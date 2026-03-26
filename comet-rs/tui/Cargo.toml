@@ -1,0 +1,10 @@
+[package]
+name = "comet-tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+comet-api = { path = "../comet-api" }
+comet-config = { path = "../config" }
+protocol = { package = "comet-protocol", path = "../protocol" }
+core = { package = "comet-core", path = "../core" }
