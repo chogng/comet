@@ -1421,7 +1421,6 @@ test('TabsTitleControl opens a context menu with close, close others, close all,
     width: 0,
     height: 0,
   });
-  assert.equal(delegate.backend, 'dom');
   assert.equal(delegate.getMenuData?.(), 'editor-tab-context');
 
   delegate.onSelect?.('close');

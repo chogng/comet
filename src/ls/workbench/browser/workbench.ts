@@ -1915,7 +1915,7 @@ class WorkbenchHost {
         activeConversationId: activeAssistantConversationId,
         llmModelOptions: agentLlmModelOptions,
         activeLlmModelOptionValue,
-        isSecondarySidebarVisible: isFetchSidebarVisible,
+        isSecondarySidebarVisible: isPrimarySidebarVisible,
       },
       actions: {
         onQuestionChange: setAssistantQuestion,
@@ -1925,6 +1925,7 @@ class WorkbenchHost {
         onActivateConversation: handleAssistantActivateConversation,
         onCloseConversation: handleAssistantCloseConversation,
         onCloseAgentBar: handleCloseAgentSidebar,
+        onToggleSecondarySidebar: togglePrimarySidebarVisibility,
         onSelectLlmModel: (value) => {
           activeAgentChatModelOptionValue =
             value === AGENT_CHAT_AUTO_MODEL_OPTION_VALUE ? null : value;

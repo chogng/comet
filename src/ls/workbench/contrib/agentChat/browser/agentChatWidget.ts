@@ -43,6 +43,8 @@ export type AgentChatWidgetProps = {
   onActivateConversation: (conversationId: string) => void;
   onCloseConversation: (conversationId: string) => void;
   onCloseAgentBar: () => void;
+  isSecondarySidebarVisible: boolean;
+  onToggleSecondarySidebar: () => void;
   onSelectLlmModel: (value: string) => void;
   onOpenModelSettings: () => void;
 };

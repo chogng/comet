@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ContextMenuPopupEvent, ContextMenuPopupPayload } from 'ls/base/parts/contextmenu/common/contextmenu';
 import type {
   AppCommand,
   AppErrorCode,
@@ -272,34 +271,6 @@ const electronAPI: ElectronAPI = {
     },
     setHovering(hovering: boolean) {
       sendIpc('app:native-toast-hover', hovering);
-    },
-  },
-  nativePopupContextMenu: {
-    open(payload: ContextMenuPopupPayload) {
-      sendIpc('app:native-popup-context-menu-open', payload);
-    },
-    close(requestId: string) {
-      sendIpc('app:native-popup-context-menu-close', requestId);
-    },
-    onEvent(listener: (event: ContextMenuPopupEvent) => void) {
-      return subscribeIpc<ContextMenuPopupEvent>('app:native-popup-context-menu-event', listener, {
-        requestId: '',
-        type: 'close',
-      });
-    },
-  },
-  nativePopupContextMenu: {
-    open(payload: ContextMenuPopupPayload) {
-      sendIpc('app:native-popup-context-menu-open', payload);
-    },
-    close(requestId: string) {
-      sendIpc('app:native-popup-context-menu-close', requestId);
-    },
-    onEvent(listener: (event: ContextMenuPopupEvent) => void) {
-      return subscribeIpc<ContextMenuPopupEvent>('app:native-popup-context-menu-event', listener, {
-        requestId: '',
-        type: 'close',
-      });
     },
   },
 };

@@ -211,7 +211,6 @@ export class LibraryRenderer {
       getActions: () => options,
       getMenuData: () => 'knowledge-library-document',
       alignment: 'start',
-      requestIdPrefix: 'library-document-menu',
       onSelect: (value) => {
         actions.get(value)?.();
       },

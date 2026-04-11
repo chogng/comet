@@ -537,7 +537,6 @@ export class TabsTitleControl extends TitleControl {
     }
 
     this.contextMenuService.showContextMenu({
-      backend: 'dom',
       getAnchor: () => ({
         x: event.clientX,
         y: event.clientY,
@@ -547,7 +546,6 @@ export class TabsTitleControl extends TitleControl {
       getActions: () => actions,
       getMenuData: () => 'editor-tab-context',
       alignment: 'start',
-      requestIdPrefix: 'editor-tab-menu',
       onSelect: (value) => {
         switch (value) {
           case 'close':

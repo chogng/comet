@@ -1559,7 +1559,6 @@ export class EditorBrowserLibraryPanel {
     itemState: BrowserLibraryListItem,
   ) {
     this.contextMenuService.showContextMenu({
-      backend: 'dom',
       getAnchor: () => ({
         x: event.clientX,
         y: event.clientY,
@@ -1595,7 +1594,6 @@ export class EditorBrowserLibraryPanel {
       ],
       getMenuData: () => 'editor-browser-library-favorite-item',
       alignment: 'start',
-      requestIdPrefix: 'editor-browser-library-favorite-item-menu',
       onSelect: (value) => {
         switch (value) {
           case 'open':

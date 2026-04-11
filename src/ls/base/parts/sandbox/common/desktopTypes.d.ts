@@ -1,7 +1,3 @@
-import type {
-  ContextMenuPopupEvent,
-  ContextMenuPopupPayload,
-} from 'ls/base/parts/contextmenu/common/contextmenu';
 import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
 
 export type Locale = 'zh' | 'en';
@@ -763,18 +759,6 @@ export interface ElectronToastApi {
   setHovering: (hovering: boolean) => void;
 }
 
-export interface ContextMenuPopupApi {
-  open: (payload: ContextMenuPopupPayload) => void;
-  close: (requestId: string) => void;
-  onEvent: (listener: (event: ContextMenuPopupEvent) => void) => () => void;
-}
-
-export interface ContextMenuPopupApi {
-  open: (payload: ContextMenuPopupPayload) => void;
-  close: (requestId: string) => void;
-  onEvent: (listener: (event: ContextMenuPopupEvent) => void) => () => void;
-}
-
 export interface ElectronAPI {
   invoke: ElectronInvoke;
   windowControls?: ElectronWindowControls;
@@ -782,5 +766,4 @@ export interface ElectronAPI {
   fetch?: ElectronFetchApi;
   modal?: ElectronModalApi;
   toast?: ElectronToastApi;
-  nativePopupContextMenu?: ContextMenuPopupApi;
 }

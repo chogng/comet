@@ -1,5 +1,4 @@
 import 'ls/base/browser/ui/dropdown/dropdown.css';
-import { createContextViewController } from 'ls/base/browser/ui/contextview/contextview';
 import {
   createContextViewController,
   resolveAnchoredVerticalPlacement,
@@ -118,39 +117,6 @@ function createChevronIcon() {
   icon.append(path);
 
   return icon;
-}
-
-function createCheckIcon() {
-  const icon = document.createElementNS(SVG_NS, 'svg');
-  icon.setAttribute('viewBox', '0 0 16 16');
-  icon.setAttribute('width', '12');
-  icon.setAttribute('height', '12');
-  icon.setAttribute('aria-hidden', 'true');
-  icon.classList.add('dropdown-menu-item-check');
-
-  const path = document.createElementNS(SVG_NS, 'path');
-  path.setAttribute('d', 'M3.5 8.2l2.4 2.4 6-6');
-  path.setAttribute('fill', 'none');
-  path.setAttribute('stroke', 'currentColor');
-  path.setAttribute('stroke-width', '1.8');
-  path.setAttribute('stroke-linecap', 'round');
-  path.setAttribute('stroke-linejoin', 'round');
-  icon.append(path);
-
-  return icon;
-}
-
-function createCheckSlot(isSelected: boolean) {
-  const slot = createElement('span', 'dropdown-menu-item-check');
-  slot.setAttribute('aria-hidden', 'true');
-
-  if (isSelected) {
-    slot.append(createCheckIcon());
-  } else {
-    slot.classList.add('placeholder');
-  }
-
-  return slot;
 }
 
 function createOptionContent(option: DropdownOption) {
