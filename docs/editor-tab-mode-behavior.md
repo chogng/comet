@@ -110,20 +110,41 @@ dynamic tab 指用户后续显式新建出来的 tab。
 
 现在三种类型都已经可以拥有稳定的真实空态 tab。
 
+## 关闭策略
+
+close affordance 需要单独按 tab 语义判断，不应该从 label 是否显示、tab 是否空态里临时推断。
+
+当前固定规则如下：
+
+1. 只有可复用的空 resident tab 隐藏 close
+2. dynamic 空态 tab 即使显示 `New Tab`，也仍然显示 close
+3. 非空态 tab 统一显示 close
+4. dirty draft 即使还是空态，只要已经有本地修改，也仍然显示 close
+
+换句话说：
+
+1. resident 空态的职责是作为 mode 锚点，所以它应该尽量安静
+2. dynamic 空态已经是一个真正新开的工作 tab，所以它应该可以被直接关闭
+3. 是否显示 close 的判断，优先看“这个 tab 当前是不是可复用的 resident 空位”，而不是只看它有没有标题
+
+当前三类 tab 可以先按下面理解：
+
+1. `draft`
+   空 resident draft 隐藏 close；空 dynamic draft 显示 close；dirty draft 显示 close
+2. `browser`
+   空 resident browser 隐藏 close；空 dynamic browser 显示 close
+3. `pdf`
+   空 resident pdf 隐藏 close；空 dynamic pdf 显示 close
+
 ## 拖拽和排序
-
-这里要区分两个层面：
-
-1. resident tab 的锚点价值
-2. dynamic tab 的工作流排序价值
 
 当前更适合的原则是：
 
-1. resident tab 作为稳定锚点存在
-2. dynamic tab 允许排序
-3. 具体是否允许 resident 参与拖拽，不应再被解释成“它不是 tab”
+1. 所有真实 tab 都允许拖拽排序
+2. resident 和 dynamic 的区别只影响空态展示，不影响排序能力
+3. 只有缺失 mode 的 resident entry 因为没有真实 `targetTabId`，所以不参与拖拽
 
-也就是说，resident 是否拖拽是交互策略问题，不是对象类型问题。
+也就是说，resident 不再意味着“固定在前面”。
 
 ## 当前实现说明
 
@@ -151,7 +172,9 @@ dynamic tab 指用户后续显式新建出来的 tab。
 2. 它们本身就是可直接使用的 tab
 3. resident 空态只显示 icon
 4. dynamic 空态显示 `New Tab`
-5. 非空态统一显示真实内容标题
+5. 只有可复用的空 resident tab 隐藏 close
+6. 所有真实 tab 都按用户顺序自由排序
+7. 非空态统一显示真实内容标题
 
 ## 后续建议
 
@@ -159,7 +182,6 @@ dynamic tab 指用户后续显式新建出来的 tab。
 
 1. 给 `pdf` 补齐真实空态 tab
 2. 收敛 resident entry 的命名，避免继续出现 `placeholder` 一类旧术语
-3. 把拖拽和关闭策略也补成明确规则
 
 当前可以先固定的核心结论是：
 

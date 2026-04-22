@@ -57,13 +57,18 @@ export function isReusableEmptyPdfTab(
 export function isClosableEditorTab(
   tab: EditorWorkspaceTab,
   dirtyDraftTabIds: ReadonlySet<string>,
+  residency: 'resident' | 'dynamic',
 ) {
   // Close affordance is hidden only for reusable empty resident entries.
   if (isEditorDraftTabInput(tab)) {
-    return !isReusableEmptyDraftTab(tab, dirtyDraftTabIds);
+    return residency !== 'resident' || !isReusableEmptyDraftTab(tab, dirtyDraftTabIds);
   }
 
-  return !isEmptyBrowserTabInput(tab) && !isEmptyPdfTabInput(tab);
+  if (isEmptyBrowserTabInput(tab) || isEmptyPdfTabInput(tab)) {
+    return residency !== 'resident';
+  }
+
+  return true;
 }
 
 export function getDraftTabDisplayLabel(params: {

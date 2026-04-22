@@ -1,6 +1,6 @@
 :root {
   --editor-tabs-strip-height: 26px;
-  --editor-tab-fixed-width: 180px;
+  --editor-tab-max-width: 180px;
 }
 
 .editor-tabs-scroll-host.horizontal-scrollbar-host {
@@ -39,9 +39,9 @@
   align-items: stretch;
   flex: 0 0 auto;
   height: var(--editor-tabs-strip-height);
-  width: var(--editor-tab-fixed-width);
-  min-width: var(--editor-tab-fixed-width);
-  max-width: var(--editor-tab-fixed-width);
+  width: fit-content;
+  min-width: 0;
+  max-width: var(--editor-tab-max-width);
   border-radius: 6px;
   background: transparent;
   overflow: hidden;
@@ -61,11 +61,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   height: 100%;
-  padding: 0 4px;
+  padding: 0 8px 0 6px;
   border: 0;
   background: transparent;
   color: var(--vscode-editor-tabForeground, #58697b);
@@ -275,10 +275,14 @@
 .editor-tab:not(.has-title) {
   width: 26px;
   min-width: 26px;
+  max-width: 26px;
+  flex-basis: 26px;
 }
 
 .editor-tab:not(.has-title) .editor-tab-main {
+  width: 100%;
   padding: 0;
+  flex: 1 0 100%;
   justify-content: center;
 }
 
@@ -310,6 +314,6 @@
 
 @media (max-width: 760px) {
   :root {
-    --editor-tab-fixed-width: 120px;
+    --editor-tab-max-width: 120px;
   }
 }

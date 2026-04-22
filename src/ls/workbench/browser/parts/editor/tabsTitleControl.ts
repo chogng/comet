@@ -180,6 +180,8 @@ export class TabsTitleControl extends TitleControl {
     this.disposables.add(addDisposableListener(this.container, 'scroll', this.handleContainerScroll, {
       passive: true,
     }));
+    this.disposables.add(addDisposableListener(this.container, 'dragover', this.handleContainerDragOver));
+    this.disposables.add(addDisposableListener(this.container, 'drop', this.handleContainerDrop));
     if (typeof ResizeObserver !== 'undefined') {
       const resizeObserver = new ResizeObserver(() => {
         this.scheduleLayoutSync(false);
@@ -327,8 +329,7 @@ export class TabsTitleControl extends TitleControl {
     tabView.element.dataset.targetTabId = tab.targetTabId ?? '';
     const canReorder = Boolean(
       this.props.onReorderTab &&
-        tab.targetTabId &&
-        tab.residency === 'dynamic',
+        tab.targetTabId,
     );
     tabView.mainButton.draggable = canReorder;
 
@@ -452,6 +453,67 @@ export class TabsTitleControl extends TitleControl {
       targetMetadata,
       position,
     };
+  }
+
+  private syncDropTargetFromContainerEvent(event: DragEvent) {
+    if (!this.dragState || !this.container) {
+      return null;
+    }
+
+    const tabElements = Array.from(this.container.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
+    );
+    if (tabElements.length === 0) {
+      this.setDropTarget(null, null, null);
+      return null;
+    }
+
+    const firstTabElement = tabElements[0];
+    const lastTabElement = tabElements[tabElements.length - 1];
+    if (!firstTabElement || !lastTabElement) {
+      this.setDropTarget(null, null, null);
+      return null;
+    }
+
+    const firstMetadata = this.getReorderableTabMetadata(firstTabElement);
+    const lastMetadata = this.getReorderableTabMetadata(lastTabElement);
+    const firstRect = firstTabElement.getBoundingClientRect();
+    const lastRect = lastTabElement.getBoundingClientRect();
+
+    if (
+      firstMetadata &&
+      firstMetadata.targetTabId !== this.dragState.sourceTabId &&
+      event.clientX <= firstRect.left
+    ) {
+      this.setDropTarget(
+        firstMetadata.viewTabId,
+        firstMetadata.targetTabId,
+        'before',
+      );
+      return {
+        targetMetadata: firstMetadata,
+        position: 'before' as const,
+      };
+    }
+
+    if (
+      lastMetadata &&
+      lastMetadata.targetTabId !== this.dragState.sourceTabId &&
+      event.clientX >= lastRect.right
+    ) {
+      this.setDropTarget(
+        lastMetadata.viewTabId,
+        lastMetadata.targetTabId,
+        'after',
+      );
+      return {
+        targetMetadata: lastMetadata,
+        position: 'after' as const,
+      };
+    }
+
+    this.setDropTarget(null, null, null);
+    return null;
   }
 
   private setDropTarget(
@@ -774,6 +836,51 @@ export class TabsTitleControl extends TitleControl {
 
     const nextDropTarget = this.syncDropTargetFromEvent(event);
     if (!nextDropTarget || !this.props.onReorderTab) {
+      this.clearDragState();
+      return;
+    }
+
+    event.preventDefault();
+    const { sourceTabId } = this.dragState;
+    const {
+      targetMetadata: { targetTabId },
+      position,
+    } = nextDropTarget;
+    this.clearDragState();
+    void this.props.onReorderTab(sourceTabId, targetTabId, position);
+  };
+
+  private readonly handleContainerDragOver = (event: Event) => {
+    if (!isDragEventLike(event) || !this.dragState) {
+      return;
+    }
+
+    if (event.target !== this.container) {
+      return;
+    }
+
+    const nextDropTarget = this.syncDropTargetFromContainerEvent(event);
+    if (!nextDropTarget) {
+      return;
+    }
+
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  private readonly handleContainerDrop = (event: Event) => {
+    if (!isDragEventLike(event) || !this.dragState) {
+      return;
+    }
+
+    if (event.target !== this.container || !this.props.onReorderTab) {
+      return;
+    }
+
+    const nextDropTarget = this.syncDropTargetFromContainerEvent(event);
+    if (!nextDropTarget) {
       this.clearDragState();
       return;
     }

@@ -224,7 +224,7 @@ export function createEditorGroupModel({
       : undefined;
     const canUndo = Boolean(draftStatus?.canUndo);
     const canRedo = Boolean(draftStatus?.canRedo);
-    const isClosable = isClosableEditorTab(tab, dirtyDraftTabIdSet);
+    const isClosable = isClosableEditorTab(tab, dirtyDraftTabIdSet, residency);
 
     return {
       id: tab.id,
@@ -246,19 +246,24 @@ export function createEditorGroupModel({
     };
   };
 
-  const residentTabs = SUPPORTED_EDITOR_PANE_MODES.map((paneMode) => {
+  const normalizedTabs = tabs.map((tab) => {
+    const paneMode = getEditorPaneMode(tab);
+    if (!isSupportedPaneMode(paneMode)) {
+      return toTabItem(tab, 'dynamic');
+    }
+
     const residentTabId =
       residentTabIdByPaneMode.get(paneMode) ??
       firstTabIdByPaneMode.get(paneMode);
-    const residentTab = residentTabId
-      ? tabs.find((tab) => tab.id === residentTabId) ?? null
-      : null;
+    return toTabItem(tab, residentTabId === tab.id ? 'resident' : 'dynamic');
+  });
 
-    if (residentTab) {
-      return toTabItem(residentTab, 'resident');
-    }
-
-    return {
+  const presentPaneModes = new Set(
+    normalizedTabs.map((tab) => tab.paneMode).filter(isSupportedPaneMode),
+  );
+  const residentEntries = SUPPORTED_EDITOR_PANE_MODES
+    .filter((paneMode) => !presentPaneModes.has(paneMode))
+    .map((paneMode) => ({
       id: `${paneMode}-entry`,
       kind: getDefaultTabKindForPaneMode(paneMode),
       paneMode,
@@ -275,25 +280,10 @@ export function createEditorGroupModel({
         canUndo: false,
         canRedo: false,
       },
-    };
-  });
-
-  const dynamicTabs = tabs
-    .filter((tab) => {
-      const paneMode = getEditorPaneMode(tab);
-      if (!isSupportedPaneMode(paneMode)) {
-        return true;
-      }
-
-      const residentTabId =
-        residentTabIdByPaneMode.get(paneMode) ??
-        firstTabIdByPaneMode.get(paneMode);
-      return residentTabId !== tab.id;
-    })
-    .map((tab) => toTabItem(tab, 'dynamic'));
+    }));
 
   return {
-    tabs: [...residentTabs, ...dynamicTabs],
+    tabs: [...normalizedTabs, ...residentEntries],
     activeTabId,
     activeTab,
   };
