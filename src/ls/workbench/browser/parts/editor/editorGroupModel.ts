@@ -137,7 +137,7 @@ function getFallbackTitleForPaneMode(
     case 'pdf':
       return labels.pdfMode;
     case 'file':
-      return 'File';
+      return 'Read';
     case 'terminal':
       return 'Terminal';
     case 'git-changes':

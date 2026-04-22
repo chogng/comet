@@ -74,6 +74,7 @@ import favoriteFilledSvg from 'ls/base/browser/ui/lxicon/svg/favorite-filled.svg
 import fileSvg from 'ls/base/browser/ui/lxicon/svg/file.svg?raw';
 import fileDocxSvg from 'ls/base/browser/ui/lxicon/svg/file-docx.svg?raw';
 import filePdfSvg from 'ls/base/browser/ui/lxicon/svg/file-pdf.svg?raw';
+import fileTextSvg from 'ls/base/browser/ui/lxicon/svg/file-text.svg?raw';
 import filesSvg from 'ls/base/browser/ui/lxicon/svg/files.svg?raw';
 import filterSvg from 'ls/base/browser/ui/lxicon/svg/filter.svg?raw';
 import foldSvg from 'ls/base/browser/ui/lxicon/svg/fold.svg?raw';
@@ -265,6 +266,7 @@ export type LxIconName =
   | 'file'
   | 'file-docx'
   | 'file-pdf'
+  | 'file-text'
   | 'files'
   | 'filter'
   | 'fold'
@@ -456,6 +458,7 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'file': fileSvg,
   'file-docx': fileDocxSvg,
   'file-pdf': filePdfSvg,
+  'file-text': fileTextSvg,
   'files': filesSvg,
   'filter': filterSvg,
   'fold': foldSvg,

@@ -24,6 +24,20 @@
   padding: 0;
 }
 
+.editor-tabs-container.is-drop-indicator-visible::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: var(--editor-tab-drop-indicator-left, 0);
+  width: 2px;
+  border-radius: 999px;
+  background: #111111;
+  pointer-events: none;
+  z-index: 2;
+  transform: translateX(-50%);
+}
+
 .editor-tabs-scroll-host .horizontal-scrollbar-track {
   bottom: 0;
   -webkit-app-region: no-drag;
@@ -116,29 +130,16 @@
 }
 
 .editor-tab.is-dragging {
-  opacity: 0.72;
+  opacity: 0.86;
 }
 
-/* Show a vertical insertion marker on the hovered tab edge during drag reorder. */
-.editor-tab.is-drop-target-before::before,
-.editor-tab.is-drop-target-after::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  border-radius: 999px;
-  background: var(--vscode-editor-tabDragBorder, #5b86b4);
+.editor-tab-drag-preview {
+  position: fixed;
+  top: -10000px;
+  left: -10000px;
   pointer-events: none;
-  z-index: 2;
-}
-
-.editor-tab.is-drop-target-before::before {
-  left: 0;
-}
-
-.editor-tab.is-drop-target-after::after {
-  right: 0;
+  z-index: 9999;
+  opacity: 0.94;
 }
 
 .editor-tab-close-btn.actionbar-action .lx-icon {

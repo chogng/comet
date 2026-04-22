@@ -520,7 +520,7 @@ function createWorkbenchLayoutViewProps() {
         topbarAddAction: 'Add',
         createDraft: 'Draft',
         createBrowser: 'Browser',
-        createFile: 'File',
+        createFile: 'Read',
         newTab: 'New Tab',
         toolbarSources: 'Source menu',
         toolbarBack: 'Back',
@@ -1151,7 +1151,7 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
     for (const [label, expectedCall] of [
       ['Draft', { kind: 'draft', disposition: 'reveal-or-open' }],
       ['Browser', { kind: 'browser', disposition: 'reveal-or-open' }],
-      ['File', { kind: 'pdf', disposition: 'reveal-or-open' }],
+      ['Read', { kind: 'pdf', disposition: 'reveal-or-open' }],
     ] as const) {
       addButton.click();
       await new Promise((resolve) => setTimeout(resolve, 0));

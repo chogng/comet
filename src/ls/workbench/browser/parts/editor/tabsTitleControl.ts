@@ -57,15 +57,14 @@ function addDisposableListener(
 
 function getTabPaneModeIconName(
   paneMode: EditorGroupTabItem['paneMode'],
-  isActive: boolean,
 ): LxIconName {
   switch (paneMode) {
     case 'draft':
       return 'draft';
     case 'pdf':
-      return isActive ? 'pdf' : 'file-pdf';
+      return 'file-text';
     case 'file':
-      return 'file';
+      return 'file-text';
     case 'terminal':
       return 'terminal';
     case 'git-changes':
@@ -104,6 +103,8 @@ type DragState = {
   position: 'before' | 'after' | null;
 };
 
+const DROP_POSITION_HYSTERESIS_PX = 6;
+
 function createTabFaviconImageElement(
   faviconUrl: string,
   onError: () => void,
@@ -133,6 +134,7 @@ export class TabsTitleControl extends TitleControl {
   private lastRenderedActiveViewTabId: string | null = null;
   private readonly hoverService = getHoverService();
   private dragState: DragState | null = null;
+  private dragPreviewElement: HTMLDivElement | null = null;
 
   constructor(
     props: TitleControlProps,
@@ -352,7 +354,7 @@ export class TabsTitleControl extends TitleControl {
     };
 
     const createFallbackPaneIcon = () =>
-      createLxIcon(getTabPaneModeIconName(tab.paneMode, tab.state.isActive));
+      createLxIcon(getTabPaneModeIconName(tab.paneMode));
     const faviconUrl =
       tab.paneMode === 'browser'
         ? normalizeTabFaviconUrl(tab.faviconUrl)
@@ -420,7 +422,116 @@ export class TabsTitleControl extends TitleControl {
       return 'after';
     }
 
-    return event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+    const midpoint = rect.left + rect.width / 2;
+    const currentTargetViewTabId = this.dragState?.targetViewTabId ?? null;
+    const currentPosition = this.dragState?.position ?? null;
+    const viewTabId = tabElement.dataset.tabId?.trim() ?? '';
+    if (currentTargetViewTabId === viewTabId && currentPosition) {
+      if (
+        currentPosition === 'before' &&
+        event.clientX <= midpoint + DROP_POSITION_HYSTERESIS_PX
+      ) {
+        return 'before';
+      }
+      if (
+        currentPosition === 'after' &&
+        event.clientX >= midpoint - DROP_POSITION_HYSTERESIS_PX
+      ) {
+        return 'after';
+      }
+    }
+
+    return event.clientX < midpoint ? 'before' : 'after';
+  }
+
+  private getTabSibling(
+    tabElement: HTMLElement,
+    direction: 'previous' | 'next',
+  ) {
+    let sibling =
+      direction === 'previous'
+        ? tabElement.previousElementSibling
+        : tabElement.nextElementSibling;
+    while (sibling) {
+      if (
+        sibling instanceof HTMLElement &&
+        sibling.classList.contains('editor-tab')
+      ) {
+        return sibling;
+      }
+      sibling =
+        direction === 'previous'
+          ? sibling.previousElementSibling
+          : sibling.nextElementSibling;
+    }
+    return null;
+  }
+
+  private getContainerRelativeX(clientX: number) {
+    if (!this.container) {
+      return 0;
+    }
+
+    const containerRect = this.container.getBoundingClientRect();
+    return clientX - containerRect.left + this.container.scrollLeft;
+  }
+
+  private resolveDropIndicatorLeft(
+    viewTabId: string,
+    position: 'before' | 'after',
+  ) {
+    const tabElement = this.tabViews.get(viewTabId)?.element;
+    if (!this.container || !tabElement) {
+      return null;
+    }
+
+    const tabRect = tabElement.getBoundingClientRect();
+    const tabLeft = this.getContainerRelativeX(tabRect.left);
+    const tabRight = this.getContainerRelativeX(tabRect.right);
+
+    if (position === 'before') {
+      const previousTab = this.getTabSibling(tabElement, 'previous');
+      if (!previousTab) {
+        return tabLeft;
+      }
+
+      const previousRect = previousTab.getBoundingClientRect();
+      if (previousRect.width <= 0 || previousRect.right >= tabRect.left) {
+        return tabLeft;
+      }
+      const previousRight = this.getContainerRelativeX(previousRect.right);
+      return (previousRight + tabLeft) / 2;
+    }
+
+    const nextTab = this.getTabSibling(tabElement, 'next');
+    if (!nextTab) {
+      return tabRight;
+    }
+
+    const nextRect = nextTab.getBoundingClientRect();
+    if (nextRect.width <= 0 || nextRect.left <= tabRect.right) {
+      return tabRight;
+    }
+    const nextLeft = this.getContainerRelativeX(nextRect.left);
+    return (tabRight + nextLeft) / 2;
+  }
+
+  private updateDropIndicator(left: number | null) {
+    if (!this.container) {
+      return;
+    }
+
+    if (left === null) {
+      this.container.classList.remove('is-drop-indicator-visible');
+      this.container.style.removeProperty('--editor-tab-drop-indicator-left');
+      return;
+    }
+
+    this.container.classList.add('is-drop-indicator-visible');
+    this.container.style.setProperty(
+      '--editor-tab-drop-indicator-left',
+      `${left}px`,
+    );
   }
 
   private syncDropTargetFromEvent(event: DragEvent) {
@@ -512,6 +623,52 @@ export class TabsTitleControl extends TitleControl {
       };
     }
 
+    for (let index = 0; index < tabElements.length - 1; index += 1) {
+      const leftTabElement = tabElements[index];
+      const rightTabElement = tabElements[index + 1];
+      if (!leftTabElement || !rightTabElement) {
+        continue;
+      }
+
+      const leftRect = leftTabElement.getBoundingClientRect();
+      const rightRect = rightTabElement.getBoundingClientRect();
+      if (event.clientX < leftRect.right || event.clientX > rightRect.left) {
+        continue;
+      }
+
+      const rightMetadata = this.getReorderableTabMetadata(rightTabElement);
+      if (
+        rightMetadata &&
+        rightMetadata.targetTabId !== this.dragState.sourceTabId
+      ) {
+        this.setDropTarget(
+          rightMetadata.viewTabId,
+          rightMetadata.targetTabId,
+          'before',
+        );
+        return {
+          targetMetadata: rightMetadata,
+          position: 'before' as const,
+        };
+      }
+
+      const leftMetadata = this.getReorderableTabMetadata(leftTabElement);
+      if (
+        leftMetadata &&
+        leftMetadata.targetTabId !== this.dragState.sourceTabId
+      ) {
+        this.setDropTarget(
+          leftMetadata.viewTabId,
+          leftMetadata.targetTabId,
+          'after',
+        );
+        return {
+          targetMetadata: leftMetadata,
+          position: 'after' as const,
+        };
+      }
+    }
+
     this.setDropTarget(null, null, null);
     return null;
   }
@@ -529,21 +686,16 @@ export class TabsTitleControl extends TitleControl {
           position,
         }
       : null;
-
-    for (const tabView of this.tabViews.values()) {
-      const isDropTarget = tabView.element.dataset.tabId === viewTabId;
-      tabView.element.classList.toggle(
-        'is-drop-target-before',
-        isDropTarget && position === 'before',
-      );
-      tabView.element.classList.toggle(
-        'is-drop-target-after',
-        isDropTarget && position === 'after',
-      );
-    }
+    this.updateDropIndicator(
+      viewTabId && position
+        ? this.resolveDropIndicatorLeft(viewTabId, position)
+        : null,
+    );
   }
 
   private clearDragState() {
+    this.disposeDragPreviewElement();
+    this.updateDropIndicator(null);
     if (this.dragState?.sourceViewTabId) {
       this.tabViews
         .get(this.dragState.sourceViewTabId)
@@ -552,12 +704,40 @@ export class TabsTitleControl extends TitleControl {
 
     this.dragState = null;
     for (const tabView of this.tabViews.values()) {
-      tabView.element.classList.remove(
-        'is-dragging',
-        'is-drop-target-before',
-        'is-drop-target-after',
-      );
+      delete tabView.element.dataset.hovered;
+      tabView.element.classList.remove('is-dragging');
     }
+  }
+
+  private createDragPreviewElement(sourceTabElement: HTMLElement) {
+    this.disposeDragPreviewElement();
+
+    const previewElement = sourceTabElement.cloneNode(true);
+    if (!(previewElement instanceof HTMLDivElement)) {
+      return null;
+    }
+
+    previewElement.classList.add('editor-tab-drag-preview');
+    previewElement.classList.remove('is-dragging');
+    previewElement.removeAttribute('data-hovered');
+
+    const { width, height } = sourceTabElement.getBoundingClientRect();
+    if (width > 0) {
+      previewElement.style.width = `${width}px`;
+      previewElement.style.maxWidth = `${width}px`;
+    }
+    if (height > 0) {
+      previewElement.style.height = `${height}px`;
+    }
+
+    document.body.append(previewElement);
+    this.dragPreviewElement = previewElement;
+    return previewElement;
+  }
+
+  private disposeDragPreviewElement() {
+    this.dragPreviewElement?.remove();
+    this.dragPreviewElement = null;
   }
 
   private openTabContextMenu(
@@ -810,6 +990,15 @@ export class TabsTitleControl extends TitleControl {
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', tabMetadata.targetTabId);
+      const dragPreviewElement = this.createDragPreviewElement(tabElement);
+      if (dragPreviewElement && typeof event.dataTransfer.setDragImage === 'function') {
+        const { height } = tabElement.getBoundingClientRect();
+        event.dataTransfer.setDragImage(
+          dragPreviewElement,
+          0,
+          Math.max(0, Math.round(height / 2)),
+        );
+      }
     }
   };
 

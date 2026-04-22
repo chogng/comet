@@ -83,7 +83,7 @@ export class EditorTopbarActionsView {
       },
       {
         label: this.props.labels.createFile,
-        icon: 'file',
+        icon: 'file-text',
         onClick: () => {
           void this.props.onOpenEditor({
             kind: 'pdf',
