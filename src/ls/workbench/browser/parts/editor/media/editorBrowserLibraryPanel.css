@@ -236,9 +236,9 @@
 }
 
 .editor-browser-library-item-delete-btn.btn-base.btn-md .lx-icon {
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
 }
 
 .editor-browser-library-item-row.is-deletable:hover .editor-browser-library-item-delete-btn.btn-base.btn-md,
