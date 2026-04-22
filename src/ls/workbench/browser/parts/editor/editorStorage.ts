@@ -143,7 +143,10 @@ function createStoredDraftStateByInputId(
 function serializeStoredGroup(group: EditorEditorGroupState) {
   return {
     groupId: group.groupId,
-    inputs: group.tabs.map((tab) => toEditorTabInput(tab)),
+    inputs: group.tabs.map((tab) => ({
+      ...toEditorTabInput(tab),
+      residency: tab.residency,
+    })),
     activeTabId: group.activeTabId,
     mruTabIds: group.mruTabIds,
   };

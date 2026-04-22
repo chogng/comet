@@ -9,10 +9,7 @@ import {
   createDropdownMenuActionViewItem,
   DropdownMenuActionViewItem,
 } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
-import {
-  createDropdownSearchInputView,
-  createFilterMenuHeader,
-} from 'ls/base/browser/ui/dropdown/dropdownSearchHeader';
+import { createFilterMenuHeader } from 'ls/base/browser/ui/dropdown/dropdownSearchHeader';
 import type { DropdownOption } from 'ls/base/browser/ui/dropdown/dropdown';
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
 import { HorizontalScrollbar } from 'ls/base/browser/ui/scrollbar/horizontalScrollbar';
@@ -380,10 +377,17 @@ export class AgentChatWidget {
       buttonClassName: 'agentbar-model-switch-btn',
       className: 'agentbar-model-switch',
       disabled: this.props.llmModelOptions.length === 0,
-      overlayRole: 'dialog',
       minWidth: 280,
+      menuData: 'agentbar-model-menu',
+      menuSelectionStyle: 'neutral',
       content: () => this.renderModelDropdownTrigger(currentOption),
-      renderOverlay: ({ hide }: { hide: () => void }) => this.renderModelDropdownMenu(hide),
+      menu: this.createModelMenuItems(''),
+      menuHeader: createFilterMenuHeader({
+        inputClassName: 'agentbar-model-menu-search-input',
+        placeholder: AGENTBAR_MODEL_SEARCH_PLACEHOLDER,
+        ariaLabel: AGENTBAR_MODEL_SEARCH_ARIA_LABEL,
+        getMenuItems: (query) => this.createModelMenuItems(query),
+      }),
     });
   }
 
@@ -403,189 +407,82 @@ export class AgentChatWidget {
     return trigger;
   }
 
-  private renderModelDropdownMenu(hide: () => void) {
-    const menu = createElement('div', 'agentbar-model-menu');
-    menu.setAttribute('role', 'group');
-    const content = createElement('div', 'agentbar-model-menu-content');
-    const searchInput = createDropdownSearchInputView({
-      className: 'agentbar-model-menu-search-header',
-      inputClassName: 'agentbar-model-menu-search-input',
-      placeholder: AGENTBAR_MODEL_SEARCH_PLACEHOLDER,
-      ariaLabel: AGENTBAR_MODEL_SEARCH_ARIA_LABEL,
-      onChange: (value) => {
-        this.renderModelDropdownMenuContent(content, hide, value);
-      },
-      onEscape: hide,
-    });
-    menu.append(searchInput.element, content);
-    this.renderModelDropdownMenuContent(content, hide, '');
-    return menu;
-  }
-
-  private renderModelDropdownMenuContent(
-    container: HTMLElement,
-    hide: () => void,
-    keyword: string,
-  ) {
+  private createModelMenuItems(keyword: string): readonly ActionBarMenuItem[] {
     const normalizedKeyword = keyword.trim().toLowerCase();
     const matchesKeyword = (value: string | undefined) =>
       !normalizedKeyword || value?.toLowerCase().includes(normalizedKeyword);
 
-    const modeItems = [
+    const items: ActionBarMenuItem[] = [
       {
         label: 'Auto Max mode',
-        description: 'Let the app route to the recommended model automatically.',
+        title: 'Let the app route to the recommended model automatically.',
         icon: 'agent' as LxIconName,
         checked: this.props.activeLlmModelOptionValue === 'auto',
         onClick: () => {
           this.props.onSelectLlmModel('auto');
-          hide();
         },
       },
       {
         label: 'Use multiple models',
-        description: 'Not available yet.',
+        title: 'Not available yet.',
         icon: 'reasoning' as LxIconName,
         disabled: true,
       },
-    ]
-      .filter((item) =>
+    ];
+
+    const filteredItems = [
+      ...items.filter((item) =>
         [
           item.label,
-          item.description,
+          item.title,
         ]
           .filter(Boolean)
           .some((value) => matchesKeyword(value)),
-      )
-      .map((item) => this.createModelMenuItem(item));
-
-    const modelItems = this.props.llmModelOptions
-      .filter((option) => option.value !== 'auto')
-      .filter((option) =>
-        [
-          option.label,
-          option.title,
-          option.value,
-        ]
-          .filter(Boolean)
-          .some((value) => matchesKeyword(value)),
-      )
-      .map((option) =>
-        this.createModelMenuItem({
+      ),
+      ...this.props.llmModelOptions
+        .filter((option) => option.value !== 'auto')
+        .filter((option) =>
+          [
+            option.label,
+            option.title,
+            option.value,
+          ]
+            .filter(Boolean)
+            .some((value) => matchesKeyword(value)),
+        )
+        .map((option) => ({
           label: option.label,
-          description: option.title,
+          title: option.title,
           icon: option.icon,
           checked: this.props.activeLlmModelOptionValue === option.value,
           disabled: option.disabled,
           onClick: () => {
             this.props.onSelectLlmModel(option.value);
-            hide();
           },
-        }),
-      );
+        })),
+      ...(matchesKeyword('Add models Open Settings to manage enabled models.')
+        ? [{
+            label: 'Add models',
+            title: 'Open Settings to manage enabled models.',
+            icon: 'gear' as LxIconName,
+            onClick: () => {
+              this.props.onOpenModelSettings();
+            },
+          }]
+        : []),
+    ];
 
-    const addModelsItem = matchesKeyword('Add models Open Settings to manage enabled models.')
-      ? this.createModelMenuItem({
-          label: 'Add models',
-          description: 'Open Settings to manage enabled models.',
-          icon: 'gear',
-          onClick: () => {
-            this.props.onOpenModelSettings();
-            hide();
-          },
-        })
-      : null;
-
-    const nodes: HTMLElement[] = [];
-    if (modeItems.length > 0) {
-      nodes.push(this.renderModelMenuSectionLabel('Mode'));
-      nodes.push(...modeItems);
-    }
-    if (modeItems.length > 0 && modelItems.length > 0) {
-      nodes.push(this.renderModelMenuSeparator());
-    }
-    if (modelItems.length > 0) {
-      nodes.push(this.renderModelMenuSectionLabel('Models'));
-      nodes.push(...modelItems);
-    }
-    if ((modeItems.length > 0 || modelItems.length > 0) && addModelsItem) {
-      nodes.push(this.renderModelMenuSeparator());
-    }
-    if (addModelsItem) {
-      nodes.push(addModelsItem);
-    }
-    if (nodes.length === 0) {
-      const emptyState = createElement('div', 'agentbar-model-menu-empty');
-      emptyState.textContent = AGENTBAR_MODEL_SEARCH_EMPTY_LABEL;
-      container.replaceChildren(emptyState);
-      return;
+    if (filteredItems.length > 0) {
+      return filteredItems;
     }
 
-    container.replaceChildren(...nodes);
-  }
-
-  private renderModelMenuSectionLabel(label: string) {
-    const element = createElement('div', 'agentbar-model-menu-section-label');
-    element.textContent = label;
-    return element;
-  }
-
-  private renderModelMenuSeparator() {
-    return createElement('div', 'agentbar-model-menu-separator');
-  }
-
-  private createModelMenuItem(options: {
-    label: string;
-    description?: string;
-    icon?: LxIconName;
-    checked?: boolean;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) {
-    const item = createElement(
-      'button',
-      [
-        'agentbar-model-menu-item',
-        options.checked ? 'is-selected' : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
-    );
-    item.type = 'button';
-    item.disabled = Boolean(options.disabled);
-    item.setAttribute('aria-pressed', String(Boolean(options.checked)));
-
-    const content = createElement('span', 'agentbar-model-menu-item-content');
-    if (options.icon) {
-      content.append(createLxIcon(options.icon, 'agentbar-model-menu-item-icon'));
-    }
-
-    const copy = createElement('span', 'agentbar-model-menu-item-copy');
-    const label = createElement('span', 'agentbar-model-menu-item-label');
-    label.textContent = options.label;
-    copy.append(label);
-    if (options.description) {
-      const description = createElement('span', 'agentbar-model-menu-item-description');
-      description.textContent = options.description;
-      copy.append(description);
-    }
-    content.append(copy);
-
-    const check = createElement('span', 'agentbar-model-menu-item-check');
-    if (options.checked) {
-      check.append(createLxIcon('check'));
-    }
-
-    item.append(content, check);
-    item.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (options.disabled) {
-        return;
-      }
-      options.onClick?.();
-    });
-    return item;
+    return [
+      {
+        id: 'agentbar-model-empty',
+        label: AGENTBAR_MODEL_SEARCH_EMPTY_LABEL,
+        disabled: true,
+      },
+    ];
   }
 
   private renderComposer(canSend: boolean) {

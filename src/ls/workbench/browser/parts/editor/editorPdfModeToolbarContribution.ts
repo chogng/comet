@@ -23,11 +23,16 @@ implements EditorModeToolbarContribution {
     'div',
     'editor-mode-toolbar editor-pdf-toolbar',
   );
-  private readonly labelElement = createElement('span', 'editor-pdf-toolbar-label');
+  private readonly rowElement = createElement('div', 'editor-pdf-toolbar-row');
+  private readonly placeholderElement = createElement(
+    'span',
+    'editor-pdf-toolbar-placeholder',
+  );
 
   constructor(context: EditorModeToolbarContributionContext) {
     this.context = context;
-    this.element.append(this.labelElement);
+    this.rowElement.append(this.placeholderElement);
+    this.element.append(this.rowElement);
     this.render();
   }
 
@@ -45,7 +50,7 @@ implements EditorModeToolbarContribution {
   }
 
   private render() {
-    this.labelElement.textContent = `${this.context.labels.pdfTitle} toolbar coming soon`;
+    this.placeholderElement.textContent = `${this.context.labels.pdfTitle} toolbar coming soon`;
   }
 }
 

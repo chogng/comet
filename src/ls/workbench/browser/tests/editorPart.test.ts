@@ -4,6 +4,7 @@ import test, { after, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 import { createWritingEditorDocumentFromPlainText } from 'ls/editor/common/writingEditorDocument';
 import en from 'language/locales/en';
+import { EMPTY_PDF_TAB_URL } from 'ls/workbench/browser/parts/editor/editorInput';
 import type {
   EditorPartBaseProps,
   EditorPartProps,
@@ -45,6 +46,7 @@ function withBrowserToolbarActions(
     onToolbarNavigateBack: () => {},
     onToolbarNavigateForward: () => {},
     onToolbarNavigateRefresh: () => {},
+    onToolbarArchiveCurrentPage: () => {},
     onToolbarHardReload: () => {},
     onToolbarCopyCurrentUrl: () => {},
     onToolbarClearBrowsingHistory: () => {},
@@ -205,6 +207,31 @@ test('EditorPartController reuses an existing empty browser tab for explicit bro
   assert.equal(browserTabs.length, 1);
   assert.equal(browserTabs[0]?.url, 'about:blank');
   assert.equal(controller.getSnapshot().activeTab?.id, browserTabs[0]?.id);
+
+  controller.dispose();
+});
+
+test('EditorPartController opens the pdf pane as an empty tab without prompting for a URL', async () => {
+  const { EditorPartController } = await import('ls/workbench/browser/parts/editor/editorPart');
+  const controller = new EditorPartController({
+    ui: en,
+    browserUrl: 'https://example.com/articles/current',
+    webUrl: '',
+    viewPartProps: defaultViewPartProps,
+  });
+
+  await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
+    kind: 'pdf',
+    disposition: 'reveal-or-open',
+  }));
+
+  const pdfTab = controller
+    .getSnapshot()
+    .tabs.find((tab) => tab.kind === 'pdf');
+  assert(pdfTab);
+  assert.equal(pdfTab.url, EMPTY_PDF_TAB_URL);
+  assert.equal(controller.getSnapshot().activeTab?.id, pdfTab.id);
+  assert.equal(document.querySelectorAll('.workbench-editor-modal-panel').length, 0);
 
   controller.dispose();
 });

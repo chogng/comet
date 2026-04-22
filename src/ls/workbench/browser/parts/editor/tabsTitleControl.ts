@@ -325,7 +325,11 @@ export class TabsTitleControl extends TitleControl {
     tabView.element.dataset.paneMode = tab.paneMode;
     tabView.element.dataset.tabId = tab.id;
     tabView.element.dataset.targetTabId = tab.targetTabId ?? '';
-    const canReorder = Boolean(this.props.onReorderTab && tab.targetTabId);
+    const canReorder = Boolean(
+      this.props.onReorderTab &&
+        tab.targetTabId &&
+        tab.residency === 'dynamic',
+    );
     tabView.mainButton.draggable = canReorder;
 
     tabView.mainButton.setAttribute('aria-selected', String(tab.state.isActive));

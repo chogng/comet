@@ -18,6 +18,7 @@ import type {
   WebContentPdfDownloadPayload,
   NativeModalState,
   WebContentBounds,
+  WebContentHtmlArchivePayload,
   WebContentBridgeResponse,
   WebContentNavigatePayload,
   WebContentState,
@@ -71,6 +72,7 @@ import {
 } from 'ls/code/electron-main/fetch/dispatch';
 import { exportArticlesDocx } from 'ls/code/electron-main/document/docx';
 import { exportEditorDocx } from 'ls/code/electron-main/document/editorDocx';
+import { archiveWebContentHtml } from 'ls/code/electron-main/document/webContentHtmlArchive';
 import { normalizeFetchStrategy, shouldPrepareWebContentArtifacts } from 'ls/code/electron-main/fetch/fetchStrategy';
 import type { WebContentExtractionSnapshot, WebContentSnapshot } from 'ls/code/electron-main/fetch/fetchStrategy';
 
@@ -249,6 +251,12 @@ async function invokeCommand<TCommand extends AppCommand>(
         libraryRegistration: null,
       } as AppCommandResultMap[TCommand];
     }
+    case 'web_content_archive_html':
+      return archiveWebContentHtml(
+        payload as WebContentHtmlArchivePayload,
+        app.getPath('downloads'),
+        storage,
+      ) as Promise<AppCommandResultMap[TCommand]>;
     case 'index_downloaded_pdf':
       return storage.registerLibraryDocument(
         payload as IndexDownloadedPdfPayload,

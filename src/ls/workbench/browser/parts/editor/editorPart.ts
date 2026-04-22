@@ -1,10 +1,8 @@
 import type { LocaleMessages } from 'language/locales';
-import { normalizeUrl } from 'ls/workbench/common/url';
 import { toEditorTabInput } from 'ls/workbench/browser/parts/editor/editorInput';
-import { createWebContentSurfaceSnapshot, resolveContentSourceUrl } from 'ls/workbench/browser/webContentSurfaceState';
+import { createWebContentSurfaceSnapshot } from 'ls/workbench/browser/webContentSurfaceState';
 import type { WebContentSurfaceSnapshot } from 'ls/workbench/browser/webContentSurfaceState';
 
-import { preparePdfDownload } from 'ls/workbench/services/document/documentActionService';
 import { createEditorModel } from 'ls/workbench/browser/parts/editor/editorModel';
 import type { EditorModelSnapshot, EditorWorkspaceTab, WritingEditorDocument } from 'ls/workbench/browser/parts/editor/editorModel';
 import { createEditorOpenService } from 'ls/workbench/services/editor/browser/editorOpenService';
@@ -87,7 +85,10 @@ type CreateEditorPartPropsParams = {
 };
 
 function toStructuralWorkspaceTab(tab: EditorWorkspaceTab) {
-  return toEditorTabInput(tab);
+  return {
+    ...toEditorTabInput(tab),
+    residency: tab.residency,
+  };
 }
 
 function createEditorPartStructureKey(snapshot: EditorPartControllerSnapshot) {
@@ -133,11 +134,13 @@ export function createEditorPartProps({
       createDraft: ui.editorCreateDraft,
       createBrowser: ui.editorCreateBrowser,
       createFile: ui.editorCreateFile,
+      newTab: ui.editorNewTab,
       toolbarSources: ui.agentbarToolbarSources,
       toolbarBack: ui.titlebarBack,
       toolbarForward: ui.titlebarForward,
       toolbarRefresh: ui.titlebarRefresh,
       toolbarFavorite: ui.agentbarToolbarFavorite,
+      toolbarArchivePage: ui.editorToolbarArchivePage,
       toolbarMore: ui.agentbarToolbarMore,
       toolbarHardReload: ui.editorToolbarHardReload,
       toolbarCopyCurrentUrl: ui.editorToolbarCopyCurrentUrl,
@@ -249,16 +252,6 @@ export function createEditorPartProps({
     isEditorCollapsed: false,
     onToggleEditorCollapse: () => {},
   };
-}
-
-function looksLikePdfUrl(url: string) {
-  const normalized = url.trim().toLowerCase();
-  return (
-    normalized.includes('.pdf') ||
-    normalized.includes('/pdf') ||
-    normalized.includes('format=pdf') ||
-    normalized.includes('download=pdf')
-  );
 }
 
 function createEditorPartControllerSnapshot(
@@ -742,36 +735,7 @@ export class EditorPartController {
       return request;
     }
 
-    const { browserUrl, webUrl, ui } = this.context;
-    const { webContentSurfaceSnapshot } = this.snapshot;
-    const seedUrl = resolveContentSourceUrl(
-      webContentSurfaceSnapshot,
-      browserUrl,
-      webUrl,
-    );
-    const preparedPdfDownload = seedUrl ? preparePdfDownload(seedUrl) : null;
-    const defaultPdfUrl = preparedPdfDownload?.preferredPdfUrl ?? '';
-    const shouldPromptForUrl =
-      !defaultPdfUrl ||
-      (preparedPdfDownload?.normalizedSourceUrl === defaultPdfUrl &&
-        !looksLikePdfUrl(defaultPdfUrl));
-    const nextInput = shouldPromptForUrl
-      ? (await showWorkbenchTextInputModal({
-          title: ui.editorPdfTitle,
-          label: ui.editorPdfUrlPrompt,
-          defaultValue: defaultPdfUrl || 'https://',
-          ui,
-        })) ?? ''
-      : defaultPdfUrl;
-    const normalizedPdfUrl = normalizeUrl(nextInput);
-    if (!normalizedPdfUrl) {
-      return null;
-    }
-
-    return {
-      ...request,
-      url: normalizedPdfUrl,
-    };
+    return request;
   };
 }
 

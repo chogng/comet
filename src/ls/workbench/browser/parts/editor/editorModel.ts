@@ -2,10 +2,14 @@ import { createEmptyWritingEditorDocument, normalizeWritingEditorDocument } from
 import type { WritingEditorDocument } from 'ls/editor/common/writingEditorDocument';
 
 import {
+  EMPTY_PDF_TAB_URL,
   EMPTY_BROWSER_TAB_URL,
+  SUPPORTED_EDITOR_PANE_MODES,
+  type SupportedEditorPaneMode,
   createEditorBrowserTabInput,
   createEditorDraftTabInput,
   createEditorPdfTabInput,
+  getEditorPaneMode,
   isEditorBrowserTabInput,
   isEditorDraftTabInput,
   isEditorPdfTabInput,
@@ -43,15 +47,21 @@ import type {
 import { getEditorContentTabTitle } from 'ls/workbench/browser/parts/editor/editorUrlPresentation';
 
 export type { WritingEditorDocument } from 'ls/editor/common/writingEditorDocument';
+export type EditorTabResidency = 'resident' | 'dynamic';
 
 // Content tabs only store editor input metadata. The active content tab temporarily owns one shared
 // web-content surface instead of spawning a dedicated browser/view instance per tab.
 export type EditorWorkspaceDraftTab = EditorDraftTabInput & {
   document: WritingEditorDocument;
+  residency?: EditorTabResidency;
 };
 
-export type EditorWorkspaceBrowserTab = EditorBrowserTabInput;
-export type EditorWorkspacePdfTab = EditorPdfTabInput;
+export type EditorWorkspaceBrowserTab = EditorBrowserTabInput & {
+  residency?: EditorTabResidency;
+};
+export type EditorWorkspacePdfTab = EditorPdfTabInput & {
+  residency?: EditorTabResidency;
+};
 export type EditorWorkspaceContentTab =
   | EditorWorkspaceBrowserTab
   | EditorWorkspacePdfTab;
@@ -113,7 +123,7 @@ type BrowserTabMetadata = {
 };
 
 function createDraftTab(
-  initial?: Partial<Pick<EditorWorkspaceDraftTab, 'id' | 'title' | 'document' | 'viewMode'>>,
+  initial?: Partial<Pick<EditorWorkspaceDraftTab, 'id' | 'title' | 'document' | 'viewMode' | 'residency'>>,
 ): EditorWorkspaceDraftTab {
   return {
     ...createEditorDraftTabInput({
@@ -124,6 +134,7 @@ function createDraftTab(
     document: normalizeWritingEditorDocument(
       initial?.document ?? createEmptyWritingEditorDocument(),
     ),
+    residency: initial?.residency ?? 'dynamic',
   };
 }
 
@@ -133,16 +144,22 @@ function createNormalizedDocumentKey(document: unknown) {
 
 function createBrowserTab(
   url: string,
-  initial?: Partial<Pick<EditorBrowserTabInput, 'id' | 'title'>>,
-): EditorBrowserTabInput {
-  return createEditorBrowserTabInput(url, initial);
+  initial?: Partial<Pick<EditorWorkspaceBrowserTab, 'id' | 'title' | 'residency'>>,
+): EditorWorkspaceBrowserTab {
+  return {
+    ...createEditorBrowserTabInput(url, initial),
+    residency: initial?.residency ?? 'dynamic',
+  };
 }
 
 function createPdfTab(
   url: string,
-  initial?: Partial<Pick<EditorPdfTabInput, 'id' | 'title'>>,
-): EditorPdfTabInput {
-  return createEditorPdfTabInput(url, initial);
+  initial?: Partial<Pick<EditorWorkspacePdfTab, 'id' | 'title' | 'residency'>>,
+): EditorWorkspacePdfTab {
+  return {
+    ...createEditorPdfTabInput(url, initial),
+    residency: initial?.residency ?? 'dynamic',
+  };
 }
 
 function normalizeWorkspaceTab(value: unknown): EditorWorkspaceTab | null {
@@ -158,17 +175,68 @@ function normalizeWorkspaceTab(value: unknown): EditorWorkspaceTab | null {
       title: normalizedInput.title,
       document: candidate.document,
       viewMode: normalizedInput.viewMode,
+      residency: candidate.residency === 'resident' ? 'resident' : 'dynamic',
     });
   }
 
-  return normalizedInput;
+  return {
+    ...normalizedInput,
+    residency: candidate.residency === 'resident' ? 'resident' : 'dynamic',
+  };
+}
+
+function isSupportedPaneMode(
+  paneMode: string,
+): paneMode is SupportedEditorPaneMode {
+  return SUPPORTED_EDITOR_PANE_MODES.includes(paneMode as SupportedEditorPaneMode);
+}
+
+function normalizeTabResidencies(
+  tabs: EditorWorkspaceTab[],
+): EditorWorkspaceTab[] {
+  const firstIndexByPaneMode = new Map<SupportedEditorPaneMode, number>();
+  const residentIndexByPaneMode = new Map<SupportedEditorPaneMode, number>();
+
+  for (const [index, tab] of tabs.entries()) {
+    const paneMode = getEditorPaneMode(tab);
+    if (!isSupportedPaneMode(paneMode)) {
+      continue;
+    }
+
+    if (!firstIndexByPaneMode.has(paneMode)) {
+      firstIndexByPaneMode.set(paneMode, index);
+    }
+
+    if (tab.residency === 'resident' && !residentIndexByPaneMode.has(paneMode)) {
+      residentIndexByPaneMode.set(paneMode, index);
+    }
+  }
+
+  return tabs.map((tab, index) => {
+    const paneMode = getEditorPaneMode(tab);
+    if (!isSupportedPaneMode(paneMode)) {
+      return tab;
+    }
+
+    const residentIndex =
+      residentIndexByPaneMode.get(paneMode) ?? firstIndexByPaneMode.get(paneMode);
+    const nextResidency: EditorTabResidency =
+      residentIndex === index ? 'resident' : 'dynamic';
+
+    return tab.residency === nextResidency
+      ? tab
+      : {
+          ...tab,
+          residency: nextResidency,
+        };
+  });
 }
 
 function normalizeEditorGroupState(
   state: EditorEditorGroupState,
 ): EditorEditorGroupState {
   const normalizedGroupId = normalizeEditorGroupId(state.groupId);
-  const tabs = state.tabs;
+  const tabs = normalizeTabResidencies(state.tabs);
   const tabIdSet = new Set(tabs.map((tab) => tab.id));
   const normalizedMruTabIds = toUniqueIds(
     [...state.mruTabIds, ...tabs.map((tab) => tab.id)].filter((tabId) =>
@@ -263,7 +331,7 @@ function normalizeStoredSavedDraftStateByInputId(
 }
 
 function createWorkspaceTabFromStoredInput(
-  input: EditorTabInput,
+  input: EditorWorkspaceTab,
   draftStateByInputId: Record<string, StoredDraftState>,
 ): EditorWorkspaceTab {
   if (isEditorDraftTabInput(input)) {
@@ -273,10 +341,14 @@ function createWorkspaceTabFromStoredInput(
       title: draftState?.title ?? input.title,
       document: draftState?.document,
       viewMode: draftState?.viewMode ?? input.viewMode,
+      residency: 'resident',
     });
   }
 
-  return input;
+  return {
+    ...input,
+    residency: 'resident',
+  };
 }
 
 function toUniqueIds(values: ReadonlyArray<string>) {
@@ -431,8 +503,8 @@ function readStoredWorkspaceState(
           };
           const tabs = Array.isArray(candidate.inputs)
             ? candidate.inputs
-                .map((input) => normalizeEditorTabInput(input))
-                .filter((input): input is EditorTabInput => Boolean(input))
+                .map((input) => normalizeWorkspaceTab(input))
+                .filter((input): input is EditorWorkspaceTab => Boolean(input))
                 .map((input) => createWorkspaceTabFromStoredInput(input, draftStateByInputId))
             : Array.isArray(candidate.tabs)
               ? candidate.tabs
@@ -464,8 +536,8 @@ function readStoredWorkspaceState(
       : (() => {
           const tabs = Array.isArray(rawWorkspace.inputs)
             ? rawWorkspace.inputs
-                .map((input) => normalizeEditorTabInput(input))
-                .filter((input): input is EditorTabInput => Boolean(input))
+                .map((input) => normalizeWorkspaceTab(input))
+                .filter((input): input is EditorWorkspaceTab => Boolean(input))
                 .map((input) => createWorkspaceTabFromStoredInput(input, draftStateByInputId))
             : Array.isArray(rawWorkspace.tabs)
               ? rawWorkspace.tabs
@@ -846,13 +918,20 @@ export class EditorModel {
   };
 
   readonly createDraftTab = (target: EditorGroupTarget = {}) => {
-    const nextTab = createDraftTab();
-    this.updateTargetGroupState(target, (group) => ({
-      ...group,
-      tabs: [...group.tabs, nextTab],
-      activeTabId: nextTab.id,
-      mruTabIds: touchMruTab(group.mruTabIds, nextTab.id),
-    }));
+    this.updateTargetGroupState(target, (group) => {
+      const hasResidentDraft = group.tabs.some(
+        (tab) => isEditorDraftTabInput(tab) && tab.residency === 'resident',
+      );
+      const nextTab = createDraftTab({
+        residency: hasResidentDraft ? 'dynamic' : 'resident',
+      });
+      return {
+        ...group,
+        tabs: [...group.tabs, nextTab],
+        activeTabId: nextTab.id,
+        mruTabIds: touchMruTab(group.mruTabIds, nextTab.id),
+      };
+    });
   };
 
   readonly createBrowserTab = (
@@ -883,7 +962,12 @@ export class EditorModel {
         };
       }
 
-      const nextTab = createBrowserTab(normalizedUrl);
+      const hasResidentBrowser = group.tabs.some(
+        (tab) => isEditorBrowserTabInput(tab) && tab.residency === 'resident',
+      );
+      const nextTab = createBrowserTab(normalizedUrl, {
+        residency: hasResidentBrowser ? 'dynamic' : 'resident',
+      });
       return {
         ...group,
         tabs: [...group.tabs, nextTab],
@@ -898,10 +982,7 @@ export class EditorModel {
     target: EditorGroupTarget = {},
     options: CreateContentTabOptions = {},
   ) => {
-    const normalizedUrl = url.trim();
-    if (!normalizedUrl) {
-      return;
-    }
+    const normalizedUrl = url.trim() || EMPTY_PDF_TAB_URL;
 
     const reuseExisting = options.reuseExisting ?? true;
 
@@ -921,7 +1002,12 @@ export class EditorModel {
         };
       }
 
-      const nextTab = createPdfTab(normalizedUrl);
+      const hasResidentPdf = group.tabs.some(
+        (tab) => isEditorPdfTabInput(tab) && tab.residency === 'resident',
+      );
+      const nextTab = createPdfTab(normalizedUrl, {
+        residency: hasResidentPdf ? 'dynamic' : 'resident',
+      });
       return {
         ...group,
         tabs: [...group.tabs, nextTab],

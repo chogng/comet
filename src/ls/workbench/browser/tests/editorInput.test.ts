@@ -4,8 +4,10 @@ import { createWritingEditorDocumentFromPlainText } from 'ls/editor/common/writi
 import type { EditorWorkspaceDraftTab } from 'ls/workbench/browser/parts/editor/editorModel';
 import {
   EMPTY_BROWSER_TAB_URL,
+  EMPTY_PDF_TAB_URL,
   getEditorTabInputResourceKey,
   isEmptyBrowserTabInput,
+  isEmptyPdfTabInput,
   normalizeEditorTabInput,
   toEditorTabInput,
 } from 'ls/workbench/browser/parts/editor/editorInput';
@@ -95,6 +97,27 @@ test('isEmptyBrowserTabInput matches only browser about:blank tabs', () => {
       kind: 'browser',
       title: 'Example',
       url: 'https://example.com',
+    }),
+    false,
+  );
+});
+
+test('isEmptyPdfTabInput matches only pdf about:blank tabs', () => {
+  assert.equal(
+    isEmptyPdfTabInput({
+      id: 'pdf-blank',
+      kind: 'pdf',
+      title: '',
+      url: EMPTY_PDF_TAB_URL,
+    }),
+    true,
+  );
+  assert.equal(
+    isEmptyPdfTabInput({
+      id: 'pdf-filled',
+      kind: 'pdf',
+      title: 'Paper.pdf',
+      url: 'https://example.com/paper.pdf',
     }),
     false,
   );

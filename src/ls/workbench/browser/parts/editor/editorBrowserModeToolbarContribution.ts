@@ -259,6 +259,17 @@ implements EditorModeToolbarContribution {
 
   private createTrailingItems(): ActionBarItem[] {
     return [
+      {
+        label: this.context.labels.toolbarArchivePage,
+        title: this.context.labels.toolbarArchivePage,
+        mode: 'icon',
+        buttonClassName: 'editor-browser-toolbar-btn',
+        content: createLxIcon('download-2'),
+        disabled: !this.context.browserUrl || !this.context.electronRuntime,
+        onClick: () => {
+          void this.context.onArchiveCurrentPage();
+        },
+      },
       createDropdownMenuActionViewItem({
         label: this.context.labels.toolbarMore,
         title: this.context.labels.toolbarMore,

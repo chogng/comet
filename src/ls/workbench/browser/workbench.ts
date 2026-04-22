@@ -1665,12 +1665,20 @@ class WorkbenchHost {
     };
     const editorBrowserToolbarActions = createEditorBrowserToolbarActions({
       browserUrl,
+      browserPageTitle,
       electronRuntime,
       webContentRuntime,
       invokeDesktop,
+      knowledgeBaseEnabled,
       setWebUrl: setWorkbenchWebUrl,
       ui,
       webContentNavigationModel: webContentNavigationModelInstance,
+      onArchiveArticle: (article) => {
+        setWorkbenchArticles((currentArticles) => [article, ...currentArticles]);
+      },
+      onLibraryDocumentUpserted:
+        libraryModelInstance.upsertDocumentSummary,
+      onLibraryUpdated: refreshLibrary,
       onOpenAddressBarSourceMenu: focusWorkbenchWebUrlInput,
       onToolbarAddressSubmit: () => {
         const { webUrl: latestWebUrl } = getWorkbenchSessionSnapshot();

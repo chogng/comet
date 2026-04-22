@@ -18,6 +18,9 @@ export type SidebarArticle = {
   fetchedAt: string;
   sourceId?: string | null;
   journalTitle?: string | null;
+  archiveHtmlPath?: string | null;
+  archiveTextPath?: string | null;
+  archivePdfPath?: string | null;
 };
 
 export type SidebarLabels = {
@@ -30,6 +33,10 @@ export type SidebarLabels = {
   publishedAt: string;
   source: string;
   fetchedAt: string;
+  archiveHtmlPath: string;
+  archiveTextPath: string;
+  archivePdfPath: string;
+  revealPath: string;
   controlsAriaLabel: string;
   minimize: string;
   maximize: string;
@@ -184,6 +191,10 @@ export function createSidebarPartLabels({
     publishedAt: ui.publishedAt,
     source: ui.source,
     fetchedAt: ui.fetchedAt,
+    archiveHtmlPath: ui.articleDetailsArchiveHtmlPath,
+    archiveTextPath: ui.articleDetailsArchiveTextPath,
+    archivePdfPath: ui.articleDetailsArchivePdfPath,
+    revealPath: ui.articleDetailsRevealPath,
     controlsAriaLabel: ui.titlebarControls,
     minimize: ui.titlebarMinimize,
     maximize: ui.titlebarMaximize,
@@ -305,6 +316,10 @@ function createArticleCardLabels(
     publishedAt: labels.publishedAt,
     source: labels.source,
     fetchedAt: labels.fetchedAt,
+    archiveHtmlPath: labels.archiveHtmlPath,
+    archiveTextPath: labels.archiveTextPath,
+    archivePdfPath: labels.archivePdfPath,
+    revealPath: labels.revealPath,
     controlsAriaLabel: labels.controlsAriaLabel,
     minimize: labels.minimize,
     maximize: labels.maximize,

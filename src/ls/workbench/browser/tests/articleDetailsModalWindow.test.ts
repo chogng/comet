@@ -42,6 +42,10 @@ function createLabels(overrides: Partial<ArticleDetailsModalLabels> = {}): Artic
     publishedAt: 'Published',
     source: 'Source',
     fetchedAt: 'Fetched',
+    archiveHtmlPath: 'Archived HTML',
+    archiveTextPath: 'Extracted text',
+    archivePdfPath: 'Archived PDF',
+    revealPath: 'Show in Finder',
     controlsAriaLabel: 'Window controls',
     minimize: 'Minimize',
     maximize: 'Maximize',
@@ -67,6 +71,9 @@ function createArticleDetailsModalState(
       publishedAt: '2025-01-15',
       sourceUrl: 'https://example.com/article',
       fetchedAt: '2025-01-16T08:00:00.000Z',
+      archiveHtmlPath: null,
+      archiveTextPath: null,
+      archivePdfPath: null,
     },
     labels: createLabels(),
     ...overrides,
@@ -240,6 +247,139 @@ test('article details modal view renders native state and updates document metad
       assert.equal(detailValues[0], '10.1000/lifecycle');
       assert.equal(document.title, 'Understanding Lifecycle Stores');
       assert.equal(document.documentElement.lang, 'en');
+    } finally {
+      view.dispose();
+    }
+  });
+});
+
+test('article details modal view renders archived artifact paths when available', async () => {
+  const fakeModal = createFakeModalApi(async () =>
+    createArticleDetailsModalState({
+      article: {
+        title: 'Archived Page',
+        articleType: 'Research Article',
+        doi: '10.1000/archive',
+        authors: ['Ada Lovelace'],
+        abstractText: 'Abstract text',
+        descriptionText: 'Description text',
+        publishedAt: '2025-01-15',
+        sourceUrl: 'https://example.com/archive',
+        fetchedAt: '2025-01-16T08:00:00.000Z',
+        archiveHtmlPath: '/tmp/archive/page.html',
+        archiveTextPath: '/tmp/archive/page.txt',
+        archivePdfPath: '/tmp/archive/page.pdf',
+      },
+    }),
+  );
+  const fakeWindowControls = createWindowControlsProvider();
+  registerWorkbenchWindowControlsProvider(fakeWindowControls.provider);
+
+  await withElectronApi(createElectronApi({
+    modal: fakeModal.api,
+    windowControls: {
+      perform() {},
+      getState: async () => ({
+        isMaximized: false,
+        isFullscreen: false,
+      }),
+      onStateChange: () => () => {},
+    } as unknown as NonNullable<ElectronAPI['windowControls']>,
+  }), async () => {
+    const view = createArticleDetailsModalWindowView();
+    document.body.append(view.getElement());
+
+    try {
+      await flushMicrotasks();
+
+      const detailRows = Array.from(
+        view.getElement().querySelectorAll('.article-details-grid .article-details-row'),
+      ).map((row) => ({
+        label: row.querySelector('dt')?.textContent?.trim(),
+        value: row.querySelector('dd')?.textContent?.trim(),
+      }));
+
+      assert.equal(
+        detailRows.some((row) => row.label === 'Archived HTML' && row.value === '/tmp/archive/page.html'),
+        true,
+      );
+      assert.equal(
+        detailRows.some((row) => row.label === 'Extracted text' && row.value === '/tmp/archive/page.txt'),
+        true,
+      );
+      assert.equal(
+        detailRows.some((row) => row.label === 'Archived PDF' && row.value === '/tmp/archive/page.pdf'),
+        true,
+      );
+    } finally {
+      view.dispose();
+    }
+  });
+});
+
+test('article details modal view reveals archived artifact paths through desktop invoke', async () => {
+  const invoked: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const fakeModal = createFakeModalApi(async () =>
+    createArticleDetailsModalState({
+      article: {
+        title: 'Archived Page',
+        articleType: 'Research Article',
+        doi: '10.1000/archive',
+        authors: ['Ada Lovelace'],
+        abstractText: 'Abstract text',
+        descriptionText: 'Description text',
+        publishedAt: '2025-01-15',
+        sourceUrl: 'https://example.com/archive',
+        fetchedAt: '2025-01-16T08:00:00.000Z',
+        archiveHtmlPath: '/tmp/archive/page.html',
+        archiveTextPath: '/tmp/archive/page.txt',
+        archivePdfPath: '/tmp/archive/page.pdf',
+      },
+    }),
+  );
+  const fakeWindowControls = createWindowControlsProvider();
+  registerWorkbenchWindowControlsProvider(fakeWindowControls.provider);
+
+  await withElectronApi(createElectronApi({
+    invoke: (async (command, args) => {
+      invoked.push({
+        command,
+        args: args as Record<string, unknown> | undefined,
+      });
+      return true;
+    }) as ElectronAPI['invoke'],
+    modal: fakeModal.api,
+    windowControls: {
+      perform() {},
+      getState: async () => ({
+        isMaximized: false,
+        isFullscreen: false,
+      }),
+      onStateChange: () => () => {},
+    } as unknown as NonNullable<ElectronAPI['windowControls']>,
+  }), async () => {
+    const view = createArticleDetailsModalWindowView();
+    document.body.append(view.getElement());
+
+    try {
+      await flushMicrotasks();
+
+      const revealButtons = Array.from(
+        view.getElement().querySelectorAll<HTMLButtonElement>('.article-details-reveal-button'),
+      );
+      assert.equal(revealButtons.length, 3);
+
+      revealButtons[0].click();
+      await flushMicrotasks();
+
+      assert.deepEqual(invoked, [
+        {
+          command: 'open_path',
+          args: {
+            path: '/tmp/archive/page.html',
+          },
+        },
+      ]);
     } finally {
       view.dispose();
     }

@@ -1,12 +1,5 @@
-import type { Annotation } from 'ls/editor/common/annotation';
-import {
-  PdfAnnotationEditor,
-  type PdfAnnotationEditorViewState,
-} from 'ls/editor/browser/pdf/pdfAnnotationEditor';
-import {
-  readStoredPdfAnnotations,
-  writeStoredPdfAnnotations,
-} from 'ls/editor/browser/pdf/pdfAnnotationPersistence';
+import type { PdfAnnotationEditorViewState } from 'ls/editor/browser/pdf/pdfAnnotationEditor';
+import type { PdfSelection } from 'ls/editor/browser/pdf/pdfSelection';
 import type { EditorWorkspacePdfTab } from 'ls/workbench/browser/parts/editor/editorModel';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
@@ -18,32 +11,59 @@ export type PdfEditorPaneProps = {
   viewPartProps: ViewPartProps;
 };
 
+class PdfEditorPaneStateController {
+  private viewState: PdfAnnotationEditorViewState = {
+    selection: null,
+    draftComment: '',
+  };
+
+  getViewState() {
+    return this.viewState;
+  }
+
+  restoreViewState(viewState: PdfAnnotationEditorViewState | undefined) {
+    this.viewState = viewState
+      ? {
+        selection: viewState.selection,
+        draftComment: viewState.draftComment,
+      }
+      : {
+        selection: null,
+        draftComment: '',
+      };
+  }
+
+  setSelection(selection: PdfSelection | null) {
+    this.viewState = {
+      ...this.viewState,
+      selection,
+    };
+  }
+}
+
 export class PdfEditorPane extends EditorPane<
   PdfEditorPaneProps,
   PdfAnnotationEditorViewState
 > {
   private props: PdfEditorPaneProps;
-  private readonly editor: PdfAnnotationEditor;
-  private annotations: readonly Annotation[] = [];
+  private readonly element = document.createElement('div');
+  private readonly bodyElement = document.createElement('div');
+  private readonly editor = new PdfEditorPaneStateController();
 
   constructor(props: PdfEditorPaneProps) {
     super();
     this.props = props;
-    this.annotations = readStoredPdfAnnotations(props.pdfTab.id);
-    this.editor = new PdfAnnotationEditor(this.toEditorProps(props));
+    this.element.className = 'editor-pdf-pane';
+    this.bodyElement.className = 'editor-pdf-body';
+    this.element.append(this.bodyElement);
   }
 
   override getElement() {
-    return this.editor.getElement();
+    return this.element;
   }
 
   override setProps(props: PdfEditorPaneProps) {
-    if (this.props.pdfTab.id !== props.pdfTab.id) {
-      this.annotations = readStoredPdfAnnotations(props.pdfTab.id);
-    }
-
     this.props = props;
-    this.editor.setProps(this.toEditorProps(props));
   }
 
   override getViewState() {
@@ -55,28 +75,8 @@ export class PdfEditorPane extends EditorPane<
   }
 
   override dispose() {
-    this.editor.dispose();
+    this.element.replaceChildren();
   }
-
-  private toEditorProps(props: PdfEditorPaneProps) {
-    return {
-      url: props.pdfTab.url,
-      targetId: props.pdfTab.id,
-      labels: {
-        title: props.labels.pdfTitle,
-        emptyState: props.labels.status.ready,
-      },
-      annotations: this.annotations,
-      onAnnotationsChange: this.handleAnnotationsChange,
-      viewPartProps: props.viewPartProps,
-    };
-  }
-
-  private readonly handleAnnotationsChange = (annotations: readonly Annotation[]) => {
-    this.annotations = annotations;
-    writeStoredPdfAnnotations(this.props.pdfTab.id, annotations);
-    this.editor.setProps(this.toEditorProps(this.props));
-  };
 }
 
 export function createPdfEditorPane(props: PdfEditorPaneProps) {

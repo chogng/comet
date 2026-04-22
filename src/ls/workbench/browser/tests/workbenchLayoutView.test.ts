@@ -521,11 +521,13 @@ function createWorkbenchLayoutViewProps() {
         createDraft: 'Draft',
         createBrowser: 'Browser',
         createFile: 'File',
+        newTab: 'New Tab',
         toolbarSources: 'Source menu',
         toolbarBack: 'Back',
         toolbarForward: 'Forward',
         toolbarRefresh: 'Refresh',
         toolbarFavorite: 'Favorite',
+        toolbarArchivePage: 'Archive page',
         toolbarMore: 'More',
         toolbarHardReload: 'Hard reload',
         toolbarCopyCurrentUrl: 'Copy current URL',
@@ -630,6 +632,7 @@ function createWorkbenchLayoutViewProps() {
       onToolbarNavigateBack: () => {},
       onToolbarNavigateForward: () => {},
       onToolbarNavigateRefresh: () => {},
+      onToolbarArchiveCurrentPage: () => {},
       onToolbarHardReload: () => {},
       onToolbarCopyCurrentUrl: () => {},
       onToolbarClearBrowsingHistory: () => {},
@@ -1344,7 +1347,7 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
     );
     assert.deepEqual(
       trailingButtons.map((button) => button.getAttribute('aria-label')),
-      ['More'],
+      ['Archive page', 'More'],
     );
   } finally {
     view.dispose();
@@ -2422,6 +2425,56 @@ test('WorkbenchLayoutView opens the browser toolbar more menu and dispatches han
   }
 });
 
+test('WorkbenchLayoutView dispatches the browser toolbar archive action', async () => {
+  const calls: string[] = [];
+  const props = createWorkbenchLayoutViewProps();
+  props.editorPartProps = {
+    ...props.editorPartProps,
+    tabs: [
+      {
+        id: 'browser-tab-1',
+        kind: 'browser',
+        title: 'Example',
+        url: 'https://example.com/current',
+      },
+    ],
+    activeTabId: 'browser-tab-1',
+    activeTab: {
+      id: 'browser-tab-1',
+      kind: 'browser',
+      title: 'Example',
+      url: 'https://example.com/current',
+    },
+    viewPartProps: {
+      ...props.editorPartProps.viewPartProps,
+      browserUrl: 'https://example.com/current',
+      electronRuntime: true,
+      webContentRuntime: true,
+    },
+    onToolbarArchiveCurrentPage: () => {
+      calls.push('archive');
+    },
+  };
+
+  const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
+  document.body.append(view.getElement());
+
+  try {
+    const archiveButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-trailing [aria-label="Archive page"]');
+    assert(archiveButton instanceof HTMLButtonElement);
+
+    archiveButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(calls, ['archive']);
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
 test('WorkbenchLayoutView hides about:blank in the browser toolbar address input', () => {
   const props = createWorkbenchLayoutViewProps();
   props.editorPartProps = {
@@ -2682,7 +2735,13 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
       view.getElement().querySelector('.editor-toolbar .editor-draft-toolbar'),
       null,
     );
-    assert.match(pdfToolbar.textContent ?? '', /PDF toolbar coming soon/i);
+    const pdfToolbarPlaceholder = pdfToolbar.querySelector('.editor-pdf-toolbar-placeholder');
+    assert(pdfToolbarPlaceholder instanceof HTMLElement);
+    assert.match(pdfToolbarPlaceholder.textContent ?? '', /PDF toolbar coming soon/i);
+    const pdfPane = view.getElement().querySelector('.editor-content .editor-pdf-pane');
+    assert(pdfPane instanceof HTMLElement);
+    const pdfBody = pdfPane.querySelector(':scope > .editor-pdf-body');
+    assert(pdfBody instanceof HTMLElement);
   } finally {
     view.dispose();
     document.body.replaceChildren();

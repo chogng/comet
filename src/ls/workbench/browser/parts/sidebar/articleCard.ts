@@ -33,6 +33,11 @@ const VIEW_DETAILS_LABEL = 'View details';
 const DOWNLOADED_PDF_LABEL = 'PDF downloaded';
 const MORE_ACTIONS_LABEL = 'More actions';
 const ARTICLE_CARD_MORE_MENU_DATA = 'sidebar-article-card-more';
+const ARCHIVE_BADGE_TITLES = {
+  html: 'Archived HTML available',
+  txt: 'Extracted text available',
+  pdf: 'Archived PDF available',
+} as const;
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
@@ -118,6 +123,10 @@ export class ArticleCard extends LifecycleOwner {
     'span',
     'fetch-pane-article-card-meta',
   );
+  private readonly archiveBadgesElement = createElement(
+    'div',
+    'fetch-pane-article-card-archive-badges',
+  );
   private readonly toolbarView = createActionBarView({
     className: 'fetch-pane-article-card-toolbar-actions',
     ariaRole: 'group',
@@ -128,7 +137,11 @@ export class ArticleCard extends LifecycleOwner {
     super();
     this.props = props;
     this.element.append(this.mainElement, this.toolbarView.getElement());
-    this.mainElement.append(this.titleElement, this.metaElement);
+    this.mainElement.append(
+      this.titleElement,
+      this.metaElement,
+      this.archiveBadgesElement,
+    );
     this.register(this.toolbarView);
     this.register(addDisposableListener(this.element, 'click', this.handleCardClick));
     this.register(addDisposableListener(this.element, 'keydown', this.handleCardKeyDown));
@@ -193,6 +206,7 @@ export class ArticleCard extends LifecycleOwner {
     this.titleElement.textContent = title;
     applyHover(this.titleElement, title);
     this.metaElement.textContent = metaText;
+    this.renderArchiveBadges();
 
     this.toolbarView.setProps({
       className: 'fetch-pane-article-card-toolbar-actions',
@@ -276,6 +290,34 @@ export class ArticleCard extends LifecycleOwner {
       ],
     });
   };
+
+  private renderArchiveBadges() {
+    const badges: Array<{ label: string; title: string }> = [];
+    const { article } = this.props;
+
+    if (article.archiveHtmlPath) {
+      badges.push({ label: 'HTML', title: ARCHIVE_BADGE_TITLES.html });
+    }
+    if (article.archiveTextPath) {
+      badges.push({ label: 'TXT', title: ARCHIVE_BADGE_TITLES.txt });
+    }
+    if (article.archivePdfPath) {
+      badges.push({ label: 'PDF', title: ARCHIVE_BADGE_TITLES.pdf });
+    }
+
+    this.archiveBadgesElement.replaceChildren(
+      ...badges.map((badge) => {
+        const badgeElement = createElement(
+          'span',
+          'fetch-pane-article-card-archive-badge',
+        );
+        badgeElement.textContent = badge.label;
+        badgeElement.title = badge.title;
+        return badgeElement;
+      }),
+    );
+    this.archiveBadgesElement.hidden = badges.length === 0;
+  }
 
   private readonly handleCardClick = () => {
     if (!this.props.isSelectionModeEnabled) {

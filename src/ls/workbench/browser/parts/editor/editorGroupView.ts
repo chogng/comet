@@ -85,6 +85,7 @@ export type EditorGroupViewProps = {
   onToolbarNavigateBack: () => void;
   onToolbarNavigateForward: () => void;
   onToolbarNavigateRefresh: () => void;
+  onToolbarArchiveCurrentPage: () => void | Promise<void>;
   onToolbarHardReload: () => void;
   onToolbarCopyCurrentUrl: () => void | Promise<void>;
   onToolbarClearBrowsingHistory: () => void;
@@ -197,8 +198,7 @@ function createTitleControlProps(
         case 'file':
         case 'terminal':
         case 'git-changes':
-          // Placeholder mode entries are visible in the topbar, but their
-          // creation/activation pipeline is intentionally deferred.
+          // Future launcher kinds are intentionally not wired yet.
           return;
       }
     },

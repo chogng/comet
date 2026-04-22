@@ -154,6 +154,98 @@ test('DropdownMenuActionViewItem can render a custom overlay', async () => {
   }
 });
 
+test('DropdownMenuActionViewItem syncs custom overlay placement class from the resolved context view position', async () => {
+  const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+  const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 400,
+  });
+  Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
+    value: 300,
+  });
+
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    if (this.classList.contains('ls-context-view')) {
+      return {
+        x: 8,
+        y: 8,
+        width: 180,
+        height: 120,
+        top: 8,
+        left: 8,
+        right: 188,
+        bottom: 128,
+        toJSON() {
+          return this;
+        },
+      } as DOMRect;
+    }
+
+    if (this.tagName === 'BUTTON') {
+      return {
+        x: 40,
+        y: 260,
+        width: 24,
+        height: 24,
+        top: 260,
+        left: 40,
+        right: 64,
+        bottom: 284,
+        toJSON() {
+          return this;
+        },
+      } as DOMRect;
+    }
+
+    return originalGetBoundingClientRect.call(this);
+  };
+
+  const item = new DropdownMenuActionViewItem({
+    label: 'History',
+    content: 'History',
+    overlayRole: 'dialog',
+    renderOverlay: () => {
+      const overlay = document.createElement('div');
+      overlay.className = 'custom-history-overlay';
+      return overlay;
+    },
+  });
+  const host = document.createElement('div');
+  document.body.append(host);
+
+  try {
+    item.render(host);
+    const trigger = host.querySelector('button');
+    assert(trigger instanceof HTMLButtonElement);
+
+    trigger.click();
+    await delay(0);
+    await delay(0);
+
+    const contextView = document.body.querySelector('.ls-context-view');
+    const overlay = document.body.querySelector('.custom-history-overlay');
+    assert(contextView instanceof HTMLElement);
+    assert(overlay instanceof HTMLElement);
+    assert.equal(contextView.classList.contains('top'), true);
+    assert.equal(overlay.classList.contains('dropdown-menu-top'), true);
+    assert.equal(overlay.classList.contains('dropdown-menu-bottom'), false);
+  } finally {
+    item.dispose();
+    document.body.replaceChildren();
+    HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    if (originalInnerWidth) {
+      Object.defineProperty(window, 'innerWidth', originalInnerWidth);
+    }
+    if (originalInnerHeight) {
+      Object.defineProperty(window, 'innerHeight', originalInnerHeight);
+    }
+  }
+});
+
 test('DropdownMenuActionViewItem delegates menu lifecycle to an injected context menu service', async () => {
   const delegates: import('ls/base/browser/contextmenu').ContextMenuDelegate[] = [];
   let visible = false;
@@ -330,6 +422,44 @@ test('DropdownMenuActionViewItem forwards requested menu position to the context
 
     assert.equal(delegates.length, 1);
     assert.equal(delegates[0]?.position, 'above');
+  } finally {
+    item.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('DropdownMenuActionViewItem forwards requested menu selection style to the context menu service', async () => {
+  const delegates: import('ls/base/browser/contextmenu').ContextMenuDelegate[] = [];
+  const contextMenuService: import('ls/base/browser/contextmenu').ContextMenuService = {
+    showContextMenu(delegate) {
+      delegates.push(delegate);
+    },
+    hideContextMenu() {},
+    isVisible() {
+      return false;
+    },
+    dispose() {},
+  };
+  const item = new DropdownMenuActionViewItem({
+    label: 'More',
+    content: 'More',
+    contextMenuService,
+    menuSelectionStyle: 'neutral',
+    menu: [{ label: 'Archive' }],
+  });
+  const host = document.createElement('div');
+  document.body.append(host);
+
+  try {
+    item.render(host);
+    const button = host.querySelector('button');
+    assert(button instanceof HTMLButtonElement);
+
+    button.click();
+    await delay(0);
+
+    assert.equal(delegates.length, 1);
+    assert.equal(delegates[0]?.selectionStyle, 'neutral');
   } finally {
     item.dispose();
     document.body.replaceChildren();

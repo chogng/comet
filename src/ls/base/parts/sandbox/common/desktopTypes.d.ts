@@ -25,6 +25,9 @@ export interface Article {
   fetchedAt: string;
   sourceId?: string | null;
   journalTitle?: string | null;
+  archiveHtmlPath?: string | null;
+  archiveTextPath?: string | null;
+  archivePdfPath?: string | null;
 }
 
 export interface BatchSource {
@@ -292,6 +295,22 @@ export interface WebContentPdfDownloadPayload {
   customDownloadDir?: string | null;
 }
 
+export interface WebContentHtmlArchivePayload {
+  pageUrl?: string;
+  pageTitle?: string | null;
+}
+
+export interface WebContentHtmlArchiveResult {
+  filePath: string;
+  htmlPath: string;
+  textPath: string;
+  pdfPath: string | null;
+  sourceUrl: string;
+  pdfSourceUrl: string | null;
+  extractedText: string;
+  article: Article;
+}
+
 export interface ExportArticlesDocxPayload {
   articles?: Article[];
   preferredDirectory?: string | null;
@@ -335,6 +354,10 @@ export interface ArticleDetailsModalLabels {
   publishedAt: string;
   source: string;
   fetchedAt: string;
+  archiveHtmlPath: string;
+  archiveTextPath: string;
+  archivePdfPath: string;
+  revealPath: string;
   controlsAriaLabel: string;
   minimize: string;
   maximize: string;
@@ -653,6 +676,7 @@ export interface AppCommandPayloadMap {
   pick_download_directory: undefined;
   open_path: OpenPathPayload;
   web_content_download_pdf: WebContentPdfDownloadPayload;
+  web_content_archive_html: WebContentHtmlArchivePayload;
   index_downloaded_pdf: IndexDownloadedPdfPayload;
   upsert_library_document_metadata: UpsertLibraryDocumentMetadataPayload;
   delete_library_document: DeleteLibraryDocumentPayload;
@@ -679,6 +703,7 @@ export interface AppCommandResultMap {
   pick_download_directory: string | null;
   open_path: boolean;
   web_content_download_pdf: PdfDownloadResult;
+  web_content_archive_html: WebContentHtmlArchiveResult;
   index_downloaded_pdf: LibraryRegistrationResult;
   upsert_library_document_metadata: LibraryDocumentSummary;
   delete_library_document: boolean;

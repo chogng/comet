@@ -76,6 +76,7 @@ export const PLANNED_EDITOR_PANE_MODES = [
 ] as const satisfies readonly EditorFuturePaneMode[];
 
 export const EMPTY_BROWSER_TAB_URL = 'about:blank';
+export const EMPTY_PDF_TAB_URL = EMPTY_BROWSER_TAB_URL;
 
 export type EditorFileTabInput = {
   id: string;
@@ -213,6 +214,12 @@ export function isEmptyBrowserTabInput(
   input: EditorTabInput | null | undefined,
 ): input is EditorBrowserTabInput {
   return isEditorBrowserTabInput(input) && input.url === EMPTY_BROWSER_TAB_URL;
+}
+
+export function isEmptyPdfTabInput(
+  input: EditorTabInput | null | undefined,
+): input is EditorPdfTabInput {
+  return isEditorPdfTabInput(input) && input.url === EMPTY_PDF_TAB_URL;
 }
 
 export function isEditorPdfTabInput(

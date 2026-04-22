@@ -2,6 +2,7 @@ import type { NativeModalState } from 'ls/base/parts/sandbox/common/desktopTypes
 import { EventEmitter } from 'ls/base/common/event';
 import { LifecycleStore } from 'ls/base/common/lifecycle';
 import { detectInitialLocale, getLocaleMessages } from 'language/i18n';
+import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
 import {
   connectWorkbenchWindowControls,
   getWindowStateSnapshot,
@@ -9,7 +10,6 @@ import {
   subscribeWindowState,
 } from 'ls/workbench/browser/window';
 import { hasWindowControlsRuntime } from 'ls/base/common/platform';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
 import { createChildWindowShellView } from 'ls/workbench/browser/parts/window/childWindowShell';
 import 'ls/workbench/browser/media/articleDetailsModalContent.css';
 
@@ -22,6 +22,7 @@ type DetailRow = {
   label: string;
   value: string;
   wide?: boolean;
+  revealPath?: string | null;
 };
 
 type ArticleDetailsModalSnapshot = {
@@ -85,8 +86,7 @@ function formatDateTime(value: string, locale: 'zh' | 'en') {
 
 function createDetailRows(modalState: ArticleDetailsModalWindowState): DetailRow[] {
   const { article, labels, locale } = modalState;
-
-  return [
+  const rows: DetailRow[] = [
     {
       label: 'DOI',
       value: detailValue(article.doi, labels.unknown),
@@ -113,6 +113,38 @@ function createDetailRows(modalState: ArticleDetailsModalWindowState): DetailRow
       value: formatDateTime(article.fetchedAt, locale),
     },
   ];
+
+  const archiveHtmlPath = detailValue(article.archiveHtmlPath, '');
+  if (archiveHtmlPath) {
+    rows.push({
+      label: normalizeLabel(labels.archiveHtmlPath),
+      value: archiveHtmlPath,
+      wide: true,
+      revealPath: archiveHtmlPath,
+    });
+  }
+
+  const archiveTextPath = detailValue(article.archiveTextPath, '');
+  if (archiveTextPath) {
+    rows.push({
+      label: normalizeLabel(labels.archiveTextPath),
+      value: archiveTextPath,
+      wide: true,
+      revealPath: archiveTextPath,
+    });
+  }
+
+  const archivePdfPath = detailValue(article.archivePdfPath, '');
+  if (archivePdfPath) {
+    rows.push({
+      label: normalizeLabel(labels.archivePdfPath),
+      value: archivePdfPath,
+      wide: true,
+      revealPath: archivePdfPath,
+    });
+  }
+
+  return rows;
 }
 
 class ArticleDetailsModalController {
@@ -271,13 +303,29 @@ export class ArticleDetailsModalWindowView {
   }
 
   private renderDetailGrid(detailRows: DetailRow[]) {
+    const labels = this.controller.getSnapshot().modalState?.labels ?? null;
     const grid = createElement('dl', 'article-details-grid');
     for (const row of detailRows) {
       const wrapper = createElement(
         'div',
         `article-details-row${row.wide ? ' article-details-row-wide' : ''}`,
       );
-      wrapper.append(createElement('dt', '', row.label), createElement('dd', '', row.value));
+      const valueElement = createElement('dd', 'article-details-row-value');
+      valueElement.append(createElement('span', 'article-details-row-text', row.value));
+      if (row.revealPath && labels) {
+        valueElement.append(
+          createButton(
+            labels.revealPath,
+            () => {
+              void nativeHostService.invoke('open_path', {
+                path: row.revealPath ?? '',
+              });
+            },
+            'article-details-reveal-button btn-base btn-secondary btn-sm',
+          ),
+        );
+      }
+      wrapper.append(createElement('dt', '', row.label), valueElement);
       grid.append(wrapper);
     }
     return grid;

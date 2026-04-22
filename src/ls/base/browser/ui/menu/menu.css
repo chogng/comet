@@ -23,6 +23,12 @@
   outline: none;
 }
 
+.ls-menu.ls-menu-selection-neutral {
+  --ls-menu-selected-bg: transparent;
+  --ls-menu-selected-fg: var(--vscode-menu-itemForeground, #304357);
+  --ls-menu-check-color: var(--vscode-menu-itemForeground, #304357);
+}
+
 .ls-menu .ls-menu-header {
   flex: 0 0 auto;
 }
@@ -93,13 +99,6 @@
 .ls-menu .dropdown-menu-item.selected {
   background: var(--ls-menu-selected-bg);
   color: var(--ls-menu-selected-fg);
-
-}
-/* 作用域改法，会影响overflow菜单的样式，暂时不改了 */
-.ls-menu[data-menu^='draft-toolbar-'] {
-  --ls-menu-selected-bg: transparent;
-  --ls-menu-selected-fg: var(--vscode-menu-itemForeground, #304357);
-  --ls-menu-check-color: var(--vscode-menu-itemForeground, #304357);
 }
 
 .ls-menu .dropdown-menu-item.disabled {

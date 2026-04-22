@@ -45,6 +45,23 @@
   white-space: pre-wrap;
 }
 
+.article-details-row-value {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.article-details-row-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.article-details-reveal-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .article-details-row:last-child {
   border-bottom: none;
 }
@@ -78,5 +95,10 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
     padding: 12px 14px;
+  }
+
+  .article-details-row-value {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

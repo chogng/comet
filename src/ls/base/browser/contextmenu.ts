@@ -1,6 +1,7 @@
 import type { BaseAction } from 'ls/base/common/actions';
 import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
 import type { ContextViewAnchor } from 'ls/base/browser/ui/contextview/contextview';
+import type { MenuSelectionStyle } from 'ls/base/browser/ui/menu/menu';
 
 export type ContextMenuAnchor = ContextViewAnchor;
 
@@ -40,6 +41,7 @@ export interface ContextMenuDelegate {
   restoreFocusOnHide?: boolean;
   getMenuClassName?: () => string;
   getMenuData?: () => string;
+  selectionStyle?: MenuSelectionStyle;
   anchorAlignment?: ContextMenuAnchorAlignment;
   anchorAxisAlignment?: ContextMenuAnchorAxisAlignment;
   alignment?: ContextMenuAlignment;

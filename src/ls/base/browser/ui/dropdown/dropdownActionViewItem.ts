@@ -16,6 +16,7 @@ import type {
   ActionBarRenderable,
 } from 'ls/base/browser/ui/actionbar/actionbar';
 import type { HoverService } from 'ls/base/browser/ui/hover/hover';
+import type { MenuSelectionStyle } from 'ls/base/browser/ui/menu/menu';
 import { createPlatformContextMenuService } from 'ls/platform/contextview/browser/contextMenuService';
 
 export type DropdownMenuActionAlignment = 'start' | 'end';
@@ -65,6 +66,7 @@ export type DropdownMenuActionViewItemOptions = {
   overlayRole?: string;
   menuClassName?: string;
   menuData?: string;
+  menuSelectionStyle?: MenuSelectionStyle;
   minWidth?: number;
   hoverService?: HoverService;
   contextMenuService?: ContextMenuService;
@@ -243,6 +245,7 @@ class DomDropdownActionOverlayPresenter {
   private readonly contextView = createContextViewController();
   private overlayView: HTMLElement | null = null;
   private currentRequest: DropdownActionOverlayRequest | null = null;
+  private placementSyncFrame: number | null = null;
 
   show(request: DropdownActionOverlayRequest) {
     this.currentRequest = request;
@@ -261,6 +264,8 @@ class DomDropdownActionOverlayPresenter {
       offset: request.offset,
       minWidth: request.minWidth,
     });
+    this.syncOverlayPlacementClass();
+    this.schedulePlacementClassSync();
   }
 
   hide = () => {
@@ -268,6 +273,10 @@ class DomDropdownActionOverlayPresenter {
   };
 
   dispose() {
+    if (this.placementSyncFrame !== null) {
+      cancelAnimationFrame(this.placementSyncFrame);
+      this.placementSyncFrame = null;
+    }
     this.overlayView?.remove();
     this.overlayView = null;
     this.currentRequest = null;
@@ -275,11 +284,37 @@ class DomDropdownActionOverlayPresenter {
   }
 
   private readonly handleHide = () => {
+    if (this.placementSyncFrame !== null) {
+      cancelAnimationFrame(this.placementSyncFrame);
+      this.placementSyncFrame = null;
+    }
     const request = this.currentRequest;
     this.overlayView = null;
     this.currentRequest = null;
     request?.onHide();
   };
+
+  private schedulePlacementClassSync() {
+    if (this.placementSyncFrame !== null) {
+      cancelAnimationFrame(this.placementSyncFrame);
+    }
+
+    this.placementSyncFrame = requestAnimationFrame(() => {
+      this.placementSyncFrame = null;
+      this.syncOverlayPlacementClass();
+    });
+  }
+
+  private syncOverlayPlacementClass() {
+    const overlay = this.overlayView;
+    if (!overlay) {
+      return;
+    }
+
+    const contextViewElement = this.contextView.getViewElement();
+    overlay.classList.toggle('dropdown-menu-top', contextViewElement.classList.contains('top'));
+    overlay.classList.toggle('dropdown-menu-bottom', contextViewElement.classList.contains('bottom'));
+  }
 }
 
 class ContextMenuDropdownActionPresenter {
@@ -330,6 +365,7 @@ class ContextMenuDropdownActionPresenter {
         : undefined,
       getMenuClassName: options.menuClassName ? () => options.menuClassName! : undefined,
       getMenuData: menuData ? () => menuData : undefined,
+      selectionStyle: options.menuSelectionStyle,
       anchorAlignment: resolvedAlignment === 'end' ? 'right' : 'left',
       alignment: resolvedAlignment,
       position: options.overlayPosition ?? 'below',

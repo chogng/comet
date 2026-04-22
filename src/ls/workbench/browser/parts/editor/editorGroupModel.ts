@@ -2,7 +2,10 @@ import {
   SUPPORTED_EDITOR_PANE_MODES,
   type EditorPaneMode,
   type EditorPlannedTabKind,
+  type SupportedEditorPaneMode,
   getEditorPaneMode,
+  isEmptyBrowserTabInput,
+  isEmptyPdfTabInput,
   isEditorBrowserTabInput,
   isEditorDraftTabInput,
 } from 'ls/workbench/browser/parts/editor/editorInput';
@@ -17,7 +20,7 @@ import {
   createDirtyDraftTabIdSet,
   getDraftTabDisplayLabel as resolveDraftTabDisplayLabel,
   isClosableEditorTab,
-  isReusableEmptyDraftTab,
+  isEmptyDraftTab,
 } from 'ls/workbench/browser/parts/editor/editorTabPolicy';
 
 export type EditorGroupTabState = {
@@ -33,6 +36,7 @@ export type EditorGroupTabItem = {
   id: string;
   kind: EditorPlannedTabKind;
   paneMode: EditorPaneMode;
+  residency: 'resident' | 'dynamic';
   label: string;
   title: string;
   faviconUrl?: string;
@@ -50,9 +54,8 @@ function getTabDisplayLabel(
   tab: EditorWorkspaceTab,
   labels: EditorPartLabels,
   draftIndex: number,
-  draftCount: number,
-  isReusableEmptyDraft: boolean,
-  isDirtyDraft: boolean,
+  isEmpty: boolean,
+  residency: EditorGroupTabItem['residency'],
 ) {
   const paneMode = getEditorPaneMode(tab);
 
@@ -61,17 +64,25 @@ function getTabDisplayLabel(
       return isEditorDraftTabInput(tab)
         ? resolveDraftTabDisplayLabel({
             tab,
+            newTabLabel: labels.newTab,
             draftModeLabel: labels.draftMode,
             draftIndex,
-            draftCount,
-            isReusableEmpty: isReusableEmptyDraft,
-            isDirty: isDirtyDraft,
+            isEmpty,
+            residency,
           })
         : labels.draftMode;
     case 'pdf':
-      return tab.title.trim() || labels.pdfMode;
+      if (!isEmptyPdfTabInput(tab)) {
+        return tab.title.trim() || labels.pdfMode;
+      }
+
+      return residency === 'resident' ? '' : labels.newTab;
     default:
-      return tab.title.trim();
+      if (!isEmptyBrowserTabInput(tab)) {
+        return tab.title.trim();
+      }
+
+      return residency === 'resident' ? '' : labels.newTab;
   }
 }
 
@@ -94,46 +105,12 @@ function getTabDisplayTitle(
   }
 }
 
-function getFallbackTitleForPaneMode(
-  paneMode: EditorGroupTabItem['paneMode'],
-  labels: EditorPartLabels,
-) {
-  switch (paneMode) {
-    case 'draft':
-      return labels.draftMode;
-    case 'pdf':
-      return labels.pdfMode;
-    // Placeholder labels until localization + real pane contributions land.
-    case 'file':
-      return 'File';
-    case 'terminal':
-      return 'Terminal';
-    case 'git-changes':
-      return 'Git Changes';
-    default:
-      return labels.sourceMode;
+function isEmptyWorkspaceTab(tab: EditorWorkspaceTab) {
+  if (isEditorDraftTabInput(tab)) {
+    return isEmptyDraftTab(tab);
   }
-}
 
-function getFallbackLabelForPaneMode(
-  paneMode: EditorGroupTabItem['paneMode'],
-) {
-  switch (paneMode) {
-    case 'file':
-      return 'File';
-    case 'terminal':
-      return 'Terminal';
-    case 'git-changes':
-      return 'Git Changes';
-    default:
-      return '';
-  }
-}
-
-function getDefaultTabKindForPaneMode(
-  paneMode: EditorGroupTabItem['paneMode'],
-): EditorPlannedTabKind {
-  return paneMode;
+  return isEmptyBrowserTabInput(tab) || isEmptyPdfTabInput(tab);
 }
 
 function sanitizeTabFaviconUrl(value: string | undefined) {
@@ -148,6 +125,42 @@ function resolveTabFaviconUrl(
   }
 
   return sanitizeTabFaviconUrl(tab.faviconUrl);
+}
+
+function getFallbackTitleForPaneMode(
+  paneMode: EditorGroupTabItem['paneMode'],
+  labels: EditorPartLabels,
+) {
+  switch (paneMode) {
+    case 'draft':
+      return labels.draftMode;
+    case 'pdf':
+      return labels.pdfMode;
+    case 'file':
+      return 'File';
+    case 'terminal':
+      return 'Terminal';
+    case 'git-changes':
+      return 'Git Changes';
+    default:
+      return labels.sourceMode;
+  }
+}
+
+function getFallbackLabelForPaneMode() {
+  return '';
+}
+
+function getDefaultTabKindForPaneMode(
+  paneMode: EditorGroupTabItem['paneMode'],
+): EditorPlannedTabKind {
+  return paneMode;
+}
+
+function isSupportedPaneMode(
+  paneMode: EditorPaneMode,
+): paneMode is SupportedEditorPaneMode {
+  return SUPPORTED_EDITOR_PANE_MODES.includes(paneMode as SupportedEditorPaneMode);
 }
 
 export function createEditorGroupModel({
@@ -167,26 +180,44 @@ export function createEditorGroupModel({
 }): EditorGroupModel {
   // Keep close/label behavior centralized by evaluating tab policy once per render.
   const dirtyDraftTabIdSet = createDirtyDraftTabIdSet(dirtyDraftTabIds);
+  const residentTabIdByPaneMode = new Map<SupportedEditorPaneMode, string>();
+  const firstTabIdByPaneMode = new Map<SupportedEditorPaneMode, string>();
+  for (const tab of tabs) {
+    const paneMode = getEditorPaneMode(tab);
+    if (!isSupportedPaneMode(paneMode)) {
+      continue;
+    }
+
+    if (!firstTabIdByPaneMode.has(paneMode)) {
+      firstTabIdByPaneMode.set(paneMode, tab.id);
+    }
+
+    if (tab.residency === 'resident' && !residentTabIdByPaneMode.has(paneMode)) {
+      residentTabIdByPaneMode.set(paneMode, tab.id);
+    }
+  }
+
   const draftTabIds = tabs
     .filter((tab) => isEditorDraftTabInput(tab))
     .map((tab) => tab.id);
-  const normalizedTabs = tabs.map((tab) => {
+
+  const toTabItem = (
+    tab: EditorWorkspaceTab,
+    residency: EditorGroupTabItem['residency'],
+  ): EditorGroupTabItem => {
     const paneMode = getEditorPaneMode(tab);
     const draftIndex =
       isEditorDraftTabInput(tab) ? draftTabIds.indexOf(tab.id) : -1;
     const isDirty = isEditorDraftTabInput(tab)
       ? dirtyDraftTabIdSet.has(tab.id)
       : false;
-    const isReusableEmptyDraft = isEditorDraftTabInput(tab)
-      ? isReusableEmptyDraftTab(tab, dirtyDraftTabIdSet)
-      : false;
+    const isEmpty = isEmptyWorkspaceTab(tab);
     const label = getTabDisplayLabel(
       tab,
       labels,
       Math.max(draftIndex, 0),
-      draftTabIds.length,
-      isReusableEmptyDraft,
-      isDirty,
+      isEmpty,
+      residency,
     );
     const draftStatus = isEditorDraftTabInput(tab)
       ? draftStatusByTabId[tab.id]
@@ -199,6 +230,7 @@ export function createEditorGroupModel({
       id: tab.id,
       kind: tab.kind,
       paneMode,
+      residency,
       label,
       title: getTabDisplayTitle(tab, labels, label),
       faviconUrl: resolveTabFaviconUrl(tab),
@@ -212,16 +244,26 @@ export function createEditorGroupModel({
         canRedo,
       },
     };
-  });
+  };
 
-  const presentPaneModes = new Set(normalizedTabs.map((tab) => tab.paneMode));
-  const placeholderTabs = SUPPORTED_EDITOR_PANE_MODES
-    .filter((paneMode) => !presentPaneModes.has(paneMode))
-    .map((paneMode) => ({
+  const residentTabs = SUPPORTED_EDITOR_PANE_MODES.map((paneMode) => {
+    const residentTabId =
+      residentTabIdByPaneMode.get(paneMode) ??
+      firstTabIdByPaneMode.get(paneMode);
+    const residentTab = residentTabId
+      ? tabs.find((tab) => tab.id === residentTabId) ?? null
+      : null;
+
+    if (residentTab) {
+      return toTabItem(residentTab, 'resident');
+    }
+
+    return {
       id: `${paneMode}-entry`,
       kind: getDefaultTabKindForPaneMode(paneMode),
       paneMode,
-      label: getFallbackLabelForPaneMode(paneMode),
+      residency: 'resident' as const,
+      label: getFallbackLabelForPaneMode(),
       title: getFallbackTitleForPaneMode(paneMode, labels),
       faviconUrl: '',
       targetTabId: null,
@@ -233,11 +275,25 @@ export function createEditorGroupModel({
         canUndo: false,
         canRedo: false,
       },
-    }));
+    };
+  });
+
+  const dynamicTabs = tabs
+    .filter((tab) => {
+      const paneMode = getEditorPaneMode(tab);
+      if (!isSupportedPaneMode(paneMode)) {
+        return true;
+      }
+
+      const residentTabId =
+        residentTabIdByPaneMode.get(paneMode) ??
+        firstTabIdByPaneMode.get(paneMode);
+      return residentTabId !== tab.id;
+    })
+    .map((tab) => toTabItem(tab, 'dynamic'));
 
   return {
-    // Real tabs keep their workspace order. Missing pane modes append a placeholder entry.
-    tabs: [...normalizedTabs, ...placeholderTabs],
+    tabs: [...residentTabs, ...dynamicTabs],
     activeTabId,
     activeTab,
   };

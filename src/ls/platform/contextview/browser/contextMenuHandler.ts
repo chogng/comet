@@ -167,6 +167,7 @@ export class ContextMenuHandler {
     const menu = new Menu({
       items: options,
       dataMenu,
+      selectionStyle: delegate.selectionStyle,
       role: 'menu',
       placement: delegate.position === 'above' ? 'top' : 'bottom',
       header: menuHeader,
@@ -190,6 +191,7 @@ export class ContextMenuHandler {
       menu.setOptions({
         items: options,
         dataMenu,
+        selectionStyle: delegate.selectionStyle,
         role: 'menu',
         placement,
         header: menuHeader,

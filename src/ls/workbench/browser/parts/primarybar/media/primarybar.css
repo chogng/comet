@@ -341,6 +341,28 @@
   text-overflow: ellipsis;
 }
 
+.fetch-pane-article-card-archive-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.fetch-pane-article-card-archive-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 6px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--vscode-primaryBar-fetchCardBadgeBackground, #edf3fa);
+  color: var(--vscode-primaryBar-fetchCardBadgeForeground, #4d6478);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
 .fetch-pane-article-card-toolbar-actions {
   flex-shrink: 0;
 }
@@ -445,6 +467,12 @@ html[lang="en"] .fetch-pane-empty-state {
 
 @media (max-width: 1100px) {
   .fetch-pane-article-card-meta {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .fetch-pane-article-card-archive-badges {
     display: none;
   }
 }

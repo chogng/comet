@@ -1,20 +1,31 @@
 import { toast } from 'ls/base/browser/ui/toast/toast';
-import type { ElectronInvoke } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type {
+  ElectronInvoke,
+  LibraryDocumentSummary,
+  WebContentHtmlArchiveResult,
+} from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { LocaleMessages } from 'language/locales';
 import type { EditorPartBrowserToolbarActions } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { getEditorContentDisplayUrl } from 'ls/workbench/browser/parts/editor/editorUrlPresentation';
 import type { WebContentNavigationModel } from 'ls/workbench/browser/webContentNavigationModel';
+import type { Article } from 'ls/workbench/services/article/articleFetch';
+import { syncLibraryMetadataFromArticle } from 'ls/workbench/services/knowledgeBase/libraryMetadataService';
 
 type EditorBrowserToolbarActionHandlers = EditorPartBrowserToolbarActions;
 
 type CreateEditorBrowserToolbarActionsParams = {
   browserUrl: string;
+  browserPageTitle?: string;
   electronRuntime: boolean;
   webContentRuntime: boolean;
   invokeDesktop: ElectronInvoke;
+  knowledgeBaseEnabled: boolean;
   setWebUrl: (value: string) => void;
   ui: LocaleMessages;
   webContentNavigationModel: WebContentNavigationModel;
+  onArchiveArticle: (article: Article) => void;
+  onLibraryDocumentUpserted?: (document: LibraryDocumentSummary) => void;
+  onLibraryUpdated?: () => void | Promise<void>;
   onOpenAddressBarSourceMenu: () => void;
   onToolbarAddressSubmit: () => void;
   onToolbarNavigateToUrl: (url: string) => void;
@@ -50,12 +61,17 @@ export function createEditorBrowserToolbarActions(
 ): EditorBrowserToolbarActionHandlers {
   const {
     browserUrl,
+    browserPageTitle,
     electronRuntime,
     webContentRuntime,
     invokeDesktop,
+    knowledgeBaseEnabled,
     setWebUrl,
     ui,
     webContentNavigationModel,
+    onArchiveArticle,
+    onLibraryDocumentUpserted,
+    onLibraryUpdated,
     onOpenAddressBarSourceMenu,
     onToolbarAddressSubmit,
     onToolbarNavigateToUrl,
@@ -81,6 +97,44 @@ export function createEditorBrowserToolbarActions(
         webContentRuntime,
         ui,
       });
+    },
+    onToolbarArchiveCurrentPage: async () => {
+      try {
+        const result = await invokeDesktop<WebContentHtmlArchiveResult>(
+          'web_content_archive_html',
+          {
+            pageUrl: browserUrl,
+            pageTitle: browserPageTitle || null,
+          },
+        );
+        onArchiveArticle(result.article);
+
+        if (knowledgeBaseEnabled) {
+          try {
+            await syncLibraryMetadataFromArticle({
+              enabled: knowledgeBaseEnabled,
+              invokeDesktop,
+              article: result.article,
+              onDocumentUpserted: onLibraryDocumentUpserted,
+            });
+            void onLibraryUpdated?.();
+          } catch (metadataError) {
+            console.error('Failed to sync archived page metadata to the library.', metadataError);
+          }
+        }
+
+        toast.success(
+          (result.pdfPath
+            ? ui.toastHtmlArchiveSavedWithPdf
+            : ui.toastHtmlArchiveSavedWithoutPdf)
+            .replace('{filePath}', result.filePath)
+            .replace('{sourceUrl}', result.sourceUrl),
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error ?? 'Unknown archive error');
+        toast.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
+      }
     },
     onToolbarHardReload: () => {
       webContentNavigationModel.handleBrowserHardReload({

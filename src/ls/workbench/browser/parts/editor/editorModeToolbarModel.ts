@@ -18,6 +18,7 @@ type EditorModeToolbarSourceProps = {
   onToolbarNavigateBack: () => void;
   onToolbarNavigateForward: () => void;
   onToolbarNavigateRefresh: () => void;
+  onToolbarArchiveCurrentPage: () => void | Promise<void>;
   onToolbarHardReload: () => void;
   onToolbarCopyCurrentUrl: () => void | Promise<void>;
   onToolbarClearBrowsingHistory: () => void;
@@ -110,6 +111,7 @@ export function createEditorModeToolbarContext(
       toolbarForward: props.labels.toolbarForward,
       toolbarRefresh: props.labels.toolbarRefresh,
       toolbarFavorite: props.labels.toolbarFavorite,
+      toolbarArchivePage: props.labels.toolbarArchivePage,
       toolbarMore: props.labels.toolbarMore,
       toolbarHardReload: props.labels.toolbarHardReload,
       toolbarCopyCurrentUrl: props.labels.toolbarCopyCurrentUrl,
@@ -136,6 +138,7 @@ export function createEditorModeToolbarContext(
     onNavigateBack: props.onToolbarNavigateBack,
     onNavigateForward: props.onToolbarNavigateForward,
     onNavigateRefresh: props.onToolbarNavigateRefresh,
+    onArchiveCurrentPage: props.onToolbarArchiveCurrentPage,
     onHardReload: props.onToolbarHardReload,
     onCopyCurrentUrl: props.onToolbarCopyCurrentUrl,
     onClearBrowsingHistory: props.onToolbarClearBrowsingHistory,

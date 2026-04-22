@@ -387,34 +387,31 @@ test('composer toolbar uses actionbar icon controls', () => {
     assert(dropdownButton instanceof HTMLButtonElement);
     dropdownButton.click();
 
-    const menu = document.body.querySelector('.agentbar-model-menu');
+    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
     assert(menu instanceof HTMLElement);
-    assert.equal(
-      menu.querySelectorAll('.agentbar-model-menu-separator').length,
-      2,
-    );
+    assert.equal(menu.getAttribute('data-menu'), 'agentbar-model-menu');
 
-    const autoMode = Array.from(menu.querySelectorAll('.agentbar-model-menu-item')).find(
+    const autoMode = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Auto Max mode'),
     );
-    assert(autoMode instanceof HTMLButtonElement);
-    assert.equal(autoMode.getAttribute('aria-pressed'), 'true');
+    assert(autoMode instanceof HTMLElement);
+    assert.equal(autoMode.classList.contains('selected'), true);
 
-    const option = Array.from(menu.querySelectorAll('.agentbar-model-menu-item')).find(
+    const option = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
       (node) => node.textContent?.includes('GPT-5.4 · medium'),
     );
-    assert(option instanceof HTMLButtonElement);
+    assert(option instanceof HTMLElement);
     option.click();
 
     assert.equal(selectedModelValue, 'openai:gpt-5.4:medium');
 
     dropdownButton.click();
-    const reopenedMenu = document.body.querySelector('.agentbar-model-menu');
+    const reopenedMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
     assert(reopenedMenu instanceof HTMLElement);
     const addModels = Array.from(
-      reopenedMenu.querySelectorAll('.agentbar-model-menu-item'),
+      reopenedMenu.querySelectorAll('.dropdown-menu-item'),
     ).find((node) => node.textContent?.includes('Add models'));
-    assert(addModels instanceof HTMLButtonElement);
+    assert(addModels instanceof HTMLElement);
     addModels.click();
 
     assert.equal(openedModelSettings, 1);
@@ -441,9 +438,9 @@ test('agent bar model menu supports search filtering', async () => {
     dropdownButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.agentbar-model-menu');
+    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
     assert(menu instanceof HTMLElement);
-    const searchInput = menu.querySelector('.dropdown-menu-search-input .input');
+    const searchInput = menu.querySelector('.ls-menu-header .agentbar-model-menu-search-input .input');
     assert(searchInput instanceof HTMLInputElement);
 
     searchInput.value = 'gpt';
@@ -451,7 +448,7 @@ test('agent bar model menu supports search filtering', async () => {
     await delay(0);
 
     const menuItemLabels = Array.from(
-      menu.querySelectorAll('.agentbar-model-menu-item .agentbar-model-menu-item-label'),
+      menu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'),
     ).map((node) => node.textContent?.trim());
     assert.deepEqual(menuItemLabels, ['GPT-5.4 · medium']);
   } finally {

@@ -27,11 +27,13 @@ export type EditorPartLabels = {
   createDraft: string;
   createBrowser: string;
   createFile: string;
+  newTab: string;
   toolbarSources: string;
   toolbarBack: string;
   toolbarForward: string;
   toolbarRefresh: string;
   toolbarFavorite: string;
+  toolbarArchivePage: string;
   toolbarMore: string;
   toolbarHardReload: string;
   toolbarCopyCurrentUrl: string;
@@ -81,6 +83,7 @@ export type EditorPartBrowserToolbarActions = {
   onToolbarNavigateBack: () => void;
   onToolbarNavigateForward: () => void;
   onToolbarNavigateRefresh: () => void;
+  onToolbarArchiveCurrentPage: () => void | Promise<void>;
   onToolbarHardReload: () => void;
   onToolbarCopyCurrentUrl: () => void | Promise<void>;
   onToolbarClearBrowsingHistory: () => void;

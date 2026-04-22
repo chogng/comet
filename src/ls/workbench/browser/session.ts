@@ -63,10 +63,19 @@ export function setWorkbenchFetchSeedUrl(
   });
 }
 
-export function setWorkbenchArticles(articles: Article[]) {
-  updateWorkbenchSessionState((current) =>
-    Object.is(current.articles, articles) ? current : { ...current, articles },
-  );
+export function setWorkbenchArticles(
+  articles: Article[] | ((current: Article[]) => Article[]),
+) {
+  updateWorkbenchSessionState((current) => {
+    const nextArticles =
+      typeof articles === 'function'
+        ? articles(current.articles)
+        : articles;
+
+    return Object.is(current.articles, nextArticles)
+      ? current
+      : { ...current, articles: nextArticles };
+  });
 }
 
 export function setWorkbenchSelectionModePhase(

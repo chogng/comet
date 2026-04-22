@@ -15,6 +15,7 @@ export type EditorModeToolbarContributionContext = {
     toolbarForward: string;
     toolbarRefresh: string;
     toolbarFavorite: string;
+    toolbarArchivePage: string;
     toolbarMore: string;
     toolbarHardReload: string;
     toolbarCopyCurrentUrl: string;
@@ -38,6 +39,7 @@ export type EditorModeToolbarContributionContext = {
   onNavigateBack: () => void;
   onNavigateForward: () => void;
   onNavigateRefresh: () => void;
+  onArchiveCurrentPage: () => void | Promise<void>;
   onHardReload: () => void;
   onCopyCurrentUrl: () => void | Promise<void>;
   onClearBrowsingHistory: () => void;

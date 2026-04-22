@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createEditorModel } from 'ls/workbench/browser/parts/editor/editorModel';
+import { EMPTY_PDF_TAB_URL } from 'ls/workbench/browser/parts/editor/editorInput';
 import { createEditorOpenService } from 'ls/workbench/services/editor/browser/editorOpenService';
 
 type MockStorage = {
@@ -152,6 +153,68 @@ test('editor open service creates a non-reused pdf tab for pdf new-tab requests'
     assert.equal(result.handled, true);
     assert.equal(matchingPdfTabs.length, 2);
     assert.equal(result.activeTabId, matchingPdfTabs[1]?.id ?? null);
+
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
+test('editor open service reuses the existing empty pdf for reveal-or-open pdf requests', () => {
+  const restoreWindow = installMockWindow(createLocalStorage());
+
+  try {
+    const model = createEditorModel();
+    const service = createEditorOpenService(model);
+
+    const firstResult = service.open({
+      kind: 'pdf',
+      disposition: 'reveal-or-open',
+    });
+    const initialPdfTabId = firstResult.activeTabId;
+    const secondResult = service.open({
+      kind: 'pdf',
+      disposition: 'reveal-or-open',
+    });
+
+    assert.equal(firstResult.handled, true);
+    assert.equal(secondResult.handled, true);
+    assert.equal(secondResult.activeTabId, initialPdfTabId);
+    assert.equal(
+      model.getSnapshot().tabs.filter(
+        (tab) => tab.kind === 'pdf' && tab.url === EMPTY_PDF_TAB_URL,
+      ).length,
+      1,
+    );
+
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
+test('editor open service creates a fresh empty pdf tab for new-tab pdf requests without a url', () => {
+  const restoreWindow = installMockWindow(createLocalStorage());
+
+  try {
+    const model = createEditorModel();
+    const service = createEditorOpenService(model);
+
+    service.open({
+      kind: 'pdf',
+      disposition: 'reveal-or-open',
+    });
+    const result = service.open({
+      kind: 'pdf',
+      disposition: 'new-tab',
+    });
+
+    const emptyPdfTabs = model.getSnapshot().tabs.filter(
+      (tab) => tab.kind === 'pdf' && tab.url === EMPTY_PDF_TAB_URL,
+    );
+    assert.equal(result.handled, true);
+    assert.equal(emptyPdfTabs.length, 2);
+    assert.equal(result.activeTabId, emptyPdfTabs[1]?.id ?? null);
 
     model.dispose();
   } finally {

@@ -2,6 +2,7 @@ import { writingEditorDocumentToPlainText } from 'ls/editor/common/writingEditor
 import {
   isEmptyBrowserTabInput,
   isEditorDraftTabInput,
+  isEmptyPdfTabInput,
 } from 'ls/workbench/browser/parts/editor/editorInput';
 import type {
   EditorWorkspaceDraftTab,
@@ -36,43 +37,58 @@ export function isReusableEmptyDraftTab(
   );
 }
 
+export function isEmptyDraftTab(
+  tab: EditorWorkspaceTab | null | undefined,
+): tab is EditorWorkspaceDraftTab {
+  return Boolean(
+    tab &&
+      isEditorDraftTabInput(tab) &&
+      tab.title.trim().length === 0 &&
+      writingEditorDocumentToPlainText(tab.document).length === 0,
+  );
+}
+
+export function isReusableEmptyPdfTab(
+  tab: EditorWorkspaceTab | null | undefined,
+) {
+  return Boolean(tab && isEmptyPdfTabInput(tab));
+}
+
 export function isClosableEditorTab(
   tab: EditorWorkspaceTab,
   dirtyDraftTabIds: ReadonlySet<string>,
 ) {
-  // Close affordance is hidden only for reusable empty placeholders.
+  // Close affordance is hidden only for reusable empty resident entries.
   if (isEditorDraftTabInput(tab)) {
     return !isReusableEmptyDraftTab(tab, dirtyDraftTabIds);
   }
 
-  return !isEmptyBrowserTabInput(tab);
+  return !isEmptyBrowserTabInput(tab) && !isEmptyPdfTabInput(tab);
 }
 
 export function getDraftTabDisplayLabel(params: {
   tab: EditorWorkspaceDraftTab;
+  newTabLabel: string;
   draftModeLabel: string;
   draftIndex: number;
-  draftCount: number;
-  isReusableEmpty: boolean;
-  isDirty: boolean;
+  isEmpty: boolean;
+  residency: 'resident' | 'dynamic';
 }) {
   const {
     tab,
+    newTabLabel,
     draftModeLabel,
     draftIndex,
-    draftCount,
-    isReusableEmpty,
-    isDirty,
+    isEmpty,
+    residency,
   } = params;
   const normalizedTitle = tab.title.trim();
   if (normalizedTitle) {
     return normalizedTitle;
   }
 
-  // In single-draft mode, keep the fixed draft entry icon-only when it is
-  // either a reusable placeholder or currently unsaved (dirty).
-  if (draftCount <= 1 && (isReusableEmpty || isDirty)) {
-    return '';
+  if (isEmpty) {
+    return residency === 'resident' ? '' : newTabLabel;
   }
 
   return `${draftModeLabel} ${draftIndex + 1}`;

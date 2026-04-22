@@ -383,6 +383,7 @@ export class DraftEditorToolbar {
           content: createLxIcon('more'),
           overlayAlignment: 'end',
           menuData: DRAFT_TOOLBAR_OVERFLOW_MENU_DATA,
+          menuSelectionStyle: 'neutral',
           menu: overflowMenuItems.map((item) => this.toActionbarMenuItem(item)),
           hoverService,
         }),
@@ -480,6 +481,7 @@ export class DraftEditorToolbar {
         mode: 'icon',
         buttonClassName: 'editor-draft-toolbar-btn editor-draft-toolbar-split-dropdown',
         menuData: DRAFT_TOOLBAR_SPLIT_MENU_DATA,
+        menuSelectionStyle: 'neutral',
         menu: splitButtonConfig.menu.map((item, index) => ({
           id: `${splitButtonConfig.label}-${index}`,
           label: item.label,

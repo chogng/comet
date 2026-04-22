@@ -12,11 +12,13 @@ const labels = {
   createDraft: 'Draft',
   createBrowser: 'Browser',
   createFile: 'File',
+  newTab: 'New Tab',
   toolbarSources: 'Source menu',
   toolbarBack: 'Back',
   toolbarForward: 'Forward',
   toolbarRefresh: 'Refresh',
   toolbarFavorite: 'Favorite',
+  toolbarArchivePage: 'Archive page',
   toolbarMore: 'More',
   toolbarHardReload: 'Hard reload',
   toolbarCopyCurrentUrl: 'Copy current URL',
@@ -140,6 +142,7 @@ function createProps(
     onToolbarNavigateBack: () => {},
     onToolbarNavigateForward: () => {},
     onToolbarNavigateRefresh: () => {},
+    onToolbarArchiveCurrentPage: () => {},
     onToolbarHardReload: () => {},
     onToolbarCopyCurrentUrl: () => {},
     onToolbarClearBrowsingHistory: () => {},
@@ -226,6 +229,30 @@ test('EditorGroupView restores pdf pane selection and draft comment after switch
     assert.equal(restoredViewState.selection.page, 2);
     assert.equal(restoredViewState.selection.text, 'quoted text');
     assert.equal(restoredViewState.draftComment, 'note');
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('EditorGroupView renders a pdf empty-state shell with a body container', () => {
+  const pdfTab = {
+    id: 'pdf-empty',
+    kind: 'pdf' as const,
+    title: 'Paper PDF',
+    url: 'https://example.com/paper.pdf',
+  };
+
+  const view = new EditorGroupView(createProps(pdfTab.id, pdfTab, [pdfTab]));
+  document.body.append(view.getElement());
+
+  try {
+    const pdfPane = view.getElement().querySelector('.editor-content .editor-pdf-pane');
+    assert(pdfPane instanceof HTMLElement);
+
+    const pdfBody = pdfPane.querySelector(':scope > .editor-pdf-body');
+    assert(pdfBody instanceof HTMLElement);
+    assert.equal(pdfBody.childElementCount, 0);
   } finally {
     view.dispose();
     document.body.replaceChildren();
