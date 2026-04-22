@@ -25,6 +25,11 @@ export type EditorModeToolbarContributionContext = {
     toolbarAddressPlaceholder: string;
     browserLibraryPanelTitle: string;
     browserLibraryPanelRecentTitle: string;
+    browserLibraryPanelRecentTodayTitle: string;
+    browserLibraryPanelRecentYesterdayTitle: string;
+    browserLibraryPanelRecentLast7DaysTitle: string;
+    browserLibraryPanelRecentLast30DaysTitle: string;
+    browserLibraryPanelRecentOlderTitle: string;
     browserLibraryPanelFavoritesTitle: string;
     browserLibraryPanelEmptyState: string;
     pdfTitle: string;

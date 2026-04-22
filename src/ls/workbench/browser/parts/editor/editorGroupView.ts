@@ -660,6 +660,11 @@ export class EditorGroupView {
       labels: {
         title: props.labels.browserLibraryPanelTitle,
         recentTitle: props.labels.browserLibraryPanelRecentTitle,
+        recentTodayTitle: props.labels.browserLibraryPanelRecentTodayTitle,
+        recentYesterdayTitle: props.labels.browserLibraryPanelRecentYesterdayTitle,
+        recentLast7DaysTitle: props.labels.browserLibraryPanelRecentLast7DaysTitle,
+        recentLast30DaysTitle: props.labels.browserLibraryPanelRecentLast30DaysTitle,
+        recentOlderTitle: props.labels.browserLibraryPanelRecentOlderTitle,
         favoritesTitle: props.labels.browserLibraryPanelFavoritesTitle,
         emptyState: props.labels.browserLibraryPanelEmptyState,
         contextOpen: props.labels.browserLibraryPanelContextOpen,

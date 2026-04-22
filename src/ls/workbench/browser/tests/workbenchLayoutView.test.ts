@@ -535,7 +535,12 @@ function createWorkbenchLayoutViewProps() {
         toolbarAddressBar: 'Address bar',
         toolbarAddressPlaceholder: 'Search or enter URL',
         browserLibraryPanelTitle: 'Source menu',
-        browserLibraryPanelRecentTitle: 'Today',
+        browserLibraryPanelRecentTitle: 'Recent',
+        browserLibraryPanelRecentTodayTitle: 'Today',
+        browserLibraryPanelRecentYesterdayTitle: 'Yesterday',
+        browserLibraryPanelRecentLast7DaysTitle: 'Last 7 Days',
+        browserLibraryPanelRecentLast30DaysTitle: 'Last 30 Days',
+        browserLibraryPanelRecentOlderTitle: 'Older',
         browserLibraryPanelFavoritesTitle: 'Favorites',
         browserLibraryPanelEmptyState: 'No links yet',
         browserLibraryPanelContextOpen: 'Open',
@@ -1699,7 +1704,12 @@ test('EditorBrowserLibraryPanel keeps the recent item and creates a separate fav
     browserTabTitle: 'Move Node',
     labels: {
       title: 'Source menu',
-      recentTitle: 'Today',
+      recentTitle: 'Recent',
+      recentTodayTitle: 'Today',
+      recentYesterdayTitle: 'Yesterday',
+      recentLast7DaysTitle: 'Last 7 Days',
+      recentLast30DaysTitle: 'Last 30 Days',
+      recentOlderTitle: 'Older',
       favoritesTitle: 'Favorites',
       emptyState: 'No links yet',
       contextOpen: 'Open',
@@ -1796,7 +1806,12 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
     browserTabTitle: 'Example',
     labels: {
       title: 'Source menu',
-      recentTitle: 'Today',
+      recentTitle: 'Recent',
+      recentTodayTitle: 'Today',
+      recentYesterdayTitle: 'Yesterday',
+      recentLast7DaysTitle: 'Last 7 Days',
+      recentLast30DaysTitle: 'Last 30 Days',
+      recentOlderTitle: 'Older',
       favoritesTitle: 'Favorites',
       emptyState: 'No links yet',
       contextOpen: 'Open',
@@ -1961,6 +1976,138 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
     panel.dispose();
     document.body.replaceChildren();
     window.localStorage?.removeItem(BROWSER_LIBRARY_STORAGE_KEY);
+  }
+});
+
+test('EditorBrowserLibraryPanel groups recent history by visit time buckets instead of showing everything as today', async () => {
+  const { EditorBrowserLibraryPanel } = await import(
+    'ls/workbench/browser/parts/editor/editorBrowserLibraryPanel'
+  );
+  const realDateNow = Date.now;
+  const baseNow = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  const host = document.createElement('div');
+  document.body.append(host);
+  const panel = new EditorBrowserLibraryPanel({
+    browserUrl: '',
+    labels: {
+      title: 'Source menu',
+      recentTitle: 'Recent',
+      recentTodayTitle: 'Today',
+      recentYesterdayTitle: 'Yesterday',
+      recentLast7DaysTitle: 'Last 7 Days',
+      recentLast30DaysTitle: 'Last 30 Days',
+      recentOlderTitle: 'Older',
+      favoritesTitle: 'Favorites',
+      emptyState: 'No links yet',
+      contextOpen: 'Open',
+      contextOpenInNewTab: 'Open in New Tab',
+      contextNewFolder: 'New Folder',
+      contextRename: 'Rename',
+      contextRemoveFavorite: 'Remove Favorite',
+    },
+    onNavigateToUrl: () => {},
+  });
+  panel.mountTo(host);
+  panel.setOpen(true);
+
+  try {
+    panel.clearRecentLibraryEntries();
+
+    Date.now = () => baseNow - 45 * DAY_MS;
+    panel.setContext({
+      browserUrl: 'https://example.com/older',
+      browserPageTitle: 'Older article',
+      browserTabTitle: 'Older article',
+      labels: {
+        title: 'Source menu',
+        recentTitle: 'Recent',
+        recentTodayTitle: 'Today',
+        recentYesterdayTitle: 'Yesterday',
+        recentLast7DaysTitle: 'Last 7 Days',
+        recentLast30DaysTitle: 'Last 30 Days',
+        recentOlderTitle: 'Older',
+        favoritesTitle: 'Favorites',
+        emptyState: 'No links yet',
+        contextOpen: 'Open',
+        contextOpenInNewTab: 'Open in New Tab',
+        contextNewFolder: 'New Folder',
+        contextRename: 'Rename',
+        contextRemoveFavorite: 'Remove Favorite',
+      },
+      onNavigateToUrl: () => {},
+    });
+
+    Date.now = () => baseNow - 14 * DAY_MS;
+    panel.setContext({
+      browserUrl: 'https://example.com/last-30-days',
+      browserPageTitle: 'Two weeks ago article',
+      browserTabTitle: 'Two weeks ago article',
+      labels: {
+        title: 'Source menu',
+        recentTitle: 'Recent',
+        recentTodayTitle: 'Today',
+        recentYesterdayTitle: 'Yesterday',
+        recentLast7DaysTitle: 'Last 7 Days',
+        recentLast30DaysTitle: 'Last 30 Days',
+        recentOlderTitle: 'Older',
+        favoritesTitle: 'Favorites',
+        emptyState: 'No links yet',
+        contextOpen: 'Open',
+        contextOpenInNewTab: 'Open in New Tab',
+        contextNewFolder: 'New Folder',
+        contextRename: 'Rename',
+        contextRemoveFavorite: 'Remove Favorite',
+      },
+      onNavigateToUrl: () => {},
+    });
+
+    Date.now = () => baseNow;
+    panel.setContext({
+      browserUrl: 'https://example.com/today',
+      browserPageTitle: 'Today article',
+      browserTabTitle: 'Today article',
+      labels: {
+        title: 'Source menu',
+        recentTitle: 'Recent',
+        recentTodayTitle: 'Today',
+        recentYesterdayTitle: 'Yesterday',
+        recentLast7DaysTitle: 'Last 7 Days',
+        recentLast30DaysTitle: 'Last 30 Days',
+        recentOlderTitle: 'Older',
+        favoritesTitle: 'Favorites',
+        emptyState: 'No links yet',
+        contextOpen: 'Open',
+        contextOpenInNewTab: 'Open in New Tab',
+        contextNewFolder: 'New Folder',
+        contextRename: 'Rename',
+        contextRemoveFavorite: 'Remove Favorite',
+      },
+      onNavigateToUrl: () => {},
+    });
+
+    await waitForNextTask();
+    await waitForNextTask();
+
+    const panelElement = panel.getElement();
+    const sectionTitles = Array.from(
+      panelElement.querySelectorAll('.editor-browser-library-section-title'),
+    ).map((node) => node.textContent?.trim());
+    assert.equal(sectionTitles.includes('Today'), true);
+    assert.equal(sectionTitles.includes('Last 30 Days'), true);
+    assert.equal(sectionTitles.includes('Older'), true);
+
+    const recentItemTitles = Array.from(
+      panelElement.querySelectorAll('.editor-browser-library-item-title'),
+    ).map((node) => node.textContent?.trim());
+    assert.equal(recentItemTitles.includes('Today article'), true);
+    assert.equal(recentItemTitles.includes('Two weeks ago article'), true);
+    assert.equal(recentItemTitles.includes('Older article'), true);
+  } finally {
+    Date.now = realDateNow;
+    panel.dispose();
+    document.body.replaceChildren();
   }
 });
 

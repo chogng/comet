@@ -18,6 +18,7 @@ type StoredBrowserLibraryFavoriteFolder = {
 
 type StoredBrowserLibraryState = {
   recentUrls: string[];
+  recentVisitedAtByUrl: Record<string, number>;
   favoriteUrls: string[];
   faviconByUrl: Record<string, string>;
   pageTitleByUrl: Record<string, string>;
@@ -28,6 +29,8 @@ type StoredBrowserLibraryState = {
 
 type BrowserLibrarySectionKind = 'recent' | 'favorites';
 
+type BrowserLibraryRecentBucket = 'today' | 'yesterday' | 'last7Days' | 'last30Days' | 'older';
+
 type BrowserLibraryListItem = {
   url: string;
   title: string;
@@ -35,11 +38,17 @@ type BrowserLibraryListItem = {
   sectionKind: BrowserLibrarySectionKind;
   favoriteFolderId: string;
   favoriteFolderName: string;
+  recentVisitedAt: number;
 };
 
 export type EditorBrowserLibraryPanelLabels = {
   title: string;
   recentTitle: string;
+  recentTodayTitle: string;
+  recentYesterdayTitle: string;
+  recentLast7DaysTitle: string;
+  recentLast30DaysTitle: string;
+  recentOlderTitle: string;
   favoritesTitle: string;
   emptyState: string;
   contextOpen?: string;
@@ -122,6 +131,7 @@ function trimUrlList(urls: string[], maxCount: number) {
 function createStoredBrowserLibraryState(): StoredBrowserLibraryState {
   return {
     recentUrls: [],
+    recentVisitedAtByUrl: {},
     favoriteUrls: [],
     faviconByUrl: {},
     pageTitleByUrl: {},
@@ -241,6 +251,35 @@ function sanitizeStoredBrowserLibraryPageTitleByUrl(
   return pageTitleByUrl;
 }
 
+function sanitizeStoredBrowserLibraryRecentVisitedAtByUrl(
+  value: unknown,
+  validUrls: Set<string>,
+) {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const recentVisitedAtByUrl: Record<string, number> = {};
+  for (const [url, visitedAt] of Object.entries(value)) {
+    const normalizedUrl = normalizeBrowserLibraryUrl(url);
+    if (!validUrls.has(normalizedUrl)) {
+      continue;
+    }
+
+    const normalizedVisitedAt =
+      typeof visitedAt === 'number'
+        ? visitedAt
+        : Number.parseInt(String(visitedAt), 10);
+    if (!Number.isFinite(normalizedVisitedAt) || normalizedVisitedAt <= 0) {
+      continue;
+    }
+
+    recentVisitedAtByUrl[normalizedUrl] = normalizedVisitedAt;
+  }
+
+  return recentVisitedAtByUrl;
+}
+
 function sanitizeStoredBrowserLibraryFavoriteFolderByUrl(
   value: unknown,
   favoriteUrls: Set<string>,
@@ -294,9 +333,9 @@ function sanitizeStoredBrowserLibraryFavoriteCustomTitleByUrl(
   return favoriteCustomTitleByUrl;
 }
 
-function areStoredBrowserLibraryStringMapsEqual(
-  left: Record<string, string>,
-  right: Record<string, string>,
+function areStoredBrowserLibraryRecordMapsEqual<T extends string | number>(
+  left: Record<string, T>,
+  right: Record<string, T>,
 ) {
   const leftKeys = Object.keys(left);
   const rightKeys = Object.keys(right);
@@ -377,6 +416,10 @@ function sanitizeStoredBrowserLibraryState(
 
   return {
     recentUrls: sanitizedRecentUrls,
+    recentVisitedAtByUrl: sanitizeStoredBrowserLibraryRecentVisitedAtByUrl(
+      (value as { recentVisitedAtByUrl?: unknown }).recentVisitedAtByUrl,
+      new Set<string>(sanitizedRecentUrls),
+    ),
     favoriteUrls: sanitizedFavoriteUrls,
     faviconByUrl: sanitizeStoredBrowserLibraryFaviconByUrl(
       (value as { faviconByUrl?: unknown }).faviconByUrl,
@@ -457,19 +500,23 @@ function updateStoredBrowserLibraryState(
       nextState.favoriteFolders,
       storedBrowserLibraryState.favoriteFolders,
     ) &&
-    areStoredBrowserLibraryStringMapsEqual(
+    areStoredBrowserLibraryRecordMapsEqual(
+      nextState.recentVisitedAtByUrl,
+      storedBrowserLibraryState.recentVisitedAtByUrl,
+    ) &&
+    areStoredBrowserLibraryRecordMapsEqual(
       nextState.faviconByUrl,
       storedBrowserLibraryState.faviconByUrl,
     ) &&
-    areStoredBrowserLibraryStringMapsEqual(
+    areStoredBrowserLibraryRecordMapsEqual(
       nextState.pageTitleByUrl,
       storedBrowserLibraryState.pageTitleByUrl,
     ) &&
-    areStoredBrowserLibraryStringMapsEqual(
+    areStoredBrowserLibraryRecordMapsEqual(
       nextState.favoriteFolderByUrl,
       storedBrowserLibraryState.favoriteFolderByUrl,
     ) &&
-    areStoredBrowserLibraryStringMapsEqual(
+    areStoredBrowserLibraryRecordMapsEqual(
       nextState.favoriteCustomTitleByUrl,
       storedBrowserLibraryState.favoriteCustomTitleByUrl,
     )
@@ -498,6 +545,7 @@ function recordBrowserLibraryEntryVisit({
 
   const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
   const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(pageTitle);
+  const visitedAt = Date.now();
 
   return updateStoredBrowserLibraryState((state) => {
     const recentUrls = trimUrlList(
@@ -524,6 +572,10 @@ function recordBrowserLibraryEntryVisit({
     return {
       ...state,
       recentUrls,
+      recentVisitedAtByUrl: {
+        ...state.recentVisitedAtByUrl,
+        [normalizedUrl]: visitedAt,
+      },
       faviconByUrl,
       pageTitleByUrl,
     };
@@ -687,6 +739,7 @@ function clearRecentBrowserLibraryEntries() {
     return {
       ...state,
       recentUrls: [],
+      recentVisitedAtByUrl: {},
       faviconByUrl: nextFaviconByUrl,
       pageTitleByUrl: nextPageTitleByUrl,
     };
@@ -714,12 +767,15 @@ function removeRecentBrowserLibraryEntry(url: string) {
 
     const faviconByUrl = { ...state.faviconByUrl };
     const pageTitleByUrl = { ...state.pageTitleByUrl };
+    const recentVisitedAtByUrl = { ...state.recentVisitedAtByUrl };
     delete faviconByUrl[normalizedUrl];
     delete pageTitleByUrl[normalizedUrl];
+    delete recentVisitedAtByUrl[normalizedUrl];
 
     return {
       ...state,
       recentUrls,
+      recentVisitedAtByUrl,
       faviconByUrl,
       pageTitleByUrl,
     };
@@ -759,8 +815,51 @@ function getFavoriteBrowserLibraryEntryFolderId(url: string) {
   return storedBrowserLibraryState.favoriteFolderByUrl[url] ?? '';
 }
 
+function getRecentBrowserLibraryEntryVisitedAt(url: string) {
+  return storedBrowserLibraryState.recentVisitedAtByUrl[url] ?? 0;
+}
+
 function getFavoriteBrowserLibraryEntryCustomTitle(url: string) {
   return storedBrowserLibraryState.favoriteCustomTitleByUrl[url] ?? '';
+}
+
+function resolveRecentBrowserLibraryBucket(
+  visitedAt: number,
+  now: Date = new Date(),
+): BrowserLibraryRecentBucket {
+  if (!Number.isFinite(visitedAt) || visitedAt <= 0) {
+    return 'older';
+  }
+
+  const visitedAtDate = new Date(visitedAt);
+  if (Number.isNaN(visitedAtDate.getTime())) {
+    return 'older';
+  }
+
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const visitedDayStart = new Date(
+    visitedAtDate.getFullYear(),
+    visitedAtDate.getMonth(),
+    visitedAtDate.getDate(),
+  );
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const diffInDays = Math.floor(
+    (todayStart.getTime() - visitedDayStart.getTime()) / DAY_MS,
+  );
+
+  if (diffInDays <= 0) {
+    return 'today';
+  }
+  if (diffInDays === 1) {
+    return 'yesterday';
+  }
+  if (diffInDays <= 6) {
+    return 'last7Days';
+  }
+  if (diffInDays <= 29) {
+    return 'last30Days';
+  }
+  return 'older';
 }
 
 function resolveBrowserLibraryTitle(url: string) {
@@ -1190,6 +1289,8 @@ export class EditorBrowserLibraryPanel {
         sectionKind,
         favoriteFolderId,
         favoriteFolderName,
+        recentVisitedAt:
+          sectionKind === 'recent' ? getRecentBrowserLibraryEntryVisitedAt(url) : 0,
       });
     };
 
@@ -1393,10 +1494,6 @@ export class EditorBrowserLibraryPanel {
         kind: 'favorites',
         title: this.context.labels.favoritesTitle,
       },
-      {
-        kind: 'recent',
-        title: this.context.labels.recentTitle,
-      },
     ];
 
     for (const section of orderedSections) {
@@ -1425,7 +1522,70 @@ export class EditorBrowserLibraryPanel {
       fragment.append(sectionElement);
     }
 
+    const recentItems = listItemsBySection.recent;
+    if (recentItems.length > 0) {
+      const recentBuckets = this.groupRecentItemsByBucket(recentItems);
+      const recentBucketOrder: BrowserLibraryRecentBucket[] = [
+        'today',
+        'yesterday',
+        'last7Days',
+        'last30Days',
+        'older',
+      ];
+
+      for (const bucket of recentBucketOrder) {
+        const sectionItems = recentBuckets[bucket];
+        if (!sectionItems || sectionItems.length === 0) {
+          continue;
+        }
+
+        const sectionElement = createElement('section', 'editor-browser-library-section');
+        const sectionTitleElement = createElement(
+          'p',
+          'editor-browser-library-section-title',
+          this.getRecentBucketTitle(bucket),
+        );
+        const sectionListElement = createElement('div', 'editor-browser-library-section-list');
+        for (const itemState of sectionItems) {
+          sectionListElement.append(this.createLibraryItemRow(itemState));
+        }
+        sectionElement.append(sectionTitleElement, sectionListElement);
+        fragment.append(sectionElement);
+      }
+    }
+
     listElement.replaceChildren(fragment);
+  }
+
+  private groupRecentItemsByBucket(items: readonly BrowserLibraryListItem[]) {
+    const groupedItems: Record<BrowserLibraryRecentBucket, BrowserLibraryListItem[]> = {
+      today: [],
+      yesterday: [],
+      last7Days: [],
+      last30Days: [],
+      older: [],
+    };
+
+    for (const item of items) {
+      groupedItems[resolveRecentBrowserLibraryBucket(item.recentVisitedAt)].push(item);
+    }
+
+    return groupedItems;
+  }
+
+  private getRecentBucketTitle(bucket: BrowserLibraryRecentBucket) {
+    switch (bucket) {
+      case 'today':
+        return this.context.labels.recentTodayTitle;
+      case 'yesterday':
+        return this.context.labels.recentYesterdayTitle;
+      case 'last7Days':
+        return this.context.labels.recentLast7DaysTitle;
+      case 'last30Days':
+        return this.context.labels.recentLast30DaysTitle;
+      case 'older':
+        return this.context.labels.recentOlderTitle;
+    }
   }
 
   private createLibraryItemFaviconElement(faviconUrl: string) {

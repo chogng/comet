@@ -120,6 +120,14 @@ export function createEditorModeToolbarContext(
       toolbarAddressPlaceholder: props.labels.toolbarAddressPlaceholder,
       browserLibraryPanelTitle: props.labels.browserLibraryPanelTitle,
       browserLibraryPanelRecentTitle: props.labels.browserLibraryPanelRecentTitle,
+      browserLibraryPanelRecentTodayTitle: props.labels.browserLibraryPanelRecentTodayTitle,
+      browserLibraryPanelRecentYesterdayTitle:
+        props.labels.browserLibraryPanelRecentYesterdayTitle,
+      browserLibraryPanelRecentLast7DaysTitle:
+        props.labels.browserLibraryPanelRecentLast7DaysTitle,
+      browserLibraryPanelRecentLast30DaysTitle:
+        props.labels.browserLibraryPanelRecentLast30DaysTitle,
+      browserLibraryPanelRecentOlderTitle: props.labels.browserLibraryPanelRecentOlderTitle,
       browserLibraryPanelFavoritesTitle: props.labels.browserLibraryPanelFavoritesTitle,
       browserLibraryPanelEmptyState: props.labels.browserLibraryPanelEmptyState,
       pdfTitle: props.labels.pdfTitle,
