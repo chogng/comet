@@ -93,24 +93,6 @@ test('menu applies and clears the data-menu attribute from options', () => {
   }
 });
 
-test('menu applies the requested selection style class', () => {
-  const menu = new Menu({
-    items: [
-      { value: 'alpha', label: 'Alpha' },
-    ],
-    selectionStyle: 'neutral',
-  });
-  document.body.append(menu.getElement());
-
-  try {
-    assert.equal(menu.getElement().classList.contains('ls-menu-selection-neutral'), true);
-    assert.equal(menu.getElement().classList.contains('ls-menu-selection-accent'), false);
-  } finally {
-    menu.dispose();
-    document.body.replaceChildren();
-  }
-});
-
 test('menu header can update menu items and request hide', () => {
   let cancelCount = 0;
   const menu = new Menu({

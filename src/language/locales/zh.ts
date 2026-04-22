@@ -249,7 +249,7 @@ const zh = {
   editorUnsavedChangesDiscard: '不保存',
   editorEmptyWorkspaceTitle: '还没有打开任何编辑器',
   editorEmptyWorkspaceBody:
-    '这里是编辑工作区。先新建一个写作标签，或者通过上方链接流程打开来源 / PDF 预览。',
+    '这里是编辑工作区。先新建一个写作标签，或者从顶部栏打开来源标签或 PDF 标签。',
   editorDraftBodyPlaceholder:
     '在这里开始写作。如果你没有在右侧助手栏单独填写“写作上下文”，当前草稿会自动作为上下文送入 LLM。',
   editorSourceUrlPrompt: '输入来源链接',
@@ -290,7 +290,7 @@ const zh = {
   editorFontFamilyPrompt: '输入字体名，留空可清除',
   editorFontSizePrompt: '输入字号，例如 18px / 小四 / 四号，留空可清除',
   editorSourceTitle: '来源预览',
-  editorPdfTitle: 'PDF 预览',
+  editorPdfTitle: 'PDF',
   editorPdfUrlPrompt: '输入 PDF URL',
   editorStatusbarAriaLabel: '编辑器状态',
   editorStatusWords: '词数',

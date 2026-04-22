@@ -428,44 +428,6 @@ test('DropdownMenuActionViewItem forwards requested menu position to the context
   }
 });
 
-test('DropdownMenuActionViewItem forwards requested menu selection style to the context menu service', async () => {
-  const delegates: import('ls/base/browser/contextmenu').ContextMenuDelegate[] = [];
-  const contextMenuService: import('ls/base/browser/contextmenu').ContextMenuService = {
-    showContextMenu(delegate) {
-      delegates.push(delegate);
-    },
-    hideContextMenu() {},
-    isVisible() {
-      return false;
-    },
-    dispose() {},
-  };
-  const item = new DropdownMenuActionViewItem({
-    label: 'More',
-    content: 'More',
-    contextMenuService,
-    menuSelectionStyle: 'neutral',
-    menu: [{ label: 'Archive' }],
-  });
-  const host = document.createElement('div');
-  document.body.append(host);
-
-  try {
-    item.render(host);
-    const button = host.querySelector('button');
-    assert(button instanceof HTMLButtonElement);
-
-    button.click();
-    await delay(0);
-
-    assert.equal(delegates.length, 1);
-    assert.equal(delegates[0]?.selectionStyle, 'neutral');
-  } finally {
-    item.dispose();
-    document.body.replaceChildren();
-  }
-});
-
 test('DropdownMenuActionViewItem forwards menu header and supports dynamic menu updates', async () => {
   const delegates: import('ls/base/browser/contextmenu').ContextMenuDelegate[] = [];
   const contextMenuService: import('ls/base/browser/contextmenu').ContextMenuService = {

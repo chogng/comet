@@ -251,7 +251,7 @@ const en = {
   editorUnsavedChangesDiscard: "Don't Save",
   editorEmptyWorkspaceTitle: 'No editor is open yet',
   editorEmptyWorkspaceBody:
-    'This area is the editor workspace. Create a draft tab first, or use the URL flow above to open source or PDF web content.',
+    'This area is the editor workspace. Create a draft tab first, or open a source or PDF tab from the top bar.',
   editorDraftBodyPlaceholder:
     'Start drafting here. If you do not type a separate writing context in the assistant sidebar, the current draft is sent to the LLM as context.',
   editorSourceUrlPrompt: 'Enter a source URL',
@@ -292,7 +292,7 @@ const en = {
   editorFontFamilyPrompt: 'Font family (leave empty to clear)',
   editorFontSizePrompt: 'Font size, e.g. 18px / xiao si / size 4 (leave empty to clear)',
   editorSourceTitle: 'Source web content',
-  editorPdfTitle: 'PDF web content',
+  editorPdfTitle: 'PDF',
   editorPdfUrlPrompt: 'Enter a PDF URL',
   editorStatusbarAriaLabel: 'Editor status',
   editorStatusWords: 'Words',

@@ -16,7 +16,6 @@ import type {
   ActionBarRenderable,
 } from 'ls/base/browser/ui/actionbar/actionbar';
 import type { HoverService } from 'ls/base/browser/ui/hover/hover';
-import type { MenuSelectionStyle } from 'ls/base/browser/ui/menu/menu';
 import { createPlatformContextMenuService } from 'ls/platform/contextview/browser/contextMenuService';
 
 export type DropdownMenuActionAlignment = 'start' | 'end';
@@ -66,7 +65,6 @@ export type DropdownMenuActionViewItemOptions = {
   overlayRole?: string;
   menuClassName?: string;
   menuData?: string;
-  menuSelectionStyle?: MenuSelectionStyle;
   minWidth?: number;
   hoverService?: HoverService;
   contextMenuService?: ContextMenuService;
@@ -365,7 +363,6 @@ class ContextMenuDropdownActionPresenter {
         : undefined,
       getMenuClassName: options.menuClassName ? () => options.menuClassName! : undefined,
       getMenuData: menuData ? () => menuData : undefined,
-      selectionStyle: options.menuSelectionStyle,
       anchorAlignment: resolvedAlignment === 'end' ? 'right' : 'left',
       alignment: resolvedAlignment,
       position: options.overlayPosition ?? 'below',

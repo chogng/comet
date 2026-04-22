@@ -155,7 +155,10 @@ function createElectronApi(overrides: Partial<ElectronAPI>): ElectronAPI {
   };
 }
 
-function withElectronApi<T>(electronAPI: ElectronAPI | undefined, run: () => T): T {
+async function withElectronApi<T>(
+  electronAPI: ElectronAPI | undefined,
+  run: () => Promise<T> | T,
+): Promise<T> {
   const testWindow = window as typeof window & {
     electronAPI?: ElectronAPI;
   };
@@ -163,7 +166,7 @@ function withElectronApi<T>(electronAPI: ElectronAPI | undefined, run: () => T):
   testWindow.electronAPI = electronAPI;
 
   try {
-    return run();
+    return await run();
   } finally {
     testWindow.electronAPI = previousElectronApi;
   }
@@ -296,7 +299,7 @@ test('article details modal view renders archived artifact paths when available'
         view.getElement().querySelectorAll('.article-details-grid .article-details-row'),
       ).map((row) => ({
         label: row.querySelector('dt')?.textContent?.trim(),
-        value: row.querySelector('dd')?.textContent?.trim(),
+        value: row.querySelector('.article-details-row-text')?.textContent?.trim(),
       }));
 
       assert.equal(

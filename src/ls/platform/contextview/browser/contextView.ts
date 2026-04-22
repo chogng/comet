@@ -2,7 +2,6 @@ import type {
   ContextMenuAction,
   ContextMenuHeader,
 } from 'ls/base/browser/contextmenu';
-import type { MenuSelectionStyle } from 'ls/base/browser/ui/menu/menu';
 import type {
   AnchorAlignment,
   AnchorAxisAlignment,
@@ -58,7 +57,6 @@ export interface ContextMenuDelegate {
   restoreFocusOnHide?: boolean;
   getMenuClassName?: () => string;
   getMenuData?: () => string;
-  selectionStyle?: MenuSelectionStyle;
   anchorAlignment?: AnchorAlignment;
   anchorAxisAlignment?: AnchorAxisAlignment;
   alignment?: ContextViewAlignment;

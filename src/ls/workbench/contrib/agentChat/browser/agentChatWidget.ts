@@ -379,7 +379,6 @@ export class AgentChatWidget {
       disabled: this.props.llmModelOptions.length === 0,
       minWidth: 280,
       menuData: 'agentbar-model-menu',
-      menuSelectionStyle: 'neutral',
       content: () => this.renderModelDropdownTrigger(currentOption),
       menu: this.createModelMenuItems(''),
       menuHeader: createFilterMenuHeader({

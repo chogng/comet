@@ -59,7 +59,6 @@ export type ActionBarSplitItem = {
     overlayRole?: string;
     menuClassName?: string;
     menuData?: string;
-    menuSelectionStyle?: 'accent' | 'neutral';
     minWidth?: number;
     overlayAlignment?: 'start' | 'end';
     overlayAlignmentPolicy?:

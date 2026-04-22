@@ -268,7 +268,6 @@ export class SelectBoxCustom extends LifecycleOwner {
   private createMenu() {
     const menu = new Menu({
       items: this.createMenuItems(),
-      selectionStyle: 'neutral',
       role: 'listbox',
       itemRole: 'option',
       activeIndex: this.activeOptionIndex,
@@ -301,7 +300,6 @@ export class SelectBoxCustom extends LifecycleOwner {
 
     this.menu.setOptions({
       items: this.createMenuItems(),
-      selectionStyle: 'neutral',
       role: 'listbox',
       itemRole: 'option',
       activeIndex: this.activeOptionIndex,

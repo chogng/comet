@@ -1,8 +1,8 @@
 .ls-menu {
   --ls-menu-hover-bg: var(--vscode-menu-itemHoverBackground, rgba(0, 0, 0, 0.04));
-  --ls-menu-selected-bg: var(--vscode-menu-itemSelectedBackground, #f1f6fc);
-  --ls-menu-selected-fg: var(--vscode-menu-itemSelectedForeground, #0a5fbf);
-  --ls-menu-check-color: var(--vscode-menu-itemCheckForeground, rgba(10, 95, 191, 0.72));
+  --ls-menu-selected-bg: transparent;
+  --ls-menu-selected-fg: var(--vscode-menu-itemForeground, #304357);
+  --ls-menu-check-color: var(--vscode-menu-itemForeground, #304357);
 
   position: relative;
   width: max-content;
@@ -21,12 +21,6 @@
   animation: ls-menu-fade-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   color: var(--vscode-menu-foreground, #1a2530);
   outline: none;
-}
-
-.ls-menu.ls-menu-selection-neutral {
-  --ls-menu-selected-bg: transparent;
-  --ls-menu-selected-fg: var(--vscode-menu-itemForeground, #304357);
-  --ls-menu-check-color: var(--vscode-menu-itemForeground, #304357);
 }
 
 .ls-menu .ls-menu-header {

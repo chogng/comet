@@ -5,7 +5,6 @@ import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
 import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
 
 export type MenuSelectionSource = 'keyboard' | 'pointer';
-export type MenuSelectionStyle = 'accent' | 'neutral';
 
 export type MenuSelectEvent = {
   value: string;
@@ -19,7 +18,6 @@ export interface MenuOptions {
   className?: string;
   itemClassName?: string;
   dataMenu?: string;
-  selectionStyle?: MenuSelectionStyle;
   placement?: 'top' | 'bottom';
   variant?: 'root' | 'submenu';
   role?: string;
@@ -139,10 +137,6 @@ function resolvePlacement(options: MenuOptions) {
 
 function resolveVariant(options: MenuOptions) {
   return options.variant ?? 'root';
-}
-
-function resolveSelectionStyle(options: MenuOptions) {
-  return options.selectionStyle ?? 'accent';
 }
 
 function addDisposableListener<K extends keyof HTMLElementEventMap>(
@@ -288,7 +282,6 @@ export class Menu extends LifecycleOwner {
     this.element.className = composeClassName([
       'ls-menu',
       `ls-menu-${resolveVariant(this.options)}`,
-      `ls-menu-selection-${resolveSelectionStyle(this.options)}`,
       'dropdown-menu',
       `dropdown-menu-${resolvePlacement(this.options)}`,
       this.options.className,
@@ -718,7 +711,6 @@ export class Menu extends LifecycleOwner {
     const submenu = new Menu({
       items: item.submenu,
       variant: 'submenu',
-      selectionStyle: this.options.selectionStyle,
       role: 'menu',
       onSelect: (nextEvent) => {
         this.options.onSelect?.(nextEvent);
