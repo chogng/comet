@@ -6,6 +6,7 @@ import {
   EMPTY_BROWSER_TAB_URL,
   SUPPORTED_EDITOR_PANE_MODES,
   type SupportedEditorPaneMode,
+  type EditorTabKind,
   createEditorBrowserTabInput,
   createEditorDraftTabInput,
   createEditorPdfTabInput,
@@ -257,6 +258,26 @@ function normalizeEditorGroupState(
       ? touchMruTab(normalizedMruTabIds, activeTabId)
       : normalizedMruTabIds,
   };
+}
+
+function createEmptyResidentTabForKind(
+  kind: EditorTabKind,
+): EditorWorkspaceTab {
+  switch (kind) {
+    case 'draft':
+      return createDraftTab({
+        residency: 'resident',
+      });
+    case 'pdf':
+      return createPdfTab(EMPTY_PDF_TAB_URL, {
+        residency: 'resident',
+      });
+    case 'browser':
+    default:
+      return createBrowserTab(EMPTY_BROWSER_TAB_URL, {
+        residency: 'resident',
+      });
+  }
 }
 
 type StoredDraftState = Partial<
@@ -877,12 +898,43 @@ export class EditorModel {
   };
 
   readonly closeTab = (tabId: string) => {
-    this.updateActiveGroupState((group) => ({
-      ...group,
-      tabs: group.tabs.filter((tab) => tab.id !== tabId),
-      activeTabId: group.activeTabId === tabId ? null : group.activeTabId,
-      mruTabIds: group.mruTabIds.filter((id) => id !== tabId),
-    }));
+    this.updateActiveGroupState((group) => {
+      const tabIndex = group.tabs.findIndex((tab) => tab.id === tabId);
+      if (tabIndex < 0) {
+        return group;
+      }
+
+      const targetTab = group.tabs[tabIndex]!;
+      const remainingTabsOfKind = group.tabs.filter(
+        (tab) => tab.id !== tabId && tab.kind === targetTab.kind,
+      );
+      const shouldResetToEmptyResident = remainingTabsOfKind.length === 0;
+      const replacementTab = shouldResetToEmptyResident
+        ? createEmptyResidentTabForKind(targetTab.kind)
+        : null;
+      const nextTabs = shouldResetToEmptyResident
+        ? [
+            ...group.tabs.slice(0, tabIndex),
+            replacementTab!,
+            ...group.tabs.slice(tabIndex + 1),
+          ]
+        : group.tabs.filter((tab) => tab.id !== tabId);
+      const nextActiveTabId =
+        group.activeTabId === tabId
+          ? replacementTab?.id ?? null
+          : group.activeTabId;
+      const nextMruTabIds = group.mruTabIds.filter((id) => id !== tabId);
+
+      return {
+        ...group,
+        tabs: nextTabs,
+        activeTabId: nextActiveTabId,
+        mruTabIds:
+          group.activeTabId === tabId && replacementTab
+            ? touchMruTab(nextMruTabIds, replacementTab.id)
+            : nextMruTabIds,
+      };
+    });
   };
 
   readonly closeOtherTabs = (tabId: string) => {

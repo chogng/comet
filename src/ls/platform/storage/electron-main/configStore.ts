@@ -368,10 +368,20 @@ function normalizeEnabledLlmModelOptions(
     return [...(defaultLlmProviderSettings[provider].enabledModelOptions ?? [])];
   }
 
-  return getEnabledLlmModelOptionValuesForProvider(
+  const normalizedOptions = getEnabledLlmModelOptionValuesForProvider(
     provider,
     value.filter((item): item is string => typeof item === 'string'),
   );
+
+  const allOptionValues = getEnabledLlmModelOptionValuesForProvider(provider);
+  if (
+    normalizedOptions.length === allOptionValues.length &&
+    normalizedOptions.every((optionValue, index) => optionValue === allOptionValues[index])
+  ) {
+    return [...(defaultLlmProviderSettings[provider].enabledModelOptions ?? [])];
+  }
+
+  return normalizedOptions;
 }
 
 function normalizeTranslationSettings(payload: unknown): StoredAppSettings['translation'] {

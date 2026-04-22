@@ -85,6 +85,11 @@ type ModelListItemView = {
   update: (entry: LlmModelListEntry) => void;
 };
 
+type ModelOrderState =
+  | { phase: 'uninitialized' }
+  | { phase: 'stable'; order: string[] }
+  | { phase: 'dirty'; order: string[] };
+
 const COLLAPSED_MODEL_COUNT = 8;
 
 const modelBadgeMeta: Record<LlmModelBadge, { icon: LxIconName; title: string }> = {
@@ -121,6 +126,7 @@ export class LlmWidget {
   );
   private readonly modelList = el('div', 'settings-model-list');
   private readonly modelListItemViews = new Map<string, ModelListItemView>();
+  private modelOrderState: ModelOrderState = { phase: 'uninitialized' };
   private modelQuery = '';
   private isModelListExpanded = false;
   private readonly apiKeyWidget = new ApiKeyWidget({
@@ -163,8 +169,23 @@ export class LlmWidget {
     return this.element;
   }
 
+  enterModelPage() {
+    const entries = this.getRawModelListEntries();
+    const order = this.getSynchronizedModelOrder(entries);
+    this.modelOrderState = {
+      phase: 'stable',
+      order: this.buildGroupedModelOrder(entries, order),
+    };
+    this.renderModelList();
+  }
+
   setProps(props: LlmWidgetProps) {
+    const previousEnabledStateKey = this.getEnabledStateKey(this.props);
     this.props = props;
+    const nextEnabledStateKey = this.getEnabledStateKey(this.props);
+    if (previousEnabledStateKey !== nextEnabledStateKey) {
+      this.markModelOrderDirty();
+    }
     this.modelFieldTitle.textContent = this.props.labels.settingsLlmModel;
     const activeProviderSettings = this.props.llmProviders[this.props.activeLlmProvider];
     this.maxContextTitle.textContent = this.props.labels.settingsLlmMaxContext;
@@ -245,7 +266,7 @@ export class LlmWidget {
     });
   }
 
-  private getModelListEntries(): LlmModelListEntry[] {
+  private getRawModelListEntries(): LlmModelListEntry[] {
     const entries: LlmModelListEntry[] = [];
     for (const providerId of llmProviderIds) {
       const provider = this.props.llmProviders[providerId];
@@ -268,6 +289,99 @@ export class LlmWidget {
     }
 
     return entries;
+  }
+
+  private getEnabledStateKey(props: LlmWidgetProps) {
+    return llmProviderIds
+      .map((providerId) => {
+        const enabled = getEnabledLlmModelOptionValuesForProvider(
+          providerId,
+          props.llmProviders[providerId].enabledModelOptions,
+        );
+        return `${providerId}:${enabled.join(',')}`;
+      })
+      .join('|');
+  }
+
+  private buildGroupedModelOrder(
+    entries: readonly LlmModelListEntry[],
+    orderedValues: readonly string[],
+  ) {
+    const entriesByValue = new Map(entries.map((entry) => [entry.option.value, entry] as const));
+    const enabled: string[] = [];
+    const disabled: string[] = [];
+
+    for (const optionValue of orderedValues) {
+      const entry = entriesByValue.get(optionValue);
+      if (!entry) {
+        continue;
+      }
+
+      if (entry.enabledOptionValues.includes(entry.option.value)) {
+        enabled.push(entry.option.value);
+      } else {
+        disabled.push(entry.option.value);
+      }
+    }
+
+    return [...enabled, ...disabled];
+  }
+
+  private getSynchronizedModelOrder(entries: readonly LlmModelListEntry[]) {
+    const entryValues = entries.map((entry) => entry.option.value);
+    const entryValueSet = new Set(entryValues);
+    const existingOrder =
+      this.modelOrderState.phase === 'uninitialized' ? [] : this.modelOrderState.order;
+    const currentOrder = existingOrder.filter((optionValue) => entryValueSet.has(optionValue));
+
+    for (const optionValue of entryValues) {
+      if (!currentOrder.includes(optionValue)) {
+        currentOrder.push(optionValue);
+      }
+    }
+
+    return currentOrder;
+  }
+
+  private markModelOrderDirty() {
+    if (this.modelOrderState.phase === 'uninitialized') {
+      return;
+    }
+
+    const entries = this.getRawModelListEntries();
+    this.modelOrderState = {
+      phase: 'dirty',
+      order: this.getSynchronizedModelOrder(entries),
+    };
+  }
+
+  private getModelListEntries() {
+    const entries = this.getRawModelListEntries();
+    if (this.modelOrderState.phase === 'uninitialized') {
+      this.modelOrderState = {
+        phase: 'stable',
+        order: this.buildGroupedModelOrder(
+          entries,
+          this.getSynchronizedModelOrder(entries),
+        ),
+      };
+    } else if (this.modelOrderState.phase === 'stable') {
+      this.modelOrderState = {
+        phase: 'stable',
+        order: this.getSynchronizedModelOrder(entries),
+      };
+    } else {
+      this.modelOrderState = {
+        phase: 'dirty',
+        order: this.getSynchronizedModelOrder(entries),
+      };
+    }
+
+    const currentOrder = this.modelOrderState.order;
+    const entriesByValue = new Map(entries.map((entry) => [entry.option.value, entry] as const));
+    return currentOrder
+      .map((optionValue) => entriesByValue.get(optionValue))
+      .filter((entry): entry is LlmModelListEntry => Boolean(entry));
   }
 
   private renderModelList() {

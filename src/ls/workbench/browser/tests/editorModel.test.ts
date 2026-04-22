@@ -5,6 +5,10 @@ import {
   writingEditorDocumentToPlainText,
 } from 'ls/editor/common/writingEditorDocument';
 import { DEFAULT_EDITOR_GROUP_ID } from 'ls/workbench/browser/editorGroupIdentity';
+import {
+  EMPTY_BROWSER_TAB_URL,
+  EMPTY_PDF_TAB_URL,
+} from 'ls/workbench/browser/parts/editor/editorInput';
 import { createEditorModel } from 'ls/workbench/browser/parts/editor/editorModel';
 
 type MockStorage = {
@@ -464,6 +468,123 @@ test('editor model can close other tabs, rename a tab, preserve a custom title, 
     assert.equal(snapshot.activeTabId, null);
     assert.equal(snapshot.activeTab, null);
     assert.deepEqual(snapshot.mruTabIds, []);
+  } finally {
+    model.dispose();
+  }
+});
+
+test('editor model resets the last browser tab to an empty resident tab when closed', () => {
+  const model = createEditorModel({
+    groups: [
+      {
+        groupId: DEFAULT_EDITOR_GROUP_ID,
+        tabs: [
+          {
+            id: 'browser-a',
+            kind: 'browser',
+            title: 'example.com/article',
+            url: 'https://example.com/article',
+          },
+        ],
+        activeTabId: 'browser-a',
+        mruTabIds: ['browser-a'],
+      },
+    ],
+    activeGroupId: DEFAULT_EDITOR_GROUP_ID,
+    viewStateEntries: [],
+  });
+
+  try {
+    model.closeTab('browser-a');
+    const snapshot = model.getSnapshot();
+
+    assert.equal(snapshot.tabs.length, 1);
+    assert.equal(snapshot.tabs[0]?.kind, 'browser');
+    assert.equal(snapshot.tabs[0]?.residency, 'resident');
+    assert.equal(snapshot.tabs[0]?.title, '');
+    assert.equal(snapshot.tabs[0]?.url, EMPTY_BROWSER_TAB_URL);
+    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
+    assert.notEqual(snapshot.tabs[0]?.id, 'browser-a');
+  } finally {
+    model.dispose();
+  }
+});
+
+test('editor model resets the last pdf tab to an empty resident tab when closed', () => {
+  const model = createEditorModel({
+    groups: [
+      {
+        groupId: DEFAULT_EDITOR_GROUP_ID,
+        tabs: [
+          {
+            id: 'pdf-a',
+            kind: 'pdf',
+            title: 'Paper.pdf',
+            url: 'https://example.com/paper.pdf',
+          },
+        ],
+        activeTabId: 'pdf-a',
+        mruTabIds: ['pdf-a'],
+      },
+    ],
+    activeGroupId: DEFAULT_EDITOR_GROUP_ID,
+    viewStateEntries: [],
+  });
+
+  try {
+    model.closeTab('pdf-a');
+    const snapshot = model.getSnapshot();
+
+    assert.equal(snapshot.tabs.length, 1);
+    assert.equal(snapshot.tabs[0]?.kind, 'pdf');
+    assert.equal(snapshot.tabs[0]?.residency, 'resident');
+    assert.equal(snapshot.tabs[0]?.title, '');
+    assert.equal(snapshot.tabs[0]?.url, EMPTY_PDF_TAB_URL);
+    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
+    assert.notEqual(snapshot.tabs[0]?.id, 'pdf-a');
+  } finally {
+    model.dispose();
+  }
+});
+
+test('editor model resets the last draft tab to an empty resident draft when closed', () => {
+  const model = createEditorModel({
+    groups: [
+      {
+        groupId: DEFAULT_EDITOR_GROUP_ID,
+        tabs: [
+          {
+            id: 'draft-a',
+            kind: 'draft',
+            title: 'Draft A',
+            document: createWritingEditorDocumentFromPlainText('alpha'),
+            viewMode: 'draft',
+          },
+        ],
+        activeTabId: 'draft-a',
+        mruTabIds: ['draft-a'],
+      },
+    ],
+    activeGroupId: DEFAULT_EDITOR_GROUP_ID,
+    viewStateEntries: [],
+  });
+
+  try {
+    model.closeTab('draft-a');
+    const snapshot = model.getSnapshot();
+    const nextDraft = snapshot.tabs[0];
+
+    assert.equal(snapshot.tabs.length, 1);
+    assert.equal(nextDraft?.kind, 'draft');
+    assert.equal(nextDraft?.residency, 'resident');
+    assert.equal(nextDraft?.title, '');
+    assert.equal(
+      writingEditorDocumentToPlainText(nextDraft?.document ?? createWritingEditorDocumentFromPlainText('fallback')),
+      '',
+    );
+    assert.equal(snapshot.activeTabId, nextDraft?.id ?? null);
+    assert.notEqual(nextDraft?.id, 'draft-a');
+    assert.deepEqual(snapshot.dirtyDraftTabIds, []);
   } finally {
     model.dispose();
   }

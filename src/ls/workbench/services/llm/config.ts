@@ -12,48 +12,61 @@ import {
 
 export const defaultLlmProviderId: LlmProviderId = 'glm';
 
+const defaultEnabledLlmModelOptions: Record<LlmProviderId, string[]> = {
+  glm: [serializeLlmModelOptionValue('glm', 'glm-4.7-flash')],
+  kimi: [serializeLlmModelOptionValue('kimi', 'kimi-k2.5')],
+  deepseek: [serializeLlmModelOptionValue('deepseek', 'deepseek-chat')],
+  anthropic: [],
+  openai: [
+    serializeLlmModelOptionValue('openai', 'gpt-5.3-codex', 'medium'),
+    serializeLlmModelOptionValue('openai', 'gpt-5.4', 'medium'),
+  ],
+  gemini: [],
+  custom: [],
+};
+
 export const defaultLlmProviderSettings: Record<LlmProviderId, LlmProviderSettings> = {
   glm: {
     apiKey: '',
     baseUrl: getLlmProviderDefinition('glm').defaultBaseUrl,
-    selectedModelOption: getEnabledLlmModelOptionValuesForProvider('glm')[0] ?? '',
-    enabledModelOptions: getEnabledLlmModelOptionValuesForProvider('glm'),
+    selectedModelOption: defaultEnabledLlmModelOptions.glm[0] ?? '',
+    enabledModelOptions: defaultEnabledLlmModelOptions.glm,
   },
   kimi: {
     apiKey: '',
     baseUrl: getLlmProviderDefinition('kimi').defaultBaseUrl,
-    selectedModelOption: getEnabledLlmModelOptionValuesForProvider('kimi')[0] ?? '',
-    enabledModelOptions: getEnabledLlmModelOptionValuesForProvider('kimi'),
+    selectedModelOption: defaultEnabledLlmModelOptions.kimi[0] ?? '',
+    enabledModelOptions: defaultEnabledLlmModelOptions.kimi,
   },
   deepseek: {
     apiKey: '',
     baseUrl: getLlmProviderDefinition('deepseek').defaultBaseUrl,
-    selectedModelOption: getEnabledLlmModelOptionValuesForProvider('deepseek')[0] ?? '',
-    enabledModelOptions: getEnabledLlmModelOptionValuesForProvider('deepseek'),
+    selectedModelOption: defaultEnabledLlmModelOptions.deepseek[0] ?? '',
+    enabledModelOptions: defaultEnabledLlmModelOptions.deepseek,
   },
   anthropic: {
     apiKey: '',
     baseUrl: getLlmProviderDefinition('anthropic').defaultBaseUrl,
-    selectedModelOption: getEnabledLlmModelOptionValuesForProvider('anthropic')[0] ?? '',
-    enabledModelOptions: getEnabledLlmModelOptionValuesForProvider('anthropic'),
+    selectedModelOption: defaultEnabledLlmModelOptions.anthropic[0] ?? '',
+    enabledModelOptions: defaultEnabledLlmModelOptions.anthropic,
   },
   openai: {
     apiKey: '',
     baseUrl: getLlmProviderDefinition('openai').defaultBaseUrl,
-    selectedModelOption: getEnabledLlmModelOptionValuesForProvider('openai')[0] ?? '',
-    enabledModelOptions: getEnabledLlmModelOptionValuesForProvider('openai'),
+    selectedModelOption: defaultEnabledLlmModelOptions.openai[0] ?? '',
+    enabledModelOptions: defaultEnabledLlmModelOptions.openai,
   },
   gemini: {
     apiKey: '',
     baseUrl: getLlmProviderDefinition('gemini').defaultBaseUrl,
-    selectedModelOption: getEnabledLlmModelOptionValuesForProvider('gemini')[0] ?? '',
-    enabledModelOptions: getEnabledLlmModelOptionValuesForProvider('gemini'),
+    selectedModelOption: defaultEnabledLlmModelOptions.gemini[0] ?? '',
+    enabledModelOptions: defaultEnabledLlmModelOptions.gemini,
   },
   custom: {
     apiKey: '',
     baseUrl: getLlmProviderDefinition('custom').defaultBaseUrl,
-    selectedModelOption: getEnabledLlmModelOptionValuesForProvider('custom')[0] ?? '',
-    enabledModelOptions: getEnabledLlmModelOptionValuesForProvider('custom'),
+    selectedModelOption: defaultEnabledLlmModelOptions.custom[0] ?? '',
+    enabledModelOptions: defaultEnabledLlmModelOptions.custom,
   },
 };
 

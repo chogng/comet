@@ -523,6 +523,9 @@ export class SettingsPartView {
       return;
     }
     this.activePageId = pageId;
+    if (pageId === 'model') {
+      this.llmWidget.enterModelPage();
+    }
     this.renderActivePage();
     this.syncNavigationView();
   }
