@@ -29,6 +29,7 @@ import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorP
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import { EditorPane } from 'ls/workbench/browser/parts/editor/panes/editorPane';
 import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { toFileUrl } from 'ls/workbench/common/fileUrl';
 
 export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
   reader: PdfReaderViewState;
@@ -44,19 +45,6 @@ export type PdfEditorPaneProps = {
     status: PdfReaderRuntimeStatus,
   ) => void;
 };
-
-function toPdfFileUrl(filePath: string) {
-  const normalized = filePath.trim().replace(/\\/g, '/');
-  if (!normalized) {
-    return '';
-  }
-
-  if (/^[a-zA-Z]:\//.test(normalized)) {
-    return encodeURI(`file:///${normalized}`);
-  }
-
-  return encodeURI(`file://${normalized.startsWith('/') ? normalized : `/${normalized}`}`);
-}
 
 class PdfEditorPaneStateController {
   private viewState: PdfEditorPaneViewState = {
@@ -273,7 +261,7 @@ export class PdfEditorPane extends EditorPane<
   private readonly handleOpenPdfFile = async () => {
     try {
       const filePath = await nativeHostService.invoke('pick_pdf_file');
-      const fileUrl = toPdfFileUrl(filePath ?? '');
+      const fileUrl = toFileUrl(filePath ?? '');
       if (!fileUrl) {
         return;
       }

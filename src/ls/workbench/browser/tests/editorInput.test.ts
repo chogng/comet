@@ -15,6 +15,7 @@ import {
   getEditorContentDisplayUrl,
   getEditorContentTabTitle,
 } from 'ls/workbench/browser/parts/editor/editorUrlPresentation';
+import { toFileUrl } from 'ls/workbench/common/fileUrl';
 
 test('toEditorTabInput strips draft-only payload from workspace tabs', () => {
   const draftTab: EditorWorkspaceDraftTab = {
@@ -79,6 +80,17 @@ test('getEditorContentTabTitle treats about:blank as an empty browser tab title'
 test('getEditorContentDisplayUrl hides about:blank from url displays', () => {
   assert.equal(getEditorContentDisplayUrl(EMPTY_BROWSER_TAB_URL), '');
   assert.equal(getEditorContentDisplayUrl(' https://example.com/paper '), 'https://example.com/paper');
+});
+
+test('toFileUrl encodes path segments without turning file characters into URL syntax', () => {
+  assert.equal(
+    toFileUrl('/Users/lance/Papers/a #1?.pdf'),
+    'file:///Users/lance/Papers/a%20%231%3F.pdf',
+  );
+  assert.equal(
+    toFileUrl('C:\\Users\\lance\\Papers\\a #1?.pdf'),
+    'file:///C:/Users/lance/Papers/a%20%231%3F.pdf',
+  );
 });
 
 test('isEmptyBrowserTabInput matches only browser about:blank tabs', () => {

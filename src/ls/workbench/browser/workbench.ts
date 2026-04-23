@@ -9,6 +9,7 @@ import type { LibraryModel, LibraryModelContext } from 'ls/workbench/browser/lib
 
 import { setWorkbenchBrowserTabKeepAliveLimit } from 'ls/workbench/browser/webContentRetentionState';
 import { WebContentNavigationModel } from 'ls/workbench/browser/webContentNavigationModel';
+import { toFileUrl } from 'ls/workbench/common/fileUrl';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchContentClassName,
@@ -189,19 +190,6 @@ const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
 const AGENT_CHAT_AUTO_MODEL_OPTION_VALUE = 'auto';
 function getArticleSelectionKey(article: Pick<Article, 'sourceUrl' | 'fetchedAt'>) {
   return `${article.sourceUrl}::${article.fetchedAt}`;
-}
-
-function toFileUrl(filePath: string) {
-  const normalized = filePath.trim().replace(/\\/g, '/');
-  if (!normalized) {
-    return '';
-  }
-
-  if (/^[a-zA-Z]:\//.test(normalized)) {
-    return encodeURI(`file:///${normalized}`);
-  }
-
-  return encodeURI(`file://${normalized.startsWith('/') ? normalized : `/${normalized}`}`);
 }
 
 function looksLikePdfResource(value: string) {

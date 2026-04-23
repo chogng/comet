@@ -463,6 +463,58 @@ test('web content contribution installs the renderer bridge and cleans up lifecy
   }
 });
 
+test('web content contribution enables plugins on managed webviews for PDF display', async () => {
+  const animationFrameSpy = installAnimationFrameSpy();
+  const webviewSpy = installWebviewSpy();
+  const host = document.createElement('div');
+
+  host.dataset.webcontentActive = 'true';
+  Object.defineProperty(host, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => createDomRect(0, 0, 320, 180),
+  });
+  document.body.append(host);
+  registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.webContentViewHost, host);
+
+  try {
+    await withElectronApi(
+      createElectronApi({
+        webContent: {
+          async navigate() {
+            throw new Error('Unexpected native navigation in webview plugin test.');
+          },
+          reportBridgeReady() {},
+          reportState() {},
+        } as unknown as NonNullable<ElectronAPI['webContent']>,
+      }),
+      async () => {
+        const contribution = createWorkbenchWebContentViewContribution();
+        assert(contribution);
+
+        const bridge = (window as typeof window & {
+          __lsWebContentBridge?: {
+            navigateTo: (url: string, targetId?: string | null) => Promise<unknown>;
+          };
+        }).__lsWebContentBridge;
+        assert(bridge);
+
+        await bridge.navigateTo('file:///tmp/test.pdf', 'pdf-tab');
+        animationFrameSpy.flushUntilIdle();
+
+        const [webview] = webviewSpy.getCreatedWebviews();
+        assert(webview);
+        assert.equal(webview.getAttribute('plugins'), 'true');
+
+        contribution.dispose();
+      },
+    );
+  } finally {
+    webviewSpy.restore();
+    animationFrameSpy.restore();
+    host.remove();
+  }
+});
+
 test('web content contribution uses src for the first navigation before webview dom-ready', async () => {
   const resizeObserverSpy = installResizeObserverSpy();
   const animationFrameSpy = installAnimationFrameSpy();

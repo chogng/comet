@@ -699,6 +699,7 @@ class WebContentDomManager {
       'contextIsolation=yes, nodeIntegration=no, sandbox=yes',
     );
     webview.setAttribute('allowpopups', 'true');
+    webview.setAttribute('plugins', 'true');
     this.applyHiddenWebviewStyle(webview);
     return webview;
   }
