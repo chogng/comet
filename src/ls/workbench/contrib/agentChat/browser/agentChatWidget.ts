@@ -40,8 +40,6 @@ export type AgentChatWidgetProps = {
   onActivateConversation: (conversationId: string) => void;
   onCloseConversation: (conversationId: string) => void;
   onCloseAgentBar: () => void;
-  isSecondarySidebarVisible: boolean;
-  onToggleSecondarySidebar: () => void;
   onSelectLlmModel: (value: string) => void;
   onOpenModelSettings: () => void;
 };
@@ -190,17 +188,6 @@ export class AgentChatWidget {
       ),
       this.createTopbarHistoryActionItem(),
       this.createTopbarMoreActionItem(),
-      this.createTopbarActionItem(
-        this.props.isSecondarySidebarVisible
-          ? this.props.labels.assistantHideSecondarySidebar
-          : this.props.labels.assistantShowSecondarySidebar,
-        this.props.isSecondarySidebarVisible
-          ? lxIconSemanticMap.assistant.secondarySidebarOpen
-          : lxIconSemanticMap.assistant.secondarySidebarClosed,
-        this.props.onToggleSecondarySidebar,
-        this.props.isSecondarySidebarVisible,
-        true,
-      ),
     ];
 
     const actionsView = createActionBarView({

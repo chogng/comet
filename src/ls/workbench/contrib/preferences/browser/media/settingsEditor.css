@@ -114,7 +114,7 @@
 .settings-content {
   flex: 1 1 auto;
   height: 100%;
-  padding: 16px 18px;
+  padding: 24px 130px;
   display: grid;
   gap: 12px;
   align-content: start;

@@ -159,10 +159,16 @@
 }
 
 .editor-pdf-body {
+  display: flex;
   min-height: 0;
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 248, 251, 0.92));
+}
+
+.editor-pdf-body > .pdf-annotation-editor {
+  flex: 1;
+  min-width: 0;
 }
 
 .editor-source-body > .browser-frame-container {

@@ -254,6 +254,7 @@ export class LlmWidget {
         {
           label: 'Refresh',
           title: 'Refresh',
+          buttonClassName: 'settings-model-search-action',
           content: createLxIcon('refresh'),
           onClick: () => {
             this.modelQuery = '';

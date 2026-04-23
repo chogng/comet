@@ -595,6 +595,17 @@
   flex: 0 0 auto;
 }
 
+.settings-model-search-action.actionbar-action {
+  width: 28px;
+  height: 28px;
+}
+
+.settings-model-search-action.actionbar-action .lx-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
 .settings-model-list {
   display: grid;
 }

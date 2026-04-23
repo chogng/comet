@@ -18,11 +18,13 @@ export type PdfAnnotationEditorLabels = {
 export type PdfAnnotationEditorProps = {
   url: string;
   targetId: string;
+  annotationTargetId?: string;
   labels: PdfAnnotationEditorLabels;
   viewPartProps: ViewPartProps;
   annotations?: readonly Annotation[];
   selection?: PdfSelection | null;
   onAnnotationsChange?: (annotations: readonly Annotation[]) => void;
+  onViewStateChange?: (viewState: PdfAnnotationEditorViewState) => void;
 };
 
 export type PdfAnnotationEditorViewState = Pick<
@@ -64,6 +66,7 @@ export class PdfAnnotationEditor {
     this.viewPartView = new ViewPartView(props.viewPartProps);
     this.unsubscribeStore = this.store.subscribe(() => {
       this.renderOverlay();
+      this.props.onViewStateChange?.(this.getViewState());
     });
     this.draftTextElement.className = 'pdf-annotation-textarea';
     this.draftTextElement.rows = 3;
@@ -113,7 +116,7 @@ export class PdfAnnotationEditor {
 
   setProps(props: PdfAnnotationEditorProps) {
     this.props = props;
-    this.store.setTarget(props.targetId);
+    this.store.setTarget(props.annotationTargetId ?? props.targetId);
     this.store.setAnnotations(props.annotations ?? []);
     this.store.setSelection(props.selection ?? null);
     this.viewPartView.setProps(props.viewPartProps);

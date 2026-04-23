@@ -252,7 +252,60 @@ test('EditorGroupView renders a pdf empty-state shell with a body container', ()
 
     const pdfBody = pdfPane.querySelector(':scope > .editor-pdf-body');
     assert(pdfBody instanceof HTMLElement);
-    assert.equal(pdfBody.childElementCount, 0);
+    assert.equal(pdfBody.childElementCount, 1);
+    assert(pdfBody.firstElementChild?.classList.contains('pdf-annotation-editor'));
+
+    const readerSurface = pdfBody.querySelector('.pdf-annotation-surface');
+    assert(readerSurface instanceof HTMLElement);
+
+    const annotationOverlay = pdfBody.querySelector('.pdf-annotation-overlay');
+    assert(annotationOverlay instanceof HTMLElement);
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('EditorGroupView captures pdf annotation editor view state from the mounted pane', () => {
+  const pdfTab = {
+    id: 'pdf-state',
+    kind: 'pdf' as const,
+    title: 'Paper PDF',
+    url: 'https://example.com/state.pdf',
+  };
+
+  const view = new EditorGroupView(createProps(pdfTab.id, pdfTab, [pdfTab]));
+  document.body.append(view.getElement());
+
+  try {
+    const activePane = (view as unknown as {
+      activePane: {
+        annotationEditor: {
+          restoreViewState: (state: {
+            selection: ReturnType<typeof createPdfSelection> | null;
+            draftComment: string;
+          }) => void;
+        };
+        getViewState: () => {
+          selection: ReturnType<typeof createPdfSelection> | null;
+          draftComment: string;
+        };
+      } | null;
+    }).activePane;
+    assert(activePane);
+
+    activePane.annotationEditor.restoreViewState({
+      selection: createPdfSelection({
+        page: 3,
+        text: 'captured text',
+      }),
+      draftComment: 'captured note',
+    });
+
+    const viewState = activePane.getViewState();
+    assert.equal(viewState.selection?.page, 3);
+    assert.equal(viewState.selection?.text, 'captured text');
+    assert.equal(viewState.draftComment, 'captured note');
   } finally {
     view.dispose();
     document.body.replaceChildren();
