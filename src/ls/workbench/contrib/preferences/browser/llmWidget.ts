@@ -1,10 +1,8 @@
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
-import { createBadge } from 'ls/base/browser/ui/badge/badge';
 import { createSwitchView } from 'ls/base/browser/ui/switch/switch';
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
 import type { LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { SettingsPartLabels } from 'ls/workbench/contrib/preferences/browser/settingsTypes';
 import { ApiKeyWidget } from 'ls/workbench/contrib/preferences/browser/apiKeyWidget';
@@ -13,34 +11,16 @@ import {
   setSettingsFocusKey as setFocusKey,
 } from 'ls/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import {
-  getEffectiveInputTokenLimit,
   getEnabledLlmModelOptionValuesForProvider,
-  hasLlmMaxContextWindow,
-  getLlmModelBadges,
   getLlmModelOptionsForProvider,
   llmProviderIds,
   parseLlmModelOptionValue,
   type LlmModelOption,
-  type LlmModelBadge,
   type LlmModelDefinition,
 } from 'ls/workbench/services/llm/registry';
 
 function normalizeModelLabel(value: string) {
   return value.replace(/[\u2010-\u2015\u2212]/g, '-');
-}
-
-function formatTokenCount(value: number) {
-  if (value >= 1_000_000) {
-    const millions = value / 1_000_000;
-    return `${millions.toFixed(millions >= 10 || Number.isInteger(millions) ? 0 : 2).replace(/\.?0+$/, '')}M`;
-  }
-
-  if (value >= 1_000) {
-    const thousands = value / 1_000;
-    return `${thousands.toFixed(thousands >= 10 || Number.isInteger(thousands) ? 0 : 1).replace(/\.?0+$/, '')}K`;
-  }
-
-  return String(value);
 }
 
 export type LlmWidgetProps = {
@@ -75,8 +55,8 @@ type LlmModelListEntry = {
   providerId: LlmProviderId;
   providerLabel: string;
   provider: LlmProviderSettings;
-  option: LlmModelOption;
   model: LlmModelDefinition;
+  options: LlmModelOption[];
   enabledOptionValues: string[];
 };
 
@@ -91,14 +71,6 @@ type ModelOrderState =
   | { phase: 'dirty'; order: string[] };
 
 const COLLAPSED_MODEL_COUNT = 8;
-
-const modelBadgeMeta: Record<LlmModelBadge, { icon: LxIconName; title: string }> = {
-  thinking: { icon: 'brain', title: 'Thinking Model' },
-  fast: { icon: 'fast', title: 'Fast Service Tier' },
-  reasoning: { icon: 'reasoning', title: 'Reasoning' },
-  chat: { icon: 'chat-filled', title: 'Chat' },
-  image: { icon: 'image-filled', title: 'Image' },
-};
 
 export class LlmWidget {
   private props: LlmWidgetProps;
@@ -276,14 +248,25 @@ export class LlmWidget {
         provider.enabledModelOptions,
       );
       const providerLabel = this.getProviderLabel(providerId);
+      const optionsByModelId = new Map<string, LlmModelOption[]>();
 
       for (const option of getLlmModelOptionsForProvider(providerId, provider.enabledModelOptions)) {
+        const modelOptions = optionsByModelId.get(option.modelId) ?? [];
+        modelOptions.push(option);
+        optionsByModelId.set(option.modelId, modelOptions);
+      }
+
+      for (const options of optionsByModelId.values()) {
+        const firstOption = options[0];
+        if (!firstOption) {
+          continue;
+        }
         entries.push({
           providerId,
           providerLabel,
           provider,
-          option,
-          model: option.model,
+          model: firstOption.model,
+          options,
           enabledOptionValues,
         });
       }
@@ -308,20 +291,20 @@ export class LlmWidget {
     entries: readonly LlmModelListEntry[],
     orderedValues: readonly string[],
   ) {
-    const entriesByValue = new Map(entries.map((entry) => [entry.option.value, entry] as const));
+    const entriesByValue = new Map(entries.map((entry) => [this.getModelEntryKey(entry), entry] as const));
     const enabled: string[] = [];
     const disabled: string[] = [];
 
-    for (const optionValue of orderedValues) {
-      const entry = entriesByValue.get(optionValue);
+    for (const entryKey of orderedValues) {
+      const entry = entriesByValue.get(entryKey);
       if (!entry) {
         continue;
       }
 
-      if (entry.enabledOptionValues.includes(entry.option.value)) {
-        enabled.push(entry.option.value);
+      if (this.isModelEntryEnabled(entry)) {
+        enabled.push(entryKey);
       } else {
-        disabled.push(entry.option.value);
+        disabled.push(entryKey);
       }
     }
 
@@ -329,7 +312,7 @@ export class LlmWidget {
   }
 
   private getSynchronizedModelOrder(entries: readonly LlmModelListEntry[]) {
-    const entryValues = entries.map((entry) => entry.option.value);
+    const entryValues = entries.map((entry) => this.getModelEntryKey(entry));
     const entryValueSet = new Set(entryValues);
     const existingOrder =
       this.modelOrderState.phase === 'uninitialized' ? [] : this.modelOrderState.order;
@@ -379,9 +362,9 @@ export class LlmWidget {
     }
 
     const currentOrder = this.modelOrderState.order;
-    const entriesByValue = new Map(entries.map((entry) => [entry.option.value, entry] as const));
+    const entriesByValue = new Map(entries.map((entry) => [this.getModelEntryKey(entry), entry] as const));
     return currentOrder
-      .map((optionValue) => entriesByValue.get(optionValue))
+      .map((entryKey) => entriesByValue.get(entryKey))
       .filter((entry): entry is LlmModelListEntry => Boolean(entry));
   }
 
@@ -392,7 +375,7 @@ export class LlmWidget {
         return true;
       }
 
-      return [entry.option.label, entry.model.id, entry.providerLabel, entry.providerId].some(
+      return [entry.model.label, entry.model.id, entry.providerLabel, entry.providerId].some(
         (value) => value.toLowerCase().includes(query),
       );
     });
@@ -418,7 +401,8 @@ export class LlmWidget {
   }
 
   private getOrCreateModelListItemView(entry: LlmModelListEntry) {
-    const existing = this.modelListItemViews.get(entry.option.value);
+    const entryKey = this.getModelEntryKey(entry);
+    const existing = this.modelListItemViews.get(entryKey);
     if (existing) {
       existing.update(entry);
       return existing;
@@ -435,7 +419,7 @@ export class LlmWidget {
       if (this.props.activeLlmProvider !== currentEntry.providerId) {
         this.props.onActiveLlmProviderChange(currentEntry.providerId);
       }
-      this.props.onLlmProviderSelectedModelOption(currentEntry.providerId, currentEntry.option.value);
+      this.props.onLlmProviderModelChange(currentEntry.providerId, currentEntry.model.id);
     });
 
     const titleRow = el('span', 'settings-model-list-title-row');
@@ -449,17 +433,15 @@ export class LlmWidget {
 
     const update = (nextEntry: LlmModelListEntry) => {
       currentEntry = nextEntry;
-      const displayLabel = normalizeModelLabel(nextEntry.option.label);
-      const isEnabled = nextEntry.enabledOptionValues.includes(nextEntry.option.value);
+      const displayLabel = normalizeModelLabel(nextEntry.model.label);
+      const isEnabled = this.isModelEntryEnabled(nextEntry);
       const selectedOption = nextEntry.provider.selectedModelOption
         ? parseLlmModelOptionValue(nextEntry.provider.selectedModelOption)
         : null;
       const isCurrent =
         this.props.activeLlmProvider === nextEntry.providerId &&
         selectedOption?.providerId === nextEntry.providerId &&
-        selectedOption.modelId === nextEntry.model.id &&
-        selectedOption.reasoningEffort === nextEntry.option.reasoningEffort &&
-        selectedOption.serviceTier === nextEntry.option.serviceTier;
+        selectedOption.modelId === nextEntry.model.id;
 
       item.className = [
         'settings-model-list-item',
@@ -467,18 +449,14 @@ export class LlmWidget {
       ]
         .filter(Boolean)
         .join(' ');
-      item.dataset.modelEntryKey = nextEntry.option.value;
+      item.dataset.modelEntryKey = this.getModelEntryKey(nextEntry);
 
       nameButton.disabled = !isEnabled;
       applyHover(nameButton, nextEntry.model.description || displayLabel);
       name.textContent = displayLabel;
       titleRow.replaceChildren(name);
-      const metadataRow = this.renderMetadataRow(nextEntry);
-      if (metadataRow) {
-        titleRow.append(metadataRow);
-      }
 
-      switchElement.dataset.modelEntryKey = nextEntry.option.value;
+      switchElement.dataset.modelEntryKey = this.getModelEntryKey(nextEntry);
       switchView.setProps({
         checked: isEnabled,
         disabled: false,
@@ -486,11 +464,17 @@ export class LlmWidget {
         title: displayLabel,
         onChange: (_checked, event) => {
           event.stopPropagation();
-          this.props.onLlmProviderModelEnabledChange(
-            currentEntry.providerId,
-            currentEntry.option.value,
-            !currentEntry.enabledOptionValues.includes(currentEntry.option.value),
-          );
+          const nextEnabled = !this.isModelEntryEnabled(currentEntry);
+          for (const option of currentEntry.options) {
+            const optionEnabled = currentEntry.enabledOptionValues.includes(option.value);
+            if (optionEnabled !== nextEnabled) {
+              this.props.onLlmProviderModelEnabledChange(
+                currentEntry.providerId,
+                option.value,
+                nextEnabled,
+              );
+            }
+          }
         },
       });
     };
@@ -502,82 +486,16 @@ export class LlmWidget {
       element: item,
       update,
     };
-    this.modelListItemViews.set(entry.option.value, view);
+    this.modelListItemViews.set(entryKey, view);
     return view;
   }
 
-  private renderMetadataRow(entry: LlmModelListEntry, option: LlmModelOption = entry.option) {
-    const row = el('span', 'settings-model-list-capabilities');
-    const { model, provider } = entry;
+  private getModelEntryKey(entry: LlmModelListEntry) {
+    return `${entry.providerId}:${entry.model.id}`;
+  }
 
-    const badges = getLlmModelBadges(model);
-
-    for (const badge of badges) {
-      const meta = modelBadgeMeta[badge];
-      row.append(
-        createBadge({
-          icon: meta.icon,
-          title: meta.title,
-          compact: true,
-          className: 'settings-model-list-capability',
-        }),
-      );
-    }
-
-    if (model.context_window_tokens) {
-      row.append(
-        createBadge({
-          label: `Ctx ${formatTokenCount(model.context_window_tokens)}`,
-          title: `Official context window: ${formatTokenCount(model.context_window_tokens)}`,
-          compact: true,
-          className: 'settings-model-list-capability',
-        }),
-      );
-    }
-
-    const useMaxContextWindow = provider.useMaxContextWindow ?? false;
-    const effectiveInputTokenLimit = getEffectiveInputTokenLimit(model, useMaxContextWindow);
-    if (effectiveInputTokenLimit) {
-      const hasMaxContextWindow = hasLlmMaxContextWindow(model);
-      const inputTitle = useMaxContextWindow && hasMaxContextWindow
-        ? `Max input token budget: ${formatTokenCount(effectiveInputTokenLimit)}`
-        : hasMaxContextWindow
-          ? `Default input token budget: ${formatTokenCount(effectiveInputTokenLimit)}. Enable Max Context to use ${formatTokenCount(model.input_token_limit!)}.`
-          : `Input token budget: ${formatTokenCount(effectiveInputTokenLimit)}`;
-      row.append(
-        createBadge({
-          label: `In ${formatTokenCount(effectiveInputTokenLimit)}`,
-          title: inputTitle,
-          compact: true,
-          className: 'settings-model-list-capability',
-        }),
-      );
-    }
-
-    if (model.max_output_tokens) {
-      row.append(
-        createBadge({
-          label: `Out ${formatTokenCount(model.max_output_tokens)}`,
-          title: `Max output tokens: ${formatTokenCount(model.max_output_tokens)}`,
-          compact: true,
-          className: 'settings-model-list-capability',
-        }),
-      );
-    }
-
-    if (option?.serviceTier === 'priority') {
-      row.append(
-        createBadge({
-          icon: modelBadgeMeta.fast.icon,
-          label: 'Fast',
-          title: 'Fast service tier (Priority)',
-          compact: true,
-          className: 'settings-model-list-capability',
-        }),
-      );
-    }
-
-    return row.childElementCount > 0 ? row : null;
+  private isModelEntryEnabled(entry: LlmModelListEntry) {
+    return entry.options.some((option) => entry.enabledOptionValues.includes(option.value));
   }
 
   private renderModelListToggle(isCollapsed: boolean) {

@@ -20,7 +20,9 @@ import { EMPTY_PDF_TAB_URL } from 'ls/workbench/browser/parts/editor/editorInput
 import type { EditorWorkspacePdfTab } from 'ls/workbench/browser/parts/editor/editorModel';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
+import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import { EditorPane } from 'ls/workbench/browser/parts/editor/panes/editorPane';
+import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
 
 export type PdfEditorPaneViewState = PdfAnnotationEditorViewState & {
   reader: PdfReaderViewState;
@@ -30,7 +32,21 @@ export type PdfEditorPaneProps = {
   labels: EditorPartLabels;
   pdfTab: EditorWorkspacePdfTab;
   viewPartProps: ViewPartProps;
+  onOpenEditor?: EditorOpenHandler;
 };
+
+function toPdfFileUrl(filePath: string) {
+  const normalized = filePath.trim().replace(/\\/g, '/');
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^[a-zA-Z]:\//.test(normalized)) {
+    return encodeURI(`file:///${normalized}`);
+  }
+
+  return encodeURI(`file://${normalized.startsWith('/') ? normalized : `/${normalized}`}`);
+}
 
 class PdfEditorPaneStateController {
   private viewState: PdfEditorPaneViewState = {
@@ -157,6 +173,7 @@ export class PdfEditorPane extends EditorPane<
       labels: {
         title: this.props.labels.pdfTitle,
         emptyState: this.props.labels.emptyWorkspaceBody,
+        openPdfFile: this.props.labels.pdfOpenFile,
       },
       viewPartProps: this.createReaderViewPartProps(this.props),
       annotations,
@@ -164,6 +181,7 @@ export class PdfEditorPane extends EditorPane<
       onViewStateChange: (viewState: PdfAnnotationEditorViewState) => {
         this.editor.setAnnotationViewState(viewState);
       },
+      onOpenPdfFile: this.handleOpenPdfFile,
       onAnnotationsChange: (nextAnnotations: Parameters<typeof writeStoredPdfAnnotations>[1]) => {
         writeStoredPdfAnnotations(this.getAnnotationTargetId(), nextAnnotations);
       },
@@ -177,6 +195,24 @@ export class PdfEditorPane extends EditorPane<
 
     this.annotationEditor.setProps(annotationProps);
   }
+
+  private readonly handleOpenPdfFile = async () => {
+    try {
+      const filePath = await nativeHostService.invoke('pick_pdf_file');
+      const fileUrl = toPdfFileUrl(filePath ?? '');
+      if (!fileUrl) {
+        return;
+      }
+
+      await this.props.onOpenEditor?.({
+        kind: 'pdf',
+        disposition: 'reveal-or-open',
+        url: fileUrl,
+      });
+    } catch (error) {
+      console.error('Failed to open PDF file.', error);
+    }
+  };
 }
 
 export function createPdfEditorPane(props: PdfEditorPaneProps) {

@@ -162,8 +162,7 @@
   display: flex;
   min-height: 0;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 248, 251, 0.92));
+  background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
 .editor-pdf-body > .pdf-annotation-editor {

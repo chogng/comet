@@ -14,6 +14,7 @@ import {
 import type { DraftEditorStatusState } from 'ls/editor/browser/text/draftEditorStatusState';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
+import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import { ContentEditorPane } from 'ls/workbench/browser/parts/editor/panes/contentEditorPane';
 import type { ContentEditorPaneProps } from 'ls/workbench/browser/parts/editor/panes/contentEditorPane';
 import { DraftEditorPane } from 'ls/workbench/browser/parts/editor/panes/draftEditorPane';
@@ -30,6 +31,7 @@ import type { PdfEditorPaneProps } from 'ls/workbench/browser/parts/editor/panes
 export type EditorPaneResolverContext = {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
+  onOpenEditor?: EditorOpenHandler;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onDraftStatusChange: (tabId: string, status: DraftEditorStatusState) => void;
 };
@@ -134,6 +136,7 @@ function createPdfPaneProps(
     labels: context.labels,
     pdfTab: tab,
     viewPartProps: context.viewPartProps,
+    onOpenEditor: context.onOpenEditor,
   };
 }
 

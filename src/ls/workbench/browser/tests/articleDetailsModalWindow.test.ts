@@ -344,10 +344,10 @@ test('article details modal view reveals archived artifact paths through desktop
   registerWorkbenchWindowControlsProvider(fakeWindowControls.provider);
 
   await withElectronApi(createElectronApi({
-    invoke: (async (command, args) => {
+    invoke: (async (command: string, args?: Record<string, unknown>) => {
       invoked.push({
         command,
-        args: args as Record<string, unknown> | undefined,
+        args,
       });
       return true;
     }) as ElectronAPI['invoke'],

@@ -13,6 +13,7 @@ import 'ls/editor/browser/pdf/media/pdfAnnotationEditor.css';
 export type PdfAnnotationEditorLabels = {
   title: string;
   emptyState: string;
+  openPdfFile?: string;
 };
 
 export type PdfAnnotationEditorProps = {
@@ -25,6 +26,7 @@ export type PdfAnnotationEditorProps = {
   selection?: PdfSelection | null;
   onAnnotationsChange?: (annotations: readonly Annotation[]) => void;
   onViewStateChange?: (viewState: PdfAnnotationEditorViewState) => void;
+  onOpenPdfFile?: () => void | Promise<void>;
 };
 
 export type PdfAnnotationEditorViewState = Pick<
@@ -47,6 +49,8 @@ export class PdfAnnotationEditor {
   private props: PdfAnnotationEditorProps;
   private readonly element = createElement('div', 'pdf-annotation-editor');
   private readonly surfaceElement = createElement('div', 'pdf-annotation-surface');
+  private readonly emptyOpenElement = createElement('div', 'pdf-annotation-open-empty');
+  private readonly openPdfButton = createElement('button', 'pdf-annotation-open-btn');
   private readonly overlayElement = createElement('div', 'pdf-annotation-overlay');
   private readonly badgeElement = createElement('div', 'pdf-annotation-badge');
   private readonly hintElement = createElement('div', 'pdf-annotation-hint');
@@ -75,6 +79,8 @@ export class PdfAnnotationEditor {
     this.captureSelectionButton.type = 'button';
     this.captureSelectionButton.textContent = 'Capture Selection';
     this.captureSelectionButton.addEventListener('click', this.handleCaptureSelection);
+    this.openPdfButton.type = 'button';
+    this.openPdfButton.addEventListener('click', this.handleOpenPdfFile);
     this.saveAnnotationButton.type = 'button';
     this.saveAnnotationButton.textContent = 'Create Annotation';
     this.saveAnnotationButton.addEventListener('click', this.handleCreateAnnotation);
@@ -87,7 +93,8 @@ export class PdfAnnotationEditor {
       this.draftTextElement,
       this.actionRowElement,
     );
-    this.surfaceElement.append(this.viewPartView.getElement());
+    this.emptyOpenElement.append(this.openPdfButton);
+    this.surfaceElement.append(this.viewPartView.getElement(), this.emptyOpenElement);
     this.overlayElement.append(
       this.badgeElement,
       this.hintElement,
@@ -144,6 +151,8 @@ export class PdfAnnotationEditor {
 
   private renderOverlay() {
     const snapshot = this.store.getSnapshot();
+    this.emptyOpenElement.hidden = Boolean(this.props.url.trim());
+    this.openPdfButton.textContent = this.props.labels.openPdfFile ?? 'Open PDF';
     this.badgeElement.textContent = `${this.props.labels.title} Annotation`;
     this.hintElement.textContent =
       snapshot.annotations.length > 0
@@ -201,6 +210,10 @@ export class PdfAnnotationEditor {
         text: selectionSnapshot.text,
       }),
     );
+  };
+
+  private readonly handleOpenPdfFile = () => {
+    void this.props.onOpenPdfFile?.();
   };
 
   private readonly handleCreateAnnotation = () => {

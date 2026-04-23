@@ -291,6 +291,7 @@ const zh = {
   editorFontSizePrompt: '输入字号，例如 18px / 小四 / 四号，留空可清除',
   editorSourceTitle: '来源预览',
   editorPdfTitle: 'PDF',
+  editorPdfOpenFile: '打开 PDF',
   editorPdfUrlPrompt: '输入 PDF URL',
   editorStatusbarAriaLabel: '编辑器状态',
   editorStatusWords: '词数',

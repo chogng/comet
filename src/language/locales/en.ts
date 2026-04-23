@@ -293,6 +293,7 @@ const en = {
   editorFontSizePrompt: 'Font size, e.g. 18px / xiao si / size 4 (leave empty to clear)',
   editorSourceTitle: 'Source web content',
   editorPdfTitle: 'PDF',
+  editorPdfOpenFile: 'Open PDF',
   editorPdfUrlPrompt: 'Enter a PDF URL',
   editorStatusbarAriaLabel: 'Editor status',
   editorStatusWords: 'Words',

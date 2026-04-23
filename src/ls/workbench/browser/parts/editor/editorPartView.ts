@@ -73,6 +73,7 @@ export type EditorPartLabels = {
   emptyWorkspaceBody: string;
   draftBodyPlaceholder: string;
   pdfTitle: string;
+  pdfOpenFile?: string;
   renameTabTitle?: string;
   renameTabLabel?: string;
   status: EditorStatusLabels;

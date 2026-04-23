@@ -1759,7 +1759,7 @@ test('WorkbenchLayoutView shows a filled favorite icon after loading a favorite 
     }));
   };
 
-  props.editorPartProps.onToolbarNavigateToUrl = (value: string) => {
+  props.editorPartProps.onToolbarNavigateToUrl = () => {
     view?.setProps(materializeWorkbenchLayoutViewProps({
       ...props,
       editorPartProps: {

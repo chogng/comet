@@ -776,6 +776,7 @@ export class EditorGroupView {
     return {
       labels: this.props.labels,
       viewPartProps: this.props.viewPartProps,
+      onOpenEditor: this.props.onOpenEditor,
       onDraftDocumentChange: this.props.onDraftDocumentChange,
       onDraftStatusChange: this.handleDraftStatusChange,
     };

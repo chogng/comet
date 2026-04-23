@@ -616,11 +616,11 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  padding: 12px;
+  padding: 16px 12px;
 }
 
 .settings-model-list-item:first-child {
-  padding-top: 12px;
+  padding-top: 16px;
 }
 
 .settings-model-list-item::before {
@@ -722,6 +722,17 @@
 
 .settings-model-list-switch {
   flex: 0 0 auto;
+}
+
+.settings-model-list-switch .switch-slider {
+  transition:
+    background-color 180ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-model-list-switch .switch-slider::after {
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .settings-model-list-empty {

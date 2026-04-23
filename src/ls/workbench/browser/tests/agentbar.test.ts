@@ -91,10 +91,10 @@ test('agent bar action buttons expose labels and shared hover', async () => {
     const actionButtons = Array.from(
       element.querySelectorAll('.sidebar-action-bar .sidebar-action-btn'),
     );
-    assert.equal(actionButtons.length, 4);
+    assert.equal(actionButtons.length, 3);
     assert.deepEqual(
       actionButtons.map((button) => button.getAttribute('aria-label')),
-      ['New chat', 'History', 'More', 'Show secondary sidebar'],
+      ['New chat', 'History', 'More'],
     );
 
     const historyButton = actionButtons[1];
@@ -347,6 +347,7 @@ test('composer toolbar uses actionbar icon controls', () => {
       { value: 'auto', label: 'Auto' },
       { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
       { value: 'openai:gpt-5.4:medium', label: 'GPT-5.4 · medium' },
+      { value: 'openai:gpt-5.4:medium:priority', label: 'GPT-5.4 · medium · fast' },
     ],
     onAsk: () => {
       askCount += 1;
@@ -398,12 +399,38 @@ test('composer toolbar uses actionbar icon controls', () => {
     assert.equal(autoMode.classList.contains('selected'), true);
 
     const option = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('GPT-5.4 · medium'),
+      (node) => node.textContent?.includes('GPT-5.4'),
     );
     assert(option instanceof HTMLElement);
     option.click();
 
+    const submenu = document.body.querySelector('.actionbar-context-view .ls-menu-submenu');
+    assert(submenu instanceof HTMLElement);
+    const useModel = Array.from(submenu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) => node.textContent?.includes('Use model'),
+    );
+    assert(useModel instanceof HTMLElement);
+    useModel.click();
+
     assert.equal(selectedModelValue, 'openai:gpt-5.4:medium');
+
+    dropdownButton.click();
+    const runtimeMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    assert(runtimeMenu instanceof HTMLElement);
+    const runtimeOption = Array.from(runtimeMenu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) => node.textContent?.includes('GPT-5.4'),
+    );
+    assert(runtimeOption instanceof HTMLElement);
+    runtimeOption.click();
+    const runtimeSubmenu = document.body.querySelector('.actionbar-context-view .ls-menu-submenu');
+    assert(runtimeSubmenu instanceof HTMLElement);
+    const fastOn = Array.from(runtimeSubmenu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) => node.textContent?.includes('Fast: On'),
+    );
+    assert(fastOn instanceof HTMLElement);
+    fastOn.click();
+
+    assert.equal(selectedModelValue, 'openai:gpt-5.4:medium:priority');
 
     dropdownButton.click();
     const reopenedMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
@@ -450,7 +477,7 @@ test('agent bar model menu supports search filtering', async () => {
     const menuItemLabels = Array.from(
       menu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'),
     ).map((node) => node.textContent?.trim());
-    assert.deepEqual(menuItemLabels, ['GPT-5.4 · medium']);
+    assert.deepEqual(menuItemLabels, ['GPT-5.4']);
   } finally {
     agentBar.dispose();
   }

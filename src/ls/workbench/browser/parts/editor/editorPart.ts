@@ -179,6 +179,7 @@ export function createEditorPartProps({
       emptyWorkspaceBody: ui.editorEmptyWorkspaceBody,
       draftBodyPlaceholder: ui.editorDraftBodyPlaceholder,
       pdfTitle: ui.editorPdfTitle,
+      pdfOpenFile: ui.editorPdfOpenFile,
       renameTabTitle: ui.editorTabRenameTitle,
       renameTabLabel: ui.editorTabRenameLabel,
       status: {

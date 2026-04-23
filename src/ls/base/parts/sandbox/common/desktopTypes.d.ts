@@ -674,6 +674,7 @@ export interface AppCommandPayloadMap {
   test_translation_connection: TestTranslationConnectionPayload;
   test_rag_connection: TestRagConnectionPayload;
   pick_download_directory: undefined;
+  pick_pdf_file: undefined;
   open_path: OpenPathPayload;
   web_content_download_pdf: WebContentPdfDownloadPayload;
   web_content_archive_html: WebContentHtmlArchivePayload;
@@ -701,6 +702,7 @@ export interface AppCommandResultMap {
   test_translation_connection: TranslationConnectionTestResult;
   test_rag_connection: RagConnectionTestResult;
   pick_download_directory: string | null;
+  pick_pdf_file: string | null;
   open_path: boolean;
   web_content_download_pdf: PdfDownloadResult;
   web_content_archive_html: WebContentHtmlArchiveResult;

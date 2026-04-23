@@ -41,3 +41,24 @@ export async function pickDirectoryDialog(window?: BrowserWindow | null) {
 
   return result.filePaths[0];
 }
+
+export async function pickPdfFileDialog(window?: BrowserWindow | null) {
+  const result = await showOpenDialog(
+    {
+      properties: ['openFile'],
+      filters: [
+        {
+          name: 'PDF',
+          extensions: ['pdf'],
+        },
+      ],
+    },
+    window,
+  );
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  return result.filePaths[0];
+}

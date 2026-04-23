@@ -1377,6 +1377,11 @@ class WorkbenchHost {
       return providerOptions.map((option) => ({
         value: option.value,
         label: option.label,
+        modelLabel: option.model.label,
+        providerId: option.providerId,
+        modelId: option.modelId,
+        reasoningEffort: option.reasoningEffort,
+        serviceTier: option.serviceTier,
         icon: llmProviderIconMap[provider],
         title: `${providerLabel} / ${option.title}`,
       }));

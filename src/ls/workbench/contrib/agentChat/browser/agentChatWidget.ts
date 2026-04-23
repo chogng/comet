@@ -18,8 +18,34 @@ import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
 
 import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
 import type { AgentBarLabels } from 'ls/workbench/browser/parts/agentbar/agentbarLabels';
+import {
+  parseLlmModelOptionValue,
+  serializeLlmModelOptionValue,
+  type LlmReasoningEffort,
+  type LlmServiceTier,
+} from 'ls/workbench/services/llm/registry';
+import type { LlmProviderId } from 'ls/base/parts/sandbox/common/desktopTypes';
 import 'ls/workbench/browser/parts/agentbar/media/agentbar.css';
 import 'ls/workbench/contrib/agentChat/browser/media/agentChatWidget.css';
+
+type AgentModelDropdownOption = DropdownOption & {
+  providerId?: LlmProviderId;
+  modelId?: string;
+  modelLabel?: string;
+  reasoningEffort?: LlmReasoningEffort;
+  serviceTier?: LlmServiceTier;
+};
+
+type AgentModelMenuGroup = {
+  key: string;
+  providerId: LlmProviderId;
+  modelId: string;
+  label: string;
+  title?: string;
+  icon?: LxIconName;
+  disabled: boolean;
+  options: AgentModelDropdownOption[];
+};
 
 export type AgentChatWidgetProps = {
   labels: AgentBarLabels;
@@ -34,7 +60,7 @@ export type AgentChatWidgetProps = {
   availableArticleCount: number;
   conversations: AssistantConversation[];
   activeConversationId: string;
-  llmModelOptions: DropdownOption[];
+  llmModelOptions: AgentModelDropdownOption[];
   activeLlmModelOptionValue: string;
   onCreateConversation: () => void;
   onActivateConversation: (conversationId: string) => void;
@@ -352,10 +378,7 @@ export class AgentChatWidget {
   }
 
   private createModelDropdownActionViewItem() {
-    const currentOption =
-      this.props.llmModelOptions.find(
-        (option) => option.value === this.props.activeLlmModelOptionValue,
-      ) ?? null;
+    const currentOption = this.resolveCurrentModelOption();
 
     return new DropdownMenuActionViewItem({
       label: currentOption?.label ?? 'Switch model',
@@ -375,6 +398,25 @@ export class AgentChatWidget {
         getMenuItems: (query) => this.createModelMenuItems(query),
       }),
     });
+  }
+
+  private resolveCurrentModelOption() {
+    if (this.props.activeLlmModelOptionValue === 'auto') {
+      return { value: 'auto', label: 'Auto', icon: 'agent' as LxIconName };
+    }
+
+    const exactOption =
+      this.props.llmModelOptions.find(
+        (option) => option.value === this.props.activeLlmModelOptionValue,
+      ) ?? null;
+    if (!exactOption) {
+      return null;
+    }
+
+    return {
+      ...exactOption,
+      label: this.getModelOptionBaseLabel(exactOption),
+    };
   }
 
   private renderModelDropdownTrigger(currentOption: DropdownOption | null) {
@@ -397,6 +439,23 @@ export class AgentChatWidget {
     const normalizedKeyword = keyword.trim().toLowerCase();
     const matchesKeyword = (value: string | undefined) =>
       !normalizedKeyword || value?.toLowerCase().includes(normalizedKeyword);
+    const modelGroups = this.getModelMenuGroups().filter((group) =>
+      [
+        group.label,
+        group.title,
+        group.providerId,
+        group.modelId,
+        ...group.options.flatMap((option) => [
+          option.label,
+          option.title,
+          option.value,
+          option.reasoningEffort,
+          option.serviceTier,
+        ]),
+      ]
+        .filter(Boolean)
+        .some((value) => matchesKeyword(value)),
+    );
 
     const items: ActionBarMenuItem[] = [
       {
@@ -425,27 +484,7 @@ export class AgentChatWidget {
           .filter(Boolean)
           .some((value) => matchesKeyword(value)),
       ),
-      ...this.props.llmModelOptions
-        .filter((option) => option.value !== 'auto')
-        .filter((option) =>
-          [
-            option.label,
-            option.title,
-            option.value,
-          ]
-            .filter(Boolean)
-            .some((value) => matchesKeyword(value)),
-        )
-        .map((option) => ({
-          label: option.label,
-          title: option.title,
-          icon: option.icon,
-          checked: this.props.activeLlmModelOptionValue === option.value,
-          disabled: option.disabled,
-          onClick: () => {
-            this.props.onSelectLlmModel(option.value);
-          },
-        })),
+      ...modelGroups.map((group) => this.createModelGroupMenuItem(group)),
       ...(matchesKeyword('Add models Open Settings to manage enabled models.')
         ? [{
             label: 'Add models',
@@ -469,6 +508,224 @@ export class AgentChatWidget {
         disabled: true,
       },
     ];
+  }
+
+  private getModelMenuGroups(): AgentModelMenuGroup[] {
+    const groups = new Map<string, AgentModelMenuGroup>();
+
+    for (const option of this.props.llmModelOptions) {
+      if (option.value === 'auto') {
+        continue;
+      }
+
+      const parsed = parseLlmModelOptionValue(option.value);
+      const providerId = option.providerId ?? parsed?.providerId;
+      const modelId = option.modelId ?? parsed?.modelId;
+      if (!providerId || !modelId) {
+        continue;
+      }
+
+      const key = `${providerId}:${modelId}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.options.push(option);
+        existing.disabled = existing.disabled && Boolean(option.disabled);
+        continue;
+      }
+
+      groups.set(key, {
+        key,
+        providerId,
+        modelId,
+        label: this.getModelOptionBaseLabel(option),
+        title: option.title,
+        icon: option.icon,
+        disabled: Boolean(option.disabled),
+        options: [option],
+      });
+    }
+
+    return [...groups.values()];
+  }
+
+  private getModelOptionBaseLabel(option: AgentModelDropdownOption) {
+    if (option.modelLabel) {
+      return option.modelLabel;
+    }
+
+    return option.label
+      .replace(/\s+·\s*(none|low|medium|high|xhigh|higher|highest|fast)$/i, '')
+      .replace(/\s+[Nn]one$/, '')
+      .replace(/\s+[Ll]ow$/, '')
+      .replace(/\s+[Mm]edium$/, '')
+      .replace(/\s+[Hh]igh$/, '')
+      .replace(/\s+[Xx][Hh]igh$/, '')
+      .replace(/\s+[Hh]igher$/, '')
+      .replace(/\s+[Hh]ighest$/, '')
+      .replace(/\s+[Ff]ast$/, '');
+  }
+
+  private createModelGroupMenuItem(group: AgentModelMenuGroup): ActionBarMenuItem {
+    const active = this.getActiveModelGroupKey() === group.key;
+    const hasRuntimeOptions = group.options.some((option) =>
+      Boolean(option.reasoningEffort ?? parseLlmModelOptionValue(option.value)?.reasoningEffort)
+      || Boolean(option.serviceTier ?? parseLlmModelOptionValue(option.value)?.serviceTier),
+    );
+
+    if (!hasRuntimeOptions) {
+      return {
+        label: group.label,
+        title: group.title,
+        icon: group.icon,
+        checked: active,
+        disabled: group.disabled,
+        onClick: () => {
+          this.props.onSelectLlmModel(this.resolvePreferredModelOptionValue(group));
+        },
+      };
+    }
+
+    return {
+      label: group.label,
+      title: group.title,
+      icon: group.icon,
+      checked: active,
+      disabled: group.disabled,
+      submenu: this.createModelGroupSubmenu(group),
+    };
+  }
+
+  private createModelGroupSubmenu(group: AgentModelMenuGroup): ActionBarMenuItem[] {
+    const activeRuntime = this.getActiveRuntimeParams(group);
+    const submenu: ActionBarMenuItem[] = [
+      {
+        label: 'Use model',
+        checked: this.getActiveModelGroupKey() === group.key,
+        onClick: () => {
+          this.props.onSelectLlmModel(this.resolvePreferredModelOptionValue(group));
+        },
+      },
+    ];
+
+    const reasoningEfforts = this.getGroupReasoningEfforts(group);
+    for (const effort of reasoningEfforts) {
+      submenu.push({
+        label: `Reasoning: ${this.formatReasoningEffortLabel(effort)}`,
+        checked:
+          this.getActiveModelGroupKey() === group.key &&
+          (activeRuntime.reasoningEffort ?? 'none') === effort,
+        onClick: () => {
+          this.props.onSelectLlmModel(
+            this.resolveModelOptionValue(group, effort, activeRuntime.serviceTier),
+          );
+        },
+      });
+    }
+
+    const supportsFast = group.options.some((option) =>
+      (option.serviceTier ?? parseLlmModelOptionValue(option.value)?.serviceTier) === 'priority',
+    );
+    if (supportsFast) {
+      for (const serviceTier of [undefined, 'priority' as const]) {
+        submenu.push({
+          label: serviceTier === 'priority' ? 'Fast: On' : 'Fast: Off',
+          checked:
+            this.getActiveModelGroupKey() === group.key &&
+            (activeRuntime.serviceTier ?? undefined) === serviceTier,
+          onClick: () => {
+            this.props.onSelectLlmModel(
+              this.resolveModelOptionValue(group, activeRuntime.reasoningEffort, serviceTier),
+            );
+          },
+        });
+      }
+    }
+
+    return submenu;
+  }
+
+  private getActiveModelGroupKey() {
+    const parsed = parseLlmModelOptionValue(this.props.activeLlmModelOptionValue);
+    return parsed ? `${parsed.providerId}:${parsed.modelId}` : '';
+  }
+
+  private getActiveRuntimeParams(group: AgentModelMenuGroup) {
+    const parsed = parseLlmModelOptionValue(this.props.activeLlmModelOptionValue);
+    if (!parsed || `${parsed.providerId}:${parsed.modelId}` !== group.key) {
+      return {
+        reasoningEffort: this.getPreferredReasoningEffort(group),
+        serviceTier: undefined as LlmServiceTier | undefined,
+      };
+    }
+
+    return {
+      reasoningEffort: parsed.reasoningEffort,
+      serviceTier: parsed.serviceTier,
+    };
+  }
+
+  private getGroupReasoningEfforts(group: AgentModelMenuGroup) {
+    const efforts = group.options
+      .map((option) => option.reasoningEffort ?? parseLlmModelOptionValue(option.value)?.reasoningEffort)
+      .filter((effort): effort is LlmReasoningEffort => Boolean(effort));
+    return [...new Set(efforts)];
+  }
+
+  private getPreferredReasoningEffort(group: AgentModelMenuGroup) {
+    const efforts = this.getGroupReasoningEfforts(group);
+    for (const effort of ['medium', 'low', 'high', 'xhigh', 'none'] as const) {
+      if (efforts.includes(effort)) {
+        return effort;
+      }
+    }
+    return efforts[0];
+  }
+
+  private resolvePreferredModelOptionValue(group: AgentModelMenuGroup) {
+    const activeRuntime = this.getActiveRuntimeParams(group);
+    return this.resolveModelOptionValue(
+      group,
+      activeRuntime.reasoningEffort,
+      activeRuntime.serviceTier,
+    );
+  }
+
+  private resolveModelOptionValue(
+    group: AgentModelMenuGroup,
+    reasoningEffort?: LlmReasoningEffort,
+    serviceTier?: LlmServiceTier,
+  ) {
+    const candidate = serializeLlmModelOptionValue(
+      group.providerId,
+      group.modelId,
+      reasoningEffort,
+      serviceTier,
+    );
+    if (group.options.some((option) => option.value === candidate)) {
+      return candidate;
+    }
+
+    const withoutServiceTier = serializeLlmModelOptionValue(
+      group.providerId,
+      group.modelId,
+      reasoningEffort,
+    );
+    if (group.options.some((option) => option.value === withoutServiceTier)) {
+      return withoutServiceTier;
+    }
+
+    const base = serializeLlmModelOptionValue(group.providerId, group.modelId);
+    if (group.options.some((option) => option.value === base)) {
+      return base;
+    }
+
+    return group.options[0]?.value ?? base;
+  }
+
+  private formatReasoningEffortLabel(reasoningEffort: LlmReasoningEffort) {
+    return reasoningEffort === 'none'
+      ? 'None'
+      : reasoningEffort.charAt(0).toUpperCase() + reasoningEffort.slice(1);
   }
 
   private renderComposer(canSend: boolean) {
