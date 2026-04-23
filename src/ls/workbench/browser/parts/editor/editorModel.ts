@@ -233,11 +233,32 @@ function normalizeTabResidencies(
   });
 }
 
+function ensureResidentTabs(
+  tabs: EditorWorkspaceTab[],
+): EditorWorkspaceTab[] {
+  const nextTabs = [...tabs];
+  const presentKinds = new Set(
+    nextTabs.map((tab) => tab.kind).filter((kind) =>
+      SUPPORTED_EDITOR_PANE_MODES.includes(kind as SupportedEditorPaneMode),
+    ),
+  );
+
+  for (const paneMode of SUPPORTED_EDITOR_PANE_MODES) {
+    if (presentKinds.has(paneMode)) {
+      continue;
+    }
+
+    nextTabs.push(createEmptyResidentTabForKind(paneMode));
+  }
+
+  return nextTabs;
+}
+
 function normalizeEditorGroupState(
   state: EditorEditorGroupState,
 ): EditorEditorGroupState {
   const normalizedGroupId = normalizeEditorGroupId(state.groupId);
-  const tabs = normalizeTabResidencies(state.tabs);
+  const tabs = normalizeTabResidencies(ensureResidentTabs(state.tabs));
   const tabIdSet = new Set(tabs.map((tab) => tab.id));
   const normalizedMruTabIds = toUniqueIds(
     [...state.mruTabIds, ...tabs.map((tab) => tab.id)].filter((tabId) =>
@@ -413,11 +434,16 @@ function reorderTabsById<T extends { id: string }>(
 }
 
 function createEmptyEditorGroupState(groupId: string): EditorEditorGroupState {
+  const tabs = normalizeTabResidencies(
+    SUPPORTED_EDITOR_PANE_MODES.map((paneMode) =>
+      createEmptyResidentTabForKind(paneMode),
+    ),
+  );
   return {
     groupId: normalizeEditorGroupId(groupId),
-    tabs: [],
-    activeTabId: null,
-    mruTabIds: [],
+    tabs,
+    activeTabId: tabs[0]?.id ?? null,
+    mruTabIds: tabs[0] ? [tabs[0].id] : [],
   };
 }
 
@@ -958,12 +984,7 @@ export class EditorModel {
       return;
     }
 
-    this.updateActiveGroupState((group) => ({
-      ...group,
-      tabs: [],
-      activeTabId: null,
-      mruTabIds: [],
-    }));
+    this.updateActiveGroupState((group) => createEmptyEditorGroupState(group.groupId));
   };
 
   readonly createDraftTab = (target: EditorGroupTarget = {}) => {

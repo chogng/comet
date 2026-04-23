@@ -133,6 +133,16 @@
   opacity: 0.86;
 }
 
+.editor-tab.is-dragging .editor-tab-actions.actionbar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.editor-tab.is-dragging .editor-tab-close-btn.actionbar-action {
+  background: transparent;
+  color: var(--vscode-editor-tabForeground, #58697b);
+}
+
 .editor-tab-drag-preview {
   position: fixed;
   top: -10000px;

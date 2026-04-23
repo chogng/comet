@@ -415,7 +415,7 @@ test('createEditorGroupModel keeps a resident tab in its workspace position inst
   assert.equal(model.tabs[2]?.residency, 'resident');
 });
 
-test('createEditorGroupModel appends missing resident entries after concrete tabs', () => {
+test('createEditorGroupModel only renders the concrete workspace tabs it receives', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -447,10 +447,8 @@ test('createEditorGroupModel appends missing resident entries after concrete tab
 
   assert.deepEqual(
     model.tabs.map((tab) => tab.id),
-    ['draft-a', 'browser-a', 'pdf-entry'],
+    ['draft-a', 'browser-a'],
   );
-  assert.equal(model.tabs[2]?.targetTabId, null);
-  assert.equal(model.tabs[2]?.title, 'PDF');
 });
 
 test('createEditorGroupModel keeps browser favicons on tabs even when inactive', () => {
@@ -527,10 +525,10 @@ test('createEditorGroupModel respects explicit resident tabs even when they are 
 
   assert.deepEqual(
     model.tabs.map((tab) => tab.id),
-    ['browser-dynamic', 'browser-resident', 'pdf-a', 'draft-entry'],
+    ['browser-dynamic', 'browser-resident', 'pdf-a'],
   );
   assert.equal(model.tabs[1]?.residency, 'resident');
-  assert.equal(model.tabs[1]?.label, '');
+  assert.equal(model.tabs[1]?.label, 'New Tab');
   const dynamicBrowser = model.tabs.find((tab) => tab.id === 'browser-dynamic');
   assert.equal(dynamicBrowser?.residency, 'dynamic');
   assert.equal(dynamicBrowser?.label, 'New Tab');
@@ -687,7 +685,7 @@ test('createEditorGroupModel shows label for a single non-empty clean draft tab'
   assert.equal(model.tabs[0]?.title, 'Draft 1');
 });
 
-test('createEditorGroupModel keeps resident empty draft icon-only and dynamic empty draft labeled', () => {
+test('createEditorGroupModel gives empty drafts labels when more than one draft exists', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -720,8 +718,8 @@ test('createEditorGroupModel keeps resident empty draft icon-only and dynamic em
 
   assert.equal(model.tabs[0]?.targetTabId, 'draft-a');
   assert.equal(model.tabs[0]?.residency, 'resident');
-  assert.equal(model.tabs[0]?.label, '');
-  assert.equal(model.tabs[0]?.title, 'Draft');
+  assert.equal(model.tabs[0]?.label, 'New Tab');
+  assert.equal(model.tabs[0]?.title, 'New Tab');
   const dynamicDraft = model.tabs.find((tab) => tab.id === 'draft-b');
   assert.equal(dynamicDraft?.targetTabId, 'draft-b');
   assert.equal(dynamicDraft?.residency, 'dynamic');
@@ -730,7 +728,7 @@ test('createEditorGroupModel keeps resident empty draft icon-only and dynamic em
   assert.equal(dynamicDraft?.title, 'New Tab');
 });
 
-test('createEditorGroupModel keeps resident empty pdf icon-only and dynamic empty pdf labeled', () => {
+test('createEditorGroupModel gives empty pdf tabs labels when more than one pdf exists', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -763,9 +761,9 @@ test('createEditorGroupModel keeps resident empty pdf icon-only and dynamic empt
 
   const residentPdf = model.tabs.find((tab) => tab.id === 'pdf-a');
   assert.equal(residentPdf?.residency, 'resident');
-  assert.equal(residentPdf?.state.isClosable, false);
-  assert.equal(residentPdf?.label, '');
-  assert.equal(residentPdf?.title, 'PDF');
+  assert.equal(residentPdf?.state.isClosable, true);
+  assert.equal(residentPdf?.label, 'New Tab');
+  assert.equal(residentPdf?.title, 'New Tab');
   const dynamicPdf = model.tabs.find((tab) => tab.id === 'pdf-b');
   assert.equal(dynamicPdf?.residency, 'dynamic');
   assert.equal(dynamicPdf?.state.isClosable, true);
@@ -773,7 +771,7 @@ test('createEditorGroupModel keeps resident empty pdf icon-only and dynamic empt
   assert.equal(dynamicPdf?.title, 'New Tab');
 });
 
-test('createEditorGroupModel keeps resident empty browser icon-only and dynamic empty browser labeled and closable', () => {
+test('createEditorGroupModel gives empty browser tabs labels when more than one browser exists', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -806,9 +804,9 @@ test('createEditorGroupModel keeps resident empty browser icon-only and dynamic 
 
   const residentBrowser = model.tabs.find((tab) => tab.id === 'browser-a');
   assert.equal(residentBrowser?.residency, 'resident');
-  assert.equal(residentBrowser?.state.isClosable, false);
-  assert.equal(residentBrowser?.label, '');
-  assert.equal(residentBrowser?.title, 'Source');
+  assert.equal(residentBrowser?.state.isClosable, true);
+  assert.equal(residentBrowser?.label, 'New Tab');
+  assert.equal(residentBrowser?.title, 'New Tab');
 
   const dynamicBrowser = model.tabs.find((tab) => tab.id === 'browser-b');
   assert.equal(dynamicBrowser?.residency, 'dynamic');
@@ -904,7 +902,7 @@ test('createEditorGroupModel keeps dirty draft tabs reachable when a clean draft
   assert.equal(activeDraft?.targetTabId, 'draft-b');
   assert.equal(activeDraft?.residency, 'dynamic');
   assert.equal(activeDraft?.state.isActive, true);
-  assert.equal(activeDraft?.state.isClosable, false);
+  assert.equal(activeDraft?.state.isClosable, true);
 });
 
 test('TabsTitleControl opens a pane mode when a resident entry has no target tab yet', () => {
@@ -1262,6 +1260,137 @@ test('TabsTitleControl clears focused tab controls after drag ends without a reo
 
   assert.notEqual(document.activeElement, draftButton);
 
+  control.dispose();
+});
+
+test('TabsTitleControl clears hovered and focused source tab state on drag start', () => {
+  const control = new TabsTitleControl({
+    group: createGroupModel('draft-a', [
+      createTabItem({
+        id: 'draft-a',
+        kind: 'draft',
+        label: 'Draft A',
+        title: 'Draft A',
+        isActive: true,
+      }),
+      createTabItem({
+        id: 'browser-b',
+        kind: 'browser',
+        label: 'Web B',
+        title: 'Web B',
+      }),
+    ]),
+    labels: {
+      close: 'Close',
+    },
+    onActivateTab: () => {},
+    onReorderTab: () => {},
+    onCloseTab: () => {},
+    onOpenPaneMode: () => {},
+  });
+  const rootElement = control.getElement();
+  document.body.append(rootElement);
+  const container = getTabsContainer(rootElement);
+  const draftTab = container.children[0];
+  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  assert(draftTab instanceof HTMLElement);
+  assert(draftButton instanceof HTMLButtonElement);
+
+  draftTab.dataset.hovered = 'true';
+  draftButton.focus();
+  assert.equal(document.activeElement, draftButton);
+
+  const dataTransfer = createDataTransferStub();
+  dispatchDragEvent(draftButton, 'dragstart', { dataTransfer });
+
+  assert.equal(draftTab.dataset.hovered, undefined);
+  assert.notEqual(document.activeElement, draftButton);
+  assert.equal(draftTab.classList.contains('is-dragging'), true);
+
+  dispatchDragEvent(draftTab, 'dragend', { dataTransfer });
+  control.dispose();
+});
+
+test('TabsTitleControl activates the dragged tab on drag start', () => {
+  const activatedTabIds: string[] = [];
+  let currentGroup = createGroupModel('browser-b', [
+    createTabItem({
+      id: 'draft-a',
+      kind: 'draft',
+      label: 'Draft A',
+      title: 'Draft A',
+    }),
+    createTabItem({
+      id: 'browser-b',
+      kind: 'browser',
+      label: 'Web B',
+      title: 'Web B',
+      isActive: true,
+    }),
+  ]);
+  const labels = {
+    close: 'Close',
+  };
+  const onReorderTab = () => {};
+  const onCloseTab = () => {};
+  const onOpenPaneMode = () => {};
+  const onActivateTab = (tabId: string) => {
+    activatedTabIds.push(tabId);
+    currentGroup = createGroupModel('draft-a', [
+      createTabItem({
+        id: 'draft-a',
+        kind: 'draft',
+        label: 'Draft A',
+        title: 'Draft A',
+        isActive: true,
+      }),
+      createTabItem({
+        id: 'browser-b',
+        kind: 'browser',
+        label: 'Web B',
+        title: 'Web B',
+      }),
+    ]);
+    control.setProps({
+      group: currentGroup,
+      labels,
+      onActivateTab,
+      onReorderTab,
+      onCloseTab,
+      onOpenPaneMode,
+    });
+  };
+
+  const control = new TabsTitleControl({
+    group: currentGroup,
+    labels,
+    onActivateTab,
+    onReorderTab,
+    onCloseTab,
+    onOpenPaneMode,
+  });
+  const rootElement = control.getElement();
+  document.body.append(rootElement);
+  const container = getTabsContainer(rootElement);
+  const draftTab = container.children[0];
+  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const browserButton = container.children[1]?.querySelector('.editor-tab-main');
+  assert(draftTab instanceof HTMLElement);
+  assert(draftButton instanceof HTMLButtonElement);
+  assert(browserButton instanceof HTMLButtonElement);
+  assert.equal(draftButton.getAttribute('aria-selected'), 'false');
+  assert.equal(browserButton.getAttribute('aria-selected'), 'true');
+
+  const dataTransfer = createDataTransferStub();
+  dispatchDragEvent(draftButton, 'dragstart', { dataTransfer });
+
+  const updatedDraftButton = draftTab.querySelector('.editor-tab-main');
+  assert(updatedDraftButton instanceof HTMLButtonElement);
+  assert.deepEqual(activatedTabIds, ['draft-a']);
+  assert.equal(updatedDraftButton.getAttribute('aria-selected'), 'true');
+  assert.equal(draftTab.classList.contains('is-active'), true);
+
+  dispatchDragEvent(draftTab, 'dragend', { dataTransfer });
   control.dispose();
 });
 

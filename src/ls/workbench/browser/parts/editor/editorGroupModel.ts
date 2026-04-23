@@ -55,7 +55,7 @@ function getTabDisplayLabel(
   labels: EditorPartLabels,
   draftIndex: number,
   isEmpty: boolean,
-  residency: EditorGroupTabItem['residency'],
+  isOnlyTabOfKind: boolean,
 ) {
   const paneMode = getEditorPaneMode(tab);
 
@@ -68,7 +68,7 @@ function getTabDisplayLabel(
             draftModeLabel: labels.draftMode,
             draftIndex,
             isEmpty,
-            residency,
+            isOnlyTabOfKind,
           })
         : labels.draftMode;
     case 'pdf':
@@ -76,13 +76,13 @@ function getTabDisplayLabel(
         return tab.title.trim() || labels.pdfMode;
       }
 
-      return residency === 'resident' ? '' : labels.newTab;
+      return isOnlyTabOfKind ? '' : labels.newTab;
     default:
       if (!isEmptyBrowserTabInput(tab)) {
         return tab.title.trim();
       }
 
-      return residency === 'resident' ? '' : labels.newTab;
+      return isOnlyTabOfKind ? '' : labels.newTab;
   }
 }
 
@@ -127,36 +127,6 @@ function resolveTabFaviconUrl(
   return sanitizeTabFaviconUrl(tab.faviconUrl);
 }
 
-function getFallbackTitleForPaneMode(
-  paneMode: EditorGroupTabItem['paneMode'],
-  labels: EditorPartLabels,
-) {
-  switch (paneMode) {
-    case 'draft':
-      return labels.draftMode;
-    case 'pdf':
-      return labels.pdfMode;
-    case 'file':
-      return 'Read';
-    case 'terminal':
-      return 'Terminal';
-    case 'git-changes':
-      return 'Git Changes';
-    default:
-      return labels.sourceMode;
-  }
-}
-
-function getFallbackLabelForPaneMode() {
-  return '';
-}
-
-function getDefaultTabKindForPaneMode(
-  paneMode: EditorGroupTabItem['paneMode'],
-): EditorPlannedTabKind {
-  return paneMode;
-}
-
 function isSupportedPaneMode(
   paneMode: EditorPaneMode,
 ): paneMode is SupportedEditorPaneMode {
@@ -182,11 +152,14 @@ export function createEditorGroupModel({
   const dirtyDraftTabIdSet = createDirtyDraftTabIdSet(dirtyDraftTabIds);
   const residentTabIdByPaneMode = new Map<SupportedEditorPaneMode, string>();
   const firstTabIdByPaneMode = new Map<SupportedEditorPaneMode, string>();
+  const tabCountByPaneMode = new Map<SupportedEditorPaneMode, number>();
   for (const tab of tabs) {
     const paneMode = getEditorPaneMode(tab);
     if (!isSupportedPaneMode(paneMode)) {
       continue;
     }
+
+    tabCountByPaneMode.set(paneMode, (tabCountByPaneMode.get(paneMode) ?? 0) + 1);
 
     if (!firstTabIdByPaneMode.has(paneMode)) {
       firstTabIdByPaneMode.set(paneMode, tab.id);
@@ -212,19 +185,26 @@ export function createEditorGroupModel({
       ? dirtyDraftTabIdSet.has(tab.id)
       : false;
     const isEmpty = isEmptyWorkspaceTab(tab);
+    const isOnlyTabOfKind =
+      isSupportedPaneMode(paneMode) &&
+      (tabCountByPaneMode.get(paneMode) ?? 0) === 1;
     const label = getTabDisplayLabel(
       tab,
       labels,
       Math.max(draftIndex, 0),
       isEmpty,
-      residency,
+      isOnlyTabOfKind,
     );
     const draftStatus = isEditorDraftTabInput(tab)
       ? draftStatusByTabId[tab.id]
       : undefined;
     const canUndo = Boolean(draftStatus?.canUndo);
     const canRedo = Boolean(draftStatus?.canRedo);
-    const isClosable = isClosableEditorTab(tab, dirtyDraftTabIdSet, residency);
+    const isClosable = isClosableEditorTab(
+      tab,
+      dirtyDraftTabIdSet,
+      isOnlyTabOfKind,
+    );
 
     return {
       id: tab.id,
@@ -258,32 +238,8 @@ export function createEditorGroupModel({
     return toTabItem(tab, residentTabId === tab.id ? 'resident' : 'dynamic');
   });
 
-  const presentPaneModes = new Set(
-    normalizedTabs.map((tab) => tab.paneMode).filter(isSupportedPaneMode),
-  );
-  const residentEntries = SUPPORTED_EDITOR_PANE_MODES
-    .filter((paneMode) => !presentPaneModes.has(paneMode))
-    .map((paneMode) => ({
-      id: `${paneMode}-entry`,
-      kind: getDefaultTabKindForPaneMode(paneMode),
-      paneMode,
-      residency: 'resident' as const,
-      label: getFallbackLabelForPaneMode(),
-      title: getFallbackTitleForPaneMode(paneMode, labels),
-      faviconUrl: '',
-      targetTabId: null,
-      state: {
-        isActive: false,
-        isClosable: false,
-        isDirty: false,
-        hasLocalHistory: false,
-        canUndo: false,
-        canRedo: false,
-      },
-    }));
-
   return {
-    tabs: [...normalizedTabs, ...residentEntries],
+    tabs: normalizedTabs,
     activeTabId,
     activeTab,
   };

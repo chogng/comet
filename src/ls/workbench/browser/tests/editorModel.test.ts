@@ -210,8 +210,8 @@ test('editor model flattens the active group while preserving grouped workspace 
     assert.equal(snapshot.groupId, 'editor-group-b');
     assert.equal(snapshot.activeTabId, 'browser-b');
     assert.equal(snapshot.activeTab?.kind, 'browser');
-    assert.equal(snapshot.tabs.length, 1);
-    assert.equal(snapshot.tabs[0].id, 'browser-b');
+    assert.equal(snapshot.tabs.length, 3);
+    assert.equal(snapshot.tabs.some((tab) => tab.id === 'browser-b'), true);
     assert.equal(snapshot.groups.length, 2);
     assert.equal(snapshot.viewStateEntries.length, 2);
   } finally {
@@ -292,8 +292,8 @@ test('editor model can create and activate explicit editor groups', () => {
     snapshot = model.getSnapshot();
     assert.equal(snapshot.activeGroupId, 'editor-group-b');
     assert.equal(snapshot.groupId, 'editor-group-b');
-    assert.equal(snapshot.tabs.length, 0);
-    assert.equal(snapshot.activeTabId, null);
+    assert.equal(snapshot.tabs.length, 3);
+    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
   } finally {
     model.dispose();
   }
@@ -341,12 +341,18 @@ test('editor model can open the same browser resource into another group without
     assert.equal(snapshot.activeGroupId, 'editor-group-a');
     assert.equal(snapshot.groupId, 'editor-group-a');
     assert.equal(snapshot.activeTab?.id, 'browser-a');
-    assert.equal(firstGroup.tabs.length, 1);
-    assert.equal(secondGroup.tabs.length, 1);
-    assert.equal(secondGroup.activeTabId, secondGroup.tabs[0]?.id ?? null);
-    assert.equal(secondGroup.tabs[0]?.kind, 'browser');
-    assert.equal(secondGroup.tabs[0]?.url, 'https://example.com/article');
-    assert.notEqual(firstGroup.tabs[0]?.id, secondGroup.tabs[0]?.id);
+    assert.equal(firstGroup.tabs.length, 3);
+    assert.equal(secondGroup.tabs.length, 4);
+    const firstGroupBrowser = firstGroup.tabs.find(
+      (tab) => tab.kind === 'browser' && tab.url === 'https://example.com/article',
+    );
+    const secondGroupBrowser = secondGroup.tabs.find(
+      (tab) => tab.kind === 'browser' && tab.url === 'https://example.com/article',
+    );
+    assert.equal(secondGroup.activeTabId, secondGroupBrowser?.id ?? null);
+    assert.equal(secondGroupBrowser?.kind, 'browser');
+    assert.equal(secondGroupBrowser?.url, 'https://example.com/article');
+    assert.notEqual(firstGroupBrowser?.id, secondGroupBrowser?.id);
   } finally {
     model.dispose();
   }
@@ -401,8 +407,8 @@ test('editor model reveals an existing browser tab inside the target group and c
     assert.equal(snapshot.groupId, 'editor-group-b');
     assert.equal(snapshot.activeTabId, 'browser-b');
     assert.equal(snapshot.activeTab?.id, 'browser-b');
-    assert.equal(secondGroup.tabs.length, 1);
-    assert.deepEqual(secondGroup.mruTabIds, ['browser-b']);
+    assert.equal(secondGroup.tabs.length, 3);
+    assert.equal(secondGroup.mruTabIds[0], 'browser-b');
   } finally {
     model.dispose();
   }
@@ -446,12 +452,9 @@ test('editor model can close other tabs, rename a tab, preserve a custom title, 
     model.closeOtherTabs('browser-a');
     let snapshot = model.getSnapshot();
 
-    assert.deepEqual(
-      snapshot.tabs.map((tab) => tab.id),
-      ['browser-a'],
-    );
+    assert.equal(snapshot.tabs.some((tab) => tab.id === 'browser-a'), true);
     assert.equal(snapshot.activeTabId, 'browser-a');
-    assert.deepEqual(snapshot.mruTabIds, ['browser-a']);
+    assert.equal(snapshot.mruTabIds[0], 'browser-a');
 
     model.renameTab('browser-a', 'Pinned Article');
     model.updateActiveContentTabUrl('https://example.com/next');
@@ -464,10 +467,11 @@ test('editor model can close other tabs, rename a tab, preserve a custom title, 
     model.closeAllTabs();
     snapshot = model.getSnapshot();
 
-    assert.equal(snapshot.tabs.length, 0);
-    assert.equal(snapshot.activeTabId, null);
-    assert.equal(snapshot.activeTab, null);
-    assert.deepEqual(snapshot.mruTabIds, []);
+    assert.equal(snapshot.tabs.length, 3);
+    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
+    assert.equal(snapshot.activeTab?.residency, 'resident');
+    assert.equal(snapshot.mruTabIds[0], snapshot.tabs[0]?.id ?? null);
+    assert.equal(snapshot.mruTabIds.length, snapshot.tabs.length);
   } finally {
     model.dispose();
   }
@@ -498,13 +502,13 @@ test('editor model resets the last browser tab to an empty resident tab when clo
     model.closeTab('browser-a');
     const snapshot = model.getSnapshot();
 
-    assert.equal(snapshot.tabs.length, 1);
-    assert.equal(snapshot.tabs[0]?.kind, 'browser');
-    assert.equal(snapshot.tabs[0]?.residency, 'resident');
-    assert.equal(snapshot.tabs[0]?.title, '');
-    assert.equal(snapshot.tabs[0]?.url, EMPTY_BROWSER_TAB_URL);
-    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
-    assert.notEqual(snapshot.tabs[0]?.id, 'browser-a');
+    assert.equal(snapshot.tabs.length, 3);
+    const nextBrowser = snapshot.tabs.find((tab) => tab.kind === 'browser');
+    assert.equal(nextBrowser?.residency, 'resident');
+    assert.equal(nextBrowser?.title, '');
+    assert.equal(nextBrowser?.url, EMPTY_BROWSER_TAB_URL);
+    assert.equal(snapshot.activeTabId, nextBrowser?.id ?? null);
+    assert.notEqual(nextBrowser?.id, 'browser-a');
   } finally {
     model.dispose();
   }
@@ -535,13 +539,13 @@ test('editor model resets the last pdf tab to an empty resident tab when closed'
     model.closeTab('pdf-a');
     const snapshot = model.getSnapshot();
 
-    assert.equal(snapshot.tabs.length, 1);
-    assert.equal(snapshot.tabs[0]?.kind, 'pdf');
-    assert.equal(snapshot.tabs[0]?.residency, 'resident');
-    assert.equal(snapshot.tabs[0]?.title, '');
-    assert.equal(snapshot.tabs[0]?.url, EMPTY_PDF_TAB_URL);
-    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
-    assert.notEqual(snapshot.tabs[0]?.id, 'pdf-a');
+    assert.equal(snapshot.tabs.length, 3);
+    const nextPdf = snapshot.tabs.find((tab) => tab.kind === 'pdf');
+    assert.equal(nextPdf?.residency, 'resident');
+    assert.equal(nextPdf?.title, '');
+    assert.equal(nextPdf?.url, EMPTY_PDF_TAB_URL);
+    assert.equal(snapshot.activeTabId, nextPdf?.id ?? null);
+    assert.notEqual(nextPdf?.id, 'pdf-a');
   } finally {
     model.dispose();
   }
@@ -572,9 +576,9 @@ test('editor model resets the last draft tab to an empty resident draft when clo
   try {
     model.closeTab('draft-a');
     const snapshot = model.getSnapshot();
-    const nextDraft = snapshot.tabs[0];
+    const nextDraft = snapshot.tabs.find((tab) => tab.kind === 'draft');
 
-    assert.equal(snapshot.tabs.length, 1);
+    assert.equal(snapshot.tabs.length, 3);
     assert.equal(nextDraft?.kind, 'draft');
     assert.equal(nextDraft?.residency, 'resident');
     assert.equal(nextDraft?.title, '');
@@ -647,10 +651,7 @@ test('editor model can reorder tabs within the active group without disturbing a
     );
     assert.equal(snapshot.activeTabId, 'browser-a');
     assert.deepEqual(snapshot.mruTabIds, ['browser-a', 'pdf-a', 'draft-a']);
-    assert.deepEqual(
-      snapshot.groups[1]?.tabs.map((tab) => tab.id),
-      ['browser-b'],
-    );
+    assert.equal(snapshot.groups[1]?.tabs.some((tab) => tab.id === 'browser-b'), true);
   } finally {
     model.dispose();
   }

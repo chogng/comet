@@ -45,14 +45,12 @@ export class PdfEditorPane extends EditorPane<
   PdfEditorPaneProps,
   PdfAnnotationEditorViewState
 > {
-  private props: PdfEditorPaneProps;
   private readonly element = document.createElement('div');
   private readonly bodyElement = document.createElement('div');
   private readonly editor = new PdfEditorPaneStateController();
 
-  constructor(props: PdfEditorPaneProps) {
+  constructor(_props: PdfEditorPaneProps) {
     super();
-    this.props = props;
     this.element.className = 'editor-pdf-pane';
     this.bodyElement.className = 'editor-pdf-body';
     this.element.append(this.bodyElement);
@@ -62,8 +60,7 @@ export class PdfEditorPane extends EditorPane<
     return this.element;
   }
 
-  override setProps(props: PdfEditorPaneProps) {
-    this.props = props;
+  override setProps(_props: PdfEditorPaneProps) {
   }
 
   override getViewState() {

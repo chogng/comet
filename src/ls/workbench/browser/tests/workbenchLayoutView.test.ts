@@ -2988,9 +2988,18 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
       view.getElement().querySelector('.editor-toolbar .editor-draft-toolbar'),
       null,
     );
-    const pdfToolbarPlaceholder = pdfToolbar.querySelector('.editor-pdf-toolbar-placeholder');
-    assert(pdfToolbarPlaceholder instanceof HTMLElement);
-    assert.match(pdfToolbarPlaceholder.textContent ?? '', /PDF toolbar coming soon/i);
+    const pdfLeadingButtons = Array.from(
+      pdfToolbar.querySelectorAll(
+        '.editor-pdf-toolbar-leading .editor-pdf-toolbar-btn.actionbar-action[aria-label]',
+      ),
+    ).map((button) => button.getAttribute('aria-label'));
+    const pdfTrailingButtons = Array.from(
+      pdfToolbar.querySelectorAll(
+        '.editor-pdf-toolbar-trailing .editor-pdf-toolbar-btn.actionbar-action[aria-label]',
+      ),
+    ).map((button) => button.getAttribute('aria-label'));
+    assert.deepEqual(pdfLeadingButtons, ['Source menu', 'Remove', 'Add']);
+    assert.deepEqual(pdfTrailingButtons, ['Search', 'More']);
     const pdfPane = view.getElement().querySelector('.editor-content .editor-pdf-pane');
     assert(pdfPane instanceof HTMLElement);
     const pdfBody = pdfPane.querySelector(':scope > .editor-pdf-body');

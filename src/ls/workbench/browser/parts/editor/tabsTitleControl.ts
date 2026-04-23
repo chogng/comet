@@ -933,12 +933,21 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
+    if (this.props.group.activeTabId !== tabMetadata.viewTabId) {
+      this.props.onActivateTab(tabMetadata.targetTabId);
+    }
+
     this.clearDragState();
     this.dragState = {
       sourceViewTabId: tabMetadata.viewTabId,
       sourceTabId: tabMetadata.targetTabId,
       targetSlotIndex: null,
     };
+    delete tabElement.dataset.hovered;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && tabElement.contains(activeElement)) {
+      activeElement.blur();
+    }
     tabElement.classList.add('is-dragging');
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';

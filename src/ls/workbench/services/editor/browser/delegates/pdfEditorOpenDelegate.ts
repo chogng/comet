@@ -2,7 +2,6 @@ import { EMPTY_PDF_TAB_URL } from 'ls/workbench/browser/parts/editor/editorInput
 import { isReusableEmptyPdfTab } from 'ls/workbench/browser/parts/editor/editorTabPolicy';
 import type { EditorModel } from 'ls/workbench/browser/parts/editor/editorModel';
 import {
-  createUnhandledEditorOpenResult,
   type PdfEditorOpenRequest,
 } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import type { EditorOpenDelegate } from 'ls/workbench/services/editor/browser/editorOpenRegistry';
