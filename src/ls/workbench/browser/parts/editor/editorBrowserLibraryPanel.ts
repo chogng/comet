@@ -108,16 +108,116 @@ function toTrackableBrowserLibraryUrl(url: string) {
   return isTrackableBrowserLibraryUrl(normalizedUrl) ? normalizedUrl : '';
 }
 
+function normalizeBrowserLibrarySearchValue(value: string | null) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+function getBrowserLibrarySearchEngineId(url: URL) {
+  const host = url.hostname.toLocaleLowerCase();
+  const pathname = url.pathname.toLocaleLowerCase();
+  const engineMatchers: Array<[string, string]> = [
+    ['bing', 'bing.'],
+    ['google', 'google.'],
+    ['duckduckgo', 'duckduckgo.'],
+    ['baidu', 'baidu.'],
+    ['yahoo', 'yahoo.'],
+    ['yandex', 'yandex.'],
+  ];
+  const matchedEngine = engineMatchers.find(([, marker]) => host.includes(marker));
+  if (matchedEngine) {
+    return matchedEngine[0];
+  }
+  return pathname.includes('search') ? host : '';
+}
+
+function createBrowserLibraryUrlMatchKey(url: string) {
+  const normalizedUrl = toTrackableBrowserLibraryUrl(url);
+  if (!normalizedUrl) {
+    return '';
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedUrl);
+    const protocol = parsedUrl.protocol.toLocaleLowerCase();
+    const host = parsedUrl.host.toLocaleLowerCase();
+    const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
+    const searchParams = parsedUrl.searchParams;
+
+    const searchEngineId = getBrowserLibrarySearchEngineId(parsedUrl);
+    if (searchEngineId) {
+      for (const searchKey of ['q', 'query', 'search', 'p', 'wd', 'text']) {
+        const searchValue = normalizeBrowserLibrarySearchValue(
+          searchParams.get(searchKey),
+        );
+        if (searchValue) {
+          return `search:${searchEngineId}:${pathname}?${searchKey}=${searchValue}`;
+        }
+      }
+    }
+
+    const stableParams = Array.from(searchParams.entries())
+      .filter(([key, value]) => {
+        const normalizedKey = key.toLocaleLowerCase();
+        return (
+          value &&
+          !normalizedKey.startsWith('utm_') &&
+          !['fbclid', 'gclid', 'msclkid', 'yclid', 'cvid', 'form'].includes(
+            normalizedKey,
+          )
+        );
+      })
+      .map(([key, value]) => [
+        key.toLocaleLowerCase(),
+        normalizeBrowserLibrarySearchValue(value),
+      ] as const)
+      .sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+        leftKey === rightKey
+          ? leftValue.localeCompare(rightValue)
+          : leftKey.localeCompare(rightKey),
+      );
+    const stableSearch = stableParams
+      .map(([key, value]) => `${key}=${value}`)
+      .join('&');
+
+    return stableSearch
+      ? `${protocol}//${host}${pathname}?${stableSearch}`
+      : `${protocol}//${host}${pathname}`;
+  } catch {
+    return normalizedUrl;
+  }
+}
+
+function areBrowserLibraryUrlsEquivalent(leftUrl: string, rightUrl: string) {
+  const leftNormalizedUrl = toTrackableBrowserLibraryUrl(leftUrl);
+  const rightNormalizedUrl = toTrackableBrowserLibraryUrl(rightUrl);
+  if (!leftNormalizedUrl || !rightNormalizedUrl) {
+    return false;
+  }
+  if (leftNormalizedUrl === rightNormalizedUrl) {
+    return true;
+  }
+  return createBrowserLibraryUrlMatchKey(leftNormalizedUrl) ===
+    createBrowserLibraryUrlMatchKey(rightNormalizedUrl);
+}
+
+function findEquivalentBrowserLibraryUrl(
+  urls: readonly string[],
+  url: string,
+) {
+  return urls.find((entry) => areBrowserLibraryUrlsEquivalent(entry, url)) ?? '';
+}
+
 function dedupeUrlList(urls: string[]) {
   const normalizedUrls: string[] = [];
   const seen = new Set<string>();
   for (const url of urls) {
     const normalizedUrl = normalizeBrowserLibraryUrl(url);
-    if (!isTrackableBrowserLibraryUrl(normalizedUrl) || seen.has(normalizedUrl)) {
+    const matchKey = createBrowserLibraryUrlMatchKey(normalizedUrl);
+    if (!isTrackableBrowserLibraryUrl(normalizedUrl) || seen.has(matchKey)) {
       continue;
     }
 
-    seen.add(normalizedUrl);
+    seen.add(matchKey);
     normalizedUrls.push(normalizedUrl);
   }
 
@@ -589,23 +689,37 @@ function toggleFavoriteBrowserLibraryEntry(url: string) {
   }
 
   return updateStoredBrowserLibraryState((state) => {
-    const alreadyFavorite = state.favoriteUrls.includes(normalizedUrl);
+    const existingFavoriteUrl = findEquivalentBrowserLibraryUrl(
+      state.favoriteUrls,
+      normalizedUrl,
+    );
+    const alreadyFavorite = Boolean(existingFavoriteUrl);
     const favoriteUrls = alreadyFavorite
-      ? state.favoriteUrls.filter((entry) => entry !== normalizedUrl)
+      ? state.favoriteUrls.filter((entry) => entry !== existingFavoriteUrl)
       : trimUrlList(
-        [normalizedUrl, ...state.favoriteUrls.filter((entry) => entry !== normalizedUrl)],
+        [
+          normalizedUrl,
+          ...state.favoriteUrls.filter(
+            (entry) => !areBrowserLibraryUrlsEquivalent(entry, normalizedUrl),
+          ),
+        ],
         MAX_FAVORITE_BROWSER_LIBRARY_ENTRIES,
       );
 
     const recentUrls = trimUrlList(
-      [normalizedUrl, ...state.recentUrls.filter((entry) => entry !== normalizedUrl)],
+      [
+        normalizedUrl,
+        ...state.recentUrls.filter(
+          (entry) => !areBrowserLibraryUrlsEquivalent(entry, normalizedUrl),
+        ),
+      ],
       MAX_RECENT_BROWSER_LIBRARY_ENTRIES,
     );
     const favoriteFolderByUrl = { ...state.favoriteFolderByUrl };
     const favoriteCustomTitleByUrl = { ...state.favoriteCustomTitleByUrl };
     if (alreadyFavorite) {
-      delete favoriteFolderByUrl[normalizedUrl];
-      delete favoriteCustomTitleByUrl[normalizedUrl];
+      delete favoriteFolderByUrl[existingFavoriteUrl];
+      delete favoriteCustomTitleByUrl[existingFavoriteUrl];
     }
 
     return {
@@ -633,19 +747,28 @@ function removeFavoriteBrowserLibraryEntry(url: string) {
   }
 
   return updateStoredBrowserLibraryState((state) => {
-    if (!state.favoriteUrls.includes(normalizedUrl)) {
+    const existingFavoriteUrl = findEquivalentBrowserLibraryUrl(
+      state.favoriteUrls,
+      normalizedUrl,
+    );
+    if (!existingFavoriteUrl) {
       return state;
     }
 
-    const favoriteUrls = state.favoriteUrls.filter((entry) => entry !== normalizedUrl);
+    const favoriteUrls = state.favoriteUrls.filter((entry) => entry !== existingFavoriteUrl);
     const recentUrls = trimUrlList(
-      [normalizedUrl, ...state.recentUrls.filter((entry) => entry !== normalizedUrl)],
+      [
+        normalizedUrl,
+        ...state.recentUrls.filter(
+          (entry) => !areBrowserLibraryUrlsEquivalent(entry, normalizedUrl),
+        ),
+      ],
       MAX_RECENT_BROWSER_LIBRARY_ENTRIES,
     );
     const favoriteFolderByUrl = { ...state.favoriteFolderByUrl };
     const favoriteCustomTitleByUrl = { ...state.favoriteCustomTitleByUrl };
-    delete favoriteFolderByUrl[normalizedUrl];
-    delete favoriteCustomTitleByUrl[normalizedUrl];
+    delete favoriteFolderByUrl[existingFavoriteUrl];
+    delete favoriteCustomTitleByUrl[existingFavoriteUrl];
 
     return {
       ...state,
@@ -788,7 +911,12 @@ function isFavoriteBrowserLibraryEntry(url: string) {
     return false;
   }
 
-  return storedBrowserLibraryState.favoriteUrls.includes(normalizedUrl);
+  return Boolean(
+    findEquivalentBrowserLibraryUrl(
+      storedBrowserLibraryState.favoriteUrls,
+      normalizedUrl,
+    ),
+  );
 }
 
 function getRecentBrowserLibraryEntries() {
@@ -883,6 +1011,7 @@ export class EditorBrowserLibraryPanel {
   private context: EditorBrowserLibraryPanelContext;
   private isInteractionWithin?: (target: Node) => boolean;
   private onDidChangeOpenState?: (isOpen: boolean) => void;
+  private onDidChangeState?: () => void;
   private readonly contextMenuService = createContextMenuService();
   private readonly backdropElement = createElement(
     'div',
@@ -960,6 +1089,10 @@ export class EditorBrowserLibraryPanel {
     this.onDidChangeOpenState = listener;
   }
 
+  setOnDidChangeState(listener: (() => void) | undefined) {
+    this.onDidChangeState = listener;
+  }
+
   getPanelId() {
     return this.panelId;
   }
@@ -1032,6 +1165,11 @@ export class EditorBrowserLibraryPanel {
     return libraryUrl ? isFavoriteBrowserLibraryEntry(libraryUrl) : false;
   }
 
+  isBrowserUrlFavorited(url: string) {
+    const libraryUrl = toTrackableBrowserLibraryUrl(url);
+    return libraryUrl ? isFavoriteBrowserLibraryEntry(libraryUrl) : false;
+  }
+
   toggleCurrentBrowserUrlFavorite() {
     const libraryUrl = toTrackableBrowserLibraryUrl(this.context.browserUrl);
     if (!libraryUrl) {
@@ -1041,6 +1179,7 @@ export class EditorBrowserLibraryPanel {
     const changed = toggleFavoriteBrowserLibraryEntry(libraryUrl);
     if (changed) {
       this.render();
+      this.onDidChangeState?.();
     }
     return changed;
   }
@@ -1193,6 +1332,7 @@ export class EditorBrowserLibraryPanel {
     }
 
     this.renderLibraryList();
+    this.onDidChangeState?.();
   };
 
   private readonly handleFavoriteItemRename = async (

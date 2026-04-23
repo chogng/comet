@@ -1690,6 +1690,259 @@ test('WorkbenchLayoutView keeps favorite context menu Open in New Tab enabled fr
   }
 });
 
+test('WorkbenchLayoutView shows a filled favorite icon after loading a favorite from the source menu', async () => {
+  const BROWSER_LIBRARY_STORAGE_KEY = 'ls.editor.browser.library.v1';
+  const CURRENT_URL = 'https://example.com/current-before-favorite-load';
+  const FAVORITE_URL = 'https://cn.bing.com/search?q=pdf+reader+github+project&form=QBLH';
+  const LOADED_FAVORITE_URL =
+    'https://www.bing.com/search?form=QBRE&q=pdf%20reader%20github%20project&cvid=abc123';
+  window.localStorage?.removeItem(BROWSER_LIBRARY_STORAGE_KEY);
+
+  const props = createWorkbenchLayoutViewProps();
+  props.editorPartProps = {
+    ...props.editorPartProps,
+    tabs: [
+      {
+        id: 'browser-tab-favorite-load',
+        kind: 'browser',
+        title: 'Favorite article',
+        url: FAVORITE_URL,
+      },
+    ],
+    activeTabId: 'browser-tab-favorite-load',
+    activeTab: {
+      id: 'browser-tab-favorite-load',
+      kind: 'browser',
+      title: 'Favorite article',
+      url: FAVORITE_URL,
+    },
+    viewPartProps: {
+      ...props.editorPartProps.viewPartProps,
+      browserUrl: FAVORITE_URL,
+      browserPageTitle: 'Favorite article',
+      browserFaviconUrl: 'https://example.com/favorite.ico',
+      electronRuntime: true,
+      webContentRuntime: true,
+    },
+  };
+
+  let view: ReturnType<typeof createWorkbenchLayoutView> | null = null;
+  const showCurrentUrl = () => {
+    view?.setProps(materializeWorkbenchLayoutViewProps({
+      ...props,
+      editorPartProps: {
+        ...props.editorPartProps,
+        tabs: [
+          {
+            id: 'browser-tab-favorite-load',
+            kind: 'browser',
+            title: 'Current article',
+            url: CURRENT_URL,
+          },
+        ],
+        activeTabId: 'browser-tab-favorite-load',
+        activeTab: {
+          id: 'browser-tab-favorite-load',
+          kind: 'browser',
+          title: 'Current article',
+          url: CURRENT_URL,
+        },
+        viewPartProps: {
+          ...props.editorPartProps.viewPartProps,
+          browserUrl: CURRENT_URL,
+          browserPageTitle: 'Current article',
+          browserFaviconUrl: 'https://example.com/current.ico',
+          electronRuntime: true,
+          webContentRuntime: true,
+        },
+      },
+    }));
+  };
+
+  props.editorPartProps.onToolbarNavigateToUrl = (value: string) => {
+    view?.setProps(materializeWorkbenchLayoutViewProps({
+      ...props,
+      editorPartProps: {
+        ...props.editorPartProps,
+        tabs: [
+          {
+            id: 'browser-tab-favorite-load',
+            kind: 'browser',
+            title: 'Current article',
+            url: CURRENT_URL,
+          },
+        ],
+        activeTabId: 'browser-tab-favorite-load',
+        activeTab: {
+          id: 'browser-tab-favorite-load',
+          kind: 'browser',
+          title: 'Current article',
+          url: CURRENT_URL,
+        },
+        viewPartProps: {
+          ...props.editorPartProps.viewPartProps,
+          browserUrl: LOADED_FAVORITE_URL,
+          browserPageTitle: 'Favorite article',
+          browserFaviconUrl: 'https://example.com/favorite.ico',
+          electronRuntime: true,
+          webContentRuntime: true,
+        },
+      },
+    }));
+  };
+
+  view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
+  document.body.append(view.getElement());
+
+  try {
+    let favoriteButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+    assert(favoriteButton instanceof HTMLButtonElement);
+    favoriteButton.click();
+
+    showCurrentUrl();
+
+    favoriteButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+    assert(favoriteButton instanceof HTMLButtonElement);
+    assert.equal(favoriteButton.getAttribute('aria-pressed'), 'false');
+
+    const sourcesButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+    assert(sourcesButton instanceof HTMLButtonElement);
+    sourcesButton.click();
+    await waitForNextTask();
+    await waitForNextTask();
+
+    const panel = document.body.querySelector('.editor-browser-library-panel');
+    assert(panel instanceof HTMLElement);
+    const favoriteItem = Array.from(
+      panel.querySelectorAll('.editor-browser-library-item.is-favorite'),
+    ).find((item) => item.getAttribute('title') === FAVORITE_URL);
+    assert(favoriteItem instanceof HTMLButtonElement);
+    favoriteItem.click();
+    await waitForNextTask();
+
+    favoriteButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+    assert(favoriteButton instanceof HTMLButtonElement);
+    assert.equal(favoriteButton.getAttribute('aria-pressed'), 'true');
+    assert(
+      favoriteButton.querySelector('.lx-icon-favorite-filled') instanceof HTMLElement,
+    );
+  } finally {
+    view?.dispose();
+    document.body.replaceChildren();
+    window.localStorage?.removeItem(BROWSER_LIBRARY_STORAGE_KEY);
+  }
+});
+
+test('WorkbenchLayoutView keeps the toolbar favorite icon in sync when a current favorite is removed from the source menu', async () => {
+  const BROWSER_LIBRARY_STORAGE_KEY = 'ls.editor.browser.library.v1';
+  const FAVORITE_URL = 'https://example.com/current-remove-favorite-sync';
+  window.localStorage?.removeItem(BROWSER_LIBRARY_STORAGE_KEY);
+
+  const props = createWorkbenchLayoutViewProps();
+  props.editorPartProps = {
+    ...props.editorPartProps,
+    tabs: [
+      {
+        id: 'browser-tab-favorite-remove-sync',
+        kind: 'browser',
+        title: 'Example',
+        url: FAVORITE_URL,
+      },
+    ],
+    activeTabId: 'browser-tab-favorite-remove-sync',
+    activeTab: {
+      id: 'browser-tab-favorite-remove-sync',
+      kind: 'browser',
+      title: 'Example',
+      url: FAVORITE_URL,
+    },
+    viewPartProps: {
+      ...props.editorPartProps.viewPartProps,
+      browserUrl: FAVORITE_URL,
+      browserPageTitle: 'Example Remove Favorite Sync Page',
+      browserFaviconUrl: 'https://example.com/favicon.ico',
+      electronRuntime: true,
+      webContentRuntime: true,
+    },
+  };
+
+  const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
+  document.body.append(view.getElement());
+
+  try {
+    let favoriteButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+    assert(favoriteButton instanceof HTMLButtonElement);
+    favoriteButton.click();
+
+    favoriteButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+    assert(favoriteButton instanceof HTMLButtonElement);
+    assert.equal(favoriteButton.getAttribute('aria-pressed'), 'true');
+    assert(
+      favoriteButton.querySelector('.lx-icon-favorite-filled') instanceof HTMLElement,
+    );
+
+    const sourcesButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+    assert(sourcesButton instanceof HTMLButtonElement);
+    sourcesButton.click();
+    await waitForNextTask();
+    await waitForNextTask();
+
+    const panel = document.body.querySelector('.editor-browser-library-panel');
+    assert(panel instanceof HTMLElement);
+    const favoriteItem = Array.from(
+      panel.querySelectorAll(`.editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`),
+    )[0];
+    assert(favoriteItem instanceof HTMLButtonElement);
+
+    favoriteItem.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 24,
+      clientY: 24,
+    }));
+    await waitForNextTask();
+
+    const menu = document.body.querySelector(
+      '.dropdown-menu[data-menu="editor-browser-library-favorite-item"]',
+    );
+    assert(menu instanceof HTMLElement);
+    const removeFavoriteItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) => node.textContent?.trim() === 'Remove Favorite',
+    );
+    assert(removeFavoriteItem instanceof HTMLElement);
+    removeFavoriteItem.click();
+    await waitForNextTask();
+    await waitForNextTask();
+
+    favoriteButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+    assert(favoriteButton instanceof HTMLButtonElement);
+    assert.equal(favoriteButton.getAttribute('aria-pressed'), 'false');
+    assert(
+      favoriteButton.querySelector('.lx-icon-favorite') instanceof HTMLElement,
+    );
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+    window.localStorage?.removeItem(BROWSER_LIBRARY_STORAGE_KEY);
+  }
+});
+
 test('EditorBrowserLibraryPanel keeps the recent item and creates a separate favorite item when favorited', async () => {
   const { EditorBrowserLibraryPanel } = await import(
     'ls/workbench/browser/parts/editor/editorBrowserLibraryPanel'

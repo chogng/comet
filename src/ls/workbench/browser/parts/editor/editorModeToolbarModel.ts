@@ -65,7 +65,8 @@ export function resolveActiveBrowserMetadata(
     };
   }
 
-  const browserUrl = normalizeBrowserMetadataValue(props.activeTab.url);
+  const activeTabBrowserUrl = normalizeBrowserMetadataValue(props.activeTab.url);
+  const browserUrl = viewPartBrowserUrl || activeTabBrowserUrl;
   const activeTabTitle = normalizeBrowserMetadataValue(props.activeTab.title);
   const derivedTitle = normalizeBrowserMetadataValue(
     getEditorContentTabTitle(browserUrl),
@@ -73,7 +74,8 @@ export function resolveActiveBrowserMetadata(
   const activeTabFaviconUrl = normalizeBrowserMetadataValue(
     props.activeTab.faviconUrl,
   );
-  const isViewPartUrlAligned = viewPartBrowserUrl === browserUrl;
+  const isViewPartUrlAligned = viewPartBrowserUrl === activeTabBrowserUrl;
+  const isUsingViewPartUrl = Boolean(viewPartBrowserUrl);
   const fallbackPageTitle =
     activeTabTitle && activeTabTitle !== derivedTitle
       ? activeTabTitle
@@ -81,12 +83,12 @@ export function resolveActiveBrowserMetadata(
 
   return {
     browserUrl,
-    browserPageTitle: isViewPartUrlAligned
-      ? viewPartBrowserPageTitle || fallbackPageTitle
+    browserPageTitle: isUsingViewPartUrl
+      ? viewPartBrowserPageTitle || (isViewPartUrlAligned ? fallbackPageTitle : '')
       : fallbackPageTitle,
     browserFaviconUrl:
-      (isViewPartUrlAligned ? viewPartBrowserFaviconUrl : '') ||
-      activeTabFaviconUrl,
+      (isUsingViewPartUrl ? viewPartBrowserFaviconUrl : '') ||
+      (isViewPartUrlAligned ? activeTabFaviconUrl : ''),
     browserTabTitle: activeTabTitle,
     hasActiveBrowserTab: true,
   };

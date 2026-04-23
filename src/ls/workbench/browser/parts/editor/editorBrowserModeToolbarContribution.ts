@@ -85,6 +85,7 @@ implements EditorModeToolbarContribution {
 
   dispose() {
     this.getLibraryPanelView()?.setOnDidChangeOpenState(undefined);
+    this.getLibraryPanelView()?.setOnDidChangeState(undefined);
     this.addressInput.inputElement.removeEventListener('keydown', this.handleAddressInputKeyDown);
     this.addressInput.inputElement.removeEventListener('blur', this.handleAddressInputBlur);
     this.addressInput.dispose();
@@ -117,6 +118,7 @@ implements EditorModeToolbarContribution {
     }
 
     panel.setOnDidChangeOpenState(this.handleLibraryPanelOpenStateChange);
+    panel.setOnDidChangeState(this.handleLibraryPanelStateChange);
   }
 
   private updateLeadingActions() {
@@ -162,6 +164,10 @@ implements EditorModeToolbarContribution {
     this.updateLeadingActions();
   };
 
+  private readonly handleLibraryPanelStateChange = () => {
+    this.updateLeadingActions();
+  };
+
   private syncAddressInputFromContext(force = false) {
     const displayBrowserUrl = getEditorContentDisplayUrl(this.context.browserUrl);
     const canSyncValue =
@@ -200,7 +206,8 @@ implements EditorModeToolbarContribution {
 
   private createLeadingItems(): ActionBarItem[] {
     const panel = this.getLibraryPanelView();
-    const isCurrentUrlFavorited = panel?.isCurrentBrowserUrlFavorited() ?? false;
+    const isCurrentUrlFavorited =
+      panel?.isBrowserUrlFavorited(this.context.browserUrl) ?? false;
 
     return [
       {
