@@ -383,12 +383,10 @@ function touchMruTab(mruTabIds: ReadonlyArray<string>, tabId: string) {
 function reorderTabsById<T extends { id: string }>(
   tabs: T[],
   tabId: string,
-  targetTabId: string,
-  position: 'before' | 'after',
+  targetSlotIndex: number,
 ): T[] {
   const sourceIndex = tabs.findIndex((tab) => tab.id === tabId);
-  const targetIndex = tabs.findIndex((tab) => tab.id === targetTabId);
-  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+  if (sourceIndex < 0) {
     return tabs;
   }
 
@@ -398,13 +396,18 @@ function reorderTabsById<T extends { id: string }>(
     return tabs;
   }
 
-  const nextTargetIndex = nextTabs.findIndex((tab) => tab.id === targetTabId);
-  if (nextTargetIndex < 0) {
+  const normalizedTargetSlotIndex = Math.max(
+    0,
+    Math.min(targetSlotIndex, tabs.length),
+  );
+  const insertionIndex =
+    normalizedTargetSlotIndex > sourceIndex
+      ? normalizedTargetSlotIndex - 1
+      : normalizedTargetSlotIndex;
+  if (insertionIndex === sourceIndex) {
     return tabs;
   }
 
-  const insertionIndex =
-    position === 'before' ? nextTargetIndex : nextTargetIndex + 1;
   nextTabs.splice(insertionIndex, 0, movedTab);
   return nextTabs;
 }
@@ -869,19 +872,13 @@ export class EditorModel {
 
   readonly reorderTab = (
     tabId: string,
-    targetTabId: string,
-    position: 'before' | 'after' = 'after',
+    targetSlotIndex: number,
   ) => {
-    if (tabId === targetTabId) {
-      return;
-    }
-
     this.updateActiveGroupState((group) => {
       const nextTabs = reorderTabsById(
         group.tabs,
         tabId,
-        targetTabId,
-        position,
+        targetSlotIndex,
       );
       if (
         nextTabs.length === group.tabs.length &&

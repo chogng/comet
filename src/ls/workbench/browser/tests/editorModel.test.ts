@@ -638,7 +638,7 @@ test('editor model can reorder tabs within the active group without disturbing a
   });
 
   try {
-    model.reorderTab('pdf-a', 'draft-a', 'before');
+    model.reorderTab('pdf-a', 0);
 
     const snapshot = model.getSnapshot();
     assert.deepEqual(

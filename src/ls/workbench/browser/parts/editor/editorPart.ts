@@ -36,8 +36,7 @@ export type EditorPartActions = {
   onActivateTab: (tabId: string) => void;
   onReorderTab: (
     tabId: string,
-    targetTabId: string,
-    position: 'before' | 'after',
+    targetSlotIndex: number,
   ) => void;
   onCloseTab: (tabId: string) => Promise<boolean>;
   onCloseOtherTabs: (tabId: string) => Promise<boolean>;
@@ -493,10 +492,9 @@ export class EditorPartController {
 
   readonly onReorderTab = (
     tabId: string,
-    targetTabId: string,
-    position: 'before' | 'after',
+    targetSlotIndex: number,
   ) => {
-    this.editorModel.reorderTab(tabId, targetTabId, position);
+    this.editorModel.reorderTab(tabId, targetSlotIndex);
   };
 
   readonly onCloseTab = (tabId: string) =>

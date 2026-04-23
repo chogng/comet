@@ -67,8 +67,7 @@ export type EditorGroupViewProps = {
   onActivateTab: (tabId: string) => void;
   onReorderTab?: (
     tabId: string,
-    targetTabId: string,
-    position: 'before' | 'after',
+    targetSlotIndex: number,
   ) => void | Promise<void>;
   onCloseTab: (tabId: string) => Promise<boolean> | boolean | void;
   onCloseOtherTabs?: (tabId: string) => Promise<boolean> | boolean | void;

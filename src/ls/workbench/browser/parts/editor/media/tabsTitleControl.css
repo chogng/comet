@@ -24,7 +24,7 @@
   padding: 0;
 }
 
-.editor-tabs-container.is-drop-indicator-visible::after {
+.editor-tabs-scroll-host.is-drop-indicator-visible::after {
   content: '';
   position: absolute;
   top: 4px;

@@ -163,8 +163,8 @@ function getTabsContainer(rootElement: HTMLElement) {
   return tabsContainer;
 }
 
-function getDropIndicatorLeft(container: HTMLDivElement) {
-  return container.style.getPropertyValue('--editor-tab-drop-indicator-left');
+function getDropIndicatorLeft(element: HTMLElement) {
+  return element.style.getPropertyValue('--editor-tab-drop-indicator-left');
 }
 
 function createDataTransferStub() {
@@ -1021,7 +1021,7 @@ test('TabsTitleControl uses file-text for both inactive and active pdf tabs', ()
 });
 
 test('TabsTitleControl reorders tabs by drag and drop', () => {
-  const reorderCalls: Array<[string, string, 'before' | 'after']> = [];
+  const reorderCalls: Array<[string, number]> = [];
   const control = new TabsTitleControl({
     group: createGroupModel('draft-a', [
       createTabItem({
@@ -1048,8 +1048,8 @@ test('TabsTitleControl reorders tabs by drag and drop', () => {
       close: 'Close',
     },
     onActivateTab: () => {},
-    onReorderTab: (tabId, targetTabId, position) => {
-      reorderCalls.push([tabId, targetTabId, position]);
+    onReorderTab: (tabId, targetSlotIndex) => {
+      reorderCalls.push([tabId, targetSlotIndex]);
     },
     onCloseTab: () => {},
     onOpenPaneMode: () => {},
@@ -1089,17 +1089,16 @@ test('TabsTitleControl reorders tabs by drag and drop', () => {
     dataTransfer,
   });
   assert.equal(dragOverEvent.defaultPrevented, true);
-  assert.equal(container.classList.contains('is-drop-indicator-visible'), true);
-  assert.equal(getDropIndicatorLeft(container), '220px');
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
 
   dispatchDragEvent(browserTab, 'drop', {
     clientX: 190,
     dataTransfer,
   });
 
-  assert.deepEqual(reorderCalls, [['draft-a', 'browser-b', 'after']]);
+  assert.deepEqual(reorderCalls, [['draft-a', 2]]);
   assert.equal(draftTab?.classList.contains('is-dragging'), false);
-  assert.equal(container.classList.contains('is-drop-indicator-visible'), false);
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), false);
 
   control.dispose();
 });
@@ -1221,6 +1220,51 @@ test('TabsTitleControl clears hovered state after drag ends', () => {
   control.dispose();
 });
 
+test('TabsTitleControl clears focused tab controls after drag ends without a reorder', () => {
+  const control = new TabsTitleControl({
+    group: createGroupModel('draft-a', [
+      createTabItem({
+        id: 'draft-a',
+        kind: 'draft',
+        label: 'Draft A',
+        title: 'Draft A',
+        isActive: true,
+      }),
+      createTabItem({
+        id: 'browser-b',
+        kind: 'browser',
+        label: 'Web B',
+        title: 'Web B',
+      }),
+    ]),
+    labels: {
+      close: 'Close',
+    },
+    onActivateTab: () => {},
+    onReorderTab: () => {},
+    onCloseTab: () => {},
+    onOpenPaneMode: () => {},
+  });
+  const rootElement = control.getElement();
+  document.body.append(rootElement);
+  const container = getTabsContainer(rootElement);
+  const draftTab = container.children[0];
+  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  assert(draftTab instanceof HTMLElement);
+  assert(draftButton instanceof HTMLButtonElement);
+
+  draftButton.focus();
+  assert.equal(document.activeElement, draftButton);
+
+  const dataTransfer = createDataTransferStub();
+  dispatchDragEvent(draftButton, 'dragstart', { dataTransfer });
+  dispatchDragEvent(draftTab, 'dragend', { dataTransfer });
+
+  assert.notEqual(document.activeElement, draftButton);
+
+  control.dispose();
+});
+
 test('TabsTitleControl keeps one stable insertion indicator between adjacent tabs', () => {
   const control = new TabsTitleControl({
     group: createGroupModel('pdf-c', [
@@ -1318,19 +1362,113 @@ test('TabsTitleControl keeps one stable insertion indicator between adjacent tab
     clientX: 120,
     dataTransfer,
   });
-  assert.equal(container.classList.contains('is-drop-indicator-visible'), true);
-  assert.equal(getDropIndicatorLeft(container), '121px');
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(getDropIndicatorLeft(rootElement), '121px');
 
   dispatchDragEvent(browserTab, 'dragover', {
     clientX: 122,
     dataTransfer,
   });
-  assert.equal(container.classList.contains('is-drop-indicator-visible'), true);
-  assert.equal(getDropIndicatorLeft(container), '121px');
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(getDropIndicatorLeft(rootElement), '121px');
 
   dispatchDragEvent(pdfTab, 'dragend', { dataTransfer });
-  assert.equal(container.classList.contains('is-drop-indicator-visible'), false);
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), false);
 
+  control.dispose();
+});
+
+test('TabsTitleControl keeps the insertion indicator visible when host drag events jitter around a gap', () => {
+  const control = new TabsTitleControl({
+    group: createGroupModel('pdf-c', [
+      createTabItem({
+        id: 'draft-a',
+        kind: 'draft',
+        label: 'Draft A',
+        title: 'Draft A',
+      }),
+      createTabItem({
+        id: 'browser-b',
+        kind: 'browser',
+        label: 'Web B',
+        title: 'Web B',
+      }),
+      createTabItem({
+        id: 'pdf-c',
+        kind: 'pdf',
+        label: 'PDF C',
+        title: 'PDF C',
+        isActive: true,
+      }),
+    ]),
+    labels: {
+      close: 'Close',
+    },
+    onActivateTab: () => {},
+    onReorderTab: () => {},
+    onCloseTab: () => {},
+    onOpenPaneMode: () => {},
+  });
+  const rootElement = control.getElement();
+  document.body.append(rootElement);
+  const container = getTabsContainer(rootElement);
+  const [draftTab, browserTab, pdfTab] = Array.from(container.children);
+  const pdfButton = pdfTab?.querySelector('.editor-tab-main');
+  assert(draftTab instanceof HTMLElement);
+  assert(browserTab instanceof HTMLElement);
+  assert(pdfButton instanceof HTMLButtonElement);
+
+  Object.defineProperty(draftTab, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      left: 0,
+      top: 0,
+      width: 120,
+      height: 26,
+      right: 120,
+      bottom: 26,
+      x: 0,
+      y: 0,
+      toJSON() {
+        return {};
+      },
+    }),
+  });
+  Object.defineProperty(browserTab, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      left: 122,
+      top: 0,
+      width: 120,
+      height: 26,
+      right: 242,
+      bottom: 26,
+      x: 122,
+      y: 0,
+      toJSON() {
+        return {};
+      },
+    }),
+  });
+
+  const dataTransfer = createDataTransferStub();
+  dispatchDragEvent(pdfButton, 'dragstart', { dataTransfer });
+
+  dispatchDragEvent(rootElement, 'dragover', {
+    clientX: 120,
+    dataTransfer,
+  });
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(getDropIndicatorLeft(rootElement), '121px');
+
+  dispatchDragEvent(rootElement, 'dragover', {
+    clientX: 122,
+    dataTransfer,
+  });
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(getDropIndicatorLeft(rootElement), '121px');
+
+  dispatchDragEvent(pdfTab, 'dragend', { dataTransfer });
   control.dispose();
 });
 
@@ -1392,20 +1530,108 @@ test('TabsTitleControl keeps the same drop side for small cursor moves near a ta
     clientX: 159,
     dataTransfer,
   });
-  assert.equal(getDropIndicatorLeft(container), '100px');
+  assert.equal(getDropIndicatorLeft(rootElement), '100px');
 
   dispatchDragEvent(browserTab, 'dragover', {
     clientX: 161,
     dataTransfer,
   });
-  assert.equal(getDropIndicatorLeft(container), '100px');
+  assert.equal(getDropIndicatorLeft(rootElement), '100px');
 
   dispatchDragEvent(draftTab, 'dragend', { dataTransfer });
   control.dispose();
 });
 
+test('TabsTitleControl keeps the first drop indicator fully visible at the leading edge', () => {
+  const control = new TabsTitleControl({
+    group: createGroupModel('pdf-c', [
+      createTabItem({
+        id: 'draft-a',
+        kind: 'draft',
+        label: 'Draft A',
+        title: 'Draft A',
+      }),
+      createTabItem({
+        id: 'browser-b',
+        kind: 'browser',
+        label: 'Web B',
+        title: 'Web B',
+      }),
+      createTabItem({
+        id: 'pdf-c',
+        kind: 'pdf',
+        label: 'PDF C',
+        title: 'PDF C',
+        isActive: true,
+      }),
+    ]),
+    labels: {
+      close: 'Close',
+    },
+    onActivateTab: () => {},
+    onReorderTab: () => {},
+    onCloseTab: () => {},
+    onOpenPaneMode: () => {},
+  });
+  const rootElement = control.getElement();
+  document.body.append(rootElement);
+  const container = getTabsContainer(rootElement);
+
+  const [draftTab, browserTab, pdfTab] = Array.from(container.children);
+  const pdfButton = pdfTab?.querySelector('.editor-tab-main');
+  assert(draftTab instanceof HTMLElement);
+  assert(browserTab instanceof HTMLElement);
+  assert(pdfButton instanceof HTMLButtonElement);
+
+  Object.defineProperty(draftTab, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      left: 0,
+      top: 0,
+      width: 120,
+      height: 26,
+      right: 120,
+      bottom: 26,
+      x: 0,
+      y: 0,
+      toJSON() {
+        return {};
+      },
+    }),
+  });
+  Object.defineProperty(browserTab, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      left: 122,
+      top: 0,
+      width: 120,
+      height: 26,
+      right: 242,
+      bottom: 26,
+      x: 122,
+      y: 0,
+      toJSON() {
+        return {};
+      },
+    }),
+  });
+
+  const dataTransfer = createDataTransferStub();
+  dispatchDragEvent(pdfButton, 'dragstart', { dataTransfer });
+  dispatchDragEvent(container, 'dragover', {
+    clientX: -8,
+    dataTransfer,
+  });
+
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(getDropIndicatorLeft(rootElement), '0px');
+
+  dispatchDragEvent(pdfTab, 'dragend', { dataTransfer });
+  control.dispose();
+});
+
 test('TabsTitleControl supports dropping a tab after the last tab from container trailing space', () => {
-  const reorderCalls: Array<[string, string, 'before' | 'after']> = [];
+  const reorderCalls: Array<[string, number]> = [];
   const control = new TabsTitleControl({
     group: createGroupModel('draft-a', [
       createTabItem({
@@ -1432,8 +1658,8 @@ test('TabsTitleControl supports dropping a tab after the last tab from container
       close: 'Close',
     },
     onActivateTab: () => {},
-    onReorderTab: (tabId, targetTabId, position) => {
-      reorderCalls.push([tabId, targetTabId, position]);
+    onReorderTab: (tabId, targetSlotIndex) => {
+      reorderCalls.push([tabId, targetSlotIndex]);
     },
     onCloseTab: () => {},
     onOpenPaneMode: () => {},
@@ -1502,16 +1728,16 @@ test('TabsTitleControl supports dropping a tab after the last tab from container
     dataTransfer,
   });
   assert.equal(dragOverEvent.defaultPrevented, true);
-  assert.equal(container.classList.contains('is-drop-indicator-visible'), true);
-  assert.equal(getDropIndicatorLeft(container), '364px');
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(getDropIndicatorLeft(rootElement), '364px');
 
   dispatchDragEvent(container, 'drop', {
     clientX: 420,
     dataTransfer,
   });
 
-  assert.deepEqual(reorderCalls, [['draft-a', 'pdf-c', 'after']]);
-  assert.equal(container.classList.contains('is-drop-indicator-visible'), false);
+  assert.deepEqual(reorderCalls, [['draft-a', 3]]);
+  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), false);
 
   control.dispose();
 });

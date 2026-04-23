@@ -98,9 +98,7 @@ function isDragEventLike(event: Event): event is DragEvent {
 type DragState = {
   sourceViewTabId: string;
   sourceTabId: string;
-  targetViewTabId: string | null;
-  targetTabId: string | null;
-  position: 'before' | 'after' | null;
+  targetSlotIndex: number | null;
 };
 
 const DROP_POSITION_HYSTERESIS_PX = 6;
@@ -182,8 +180,8 @@ export class TabsTitleControl extends TitleControl {
     this.disposables.add(addDisposableListener(this.container, 'scroll', this.handleContainerScroll, {
       passive: true,
     }));
-    this.disposables.add(addDisposableListener(this.container, 'dragover', this.handleContainerDragOver));
-    this.disposables.add(addDisposableListener(this.container, 'drop', this.handleContainerDrop));
+    this.disposables.add(addDisposableListener(scrollHost, 'dragover', this.handleContainerDragOver));
+    this.disposables.add(addDisposableListener(scrollHost, 'drop', this.handleContainerDrop));
     if (typeof ResizeObserver !== 'undefined') {
       const resizeObserver = new ResizeObserver(() => {
         this.scheduleLayoutSync(false);
@@ -413,122 +411,186 @@ export class TabsTitleControl extends TitleControl {
     };
   }
 
-  private resolveDropPosition(
+  private getReorderableTabElements() {
+    if (!this.container) {
+      return [];
+    }
+
+    return Array.from(this.container.children).filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement &&
+        child.classList.contains('editor-tab'),
+    );
+  }
+
+  private getTabMidpoint(tabElement: HTMLElement) {
+    const rect = tabElement.getBoundingClientRect();
+    return rect.left + rect.width / 2;
+  }
+
+  private getViewTabIndex(viewTabId: string) {
+    return this.props.group.tabs.findIndex((tab) => tab.id === viewTabId);
+  }
+
+  private resolveDropSlotIndexFromTab(
     event: DragEvent,
     tabElement: HTMLElement,
-  ): 'before' | 'after' {
-    const rect = tabElement.getBoundingClientRect();
-    if (rect.width <= 0) {
-      return 'after';
-    }
-
-    const midpoint = rect.left + rect.width / 2;
-    const currentTargetViewTabId = this.dragState?.targetViewTabId ?? null;
-    const currentPosition = this.dragState?.position ?? null;
+  ) {
     const viewTabId = tabElement.dataset.tabId?.trim() ?? '';
-    if (currentTargetViewTabId === viewTabId && currentPosition) {
-      if (
-        currentPosition === 'before' &&
-        event.clientX <= midpoint + DROP_POSITION_HYSTERESIS_PX
-      ) {
-        return 'before';
-      }
-      if (
-        currentPosition === 'after' &&
-        event.clientX >= midpoint - DROP_POSITION_HYSTERESIS_PX
-      ) {
-        return 'after';
-      }
-    }
-
-    return event.clientX < midpoint ? 'before' : 'after';
-  }
-
-  private getTabSibling(
-    tabElement: HTMLElement,
-    direction: 'previous' | 'next',
-  ) {
-    let sibling =
-      direction === 'previous'
-        ? tabElement.previousElementSibling
-        : tabElement.nextElementSibling;
-    while (sibling) {
-      if (
-        sibling instanceof HTMLElement &&
-        sibling.classList.contains('editor-tab')
-      ) {
-        return sibling;
-      }
-      sibling =
-        direction === 'previous'
-          ? sibling.previousElementSibling
-          : sibling.nextElementSibling;
-    }
-    return null;
-  }
-
-  private getContainerRelativeX(clientX: number) {
-    if (!this.container) {
-      return 0;
-    }
-
-    const containerRect = this.container.getBoundingClientRect();
-    return clientX - containerRect.left + this.container.scrollLeft;
-  }
-
-  private resolveDropIndicatorLeft(
-    viewTabId: string,
-    position: 'before' | 'after',
-  ) {
-    const tabElement = this.tabViews.get(viewTabId)?.element;
-    if (!this.container || !tabElement) {
+    const tabIndex = this.getViewTabIndex(viewTabId);
+    if (tabIndex < 0) {
       return null;
     }
 
-    const tabRect = tabElement.getBoundingClientRect();
-    const tabLeft = this.getContainerRelativeX(tabRect.left);
-    const tabRight = this.getContainerRelativeX(tabRect.right);
+    const rect = tabElement.getBoundingClientRect();
+    if (rect.width <= 0) {
+      return tabIndex + 1;
+    }
 
-    if (position === 'before') {
-      const previousTab = this.getTabSibling(tabElement, 'previous');
-      if (!previousTab) {
-        return tabLeft;
+    const midpoint = rect.left + rect.width / 2;
+    const currentTargetSlotIndex = this.dragState?.targetSlotIndex ?? null;
+    const leadingSlotIndex = tabIndex;
+    const trailingSlotIndex = tabIndex + 1;
+    if (
+      currentTargetSlotIndex === leadingSlotIndex &&
+      event.clientX <= midpoint + DROP_POSITION_HYSTERESIS_PX
+    ) {
+      return leadingSlotIndex;
+    }
+    if (
+      currentTargetSlotIndex === trailingSlotIndex &&
+      event.clientX >= midpoint - DROP_POSITION_HYSTERESIS_PX
+    ) {
+      return trailingSlotIndex;
+    }
+
+    return event.clientX < midpoint ? leadingSlotIndex : trailingSlotIndex;
+  }
+
+  private resolveDropSlotIndexFromStrip(event: DragEvent) {
+    const tabElements = this.getReorderableTabElements();
+    if (tabElements.length === 0) {
+      return null;
+    }
+
+    const currentTargetSlotIndex = this.dragState?.targetSlotIndex ?? null;
+    if (currentTargetSlotIndex !== null) {
+      const leftBoundary =
+        currentTargetSlotIndex <= 0
+          ? Number.NEGATIVE_INFINITY
+          : this.getTabMidpoint(tabElements[currentTargetSlotIndex - 1]!);
+      const rightBoundary =
+        currentTargetSlotIndex >= tabElements.length
+          ? Number.POSITIVE_INFINITY
+          : this.getTabMidpoint(tabElements[currentTargetSlotIndex]!);
+
+      if (
+        event.clientX >= leftBoundary - DROP_POSITION_HYSTERESIS_PX &&
+        event.clientX <= rightBoundary + DROP_POSITION_HYSTERESIS_PX
+      ) {
+        return currentTargetSlotIndex;
+      }
+    }
+
+    for (let index = 0; index < tabElements.length; index += 1) {
+      const tabElement = tabElements[index];
+      if (!tabElement) {
+        continue;
       }
 
-      const previousRect = previousTab.getBoundingClientRect();
-      if (previousRect.width <= 0 || previousRect.right >= tabRect.left) {
-        return tabLeft;
+      const rect = tabElement.getBoundingClientRect();
+      if (rect.width <= 0) {
+        continue;
       }
-      const previousRight = this.getContainerRelativeX(previousRect.right);
-      return (previousRight + tabLeft) / 2;
+
+      if (event.clientX < this.getTabMidpoint(tabElement)) {
+        return index;
+      }
     }
 
-    const nextTab = this.getTabSibling(tabElement, 'next');
-    if (!nextTab) {
-      return tabRight;
+    return tabElements.length;
+  }
+
+  private getScrollHostRelativeX(clientX: number) {
+    if (!this.scrollableRoot) {
+      return 0;
     }
 
-    const nextRect = nextTab.getBoundingClientRect();
-    if (nextRect.width <= 0 || nextRect.left <= tabRect.right) {
-      return tabRight;
+    const scrollHostRect = this.scrollableRoot.getBoundingClientRect();
+    return clientX - scrollHostRect.left;
+  }
+
+  private resolveDropIndicatorLeft(targetSlotIndex: number) {
+    if (!this.container) {
+      return null;
     }
-    const nextLeft = this.getContainerRelativeX(nextRect.left);
-    return (tabRight + nextLeft) / 2;
+
+    const tabCount = this.props.group.tabs.length;
+    const normalizedTargetSlotIndex = Math.max(
+      0,
+      Math.min(targetSlotIndex, tabCount),
+    );
+
+    const previousViewTabId =
+      this.props.group.tabs[normalizedTargetSlotIndex - 1]?.id ?? null;
+    const nextViewTabId =
+      this.props.group.tabs[normalizedTargetSlotIndex]?.id ?? null;
+    const previousTabElement = previousViewTabId
+      ? this.tabViews.get(previousViewTabId)?.element ?? null
+      : null;
+    const nextTabElement = nextViewTabId
+      ? this.tabViews.get(nextViewTabId)?.element ?? null
+      : null;
+
+    if (previousTabElement && nextTabElement) {
+      const previousRect = previousTabElement.getBoundingClientRect();
+      const nextRect = nextTabElement.getBoundingClientRect();
+      const previousRight =
+        previousRect.width > 0
+          ? this.getScrollHostRelativeX(previousRect.right)
+          : null;
+      const nextLeft =
+        nextRect.width > 0
+          ? this.getScrollHostRelativeX(nextRect.left)
+          : null;
+      if (
+        previousRight !== null &&
+        nextLeft !== null &&
+        nextLeft > previousRight
+      ) {
+        return (previousRight + nextLeft) / 2;
+      }
+      return nextLeft ?? previousRight;
+    }
+
+    if (nextTabElement) {
+      const nextRect = nextTabElement.getBoundingClientRect();
+      return this.getScrollHostRelativeX(nextRect.left);
+    }
+
+    if (previousTabElement) {
+      const previousRect = previousTabElement.getBoundingClientRect();
+      return this.getScrollHostRelativeX(previousRect.right);
+    }
+
+    return null;
   }
 
   private updateDropIndicator(left: number | null) {
-    if (!this.container) {
+    if (!this.scrollableRoot) {
       return;
     }
 
     if (left === null) {
-      this.container.classList.remove('is-drop-indicator-visible');
-      this.container.style.removeProperty('--editor-tab-drop-indicator-left');
+      this.scrollableRoot.classList.remove('is-drop-indicator-visible');
+      this.scrollableRoot.style.removeProperty(
+        '--editor-tab-drop-indicator-left',
+      );
       return;
     }
 
-    this.container.classList.add('is-drop-indicator-visible');
-    this.container.style.setProperty(
+    this.scrollableRoot.classList.add('is-drop-indicator-visible');
+    this.scrollableRoot.style.setProperty(
       '--editor-tab-drop-indicator-left',
       `${left}px`,
     );
@@ -540,155 +602,40 @@ export class TabsTitleControl extends TitleControl {
     }
 
     const targetElement = event.currentTarget;
-    if (!(targetElement instanceof HTMLElement)) {
+    const targetMetadata =
+      targetElement instanceof HTMLElement
+        ? this.getReorderableTabMetadata(targetElement)
+        : null;
+    const targetSlotIndex =
+      targetMetadata && targetMetadata.targetTabId !== this.dragState.sourceTabId
+        ? this.resolveDropSlotIndexFromTab(event, targetElement as HTMLElement)
+        : this.resolveDropSlotIndexFromStrip(event);
+    if (targetSlotIndex === null) {
+      this.setDropTarget(null);
       return null;
     }
 
-    const targetMetadata = this.getReorderableTabMetadata(targetElement);
-    if (
-      !targetMetadata ||
-      targetMetadata.targetTabId === this.dragState.sourceTabId
-    ) {
-      this.setDropTarget(null, null, null);
-      return null;
-    }
+    this.setDropTarget(targetSlotIndex);
 
-    const position = this.resolveDropPosition(event, targetElement);
-    this.setDropTarget(
-      targetMetadata.viewTabId,
-      targetMetadata.targetTabId,
-      position,
-    );
     return {
-      targetElement,
-      targetMetadata,
-      position,
+      targetSlotIndex,
     };
   }
 
   private syncDropTargetFromContainerEvent(event: DragEvent) {
-    if (!this.dragState || !this.container) {
-      return null;
-    }
-
-    const tabElements = Array.from(this.container.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement,
-    );
-    if (tabElements.length === 0) {
-      this.setDropTarget(null, null, null);
-      return null;
-    }
-
-    const firstTabElement = tabElements[0];
-    const lastTabElement = tabElements[tabElements.length - 1];
-    if (!firstTabElement || !lastTabElement) {
-      this.setDropTarget(null, null, null);
-      return null;
-    }
-
-    const firstMetadata = this.getReorderableTabMetadata(firstTabElement);
-    const lastMetadata = this.getReorderableTabMetadata(lastTabElement);
-    const firstRect = firstTabElement.getBoundingClientRect();
-    const lastRect = lastTabElement.getBoundingClientRect();
-
-    if (
-      firstMetadata &&
-      firstMetadata.targetTabId !== this.dragState.sourceTabId &&
-      event.clientX <= firstRect.left
-    ) {
-      this.setDropTarget(
-        firstMetadata.viewTabId,
-        firstMetadata.targetTabId,
-        'before',
-      );
-      return {
-        targetMetadata: firstMetadata,
-        position: 'before' as const,
-      };
-    }
-
-    if (
-      lastMetadata &&
-      lastMetadata.targetTabId !== this.dragState.sourceTabId &&
-      event.clientX >= lastRect.right
-    ) {
-      this.setDropTarget(
-        lastMetadata.viewTabId,
-        lastMetadata.targetTabId,
-        'after',
-      );
-      return {
-        targetMetadata: lastMetadata,
-        position: 'after' as const,
-      };
-    }
-
-    for (let index = 0; index < tabElements.length - 1; index += 1) {
-      const leftTabElement = tabElements[index];
-      const rightTabElement = tabElements[index + 1];
-      if (!leftTabElement || !rightTabElement) {
-        continue;
-      }
-
-      const leftRect = leftTabElement.getBoundingClientRect();
-      const rightRect = rightTabElement.getBoundingClientRect();
-      if (event.clientX < leftRect.right || event.clientX > rightRect.left) {
-        continue;
-      }
-
-      const rightMetadata = this.getReorderableTabMetadata(rightTabElement);
-      if (
-        rightMetadata &&
-        rightMetadata.targetTabId !== this.dragState.sourceTabId
-      ) {
-        this.setDropTarget(
-          rightMetadata.viewTabId,
-          rightMetadata.targetTabId,
-          'before',
-        );
-        return {
-          targetMetadata: rightMetadata,
-          position: 'before' as const,
-        };
-      }
-
-      const leftMetadata = this.getReorderableTabMetadata(leftTabElement);
-      if (
-        leftMetadata &&
-        leftMetadata.targetTabId !== this.dragState.sourceTabId
-      ) {
-        this.setDropTarget(
-          leftMetadata.viewTabId,
-          leftMetadata.targetTabId,
-          'after',
-        );
-        return {
-          targetMetadata: leftMetadata,
-          position: 'after' as const,
-        };
-      }
-    }
-
-    this.setDropTarget(null, null, null);
-    return null;
+    return this.syncDropTargetFromEvent(event);
   }
 
-  private setDropTarget(
-    viewTabId: string | null,
-    targetTabId: string | null,
-    position: 'before' | 'after' | null,
-  ) {
+  private setDropTarget(targetSlotIndex: number | null) {
     this.dragState = this.dragState
       ? {
           ...this.dragState,
-          targetViewTabId: viewTabId,
-          targetTabId,
-          position,
+          targetSlotIndex,
         }
       : null;
     this.updateDropIndicator(
-      viewTabId && position
-        ? this.resolveDropIndicatorLeft(viewTabId, position)
+      targetSlotIndex !== null
+        ? this.resolveDropIndicatorLeft(targetSlotIndex)
         : null,
     );
   }
@@ -696,10 +643,18 @@ export class TabsTitleControl extends TitleControl {
   private clearDragState() {
     this.disposeDragPreviewElement();
     this.updateDropIndicator(null);
-    if (this.dragState?.sourceViewTabId) {
-      this.tabViews
-        .get(this.dragState.sourceViewTabId)
-        ?.element.classList.remove('is-dragging');
+    const sourceTabElement = this.dragState?.sourceViewTabId
+      ? this.tabViews.get(this.dragState.sourceViewTabId)?.element ?? null
+      : null;
+    if (sourceTabElement) {
+      sourceTabElement.classList.remove('is-dragging');
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        sourceTabElement.contains(activeElement)
+      ) {
+        activeElement.blur();
+      }
     }
 
     this.dragState = null;
@@ -982,9 +937,7 @@ export class TabsTitleControl extends TitleControl {
     this.dragState = {
       sourceViewTabId: tabMetadata.viewTabId,
       sourceTabId: tabMetadata.targetTabId,
-      targetViewTabId: null,
-      targetTabId: null,
-      position: null,
+      targetSlotIndex: null,
     };
     tabElement.classList.add('is-dragging');
     if (event.dataTransfer) {
@@ -1031,12 +984,9 @@ export class TabsTitleControl extends TitleControl {
 
     event.preventDefault();
     const { sourceTabId } = this.dragState;
-    const {
-      targetMetadata: { targetTabId },
-      position,
-    } = nextDropTarget;
+    const { targetSlotIndex } = nextDropTarget;
     this.clearDragState();
-    void this.props.onReorderTab(sourceTabId, targetTabId, position);
+    void this.props.onReorderTab(sourceTabId, targetSlotIndex);
   };
 
   private readonly handleContainerDragOver = (event: Event) => {
@@ -1044,7 +994,10 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    if (event.target !== this.container) {
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest('.editor-tab')
+    ) {
       return;
     }
 
@@ -1064,7 +1017,14 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    if (event.target !== this.container || !this.props.onReorderTab) {
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest('.editor-tab')
+    ) {
+      return;
+    }
+
+    if (!this.props.onReorderTab) {
       return;
     }
 
@@ -1076,12 +1036,9 @@ export class TabsTitleControl extends TitleControl {
 
     event.preventDefault();
     const { sourceTabId } = this.dragState;
-    const {
-      targetMetadata: { targetTabId },
-      position,
-    } = nextDropTarget;
+    const { targetSlotIndex } = nextDropTarget;
     this.clearDragState();
-    void this.props.onReorderTab(sourceTabId, targetTabId, position);
+    void this.props.onReorderTab(sourceTabId, targetSlotIndex);
   };
 
   private readonly handleTabDragEnd = () => {
