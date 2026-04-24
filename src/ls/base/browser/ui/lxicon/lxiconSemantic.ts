@@ -40,6 +40,8 @@ export const lxIconSemanticMap = {
     pdfPagination: 'spilt-page',
     pdfHighlight: 'edit',
     pdfTranslate: 'translate',
+    pdfErase: 'erasure',
+    pdfNote: 'note',
   },
   settings: {
     moveUp: 'arrow-up',

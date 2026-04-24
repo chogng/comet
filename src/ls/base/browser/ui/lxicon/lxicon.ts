@@ -66,6 +66,7 @@ import download2Svg from 'ls/base/browser/ui/lxicon/svg/download-2.svg?raw';
 import editSvg from 'ls/base/browser/ui/lxicon/svg/edit.svg?raw';
 import enterSvg from 'ls/base/browser/ui/lxicon/svg/enter.svg?raw';
 import errorSvg from 'ls/base/browser/ui/lxicon/svg/error.svg?raw';
+import erasureSvg from 'ls/base/browser/ui/lxicon/svg/erasure.svg?raw';
 import exportSvg from 'ls/base/browser/ui/lxicon/svg/export.svg?raw';
 import export2Svg from 'ls/base/browser/ui/lxicon/svg/export-2.svg?raw';
 import extensionsSvg from 'ls/base/browser/ui/lxicon/svg/extensions.svg?raw';
@@ -260,6 +261,7 @@ export type LxIconName =
   | 'edit'
   | 'enter'
   | 'error'
+  | 'erasure'
   | 'export'
   | 'export-2'
   | 'extensions'
@@ -454,6 +456,7 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'edit': editSvg,
   'enter': enterSvg,
   'error': errorSvg,
+  'erasure': erasureSvg,
   'export': exportSvg,
   'export-2': export2Svg,
   'extensions': extensionsSvg,

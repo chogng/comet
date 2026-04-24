@@ -23,6 +23,8 @@ const EDITOR_PDF_TOOLBAR_MORE_MENU_DATA = 'editor-pdf-toolbar-more';
 const PDF_PAGINATION_LABEL = 'Pagination';
 const PDF_HIGHLIGHT_LABEL = 'Highlight';
 const PDF_TRANSLATE_LABEL = 'Translate';
+const PDF_ERASE_LABEL = 'Erase';
+const PDF_NOTE_LABEL = 'Note';
 
 export class EditorPdfModeToolbarContribution
 implements EditorModeToolbarContribution {
@@ -130,6 +132,22 @@ implements EditorModeToolbarContribution {
         mode: 'icon',
         buttonClassName: 'editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfTranslate),
+        onClick: () => {},
+      },
+      {
+        label: PDF_ERASE_LABEL,
+        title: PDF_ERASE_LABEL,
+        mode: 'icon',
+        buttonClassName: 'editor-pdf-toolbar-btn',
+        content: createLxIcon(lxIconSemanticMap.editor.pdfErase),
+        onClick: () => {},
+      },
+      {
+        label: PDF_NOTE_LABEL,
+        title: PDF_NOTE_LABEL,
+        mode: 'icon',
+        buttonClassName: 'editor-pdf-toolbar-btn',
+        content: createLxIcon(lxIconSemanticMap.editor.pdfNote),
         onClick: () => {},
       },
     ];
