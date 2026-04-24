@@ -63,6 +63,7 @@ import discardSvg from 'ls/base/browser/ui/lxicon/svg/discard.svg?raw';
 import docxSvg from 'ls/base/browser/ui/lxicon/svg/docx.svg?raw';
 import downloadSvg from 'ls/base/browser/ui/lxicon/svg/download.svg?raw';
 import download2Svg from 'ls/base/browser/ui/lxicon/svg/download-2.svg?raw';
+import editSvg from 'ls/base/browser/ui/lxicon/svg/edit.svg?raw';
 import enterSvg from 'ls/base/browser/ui/lxicon/svg/enter.svg?raw';
 import errorSvg from 'ls/base/browser/ui/lxicon/svg/error.svg?raw';
 import exportSvg from 'ls/base/browser/ui/lxicon/svg/export.svg?raw';
@@ -159,6 +160,7 @@ import searchSvg from 'ls/base/browser/ui/lxicon/svg/search.svg?raw';
 import selectSvg from 'ls/base/browser/ui/lxicon/svg/select.svg?raw';
 import selectAllSvg from 'ls/base/browser/ui/lxicon/svg/select-all.svg?raw';
 import settingsSvg from 'ls/base/browser/ui/lxicon/svg/settings.svg?raw';
+import spiltPageSvg from 'ls/base/browser/ui/lxicon/svg/spilt-page.svg?raw';
 import splitHorizontalSvg from 'ls/base/browser/ui/lxicon/svg/split-horizontal.svg?raw';
 import splitVerticalSvg from 'ls/base/browser/ui/lxicon/svg/split-vertical.svg?raw';
 import startSvg from 'ls/base/browser/ui/lxicon/svg/start.svg?raw';
@@ -255,6 +257,7 @@ export type LxIconName =
   | 'download'
   | 'download-2'
   | 'draft'
+  | 'edit'
   | 'enter'
   | 'error'
   | 'export'
@@ -351,6 +354,7 @@ export type LxIconName =
   | 'select'
   | 'select-all'
   | 'settings'
+  | 'spilt-page'
   | 'split-horizontal'
   | 'split-vertical'
   | 'start'
@@ -447,6 +451,7 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'download': downloadSvg,
   'download-2': download2Svg,
   'draft': writeSvg,
+  'edit': editSvg,
   'enter': enterSvg,
   'error': errorSvg,
   'export': exportSvg,
@@ -543,6 +548,7 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'select': selectSvg,
   'select-all': selectAllSvg,
   'settings': settingsSvg,
+  'spilt-page': spiltPageSvg,
   'split-horizontal': splitHorizontalSvg,
   'split-vertical': splitVerticalSvg,
   'start': startSvg,

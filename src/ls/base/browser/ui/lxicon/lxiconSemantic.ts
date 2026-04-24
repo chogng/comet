@@ -37,6 +37,9 @@ export const lxIconSemanticMap = {
   },
   editor: {
     closeTab: 'close',
+    pdfPagination: 'spilt-page',
+    pdfHighlight: 'edit',
+    pdfTranslate: 'translate',
   },
   settings: {
     moveUp: 'arrow-up',

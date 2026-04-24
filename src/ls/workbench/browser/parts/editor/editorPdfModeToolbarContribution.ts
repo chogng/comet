@@ -2,6 +2,7 @@ import type { ActionBarItem } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
 import type {
   EditorModeToolbarContribution,
   EditorModeToolbarContributionContext,
@@ -19,6 +20,9 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 }
 
 const EDITOR_PDF_TOOLBAR_MORE_MENU_DATA = 'editor-pdf-toolbar-more';
+const PDF_PAGINATION_LABEL = 'Pagination';
+const PDF_HIGHLIGHT_LABEL = 'Highlight';
+const PDF_TRANSLATE_LABEL = 'Translate';
 
 export class EditorPdfModeToolbarContribution
 implements EditorModeToolbarContribution {
@@ -89,19 +93,43 @@ implements EditorModeToolbarContribution {
         onClick: this.context.onOpenSources,
       },
       {
-        label: 'Remove',
-        title: 'Remove',
+        label: 'Zoom out',
+        title: 'Zoom out',
         mode: 'icon',
         buttonClassName: 'editor-pdf-toolbar-btn',
         content: createLxIcon('remove'),
         onClick: () => {},
       },
       {
-        label: 'Add',
-        title: 'Add',
+        label: 'Zoom in',
+        title: 'Zoom in',
         mode: 'icon',
         buttonClassName: 'editor-pdf-toolbar-btn',
         content: createLxIcon('add'),
+        onClick: () => {},
+      },
+      {
+        label: PDF_PAGINATION_LABEL,
+        title: PDF_PAGINATION_LABEL,
+        mode: 'icon',
+        buttonClassName: 'editor-pdf-toolbar-btn',
+        content: createLxIcon(lxIconSemanticMap.editor.pdfPagination),
+        onClick: () => {},
+      },
+      {
+        label: PDF_HIGHLIGHT_LABEL,
+        title: PDF_HIGHLIGHT_LABEL,
+        mode: 'icon',
+        buttonClassName: 'editor-pdf-toolbar-btn',
+        content: createLxIcon(lxIconSemanticMap.editor.pdfHighlight),
+        onClick: () => {},
+      },
+      {
+        label: PDF_TRANSLATE_LABEL,
+        title: PDF_TRANSLATE_LABEL,
+        mode: 'icon',
+        buttonClassName: 'editor-pdf-toolbar-btn',
+        content: createLxIcon(lxIconSemanticMap.editor.pdfTranslate),
         onClick: () => {},
       },
     ];
