@@ -361,20 +361,20 @@ test('EditorGroupView renders a pdf empty-state shell with a body container', ()
     const pdfBody = pdfPane.querySelector(':scope > .editor-pdf-body');
     assert(pdfBody instanceof HTMLElement);
     assert.equal(pdfBody.childElementCount, 1);
-    assert(pdfBody.firstElementChild?.classList.contains('pdf-annotation-editor'));
+    assert(pdfBody.firstElementChild?.classList.contains('pdf-document-reader'));
 
     const readerSurface = pdfBody.querySelector('.pdf-annotation-surface');
     assert(readerSurface instanceof HTMLElement);
 
     const annotationOverlay = pdfBody.querySelector('.pdf-annotation-overlay');
-    assert(annotationOverlay instanceof HTMLElement);
+    assert.equal(annotationOverlay, null);
   } finally {
     view.dispose();
     document.body.replaceChildren();
   }
 });
 
-test('EditorGroupView captures pdf annotation editor view state from the mounted pane', () => {
+test('EditorGroupView captures pdf document reader view state from the mounted pane', () => {
   const pdfTab = {
     id: 'pdf-state',
     kind: 'pdf' as const,
@@ -388,7 +388,7 @@ test('EditorGroupView captures pdf annotation editor view state from the mounted
   try {
     const activePane = (view as unknown as {
       activePane: {
-        annotationEditor: {
+        documentReader: {
           restoreViewState: (state: {
             selection: ReturnType<typeof createPdfSelection> | null;
             draftComment: string;
@@ -402,7 +402,7 @@ test('EditorGroupView captures pdf annotation editor view state from the mounted
     }).activePane;
     assert(activePane);
 
-    activePane.annotationEditor.restoreViewState({
+    activePane.documentReader.restoreViewState({
       selection: createPdfSelection({
         page: 3,
         text: 'captured text',

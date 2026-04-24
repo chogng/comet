@@ -165,7 +165,7 @@
   background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
-.editor-pdf-body > .pdf-annotation-editor {
+.editor-pdf-body > .pdf-document-reader {
   flex: 1;
   min-width: 0;
 }

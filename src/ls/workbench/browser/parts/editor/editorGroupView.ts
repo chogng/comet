@@ -17,7 +17,7 @@ import type {
   EditorContentStatusState,
   EditorStatusState,
 } from 'ls/workbench/browser/parts/editor/editorStatus';
-import type { PdfReaderRuntimeStatus } from 'ls/editor/browser/pdf/pdfAnnotationEditor';
+import type { PdfReaderRuntimeStatus } from 'ls/editor/browser/pdf/pdfDocumentReader';
 
 import { createActiveDraftEditorCommandExecutor } from 'ls/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
 import type { DraftEditorSurfaceActionId } from 'ls/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';

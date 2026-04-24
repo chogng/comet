@@ -1,15 +1,12 @@
 import type {
-  PdfAnnotationEditorViewState,
+  PdfDocumentReaderViewState,
   PdfReaderRuntimeStatus,
-} from 'ls/editor/browser/pdf/pdfAnnotationEditor';
+} from 'ls/editor/browser/pdf/pdfDocumentReader';
 import {
-  createPdfAnnotationEditor,
-} from 'ls/editor/browser/pdf/pdfAnnotationEditor';
+  createPdfDocumentReader,
+} from 'ls/editor/browser/pdf/pdfDocumentReader';
 import type { PdfSelection } from 'ls/editor/browser/pdf/pdfSelection';
-import {
-  readStoredPdfAnnotations,
-  writeStoredPdfAnnotations,
-} from 'ls/editor/browser/pdf/pdfAnnotationPersistence';
+import { readStoredPdfAnnotations } from 'ls/editor/browser/pdf/pdfAnnotationPersistence';
 import {
   createPdfReaderDocumentSource,
   createPdfReaderSnapshot,
@@ -27,7 +24,7 @@ import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/edit
 import { EditorPane } from 'ls/workbench/browser/parts/editor/panes/editorPane';
 import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
 
-export type PdfEditorPaneViewState = PdfAnnotationEditorViewState & {
+export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
   reader: PdfReaderViewState;
 };
 
@@ -87,7 +84,7 @@ class PdfEditorPaneStateController {
     };
   }
 
-  setAnnotationViewState(viewState: PdfAnnotationEditorViewState) {
+  setDocumentReaderViewState(viewState: PdfDocumentReaderViewState) {
     this.viewState = {
       ...this.viewState,
       selection: viewState.selection,
@@ -105,7 +102,7 @@ export class PdfEditorPane extends EditorPane<
   private readonly bodyElement = document.createElement('div');
   private readonly editor = new PdfEditorPaneStateController();
   private readerSnapshot: PdfReaderSnapshot;
-  private annotationEditor: ReturnType<typeof createPdfAnnotationEditor> | null = null;
+  private documentReader: ReturnType<typeof createPdfDocumentReader> | null = null;
 
   constructor(props: PdfEditorPaneProps) {
     super();
@@ -133,12 +130,12 @@ export class PdfEditorPane extends EditorPane<
 
   override restoreViewState(viewState: PdfEditorPaneViewState | undefined) {
     this.editor.restoreViewState(viewState);
-    this.annotationEditor?.restoreViewState(this.editor.getViewState());
+    this.documentReader?.restoreViewState(this.editor.getViewState());
   }
 
   override dispose() {
-    this.annotationEditor?.dispose();
-    this.annotationEditor = null;
+    this.documentReader?.dispose();
+    this.documentReader = null;
     this.element.replaceChildren();
   }
 
@@ -171,7 +168,7 @@ export class PdfEditorPane extends EditorPane<
 
   private render() {
     const annotations = readStoredPdfAnnotations(this.getAnnotationTargetId());
-    const annotationProps = {
+    const readerProps = {
       url: this.readerSnapshot.source.kind === 'url'
         ? this.readerSnapshot.source.url
         : '',
@@ -185,25 +182,22 @@ export class PdfEditorPane extends EditorPane<
       viewPartProps: this.createReaderViewPartProps(this.props),
       annotations,
       selection: this.editor.getViewState().selection,
-      onViewStateChange: (viewState: PdfAnnotationEditorViewState) => {
-        this.editor.setAnnotationViewState(viewState);
+      onViewStateChange: (viewState: PdfDocumentReaderViewState) => {
+        this.editor.setDocumentReaderViewState(viewState);
       },
       onReaderStatusChange: (status: PdfReaderRuntimeStatus) => {
         this.props.onReaderStatusChange?.(this.props.pdfTab.id, status);
       },
       onOpenPdfFile: this.handleOpenPdfFile,
-      onAnnotationsChange: (nextAnnotations: Parameters<typeof writeStoredPdfAnnotations>[1]) => {
-        writeStoredPdfAnnotations(this.getAnnotationTargetId(), nextAnnotations);
-      },
     };
 
-    if (!this.annotationEditor) {
-      this.annotationEditor = createPdfAnnotationEditor(annotationProps);
-      this.bodyElement.replaceChildren(this.annotationEditor.getElement());
+    if (!this.documentReader) {
+      this.documentReader = createPdfDocumentReader(readerProps);
+      this.bodyElement.replaceChildren(this.documentReader.getElement());
       return;
     }
 
-    this.annotationEditor.setProps(annotationProps);
+    this.documentReader.setProps(readerProps);
   }
 
   private readonly handleOpenPdfFile = async () => {

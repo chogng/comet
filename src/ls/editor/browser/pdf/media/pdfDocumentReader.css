@@ -1,7 +1,6 @@
-.pdf-annotation-editor {
+.pdf-document-reader {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 288px;
+  display: flex;
   min-height: 0;
   height: 100%;
   background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
@@ -9,6 +8,7 @@
 
 .pdf-annotation-surface {
   position: relative;
+  flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -174,134 +174,8 @@
   border-color: var(--vscode-button-secondaryHoverBorder, #b8c7d9);
 }
 
-.pdf-annotation-overlay {
-  position: relative;
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-  min-height: 0;
-  padding: 12px;
-  border-left: 1px solid var(--vscode-editor-sourceHeaderBorder, #e1e1e1);
-  background: var(--vscode-sideBar-background, #f8f8f8);
-  color: var(--vscode-sideBar-foreground, #1f2d3a);
-  box-sizing: border-box;
-  overflow: auto;
-  pointer-events: auto;
-}
-
-.pdf-annotation-badge {
-  color: var(--vscode-sideBarTitle-foreground, #1f2d3a);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.pdf-annotation-hint {
-  color: var(--vscode-descriptionForeground, #64748b);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.pdf-annotation-draft,
-.pdf-annotation-list {
-  display: grid;
-  gap: 8px;
-}
-
-.pdf-annotation-meta,
-.pdf-annotation-list-empty,
-.pdf-annotation-item-body {
-  color: var(--vscode-descriptionForeground, #64748b);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.pdf-annotation-textarea {
-  width: 100%;
-  min-height: 72px;
-  resize: none;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: 1px solid var(--vscode-input-border, #d6e0ea);
-  border-radius: 6px;
-  background: var(--vscode-input-background, #fff);
-  color: var(--vscode-input-foreground, #203040);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.45;
-  outline: none;
-}
-
-.pdf-annotation-textarea:focus {
-  border-color: var(--vscode-focusBorder, #0a5fbf);
-}
-
-.pdf-annotation-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  min-width: 0;
-}
-
-.pdf-annotation-btn {
-  appearance: none;
-  height: 28px;
-  border: 1px solid var(--vscode-button-secondaryBorder, #cfdae7);
-  border-radius: 6px;
-  background: var(--vscode-button-secondaryBackground, #fff);
-  color: var(--vscode-button-secondaryForeground, #1a2530);
-  padding: 0 10px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.pdf-annotation-btn:hover:not(:disabled) {
-  background: var(--vscode-button-secondaryHoverBackground, #f8fafc);
-  border-color: var(--vscode-button-secondaryHoverBorder, #b8c7d9);
-}
-
-.pdf-annotation-btn.is-primary {
-  border-color: var(--vscode-button-primaryBorder, #0955ac);
-  background: var(--vscode-button-primaryBackground, #0a5fbf);
-  color: var(--vscode-button-primaryForeground, #fff);
-}
-
-.pdf-annotation-btn.is-primary:hover:not(:disabled) {
-  background: var(--vscode-button-primaryHoverBackground, #0d6ed8);
-  border-color: var(--vscode-button-primaryHoverBorder, #0c67ca);
-}
-
-.pdf-annotation-btn:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.pdf-annotation-item {
-  display: grid;
-  gap: 4px;
-  padding-top: 10px;
-  border-top: 1px solid var(--vscode-editor-sourceHeaderBorder, #e1e1e1);
-}
-
-.pdf-annotation-item-title {
-  color: var(--vscode-sideBarTitle-foreground, #1f2d3a);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 @media (max-width: 760px) {
-  .pdf-annotation-editor {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
-  .pdf-annotation-overlay {
-    max-height: 220px;
-    border-left: 0;
-    border-top: 1px solid var(--vscode-editor-sourceHeaderBorder, #e1e1e1);
+  .pdf-document-reader {
+    min-width: 0;
   }
 }

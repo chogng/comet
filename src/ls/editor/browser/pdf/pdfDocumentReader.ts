@@ -1,9 +1,7 @@
-import { createAnnotationId } from 'ls/editor/common/annotation';
 import type { Annotation } from 'ls/editor/common/annotation';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
 import { PdfAnnotationStore } from 'ls/editor/browser/pdf/pdfAnnotationStore';
 import type { PdfAnnotationStoreSnapshot } from 'ls/editor/browser/pdf/pdfAnnotationStore';
-import { isPdfSelectionEmpty } from 'ls/editor/browser/pdf/pdfSelection';
 import type { PdfSelection } from 'ls/editor/browser/pdf/pdfSelection';
 import { PdfSelectionController } from 'ls/editor/browser/pdf/pdfSelectionController';
 import { pdfRectToViewportRect } from 'ls/editor/browser/pdf/pdfReviewerTypes';
@@ -16,29 +14,28 @@ import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHos
 import { init as initPdfium } from 'ls/editor/browser/pdf/vendor/pdfium/index.js';
 import type { WrappedPdfiumModule } from 'ls/editor/browser/pdf/vendor/pdfium/index.js';
 
-import 'ls/editor/browser/pdf/media/pdfAnnotationEditor.css';
+import 'ls/editor/browser/pdf/media/pdfDocumentReader.css';
 
-export type PdfAnnotationEditorLabels = {
+export type PdfDocumentReaderLabels = {
   title: string;
   emptyState: string;
   openPdfFile?: string;
 };
 
-export type PdfAnnotationEditorProps = {
+export type PdfDocumentReaderProps = {
   url: string;
   targetId: string;
   annotationTargetId?: string;
-  labels: PdfAnnotationEditorLabels;
+  labels: PdfDocumentReaderLabels;
   viewPartProps: ViewPartProps;
   annotations?: readonly Annotation[];
   selection?: PdfSelection | null;
-  onAnnotationsChange?: (annotations: readonly Annotation[]) => void;
-  onViewStateChange?: (viewState: PdfAnnotationEditorViewState) => void;
+  onViewStateChange?: (viewState: PdfDocumentReaderViewState) => void;
   onReaderStatusChange?: (status: PdfReaderRuntimeStatus) => void;
   onOpenPdfFile?: () => void | Promise<void>;
 };
 
-export type PdfAnnotationEditorViewState = Pick<
+export type PdfDocumentReaderViewState = Pick<
   PdfAnnotationStoreSnapshot,
   'selection' | 'draftComment'
 >;
@@ -73,10 +70,41 @@ type PdfiumModuleWithHeap = WrappedPdfiumModule & {
   };
 };
 
+type PdfPageShell = {
+  pageNumber: number;
+  pageWidth: number;
+  pageHeight: number;
+  scale: number;
+  cssWidth: number;
+  cssHeight: number;
+  pageElement: HTMLElement;
+  pageCanvasWrap: HTMLElement;
+  highlightLayer: HTMLElement;
+  canvas: HTMLCanvasElement | null;
+  renderState: 'empty' | 'rendering' | 'rendered';
+  lastVisibleAt: number;
+};
+
+type PdfZoomAnchor = {
+  page: number;
+  ratioX: number;
+  ratioY: number;
+  viewportX: number;
+  viewportY: number;
+};
+
 const PDF_READER_MIN_ZOOM = 0.4;
 const PDF_READER_MAX_ZOOM = 3;
 const PDF_READER_ZOOM_STEP = 0.1;
 const PDF_READER_ZOOM_RENDER_DELAY_MS = 120;
+const PDF_READER_MIN_OUTPUT_SCALE = 1.5;
+const PDF_READER_MAX_OUTPUT_SCALE = 3;
+const PDF_READER_MAX_BITMAP_PIXELS = 12_000_000;
+const PDF_READER_VIRTUALIZATION_MARGIN_PX = 1200;
+const PDF_READER_MAX_RETAINED_PAGES = 8;
+const FPDF_RENDER_LCD_TEXT = 0x02;
+const FPDF_RENDER_REVERSE_BYTE_ORDER = 0x10;
+const PDF_RENDER_FLAGS = FPDF_RENDER_LCD_TEXT | FPDF_RENDER_REVERSE_BYTE_ORDER;
 
 let pdfiumModulePromise: Promise<PdfiumModuleWithHeap> | null = null;
 const pdfiumWasmUrl = new URL(
@@ -135,9 +163,9 @@ function normalizePdfError(error: unknown) {
   return String(error);
 }
 
-export class PdfAnnotationEditor {
-  private props: PdfAnnotationEditorProps;
-  private readonly element = createElement('div', 'pdf-annotation-editor');
+export class PdfDocumentReader {
+  private props: PdfDocumentReaderProps;
+  private readonly element = createElement('div', 'pdf-document-reader');
   private readonly surfaceElement = createElement('div', 'pdf-annotation-surface');
   private readonly readerElement = createElement('div', 'pdf-reader-view');
   private readonly pagesElement = createElement('div', 'pdf-reader-pages');
@@ -148,16 +176,6 @@ export class PdfAnnotationEditor {
   );
   private readonly emptyOpenElement = createElement('div', 'pdf-annotation-open-empty');
   private readonly openPdfButton = createElement('button', 'pdf-annotation-open-btn');
-  private readonly overlayElement = createElement('div', 'pdf-annotation-overlay');
-  private readonly badgeElement = createElement('div', 'pdf-annotation-badge');
-  private readonly hintElement = createElement('div', 'pdf-annotation-hint');
-  private readonly draftSectionElement = createElement('div', 'pdf-annotation-draft');
-  private readonly draftMetaElement = createElement('div', 'pdf-annotation-meta');
-  private readonly draftTextElement = document.createElement('textarea');
-  private readonly actionRowElement = createElement('div', 'pdf-annotation-actions');
-  private readonly captureSelectionButton = createElement('button', 'pdf-annotation-btn');
-  private readonly saveAnnotationButton = createElement('button', 'pdf-annotation-btn is-primary');
-  private readonly listElement = createElement('div', 'pdf-annotation-list');
   private readonly store = new PdfAnnotationStore();
   private readonly unsubscribeStore: () => void;
   private renderedUrl = '';
@@ -166,8 +184,16 @@ export class PdfAnnotationEditor {
   private zoomScale = 1;
   private renderedZoomScale = 1;
   private zoomRenderTimer: number | null = null;
+  private zoomAnchor: PdfZoomAnchor | null = null;
+  private isRestoringZoomScroll = false;
+  private visibilityRenderFrame: number | null = null;
+  private readonly pageShells = new Map<number, PdfPageShell>();
   private documentHandle: PdfiumDocumentHandle | null = null;
   private readonly pageRenderInfoByPage = new Map<number, PdfReviewerPageInfo>();
+  private readonly resizeObserver: ResizeObserver | null =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => this.scheduleVisiblePageRender());
   private readonly selectionController = new PdfSelectionController({
     pagesElement: this.pagesElement,
     pageInfoByPage: this.pageRenderInfoByPage,
@@ -178,38 +204,21 @@ export class PdfAnnotationEditor {
     message: 'No PDF loaded',
   };
 
-  constructor(props: PdfAnnotationEditorProps) {
+  constructor(props: PdfDocumentReaderProps) {
     this.props = props;
     this.unsubscribeStore = this.store.subscribe(() => {
-      this.renderOverlay();
+      this.renderReaderChrome();
       this.props.onViewStateChange?.(this.getViewState());
     });
     this.element.tabIndex = 0;
     this.element.addEventListener('keydown', this.handleKeyDown);
     this.element.addEventListener('pointerdown', this.handlePointerFocus, true);
     this.pagesElement.addEventListener('wheel', this.handleWheel, { passive: false });
+    this.pagesElement.addEventListener('scroll', this.handleReaderScroll, { passive: true });
+    this.resizeObserver?.observe(this.surfaceElement);
     this.loadingElement.textContent = 'Loading PDF...';
-    this.draftTextElement.className = 'pdf-annotation-textarea';
-    this.draftTextElement.rows = 3;
-    this.draftTextElement.placeholder = 'Annotation comment';
-    this.draftTextElement.addEventListener('input', this.handleDraftCommentInput);
-    this.captureSelectionButton.type = 'button';
-    this.captureSelectionButton.textContent = 'Use Selection';
-    this.captureSelectionButton.addEventListener('click', this.handleCaptureSelection);
     this.openPdfButton.type = 'button';
     this.openPdfButton.addEventListener('click', this.handleOpenPdfFile);
-    this.saveAnnotationButton.type = 'button';
-    this.saveAnnotationButton.textContent = 'Create Annotation';
-    this.saveAnnotationButton.addEventListener('click', this.handleCreateAnnotation);
-    this.actionRowElement.append(
-      this.captureSelectionButton,
-      this.saveAnnotationButton,
-    );
-    this.draftSectionElement.append(
-      this.draftMetaElement,
-      this.draftTextElement,
-      this.actionRowElement,
-    );
     this.emptyOpenElement.append(this.openPdfButton);
     this.readerElement.append(
       this.loadingElement,
@@ -217,13 +226,7 @@ export class PdfAnnotationEditor {
       this.unavailableElement,
     );
     this.surfaceElement.append(this.readerElement, this.emptyOpenElement);
-    this.overlayElement.append(
-      this.badgeElement,
-      this.hintElement,
-      this.draftSectionElement,
-      this.listElement,
-    );
-    this.element.append(this.surfaceElement, this.overlayElement);
+    this.element.append(this.surfaceElement);
     this.setProps(props);
   }
 
@@ -235,7 +238,7 @@ export class PdfAnnotationEditor {
     return this.store.getSnapshot();
   }
 
-  getViewState(): PdfAnnotationEditorViewState {
+  getViewState(): PdfDocumentReaderViewState {
     const snapshot = this.store.getSnapshot();
     return {
       selection: snapshot.selection,
@@ -243,20 +246,20 @@ export class PdfAnnotationEditor {
     };
   }
 
-  setProps(props: PdfAnnotationEditorProps) {
+  setProps(props: PdfDocumentReaderProps) {
     this.props = props;
     this.store.setTarget(props.annotationTargetId ?? props.targetId);
     this.store.setAnnotations(props.annotations ?? []);
     this.store.setSelection(props.selection ?? null);
     this.renderReader();
-    this.renderOverlay();
+    this.renderReaderChrome();
   }
 
   setSelection(selection: PdfSelection | null) {
     this.store.setSelection(selection);
   }
 
-  restoreViewState(viewState: PdfAnnotationEditorViewState | undefined) {
+  restoreViewState(viewState: PdfDocumentReaderViewState | undefined) {
     if (!viewState) {
       return;
     }
@@ -271,6 +274,8 @@ export class PdfAnnotationEditor {
     this.element.removeEventListener('keydown', this.handleKeyDown);
     this.element.removeEventListener('pointerdown', this.handlePointerFocus, true);
     this.pagesElement.removeEventListener('wheel', this.handleWheel);
+    this.pagesElement.removeEventListener('scroll', this.handleReaderScroll);
+    this.resizeObserver?.disconnect();
     this.cancelReaderWork();
     this.element.replaceChildren();
   }
@@ -279,11 +284,15 @@ export class PdfAnnotationEditor {
     this.loadVersion += 1;
     this.pageRenderVersion += 1;
     this.clearScheduledZoomRender();
+    this.clearScheduledVisiblePageRender();
     this.closePdfiumDocument(this.documentHandle);
     this.documentHandle = null;
     this.zoomScale = 1;
     this.renderedZoomScale = 1;
+    this.zoomAnchor = null;
+    this.isRestoringZoomScroll = false;
     this.selectionController.reset();
+    this.pageShells.clear();
     this.pageRenderInfoByPage.clear();
     delete this.element.dataset.pdfReaderTextChars;
     delete this.element.dataset.pdfReaderSelectionText;
@@ -357,7 +366,8 @@ export class PdfAnnotationEditor {
       this.documentHandle = document;
       this.loadingElement.textContent = `${document.pageCount} pages`;
       const pageRenderVersion = ++this.pageRenderVersion;
-      await this.renderPdfPages(document, version, pageRenderVersion);
+      this.createPdfPageShells(document, version, pageRenderVersion);
+      await this.renderVisiblePdfPages(version, pageRenderVersion);
       if (version === this.loadVersion && pageRenderVersion === this.pageRenderVersion) {
         this.renderedZoomScale = this.zoomScale;
         this.renderAllHighlights();
@@ -467,89 +477,190 @@ export class PdfAnnotationEditor {
     document.pdfium.pdfium.wasmExports.free(document.filePtr);
   }
 
-  private async renderPdfPages(
-    document: PdfiumDocumentHandle,
+  private createPdfPageShells(
+    documentHandle: PdfiumDocumentHandle,
     version: number,
     pageRenderVersion: number,
-    target: HTMLElement | DocumentFragment = this.pagesElement,
-    pageInfoByPage: Map<number, PdfReviewerPageInfo> = this.pageRenderInfoByPage,
   ) {
-    for (let pageNumber = 1; pageNumber <= document.pageCount; pageNumber += 1) {
+    const fragment = document.createDocumentFragment();
+    this.pageShells.clear();
+    this.pageRenderInfoByPage.clear();
+    delete this.element.dataset.pdfReaderTextChars;
+
+    for (let pageNumber = 1; pageNumber <= documentHandle.pageCount; pageNumber += 1) {
       if (version !== this.loadVersion || pageRenderVersion !== this.pageRenderVersion) {
         return;
       }
 
-      this.renderPdfPage(
-        document,
-        pageNumber,
-        version,
-        pageRenderVersion,
-        target,
-        pageInfoByPage,
+      const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
+        documentHandle.documentPtr,
+        pageNumber - 1,
       );
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      if (!pagePtr) {
+        throw new Error(`PDFium failed to load page ${pageNumber}.`);
+      }
+
+      try {
+        const pageWidth = documentHandle.pdfium.FPDF_GetPageWidthF(pagePtr);
+        const pageHeight = documentHandle.pdfium.FPDF_GetPageHeightF(pagePtr);
+        const shell = this.createPdfPageShell(pageNumber, pageWidth, pageHeight);
+        this.pageShells.set(pageNumber, shell);
+        fragment.append(shell.pageElement);
+      } finally {
+        documentHandle.pdfium.FPDF_ClosePage(pagePtr);
+      }
     }
+
+    this.pagesElement.replaceChildren(fragment);
   }
 
-  private renderPdfPage(
-    documentHandle: PdfiumDocumentHandle,
+  private createPdfPageShell(
     pageNumber: number,
-    version: number,
-    pageRenderVersion: number,
-    target: HTMLElement | DocumentFragment,
-    pageInfoByPage: Map<number, PdfReviewerPageInfo>,
-  ) {
-    const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
-      documentHandle.documentPtr,
-      pageNumber - 1,
-    );
-    if (!pagePtr) {
-      throw new Error(`PDFium failed to load page ${pageNumber}.`);
-    }
-
+    pageWidth: number,
+    pageHeight: number,
+  ): PdfPageShell {
     const pageElement = createElement('section', 'pdf-reader-page');
     const pageMetaElement = createElement('div', 'pdf-reader-page-meta');
     const pageCanvasWrap = createElement('div', 'pdf-reader-page-canvas-wrap');
-    const canvas = document.createElement('canvas');
     const highlightLayer = createElement('div', 'pdf-reader-highlight-layer');
+    const geometry = this.getPageGeometry(pageWidth, pageHeight);
+
+    pageElement.dataset.pdfPage = String(pageNumber);
+    pageMetaElement.textContent = `Page ${pageNumber}`;
+    pageCanvasWrap.style.width = `${geometry.cssWidth}px`;
+    pageCanvasWrap.style.height = `${geometry.cssHeight}px`;
+    pageCanvasWrap.dataset.renderedWidth = String(geometry.cssWidth);
+    pageCanvasWrap.dataset.renderedHeight = String(geometry.cssHeight);
+    highlightLayer.style.width = `${geometry.cssWidth}px`;
+    highlightLayer.style.height = `${geometry.cssHeight}px`;
+    pageCanvasWrap.append(highlightLayer);
+    pageElement.append(pageMetaElement, pageCanvasWrap);
+
+    return {
+      pageNumber,
+      pageWidth,
+      pageHeight,
+      scale: geometry.scale,
+      cssWidth: geometry.cssWidth,
+      cssHeight: geometry.cssHeight,
+      pageElement,
+      pageCanvasWrap,
+      highlightLayer,
+      canvas: null,
+      renderState: 'empty',
+      lastVisibleAt: 0,
+    };
+  }
+
+  private getPageGeometry(pageWidth: number, pageHeight: number) {
+    const availableWidth = Math.max(320, this.surfaceElement.clientWidth - 48);
+    const scale = Math.max(0.2, availableWidth / pageWidth) * this.zoomScale;
+    return {
+      scale,
+      cssWidth: Math.max(1, Math.floor(pageWidth * scale)),
+      cssHeight: Math.max(1, Math.floor(pageHeight * scale)),
+    };
+  }
+
+  private getOutputScale(cssWidth: number, cssHeight: number) {
+    const preferredScale = Math.min(
+      PDF_READER_MAX_OUTPUT_SCALE,
+      Math.max(PDF_READER_MIN_OUTPUT_SCALE, window.devicePixelRatio || 1),
+    );
+    const cssPixels = Math.max(1, cssWidth * cssHeight);
+    const bitmapBudgetScale = Math.sqrt(PDF_READER_MAX_BITMAP_PIXELS / cssPixels);
+    return Math.max(1, Math.min(preferredScale, bitmapBudgetScale));
+  }
+
+  private async renderVisiblePdfPages(version: number, pageRenderVersion: number) {
+    const documentHandle = this.documentHandle;
+    if (!documentHandle) {
+      return;
+    }
+
+    const visibleShells = this.getVisiblePageShells();
+    for (const shell of visibleShells) {
+      if (version !== this.loadVersion || pageRenderVersion !== this.pageRenderVersion) {
+        return;
+      }
+      shell.lastVisibleAt = performance.now();
+      await this.renderPdfPageIntoShell(documentHandle, shell, version, pageRenderVersion);
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    }
+
+    this.evictDistantRenderedPages();
+  }
+
+  private getVisiblePageShells() {
+    const shells = [...this.pageShells.values()];
+    if (shells.length === 0) {
+      return [];
+    }
+
+    const viewportRect = this.pagesElement.getBoundingClientRect();
+    if (viewportRect.height <= 0) {
+      return shells.slice(0, 2);
+    }
+
+    const visibleShells = shells.filter((shell) =>
+      this.isShellNearViewport(shell, PDF_READER_VIRTUALIZATION_MARGIN_PX),
+    );
+    return visibleShells.length > 0 ? visibleShells : shells.slice(0, 2);
+  }
+
+  private isShellNearViewport(shell: PdfPageShell, margin: number) {
+    const viewportRect = this.pagesElement.getBoundingClientRect();
+    const pageRect = shell.pageElement.getBoundingClientRect();
+    return (
+      pageRect.bottom >= viewportRect.top - margin &&
+      pageRect.top <= viewportRect.bottom + margin
+    );
+  }
+
+  private async renderPdfPageIntoShell(
+    documentHandle: PdfiumDocumentHandle,
+    shell: PdfPageShell,
+    version: number,
+    pageRenderVersion: number,
+  ) {
+    if (shell.renderState !== 'empty') {
+      return;
+    }
+
+    shell.renderState = 'rendering';
+    const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
+      documentHandle.documentPtr,
+      shell.pageNumber - 1,
+    );
+    if (!pagePtr) {
+      shell.renderState = 'empty';
+      throw new Error(`PDFium failed to load page ${shell.pageNumber}.`);
+    }
+
+    const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
 
     if (!context) {
       documentHandle.pdfium.FPDF_ClosePage(pagePtr);
+      shell.renderState = 'empty';
       return;
     }
 
     try {
-      const pageWidth = documentHandle.pdfium.FPDF_GetPageWidthF(pagePtr);
-      const pageHeight = documentHandle.pdfium.FPDF_GetPageHeightF(pagePtr);
-      const availableWidth = Math.max(320, this.surfaceElement.clientWidth - 48);
-      const scale = Math.max(0.2, availableWidth / pageWidth) * this.zoomScale;
-      const outputScale = Math.max(1, window.devicePixelRatio || 1);
-      const cssWidth = Math.floor(pageWidth * scale);
-      const cssHeight = Math.floor(pageHeight * scale);
-      const bitmapWidth = Math.max(1, Math.floor(cssWidth * outputScale));
-      const bitmapHeight = Math.max(1, Math.floor(cssHeight * outputScale));
+      const outputScale = this.getOutputScale(shell.cssWidth, shell.cssHeight);
+      const bitmapWidth = Math.max(1, Math.floor(shell.cssWidth * outputScale));
+      const bitmapHeight = Math.max(1, Math.floor(shell.cssHeight * outputScale));
       const bitmapPtr = documentHandle.pdfium.FPDFBitmap_Create(bitmapWidth, bitmapHeight, 0);
 
       if (!bitmapPtr) {
-        throw new Error(`PDFium failed to create bitmap for page ${pageNumber}.`);
+        throw new Error(`PDFium failed to create bitmap for page ${shell.pageNumber}.`);
       }
 
       try {
-        pageElement.dataset.pdfPage = String(pageNumber);
-        pageMetaElement.textContent = `Page ${pageNumber}`;
         canvas.width = bitmapWidth;
         canvas.height = bitmapHeight;
-        canvas.style.width = `${cssWidth}px`;
-        canvas.style.height = `${cssHeight}px`;
-        pageCanvasWrap.style.width = `${cssWidth}px`;
-        pageCanvasWrap.style.height = `${cssHeight}px`;
-        pageCanvasWrap.dataset.renderedWidth = String(cssWidth);
-        pageCanvasWrap.dataset.renderedHeight = String(cssHeight);
-        highlightLayer.style.width = `${cssWidth}px`;
-        highlightLayer.style.height = `${cssHeight}px`;
-        pageCanvasWrap.append(canvas, highlightLayer);
-        pageElement.append(pageMetaElement, pageCanvasWrap);
+        canvas.style.width = `${shell.cssWidth}px`;
+        canvas.style.height = `${shell.cssHeight}px`;
 
         if (version !== this.loadVersion || pageRenderVersion !== this.pageRenderVersion) {
           return;
@@ -571,7 +682,7 @@ export class PdfAnnotationEditor {
           bitmapWidth,
           bitmapHeight,
           0,
-          16,
+          PDF_RENDER_FLAGS,
         );
 
         const bufferPtr = documentHandle.pdfium.FPDFBitmap_GetBuffer(bitmapPtr);
@@ -586,21 +697,70 @@ export class PdfAnnotationEditor {
         }
 
         context.putImageData(new ImageData(pixels, bitmapWidth, bitmapHeight), 0, 0);
-        pageInfoByPage.set(pageNumber, {
-          page: pageNumber,
-          pageWidth,
-          pageHeight,
-          scale,
+        shell.pageCanvasWrap.prepend(canvas);
+        shell.canvas = canvas;
+        shell.renderState = 'rendered';
+        this.pageRenderInfoByPage.set(shell.pageNumber, {
+          page: shell.pageNumber,
+          pageWidth: shell.pageWidth,
+          pageHeight: shell.pageHeight,
+          scale: shell.scale,
           canvas,
-          highlightLayer,
+          highlightLayer: shell.highlightLayer,
           chars: this.extractPageTextChars(documentHandle, pagePtr),
         });
-        target.append(pageElement);
+        this.refreshRenderedTextCharCount();
+        this.renderHighlightsForPage(shell.pageNumber);
       } finally {
         documentHandle.pdfium.FPDFBitmap_Destroy(bitmapPtr);
       }
     } finally {
       documentHandle.pdfium.FPDF_ClosePage(pagePtr);
+      if (shell.renderState === 'rendering') {
+        shell.renderState = 'empty';
+      }
+    }
+  }
+
+  private unloadPdfPageShell(shell: PdfPageShell) {
+    shell.canvas?.remove();
+    shell.canvas = null;
+    shell.highlightLayer.replaceChildren();
+    shell.renderState = 'empty';
+    this.pageRenderInfoByPage.delete(shell.pageNumber);
+    this.refreshRenderedTextCharCount();
+  }
+
+  private evictDistantRenderedPages() {
+    const renderedShells = [...this.pageShells.values()]
+      .filter((shell) => shell.renderState === 'rendered');
+    if (renderedShells.length <= PDF_READER_MAX_RETAINED_PAGES) {
+      return;
+    }
+
+    const candidates = renderedShells
+      .filter((shell) => !this.isShellNearViewport(shell, PDF_READER_VIRTUALIZATION_MARGIN_PX))
+      .sort((a, b) => a.lastVisibleAt - b.lastVisibleAt);
+    while (
+      renderedShells.length > PDF_READER_MAX_RETAINED_PAGES &&
+      candidates.length > 0
+    ) {
+      const shell = candidates.shift();
+      if (!shell) {
+        break;
+      }
+      this.unloadPdfPageShell(shell);
+      renderedShells.splice(renderedShells.indexOf(shell), 1);
+    }
+  }
+
+  private refreshRenderedTextCharCount() {
+    const textChars = [...this.pageRenderInfoByPage.values()]
+      .reduce((total, info) => total + info.chars.length, 0);
+    if (textChars > 0) {
+      this.element.dataset.pdfReaderTextChars = String(textChars);
+    } else {
+      delete this.element.dataset.pdfReaderTextChars;
     }
   }
 
@@ -663,9 +823,6 @@ export class PdfAnnotationEditor {
         });
       }
 
-      this.element.dataset.pdfReaderTextChars = String(
-        Number(this.element.dataset.pdfReaderTextChars ?? 0) + chars.length,
-      );
       return chars;
     } finally {
       pdfium.pdfium.wasmExports.free(leftPtr);
@@ -738,11 +895,14 @@ export class PdfAnnotationEditor {
     }
   }
 
-  private getVisiblePageAnchor() {
+  private getVisiblePageAnchor(
+    viewportPoint?: { clientX: number; clientY: number },
+  ): PdfZoomAnchor | null {
     const viewportRect = this.pagesElement.getBoundingClientRect();
-    const viewportCenterY = viewportRect.top + viewportRect.height / 2;
+    const viewportX = viewportPoint?.clientX ?? viewportRect.left + viewportRect.width / 2;
+    const viewportY = viewportPoint?.clientY ?? viewportRect.top + viewportRect.height / 2;
     const pageElements = this.pagesElement.querySelectorAll<HTMLElement>('.pdf-reader-page');
-    let nearestAnchor: { page: number; ratio: number } | null = null;
+    let nearestAnchor: PdfZoomAnchor | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
     for (const pageElement of pageElements) {
@@ -751,18 +911,23 @@ export class PdfAnnotationEditor {
         continue;
       }
 
-      const rect = pageElement.getBoundingClientRect();
-      if (rect.height <= 0) {
+      const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.pdf-reader-page-canvas-wrap');
+      const rect = pageCanvasWrap?.getBoundingClientRect() ?? pageElement.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
         continue;
       }
 
-      const clampedY = Math.min(Math.max(viewportCenterY, rect.top), rect.bottom);
-      const distance = Math.abs(viewportCenterY - clampedY);
+      const clampedX = Math.min(Math.max(viewportX, rect.left), rect.right);
+      const clampedY = Math.min(Math.max(viewportY, rect.top), rect.bottom);
+      const distance = Math.hypot(viewportX - clampedX, viewportY - clampedY);
       if (distance < nearestDistance) {
         nearestDistance = distance;
         nearestAnchor = {
           page,
-          ratio: Math.min(1, Math.max(0, (clampedY - rect.top) / rect.height)),
+          ratioX: Math.min(1, Math.max(0, (clampedX - rect.left) / rect.width)),
+          ratioY: Math.min(1, Math.max(0, (clampedY - rect.top) / rect.height)),
+          viewportX,
+          viewportY,
         };
       }
     }
@@ -770,7 +935,7 @@ export class PdfAnnotationEditor {
     return nearestAnchor;
   }
 
-  private restoreVisiblePageAnchor(anchor: { page: number; ratio: number } | null) {
+  private restoreVisiblePageAnchor(anchor: PdfZoomAnchor | null) {
     if (!anchor) {
       return;
     }
@@ -782,11 +947,16 @@ export class PdfAnnotationEditor {
       return;
     }
 
-    const viewportRect = this.pagesElement.getBoundingClientRect();
-    const viewportCenterY = viewportRect.top + viewportRect.height / 2;
-    const pageRect = pageElement.getBoundingClientRect();
-    const anchoredY = pageRect.top + pageRect.height * anchor.ratio;
-    this.pagesElement.scrollTop += anchoredY - viewportCenterY;
+    const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.pdf-reader-page-canvas-wrap');
+    const pageRect = pageCanvasWrap?.getBoundingClientRect() ?? pageElement.getBoundingClientRect();
+    const anchoredX = pageRect.left + pageRect.width * anchor.ratioX;
+    const anchoredY = pageRect.top + pageRect.height * anchor.ratioY;
+    this.isRestoringZoomScroll = true;
+    this.pagesElement.scrollLeft += anchoredX - anchor.viewportX;
+    this.pagesElement.scrollTop += anchoredY - anchor.viewportY;
+    window.requestAnimationFrame(() => {
+      this.isRestoringZoomScroll = false;
+    });
   }
 
   private applyInstantZoomPreview() {
@@ -794,7 +964,6 @@ export class PdfAnnotationEditor {
       return;
     }
 
-    const anchor = this.getVisiblePageAnchor();
     const previewRatio = this.zoomScale / this.renderedZoomScale;
     const pageCanvasWraps =
       this.pagesElement.querySelectorAll<HTMLElement>('.pdf-reader-page-canvas-wrap');
@@ -806,11 +975,6 @@ export class PdfAnnotationEditor {
         continue;
       }
 
-      const previewWidth = Math.max(1, Math.floor(renderedWidth * previewRatio));
-      const previewHeight = Math.max(1, Math.floor(renderedHeight * previewRatio));
-      pageCanvasWrap.style.width = `${previewWidth}px`;
-      pageCanvasWrap.style.height = `${previewHeight}px`;
-
       for (const previewLayer of pageCanvasWrap.children) {
         if (!(previewLayer instanceof HTMLElement)) {
           continue;
@@ -820,7 +984,6 @@ export class PdfAnnotationEditor {
     }
 
     this.pagesElement.classList.add('is-zoom-previewing');
-    this.restoreVisiblePageAnchor(anchor);
   }
 
   private clearInstantZoomPreview() {
@@ -847,6 +1010,31 @@ export class PdfAnnotationEditor {
     this.zoomRenderTimer = null;
   }
 
+  private clearScheduledVisiblePageRender() {
+    if (this.visibilityRenderFrame === null) {
+      return;
+    }
+
+    window.cancelAnimationFrame(this.visibilityRenderFrame);
+    this.visibilityRenderFrame = null;
+  }
+
+  private scheduleVisiblePageRender() {
+    if (!this.documentHandle || this.readerStatus.state !== 'ready') {
+      return;
+    }
+    if (this.visibilityRenderFrame !== null) {
+      return;
+    }
+
+    const version = this.loadVersion;
+    const pageRenderVersion = this.pageRenderVersion;
+    this.visibilityRenderFrame = window.requestAnimationFrame(() => {
+      this.visibilityRenderFrame = null;
+      void this.renderVisiblePdfPages(version, pageRenderVersion);
+    });
+  }
+
   private scheduleZoomRender() {
     this.clearScheduledZoomRender();
     this.pageRenderVersion += 1;
@@ -863,44 +1051,47 @@ export class PdfAnnotationEditor {
     }
 
     const pageRenderVersion = ++this.pageRenderVersion;
-    const anchor = this.getVisiblePageAnchor();
-    const nextPages = document.createDocumentFragment();
-    const nextPageInfoByPage = new Map<number, PdfReviewerPageInfo>();
+    const anchor = this.zoomAnchor ?? this.getVisiblePageAnchor();
 
     this.loadingElement.hidden = false;
     this.loadingElement.textContent = `${Math.round(this.zoomScale * 100)}%`;
     this.pagesElement.classList.add('is-zooming');
     this.selectionController.reset();
+    this.pageRenderInfoByPage.clear();
     delete this.element.dataset.pdfReaderTextChars;
     this.element.dataset.pdfReaderZoom = String(this.zoomScale);
 
-    await this.renderPdfPages(
-      documentHandle,
-      this.loadVersion,
-      pageRenderVersion,
-      nextPages,
-      nextPageInfoByPage,
-    );
+    for (const shell of this.pageShells.values()) {
+      this.unloadPdfPageShell(shell);
+      const geometry = this.getPageGeometry(shell.pageWidth, shell.pageHeight);
+      shell.scale = geometry.scale;
+      shell.cssWidth = geometry.cssWidth;
+      shell.cssHeight = geometry.cssHeight;
+      shell.pageCanvasWrap.style.width = `${geometry.cssWidth}px`;
+      shell.pageCanvasWrap.style.height = `${geometry.cssHeight}px`;
+      shell.pageCanvasWrap.dataset.renderedWidth = String(geometry.cssWidth);
+      shell.pageCanvasWrap.dataset.renderedHeight = String(geometry.cssHeight);
+      shell.highlightLayer.style.width = `${geometry.cssWidth}px`;
+      shell.highlightLayer.style.height = `${geometry.cssHeight}px`;
+    }
+
+    await this.renderVisiblePdfPages(this.loadVersion, pageRenderVersion);
 
     if (pageRenderVersion !== this.pageRenderVersion) {
       this.pagesElement.classList.remove('is-zooming');
       return;
     }
 
-    this.pagesElement.replaceChildren(nextPages);
     this.clearInstantZoomPreview();
-    this.pageRenderInfoByPage.clear();
-    for (const [page, info] of nextPageInfoByPage) {
-      this.pageRenderInfoByPage.set(page, info);
-    }
     this.renderedZoomScale = this.zoomScale;
     this.renderAllHighlights();
     this.restoreVisiblePageAnchor(anchor);
     this.pagesElement.classList.remove('is-zooming');
     this.loadingElement.hidden = true;
+    this.zoomAnchor = null;
   }
 
-  private setZoomScale(nextZoomScale: number) {
+  private setZoomScale(nextZoomScale: number, anchor?: PdfZoomAnchor | null) {
     const normalizedZoomScale = Math.min(
       PDF_READER_MAX_ZOOM,
       Math.max(PDF_READER_MIN_ZOOM, Number(nextZoomScale.toFixed(2))),
@@ -909,7 +1100,9 @@ export class PdfAnnotationEditor {
       return;
     }
 
+    const zoomAnchor = this.zoomAnchor ?? anchor ?? this.getVisiblePageAnchor();
     this.zoomScale = normalizedZoomScale;
+    this.zoomAnchor = zoomAnchor;
     this.loadingElement.hidden = false;
     this.loadingElement.textContent = `${Math.round(this.zoomScale * 100)}%`;
     this.element.dataset.pdfReaderZoom = String(this.zoomScale);
@@ -917,29 +1110,16 @@ export class PdfAnnotationEditor {
     this.scheduleZoomRender();
   }
 
-  private zoomByStep(direction: 1 | -1) {
-    this.setZoomScale(this.zoomScale + direction * PDF_READER_ZOOM_STEP);
+  private zoomByStep(direction: 1 | -1, anchor?: PdfZoomAnchor | null) {
+    this.setZoomScale(this.zoomScale + direction * PDF_READER_ZOOM_STEP, anchor);
   }
 
-  private renderOverlay() {
+  private renderReaderChrome() {
     const snapshot = this.store.getSnapshot();
     this.renderAllHighlights();
     this.emptyOpenElement.hidden = Boolean(this.props.url.trim());
     this.openPdfButton.textContent = this.props.labels.openPdfFile ?? 'Open PDF';
-    this.badgeElement.textContent = `${this.props.labels.title} Annotation`;
-    this.hintElement.textContent =
-      snapshot.annotations.length > 0
-        ? `${snapshot.annotations.length} annotations`
-        : this.props.labels.emptyState;
-
-    const hasSelection = !isPdfSelectionEmpty(snapshot.selection);
-    const selectionPageLabel = snapshot.selection && snapshot.selection.ranges.length > 1
-      ? `Pages ${snapshot.selection.ranges[0]?.page ?? 1}-${snapshot.selection.ranges.at(-1)?.page ?? 1}`
-      : `Page ${snapshot.selection?.page ?? 1}`;
-    this.draftMetaElement.textContent = hasSelection
-      ? `${selectionPageLabel} selected`
-      : 'No PDF selection yet';
-    if (hasSelection && snapshot.selection) {
+    if (snapshot.selection && snapshot.selection.text.trim()) {
       this.element.dataset.pdfReaderSelectionText = snapshot.selection.text;
       this.element.dataset.pdfReaderSelectionPages = snapshot.selection.ranges
         .map((range) => String(range.page))
@@ -948,40 +1128,7 @@ export class PdfAnnotationEditor {
       delete this.element.dataset.pdfReaderSelectionText;
       delete this.element.dataset.pdfReaderSelectionPages;
     }
-    this.draftTextElement.value = snapshot.draftComment;
-    this.saveAnnotationButton.disabled =
-      !hasSelection || !snapshot.draftComment.trim();
-    this.renderAnnotationList(snapshot);
   }
-
-  private renderAnnotationList(snapshot: PdfAnnotationStoreSnapshot) {
-    this.listElement.replaceChildren();
-
-    if (snapshot.annotations.length === 0) {
-      const emptyElement = createElement('div', 'pdf-annotation-list-empty');
-      emptyElement.textContent = 'Annotations will appear here.';
-      this.listElement.append(emptyElement);
-      return;
-    }
-
-    for (const annotation of snapshot.annotations) {
-      const itemElement = createElement('div', 'pdf-annotation-item');
-      const titleElement = createElement('div', 'pdf-annotation-item-title');
-      const bodyElement = createElement('div', 'pdf-annotation-item-body');
-      titleElement.textContent = `Page ${annotation.anchor.page}`;
-      bodyElement.textContent = annotation.comment;
-      itemElement.append(titleElement, bodyElement);
-      this.listElement.append(itemElement);
-    }
-  }
-
-  private readonly handleDraftCommentInput = () => {
-    this.store.setDraftComment(this.draftTextElement.value);
-  };
-
-  private readonly handleCaptureSelection = () => {
-    this.renderOverlay();
-  };
 
   private readonly handleOpenPdfFile = () => {
     void this.props.onOpenPdfFile?.();
@@ -998,19 +1145,19 @@ export class PdfAnnotationEditor {
 
     if (event.key === '+' || event.key === '=' || event.code === 'NumpadAdd') {
       event.preventDefault();
-      this.zoomByStep(1);
+      this.zoomByStep(1, this.getVisiblePageAnchor());
       return;
     }
 
     if (event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract') {
       event.preventDefault();
-      this.zoomByStep(-1);
+      this.zoomByStep(-1, this.getVisiblePageAnchor());
       return;
     }
 
     if (event.key === '0' || event.code === 'Numpad0') {
       event.preventDefault();
-      this.setZoomScale(1);
+      this.setZoomScale(1, this.getVisiblePageAnchor());
     }
   };
 
@@ -1020,47 +1167,21 @@ export class PdfAnnotationEditor {
     }
 
     event.preventDefault();
-    this.zoomByStep(event.deltaY < 0 ? 1 : -1);
+    this.zoomByStep(
+      event.deltaY < 0 ? 1 : -1,
+      this.getVisiblePageAnchor({ clientX: event.clientX, clientY: event.clientY }),
+    );
   };
 
-  private readonly handleCreateAnnotation = () => {
-    const snapshot = this.store.getSnapshot();
-    const selection = snapshot.selection;
-    if (!snapshot.targetId || isPdfSelectionEmpty(selection) || !selection) {
+  private readonly handleReaderScroll = () => {
+    if (this.isRestoringZoomScroll || this.pagesElement.classList.contains('is-zoom-previewing')) {
       return;
     }
 
-    const now = new Date().toISOString();
-    const ranges = selection.ranges.map((range) => ({
-      page: range.page,
-      rects: [...range.rects],
-      quote: range.text.trim() || undefined,
-      startCharIndex: range.textRange?.startCharIndex,
-      endCharIndex: range.textRange?.endCharIndex,
-    }));
-    const nextAnnotation: Annotation = {
-      id: createAnnotationId('pdf_annotation'),
-      kind: 'pdf',
-      targetId: snapshot.targetId,
-      anchor: {
-        page: selection.page,
-        rects: [...selection.rects],
-        quote: selection.text.trim() || undefined,
-        ranges,
-      },
-      comment: snapshot.draftComment.trim(),
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    const nextAnnotations = [...snapshot.annotations, nextAnnotation];
-    this.store.setAnnotations(nextAnnotations);
-    this.store.setDraftComment('');
-    this.store.setSelection(null);
-    this.props.onAnnotationsChange?.(nextAnnotations);
-  }
+    this.scheduleVisiblePageRender();
+  };
 }
 
-export function createPdfAnnotationEditor(props: PdfAnnotationEditorProps) {
-  return new PdfAnnotationEditor(props);
+export function createPdfDocumentReader(props: PdfDocumentReaderProps) {
+  return new PdfDocumentReader(props);
 }

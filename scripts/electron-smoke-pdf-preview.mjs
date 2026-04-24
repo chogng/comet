@@ -185,7 +185,7 @@ async function getPdfDiagnostics(window) {
   return await evaluateRenderer(
     window,
     `(() => {
-      const editor = document.querySelector('.pdf-annotation-editor');
+      const editor = document.querySelector('.pdf-document-reader');
       const status = document.querySelector('[data-statusbar-item-id="pdf-status"]');
       const readerStatus = document.querySelector('.pdf-reader-status');
       return {
@@ -200,6 +200,8 @@ async function getPdfDiagnostics(window) {
               status: editor.dataset.pdfReaderStatus ?? null,
               detail: editor.dataset.pdfReaderErrorDetail ?? null,
               textChars: Number(editor.dataset.pdfReaderTextChars ?? 0),
+              selectionText: editor.dataset.pdfReaderSelectionText ?? null,
+              selectionPages: editor.dataset.pdfReaderSelectionPages ?? null,
             }
           : null,
         floatingStatus: readerStatus instanceof HTMLElement
@@ -218,6 +220,48 @@ async function getPdfDiagnostics(window) {
             }
           : null,
       };
+    })()`,
+  );
+}
+
+async function dragSelectGeneratedPdfText(window) {
+  await evaluateRenderer(
+    window,
+    `(() => {
+      const page = document.querySelector('.pdf-reader-page');
+      const wrap = document.querySelector('.pdf-reader-page-canvas-wrap');
+      const canvas = document.querySelector('.pdf-reader-page canvas');
+      if (!(page instanceof HTMLElement) || !(wrap instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) {
+        return false;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const pageWidth = 300;
+      const pageHeight = 200;
+      const scale = rect.width / pageWidth;
+      const start = {
+        x: rect.left + 48 * scale,
+        y: rect.top + (pageHeight - 112 - 16) * scale,
+      };
+      const end = {
+        x: rect.left + 270 * scale,
+        y: start.y,
+      };
+      const makeEvent = (type, point) => new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: point.x,
+        clientY: point.y,
+        pointerId: 10,
+        pointerType: 'mouse',
+      });
+
+      wrap.dispatchEvent(makeEvent('pointerdown', start));
+      wrap.dispatchEvent(makeEvent('pointermove', end));
+      wrap.dispatchEvent(makeEvent('pointerup', end));
+      return true;
     })()`,
   );
 }
@@ -279,6 +323,31 @@ async function runSmoke() {
   );
   assert.ok(diagnostics.canvasCount >= 1, 'Expected at least one PDF canvas.');
   assert.ok(diagnostics.editor?.textChars >= 1, 'Expected PDF reviewer text character boxes.');
+
+  if (!inputPdfPath) {
+    await dragSelectGeneratedPdfText(window);
+    const selectionDiagnostics = await waitForCondition(
+      'pdf text selection',
+      async () => {
+        const snapshot = await getPdfDiagnostics(window);
+        lastDiagnostics = snapshot;
+        if (
+          snapshot.selectionHighlightCount >= 1 &&
+          snapshot.editor?.selectionText
+        ) {
+          return snapshot;
+        }
+        return null;
+      },
+      { timeoutMs: 5000, stepMs: 100 },
+    );
+    logStep('pdf selection diagnostics', selectionDiagnostics);
+    assert.match(
+      selectionDiagnostics.editor.selectionText,
+      /Literature Studio PDF smoke/,
+      'Expected generated PDF text selection to preserve readable text.',
+    );
+  }
 
   for (const existingWindow of BrowserWindow.getAllWindows()) {
     if (!existingWindow.isDestroyed()) {

@@ -14,7 +14,7 @@ import {
 import type { DraftEditorStatusState } from 'ls/editor/browser/text/draftEditorStatusState';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
-import type { PdfReaderRuntimeStatus } from 'ls/editor/browser/pdf/pdfAnnotationEditor';
+import type { PdfReaderRuntimeStatus } from 'ls/editor/browser/pdf/pdfDocumentReader';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import { ContentEditorPane } from 'ls/workbench/browser/parts/editor/panes/contentEditorPane';
 import type { ContentEditorPaneProps } from 'ls/workbench/browser/parts/editor/panes/contentEditorPane';
