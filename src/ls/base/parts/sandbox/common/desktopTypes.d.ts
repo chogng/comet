@@ -431,6 +431,16 @@ export interface OpenPathPayload {
   path?: string;
 }
 
+export interface ReadPdfFilePayload {
+  url?: string;
+  path?: string;
+}
+
+export interface ReadPdfFileResult {
+  filePath: string;
+  data: Uint8Array;
+}
+
 export interface PdfDownloadResult {
   filePath: string;
   sourceUrl: string;
@@ -675,6 +685,7 @@ export interface AppCommandPayloadMap {
   test_rag_connection: TestRagConnectionPayload;
   pick_download_directory: undefined;
   pick_pdf_file: undefined;
+  read_pdf_file: ReadPdfFilePayload;
   open_path: OpenPathPayload;
   web_content_download_pdf: WebContentPdfDownloadPayload;
   web_content_archive_html: WebContentHtmlArchivePayload;
@@ -703,6 +714,7 @@ export interface AppCommandResultMap {
   test_rag_connection: RagConnectionTestResult;
   pick_download_directory: string | null;
   pick_pdf_file: string | null;
+  read_pdf_file: ReadPdfFileResult;
   open_path: boolean;
   web_content_download_pdf: PdfDownloadResult;
   web_content_archive_html: WebContentHtmlArchiveResult;

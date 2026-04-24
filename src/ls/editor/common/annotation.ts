@@ -9,6 +9,18 @@ export type AnnotationAnchor = {
     height: number;
   }>;
   quote?: string;
+  ranges?: ReadonlyArray<{
+    page: number;
+    rects: ReadonlyArray<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }>;
+    quote?: string;
+    startCharIndex?: number;
+    endCharIndex?: number;
+  }>;
 };
 
 export type Annotation = {

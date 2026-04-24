@@ -5,21 +5,43 @@ export type PdfSelectionRect = {
   height: number;
 };
 
+export type PdfSelectionTextRange = {
+  startCharIndex: number;
+  endCharIndex: number;
+};
+
+export type PdfSelectionRange = {
+  page: number;
+  rects: readonly PdfSelectionRect[];
+  text: string;
+  textRange?: PdfSelectionTextRange;
+};
+
 export type PdfSelection = {
   page: number;
   rects: readonly PdfSelectionRect[];
   text: string;
+  textRange?: PdfSelectionTextRange;
+  ranges: readonly PdfSelectionRange[];
 };
 
 export function createPdfSelection(params: {
   page: number;
   rects?: readonly PdfSelectionRect[];
   text?: string;
+  textRange?: PdfSelectionTextRange;
+  ranges?: readonly PdfSelectionRange[];
 }): PdfSelection {
-  return {
+  const primaryRange = {
     page: params.page,
     rects: params.rects ?? [],
     text: params.text ?? '',
+    textRange: params.textRange,
+  };
+
+  return {
+    ...primaryRange,
+    ranges: params.ranges ?? [primaryRange],
   };
 }
 
@@ -28,5 +50,7 @@ export function isPdfSelectionEmpty(selection: PdfSelection | null | undefined) 
     return true;
   }
 
-  return selection.rects.length === 0 && !selection.text.trim();
+  return selection.ranges.every((range) => {
+    return range.rects.length === 0 && !range.text.trim();
+  });
 }

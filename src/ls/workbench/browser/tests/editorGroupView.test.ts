@@ -190,6 +190,7 @@ function createResolverContext() {
     viewPartProps: defaultViewPartProps,
     onDraftDocumentChange: () => {},
     onDraftStatusChange: () => {},
+    onPdfReaderStatusChange: () => {},
   };
 }
 
@@ -284,7 +285,7 @@ test('EditorGroupView recreates draft pane instances and restores view state aft
   }
 });
 
-test('EditorGroupView schedules browser primary input focus when opening browser mode from an empty pane entry', () => {
+test('EditorGroupView schedules browser primary input focus when opening browser from empty workspace', () => {
   const openedRequests: Array<{ kind: string; disposition: string }> = [];
   const view = new EditorGroupView({
     ...createProps(null, null, []),
@@ -298,9 +299,10 @@ test('EditorGroupView schedules browser primary input focus when opening browser
   document.body.append(view.getElement());
 
   try {
-    const browserButton = view
+    const browserButton = [...view
       .getElement()
-      .querySelector('[data-tab-id="browser-entry"] .editor-tab-main');
+      .querySelectorAll('.editor-placeholder-action-btn')]
+      .find((button) => button.textContent === labels.createBrowser);
     assert(browserButton instanceof HTMLButtonElement);
 
     browserButton.click();

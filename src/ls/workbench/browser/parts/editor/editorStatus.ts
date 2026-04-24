@@ -57,15 +57,22 @@ export type EditorStatusContextLabels = DraftStatusResolverLabels &
     pdfMode: string;
   };
 
-export type EditorStatusItemTone = 'default' | 'accent' | 'muted';
+export type EditorStatusItemTone = 'default' | 'accent' | 'muted' | 'error';
 
 export type EditorStatusItem = {
   id: string;
   label: string;
   value: string;
   tone?: EditorStatusItemTone;
+  title?: string;
   commandId?: 'undo' | 'redo';
   commandEnabled?: boolean;
+};
+
+export type EditorContentStatusState = {
+  message: string;
+  detail?: string;
+  tone?: EditorStatusItemTone;
 };
 
 export type EditorStatusState = {
@@ -217,13 +224,25 @@ function createDraftEditorStatus(
 function createContentEditorStatus(
   tab: Extract<EditorWorkspaceTab, { kind: 'browser' | 'pdf' }>,
   labels: EditorStatusContextLabels,
+  contentStatus?: EditorContentStatusState,
 ): EditorStatusState {
   const paneMode = getEditorPaneMode(tab);
+  const leftItems: EditorStatusItem[] = [];
+  if (contentStatus?.message) {
+    leftItems.push({
+      id: `${paneMode}-status`,
+      label: paneMode === 'pdf' ? labels.pdfMode : labels.sourceMode,
+      value: contentStatus.message,
+      tone: contentStatus.tone ?? 'default',
+      title: contentStatus.detail,
+    });
+  }
+
   return {
     ariaLabel: labels.statusbarAriaLabel,
     paneMode,
     modeLabel: isEditorPdfTabInput(tab) ? labels.pdfMode : labels.sourceMode,
-    leftItems: [],
+    leftItems,
     rightItems: [
       {
         id: 'url',
@@ -238,6 +257,7 @@ export function createEditorStatus(
   activeTab: EditorWorkspaceTab | null,
   labels: EditorStatusContextLabels,
   draftStatusState?: DraftEditorStatusState,
+  contentStatus?: EditorContentStatusState,
 ): EditorStatusState {
   if (!activeTab) {
     return {
@@ -253,5 +273,5 @@ export function createEditorStatus(
     return createDraftEditorStatus(activeTab, labels, draftStatusState);
   }
 
-  return createContentEditorStatus(activeTab, labels);
+  return createContentEditorStatus(activeTab, labels, contentStatus);
 }

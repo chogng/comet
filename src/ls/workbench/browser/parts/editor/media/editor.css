@@ -336,6 +336,16 @@
   opacity: 0.7;
 }
 
+.editor-statusbar-item.is-error {
+  border-color: var(--vscode-sideBar-statusErrorForeground, #a53333);
+  background: var(--vscode-sideBar-statusErrorBackground, #fdecec);
+}
+
+.editor-statusbar-item.is-error .editor-statusbar-item-label,
+.editor-statusbar-item.is-error .editor-statusbar-item-value {
+  color: var(--vscode-sideBar-statusErrorForeground, #a53333);
+}
+
 .editor-statusbar-item-label {
   color: var(--vscode-editor-statusItemLabelForeground, #607488);
   font-size: 11px;

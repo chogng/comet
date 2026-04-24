@@ -1,4 +1,4 @@
-export type PdfReaderBackendKind = 'chromium-webview' | 'pdfjs-display';
+export type PdfReaderBackendKind = 'chromium-webview' | 'pdfium-wasm';
 
 export type PdfReaderDocumentSource =
   | {

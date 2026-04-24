@@ -1,4 +1,6 @@
 import { Notification, app, ipcMain, shell } from 'electron';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 import type {
   AppCommand,
@@ -14,6 +16,7 @@ import type {
   NativeToastOptions,
   OpenArticleDetailsModalPayload,
   OpenPathPayload,
+  ReadPdfFilePayload,
   UpsertLibraryDocumentMetadataPayload,
   WebContentPdfDownloadPayload,
   NativeModalState,
@@ -125,6 +128,44 @@ function showSystemNotificationFromToast(options: NativeToastOptions, settings: 
   }).show();
 }
 
+function resolvePdfFilePath(payload: ReadPdfFilePayload = {}) {
+  const rawPath = payload.path?.trim();
+  if (rawPath) {
+    return rawPath;
+  }
+
+  const rawUrl = payload.url?.trim();
+  if (!rawUrl) {
+    throw appError('UNKNOWN_ERROR', { message: 'PDF path is required.' });
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    throw appError('UNKNOWN_ERROR', { message: 'PDF URL is invalid.' });
+  }
+
+  if (parsedUrl.protocol !== 'file:') {
+    throw appError('URL_PROTOCOL_UNSUPPORTED', { url: rawUrl });
+  }
+
+  return fileURLToPath(parsedUrl);
+}
+
+async function readPdfFile(payload: ReadPdfFilePayload = {}) {
+  const filePath = resolvePdfFilePath(payload);
+  if (!/\.pdf$/i.test(filePath)) {
+    throw appError('UNKNOWN_ERROR', { message: 'Only PDF files can be previewed.' });
+  }
+
+  const buffer = await readFile(filePath);
+  return {
+    filePath,
+    data: new Uint8Array(buffer),
+  };
+}
+
 async function loadSettingsWithCache(storage: StorageService) {
   if (cachedSettings) {
     return cachedSettings;
@@ -214,6 +255,8 @@ async function invokeCommand<TCommand extends AppCommand>(
       return pickDirectoryDialog(getMainWindow()) as Promise<AppCommandResultMap[TCommand]>;
     case 'pick_pdf_file':
       return pickPdfFileDialog(getMainWindow()) as Promise<AppCommandResultMap[TCommand]>;
+    case 'read_pdf_file':
+      return readPdfFile(payload as ReadPdfFilePayload) as Promise<AppCommandResultMap[TCommand]>;
     case 'open_path': {
       const targetPath = (payload as OpenPathPayload)?.path?.trim();
       if (!targetPath) {

@@ -15,6 +15,116 @@
   background: var(--vscode-editor-webContentBackground, #fff);
 }
 
+.pdf-reader-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--vscode-editor-webContentBackground, #fff);
+}
+
+.pdf-reader-view[hidden] {
+  display: none;
+}
+
+.pdf-reader-pages {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 24px 28px;
+  background: var(--vscode-editor-pdfWorkbenchBackground, #f1f3f6);
+}
+
+.pdf-reader-status {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  max-width: min(560px, calc(100% - 32px));
+  border: 1px solid var(--vscode-editor-sourceHeaderBorder, #e1e1e1);
+  border-radius: 5px;
+  background: var(--vscode-sideBar-background, #f8f8f8);
+  color: var(--vscode-descriptionForeground, #64748b);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.pdf-reader-status[hidden],
+.pdf-reader-unavailable[hidden] {
+  display: none;
+}
+
+.pdf-reader-unavailable {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.pdf-reader-page {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0 auto 18px;
+}
+
+.pdf-reader-page-meta {
+  color: var(--vscode-descriptionForeground, #64748b);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pdf-reader-page canvas {
+  display: block;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.pdf-reader-page-canvas-wrap {
+  position: relative;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.pdf-reader-page-canvas-wrap canvas {
+  box-shadow: none;
+}
+
+.pdf-reader-highlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.pdf-reader-highlight {
+  position: absolute;
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+
+.pdf-reader-highlight.is-selection {
+  background: rgba(31, 111, 235, 0.24);
+  outline: 1px solid rgba(31, 111, 235, 0.42);
+}
+
+.pdf-reader-highlight.is-annotation {
+  background: rgba(255, 211, 61, 0.44);
+  outline: 1px solid rgba(188, 140, 0, 0.32);
+}
+
 .pdf-annotation-open-empty {
   position: absolute;
   inset: 0;

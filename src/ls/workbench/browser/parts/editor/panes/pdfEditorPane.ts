@@ -1,4 +1,7 @@
-import type { PdfAnnotationEditorViewState } from 'ls/editor/browser/pdf/pdfAnnotationEditor';
+import type {
+  PdfAnnotationEditorViewState,
+  PdfReaderRuntimeStatus,
+} from 'ls/editor/browser/pdf/pdfAnnotationEditor';
 import {
   createPdfAnnotationEditor,
 } from 'ls/editor/browser/pdf/pdfAnnotationEditor';
@@ -33,6 +36,10 @@ export type PdfEditorPaneProps = {
   pdfTab: EditorWorkspacePdfTab;
   viewPartProps: ViewPartProps;
   onOpenEditor?: EditorOpenHandler;
+  onReaderStatusChange?: (
+    tabId: string,
+    status: PdfReaderRuntimeStatus,
+  ) => void;
 };
 
 function toPdfFileUrl(filePath: string) {
@@ -180,6 +187,9 @@ export class PdfEditorPane extends EditorPane<
       selection: this.editor.getViewState().selection,
       onViewStateChange: (viewState: PdfAnnotationEditorViewState) => {
         this.editor.setAnnotationViewState(viewState);
+      },
+      onReaderStatusChange: (status: PdfReaderRuntimeStatus) => {
+        this.props.onReaderStatusChange?.(this.props.pdfTab.id, status);
       },
       onOpenPdfFile: this.handleOpenPdfFile,
       onAnnotationsChange: (nextAnnotations: Parameters<typeof writeStoredPdfAnnotations>[1]) => {

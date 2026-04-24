@@ -7,6 +7,16 @@ import { DEFAULT_EDITOR_GROUP_ID } from 'ls/workbench/browser/editorGroupIdentit
 let cleanupDomEnvironment: (() => void) | null = null;
 let EditorGroupView: typeof import('ls/workbench/browser/parts/editor/editorGroupView').EditorGroupView;
 
+type TestViewPartProps = {
+  browserUrl: string;
+  electronRuntime: boolean;
+  webContentRuntime: boolean;
+  labels: {
+    emptyState: string;
+    contentUnavailable: string;
+  };
+};
+
 const labels = {
   topbarAddAction: 'Add',
   createDraft: 'Draft',
@@ -117,6 +127,7 @@ function createProps(
   activeTabId: string | null,
   activeTab: import('ls/workbench/browser/parts/editor/editorModel').EditorWorkspaceTab | null,
   tabs: import('ls/workbench/browser/parts/editor/editorModel').EditorWorkspaceTab[],
+  viewPartProps?: Partial<TestViewPartProps>,
 ) {
   return {
     labels,
@@ -128,6 +139,7 @@ function createProps(
         emptyState: 'Empty',
         contentUnavailable: 'Unavailable',
       },
+      ...viewPartProps,
     },
     groupId: DEFAULT_EDITOR_GROUP_ID,
     tabs,
@@ -229,6 +241,102 @@ test('EditorGroupView restores pdf pane selection and draft comment after switch
     assert.equal(restoredViewState.selection.page, 2);
     assert.equal(restoredViewState.selection.text, 'quoted text');
     assert.equal(restoredViewState.draftComment, 'note');
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('EditorGroupView renders a controlled PDFium reader shell for PDF tabs', () => {
+  const pdfTab = {
+    id: 'pdf-direct-reader',
+    kind: 'pdf' as const,
+    title: 'Paper PDF',
+    url: 'file:///C:/Users/lanxi/Desktop/sample.pdf',
+  };
+
+  const view = new EditorGroupView(
+    createProps(pdfTab.id, pdfTab, [pdfTab], {
+      electronRuntime: true,
+      webContentRuntime: false,
+    }),
+  );
+  document.body.append(view.getElement());
+
+  try {
+    const reader = view.getElement().querySelector('.pdf-reader-view');
+    const pages = view.getElement().querySelector('.pdf-reader-pages');
+    const loading = view.getElement().querySelector('.pdf-reader-status');
+    assert(reader instanceof HTMLElement);
+    assert(pages instanceof HTMLElement);
+    assert(loading instanceof HTMLElement);
+    assert.equal(reader.hidden, false);
+    assert.equal(loading.textContent, 'Loading PDF...');
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('EditorGroupView replaces the pdf reader with unavailable state when rendering is unsupported', () => {
+  const pdfTab = {
+    id: 'pdf-unavailable-reader',
+    kind: 'pdf' as const,
+    title: 'Paper PDF',
+    url: 'file:///C:/Users/lanxi/Desktop/sample.pdf',
+  };
+
+  const view = new EditorGroupView(createProps(pdfTab.id, pdfTab, [pdfTab]));
+  document.body.append(view.getElement());
+
+  try {
+    const reader = view.getElement().querySelector('.pdf-reader-view');
+    const pages = view.getElement().querySelector('.pdf-reader-pages');
+    const loading = view.getElement().querySelector('.pdf-reader-status');
+    const unavailable = view.getElement().querySelector('.pdf-reader-unavailable');
+    assert(reader instanceof HTMLElement);
+    assert(pages instanceof HTMLElement);
+    assert(loading instanceof HTMLElement);
+    assert(unavailable instanceof HTMLElement);
+    assert.equal(reader.hidden, false);
+    assert.equal(pages.childElementCount, 0);
+    assert.equal(loading.hidden, true);
+    assert.equal(unavailable.hidden, false);
+    assert.equal(unavailable.textContent, 'Unavailable');
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('EditorGroupView reports pdf reader errors to the editor statusbar state', () => {
+  const pdfTab = {
+    id: 'pdf-status-error',
+    kind: 'pdf' as const,
+    title: 'Paper PDF',
+    url: 'file:///C:/Users/lanxi/Desktop/sample.pdf',
+  };
+  const statusUpdates: Array<{
+    paneMode: string;
+    leftItems: readonly { id: string; value: string; tone?: string; title?: string }[];
+  }> = [];
+
+  const view = new EditorGroupView({
+    ...createProps(pdfTab.id, pdfTab, [pdfTab]),
+    onStatusChange: (status) => {
+      statusUpdates.push(status);
+    },
+  });
+  document.body.append(view.getElement());
+
+  try {
+    const pdfStatus = statusUpdates
+      .flatMap((status) => status.leftItems)
+      .find((item) => item.id === 'pdf-status');
+    assert(pdfStatus);
+    assert.equal(pdfStatus.tone, 'error');
+    assert.match(pdfStatus.value, /Unavailable/);
+    assert.match(pdfStatus.title ?? '', /Electron runtime/);
   } finally {
     view.dispose();
     document.body.replaceChildren();

@@ -10,6 +10,11 @@ const hoverService = getHoverService();
 export function createStatusbarItemElement(item: EditorStatusItem) {
   const itemElement = document.createElement('span');
   const canRunCommand = canRunStatusbarCommand(item);
+  itemElement.dataset.statusbarItemId = item.id;
+  itemElement.dataset.statusbarItemValue = item.value;
+  if (item.title) {
+    itemElement.dataset.statusbarItemTitle = item.title;
+  }
   itemElement.className = [
     'editor-statusbar-item',
     item.tone ? `is-${item.tone}` : '',
@@ -28,7 +33,7 @@ export function createStatusbarItemElement(item: EditorStatusItem) {
 
   hoverService.createHover(itemElement, {
     content: item.label,
-    subtitle: item.value,
+    subtitle: item.title ?? item.value,
     actions: canRunCommand
       ? [
           {

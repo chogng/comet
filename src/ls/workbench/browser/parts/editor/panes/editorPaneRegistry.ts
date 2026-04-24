@@ -14,6 +14,7 @@ import {
 import type { DraftEditorStatusState } from 'ls/editor/browser/text/draftEditorStatusState';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
+import type { PdfReaderRuntimeStatus } from 'ls/editor/browser/pdf/pdfAnnotationEditor';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import { ContentEditorPane } from 'ls/workbench/browser/parts/editor/panes/contentEditorPane';
 import type { ContentEditorPaneProps } from 'ls/workbench/browser/parts/editor/panes/contentEditorPane';
@@ -34,6 +35,10 @@ export type EditorPaneResolverContext = {
   onOpenEditor?: EditorOpenHandler;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onDraftStatusChange: (tabId: string, status: DraftEditorStatusState) => void;
+  onPdfReaderStatusChange: (
+    tabId: string,
+    status: PdfReaderRuntimeStatus,
+  ) => void;
 };
 
 export type EditorPaneId = SupportedEditorPaneMode;
@@ -137,6 +142,7 @@ function createPdfPaneProps(
     pdfTab: tab,
     viewPartProps: context.viewPartProps,
     onOpenEditor: context.onOpenEditor,
+    onReaderStatusChange: context.onPdfReaderStatusChange,
   };
 }
 

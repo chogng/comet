@@ -10,6 +10,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
+function isAnnotationRangeRecord(
+  value: unknown,
+): value is Record<string, unknown> & { page: number } {
+  return isRecord(value) && typeof value.page === 'number';
+}
+
 function normalizeAnnotation(value: unknown, targetId: string): Annotation | null {
   if (!isRecord(value)) {
     return null;
@@ -30,13 +36,28 @@ function normalizeAnnotation(value: unknown, targetId: string): Annotation | nul
   }
 
   const rects = anchor.rects
-    .filter((rect) => isRecord(rect))
-    .map((rect) => ({
-      x: typeof rect.x === 'number' ? rect.x : 0,
-      y: typeof rect.y === 'number' ? rect.y : 0,
-      width: typeof rect.width === 'number' ? rect.width : 0,
-      height: typeof rect.height === 'number' ? rect.height : 0,
-    }));
+    .filter((rect): rect is Record<string, unknown> => isRecord(rect))
+    .map(normalizeRect);
+
+  const ranges = Array.isArray(anchor.ranges)
+    ? anchor.ranges
+      .filter(isAnnotationRangeRecord)
+      .map((range) => ({
+        page: range.page,
+        rects: Array.isArray(range.rects)
+          ? range.rects
+            .filter((rect): rect is Record<string, unknown> => isRecord(rect))
+            .map(normalizeRect)
+          : [],
+        quote: typeof range.quote === 'string' ? range.quote : undefined,
+        startCharIndex: typeof range.startCharIndex === 'number'
+          ? range.startCharIndex
+          : undefined,
+        endCharIndex: typeof range.endCharIndex === 'number'
+          ? range.endCharIndex
+          : undefined,
+      }))
+    : undefined;
 
   return {
     id: value.id,
@@ -46,10 +67,20 @@ function normalizeAnnotation(value: unknown, targetId: string): Annotation | nul
       page: anchor.page,
       rects,
       quote: typeof anchor.quote === 'string' ? anchor.quote : undefined,
+      ranges,
     },
     comment: value.comment,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+  };
+}
+
+function normalizeRect(rect: Record<string, unknown>) {
+  return {
+    x: typeof rect.x === 'number' ? rect.x : 0,
+    y: typeof rect.y === 'number' ? rect.y : 0,
+    width: typeof rect.width === 'number' ? rect.width : 0,
+    height: typeof rect.height === 'number' ? rect.height : 0,
   };
 }
 

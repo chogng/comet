@@ -5,7 +5,11 @@ import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/edit
 export type EditorEmptyWorkspaceViewProps = {
   labels: Pick<
     EditorPartLabels,
-    'emptyWorkspaceTitle' | 'emptyWorkspaceBody' | 'draftMode'
+    | 'emptyWorkspaceTitle'
+    | 'emptyWorkspaceBody'
+    | 'createDraft'
+    | 'createBrowser'
+    | 'createFile'
   >;
   onOpenEditor: EditorOpenHandler;
 };
@@ -37,10 +41,30 @@ export class EditorEmptyWorkspaceView {
       body: props.labels.emptyWorkspaceBody,
       actions: [
         {
-          label: props.labels.draftMode,
+          label: props.labels.createDraft,
           onRun: () => {
             void this.onOpenEditor({
               kind: 'draft',
+              disposition: 'reveal-or-open',
+            });
+          },
+          className: 'editor-workspace-action-btn btn-secondary btn-md',
+        },
+        {
+          label: props.labels.createBrowser,
+          onRun: () => {
+            void this.onOpenEditor({
+              kind: 'browser',
+              disposition: 'reveal-or-open',
+            });
+          },
+          className: 'editor-workspace-action-btn btn-secondary btn-md',
+        },
+        {
+          label: props.labels.createFile,
+          onRun: () => {
+            void this.onOpenEditor({
+              kind: 'pdf',
               disposition: 'reveal-or-open',
             });
           },

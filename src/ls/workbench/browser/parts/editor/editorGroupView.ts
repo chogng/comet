@@ -13,7 +13,11 @@ import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartVie
 import { areDraftEditorStatusStatesEqual } from 'ls/editor/browser/text/draftEditorStatusState';
 import type { DraftEditorStatusState } from 'ls/editor/browser/text/draftEditorStatusState';
 import { createEditorStatus } from 'ls/workbench/browser/parts/editor/editorStatus';
-import type { EditorStatusState } from 'ls/workbench/browser/parts/editor/editorStatus';
+import type {
+  EditorContentStatusState,
+  EditorStatusState,
+} from 'ls/workbench/browser/parts/editor/editorStatus';
+import type { PdfReaderRuntimeStatus } from 'ls/editor/browser/pdf/pdfAnnotationEditor';
 
 import { createActiveDraftEditorCommandExecutor } from 'ls/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
 import type { DraftEditorSurfaceActionId } from 'ls/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
@@ -51,7 +55,10 @@ import type {
 import { TabsTitleControl } from 'ls/workbench/browser/parts/editor/tabsTitleControl';
 import type { TitleControl, TitleControlProps } from 'ls/workbench/browser/parts/editor/titleControl';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
-import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
+import type {
+  EditorOpenHandler,
+  EditorOpenRequest,
+} from 'ls/workbench/services/editor/common/editorOpenTypes';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
@@ -258,6 +265,7 @@ function createEditorStatusLabels(labels: EditorPartLabels) {
 function createEditorGroupControllerSnapshot(
   context: EditorGroupViewProps,
   draftStatusByTabId: Record<string, DraftEditorStatusState>,
+  pdfReaderStatusByTabId: Record<string, PdfReaderRuntimeStatus>,
 ): EditorGroupControllerSnapshot {
   const group = createEditorGroupModel({
     tabs: context.tabs,
@@ -271,6 +279,10 @@ function createEditorGroupControllerSnapshot(
     isEditorDraftTabInput(group.activeTab)
       ? draftStatusByTabId[group.activeTab.id]
       : undefined;
+  const activeContentStatus =
+    group.activeTab?.kind === 'pdf'
+      ? createPdfContentStatus(pdfReaderStatusByTabId[group.activeTab.id])
+      : undefined;
 
   return {
     group,
@@ -278,7 +290,31 @@ function createEditorGroupControllerSnapshot(
       group.activeTab,
       createEditorStatusLabels(context.labels),
       activeDraftStatus,
+      activeContentStatus,
     ),
+  };
+}
+
+function createPdfContentStatus(
+  status: PdfReaderRuntimeStatus | undefined,
+): EditorContentStatusState | undefined {
+  if (!status || status.state === 'idle') {
+    return undefined;
+  }
+
+  const value = status.detail && status.state === 'error'
+    ? `${status.message}: ${status.detail}`
+    : status.message;
+
+  return {
+    message: value,
+    detail: status.detail,
+    tone:
+      status.state === 'error'
+        ? 'error'
+        : status.state === 'loading'
+          ? 'muted'
+          : 'accent',
   };
 }
 
@@ -300,6 +336,7 @@ function createEditorGroupSnapshotKey(snapshot: EditorGroupControllerSnapshot) {
 class EditorGroupController {
   private context: EditorGroupViewProps;
   private draftStatusByTabId: Record<string, DraftEditorStatusState> = {};
+  private pdfReaderStatusByTabId: Record<string, PdfReaderRuntimeStatus> = {};
   private snapshot: EditorGroupControllerSnapshot;
   private snapshotKey: string;
 
@@ -308,6 +345,7 @@ class EditorGroupController {
     this.snapshot = createEditorGroupControllerSnapshot(
       this.context,
       this.draftStatusByTabId,
+      this.pdfReaderStatusByTabId,
     );
     this.snapshotKey = createEditorGroupSnapshotKey(this.snapshot);
   }
@@ -319,6 +357,7 @@ class EditorGroupController {
   setContext(context: EditorGroupViewProps) {
     this.context = context;
     this.pruneDraftStatuses();
+    this.prunePdfReaderStatuses();
     this.refreshSnapshot();
   }
 
@@ -329,6 +368,26 @@ class EditorGroupController {
 
     this.draftStatusByTabId = {
       ...this.draftStatusByTabId,
+      [tabId]: nextStatus,
+    };
+    this.refreshSnapshot();
+  };
+
+  updatePdfReaderStatus = (
+    tabId: string,
+    nextStatus: PdfReaderRuntimeStatus,
+  ) => {
+    const previousStatus = this.pdfReaderStatusByTabId[tabId];
+    if (
+      previousStatus?.state === nextStatus.state &&
+      previousStatus.message === nextStatus.message &&
+      previousStatus.detail === nextStatus.detail
+    ) {
+      return;
+    }
+
+    this.pdfReaderStatusByTabId = {
+      ...this.pdfReaderStatusByTabId,
       [tabId]: nextStatus,
     };
     this.refreshSnapshot();
@@ -356,10 +415,34 @@ class EditorGroupController {
     this.draftStatusByTabId = nextDraftStatusByTabId;
   }
 
+  private prunePdfReaderStatuses() {
+    const pdfTabIds = new Set(
+      this.context.tabs
+        .filter((tab) => tab.kind === 'pdf')
+        .map((tab) => tab.id),
+    );
+    const nextPdfReaderStatusByTabId = Object.fromEntries(
+      Object.entries(this.pdfReaderStatusByTabId).filter(([tabId]) =>
+        pdfTabIds.has(tabId),
+      ),
+    ) as Record<string, PdfReaderRuntimeStatus>;
+
+    if (
+      Object.keys(nextPdfReaderStatusByTabId).length ===
+      Object.keys(this.pdfReaderStatusByTabId).length
+    ) {
+      return;
+    }
+
+    this.pdfReaderStatusByTabId = nextPdfReaderStatusByTabId;
+  }
+
+
   private refreshSnapshot() {
     const nextSnapshot = createEditorGroupControllerSnapshot(
       this.context,
       this.draftStatusByTabId,
+      this.pdfReaderStatusByTabId,
     );
     const nextSnapshotKey = createEditorGroupSnapshotKey(nextSnapshot);
     if (nextSnapshotKey === this.snapshotKey) {
@@ -444,7 +527,7 @@ export class EditorGroupView {
     );
     this.emptyWorkspaceView = new EditorEmptyWorkspaceView({
       labels: props.labels,
-      onOpenEditor: props.onOpenEditor,
+      onOpenEditor: this.openEditorFromEmptyWorkspace,
     });
     this.tabsElement.append(this.titleAreaControl.getElement());
     this.headerElement.append(this.tabsElement, this.actionsElement);
@@ -511,6 +594,14 @@ export class EditorGroupView {
     this.props.onStatusChange?.(this.controller.getSnapshot().editorStatus);
   };
 
+  private handlePdfReaderStatusChange = (
+    tabId: string,
+    status: PdfReaderRuntimeStatus,
+  ) => {
+    this.controller.updatePdfReaderStatus(tabId, status);
+    this.props.onStatusChange?.(this.controller.getSnapshot().editorStatus);
+  };
+
   private render() {
     const { group, editorStatus } = this.controller.getSnapshot();
     const resolverContext = this.createPaneResolverContext();
@@ -572,7 +663,7 @@ export class EditorGroupView {
       this.syncTopbarToolbar(null);
       this.emptyWorkspaceView.setProps({
         labels: this.props.labels,
-        onOpenEditor: this.props.onOpenEditor,
+        onOpenEditor: this.openEditorFromEmptyWorkspace,
       });
       this.contentElement.replaceChildren(this.emptyWorkspaceView.getElement());
       this.browserLibraryPanel.close();
@@ -683,6 +774,18 @@ export class EditorGroupView {
     this.shouldFocusBrowserPrimaryInput = true;
   };
 
+  private readonly openEditorFromEmptyWorkspace = (request: EditorOpenRequest) => {
+    const result = this.props.onOpenEditor(request);
+    if (
+      request.kind === 'browser' &&
+      request.disposition === 'reveal-or-open' &&
+      !request.url
+    ) {
+      this.requestBrowserPrimaryInputFocus();
+    }
+    return result;
+  };
+
   private flushBrowserPrimaryInputFocus(activeTab: EditorWorkspaceTab | null) {
     if (!this.shouldFocusBrowserPrimaryInput || !isEmptyBrowserTabInput(activeTab)) {
       return;
@@ -779,6 +882,7 @@ export class EditorGroupView {
       onOpenEditor: this.props.onOpenEditor,
       onDraftDocumentChange: this.props.onDraftDocumentChange,
       onDraftStatusChange: this.handleDraftStatusChange,
+      onPdfReaderStatusChange: this.handlePdfReaderStatusChange,
     };
   }
 
