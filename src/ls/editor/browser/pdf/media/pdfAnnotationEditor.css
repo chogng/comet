@@ -34,8 +34,13 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 18px 24px 28px;
   background: var(--vscode-editor-pdfWorkbenchBackground, #f1f3f6);
+}
+
+.pdf-reader-pages.is-zooming {
+  cursor: zoom-in;
 }
 
 .pdf-reader-status {
@@ -86,27 +91,37 @@
 
 .pdf-reader-page canvas {
   display: block;
-  max-width: 100%;
+  max-width: none;
   background: #fff;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  transform-origin: top left;
 }
 
 .pdf-reader-page-canvas-wrap {
   position: relative;
-  max-width: 100%;
+  max-width: none;
   background: #fff;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  cursor: text;
+  user-select: none;
 }
 
 .pdf-reader-page-canvas-wrap canvas {
   box-shadow: none;
 }
 
+.pdf-reader-pages.is-zoom-previewing .pdf-reader-page-canvas-wrap canvas,
+.pdf-reader-pages.is-zoom-previewing .pdf-reader-highlight-layer {
+  will-change: transform;
+}
+
 .pdf-reader-highlight-layer {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: 1;
   pointer-events: none;
+  transform-origin: top left;
 }
 
 .pdf-reader-highlight {
