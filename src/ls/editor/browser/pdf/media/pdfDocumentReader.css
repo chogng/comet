@@ -30,6 +30,7 @@
 }
 
 .pdf-reader-pages {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -78,6 +79,8 @@
 
 .pdf-reader-page {
   display: grid;
+  width: max-content;
+  min-width: 100%;
   justify-items: center;
   gap: 6px;
   margin: 0 auto 18px;

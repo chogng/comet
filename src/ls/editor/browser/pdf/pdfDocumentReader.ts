@@ -93,14 +93,58 @@ type PdfZoomAnchor = {
   viewportY: number;
 };
 
+type PdfPageGeometry = {
+  scale: number;
+  cssWidth: number;
+  cssHeight: number;
+};
+
+type PdfVisibleShell = {
+  shell: PdfPageShell;
+  priority: number;
+};
+
+type PdfRenderDiagnostics = {
+  pageRenderCount: number;
+  pageRenderTotalMs: number;
+  pageRenderMaxMs: number;
+  renderStaleCount: number;
+  textCacheHits: number;
+  textCacheMisses: number;
+};
+
+type PdfRenderToken = {
+  isStale: () => boolean;
+};
+
 const PDF_READER_MIN_ZOOM = 0.4;
 const PDF_READER_MAX_ZOOM = 3;
-const PDF_READER_ZOOM_STEP = 0.1;
+const PDF_READER_ZOOM_LEVELS = [
+  0.4,
+  0.5,
+  0.67,
+  0.75,
+  0.8,
+  0.9,
+  1,
+  1.1,
+  1.25,
+  1.5,
+  1.75,
+  2,
+  2.5,
+  3,
+] as const;
+const PDF_READER_WHEEL_ZOOM_THRESHOLD = 80;
+const PDF_READER_WHEEL_ZOOM_RESET_MS = 250;
 const PDF_READER_ZOOM_RENDER_DELAY_MS = 120;
+const PDF_READER_RENDER_YIELD_TIMEOUT_MS = 32;
 const PDF_READER_MIN_OUTPUT_SCALE = 1.5;
 const PDF_READER_MAX_OUTPUT_SCALE = 3;
 const PDF_READER_MAX_BITMAP_PIXELS = 12_000_000;
 const PDF_READER_VIRTUALIZATION_MARGIN_PX = 1200;
+const PDF_READER_VIRTUALIZATION_VIEWPORTS = 2.5;
+const PDF_READER_MAX_VIRTUALIZATION_MARGIN_PX = 4200;
 const PDF_READER_MAX_RETAINED_PAGES = 8;
 const FPDF_RENDER_LCD_TEXT = 0x02;
 const FPDF_RENDER_REVERSE_BYTE_ORDER = 0x10;
@@ -163,6 +207,224 @@ function normalizePdfError(error: unknown) {
   return String(error);
 }
 
+class PdfRenderScheduler {
+  private frame: number | null = null;
+  private generation = 0;
+  private callback: ((token: PdfRenderToken) => void | Promise<void>) | null = null;
+  private onError: ((error: unknown) => void) | null = null;
+
+  cancel() {
+    this.generation += 1;
+    this.callback = null;
+    this.onError = null;
+    if (this.frame === null) {
+      return;
+    }
+
+    window.cancelAnimationFrame(this.frame);
+    this.frame = null;
+  }
+
+  request(
+    callback: (token: PdfRenderToken) => void | Promise<void>,
+    onError: (error: unknown) => void,
+  ) {
+    this.generation += 1;
+    this.callback = callback;
+    this.onError = onError;
+    if (this.frame !== null) {
+      return;
+    }
+
+    this.frame = window.requestAnimationFrame(() => {
+      this.frame = null;
+      const latestCallback = this.callback;
+      const latestOnError = this.onError;
+      this.callback = null;
+      this.onError = null;
+      if (!latestCallback || !latestOnError) {
+        return;
+      }
+      const generation = this.generation;
+      const token: PdfRenderToken = {
+        isStale: () => generation !== this.generation,
+      };
+      void Promise.resolve(latestCallback(token)).catch(latestOnError);
+    });
+  }
+}
+
+class PdfViewportModel {
+  private zoomScale = 1;
+  private renderedZoomScale = 1;
+  private zoomAnchor: PdfZoomAnchor | null = null;
+  private isRestoringScroll = false;
+  private lastScrollTop = 0;
+  private scrollDirection: -1 | 0 | 1 = 0;
+
+  constructor(
+    private readonly pagesElement: HTMLElement,
+    private readonly surfaceElement: HTMLElement,
+  ) {}
+
+  reset() {
+    this.zoomScale = 1;
+    this.renderedZoomScale = 1;
+    this.zoomAnchor = null;
+    this.isRestoringScroll = false;
+    this.lastScrollTop = this.pagesElement.scrollTop;
+    this.scrollDirection = 0;
+  }
+
+  getZoomScale() {
+    return this.zoomScale;
+  }
+
+  setZoomScale(zoomScale: number) {
+    this.zoomScale = zoomScale;
+  }
+
+  getRenderedZoomScale() {
+    return this.renderedZoomScale;
+  }
+
+  setRenderedZoomScale(renderedZoomScale: number) {
+    this.renderedZoomScale = renderedZoomScale;
+  }
+
+  getZoomAnchor() {
+    return this.zoomAnchor;
+  }
+
+  setZoomAnchor(anchor: PdfZoomAnchor | null) {
+    this.zoomAnchor = anchor;
+  }
+
+  clearZoomAnchor() {
+    this.zoomAnchor = null;
+  }
+
+  getIsRestoringScroll() {
+    return this.isRestoringScroll;
+  }
+
+  beginScrollRestore() {
+    this.isRestoringScroll = true;
+  }
+
+  finishScrollRestoreNextFrame() {
+    window.requestAnimationFrame(() => {
+      this.isRestoringScroll = false;
+    });
+  }
+
+  syncScrollPosition() {
+    this.lastScrollTop = this.pagesElement.scrollTop;
+  }
+
+  recordUserScroll() {
+    const scrollTop = this.pagesElement.scrollTop;
+    if (scrollTop > this.lastScrollTop) {
+      this.scrollDirection = 1;
+    } else if (scrollTop < this.lastScrollTop) {
+      this.scrollDirection = -1;
+    }
+    this.lastScrollTop = scrollTop;
+  }
+
+  getPageGeometry(pageWidth: number, pageHeight: number): PdfPageGeometry {
+    const containerWidth = this.pagesElement.clientWidth || this.surfaceElement.clientWidth;
+    const computedStyle = window.getComputedStyle(this.pagesElement);
+    const paddingLeft = Number.parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingRight = Number.parseFloat(computedStyle.paddingRight) || 0;
+    const availableWidth = Math.max(320, containerWidth - paddingLeft - paddingRight);
+    const scale = Math.max(0.2, availableWidth / pageWidth) * this.zoomScale;
+    return {
+      scale,
+      cssWidth: Math.max(1, Math.floor(pageWidth * scale)),
+      cssHeight: Math.max(1, Math.floor(pageHeight * scale)),
+    };
+  }
+
+  getVirtualizationMargin() {
+    return Math.min(
+      PDF_READER_MAX_VIRTUALIZATION_MARGIN_PX,
+      Math.max(
+        PDF_READER_VIRTUALIZATION_MARGIN_PX,
+        this.pagesElement.clientHeight * PDF_READER_VIRTUALIZATION_VIEWPORTS,
+      ),
+    );
+  }
+
+  getOrderedVisibleShells(shells: readonly PdfPageShell[]): PdfVisibleShell[] {
+    if (shells.length === 0) {
+      return [];
+    }
+
+    const viewportHeight = this.pagesElement.clientHeight;
+    if (viewportHeight <= 0) {
+      return shells.slice(0, 2).map((shell) => ({ shell, priority: 0 }));
+    }
+
+    const viewportTop = this.pagesElement.scrollTop;
+    const viewportBottom = viewportTop + viewportHeight;
+    const viewportCenter = viewportTop + viewportHeight / 2;
+    const margin = this.getVirtualizationMargin();
+    const direction = this.scrollDirection;
+    const visibleShells = shells
+      .map((shell) => {
+        const pageTop = shell.pageElement.offsetTop;
+        const pageBottom = pageTop + shell.pageElement.offsetHeight;
+        const intersectsViewport = pageBottom >= viewportTop && pageTop <= viewportBottom;
+        const isNearViewport = (
+          pageBottom >= viewportTop - margin &&
+          pageTop <= viewportBottom + margin
+        );
+        const distance = intersectsViewport
+          ? Math.abs((pageTop + pageBottom) / 2 - viewportCenter)
+          : pageTop > viewportBottom
+            ? pageTop - viewportBottom
+            : viewportTop - pageBottom;
+        const isAhead = direction > 0
+          ? pageTop >= viewportTop
+          : direction < 0
+            ? pageBottom <= viewportBottom
+            : false;
+        const priority = intersectsViewport ? 0 : isAhead ? 1 : 2;
+        return {
+          shell,
+          isNearViewport,
+          priority,
+          distance,
+        };
+      })
+      .filter((entry) => entry.isNearViewport)
+      .sort((a, b) =>
+        a.priority - b.priority ||
+        a.distance - b.distance ||
+        a.shell.pageNumber - b.shell.pageNumber,
+      )
+      .map((entry) => ({
+        shell: entry.shell,
+        priority: entry.priority,
+      }));
+    return visibleShells.length > 0
+      ? visibleShells
+      : shells.slice(0, 2).map((shell) => ({ shell, priority: 0 }));
+  }
+
+  isShellNearViewport(shell: PdfPageShell, margin: number) {
+    const viewportTop = this.pagesElement.scrollTop;
+    const viewportBottom = viewportTop + this.pagesElement.clientHeight;
+    const pageTop = shell.pageElement.offsetTop;
+    const pageBottom = pageTop + shell.pageElement.offsetHeight;
+    return (
+      pageBottom >= viewportTop - margin &&
+      pageTop <= viewportBottom + margin
+    );
+  }
+}
+
 export class PdfDocumentReader {
   private props: PdfDocumentReaderProps;
   private readonly element = createElement('div', 'pdf-document-reader');
@@ -181,19 +443,27 @@ export class PdfDocumentReader {
   private renderedUrl = '';
   private loadVersion = 0;
   private pageRenderVersion = 0;
-  private zoomScale = 1;
-  private renderedZoomScale = 1;
   private zoomRenderTimer: number | null = null;
-  private zoomAnchor: PdfZoomAnchor | null = null;
-  private isRestoringZoomScroll = false;
-  private visibilityRenderFrame: number | null = null;
+  private wheelZoomDelta = 0;
+  private wheelZoomResetTimer: number | null = null;
+  private readonly viewportModel = new PdfViewportModel(this.pagesElement, this.surfaceElement);
+  private readonly renderScheduler = new PdfRenderScheduler();
   private readonly pageShells = new Map<number, PdfPageShell>();
   private documentHandle: PdfiumDocumentHandle | null = null;
   private readonly pageRenderInfoByPage = new Map<number, PdfReviewerPageInfo>();
+  private readonly pageTextCharsByPage = new Map<number, readonly PdfTextChar[]>();
+  private renderDiagnostics: PdfRenderDiagnostics = {
+    pageRenderCount: 0,
+    pageRenderTotalMs: 0,
+    pageRenderMaxMs: 0,
+    renderStaleCount: 0,
+    textCacheHits: 0,
+    textCacheMisses: 0,
+  };
   private readonly resizeObserver: ResizeObserver | null =
     typeof ResizeObserver === 'undefined'
       ? null
-      : new ResizeObserver(() => this.scheduleVisiblePageRender());
+      : new ResizeObserver(() => this.handleReaderResize());
   private readonly selectionController = new PdfSelectionController({
     pagesElement: this.pagesElement,
     pageInfoByPage: this.pageRenderInfoByPage,
@@ -284,16 +554,18 @@ export class PdfDocumentReader {
     this.loadVersion += 1;
     this.pageRenderVersion += 1;
     this.clearScheduledZoomRender();
-    this.clearScheduledVisiblePageRender();
+    this.renderScheduler.cancel();
+    this.clearWheelZoomResetTimer();
+    this.clearInstantZoomPreview();
     this.closePdfiumDocument(this.documentHandle);
     this.documentHandle = null;
-    this.zoomScale = 1;
-    this.renderedZoomScale = 1;
-    this.zoomAnchor = null;
-    this.isRestoringZoomScroll = false;
+    this.viewportModel.reset();
+    this.wheelZoomDelta = 0;
     this.selectionController.reset();
     this.pageShells.clear();
     this.pageRenderInfoByPage.clear();
+    this.pageTextCharsByPage.clear();
+    this.resetRenderDiagnostics();
     delete this.element.dataset.pdfReaderTextChars;
     delete this.element.dataset.pdfReaderSelectionText;
     delete this.element.dataset.pdfReaderSelectionPages;
@@ -369,7 +641,7 @@ export class PdfDocumentReader {
       this.createPdfPageShells(document, version, pageRenderVersion);
       await this.renderVisiblePdfPages(version, pageRenderVersion);
       if (version === this.loadVersion && pageRenderVersion === this.pageRenderVersion) {
-        this.renderedZoomScale = this.zoomScale;
+        this.viewportModel.setRenderedZoomScale(this.viewportModel.getZoomScale());
         this.renderAllHighlights();
         this.loadingElement.hidden = true;
         this.setReaderStatus({
@@ -485,6 +757,8 @@ export class PdfDocumentReader {
     const fragment = document.createDocumentFragment();
     this.pageShells.clear();
     this.pageRenderInfoByPage.clear();
+    this.pageTextCharsByPage.clear();
+    this.resetRenderDiagnostics();
     delete this.element.dataset.pdfReaderTextChars;
 
     for (let pageNumber = 1; pageNumber <= documentHandle.pageCount; pageNumber += 1) {
@@ -552,14 +826,94 @@ export class PdfDocumentReader {
     };
   }
 
-  private getPageGeometry(pageWidth: number, pageHeight: number) {
-    const availableWidth = Math.max(320, this.surfaceElement.clientWidth - 48);
-    const scale = Math.max(0.2, availableWidth / pageWidth) * this.zoomScale;
+  private getPageGeometry(pageWidth: number, pageHeight: number): PdfPageGeometry {
+    return this.viewportModel.getPageGeometry(pageWidth, pageHeight);
+  }
+
+  private getRenderedShellSize(shell: PdfPageShell) {
+    const renderedWidth = Number(shell.pageCanvasWrap.dataset.renderedWidth);
+    const renderedHeight = Number(shell.pageCanvasWrap.dataset.renderedHeight);
+    if (
+      Number.isFinite(renderedWidth) &&
+      renderedWidth > 0 &&
+      Number.isFinite(renderedHeight) &&
+      renderedHeight > 0
+    ) {
+      return {
+        width: renderedWidth,
+        height: renderedHeight,
+      };
+    }
+
     return {
-      scale,
-      cssWidth: Math.max(1, Math.floor(pageWidth * scale)),
-      cssHeight: Math.max(1, Math.floor(pageHeight * scale)),
+      width: shell.cssWidth,
+      height: shell.cssHeight,
     };
+  }
+
+  private setShellLayoutSize(
+    shell: PdfPageShell,
+    geometry: PdfPageGeometry,
+  ) {
+    shell.pageCanvasWrap.style.width = `${geometry.cssWidth}px`;
+    shell.pageCanvasWrap.style.height = `${geometry.cssHeight}px`;
+  }
+
+  private setShellTargetGeometry(
+    shell: PdfPageShell,
+    geometry: PdfPageGeometry,
+  ) {
+    shell.scale = geometry.scale;
+    shell.cssWidth = geometry.cssWidth;
+    shell.cssHeight = geometry.cssHeight;
+    this.setShellLayoutSize(shell, geometry);
+  }
+
+  private commitShellGeometry(
+    shell: PdfPageShell,
+    geometry: PdfPageGeometry,
+  ) {
+    this.setShellTargetGeometry(shell, geometry);
+    shell.pageCanvasWrap.dataset.renderedWidth = String(geometry.cssWidth);
+    shell.pageCanvasWrap.dataset.renderedHeight = String(geometry.cssHeight);
+    shell.highlightLayer.style.width = `${geometry.cssWidth}px`;
+    shell.highlightLayer.style.height = `${geometry.cssHeight}px`;
+  }
+
+  private isShellRenderedAtCurrentGeometry(shell: PdfPageShell) {
+    const renderedSize = this.getRenderedShellSize(shell);
+    return (
+      shell.renderState === 'rendered' &&
+      Math.abs(renderedSize.width - shell.cssWidth) <= 1 &&
+      Math.abs(renderedSize.height - shell.cssHeight) <= 1
+    );
+  }
+
+  private clearShellInstantZoomPreview(shell: PdfPageShell) {
+    let didClearPreview = false;
+    for (const previewLayer of shell.pageCanvasWrap.children) {
+      if (previewLayer instanceof HTMLElement) {
+        if (previewLayer.style.transform) {
+          previewLayer.style.transform = '';
+          didClearPreview = true;
+        }
+      }
+    }
+    if (shell.highlightLayer.style.transform) {
+      didClearPreview = true;
+    }
+    shell.highlightLayer.style.width = `${shell.cssWidth}px`;
+    shell.highlightLayer.style.height = `${shell.cssHeight}px`;
+    return didClearPreview;
+  }
+
+  private updateInstantZoomPreviewClass() {
+    const hasPreview = [...this.pageShells.values()].some((shell) =>
+      [...shell.pageCanvasWrap.children].some((previewLayer) =>
+        previewLayer instanceof HTMLElement && Boolean(previewLayer.style.transform),
+      ),
+    );
+    this.pagesElement.classList.toggle('is-zoom-previewing', hasPreview);
   }
 
   private getOutputScale(cssWidth: number, cssHeight: number) {
@@ -572,20 +926,100 @@ export class PdfDocumentReader {
     return Math.max(1, Math.min(preferredScale, bitmapBudgetScale));
   }
 
-  private async renderVisiblePdfPages(version: number, pageRenderVersion: number) {
+  private async waitForNextFrame() {
+    await new Promise<void>((resolve) => {
+      let didResolve = false;
+      let timeout: number | null = null;
+      const resolveOnce = () => {
+        if (didResolve) {
+          return;
+        }
+        didResolve = true;
+        if (timeout !== null) {
+          window.clearTimeout(timeout);
+        }
+        resolve();
+      };
+      // Electron smoke and backgrounded windows can delay rAF long enough to
+      // suspend the PDF render queue, so keep a short timer as the yield floor.
+      timeout = window.setTimeout(resolveOnce, PDF_READER_RENDER_YIELD_TIMEOUT_MS);
+      window.requestAnimationFrame(resolveOnce);
+    });
+  }
+
+  private isVisibleRenderStale(renderToken?: PdfRenderToken) {
+    const isStale = Boolean(renderToken?.isStale());
+    if (isStale) {
+      this.recordStaleRender();
+    }
+    return isStale;
+  }
+
+  private async renderVisiblePdfPages(
+    version: number,
+    pageRenderVersion: number,
+    renderToken?: PdfRenderToken,
+  ) {
     const documentHandle = this.documentHandle;
     if (!documentHandle) {
       return;
     }
 
     const visibleShells = this.getVisiblePageShells();
-    for (const shell of visibleShells) {
-      if (version !== this.loadVersion || pageRenderVersion !== this.pageRenderVersion) {
+    let didCommitViewportRender = false;
+    let didYieldAfterViewportRender = false;
+
+    for (const { shell, priority } of visibleShells) {
+      if (
+        version !== this.loadVersion ||
+        pageRenderVersion !== this.pageRenderVersion ||
+        this.isVisibleRenderStale(renderToken)
+      ) {
         return;
       }
+      if (
+        priority > 0 &&
+        didCommitViewportRender &&
+        !didYieldAfterViewportRender
+      ) {
+        await this.waitForNextFrame();
+        didYieldAfterViewportRender = true;
+        if (
+          version !== this.loadVersion ||
+          pageRenderVersion !== this.pageRenderVersion ||
+          this.isVisibleRenderStale(renderToken)
+        ) {
+          return;
+        }
+      }
       shell.lastVisibleAt = performance.now();
-      await this.renderPdfPageIntoShell(documentHandle, shell, version, pageRenderVersion);
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      const didCommitRender = await this.renderPdfPageIntoShell(
+        documentHandle,
+        shell,
+        version,
+        pageRenderVersion,
+      );
+      if (
+        version !== this.loadVersion ||
+        pageRenderVersion !== this.pageRenderVersion ||
+        this.isVisibleRenderStale(renderToken)
+      ) {
+        return;
+      }
+      if (didCommitRender) {
+        if (priority === 0) {
+          didCommitViewportRender = true;
+        } else {
+          await this.waitForNextFrame();
+          if (
+            version !== this.loadVersion ||
+            pageRenderVersion !== this.pageRenderVersion ||
+            this.isVisibleRenderStale(renderToken)
+          ) {
+            return;
+          }
+        }
+      }
     }
 
     this.evictDistantRenderedPages();
@@ -593,28 +1027,11 @@ export class PdfDocumentReader {
 
   private getVisiblePageShells() {
     const shells = [...this.pageShells.values()];
-    if (shells.length === 0) {
-      return [];
-    }
-
-    const viewportRect = this.pagesElement.getBoundingClientRect();
-    if (viewportRect.height <= 0) {
-      return shells.slice(0, 2);
-    }
-
-    const visibleShells = shells.filter((shell) =>
-      this.isShellNearViewport(shell, PDF_READER_VIRTUALIZATION_MARGIN_PX),
-    );
-    return visibleShells.length > 0 ? visibleShells : shells.slice(0, 2);
+    return this.viewportModel.getOrderedVisibleShells(shells);
   }
 
   private isShellNearViewport(shell: PdfPageShell, margin: number) {
-    const viewportRect = this.pagesElement.getBoundingClientRect();
-    const pageRect = shell.pageElement.getBoundingClientRect();
-    return (
-      pageRect.bottom >= viewportRect.top - margin &&
-      pageRect.top <= viewportRect.bottom + margin
-    );
+    return this.viewportModel.isShellNearViewport(shell, margin);
   }
 
   private async renderPdfPageIntoShell(
@@ -623,17 +1040,26 @@ export class PdfDocumentReader {
     version: number,
     pageRenderVersion: number,
   ) {
-    if (shell.renderState !== 'empty') {
-      return;
+    if (shell.renderState === 'rendering') {
+      return false;
     }
 
+    if (this.isShellRenderedAtCurrentGeometry(shell)) {
+      if (this.clearShellInstantZoomPreview(shell)) {
+        this.updateInstantZoomPreviewClass();
+      }
+      return false;
+    }
+
+    const previousRenderState = shell.renderState;
+    const previousCanvas = shell.canvas;
     shell.renderState = 'rendering';
     const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
       documentHandle.documentPtr,
       shell.pageNumber - 1,
     );
     if (!pagePtr) {
-      shell.renderState = 'empty';
+      shell.renderState = previousRenderState;
       throw new Error(`PDFium failed to load page ${shell.pageNumber}.`);
     }
 
@@ -642,10 +1068,12 @@ export class PdfDocumentReader {
 
     if (!context) {
       documentHandle.pdfium.FPDF_ClosePage(pagePtr);
-      shell.renderState = 'empty';
-      return;
+      shell.renderState = previousRenderState;
+      return false;
     }
 
+    let didCommitRender = false;
+    const renderStartedAt = performance.now();
     try {
       const outputScale = this.getOutputScale(shell.cssWidth, shell.cssHeight);
       const bitmapWidth = Math.max(1, Math.floor(shell.cssWidth * outputScale));
@@ -663,7 +1091,7 @@ export class PdfDocumentReader {
         canvas.style.height = `${shell.cssHeight}px`;
 
         if (version !== this.loadVersion || pageRenderVersion !== this.pageRenderVersion) {
-          return;
+          return false;
         }
 
         documentHandle.pdfium.FPDFBitmap_FillRect(
@@ -697,9 +1125,24 @@ export class PdfDocumentReader {
         }
 
         context.putImageData(new ImageData(pixels, bitmapWidth, bitmapHeight), 0, 0);
-        shell.pageCanvasWrap.prepend(canvas);
+        if (version !== this.loadVersion || pageRenderVersion !== this.pageRenderVersion) {
+          return false;
+        }
+
+        const didClearPreview = this.clearShellInstantZoomPreview(shell);
+        if (previousCanvas?.isConnected) {
+          previousCanvas.replaceWith(canvas);
+        } else {
+          shell.pageCanvasWrap.prepend(canvas);
+        }
         shell.canvas = canvas;
+        this.commitShellGeometry(shell, {
+          scale: shell.scale,
+          cssWidth: shell.cssWidth,
+          cssHeight: shell.cssHeight,
+        });
         shell.renderState = 'rendered';
+        didCommitRender = true;
         this.pageRenderInfoByPage.set(shell.pageNumber, {
           page: shell.pageNumber,
           pageWidth: shell.pageWidth,
@@ -707,19 +1150,24 @@ export class PdfDocumentReader {
           scale: shell.scale,
           canvas,
           highlightLayer: shell.highlightLayer,
-          chars: this.extractPageTextChars(documentHandle, pagePtr),
+          chars: this.getPageTextChars(documentHandle, pagePtr, shell.pageNumber),
         });
         this.refreshRenderedTextCharCount();
         this.renderHighlightsForPage(shell.pageNumber);
+        if (didClearPreview) {
+          this.updateInstantZoomPreviewClass();
+        }
+        this.recordPageRenderDuration(performance.now() - renderStartedAt);
       } finally {
         documentHandle.pdfium.FPDFBitmap_Destroy(bitmapPtr);
       }
     } finally {
       documentHandle.pdfium.FPDF_ClosePage(pagePtr);
-      if (shell.renderState === 'rendering') {
-        shell.renderState = 'empty';
+      if (!didCommitRender && shell.renderState === 'rendering') {
+        shell.renderState = previousRenderState;
       }
     }
+    return didCommitRender;
   }
 
   private unloadPdfPageShell(shell: PdfPageShell) {
@@ -739,7 +1187,7 @@ export class PdfDocumentReader {
     }
 
     const candidates = renderedShells
-      .filter((shell) => !this.isShellNearViewport(shell, PDF_READER_VIRTUALIZATION_MARGIN_PX))
+      .filter((shell) => !this.isShellNearViewport(shell, this.viewportModel.getVirtualizationMargin()))
       .sort((a, b) => a.lastVisibleAt - b.lastVisibleAt);
     while (
       renderedShells.length > PDF_READER_MAX_RETAINED_PAGES &&
@@ -762,6 +1210,74 @@ export class PdfDocumentReader {
     } else {
       delete this.element.dataset.pdfReaderTextChars;
     }
+  }
+
+  private resetRenderDiagnostics() {
+    this.renderDiagnostics = {
+      pageRenderCount: 0,
+      pageRenderTotalMs: 0,
+      pageRenderMaxMs: 0,
+      renderStaleCount: 0,
+      textCacheHits: 0,
+      textCacheMisses: 0,
+    };
+    delete this.element.dataset.pdfReaderRenderDiagnostics;
+  }
+
+  private publishRenderDiagnostics() {
+    const {
+      pageRenderCount,
+      pageRenderTotalMs,
+      pageRenderMaxMs,
+      renderStaleCount,
+      textCacheHits,
+      textCacheMisses,
+    } = this.renderDiagnostics;
+    this.element.dataset.pdfReaderRenderDiagnostics = JSON.stringify({
+      pageRenderCount,
+      pageRenderTotalMs: Math.round(pageRenderTotalMs),
+      pageRenderAverageMs: pageRenderCount > 0
+        ? Math.round(pageRenderTotalMs / pageRenderCount)
+        : 0,
+      pageRenderMaxMs: Math.round(pageRenderMaxMs),
+      renderStaleCount,
+      textCacheHits,
+      textCacheMisses,
+    });
+  }
+
+  private recordPageRenderDuration(durationMs: number) {
+    this.renderDiagnostics.pageRenderCount += 1;
+    this.renderDiagnostics.pageRenderTotalMs += durationMs;
+    this.renderDiagnostics.pageRenderMaxMs = Math.max(
+      this.renderDiagnostics.pageRenderMaxMs,
+      durationMs,
+    );
+    this.publishRenderDiagnostics();
+  }
+
+  private recordStaleRender() {
+    this.renderDiagnostics.renderStaleCount += 1;
+    this.publishRenderDiagnostics();
+  }
+
+  private getPageTextChars(
+    documentHandle: PdfiumDocumentHandle,
+    pagePtr: number,
+    pageNumber: number,
+  ) {
+    const cachedChars = this.pageTextCharsByPage.get(pageNumber);
+    if (cachedChars) {
+      this.renderDiagnostics.textCacheHits += 1;
+      this.publishRenderDiagnostics();
+      return cachedChars;
+    }
+
+    this.renderDiagnostics.textCacheMisses += 1;
+    const chars = this.extractPageTextChars(documentHandle, pagePtr);
+    this.pageTextCharsByPage.set(pageNumber, chars);
+    this.publishRenderDiagnostics();
+    return chars;
   }
 
   private extractPageTextChars(
@@ -951,51 +1467,62 @@ export class PdfDocumentReader {
     const pageRect = pageCanvasWrap?.getBoundingClientRect() ?? pageElement.getBoundingClientRect();
     const anchoredX = pageRect.left + pageRect.width * anchor.ratioX;
     const anchoredY = pageRect.top + pageRect.height * anchor.ratioY;
-    this.isRestoringZoomScroll = true;
+    this.viewportModel.beginScrollRestore();
     this.pagesElement.scrollLeft += anchoredX - anchor.viewportX;
     this.pagesElement.scrollTop += anchoredY - anchor.viewportY;
-    window.requestAnimationFrame(() => {
-      this.isRestoringZoomScroll = false;
-    });
+    this.viewportModel.syncScrollPosition();
+    this.viewportModel.finishScrollRestoreNextFrame();
   }
 
   private applyInstantZoomPreview() {
-    if (this.renderedZoomScale <= 0 || this.zoomScale === this.renderedZoomScale) {
+    if (this.viewportModel.getRenderedZoomScale() <= 0) {
       return;
     }
 
-    const previewRatio = this.zoomScale / this.renderedZoomScale;
-    const pageCanvasWraps =
-      this.pagesElement.querySelectorAll<HTMLElement>('.pdf-reader-page-canvas-wrap');
+    let isPreviewing = false;
 
-    for (const pageCanvasWrap of pageCanvasWraps) {
-      const renderedWidth = Number(pageCanvasWrap.dataset.renderedWidth);
-      const renderedHeight = Number(pageCanvasWrap.dataset.renderedHeight);
-      if (!Number.isFinite(renderedWidth) || !Number.isFinite(renderedHeight)) {
+    for (const shell of this.pageShells.values()) {
+      const { pageCanvasWrap, highlightLayer } = shell;
+      const renderedSize = this.getRenderedShellSize(shell);
+      const previewGeometry = this.getPageGeometry(shell.pageWidth, shell.pageHeight);
+      const scaleX = previewGeometry.cssWidth / renderedSize.width;
+      const scaleY = previewGeometry.cssHeight / renderedSize.height;
+      const shouldScale =
+        shell.canvas !== null &&
+        Number.isFinite(scaleX) &&
+        Number.isFinite(scaleY) &&
+        (Math.abs(scaleX - 1) > 0.001 || Math.abs(scaleY - 1) > 0.001);
+
+      this.setShellLayoutSize(shell, previewGeometry);
+
+      if (!shouldScale) {
+        highlightLayer.style.width = `${previewGeometry.cssWidth}px`;
+        highlightLayer.style.height = `${previewGeometry.cssHeight}px`;
+        for (const previewLayer of pageCanvasWrap.children) {
+          if (previewLayer instanceof HTMLElement) {
+            previewLayer.style.transform = '';
+          }
+        }
         continue;
       }
 
+      highlightLayer.style.width = `${renderedSize.width}px`;
+      highlightLayer.style.height = `${renderedSize.height}px`;
       for (const previewLayer of pageCanvasWrap.children) {
         if (!(previewLayer instanceof HTMLElement)) {
           continue;
         }
-        previewLayer.style.transform = `scale(${previewRatio})`;
+        previewLayer.style.transform = `scale(${scaleX}, ${scaleY})`;
       }
+      isPreviewing = true;
     }
 
-    this.pagesElement.classList.add('is-zoom-previewing');
+    this.pagesElement.classList.toggle('is-zoom-previewing', isPreviewing);
   }
 
   private clearInstantZoomPreview() {
-    const pageCanvasWraps =
-      this.pagesElement.querySelectorAll<HTMLElement>('.pdf-reader-page-canvas-wrap');
-
-    for (const pageCanvasWrap of pageCanvasWraps) {
-      for (const previewLayer of pageCanvasWrap.children) {
-        if (previewLayer instanceof HTMLElement) {
-          previewLayer.style.transform = '';
-        }
-      }
+    for (const shell of this.pageShells.values()) {
+      this.clearShellInstantZoomPreview(shell);
     }
 
     this.pagesElement.classList.remove('is-zoom-previewing');
@@ -1010,39 +1537,71 @@ export class PdfDocumentReader {
     this.zoomRenderTimer = null;
   }
 
-  private clearScheduledVisiblePageRender() {
-    if (this.visibilityRenderFrame === null) {
+  private clearWheelZoomResetTimer() {
+    if (this.wheelZoomResetTimer === null) {
       return;
     }
 
-    window.cancelAnimationFrame(this.visibilityRenderFrame);
-    this.visibilityRenderFrame = null;
+    window.clearTimeout(this.wheelZoomResetTimer);
+    this.wheelZoomResetTimer = null;
   }
 
   private scheduleVisiblePageRender() {
     if (!this.documentHandle || this.readerStatus.state !== 'ready') {
       return;
     }
-    if (this.visibilityRenderFrame !== null) {
-      return;
-    }
 
     const version = this.loadVersion;
     const pageRenderVersion = this.pageRenderVersion;
-    this.visibilityRenderFrame = window.requestAnimationFrame(() => {
-      this.visibilityRenderFrame = null;
-      void this.renderVisiblePdfPages(version, pageRenderVersion);
-    });
+    this.renderScheduler.request(
+      async (renderToken) => {
+        await this.renderVisiblePdfPages(version, pageRenderVersion, renderToken);
+      },
+      (error: unknown) => {
+        console.error('Failed to render visible PDF pages.', error);
+      },
+    );
   }
 
   private scheduleZoomRender() {
     this.clearScheduledZoomRender();
     this.pageRenderVersion += 1;
+    this.renderScheduler.cancel();
     this.zoomRenderTimer = window.setTimeout(() => {
       this.zoomRenderTimer = null;
-      void this.rerenderPdfAtCurrentZoom();
+      void this.rerenderPdfAtCurrentZoom().catch((error: unknown) => {
+        this.handleZoomRenderError(error);
+      });
     }, PDF_READER_ZOOM_RENDER_DELAY_MS);
   }
+
+  private handleZoomRenderError(error: unknown) {
+    this.pagesElement.classList.remove('is-zooming');
+    this.loadingElement.hidden = true;
+    this.viewportModel.clearZoomAnchor();
+    this.updateInstantZoomPreviewClass();
+    console.error('Failed to rerender PDF at the requested zoom level.', error);
+  }
+
+  private relayoutPdfPreview(anchor: PdfZoomAnchor | null) {
+    this.loadingElement.hidden = false;
+    this.loadingElement.textContent = `${Math.round(this.viewportModel.getZoomScale() * 100)}%`;
+    this.element.dataset.pdfReaderZoom = String(this.viewportModel.getZoomScale());
+    this.applyInstantZoomPreview();
+    this.restoreVisiblePageAnchor(anchor);
+    this.scheduleZoomRender();
+  }
+
+  private handleReaderResize = () => {
+    if (!this.documentHandle || this.readerStatus.state !== 'ready') {
+      this.scheduleVisiblePageRender();
+      return;
+    }
+
+    const anchor = this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
+    this.viewportModel.setZoomAnchor(anchor);
+    this.relayoutPdfPreview(anchor);
+  };
 
   private async rerenderPdfAtCurrentZoom() {
     const documentHandle = this.documentHandle;
@@ -1051,28 +1610,17 @@ export class PdfDocumentReader {
     }
 
     const pageRenderVersion = ++this.pageRenderVersion;
-    const anchor = this.zoomAnchor ?? this.getVisiblePageAnchor();
+    const anchor = this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
 
     this.loadingElement.hidden = false;
-    this.loadingElement.textContent = `${Math.round(this.zoomScale * 100)}%`;
+    this.loadingElement.textContent = `${Math.round(this.viewportModel.getZoomScale() * 100)}%`;
     this.pagesElement.classList.add('is-zooming');
     this.selectionController.reset();
-    this.pageRenderInfoByPage.clear();
-    delete this.element.dataset.pdfReaderTextChars;
-    this.element.dataset.pdfReaderZoom = String(this.zoomScale);
+    this.element.dataset.pdfReaderZoom = String(this.viewportModel.getZoomScale());
 
     for (const shell of this.pageShells.values()) {
-      this.unloadPdfPageShell(shell);
       const geometry = this.getPageGeometry(shell.pageWidth, shell.pageHeight);
-      shell.scale = geometry.scale;
-      shell.cssWidth = geometry.cssWidth;
-      shell.cssHeight = geometry.cssHeight;
-      shell.pageCanvasWrap.style.width = `${geometry.cssWidth}px`;
-      shell.pageCanvasWrap.style.height = `${geometry.cssHeight}px`;
-      shell.pageCanvasWrap.dataset.renderedWidth = String(geometry.cssWidth);
-      shell.pageCanvasWrap.dataset.renderedHeight = String(geometry.cssHeight);
-      shell.highlightLayer.style.width = `${geometry.cssWidth}px`;
-      shell.highlightLayer.style.height = `${geometry.cssHeight}px`;
+      this.setShellTargetGeometry(shell, geometry);
     }
 
     await this.renderVisiblePdfPages(this.loadVersion, pageRenderVersion);
@@ -1082,13 +1630,13 @@ export class PdfDocumentReader {
       return;
     }
 
-    this.clearInstantZoomPreview();
-    this.renderedZoomScale = this.zoomScale;
+    this.viewportModel.setRenderedZoomScale(this.viewportModel.getZoomScale());
     this.renderAllHighlights();
+    this.updateInstantZoomPreviewClass();
     this.restoreVisiblePageAnchor(anchor);
     this.pagesElement.classList.remove('is-zooming');
     this.loadingElement.hidden = true;
-    this.zoomAnchor = null;
+    this.viewportModel.clearZoomAnchor();
   }
 
   private setZoomScale(nextZoomScale: number, anchor?: PdfZoomAnchor | null) {
@@ -1096,22 +1644,40 @@ export class PdfDocumentReader {
       PDF_READER_MAX_ZOOM,
       Math.max(PDF_READER_MIN_ZOOM, Number(nextZoomScale.toFixed(2))),
     );
-    if (normalizedZoomScale === this.zoomScale) {
+    if (normalizedZoomScale === this.viewportModel.getZoomScale()) {
       return;
     }
 
-    const zoomAnchor = this.zoomAnchor ?? anchor ?? this.getVisiblePageAnchor();
-    this.zoomScale = normalizedZoomScale;
-    this.zoomAnchor = zoomAnchor;
-    this.loadingElement.hidden = false;
-    this.loadingElement.textContent = `${Math.round(this.zoomScale * 100)}%`;
-    this.element.dataset.pdfReaderZoom = String(this.zoomScale);
-    this.applyInstantZoomPreview();
-    this.scheduleZoomRender();
+    const zoomAnchor = anchor ?? this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
+    this.viewportModel.setZoomScale(normalizedZoomScale);
+    this.viewportModel.setZoomAnchor(zoomAnchor);
+    this.relayoutPdfPreview(zoomAnchor);
   }
 
   private zoomByStep(direction: 1 | -1, anchor?: PdfZoomAnchor | null) {
-    this.setZoomScale(this.zoomScale + direction * PDF_READER_ZOOM_STEP, anchor);
+    const levels = PDF_READER_ZOOM_LEVELS;
+    const zoomScale = this.viewportModel.getZoomScale();
+    const currentLevelIndex = levels.findIndex((level) => level === zoomScale);
+    if (currentLevelIndex >= 0) {
+      this.setZoomScale(
+        levels[Math.min(
+          levels.length - 1,
+          Math.max(0, currentLevelIndex + direction),
+        )],
+        anchor,
+      );
+      return;
+    }
+
+    const nextLevel = direction > 0
+      ? levels.find((level) => level > zoomScale)
+      : [...levels].reverse().find((level) => level < zoomScale);
+    if (nextLevel === undefined) {
+      this.setZoomScale(direction > 0 ? PDF_READER_MAX_ZOOM : PDF_READER_MIN_ZOOM, anchor);
+      return;
+    }
+
+    this.setZoomScale(nextLevel, anchor);
   }
 
   private renderReaderChrome() {
@@ -1167,17 +1733,42 @@ export class PdfDocumentReader {
     }
 
     event.preventDefault();
-    this.zoomByStep(
-      event.deltaY < 0 ? 1 : -1,
-      this.getVisiblePageAnchor({ clientX: event.clientX, clientY: event.clientY }),
-    );
+    const deltaMultiplier = event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+      ? this.pagesElement.clientHeight
+      : event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 40
+        : 1;
+    const deltaY = event.deltaY * deltaMultiplier;
+    const anchor = this.getVisiblePageAnchor({
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+
+    if (Math.sign(this.wheelZoomDelta) !== 0 && Math.sign(deltaY) !== Math.sign(this.wheelZoomDelta)) {
+      this.wheelZoomDelta = 0;
+    }
+    this.wheelZoomDelta += deltaY;
+    this.clearWheelZoomResetTimer();
+    this.wheelZoomResetTimer = window.setTimeout(() => {
+      this.wheelZoomDelta = 0;
+      this.wheelZoomResetTimer = null;
+    }, PDF_READER_WHEEL_ZOOM_RESET_MS);
+
+    while (Math.abs(this.wheelZoomDelta) >= PDF_READER_WHEEL_ZOOM_THRESHOLD) {
+      const direction = this.wheelZoomDelta < 0 ? 1 : -1;
+      this.zoomByStep(direction, anchor);
+      this.wheelZoomDelta -= direction < 0
+        ? PDF_READER_WHEEL_ZOOM_THRESHOLD
+        : -PDF_READER_WHEEL_ZOOM_THRESHOLD;
+    }
   };
 
   private readonly handleReaderScroll = () => {
-    if (this.isRestoringZoomScroll || this.pagesElement.classList.contains('is-zoom-previewing')) {
+    if (this.viewportModel.getIsRestoringScroll()) {
       return;
     }
 
+    this.viewportModel.recordUserScroll();
     this.scheduleVisiblePageRender();
   };
 }
