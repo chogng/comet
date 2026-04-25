@@ -5,13 +5,14 @@ import type {
 } from 'ls/editor/browser/pdf/pdfSelection';
 import { pdfRectToViewportRect } from 'ls/editor/browser/pdf/pdfReviewerTypes';
 import type {
+  PdfRect,
   PdfReviewerPageInfo,
   PdfTextChar,
 } from 'ls/editor/browser/pdf/pdfReviewerTypes';
 
-type PdfSelectionAnchor = {
+type PdfSelectionBoundary = {
   page: number;
-  charIndex: number;
+  charOffset: number;
 };
 
 export type PdfSelectionControllerOptions = {
@@ -24,7 +25,7 @@ export class PdfSelectionController {
   private readonly pagesElement: HTMLElement;
   private readonly pageInfoByPage: ReadonlyMap<number, PdfReviewerPageInfo>;
   private readonly onSelectionChange: (selection: PdfSelection | null) => void;
-  private anchor: PdfSelectionAnchor | null = null;
+  private anchor: PdfSelectionBoundary | null = null;
 
   constructor(options: PdfSelectionControllerOptions) {
     this.pagesElement = options.pagesElement;
@@ -41,10 +42,15 @@ export class PdfSelectionController {
   reset() {
     this.anchor = null;
     this.pagesElement.removeEventListener('pointermove', this.handlePointerMove);
+    this.pagesElement.removeEventListener('pointerup', this.handlePointerUp);
+    this.pagesElement.removeEventListener('pointercancel', this.handlePointerUp);
   }
 
   private findPageInfoFromEvent(event: PointerEvent) {
-    const pageElement = (event.target as Element | null)?.closest?.('.pdf-reader-page');
+    const pageElement =
+      (event.target as Element | null)?.closest?.('.pdf-reader-page') ??
+      document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.pdf-reader-page') ??
+      this.findNearestPageElement(event);
     if (!(pageElement instanceof HTMLElement)) {
       return null;
     }
@@ -53,14 +59,86 @@ export class PdfSelectionController {
     return Number.isFinite(page) ? this.pageInfoByPage.get(page) ?? null : null;
   }
 
-  private findNearestChar(info: PdfReviewerPageInfo, event: PointerEvent) {
+  private findNearestPageElement(event: PointerEvent) {
+    let nearestPageElement: HTMLElement | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    const pageElements = this.pagesElement.querySelectorAll<HTMLElement>('.pdf-reader-page');
+
+    for (const pageElement of pageElements) {
+      const rect = pageElement.getBoundingClientRect();
+      const clampedX = Math.min(Math.max(event.clientX, rect.left), rect.right);
+      const clampedY = Math.min(Math.max(event.clientY, rect.top), rect.bottom);
+      const distance = Math.hypot(event.clientX - clampedX, event.clientY - clampedY);
+      if (distance < nearestDistance) {
+        nearestPageElement = pageElement;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearestPageElement;
+  }
+
+  private getCanvasLocalPoint(info: PdfReviewerPageInfo, event: PointerEvent) {
     const canvasRect = info.canvas.getBoundingClientRect();
-    const x = event.clientX - canvasRect.left;
-    const y = event.clientY - canvasRect.top;
+    const cssWidth = Number.parseFloat(info.canvas.style.width) || info.canvas.clientWidth || canvasRect.width;
+    const cssHeight = Number.parseFloat(info.canvas.style.height) || info.canvas.clientHeight || canvasRect.height;
+    const scaleX = canvasRect.width > 0 ? cssWidth / canvasRect.width : 1;
+    const scaleY = canvasRect.height > 0 ? cssHeight / canvasRect.height : 1;
+    return {
+      x: (event.clientX - canvasRect.left) * scaleX,
+      y: (event.clientY - canvasRect.top) * scaleY,
+    };
+  }
+
+  private findNearestTextBoundary(info: PdfReviewerPageInfo, event: PointerEvent) {
+    const { x, y } = this.getCanvasLocalPoint(info, event);
+    let nearestBoundary: PdfSelectionBoundary | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (let position = 0; position < info.chars.length; position += 1) {
+      const char = info.chars[position];
+      if (!char.rect) {
+        continue;
+      }
+
+      const rect = pdfRectToViewportRect(info, char.rect);
+      const centerX = rect.x + rect.width / 2;
+      const contains =
+        x >= rect.x &&
+        x <= rect.x + rect.width &&
+        y >= rect.y &&
+        y <= rect.y + rect.height;
+      if (contains) {
+        return {
+          page: info.page,
+          charOffset: position + (x < centerX ? 0 : 1),
+        };
+      }
+
+      const centerY = rect.y + rect.height / 2;
+      const distance = Math.hypot(centerX - x, centerY - y);
+      if (distance < nearestDistance) {
+        nearestBoundary = {
+          page: info.page,
+          charOffset: position + (x < centerX ? 0 : 1),
+        };
+        nearestDistance = distance;
+      }
+    }
+
+    return nearestBoundary;
+  }
+
+  private findNearestTextChar(info: PdfReviewerPageInfo, event: PointerEvent) {
+    const { x, y } = this.getCanvasLocalPoint(info, event);
     let nearest: PdfTextChar | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
     for (const char of info.chars) {
+      if (!char.rect) {
+        continue;
+      }
+
       const rect = pdfRectToViewportRect(info, char.rect);
       const contains =
         x >= rect.x &&
@@ -83,56 +161,94 @@ export class PdfSelectionController {
     return nearest;
   }
 
-  private createSelectionFromCharRange(
+  private mergeTextRects(info: PdfReviewerPageInfo, chars: readonly PdfTextChar[]) {
+    const rects = chars.flatMap((char) => (char.rect ? [char.rect] : []));
+    const mergedRects: PdfRect[] = [];
+
+    for (const rect of rects) {
+      const previous = mergedRects.at(-1);
+      if (!previous || !this.canMergeTextRects(previous, rect)) {
+        mergedRects.push({ ...rect });
+        continue;
+      }
+
+      const left = Math.min(previous.x, rect.x);
+      const bottom = Math.min(previous.y, rect.y);
+      const right = Math.max(previous.x + previous.width, rect.x + rect.width);
+      const top = Math.max(previous.y + previous.height, rect.y + rect.height);
+      previous.x = left;
+      previous.y = bottom;
+      previous.width = right - left;
+      previous.height = top - bottom;
+    }
+
+    return mergedRects.map((rect) => this.expandHighlightRect(info, rect));
+  }
+
+  private canMergeTextRects(previous: PdfRect, next: PdfRect) {
+    const previousCenterY = previous.y + previous.height / 2;
+    const nextCenterY = next.y + next.height / 2;
+    const lineHeight = Math.max(previous.height, next.height, 1);
+    const verticalDistance = Math.abs(previousCenterY - nextCenterY);
+    if (verticalDistance > lineHeight * 1.2) {
+      return false;
+    }
+
+    const gap = next.x - (previous.x + previous.width);
+    const generousWordGap = lineHeight * 6;
+    return gap >= -lineHeight * 0.35 && gap <= generousWordGap;
+  }
+
+  private expandHighlightRect(info: PdfReviewerPageInfo, rect: PdfRect): PdfRect {
+    const inset = Math.min(rect.height * 0.12, 1.5 / info.scale);
+    return {
+      x: rect.x,
+      y: Math.max(0, rect.y - inset),
+      width: rect.width,
+      height: rect.height + inset * 2,
+    };
+  }
+
+  private createSelectionFromOffsets(
     info: PdfReviewerPageInfo,
-    startCharIndex: number,
-    endCharIndex: number,
+    startCharOffset: number,
+    endCharOffset: number,
   ) {
-    const start = Math.min(startCharIndex, endCharIndex);
-    const end = Math.max(startCharIndex, endCharIndex);
-    const chars = info.chars.filter((char) => char.index >= start && char.index <= end);
-    if (chars.length === 0) {
+    const range = this.createRangeFromOffsets(info, startCharOffset, endCharOffset);
+    if (!range) {
       return null;
     }
 
-    return createPdfSelection({
-      page: info.page,
-      rects: chars.map((char) => char.rect),
-      text: chars.map((char) => char.char).join(''),
-      textRange: {
-        startCharIndex: start,
-        endCharIndex: end,
-      },
-    });
+    return createPdfSelection(range);
   }
 
-  private createRangeFromCharRange(
+  private createRangeFromOffsets(
     info: PdfReviewerPageInfo,
-    startCharIndex: number,
-    endCharIndex: number,
+    startCharOffset: number,
+    endCharOffset: number,
   ): PdfSelectionRange | null {
-    const start = Math.min(startCharIndex, endCharIndex);
-    const end = Math.max(startCharIndex, endCharIndex);
-    const chars = info.chars.filter((char) => char.index >= start && char.index <= end);
+    const start = Math.max(0, Math.min(startCharOffset, endCharOffset));
+    const end = Math.min(info.chars.length, Math.max(startCharOffset, endCharOffset));
+    const chars = info.chars.slice(start, end);
     if (chars.length === 0) {
       return null;
     }
 
     return {
       page: info.page,
-      rects: chars.map((char) => char.rect),
+      rects: this.mergeTextRects(info, chars),
       text: chars.map((char) => char.char).join(''),
       textRange: {
-        startCharIndex: start,
-        endCharIndex: end,
+        startCharIndex: chars[0]?.index ?? 0,
+        endCharIndex: chars.at(-1)?.index ?? chars[0]?.index ?? 0,
       },
     };
   }
 
-  private getPageInfosBetween(anchor: PdfSelectionAnchor, focus: PdfSelectionAnchor) {
+  private getPageInfosBetween(anchor: PdfSelectionBoundary, focus: PdfSelectionBoundary) {
     const direction =
       anchor.page < focus.page ||
-      (anchor.page === focus.page && anchor.charIndex <= focus.charIndex)
+      (anchor.page === focus.page && anchor.charOffset <= focus.charOffset)
         ? 1
         : -1;
     const start = direction === 1 ? anchor : focus;
@@ -149,26 +265,24 @@ export class PdfSelectionController {
     return { infos, start, end };
   }
 
-  private createSelectionBetween(anchor: PdfSelectionAnchor, focus: PdfSelectionAnchor) {
+  private createSelectionBetween(anchor: PdfSelectionBoundary, focus: PdfSelectionBoundary) {
     if (anchor.page === focus.page) {
       const info = this.pageInfoByPage.get(anchor.page);
       return info
-        ? this.createSelectionFromCharRange(info, anchor.charIndex, focus.charIndex)
+        ? this.createSelectionFromOffsets(info, anchor.charOffset, focus.charOffset)
         : null;
     }
 
     const { infos, start, end } = this.getPageInfosBetween(anchor, focus);
     const ranges = infos
       .map((info) => {
-        const firstCharIndex = info.chars[0]?.index ?? 0;
-        const lastCharIndex = info.chars.at(-1)?.index ?? firstCharIndex;
         if (info.page === start.page) {
-          return this.createRangeFromCharRange(info, start.charIndex, lastCharIndex);
+          return this.createRangeFromOffsets(info, start.charOffset, info.chars.length);
         }
         if (info.page === end.page) {
-          return this.createRangeFromCharRange(info, firstCharIndex, end.charIndex);
+          return this.createRangeFromOffsets(info, 0, end.charOffset);
         }
-        return this.createRangeFromCharRange(info, firstCharIndex, lastCharIndex);
+        return this.createRangeFromOffsets(info, 0, info.chars.length);
       })
       .filter((range): range is PdfSelectionRange => range !== null);
 
@@ -210,11 +324,7 @@ export class PdfSelectionController {
       endPosition += 1;
     }
 
-    return this.createSelectionFromCharRange(
-      info,
-      info.chars[startPosition]?.index ?? charIndex,
-      info.chars[endPosition]?.index ?? charIndex,
-    );
+    return this.createSelectionFromOffsets(info, startPosition, endPosition + 1);
   }
 
   private readonly handlePointerDown = (event: PointerEvent) => {
@@ -227,25 +337,24 @@ export class PdfSelectionController {
       return;
     }
 
-    const char = this.findNearestChar(info, event);
-    if (!char) {
+    const boundary = this.findNearestTextBoundary(info, event);
+    if (!boundary) {
       return;
     }
 
     event.preventDefault();
 
     if (event.detail >= 2) {
+      const char = this.findNearestTextChar(info, event);
+      if (!char) {
+        return;
+      }
       this.onSelectionChange(this.createWordSelection(info, char.index));
       return;
     }
 
-    this.anchor = {
-      page: info.page,
-      charIndex: char.index,
-    };
-    this.onSelectionChange(
-      this.createSelectionFromCharRange(info, char.index, char.index),
-    );
+    this.anchor = boundary;
+    this.onSelectionChange(null);
     try {
       this.pagesElement.setPointerCapture(event.pointerId);
     } catch {
@@ -266,15 +375,12 @@ export class PdfSelectionController {
       return;
     }
 
-    const char = this.findNearestChar(info, event);
-    if (!char) {
+    const boundary = this.findNearestTextBoundary(info, event);
+    if (!boundary) {
       return;
     }
 
-    this.onSelectionChange(this.createSelectionBetween(this.anchor, {
-      page: info.page,
-      charIndex: char.index,
-    }));
+    this.onSelectionChange(this.createSelectionBetween(this.anchor, boundary));
   };
 
   private readonly handlePointerUp = (event: PointerEvent) => {

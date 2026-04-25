@@ -2998,7 +2998,14 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
         '.editor-pdf-toolbar-trailing .editor-pdf-toolbar-btn.actionbar-action[aria-label]',
       ),
     ).map((button) => button.getAttribute('aria-label'));
-    assert.deepEqual(pdfLeadingButtons, ['Source menu', 'Remove', 'Add']);
+    assert.deepEqual(pdfLeadingButtons, [
+      'Source menu',
+      'Zoom out',
+      'Zoom in',
+      'Pagination',
+      'Highlight',
+      'Translate',
+    ]);
     assert.deepEqual(pdfTrailingButtons, ['Search', 'More']);
     const pdfPane = view.getElement().querySelector('.editor-content .editor-pdf-pane');
     assert(pdfPane instanceof HTMLElement);

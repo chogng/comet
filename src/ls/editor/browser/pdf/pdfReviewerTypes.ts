@@ -8,7 +8,7 @@ export type PdfRect = {
 export type PdfTextChar = {
   index: number;
   char: string;
-  rect: PdfRect;
+  rect?: PdfRect;
 };
 
 export type PdfReviewerPageInfo = {
