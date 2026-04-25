@@ -153,6 +153,7 @@ export function buildSettingsSwitch(config: {
     disabled: config.disabled,
     className: 'settings-toggle-switch',
     title: config.title,
+    animationKey: config.focusKey,
     onChange: config.onChange,
   });
   const element = view.getElement();

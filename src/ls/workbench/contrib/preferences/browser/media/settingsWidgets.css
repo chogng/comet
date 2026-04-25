@@ -724,17 +724,6 @@
   flex: 0 0 auto;
 }
 
-.settings-model-list-switch .switch-slider {
-  transition:
-    background-color 180ms ease,
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.settings-model-list-switch .switch-slider::after {
-  transition:
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
 .settings-model-list-empty {
   padding: 8px 2px 2px;
   color: var(--vscode-settings-mutedForeground, #66788b);

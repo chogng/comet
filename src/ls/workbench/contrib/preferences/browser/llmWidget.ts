@@ -167,6 +167,7 @@ export class LlmWidget {
       disabled: this.props.isSettingsSaving,
       className: 'settings-toggle-switch',
       title: this.props.labels.settingsLlmMaxContext,
+      animationKey: `settings.llm.maxContext.${this.props.activeLlmProvider}`,
       onChange: (checked) =>
         this.props.onLlmProviderUseMaxContextWindowChange(this.props.activeLlmProvider, checked),
     });
@@ -462,6 +463,7 @@ export class LlmWidget {
         disabled: false,
         className: 'settings-model-list-switch',
         title: displayLabel,
+        animationKey: `settings.llm.model.${this.getModelEntryKey(nextEntry)}`,
         onChange: (_checked, event) => {
           event.stopPropagation();
           const nextEnabled = !this.isModelEntryEnabled(currentEntry);
