@@ -1114,6 +1114,7 @@ class WorkbenchHost {
       accountLabel: props.primaryBarProps.accountLabel,
       moreLabel: props.primaryBarProps.moreLabel,
       settingsLabel: props.primaryBarProps.settingsLabel,
+      isSettingsActive: false,
       activeLayoutMode: this.resolvePrimaryBarFooterLayoutMode({
         isAgentSidebarVisible: props.isAgentSidebarVisible,
         isEditorCollapsed: props.isEditorCollapsed,
@@ -1213,6 +1214,7 @@ class WorkbenchHost {
       accountLabel: props.primaryBarProps.accountLabel,
       moreLabel: props.primaryBarProps.moreLabel,
       settingsLabel: props.primaryBarProps.settingsLabel,
+      isSettingsActive: true,
       activeLayoutMode: 'flow',
       onApplyLayoutAgent: props.onApplyLayoutAgent,
       onApplyLayoutFlow: props.onApplyLayoutFlow,

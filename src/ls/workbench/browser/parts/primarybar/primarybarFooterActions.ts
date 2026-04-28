@@ -15,6 +15,7 @@ export type PrimaryBarFooterActionsProps = {
   accountLabel?: string;
   moreLabel?: string;
   settingsLabel?: string;
+  isSettingsActive?: boolean;
   activeLayoutMode?: PrimaryBarFooterLayoutMode | null;
   onApplyLayoutAgent?: () => void;
   onApplyLayoutFlow?: () => void;
@@ -113,6 +114,7 @@ export class PrimaryBarFooterActionsView {
           label: props.settingsLabel ?? '',
           title: props.settingsLabel ?? '',
           mode: 'icon',
+          active: props.isSettingsActive === true,
           buttonClassName: 'primarybar-footer-settings-btn',
           content: createLxIcon('gear'),
           onClick: () => props.onOpenSettings?.(),

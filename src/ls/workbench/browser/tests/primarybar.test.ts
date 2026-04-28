@@ -403,3 +403,30 @@ test('primary bar footer layout submenu marks the active layout', async () => {
     footerActionsView.dispose();
   }
 });
+
+test('primary bar footer settings action keeps active styling when settings is active', () => {
+  const footerActionsView = new PrimaryBarFooterActionsView({
+    accountLabel: 'Literature Studio',
+    settingsLabel: 'Settings',
+    isSettingsActive: true,
+  });
+  const primaryBar = createPrimaryBar({
+    ...createProps(),
+    footerActionsElement: footerActionsView.getElement(),
+  });
+  const element = primaryBar.getElement();
+  document.body.append(element);
+
+  try {
+    const settingsButton = element.querySelector(
+      '.primarybar-footer .primarybar-footer-settings-btn',
+    );
+    assert(settingsButton instanceof HTMLButtonElement);
+    const settingsItem = settingsButton.closest('.actionbar-item');
+    assert(settingsItem instanceof HTMLElement);
+    assert.equal(settingsItem.classList.contains('is-active'), true);
+  } finally {
+    primaryBar.dispose();
+    footerActionsView.dispose();
+  }
+});
