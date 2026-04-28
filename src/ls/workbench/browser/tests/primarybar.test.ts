@@ -342,3 +342,64 @@ test('primary bar footer more action exposes agent and flow layout actions', asy
     footerActionsView.dispose();
   }
 });
+
+test('primary bar footer layout submenu marks the active layout', async () => {
+  const footerActionsView = new PrimaryBarFooterActionsView({
+    accountLabel: 'Literature Studio',
+    settingsLabel: 'Settings',
+    activeLayoutMode: 'agent',
+  });
+  const primaryBar = createPrimaryBar({
+    ...createProps(),
+    footerActionsElement: footerActionsView.getElement(),
+  });
+  const element = primaryBar.getElement();
+  document.body.append(element);
+
+  try {
+    const moreButton = element.querySelector(
+      '.primarybar-footer .primarybar-footer-more-btn',
+    );
+    assert(moreButton instanceof HTMLButtonElement);
+
+    moreButton.click();
+    await delay(0);
+
+    const menu = document.body.querySelector(
+      '.actionbar-context-view.primarybar-footer-more-menu-overlay .dropdown-menu',
+    );
+    assert(menu instanceof HTMLElement);
+    const layoutItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) => node.textContent?.includes('Layout'),
+    );
+    assert(layoutItem instanceof HTMLElement);
+    layoutItem.click();
+    await delay(0);
+
+    const submenu = document.body.querySelector(
+      '.actionbar-context-view.primarybar-footer-more-menu-overlay .ls-menu-submenu',
+    );
+    assert(submenu instanceof HTMLElement);
+    const agentItem = Array.from(
+      submenu.querySelectorAll<HTMLElement>('.dropdown-menu-item'),
+    ).find((node) => node.textContent?.includes('Agent'));
+    const flowItem = Array.from(
+      submenu.querySelectorAll<HTMLElement>('.dropdown-menu-item'),
+    ).find((node) => node.textContent?.includes('Flow'));
+    assert(agentItem instanceof HTMLElement);
+    assert(flowItem instanceof HTMLElement);
+    assert.equal(agentItem.classList.contains('selected'), true);
+    assert.equal(
+      agentItem.querySelector('.dropdown-menu-item-check svg') instanceof SVGElement,
+      true,
+    );
+    assert.equal(flowItem.classList.contains('selected'), false);
+    assert.equal(
+      flowItem.querySelector('.dropdown-menu-item-check.placeholder') instanceof HTMLElement,
+      true,
+    );
+  } finally {
+    primaryBar.dispose();
+    footerActionsView.dispose();
+  }
+});

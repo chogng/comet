@@ -9,10 +9,13 @@ const MORE_LAYOUT_LABEL = 'Layout';
 const MORE_LAYOUT_AGENT_LABEL = 'Agent';
 const MORE_LAYOUT_FLOW_LABEL = 'Flow';
 
+export type PrimaryBarFooterLayoutMode = 'agent' | 'flow';
+
 export type PrimaryBarFooterActionsProps = {
   accountLabel?: string;
   moreLabel?: string;
   settingsLabel?: string;
+  activeLayoutMode?: PrimaryBarFooterLayoutMode | null;
   onApplyLayoutAgent?: () => void;
   onApplyLayoutFlow?: () => void;
   onOpenSettings?: () => void;
@@ -89,6 +92,7 @@ export class PrimaryBarFooterActionsView {
                 {
                   id: 'primarybar-footer-more-layout-agent',
                   label: MORE_LAYOUT_AGENT_LABEL,
+                  checked: props.activeLayoutMode === 'agent',
                   onClick: () => {
                     props.onApplyLayoutAgent?.();
                   },
@@ -96,6 +100,7 @@ export class PrimaryBarFooterActionsView {
                 {
                   id: 'primarybar-footer-more-layout-flow',
                   label: MORE_LAYOUT_FLOW_LABEL,
+                  checked: props.activeLayoutMode === 'flow',
                   onClick: () => {
                     props.onApplyLayoutFlow?.();
                   },

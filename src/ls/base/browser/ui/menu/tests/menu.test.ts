@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 
@@ -224,6 +225,51 @@ test('menu closes only submenu on first Escape and root menu on second Escape', 
 
     parentItem.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.equal(cancelCount, 1);
+  } finally {
+    menu.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('menu keeps pointer submenu while hovered and closes it after leaving', async () => {
+  const menu = new Menu({
+    items: [
+      {
+        value: 'parent',
+        label: 'Parent',
+        submenu: [
+          { value: 'child', label: 'Child' },
+        ],
+      },
+    ],
+  });
+  document.body.append(menu.getElement());
+
+  try {
+    const parentItem = menu.getElement().querySelector('.dropdown-menu-item');
+    assert(parentItem instanceof HTMLDivElement);
+
+    parentItem.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    const submenu = document.body.querySelector('.ls-menu-submenu');
+    assert(submenu instanceof HTMLElement);
+
+    menu.getElement().dispatchEvent(
+      new MouseEvent('mouseleave', {
+        bubbles: true,
+        relatedTarget: submenu,
+      }),
+    );
+    await delay(140);
+    assert.equal(document.body.querySelector('.ls-menu-submenu'), submenu);
+
+    submenu.dispatchEvent(
+      new MouseEvent('mouseleave', {
+        bubbles: true,
+        relatedTarget: document.body,
+      }),
+    );
+    await delay(140);
+    assert.equal(document.body.querySelector('.ls-menu-submenu'), null);
   } finally {
     menu.dispose();
     document.body.replaceChildren();

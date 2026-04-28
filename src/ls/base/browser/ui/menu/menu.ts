@@ -195,15 +195,20 @@ export class Menu extends LifecycleOwner {
     parentElement: HTMLDivElement;
     menu: Menu;
     element: HTMLElement;
+    listeners: Array<{ dispose: () => void }>;
+    source: MenuSelectionSource;
   } | null = null;
   private activeIndex = -1;
   private disposed = false;
+  private submenuCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: MenuOptions) {
     super();
     this.register(this.renderDisposables);
     this.options = options;
     this.register(addDisposableListener(this.element, 'keydown', this.handleKeyDown));
+    this.register(addDisposableListener(this.element, 'mouseenter', this.cancelSubmenuClose));
+    this.register(addDisposableListener(this.element, 'mouseleave', this.handleRootMouseLeave));
     this.render();
   }
 
@@ -268,6 +273,7 @@ export class Menu extends LifecycleOwner {
     }
 
     this.disposed = true;
+    this.cancelSubmenuClose();
     this.closeSubmenu();
     super.dispose();
     this.element.replaceChildren();
@@ -275,6 +281,60 @@ export class Menu extends LifecycleOwner {
     this.activeIndex = -1;
     this.element.remove();
   }
+
+  private cancelSubmenuClose = () => {
+    if (this.submenuCloseTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.submenuCloseTimer);
+    this.submenuCloseTimer = null;
+  };
+
+  private scheduleSubmenuClose() {
+    if (!this.submenuState || this.submenuState.source !== 'pointer') {
+      return;
+    }
+
+    this.cancelSubmenuClose();
+    this.submenuCloseTimer = setTimeout(() => {
+      this.submenuCloseTimer = null;
+      this.closeSubmenu();
+    }, 120);
+  }
+
+  private readonly handleRootMouseLeave = (event: MouseEvent) => {
+    if (!this.submenuState) {
+      return;
+    }
+
+    const relatedTarget = event.relatedTarget;
+    if (
+      relatedTarget instanceof Node
+      && this.submenuState.element.contains(relatedTarget)
+    ) {
+      return;
+    }
+
+    this.scheduleSubmenuClose();
+  };
+
+  private readonly handleSubmenuMouseLeave = (event: MouseEvent) => {
+    if (!this.submenuState) {
+      return;
+    }
+
+    const relatedTarget = event.relatedTarget;
+    if (
+      relatedTarget instanceof Node
+      && (this.element.contains(relatedTarget)
+        || this.submenuState.element.contains(relatedTarget))
+    ) {
+      return;
+    }
+
+    this.scheduleSubmenuClose();
+  };
 
   private render() {
     this.closeSubmenu();
@@ -700,6 +760,7 @@ export class Menu extends LifecycleOwner {
     }
 
     if (this.submenuState?.parentIndex === index) {
+      this.cancelSubmenuClose();
       if (source === 'keyboard') {
         this.submenuState.menu.focusSelectedOrFirstEnabled();
       }
@@ -722,6 +783,10 @@ export class Menu extends LifecycleOwner {
     });
     const submenuElement = submenu.getElement();
     submenuElement.classList.add('ls-menu-submenu');
+    const submenuListeners = [
+      addDisposableListener(submenuElement, 'mouseenter', this.cancelSubmenuClose),
+      addDisposableListener(submenuElement, 'mouseleave', this.handleSubmenuMouseLeave),
+    ];
     const host = this.element.parentElement ?? this.element;
     host.append(submenuElement);
     this.layoutSubmenu(submenuElement, parentElement);
@@ -731,6 +796,8 @@ export class Menu extends LifecycleOwner {
       parentElement,
       menu: submenu,
       element: submenuElement,
+      listeners: submenuListeners,
+      source,
     };
     if (source === 'keyboard') {
       submenu.focusSelectedOrFirstEnabled();
@@ -742,7 +809,11 @@ export class Menu extends LifecycleOwner {
       return;
     }
 
+    this.cancelSubmenuClose();
     this.submenuState.parentElement.setAttribute('aria-expanded', 'false');
+    for (const listener of this.submenuState.listeners) {
+      listener.dispose();
+    }
     this.submenuState.menu.dispose();
     this.submenuState = null;
   }

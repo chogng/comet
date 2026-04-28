@@ -1,8 +1,8 @@
 .ls-menu {
   --ls-menu-hover-bg: var(--vscode-menu-itemHoverBackground, rgba(0, 0, 0, 0.04));
-  --ls-menu-selected-bg: transparent;
-  --ls-menu-selected-fg: var(--vscode-menu-itemForeground, #304357);
-  --ls-menu-check-color: var(--vscode-menu-itemForeground, #304357);
+  --ls-menu-selected-bg: var(--vscode-menu-selectionBackground, rgba(0, 0, 0, 0.06));
+  --ls-menu-selected-fg: var(--vscode-menu-selectionForeground, var(--vscode-menu-itemForeground, #304357));
+  --ls-menu-check-color: var(--vscode-menu-selectionForeground, var(--vscode-menu-itemForeground, #304357));
 
   position: relative;
   width: max-content;

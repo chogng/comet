@@ -34,6 +34,7 @@ import type { EditorPartChangeReason, EditorPartControllerContext, EditorPartMod
 import type { EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { createEditorBrowserToolbarActions } from 'ls/workbench/browser/parts/editor/editorBrowserToolbarActions';
 import { PrimaryBarFooterActionsView } from 'ls/workbench/browser/parts/primarybar/primarybarFooterActions';
+import type { PrimaryBarFooterLayoutMode } from 'ls/workbench/browser/parts/primarybar/primarybarFooterActions';
 import { SidebarTopbarActionsView } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
 import {
   createSettingsPartView,
@@ -1113,6 +1114,10 @@ class WorkbenchHost {
       accountLabel: props.primaryBarProps.accountLabel,
       moreLabel: props.primaryBarProps.moreLabel,
       settingsLabel: props.primaryBarProps.settingsLabel,
+      activeLayoutMode: this.resolvePrimaryBarFooterLayoutMode({
+        isAgentSidebarVisible: props.isAgentSidebarVisible,
+        isEditorCollapsed: props.isEditorCollapsed,
+      }),
       onApplyLayoutAgent: props.onApplyLayoutAgent,
       onApplyLayoutFlow: props.onApplyLayoutFlow,
       onOpenSettings: props.onOpenSettings,
@@ -1167,6 +1172,17 @@ class WorkbenchHost {
     this.workbenchLayoutView.layout();
   }
 
+  private resolvePrimaryBarFooterLayoutMode(props: {
+    isAgentSidebarVisible: boolean;
+    isEditorCollapsed: boolean;
+  }): PrimaryBarFooterLayoutMode | null {
+    if (props.isEditorCollapsed) {
+      return null;
+    }
+
+    return props.isAgentSidebarVisible ? 'agent' : 'flow';
+  }
+
   private renderSettingsPage(
     props: {
       settingsPartProps: ReturnType<typeof createSettingsPartProps>;
@@ -1197,6 +1213,7 @@ class WorkbenchHost {
       accountLabel: props.primaryBarProps.accountLabel,
       moreLabel: props.primaryBarProps.moreLabel,
       settingsLabel: props.primaryBarProps.settingsLabel,
+      activeLayoutMode: 'flow',
       onApplyLayoutAgent: props.onApplyLayoutAgent,
       onApplyLayoutFlow: props.onApplyLayoutFlow,
       onOpenSettings: props.onOpenSettings,
