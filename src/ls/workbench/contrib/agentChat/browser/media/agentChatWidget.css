@@ -19,6 +19,11 @@
   overflow: hidden;
 }
 
+.agentbar-shell.is-empty-state {
+  justify-content: center;
+  align-items: center;
+}
+
 .agentbar-thread {
   flex: 1;
   min-height: 0;
@@ -98,15 +103,16 @@
   position: relative;
   margin-top: auto;
   padding: 0;
-  border: 1px solid #d7e2ec;
+  border: 1px solid var(--vscode-agentBar-composerBorder, #F8F8F8);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--vscode-agentBar-composerBackground, #FCFCFC);
   box-shadow: none;
   overflow: hidden;
 }
 
 .agentbar-composer.is-empty-state {
   margin-top: 0;
+  width: min(100%, 560px);
 }
 
 .agentbar-composer .agentbar-input {
@@ -124,8 +130,8 @@
   justify-content: space-between;
   gap: 8px;
   padding: 4px;
-  border-top: 1px solid #e6edf4;
-  background: #ffffff;
+  border-top: 1px solid var(--vscode-agentBar-composerToolbarBorder, #F8F8F8);
+  background: var(--vscode-agentBar-composerToolbarBackground, #FCFCFC);
 }
 
 .agentbar-model-switch {

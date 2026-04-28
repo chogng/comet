@@ -11,8 +11,6 @@ import {
 } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createFilterMenuHeader } from 'ls/base/browser/ui/dropdown/dropdownSearchHeader';
 import type { DropdownOption } from 'ls/base/browser/ui/dropdown/dropdown';
-import { applyHover } from 'ls/base/browser/ui/hover/hover';
-import { HorizontalScrollbar } from 'ls/base/browser/ui/scrollbar/horizontalScrollbar';
 import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
 import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
 
@@ -93,7 +91,6 @@ export class AgentChatWidget {
   private props: AgentChatWidgetProps;
   private readonly element = createElement('div', 'agentbar-content');
   private readonly renderDisposables = new Set<() => void>();
-  private tabStripScrollLeft = 0;
 
   constructor(props: AgentChatWidgetProps) {
     this.props = props;
@@ -125,87 +122,6 @@ export class AgentChatWidget {
 
   private renderTopbar() {
     const topbar = createElement('div', 'agentbar-tabs-header');
-    const stripHost = createElement(
-      'div',
-      'agentbar-tab-scroll-host horizontal-scrollbar-host',
-    );
-    const strip = createElement(
-      'div',
-      'agentbar-tab-strip horizontal-scrollbar-strip',
-    );
-    let activeTabButton: HTMLButtonElement | null = null;
-    for (const conversation of this.props.conversations) {
-      const item = createElement('div', 'agentbar-tab-item');
-      const button = createElement(
-        'button',
-        [
-          'agentbar-tab',
-          conversation.id === this.props.activeConversationId ? 'is-active' : '',
-        ]
-          .filter(Boolean)
-          .join(' '),
-      );
-      button.type = 'button';
-      button.textContent = conversation.title;
-      applyHover(button, conversation.title);
-      if (conversation.id === this.props.activeConversationId) {
-        activeTabButton = button;
-      }
-      button.addEventListener('click', () =>
-        this.props.onActivateConversation(conversation.id),
-      );
-
-      const close = createElement(
-        'button',
-        'agentbar-tab-close btn-base btn-ghost btn-mode-icon',
-      );
-      close.type = 'button';
-      close.append(createLxIcon(lxIconSemanticMap.assistant.closeConversation));
-      close.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (this.props.conversations.length === 1) {
-          this.props.onCloseAgentBar();
-          return;
-        }
-        this.props.onCloseConversation(conversation.id);
-      });
-      item.append(button, close);
-      strip.append(item);
-    }
-
-    const scrollbarTrack = createElement(
-      'div',
-      'agentbar-tab-scrollbar horizontal-scrollbar-track',
-    );
-    scrollbarTrack.setAttribute('aria-hidden', 'true');
-    const scrollbarThumb = createElement(
-      'div',
-      'agentbar-tab-scrollbar-thumb horizontal-scrollbar-thumb',
-    );
-    scrollbarThumb.setAttribute('aria-hidden', 'true');
-    scrollbarTrack.append(scrollbarThumb);
-    stripHost.append(strip, scrollbarTrack);
-
-    const tabStripScrollbar = new HorizontalScrollbar(
-      stripHost,
-      strip,
-      scrollbarTrack,
-      scrollbarThumb,
-      {
-        activeItem: activeTabButton,
-        initialScrollLeft: this.tabStripScrollLeft,
-        scrollYToX: true,
-        mouseWheelSmoothScroll: false,
-        consumeMouseWheelIfScrollbarIsNeeded: true,
-        onScrollLeftChange: (scrollLeft) => {
-          this.tabStripScrollLeft = scrollLeft;
-        },
-      },
-    );
-    this.renderDisposables.add(() => {
-      tabStripScrollbar.dispose();
-    });
-
     const topbarItems: ActionBarItem[] = [
       this.createTopbarActionItem(
         this.props.labels.assistantNewConversation,
@@ -224,12 +140,20 @@ export class AgentChatWidget {
     this.renderDisposables.add(() => {
       actionsView.dispose();
     });
-    topbar.append(stripHost, actionsView.getElement());
+    topbar.append(actionsView.getElement());
     return topbar;
   }
 
   private renderShell(canSend: boolean) {
-    const shell = createElement('div', 'agentbar-shell');
+    const shell = createElement(
+      'div',
+      [
+        'agentbar-shell',
+        this.props.messages.length === 0 ? 'is-empty-state' : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
     if (this.props.errorMessage) {
       const error = createElement('div', 'agentbar-error');
       error.textContent = this.props.errorMessage;

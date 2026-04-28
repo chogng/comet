@@ -185,6 +185,26 @@ export const agentBarInputForeground = registerColor('agentBar.inputForeground',
   light: '#1f2d3a',
 });
 
+export const agentBarComposerBorder = registerColor('agentBar.composerBorder', {
+  dark: '#2a3340',
+  light: '#F8F8F8',
+});
+
+export const agentBarComposerBackground = registerColor('agentBar.composerBackground', {
+  dark: '#20262e',
+  light: '#FCFCFC',
+});
+
+export const agentBarComposerToolbarBorder = registerColor('agentBar.composerToolbarBorder', {
+  dark: '#2a3340',
+  light: '#F8F8F8',
+});
+
+export const agentBarComposerToolbarBackground = registerColor('agentBar.composerToolbarBackground', {
+  dark: '#20262e',
+  light: '#FCFCFC',
+});
+
 export const agentBarTabForeground = registerColor('agentBar.tabForeground', {
   dark: '#93a4b5',
   light: '#415366',
