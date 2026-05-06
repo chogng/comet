@@ -305,6 +305,7 @@ function createPdfContentStatus(
   const value = status.detail && status.state === 'error'
     ? `${status.message}: ${status.detail}`
     : status.message;
+  const hitTest = status.hitTest;
 
   return {
     message: value,
@@ -315,6 +316,24 @@ function createPdfContentStatus(
         : status.state === 'loading'
           ? 'muted'
           : 'accent',
+    items: hitTest
+      ? [
+          {
+            id: 'pdf-hit-line',
+            label: 'Line',
+            value: `P${hitTest.page} L${hitTest.lineIndex}`,
+            tone: 'muted',
+            title: `${hitTest.lineId}\n${hitTest.text}`,
+          },
+          {
+            id: 'pdf-hit-point',
+            label: 'PDF',
+            value: `${Math.round(hitTest.pdfX)},${Math.round(hitTest.pdfY)}`,
+            tone: 'muted',
+            title: `char=${hitTest.charOffset}, deltaY=${hitTest.lineDeltaY.toFixed(2)}`,
+          },
+        ]
+      : undefined,
   };
 }
 
@@ -381,7 +400,8 @@ class EditorGroupController {
     if (
       previousStatus?.state === nextStatus.state &&
       previousStatus.message === nextStatus.message &&
-      previousStatus.detail === nextStatus.detail
+      previousStatus.detail === nextStatus.detail &&
+      previousStatus.hitTest === nextStatus.hitTest
     ) {
       return;
     }
@@ -509,6 +529,8 @@ export class EditorGroupView {
       createEditorModeToolbarContext({
         ...props,
         browserLibraryPanel: this.browserLibraryPanel,
+        onPdfHighlightSelection: this.handlePdfHighlightSelection,
+        onPdfNoteSelection: this.handlePdfNoteSelection,
       }),
     );
     setEditorFrameSlot(this.headerElement, EDITOR_FRAME_SLOTS.topbar);
@@ -602,6 +624,24 @@ export class EditorGroupView {
     this.props.onStatusChange?.(this.controller.getSnapshot().editorStatus);
   };
 
+  private readonly handlePdfHighlightSelection = () => {
+    this.runActivePdfAnnotationAction('addHighlightFromSelection');
+  };
+
+  private readonly handlePdfNoteSelection = () => {
+    this.runActivePdfAnnotationAction('addNoteFromSelection');
+  };
+
+  private runActivePdfAnnotationAction(
+    methodName: 'addHighlightFromSelection' | 'addNoteFromSelection',
+  ) {
+    const pane = this.activePane as AnyEditorPane & {
+      addHighlightFromSelection?: () => boolean;
+      addNoteFromSelection?: () => boolean;
+    } | null;
+    pane?.[methodName]?.();
+  }
+
   private render() {
     const { group, editorStatus } = this.controller.getSnapshot();
     const resolverContext = this.createPaneResolverContext();
@@ -648,6 +688,8 @@ export class EditorGroupView {
     this.modeToolbarHost.setContext(createEditorModeToolbarContext({
       ...this.props,
       browserLibraryPanel: this.browserLibraryPanel,
+      onPdfHighlightSelection: this.handlePdfHighlightSelection,
+      onPdfNoteSelection: this.handlePdfNoteSelection,
     }));
     this.syncToolbarMode(group.activeTab);
     this.syncTopbarActions(

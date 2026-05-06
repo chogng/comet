@@ -27,6 +27,8 @@ type EditorModeToolbarSourceProps = {
   onToolbarAddressChange: (value: string) => void;
   onToolbarAddressSubmit: () => void;
   onToolbarNavigateToUrl: (url: string) => void;
+  onPdfHighlightSelection?: () => void;
+  onPdfNoteSelection?: () => void;
   browserLibraryPanel?: EditorBrowserLibraryPanel | null;
 };
 
@@ -149,6 +151,8 @@ export function createEditorModeToolbarContext(
     onAddressInputChange: props.onToolbarAddressChange,
     onAddressInputSubmit: props.onToolbarAddressSubmit,
     onNavigateToUrl: props.onToolbarNavigateToUrl,
+    onPdfHighlightSelection: props.onPdfHighlightSelection ?? (() => {}),
+    onPdfNoteSelection: props.onPdfNoteSelection ?? (() => {}),
     browserLibraryPanel: props.browserLibraryPanel ?? null,
   };
 }

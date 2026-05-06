@@ -20,6 +20,7 @@
     "test:base-common": "node scripts/run-base-common-tests.mjs",
     "test:workbench-browser": "node scripts/run-workbench-browser-tests.mjs",
     "test:editor": "node scripts/run-editor-tests.mjs",
+    "test:pdf-selection": "node scripts/run-pdf-selection-tests.mjs",
     "test:library-store": "node scripts/run-library-store-tests.mjs",
     "test:electron-main": "node scripts/run-electron-main-tests.mjs",
     "test:agent": "node scripts/run-agent-tests.mjs",

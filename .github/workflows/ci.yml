@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check i18n keys
+        run: npm run check:i18n
+
+      - name: Type-check tests
+        run: npm run typecheck:tests
+
+      - name: Run base common tests
+        run: npm run test:base-common
+
+      - name: Run library store tests
+        run: npm run test:library-store
+
+      - name: Run editor tests
+        run: npm run test:editor
+
+      - name: Run PDF selection tests
+        run: npm run test:pdf-selection
+
+      - name: Run Electron main tests
+        run: npm run test:electron-main
+
+      - name: Build application
+        run: npm run build
+

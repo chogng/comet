@@ -73,6 +73,7 @@ export type EditorContentStatusState = {
   message: string;
   detail?: string;
   tone?: EditorStatusItemTone;
+  items?: readonly EditorStatusItem[];
 };
 
 export type EditorStatusState = {
@@ -237,6 +238,7 @@ function createContentEditorStatus(
       title: contentStatus.detail,
     });
   }
+  leftItems.push(...(contentStatus?.items ?? []));
 
   return {
     ariaLabel: labels.statusbarAriaLabel,

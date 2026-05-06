@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
+import type { Annotation } from 'ls/editor/common/annotation';
+import { readStoredPdfAnnotations } from 'ls/editor/browser/pdf/pdfAnnotationPersistence';
 import { createPdfSelection } from 'ls/editor/browser/pdf/pdfSelection';
 import { DEFAULT_EDITOR_GROUP_ID } from 'ls/workbench/browser/editorGroupIdentity';
 
@@ -247,6 +249,82 @@ test('EditorGroupView restores pdf pane selection and draft comment after switch
   }
 });
 
+test('EditorGroupView persists pdf highlight and note annotations from the current selection', () => {
+  const pdfTab = {
+    id: 'pdf-annotate',
+    kind: 'pdf' as const,
+    title: 'Paper PDF',
+    url: 'https://example.com/annotate.pdf',
+  };
+  const storageKey = `ls.pdfAnnotations.${pdfTab.url}`;
+  window.localStorage.removeItem(storageKey);
+
+  const view = new EditorGroupView(createProps(pdfTab.id, pdfTab, [pdfTab]));
+  document.body.append(view.getElement());
+
+  try {
+    const activePane = (view as unknown as {
+      activePane: {
+        restoreViewState: (state: {
+          selection: ReturnType<typeof createPdfSelection> | null;
+          draftComment: string;
+        }) => void;
+        addHighlightFromSelection: () => boolean;
+        addNoteFromSelection: () => boolean;
+        updatePdfAnnotation: (annotation: Annotation) => void;
+        deletePdfAnnotation: (annotationId: string) => void;
+      } | null;
+    }).activePane;
+    assert(activePane);
+
+    activePane.restoreViewState({
+      selection: createPdfSelection({
+        page: 1,
+        rects: [{ x: 10, y: 20, width: 100, height: 12 }],
+        text: 'layout anchored quote',
+        startCharOffset: 5,
+        endCharOffset: 26,
+        lineIds: ['page-1-line-2'],
+        textRange: { startCharIndex: 5, endCharIndex: 26 },
+      }),
+      draftComment: 'stored note',
+    });
+
+    assert.equal(activePane.addHighlightFromSelection(), true);
+    assert.equal(activePane.addNoteFromSelection(), true);
+
+    const annotations = readStoredPdfAnnotations(pdfTab.url);
+    assert.equal(annotations.length, 2);
+    const [highlight, note] = annotations;
+    assert(highlight);
+    assert(note);
+    assert.equal(highlight.mode, 'highlight');
+    assert.equal(highlight.comment, '');
+    assert.equal(note.mode, 'note');
+    assert.equal(note.comment, 'stored note');
+    assert.equal(highlight.anchor.ranges?.[0]?.quote, 'layout anchored quote');
+    assert.equal(highlight.anchor.ranges?.[0]?.startCharOffset, 5);
+    assert.equal(highlight.anchor.ranges?.[0]?.endCharOffset, 26);
+    assert.deepEqual(highlight.anchor.ranges?.[0]?.lineIds, ['page-1-line-2']);
+
+    activePane.updatePdfAnnotation({
+      ...note,
+      comment: 'edited note',
+      updatedAt: '2026-04-25T00:00:00.000Z',
+    });
+    assert.equal(readStoredPdfAnnotations(pdfTab.url)[1]?.comment, 'edited note');
+
+    activePane.deletePdfAnnotation(highlight.id);
+    const remainingAnnotations = readStoredPdfAnnotations(pdfTab.url);
+    assert.equal(remainingAnnotations.length, 1);
+    assert.equal(remainingAnnotations[0]?.id, note.id);
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+    window.localStorage.removeItem(storageKey);
+  }
+});
+
 test('EditorGroupView renders a controlled PDFium reader shell for PDF tabs', () => {
   const pdfTab = {
     id: 'pdf-direct-reader',
@@ -337,6 +415,79 @@ test('EditorGroupView reports pdf reader errors to the editor statusbar state', 
     assert.equal(pdfStatus.tone, 'error');
     assert.match(pdfStatus.value, /Unavailable/);
     assert.match(pdfStatus.title ?? '', /Electron runtime/);
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('EditorGroupView reports pdf hit-test diagnostics to the editor statusbar state', () => {
+  const pdfTab = {
+    id: 'pdf-status-hit-test',
+    kind: 'pdf' as const,
+    title: 'Paper PDF',
+    url: 'file:///C:/Users/lanxi/Desktop/sample.pdf',
+  };
+  const statusUpdates: Array<{
+    leftItems: readonly { id: string; value: string; title?: string }[];
+  }> = [];
+
+  const view = new EditorGroupView({
+    ...createProps(pdfTab.id, pdfTab, [pdfTab]),
+    onStatusChange: (status) => {
+      statusUpdates.push(status);
+    },
+  });
+  document.body.append(view.getElement());
+
+  try {
+    (view as unknown as {
+      handlePdfReaderStatusChange: (
+        tabId: string,
+        status: {
+          state: 'ready';
+          message: string;
+          hitTest: {
+            page: number;
+            lineIndex: number;
+            lineId: string;
+            charOffset: number;
+            pdfX: number;
+            pdfY: number;
+            lineDeltaY: number;
+            text: string;
+          };
+        },
+      ) => void;
+    }).handlePdfReaderStatusChange(pdfTab.id, {
+      state: 'ready',
+      message: '7 pages',
+      hitTest: {
+        page: 2,
+        lineIndex: 5,
+        lineId: 'pdf_line_2_5',
+        charOffset: 42,
+        pdfX: 123.4,
+        pdfY: 567.8,
+        lineDeltaY: -3.2,
+        text: 'diagnostic line',
+      },
+    });
+
+    const latestStatus = statusUpdates.at(-1);
+    assert(latestStatus);
+    assert.equal(
+      latestStatus.leftItems.find((item) => item.id === 'pdf-hit-line')?.value,
+      'P2 L5',
+    );
+    assert.equal(
+      latestStatus.leftItems.find((item) => item.id === 'pdf-hit-point')?.value,
+      '123,568',
+    );
+    assert.match(
+      latestStatus.leftItems.find((item) => item.id === 'pdf-hit-line')?.title ?? '',
+      /diagnostic line/,
+    );
   } finally {
     view.dispose();
     document.body.replaceChildren();

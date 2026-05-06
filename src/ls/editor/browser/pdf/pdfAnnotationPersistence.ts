@@ -50,24 +50,81 @@ function normalizeAnnotation(value: unknown, targetId: string): Annotation | nul
             .map(normalizeRect)
           : [],
         quote: typeof range.quote === 'string' ? range.quote : undefined,
+        startCharOffset: typeof range.startCharOffset === 'number'
+          ? range.startCharOffset
+          : undefined,
+        endCharOffset: typeof range.endCharOffset === 'number'
+          ? range.endCharOffset
+          : undefined,
         startCharIndex: typeof range.startCharIndex === 'number'
           ? range.startCharIndex
           : undefined,
         endCharIndex: typeof range.endCharIndex === 'number'
           ? range.endCharIndex
           : undefined,
+        startTextIndex: typeof range.startTextIndex === 'number'
+          ? range.startTextIndex
+          : undefined,
+        endTextIndex: typeof range.endTextIndex === 'number'
+          ? range.endTextIndex
+          : undefined,
+        textSpans: Array.isArray(range.textSpans)
+          ? range.textSpans
+            .filter((span): span is Record<string, unknown> => isRecord(span))
+            .map((span) => ({
+              startTextIndex: typeof span.startTextIndex === 'number'
+                ? span.startTextIndex
+                : 0,
+              endTextIndex: typeof span.endTextIndex === 'number'
+                ? span.endTextIndex
+                : 0,
+            }))
+            .filter((span) => span.endTextIndex > span.startTextIndex)
+          : undefined,
+        lineIds: Array.isArray(range.lineIds)
+          ? range.lineIds.filter((lineId): lineId is string => typeof lineId === 'string')
+          : undefined,
+        blockIds: Array.isArray(range.blockIds)
+          ? range.blockIds.filter((blockId): blockId is string => typeof blockId === 'string')
+          : undefined,
       }))
+    : undefined;
+
+  const fingerprint = isRecord(anchor.fingerprint)
+    ? {
+      beforeText: typeof anchor.fingerprint.beforeText === 'string'
+        ? anchor.fingerprint.beforeText
+        : undefined,
+      afterText: typeof anchor.fingerprint.afterText === 'string'
+        ? anchor.fingerprint.afterText
+        : undefined,
+      pageTextHash: typeof anchor.fingerprint.pageTextHash === 'string'
+        ? anchor.fingerprint.pageTextHash
+        : undefined,
+      layoutVersion: typeof anchor.fingerprint.layoutVersion === 'number'
+        ? anchor.fingerprint.layoutVersion
+        : undefined,
+    }
     : undefined;
 
   return {
     id: value.id,
     kind: 'pdf',
+    mode: value.mode === 'highlight' || value.mode === 'note'
+      ? value.mode
+      : undefined,
     targetId,
     anchor: {
+      anchorVersion: anchor.anchorVersion === 2 ? 2 : anchor.anchorVersion === 1 ? 1 : undefined,
+      documentId: typeof anchor.documentId === 'string' ? anchor.documentId : undefined,
+      fileHash: typeof anchor.fileHash === 'string' ? anchor.fileHash : undefined,
+      parserName: typeof anchor.parserName === 'string' ? anchor.parserName : undefined,
+      parserVersion: typeof anchor.parserVersion === 'string' ? anchor.parserVersion : undefined,
       page: anchor.page,
       rects,
       quote: typeof anchor.quote === 'string' ? anchor.quote : undefined,
       ranges,
+      fingerprint,
     },
     comment: value.comment,
     createdAt: value.createdAt,

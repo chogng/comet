@@ -3005,6 +3005,8 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
       'Pagination',
       'Highlight',
       'Translate',
+      'Erase',
+      'Note',
     ]);
     assert.deepEqual(pdfTrailingButtons, ['Search', 'More']);
     const pdfPane = view.getElement().querySelector('.editor-content .editor-pdf-pane');

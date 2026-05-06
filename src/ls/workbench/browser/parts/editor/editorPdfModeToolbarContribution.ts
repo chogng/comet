@@ -124,7 +124,7 @@ implements EditorModeToolbarContribution {
         mode: 'icon',
         buttonClassName: 'editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfHighlight),
-        onClick: () => {},
+        onClick: this.context.onPdfHighlightSelection,
       },
       {
         label: PDF_TRANSLATE_LABEL,
@@ -148,7 +148,7 @@ implements EditorModeToolbarContribution {
         mode: 'icon',
         buttonClassName: 'editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfNote),
-        onClick: () => {},
+        onClick: this.context.onPdfNoteSelection,
       },
     ];
   }

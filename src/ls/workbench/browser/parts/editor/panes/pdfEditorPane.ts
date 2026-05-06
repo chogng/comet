@@ -6,7 +6,13 @@ import {
   createPdfDocumentReader,
 } from 'ls/editor/browser/pdf/pdfDocumentReader';
 import type { PdfSelection } from 'ls/editor/browser/pdf/pdfSelection';
-import { readStoredPdfAnnotations } from 'ls/editor/browser/pdf/pdfAnnotationPersistence';
+import { createAnnotationId } from 'ls/editor/common/annotation';
+import type { Annotation } from 'ls/editor/common/annotation';
+import { createPdfAnnotationAnchorFromSelection } from 'ls/editor/browser/pdf/pdfAnnotationAnchor';
+import {
+  readStoredPdfAnnotations,
+  writeStoredPdfAnnotations,
+} from 'ls/editor/browser/pdf/pdfAnnotationPersistence';
 import {
   createPdfReaderDocumentSource,
   createPdfReaderSnapshot,
@@ -133,6 +139,35 @@ export class PdfEditorPane extends EditorPane<
     this.documentReader?.restoreViewState(this.editor.getViewState());
   }
 
+  addHighlightFromSelection() {
+    return this.addAnnotationFromSelection('highlight');
+  }
+
+  addNoteFromSelection() {
+    return this.addAnnotationFromSelection('note');
+  }
+
+  updatePdfAnnotation(annotation: Annotation) {
+    const targetId = this.getAnnotationTargetId();
+    const annotations = readStoredPdfAnnotations(targetId);
+    const nextAnnotations = annotations.map((storedAnnotation) => {
+      return storedAnnotation.id === annotation.id
+        ? annotation
+        : storedAnnotation;
+    });
+    writeStoredPdfAnnotations(targetId, nextAnnotations);
+    this.render();
+  }
+
+  deletePdfAnnotation(annotationId: string) {
+    const targetId = this.getAnnotationTargetId();
+    const annotations = readStoredPdfAnnotations(targetId).filter((annotation) => {
+      return annotation.id !== annotationId;
+    });
+    writeStoredPdfAnnotations(targetId, annotations);
+    this.render();
+  }
+
   override dispose() {
     this.documentReader?.dispose();
     this.documentReader = null;
@@ -166,6 +201,35 @@ export class PdfEditorPane extends EditorPane<
       : this.props.pdfTab.id;
   }
 
+  private addAnnotationFromSelection(mode: NonNullable<Annotation['mode']>) {
+    const selection = this.editor.getViewState().selection;
+    if (!selection || !selection.text.trim()) {
+      return false;
+    }
+
+    const targetId = this.getAnnotationTargetId();
+    const now = new Date().toISOString();
+    const annotation: Annotation = {
+      id: createAnnotationId(`pdf_${mode}`),
+      kind: 'pdf',
+      mode,
+      targetId,
+      anchor: createPdfAnnotationAnchorFromSelection(selection),
+      comment: mode === 'note'
+        ? this.editor.getViewState().draftComment.trim()
+        : '',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    writeStoredPdfAnnotations(targetId, [
+      ...readStoredPdfAnnotations(targetId),
+      annotation,
+    ]);
+    this.render();
+    return true;
+  }
+
   private render() {
     const annotations = readStoredPdfAnnotations(this.getAnnotationTargetId());
     const readerProps = {
@@ -184,6 +248,12 @@ export class PdfEditorPane extends EditorPane<
       selection: this.editor.getViewState().selection,
       onViewStateChange: (viewState: PdfDocumentReaderViewState) => {
         this.editor.setDocumentReaderViewState(viewState);
+      },
+      onAnnotationChange: (annotation: Annotation) => {
+        this.updatePdfAnnotation(annotation);
+      },
+      onAnnotationDelete: (annotationId: string) => {
+        this.deletePdfAnnotation(annotationId);
       },
       onReaderStatusChange: (status: PdfReaderRuntimeStatus) => {
         this.props.onReaderStatusChange?.(this.props.pdfTab.id, status);

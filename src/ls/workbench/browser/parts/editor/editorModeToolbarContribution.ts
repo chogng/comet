@@ -48,6 +48,8 @@ export type EditorModeToolbarContributionContext = {
   onAddressInputChange: (value: string) => void;
   onAddressInputSubmit: () => void;
   onNavigateToUrl: (url: string) => void;
+  onPdfHighlightSelection: () => void;
+  onPdfNoteSelection: () => void;
   browserLibraryPanel: EditorBrowserLibraryPanel | null;
 };
 
