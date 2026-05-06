@@ -20,7 +20,7 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set Up Node.js
         uses: actions/setup-node@v4
@@ -55,7 +55,7 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set Up Node.js
         uses: actions/setup-node@v4
