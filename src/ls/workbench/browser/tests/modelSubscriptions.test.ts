@@ -501,6 +501,36 @@ test('WebContentNavigationModel does not activate a default web content target f
   });
 });
 
+test('WebContentNavigationModel reloads the active web content target', async () => {
+  const reloadTargetIds: Array<string | null | undefined> = [];
+
+  await withElectronApi(createElectronApi({
+    webContent: {
+      activate() {},
+      async getState() {
+        return createWebContentState();
+      },
+      onStateChange() {
+        return () => {};
+      },
+      reload(targetId?: string | null) {
+        reloadTargetIds.push(targetId);
+      },
+    } as unknown as NonNullable<ElectronAPI['webContent']>,
+  }), async () => {
+    const model = new WebContentNavigationModel();
+
+    await model.activateTarget('target-refresh');
+    model.handleBrowserRefresh({
+      electronRuntime: true,
+      webContentRuntime: true,
+      ui: locales.en,
+    });
+
+    assert.deepEqual(reloadTargetIds, ['target-refresh']);
+  });
+});
+
 test('SettingsModel subscriptions stop after disposal', () => {
   const model = new SettingsModel([]);
   const sameDomainOnlyValues: boolean[] = [];

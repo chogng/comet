@@ -163,6 +163,7 @@ type TestWebviewElement = HTMLElement & {
   __historyIndex: number;
   __loadURLCalls: string[];
   __loading: boolean;
+  __reloadCalls: number;
   __title: string;
   canGoBack?: () => boolean;
   canGoForward?: () => boolean;
@@ -224,6 +225,7 @@ function installWebviewSpy() {
     webview.__historyIndex = -1;
     webview.__loadURLCalls = [];
     webview.__loading = false;
+    webview.__reloadCalls = 0;
     webview.__title = '';
 
     const originalSetAttribute = webview.setAttribute.bind(webview);
@@ -266,6 +268,7 @@ function installWebviewSpy() {
       webview.__historyIndex += 1;
     };
     webview.reload = () => {
+      webview.__reloadCalls += 1;
       const currentUrl = webview.getURL?.();
       if (currentUrl) {
         commitNavigation(webview, currentUrl, false);
@@ -595,6 +598,88 @@ test('web content contribution uses src for the first navigation before webview 
     webviewSpy.restore();
     animationFrameSpy.restore();
     resizeObserverSpy.restore();
+  }
+});
+
+test('web content contribution reloads the active target and falls back to the current URL', async () => {
+  const resizeObserverSpy = installResizeObserverSpy();
+  const animationFrameSpy = installAnimationFrameSpy();
+  const webviewSpy = installWebviewSpy();
+  const host = document.createElement('div');
+
+  host.dataset.webcontentActive = 'true';
+  Object.defineProperty(host, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => createDomRect(0, 0, 480, 320),
+  });
+  document.body.append(host);
+  registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.webContentViewHost, host);
+
+  try {
+    await withElectronApi(
+      createElectronApi({
+        webContent: {
+          async navigate() {
+            return {
+              targetId: null,
+              activeTargetId: null,
+              ownership: 'inactive',
+              layoutPhase: 'hidden',
+              url: '',
+              canGoBack: false,
+              canGoForward: false,
+              isLoading: false,
+              visible: false,
+            } satisfies DesktopWebContentState;
+          },
+          onBridgeCommand() {
+            return () => {};
+          },
+          respondToBridgeCommand() {},
+          reportBridgeReady() {},
+          reportState() {},
+        } as unknown as NonNullable<ElectronAPI['webContent']>,
+      }),
+      async () => {
+        const contribution = createWorkbenchWebContentViewContribution();
+        assert(contribution);
+        animationFrameSpy.flushUntilIdle();
+
+        const bridge = (window as typeof window & {
+          __lsWebContentBridge?: {
+            navigateTo: (
+              url: string,
+              targetId?: string | null,
+              mode?: 'browser' | 'strict',
+            ) => Promise<DesktopWebContentState>;
+            reload: (targetId?: string | null) => Promise<DesktopWebContentState>;
+          };
+        }).__lsWebContentBridge;
+        assert(bridge);
+
+        await bridge.navigateTo(
+          'https://example.com/reloadable',
+          'target-reload',
+          'browser',
+        );
+        const testWebview = webviewSpy.getCreatedWebviews()[0];
+        assert(testWebview);
+
+        await bridge.reload('target-reload');
+        assert.equal(testWebview.__reloadCalls, 1);
+
+        testWebview.reload = undefined;
+        await bridge.reload('target-reload');
+        assert.equal(testWebview.__loadURLCalls.at(-1), 'https://example.com/reloadable');
+
+        contribution.dispose();
+      },
+    );
+  } finally {
+    webviewSpy.restore();
+    animationFrameSpy.restore();
+    resizeObserverSpy.restore();
+    host.remove();
   }
 });
 

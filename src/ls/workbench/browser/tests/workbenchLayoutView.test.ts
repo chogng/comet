@@ -528,6 +528,7 @@ function createWorkbenchLayoutViewProps() {
         toolbarRefresh: 'Refresh',
         toolbarFavorite: 'Favorite',
         toolbarArchivePage: 'Archive page',
+        toolbarExportDocx: 'Export DOCX',
         toolbarMore: 'More',
         toolbarHardReload: 'Hard reload',
         toolbarCopyCurrentUrl: 'Copy current URL',
@@ -1349,6 +1350,55 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
       trailingButtons.map((button) => button.getAttribute('aria-label')),
       ['Archive page', 'More'],
     );
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('WorkbenchLayoutView dispatches the browser toolbar refresh action', () => {
+  let refreshCalls = 0;
+  const props = createWorkbenchLayoutViewProps();
+  props.editorPartProps = {
+    ...props.editorPartProps,
+    tabs: [
+      {
+        id: 'browser-tab-refresh',
+        kind: 'browser',
+        title: 'Example',
+        url: 'https://example.com/current',
+      },
+    ],
+    activeTabId: 'browser-tab-refresh',
+    activeTab: {
+      id: 'browser-tab-refresh',
+      kind: 'browser',
+      title: 'Example',
+      url: 'https://example.com/current',
+    },
+    viewPartProps: {
+      ...props.editorPartProps.viewPartProps,
+      browserUrl: 'https://example.com/current',
+      electronRuntime: true,
+      webContentRuntime: true,
+    },
+    onToolbarNavigateRefresh: () => {
+      refreshCalls += 1;
+    },
+  };
+
+  const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
+  document.body.append(view.getElement());
+
+  try {
+    const refreshButton = view
+      .getElement()
+      .querySelector('.editor-browser-toolbar-leading [aria-label="Refresh"]');
+    assert(refreshButton instanceof HTMLButtonElement);
+
+    refreshButton.click();
+
+    assert.equal(refreshCalls, 1);
   } finally {
     view.dispose();
     document.body.replaceChildren();
