@@ -3,6 +3,7 @@ import type {
   AppTheme,
   ElectronInvoke,
   LlmProviderId,
+  TranslationProviderId,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import {
   areEditorDraftStyleSettingsEqual,
@@ -485,16 +486,24 @@ export class SettingsController {
     this.scheduleImmediateAutoSave();
   };
 
-  readonly setActiveTranslationProvider = (nextProvider: 'deepl') => {
+  readonly setActiveTranslationProvider = (nextProvider: TranslationProviderId) => {
     this.settingsModel.setActiveTranslationProvider(nextProvider);
     this.scheduleImmediateAutoSave();
   };
 
   readonly setTranslationProviderApiKey = (
-    provider: 'deepl',
+    provider: TranslationProviderId,
     apiKey: string,
   ) => {
     this.settingsModel.setTranslationProviderApiKey(provider, apiKey);
+    this.scheduleDebouncedAutoSave();
+  };
+
+  readonly setTranslationProviderBaseUrl = (
+    provider: TranslationProviderId,
+    baseUrl: string,
+  ) => {
+    this.settingsModel.setTranslationProviderBaseUrl(provider, baseUrl);
     this.scheduleDebouncedAutoSave();
   };
 

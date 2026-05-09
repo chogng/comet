@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 
-import type { LlmSettings, TranslationSettings } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type {
+  DocumentTranslationProgress,
+  LlmSettings,
+  TranslationSettings,
+} from 'ls/base/parts/sandbox/common/desktopTypes';
 import { cleanText } from 'ls/base/common/strings';
 import type { StorageService, TranslationCacheRecord } from 'ls/platform/storage/common/storage';
 import { getLlmTranslationCacheIdentity, translateTextsWithLlm } from 'ls/code/electron-main/llm/llmTranslation';
@@ -18,10 +22,13 @@ const maxTranslationBatchItems = 8;
 const maxTranslationBatchChars = 12000;
 const translationBatchConcurrency = 3;
 const translationCacheVersion = 'scientific-zh-v1';
+const openAICompatibleTranslationModel = 'gpt-5.4-mini';
 
 type TranslationCacheItem = TranslationBatchItem & {
   cacheKey: string;
 };
+
+export type TranslationProgressReporter = (progress: DocumentTranslationProgress) => void;
 
 function buildTranslationBatches(items: TranslationBatchItem[]) {
   const batches: TranslationBatchItem[][] = [];
@@ -124,15 +131,45 @@ function applyTranslatedValue(
   }
 }
 
+function shouldUseGlmTranslation(
+  llmSettings: LlmSettings,
+  translationSettings: TranslationSettings,
+) {
+  if (translationSettings.activeProvider === 'glm') {
+    return true;
+  }
+
+  return (
+    !hasUsableTranslationSettings(translationSettings) &&
+    Boolean(cleanText(llmSettings.providers.glm.apiKey))
+  );
+}
+
+function toGlmLlmSettings(llmSettings: LlmSettings): LlmSettings {
+  return {
+    ...llmSettings,
+    activeProvider: 'glm',
+  };
+}
+
 function resolveTranslationCacheIdentity(
   llmSettings: LlmSettings,
   translationSettings: TranslationSettings,
 ) {
-  if (hasUsableTranslationSettings(translationSettings)) {
+  if (shouldUseGlmTranslation(llmSettings, translationSettings)) {
+    const llmIdentity = getLlmTranslationCacheIdentity(toGlmLlmSettings(llmSettings));
     return {
-      provider: `translation:${translationSettings.activeProvider}`,
-      baseUrl: translationSettings.providers[translationSettings.activeProvider].baseUrl,
-      model: 'translate-to-zh-hans',
+      ...llmIdentity,
+      mode: 'llm' as const,
+    };
+  }
+
+  if (hasUsableTranslationSettings(translationSettings)) {
+    const activeProvider = translationSettings.activeProvider;
+    return {
+      provider: `translation:${activeProvider}`,
+      baseUrl: translationSettings.providers[activeProvider].baseUrl,
+      model: activeProvider === 'openai-compatible' ? openAICompatibleTranslationModel : 'translate-to-zh-hans',
       mode: 'dedicated' as const,
     };
   }
@@ -149,6 +186,7 @@ export async function translateTextsToChinese(
   llmSettings: LlmSettings,
   translationSettings: TranslationSettings,
   storage: StorageService,
+  onProgress?: TranslationProgressReporter,
 ): Promise<string[]> {
   const normalizedTexts = texts.map((text) => cleanText(text));
   if (normalizedTexts.length === 0) {
@@ -182,6 +220,16 @@ export async function translateTextsToChinese(
     uncachedItems.map((item) => [item.index, item] satisfies [number, TranslationCacheItem]),
   );
   const cacheEntriesToSave: TranslationCacheRecord[] = [];
+  let completedBatches = 0;
+
+  onProgress?.({
+    phase: 'started',
+    current: 0,
+    total: batches.length,
+    provider: route.provider,
+    model: route.model,
+    message: null,
+  });
 
   await runBatchesWithConcurrency(batches, translationBatchConcurrency, async (batch) => {
     const batchTranslations =
@@ -190,7 +238,12 @@ export async function translateTextsToChinese(
             batch.map((item) => item.text),
             translationSettings,
           )
-        : await translateTextsWithLlm(batch, llmSettings);
+        : await translateTextsWithLlm(
+            batch,
+            shouldUseGlmTranslation(llmSettings, translationSettings)
+              ? toGlmLlmSettings(llmSettings)
+              : llmSettings,
+          );
 
     batch.forEach((item, index) => {
       const uncachedItem = uncachedByIndex.get(item.index);
@@ -205,9 +258,26 @@ export async function translateTextsToChinese(
         value: translatedValue,
       });
     });
+    completedBatches += 1;
+    onProgress?.({
+      phase: 'batch',
+      current: completedBatches,
+      total: batches.length,
+      provider: route.provider,
+      model: route.model,
+      message: null,
+    });
   });
 
   await storage.saveTranslationCache(cacheEntriesToSave);
+  onProgress?.({
+    phase: 'completed',
+    current: batches.length,
+    total: batches.length,
+    provider: route.provider,
+    model: route.model,
+    message: null,
+  });
 
   return translatedTexts;
 }

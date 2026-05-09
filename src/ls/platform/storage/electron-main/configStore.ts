@@ -113,13 +113,24 @@ function serializeConfigValue(value: unknown) {
   );
   const serializedTranslationProviders = Object.fromEntries(
     Object.entries(settings.translation.providers)
-      .filter(([, provider]) => cleanText(provider.apiKey))
-      .map(([providerId, provider]) => [
-        providerId,
-        {
-          apiKey: provider.apiKey,
-        },
-      ]),
+      .flatMap(([providerId, provider]) => {
+        const defaultProvider =
+          defaultTranslationProviderSettings[providerId as keyof typeof defaultTranslationProviderSettings];
+        const hasApiKey = Boolean(cleanText(provider.apiKey));
+        const hasCustomBaseUrl = cleanText(provider.baseUrl) !== defaultProvider.baseUrl;
+
+        if (!hasApiKey && !hasCustomBaseUrl) {
+          return [];
+        }
+
+        return [[
+          providerId,
+          {
+            apiKey: provider.apiKey,
+            baseUrl: provider.baseUrl,
+          },
+        ]];
+      }),
   );
 
   return {
@@ -401,6 +412,11 @@ function normalizeTranslationSettings(payload: unknown): StoredAppSettings['tran
     activeProvider,
     providers: {
       deepl: normalizeTranslationProviderSettings('deepl', providersPayload.deepl),
+      glm: normalizeTranslationProviderSettings('glm', providersPayload.glm),
+      'openai-compatible': normalizeTranslationProviderSettings(
+        'openai-compatible',
+        providersPayload['openai-compatible'],
+      ),
     },
   };
 }
@@ -417,7 +433,7 @@ function normalizeTranslationProviderSettings(
 
   return {
     apiKey: cleanText(providerPayload.apiKey),
-    baseUrl: defaults.baseUrl,
+    baseUrl: cleanText(providerPayload.baseUrl) || defaults.baseUrl,
   };
 }
 

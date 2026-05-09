@@ -1692,6 +1692,9 @@ class WorkbenchHost {
         libraryModelInstance.upsertDocumentSummary,
       onLibraryUpdated: refreshLibrary,
       onOpenAddressBarSourceMenu: focusWorkbenchWebUrlInput,
+      onToolbarExportDocx: () => {
+        void documentActionsControllerInstance.handleExportDocx();
+      },
       onToolbarAddressSubmit: () => {
         const { webUrl: latestWebUrl } = getWorkbenchSessionSnapshot();
         navigateToAddressBarUrl(latestWebUrl, true);
@@ -2143,6 +2146,8 @@ class WorkbenchHost {
           settingsControllerInstance.setActiveTranslationProvider,
         onTranslationProviderApiKeyChange:
           settingsControllerInstance.setTranslationProviderApiKey,
+        onTranslationProviderBaseUrlChange:
+          settingsControllerInstance.setTranslationProviderBaseUrl,
         onTestRagConnection: () =>
           void settingsControllerInstance.handleTestRagConnection(),
         onTestLlmConnection: () =>

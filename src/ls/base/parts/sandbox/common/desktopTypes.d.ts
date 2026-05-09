@@ -59,7 +59,7 @@ export interface LlmSettings {
   providers: Record<LlmProviderId, LlmProviderSettings>;
 }
 
-export type TranslationProviderId = 'deepl';
+export type TranslationProviderId = 'deepl' | 'glm' | 'openai-compatible';
 
 export interface TranslationProviderSettings {
   apiKey: string;
@@ -273,6 +273,17 @@ export interface FetchStatus {
   extractorId: string | null;
   paginationStopped?: boolean;
   paginationStopReason?: string | null;
+}
+
+export type DocumentTranslationProgressPhase = 'started' | 'batch' | 'completed' | 'failed';
+
+export interface DocumentTranslationProgress {
+  phase: DocumentTranslationProgressPhase;
+  current: number;
+  total: number;
+  provider: string;
+  model: string;
+  message?: string | null;
 }
 
 export interface FetchLatestArticlesPayload {
@@ -784,6 +795,10 @@ export interface ElectronFetchApi {
   onFetchStatus: (listener: (status: FetchStatus) => void) => () => void;
 }
 
+export interface ElectronDocumentApi {
+  onTranslationProgress: (listener: (progress: DocumentTranslationProgress) => void) => () => void;
+}
+
 export interface ElectronModalApi {
   getState: () => Promise<NativeModalState | null>;
   onStateChange: (listener: (state: NativeModalState | null) => void) => () => void;
@@ -803,6 +818,7 @@ export interface ElectronAPI {
   windowControls?: ElectronWindowControls;
   webContent?: ElectronWebContentApi;
   fetch?: ElectronFetchApi;
+  document?: ElectronDocumentApi;
   modal?: ElectronModalApi;
   toast?: ElectronToastApi;
 }

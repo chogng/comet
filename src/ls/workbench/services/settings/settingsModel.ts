@@ -857,6 +857,19 @@ export class SettingsModel {
     }));
   };
 
+  readonly setTranslationProviderBaseUrl = (provider: TranslationProviderId, baseUrl: string) => {
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      translationProviders: {
+        ...snapshot.translationProviders,
+        [provider]: {
+          ...snapshot.translationProviders[provider],
+          baseUrl,
+        },
+      },
+    }));
+  };
+
   readonly resetDownloadDir = () => {
     this.setPdfDownloadDir('');
   };
@@ -1408,6 +1421,29 @@ export class SettingsModel {
 
     try {
       const { activeTranslationProvider, translationProviders } = this.snapshot;
+      if (activeTranslationProvider === 'glm') {
+        const route = resolveLlmRoute(
+          {
+            activeProvider: 'glm',
+            providers: this.snapshot.llmProviders,
+          },
+          'chat',
+        );
+        const result = await invokeDesktop('test_llm_connection', {
+          provider: route.provider,
+          apiKey: route.apiKey,
+          baseUrl: route.baseUrl,
+          model: route.model,
+          reasoningEffort: route.reasoningEffort,
+        });
+
+        return {
+          provider: activeTranslationProvider,
+          baseUrl: result.baseUrl,
+          responsePreview: result.responsePreview,
+        };
+      }
+
       const providerSettings = translationProviders[activeTranslationProvider];
 
       return await invokeDesktop('test_translation_connection', {

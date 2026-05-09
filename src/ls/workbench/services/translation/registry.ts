@@ -1,6 +1,6 @@
 import type { TranslationProviderId } from 'ls/base/parts/sandbox/common/desktopTypes';
 
-export type TranslationApiStyle = 'deepl-compatible';
+export type TranslationApiStyle = 'deepl-compatible' | 'llm-compatible' | 'openai-compatible';
 
 export type TranslationProviderDefinition = {
   id: TranslationProviderId;
@@ -15,6 +15,18 @@ export const translationProviders: ReadonlyArray<TranslationProviderDefinition> 
     label: 'DeepL',
     apiStyle: 'deepl-compatible',
     defaultBaseUrl: 'https://api-free.deepl.com',
+  },
+  {
+    id: 'glm',
+    label: 'GLM',
+    apiStyle: 'llm-compatible',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+  },
+  {
+    id: 'openai-compatible',
+    label: 'OpenAI-compatible',
+    apiStyle: 'openai-compatible',
+    defaultBaseUrl: 'https://api.openai.com/v1',
   },
 ];
 
