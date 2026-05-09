@@ -267,6 +267,17 @@ implements EditorModeToolbarContribution {
   private createTrailingItems(): ActionBarItem[] {
     return [
       {
+        label: this.context.labels.toolbarExportDocx,
+        title: this.context.labels.toolbarExportDocx,
+        mode: 'icon',
+        buttonClassName: 'editor-browser-toolbar-btn',
+        content: createLxIcon('docx'),
+        disabled: !this.context.electronRuntime,
+        onClick: () => {
+          void this.context.onExportDocx();
+        },
+      },
+      {
         label: this.context.labels.toolbarArchivePage,
         title: this.context.labels.toolbarArchivePage,
         mode: 'icon',

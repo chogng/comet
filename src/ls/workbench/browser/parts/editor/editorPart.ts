@@ -140,6 +140,7 @@ export function createEditorPartProps({
       toolbarRefresh: ui.titlebarRefresh,
       toolbarFavorite: ui.agentbarToolbarFavorite,
       toolbarArchivePage: ui.editorToolbarArchivePage,
+      toolbarExportDocx: ui.titlebarExportDocx,
       toolbarMore: ui.agentbarToolbarMore,
       toolbarHardReload: ui.editorToolbarHardReload,
       toolbarCopyCurrentUrl: ui.editorToolbarCopyCurrentUrl,

@@ -31,6 +31,7 @@ const labels = {
   toolbarRefresh: 'Refresh',
   toolbarFavorite: 'Favorite',
   toolbarArchivePage: 'Archive page',
+  toolbarExportDocx: 'Export DOCX',
   toolbarMore: 'More',
   toolbarHardReload: 'Hard reload',
   toolbarCopyCurrentUrl: 'Copy current URL',

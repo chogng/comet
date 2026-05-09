@@ -166,7 +166,7 @@ async function translateDocxArticlesToChinese(
       model: '',
       message: error instanceof Error ? error.message : String(error),
     });
-    throw error;
+    return articles;
   }
 }
 

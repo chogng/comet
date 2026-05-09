@@ -29,6 +29,7 @@ type CreateEditorBrowserToolbarActionsParams = {
   onOpenAddressBarSourceMenu: () => void;
   onToolbarAddressSubmit: () => void;
   onToolbarNavigateToUrl: (url: string) => void;
+  onToolbarExportDocx?: () => void | Promise<void>;
 };
 
 async function copyTextToClipboard(value: string) {
@@ -75,6 +76,7 @@ export function createEditorBrowserToolbarActions(
     onOpenAddressBarSourceMenu,
     onToolbarAddressSubmit,
     onToolbarNavigateToUrl,
+    onToolbarExportDocx = () => {},
   } = params;
 
   return {
@@ -135,6 +137,9 @@ export function createEditorBrowserToolbarActions(
           error instanceof Error ? error.message : String(error ?? 'Unknown archive error');
         toast.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
       }
+    },
+    onToolbarExportDocx: () => {
+      void onToolbarExportDocx();
     },
     onToolbarHardReload: () => {
       webContentNavigationModel.handleBrowserHardReload({

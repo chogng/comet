@@ -92,6 +92,7 @@ export type EditorGroupViewProps = {
   onToolbarNavigateForward: () => void;
   onToolbarNavigateRefresh: () => void;
   onToolbarArchiveCurrentPage: () => void | Promise<void>;
+  onToolbarExportDocx?: () => void | Promise<void>;
   onToolbarHardReload: () => void;
   onToolbarCopyCurrentUrl: () => void | Promise<void>;
   onToolbarClearBrowsingHistory: () => void;
