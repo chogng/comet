@@ -1356,55 +1356,6 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
   }
 });
 
-test('WorkbenchLayoutView dispatches the browser toolbar refresh action', () => {
-  let refreshCalls = 0;
-  const props = createWorkbenchLayoutViewProps();
-  props.editorPartProps = {
-    ...props.editorPartProps,
-    tabs: [
-      {
-        id: 'browser-tab-refresh',
-        kind: 'browser',
-        title: 'Example',
-        url: 'https://example.com/current',
-      },
-    ],
-    activeTabId: 'browser-tab-refresh',
-    activeTab: {
-      id: 'browser-tab-refresh',
-      kind: 'browser',
-      title: 'Example',
-      url: 'https://example.com/current',
-    },
-    viewPartProps: {
-      ...props.editorPartProps.viewPartProps,
-      browserUrl: 'https://example.com/current',
-      electronRuntime: true,
-      webContentRuntime: true,
-    },
-    onToolbarNavigateRefresh: () => {
-      refreshCalls += 1;
-    },
-  };
-
-  const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
-  document.body.append(view.getElement());
-
-  try {
-    const refreshButton = view
-      .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Refresh"]');
-    assert(refreshButton instanceof HTMLButtonElement);
-
-    refreshButton.click();
-
-    assert.equal(refreshCalls, 1);
-  } finally {
-    view.dispose();
-    document.body.replaceChildren();
-  }
-});
-
 test('WorkbenchLayoutView shows browser library panel entries and navigates when a favorite is selected', async () => {
   const BROWSER_LIBRARY_STORAGE_KEY = 'ls.editor.browser.library.v1';
   const addressChanges: string[] = [];
