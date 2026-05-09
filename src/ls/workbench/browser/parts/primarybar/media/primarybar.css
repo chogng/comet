@@ -248,14 +248,20 @@
   flex-direction: column;
 }
 
+.fetch-pane-content-body {
+  min-height: 100%;
+}
+
+.fetch-pane-scrollable > .fetch-pane-content-body.scrollable-content {
+  display: flex;
+  flex-direction: column;
+}
+
 .fetch-pane-article-list {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
   margin: 0;
   padding: 4px 0;
   list-style: none;
-  overflow-y: auto;
-  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -391,7 +397,8 @@
 }
 
 .fetch-pane-empty-state {
-  flex: 1;
+  flex: 1 0 auto;
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -1,6 +1,8 @@
 import type {
   ArticleDetailsModalLabels,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
+import { DomScrollableElement } from 'ls/base/browser/ui/scrollbar/scrollableElement';
+import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElementOptions';
 import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
@@ -331,7 +333,8 @@ function createArticleCardLabels(
 export class FetchPaneContentView extends LifecycleOwner {
   private props: FetchPaneProps;
   private readonly element = createElement('div', 'fetch-pane-content');
-  private readonly contentElement = createElement('div');
+  private readonly contentElement = createElement('div', 'fetch-pane-content-body');
+  private readonly scrollableElement: DomScrollableElement;
   private readonly renderDisposables = new LifecycleStore();
   private cards = new Map<string, ArticleCard>();
   private disposed = false;
@@ -340,7 +343,13 @@ export class FetchPaneContentView extends LifecycleOwner {
     super();
     this.props = props;
     this.register(this.renderDisposables);
-    this.element.append(this.contentElement);
+    this.scrollableElement = new DomScrollableElement(this.contentElement, {
+      className: 'fetch-pane-scrollable',
+      vertical: ScrollbarVisibility.Auto,
+      horizontal: ScrollbarVisibility.Hidden,
+      useShadows: false,
+    });
+    this.element.append(this.scrollableElement.getDomNode());
     this.render();
   }
 
@@ -364,6 +373,7 @@ export class FetchPaneContentView extends LifecycleOwner {
 
     this.disposed = true;
     super.dispose();
+    this.scrollableElement.dispose();
     for (const card of this.cards.values()) {
       card.dispose();
     }
@@ -429,6 +439,7 @@ export class FetchPaneContentView extends LifecycleOwner {
         list.append(card.getElement());
       });
       this.contentElement.replaceChildren(list);
+      this.scrollableElement.scanDomNode();
       return;
     }
 
@@ -436,6 +447,7 @@ export class FetchPaneContentView extends LifecycleOwner {
     if (this.props.hasData) {
       empty.textContent = this.props.labels.emptyFiltered;
       this.contentElement.replaceChildren(empty);
+      this.scrollableElement.scanDomNode();
       return;
     }
 
@@ -458,5 +470,6 @@ export class FetchPaneContentView extends LifecycleOwner {
       ),
     );
     this.contentElement.replaceChildren(empty);
+    this.scrollableElement.scanDomNode();
   }
 }

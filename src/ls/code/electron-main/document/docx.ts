@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 
 import type {
   Article,
+  DocumentTranslationProgress,
   DocxExportResult,
   ExportArticlesDocxPayload,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
@@ -147,8 +148,26 @@ function groupArticlesByJournal(articles: Article[], locale: SupportedLocale): J
   return groups;
 }
 
-async function translateDocxArticlesToChinese(articles: Article[], storage: StorageService) {
-  return translateArticlesToChinese(articles, storage);
+type DocumentTranslationProgressReporter = (progress: DocumentTranslationProgress) => void;
+
+async function translateDocxArticlesToChinese(
+  articles: Article[],
+  storage: StorageService,
+  onProgress?: DocumentTranslationProgressReporter,
+) {
+  try {
+    return await translateArticlesToChinese(articles, storage, onProgress);
+  } catch (error) {
+    onProgress?.({
+      phase: 'failed',
+      current: 0,
+      total: 0,
+      provider: '',
+      model: '',
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 function articleParagraphsXml(article: Article, indexInJournal: number, locale: SupportedLocale) {
@@ -306,6 +325,7 @@ export async function exportArticlesDocx(
   defaultDownloadDir: string,
   storage: StorageService,
   window?: BrowserWindow | null,
+  options: { onTranslationProgress?: DocumentTranslationProgressReporter } = {},
 ): Promise<DocxExportResult | null> {
   const articles = Array.isArray(payload.articles) ? payload.articles : [];
   if (articles.length === 0) {
@@ -340,7 +360,7 @@ export async function exportArticlesDocx(
   }
 
   return exportArticlesToDocxFile({
-    articles: await translateDocxArticlesToChinese(articles, storage),
+    articles: await translateDocxArticlesToChinese(articles, storage, options.onTranslationProgress),
     filePath: result.filePath,
     locale,
   });

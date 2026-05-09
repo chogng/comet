@@ -2,6 +2,7 @@ import type { Article } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { cleanText } from 'ls/base/common/strings';
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import { translateTextsToChinese } from 'ls/code/electron-main/translation/translationRouter';
+import type { TranslationProgressReporter } from 'ls/code/electron-main/translation/translationRouter';
 
 export type TranslatableArticleField = 'descriptionText' | 'abstractText';
 
@@ -35,6 +36,7 @@ export function resolvePreferredArticleTranslationContent(
 export async function translateArticlesToChinese(
   articles: Article[],
   storage: StorageService,
+  onProgress?: TranslationProgressReporter,
 ): Promise<Article[]> {
   const selectedContent = articles
     .map((article, index) => {
@@ -53,6 +55,7 @@ export async function translateArticlesToChinese(
     settings.llm,
     settings.translation,
     storage,
+    onProgress,
   );
   const translatedArticles = [...articles];
 

@@ -2,6 +2,7 @@ import { toast } from 'ls/base/browser/ui/toast/toast';
 import { EventEmitter } from 'ls/base/common/event';
 import type {
   ArticleDetailsModalLabels,
+  DocumentTranslationProgress,
   ElectronInvoke,
   LibraryDocumentSummary,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
@@ -28,6 +29,11 @@ import {
 import { syncLibraryMetadataFromArticle } from 'ls/workbench/services/knowledgeBase/libraryMetadataService';
 import type { WritingEditorDocument } from 'ls/editor/common/writingEditorDocument';
 import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
+import type { EditorStatusState } from 'ls/workbench/browser/parts/editor/editorStatus';
+import {
+  getStatusbarStateSnapshot,
+  setStatusbarState,
+} from 'ls/workbench/browser/parts/statusbar/statusbarModel';
 
 export type DocumentActionsControllerContext = {
   desktopRuntime: boolean;
@@ -346,6 +352,7 @@ export class DocumentActionsController {
       return;
     }
 
+    const restoreTranslationStatus = this.beginTranslationStatusbarProgress();
     try {
       const result = await invokeDesktop('export_articles_docx', {
         articles: exportableArticles,
@@ -371,8 +378,57 @@ export class DocumentActionsController {
       toast.error(
         formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
       );
+    } finally {
+      restoreTranslationStatus();
     }
   };
+
+  private beginTranslationStatusbarProgress() {
+    const previousStatus = getStatusbarStateSnapshot();
+    const unsubscribe = nativeHostService.document?.onTranslationProgress((progress) => {
+      this.renderTranslationStatusbarProgress(previousStatus, progress);
+    });
+
+    return () => {
+      unsubscribe?.();
+      setStatusbarState(previousStatus);
+    };
+  }
+
+  private renderTranslationStatusbarProgress(
+    previousStatus: EditorStatusState,
+    progress: DocumentTranslationProgress,
+  ) {
+    const { ui } = this.context;
+    const total = Math.max(0, progress.total);
+    const current = Math.max(0, Math.min(progress.current, total));
+    const summary =
+      progress.phase === 'failed'
+        ? ui.statusTranslationFailed
+        : progress.phase === 'completed' && total === 0
+          ? ui.statusTranslationCached
+          : progress.phase === 'completed'
+            ? ui.statusTranslationCompleted
+            : total > 0
+              ? formatLocalized(ui.statusTranslationProgress, { current, total })
+              : ui.statusTranslationStarting;
+    const providerDetail = [progress.provider, progress.model].filter(Boolean).join(' / ');
+
+    setStatusbarState({
+      ...previousStatus,
+      summary,
+      leftItems: [
+        ...previousStatus.leftItems.filter((item) => item.id !== 'document.translation.progress'),
+        {
+          id: 'document.translation.progress',
+          label: 'Translate',
+          value: providerDetail || summary,
+          tone: progress.phase === 'failed' ? 'error' : 'accent',
+          title: progress.message || providerDetail || summary,
+        },
+      ],
+    });
+  }
 
   private emitChange() {
     this.onDidChangeEmitter.fire();

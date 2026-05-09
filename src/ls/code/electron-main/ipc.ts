@@ -97,6 +97,7 @@ import {
 } from 'ls/platform/window/electron-main/window';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
 const FETCH_STATUS_CHANNEL = 'app:fetch-status';
+const DOCUMENT_TRANSLATION_PROGRESS_CHANNEL = 'app:document-translation-progress';
 type AppInvokeResponse<T> =
   | { ok: true; result: T }
   | { ok: false; error: string };
@@ -347,6 +348,11 @@ async function invokeCommand<TCommand extends AppCommand>(
           app.getPath('downloads'),
           storage,
           mainWindow,
+          {
+            onTranslationProgress: (progress) => {
+              emitToRenderer?.(DOCUMENT_TRANSLATION_PROGRESS_CHANNEL, progress);
+            },
+          },
         ) as Promise<AppCommandResultMap[TCommand]>;
       }
     case 'export_editor_docx':

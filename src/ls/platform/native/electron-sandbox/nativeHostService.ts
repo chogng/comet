@@ -37,6 +37,10 @@ class ElectronSandboxNativeHostService implements INativeHostService {
     return this.api?.fetch;
   }
 
+  get document() {
+    return this.api?.document;
+  }
+
   get modal() {
     return this.api?.modal;
   }

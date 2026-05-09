@@ -7,6 +7,7 @@ import type {
   WebContentBridgeCommand,
   WebContentBridgeResponse,
   ElectronAPI,
+  DocumentTranslationProgress,
   FetchStatus,
   NativeModalState,
   NativeToastLayout,
@@ -240,6 +241,18 @@ const electronAPI: ElectronAPI = {
         extractorId: null,
         paginationStopped: false,
         paginationStopReason: null,
+      });
+    },
+  },
+  document: {
+    onTranslationProgress(listener: (progress: DocumentTranslationProgress) => void) {
+      return subscribeIpc<DocumentTranslationProgress>('app:document-translation-progress', listener, {
+        phase: 'completed',
+        current: 0,
+        total: 0,
+        provider: '',
+        model: '',
+        message: null,
       });
     },
   },

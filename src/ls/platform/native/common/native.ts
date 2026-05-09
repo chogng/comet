@@ -1,5 +1,6 @@
 import type {
   ElectronFetchApi,
+  ElectronDocumentApi,
   ElectronInvoke,
   ElectronModalApi,
   ElectronToastApi,
@@ -13,6 +14,7 @@ export interface INativeHostService {
   readonly windowControls: ElectronWindowControls | undefined;
   readonly webContent: ElectronWebContentApi | undefined;
   readonly fetch: ElectronFetchApi | undefined;
+  readonly document: ElectronDocumentApi | undefined;
   readonly modal: ElectronModalApi | undefined;
   readonly toast: ElectronToastApi | undefined;
 }
