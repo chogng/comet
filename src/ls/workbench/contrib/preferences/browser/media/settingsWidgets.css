@@ -535,6 +535,10 @@
   font-weight: 500;
 }
 
+.settings-block-list-item-title-empty {
+  display: none;
+}
+
 .settings-block-list-item-description {
   margin: 0;
   color: var(--vscode-settings-mutedForeground, #64748b);
@@ -557,7 +561,7 @@
 .settings-supported-sources-table {
   display: grid;
   min-width: 0;
-  margin: 0 12px 12px;
+  margin: 0 12px;
   padding: 0;
   border-top: 1px solid var(--vscode-settings-separator, #e5e5e5);
   background: transparent;
@@ -606,6 +610,128 @@
 .settings-supported-source-journal-input {
   width: 100%;
   min-width: 0;
+}
+
+/* ===== Literature Batch / Download / Translation Blocks ===== */
+.settings-batch-settings,
+.settings-download-settings {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-batch-options-control {
+  justify-content: flex-start;
+}
+
+.settings-batch-options-item {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.settings-batch-date-summary-item {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.settings-batch-date-summary-content {
+  order: 2;
+}
+
+.settings-batch-date-summary-control {
+  order: 1;
+  justify-content: stretch;
+  width: 100%;
+}
+
+.settings-batch-date-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-batch-date-item {
+  padding: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-batch-date-item::before {
+  display: none;
+}
+
+.settings-batch-date-control {
+  justify-content: flex-start;
+}
+
+.settings-batch-date-control .settings-input-control {
+  min-width: 160px;
+}
+
+.settings-download-directory-control {
+  min-width: 0;
+  width: min(100%, 520px);
+}
+
+.settings-download-directory-control .settings-input-row {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-download-directory-control .settings-inputbox.inputbox {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.settings-translation-panel {
+  overflow: hidden;
+}
+
+.settings-translation-provider-control,
+.settings-translation-model-control,
+.settings-translation-base-url-control {
+  min-width: min(100%, 420px);
+}
+
+.settings-translation-provider-control > *,
+.settings-translation-model-control > *,
+.settings-translation-base-url-control > * {
+  width: 100%;
+}
+
+.settings-translation-base-url-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-translation-model-value {
+  margin: 0;
+  color: var(--vscode-settings-panelForeground, #203040);
+}
+
+.settings-translation-api-key-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-translation-api-key-content {
+  display: none;
+}
+
+.settings-translation-api-key-row-control {
+  justify-content: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-translation-api-key-control,
+.settings-translation-api-key-control > .settings-field {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-translation-api-key-control .settings-llm-api-header {
+  width: 100%;
 }
 
 @media (max-width: 900px) {
