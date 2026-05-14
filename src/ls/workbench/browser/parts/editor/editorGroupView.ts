@@ -781,6 +781,9 @@ export class EditorGroupView {
     const browserFaviconUrl = activeBrowserMetadata.hasActiveBrowserTab
       ? activeBrowserMetadata.browserFaviconUrl
       : '';
+    const browserIsLoading = activeBrowserMetadata.hasActiveBrowserTab
+      ? Boolean(props.viewPartProps.browserIsLoading)
+      : false;
     const browserTabTitle = activeBrowserMetadata.hasActiveBrowserTab
       ? activeBrowserMetadata.browserTabTitle
       : '';
@@ -789,6 +792,7 @@ export class EditorGroupView {
       browserUrl,
       browserPageTitle,
       browserFaviconUrl,
+      browserIsLoading,
       browserTabTitle,
       labels: {
         title: props.labels.browserLibraryPanelTitle,

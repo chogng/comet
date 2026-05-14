@@ -360,12 +360,7 @@ export async function resolveWebContentSnapshotHtml(payload: WebContentPdfDownlo
   const requestedUrl = safeNormalizeWebContentUrl(payload.pageUrl ?? '');
   if (!requestedUrl) return null;
 
-  const webContentState = getWebContentState();
-  const webContentUrl = safeNormalizeWebContentUrl(webContentState.url ?? '');
-  if (!webContentUrl || !matchesWebContentTargetUrl(webContentUrl, requestedUrl)) {
-    return null;
-  }
-
+  // The cached web content state can lag behind a navigation; trust the live DOM snapshot first.
   const snapshot = await getWebContentDocumentSnapshot();
   const snapshotUrl = safeNormalizeWebContentUrl(snapshot?.url ?? '');
   if (!snapshot || !snapshotUrl || !matchesWebContentTargetUrl(snapshotUrl, requestedUrl)) {

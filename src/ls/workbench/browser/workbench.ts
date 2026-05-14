@@ -1413,6 +1413,7 @@ class WorkbenchHost {
       browserUrl,
       browserPageTitle,
       browserFaviconUrl,
+      browserIsLoading: webContentState.isLoading,
       electronRuntime,
       webContentRuntime,
       labels: {

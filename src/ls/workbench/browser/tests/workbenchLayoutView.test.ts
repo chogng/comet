@@ -1385,6 +1385,7 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
       browserUrl: 'https://example.com/current',
       browserPageTitle: 'Example Current Page',
       browserFaviconUrl: 'https://example.com/favicon.ico',
+      browserIsLoading: true,
       electronRuntime: true,
       webContentRuntime: true,
     },
@@ -1466,8 +1467,7 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
       '.editor-browser-library-item-favicon',
     );
     assert(favoriteFavicon instanceof HTMLElement);
-    assert.equal(favoriteFavicon.tagName, 'IMG');
-    assert.equal(favoriteFavicon.getAttribute('src'), 'https://example.com/favicon.ico');
+    assert.equal(favoriteFavicon.classList.contains('is-loading'), true);
     const favoriteTitle = favoriteItems[0]?.querySelector(
       '.editor-browser-library-item-title',
     );

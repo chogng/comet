@@ -311,6 +311,8 @@ function areEditorPartControllerContextsEqual(
       (next.viewPartProps.browserPageTitle ?? '') &&
     (previous.viewPartProps.browserFaviconUrl ?? '') ===
       (next.viewPartProps.browserFaviconUrl ?? '') &&
+    Boolean(previous.viewPartProps.browserIsLoading) ===
+      Boolean(next.viewPartProps.browserIsLoading) &&
     previous.viewPartProps.electronRuntime === next.viewPartProps.electronRuntime &&
     previous.viewPartProps.webContentRuntime === next.viewPartProps.webContentRuntime &&
     previous.viewPartProps.labels.emptyState === next.viewPartProps.labels.emptyState &&
