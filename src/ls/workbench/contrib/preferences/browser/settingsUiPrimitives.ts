@@ -114,9 +114,9 @@ export function buildSettingsButton(config: {
   onClick: () => void;
 }) {
   const extraClasses = (config.className ?? '').trim();
-  const isIconButton = extraClasses.includes('settings-native-icon-button');
+  const isIconButton = extraClasses.includes('settings-btn-icon');
   const buttonClassName = [
-    'settings-native-button',
+    'settings-btn',
     'btn-base',
     'btn-secondary',
     isIconButton ? 'btn-mode-icon btn-sm' : 'btn-md',

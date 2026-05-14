@@ -422,7 +422,7 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
     buildButton({
       label: '...',
       icon: lxIconSemanticMap.settings.chooseDirectory,
-      className: 'settings-native-icon-button',
+      className: 'settings-btn-icon',
       focusKey: 'settings.download.choose',
       title: props.labels.chooseDirectory,
       disabled: !props.desktopRuntime || props.isSettingsSaving,
@@ -464,7 +464,7 @@ export function renderConfigPathSection(props: SettingsPartProps) {
     buildButton({
       label: '...',
       icon: lxIconSemanticMap.settings.openConfigLocation,
-      className: 'settings-native-icon-button',
+      className: 'settings-btn-icon',
       focusKey: 'settings.config.open',
       title: props.labels.openConfigLocation,
       disabled: !props.desktopRuntime || props.isSettingsSaving || !props.configPath.trim(),
@@ -560,7 +560,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   colorRow.append(colorPickerInput.element, colorValueInput.element);
 
   const resetButton = buildButton({
-    label: props.labels.settingsTextEditorResetDefaultBodyStyle,
+    label: props.labels.resetDefault,
     className: 'settings-text-editor-reset-button',
     focusKey: 'settings.textEditor.resetDefaultBodyStyle',
     disabled: isDisabled,
@@ -593,7 +593,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
       control: colorRow,
     }),
     createSettingsRow({
-      title: props.labels.settingsTextEditorResetDefaultBodyStyle,
+      title: props.labels.resetDefault,
       control: resetButton,
     }),
   );

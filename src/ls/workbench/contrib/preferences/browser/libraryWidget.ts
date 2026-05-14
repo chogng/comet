@@ -111,7 +111,7 @@ export class LibraryWidget {
         placeholder: this.props.labels.settingsLibraryDirectoryPlaceholder,
         onInput: this.props.onLibraryDirectoryChange,
       }).element,
-      buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-native-icon-button', focusKey: 'settings.library.chooseDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseLibraryDirectory }),
+      buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-btn-icon', focusKey: 'settings.library.chooseDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseLibraryDirectory }),
     );
     directoryField.append(
       text(this.props.labels.settingsLibraryDirectory),
@@ -184,7 +184,7 @@ export class LibraryWidget {
         placeholder: this.props.labels.settingsKnowledgeBasePdfDownloadDirPlaceholder,
         onInput: this.props.onKnowledgeBasePdfDownloadDirChange,
       }).element,
-      buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-native-icon-button', focusKey: 'settings.library.chooseDownloadDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseKnowledgeBasePdfDownloadDir }),
+      buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-btn-icon', focusKey: 'settings.library.chooseDownloadDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseKnowledgeBasePdfDownloadDir }),
     );
     downloadDirectoryField.append(
       text(this.props.labels.settingsKnowledgeBasePdfDownloadDir),

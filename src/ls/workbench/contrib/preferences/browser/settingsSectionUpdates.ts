@@ -181,7 +181,7 @@ function shouldUpdateTextEditorSection(
     previousProps.labels.settingsTextEditorParagraphSpacingBefore !== currentProps.labels.settingsTextEditorParagraphSpacingBefore ||
     previousProps.labels.settingsTextEditorParagraphSpacingAfter !== currentProps.labels.settingsTextEditorParagraphSpacingAfter ||
     previousProps.labels.settingsTextEditorColor !== currentProps.labels.settingsTextEditorColor ||
-    previousProps.labels.settingsTextEditorResetDefaultBodyStyle !== currentProps.labels.settingsTextEditorResetDefaultBodyStyle
+    previousProps.labels.resetDefault !== currentProps.labels.resetDefault
   );
 }
 
