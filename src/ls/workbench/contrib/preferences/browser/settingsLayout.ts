@@ -72,6 +72,7 @@ const settingsPageLayout: SettingsPageDefinition[] = [
   {
     id: 'literature',
     label: (labels) => labels.settingsNavigationLiterature,
+    icon: 'book',
     sections: ['batchSources', 'batchOptions', 'downloadDirectory', 'translation'],
   },
 ] as const;

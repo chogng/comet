@@ -35,6 +35,7 @@ export class RagWidget {
   private readonly element = el('div', 'settings-field');
   private readonly apiKeyWidget = new ApiKeyWidget({
     title: '',
+    subtitle: '',
     value: '',
     placeholder: '',
     show: false,
@@ -44,10 +45,6 @@ export class RagWidget {
     toggleLabelHide: '',
     onToggle: () => this.props.onToggleShowApiKey(),
     onInput: (value) => this.props.onRagProviderApiKeyChange(this.props.activeRagProvider, value),
-    testButtonLabel: '',
-    testButtonKey: 'settings.rag.test',
-    testButtonDisabled: false,
-    onTest: () => this.props.onTestRagConnection(),
   });
 
   constructor(props: RagWidgetProps) {
@@ -119,7 +116,8 @@ export class RagWidget {
     grid.append(this.renderTextField(this.props.labels.settingsRagEmbeddingPath, provider.embeddingPath, 'settings.rag.embeddingPath', (value) => this.props.onRagProviderEmbeddingPathChange(this.props.activeRagProvider, value)));
     grid.append(this.renderTextField(this.props.labels.settingsRagRerankPath, provider.rerankPath, 'settings.rag.rerankPath', (value) => this.props.onRagProviderRerankPathChange(this.props.activeRagProvider, value)));
     this.apiKeyWidget.setProps({
-      title: this.props.labels.settingsRagApiKey,
+      title: this.props.labels.settingsLlmApiKey,
+      subtitle: this.props.labels.settingsRagProviderMoark,
       value: provider.apiKey,
       placeholder: this.props.labels.settingsRagApiKeyPlaceholder,
       show: this.props.showApiKey,
@@ -129,10 +127,6 @@ export class RagWidget {
       toggleLabelHide: this.props.labels.settingsRagHideApiKey,
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) => this.props.onRagProviderApiKeyChange(this.props.activeRagProvider, value),
-      testButtonLabel: this.props.labels.settingsRagTestConnection,
-      testButtonKey: 'settings.rag.test',
-      testButtonDisabled: this.props.isSettingsSaving || this.props.isTestingRagConnection,
-      onTest: () => this.props.onTestRagConnection(),
     });
     grid.append(this.apiKeyWidget.getElement());
     field.append(title, buildHint(this.props.labels.settingsRagHint), grid);

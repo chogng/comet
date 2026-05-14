@@ -157,6 +157,7 @@ import rssSvg from 'ls/base/browser/ui/lxicon/svg/rss.svg?raw';
 import sandboxSvg from 'ls/base/browser/ui/lxicon/svg/sandbox.svg?raw';
 import saveSvg from 'ls/base/browser/ui/lxicon/svg/save.svg?raw';
 import screenFullSvg from 'ls/base/browser/ui/lxicon/svg/screen-full.svg?raw';
+import showSvg from 'ls/base/browser/ui/lxicon/svg/show.svg?raw';
 import searchSvg from 'ls/base/browser/ui/lxicon/svg/search.svg?raw';
 import selectSvg from 'ls/base/browser/ui/lxicon/svg/select.svg?raw';
 import selectAllSvg from 'ls/base/browser/ui/lxicon/svg/select-all.svg?raw';
@@ -187,6 +188,7 @@ import unsaveSvg from 'ls/base/browser/ui/lxicon/svg/unsave.svg?raw';
 import voiceCircleSvg from 'ls/base/browser/ui/lxicon/svg/voice-circle.svg?raw';
 import voiceCircleFilledSvg from 'ls/base/browser/ui/lxicon/svg/voice-circle-filled.svg?raw';
 import warningSvg from 'ls/base/browser/ui/lxicon/svg/warning.svg?raw';
+import hiddenSvg from 'ls/base/browser/ui/lxicon/svg/hidden.svg?raw';
 import writeSvg from 'ls/base/browser/ui/lxicon/svg/write.svg?raw';
 import zoomInSvg from 'ls/base/browser/ui/lxicon/svg/zoom-in.svg?raw';
 import zoomOutSvg from 'ls/base/browser/ui/lxicon/svg/zoom-out.svg?raw';
@@ -352,6 +354,7 @@ export type LxIconName =
   | 'sandbox'
   | 'save'
   | 'screen-full'
+  | 'show'
   | 'search'
   | 'select'
   | 'select-all'
@@ -382,6 +385,7 @@ export type LxIconName =
   | 'voice-circle'
   | 'voice-circle-filled'
   | 'warning'
+  | 'hidden'
   | 'write'
   | 'zoom-in'
   | 'zoom-out';
@@ -547,6 +551,7 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'sandbox': sandboxSvg,
   'save': saveSvg,
   'screen-full': screenFullSvg,
+  'show': showSvg,
   'search': searchSvg,
   'select': selectSvg,
   'select-all': selectAllSvg,
@@ -577,6 +582,7 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'voice-circle': voiceCircleSvg,
   'voice-circle-filled': voiceCircleFilledSvg,
   'warning': warningSvg,
+  'hidden': hiddenSvg,
   'write': writeSvg,
   'zoom-in': zoomInSvg,
   'zoom-out': zoomOutSvg,

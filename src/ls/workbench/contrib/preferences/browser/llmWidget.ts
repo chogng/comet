@@ -103,6 +103,7 @@ export class LlmWidget {
   private isModelListExpanded = false;
   private readonly apiKeyWidget = new ApiKeyWidget({
     title: '',
+    subtitle: '',
     value: '',
     placeholder: '',
     show: false,
@@ -113,10 +114,6 @@ export class LlmWidget {
     onToggle: () => this.props.onToggleShowApiKey(),
     onInput: (value) =>
       this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
-    testButtonLabel: '',
-    testButtonKey: 'settings.llm.test',
-    testButtonDisabled: false,
-    onTest: () => this.props.onTestLlmConnection(),
     className: 'settings-field settings-llm-api-field settings-llm-api-panel',
   });
 
@@ -179,7 +176,8 @@ export class LlmWidget {
     const provider = activeProviderSettings;
     const providerLabel = this.getProviderLabel(this.props.activeLlmProvider);
     this.apiKeyWidget.setProps({
-      title: `${this.props.labels.settingsLlmApiKey} (${providerLabel})`,
+      title: this.props.labels.settingsLlmApiKey,
+      subtitle: providerLabel,
       value: provider.apiKey,
       placeholder: this.props.labels.settingsLlmApiKeyPlaceholder,
       show: this.props.showApiKey,
@@ -190,10 +188,6 @@ export class LlmWidget {
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) =>
         this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
-      testButtonLabel: this.props.labels.settingsLlmTestConnection,
-      testButtonKey: 'settings.llm.test',
-      testButtonDisabled: this.props.isSettingsSaving || this.props.isTestingLlmConnection,
-      onTest: () => this.props.onTestLlmConnection(),
       className: 'settings-field settings-llm-api-field settings-llm-api-panel settings-llm-span-2',
     });
   }

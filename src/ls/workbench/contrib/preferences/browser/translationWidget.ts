@@ -39,6 +39,7 @@ export class TranslationWidget {
   private readonly element = el('div', 'settings-field');
   private readonly apiKeyWidget = new ApiKeyWidget({
     title: '',
+    subtitle: '',
     value: '',
     placeholder: '',
     show: false,
@@ -48,13 +49,10 @@ export class TranslationWidget {
     toggleLabelHide: '',
     onToggle: () => this.props.onToggleShowApiKey(),
     onInput: (value) => this.props.onTranslationProviderApiKeyChange(this.props.activeTranslationProvider, value),
-    testButtonLabel: '',
-    testButtonKey: 'settings.translation.test',
-    testButtonDisabled: false,
-    onTest: () => this.props.onTestTranslationConnection(),
   });
   private readonly glmApiKeyWidget = new ApiKeyWidget({
     title: '',
+    subtitle: '',
     value: '',
     placeholder: '',
     show: false,
@@ -64,10 +62,6 @@ export class TranslationWidget {
     toggleLabelHide: '',
     onToggle: () => this.props.onToggleShowApiKey(),
     onInput: (value) => this.props.onGlmApiKeyChange(value),
-    testButtonLabel: '',
-    testButtonKey: 'settings.translation.glm.test',
-    testButtonDisabled: false,
-    onTest: () => this.props.onTestTranslationConnection(),
     className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
   });
 
@@ -103,7 +97,8 @@ export class TranslationWidget {
     if (this.props.activeTranslationProvider === 'glm') {
       grid.append(this.renderGlmModelField());
       this.glmApiKeyWidget.setProps({
-        title: `${this.props.labels.settingsLlmApiKey} (${this.props.labels.settingsTranslationProviderGlm})`,
+        title: this.props.labels.settingsLlmApiKey,
+        subtitle: this.props.labels.settingsTranslationProviderGlm,
         value: this.props.llmProviders.glm.apiKey,
         placeholder: this.props.labels.settingsLlmApiKeyPlaceholder,
         show: this.props.showApiKey,
@@ -113,10 +108,6 @@ export class TranslationWidget {
         toggleLabelHide: this.props.labels.settingsTranslationHideApiKey,
         onToggle: () => this.props.onToggleShowApiKey(),
         onInput: (value) => this.props.onGlmApiKeyChange(value),
-        testButtonLabel: this.props.labels.settingsTranslationTestConnection,
-        testButtonKey: 'settings.translation.glm.test',
-        testButtonDisabled: this.props.isSettingsSaving || this.props.isTestingTranslationConnection,
-        onTest: () => this.props.onTestTranslationConnection(),
         className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
       });
       grid.append(this.glmApiKeyWidget.getElement());
@@ -129,7 +120,8 @@ export class TranslationWidget {
     }
 
     this.apiKeyWidget.setProps({
-      title: this.props.labels.settingsTranslationApiKey,
+      title: this.props.labels.settingsLlmApiKey,
+      subtitle: this.getTranslationProviderLabel(this.props.activeTranslationProvider),
       value: this.props.translationProviders[this.props.activeTranslationProvider].apiKey,
       placeholder: this.props.labels.settingsTranslationApiKeyPlaceholder,
       show: this.props.showApiKey,
@@ -139,10 +131,6 @@ export class TranslationWidget {
       toggleLabelHide: this.props.labels.settingsTranslationHideApiKey,
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) => this.props.onTranslationProviderApiKeyChange(this.props.activeTranslationProvider, value),
-      testButtonLabel: this.props.labels.settingsTranslationTestConnection,
-      testButtonKey: 'settings.translation.test',
-      testButtonDisabled: this.props.isSettingsSaving || this.props.isTestingTranslationConnection,
-      onTest: () => this.props.onTestTranslationConnection(),
     });
     grid.append(this.apiKeyWidget.getElement());
     field.append(title, buildHint(this.props.labels.settingsTranslationHint), grid);
@@ -201,5 +189,18 @@ export class TranslationWidget {
       buildHint(this.props.labels.settingsTranslationProviderGlmHint),
     );
     return field;
+  }
+
+  private getTranslationProviderLabel(provider: TranslationProviderId) {
+    switch (provider) {
+      case 'glm':
+        return this.props.labels.settingsTranslationProviderGlm;
+      case 'openai-compatible':
+        return this.props.labels.settingsTranslationProviderOpenAICompatible;
+      case 'deepl':
+        return this.props.labels.settingsTranslationProviderDeepL;
+      default:
+        return provider;
+    }
   }
 }
