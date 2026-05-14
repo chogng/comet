@@ -1156,7 +1156,7 @@ class WebContentDomManager {
     this.markTargetAsActive(normalizedTargetId);
     this.activeTargetId = normalizedTargetId;
     this.syncDomPlacement();
-    await this.reloadEntry(entry, normalizedTargetId);
+    entry.webview.reload?.();
     await this.syncTargetState(normalizedTargetId);
     return this.buildState(normalizedTargetId);
   }
@@ -1167,45 +1167,9 @@ class WebContentDomManager {
     this.markTargetAsActive(normalizedTargetId);
     this.activeTargetId = normalizedTargetId;
     this.syncDomPlacement();
-    if (typeof entry.webview.reloadIgnoringCache === 'function') {
-      entry.webview.reloadIgnoringCache();
-    } else {
-      await this.reloadEntry(entry, normalizedTargetId);
-    }
+    entry.webview.reloadIgnoringCache?.();
     await this.syncTargetState(normalizedTargetId);
     return this.buildState(normalizedTargetId);
-  }
-
-  private async reloadEntry(
-    entry: ManagedWebviewEntry,
-    normalizedTargetId: string,
-  ) {
-    if (typeof entry.webview.reload === 'function') {
-      entry.webview.reload();
-      return;
-    }
-
-    const currentUrl = coerceWebviewNavigationUrl(
-      String(
-        entry.webview.getURL?.() ||
-          entry.state.url ||
-          entry.webview.getAttribute('src') ||
-          '',
-      ).trim(),
-    );
-    if (!currentUrl || isWebContentFailureUrl(currentUrl)) {
-      return;
-    }
-
-    if (entry.domReady && typeof entry.webview.loadURL === 'function') {
-      await entry.webview.loadURL(currentUrl);
-      return;
-    }
-
-    entry.webview.setAttribute('src', currentUrl);
-    if (!entry.domReady) {
-      await this.waitForTargetDomReady(normalizedTargetId, 12000);
-    }
   }
 
   private async clearHistory(targetId?: string | null) {

@@ -601,7 +601,7 @@ test('web content contribution uses src for the first navigation before webview 
   }
 });
 
-test('web content contribution reloads the active target and falls back to the current URL', async () => {
+test('web content contribution reloads the active target', async () => {
   const resizeObserverSpy = installResizeObserverSpy();
   const animationFrameSpy = installAnimationFrameSpy();
   const webviewSpy = installWebviewSpy();
@@ -667,10 +667,6 @@ test('web content contribution reloads the active target and falls back to the c
 
         await bridge.reload('target-reload');
         assert.equal(testWebview.__reloadCalls, 1);
-
-        testWebview.reload = undefined;
-        await bridge.reload('target-reload');
-        assert.equal(testWebview.__loadURLCalls.at(-1), 'https://example.com/reloadable');
 
         contribution.dispose();
       },
