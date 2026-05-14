@@ -1,4 +1,6 @@
 import type { LocaleMessages } from 'language/locales';
+import { DomScrollableElement } from 'ls/base/browser/ui/scrollbar/scrollableElement';
+import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElementOptions';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 
 import { BatchSourcesWidget } from 'ls/workbench/contrib/preferences/browser/batchSourcesWidget';
@@ -84,7 +86,13 @@ export class SettingsPartView {
   private props: SettingsPartProps;
   private readonly navigationView: ReturnType<typeof createSettingsNavigationView>;
   private readonly container = el('div', 'settings-page');
-  private readonly content = el('div', 'settings-content');
+  private readonly content = el('div', 'settings-content-body');
+  private readonly contentScrollable = new DomScrollableElement(this.content, {
+    className: 'settings-content',
+    vertical: ScrollbarVisibility.Auto,
+    horizontal: ScrollbarVisibility.Hidden,
+    useShadows: false,
+  });
   private readonly topbar = el('div', 'settings-page-topbar');
   private readonly pageTitle = el('h2', 'settings-page-title');
   private readonly loadingHint = buildHint('');
@@ -153,7 +161,7 @@ export class SettingsPartView {
       onGlmModelChange: (optionValue) => this.props.onLlmProviderSelectedModelOption('glm', optionValue),
       onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
     });
-    this.container.append(this.topbar, this.content);
+    this.container.append(this.topbar, this.contentScrollable.getDomNode());
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, this.container);
     this.initializeSectionContainers();
     this.updateView(undefined, true);
@@ -168,7 +176,7 @@ export class SettingsPartView {
   }
 
   getContentElement() {
-    return this.container;
+    return this.contentScrollable.getDomNode();
   }
 
   setProps(props: SettingsPartProps) {
@@ -180,6 +188,7 @@ export class SettingsPartView {
   dispose() {
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, null);
     this.navigationView.dispose();
+    this.contentScrollable.dispose();
     this.container.replaceChildren();
   }
 
@@ -195,7 +204,7 @@ export class SettingsPartView {
     const selector = `[data-focus-key="${key}"]`;
     const navigationElement = this.navigationView.getElement();
     return (
-      this.content.querySelector<HTMLElement>(selector) ??
+      this.contentScrollable.getDomNode().querySelector<HTMLElement>(selector) ??
       navigationElement.querySelector<HTMLElement>(selector)
     );
   }
@@ -386,6 +395,7 @@ export class SettingsPartView {
       sections: this.sections,
     });
     this.content.replaceChildren(...contentChildren);
+    this.contentScrollable.scanDomNode();
     for (const [sectionId, section] of Object.entries(this.sections) as Array<[SettingsSectionId, HTMLElement]>) {
       section.classList.toggle('active', activeSectionIds.includes(sectionId));
     }

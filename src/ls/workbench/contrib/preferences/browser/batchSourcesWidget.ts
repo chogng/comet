@@ -73,7 +73,9 @@ export class BatchSourcesWidget {
       : this.labels.settingsBatchSourcesShow;
     this.toggleButton.textContent = label;
     this.toggleButton.ariaLabel = label;
+    this.toggleButton.setAttribute('aria-expanded', String(this.isExpanded));
     this.table.hidden = !this.isExpanded;
+    this.table.setAttribute('aria-hidden', String(!this.isExpanded));
     this.element.classList.toggle('expanded', this.isExpanded);
   }
 }

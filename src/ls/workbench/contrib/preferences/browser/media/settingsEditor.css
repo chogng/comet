@@ -113,14 +113,18 @@
 
 .settings-content {
   flex: 1 1 auto;
+  min-height: 0;
   height: 100%;
-  padding: 24px 130px;
+  background: var(--settings-page-content-background);
+}
+
+.settings-content-body {
   display: grid;
   gap: 12px;
   align-content: start;
-  min-height: 0;
-  overflow: auto;
-  background: var(--settings-page-content-background);
+  min-height: 100%;
+  padding: 24px 130px;
+  box-sizing: border-box;
 }
 
 .settings-section {
