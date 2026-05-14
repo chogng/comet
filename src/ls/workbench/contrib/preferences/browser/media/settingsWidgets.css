@@ -334,7 +334,9 @@
 }
 
 .settings-native-button:hover:not(:disabled) {
-  background: var(--vscode-settings-selectHoverBackground, #e6e6e6);
+  background: var(--vscode-settings-buttonHoverBackground, #f6f9fc);
+  color: var(--vscode-settings-buttonHoverForeground, #2f2f2f);
+  border-color: var(--vscode-settings-buttonHoverBorder, #b8b8b8);
 }
 
 .settings-native-button:disabled {
