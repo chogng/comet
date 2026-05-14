@@ -57,8 +57,7 @@ const en = {
   settingsTextEditorParagraphSpacingAfter: 'Paragraph after (pt)',
   settingsTextEditorColor: 'Text color',
   settingsPageUrl: 'Supported journal sources',
-  settingsPageUrlHint:
-    'Articles fetched from these sources are automatically labeled with their journal name and grouped by journal when exporting to DOCX.',
+  settingsPageUrlHint: 'Journal name completion for grouped display in DOCX exports.',
   addBatchUrl: 'Add URL',
   removeBatchUrl: 'Remove URL',
   moveBatchUrlUp: 'Move up',
@@ -66,6 +65,8 @@ const en = {
   settingsBatchJournalTitle: 'Journal title',
   batchJournalTitlePlaceholder: 'Journal title for this URL (e.g., Nature News)',
   settingsBatchSourceOptimized: 'Optimized',
+  settingsBatchSourcesEdit: 'Edit',
+  settingsBatchSourcesDone: 'Done',
   settingsBatchSourcesShow: 'Show',
   settingsBatchSourcesHide: 'Hide',
   settingsBatchOptions: 'Default batch fetch options',

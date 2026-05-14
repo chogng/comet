@@ -548,58 +548,19 @@
   flex: 0 0 auto;
 }
 
-.settings-supported-sources-card {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-  padding: 18px 16px;
-  border-radius: 8px;
-  background: var(--vscode-settings-panelBackground, #f6f6f6);
-  color: var(--vscode-settings-panelForeground, #203040);
-  overflow: hidden;
-}
-
-.settings-supported-sources-card.expanded {
-  gap: 18px;
-}
-
-.settings-supported-sources-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  min-width: 0;
-}
-
-.settings-supported-sources-header {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
 .settings-supported-sources-actions {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-}
-
-.settings-supported-sources-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.settings-supported-sources-description {
-  max-width: 820px;
-  margin: 0;
-  color: var(--vscode-settings-fieldForeground, #2d4052);
-  font-size: 14px;
-  line-height: 1.45;
+  gap: 8px;
 }
 
 .settings-supported-sources-table {
   display: grid;
   min-width: 0;
+  margin: 0 12px 12px;
+  padding: 0;
+  border-top: 1px solid var(--vscode-settings-separator, #e5e5e5);
+  background: transparent;
 }
 
 .settings-supported-sources-table[hidden] {
@@ -608,12 +569,17 @@
 
 .settings-supported-source-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(220px, 0.8fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 16px;
   align-items: center;
   min-width: 0;
-  min-height: 36px;
+  min-height: 38px;
+  padding: 0;
   border-top: 1px solid var(--vscode-settings-separator, #e5e5e5);
+}
+
+.settings-supported-source-row:first-child {
+  border-top: 0;
 }
 
 .settings-supported-source-url,
@@ -622,17 +588,32 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .settings-supported-source-url {
   font-family: var(--monaco-monospace-font, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--vscode-settings-mutedForeground, #64748b);
 }
 
 .settings-supported-source-journal {
-  color: var(--vscode-settings-mutedForeground, #64748b);
-  font-size: 14px;
+  color: var(--vscode-settings-panelForeground, #203040);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-supported-source-journal-input {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .settings-supported-source-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 10px 0;
+  }
 }
 
 .settings-library-mode-note {

@@ -63,6 +63,10 @@ function shouldUpdateBatchSourcesSection(
     previousProps.labels.removeBatchUrl !== currentProps.labels.removeBatchUrl ||
     previousProps.labels.moveBatchUrlUp !== currentProps.labels.moveBatchUrlUp ||
     previousProps.labels.moveBatchUrlDown !== currentProps.labels.moveBatchUrlDown ||
+    previousProps.labels.settingsBatchSourcesEdit !== currentProps.labels.settingsBatchSourcesEdit ||
+    previousProps.labels.settingsBatchSourcesDone !== currentProps.labels.settingsBatchSourcesDone ||
+    previousProps.labels.settingsBatchSourcesShow !== currentProps.labels.settingsBatchSourcesShow ||
+    previousProps.labels.settingsBatchSourcesHide !== currentProps.labels.settingsBatchSourcesHide ||
     previousProps.labels.settingsPageUrlHint !== currentProps.labels.settingsPageUrlHint
   );
 }
