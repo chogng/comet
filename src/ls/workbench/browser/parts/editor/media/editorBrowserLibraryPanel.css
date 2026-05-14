@@ -299,3 +299,8 @@
   color: var(--vscode-editor-sourceSubheadingForeground, #7a8ca0);
   font-size: 12px;
 }
+
+.editor-browser-library-item-favicon.is-loading {
+  color: var(--vscode-editor-sourceForeground, #111827);
+  font-size: 14px;
+}

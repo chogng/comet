@@ -601,3 +601,10 @@ export function createLxIcon(name: LxIconName, className = '') {
   icon.append(createSvgElement(SVG_BY_NAME[name]));
   return icon;
 }
+
+export function createLxLoadingIcon(className = '') {
+  return createLxIcon(
+    'sync',
+    ['lx-icon-loading', 'lx-icon-modifier-spin', className].filter(Boolean).join(' '),
+  );
+}

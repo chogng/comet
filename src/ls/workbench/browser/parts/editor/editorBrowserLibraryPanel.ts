@@ -1,5 +1,5 @@
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon, createLxLoadingIcon } from 'ls/base/browser/ui/lxicon/lxicon';
 import { createContextMenuService } from 'ls/workbench/services/contextmenu/electron-sandbox/contextmenuService';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 
@@ -63,6 +63,7 @@ export type EditorBrowserLibraryPanelContext = {
   browserUrl: string;
   browserPageTitle?: string;
   browserFaviconUrl?: string;
+  browserIsLoading?: boolean;
   browserTabTitle?: string;
   labels: EditorBrowserLibraryPanelLabels;
   onNavigateToUrl: (url: string) => void;
@@ -1117,7 +1118,6 @@ export class EditorBrowserLibraryPanel {
         sanitizeBrowserLibraryPageTitle(context.browserPageTitle) ||
       sanitizeBrowserLibraryFaviconUrl(this.context.browserFaviconUrl) !==
         sanitizeBrowserLibraryFaviconUrl(context.browserFaviconUrl);
-
     this.context = context;
     if (didEntryMetadataChange) {
       this.trackCurrentBrowserLibraryEntry();
@@ -1728,7 +1728,13 @@ export class EditorBrowserLibraryPanel {
     }
   }
 
-  private createLibraryItemFaviconElement(faviconUrl: string) {
+  private createLibraryItemFaviconElement(faviconUrl: string, isLoading = false) {
+    if (isLoading) {
+      return createLxLoadingIcon(
+        'editor-browser-library-item-favicon is-loading',
+      );
+    }
+
     const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
     if (!normalizedFaviconUrl) {
       return createLxIcon(
@@ -1803,6 +1809,10 @@ export class EditorBrowserLibraryPanel {
   private createLibraryItemRow(itemState: BrowserLibraryListItem) {
     const { url, title, faviconUrl, sectionKind } = itemState;
     const canDeleteHistory = sectionKind === 'recent';
+    const isCurrentLoading =
+      Boolean(this.context.browserIsLoading) &&
+      toTrackableBrowserLibraryUrl(this.context.browserUrl) ===
+        toTrackableBrowserLibraryUrl(url);
     const itemRow = createElement('div', 'editor-browser-library-item-row');
     itemRow.classList.toggle('is-deletable', canDeleteHistory);
     const item = createElement('button', 'editor-browser-library-item');
@@ -1825,7 +1835,10 @@ export class EditorBrowserLibraryPanel {
       'span',
       'editor-browser-library-item-header',
     );
-    const faviconElement = this.createLibraryItemFaviconElement(faviconUrl);
+    const faviconElement = this.createLibraryItemFaviconElement(
+      faviconUrl,
+      isCurrentLoading,
+    );
     const titleElement = createElement(
       'span',
       'editor-browser-library-item-title',
