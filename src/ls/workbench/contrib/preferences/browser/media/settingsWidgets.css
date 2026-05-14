@@ -602,14 +602,42 @@
 }
 
 .settings-supported-source-journal {
-  color: var(--vscode-settings-panelForeground, #203040);
+  display: flex;
+  align-items: center;
+  position: absolute;
+  inset: 0;
+  height: 24px;
+  color: #000;
   font-size: 13px;
-  font-weight: 500;
+  line-height: 1.2;
+}
+
+.settings-supported-source-journal-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 24px;
+  line-height: 1.35;
 }
 
 .settings-supported-source-journal-input {
-  width: 100%;
+  --inputbox-height: 24px;
+  --inputbox-padding-y: 2px;
+  --inputbox-font-size: 13px;
+  position: absolute;
+  top: -1px; /*这部分补偿很重要，是原地文案不变的关键*/
+  right: 0;
+  left: -9px;
+  width: auto;
   min-width: 0;
+}
+
+.settings-supported-source-journal-input > .ibwrapper > .input {
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1.2;
 }
 
 /* ===== Literature Batch / Download / Translation Blocks ===== */
