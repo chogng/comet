@@ -174,10 +174,9 @@ export class LlmWidget {
     this.renderModelList();
 
     const provider = activeProviderSettings;
-    const providerLabel = this.getProviderLabel(this.props.activeLlmProvider);
     this.apiKeyWidget.setProps({
       title: this.props.labels.settingsLlmApiKey,
-      subtitle: providerLabel,
+      subtitle: this.getProviderLabel(this.props.activeLlmProvider),
       value: provider.apiKey,
       placeholder: this.props.labels.settingsLlmApiKeyPlaceholder,
       show: this.props.showApiKey,

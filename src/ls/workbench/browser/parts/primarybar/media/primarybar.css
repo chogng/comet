@@ -99,9 +99,8 @@
 }
 
 .app-window.is-mica-enabled .panel.primarybar-panel.primarybar-platform-macos .primarybar-footer,
-.app-window.is-mica-enabled .panel.primarybar-panel.primarybar-platform-macos .primarybar-pane > .pane-header,
-.app-window.is-mica-enabled .panel.primarybar-panel.primarybar-platform-macos .primarybar-pane > .pane-body,
-.app-window.is-mica-enabled .panel.primarybar-panel.primarybar-platform-macos .primarybar-pane-content {
+.app-window.is-mica-enabled .panel.primarybar-panel.primarybar-platform-macos .primarybar-switcher,
+.app-window.is-mica-enabled .panel.primarybar-panel.primarybar-platform-macos .primarybar-tab-panel {
   background: transparent;
 }
 
@@ -168,77 +167,135 @@
   height: 100%;
 }
 
+.primarybar-switcher {
+  min-width: 0;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 5px;
+  background: var(--primarybar-surface-bg);
+}
+
+.primarybar-switcher[hidden] {
+  display: none;
+}
+
+.primarybar-tab-list {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--vscode-primaryBar-tabBorder, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--vscode-primaryBar-tabBackground, rgba(0, 0, 0, 0.045));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.primarybar-tab {
+  appearance: none;
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--vscode-primaryBar-tabInactiveForeground, #6f7478);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 30px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.primarybar-tab:hover {
+  color: var(--vscode-primaryBar-tabHoverForeground, #23272b);
+  background: var(--vscode-primaryBar-tabHoverBackground, rgba(255, 255, 255, 0.42));
+}
+
+.primarybar-tab.is-active {
+  color: var(--vscode-primaryBar-tabActiveForeground, #1f2328);
+  background: var(--vscode-primaryBar-tabActiveBackground, #ffffff);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+.primarybar-tab:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #0078d4);
+  outline-offset: 1px;
+}
+
+.primarybar-tab-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .primarybar-content {
   min-height: 0;
   flex: 1;
   display: flex;
 }
 
-.primarybar-content .pane-view {
+.primarybar-content-host,
+.primarybar-tab-panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  background: var(--primarybar-surface-bg);
+}
+
+.primarybar-tab-panel {
+  flex-direction: column;
+}
+
+.primarybar-library-panel > .library-tree {
   flex: 1;
   min-height: 0;
 }
 
-.primarybar-pane > .pane-header,
-.primarybar-pane > .pane-body {
-  background: var(--primarybar-surface-bg);
-}
-
-.primarybar-pane > .pane-header {
-  border-bottom: 0;
-}
-
-.primarybar-library-pane {
-  --ls-pane-header-toggle-padding: 0 8px;
-}
-
-.primarybar-pane-content {
-  min-height: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--primarybar-surface-bg);
-}
-
-.primarybar-pane-toolbar {
-  min-height: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  justify-content: flex-end;
-}
-
-.primarybar-pane-header .pane-header-actionbar {
-  --pane-header-actionbar-item-size: 24px;
+.primarybar-tab-actionbar {
+  --pane-header-actionbar-item-size: 26px;
   --pane-header-actionbar-icon-size: 16px;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
+  --ls-actionbar-gap: 8px;
+  --ls-actionbar-radius: 6px;
+  --ls-actionbar-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
+  --ls-actionbar-hover-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
+  --ls-actionbar-hover-background: var(--vscode-sideBar-actionHoverBackground, rgba(0, 0, 0, 0.05));
+  --ls-actionbar-active-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
+  --ls-actionbar-active-background: var(--vscode-sideBar-actionActiveBackground, rgba(0, 0, 0, 0.1));
+  --ls-actionbar-focus-outline: transparent;
   padding: 0;
-  border-bottom: 0;
-  background: transparent;
 }
 
-.primarybar-pane-header .pane-header-actionbar .actionbar-action {
+.primarybar-tab-actionbar .actionbar-actions-container,
+.primarybar-tab-actionbar .actionbar-item {
+  display: flex;
+  align-items: center;
+}
+
+.primarybar-tab-actionbar .actionbar-action {
   min-height: var(--pane-header-actionbar-item-size);
 }
 
-.primarybar-pane-header .pane-header-actionbar .actionbar-action.is-icon {
+.primarybar-tab-actionbar .actionbar-action.is-icon {
   width: var(--pane-header-actionbar-item-size);
   height: var(--pane-header-actionbar-item-size);
 }
 
-.primarybar-pane-header .pane-header-actionbar .actionbar-action .lx-icon {
+.primarybar-tab-actionbar .actionbar-action .lx-icon {
   width: var(--pane-header-actionbar-icon-size);
   height: var(--pane-header-actionbar-icon-size);
   font-size: var(--pane-header-actionbar-icon-size);
-}
-
-.primarybar-library-pane-content > .library-tree {
-  flex: 1;
-  min-height: 0;
 }
 
 .fetch-pane-content {
@@ -440,17 +497,7 @@ html[lang="en"] .fetch-pane-empty-state {
 }
 
 .fetch-pane-actionbar {
-  --pane-header-actionbar-item-size: 26px;
-  --pane-header-actionbar-icon-size: 16px;
-  --ls-actionbar-gap: 8px;
-  --ls-actionbar-radius: 6px;
-  --ls-actionbar-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
-  --ls-actionbar-hover-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
-  --ls-actionbar-hover-background: var(--vscode-sideBar-actionHoverBackground, rgba(0, 0, 0, 0.05));
-  --ls-actionbar-active-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
-  --ls-actionbar-active-background: var(--vscode-sideBar-actionActiveBackground, rgba(0, 0, 0, 0.1));
-  --ls-actionbar-focus-outline: transparent;
-  padding: 8px;
+  flex-shrink: 0;
 }
 
 .fetch-pane-article-card-icon-btn.actionbar-action {

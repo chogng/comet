@@ -964,7 +964,7 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     assert(
       view
         .getElement()
-        .querySelector('.primarybar-content .pane-view') instanceof HTMLElement,
+        .querySelector('.primarybar-content .primarybar-content-host') instanceof HTMLElement,
     );
     assert(
       view
@@ -1011,7 +1011,7 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     assert.equal(
       view
         .getElement()
-        .querySelector('.primarybar-content .pane-view'),
+        .querySelector('.primarybar-content .primarybar-content-host'),
       null,
     );
     assert.equal(

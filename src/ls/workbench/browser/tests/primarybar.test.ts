@@ -137,19 +137,32 @@ test('primary bar topbar exposes an address bar action', () => {
   }
 });
 
-test('primary bar library header no longer renders a draft action button', () => {
+test('primary bar renders library and fetch as switcher tabs', () => {
   const primaryBar = createPrimaryBar(createProps());
   const element = primaryBar.getElement();
   document.body.append(element);
 
   try {
-    assert.equal(
-      element.querySelector('.primarybar-library-pane-header .pane-header-actionbar'),
-      null,
-    );
-    assert.equal(
-      element.querySelector('.primarybar-library-pane-header .sidebar-action-btn'),
-      null,
+    const libraryTab = element.querySelector('.primarybar-library-tab');
+    const fetchTab = element.querySelector('.primarybar-fetch-tab');
+    assert(libraryTab instanceof HTMLButtonElement);
+    assert(fetchTab instanceof HTMLButtonElement);
+    assert.equal(libraryTab.textContent, 'Library');
+    assert.equal(fetchTab.textContent, 'Fetch');
+    assert.equal(libraryTab.getAttribute('aria-selected'), 'true');
+    assert.equal(fetchTab.getAttribute('aria-selected'), 'false');
+    assert(element.querySelector('.primarybar-library-panel') instanceof HTMLElement);
+    assert.equal(element.querySelector('.primarybar-fetch-panel'), null);
+    assert.equal(element.querySelector('.primarybar-tab-actions .fetch-pane-actionbar'), null);
+
+    fetchTab.click();
+
+    assert.equal(libraryTab.getAttribute('aria-selected'), 'false');
+    assert.equal(fetchTab.getAttribute('aria-selected'), 'true');
+    assert(element.querySelector('.primarybar-fetch-panel') instanceof HTMLElement);
+    assert.equal(element.querySelector('.primarybar-library-panel'), null);
+    assert(
+      element.querySelector('.primarybar-tab-actions .fetch-pane-actionbar') instanceof HTMLElement,
     );
   } finally {
     primaryBar.dispose();

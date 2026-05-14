@@ -50,8 +50,8 @@
     background-color 120ms ease-out,
     width 120ms ease-out,
     height 120ms ease-out;
-  /* Match upstream: keep the sash visually transparent at rest and only show it on hover/drag. */
-  background: transparent;
+  /* Keep a subtle resting divider while preserving the larger drag hit area. */
+  background: var(--vscode-splitViewSeparatorBorder, var(--vscode-sideBar-border, #e5e5e5));
 }
 
 .sash.vertical::before {

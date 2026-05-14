@@ -4,18 +4,7 @@ import type {
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import {
-  Pane,
-  PaneView,
-  Orientation,
-  type PaneClassNames,
-} from 'ls/base/browser/ui/splitview/paneview';
 import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
-import {
-  MutableLifecycle,
-  toDisposable,
-  type DisposableLike,
-} from 'ls/base/common/lifecycle';
 import { LibraryView } from 'ls/workbench/contrib/knowledgeBase/browser/views/libraryView';
 import {
   FetchPaneContentView,
@@ -63,41 +52,7 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-class ContentPane extends Pane {
-  constructor(
-    title: string,
-    private readonly content: HTMLElement,
-    minimumBodySize: number,
-    headerSize?: number,
-    headerContent?: HTMLElement,
-    classNames?: Partial<PaneClassNames>,
-  ) {
-    super({
-      title,
-      minimumBodySize,
-      expanded: true,
-      headerSize,
-      headerContent,
-      classNames,
-    });
-    this.bodyElement.append(this.content);
-  }
-
-  protected layoutBody() {
-    // Body content stretches with CSS.
-  }
-}
-
-function createPrimaryBarPaneClassNames(
-  pane: 'library' | 'fetch',
-): Partial<PaneClassNames> {
-  return {
-    pane: `primarybar-pane primarybar-${pane}-pane`,
-    header: `primarybar-pane-header primarybar-${pane}-pane-header`,
-    title: `primarybar-pane-title primarybar-${pane}-pane-title`,
-    body: `primarybar-pane-body primarybar-${pane}-pane-body`,
-  };
-}
+type PrimaryBarContentTab = 'library' | 'fetch';
 
 export class PrimaryBar {
   private props: PrimaryBarProps;
@@ -115,27 +70,57 @@ export class PrimaryBar {
     'footer',
     'primarybar-footer',
   );
-  private readonly paneView = new PaneView({
-    orientation: Orientation.HORIZONTAL,
-    reserveSashSpace: false,
-  });
+  private readonly switcherElement = createElement('div', 'primarybar-switcher');
+  private readonly tabListElement = createElement('div', 'primarybar-tab-list');
+  private readonly libraryTabButton = createElement('button', 'primarybar-tab');
+  private readonly fetchTabButton = createElement('button', 'primarybar-tab');
+  private readonly tabActionsElement = createElement('div', 'primarybar-tab-actions');
+  private readonly contentHostElement = createElement('div', 'primarybar-content-host');
   private readonly librarySection = createElement(
-    'div',
-    'primarybar-pane-content primarybar-library-pane-content',
+    'section',
+    'primarybar-tab-panel primarybar-library-panel',
+  );
+  private readonly fetchSection = createElement(
+    'section',
+    'primarybar-tab-panel primarybar-fetch-panel',
   );
   private readonly fetchActionsView = createActionBarView({
-    className: 'pane-header-actionbar fetch-pane-actionbar',
+    className: 'primarybar-tab-actionbar fetch-pane-actionbar',
     ariaRole: 'group',
   });
   private readonly libraryView: LibraryView;
   private readonly fetchContentView: FetchPaneContentView;
-  private readonly libraryPane: ContentPane;
-  private readonly fetchPane: ContentPane;
-  private readonly resizeObserver = new MutableLifecycle<DisposableLike>();
+  private activeTab: PrimaryBarContentTab = 'library';
   private disposed = false;
 
   constructor(props: PrimaryBarProps) {
     this.props = props;
+    this.tabListElement.setAttribute('role', 'tablist');
+    this.tabListElement.setAttribute('aria-label', props.labels.libraryTitle);
+    this.libraryTabButton.type = 'button';
+    this.fetchTabButton.type = 'button';
+    this.libraryTabButton.setAttribute('role', 'tab');
+    this.fetchTabButton.setAttribute('role', 'tab');
+    this.libraryTabButton.classList.add('primarybar-library-tab');
+    this.fetchTabButton.classList.add('primarybar-fetch-tab');
+    this.librarySection.id = `primarybar-library-panel-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    this.fetchSection.id = `primarybar-fetch-panel-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    this.libraryTabButton.setAttribute('aria-controls', this.librarySection.id);
+    this.fetchTabButton.setAttribute('aria-controls', this.fetchSection.id);
+    this.libraryTabButton.addEventListener('click', () => this.setActiveTab('library'));
+    this.fetchTabButton.addEventListener('click', () => this.setActiveTab('fetch'));
+    this.tabListElement.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+        return;
+      }
+
+      event.preventDefault();
+      this.setActiveTab(this.activeTab === 'library' ? 'fetch' : 'library');
+    });
     this.libraryView = new LibraryView({
       labels: props.labels,
       librarySnapshot: props.librarySnapshot,
@@ -151,24 +136,9 @@ export class PrimaryBar {
       labels: props.labels,
     });
     this.librarySection.append(this.libraryView.getElement());
-    this.libraryPane = new ContentPane(
-      props.labels.libraryTitle,
-      this.librarySection,
-      220,
-      35,
-      undefined,
-      createPrimaryBarPaneClassNames('library'),
-    );
-    this.fetchPane = new ContentPane(
-      props.labels.fetchTitle,
-      this.fetchContentView.getElement(),
-      260,
-      35,
-      this.fetchActionsView.getElement(),
-      createPrimaryBarPaneClassNames('fetch'),
-    );
-    this.paneView.addPane(this.libraryPane, 280, { flex: true });
-    this.paneView.addPane(this.fetchPane, 360, { flex: true });
+    this.fetchSection.append(this.fetchContentView.getElement());
+    this.tabListElement.append(this.libraryTabButton, this.fetchTabButton);
+    this.switcherElement.append(this.tabListElement, this.tabActionsElement);
     if (WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0) {
       this.leadingWindowControlsSpacer.style.setProperty(
         '--window-controls-width',
@@ -176,9 +146,13 @@ export class PrimaryBar {
       );
       this.topbarElement.append(this.leadingWindowControlsSpacer);
     }
-    this.contentElement.append(this.paneView.element);
-    this.element.append(this.topbarElement, this.contentElement, this.footerElement);
-    this.installResizeObserver();
+    this.contentElement.append(this.contentHostElement);
+    this.element.append(
+      this.topbarElement,
+      this.switcherElement,
+      this.contentElement,
+      this.footerElement,
+    );
     this.render();
   }
 
@@ -192,8 +166,6 @@ export class PrimaryBar {
     }
 
     this.props = props;
-    this.libraryPane.setTitle(props.labels.libraryTitle);
-    this.fetchPane.setTitle(props.labels.fetchTitle);
     this.libraryView.setProps({
       labels: props.labels,
       librarySnapshot: props.librarySnapshot,
@@ -217,16 +189,20 @@ export class PrimaryBar {
     }
 
     this.disposed = true;
-    this.resizeObserver.dispose();
     this.fetchActionsView.dispose();
     this.libraryView.dispose();
     this.fetchContentView.dispose();
-    this.paneView.dispose();
     this.element.replaceChildren();
   }
 
   private render() {
     const { labels } = this.props;
+    this.libraryTabButton.textContent = labels.libraryTitle;
+    this.fetchTabButton.textContent = labels.fetchTitle;
+    this.tabListElement.setAttribute(
+      'aria-label',
+      `${labels.libraryTitle} / ${labels.fetchTitle}`,
+    );
     this.syncModeContent();
     this.syncTopbarActions(this.props.topbarActionsElement ?? null);
     this.syncFooterActions(this.props.footerActionsElement ?? null);
@@ -237,7 +213,7 @@ export class PrimaryBar {
           ? labels.selectionModeSelectAll
           : labels.selectionModeExit;
     this.fetchActionsView.setProps({
-      className: 'pane-header-actionbar fetch-pane-actionbar',
+      className: 'primarybar-tab-actionbar fetch-pane-actionbar',
       ariaRole: 'group',
       items: [
         {
@@ -270,11 +246,12 @@ export class PrimaryBar {
         },
       ],
     });
-    this.layoutPanes();
+    this.syncTabs();
   }
 
   private syncModeContent() {
     if (this.props.mode === 'settings') {
+      this.switcherElement.hidden = true;
       const settingsNavigationElement = this.props.settingsNavigationElement ?? null;
       if (settingsNavigationElement) {
         if (this.contentElement.firstElementChild !== settingsNavigationElement) {
@@ -286,8 +263,9 @@ export class PrimaryBar {
       return;
     }
 
-    if (this.contentElement.firstElementChild !== this.paneView.element) {
-      this.contentElement.replaceChildren(this.paneView.element);
+    this.switcherElement.hidden = false;
+    if (this.contentElement.firstElementChild !== this.contentHostElement) {
+      this.contentElement.replaceChildren(this.contentHostElement);
     }
   }
 
@@ -320,40 +298,48 @@ export class PrimaryBar {
     }
   }
 
-  private installResizeObserver() {
-    if (typeof ResizeObserver === 'undefined') {
-      const handleWindowResize = () => {
-        this.layoutPanes();
-      };
-      window.addEventListener('resize', handleWindowResize);
-      this.resizeObserver.value = toDisposable(() => {
-        window.removeEventListener('resize', handleWindowResize);
-      });
+  private setActiveTab(tab: PrimaryBarContentTab) {
+    if (this.disposed || this.activeTab === tab) {
       return;
     }
 
-    const observer = new ResizeObserver(() => {
-      this.layoutPanes();
-    });
-    observer.observe(this.element);
-    this.resizeObserver.value = toDisposable(() => {
-      observer.disconnect();
-    });
+    this.activeTab = tab;
+    this.syncTabs();
   }
 
-  private layoutPanes() {
+  private syncTabs() {
     if (this.props.mode === 'settings') {
       return;
     }
 
-    if (this.contentElement.firstElementChild !== this.paneView.element) {
+    if (this.contentElement.firstElementChild !== this.contentHostElement) {
       return;
     }
 
-    this.paneView.layout(
-      this.contentElement.clientWidth,
-      this.contentElement.clientHeight,
-    );
+    const activePanel =
+      this.activeTab === 'library' ? this.librarySection : this.fetchSection;
+    if (this.contentHostElement.firstElementChild !== activePanel) {
+      this.contentHostElement.replaceChildren(activePanel);
+    }
+
+    const isLibraryActive = this.activeTab === 'library';
+    this.libraryTabButton.classList.toggle('is-active', isLibraryActive);
+    this.fetchTabButton.classList.toggle('is-active', !isLibraryActive);
+    this.libraryTabButton.setAttribute('aria-selected', String(isLibraryActive));
+    this.fetchTabButton.setAttribute('aria-selected', String(!isLibraryActive));
+    this.libraryTabButton.tabIndex = isLibraryActive ? 0 : -1;
+    this.fetchTabButton.tabIndex = isLibraryActive ? -1 : 0;
+
+    if (!isLibraryActive) {
+      if (this.tabActionsElement.firstElementChild !== this.fetchActionsView.getElement()) {
+        this.tabActionsElement.replaceChildren(this.fetchActionsView.getElement());
+      }
+      return;
+    }
+
+    if (this.tabActionsElement.firstElementChild) {
+      this.tabActionsElement.replaceChildren();
+    }
   }
 }
 

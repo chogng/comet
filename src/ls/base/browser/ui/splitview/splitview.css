@@ -23,6 +23,7 @@
   position: absolute;
   pointer-events: none;
   background: var(--vscode-splitViewSeparatorBorder, var(--vscode-sideBar-border, #e5e5e5));
+  display: none;
   opacity: 0;
 }
 
