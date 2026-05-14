@@ -1270,6 +1270,8 @@ test('DomScrollableElement uses visibility controllers to reveal auto scrollbars
   document.body.append(root);
 
   try {
+    assert(root.querySelector('.overlay-scrollbar-vertical'));
+    assert(root.querySelector('.overlay-scrollbar-horizontal'));
     assert.equal(root.classList.contains('is-vertical-scrollbar-visible'), false);
 
     root.dispatchEvent(new Event('mouseenter'));

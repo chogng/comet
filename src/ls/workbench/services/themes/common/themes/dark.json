@@ -2,9 +2,9 @@
   "colors": {
     "sash.hoverBorder": "rgba(90, 169, 255, 0.38)",
     "scrollbar.shadow": "rgba(0, 0, 0, 0.32)",
-    "scrollbarSlider.background": "rgba(121, 149, 166, 0.42)",
-    "scrollbarSlider.hoverBackground": "rgba(146, 176, 194, 0.58)",
-    "scrollbarSlider.activeBackground": "rgba(173, 201, 219, 0.72)",
+    "scrollbarSlider.background": "rgba(180, 180, 180, 0.32)",
+    "scrollbarSlider.hoverBackground": "rgba(200, 200, 200, 0.46)",
+    "scrollbarSlider.activeBackground": "rgba(220, 220, 220, 0.62)",
     "sideBar.foreground": "#d7e1ea",
     "sideBar.secondaryForeground": "#93a4b5",
     "sideBar.border": "#33404d",

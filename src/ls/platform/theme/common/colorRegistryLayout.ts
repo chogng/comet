@@ -16,28 +16,28 @@ export const scrollbarShadow = registerColor('scrollbar.shadow', {
 });
 
 export const scrollbarSliderBackground = registerColor('scrollbarSlider.background', {
-  dark: 'rgba(96, 125, 139, 0.55)',
-  light: 'rgba(96, 125, 139, 0.55)',
+  dark: 'rgba(180, 180, 180, 0.32)',
+  light: 'rgba(110, 110, 110, 0.42)',
 });
 
 export const scrollbarSliderHoverBackground = registerColor('scrollbarSlider.hoverBackground', {
-  dark: 'rgba(76, 107, 122, 0.72)',
-  light: 'rgba(76, 107, 122, 0.72)',
+  dark: 'rgba(200, 200, 200, 0.46)',
+  light: 'rgba(92, 92, 92, 0.58)',
 });
 
 export const scrollbarSliderActiveBackground = registerColor('scrollbarSlider.activeBackground', {
-  dark: 'rgba(58, 87, 102, 0.88)',
-  light: 'rgba(58, 87, 102, 0.88)',
+  dark: 'rgba(220, 220, 220, 0.62)',
+  light: 'rgba(72, 72, 72, 0.76)',
 });
 
 export const workbenchChromeBackground = registerColor('workbench.chromeBackground', {
   dark: '#18222c',
-  light: '#fafafd',
+  light: '#ffffff',
 });
 
 export const workbenchChromeBackgroundTransparent = registerColor('workbench.chromeBackgroundTransparent', {
   dark: 'rgba(24, 34, 44, 0)',
-  light: 'rgba(250, 250, 253, 0)',
+  light: 'rgba(255, 255, 255, 0)',
 });
 
 export const workbenchForeground = registerColor('workbench.foreground', {

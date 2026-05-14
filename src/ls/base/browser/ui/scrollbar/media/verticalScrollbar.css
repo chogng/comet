@@ -19,15 +19,6 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  scrollbar-color: transparent transparent;
-}
-
-.scrollable-element-root.is-vertical-scrollbar-visible .scrollable-content,
-.scrollable-element-root.is-horizontal-scrollbar-visible .scrollable-content {
-  scrollbar-color:
-    var(--vscode-scrollbarSlider-background, rgba(96, 125, 139, 0.55))
-    transparent;
-  scrollbar-width: thin;
 }
 
 .scrollable-element-root .scrollable-content::-webkit-scrollbar:vertical {
@@ -38,58 +29,74 @@
   height: 0;
 }
 
-.scrollable-element-root.is-vertical-scrollbar-visible .scrollable-content::-webkit-scrollbar:vertical {
-  width: var(--scrollbar-size-vertical, 10px);
-}
-
-.scrollable-element-root.is-horizontal-scrollbar-visible .scrollable-content::-webkit-scrollbar:horizontal {
-  height: var(--scrollbar-size-horizontal, 10px);
-}
-
 .scrollable-element-root .scrollable-content::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-track:vertical {
-  background: transparent;
+.scrollable-element-root .overlay-scrollbar {
+  position: absolute;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms linear;
+  contain: strict;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-track:horizontal {
-  background: transparent;
+.scrollable-element-root .overlay-scrollbar-vertical {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--scrollbar-size-vertical, 10px);
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-thumb:vertical {
+.scrollable-element-root .overlay-scrollbar-horizontal {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--scrollbar-size-horizontal, 10px);
+}
+
+.scrollable-element-root.is-vertical-scrollbar-visible .overlay-scrollbar-vertical,
+.scrollable-element-root.is-horizontal-scrollbar-visible .overlay-scrollbar-horizontal {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scrollable-element-root.is-scrollbar-hiding .overlay-scrollbar {
+  transition-duration: 500ms;
+}
+
+.scrollable-element-root .overlay-scrollbar-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
   border: 2px solid transparent;
   border-radius: 999px;
+  background:
+    var(--vscode-scrollbarSlider-background, rgba(110, 110, 110, 0.42))
+    padding-box;
   background-clip: padding-box;
-  background: var(--vscode-scrollbarSlider-background, rgba(96, 125, 139, 0.55));
+  contain: strict;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-thumb:horizontal {
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background-clip: padding-box;
-  background: var(--vscode-scrollbarSlider-background, rgba(96, 125, 139, 0.55));
+.scrollable-element-root .overlay-scrollbar-vertical .overlay-scrollbar-slider {
+  width: 100%;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-thumb:vertical:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(76, 107, 122, 0.72));
+.scrollable-element-root .overlay-scrollbar-horizontal .overlay-scrollbar-slider {
+  height: 100%;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-thumb:horizontal:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(76, 107, 122, 0.72));
+.scrollable-element-root .overlay-scrollbar-slider:hover {
+  background:
+    var(--vscode-scrollbarSlider-hoverBackground, rgba(92, 92, 92, 0.58))
+    padding-box;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-thumb:vertical:active {
-  background: var(--vscode-scrollbarSlider-activeBackground, rgba(58, 87, 102, 0.88));
-}
-
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-thumb:horizontal:active {
-  background: var(--vscode-scrollbarSlider-activeBackground, rgba(58, 87, 102, 0.88));
-}
-
-.scrollable-element-root.is-scrollbar-hiding .scrollable-content {
-  transition: scrollbar-color 120ms linear;
+.scrollable-element-root .overlay-scrollbar-slider:active {
+  background:
+    var(--vscode-scrollbarSlider-activeBackground, rgba(72, 72, 72, 0.76))
+    padding-box;
 }
 
 .scrollable-element-root.use-shadows::before {

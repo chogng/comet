@@ -1,13 +1,7 @@
 import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElementOptions';
 
-function splitClassNames(className: string) {
-  return className.split(/\s+/).filter(Boolean);
-}
-
 export class ScrollbarVisibilityController {
   private static readonly HIDING_CLASS_NAME = 'is-scrollbar-hiding';
-  private readonly visibleClassNames: readonly string[];
-  private readonly invisibleClassNames: readonly string[];
   private visibility: ScrollbarVisibility;
   private domNode: HTMLElement | null = null;
   private rawShouldBeVisible = false;
@@ -18,12 +12,9 @@ export class ScrollbarVisibilityController {
 
   constructor(
     visibility: ScrollbarVisibility,
-    visibleClassName: string,
-    invisibleClassName: string,
+    private readonly visibleClassName: string,
   ) {
     this.visibility = visibility;
-    this.visibleClassNames = splitClassNames(visibleClassName);
-    this.invisibleClassNames = splitClassNames(invisibleClassName);
   }
 
   setVisibility(visibility: ScrollbarVisibility) {
@@ -51,7 +42,7 @@ export class ScrollbarVisibilityController {
 
   setDomNode(domNode: HTMLElement) {
     this.domNode = domNode;
-    this.applyClassNames(this.invisibleClassNames);
+    this.hide(false);
     this.setShouldBeVisible(false);
   }
 
@@ -107,7 +98,7 @@ export class ScrollbarVisibilityController {
     }
     this.revealTimer = window.setTimeout(() => {
       this.revealTimer = null;
-      this.applyClassNames(this.visibleClassNames);
+      this.applyVisibleState(true);
     }, 0);
   }
 
@@ -117,31 +108,22 @@ export class ScrollbarVisibilityController {
       this.revealTimer = null;
     }
     if (!this.isVisible) {
-      this.applyClassNames(this.invisibleClassNames, withFadeAway);
+      this.applyVisibleState(false, withFadeAway);
       return;
     }
 
     this.isVisible = false;
-    this.applyClassNames(this.invisibleClassNames, withFadeAway);
+    this.applyVisibleState(false, withFadeAway);
   }
 
-  private applyClassNames(classNames: readonly string[], withFadeAway = false) {
+  private applyVisibleState(visible: boolean, withFadeAway = false) {
     if (!this.domNode) {
       return;
     }
 
-    for (const className of this.visibleClassNames) {
-      this.domNode.classList.remove(className);
-    }
-    for (const className of this.invisibleClassNames) {
-      this.domNode.classList.remove(className);
-    }
+    this.domNode.classList.toggle(this.visibleClassName, visible);
     this.domNode.classList.remove(ScrollbarVisibilityController.HIDING_CLASS_NAME);
-
-    for (const className of classNames) {
-      this.domNode.classList.add(className);
-    }
-    if (withFadeAway) {
+    if (!visible && withFadeAway) {
       this.domNode.classList.add(ScrollbarVisibilityController.HIDING_CLASS_NAME);
     }
   }

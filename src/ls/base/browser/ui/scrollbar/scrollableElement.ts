@@ -33,8 +33,13 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
 
 export class AbstractScrollableElement {
   private static readonly SCROLLBAR_REVEAL_DURATION = 500;
+  private static readonly MIN_SLIDER_SIZE = 20;
   protected readonly element: HTMLElement;
   protected readonly domNode: HTMLDivElement;
+  private readonly horizontalScrollbar: HTMLDivElement;
+  private readonly horizontalSlider: HTMLDivElement;
+  private readonly verticalScrollbar: HTMLDivElement;
+  private readonly verticalSlider: HTMLDivElement;
   protected options: ScrollableElementResolvedOptions;
   private readonly onScrollEmitter = new EventEmitter<ScrollEvent>();
   private readonly onWillScrollEmitter = new EventEmitter<ScrollEvent>();
@@ -56,7 +61,13 @@ export class AbstractScrollableElement {
     this.options = resolveScrollableElementOptions(options);
     this.domNode = document.createElement('div');
     this.domNode.className = 'scrollable-element-root';
-    this.domNode.append(this.element);
+    this.horizontalScrollbar = this.createScrollbarElement('horizontal');
+    this.horizontalSlider = this.createSliderElement();
+    this.verticalScrollbar = this.createScrollbarElement('vertical');
+    this.verticalSlider = this.createSliderElement();
+    this.horizontalScrollbar.append(this.horizontalSlider);
+    this.verticalScrollbar.append(this.verticalSlider);
+    this.domNode.append(this.element, this.horizontalScrollbar, this.verticalScrollbar);
 
     this.element.classList.add('scrollable-content');
     this.element.style.minHeight = this.element.style.minHeight || '0';
@@ -100,12 +111,10 @@ export class AbstractScrollableElement {
     this.horizontalVisibilityController = new ScrollbarVisibilityController(
       this.options.horizontal,
       'is-horizontal-scrollbar-visible',
-      'is-horizontal-scrollbar-hidden',
     );
     this.verticalVisibilityController = new ScrollbarVisibilityController(
       this.options.vertical,
       'is-vertical-scrollbar-visible',
-      'is-vertical-scrollbar-hidden',
     );
     this.horizontalVisibilityController.setIsNeeded(this.horizontalScrollbarState.isNeeded());
     this.verticalVisibilityController.setIsNeeded(this.verticalScrollbarState.isNeeded());
@@ -118,6 +127,12 @@ export class AbstractScrollableElement {
       addDisposableListener(this.element, 'scroll', this.handleElementScroll, {
         passive: true,
       }),
+    );
+    this.domDisposables.add(
+      addDisposableListener(this.verticalScrollbar, 'pointerdown', this.handleVerticalScrollbarPointerDown),
+    );
+    this.domDisposables.add(
+      addDisposableListener(this.horizontalScrollbar, 'pointerdown', this.handleHorizontalScrollbarPointerDown),
     );
     this.domDisposables.add(
       addDisposableListener(this.domNode, 'mouseenter', this.handleMouseEnter),
@@ -240,8 +255,7 @@ export class AbstractScrollableElement {
   }
 
   delegateVerticalScrollbarPointerDown(_browserEvent: PointerEvent) {
-    // Future custom scrollbar work can hook into this. The base implementation
-    // keeps the API shape without introducing synthetic drag logic yet.
+    this.handleVerticalScrollbarPointerDown(_browserEvent);
   }
 
   dispose() {
@@ -279,6 +293,36 @@ export class AbstractScrollableElement {
   private readonly handleMouseLeave = () => {
     this.isHovered = false;
     this.scheduleScrollbarHide();
+  };
+
+  private readonly handleVerticalScrollbarPointerDown = (event: PointerEvent) => {
+    if (event.button !== 0 || !this.verticalScrollbarState.isNeeded()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.setScrollbarsVisible(true);
+    const sliderRect = this.verticalSlider.getBoundingClientRect();
+    const isSliderTarget = this.verticalSlider.contains(event.target as Node);
+    const offset = isSliderTarget
+      ? event.clientY - sliderRect.top
+      : this.verticalSlider.offsetHeight / 2;
+    this.startScrollbarDrag(event, 'vertical', offset);
+  };
+
+  private readonly handleHorizontalScrollbarPointerDown = (event: PointerEvent) => {
+    if (event.button !== 0 || !this.horizontalScrollbarState.isNeeded()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.setScrollbarsVisible(true);
+    const sliderRect = this.horizontalSlider.getBoundingClientRect();
+    const isSliderTarget = this.horizontalSlider.contains(event.target as Node);
+    const offset = isSliderTarget
+      ? event.clientX - sliderRect.left
+      : this.horizontalSlider.offsetWidth / 2;
+    this.startScrollbarDrag(event, 'horizontal', offset);
   };
 
   private applyOptions() {
@@ -357,7 +401,135 @@ export class AbstractScrollableElement {
       'has-top-shadow',
       this.options.useShadows && this.scrollPosition.scrollTop > 0,
     );
+    this.renderScrollbars();
     this.syncScrollbarVisibility();
+  }
+
+  private createScrollbarElement(orientation: 'horizontal' | 'vertical') {
+    const scrollbar = document.createElement('div');
+    scrollbar.className = `overlay-scrollbar overlay-scrollbar-${orientation}`;
+    scrollbar.setAttribute('aria-hidden', 'true');
+    return scrollbar;
+  }
+
+  private createSliderElement() {
+    const slider = document.createElement('div');
+    slider.className = 'overlay-scrollbar-slider';
+    return slider;
+  }
+
+  private renderScrollbars() {
+    this.renderVerticalScrollbar();
+    this.renderHorizontalScrollbar();
+  }
+
+  private renderVerticalScrollbar() {
+    const trackSize = this.element.clientHeight;
+    const scrollSize = this.element.scrollHeight;
+    const scrollbarSize = this.options.vertical === ScrollbarVisibility.Hidden
+      ? 0
+      : this.options.verticalScrollbarSize;
+    this.verticalScrollbar.style.width = `${scrollbarSize}px`;
+
+    if (!trackSize || scrollSize <= trackSize || !scrollbarSize) {
+      this.verticalSlider.style.height = '0';
+      this.verticalSlider.style.transform = 'translateY(0)';
+      return;
+    }
+
+    const sliderSize = Math.max(
+      AbstractScrollableElement.MIN_SLIDER_SIZE,
+      Math.floor((trackSize * trackSize) / scrollSize),
+    );
+    const scrollRange = Math.max(1, scrollSize - trackSize);
+    const sliderRange = Math.max(0, trackSize - sliderSize);
+    const sliderTop = Math.round((this.element.scrollTop / scrollRange) * sliderRange);
+    this.verticalSlider.style.height = `${sliderSize}px`;
+    this.verticalSlider.style.transform = `translateY(${sliderTop}px)`;
+  }
+
+  private renderHorizontalScrollbar() {
+    const trackSize = this.element.clientWidth;
+    const scrollSize = this.element.scrollWidth;
+    const scrollbarSize = this.options.horizontal === ScrollbarVisibility.Hidden
+      ? 0
+      : this.options.horizontalScrollbarSize;
+    this.horizontalScrollbar.style.height = `${scrollbarSize}px`;
+
+    if (!trackSize || scrollSize <= trackSize || !scrollbarSize) {
+      this.horizontalSlider.style.width = '0';
+      this.horizontalSlider.style.transform = 'translateX(0)';
+      return;
+    }
+
+    const sliderSize = Math.max(
+      AbstractScrollableElement.MIN_SLIDER_SIZE,
+      Math.floor((trackSize * trackSize) / scrollSize),
+    );
+    const scrollRange = Math.max(1, scrollSize - trackSize);
+    const sliderRange = Math.max(0, trackSize - sliderSize);
+    const sliderLeft = Math.round((this.element.scrollLeft / scrollRange) * sliderRange);
+    this.horizontalSlider.style.width = `${sliderSize}px`;
+    this.horizontalSlider.style.transform = `translateX(${sliderLeft}px)`;
+  }
+
+  private startScrollbarDrag(
+    event: PointerEvent,
+    orientation: 'horizontal' | 'vertical',
+    pointerOffsetWithinSlider: number,
+  ) {
+    const scrollbar = orientation === 'vertical'
+      ? this.verticalScrollbar
+      : this.horizontalScrollbar;
+    const slider = orientation === 'vertical'
+      ? this.verticalSlider
+      : this.horizontalSlider;
+    const trackSize = orientation === 'vertical'
+      ? scrollbar.clientHeight
+      : scrollbar.clientWidth;
+    const sliderSize = orientation === 'vertical'
+      ? slider.offsetHeight
+      : slider.offsetWidth;
+    const scrollSize = orientation === 'vertical'
+      ? this.element.scrollHeight
+      : this.element.scrollWidth;
+    const visibleSize = orientation === 'vertical'
+      ? this.element.clientHeight
+      : this.element.clientWidth;
+    const scrollbarRect = scrollbar.getBoundingClientRect();
+    const scrollRange = Math.max(0, scrollSize - visibleSize);
+    const sliderRange = Math.max(1, trackSize - sliderSize);
+
+    const updateFromPointer = (pointerEvent: PointerEvent) => {
+      const pointerPosition = orientation === 'vertical'
+        ? pointerEvent.clientY - scrollbarRect.top
+        : pointerEvent.clientX - scrollbarRect.left;
+      const sliderPosition = Math.min(
+        sliderRange,
+        Math.max(0, pointerPosition - pointerOffsetWithinSlider),
+      );
+      const scrollPosition = (sliderPosition / sliderRange) * scrollRange;
+      if (orientation === 'vertical') {
+        this.element.scrollTop = scrollPosition;
+      } else {
+        this.element.scrollLeft = scrollPosition;
+      }
+      this.captureState();
+    };
+
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
+      pointerEvent.preventDefault();
+      updateFromPointer(pointerEvent);
+    };
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      this.scheduleScrollbarHide();
+    };
+
+    updateFromPointer(event);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
   }
 
   private revealScrollbarsTemporarily() {
