@@ -220,6 +220,11 @@ export const settingsButtonHoverBackground = registerColor('settings.buttonHover
   light: '#f6f9fc',
 });
 
+export const settingsSelectHoverBackground = registerColor('settings.selectHoverBackground', {
+  dark: '#2a3642',
+  light: '#e6e6e6',
+});
+
 export const settingsPanelBackground = registerColor('settings.panelBackground', {
   dark: '#202b35',
   light: '#f6f6f6',

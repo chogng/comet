@@ -162,6 +162,7 @@ export type ColorIdentifier =
   | 'settings.buttonBackground'
   | 'settings.buttonForeground'
   | 'settings.buttonHoverBackground'
+  | 'settings.selectHoverBackground'
   | 'settings.panelBackground'
   | 'settings.panelBorder'
   | 'settings.panelForeground'
