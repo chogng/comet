@@ -208,6 +208,7 @@ function shouldUpdateDownloadDirectorySection(
     previousProps.desktopRuntime !== currentProps.desktopRuntime ||
     previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
     previousProps.labels.defaultPdfDir !== currentProps.labels.defaultPdfDir ||
+    previousProps.labels.open !== currentProps.labels.open ||
     previousProps.labels.downloadDirPlaceholder !== currentProps.labels.downloadDirPlaceholder ||
     previousProps.labels.chooseDirectory !== currentProps.labels.chooseDirectory ||
     previousProps.labels.pdfFileNameUseSelectionOrder !== currentProps.labels.pdfFileNameUseSelectionOrder ||

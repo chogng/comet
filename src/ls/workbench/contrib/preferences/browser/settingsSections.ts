@@ -422,25 +422,7 @@ export function renderNotificationsSection(props: SettingsPartProps) {
 
 export function renderDownloadDirectorySection(props: SettingsPartProps) {
   const field = el('div', 'settings-download-settings');
-  const row = el('div', 'settings-input-row');
-  row.append(
-    buildInput({
-      value: props.pdfDownloadDir,
-      className: 'settings-input-control',
-      focusKey: 'settings.download.dir',
-      placeholder: props.labels.downloadDirPlaceholder,
-      onInput: props.onPdfDownloadDirChange,
-    }).element,
-    buildButton({
-      label: '...',
-      icon: lxIconSemanticMap.settings.chooseDirectory,
-      className: 'settings-btn-icon',
-      focusKey: 'settings.download.choose',
-      title: props.labels.chooseDirectory,
-      disabled: !props.desktopRuntime || props.isSettingsSaving,
-      onClick: props.onChoosePdfDownloadDir,
-    }),
-  );
+  const effectiveDownloadDir = props.pdfDownloadDir.trim() || props.labels.systemDownloads;
   const downloadDirectory = createSettingsSection({
     sectionClassName: 'settings-download-directory-section',
     panelClassName: 'settings-download-directory-panel',
@@ -449,7 +431,14 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
   downloadDirectory.list.append(
     createSettingsRow({
       title: props.labels.defaultPdfDir,
-      control: row,
+      description: effectiveDownloadDir,
+      control: buildButton({
+        label: props.labels.open,
+        focusKey: 'settings.download.open',
+        title: props.labels.open,
+        disabled: !props.desktopRuntime || props.isSettingsSaving,
+        onClick: props.onChoosePdfDownloadDir,
+      }),
       itemClassName: 'settings-download-directory-item',
       controlClassName: 'settings-download-directory-control',
     }),

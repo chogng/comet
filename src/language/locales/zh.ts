@@ -300,6 +300,7 @@ const zh = {
   pdfFileNameUseSelectionOrderHint:
     '仅在多选模式下生效。启用后会命名为“1. 文献标题”；关闭后仅使用文献标题。',
   downloadDirPlaceholder: '默认下载到系统Downloads目录',
+  open: 'open',
   chooseDirectory: '选择目录',
   openConfigLocation: '打开用户 settings.json',
   resetDefault: '恢复默认',

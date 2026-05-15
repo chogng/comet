@@ -302,6 +302,7 @@ const en = {
   pdfFileNameUseSelectionOrderHint:
     'Only applies in multi-select mode. When enabled, names are like "1. Article Title"; when disabled, only the title is used.',
   downloadDirPlaceholder: 'Leave empty to use the system Downloads folder',
+  open: 'open',
   chooseDirectory: 'Choose directory',
   openConfigLocation: 'Open user settings JSON',
   resetDefault: 'Reset',
