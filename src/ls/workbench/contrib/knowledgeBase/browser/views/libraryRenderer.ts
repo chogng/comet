@@ -1,4 +1,5 @@
 import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/desktopTypes';
+import { createMouseContextMenuAnchor } from 'ls/base/browser/contextmenu';
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
 import type { SimpleTreeRenderContext } from 'ls/base/browser/ui/tree/simpleTree';
 import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
@@ -202,12 +203,7 @@ export class LibraryRenderer {
     }
 
     this.contextMenuService.showContextMenu({
-      getAnchor: () => ({
-        x: event.clientX,
-        y: event.clientY,
-        width: 0,
-        height: 0,
-      }),
+      getAnchor: () => createMouseContextMenuAnchor(event),
       getActions: () => options,
       getMenuData: () => 'knowledge-library-document',
       alignment: 'start',

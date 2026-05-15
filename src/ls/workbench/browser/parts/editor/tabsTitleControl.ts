@@ -5,7 +5,10 @@ import {
 } from 'ls/base/browser/ui/hover/hover';
 import { createLxIcon, type LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
 import { HorizontalScrollbar } from 'ls/base/browser/ui/scrollbar/horizontalScrollbar';
-import type { ContextMenuAction } from 'ls/base/browser/contextmenu';
+import {
+  createMouseContextMenuAnchor,
+  type ContextMenuAction,
+} from 'ls/base/browser/contextmenu';
 import {
   LifecycleStore,
   MutableLifecycle,
@@ -738,12 +741,7 @@ export class TabsTitleControl extends TitleControl {
     }
 
     this.contextMenuService.showContextMenu({
-      getAnchor: () => ({
-        x: event.clientX,
-        y: event.clientY,
-        width: 0,
-        height: 0,
-      }),
+      getAnchor: () => createMouseContextMenuAnchor(event),
       getActions: () => actions,
       getMenuData: () => 'editor-tab-context',
       alignment: 'start',

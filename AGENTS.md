@@ -1,4 +1,4 @@
-上游在 C:\Users\lanxi\Desktop\code or /Users/lance/Desktop/code-main or C:\Users\lanxi\Desktop\codex
+上游在 C:\Users\lanxi\Desktop\code or /Users/lance/Desktop/vscode or C:\Users\lanxi\Desktop\codex
 prosemirror的官方文档如下
 [https://github.com/prosemirror](https://github.com/prosemirror)
 [https://prosemirror.net/examples/](https://prosemirror.net/examples/)

@@ -1,3 +1,5 @@
+import type { IMouseEvent } from 'ls/base/browser/mouseEvent';
+import { getMouseClientCoordinates } from 'ls/base/browser/mouseEvent';
 import type { BaseAction } from 'ls/base/common/actions';
 import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
 import type { ContextViewAnchor } from 'ls/base/browser/ui/contextview/contextview';
@@ -8,6 +10,18 @@ export type ContextMenuAlignment = 'start' | 'end';
 export type ContextMenuPosition = 'auto' | 'above' | 'below';
 export type ContextMenuAnchorAlignment = 'left' | 'right';
 export type ContextMenuAnchorAxisAlignment = 'vertical' | 'horizontal';
+
+export function createMouseContextMenuAnchor(
+  event: MouseEvent | IMouseEvent,
+): ContextMenuAnchor {
+  const { x, y } = getMouseClientCoordinates(event);
+  return {
+    x,
+    y,
+    width: 0,
+    height: 0,
+  };
+}
 
 // This is the current repo-level menu action contract shared by platform,
 // workbench, and native menu bridges. It is intentionally smaller than the

@@ -1,3 +1,4 @@
+import { createMouseContextMenuAnchor } from 'ls/base/browser/contextmenu';
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
 import { createLxIcon, createLxLoadingIcon } from 'ls/base/browser/ui/lxicon/lxicon';
 import { createContextMenuService } from 'ls/workbench/services/contextmenu/electron-sandbox/contextmenuService';
@@ -1872,12 +1873,7 @@ export class EditorBrowserLibraryPanel {
     itemState: BrowserLibraryListItem,
   ) {
     this.contextMenuService.showContextMenu({
-      getAnchor: () => ({
-        x: event.clientX,
-        y: event.clientY,
-        width: 0,
-        height: 0,
-      }),
+      getAnchor: () => createMouseContextMenuAnchor(event),
       getActions: () => [
         {
           value: 'open',
