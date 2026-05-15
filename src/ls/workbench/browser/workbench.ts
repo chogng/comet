@@ -116,6 +116,7 @@ import {
 } from 'ls/base/common/platform';
 import { EventEmitter } from 'ls/base/common/event';
 import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 import { applyWorkbenchTheme } from 'ls/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'ls/workbench/browser/style';
 import type { EditorOpenRequest } from 'ls/workbench/services/editor/common/editorOpenTypes';
@@ -160,6 +161,8 @@ type DesktopInvokeArgs = Record<string, unknown> | undefined;
 const DEFAULT_WORKBENCH_STATE: WorkbenchStateSnapshot = {
   activePage: 'content',
 };
+
+const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 let workbenchState = DEFAULT_WORKBENCH_STATE;
 const onDidChangeWorkbenchStateEmitter = new EventEmitter<void>();
@@ -1044,14 +1047,25 @@ class WorkbenchHost {
   }) {
     const { electronRuntime, useMica, statusbarVisible, activePage } = params;
     const isStatusbarVisible = resolveWorkbenchStatusbarVisibility(statusbarVisible);
+    const hasNativeWindowControlsOverlay =
+      electronRuntime && WINDOW_CHROME_LAYOUT.nativeWindowControlsOverlay;
 
     this.containerElement.className = [
       'app-window',
       electronRuntime && useMica ? 'is-mica-enabled' : '',
       isStatusbarVisible ? 'has-statusbar' : '',
+      hasNativeWindowControlsOverlay ? 'has-native-window-controls-overlay' : '',
     ]
       .filter(Boolean)
       .join(' ');
+    if (hasNativeWindowControlsOverlay) {
+      this.containerElement.style.setProperty(
+        '--workbench-window-controls-width',
+        `${WINDOW_CHROME_LAYOUT.trailingWindowControlsWidthPx}px`,
+      );
+    } else {
+      this.containerElement.style.removeProperty('--workbench-window-controls-width');
+    }
     this.shellElement.className = getWorkbenchShellClassName({ activePage });
     this.syncStatusbarVisibility(isStatusbarVisible);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, null);

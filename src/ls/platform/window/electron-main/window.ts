@@ -93,6 +93,18 @@ function resolveFramelessTitleBarStyle() {
     : ('default' as const);
 }
 
+function resolveTitleBarOverlay() {
+  if (process.platform !== 'win32') {
+    return false;
+  }
+
+  return {
+    color: '#00000000',
+    symbolColor: '#1f2d3a',
+    height: 38,
+  } as const;
+}
+
 function applyWindowBackgroundMaterial(window: BrowserWindow, useMica: boolean) {
   if (window.isDestroyed()) {
     return;
@@ -388,7 +400,7 @@ export function createMainWindow(options: { useMica?: boolean } = {}) {
     title: 'Literature Studio',
     frame: process.platform !== 'darwin' ? false : undefined,
     titleBarStyle: resolveFramelessTitleBarStyle(),
-    titleBarOverlay: false,
+    titleBarOverlay: resolveTitleBarOverlay(),
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 13, y: 11 } } : {}),
     backgroundColor: resolveMainWindowBackgroundColor(useMica),
     backgroundMaterial: resolveWindowBackgroundMaterial(useMica),

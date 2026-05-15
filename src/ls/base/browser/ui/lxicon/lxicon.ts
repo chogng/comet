@@ -350,6 +350,7 @@ export type LxIconName =
   | 'reasoning'
   | 'refresh'
   | 'remove'
+  | 'remove-1'
   | 'repo-fetch'
   | 'repo-pull'
   | 'repo-push'

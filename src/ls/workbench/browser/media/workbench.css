@@ -88,6 +88,10 @@ button:disabled {
   background-color: var(--vscode-settings-contentBackground, #ffffff);
 }
 
+.app-window.has-native-window-controls-overlay .editor-topbar-actions {
+  padding-right: var(--workbench-window-controls-width, 138px);
+}
+
 .app-shell.app-shell-settings .workbench-content-layout,
 .app-shell.app-shell-settings .content-grid,
 .app-shell.app-shell-settings .workbench-content-slot-editor {
