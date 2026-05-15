@@ -19,6 +19,7 @@ import {
   batchLimitMax,
   batchLimitMin,
   defaultBatchLimit,
+  getDefaultBatchSources,
 } from 'ls/platform/config/common/defaultBatchSources';
 import {
   createDefaultLlmSettings,
@@ -60,6 +61,11 @@ type ConfigStoreOptions = {
   defaultLocale?: 'zh' | 'en';
 };
 
+type UserSettings = {
+  'literature.journalSourceOverrides'?: JournalSourceOverride[];
+  journalSourceOverrides?: JournalSourceOverride[];
+};
+
 async function readJson<T>(filePath: string, fallbackValue: T) {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
@@ -72,6 +78,66 @@ async function readJson<T>(filePath: string, fallbackValue: T) {
 async function writeJson(filePath: string, value: unknown) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(serializeConfigValue(value), null, 2), 'utf8');
+}
+
+function createDefaultUserJournalSourceOverrides() {
+  return getDefaultBatchSources().map((source): JournalSourceOverride => ({
+    url: source.url,
+    journalTitle: source.journalTitle,
+    preferredExtractorId: source.preferredExtractorId ?? null,
+  }));
+}
+
+function mergeJournalSourceOverrides(
+  base: ReadonlyArray<JournalSourceOverride>,
+  overrides: ReadonlyArray<JournalSourceOverride>,
+) {
+  const merged = new Map<string, JournalSourceOverride>();
+  for (const source of [...base, ...overrides]) {
+    const url = cleanText(source.url);
+    if (!url) {
+      continue;
+    }
+
+    merged.set(url, {
+      url,
+      journalTitle: cleanText(source.journalTitle),
+      preferredExtractorId: source.preferredExtractorId ?? null,
+    });
+  }
+
+  return [...merged.values()];
+}
+
+async function ensureUserSettingsFile(
+  filePath: string,
+  appSettingsPayload: Partial<StoredAppSettings>,
+) {
+  const defaultSourceOverrides = createDefaultUserJournalSourceOverrides();
+  const legacySourceOverrides = normalizeJournalSourceOverrides(
+    appSettingsPayload.journalSourceOverrides,
+  );
+
+  try {
+    const existing = await readJson<Partial<UserSettings>>(filePath, {});
+    const existingSourceOverrides = resolveUserJournalSourceOverrides(existing);
+    const nextSourceOverrides = mergeJournalSourceOverrides(
+      defaultSourceOverrides,
+      existingSourceOverrides.length > 0 ? existingSourceOverrides : legacySourceOverrides,
+    );
+
+    await writeJson(filePath, {
+      ...existing,
+      'literature.journalSourceOverrides': nextSourceOverrides,
+    });
+  } catch {
+    await writeJson(filePath, {
+      'literature.journalSourceOverrides': mergeJournalSourceOverrides(
+        defaultSourceOverrides,
+        legacySourceOverrides,
+      ),
+    } satisfies UserSettings);
+  }
 }
 
 function serializeConfigValue(value: unknown) {
@@ -198,6 +264,14 @@ function normalizeJournalSourceOverrides(value: unknown): JournalSourceOverride[
   }
 
   return [...deduped.values()];
+}
+
+function resolveUserJournalSourceOverrides(userSettings: Partial<UserSettings>) {
+  if (Array.isArray(userSettings['literature.journalSourceOverrides'])) {
+    return normalizeJournalSourceOverrides(userSettings['literature.journalSourceOverrides']);
+  }
+
+  return normalizeJournalSourceOverrides(userSettings.journalSourceOverrides);
 }
 
 function normalizeSettings(
@@ -493,13 +567,25 @@ function attachConfigPath(settings: StoredAppSettings, configPath: string): AppS
   };
 }
 
-export function createConfigStore(configFile: string, options: ConfigStoreOptions = {}): ConfigStore {
+export function createConfigStore(
+  configFile: string,
+  userSettingsFile: string,
+  options: ConfigStoreOptions = {},
+): ConfigStore {
   const defaultLocale = options.defaultLocale === 'en' ? 'en' : fallbackLocale;
 
   async function readSettings() {
     const payload = await readJson<Partial<StoredAppSettings>>(configFile, {});
-    const normalized = normalizeSettings(payload, defaultLocale);
-    return attachConfigPath(normalized, configFile);
+    await ensureUserSettingsFile(userSettingsFile, payload);
+    const userSettings = await readJson<Partial<UserSettings>>(userSettingsFile, {});
+    const normalized = normalizeSettings(
+      {
+        ...payload,
+        journalSourceOverrides: resolveUserJournalSourceOverrides(userSettings),
+      },
+      defaultLocale,
+    );
+    return attachConfigPath(normalized, userSettingsFile);
   }
 
   return {
@@ -510,9 +596,16 @@ export function createConfigStore(configFile: string, options: ConfigStoreOption
     async saveSettings(settings = {}) {
       const current = await readSettings();
       const { configPath: _configPath, ...currentStored } = current;
-      const saved = normalizeSettings({ ...currentStored, ...settings }, defaultLocale);
+      const saved = normalizeSettings(
+        {
+          ...currentStored,
+          ...settings,
+          journalSourceOverrides: [],
+        },
+        defaultLocale,
+      );
       await writeJson(configFile, saved);
-      return attachConfigPath(saved, configFile);
+      return readSettings();
     },
   };
 }

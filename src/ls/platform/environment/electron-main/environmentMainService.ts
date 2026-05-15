@@ -9,12 +9,14 @@ export type AppEnvironmentPaths = {
   previousUserDataDir: string;
   legacyRootDir: string;
   rootDir: string;
+  userSettingsDir: string;
   configDir: string;
   dataDir: string;
   cacheDir: string;
   sessionDir: string;
   tempDir: string;
   logsDir: string;
+  userSettingsFile: string;
   configFile: string;
   historyFile: string;
   translationCacheFile: string;
@@ -43,6 +45,7 @@ export function resolveEnvironmentMainPaths(): AppEnvironmentPaths {
   const rootBaseDir = portableExecutableDir ?? app.getPath('home');
   const legacyRootDir = path.join(rootBaseDir, LEGACY_APP_ROOT_DIR_NAME);
   const rootDir = path.join(rootBaseDir, APP_ROOT_DIR_NAME);
+  const userSettingsDir = path.join(rootDir, 'User');
   const configDir = path.join(rootDir, 'config');
   const dataDir = path.join(rootDir, 'data');
   const cacheDir = path.join(rootDir, 'cache');
@@ -54,12 +57,14 @@ export function resolveEnvironmentMainPaths(): AppEnvironmentPaths {
     previousUserDataDir,
     legacyRootDir,
     rootDir,
+    userSettingsDir,
     configDir,
     dataDir,
     cacheDir,
     sessionDir,
     tempDir,
     logsDir,
+    userSettingsFile: path.join(userSettingsDir, 'settings.json'),
     configFile: path.join(configDir, 'config.json'),
     historyFile: path.join(dataDir, 'history.json'),
     translationCacheFile: path.join(dataDir, 'translation-cache.json'),

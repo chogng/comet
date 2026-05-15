@@ -264,7 +264,10 @@ async function invokeCommand<TCommand extends AppCommand>(
         throw appError('UNKNOWN_ERROR', { message: 'Path is required.' });
       }
 
-      shell.showItemInFolder(targetPath);
+      const openError = await shell.openPath(targetPath);
+      if (openError) {
+        shell.showItemInFolder(targetPath);
+      }
       return true as AppCommandResultMap[TCommand];
     }
     case 'web_content_download_pdf': {

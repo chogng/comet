@@ -27,6 +27,7 @@ app.whenReady().then(async () => {
     {
       historyFile: environmentMainPaths.historyFile,
       configFile: environmentMainPaths.configFile,
+      userSettingsFile: environmentMainPaths.userSettingsFile,
       translationCacheFile: environmentMainPaths.translationCacheFile,
       libraryDbFile: environmentMainPaths.libraryDbFile,
       libraryFilesDir: environmentMainPaths.libraryFilesDir,

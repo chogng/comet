@@ -8,6 +8,7 @@ import { createTranslationCacheStore } from 'ls/platform/storage/electron-main/t
 interface StoragePaths {
   historyFile: string;
   configFile: string;
+  userSettingsFile: string;
   translationCacheFile: string;
   libraryDbFile: string;
   libraryFilesDir: string;
@@ -20,7 +21,7 @@ interface StorageOptions {
 
 export function createStorageService(paths: StoragePaths, options: StorageOptions = {}): StorageService {
   const historyStore = createHistoryStore(paths.historyFile);
-  const configStore = createConfigStore(paths.configFile, {
+  const configStore = createConfigStore(paths.configFile, paths.userSettingsFile, {
     defaultLocale: options.defaultLocale,
   });
   const translationCacheStore = createTranslationCacheStore(paths.translationCacheFile);
