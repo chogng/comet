@@ -334,12 +334,10 @@ const zh = {
   settingsTranslationTitle: '\u7ffb\u8bd1',
   settingsTranslationProvider: '\u7ffb\u8bd1\u63d0\u4f9b\u65b9',
   settingsTranslationProviderHint:
-    '\u9009\u62e9\u7528\u4e8e DOCX \u5bfc\u51fa\u7ffb\u8bd1\u7684\u63d0\u4f9b\u65b9\uff1aGLM\u3001OpenAI \u6216 DeepL\u3002',
+    '\u9009\u62e9\u7528\u4e8e\u7ffb\u8bd1 DOCX \u6587\u4ef6\u7684\u63d0\u4f9b\u65b9\u3002',
   settingsTranslationProviderDeepL: 'DeepL',
   settingsTranslationProviderGlm: 'GLM',
   settingsTranslationProviderOpenAICompatible: 'OpenAI',
-  settingsTranslationProviderGlmHint:
-    '\u6587\u732e\u5bfc\u51fa \u4e3aDOCX \u65f6\uff0c\u6458\u8981\u548c\u63cf\u8ff0\u6587\u672c\u7684\u7ffb\u8bd1\u6a21\u578b\u3002',
   settingsTranslationProviderOpenAICompatibleHint:
     '\u4f7f\u7528 OpenAI chat completions\uff0c\u56fa\u5b9a\u6a21\u578b GPT-5.4 Mini\u3002\u8fd9\u91cc\u5355\u72ec\u914d\u7f6e Base URL \u548c API Key\u3002',
   settingsTranslationBaseUrl: 'Base URL',
@@ -348,8 +346,6 @@ const zh = {
   settingsTranslationTestConnection: '\u6d4b\u8bd5',
   settingsTranslationShowApiKey: '\u663e\u793a',
   settingsTranslationHideApiKey: '\u9690\u85cf',
-  settingsTranslationHint:
-    '\u6587\u732e\u5bfc\u51fa \u4e3aDOCX \u65f6\uff0c\u6458\u8981\u548c\u63cf\u8ff0\u6587\u672c\u7684\u7ffb\u8bd1\u6a21\u578b\u3002',
   statusTranslationStarting: '\u6b63\u5728\u51c6\u5907\u7ffb\u8bd1...',
   statusTranslationProgress: '\u6b63\u5728\u7ffb\u8bd1 {current}/{total}',
   statusTranslationCompleted: '\u7ffb\u8bd1\u5b8c\u6210',

@@ -1461,17 +1461,17 @@ export class SettingsModel {
       if (activeTranslationProvider === 'glm') {
         const route = resolveLlmRoute(
           {
-          activeProvider: 'glm',
-          providers: this.snapshot.llmProviders,
-        },
-        'chat',
-      );
-      const result = await invokeDesktop('test_llm_connection', {
-        provider: route.provider,
-        apiKey: translationProviders.glm.apiKey,
-        baseUrl: route.baseUrl,
-        model: route.model,
-        reasoningEffort: route.reasoningEffort,
+            activeProvider: 'glm',
+            providers: this.snapshot.llmProviders,
+          },
+          'chat',
+        );
+        const result = await invokeDesktop('test_llm_connection', {
+          provider: route.provider,
+          apiKey: translationProviders.glm.apiKey,
+          baseUrl: route.baseUrl,
+          model: route.model,
+          reasoningEffort: route.reasoningEffort,
         });
 
         return {

@@ -70,7 +70,6 @@ export class TranslationWidget {
   private render() {
     const section = createSettingsSection({
       title: this.props.labels.settingsTranslationTitle,
-      description: this.props.labels.settingsTranslationHint,
       sectionClassName: 'settings-translation-section',
       panelClassName: 'settings-translation-panel',
       listClassName: 'settings-translation-list',
@@ -88,7 +87,6 @@ export class TranslationWidget {
     section.list.append(
       createSettingsRow({
         title: this.props.labels.settingsTranslationProvider,
-        description: this.props.labels.settingsTranslationProviderHint,
         control: providerSelect,
         itemClassName: 'settings-translation-provider-item',
         controlClassName: 'settings-translation-provider-control',
@@ -114,9 +112,8 @@ export class TranslationWidget {
     const provider = this.props.activeTranslationProvider;
     this.apiKeyWidget.setProps({
       title: this.props.labels.settingsLlmApiKey,
-      subtitle: this.getTranslationProviderApiKeyHint(provider),
       value: this.props.translationProviders[provider].apiKey,
-      placeholder: this.props.labels.settingsTranslationApiKeyPlaceholder,
+      placeholder: 'Paste the API key',
       show: this.props.showApiKey,
       focusKey: `settings.translation.${provider}.apiKey`,
       toggleKey: `settings.translation.${provider}.apiKey.toggle`,
@@ -125,6 +122,7 @@ export class TranslationWidget {
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) => this.props.onTranslationProviderApiKeyChange(provider, value),
       className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
+      hideToggleWhenEmpty: true,
     });
   }
 
@@ -147,7 +145,6 @@ export class TranslationWidget {
       }),
       createSettingsRow({
         title: this.props.labels.settingsLlmModel,
-        description: this.props.labels.settingsTranslationProviderOpenAICompatibleHint,
         control: buildHint('GPT-5.4 Mini (gpt-5.4-mini)', 'settings-hint settings-translation-model-value'),
         itemClassName: 'settings-translation-model-item',
         controlClassName: 'settings-translation-model-control',
@@ -168,7 +165,6 @@ export class TranslationWidget {
       '';
     return createSettingsRow({
       title: this.props.labels.settingsLlmModel,
-      description: this.props.labels.settingsTranslationProviderGlmHint,
       control: buildSelect(
         options.map((option) => ({
           value: option.value,
@@ -196,23 +192,5 @@ export class TranslationWidget {
       contentClassName: 'settings-translation-api-key-content',
       controlClassName: 'settings-translation-api-key-row-control',
     });
-  }
-
-  private getTranslationProviderLabel(provider: TranslationProviderId) {
-    switch (provider) {
-      case 'glm':
-        return this.props.labels.settingsTranslationProviderGlm;
-      case 'openai-compatible':
-        return this.props.labels.settingsTranslationProviderOpenAICompatible;
-      case 'deepl':
-        return this.props.labels.settingsTranslationProviderDeepL;
-      default:
-        return provider;
-    }
-  }
-
-  private getTranslationProviderApiKeyHint(provider: TranslationProviderId) {
-    const label = this.getTranslationProviderLabel(provider);
-    return `you can put in your ${label} key to use the ${label} models at cost`;
   }
 }

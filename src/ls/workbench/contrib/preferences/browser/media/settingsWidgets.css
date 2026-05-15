@@ -278,7 +278,7 @@
   --inputbox-background: var(--vscode-settings-inputBackground, #fff);
   --inputbox-background-hover: var(--vscode-settings-inputBackground, #fff);
   --inputbox-foreground: var(--vscode-settings-inputForeground, #203040);
-  --inputbox-placeholder-foreground: var(--vscode-settings-mutedForeground, #64748b);
+  --inputbox-placeholder-foreground: var(--vscode-input-placeholderForeground, #94a3b8);
   --inputbox-padding-y: 2px;
   --inputbox-padding-x: 8px;
   --inputbox-font-size: 13px;
@@ -692,20 +692,21 @@
 }
 
 .settings-translation-provider-control,
-.settings-translation-model-control,
-.settings-translation-base-url-control {
-  min-width: min(100%, 420px);
+.settings-translation-base-url-control,
+.settings-translation-model-control {
+  width: 140px;
+  min-width: 140px;
 }
 
 .settings-translation-provider-control > *,
-.settings-translation-model-control > *,
-.settings-translation-base-url-control > * {
-  width: 100%;
+.settings-translation-base-url-control > *,
+.settings-translation-model-control > * {
+  width: 140px;
 }
 
 .settings-translation-base-url-input {
-  width: 100%;
-  min-width: 0;
+  width: 140px;
+  min-width: 140px;
 }
 
 .settings-translation-model-value {
@@ -751,9 +752,38 @@
 }
 
 .settings-translation-api-key-control .settings-api-key-input {
-  flex: 0 1 340px;
-  width: min(340px, 100%);
+  flex: 0 1 140px;
+  width: min(140px, 100%);
   margin-left: 0;
+}
+
+.settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox {
+  width: 140px;
+  min-width: 140px;
+}
+
+.settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+  padding: 2px 28px 2px 8px;
+}
+
+.settings-translation-api-key-control .settings-api-key-empty .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+  padding: 2px 8px;
+}
+
+.settings-translation-api-key-control .settings-password-toggle {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.settings-translation-api-key-control .settings-password-toggle[hidden] {
+  display: none;
+}
+
+.settings-translation-api-key-control .settings-api-key-input:hover .settings-password-toggle,
+.settings-translation-api-key-control .settings-api-key-input:focus-within .settings-password-toggle {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 @media (max-width: 900px) {
@@ -1265,6 +1295,22 @@
 
   .settings-api-key-input > .settings-inputbox.inputbox {
     width: 100%;
+  }
+
+  .settings-translation-api-key-control .settings-api-key-input {
+    width: 140px;
+  }
+
+  .settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox {
+    width: 140px;
+  }
+
+  .settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+    padding: 2px 28px 2px 8px;
+  }
+
+  .settings-translation-api-key-control .settings-api-key-empty .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+    padding: 2px 8px;
   }
 
   .settings-llm-span-2 {

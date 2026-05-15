@@ -44,9 +44,9 @@ export type SettingsPartLabels = {
   resetDefault: string; settingsHintPath: string; settingsConfigPath: string; currentDir: string; systemDownloads: string; settingsLlmTitle: string; settingsLlmProvider: string;
   settingsLlmProviderHint: string; settingsLlmProviderGlm: string; settingsLlmProviderKimi: string; settingsLlmProviderDeepSeek: string; settingsLlmProviderGemini: string; settingsLlmApiKey: string;
   settingsLlmApiKeyPlaceholder: string; settingsLlmModel: string; settingsLlmSearchPlaceholder: string; settingsLlmNoResults: string; settingsLlmMaxContext: string; settingsLlmMaxContextHint: string; settingsLlmTestConnection: string; settingsLlmShowApiKey: string; settingsLlmHideApiKey: string;
-  settingsTranslationTitle: string; settingsTranslationProvider: string; settingsTranslationProviderHint: string; settingsTranslationProviderDeepL: string; settingsTranslationProviderGlm: string; settingsTranslationProviderOpenAICompatible: string; settingsTranslationProviderGlmHint: string; settingsTranslationProviderOpenAICompatibleHint: string; settingsTranslationBaseUrl: string;
+  settingsTranslationTitle: string; settingsTranslationProvider: string; settingsTranslationProviderHint: string; settingsTranslationProviderDeepL: string; settingsTranslationProviderGlm: string; settingsTranslationProviderOpenAICompatible: string; settingsTranslationProviderOpenAICompatibleHint: string; settingsTranslationBaseUrl: string;
   settingsTranslationApiKey: string; settingsTranslationApiKeyPlaceholder: string; settingsTranslationTestConnection: string; settingsTranslationShowApiKey: string;
-  settingsTranslationHideApiKey: string; settingsTranslationHint: string;
+  settingsTranslationHideApiKey: string;
 };
 
 export type SettingsPartProps = {

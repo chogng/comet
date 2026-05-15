@@ -335,12 +335,10 @@ const en = {
   settingsLlmHideApiKey: 'Hide',
   settingsTranslationTitle: 'Translation',
   settingsTranslationProvider: 'Translation provider',
-  settingsTranslationProviderHint: 'Choose the provider used for DOCX export translation: GLM, OpenAI, or DeepL.',
+  settingsTranslationProviderHint: 'Choose the provider for translate DOCX file.',
   settingsTranslationProviderDeepL: 'DeepL',
   settingsTranslationProviderGlm: 'GLM',
   settingsTranslationProviderOpenAICompatible: 'OpenAI',
-  settingsTranslationProviderGlmHint:
-    'The translation model used when literature is exported as DOCX and the abstract and description text are translated.',
   settingsTranslationProviderOpenAICompatibleHint:
     'Uses OpenAI chat completions with GPT-5.4 Mini. Set the base URL and API key here.',
   settingsTranslationBaseUrl: 'Base URL',
@@ -349,8 +347,6 @@ const en = {
   settingsTranslationTestConnection: 'Test',
   settingsTranslationShowApiKey: 'Show',
   settingsTranslationHideApiKey: 'Hide',
-  settingsTranslationHint:
-    'The translation model used when literature is exported as DOCX and the abstract and description text are translated.',
   statusError: 'Error',
   statusInfo: 'Status',
   statusReady: 'Ready',

@@ -491,7 +491,6 @@ export function renderConfigPathSection(props: SettingsPartProps) {
 export function renderTextEditorSection(props: SettingsPartProps) {
   const defaultBodyStyle = props.editorDraftStyle.value.defaultBodyStyle;
   const isDisabled = props.isSettingsSaving;
-  const hasUserOverride = props.editorDraftStyle.userValue !== null;
   const textEditorPanel = createSettingsSection({
     title: props.labels.settingsTextEditorDefaultBodyStyle,
     description: props.labels.settingsTextEditorHint,

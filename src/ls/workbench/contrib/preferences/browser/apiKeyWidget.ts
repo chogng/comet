@@ -19,6 +19,7 @@ export type ApiKeyWidgetProps = {
   onToggle: () => void;
   onInput: (value: string) => void;
   className?: string;
+  hideToggleWhenEmpty?: boolean;
 };
 
 export class ApiKeyWidget {
@@ -68,8 +69,14 @@ export class ApiKeyWidget {
     this.inputBox.value = props.value;
     this.inputBox.setPlaceHolder(props.placeholder);
     setFocusKey(this.toggle, props.toggleKey);
-    this.toggle.replaceChildren(createLxIcon(props.show ? 'hidden' : 'show'));
-    applyHover(this.toggle, props.show ? props.toggleLabelHide : props.toggleLabelShow);
-    this.toggle.ariaLabel = props.show ? props.toggleLabelHide : props.toggleLabelShow;
+    const shouldHideToggle = Boolean(props.hideToggleWhenEmpty && !props.value);
+    this.toggle.hidden = shouldHideToggle;
+    this.toggle.style.display = shouldHideToggle ? 'none' : '';
+    this.element.classList.toggle('settings-api-key-empty', shouldHideToggle);
+    if (!shouldHideToggle) {
+      this.toggle.replaceChildren(createLxIcon(props.show ? 'hidden' : 'show'));
+      applyHover(this.toggle, props.show ? props.toggleLabelHide : props.toggleLabelShow);
+      this.toggle.ariaLabel = props.show ? props.toggleLabelHide : props.toggleLabelShow;
+    }
   }
 }
