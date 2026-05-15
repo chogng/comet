@@ -59,6 +59,8 @@ function shouldUpdateBatchOptionsSection(
     previousProps.labels.batchCount !== currentProps.labels.batchCount ||
     previousProps.labels.startDate !== currentProps.labels.startDate ||
     previousProps.labels.endDate !== currentProps.labels.endDate ||
+    previousProps.labels.clearDate !== currentProps.labels.clearDate ||
+    previousProps.labels.today !== currentProps.labels.today ||
     previousProps.labels.settingsBatchHint !== currentProps.labels.settingsBatchHint
   );
 }

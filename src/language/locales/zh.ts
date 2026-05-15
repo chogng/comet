@@ -10,6 +10,8 @@ const zh = {
   crossDomainAllowed: '允许跨域',
   startDate: '开始日期',
   endDate: '结束日期',
+  clearDate: '清除',
+  today: '今天',
   fetchLatestBusy: '批量抓取中...',
   fetchLatest: '抓取',
   sidebarFetchTitle: '文献抓取',
@@ -54,9 +56,9 @@ const zh = {
   settingsTextEditorParagraphSpacingBefore: '段前间距 (pt)',
   settingsTextEditorParagraphSpacingAfter: '段后间距 (pt)',
   settingsTextEditorColor: '文字颜色',
-  settingsBatchOptions: '默认抓取选项',
+  settingsBatchOptions: '最大抓取',
   settingsBatchHint:
-    '在内容工作区点击“抓取”时，当前 URL 会作为唯一来源。抓取会在所选日期范围内跟随分页继续进行。最大抓取数按该来源生效。',
+    '限制单个 URL 在批量抓取中最多写入的文献数量。',
   settingsAppearanceTitle: '\u7a97\u53e3\u5916\u89c2',
   settingsTheme: '\u4e3b\u9898',
   settingsThemeHint:

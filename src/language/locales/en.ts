@@ -10,6 +10,8 @@ const en = {
   crossDomainAllowed: 'Cross-domain allowed',
   startDate: 'Start date',
   endDate: 'End date',
+  clearDate: 'Clear',
+  today: 'Today',
   fetchLatestBusy: 'Batch fetching...',
   fetchLatest: 'Fetch',
   sidebarFetchTitle: 'Literature fetch',
@@ -55,9 +57,9 @@ const en = {
   settingsTextEditorParagraphSpacingBefore: 'Paragraph before (pt)',
   settingsTextEditorParagraphSpacingAfter: 'Paragraph after (pt)',
   settingsTextEditorColor: 'Text color',
-  settingsBatchOptions: 'Default fetch options',
+  settingsBatchOptions: 'Max fetch count',
   settingsBatchHint:
-    'When you click "Fetch" in the content workspace, the current URL is used as the only source. The fetch follows pagination within the selected date range. Max fetch count is applied to that source.',
+    'Limits how many articles a single URL can write during batch fetch.',
   settingsAppearanceTitle: 'Window appearance',
   settingsTheme: 'Theme',
   settingsThemeHint:

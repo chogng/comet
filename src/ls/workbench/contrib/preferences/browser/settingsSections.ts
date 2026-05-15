@@ -1,5 +1,6 @@
 import type { Locale } from 'language/i18n';
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'ls/base/common/editorDraftStyle';
+import { createDateInput } from 'ls/base/browser/ui/dateInput/dateInput';
 import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
 import {
   createSettingsSection,
@@ -11,7 +12,6 @@ import {
   buildSettingsSelect as buildSelect,
   buildSettingsSwitch as buildSwitch,
   createSettingsElement as el,
-  createSettingsText as text,
 } from 'ls/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import { buildSettingsNumberStepperInput as buildNumberStepperInput } from 'ls/workbench/contrib/preferences/browser/settingsNumberStepperInput';
 import type {
@@ -205,8 +205,6 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
     panelClassName: 'settings-batch-options-panel',
     listClassName: 'settings-batch-options-list',
   });
-  const row = el('div', 'settings-batch-options');
-  const limitLabel = el('div', 'inline-field');
   const wrap = el('div', 'settings-limit-input-wrap');
   wrap.append(buildNumberStepperInput({
     value: props.batchLimit,
@@ -219,30 +217,46 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
     onInput: props.onBatchLimitChange,
     disabled: props.isSettingsSaving,
   }).element);
-  limitLabel.append(text(props.labels.batchCount), wrap);
-  row.append(limitLabel);
 
   const dateOptions = createSettingsSection({
     sectionClassName: 'settings-batch-date-section',
     panelClassName: 'settings-batch-date-panel',
     listClassName: 'settings-batch-date-list',
   });
-  const dateRow = el('div', 'settings-batch-date-row');
-  const startDateInput = buildInput({
-    type: 'date',
+  const startDateInput = createDateInput({
     value: props.fetchStartDate,
-    className: 'settings-input-control',
+    labels: {
+      calendar: props.labels.startDate,
+      clear: props.labels.clearDate,
+      today: props.labels.today,
+    },
+    className: 'settings-date-input',
+    inputClassName: 'settings-input-control',
     focusKey: 'settings.batch.startDate',
     onInput: props.onFetchStartDateChange,
-  }).element;
-  const endDateInput = buildInput({
-    type: 'date',
+  }).getElement();
+  const endDateInput = createDateInput({
     value: props.fetchEndDate,
-    className: 'settings-input-control',
+    labels: {
+      calendar: props.labels.endDate,
+      clear: props.labels.clearDate,
+      today: props.labels.today,
+    },
+    className: 'settings-date-input',
+    inputClassName: 'settings-input-control',
     focusKey: 'settings.batch.endDate',
     onInput: props.onFetchEndDateChange,
-  }).element;
-  dateRow.append(
+  }).getElement();
+  batchOptions.list.append(
+    createSettingsRow({
+      title: props.labels.settingsBatchOptions,
+      description: props.labels.settingsBatchHint,
+      control: wrap,
+      itemClassName: 'settings-batch-options-item',
+      controlClassName: 'settings-batch-options-control',
+    }),
+  );
+  dateOptions.list.append(
     createSettingsRow({
       title: props.labels.startDate,
       control: startDateInput,
@@ -254,26 +268,6 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
       control: endDateInput,
       itemClassName: 'settings-batch-date-item',
       controlClassName: 'settings-batch-date-control',
-    }),
-  );
-
-  batchOptions.list.append(
-    createSettingsRow({
-      title: props.labels.settingsBatchOptions,
-      control: row,
-      itemClassName: 'settings-batch-options-item',
-      controlClassName: 'settings-batch-options-control',
-    }),
-  );
-  dateOptions.list.append(
-    createSettingsRow({
-      title: '',
-      description: props.labels.settingsBatchHint,
-      control: dateRow,
-      itemClassName: 'settings-batch-date-summary-item',
-      titleClassName: 'settings-block-list-item-title-empty',
-      contentClassName: 'settings-batch-date-summary-content',
-      controlClassName: 'settings-batch-date-summary-control',
     }),
   );
   field.append(batchOptions.element, dateOptions.element);

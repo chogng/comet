@@ -51,6 +51,7 @@ export const lxIconSemanticMap = {
     removeBatchSource: 'close',
     chooseDirectory: 'projects',
     openConfigLocation: 'link-external',
+    calendar: 'calendar',
   },
   library: {
     refresh: 'projects',
