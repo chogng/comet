@@ -1853,9 +1853,7 @@ class WorkbenchHost {
       onToggleAgentSidebar: toggleAgentSidebarVisibility,
     });
 
-    const handleBatchFetchStart = () => {
-      setWorkbenchArticles([]);
-    };
+    const handleBatchFetchStart = () => {};
 
     const handleBatchFetchSuccess = (nextArticles: Article[]) => {
       setWorkbenchArticles(nextArticles);

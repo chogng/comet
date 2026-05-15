@@ -6,7 +6,7 @@ import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElem
 import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
-import { ArticleCard } from 'ls/workbench/browser/parts/sidebar/articleCard';
+import { FetchTreeView } from 'ls/workbench/browser/parts/sidebar/fetchTreeView';
 
 export type SidebarArticle = {
   title: string;
@@ -336,7 +336,7 @@ export class FetchPaneContentView extends LifecycleOwner {
   private readonly contentElement = createElement('div', 'fetch-pane-content-body');
   private readonly scrollableElement: DomScrollableElement;
   private readonly renderDisposables = new LifecycleStore();
-  private cards = new Map<string, ArticleCard>();
+  private fetchTreeView: FetchTreeView | null = null;
   private disposed = false;
 
   constructor(props: FetchPaneProps) {
@@ -374,10 +374,8 @@ export class FetchPaneContentView extends LifecycleOwner {
     this.disposed = true;
     super.dispose();
     this.scrollableElement.dispose();
-    for (const card of this.cards.values()) {
-      card.dispose();
-    }
-    this.cards.clear();
+    this.fetchTreeView?.dispose();
+    this.fetchTreeView = null;
     this.element.replaceChildren();
   }
 
@@ -392,55 +390,38 @@ export class FetchPaneContentView extends LifecycleOwner {
   private renderContent() {
     this.renderDisposables.clear();
 
-    for (const [key, card] of this.cards) {
-      if (
-        !this.props.articles.some(
-          (article, index) => `${article.sourceUrl}-${article.fetchedAt}-${index}` === key,
-        )
-      ) {
-        card.dispose();
-        this.cards.delete(key);
-      }
-    }
-
     if (this.props.articles.length > 0) {
       const articleCardLabels = createArticleCardLabels(this.props.labels);
-      const list = createElement('ul', 'fetch-pane-article-list');
-      this.props.articles.forEach((article, index) => {
-        const key = `${article.sourceUrl}-${article.fetchedAt}-${index}`;
-        const isSelected = this.props.selectedArticleKeys.has(
-          `${article.sourceUrl}::${article.fetchedAt}`,
-        );
-        let card = this.cards.get(key);
-        if (!card) {
-          card = new ArticleCard({
-            article,
-            locale: this.props.locale,
-            labels: articleCardLabels,
-            onDownloadPdf: this.props.onDownloadPdf,
-            onOpenArticleDetails: this.props.onOpenArticleDetails,
-            isSelectionModeEnabled: this.props.isSelectionModeEnabled,
-            isSelected,
-            onToggleSelected: this.props.onToggleArticleSelected,
-          });
-          this.cards.set(key, card);
-        } else {
-          card.setProps({
-            article,
-            locale: this.props.locale,
-            labels: articleCardLabels,
-            onDownloadPdf: this.props.onDownloadPdf,
-            onOpenArticleDetails: this.props.onOpenArticleDetails,
-            isSelectionModeEnabled: this.props.isSelectionModeEnabled,
-            isSelected,
-            onToggleSelected: this.props.onToggleArticleSelected,
-          });
-        }
-        list.append(card.getElement());
-      });
-      this.contentElement.replaceChildren(list);
+      const treeProps = {
+        articles: this.props.articles,
+        locale: this.props.locale,
+        labels: {
+          ...articleCardLabels,
+          fetchTitle: this.props.labels.fetchTitle,
+        },
+        selectedArticleKeys: this.props.selectedArticleKeys,
+        isSelectionModeEnabled: this.props.isSelectionModeEnabled,
+        onDownloadPdf: this.props.onDownloadPdf,
+        onOpenArticleDetails: this.props.onOpenArticleDetails,
+        onToggleArticleSelected: this.props.onToggleArticleSelected,
+      };
+
+      if (!this.fetchTreeView) {
+        this.fetchTreeView = new FetchTreeView(treeProps);
+      } else {
+        this.fetchTreeView.setProps(treeProps);
+      }
+
+      if (this.fetchTreeView.getElement().parentElement !== this.contentElement) {
+        this.contentElement.replaceChildren(this.fetchTreeView.getElement());
+      }
       this.scrollableElement.scanDomNode();
       return;
+    }
+
+    if (this.fetchTreeView) {
+      this.fetchTreeView.dispose();
+      this.fetchTreeView = null;
     }
 
     const empty = createElement('div', 'fetch-pane-empty-state');

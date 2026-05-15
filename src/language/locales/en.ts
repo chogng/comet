@@ -425,7 +425,7 @@ const en = {
   toastDesktopBatchFetchOnly: 'Batch fetching is not available in web mode. Please run the desktop app.',
   toastEnterPageUrl: 'Please add at least one batch fetch URL first.',
   toastDateRangeInvalid: 'Start date cannot be later than end date.',
-  toastBatchFetchSucceeded: 'Batch fetch completed: {count} article(s) added to history.',
+  toastBatchFetchSucceeded: 'Batch fetch completed: {count} article(s).',
   toastBatchFetchFailed: 'Batch fetch failed: {error}',
   toastSciencePdfQueued: 'Science PDF downloads run sequentially. This request has been queued.',
   toastDesktopLlmTestOnly: 'Model connection testing is available only in the desktop app.',

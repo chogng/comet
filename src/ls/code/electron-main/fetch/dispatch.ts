@@ -1459,24 +1459,6 @@ export async function fetchLatestArticles(
     throw appError('BATCH_NO_VALID_ARTICLES');
   }
 
-  const saveStartedAt = Date.now();
-  void storage
-    .saveFetchedArticles(fetched)
-    .then(() => {
-      timingLog(traceId, 'batch:save_done', {
-        ms: elapsedMs(saveStartedAt),
-        count: fetched.length,
-        deferred: true,
-      });
-    })
-    .catch((error) => {
-      timingLog(traceId, 'batch:save_failed', {
-        ms: elapsedMs(saveStartedAt),
-        count: fetched.length,
-        deferred: true,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    });
   timingLog(traceId, 'batch:done', {
     totalMs: elapsedMs(totalStartedAt),
     sourceCount: pageSources.length,
@@ -1484,7 +1466,7 @@ export async function fetchLatestArticles(
     dedupedCount: fetched.length,
     dedupeDropped: Math.max(0, rawFetchedCount - fetched.length),
     failedSourceCount: failedSources.length,
-    historySave: 'deferred',
+    historySave: 'skipped',
   });
   return fetched;
 }

@@ -36,6 +36,7 @@ export type SimpleTreeOptions<T> = {
   getLabel?: (node: T) => string;
   getNodeState?: (node: T) => SimpleTreeNodeState;
   defaultExpandedIds?: Iterable<string>;
+  shouldAutoExpand?: (node: T) => boolean;
   ariaLabel?: string;
   onDidChangeSelection?: (node: T | null) => void;
   onDidOpen?: (node: T) => void;
@@ -52,6 +53,7 @@ export class SimpleTree<T> extends LifecycleOwner {
   private readonly list: ListWidget<VisibleTreeNode<T>>;
   private input: T | null = null;
   private readonly expandedIds: Set<string>;
+  private readonly autoExpandedIds = new Set<string>();
   private disposed = false;
 
   constructor(
@@ -281,6 +283,15 @@ export class SimpleTree<T> extends LifecycleOwner {
       const nodeId = this.options.getId(node);
       const hasChildren = this.dataSource.hasChildren(node);
       const isRoot = this.options.isRoot(node);
+      if (
+        hasChildren &&
+        !isRoot &&
+        this.options.shouldAutoExpand?.(node) &&
+        !this.autoExpandedIds.has(nodeId)
+      ) {
+        this.autoExpandedIds.add(nodeId);
+        this.expandedIds.add(nodeId);
+      }
       const isExpanded = isRoot || (hasChildren && this.expandedIds.has(nodeId));
       if (includeNode) {
         nodes.push({ node, depth, hasChildren, isExpanded });

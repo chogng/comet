@@ -425,7 +425,7 @@ const zh = {
   toastDesktopBatchFetchOnly: '浏览器 Web 模式暂不支持批量抓取（需要桌面端后端命令）。请在桌面端运行。',
   toastEnterPageUrl: '请至少添加一个批量抓取 URL。',
   toastDateRangeInvalid: '开始日期不能晚于结束日期。',
-  toastBatchFetchSucceeded: '批量抓取完成：{count} 篇，已写入历史。',
+  toastBatchFetchSucceeded: '批量抓取完成：{count} 篇。',
   toastBatchFetchFailed: '批量抓取失败：{error}',
   toastSciencePdfQueued:
     'Science PDF \u6b63\u5728\u987a\u5e8f\u4e0b\u8f7d\uff0c\u5f53\u524d\u4efb\u52a1\u5df2\u52a0\u5165\u961f\u5217\u3002',
