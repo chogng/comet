@@ -37,6 +37,12 @@ export interface BatchSource {
   preferredExtractorId?: string | null;
 }
 
+export interface JournalSourceOverride {
+  url: string;
+  journalTitle?: string;
+  preferredExtractorId?: string | null;
+}
+
 export type LlmProviderId =
   | 'glm'
   | 'kimi'
@@ -114,8 +120,8 @@ export interface StoredAppSettings {
   defaultDownloadDir: string | null;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
-  defaultBatchSources: BatchSource[];
   defaultBatchLimit: number;
+  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;

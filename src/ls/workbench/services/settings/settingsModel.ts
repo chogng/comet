@@ -1,6 +1,7 @@
 import type {
   AppTheme,
   ElectronInvoke,
+  JournalSourceOverride,
   LibraryStorageMode,
   LlmProviderId,
   LlmProviderSettings,
@@ -19,7 +20,6 @@ import {
 import { EventEmitter } from 'ls/base/common/event';
 import type { Locale } from 'language/i18n';
 import { defaultBatchLimit } from 'ls/workbench/services/config/configSchema';
-import type { BatchSource } from 'ls/workbench/services/config/configSchema';
 
 import {
   buildSaveSettingsPayload,
@@ -31,13 +31,6 @@ import {
 import {
   createDefaultKnowledgeBaseSettings,
 } from 'ls/workbench/services/knowledgeBase/config';
-import {
-  addBatchSource,
-  moveBatchSource,
-  removeBatchSource,
-  updateBatchSourceJournalTitle,
-  updateBatchSourceUrl,
-} from 'ls/workbench/services/settings/settingsEditing';
 import { cloneLlmSettings, createDefaultLlmSettings } from 'ls/workbench/services/llm/config';
 import {
   getEnabledLlmModelOptionValuesForProvider,
@@ -58,8 +51,8 @@ export type SettingsModelSnapshot = {
   knowledgeBasePdfDownloadDir: string;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
-  batchSources: BatchSource[];
   batchLimit: number;
+  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -138,6 +131,7 @@ function areSettingsModelSnapshotsEqual(
     previous.pdfFileNameUseSelectionOrder === next.pdfFileNameUseSelectionOrder &&
     previous.browserTabKeepAliveLimit === next.browserTabKeepAliveLimit &&
     previous.batchLimit === next.batchLimit &&
+    areJsonEqual(previous.journalSourceOverrides, next.journalSourceOverrides) &&
     previous.systemNotificationsEnabled === next.systemNotificationsEnabled &&
     previous.warningNotificationsEnabled === next.warningNotificationsEnabled &&
     previous.menuBarIconEnabled === next.menuBarIconEnabled &&
@@ -163,16 +157,13 @@ function areSettingsModelSnapshotsEqual(
     previous.isTestingLlmConnection === next.isTestingLlmConnection &&
     previous.isTestingTranslationConnection === next.isTestingTranslationConnection &&
     areJsonEqual(previous.workbenchColorCustomizations, next.workbenchColorCustomizations) &&
-    areJsonEqual(previous.batchSources, next.batchSources) &&
     areJsonEqual(previous.ragProviders, next.ragProviders) &&
     areJsonEqual(previous.llmProviders, next.llmProviders) &&
     areJsonEqual(previous.translationProviders, next.translationProviders)
   );
 }
 
-function createInitialSettingsModelSnapshot(
-  initialBatchSources: BatchSource[],
-): SettingsModelSnapshot {
+function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
   const defaultKnowledgeBaseSettings = createDefaultKnowledgeBaseSettings();
   const defaultRagSettings = createDefaultRagSettings();
   const defaultLlmSettings = createDefaultLlmSettings();
@@ -183,8 +174,8 @@ function createInitialSettingsModelSnapshot(
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
     browserTabKeepAliveLimit: defaultBrowserTabKeepAliveLimit,
-    batchSources: initialBatchSources,
     batchLimit: defaultBatchLimit,
+    journalSourceOverrides: [],
     systemNotificationsEnabled: true,
     warningNotificationsEnabled: true,
     menuBarIconEnabled: false,
@@ -220,8 +211,8 @@ export class SettingsModel {
   private snapshot: SettingsModelSnapshot;
   private readonly onDidChangeEmitter = new EventEmitter<void>();
 
-  constructor(initialBatchSources: BatchSource[]) {
-    this.snapshot = createInitialSettingsModelSnapshot(initialBatchSources);
+  constructor() {
+    this.snapshot = createInitialSettingsModelSnapshot();
   }
 
   private emitChange() {
@@ -860,48 +851,6 @@ export class SettingsModel {
     this.setPdfDownloadDir('');
   };
 
-  readonly handleBatchSourceUrlChange = (index: number, nextUrl: string) => {
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      batchSources: updateBatchSourceUrl(snapshot.batchSources, index, nextUrl),
-    }));
-  };
-
-  readonly handleBatchSourceJournalTitleChange = (
-    index: number,
-    nextJournalTitle: string,
-  ) => {
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      batchSources: updateBatchSourceJournalTitle(
-        snapshot.batchSources,
-        index,
-        nextJournalTitle,
-      ),
-    }));
-  };
-
-  readonly handleAddBatchSource = () => {
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      batchSources: addBatchSource(snapshot.batchSources),
-    }));
-  };
-
-  readonly handleRemoveBatchSource = (index: number) => {
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      batchSources: removeBatchSource(snapshot.batchSources, index),
-    }));
-  };
-
-  readonly handleMoveBatchSource = (index: number, direction: 'up' | 'down') => {
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      batchSources: moveBatchSource(snapshot.batchSources, index, direction),
-    }));
-  };
-
   async loadSettings({
     desktopRuntime,
     invokeDesktop,
@@ -921,8 +870,8 @@ export class SettingsModel {
         knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
         pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
         browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
-        batchSources: resolved.batchSources,
         batchLimit: resolved.batchLimit,
+        journalSourceOverrides: resolved.journalSourceOverrides,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,
@@ -1050,8 +999,8 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
-      batchSources,
       batchLimit,
+      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1082,8 +1031,8 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
-      batchSources,
       batchLimit,
+      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1141,8 +1090,8 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
-      batchSources: resolved.batchSources,
       batchLimit: resolved.batchLimit,
+      journalSourceOverrides: resolved.journalSourceOverrides,
       systemNotificationsEnabled: resolved.systemNotificationsEnabled,
       warningNotificationsEnabled: resolved.warningNotificationsEnabled,
       menuBarIconEnabled: resolved.menuBarIconEnabled,
@@ -1184,8 +1133,8 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
-      batchSources,
       batchLimit,
+      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1216,8 +1165,8 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
-      batchSources,
       batchLimit,
+      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1277,8 +1226,8 @@ export class SettingsModel {
         knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
         pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
         browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
-        batchSources: resolved.batchSources,
         batchLimit: resolved.batchLimit,
+        journalSourceOverrides: resolved.journalSourceOverrides,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,

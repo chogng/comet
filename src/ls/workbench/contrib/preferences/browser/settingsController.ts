@@ -19,7 +19,6 @@ import {
   localizeDesktopInvokeError,
   parseDesktopInvokeError,
 } from 'ls/workbench/services/desktop/desktopError';
-import type { BatchSource } from 'ls/workbench/services/config/configSchema';
 import { SettingsModel } from 'ls/workbench/services/settings/settingsModel';
 import type { SettingsModelSnapshot } from 'ls/workbench/services/settings/settingsModel';
 
@@ -35,9 +34,7 @@ type SettingsModelContext = {
   invokeDesktop: ElectronInvoke;
 };
 
-type CreateSettingsControllerParams = SettingsControllerContext & {
-  initialBatchSources: BatchSource[];
-};
+type CreateSettingsControllerParams = SettingsControllerContext;
 
 const immediateAutoSaveDelayMs = 0;
 const debouncedAutoSaveDelayMs = 650;
@@ -56,9 +53,9 @@ export class SettingsController {
   private disposed = false;
   private loadSequence = 0;
 
-  constructor({ initialBatchSources, ...context }: CreateSettingsControllerParams) {
+  constructor(context: CreateSettingsControllerParams) {
     this.context = context;
-    this.settingsModel = new SettingsModel(initialBatchSources);
+    this.settingsModel = new SettingsModel();
   }
 
   readonly subscribe = (listener: () => void) =>
@@ -504,37 +501,6 @@ export class SettingsController {
 
   readonly handleResetDownloadDir = () => {
     this.settingsModel.resetDownloadDir();
-    this.scheduleImmediateAutoSave();
-  };
-
-  readonly handleBatchSourceUrlChange = (index: number, nextUrl: string) => {
-    this.settingsModel.handleBatchSourceUrlChange(index, nextUrl);
-    this.scheduleDebouncedAutoSave();
-  };
-
-  readonly handleBatchSourceJournalTitleChange = (
-    index: number,
-    nextJournalTitle: string,
-  ) => {
-    this.settingsModel.handleBatchSourceJournalTitleChange(
-      index,
-      nextJournalTitle,
-    );
-    this.scheduleDebouncedAutoSave();
-  };
-
-  readonly handleAddBatchSource = () => {
-    this.settingsModel.handleAddBatchSource();
-    this.scheduleImmediateAutoSave();
-  };
-
-  readonly handleRemoveBatchSource = (index: number) => {
-    this.settingsModel.handleRemoveBatchSource(index);
-    this.scheduleImmediateAutoSave();
-  };
-
-  readonly handleMoveBatchSource = (index: number, direction: 'up' | 'down') => {
-    this.settingsModel.handleMoveBatchSource(index, direction);
     this.scheduleImmediateAutoSave();
   };
 

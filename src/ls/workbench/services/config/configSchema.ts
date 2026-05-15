@@ -185,17 +185,12 @@ function dedupeBatchSources(sources: BatchSource[]): BatchSource[] {
       deduped.set(key, source);
       continue;
     }
-    if (!previous.id && source.id) {
-      deduped.set(key, source);
-      continue;
-    }
-    if (!previous.journalTitle && source.journalTitle) {
-      deduped.set(key, source);
-      continue;
-    }
-    if (!previous.preferredExtractorId && source.preferredExtractorId) {
-      deduped.set(key, source);
-    }
+    deduped.set(key, {
+      ...previous,
+      id: source.id || previous.id,
+      journalTitle: source.journalTitle || previous.journalTitle,
+      preferredExtractorId: source.preferredExtractorId || previous.preferredExtractorId,
+    });
   }
 
   return [...deduped.values()];

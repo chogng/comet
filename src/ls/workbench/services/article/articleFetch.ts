@@ -1,10 +1,16 @@
 import type {
   Article as DesktopArticle,
   ElectronInvoke,
+  JournalSourceOverride,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { isDateRangeValid } from 'ls/workbench/common/dateRange';
 import { normalizeUrl } from 'ls/workbench/common/url';
-import { ensureBatchSourceId, resolveSourceTableMetadata, sanitizeBatchSources } from 'ls/workbench/services/config/configSchema';
+import {
+  ensureBatchSourceId,
+  getConfigBatchSourceSeed,
+  resolveSourceTableMetadata,
+  sanitizeBatchSources,
+} from 'ls/workbench/services/config/configSchema';
 import type { BatchSource } from 'ls/workbench/services/config/configSchema';
 import { parseDesktopInvokeError } from 'ls/workbench/services/desktop/desktopError';
 import type { DesktopInvokeErrorData } from 'ls/workbench/services/desktop/desktopError';
@@ -31,7 +37,7 @@ export type FetchLatestArticlesBatchResult =
 type FetchLatestArticlesBatchParams = {
   desktopRuntime: boolean;
   addressBarUrl?: string | null;
-  batchSources: BatchSource[];
+  journalSourceOverrides?: JournalSourceOverride[];
   limit?: number;
   startDate?: string | null;
   endDate?: string | null;
@@ -82,7 +88,7 @@ function canImproveBatchFetchSource(existing: BatchFetchSource, candidate: Batch
   return (!existing.journalTitle && candidate.journalTitle) || (!existing.preferredExtractorId && candidate.preferredExtractorId);
 }
 
-function prepareBatchSourcesForFetch(
+export function prepareBatchSourcesForFetch(
   input: unknown,
   sourceTableInput: unknown = input,
 ): {
@@ -119,18 +125,39 @@ function prepareBatchSourcesForFetch(
 
 export function resolveBatchFetchSources(
   addressBarUrl: string | null | undefined,
-  batchSources: BatchSource[],
+  sourceTable: ReadonlyArray<BatchSource>,
 ): BatchSource[] {
   const normalizedAddressBarUrl = normalizeUrl(addressBarUrl ?? '');
   return normalizedAddressBarUrl
-    ? [buildManualBatchSource(normalizedAddressBarUrl, batchSources)]
-    : batchSources;
+    ? [buildManualBatchSource(normalizedAddressBarUrl, sourceTable)]
+    : [];
+}
+
+function createBatchSourceFromJournalOverride(
+  override: JournalSourceOverride,
+  index: number,
+): BatchSource {
+  return {
+    id: `override-${index + 1}`,
+    url: override.url,
+    journalTitle: override.journalTitle?.trim() ?? '',
+    preferredExtractorId: override.preferredExtractorId ?? null,
+  };
+}
+
+function resolveSourceTable(
+  journalSourceOverrides?: readonly JournalSourceOverride[],
+): BatchSource[] {
+  return [
+    ...getConfigBatchSourceSeed(),
+    ...(journalSourceOverrides ?? []).map(createBatchSourceFromJournalOverride),
+  ];
 }
 
 export async function fetchLatestArticlesBatch({
   desktopRuntime,
   addressBarUrl,
-  batchSources,
+  journalSourceOverrides,
   limit: _limit,
   startDate,
   endDate,
@@ -141,8 +168,9 @@ export async function fetchLatestArticlesBatch({
     return { ok: false, reason: 'desktop_unsupported' };
   }
 
-  const selectedSources = resolveBatchFetchSources(addressBarUrl, batchSources);
-  const { sources } = prepareBatchSourcesForFetch(selectedSources, batchSources);
+  const sourceTable = resolveSourceTable(journalSourceOverrides);
+  const selectedSources = resolveBatchFetchSources(addressBarUrl, sourceTable);
+  const { sources } = prepareBatchSourcesForFetch(selectedSources, sourceTable);
   if (sources.length === 0) {
     return { ok: false, reason: 'empty_page_url' };
   }

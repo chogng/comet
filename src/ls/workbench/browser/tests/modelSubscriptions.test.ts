@@ -288,7 +288,7 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
     const controller = createBatchFetchController({
       desktopRuntime: true,
       addressBarUrl: '',
-      batchSources: [],
+      journalSourceOverrides: [],
       batchStartDate: '',
       batchEndDate: '',
       invokeDesktop: createInvokeDesktop(),
@@ -501,7 +501,7 @@ test('WebContentNavigationModel does not activate a default web content target f
 });
 
 test('SettingsModel subscriptions stop after disposal', () => {
-  const model = new SettingsModel([]);
+  const model = new SettingsModel();
   const useMicaValues: boolean[] = [];
   const disposeListener = model.subscribe(() => {
     useMicaValues.push(model.getSnapshot().useMica);

@@ -94,8 +94,7 @@ import { getLocaleMessages } from 'language/i18n';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'ls/workbench/common/url';
 import type { LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/desktopTypes';
-import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
-import type { BatchSource } from 'ls/workbench/services/config/configSchema';
+import { normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
 import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
 import { normalizeBrowserTabKeepAliveLimit } from 'ls/workbench/services/webContent/webContentRetentionConfig';
 import {
@@ -158,8 +157,6 @@ type DesktopInvokeArgs = Record<string, unknown> | undefined;
 const DEFAULT_WORKBENCH_STATE: WorkbenchStateSnapshot = {
   activePage: 'content',
 };
-
-const INITIAL_BATCH_SOURCES = getConfigBatchSourceSeed();
 
 let workbenchState = DEFAULT_WORKBENCH_STATE;
 const onDidChangeWorkbenchStateEmitter = new EventEmitter<void>();
@@ -1295,12 +1292,10 @@ class WorkbenchHost {
       invokeDesktop,
       ui,
       locale,
-      initialBatchSources: INITIAL_BATCH_SOURCES,
     });
     const settingsSnapshot = settingsControllerInstance.getSnapshot();
     const editorDraftStyleSnapshot = editorDraftStyleService.getSnapshot();
     const {
-      batchSources,
       batchLimit,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
@@ -1333,6 +1328,7 @@ class WorkbenchHost {
       isTestingRagConnection,
       isTestingLlmConnection,
       isTestingTranslationConnection,
+      journalSourceOverrides,
     } = settingsSnapshot;
     setWorkbenchBrowserTabKeepAliveLimit(browserTabKeepAliveLimit);
     applyWorkbenchTheme(theme, workbenchColorCustomizations);
@@ -1738,7 +1734,7 @@ class WorkbenchHost {
     const batchFetchControllerInstance = getWorkbenchBatchFetchController({
       desktopRuntime,
       addressBarUrl: fetchSeedUrl || webUrl,
-      batchSources,
+      journalSourceOverrides,
       batchStartDate,
       batchEndDate,
       invokeDesktop,
@@ -1856,7 +1852,7 @@ class WorkbenchHost {
       batchFetchContext: {
         desktopRuntime,
         addressBarUrl: fetchSeedUrl || webUrl,
-        batchSources,
+        journalSourceOverrides,
         batchStartDate,
         batchEndDate,
         invokeDesktop,
@@ -1988,7 +1984,6 @@ class WorkbenchHost {
         ui,
         isSettingsLoading,
         locale,
-        batchSources,
         batchLimit,
         fetchStartDate: batchStartDate,
         fetchEndDate: batchEndDate,
@@ -2043,13 +2038,6 @@ class WorkbenchHost {
       },
       actions: {
         onNavigateBack: toggleWorkbenchSettings,
-        onBatchSourceUrlChange: settingsControllerInstance.handleBatchSourceUrlChange,
-        onBatchSourceJournalTitleChange:
-          settingsControllerInstance.handleBatchSourceJournalTitleChange,
-        onSaveBatchSources: settingsControllerInstance.handleSaveSettings,
-        onAddBatchSource: settingsControllerInstance.handleAddBatchSource,
-        onRemoveBatchSource: settingsControllerInstance.handleRemoveBatchSource,
-        onMoveBatchSource: settingsControllerInstance.handleMoveBatchSource,
         onBatchLimitChange: (value) =>
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
         onFetchStartDateChange: setBatchStartDate,
@@ -2297,7 +2285,7 @@ export function disposeWorkbenchServices() {
 }
 
 export function getWorkbenchSettingsController(
-  context: SettingsControllerContext & { initialBatchSources: BatchSource[] },
+  context: SettingsControllerContext,
 ) {
   if (!settingsController) {
     settingsController = createSettingsController(context);

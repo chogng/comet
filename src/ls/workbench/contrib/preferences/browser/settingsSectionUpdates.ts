@@ -23,8 +23,6 @@ export function shouldUpdateSettingsSection(
       return shouldUpdateLlmSection(previousProps, currentProps);
     case 'translation':
       return shouldUpdateTranslationSection(previousProps, currentProps);
-    case 'batchSources':
-      return shouldUpdateBatchSourcesSection(previousProps, currentProps);
     case 'batchOptions':
       return shouldUpdateBatchOptionsSection(previousProps, currentProps);
     case 'knowledgeBase':
@@ -45,29 +43,6 @@ function shouldUpdateLocaleSection(
     previousProps.labels.languageChinese !== currentProps.labels.languageChinese ||
     previousProps.labels.languageEnglish !== currentProps.labels.languageEnglish ||
     previousProps.labels.settingsLanguageHint !== currentProps.labels.settingsLanguageHint
-  );
-}
-
-function shouldUpdateBatchSourcesSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
-) {
-  return (
-    !previousProps ||
-    previousProps.batchSources !== currentProps.batchSources ||
-    previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
-    previousProps.labels.settingsPageUrl !== currentProps.labels.settingsPageUrl ||
-    previousProps.labels.pageUrlPlaceholder !== currentProps.labels.pageUrlPlaceholder ||
-    previousProps.labels.batchJournalTitlePlaceholder !== currentProps.labels.batchJournalTitlePlaceholder ||
-    previousProps.labels.addBatchUrl !== currentProps.labels.addBatchUrl ||
-    previousProps.labels.removeBatchUrl !== currentProps.labels.removeBatchUrl ||
-    previousProps.labels.moveBatchUrlUp !== currentProps.labels.moveBatchUrlUp ||
-    previousProps.labels.moveBatchUrlDown !== currentProps.labels.moveBatchUrlDown ||
-    previousProps.labels.settingsBatchSourcesEdit !== currentProps.labels.settingsBatchSourcesEdit ||
-    previousProps.labels.settingsBatchSourcesDone !== currentProps.labels.settingsBatchSourcesDone ||
-    previousProps.labels.settingsBatchSourcesShow !== currentProps.labels.settingsBatchSourcesShow ||
-    previousProps.labels.settingsBatchSourcesHide !== currentProps.labels.settingsBatchSourcesHide ||
-    previousProps.labels.settingsPageUrlHint !== currentProps.labels.settingsPageUrlHint
   );
 }
 

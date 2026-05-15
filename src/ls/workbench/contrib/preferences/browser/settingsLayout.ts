@@ -10,7 +10,6 @@ export type SettingsSectionId =
   | 'textEditor'
   | 'llm'
   | 'translation'
-  | 'batchSources'
   | 'batchOptions'
   | 'knowledgeBase'
   | 'downloadDirectory';
@@ -73,7 +72,7 @@ const settingsPageLayout: SettingsPageDefinition[] = [
     id: 'literature',
     label: (labels) => labels.settingsNavigationLiterature,
     icon: 'book',
-    sections: ['batchSources', 'batchOptions', 'downloadDirectory', 'translation'],
+    sections: ['batchOptions', 'downloadDirectory', 'translation'],
   },
 ] as const;
 

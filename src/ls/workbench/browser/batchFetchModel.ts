@@ -4,9 +4,9 @@ import { MutableLifecycle } from 'ls/base/common/lifecycle';
 import type {
   ElectronInvoke,
   FetchStatus,
+  JournalSourceOverride,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { LocaleMessages } from 'language/locales';
-import type { BatchSource } from 'ls/workbench/services/config/configSchema';
 import { fetchLatestArticlesBatch } from 'ls/workbench/services/article/articleFetch';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
 import { INITIAL_BATCH_FETCH_MACHINE_STATE, reduceBatchFetchMachineState } from 'ls/workbench/services/article/batchFetchState';
@@ -28,7 +28,7 @@ type BatchFetchTitlebarStatus = {
 export type BatchFetchControllerContext = {
   desktopRuntime: boolean;
   addressBarUrl: string;
-  batchSources: BatchSource[];
+  journalSourceOverrides: JournalSourceOverride[];
   batchStartDate: string;
   batchEndDate: string;
   invokeDesktop: ElectronInvoke;
@@ -176,7 +176,7 @@ export class BatchFetchController {
     const {
       desktopRuntime,
       addressBarUrl,
-      batchSources,
+      journalSourceOverrides,
       batchStartDate,
       batchEndDate,
       invokeDesktop,
@@ -195,7 +195,7 @@ export class BatchFetchController {
       const result = await fetchLatestArticlesBatch({
         desktopRuntime,
         addressBarUrl,
-        batchSources,
+        journalSourceOverrides,
         startDate: batchStartDate || null,
         endDate: batchEndDate || null,
         invokeDesktop,

@@ -115,8 +115,6 @@ const defaultBatchSourceSeed: ReadonlyArray<BatchSource> = [
   },
 ];
 
-export const defaultBatchSources = defaultBatchSourceSeed;
-
 export function getDefaultBatchSources(): BatchSource[] {
   // Return fresh objects to avoid accidental shared mutations in config state.
   return defaultBatchSourceSeed.map((source) => ({

@@ -1,4 +1,3 @@
-import type { BatchSource } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import { appError } from 'ls/base/common/errors';
 import { createConfigStore } from 'ls/platform/storage/electron-main/configStore';
@@ -17,14 +16,12 @@ interface StoragePaths {
 
 interface StorageOptions {
   defaultLocale?: 'zh' | 'en';
-  defaultBatchSources?: ReadonlyArray<BatchSource>;
 }
 
 export function createStorageService(paths: StoragePaths, options: StorageOptions = {}): StorageService {
   const historyStore = createHistoryStore(paths.historyFile);
   const configStore = createConfigStore(paths.configFile, {
     defaultLocale: options.defaultLocale,
-    defaultBatchSources: options.defaultBatchSources,
   });
   const translationCacheStore = createTranslationCacheStore(paths.translationCacheFile);
   const libraryStore = createLibraryStore({

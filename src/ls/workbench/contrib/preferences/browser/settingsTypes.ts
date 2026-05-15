@@ -11,7 +11,6 @@ import type {
   TranslationProviderId,
   TranslationProviderSettings,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
-import type { BatchSource } from 'ls/workbench/services/config/configSchema';
 import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
 
 export type SettingsDropdownOption = {
@@ -27,8 +26,7 @@ export type SettingsPartLabels = {
   settingsTitle: string; settingsLoading: string; settingsLanguage: string; languageChinese: string; languageEnglish: string; settingsLanguageHint: string;
   settingsNavigationBack: string; settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationTextEditor: string; settingsNavigationChat: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
   settingsTextEditorDefaultBodyStyle: string; settingsTextEditorFontFamily: string; settingsTextEditorFontSize: string; settingsTextEditorLineHeight: string; settingsTextEditorParagraphSpacingBefore: string; settingsTextEditorParagraphSpacingAfter: string; settingsTextEditorColor: string;
-  settingsPageUrl: string; settingsPageUrlHint: string; pageUrlPlaceholder: string; settingsBatchJournalTitle: string; batchJournalTitlePlaceholder: string; settingsBatchSourceOptimized: string; settingsBatchSourcesEdit: string; settingsBatchSourcesDone: string; settingsBatchSourcesShow: string; settingsBatchSourcesHide: string;
-  addBatchUrl: string; removeBatchUrl: string; moveBatchUrlUp: string; moveBatchUrlDown: string; settingsBatchOptions: string; batchCount: string; startDate: string; endDate: string;
+  settingsBatchOptions: string; batchCount: string; startDate: string; endDate: string;
   settingsAppearanceTitle: string; settingsTheme: string; settingsThemeHint: string; settingsThemeLight: string; settingsThemeDark: string; settingsThemeSystem: string; settingsUseMica: string; settingsUseMicaHint: string; settingsLibraryTitle: string; settingsKnowledgeBaseMode: string;
   settingsKnowledgeBaseTitle: string; settingsKnowledgeBaseHint: string; settingsKnowledgeBaseModeHint: string; settingsKnowledgeBaseModeDisabledHint: string; settingsKnowledgeBaseAutoIndex: string; settingsKnowledgeBaseAutoIndexHint: string;
   settingsKnowledgeBasePdfDownloadDir: string; settingsKnowledgeBasePdfDownloadDirPlaceholder: string; settingsKnowledgeBasePdfDownloadDirHint: string;
@@ -51,13 +49,12 @@ export type SettingsPartLabels = {
 };
 
 export type SettingsPartProps = {
-  labels: SettingsPartLabels; isSettingsLoading: boolean; locale: Locale; batchSources: BatchSource[];
+  labels: SettingsPartLabels; isSettingsLoading: boolean; locale: Locale;
   editorDraftStyle: EditorDraftStyleSettings;
   editorDraftFontFamilyOptions: readonly SettingsDropdownOption[];
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
   onNavigateBack: () => void;
-  onBatchSourceUrlChange: (index: number, url: string) => void; onBatchSourceJournalTitleChange: (index: number, journalTitle: string) => void; onSaveBatchSources: () => Promise<boolean>; onAddBatchSource: () => void;
-  onRemoveBatchSource: (index: number) => void; onMoveBatchSource: (index: number, direction: 'up' | 'down') => void; batchLimit: number; onBatchLimitChange: (value: string) => void;
+  batchLimit: number; onBatchLimitChange: (value: string) => void;
   fetchStartDate: string; onFetchStartDateChange: (value: string) => void; fetchEndDate: string; onFetchEndDateChange: (value: string) => void; systemNotificationsEnabled: boolean; onSystemNotificationsEnabledChange: (checked: boolean) => void; warningNotificationsEnabled: boolean; onWarningNotificationsEnabledChange: (checked: boolean) => void; menuBarIconEnabled: boolean; onMenuBarIconEnabledChange: (checked: boolean) => void; completionNotificationsEnabled: boolean; onCompletionNotificationsEnabledChange: (checked: boolean) => void; useMica: boolean; onUseMicaChange: (checked: boolean) => void; statusbarVisible: boolean; onStatusbarVisibleChange: (checked: boolean) => void; browserTabKeepAliveLimit: number; onBrowserTabKeepAliveLimitChange: (value: string) => void; theme: AppTheme; onThemeChange: (value: AppTheme) => void; knowledgeBaseEnabled: boolean;
   onKnowledgeBaseEnabledChange: (checked: boolean) => void; autoIndexDownloadedPdf: boolean; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; knowledgeBasePdfDownloadDir: string; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void; libraryStorageMode: LibraryStorageMode;
   onLibraryStorageModeChange: (value: LibraryStorageMode) => void; libraryDirectory: string; onLibraryDirectoryChange: (value: string) => void; onChooseLibraryDirectory: () => void;
@@ -78,7 +75,7 @@ export type SettingsPartProps = {
 };
 
 export type SettingsPartState = {
-  ui: LocaleMessages; isSettingsLoading: boolean; locale: Locale; batchSources: BatchSource[]; batchLimit: number; fetchStartDate: string; fetchEndDate: string; systemNotificationsEnabled: boolean; warningNotificationsEnabled: boolean; menuBarIconEnabled: boolean; completionNotificationsEnabled: boolean; useMica: boolean; statusbarVisible: boolean; browserTabKeepAliveLimit: number; theme: AppTheme;
+  ui: LocaleMessages; isSettingsLoading: boolean; locale: Locale; batchLimit: number; fetchStartDate: string; fetchEndDate: string; systemNotificationsEnabled: boolean; warningNotificationsEnabled: boolean; menuBarIconEnabled: boolean; completionNotificationsEnabled: boolean; useMica: boolean; statusbarVisible: boolean; browserTabKeepAliveLimit: number; theme: AppTheme;
   editorDraftStyle: EditorDraftStyleSettings;
   editorDraftFontFamilyOptions: readonly SettingsDropdownOption[];
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
@@ -91,8 +88,7 @@ export type SettingsPartState = {
 
 export type SettingsPartActions = {
   onNavigateBack: () => void;
-  onBatchSourceUrlChange: (index: number, url: string) => void; onBatchSourceJournalTitleChange: (index: number, journalTitle: string) => void; onSaveBatchSources: () => Promise<boolean>;
-  onAddBatchSource: () => void; onRemoveBatchSource: (index: number) => void; onMoveBatchSource: (index: number, direction: 'up' | 'down') => void; onBatchLimitChange: (value: string) => void;
+  onBatchLimitChange: (value: string) => void;
   onFetchStartDateChange: (value: string) => void; onFetchEndDateChange: (value: string) => void; onSystemNotificationsEnabledChange: (checked: boolean) => void; onWarningNotificationsEnabledChange: (checked: boolean) => void; onMenuBarIconEnabledChange: (checked: boolean) => void; onCompletionNotificationsEnabledChange: (checked: boolean) => void; onUseMicaChange: (checked: boolean) => void; onStatusbarVisibleChange: (checked: boolean) => void; onBrowserTabKeepAliveLimitChange: (value: string) => void; onThemeChange: (value: AppTheme) => void; onKnowledgeBaseEnabledChange: (checked: boolean) => void; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void;
   onLibraryStorageModeChange: (value: LibraryStorageMode) => void; onLibraryDirectoryChange: (value: string) => void; onChooseLibraryDirectory: () => void; onMaxConcurrentIndexJobsChange: (value: string) => void;
   onRagProviderApiKeyChange: (provider: RagProviderId, apiKey: string) => void; onRagProviderBaseUrlChange: (provider: RagProviderId, baseUrl: string) => void; onRagProviderEmbeddingModelChange: (provider: RagProviderId, model: string) => void;

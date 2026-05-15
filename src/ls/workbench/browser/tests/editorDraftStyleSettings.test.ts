@@ -56,7 +56,6 @@ test('SettingsController syncs editorDraftStyleService through load and autosave
     invokeDesktop,
     ui: locales.en,
     locale: 'en',
-    initialBatchSources: [],
   });
 
   try {
@@ -181,7 +180,6 @@ test('SettingsController editorDraft style handlers update service snapshot and 
     invokeDesktop,
     ui: locales.en,
     locale: 'en',
-    initialBatchSources: [],
   });
 
   try {
@@ -319,7 +317,6 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
     invokeDesktop,
     ui: locales.en,
     locale: 'en',
-    initialBatchSources: [],
   });
 
   try {

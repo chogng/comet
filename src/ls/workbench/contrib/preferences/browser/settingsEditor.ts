@@ -3,7 +3,6 @@ import { DomScrollableElement } from 'ls/base/browser/ui/scrollbar/scrollableEle
 import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElementOptions';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 
-import { BatchSourcesWidget } from 'ls/workbench/contrib/preferences/browser/batchSourcesWidget';
 import { KnowledgeBaseWidget } from 'ls/workbench/contrib/preferences/browser/knowledgeBaseWidget';
 import type { KnowledgeBaseWidgetProps } from 'ls/workbench/contrib/preferences/browser/knowledgeBaseWidget';
 
@@ -49,8 +48,7 @@ export function createSettingsPartLabels({ ui }: CreateSettingsPartLabelsParams)
     settingsTitle: ui.settingsTitle, settingsLoading: ui.settingsLoading, settingsLanguage: ui.settingsLanguage, languageChinese: ui.languageChinese, languageEnglish: ui.languageEnglish, settingsLanguageHint: ui.settingsLanguageHint,
     settingsNavigationBack: ui.settingsNavigationBack, settingsNavigationGeneral: ui.settingsNavigationGeneral, settingsNavigationAppearance: ui.settingsNavigationAppearance, settingsNavigationTextEditor: ui.settingsNavigationTextEditor, settingsNavigationChat: ui.settingsNavigationChat, settingsNavigationKnowledgeBase: ui.settingsNavigationKnowledgeBase, settingsNavigationLiterature: ui.settingsNavigationLiterature, settingsTextEditorTitle: ui.settingsTextEditorTitle, settingsTextEditorHint: ui.settingsTextEditorHint,
     settingsTextEditorDefaultBodyStyle: ui.settingsTextEditorDefaultBodyStyle, settingsTextEditorFontFamily: ui.settingsTextEditorFontFamily, settingsTextEditorFontSize: ui.settingsTextEditorFontSize, settingsTextEditorLineHeight: ui.settingsTextEditorLineHeight, settingsTextEditorParagraphSpacingBefore: ui.settingsTextEditorParagraphSpacingBefore, settingsTextEditorParagraphSpacingAfter: ui.settingsTextEditorParagraphSpacingAfter, settingsTextEditorColor: ui.settingsTextEditorColor,
-    settingsPageUrl: ui.settingsPageUrl, settingsPageUrlHint: ui.settingsPageUrlHint, pageUrlPlaceholder: ui.pageUrlPlaceholder, settingsBatchJournalTitle: ui.settingsBatchJournalTitle, batchJournalTitlePlaceholder: ui.batchJournalTitlePlaceholder, settingsBatchSourceOptimized: ui.settingsBatchSourceOptimized, settingsBatchSourcesEdit: ui.settingsBatchSourcesEdit, settingsBatchSourcesDone: ui.settingsBatchSourcesDone, settingsBatchSourcesShow: ui.settingsBatchSourcesShow, settingsBatchSourcesHide: ui.settingsBatchSourcesHide,
-    addBatchUrl: ui.addBatchUrl, removeBatchUrl: ui.removeBatchUrl, moveBatchUrlUp: ui.moveBatchUrlUp, moveBatchUrlDown: ui.moveBatchUrlDown, settingsBatchOptions: ui.settingsBatchOptions, batchCount: ui.batchCount, startDate: ui.startDate, endDate: ui.endDate,
+    settingsBatchOptions: ui.settingsBatchOptions, batchCount: ui.batchCount, startDate: ui.startDate, endDate: ui.endDate,
     settingsAppearanceTitle: ui.settingsAppearanceTitle, settingsTheme: ui.settingsTheme, settingsThemeHint: ui.settingsThemeHint, settingsThemeLight: ui.settingsThemeLight, settingsThemeDark: ui.settingsThemeDark, settingsThemeSystem: ui.settingsThemeSystem, settingsUseMica: ui.settingsUseMica, settingsUseMicaHint: ui.settingsUseMicaHint, settingsLibraryTitle: ui.settingsLibraryTitle, settingsKnowledgeBaseTitle: ui.settingsKnowledgeBaseTitle, settingsKnowledgeBaseHint: ui.settingsKnowledgeBaseHint, settingsKnowledgeBaseMode: ui.settingsKnowledgeBaseMode,
     settingsKnowledgeBaseModeHint: ui.settingsKnowledgeBaseModeHint, settingsKnowledgeBaseModeDisabledHint: ui.settingsKnowledgeBaseModeDisabledHint, settingsKnowledgeBaseAutoIndex: ui.settingsKnowledgeBaseAutoIndex, settingsKnowledgeBaseAutoIndexHint: ui.settingsKnowledgeBaseAutoIndexHint,
     settingsKnowledgeBasePdfDownloadDir: ui.settingsKnowledgeBasePdfDownloadDir, settingsKnowledgeBasePdfDownloadDirPlaceholder: ui.settingsKnowledgeBasePdfDownloadDirPlaceholder, settingsKnowledgeBasePdfDownloadDirHint: ui.settingsKnowledgeBasePdfDownloadDirHint,
@@ -99,7 +97,6 @@ export class SettingsPartView {
   // Keep section containers stable so updates can replace only local content
   // without recreating the whole settings page.
   private readonly sections = createSettingsSectionMap(() => el('section', 'settings-section'));
-  private readonly batchSourcesWidget: BatchSourcesWidget;
   private readonly knowledgeBaseWidget: KnowledgeBaseWidget;
   private readonly llmWidget: LlmWidget;
   private readonly translationWidget: TranslationWidget;
@@ -116,17 +113,6 @@ export class SettingsPartView {
       activePageId: this.activePageId,
       onDidSelectPage: this.handleDidSelectPage,
       onDidNavigateBack: this.props.onNavigateBack,
-    });
-    this.batchSourcesWidget = new BatchSourcesWidget({
-      labels: this.props.labels,
-      batchSources: this.props.batchSources,
-      isSettingsSaving: this.props.isSettingsSaving,
-      onBatchSourceUrlChange: (index, url) => this.props.onBatchSourceUrlChange(index, url),
-      onBatchSourceJournalTitleChange: (index, journalTitle) => this.props.onBatchSourceJournalTitleChange(index, journalTitle),
-      onSaveBatchSources: () => this.props.onSaveBatchSources(),
-      onAddBatchSource: () => this.props.onAddBatchSource(),
-      onRemoveBatchSource: (index) => this.props.onRemoveBatchSource(index),
-      onMoveBatchSource: (index, direction) => this.props.onMoveBatchSource(index, direction),
     });
     this.knowledgeBaseWidget = new KnowledgeBaseWidget(this.getKnowledgeBaseWidgetProps());
     this.llmWidget = new LlmWidget({
@@ -242,20 +228,6 @@ export class SettingsPartView {
 
   private updateSection(container: HTMLElement, content: Node) {
     container.replaceChildren(content);
-  }
-
-  private updateBatchSourcesWidget() {
-    this.batchSourcesWidget.setProps({
-      labels: this.props.labels,
-      batchSources: this.props.batchSources,
-      isSettingsSaving: this.props.isSettingsSaving,
-      onBatchSourceUrlChange: (index, url) => this.props.onBatchSourceUrlChange(index, url),
-      onBatchSourceJournalTitleChange: (index, journalTitle) => this.props.onBatchSourceJournalTitleChange(index, journalTitle),
-      onSaveBatchSources: () => this.props.onSaveBatchSources(),
-      onAddBatchSource: () => this.props.onAddBatchSource(),
-      onRemoveBatchSource: (index) => this.props.onRemoveBatchSource(index),
-      onMoveBatchSource: (index, direction) => this.props.onMoveBatchSource(index, direction),
-    });
   }
 
   private getKnowledgeBaseWidgetProps(): KnowledgeBaseWidgetProps {
@@ -416,10 +388,6 @@ export class SettingsPartView {
     }
     if (forceAll || shouldUpdateSettingsSection('notifications', previousProps, this.props)) {
       this.updateSection(this.sections.notifications, renderNotificationsSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('batchSources', previousProps, this.props)) {
-      this.updateBatchSourcesWidget();
-      this.updateSection(this.sections.batchSources, this.batchSourcesWidget.getElement());
     }
     if (forceAll || shouldUpdateSettingsSection('batchOptions', previousProps, this.props)) {
       this.updateSection(this.sections.batchOptions, renderBatchOptionsSection(this.props));

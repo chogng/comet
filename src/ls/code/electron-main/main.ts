@@ -11,7 +11,6 @@ import {
 import { registerDevShortcuts } from 'ls/platform/window/electron-main/devShortcuts';
 import { registerAppLifecycleHandlers } from 'ls/platform/lifecycle/electron-main/lifecycleMain';
 import { registerAppIpc } from 'ls/code/electron-main/ipc';
-import { getDefaultBatchSources } from 'ls/platform/config/common/defaultBatchSources';
 import { createStorageService } from 'ls/platform/storage/electron-main/storageService';
 import { createMainWindow, getMainWindow } from 'ls/platform/window/electron-main/window';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
@@ -35,7 +34,6 @@ app.whenReady().then(async () => {
     },
     {
       defaultLocale: resolveEnvironmentMainLocale(),
-      defaultBatchSources: getDefaultBatchSources(),
     },
   );
 

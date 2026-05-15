@@ -2,6 +2,7 @@ import type {
   AppTheme,
   AppSettings as DesktopAppSettings,
   ElectronInvoke,
+  JournalSourceOverride,
   KnowledgeBaseSettings,
   LlmSettings,
   RagSettings,
@@ -16,8 +17,7 @@ import {
   type EditorDraftStyleSettings,
 } from 'ls/base/common/editorDraftStyle';
 import type { Locale } from 'language/i18n';
-import { defaultBatchLimit, getConfigBatchSourceSeed, normalizeBatchLimit, resolveConfigBatchSources } from 'ls/workbench/services/config/configSchema';
-import type { BatchSource } from 'ls/workbench/services/config/configSchema';
+import { defaultBatchLimit, normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
 
 import {
   cloneKnowledgeBaseSettings,
@@ -39,8 +39,8 @@ export type ResolvedSettingsState = {
   knowledgeBasePdfDownloadDir: string;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
-  batchSources: BatchSource[];
   batchLimit: number;
+  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -63,8 +63,8 @@ export type SaveSettingsDraft = {
   knowledgeBasePdfDownloadDir: string;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
-  batchSources: BatchSource[];
   batchLimit: number;
+  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -83,13 +83,11 @@ export type SaveSettingsDraft = {
 
 export type SaveSettingsPayloadBuild = {
   nextDir: string;
-  nextBatchSources: BatchSource[];
   nextBatchLimit: number;
   payload: StoredAppSettingsPayload;
 };
 
 export type PartialSettingsPayload = Partial<StoredAppSettingsPayload>;
-const configBatchSourceSeed = getConfigBatchSourceSeed();
 
 export function resolveSettingsState(
   loaded: Partial<AppSettingsPayload>,
@@ -98,8 +96,6 @@ export function resolveSettingsState(
   const loadedLocale = loaded.locale === 'zh' || loaded.locale === 'en' ? loaded.locale : null;
   const loadedConfigPath =
     typeof loaded.configPath === 'string' ? loaded.configPath : (options.fallbackConfigPath ?? '');
-
-  const resolvedBatchSources = resolveConfigBatchSources(loaded.defaultBatchSources, configBatchSourceSeed);
 
   return {
     pdfDownloadDir: typeof loaded.defaultDownloadDir === 'string' ? loaded.defaultDownloadDir : '',
@@ -115,8 +111,10 @@ export function resolveSettingsState(
       loaded.browserTabKeepAliveLimit,
       defaultBrowserTabKeepAliveLimit,
     ),
-    batchSources: resolvedBatchSources,
     batchLimit: normalizeBatchLimit(loaded.defaultBatchLimit, defaultBatchLimit),
+    journalSourceOverrides: Array.isArray(loaded.journalSourceOverrides)
+      ? [...loaded.journalSourceOverrides]
+      : [],
     systemNotificationsEnabled:
       typeof loaded.systemNotificationsEnabled === 'boolean'
         ? loaded.systemNotificationsEnabled
@@ -160,7 +158,6 @@ export function resolveSettingsState(
 export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettingsPayloadBuild {
   const nextDir = draft.pdfDownloadDir.trim();
   const nextKnowledgeBaseDir = draft.knowledgeBasePdfDownloadDir.trim();
-  const nextBatchSources = resolveConfigBatchSources(draft.batchSources, configBatchSourceSeed);
   const nextBatchLimit = normalizeBatchLimit(draft.batchLimit, defaultBatchLimit);
   const nextBrowserTabKeepAliveLimit = normalizeBrowserTabKeepAliveLimit(
     draft.browserTabKeepAliveLimit,
@@ -169,14 +166,13 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
 
   return {
     nextDir,
-    nextBatchSources,
     nextBatchLimit,
     payload: {
       defaultDownloadDir: nextDir || null,
       pdfFileNameUseSelectionOrder: draft.pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit: nextBrowserTabKeepAliveLimit,
-      defaultBatchSources: nextBatchSources,
       defaultBatchLimit: nextBatchLimit,
+      journalSourceOverrides: [...draft.journalSourceOverrides],
       systemNotificationsEnabled: draft.systemNotificationsEnabled,
       warningNotificationsEnabled: draft.warningNotificationsEnabled,
       menuBarIconEnabled: draft.menuBarIconEnabled,

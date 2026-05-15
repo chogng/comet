@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import type {
   AppTheme,
   AppSettings,
-  BatchSource,
+  JournalSourceOverride,
   KnowledgeBaseSettings,
   RagSettings,
   StoredAppSettings,
@@ -58,7 +58,6 @@ const maxConcurrentIndexJobs = 4;
 
 type ConfigStoreOptions = {
   defaultLocale?: 'zh' | 'en';
-  defaultBatchSources?: ReadonlyArray<BatchSource>;
 };
 
 async function readJson<T>(filePath: string, fallbackValue: T) {
@@ -81,11 +80,6 @@ function serializeConfigValue(value: unknown) {
   }
 
   const settings = value as StoredAppSettings;
-  const serializedBatchSources = settings.defaultBatchSources.map((source) => ({
-    id: source.id,
-    url: source.url,
-    journalTitle: source.journalTitle,
-  }));
   const serializedProviders = Object.fromEntries(
     Object.entries(settings.llm.providers).flatMap(([providerId, provider]) => {
       const defaultProvider = defaultLlmProviderSettings[providerId as keyof typeof defaultLlmProviderSettings];
@@ -134,7 +128,6 @@ function serializeConfigValue(value: unknown) {
 
   return {
     ...settings,
-    defaultBatchSources: serializedBatchSources,
     llm: {
       ...settings.llm,
       providers: serializedProviders,
@@ -170,80 +163,38 @@ function normalizeThemeColorCustomizations(value: unknown): StoredAppSettings['w
   return Object.fromEntries(entries);
 }
 
-function buildSourceId(seed: unknown, index: number) {
-  const cleaned = cleanText(seed);
-  if (cleaned) return cleaned;
-
-  return String(index + 1);
-}
-
-function normalizePreferredExtractorId(value: unknown): string | null {
-  const cleaned = cleanText(value);
-  return cleaned || null;
-}
-
-function cloneBatchSources(input: ReadonlyArray<BatchSource>): BatchSource[] {
-  return input
-    .map((item, index) => {
-      const url = cleanText(item?.url);
-      return {
-        id: buildSourceId(item?.id, index),
-        url,
-        journalTitle: cleanText(item?.journalTitle),
-        preferredExtractorId: normalizePreferredExtractorId(item?.preferredExtractorId),
-      };
-    })
-    .filter((source) => source.url);
-}
-
-function normalizeBatchSources(
-  payload: Partial<StoredAppSettings>,
-  fallbackBatchSources: ReadonlyArray<BatchSource>,
-): BatchSource[] {
-  if (!Array.isArray(payload.defaultBatchSources)) {
-    return cloneBatchSources(fallbackBatchSources);
+function normalizeJournalSourceOverrides(value: unknown): JournalSourceOverride[] {
+  if (!Array.isArray(value)) {
+    return [];
   }
 
-  const fallbackByUrl = new Map<string, BatchSource>();
-  for (const source of fallbackBatchSources) {
-    if (!source.url || fallbackByUrl.has(source.url)) {
+  const deduped = new Map<string, JournalSourceOverride>();
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
       continue;
     }
-    fallbackByUrl.set(source.url, source);
-  }
 
-  const fromStructured = payload.defaultBatchSources.map((item, index) => {
-    const url = cleanText(item?.url);
-    const fallbackSource = fallbackByUrl.get(url);
-    return {
-      id: buildSourceId(item?.id ?? fallbackSource?.id, index),
+    const record = item as Record<string, unknown>;
+    const url = cleanText(record.url);
+    if (!url) {
+      continue;
+    }
+
+    const override: JournalSourceOverride = {
       url,
-      journalTitle: cleanText(item?.journalTitle) || cleanText(fallbackSource?.journalTitle),
-      preferredExtractorId: normalizePreferredExtractorId(
-        item?.preferredExtractorId ?? fallbackSource?.preferredExtractorId,
-      ),
     };
-  });
-  const normalized = fromStructured.filter((source) => source.url);
-  const deduped = new Map<string, BatchSource>();
+    const journalTitle = cleanText(record.journalTitle);
+    if (journalTitle) {
+      override.journalTitle = journalTitle;
+    }
+    const preferredExtractorId = cleanText(record.preferredExtractorId);
+    if (preferredExtractorId) {
+      override.preferredExtractorId = preferredExtractorId;
+    } else if (record.preferredExtractorId === null) {
+      override.preferredExtractorId = null;
+    }
 
-  for (const source of normalized) {
-    const existing = deduped.get(source.url);
-    if (!existing) {
-      deduped.set(source.url, source);
-      continue;
-    }
-    if (!existing.journalTitle && source.journalTitle) {
-      deduped.set(source.url, source);
-      continue;
-    }
-    if (!existing.id && source.id) {
-      deduped.set(source.url, source);
-      continue;
-    }
-    if (!existing.preferredExtractorId && source.preferredExtractorId) {
-      deduped.set(source.url, source);
-    }
+    deduped.set(url, override);
   }
 
   return [...deduped.values()];
@@ -252,10 +203,8 @@ function normalizeBatchSources(
 function normalizeSettings(
   payload: Partial<StoredAppSettings> = {},
   defaultLocale: 'zh' | 'en',
-  fallbackBatchSources: ReadonlyArray<BatchSource>,
 ): StoredAppSettings {
   const downloadDir = typeof payload.defaultDownloadDir === 'string' ? cleanText(payload.defaultDownloadDir) : '';
-  const normalizedBatchSources = normalizeBatchSources(payload, fallbackBatchSources);
   const parsedLimit = Number.parseInt(String(payload.defaultBatchLimit), 10);
   const normalizedLimit = Number.isNaN(parsedLimit)
     ? defaultBatchLimit
@@ -271,8 +220,8 @@ function normalizeSettings(
       payload.browserTabKeepAliveLimit,
       defaultBrowserTabKeepAliveLimit,
     ),
-    defaultBatchSources: normalizedBatchSources,
     defaultBatchLimit: normalizedLimit,
+    journalSourceOverrides: normalizeJournalSourceOverrides(payload.journalSourceOverrides),
     systemNotificationsEnabled:
       typeof payload.systemNotificationsEnabled === 'boolean'
         ? payload.systemNotificationsEnabled
@@ -546,18 +495,10 @@ function attachConfigPath(settings: StoredAppSettings, configPath: string): AppS
 
 export function createConfigStore(configFile: string, options: ConfigStoreOptions = {}): ConfigStore {
   const defaultLocale = options.defaultLocale === 'en' ? 'en' : fallbackLocale;
-  const fallbackBatchSources = cloneBatchSources(options.defaultBatchSources ?? []);
 
   async function readSettings() {
     const payload = await readJson<Partial<StoredAppSettings>>(configFile, {});
-    const normalized = normalizeSettings(payload, defaultLocale, fallbackBatchSources);
-    if (!Array.isArray(payload.defaultBatchSources)) {
-      try {
-        await writeJson(configFile, normalized);
-      } catch {
-        // ignore write failures on lazy defaults hydration
-      }
-    }
+    const normalized = normalizeSettings(payload, defaultLocale);
     return attachConfigPath(normalized, configFile);
   }
 
@@ -569,7 +510,7 @@ export function createConfigStore(configFile: string, options: ConfigStoreOption
     async saveSettings(settings = {}) {
       const current = await readSettings();
       const { configPath: _configPath, ...currentStored } = current;
-      const saved = normalizeSettings({ ...currentStored, ...settings }, defaultLocale, fallbackBatchSources);
+      const saved = normalizeSettings({ ...currentStored, ...settings }, defaultLocale);
       await writeJson(configFile, saved);
       return attachConfigPath(saved, configFile);
     },
