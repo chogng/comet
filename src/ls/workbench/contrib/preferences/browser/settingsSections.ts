@@ -515,10 +515,6 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   const defaultBodyStyle = props.editorDraftStyle.value.defaultBodyStyle;
   const isDisabled = props.isSettingsSaving;
   const hasUserOverride = props.editorDraftStyle.userValue !== null;
-  const sourceHint = el('p', 'settings-hint settings-text-editor-source-hint');
-  sourceHint.textContent = hasUserOverride
-    ? props.labels.settingsTextEditorValueSourceUser
-    : props.labels.settingsTextEditorValueSourceDefault;
   const textEditorPanel = createSettingsSection({
     title: props.labels.settingsTextEditorDefaultBodyStyle,
     description: props.labels.settingsTextEditorHint,
@@ -607,7 +603,6 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     onClick: props.onResetEditorDraftStyle,
   });
 
-  textEditorPanel.list.append(sourceHint);
   textEditorPanel.list.append(
     createSettingsRow({
       title: props.labels.settingsTextEditorFontFamily,

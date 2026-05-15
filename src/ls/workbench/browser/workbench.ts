@@ -1214,7 +1214,7 @@ class WorkbenchHost {
       settingsTopbarActionsElement: this.settingsTopbarActionsView.getElement(),
       agentBarProps: props.agentBarProps,
       editorPartProps: props.editorPartProps,
-      settingsContentElement: this.settingsView.getContentElement(),
+      settingsContentElement: this.settingsView.getElement(),
       sidebarTopbarActionsElement: this.sidebarTopbarActionsView.getElement(),
       primaryBarFooterActionsElement: this.primaryBarFooterActionsView.getElement(),
       editorTopbarAuxiliaryActionsElement: null,

@@ -976,8 +976,13 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     settingsNavigationElement.className = 'settings-navigation';
     settingsNavigationElement.textContent = 'Settings navigation';
     const settingsContentElement = document.createElement('div');
-    settingsContentElement.className = 'settings-content';
-    settingsContentElement.textContent = 'Settings content';
+    settingsContentElement.className = 'settings-page';
+    const settingsContentTopbar = document.createElement('div');
+    settingsContentTopbar.className = 'settings-page-topbar';
+    const settingsContentBody = document.createElement('div');
+    settingsContentBody.className = 'settings-content';
+    settingsContentBody.textContent = 'Settings content';
+    settingsContentElement.append(settingsContentTopbar, settingsContentBody);
     const settingsTopbarActionsElement = createSettingsTopbarActionsElement('Back');
 
     const nextProps = {
@@ -1017,8 +1022,14 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     assert.equal(
       view
         .getElement()
-        .querySelector('.workbench-content-slot-editor > .settings-content'),
+        .querySelector('.workbench-content-slot-editor > .settings-page'),
       settingsContentElement,
+    );
+    assert.equal(
+      view
+        .getElement()
+        .querySelector('.workbench-content-slot-editor .settings-page-topbar'),
+      settingsContentTopbar,
     );
     assert.equal(
       view
@@ -1075,8 +1086,13 @@ test('WorkbenchLayoutView keeps primary width when switching back from settings 
     settingsNavigationElement.className = 'settings-navigation';
     settingsNavigationElement.textContent = 'Settings navigation';
     const settingsContentElement = document.createElement('div');
-    settingsContentElement.className = 'settings-content';
-    settingsContentElement.textContent = 'Settings content';
+    settingsContentElement.className = 'settings-page';
+    const settingsContentTopbar = document.createElement('div');
+    settingsContentTopbar.className = 'settings-page-topbar';
+    const settingsContentBody = document.createElement('div');
+    settingsContentBody.className = 'settings-content';
+    settingsContentBody.textContent = 'Settings content';
+    settingsContentElement.append(settingsContentTopbar, settingsContentBody);
     const settingsTopbarActionsElement = createSettingsTopbarActionsElement('Back');
 
     const settingsProps = {

@@ -57,8 +57,6 @@ const en = {
   settingsTextEditorParagraphSpacingBefore: 'Paragraph before (pt)',
   settingsTextEditorParagraphSpacingAfter: 'Paragraph after (pt)',
   settingsTextEditorColor: 'Text color',
-  settingsTextEditorValueSourceDefault: 'Using built-in default',
-  settingsTextEditorValueSourceUser: 'Using user override',
   settingsBatchOptions: 'Max fetch count',
   settingsBatchHint:
     'Limits how many articles a single URL can write during batch fetch.',
