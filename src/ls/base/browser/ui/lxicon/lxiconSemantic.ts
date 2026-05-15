@@ -46,8 +46,8 @@ export const lxIconSemanticMap = {
   settings: {
     moveUp: 'arrow-up',
     moveDown: 'arrow-down',
-    decrement: 'remove',
-    increment: 'add',
+    decrement: 'remove-1',
+    increment: 'add-1',
     removeBatchSource: 'close',
     chooseDirectory: 'projects',
     changeConfigLocation: 'link-external',
