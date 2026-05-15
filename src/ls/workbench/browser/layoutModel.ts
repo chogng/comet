@@ -159,8 +159,9 @@ export function resolveFlexState(params: {
   isAgentSidebarVisible: boolean;
   isEditorVisible: boolean;
 }): LayoutFlexState {
-  const agentSidebarFlex = params.isAgentSidebarVisible;
-  const editorFlex = params.isEditorVisible && !params.isAgentSidebarVisible;
+  const editorFlex = params.isEditorVisible;
+  const agentSidebarFlex =
+    params.isAgentSidebarVisible && !params.isEditorVisible;
   return {
     agentSidebarFlex,
     editorFlex,

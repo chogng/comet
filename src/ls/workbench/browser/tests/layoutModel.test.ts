@@ -143,7 +143,23 @@ test('layout model updates leaf data immutably', () => {
   assert.equal(originalAuxiliary.type, 'leaf');
   assert.equal(originalAuxiliary.size, 260);
   assert.equal(originalAuxiliary.visible, true);
-  assert.equal(originalAuxiliary.flex, true);
+  assert.equal(originalAuxiliary.flex, false);
+});
+
+test('layout model keeps editor flexible when editor and agent sidebar are both visible', () => {
+  const tree = createDefaultTree();
+  assert.equal(tree.type, 'branch');
+
+  const primarySidebar = tree.children[0];
+  const agentSidebar = tree.children[1];
+  const editor = tree.children[2];
+
+  assert(primarySidebar?.type === 'leaf');
+  assert(agentSidebar?.type === 'leaf');
+  assert(editor?.type === 'leaf');
+  assert.equal(primarySidebar.flex, undefined);
+  assert.equal(agentSidebar.flex, false);
+  assert.equal(editor.flex, true);
 });
 
 test('layout model can read and update the root branch by path', () => {
