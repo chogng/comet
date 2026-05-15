@@ -35,7 +35,7 @@ export function buildSettingsNumberStepperInput(config: {
   const inputBox = buildSettingsInput({
     type: 'number',
     value: config.value,
-    className: `${config.className} settings-number-stepper-input`,
+    className: 'settings-number-stepper-input',
     focusKey: config.focusKey,
     min: config.min,
     max: config.max,

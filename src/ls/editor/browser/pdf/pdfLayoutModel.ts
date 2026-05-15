@@ -464,13 +464,13 @@ function getLineSelectionMetrics(line: MutablePdfLayoutLine) {
       : getRectCenterY(line.rect);
 
   const baseHeight = Math.max(boundsHeight, metricMedianHeight, line.averageHeight, 1);
-  const inset = Math.min(baseHeight * 0.28, 3.5);
+  const inset = Math.min(baseHeight * 0.12, 1.8);
 
   return {
     centerY,
     baseHeight,
-    // Row highlight should be thicker than glyph boxes so it reads as a stable line band.
-    height: Math.max(baseHeight + inset * 2, line.averageHeight * 1.4, 1),
+    // Keep selection bands close to the glyph row instead of expanding to the full line gap.
+    height: Math.max(baseHeight + inset * 2, line.averageHeight * 1.08, 1),
   };
 }
 
@@ -489,8 +489,15 @@ function createSelectionRectForLineRange(
     return null;
   }
 
-  const left = Math.min(...selectedChars.map((char) => char.rect?.x ?? getCharLayoutX(char)));
-  const right = Math.max(...selectedChars.map((char) => char.rect ? getRectRight(char.rect) : getCharLayoutRight(char)));
+  const coversFullLine = lineStart <= line.startCharOffset && lineEnd >= line.endCharOffset;
+  const left = Math.min(
+    coversFullLine ? line.selectionRect.x : Number.POSITIVE_INFINITY,
+    ...selectedChars.map((char) => char.rect?.x ?? getCharLayoutX(char)),
+  );
+  const right = Math.max(
+    coversFullLine ? getRectRight(line.selectionRect) : Number.NEGATIVE_INFINITY,
+    ...selectedChars.map((char) => char.rect ? getRectRight(char.rect) : getCharLayoutRight(char)),
+  );
   if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) {
     return null;
   }
@@ -609,8 +616,7 @@ export function createPdfLayoutPage(info: PdfReviewerPageInfo): PdfLayoutPage {
       };
     });
 
-  // Bump selection band heights towards typical line spacing (within a cap) to avoid visible
-  // gaps between adjacent selection rows in PDFs with loose line spacing.
+  // Normalize unusual glyph rows slightly, but keep the visual band anchored to the text itself.
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line.selectionHeight || !line.selectionCenterY) {
@@ -634,8 +640,11 @@ export function createPdfLayoutPage(info: PdfReviewerPageInfo): PdfLayoutPage {
     }
 
     const baseHeight = line.selectionBaseHeight ?? line.averageHeight ?? 0;
-    const capHeight = Math.max(baseHeight * 2.4, line.selectionHeight);
-    line.selectionHeight = Math.max(line.selectionHeight, Math.min(nearestDistance, capHeight));
+    const capHeight = Math.max(baseHeight * 1.35, line.selectionHeight);
+    line.selectionHeight = Math.min(
+      capHeight,
+      Math.max(line.selectionHeight, Math.min(nearestDistance * 0.72, capHeight)),
+    );
   }
 
   const chars = lines.flatMap((line, lineIndex) => {
@@ -730,7 +739,7 @@ function findNearestLine(
 export function findPdfTextBoundaryAtPoint(
   page: PdfLayoutPage,
   point: { x: number; y: number },
-  options: { strict?: boolean } = {},
+  options: { strict?: boolean; preferBeforeInsideChar?: boolean } = {},
 ): PdfTextBoundary | null {
   const line = findNearestLine(page, point, options.strict === true);
   if (!line) {
@@ -756,6 +765,9 @@ export function findPdfTextBoundaryAtPoint(
     const charBottom = char.rect?.y ?? line.selectionRect.y;
     const charTop = char.rect ? getRectTop(char.rect) : getRectTop(line.selectionRect);
     const centerX = (charLeft + charRight) / 2;
+    const boundarySplitX = options.preferBeforeInsideChar
+      ? charLeft + (charRight - charLeft) * 0.7
+      : centerX;
     const contains =
       point.x >= charLeft &&
       point.x <= charRight &&
@@ -764,7 +776,7 @@ export function findPdfTextBoundaryAtPoint(
     if (contains) {
       return {
         page: page.page,
-        charOffset: position + (point.x < centerX ? 0 : 1),
+        charOffset: position + (point.x < boundarySplitX ? 0 : 1),
       };
     }
 
@@ -785,7 +797,7 @@ export function findPdfTextBoundaryAtPoint(
 export function findPdfTextIndexBoundaryAtPoint(
   page: PdfLayoutPage,
   point: { x: number; y: number },
-  options: { strict?: boolean } = {},
+  options: { strict?: boolean; preferBeforeInsideChar?: boolean } = {},
 ): PdfTextIndexBoundary | null {
   const line = findNearestLine(page, point, options.strict === true);
   if (!line) {
@@ -813,6 +825,9 @@ export function findPdfTextIndexBoundaryAtPoint(
     const charBottom = char.rect?.y ?? line.selectionRect.y;
     const charTop = char.rect ? getRectTop(char.rect) : getRectTop(line.selectionRect);
     const centerX = (charLeft + charRight) / 2;
+    const boundarySplitX = options.preferBeforeInsideChar
+      ? charLeft + (charRight - charLeft) * 0.7
+      : centerX;
     const contains =
       point.x >= charLeft &&
       point.x <= charRight &&
@@ -821,7 +836,7 @@ export function findPdfTextIndexBoundaryAtPoint(
     if (contains) {
       return {
         page: page.page,
-        charIndex: char.index + (point.x < centerX ? 0 : 1),
+        charIndex: char.index + (point.x < boundarySplitX ? 0 : 1),
       };
     }
 

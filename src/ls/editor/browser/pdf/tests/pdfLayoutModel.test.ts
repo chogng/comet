@@ -396,6 +396,50 @@ test('PdfLayoutModel creates selection ranges with row-normalized rects', () => 
   assert(range.rects[0].height > 12);
 });
 
+test('PdfLayoutModel keeps selection rows close to loose-spaced text height', () => {
+  const page = createPdfLayoutPage(createPageInfo([
+    {
+      index: 0,
+      char: 'a',
+      rect: { x: 10, y: 80, width: 8, height: 10 },
+    },
+    {
+      index: 1,
+      char: 'b',
+      rect: { x: 10, y: 40, width: 8, height: 10 },
+    },
+  ]));
+
+  assert.equal(page.lines.length, 2);
+  assert(page.lines[0].selectionRect.height <= 14);
+  assert(page.lines[1].selectionRect.height <= 14);
+});
+
+test('PdfLayoutModel expands fully selected lines to the row visual bounds', () => {
+  const page = createPdfLayoutPage(createPageInfo([
+    {
+      index: 0,
+      char: 'a',
+      rect: { x: 10, y: 80, width: 8, height: 10 },
+    },
+    {
+      index: 1,
+      char: ' ',
+    },
+    {
+      index: 2,
+      char: 'b',
+      rect: { x: 40, y: 80, width: 8, height: 10 },
+    },
+  ]));
+
+  const range = createPdfLayoutSelectionRange(page, 0, 3);
+  assert(range);
+  assert.equal(range.rects.length, 1);
+  assert(range.rects[0].x <= page.lines[0].selectionRect.x);
+  assert(range.rects[0].width >= page.lines[0].selectionRect.width);
+});
+
 test('PdfLayoutModel keeps neighboring selection rows visually even with small raised glyphs', () => {
   const page = createPdfLayoutPage(createPageInfo([
     {

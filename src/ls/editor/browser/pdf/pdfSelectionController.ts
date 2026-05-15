@@ -160,7 +160,7 @@ export class PdfSelectionController {
   private findNearestTextBoundary(
     info: PdfReviewerPageInfo,
     event: PointerEvent,
-    options: { strict?: boolean } = {},
+    options: { strict?: boolean; preferBeforeInsideChar?: boolean } = {},
   ) {
     return findPdfTextBoundaryAtPoint(
       this.getLayoutPage(info),
@@ -341,8 +341,11 @@ export class PdfSelectionController {
       return;
     }
 
-    const boundary = this.findNearestTextBoundary(info, event, { strict: true });
-    if (!boundary) {
+    const anchorBoundary = this.findNearestTextBoundary(info, event, {
+      strict: true,
+      preferBeforeInsideChar: true,
+    });
+    if (!anchorBoundary) {
       this.onHitTestStatusChange?.(null);
       return;
     }
@@ -359,7 +362,7 @@ export class PdfSelectionController {
       return;
     }
 
-    this.anchor = boundary;
+    this.anchor = anchorBoundary;
     this.setSelectionDragActive(true);
     this.onSelectionChange(null);
     try {

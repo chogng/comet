@@ -231,7 +231,7 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
       today: props.labels.today,
     },
     className: 'settings-date-input',
-    inputClassName: 'settings-input-control',
+    inputClassName: 'settings-inputbox settings-input-control settings-date-input-field',
     focusKey: 'settings.batch.startDate',
     onInput: props.onFetchStartDateChange,
   }).getElement();
@@ -243,7 +243,7 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
       today: props.labels.today,
     },
     className: 'settings-date-input',
-    inputClassName: 'settings-input-control',
+    inputClassName: 'settings-inputbox settings-input-control settings-date-input-field',
     focusKey: 'settings.batch.endDate',
     onInput: props.onFetchEndDateChange,
   }).getElement();
