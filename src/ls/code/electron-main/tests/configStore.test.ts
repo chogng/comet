@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 
 import { createConfigStore } from 'ls/platform/storage/electron-main/configStore';
 import { getDefaultBatchSources } from 'ls/platform/config/common/defaultBatchSources';
+import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
 
 async function withConfigStore(
   run: (
@@ -38,6 +39,24 @@ function getJournalSourceOverrides(settingsJson: unknown): TestJournalSourceOver
   return (settingsJson as {
     'literature.journalSourceOverrides'?: TestJournalSourceOverride[];
   })['literature.journalSourceOverrides'] ?? [];
+}
+
+function createTestEditorDraftStyle(fontFamilyValue: string): EditorDraftStyleSettings {
+  return {
+    defaultBodyStyle: {
+      fontFamilyValue,
+      fontSizeValue: '16px',
+      lineHeight: 1.6,
+      paragraphSpacingBeforePt: 10,
+      paragraphSpacingAfterPt: 6,
+      color: '#112233',
+      inlineStyleDefaults: {
+        bold: false,
+        italic: false,
+        underline: false,
+      },
+    },
+  };
 }
 
 test('config store reads journal source overrides from user settings json', async () => {
@@ -135,6 +154,79 @@ test('config store keeps user settings json separate from saved app settings', a
           source.url === 'https://example.com/latest' &&
           source.journalTitle === 'Example Journal',
       ),
+    );
+  });
+});
+
+test('config store reads editor draft style only from user settings json', async () => {
+  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+    await mkdir(path.dirname(configFile), { recursive: true });
+    await writeFile(
+      configFile,
+      JSON.stringify({
+        editorDraftStyle: createTestEditorDraftStyle('"Config Serif", serif'),
+      }),
+      'utf8',
+    );
+    await writeFile(
+      userSettingsFile,
+      JSON.stringify({
+        'literature.editorDraftStyle': createTestEditorDraftStyle('"User Sans", sans-serif'),
+      }),
+      'utf8',
+    );
+
+    const settings = await store.loadSettings();
+
+    assert.equal(
+      settings.editorDraftStyle.defaultBodyStyle.fontFamilyValue,
+      '"User Sans", sans-serif',
+    );
+  });
+});
+
+test('config store ignores legacy editor draft style from config json', async () => {
+  await withConfigStore(async (store, { configFile }) => {
+    await mkdir(path.dirname(configFile), { recursive: true });
+    await writeFile(
+      configFile,
+      JSON.stringify({
+        editorDraftStyle: createTestEditorDraftStyle('"Legacy Serif", serif'),
+      }),
+      'utf8',
+    );
+
+    const settings = await store.loadSettings();
+
+    assert.notEqual(
+      settings.editorDraftStyle.defaultBodyStyle.fontFamilyValue,
+      '"Legacy Serif", serif',
+    );
+  });
+});
+
+test('config store saves editor draft style into user settings json', async () => {
+  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+    const nextEditorDraftStyle = createTestEditorDraftStyle('"Saved Sans", sans-serif');
+
+    await store.saveSettings({
+      defaultBatchLimit: 12,
+      editorDraftStyle: nextEditorDraftStyle,
+    });
+
+    const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
+    const savedUserSettings = JSON.parse(await readFile(userSettingsFile, 'utf8'));
+    const savedEditorDraftStyle = savedUserSettings['literature.editorDraftStyle'];
+    const settings = await store.loadSettings();
+
+    assert.equal(savedConfig.editorDraftStyle, undefined);
+    assert.equal(
+      savedEditorDraftStyle.defaultBodyStyle.fontFamilyValue,
+      '"Saved Sans", sans-serif',
+    );
+    assert.equal(
+      settings.editorDraftStyle.defaultBodyStyle.fontFamilyValue,
+      '"Saved Sans", sans-serif',
     );
   });
 });

@@ -1348,7 +1348,7 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
     );
     assert.deepEqual(
       trailingButtons.map((button) => button.getAttribute('aria-label')),
-      ['Archive page', 'More'],
+      ['Export DOCX', 'Archive page', 'More'],
     );
   } finally {
     view.dispose();

@@ -629,7 +629,7 @@ export class SettingsController {
       this.isApplyingLoadedEditorDraftStyle = true;
       try {
         editorDraftStyleService.setDefaultBodyStyle(
-          cloneEditorDraftStyleSettings(this.settingsModel.getSnapshot().editorDraftStyle)
+          cloneEditorDraftStyleSettings(this.settingsModel.getSnapshot().editorDraftStyle.value)
             .defaultBodyStyle,
         );
       } finally {
@@ -656,7 +656,7 @@ export class SettingsController {
     const nextEditorDraftStyle = cloneEditorDraftStyleSettings(
       editorDraftStyleService.getSnapshot(),
     );
-    const previousEditorDraftStyle = this.settingsModel.getSnapshot().editorDraftStyle;
+    const previousEditorDraftStyle = this.settingsModel.getSnapshot().editorDraftStyle.value;
     if (areEditorDraftStyleSettingsEqual(previousEditorDraftStyle, nextEditorDraftStyle)) {
       return;
     }

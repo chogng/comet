@@ -56,6 +56,8 @@ const zh = {
   settingsTextEditorParagraphSpacingBefore: '段前间距 (pt)',
   settingsTextEditorParagraphSpacingAfter: '段后间距 (pt)',
   settingsTextEditorColor: '文字颜色',
+  settingsTextEditorValueSourceDefault: '使用内置默认值',
+  settingsTextEditorValueSourceUser: '使用用户覆盖值',
   settingsBatchOptions: '最大抓取',
   settingsBatchHint:
     '限制单个 URL 在批量抓取中最多写入的文献数量。',

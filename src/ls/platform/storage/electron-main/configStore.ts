@@ -12,6 +12,7 @@ import type {
 import {
   cloneEditorDraftStyleSettings,
   normalizeEditorDraftStyleSettings,
+  type EditorDraftStyleSettings,
 } from 'ls/base/common/editorDraftStyle';
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import { cleanText } from 'ls/base/common/strings';
@@ -63,6 +64,7 @@ type ConfigStoreOptions = {
 
 type UserSettings = {
   'literature.journalSourceOverrides'?: JournalSourceOverride[];
+  'literature.editorDraftStyle'?: EditorDraftStyleSettings;
   journalSourceOverrides?: JournalSourceOverride[];
 };
 
@@ -125,7 +127,6 @@ async function ensureUserSettingsFile(
       defaultSourceOverrides,
       existingSourceOverrides.length > 0 ? existingSourceOverrides : legacySourceOverrides,
     );
-
     await writeJson(filePath, {
       ...existing,
       'literature.journalSourceOverrides': nextSourceOverrides,
@@ -136,8 +137,19 @@ async function ensureUserSettingsFile(
         defaultSourceOverrides,
         legacySourceOverrides,
       ),
-    } satisfies UserSettings);
+    } satisfies Partial<UserSettings>);
   }
+}
+
+async function writeUserSettingsEditorDraftStyle(
+  filePath: string,
+  editorDraftStyle: EditorDraftStyleSettings,
+) {
+  const existing = await readJson<Partial<UserSettings>>(filePath, {});
+  await writeJson(filePath, {
+    ...existing,
+    'literature.editorDraftStyle': cloneEditorDraftStyleSettings(editorDraftStyle),
+  } satisfies Partial<UserSettings>);
 }
 
 function serializeConfigValue(value: unknown) {
@@ -272,6 +284,14 @@ function resolveUserJournalSourceOverrides(userSettings: Partial<UserSettings>) 
   }
 
   return normalizeJournalSourceOverrides(userSettings.journalSourceOverrides);
+}
+
+function resolveUserEditorDraftStyle(userSettings: Partial<UserSettings>) {
+  if (userSettings['literature.editorDraftStyle'] !== undefined) {
+    return normalizeEditorDraftStyleSettings(userSettings['literature.editorDraftStyle']);
+  }
+
+  return null;
 }
 
 function normalizeSettings(
@@ -576,12 +596,15 @@ export function createConfigStore(
 
   async function readSettings() {
     const payload = await readJson<Partial<StoredAppSettings>>(configFile, {});
+    const { editorDraftStyle: _legacyEditorDraftStyle, ...configPayload } = payload;
     await ensureUserSettingsFile(userSettingsFile, payload);
     const userSettings = await readJson<Partial<UserSettings>>(userSettingsFile, {});
+    const userEditorDraftStyle = resolveUserEditorDraftStyle(userSettings);
     const normalized = normalizeSettings(
       {
-        ...payload,
+        ...configPayload,
         journalSourceOverrides: resolveUserJournalSourceOverrides(userSettings),
+        ...(userEditorDraftStyle ? { editorDraftStyle: userEditorDraftStyle } : {}),
       },
       defaultLocale,
     );
@@ -604,7 +627,9 @@ export function createConfigStore(
         },
         defaultLocale,
       );
-      await writeJson(configFile, saved);
+      const { editorDraftStyle, ...savedConfig } = saved;
+      await writeJson(configFile, savedConfig);
+      await writeUserSettingsEditorDraftStyle(userSettingsFile, editorDraftStyle);
       return readSettings();
     },
   };

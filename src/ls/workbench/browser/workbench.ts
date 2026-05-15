@@ -1996,10 +1996,30 @@ class WorkbenchHost {
         browserTabKeepAliveLimit,
         theme,
         editorDraftStyle: {
-          defaultBodyStyle: {
-            ...editorDraftStyleSnapshot.defaultBodyStyle,
-            inlineStyleDefaults: {
-              ...editorDraftStyleSnapshot.defaultBodyStyle.inlineStyleDefaults,
+          defaultValue: {
+            defaultBodyStyle: {
+              ...settingsSnapshot.editorDraftStyle.defaultValue.defaultBodyStyle,
+              inlineStyleDefaults: {
+                ...settingsSnapshot.editorDraftStyle.defaultValue.defaultBodyStyle.inlineStyleDefaults,
+              },
+            },
+          },
+          userValue: settingsSnapshot.editorDraftStyle.userValue
+            ? {
+                defaultBodyStyle: {
+                  ...settingsSnapshot.editorDraftStyle.userValue.defaultBodyStyle,
+                  inlineStyleDefaults: {
+                    ...settingsSnapshot.editorDraftStyle.userValue.defaultBodyStyle.inlineStyleDefaults,
+                  },
+                },
+              }
+            : null,
+          value: {
+            defaultBodyStyle: {
+              ...editorDraftStyleSnapshot.defaultBodyStyle,
+              inlineStyleDefaults: {
+                ...editorDraftStyleSnapshot.defaultBodyStyle.inlineStyleDefaults,
+              },
             },
           },
         },

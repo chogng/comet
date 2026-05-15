@@ -138,8 +138,8 @@ function shouldUpdateTextEditorSection(
     return true;
   }
 
-  const previousDefaultBodyStyle = previousProps.editorDraftStyle.defaultBodyStyle;
-  const currentDefaultBodyStyle = currentProps.editorDraftStyle.defaultBodyStyle;
+  const previousDefaultBodyStyle = previousProps.editorDraftStyle.value.defaultBodyStyle;
+  const currentDefaultBodyStyle = currentProps.editorDraftStyle.value.defaultBodyStyle;
 
   return (
     previousDefaultBodyStyle.fontFamilyValue !== currentDefaultBodyStyle.fontFamilyValue ||
@@ -148,6 +148,7 @@ function shouldUpdateTextEditorSection(
     previousDefaultBodyStyle.paragraphSpacingBeforePt !== currentDefaultBodyStyle.paragraphSpacingBeforePt ||
     previousDefaultBodyStyle.paragraphSpacingAfterPt !== currentDefaultBodyStyle.paragraphSpacingAfterPt ||
     previousDefaultBodyStyle.color !== currentDefaultBodyStyle.color ||
+    previousProps.editorDraftStyle.userValue !== currentProps.editorDraftStyle.userValue ||
     previousProps.editorDraftFontFamilyOptions !== currentProps.editorDraftFontFamilyOptions ||
     previousProps.editorDraftFontSizeOptions !== currentProps.editorDraftFontSizeOptions ||
     previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
@@ -160,6 +161,8 @@ function shouldUpdateTextEditorSection(
     previousProps.labels.settingsTextEditorParagraphSpacingBefore !== currentProps.labels.settingsTextEditorParagraphSpacingBefore ||
     previousProps.labels.settingsTextEditorParagraphSpacingAfter !== currentProps.labels.settingsTextEditorParagraphSpacingAfter ||
     previousProps.labels.settingsTextEditorColor !== currentProps.labels.settingsTextEditorColor ||
+    previousProps.labels.settingsTextEditorValueSourceDefault !== currentProps.labels.settingsTextEditorValueSourceDefault ||
+    previousProps.labels.settingsTextEditorValueSourceUser !== currentProps.labels.settingsTextEditorValueSourceUser ||
     previousProps.labels.resetDefault !== currentProps.labels.resetDefault
   );
 }

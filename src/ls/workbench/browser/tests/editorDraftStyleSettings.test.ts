@@ -117,14 +117,7 @@ test('SettingsController syncs editorDraftStyleService through load and autosave
         }
       | undefined;
     assert(lastPayload);
-    assert.equal(
-      lastPayload.editorDraftStyle?.defaultBodyStyle?.fontFamilyValue,
-      initialSnapshot.defaultBodyStyle.fontFamilyValue,
-    );
-    assert.equal(
-      lastPayload.editorDraftStyle?.defaultBodyStyle?.fontSizeValue,
-      initialSnapshot.defaultBodyStyle.fontSizeValue,
-    );
+    assert.equal(lastPayload.editorDraftStyle, undefined);
   } finally {
     controller.dispose();
     editorDraftStyleService.resetToCatalog();

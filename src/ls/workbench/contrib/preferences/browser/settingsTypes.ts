@@ -12,6 +12,7 @@ import type {
   TranslationProviderSettings,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
+import type { SettingValue } from 'ls/workbench/services/settings/settingValue';
 
 export type SettingsDropdownOption = {
   value: string;
@@ -25,7 +26,7 @@ export type SettingsDropdownOption = {
 export type SettingsPartLabels = {
   settingsTitle: string; settingsLoading: string; settingsLanguage: string; languageChinese: string; languageEnglish: string; settingsLanguageHint: string;
   settingsNavigationBack: string; settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationTextEditor: string; settingsNavigationChat: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
-  settingsTextEditorDefaultBodyStyle: string; settingsTextEditorFontFamily: string; settingsTextEditorFontSize: string; settingsTextEditorLineHeight: string; settingsTextEditorParagraphSpacingBefore: string; settingsTextEditorParagraphSpacingAfter: string; settingsTextEditorColor: string;
+  settingsTextEditorDefaultBodyStyle: string; settingsTextEditorFontFamily: string; settingsTextEditorFontSize: string; settingsTextEditorLineHeight: string; settingsTextEditorParagraphSpacingBefore: string; settingsTextEditorParagraphSpacingAfter: string; settingsTextEditorColor: string; settingsTextEditorValueSourceDefault: string; settingsTextEditorValueSourceUser: string;
   settingsBatchOptions: string; batchCount: string; startDate: string; endDate: string; clearDate: string; today: string;
   settingsAppearanceTitle: string; settingsTheme: string; settingsThemeHint: string; settingsThemeLight: string; settingsThemeDark: string; settingsThemeSystem: string; settingsUseMica: string; settingsUseMicaHint: string; settingsLibraryTitle: string; settingsKnowledgeBaseMode: string;
   settingsKnowledgeBaseTitle: string; settingsKnowledgeBaseHint: string; settingsKnowledgeBaseModeHint: string; settingsKnowledgeBaseModeDisabledHint: string; settingsKnowledgeBaseAutoIndex: string; settingsKnowledgeBaseAutoIndexHint: string;
@@ -50,7 +51,7 @@ export type SettingsPartLabels = {
 
 export type SettingsPartProps = {
   labels: SettingsPartLabels; isSettingsLoading: boolean; locale: Locale;
-  editorDraftStyle: EditorDraftStyleSettings;
+  editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   editorDraftFontFamilyOptions: readonly SettingsDropdownOption[];
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
   onNavigateBack: () => void;
@@ -76,7 +77,7 @@ export type SettingsPartProps = {
 
 export type SettingsPartState = {
   ui: LocaleMessages; isSettingsLoading: boolean; locale: Locale; batchLimit: number; fetchStartDate: string; fetchEndDate: string; systemNotificationsEnabled: boolean; warningNotificationsEnabled: boolean; menuBarIconEnabled: boolean; completionNotificationsEnabled: boolean; useMica: boolean; statusbarVisible: boolean; browserTabKeepAliveLimit: number; theme: AppTheme;
-  editorDraftStyle: EditorDraftStyleSettings;
+  editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   editorDraftFontFamilyOptions: readonly SettingsDropdownOption[];
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
   knowledgeBaseEnabled: boolean; autoIndexDownloadedPdf: boolean; knowledgeBasePdfDownloadDir: string; libraryStorageMode: LibraryStorageMode; libraryDirectory: string; maxConcurrentIndexJobs: number; activeRagProvider: RagProviderId;

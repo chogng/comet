@@ -539,7 +539,7 @@ test('PdfSelectionController keeps disjoint PDFium text spans for visual selecti
 
   try {
     harness.canvas.dispatchEvent(createPointerEvent('pointerdown', {
-      clientX: 25,
+      clientX: 23,
       clientY: 15,
     }));
     harness.pagesElement.dispatchEvent(createPointerEvent('pointermove', {

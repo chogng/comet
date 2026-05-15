@@ -14,10 +14,15 @@ import {
   cloneEditorDraftStyleSettings,
   createDefaultEditorDraftStyleSettings,
   normalizeEditorDraftStyleSettings,
+  areEditorDraftStyleSettingsEqual,
   type EditorDraftStyleSettings,
 } from 'ls/base/common/editorDraftStyle';
 import type { Locale } from 'language/i18n';
 import { defaultBatchLimit, normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
+import {
+  createSettingValue,
+  type SettingValue,
+} from 'ls/workbench/services/settings/settingValue';
 
 import {
   cloneKnowledgeBaseSettings,
@@ -51,7 +56,7 @@ export type ResolvedSettingsState = {
   workbenchColorCustomizations: ThemeColorCustomizations;
   locale: Locale | null;
   configPath: string;
-  editorDraftStyle: EditorDraftStyleSettings;
+  editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   llm: LlmSettings;
   translation: TranslationSettings;
   knowledgeBase: KnowledgeBaseSettings;
@@ -74,7 +79,7 @@ export type SaveSettingsDraft = {
   theme: AppTheme;
   workbenchColorCustomizations: ThemeColorCustomizations;
   locale: Locale;
-  editorDraftStyle: EditorDraftStyleSettings;
+  editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   llm: LlmSettings;
   translation: TranslationSettings;
   knowledgeBase: KnowledgeBaseSettings;
@@ -84,7 +89,7 @@ export type SaveSettingsDraft = {
 export type SaveSettingsPayloadBuild = {
   nextDir: string;
   nextBatchLimit: number;
-  payload: StoredAppSettingsPayload;
+  payload: PartialSettingsPayload;
 };
 
 export type PartialSettingsPayload = Partial<StoredAppSettingsPayload>;
@@ -96,6 +101,17 @@ export function resolveSettingsState(
   const loadedLocale = loaded.locale === 'zh' || loaded.locale === 'en' ? loaded.locale : null;
   const loadedConfigPath =
     typeof loaded.configPath === 'string' ? loaded.configPath : (options.fallbackConfigPath ?? '');
+
+  const defaultEditorDraftStyle = createDefaultEditorDraftStyleSettings();
+  const normalizedUserEditorDraftStyle =
+    loaded.editorDraftStyle === undefined
+      ? null
+      : normalizeEditorDraftStyleSettings(loaded.editorDraftStyle);
+  const editorDraftStyle = createSettingValue(
+    defaultEditorDraftStyle,
+    normalizedUserEditorDraftStyle,
+    cloneEditorDraftStyleSettings,
+  );
 
   return {
     pdfDownloadDir: typeof loaded.defaultDownloadDir === 'string' ? loaded.defaultDownloadDir : '',
@@ -143,9 +159,7 @@ export function resolveSettingsState(
     workbenchColorCustomizations: { ...(loaded['workbench.colorCustomizations'] ?? {}) },
     locale: loadedLocale,
     configPath: loadedConfigPath,
-    editorDraftStyle: normalizeEditorDraftStyleSettings(
-      loaded.editorDraftStyle ?? createDefaultEditorDraftStyleSettings(),
-    ),
+    editorDraftStyle,
     llm: cloneLlmSettings(loaded.llm ?? createDefaultLlmSettings()),
     translation: cloneTranslationSettings(loaded.translation ?? createDefaultTranslationSettings()),
     knowledgeBase: cloneKnowledgeBaseSettings(
@@ -163,6 +177,15 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
     draft.browserTabKeepAliveLimit,
     defaultBrowserTabKeepAliveLimit,
   );
+
+  const nextEditorDraftStyle =
+    draft.editorDraftStyle.userValue &&
+    !areEditorDraftStyleSettingsEqual(
+      draft.editorDraftStyle.userValue,
+      draft.editorDraftStyle.defaultValue,
+    )
+      ? cloneEditorDraftStyleSettings(draft.editorDraftStyle.userValue)
+      : undefined;
 
   return {
     nextDir,
@@ -182,7 +205,7 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
       theme: draft.theme,
       'workbench.colorCustomizations': { ...draft.workbenchColorCustomizations },
       locale: draft.locale,
-      editorDraftStyle: cloneEditorDraftStyleSettings(draft.editorDraftStyle),
+      editorDraftStyle: nextEditorDraftStyle,
       llm: cloneLlmSettings(draft.llm),
       translation: cloneTranslationSettings(draft.translation),
       knowledgeBase: cloneKnowledgeBaseSettings({
@@ -205,7 +228,7 @@ export async function loadAppSettings(
 export async function saveAppSettings(
   desktopRuntime: boolean,
   invokeDesktop: ElectronInvoke,
-  payload: StoredAppSettingsPayload,
+  payload: PartialSettingsPayload,
 ): Promise<Partial<AppSettingsPayload>> {
   if (!desktopRuntime) return payload;
   return invokeDesktop('save_settings', { settings: payload });
