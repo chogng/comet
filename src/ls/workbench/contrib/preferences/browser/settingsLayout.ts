@@ -19,7 +19,6 @@ export type SettingsPageId =
   | 'appearance'
   | 'textEditor'
   | 'model'
-  | 'chat'
   | 'knowledgeBase'
   | 'literature';
 
@@ -56,11 +55,6 @@ const settingsPageLayout: SettingsPageDefinition[] = [
     label: (labels) => labels.settingsLlmTitle,
     icon: 'model',
     sections: ['llm'],
-  },
-  {
-    id: 'chat',
-    label: (labels) => labels.settingsNavigationChat,
-    sections: ['translation'],
   },
   {
     id: 'knowledgeBase',

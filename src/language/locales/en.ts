@@ -44,7 +44,6 @@ const en = {
   settingsNavigationGeneral: 'General',
   settingsNavigationAppearance: 'Appearance',
   settingsNavigationTextEditor: 'Editor',
-  settingsNavigationChat: 'Chat',
   settingsNavigationKnowledgeBase: 'Indexing',
   settingsNavigationLiterature: 'Literature',
   settingsTextEditorTitle: 'Editor',

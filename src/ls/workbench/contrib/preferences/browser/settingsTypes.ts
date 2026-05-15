@@ -25,7 +25,7 @@ export type SettingsDropdownOption = {
 // can depend on stable contracts without importing the editor host module.
 export type SettingsPartLabels = {
   settingsTitle: string; settingsLoading: string; settingsLanguage: string; languageChinese: string; languageEnglish: string; settingsLanguageHint: string;
-  settingsNavigationBack: string; settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationTextEditor: string; settingsNavigationChat: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
+  settingsNavigationBack: string; settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationTextEditor: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
   settingsTextEditorDefaultBodyStyle: string; settingsTextEditorFontFamily: string; settingsTextEditorFontSize: string; settingsTextEditorLineHeight: string; settingsTextEditorParagraphSpacingBefore: string; settingsTextEditorParagraphSpacingAfter: string; settingsTextEditorColor: string;
   settingsBatchOptions: string; batchCount: string; startDate: string; endDate: string; clearDate: string; today: string;
   settingsAppearanceTitle: string; settingsTheme: string; settingsThemeHint: string; settingsThemeLight: string; settingsThemeDark: string; settingsThemeSystem: string; settingsUseMica: string; settingsUseMicaHint: string; settingsLibraryTitle: string; settingsKnowledgeBaseMode: string;

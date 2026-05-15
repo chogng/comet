@@ -44,7 +44,6 @@ const zh = {
   settingsNavigationGeneral: '通用设置',
   settingsNavigationAppearance: 'Appearance',
   settingsNavigationTextEditor: '编辑器',
-  settingsNavigationChat: '聊天',
   settingsNavigationKnowledgeBase: '索引',
   settingsNavigationLiterature: '文献',
   settingsTextEditorTitle: '编辑器',
