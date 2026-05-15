@@ -70,14 +70,11 @@
   min-width: 160px;
 }
 
-.settings-text-editor-line-height-input {
-  max-width: 140px;
-  min-width: 120px;
-}
-
+.settings-text-editor-line-height-input,
 .settings-text-editor-spacing-input {
-  max-width: 140px;
+  width: 120px;
   min-width: 120px;
+  max-width: 120px;
 }
 
 /* ===== Number Stepper (Decrease/Input/Increase) ===== */
@@ -85,7 +82,7 @@
   display: inline-flex;
   align-items: stretch;
   min-width: 0;
-  height: 26px;
+  height: 24px;
   border: 1px solid #d3d3d3;
   border-radius: 8px;
   background: transparent;
@@ -119,6 +116,17 @@
   --inputbox-font-size: 13px;
   --inputbox-padding-x: 6px;
   --inputbox-text-align: center;
+}
+
+.settings-number-stepper > .settings-inputbox.inputbox > .ibwrapper > .input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.settings-number-stepper > .settings-inputbox.inputbox > .ibwrapper > .input::-webkit-outer-spin-button,
+.settings-number-stepper > .settings-inputbox.inputbox > .ibwrapper > .input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .settings-number-stepper-button {
