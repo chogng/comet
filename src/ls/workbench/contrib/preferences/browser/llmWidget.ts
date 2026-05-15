@@ -7,6 +7,10 @@ import type { LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/c
 import type { SettingsPartLabels } from 'ls/workbench/contrib/preferences/browser/settingsTypes';
 import { ApiKeyWidget } from 'ls/workbench/contrib/preferences/browser/apiKeyWidget';
 import {
+  createSettingsSection,
+  createSettingsRow,
+} from 'ls/workbench/contrib/preferences/browser/section';
+import {
   createSettingsElement as el,
   setSettingsFocusKey as setFocusKey,
 } from 'ls/workbench/contrib/preferences/browser/settingsUiPrimitives';
@@ -74,15 +78,21 @@ const COLLAPSED_MODEL_COUNT = 8;
 
 export class LlmWidget {
   private props: LlmWidgetProps;
-  private readonly element = el('div', 'settings-field');
-  private readonly grid = el('div', 'settings-llm-grid');
-  private readonly modelField = el('div', 'settings-field settings-llm-span-2');
-  private readonly modelFieldTitle = el('span');
-  private readonly maxContextRow = el('div', 'settings-toggle-row settings-llm-api-panel');
-  private readonly maxContextText = el('div', 'settings-field');
-  private readonly maxContextTitle = el('span');
-  private readonly maxContextHint = el('span', 'settings-toggle-subtitle');
+  private readonly element = el('div', 'settings-llm-settings');
+  private readonly modelSection = createSettingsSection({
+    title: ' ',
+    sectionClassName: 'settings-llm-model-section',
+    panelClassName: 'settings-llm-model-panel',
+    listClassName: 'settings-llm-model-list',
+  });
+  private readonly maxContextSwitchRowControl = el('div', 'settings-llm-max-context-control');
   private readonly maxContextSwitch = createSwitchView();
+  private readonly apiKeySection = createSettingsSection({
+    sectionClassName: 'settings-llm-api-section',
+    panelClassName: 'settings-llm-api-block-panel',
+    listClassName: 'settings-llm-api-list',
+  });
+  private readonly apiKeyControl = el('div', 'settings-llm-api-key-control');
   private readonly modelPanel = el('div', 'settings-model-panel');
   private readonly modelSearchRow = el('div', 'settings-model-search-row');
   private readonly modelSearchInputHost = el('div', 'settings-model-search-input-host');
@@ -124,13 +134,11 @@ export class LlmWidget {
       this.renderModelList();
     });
     this.modelSearchInput.spellcheck = false;
-    this.maxContextText.append(this.maxContextTitle, this.maxContextHint);
-    this.maxContextRow.append(this.maxContextText, this.maxContextSwitch.getElement());
+    this.maxContextSwitchRowControl.append(this.maxContextSwitch.getElement());
     this.modelSearchRow.append(this.modelSearchInputHost, this.modelSearchActions.getElement());
     this.modelPanel.append(this.modelSearchRow, this.modelList);
-    this.modelField.append(this.modelFieldTitle, this.maxContextRow, this.modelPanel);
-    this.grid.append(this.modelField, this.apiKeyWidget.getElement());
-    this.element.append(this.grid);
+    this.apiKeyControl.append(this.apiKeyWidget.getElement());
+    this.element.append(this.modelSection.element, this.apiKeySection.element);
     this.setProps(props);
   }
 
@@ -155,10 +163,8 @@ export class LlmWidget {
     if (previousEnabledStateKey !== nextEnabledStateKey) {
       this.markModelOrderDirty();
     }
-    this.modelFieldTitle.textContent = this.props.labels.settingsLlmModel;
+    this.modelSection.element.querySelector('.settings-block-title')!.textContent = this.props.labels.settingsLlmModel;
     const activeProviderSettings = this.props.llmProviders[this.props.activeLlmProvider];
-    this.maxContextTitle.textContent = this.props.labels.settingsLlmMaxContext;
-    this.maxContextHint.textContent = this.props.labels.settingsLlmMaxContextHint;
     this.maxContextSwitch.setProps({
       checked: activeProviderSettings.useMaxContextWindow ?? false,
       disabled: this.props.isSettingsSaving,
@@ -172,6 +178,23 @@ export class LlmWidget {
     this.modelSearchInputBox.setPlaceHolder(this.props.labels.settingsLlmSearchPlaceholder);
     this.modelSearchInputBox.setTooltip(this.props.labels.settingsLlmSearchPlaceholder);
     this.renderModelList();
+    this.modelSection.list.replaceChildren(
+      createSettingsRow({
+        title: this.props.labels.settingsLlmMaxContext,
+        description: this.props.labels.settingsLlmMaxContextHint,
+        control: this.maxContextSwitchRowControl,
+        itemClassName: 'settings-llm-max-context-item',
+        controlClassName: 'settings-llm-max-context-row-control',
+      }),
+      createSettingsRow({
+        title: '',
+        control: this.modelPanel,
+        itemClassName: 'settings-llm-model-picker-item',
+        titleClassName: 'settings-block-list-item-title-empty',
+        contentClassName: 'settings-llm-model-picker-content',
+        controlClassName: 'settings-llm-model-picker-control',
+      }),
+    );
 
     const provider = activeProviderSettings;
     this.apiKeyWidget.setProps({
@@ -187,8 +210,18 @@ export class LlmWidget {
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) =>
         this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
-      className: 'settings-field settings-llm-api-field settings-llm-api-panel settings-llm-span-2',
+      className: 'settings-field settings-llm-api-field',
     });
+    this.apiKeySection.list.replaceChildren(
+      createSettingsRow({
+        title: '',
+        control: this.apiKeyControl,
+        itemClassName: 'settings-llm-api-key-item',
+        titleClassName: 'settings-block-list-item-title-empty',
+        contentClassName: 'settings-llm-api-key-content',
+        controlClassName: 'settings-llm-api-key-row-control',
+      }),
+    );
   }
 
   private getProviderLabel(providerId: LlmProviderId) {

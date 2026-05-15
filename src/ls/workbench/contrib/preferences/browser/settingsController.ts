@@ -160,11 +160,6 @@ export class SettingsController {
     this.scheduleImmediateAutoSave();
   };
 
-  readonly setSameDomainOnly = (nextSameDomainOnly: boolean) => {
-    this.settingsModel.setSameDomainOnly(nextSameDomainOnly);
-    this.scheduleImmediateAutoSave();
-  };
-
   readonly setSystemNotificationsEnabled = (
     nextSystemNotificationsEnabled: boolean,
   ) => {
@@ -541,6 +536,31 @@ export class SettingsController {
   readonly handleMoveBatchSource = (index: number, direction: 'up' | 'down') => {
     this.settingsModel.handleMoveBatchSource(index, direction);
     this.scheduleImmediateAutoSave();
+  };
+
+  readonly handleSaveSettings = async (): Promise<boolean> => {
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+    }
+
+    const { locale, ui } = this.context;
+    try {
+      await this.settingsModel.saveSettings({
+        ...this.getSettingsModelContext(),
+        locale,
+      });
+      toast.success(ui.toastSettingsSaved);
+      return true;
+    } catch (saveError) {
+      const localizedError = localizeSettingsError(ui, saveError);
+      toast.error(
+        formatLocalized(ui.toastSaveSettingsFailed, {
+          error: localizedError,
+        }),
+      );
+      return false;
+    }
   };
 
   readonly handleTestLlmConnection = async () => {

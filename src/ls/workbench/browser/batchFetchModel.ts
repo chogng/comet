@@ -29,7 +29,6 @@ export type BatchFetchControllerContext = {
   desktopRuntime: boolean;
   addressBarUrl: string;
   batchSources: BatchSource[];
-  sameDomainOnly: boolean;
   batchStartDate: string;
   batchEndDate: string;
   invokeDesktop: ElectronInvoke;
@@ -178,7 +177,6 @@ export class BatchFetchController {
       desktopRuntime,
       addressBarUrl,
       batchSources,
-      sameDomainOnly,
       batchStartDate,
       batchEndDate,
       invokeDesktop,
@@ -198,7 +196,6 @@ export class BatchFetchController {
         desktopRuntime,
         addressBarUrl,
         batchSources,
-        sameDomainOnly,
         startDate: batchStartDate || null,
         endDate: batchEndDate || null,
         invokeDesktop,

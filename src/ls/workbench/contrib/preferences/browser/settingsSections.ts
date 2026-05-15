@@ -7,8 +7,6 @@ import {
 } from 'ls/workbench/contrib/preferences/browser/section';
 import {
   buildSettingsButton as buildButton,
-  buildSettingsCheckbox as buildCheckbox,
-  buildSettingsHint as buildHint,
   buildSettingsInput as buildInput,
   buildSettingsSelect as buildSelect,
   buildSettingsSwitch as buildSwitch,
@@ -201,9 +199,12 @@ export function renderLocaleSection(props: SettingsPartProps) {
 }
 
 export function renderBatchOptionsSection(props: SettingsPartProps) {
-  const field = el('div', 'settings-field');
-  const title = el('span');
-  title.textContent = props.labels.settingsBatchOptions;
+  const field = el('div', 'settings-batch-settings');
+  const batchOptions = createSettingsSection({
+    sectionClassName: 'settings-batch-options-section',
+    panelClassName: 'settings-batch-options-panel',
+    listClassName: 'settings-batch-options-list',
+  });
   const row = el('div', 'settings-batch-options');
   const limitLabel = el('div', 'inline-field');
   const wrap = el('div', 'settings-limit-input-wrap');
@@ -219,42 +220,63 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
     disabled: props.isSettingsSaving,
   }).element);
   limitLabel.append(text(props.labels.batchCount), wrap);
-  const checkboxLabel = el('label', 'inline-field checkbox-field');
-  checkboxLabel.append(
-    buildCheckbox({
-      checked: props.sameDomainOnly,
-      className: 'radix-checkbox',
-      focusKey: 'settings.batch.sameDomain',
-      onChange: props.onSameDomainOnlyChange,
-    }),
-    text(props.labels.sameDomainOnly),
-  );
+  row.append(limitLabel);
+
+  const dateOptions = createSettingsSection({
+    sectionClassName: 'settings-batch-date-section',
+    panelClassName: 'settings-batch-date-panel',
+    listClassName: 'settings-batch-date-list',
+  });
   const dateRow = el('div', 'settings-batch-date-row');
-  const startDateField = el('div', 'settings-field settings-batch-date-field');
-  startDateField.append(
-    text(props.labels.startDate),
-    buildInput({
-      type: 'date',
-      value: props.fetchStartDate,
-      className: 'settings-input-control',
-      focusKey: 'settings.batch.startDate',
-      onInput: props.onFetchStartDateChange,
-    }).element,
+  const startDateInput = buildInput({
+    type: 'date',
+    value: props.fetchStartDate,
+    className: 'settings-input-control',
+    focusKey: 'settings.batch.startDate',
+    onInput: props.onFetchStartDateChange,
+  }).element;
+  const endDateInput = buildInput({
+    type: 'date',
+    value: props.fetchEndDate,
+    className: 'settings-input-control',
+    focusKey: 'settings.batch.endDate',
+    onInput: props.onFetchEndDateChange,
+  }).element;
+  dateRow.append(
+    createSettingsRow({
+      title: props.labels.startDate,
+      control: startDateInput,
+      itemClassName: 'settings-batch-date-item',
+      controlClassName: 'settings-batch-date-control',
+    }),
+    createSettingsRow({
+      title: props.labels.endDate,
+      control: endDateInput,
+      itemClassName: 'settings-batch-date-item',
+      controlClassName: 'settings-batch-date-control',
+    }),
   );
-  const endDateField = el('div', 'settings-field settings-batch-date-field');
-  endDateField.append(
-    text(props.labels.endDate),
-    buildInput({
-      type: 'date',
-      value: props.fetchEndDate,
-      className: 'settings-input-control',
-      focusKey: 'settings.batch.endDate',
-      onInput: props.onFetchEndDateChange,
-    }).element,
+
+  batchOptions.list.append(
+    createSettingsRow({
+      title: props.labels.settingsBatchOptions,
+      control: row,
+      itemClassName: 'settings-batch-options-item',
+      controlClassName: 'settings-batch-options-control',
+    }),
   );
-  dateRow.append(startDateField, endDateField);
-  row.append(limitLabel, checkboxLabel);
-  field.append(title, row, dateRow, buildHint(props.labels.settingsBatchHint));
+  dateOptions.list.append(
+    createSettingsRow({
+      title: '',
+      description: props.labels.settingsBatchHint,
+      control: dateRow,
+      itemClassName: 'settings-batch-date-summary-item',
+      titleClassName: 'settings-block-list-item-title-empty',
+      contentClassName: 'settings-batch-date-summary-content',
+      controlClassName: 'settings-batch-date-summary-control',
+    }),
+  );
+  field.append(batchOptions.element, dateOptions.element);
   return field;
 }
 
@@ -298,9 +320,7 @@ export function renderLayoutSection(props: SettingsPartProps) {
 }
 
 export function renderAppearanceSection(props: SettingsPartProps) {
-  const field = el('div', 'settings-field');
-  const title = el('span');
-  title.textContent = props.labels.settingsAppearanceTitle;
+  const field = el('div', 'settings-appearance-settings');
   const themeSelect = buildSelect(
     createThemeOptions(props),
     props.theme,
@@ -345,7 +365,7 @@ export function renderAppearanceSection(props: SettingsPartProps) {
       }),
     }),
   );
-  field.append(title, appearanceTheme.element, appearanceToggles.element);
+  field.append(appearanceTheme.element, appearanceToggles.element);
   return field;
 }
 
@@ -407,9 +427,7 @@ export function renderNotificationsSection(props: SettingsPartProps) {
 }
 
 export function renderDownloadDirectorySection(props: SettingsPartProps) {
-  const field = el('div', 'settings-field');
-  const title = el('span');
-  title.textContent = props.labels.defaultPdfDir;
+  const field = el('div', 'settings-download-settings');
   const row = el('div', 'settings-input-row');
   row.append(
     buildInput({
@@ -427,6 +445,19 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
       title: props.labels.chooseDirectory,
       disabled: !props.desktopRuntime || props.isSettingsSaving,
       onClick: props.onChoosePdfDownloadDir,
+    }),
+  );
+  const downloadDirectory = createSettingsSection({
+    sectionClassName: 'settings-download-directory-section',
+    panelClassName: 'settings-download-directory-panel',
+    listClassName: 'settings-download-directory-list',
+  });
+  downloadDirectory.list.append(
+    createSettingsRow({
+      title: props.labels.defaultPdfDir,
+      control: row,
+      itemClassName: 'settings-download-directory-item',
+      controlClassName: 'settings-download-directory-control',
     }),
   );
   const downloadOptions = createSettingsSection({
@@ -447,12 +478,16 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
       }),
     }),
   );
-  field.append(title, row, downloadOptions.element);
+  field.append(downloadDirectory.element, downloadOptions.element);
   return field;
 }
 
 export function renderConfigPathSection(props: SettingsPartProps) {
-  const field = el('div', 'settings-field');
+  const configPath = createSettingsSection({
+    sectionClassName: 'settings-config-path-section',
+    panelClassName: 'settings-config-path-panel',
+    listClassName: 'settings-config-path-list',
+  });
   const row = el('div', 'settings-input-row');
   row.append(
     buildInput({
@@ -471,12 +506,18 @@ export function renderConfigPathSection(props: SettingsPartProps) {
       onClick: props.onOpenConfigLocation,
     }),
   );
-  field.append(text(props.labels.settingsConfigPath), row);
-  return field;
+  configPath.list.append(
+    createSettingsRow({
+      title: props.labels.settingsConfigPath,
+      control: row,
+      itemClassName: 'settings-config-path-item',
+      controlClassName: 'settings-config-path-control',
+    }),
+  );
+  return configPath.element;
 }
 
 export function renderTextEditorSection(props: SettingsPartProps) {
-  const field = el('div', 'settings-field settings-text-editor-field');
   const defaultBodyStyle = props.editorDraftStyle.defaultBodyStyle;
   const isDisabled = props.isSettingsSaving;
   const textEditorPanel = createSettingsSection({
@@ -598,6 +639,5 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     }),
   );
 
-  field.append(textEditorPanel.element);
-  return field;
+  return textEditorPanel.element;
 }

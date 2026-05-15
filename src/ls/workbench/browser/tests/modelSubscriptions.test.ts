@@ -289,7 +289,6 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
       desktopRuntime: true,
       addressBarUrl: '',
       batchSources: [],
-      sameDomainOnly: false,
       batchStartDate: '',
       batchEndDate: '',
       invokeDesktop: createInvokeDesktop(),
@@ -503,16 +502,16 @@ test('WebContentNavigationModel does not activate a default web content target f
 
 test('SettingsModel subscriptions stop after disposal', () => {
   const model = new SettingsModel([]);
-  const sameDomainOnlyValues: boolean[] = [];
+  const useMicaValues: boolean[] = [];
   const disposeListener = model.subscribe(() => {
-    sameDomainOnlyValues.push(model.getSnapshot().sameDomainOnly);
+    useMicaValues.push(model.getSnapshot().useMica);
   });
 
-  model.setSameDomainOnly(!model.getSnapshot().sameDomainOnly);
-  disposeListener();
   model.setUseMica(!model.getSnapshot().useMica);
+  disposeListener();
+  model.setStatusbarVisible(!model.getSnapshot().statusbarVisible);
 
-  assert.equal(sameDomainOnlyValues.length, 1);
+  assert.equal(useMicaValues.length, 1);
 });
 
 test('pdfDownloadStatus subscriptions stop after disposal', () => {

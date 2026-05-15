@@ -16,7 +16,7 @@ import {
   type EditorDraftStyleSettings,
 } from 'ls/base/common/editorDraftStyle';
 import type { Locale } from 'language/i18n';
-import { defaultBatchLimit, defaultSameDomainOnly, getConfigBatchSourceSeed, normalizeBatchLimit, resolveConfigBatchSources } from 'ls/workbench/services/config/configSchema';
+import { defaultBatchLimit, getConfigBatchSourceSeed, normalizeBatchLimit, resolveConfigBatchSources } from 'ls/workbench/services/config/configSchema';
 import type { BatchSource } from 'ls/workbench/services/config/configSchema';
 
 import {
@@ -41,7 +41,6 @@ export type ResolvedSettingsState = {
   browserTabKeepAliveLimit: number;
   batchSources: BatchSource[];
   batchLimit: number;
-  sameDomainOnly: boolean;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -66,7 +65,6 @@ export type SaveSettingsDraft = {
   browserTabKeepAliveLimit: number;
   batchSources: BatchSource[];
   batchLimit: number;
-  sameDomainOnly: boolean;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -119,10 +117,6 @@ export function resolveSettingsState(
     ),
     batchSources: resolvedBatchSources,
     batchLimit: normalizeBatchLimit(loaded.defaultBatchLimit, defaultBatchLimit),
-    sameDomainOnly:
-      typeof loaded.defaultSameDomainOnly === 'boolean'
-        ? loaded.defaultSameDomainOnly
-        : defaultSameDomainOnly,
     systemNotificationsEnabled:
       typeof loaded.systemNotificationsEnabled === 'boolean'
         ? loaded.systemNotificationsEnabled
@@ -183,7 +177,6 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
       browserTabKeepAliveLimit: nextBrowserTabKeepAliveLimit,
       defaultBatchSources: nextBatchSources,
       defaultBatchLimit: nextBatchLimit,
-      defaultSameDomainOnly: draft.sameDomainOnly,
       systemNotificationsEnabled: draft.systemNotificationsEnabled,
       warningNotificationsEnabled: draft.warningNotificationsEnabled,
       menuBarIconEnabled: draft.menuBarIconEnabled,

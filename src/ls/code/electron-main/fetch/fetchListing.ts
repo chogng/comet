@@ -32,7 +32,6 @@ export async function fetchListing({
   journalTitle,
   extractor,
   remainingLimit,
-  sameDomainOnly,
   dateRange,
   traceId,
   options,
@@ -60,7 +59,6 @@ export async function fetchListing({
   journalTitle: string;
   extractor: ListingCandidateExtractor | null;
   remainingLimit: number;
-  sameDomainOnly: boolean;
   dateRange: DateRange;
   traceId: string;
   options: FetchLatestArticlesOptions;
@@ -78,7 +76,6 @@ export async function fetchListing({
     pageUrl: string,
     $: ReturnType<typeof load>,
     extractor: ListingCandidateExtractor | null,
-    sameDomainOnly: boolean,
     dateRange: DateRange,
     traceId: string,
     pageNumber: number,
@@ -87,7 +84,6 @@ export async function fetchListing({
     page: URL;
     pageUrl: string;
     extractor: ListingCandidateExtractor;
-    sameDomainOnly: boolean;
     dateRange: DateRange;
     traceId: string;
     pageNumber: number;
@@ -171,7 +167,6 @@ export async function fetchListing({
       page,
       pageUrl,
       extractor,
-      sameDomainOnly,
       dateRange,
       traceId,
       pageNumber,
@@ -251,7 +246,6 @@ export async function fetchListing({
       pageUrl,
       $,
       extractor,
-      sameDomainOnly,
       dateRange,
       traceId,
       pageNumber,
@@ -275,7 +269,6 @@ export async function fetchListing({
           pageUrl,
           $,
           extractor,
-          sameDomainOnly,
           dateRange,
           traceId,
           pageNumber,

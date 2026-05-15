@@ -3,7 +3,6 @@ import type { BatchSource } from 'ls/base/parts/sandbox/common/desktopTypes';
 export const batchLimitMin = 1;
 export const batchLimitMax = 100;
 export const defaultBatchLimit = 50;
-export const defaultSameDomainOnly = true;
 
 // Immutable baseline list so callers can safely clone/reset source config.
 const defaultBatchSourceSeed: ReadonlyArray<BatchSource> = [

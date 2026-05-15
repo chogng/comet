@@ -1302,7 +1302,6 @@ class WorkbenchHost {
     const {
       batchSources,
       batchLimit,
-      sameDomainOnly,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1740,7 +1739,6 @@ class WorkbenchHost {
       desktopRuntime,
       addressBarUrl: fetchSeedUrl || webUrl,
       batchSources,
-      sameDomainOnly,
       batchStartDate,
       batchEndDate,
       invokeDesktop,
@@ -1859,7 +1857,6 @@ class WorkbenchHost {
         desktopRuntime,
         addressBarUrl: fetchSeedUrl || webUrl,
         batchSources,
-        sameDomainOnly,
         batchStartDate,
         batchEndDate,
         invokeDesktop,
@@ -1993,7 +1990,6 @@ class WorkbenchHost {
         locale,
         batchSources,
         batchLimit,
-        sameDomainOnly,
         fetchStartDate: batchStartDate,
         fetchEndDate: batchEndDate,
         systemNotificationsEnabled,
@@ -2050,12 +2046,12 @@ class WorkbenchHost {
         onBatchSourceUrlChange: settingsControllerInstance.handleBatchSourceUrlChange,
         onBatchSourceJournalTitleChange:
           settingsControllerInstance.handleBatchSourceJournalTitleChange,
+        onSaveBatchSources: settingsControllerInstance.handleSaveSettings,
         onAddBatchSource: settingsControllerInstance.handleAddBatchSource,
         onRemoveBatchSource: settingsControllerInstance.handleRemoveBatchSource,
         onMoveBatchSource: settingsControllerInstance.handleMoveBatchSource,
         onBatchLimitChange: (value) =>
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
-        onSameDomainOnlyChange: settingsControllerInstance.setSameDomainOnly,
         onFetchStartDateChange: setBatchStartDate,
         onFetchEndDateChange: setBatchEndDate,
         onSystemNotificationsEnabledChange:

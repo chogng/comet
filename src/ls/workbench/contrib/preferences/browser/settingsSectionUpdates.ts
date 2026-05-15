@@ -78,12 +78,10 @@ function shouldUpdateBatchOptionsSection(
   return (
     !previousProps ||
     previousProps.batchLimit !== currentProps.batchLimit ||
-    previousProps.sameDomainOnly !== currentProps.sameDomainOnly ||
     previousProps.fetchStartDate !== currentProps.fetchStartDate ||
     previousProps.fetchEndDate !== currentProps.fetchEndDate ||
     previousProps.labels.settingsBatchOptions !== currentProps.labels.settingsBatchOptions ||
     previousProps.labels.batchCount !== currentProps.labels.batchCount ||
-    previousProps.labels.sameDomainOnly !== currentProps.labels.sameDomainOnly ||
     previousProps.labels.startDate !== currentProps.labels.startDate ||
     previousProps.labels.endDate !== currentProps.labels.endDate ||
     previousProps.labels.settingsBatchHint !== currentProps.labels.settingsBatchHint

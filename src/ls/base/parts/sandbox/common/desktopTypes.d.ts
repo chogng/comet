@@ -116,7 +116,6 @@ export interface StoredAppSettings {
   browserTabKeepAliveLimit: number;
   defaultBatchSources: BatchSource[];
   defaultBatchLimit: number;
-  defaultSameDomainOnly: boolean;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -288,7 +287,6 @@ export interface DocumentTranslationProgress {
 
 export interface FetchLatestArticlesPayload {
   sources?: FetchBatchSource[];
-  sameDomainOnly?: boolean;
   startDate?: string | null;
   endDate?: string | null;
   fetchStrategy?: FetchStrategy;

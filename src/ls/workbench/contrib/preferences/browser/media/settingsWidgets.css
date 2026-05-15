@@ -268,16 +268,21 @@
 }
 
 .settings-inputbox.inputbox {
-  --inputbox-height: 26px;
-  --inputbox-border-radius: 8px;
+  --inputbox-height: 24px;
+  --inputbox-border-radius: 6px;
   --inputbox-border: 1px solid transparent;
   --inputbox-background: var(--vscode-settings-inputBackground, #fff);
   --inputbox-background-hover: var(--vscode-settings-inputBackground, #fff);
   --inputbox-foreground: var(--vscode-settings-inputForeground, #203040);
   --inputbox-placeholder-foreground: var(--vscode-settings-mutedForeground, #64748b);
-  --inputbox-padding-y: 6px;
-  --inputbox-padding-x: 10px;
-  --inputbox-font-size: inherit;
+  --inputbox-padding-y: 2px;
+  --inputbox-padding-x: 8px;
+  --inputbox-font-size: 13px;
+}
+
+.settings-inputbox.inputbox > .ibwrapper > .input {
+  line-height: 1.2;
+  font-weight: 400;
 }
 
 .settings-select-trigger {
@@ -428,6 +433,12 @@
   width: 140px;
 }
 
+.settings-appearance-settings {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
 .settings-batch-options {
   display: flex;
   flex-wrap: wrap;
@@ -573,7 +584,7 @@
 
 .settings-supported-source-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
   gap: 16px;
   align-items: center;
   min-width: 0;
@@ -625,9 +636,11 @@
 .settings-supported-source-journal-input {
   --inputbox-height: 24px;
   --inputbox-padding-y: 2px;
+  --inputbox-padding-x: 8px;
   --inputbox-font-size: 13px;
   position: absolute;
-  top: -1px; /*这部分补偿很重要，是原地文案不变的关键*/
+  /* Keeps the edited text visually anchored to the read-only label baseline. */
+  top: -1px;
   right: 0;
   left: -9px;
   width: auto;
@@ -635,8 +648,7 @@
 }
 
 .settings-supported-source-journal-input > .ibwrapper > .input {
-  padding-top: 0;
-  padding-bottom: 0;
+  padding: 2px 8px;
   line-height: 1.2;
 }
 
@@ -783,7 +795,63 @@
   gap: 10px;
 }
 
+.settings-config-path-control,
+.settings-library-directory-control,
+.settings-library-readonly-control,
+.settings-library-recent-documents-control {
+  min-width: 0;
+  width: min(100%, 560px);
+}
+
+.settings-config-path-control .settings-input-row,
+.settings-library-directory-control .settings-input-row {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-config-path-control .settings-inputbox.inputbox,
+.settings-library-directory-control .settings-inputbox.inputbox,
+.settings-library-readonly-control .settings-inputbox.inputbox {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.settings-library-stats-item,
+.settings-library-recent-documents-item {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.settings-library-stats-content {
+  display: none;
+}
+
+.settings-library-stats-control {
+  justify-content: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-library-recent-documents-control {
+  justify-content: stretch;
+  width: 100%;
+}
+
+.settings-library-recent-documents-content {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
 /* ===== LLM / RAG API & Model Picker ===== */
+.settings-llm-settings {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
 .settings-llm-grid {
   display: grid;
   gap: 12px;
@@ -791,6 +859,34 @@
 
 .settings-llm-api-field {
   min-width: 0;
+}
+
+.settings-llm-api-key-item,
+.settings-llm-model-picker-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-llm-api-key-content,
+.settings-llm-model-picker-content {
+  display: none;
+}
+
+.settings-llm-api-key-row-control,
+.settings-llm-model-picker-control {
+  justify-content: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-llm-api-key-control,
+.settings-llm-api-key-control > .settings-field {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-llm-max-context-control {
+  display: inline-flex;
+  align-items: center;
 }
 
 .settings-llm-api-panel {
@@ -889,8 +985,10 @@
 .settings-model-panel {
   display: grid;
   gap: 0px;
-  border-radius: 18px;
-  background: var(--vscode-settings-panelBackground, #f6f6f6);
+  width: 100%;
+  min-width: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -904,7 +1002,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
+  padding: 0 0 12px;
 }
 
 .settings-model-search-actions {
@@ -932,7 +1030,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  padding: 16px 12px;
+  padding: 12px 0;
 }
 
 .settings-model-list-item:first-child {
@@ -943,8 +1041,8 @@
   content: '';
   position: absolute;
   top: 0;
-  left: 12px;
-  right: 12px;
+  left: 0;
+  right: 0;
   height: 1px;
   background: var(--vscode-settings-separator, #e5e5e5);
 }
@@ -1044,6 +1142,44 @@
   padding: 8px 2px 2px;
   color: var(--vscode-settings-mutedForeground, #66788b);
   font-size: 13px;
+}
+
+/* ===== RAG Block Rows ===== */
+.settings-rag-provider-row-control,
+.settings-rag-text-control {
+  min-width: min(100%, 420px);
+}
+
+.settings-rag-provider-control-stack {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-rag-text-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-rag-api-key-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-rag-api-key-content {
+  display: none;
+}
+
+.settings-rag-api-key-row-control {
+  justify-content: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-rag-api-key-control,
+.settings-rag-api-key-control > .settings-field {
+  width: 100%;
+  min-width: 0;
 }
 
 /* ===== Shared Hint Text ===== */

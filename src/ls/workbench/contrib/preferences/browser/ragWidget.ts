@@ -2,10 +2,13 @@ import type { RagProviderId, RagProviderSettings } from 'ls/base/parts/sandbox/c
 import type { SettingsPartLabels } from 'ls/workbench/contrib/preferences/browser/settingsTypes';
 import { ApiKeyWidget } from 'ls/workbench/contrib/preferences/browser/apiKeyWidget';
 import {
+  createSettingsSection,
+  createSettingsRow,
+} from 'ls/workbench/contrib/preferences/browser/section';
+import {
   buildSettingsHint as buildHint,
   buildSettingsInput as buildInput,
   createSettingsElement as el,
-  createSettingsText as text,
 } from 'ls/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import { buildSettingsNumberStepperInput as buildNumberStepperInput } from 'ls/workbench/contrib/preferences/browser/settingsNumberStepperInput';
 
@@ -62,7 +65,6 @@ export class RagWidget {
   }
 
   private renderNumberField(label: string, value: number, focusKey: string, min: string, max: string, onInput: (value: string) => void) {
-    const field = el('div', 'settings-field');
     const wrap = el('div', 'settings-limit-input-wrap');
     wrap.append(buildNumberStepperInput({
       value,
@@ -75,46 +77,64 @@ export class RagWidget {
       onInput,
       disabled: this.props.isSettingsSaving,
     }).element);
-    field.append(text(label), wrap);
-    return field;
+    return createSettingsRow({
+      title: label,
+      control: wrap,
+      itemClassName: 'settings-rag-number-item',
+      controlClassName: 'settings-rag-number-control',
+    });
   }
 
   private renderTextField(label: string, value: string, focusKey: string, onInput: (value: string) => void, className = 'settings-field') {
-    const field = el('div', className);
-    field.append(text(label), buildInput({
+    return createSettingsRow({
+      title: label,
+      control: buildInput({
       value,
-      className: 'settings-input-control',
+      className: 'settings-input-control settings-rag-text-input',
       focusKey,
       onInput,
-    }).element);
-    return field;
+      }).element,
+      itemClassName: className.includes('settings-llm-span-2')
+        ? 'settings-rag-text-item settings-rag-wide-item'
+        : 'settings-rag-text-item',
+      controlClassName: 'settings-rag-text-control',
+    });
   }
 
   private render() {
-    const field = el('div', 'settings-field');
-    const title = el('span');
-    title.textContent = this.props.labels.settingsRagTitle;
+    const section = createSettingsSection({
+      title: this.props.labels.settingsRagTitle,
+      description: this.props.labels.settingsRagHint,
+      sectionClassName: 'settings-rag-section',
+      panelClassName: 'settings-rag-panel',
+      listClassName: 'settings-rag-list',
+    });
     const provider = this.props.ragProviders[this.props.activeRagProvider];
-    const grid = el('div', 'settings-llm-grid');
-    const providerField = el('div', 'settings-field');
-    providerField.append(
-      text(this.props.labels.settingsRagProvider),
+    const providerControl = el('div', 'settings-rag-provider-control-stack');
+    providerControl.append(
       buildInput({
         value: this.props.labels.settingsRagProviderMoark,
-        className: 'settings-input-control',
+        className: 'settings-input-control settings-rag-text-input',
         focusKey: 'settings.rag.provider',
         readOnly: true,
       }).element,
       buildHint(this.props.labels.settingsRagProviderHint),
     );
-    grid.append(providerField);
-    grid.append(this.renderNumberField(this.props.labels.settingsRagCandidateCount, this.props.retrievalCandidateCount, 'settings.rag.candidates', '3', '20', this.props.onRetrievalCandidateCountChange));
-    grid.append(this.renderNumberField(this.props.labels.settingsRagTopK, this.props.retrievalTopK, 'settings.rag.topK', '1', String(this.props.retrievalCandidateCount), this.props.onRetrievalTopKChange));
-    grid.append(this.renderTextField(this.props.labels.settingsRagBaseUrl, provider.baseUrl, 'settings.rag.baseUrl', (value) => this.props.onRagProviderBaseUrlChange(this.props.activeRagProvider, value), 'settings-field settings-llm-span-2'));
-    grid.append(this.renderTextField(this.props.labels.settingsRagEmbeddingModel, provider.embeddingModel, 'settings.rag.embeddingModel', (value) => this.props.onRagProviderEmbeddingModelChange(this.props.activeRagProvider, value)));
-    grid.append(this.renderTextField(this.props.labels.settingsRagRerankerModel, provider.rerankerModel, 'settings.rag.rerankerModel', (value) => this.props.onRagProviderRerankerModelChange(this.props.activeRagProvider, value)));
-    grid.append(this.renderTextField(this.props.labels.settingsRagEmbeddingPath, provider.embeddingPath, 'settings.rag.embeddingPath', (value) => this.props.onRagProviderEmbeddingPathChange(this.props.activeRagProvider, value)));
-    grid.append(this.renderTextField(this.props.labels.settingsRagRerankPath, provider.rerankPath, 'settings.rag.rerankPath', (value) => this.props.onRagProviderRerankPathChange(this.props.activeRagProvider, value)));
+    section.list.append(
+      createSettingsRow({
+        title: this.props.labels.settingsRagProvider,
+        control: providerControl,
+        itemClassName: 'settings-rag-provider-item',
+        controlClassName: 'settings-rag-provider-row-control',
+      }),
+      this.renderNumberField(this.props.labels.settingsRagCandidateCount, this.props.retrievalCandidateCount, 'settings.rag.candidates', '3', '20', this.props.onRetrievalCandidateCountChange),
+      this.renderNumberField(this.props.labels.settingsRagTopK, this.props.retrievalTopK, 'settings.rag.topK', '1', String(this.props.retrievalCandidateCount), this.props.onRetrievalTopKChange),
+      this.renderTextField(this.props.labels.settingsRagBaseUrl, provider.baseUrl, 'settings.rag.baseUrl', (value) => this.props.onRagProviderBaseUrlChange(this.props.activeRagProvider, value), 'settings-field settings-llm-span-2'),
+      this.renderTextField(this.props.labels.settingsRagEmbeddingModel, provider.embeddingModel, 'settings.rag.embeddingModel', (value) => this.props.onRagProviderEmbeddingModelChange(this.props.activeRagProvider, value)),
+      this.renderTextField(this.props.labels.settingsRagRerankerModel, provider.rerankerModel, 'settings.rag.rerankerModel', (value) => this.props.onRagProviderRerankerModelChange(this.props.activeRagProvider, value)),
+      this.renderTextField(this.props.labels.settingsRagEmbeddingPath, provider.embeddingPath, 'settings.rag.embeddingPath', (value) => this.props.onRagProviderEmbeddingPathChange(this.props.activeRagProvider, value)),
+      this.renderTextField(this.props.labels.settingsRagRerankPath, provider.rerankPath, 'settings.rag.rerankPath', (value) => this.props.onRagProviderRerankPathChange(this.props.activeRagProvider, value)),
+    );
     this.apiKeyWidget.setProps({
       title: this.props.labels.settingsLlmApiKey,
       subtitle: this.props.labels.settingsRagProviderMoark,
@@ -128,8 +148,16 @@ export class RagWidget {
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) => this.props.onRagProviderApiKeyChange(this.props.activeRagProvider, value),
     });
-    grid.append(this.apiKeyWidget.getElement());
-    field.append(title, buildHint(this.props.labels.settingsRagHint), grid);
-    return field;
+    const apiKeyControl = el('div', 'settings-rag-api-key-control');
+    apiKeyControl.append(this.apiKeyWidget.getElement());
+    section.list.append(createSettingsRow({
+      title: '',
+      control: apiKeyControl,
+      itemClassName: 'settings-rag-api-key-item',
+      titleClassName: 'settings-block-list-item-title-empty',
+      contentClassName: 'settings-rag-api-key-content',
+      controlClassName: 'settings-rag-api-key-row-control',
+    }));
+    return section.element;
   }
 }

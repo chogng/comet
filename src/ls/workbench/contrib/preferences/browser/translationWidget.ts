@@ -6,11 +6,14 @@ import type {
 import type { SettingsPartLabels } from 'ls/workbench/contrib/preferences/browser/settingsTypes';
 import { ApiKeyWidget } from 'ls/workbench/contrib/preferences/browser/apiKeyWidget';
 import {
+  createSettingsSection,
+  createSettingsRow,
+} from 'ls/workbench/contrib/preferences/browser/section';
+import {
   buildSettingsHint as buildHint,
   buildSettingsInput as buildInput,
   buildSettingsSelect as buildSelect,
   createSettingsElement as el,
-  createSettingsText as text,
 } from 'ls/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import {
   getLlmModelOptionsForProvider,
@@ -80,22 +83,33 @@ export class TranslationWidget {
   }
 
   private render() {
-    const field = el('div', 'settings-field');
-    const title = el('span');
-    title.textContent = this.props.labels.settingsTranslationTitle;
-    const grid = el('div', 'settings-llm-grid');
-    const providerField = el('div', 'settings-field');
-    providerField.append(
-      text(this.props.labels.settingsTranslationProvider),
-      buildSelect([
+    const section = createSettingsSection({
+      title: this.props.labels.settingsTranslationTitle,
+      description: this.props.labels.settingsTranslationHint,
+      sectionClassName: 'settings-translation-section',
+      panelClassName: 'settings-translation-panel',
+      listClassName: 'settings-translation-list',
+    });
+    const providerSelect = buildSelect([
         { value: 'glm', label: this.props.labels.settingsTranslationProviderGlm },
         { value: 'openai-compatible', label: this.props.labels.settingsTranslationProviderOpenAICompatible },
         { value: 'deepl', label: this.props.labels.settingsTranslationProviderDeepL },
-      ], this.props.activeTranslationProvider, 'settings.translation.provider', (value) => this.props.onActiveTranslationProviderChange(value as TranslationProviderId), 'settings-llm-provider'),
+      ],
+      this.props.activeTranslationProvider,
+      'settings.translation.provider',
+      (value) => this.props.onActiveTranslationProviderChange(value as TranslationProviderId),
+      'settings-llm-provider',
     );
-    grid.append(providerField);
+    section.list.append(
+      createSettingsRow({
+        title: this.props.labels.settingsTranslationProvider,
+        control: providerSelect,
+        itemClassName: 'settings-translation-provider-item',
+        controlClassName: 'settings-translation-provider-control',
+      }),
+    );
     if (this.props.activeTranslationProvider === 'glm') {
-      grid.append(this.renderGlmModelField());
+      section.list.append(this.renderGlmModelRow());
       this.glmApiKeyWidget.setProps({
         title: this.props.labels.settingsLlmApiKey,
         subtitle: this.props.labels.settingsTranslationProviderGlm,
@@ -110,13 +124,12 @@ export class TranslationWidget {
         onInput: (value) => this.props.onGlmApiKeyChange(value),
         className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
       });
-      grid.append(this.glmApiKeyWidget.getElement());
-      field.append(title, buildHint(this.props.labels.settingsTranslationHint), grid);
-      return field;
+      section.list.append(this.renderApiKeyRow(this.glmApiKeyWidget.getElement()));
+      return section.element;
     }
 
     if (this.props.activeTranslationProvider === 'openai-compatible') {
-      grid.append(this.renderOpenAICompatibleFields());
+      section.list.append(...this.renderOpenAICompatibleRows());
     }
 
     this.apiKeyWidget.setProps({
@@ -132,36 +145,38 @@ export class TranslationWidget {
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) => this.props.onTranslationProviderApiKeyChange(this.props.activeTranslationProvider, value),
     });
-    grid.append(this.apiKeyWidget.getElement());
-    field.append(title, buildHint(this.props.labels.settingsTranslationHint), grid);
-    return field;
+    section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
+    return section.element;
   }
 
-  private renderOpenAICompatibleFields() {
+  private renderOpenAICompatibleRows() {
     const provider = this.props.translationProviders['openai-compatible'];
-    const fragment = document.createDocumentFragment();
-    const baseUrlField = el('div', 'settings-field settings-llm-span-2');
     const baseUrlInput = buildInput({
       value: provider.baseUrl,
-      className: 'settings-llm-provider',
+      className: 'settings-input-control settings-translation-base-url-input',
       focusKey: 'settings.translation.openai.baseUrl',
       placeholder: 'https://api.openai.com/v1',
       onInput: (value) => this.props.onTranslationProviderBaseUrlChange('openai-compatible', value),
-    });
-    baseUrlField.append(text(this.props.labels.settingsTranslationBaseUrl), baseUrlInput.element);
+    }).element;
 
-    const modelField = el('div', 'settings-field settings-translation-ai-field settings-llm-span-2');
-    modelField.append(
-      text(this.props.labels.settingsLlmModel),
-      buildHint('GPT-5.4 Mini (gpt-5.4-mini)'),
-      buildHint(this.props.labels.settingsTranslationProviderOpenAICompatibleHint),
-    );
-
-    fragment.append(baseUrlField, modelField);
-    return fragment;
+    return [
+      createSettingsRow({
+        title: this.props.labels.settingsTranslationBaseUrl,
+        control: baseUrlInput,
+        itemClassName: 'settings-translation-base-url-item',
+        controlClassName: 'settings-translation-base-url-control',
+      }),
+      createSettingsRow({
+        title: this.props.labels.settingsLlmModel,
+        description: this.props.labels.settingsTranslationProviderOpenAICompatibleHint,
+        control: buildHint('GPT-5.4 Mini (gpt-5.4-mini)', 'settings-hint settings-translation-model-value'),
+        itemClassName: 'settings-translation-model-item',
+        controlClassName: 'settings-translation-model-control',
+      }),
+    ];
   }
 
-  private renderGlmModelField() {
+  private renderGlmModelRow() {
     const provider = this.props.llmProviders.glm;
     const options = getLlmModelOptionsForProvider('glm', provider.enabledModelOptions, { enabledOnly: true });
     const selectedOption = provider.selectedModelOption
@@ -172,10 +187,10 @@ export class TranslationWidget {
       options.find((option) => option.modelId === selectedOption?.modelId)?.value ??
       options[0]?.value ??
       '';
-    const field = el('div', 'settings-field settings-translation-ai-field');
-    field.append(
-      text(this.props.labels.settingsLlmModel),
-      buildSelect(
+    return createSettingsRow({
+      title: this.props.labels.settingsLlmModel,
+      description: this.props.labels.settingsTranslationProviderGlmHint,
+      control: buildSelect(
         options.map((option) => ({
           value: option.value,
           label: option.label,
@@ -186,9 +201,22 @@ export class TranslationWidget {
         (value) => this.props.onGlmModelChange(value),
         'settings-llm-provider',
       ),
-      buildHint(this.props.labels.settingsTranslationProviderGlmHint),
-    );
-    return field;
+      itemClassName: 'settings-translation-model-item',
+      controlClassName: 'settings-translation-model-control',
+    });
+  }
+
+  private renderApiKeyRow(apiKeyElement: HTMLElement) {
+    const rowContent = el('div', 'settings-translation-api-key-control');
+    rowContent.append(apiKeyElement);
+    return createSettingsRow({
+      title: '',
+      control: rowContent,
+      itemClassName: 'settings-translation-api-key-item',
+      titleClassName: 'settings-block-list-item-title-empty',
+      contentClassName: 'settings-translation-api-key-content',
+      controlClassName: 'settings-translation-api-key-row-control',
+    });
   }
 
   private getTranslationProviderLabel(provider: TranslationProviderId) {

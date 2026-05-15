@@ -47,7 +47,6 @@ export type ListingCandidateCollection = {
 export function collectCandidateDescriptorsFromSeeds(
   page: URL,
   pageUrl: string,
-  sameDomainOnly: boolean,
   dateRange: DateRange,
   seeds: ListingCandidateSeed[],
   {
@@ -78,7 +77,7 @@ export function collectCandidateDescriptorsFromSeeds(
     try {
       const candidateUrl = new URL(href, pageUrl);
       if (!/^https?:$/i.test(candidateUrl.protocol)) continue;
-      if (sameDomainOnly && candidateUrl.host !== page.host) continue;
+      if (candidateUrl.host !== page.host) continue;
       if (isLikelyStaticResourcePath(candidateUrl.pathname)) continue;
       candidateUrl.hash = '';
 

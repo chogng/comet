@@ -18,7 +18,7 @@ import {
 } from 'ls/base/common/editorDraftStyle';
 import { EventEmitter } from 'ls/base/common/event';
 import type { Locale } from 'language/i18n';
-import { defaultBatchLimit, defaultSameDomainOnly } from 'ls/workbench/services/config/configSchema';
+import { defaultBatchLimit } from 'ls/workbench/services/config/configSchema';
 import type { BatchSource } from 'ls/workbench/services/config/configSchema';
 
 import {
@@ -60,7 +60,6 @@ export type SettingsModelSnapshot = {
   browserTabKeepAliveLimit: number;
   batchSources: BatchSource[];
   batchLimit: number;
-  sameDomainOnly: boolean;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -139,7 +138,6 @@ function areSettingsModelSnapshotsEqual(
     previous.pdfFileNameUseSelectionOrder === next.pdfFileNameUseSelectionOrder &&
     previous.browserTabKeepAliveLimit === next.browserTabKeepAliveLimit &&
     previous.batchLimit === next.batchLimit &&
-    previous.sameDomainOnly === next.sameDomainOnly &&
     previous.systemNotificationsEnabled === next.systemNotificationsEnabled &&
     previous.warningNotificationsEnabled === next.warningNotificationsEnabled &&
     previous.menuBarIconEnabled === next.menuBarIconEnabled &&
@@ -187,7 +185,6 @@ function createInitialSettingsModelSnapshot(
     browserTabKeepAliveLimit: defaultBrowserTabKeepAliveLimit,
     batchSources: initialBatchSources,
     batchLimit: defaultBatchLimit,
-    sameDomainOnly: defaultSameDomainOnly,
     systemNotificationsEnabled: true,
     warningNotificationsEnabled: true,
     menuBarIconEnabled: false,
@@ -263,17 +260,6 @@ export class SettingsModel {
     this.updateSnapshot((snapshot) => ({
       ...snapshot,
       batchLimit,
-    }));
-  };
-
-  readonly setSameDomainOnly = (sameDomainOnly: boolean) => {
-    if (this.snapshot.sameDomainOnly === sameDomainOnly) {
-      return;
-    }
-
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      sameDomainOnly,
     }));
   };
 
@@ -937,7 +923,6 @@ export class SettingsModel {
         browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
         batchSources: resolved.batchSources,
         batchLimit: resolved.batchLimit,
-        sameDomainOnly: resolved.sameDomainOnly,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,
@@ -1067,7 +1052,6 @@ export class SettingsModel {
       browserTabKeepAliveLimit,
       batchSources,
       batchLimit,
-      sameDomainOnly,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1100,7 +1084,6 @@ export class SettingsModel {
       browserTabKeepAliveLimit,
       batchSources,
       batchLimit,
-      sameDomainOnly,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1160,7 +1143,6 @@ export class SettingsModel {
       browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
       batchSources: resolved.batchSources,
       batchLimit: resolved.batchLimit,
-      sameDomainOnly: resolved.sameDomainOnly,
       systemNotificationsEnabled: resolved.systemNotificationsEnabled,
       warningNotificationsEnabled: resolved.warningNotificationsEnabled,
       menuBarIconEnabled: resolved.menuBarIconEnabled,
@@ -1204,7 +1186,6 @@ export class SettingsModel {
       browserTabKeepAliveLimit,
       batchSources,
       batchLimit,
-      sameDomainOnly,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1237,7 +1218,6 @@ export class SettingsModel {
       browserTabKeepAliveLimit,
       batchSources,
       batchLimit,
-      sameDomainOnly,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1299,7 +1279,6 @@ export class SettingsModel {
         browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
         batchSources: resolved.batchSources,
         batchLimit: resolved.batchLimit,
-        sameDomainOnly: resolved.sameDomainOnly,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,

@@ -15,7 +15,6 @@ import {
   buildSettingsSelect as buildSelect,
   buildSettingsSwitch as buildSwitch,
   createSettingsElement as el,
-  createSettingsText as text,
 } from 'ls/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import { buildSettingsNumberStepperInput as buildNumberStepperInput } from 'ls/workbench/contrib/preferences/browser/settingsNumberStepperInput';
 
@@ -101,7 +100,6 @@ export class LibraryWidget {
       }),
     );
 
-    const directoryField = el('div', 'settings-field');
     const directoryRow = el('div', 'settings-input-row');
     directoryRow.append(
       buildInput({
@@ -113,15 +111,15 @@ export class LibraryWidget {
       }).element,
       buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-btn-icon', focusKey: 'settings.library.chooseDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseLibraryDirectory }),
     );
-    directoryField.append(
-      text(this.props.labels.settingsLibraryDirectory),
-      directoryRow,
-      buildHint(this.props.labels.settingsLibraryDirectoryHint),
-      buildHint(`${this.props.labels.currentDir} ${effectiveManagedDirectory || '-'}`),
-    );
 
-    section.element.append(
-      directoryField,
+    section.list.append(
+      createSettingsRow({
+        title: this.props.labels.settingsLibraryDirectory,
+        description: `${this.props.labels.settingsLibraryDirectoryHint} ${this.props.labels.currentDir} ${effectiveManagedDirectory || '-'}`,
+        control: directoryRow,
+        itemClassName: 'settings-library-directory-item',
+        controlClassName: 'settings-library-directory-control',
+      }),
       this.renderReadOnlyField(this.props.labels.settingsLibraryDbFile, this.props.libraryDbFile, 'settings.library.db'),
       this.renderReadOnlyField(this.props.labels.settingsLibraryFilesDir, effectiveManagedDirectory, 'settings.library.filesDir'),
       this.renderReadOnlyField(this.props.labels.settingsLibraryCacheDir, this.props.ragCacheDir, 'settings.library.cacheDir'),
@@ -164,7 +162,7 @@ export class LibraryWidget {
     if (!this.props.knowledgeBaseEnabled) {
       section.element.append(buildHint(this.props.labels.settingsKnowledgeBaseModeDisabledHint, 'settings-hint settings-library-mode-note'));
     }
-    section.element.append(
+    section.list.append(
       this.renderDownloadDirectoryField(),
       this.renderMaxConcurrentJobsField(),
       this.renderLibraryStats(),
@@ -174,7 +172,6 @@ export class LibraryWidget {
   }
 
   private renderDownloadDirectoryField() {
-    const downloadDirectoryField = el('div', 'settings-field');
     const downloadDirectoryRow = el('div', 'settings-input-row');
     downloadDirectoryRow.append(
       buildInput({
@@ -186,17 +183,16 @@ export class LibraryWidget {
       }).element,
       buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-btn-icon', focusKey: 'settings.library.chooseDownloadDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseKnowledgeBasePdfDownloadDir }),
     );
-    downloadDirectoryField.append(
-      text(this.props.labels.settingsKnowledgeBasePdfDownloadDir),
-      downloadDirectoryRow,
-      buildHint(this.props.labels.settingsKnowledgeBasePdfDownloadDirHint),
-      buildHint(`${this.props.labels.currentDir} ${this.props.knowledgeBasePdfDownloadDir.trim() || this.props.labels.systemDownloads}`),
-    );
-    return downloadDirectoryField;
+    return createSettingsRow({
+      title: this.props.labels.settingsKnowledgeBasePdfDownloadDir,
+      description: `${this.props.labels.settingsKnowledgeBasePdfDownloadDirHint} ${this.props.labels.currentDir} ${this.props.knowledgeBasePdfDownloadDir.trim() || this.props.labels.systemDownloads}`,
+      control: downloadDirectoryRow,
+      itemClassName: 'settings-library-download-directory-item',
+      controlClassName: 'settings-library-directory-control',
+    });
   }
 
   private renderMaxConcurrentJobsField() {
-    const jobsField = el('div', 'settings-field');
     const jobsWrap = el('div', 'settings-limit-input-wrap');
     jobsWrap.append(buildNumberStepperInput({
       value: this.props.maxConcurrentIndexJobs,
@@ -209,12 +205,13 @@ export class LibraryWidget {
       onInput: this.props.onMaxConcurrentIndexJobsChange,
       disabled: this.props.isSettingsSaving,
     }).element);
-    jobsField.append(
-      text(this.props.labels.settingsLibraryMaxConcurrentJobs),
-      jobsWrap,
-      buildHint(this.props.labels.settingsLibraryMaxConcurrentJobsHint),
-    );
-    return jobsField;
+    return createSettingsRow({
+      title: this.props.labels.settingsLibraryMaxConcurrentJobs,
+      description: this.props.labels.settingsLibraryMaxConcurrentJobsHint,
+      control: jobsWrap,
+      itemClassName: 'settings-library-max-jobs-item',
+      controlClassName: 'settings-library-max-jobs-control',
+    });
   }
 
   private renderLibraryStats() {
@@ -231,20 +228,29 @@ export class LibraryWidget {
     addCard(this.props.labels.settingsLibraryStatusDocuments, this.props.libraryDocumentCount);
     addCard(this.props.labels.settingsLibraryStatusFiles, this.props.libraryFileCount);
     addCard(this.props.labels.settingsLibraryStatusQueuedJobs, this.props.libraryQueuedJobCount);
-    return stats;
+    return createSettingsRow({
+      title: '',
+      control: stats,
+      itemClassName: 'settings-library-stats-item',
+      titleClassName: 'settings-block-list-item-title-empty',
+      contentClassName: 'settings-library-stats-content',
+      controlClassName: 'settings-library-stats-control',
+    });
   }
 
   private renderLibraryRecentDocuments() {
-    const field = el('div', 'settings-field');
-    const title = el('span');
-    title.textContent = this.props.labels.settingsLibraryRecentDocuments;
-    field.append(title);
+    const content = el('div', 'settings-library-recent-documents-content');
     if (this.props.isLibraryLoading) {
-      field.append(buildHint(this.props.labels.settingsLoading));
+      content.append(buildHint(this.props.labels.settingsLoading));
     }
     if (this.props.libraryDocuments.length === 0) {
-      field.append(buildHint(this.props.labels.settingsLibraryStatusEmpty));
-      return field;
+      content.append(buildHint(this.props.labels.settingsLibraryStatusEmpty));
+      return createSettingsRow({
+        title: this.props.labels.settingsLibraryRecentDocuments,
+        control: content,
+        itemClassName: 'settings-library-recent-documents-item',
+        controlClassName: 'settings-library-recent-documents-control',
+      });
     }
     const list = el('div', 'settings-library-doc-list');
     for (const document of this.props.libraryDocuments) {
@@ -258,18 +264,26 @@ export class LibraryWidget {
       item.append(strong, meta, status);
       list.append(item);
     }
-    field.append(list);
-    return field;
+    content.append(list);
+    return createSettingsRow({
+      title: this.props.labels.settingsLibraryRecentDocuments,
+      control: content,
+      itemClassName: 'settings-library-recent-documents-item',
+      controlClassName: 'settings-library-recent-documents-control',
+    });
   }
 
   private renderReadOnlyField(label: string, value: string, focusKey: string) {
-    const field = el('div', 'settings-field');
-    field.append(text(label), buildInput({
+    return createSettingsRow({
+      title: label,
+      control: buildInput({
       value,
       className: 'settings-input-control',
       focusKey,
       readOnly: true,
-    }).element);
-    return field;
+      }).element,
+      itemClassName: 'settings-library-readonly-item',
+      controlClassName: 'settings-library-readonly-control',
+    });
   }
 }

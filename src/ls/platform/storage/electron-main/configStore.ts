@@ -19,7 +19,6 @@ import {
   batchLimitMax,
   batchLimitMin,
   defaultBatchLimit,
-  defaultSameDomainOnly,
 } from 'ls/platform/config/common/defaultBatchSources';
 import {
   createDefaultLlmSettings,
@@ -274,10 +273,6 @@ function normalizeSettings(
     ),
     defaultBatchSources: normalizedBatchSources,
     defaultBatchLimit: normalizedLimit,
-    defaultSameDomainOnly:
-      typeof payload.defaultSameDomainOnly === 'boolean'
-        ? payload.defaultSameDomainOnly
-        : defaultSameDomainOnly,
     systemNotificationsEnabled:
       typeof payload.systemNotificationsEnabled === 'boolean'
         ? payload.systemNotificationsEnabled

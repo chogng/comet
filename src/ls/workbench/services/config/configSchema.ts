@@ -4,7 +4,6 @@ import {
   batchLimitMax,
   batchLimitMin,
   defaultBatchLimit,
-  defaultSameDomainOnly,
   getDefaultBatchSources,
 } from 'ls/platform/config/common/defaultBatchSources';
 
@@ -12,7 +11,6 @@ export {
   batchLimitMax,
   batchLimitMin,
   defaultBatchLimit,
-  defaultSameDomainOnly,
 };
 
 export type BatchSource = DesktopBatchSource;

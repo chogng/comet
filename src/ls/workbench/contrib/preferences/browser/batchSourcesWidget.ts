@@ -12,6 +12,7 @@ export type BatchSourcesWidgetProps = {
   isSettingsSaving: boolean;
   onBatchSourceUrlChange: (index: number, url: string) => void;
   onBatchSourceJournalTitleChange: (index: number, journalTitle: string) => void;
+  onSaveBatchSources: () => Promise<boolean>;
   onAddBatchSource: () => void;
   onRemoveBatchSource: (index: number) => void;
   onMoveBatchSource: (index: number, direction: 'up' | 'down') => void;
@@ -30,9 +31,15 @@ export class BatchSourcesWidget {
   private readonly editButton = buildButton({
     label: '',
     focusKey: 'settings.batch.sources.edit',
-    onClick: () => {
-      this.isEditing = !this.isEditing;
+    onClick: async () => {
       if (this.isEditing) {
+        const didSave = await this.props.onSaveBatchSources();
+        if (!didSave) {
+          return;
+        }
+        this.isEditing = false;
+      } else {
+        this.isEditing = true;
         this.isExpanded = true;
       }
       this.renderDisclosure();
@@ -88,17 +95,19 @@ export class BatchSourcesWidget {
       const url = el('span', 'settings-supported-source-url');
       url.textContent = source.url.replace(/^https?:\/\//i, '');
       url.title = source.url;
+      const journalCell = el('div', 'settings-supported-source-journal-cell');
       const journalTitle = this.isEditing
         ? this.renderJournalInput(source, index)
         : this.renderJournalTitle(source);
-      row.append(url, journalTitle);
+      journalCell.append(journalTitle);
+      row.append(url, journalCell);
       return row;
     }));
   }
 
   private renderJournalTitle(source: BatchSource) {
     const journalTitle = el('span', 'settings-supported-source-journal');
-    journalTitle.textContent = source.journalTitle.trim() || this.props.labels.settingsBatchSourceOptimized;
+    journalTitle.textContent = source.journalTitle.trim();
     journalTitle.title = journalTitle.textContent;
     return journalTitle;
   }

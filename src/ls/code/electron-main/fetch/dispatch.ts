@@ -492,14 +492,12 @@ function buildGenericCandidateSeeds($: ReturnType<typeof load>) {
 function collectCandidateDescriptorsFromSeeds(
   page: URL,
   pageUrl: string,
-  sameDomainOnly: boolean,
   dateRange: DateRange,
   seeds: ListingCandidateSeed[],
 ): CandidateCollectionResult {
   const result = collectListingCandidateDescriptorsFromSeeds(
     page,
     pageUrl,
-    sameDomainOnly,
     dateRange,
     normalizeListingCandidateSeeds(seeds),
     {
@@ -553,7 +551,6 @@ async function collectListingCandidateDescriptors(
   pageUrl: string,
   $: ReturnType<typeof load>,
   extractor: ListingCandidateExtractor | null,
-  sameDomainOnly: boolean,
   dateRange: DateRange,
   traceId: string,
   pageNumber: number,
@@ -591,7 +588,6 @@ async function collectListingCandidateDescriptors(
       const result = collectCandidateDescriptorsFromSeeds(
         page,
         pageUrl,
-        sameDomainOnly,
         dateRange,
         extracted.candidates,
       );
@@ -607,7 +603,6 @@ async function collectListingCandidateDescriptors(
   return collectCandidateDescriptorsFromSeeds(
     page,
     pageUrl,
-    sameDomainOnly,
     dateRange,
     buildGenericCandidateSeeds($),
   );
@@ -617,7 +612,6 @@ async function collectListingCandidateDescriptorsFromWebContentExtraction({
   page,
   pageUrl,
   extractor,
-  sameDomainOnly,
   dateRange,
   traceId,
   pageNumber,
@@ -626,7 +620,6 @@ async function collectListingCandidateDescriptorsFromWebContentExtraction({
   page: URL;
   pageUrl: string;
   extractor: ListingCandidateExtractor;
-  sameDomainOnly: boolean;
   dateRange: DateRange;
   traceId: string;
   pageNumber: number;
@@ -660,7 +653,6 @@ async function collectListingCandidateDescriptorsFromWebContentExtraction({
   const result = collectCandidateDescriptorsFromSeeds(
     page,
     pageUrl,
-    sameDomainOnly,
     dateRange,
     extracted.candidates,
   );
@@ -694,7 +686,6 @@ async function fetchLatestArticlesFromPageOnce({
   journalTitle,
   preferredExtractorId,
   remainingLimit,
-  sameDomainOnly,
   dateRange,
   traceId,
   options,
@@ -707,7 +698,6 @@ async function fetchLatestArticlesFromPageOnce({
   journalTitle: string;
   preferredExtractorId: string | null;
   remainingLimit: number;
-  sameDomainOnly: boolean;
   dateRange: DateRange;
   traceId: string;
   options: FetchLatestArticlesOptions;
@@ -773,7 +763,6 @@ async function fetchLatestArticlesFromPageOnce({
     journalTitle,
     extractor,
     remainingLimit,
-    sameDomainOnly,
     dateRange,
     traceId,
     options,
@@ -1231,7 +1220,6 @@ async function fetchLatestArticlesFromPage(
   journalTitle: string,
   preferredExtractorId: string | null,
   perSourceLimit: number,
-  sameDomainOnly: boolean,
   dateRange: DateRange,
   traceId: string,
   options: FetchLatestArticlesOptions,
@@ -1242,7 +1230,6 @@ async function fetchLatestArticlesFromPage(
     pageUrl: shortenForLog(pageUrl),
     preferredExtractorId,
     perSourceLimit,
-    sameDomainOnly,
     dateStart: dateRange.start,
     dateEnd: dateRange.end,
   });
@@ -1279,7 +1266,6 @@ async function fetchLatestArticlesFromPage(
         journalTitle,
         preferredExtractorId,
         remainingLimit: perSourceLimit - fetched.length,
-        sameDomainOnly,
         dateRange,
         traceId,
         options,
@@ -1361,7 +1347,6 @@ export async function fetchLatestArticles(
   const configuredUserLimit = await resolveConfiguredUserBatchLimit(storage);
   // Per-source cap comes only from persisted user settings.
   const perSourceLimit = configuredUserLimit;
-  const sameDomainOnly = payload.sameDomainOnly !== false;
   const dateRange = parseDateRange(payload.startDate ?? null, payload.endDate ?? null);
   const fetchStrategy = normalizeFetchStrategy(options.fetchStrategy ?? payload.fetchStrategy);
   const fetched: Article[] = [];
@@ -1373,7 +1358,6 @@ export async function fetchLatestArticles(
     perSourceLimit,
     configuredUserLimit,
     systemLimit: SYSTEM_BATCH_LIMIT_MAX,
-    sameDomainOnly,
     dateStart: dateRange.start,
     dateEnd: dateRange.end,
     fetchStrategy,
@@ -1392,7 +1376,6 @@ export async function fetchLatestArticles(
             source.journalTitle,
             source.preferredExtractorId,
             perSourceLimit,
-            sameDomainOnly,
             dateRange,
             `${traceId}:${source.sourceId}`,
             options,
