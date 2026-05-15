@@ -273,6 +273,70 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
   return field;
 }
 
+function getJournalOverrideTitle(props: SettingsPartProps, url: string) {
+  const override = props.journalSourceOverrides.find((item) => item.url === url);
+  return override?.journalTitle ?? null;
+}
+
+export function renderSupportedSourcesSection(props: SettingsPartProps) {
+  const supportedSources = createSettingsSection({
+    title: props.labels.settingsSupportedSources,
+    description: props.labels.settingsSupportedSourcesHint,
+    sectionClassName: 'settings-supported-sources-section',
+    panelClassName: 'settings-supported-sources-panel',
+    listClassName: 'settings-supported-sources-list',
+  });
+
+  const table = el('div', 'settings-supported-sources-table');
+  table.hidden = !props.showSupportedSources;
+  for (const [index, source] of props.supportedSources.entries()) {
+    const row = el('div', 'settings-supported-source-row');
+    const url = el('div', 'settings-supported-source-url');
+    url.textContent = source.url;
+    url.title = `${props.labels.settingsSupportedSourceUrl}: ${source.url}`;
+
+    const journalCell = el('div', 'settings-supported-source-journal-cell');
+    const effectiveJournalTitle = getJournalOverrideTitle(props, source.url) ?? source.journalTitle;
+    const journalLabel = el('div', 'settings-supported-source-journal');
+    journalLabel.textContent = effectiveJournalTitle || '-';
+    journalLabel.title = props.labels.settingsSupportedSourceJournalTitle;
+    const journalInput = buildInput({
+      value: effectiveJournalTitle,
+      className: 'settings-supported-source-journal-input',
+      focusKey: `settings.supportedSources.${index}.journalTitle`,
+      disabled: props.isSettingsSaving,
+      onInput: (value) => props.onJournalSourceTitleChange(source.url, value),
+    });
+    journalInput.inputElement.ariaLabel = props.labels.settingsSupportedSourceJournalTitle;
+    journalCell.append(journalLabel, journalInput.element);
+
+    row.append(url, journalCell);
+    table.append(row);
+  }
+
+  supportedSources.list.append(
+    createSettingsRow({
+      title: props.labels.settingsSupportedSources,
+      description: props.labels.settingsSupportedSourcesHint,
+      control: buildButton({
+        label: props.showSupportedSources
+          ? props.labels.settingsSupportedSourcesHide
+          : props.labels.settingsSupportedSourcesShow,
+        focusKey: 'settings.supportedSources.toggle',
+        title: props.showSupportedSources
+          ? props.labels.settingsSupportedSourcesHide
+          : props.labels.settingsSupportedSourcesShow,
+        disabled: props.isSettingsSaving,
+        onClick: props.onToggleSupportedSources,
+      }),
+      itemClassName: 'settings-supported-sources-actions-item',
+      controlClassName: 'settings-supported-sources-actions',
+    }),
+  );
+  supportedSources.panel.append(table);
+  return supportedSources.element;
+}
+
 export function renderLayoutSection(props: SettingsPartProps) {
   const layout = createSettingsSection({
     title: props.labels.settingsLayoutTitle,

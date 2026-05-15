@@ -272,6 +272,39 @@ export class SettingsModel {
     }));
   };
 
+  readonly setJournalSourceTitle = (url: string, journalTitle: string) => {
+    const normalizedUrl = String(url ?? '').trim();
+    if (!normalizedUrl) {
+      return;
+    }
+
+    const normalizedJournalTitle = String(journalTitle ?? '').trim();
+    this.updateSnapshot((snapshot) => {
+      const nextOverrides = snapshot.journalSourceOverrides.filter(
+        (override) => override.url !== normalizedUrl,
+      );
+      if (normalizedJournalTitle) {
+        const previousOverride = snapshot.journalSourceOverrides.find(
+          (override) => override.url === normalizedUrl,
+        );
+        nextOverrides.push({
+          url: normalizedUrl,
+          journalTitle: normalizedJournalTitle,
+          preferredExtractorId: previousOverride?.preferredExtractorId ?? null,
+        });
+      }
+
+      if (areJsonEqual(snapshot.journalSourceOverrides, nextOverrides)) {
+        return snapshot;
+      }
+
+      return {
+        ...snapshot,
+        journalSourceOverrides: nextOverrides,
+      };
+    });
+  };
+
   readonly setSystemNotificationsEnabled = (systemNotificationsEnabled: boolean) => {
     if (this.snapshot.systemNotificationsEnabled === systemNotificationsEnabled) {
       return;

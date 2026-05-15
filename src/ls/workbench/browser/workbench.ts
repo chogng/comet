@@ -94,7 +94,7 @@ import { getLocaleMessages } from 'language/i18n';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'ls/workbench/common/url';
 import type { LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/desktopTypes';
-import { normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
+import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
 import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
 import { normalizeBrowserTabKeepAliveLimit } from 'ls/workbench/services/webContent/webContentRetentionConfig';
 import {
@@ -2105,6 +2105,8 @@ class WorkbenchHost {
         isSettingsLoading,
         locale,
         batchLimit,
+        supportedSources: getConfigBatchSourceSeed(),
+        journalSourceOverrides,
         fetchStartDate: batchStartDate,
         fetchEndDate: batchEndDate,
         systemNotificationsEnabled,
@@ -2181,6 +2183,8 @@ class WorkbenchHost {
         onNavigateBack: toggleWorkbenchSettings,
         onBatchLimitChange: (value) =>
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
+        onJournalSourceTitleChange:
+          settingsControllerInstance.setJournalSourceTitle,
         onFetchStartDateChange: setBatchStartDate,
         onFetchEndDateChange: setBatchEndDate,
         onSystemNotificationsEnabledChange:

@@ -25,6 +25,7 @@ import {
   renderLayoutSection,
   renderLocaleSection,
   renderNotificationsSection,
+  renderSupportedSourcesSection,
   renderTextEditorSection,
 } from 'ls/workbench/contrib/preferences/browser/settingsSections';
 import { shouldUpdateSettingsSection } from 'ls/workbench/contrib/preferences/browser/settingsSectionUpdates';
@@ -49,6 +50,7 @@ export function createSettingsPartLabels({ ui }: CreateSettingsPartLabelsParams)
     settingsNavigationBack: ui.settingsNavigationBack, settingsNavigationGeneral: ui.settingsNavigationGeneral, settingsNavigationAppearance: ui.settingsNavigationAppearance, settingsNavigationTextEditor: ui.settingsNavigationTextEditor, settingsNavigationKnowledgeBase: ui.settingsNavigationKnowledgeBase, settingsNavigationLiterature: ui.settingsNavigationLiterature, settingsTextEditorTitle: ui.settingsTextEditorTitle, settingsTextEditorHint: ui.settingsTextEditorHint,
     settingsTextEditorDefaultBodyStyle: ui.settingsTextEditorDefaultBodyStyle, settingsTextEditorFontFamily: ui.settingsTextEditorFontFamily, settingsTextEditorFontSize: ui.settingsTextEditorFontSize, settingsTextEditorLineHeight: ui.settingsTextEditorLineHeight, settingsTextEditorParagraphSpacingBefore: ui.settingsTextEditorParagraphSpacingBefore, settingsTextEditorParagraphSpacingAfter: ui.settingsTextEditorParagraphSpacingAfter, settingsTextEditorColor: ui.settingsTextEditorColor,
     settingsBatchOptions: ui.settingsBatchOptions, batchCount: ui.batchCount, startDate: ui.startDate, endDate: ui.endDate, clearDate: ui.clearDate, today: ui.today,
+    settingsSupportedSources: ui.settingsSupportedSources, settingsSupportedSourcesHint: ui.settingsSupportedSourcesHint, settingsSupportedSourceUrl: ui.settingsSupportedSourceUrl, settingsSupportedSourceJournalTitle: ui.settingsSupportedSourceJournalTitle, settingsSupportedSourcesShow: ui.settingsSupportedSourcesShow, settingsSupportedSourcesHide: ui.settingsSupportedSourcesHide,
     settingsAppearanceTitle: ui.settingsAppearanceTitle, settingsTheme: ui.settingsTheme, settingsThemeHint: ui.settingsThemeHint, settingsThemeLight: ui.settingsThemeLight, settingsThemeDark: ui.settingsThemeDark, settingsThemeSystem: ui.settingsThemeSystem, settingsUseMica: ui.settingsUseMica, settingsUseMicaHint: ui.settingsUseMicaHint, settingsLibraryTitle: ui.settingsLibraryTitle, settingsKnowledgeBaseTitle: ui.settingsKnowledgeBaseTitle, settingsKnowledgeBaseHint: ui.settingsKnowledgeBaseHint, settingsKnowledgeBaseMode: ui.settingsKnowledgeBaseMode,
     settingsKnowledgeBaseModeHint: ui.settingsKnowledgeBaseModeHint, settingsKnowledgeBaseModeDisabledHint: ui.settingsKnowledgeBaseModeDisabledHint, settingsKnowledgeBaseAutoIndex: ui.settingsKnowledgeBaseAutoIndex, settingsKnowledgeBaseAutoIndexHint: ui.settingsKnowledgeBaseAutoIndexHint,
     settingsKnowledgeBasePdfDownloadDir: ui.settingsKnowledgeBasePdfDownloadDir, settingsKnowledgeBasePdfDownloadDirPlaceholder: ui.settingsKnowledgeBasePdfDownloadDirPlaceholder, settingsKnowledgeBasePdfDownloadDirHint: ui.settingsKnowledgeBasePdfDownloadDirHint,
@@ -71,7 +73,13 @@ export function createSettingsPartLabels({ ui }: CreateSettingsPartLabelsParams)
 }
 
 export function createSettingsPartProps({ state, actions }: CreateSettingsPartPropsParams): SettingsPartProps {
-  return { labels: createSettingsPartLabels({ ui: state.ui }), ...state, ...actions };
+  return {
+    labels: createSettingsPartLabels({ ui: state.ui }),
+    showSupportedSources: false,
+    onToggleSupportedSources: () => {},
+    ...state,
+    ...actions,
+  };
 }
 
 type FocusSnapshot = {
@@ -103,6 +111,7 @@ export class SettingsPartView {
   private showRagApiKey = false;
   private showLlmApiKey = false;
   private showTranslationApiKey = false;
+  private showSupportedSources = false;
   private activePageId: SettingsPageId = 'general';
 
   constructor(props: SettingsPartProps) {
@@ -327,6 +336,14 @@ export class SettingsPartView {
     });
   }
 
+  private withRuntimeUiState(props: SettingsPartProps): SettingsPartProps {
+    return {
+      ...props,
+      showSupportedSources: this.showSupportedSources,
+      onToggleSupportedSources: this.handleToggleSupportedSources,
+    };
+  }
+
   private initializeSectionContainers() {
     for (const [id, section] of Object.entries(this.sections) as Array<[SettingsSectionId, HTMLElement]>) {
       section.dataset.sectionId = id;
@@ -377,6 +394,7 @@ export class SettingsPartView {
 
   private updateView(previousProps?: SettingsPartProps, forceAll = false) {
     const focusSnapshot = this.captureFocus();
+    this.props = this.withRuntimeUiState(this.props);
     this.loadingHint.textContent = this.props.labels.settingsLoading;
     this.syncNavigationView();
 
@@ -391,6 +409,9 @@ export class SettingsPartView {
     }
     if (forceAll || shouldUpdateSettingsSection('batchOptions', previousProps, this.props)) {
       this.updateSection(this.sections.batchOptions, renderBatchOptionsSection(this.props));
+    }
+    if (forceAll || shouldUpdateSettingsSection('supportedSources', previousProps, this.props)) {
+      this.updateSection(this.sections.supportedSources, renderSupportedSourcesSection(this.props));
     }
     if (forceAll || shouldUpdateSettingsSection('appearance', previousProps, this.props)) {
       this.updateSection(this.sections.appearance, renderAppearanceSection(this.props));
@@ -420,6 +441,13 @@ export class SettingsPartView {
     this.renderActivePage();
     this.restoreFocus(focusSnapshot);
   }
+
+  private readonly handleToggleSupportedSources = () => {
+    this.showSupportedSources = !this.showSupportedSources;
+    this.props = this.withRuntimeUiState(this.props);
+    this.updateSection(this.sections.supportedSources, renderSupportedSourcesSection(this.props));
+    this.renderActivePage();
+  };
 
 }
 

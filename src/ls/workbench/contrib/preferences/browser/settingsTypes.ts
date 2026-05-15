@@ -2,6 +2,8 @@ import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import type {
   AppTheme,
+  BatchSource,
+  JournalSourceOverride,
   LibraryDocumentSummary,
   LibraryStorageMode,
   LlmProviderId,
@@ -28,6 +30,7 @@ export type SettingsPartLabels = {
   settingsNavigationBack: string; settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationTextEditor: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
   settingsTextEditorDefaultBodyStyle: string; settingsTextEditorFontFamily: string; settingsTextEditorFontSize: string; settingsTextEditorLineHeight: string; settingsTextEditorParagraphSpacingBefore: string; settingsTextEditorParagraphSpacingAfter: string; settingsTextEditorColor: string;
   settingsBatchOptions: string; batchCount: string; startDate: string; endDate: string; clearDate: string; today: string;
+  settingsSupportedSources: string; settingsSupportedSourcesHint: string; settingsSupportedSourceUrl: string; settingsSupportedSourceJournalTitle: string; settingsSupportedSourcesShow: string; settingsSupportedSourcesHide: string;
   settingsAppearanceTitle: string; settingsTheme: string; settingsThemeHint: string; settingsThemeLight: string; settingsThemeDark: string; settingsThemeSystem: string; settingsUseMica: string; settingsUseMicaHint: string; settingsLibraryTitle: string; settingsKnowledgeBaseMode: string;
   settingsKnowledgeBaseTitle: string; settingsKnowledgeBaseHint: string; settingsKnowledgeBaseModeHint: string; settingsKnowledgeBaseModeDisabledHint: string; settingsKnowledgeBaseAutoIndex: string; settingsKnowledgeBaseAutoIndexHint: string;
   settingsKnowledgeBasePdfDownloadDir: string; settingsKnowledgeBasePdfDownloadDirPlaceholder: string; settingsKnowledgeBasePdfDownloadDirHint: string;
@@ -56,6 +59,7 @@ export type SettingsPartProps = {
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
   onNavigateBack: () => void;
   batchLimit: number; onBatchLimitChange: (value: string) => void;
+  supportedSources: BatchSource[]; journalSourceOverrides: JournalSourceOverride[]; showSupportedSources: boolean; onToggleSupportedSources: () => void; onJournalSourceTitleChange: (url: string, journalTitle: string) => void;
   fetchStartDate: string; onFetchStartDateChange: (value: string) => void; fetchEndDate: string; onFetchEndDateChange: (value: string) => void; systemNotificationsEnabled: boolean; onSystemNotificationsEnabledChange: (checked: boolean) => void; warningNotificationsEnabled: boolean; onWarningNotificationsEnabledChange: (checked: boolean) => void; menuBarIconEnabled: boolean; onMenuBarIconEnabledChange: (checked: boolean) => void; completionNotificationsEnabled: boolean; onCompletionNotificationsEnabledChange: (checked: boolean) => void; useMica: boolean; onUseMicaChange: (checked: boolean) => void; statusbarVisible: boolean; onStatusbarVisibleChange: (checked: boolean) => void; browserTabKeepAliveLimit: number; onBrowserTabKeepAliveLimitChange: (value: string) => void; theme: AppTheme; onThemeChange: (value: AppTheme) => void; knowledgeBaseEnabled: boolean;
   onKnowledgeBaseEnabledChange: (checked: boolean) => void; autoIndexDownloadedPdf: boolean; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; knowledgeBasePdfDownloadDir: string; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void; libraryStorageMode: LibraryStorageMode;
   onLibraryStorageModeChange: (value: LibraryStorageMode) => void; libraryDirectory: string; onLibraryDirectoryChange: (value: string) => void; onChooseLibraryDirectory: () => void;
@@ -83,13 +87,14 @@ export type SettingsPartState = {
   knowledgeBaseEnabled: boolean; autoIndexDownloadedPdf: boolean; knowledgeBasePdfDownloadDir: string; libraryStorageMode: LibraryStorageMode; libraryDirectory: string; maxConcurrentIndexJobs: number; activeRagProvider: RagProviderId;
   ragProviders: Record<RagProviderId, RagProviderSettings>; retrievalCandidateCount: number; retrievalTopK: number; pdfDownloadDir: string; pdfFileNameUseSelectionOrder: boolean;
   activeLlmProvider: LlmProviderId; llmProviders: Record<LlmProviderId, LlmProviderSettings>; activeTranslationProvider: TranslationProviderId; translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
-  desktopRuntime: boolean; configPath: string; defaultConfigPath: string; isLibraryLoading: boolean; libraryDocumentCount: number; libraryFileCount: number; libraryQueuedJobCount: number; libraryDocuments: LibraryDocumentSummary[];
+  supportedSources: BatchSource[]; journalSourceOverrides: JournalSourceOverride[]; desktopRuntime: boolean; configPath: string; defaultConfigPath: string; isLibraryLoading: boolean; libraryDocumentCount: number; libraryFileCount: number; libraryQueuedJobCount: number; libraryDocuments: LibraryDocumentSummary[];
   libraryDbFile: string; defaultManagedDirectory: string; ragCacheDir: string; isSettingsSaving: boolean; isTestingRagConnection: boolean; isTestingLlmConnection: boolean; isTestingTranslationConnection: boolean;
 };
 
 export type SettingsPartActions = {
   onNavigateBack: () => void;
   onBatchLimitChange: (value: string) => void;
+  onJournalSourceTitleChange: (url: string, journalTitle: string) => void;
   onFetchStartDateChange: (value: string) => void; onFetchEndDateChange: (value: string) => void; onSystemNotificationsEnabledChange: (checked: boolean) => void; onWarningNotificationsEnabledChange: (checked: boolean) => void; onMenuBarIconEnabledChange: (checked: boolean) => void; onCompletionNotificationsEnabledChange: (checked: boolean) => void; onUseMicaChange: (checked: boolean) => void; onStatusbarVisibleChange: (checked: boolean) => void; onBrowserTabKeepAliveLimitChange: (value: string) => void; onThemeChange: (value: AppTheme) => void; onKnowledgeBaseEnabledChange: (checked: boolean) => void; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void;
   onLibraryStorageModeChange: (value: LibraryStorageMode) => void; onLibraryDirectoryChange: (value: string) => void; onChooseLibraryDirectory: () => void; onMaxConcurrentIndexJobsChange: (value: string) => void;
   onRagProviderApiKeyChange: (provider: RagProviderId, apiKey: string) => void; onRagProviderBaseUrlChange: (provider: RagProviderId, baseUrl: string) => void; onRagProviderEmbeddingModelChange: (provider: RagProviderId, model: string) => void;

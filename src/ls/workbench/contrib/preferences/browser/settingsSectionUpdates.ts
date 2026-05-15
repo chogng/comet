@@ -25,6 +25,8 @@ export function shouldUpdateSettingsSection(
       return shouldUpdateTranslationSection(previousProps, currentProps);
     case 'batchOptions':
       return shouldUpdateBatchOptionsSection(previousProps, currentProps);
+    case 'supportedSources':
+      return shouldUpdateSupportedSourcesSection(previousProps, currentProps);
     case 'knowledgeBase':
       return shouldUpdateKnowledgeBaseSection(previousProps, currentProps);
     case 'downloadDirectory':
@@ -62,6 +64,25 @@ function shouldUpdateBatchOptionsSection(
     previousProps.labels.clearDate !== currentProps.labels.clearDate ||
     previousProps.labels.today !== currentProps.labels.today ||
     previousProps.labels.settingsBatchHint !== currentProps.labels.settingsBatchHint
+  );
+}
+
+function shouldUpdateSupportedSourcesSection(
+  previousProps: SettingsPartProps | undefined,
+  currentProps: SettingsPartProps,
+) {
+  return (
+    !previousProps ||
+    previousProps.supportedSources !== currentProps.supportedSources ||
+    previousProps.journalSourceOverrides !== currentProps.journalSourceOverrides ||
+    previousProps.showSupportedSources !== currentProps.showSupportedSources ||
+    previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
+    previousProps.labels.settingsSupportedSources !== currentProps.labels.settingsSupportedSources ||
+    previousProps.labels.settingsSupportedSourcesHint !== currentProps.labels.settingsSupportedSourcesHint ||
+    previousProps.labels.settingsSupportedSourceUrl !== currentProps.labels.settingsSupportedSourceUrl ||
+    previousProps.labels.settingsSupportedSourceJournalTitle !== currentProps.labels.settingsSupportedSourceJournalTitle ||
+    previousProps.labels.settingsSupportedSourcesShow !== currentProps.labels.settingsSupportedSourcesShow ||
+    previousProps.labels.settingsSupportedSourcesHide !== currentProps.labels.settingsSupportedSourcesHide
   );
 }
 

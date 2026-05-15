@@ -59,6 +59,13 @@ const en = {
   settingsBatchOptions: 'Max fetch count',
   settingsBatchHint:
     'Limits how many articles a single URL can write during batch fetch.',
+  settingsSupportedSources: 'Supported sources',
+  settingsSupportedSourcesHint:
+    'These adapted listing URLs can provide default journal titles and preferred extractors. Edit the journal title when a source should appear under a different name.',
+  settingsSupportedSourceUrl: 'Listing URL',
+  settingsSupportedSourceJournalTitle: 'Journal title',
+  settingsSupportedSourcesShow: 'Show',
+  settingsSupportedSourcesHide: 'Hide',
   settingsAppearanceTitle: 'Window appearance',
   settingsTheme: 'Theme',
   settingsThemeHint:

@@ -58,6 +58,13 @@ const zh = {
   settingsBatchOptions: '最大抓取',
   settingsBatchHint:
     '限制单个 URL 在批量抓取中最多写入的文献数量。',
+  settingsSupportedSources: '已适配来源',
+  settingsSupportedSourcesHint:
+    '这些已适配的列表页会提供默认期刊名和优先抓取器。需要以其他名称显示时，可直接修改期刊标题。',
+  settingsSupportedSourceUrl: '列表页链接',
+  settingsSupportedSourceJournalTitle: '期刊标题',
+  settingsSupportedSourcesShow: '显示',
+  settingsSupportedSourcesHide: '隐藏',
   settingsAppearanceTitle: '\u7a97\u53e3\u5916\u89c2',
   settingsTheme: '\u4e3b\u9898',
   settingsThemeHint:
