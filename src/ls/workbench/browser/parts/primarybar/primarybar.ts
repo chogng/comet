@@ -4,6 +4,7 @@ import type {
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
 import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
 import { LibraryView } from 'ls/workbench/contrib/knowledgeBase/browser/views/libraryView';
 import {
@@ -323,6 +324,17 @@ export class PrimaryBar {
     }
 
     const isLibraryActive = this.activeTab === 'library';
+    const { labels } = this.props;
+    this.renderTabButton(
+      this.libraryTabButton,
+      labels.libraryTitle,
+      isLibraryActive ? 'projects-filled' : 'projects',
+    );
+    this.renderTabButton(
+      this.fetchTabButton,
+      labels.fetchTitle,
+      isLibraryActive ? 'customize' : 'customize-filled',
+    );
     this.libraryTabButton.classList.toggle('is-active', isLibraryActive);
     this.fetchTabButton.classList.toggle('is-active', !isLibraryActive);
     this.libraryTabButton.setAttribute('aria-selected', String(isLibraryActive));
@@ -340,6 +352,17 @@ export class PrimaryBar {
     if (this.tabActionsElement.firstElementChild) {
       this.tabActionsElement.replaceChildren();
     }
+  }
+
+  private renderTabButton(
+    button: HTMLButtonElement,
+    label: string,
+    iconName: LxIconName,
+  ) {
+    const labelElement = createElement('span', 'primarybar-tab-label');
+    labelElement.textContent = label;
+    button.replaceChildren(createLxIcon(iconName, 'primarybar-tab-icon'), labelElement);
+    button.title = label;
   }
 }
 

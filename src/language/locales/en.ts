@@ -14,7 +14,7 @@ const en = {
   today: 'Today',
   fetchLatestBusy: 'Batch fetching...',
   fetchLatest: 'Fetch',
-  sidebarFetchTitle: 'Literature fetch',
+  sidebarFetchTitle: 'Fetch',
   journalFilterPlaceholder: 'Journal/source filter (URL fragment)',
   resetFilter: 'Reset filters',
   showing: 'Showing',
@@ -158,7 +158,7 @@ const en = {
   settingsRagHint:
     'This phase uses article metadata, abstracts, and descriptions as the retrieval corpus. PDF chunk retrieval can plug into the same route later.',
   sidebarLibraryAction: 'Library',
-  sidebarPdfDownloadAction: 'PDF download',
+  sidebarPdfDownloadAction: 'Fetch',
   knowledgeBaseSidebarEmpty:
     'No documents are in the knowledge base yet. Turn on knowledge base mode, then download PDFs to register them here.',
   assistantSidebarTitle: 'Assistant',

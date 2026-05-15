@@ -203,15 +203,29 @@
   padding: 0 10px;
   background: transparent;
   color: var(--vscode-primaryBar-tabInactiveForeground, #6f7478);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font: inherit;
   font-size: 13px;
   font-weight: 500;
-  line-height: 30px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
   -webkit-app-region: no-drag;
+}
+
+.primarybar-tab-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.primarybar-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .primarybar-tab:hover {

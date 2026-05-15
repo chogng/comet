@@ -54,6 +54,8 @@ import cornerBottomLeftSvg from 'ls/base/browser/ui/lxicon/svg/corner-bottom-lef
 import cornerBottomRightSvg from 'ls/base/browser/ui/lxicon/svg/corner-bottom-right.svg?raw';
 import cornerTopLeftSvg from 'ls/base/browser/ui/lxicon/svg/corner-top-left.svg?raw';
 import cornerTopRightSvg from 'ls/base/browser/ui/lxicon/svg/corner-top-right.svg?raw';
+import customizeSvg from 'ls/base/browser/ui/lxicon/svg/customize.svg?raw';
+import customizeFilledSvg from 'ls/base/browser/ui/lxicon/svg/customize-filled.svg?raw';
 import cursorSvg from 'ls/base/browser/ui/lxicon/svg/cursor.svg?raw';
 import databaseSvg from 'ls/base/browser/ui/lxicon/svg/database.svg?raw';
 import deeplColorSvg from 'ls/base/browser/ui/lxicon/svg/deepl-color.svg?raw';
@@ -251,6 +253,8 @@ export type LxIconName =
   | 'corner-bottom-right'
   | 'corner-top-left'
   | 'corner-top-right'
+  | 'customize'
+  | 'customize-filled'
   | 'cursor'
   | 'database'
   | 'database-1'
@@ -450,6 +454,8 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'corner-bottom-right': cornerBottomRightSvg,
   'corner-top-left': cornerTopLeftSvg,
   'corner-top-right': cornerTopRightSvg,
+  'customize': customizeSvg,
+  'customize-filled': customizeFilledSvg,
   'cursor': cursorSvg,
   'database': databaseSvg,
   'database-1': databaseSvg,

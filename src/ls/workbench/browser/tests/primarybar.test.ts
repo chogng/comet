@@ -149,6 +149,8 @@ test('primary bar renders library and fetch as switcher tabs', () => {
     assert(fetchTab instanceof HTMLButtonElement);
     assert.equal(libraryTab.textContent, 'Library');
     assert.equal(fetchTab.textContent, 'Fetch');
+    assert(libraryTab.querySelector('.lx-icon-projects-filled') instanceof HTMLElement);
+    assert(fetchTab.querySelector('.lx-icon-customize') instanceof HTMLElement);
     assert.equal(libraryTab.getAttribute('aria-selected'), 'true');
     assert.equal(fetchTab.getAttribute('aria-selected'), 'false');
     assert(element.querySelector('.primarybar-library-panel') instanceof HTMLElement);
@@ -159,6 +161,8 @@ test('primary bar renders library and fetch as switcher tabs', () => {
 
     assert.equal(libraryTab.getAttribute('aria-selected'), 'false');
     assert.equal(fetchTab.getAttribute('aria-selected'), 'true');
+    assert(libraryTab.querySelector('.lx-icon-projects') instanceof HTMLElement);
+    assert(fetchTab.querySelector('.lx-icon-customize-filled') instanceof HTMLElement);
     assert(element.querySelector('.primarybar-fetch-panel') instanceof HTMLElement);
     assert.equal(element.querySelector('.primarybar-library-panel'), null);
     assert(

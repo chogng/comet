@@ -14,7 +14,7 @@ const zh = {
   today: '今天',
   fetchLatestBusy: '批量抓取中...',
   fetchLatest: '抓取',
-  sidebarFetchTitle: '文献抓取',
+  sidebarFetchTitle: '抓取',
   journalFilterPlaceholder: '期刊/来源过滤（URL片段）',
   resetFilter: '重置过滤',
   showing: '显示',
@@ -156,8 +156,8 @@ const zh = {
   settingsRagHideApiKey: '隐藏',
   settingsRagHint:
     '这一阶段的检索语料来自已抓取文献的元数据、摘要和描述文本。后续接入 PDF chunk 后可以直接复用这条链路。',
-  sidebarLibraryAction: '知识库',
-  sidebarPdfDownloadAction: 'PDF 下载',
+  sidebarLibraryAction: '库',
+  sidebarPdfDownloadAction: '抓取',
   knowledgeBaseSidebarEmpty:
     '知识库里还没有文献。开启知识库模式后，下载 PDF 就能在这里登记入库。',
   assistantSidebarTitle: '助手',
