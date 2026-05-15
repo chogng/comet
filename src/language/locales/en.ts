@@ -334,7 +334,7 @@ const en = {
   settingsLlmShowApiKey: 'Show',
   settingsLlmHideApiKey: 'Hide',
   settingsTranslationTitle: 'Translation',
-  settingsTranslationProvider: 'Translation provider',
+  settingsTranslationProvider: 'Provider',
   settingsTranslationProviderHint: 'Choose the provider for translate DOCX file.',
   settingsTranslationProviderDeepL: 'DeepL',
   settingsTranslationProviderGlm: 'GLM',

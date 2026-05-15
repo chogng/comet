@@ -144,6 +144,7 @@ export class SettingsPartView {
       onActiveTranslationProviderChange: (provider) => this.props.onActiveTranslationProviderChange(provider),
       onTranslationProviderApiKeyChange: (provider, apiKey) => this.props.onTranslationProviderApiKeyChange(provider, apiKey),
       onTranslationProviderBaseUrlChange: (provider, baseUrl) => this.props.onTranslationProviderBaseUrlChange(provider, baseUrl),
+      onTranslationProviderModelChange: (provider, model) => this.props.onTranslationProviderModelChange(provider, model),
       onGlmModelChange: (optionValue) => this.props.onLlmProviderSelectedModelOption('glm', optionValue),
       onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
     });
@@ -320,6 +321,7 @@ export class SettingsPartView {
       onActiveTranslationProviderChange: (provider) => this.props.onActiveTranslationProviderChange(provider),
       onTranslationProviderApiKeyChange: (provider, apiKey) => this.props.onTranslationProviderApiKeyChange(provider, apiKey),
       onTranslationProviderBaseUrlChange: (provider, baseUrl) => this.props.onTranslationProviderBaseUrlChange(provider, baseUrl),
+      onTranslationProviderModelChange: (provider, model) => this.props.onTranslationProviderModelChange(provider, model),
       onGlmModelChange: (optionValue) => this.props.onLlmProviderSelectedModelOption('glm', optionValue),
       onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
     });

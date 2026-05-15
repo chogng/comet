@@ -893,6 +893,19 @@ export class SettingsModel {
     }));
   };
 
+  readonly setTranslationProviderModel = (provider: TranslationProviderId, model: string) => {
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      translationProviders: {
+        ...snapshot.translationProviders,
+        [provider]: {
+          ...snapshot.translationProviders[provider],
+          model,
+        },
+      },
+    }));
+  };
+
   readonly resetDownloadDir = () => {
     this.setPdfDownloadDir('');
   };
@@ -1487,6 +1500,7 @@ export class SettingsModel {
         provider: activeTranslationProvider,
         apiKey: providerSettings.apiKey,
         baseUrl: providerSettings.baseUrl,
+        model: providerSettings.model,
       });
     } finally {
       this.updateSnapshot((snapshot) => ({

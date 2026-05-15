@@ -70,6 +70,7 @@ export type TranslationProviderId = 'deepl' | 'glm' | 'openai-compatible';
 export interface TranslationProviderSettings {
   apiKey: string;
   baseUrl: string;
+  model: string;
 }
 
 export interface TranslationSettings {
@@ -417,6 +418,7 @@ export interface TestTranslationConnectionPayload {
   provider?: TranslationProviderId;
   apiKey?: string;
   baseUrl?: string;
+  model?: string;
 }
 
 export interface TranslationConnectionTestResult {

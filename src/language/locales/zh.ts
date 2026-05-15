@@ -332,7 +332,7 @@ const zh = {
   settingsLlmShowApiKey: '\u663e\u793a',
   settingsLlmHideApiKey: '\u9690\u85cf',
   settingsTranslationTitle: '\u7ffb\u8bd1',
-  settingsTranslationProvider: '\u7ffb\u8bd1\u63d0\u4f9b\u65b9',
+  settingsTranslationProvider: '\u63d0\u4f9b\u65b9',
   settingsTranslationProviderHint:
     '\u9009\u62e9\u7528\u4e8e\u7ffb\u8bd1 DOCX \u6587\u4ef6\u7684\u63d0\u4f9b\u65b9\u3002',
   settingsTranslationProviderDeepL: 'DeepL',

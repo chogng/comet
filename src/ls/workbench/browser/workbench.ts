@@ -101,6 +101,7 @@ import {
   getLlmProviderDefinition,
   getLlmModelByIdForProvider,
   getLlmModelOptionsForProvider,
+  hasLlmMaxContextWindow,
   parseLlmModelOptionValue,
 } from 'ls/workbench/services/llm/registry';
 import { resolveLlmRoute } from 'ls/workbench/services/llm/routing';
@@ -426,11 +427,75 @@ function createAgentChatLlmSettings(
   };
 }
 
+function resolveAgentChatLlmProvider(
+  activeProvider: LlmProviderId,
+  selectedModelOptionValue: string | null,
+) {
+  if (
+    !selectedModelOptionValue ||
+    selectedModelOptionValue === AGENT_CHAT_AUTO_MODEL_OPTION_VALUE
+  ) {
+    return activeProvider;
+  }
+
+  return parseLlmModelOptionValue(selectedModelOptionValue)?.providerId ?? activeProvider;
+}
+
+function resolveAgentChatManualModelOptionValue(
+  activeProvider: LlmProviderId,
+  llmProviders: Record<LlmProviderId, LlmProviderSettings>,
+) {
+  const providerSettings = llmProviders[activeProvider];
+  const enabledOptions = getLlmModelOptionsForProvider(
+    activeProvider,
+    providerSettings.enabledModelOptions,
+    { enabledOnly: true },
+  );
+
+  if (
+    providerSettings.selectedModelOption &&
+    enabledOptions.some((option) => option.value === providerSettings.selectedModelOption)
+  ) {
+    return providerSettings.selectedModelOption;
+  }
+
+  return enabledOptions[0]?.value ?? '';
+}
+
+function formatAgentChatReasoningEffortLabel(value: string | undefined) {
+  if (!value || value === 'none') {
+    return '';
+  }
+
+  return value === 'xhigh'
+    ? 'XHigh'
+    : value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function createAgentChatModelDisplayLabel(
   llmSettings: ReturnType<typeof createAgentChatLlmSettings>,
 ) {
   const route = resolveLlmRoute(llmSettings, 'reasoning');
-  return getLlmModelByIdForProvider(route.provider, route.model)?.label ?? route.model;
+  const model = getLlmModelByIdForProvider(route.provider, route.model);
+  const providerSettings = llmSettings.providers[route.provider];
+  const parts = [
+    model?.label ?? route.model,
+    model && providerSettings.useMaxContextWindow && hasLlmMaxContextWindow(model)
+      ? '1M'
+      : '',
+    formatAgentChatReasoningEffortLabel(route.reasoningEffort),
+    route.serviceTier === 'priority' ? 'Fast' : '',
+  ].filter(Boolean);
+
+  return parts.join(' ');
+}
+
+function doesAgentChatModelSupportMaxContextWindow(
+  llmSettings: ReturnType<typeof createAgentChatLlmSettings>,
+) {
+  const route = resolveLlmRoute(llmSettings, 'reasoning');
+  const model = getLlmModelByIdForProvider(route.provider, route.model);
+  return model ? hasLlmMaxContextWindow(model) : false;
 }
 
 function detectNativeModalKind() {
@@ -1943,6 +2008,15 @@ class WorkbenchHost {
         llmModelOptions: agentLlmModelOptions,
         activeLlmModelOptionValue,
         activeLlmModelLabel: createAgentChatModelDisplayLabel(currentLlmSettings),
+        isMaxContextWindowEnabled:
+          currentLlmSettings.providers[
+            resolveAgentChatLlmProvider(
+              activeLlmProvider,
+              activeAgentChatModelOptionValue,
+            )
+          ].useMaxContextWindow ?? false,
+        activeLlmModelSupportsMaxContextWindow:
+          doesAgentChatModelSupportMaxContextWindow(currentLlmSettings),
         isSecondarySidebarVisible: isPrimarySidebarVisible,
       },
       actions: {
@@ -1954,6 +2028,12 @@ class WorkbenchHost {
         onCloseConversation: handleAssistantCloseConversation,
         onCloseAgentBar: handleCloseAgentSidebar,
         onToggleSecondarySidebar: togglePrimarySidebarVisibility,
+        onToggleAutoModelRouting: () => {
+          activeAgentChatModelOptionValue = activeAgentChatModelOptionValue
+            ? null
+            : resolveAgentChatManualModelOptionValue(activeLlmProvider, llmProviders);
+          this.requestRender();
+        },
         onSelectLlmModel: (value) => {
           activeAgentChatModelOptionValue =
             value === AGENT_CHAT_AUTO_MODEL_OPTION_VALUE ? null : value;
@@ -1968,6 +2048,16 @@ class WorkbenchHost {
           }
           settingsControllerInstance.setActiveLlmProvider(parsed.providerId);
           settingsControllerInstance.setLlmProviderSelectedModelOption(parsed.providerId, value);
+        },
+        onToggleMaxContextWindow: () => {
+          const providerId = resolveAgentChatLlmProvider(
+            activeLlmProvider,
+            activeAgentChatModelOptionValue,
+          );
+          const nextValue =
+            !(currentLlmSettings.providers[providerId].useMaxContextWindow ?? false);
+          settingsControllerInstance.setLlmProviderUseMaxContextWindow(providerId, nextValue);
+          this.requestRender();
         },
         onOpenModelSettings: () => {
           const selectedOption = activeAgentChatModelOptionValue
@@ -2165,6 +2255,8 @@ class WorkbenchHost {
           settingsControllerInstance.setTranslationProviderApiKey,
         onTranslationProviderBaseUrlChange:
           settingsControllerInstance.setTranslationProviderBaseUrl,
+        onTranslationProviderModelChange:
+          settingsControllerInstance.setTranslationProviderModel,
         onTestRagConnection: () =>
           void settingsControllerInstance.handleTestRagConnection(),
         onTestLlmConnection: () =>

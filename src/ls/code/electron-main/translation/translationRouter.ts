@@ -181,10 +181,14 @@ function resolveTranslationCacheIdentity(
 
   if (hasUsableTranslationSettings(translationSettings)) {
     const activeProvider = translationSettings.activeProvider;
+    const providerSettings = translationSettings.providers[activeProvider];
     return {
       provider: `translation:${activeProvider}`,
-      baseUrl: translationSettings.providers[activeProvider].baseUrl,
-      model: activeProvider === 'openai-compatible' ? openAICompatibleTranslationModel : 'translate-to-zh-hans',
+      baseUrl: providerSettings.baseUrl,
+      model:
+        activeProvider === 'openai-compatible'
+          ? cleanText(providerSettings.model) || openAICompatibleTranslationModel
+          : 'translate-to-zh-hans',
       mode: 'dedicated' as const,
     };
   }

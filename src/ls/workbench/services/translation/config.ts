@@ -11,14 +11,17 @@ export const defaultTranslationProviderSettings: Record<TranslationProviderId, T
   deepl: {
     apiKey: '',
     baseUrl: getTranslationProviderDefinition('deepl').defaultBaseUrl,
+    model: '',
   },
   glm: {
     apiKey: '',
     baseUrl: getTranslationProviderDefinition('glm').defaultBaseUrl,
+    model: '',
   },
   'openai-compatible': {
     apiKey: '',
     baseUrl: getTranslationProviderDefinition('openai-compatible').defaultBaseUrl,
+    model: 'gpt-5.4-mini',
   },
 };
 
@@ -26,6 +29,7 @@ function cloneProviderSettings(settings: TranslationProviderSettings): Translati
   return {
     apiKey: settings.apiKey,
     baseUrl: settings.baseUrl,
+    model: settings.model,
   };
 }
 

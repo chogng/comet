@@ -10,7 +10,6 @@ import {
   createSettingsRow,
 } from 'ls/workbench/contrib/preferences/browser/section';
 import {
-  buildSettingsHint as buildHint,
   buildSettingsInput as buildInput,
   buildSettingsSelect as buildSelect,
   createSettingsElement as el,
@@ -18,6 +17,7 @@ import {
 import {
   getLlmModelOptionsForProvider,
   parseLlmModelOptionValue,
+  getLlmModelByIdForProvider,
 } from 'ls/workbench/services/llm/registry';
 
 export type TranslationWidgetProps = {
@@ -32,9 +32,12 @@ export type TranslationWidgetProps = {
   onActiveTranslationProviderChange: (provider: TranslationProviderId) => void;
   onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void;
   onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void;
+  onTranslationProviderModelChange: (provider: TranslationProviderId, model: string) => void;
   onGlmModelChange: (optionValue: string) => void;
   onTestTranslationConnection: () => void;
 };
+
+const openAITranslationModelIds = ['gpt-5.2', 'gpt-5.4', 'gpt-5.4-mini'] as const;
 
 export class TranslationWidget {
   private props: TranslationWidgetProps;
@@ -143,12 +146,7 @@ export class TranslationWidget {
         itemClassName: 'settings-translation-base-url-item',
         controlClassName: 'settings-translation-base-url-control',
       }),
-      createSettingsRow({
-        title: this.props.labels.settingsLlmModel,
-        control: buildHint('GPT-5.4 Mini (gpt-5.4-mini)', 'settings-hint settings-translation-model-value'),
-        itemClassName: 'settings-translation-model-item',
-        controlClassName: 'settings-translation-model-control',
-      }),
+      this.renderOpenAICompatibleModelRow(),
     ];
   }
 
@@ -191,6 +189,35 @@ export class TranslationWidget {
       titleClassName: 'settings-block-list-item-title-empty',
       contentClassName: 'settings-translation-api-key-content',
       controlClassName: 'settings-translation-api-key-row-control',
+    });
+  }
+
+  private renderOpenAICompatibleModelRow() {
+    const provider = this.props.translationProviders['openai-compatible'];
+    const options = openAITranslationModelIds.map((modelId) => {
+      const model = getLlmModelByIdForProvider('openai', modelId);
+      const label = model?.label ?? modelId;
+      return {
+        value: modelId,
+        label,
+        title: label,
+      };
+    });
+    const selectedValue = options.some((option) => option.value === provider.model)
+      ? provider.model
+      : 'gpt-5.4-mini';
+
+    return createSettingsRow({
+      title: this.props.labels.settingsLlmModel,
+      control: buildSelect(
+        options,
+        selectedValue,
+        'settings.translation.openai.model',
+        (value) => this.props.onTranslationProviderModelChange('openai-compatible', value),
+        'settings-llm-provider',
+      ),
+      itemClassName: 'settings-translation-model-item',
+      controlClassName: 'settings-translation-model-control',
     });
   }
 }

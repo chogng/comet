@@ -506,6 +506,14 @@ export class SettingsController {
     this.scheduleDebouncedAutoSave();
   };
 
+  readonly setTranslationProviderModel = (
+    provider: TranslationProviderId,
+    model: string,
+  ) => {
+    this.settingsModel.setTranslationProviderModel(provider, model);
+    this.scheduleImmediateAutoSave();
+  };
+
   readonly handleResetDownloadDir = () => {
     this.settingsModel.resetDownloadDir();
     this.scheduleImmediateAutoSave();

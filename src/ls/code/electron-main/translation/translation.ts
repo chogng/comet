@@ -22,6 +22,7 @@ type ResolvedTranslationRequest = {
   provider: TranslationProviderId;
   apiKey: string;
   baseUrl: string;
+  model: string;
 };
 
 type DeepLTranslationResponse = {
@@ -87,10 +88,15 @@ function normalizeApiKey(value: unknown): string {
 }
 
 function resolveTranslationRequest(payload: TestTranslationConnectionPayload = {}): ResolvedTranslationRequest {
+  const provider = normalizeProvider(payload.provider ?? defaultTranslationProviderId);
   return {
-    provider: normalizeProvider(payload.provider ?? defaultTranslationProviderId),
+    provider,
     apiKey: normalizeApiKey(payload.apiKey),
     baseUrl: normalizeBaseUrl(payload.baseUrl),
+    model:
+      provider === 'openai-compatible'
+        ? cleanText(payload.model) || openAICompatibleTranslationModel
+        : 'translate-to-zh-hans',
   };
 }
 
@@ -310,7 +316,7 @@ async function requestOpenAICompatibleTranslations(
   const responseJson = await requestOpenAICompatibleResponse(
     request,
     {
-      model: openAICompatibleTranslationModel,
+      model: request.model,
       input: [
         {
           role: 'system',

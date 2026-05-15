@@ -495,6 +495,7 @@ function normalizeTranslationProviderSettings(
   return {
     apiKey: cleanText(providerPayload.apiKey),
     baseUrl: cleanText(providerPayload.baseUrl) || defaults.baseUrl,
+    model: cleanText(providerPayload.model) || defaults.model,
   };
 }
 
