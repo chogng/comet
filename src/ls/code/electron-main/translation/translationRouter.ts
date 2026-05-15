@@ -145,10 +145,24 @@ function shouldUseGlmTranslation(
   );
 }
 
-function toGlmLlmSettings(llmSettings: LlmSettings): LlmSettings {
+function toGlmLlmSettings(
+  llmSettings: LlmSettings,
+  translationSettings?: TranslationSettings,
+): LlmSettings {
+  const translationApiKey = translationSettings
+    ? cleanText(translationSettings.providers.glm.apiKey)
+    : '';
+
   return {
     ...llmSettings,
     activeProvider: 'glm',
+    providers: {
+      ...llmSettings.providers,
+      glm: {
+        ...llmSettings.providers.glm,
+        apiKey: translationApiKey || llmSettings.providers.glm.apiKey,
+      },
+    },
   };
 }
 
@@ -157,9 +171,10 @@ function resolveTranslationCacheIdentity(
   translationSettings: TranslationSettings,
 ) {
   if (shouldUseGlmTranslation(llmSettings, translationSettings)) {
-    const llmIdentity = getLlmTranslationCacheIdentity(toGlmLlmSettings(llmSettings));
+    const llmIdentity = getLlmTranslationCacheIdentity(toGlmLlmSettings(llmSettings, translationSettings));
     return {
       ...llmIdentity,
+      provider: translationSettings.activeProvider === 'glm' ? 'translation:glm' : llmIdentity.provider,
       mode: 'llm' as const,
     };
   }
@@ -241,7 +256,7 @@ export async function translateTextsToChinese(
         : await translateTextsWithLlm(
             batch,
             shouldUseGlmTranslation(llmSettings, translationSettings)
-              ? toGlmLlmSettings(llmSettings)
+              ? toGlmLlmSettings(llmSettings, translationSettings)
               : llmSettings,
           );
 

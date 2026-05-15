@@ -131,25 +131,32 @@ export class SettingsController {
     }
   };
 
-  readonly handleOpenConfigLocation = async () => {
-    const { desktopRuntime, invokeDesktop, ui } = this.context;
-    if (!desktopRuntime) {
-      toast.info(ui.toastDesktopDirPickerOnly);
-      return;
-    }
-
+  readonly handleChooseConfigPath = async () => {
     try {
-      await invokeDesktop('open_path', {
-        path: this.settingsModel.getSnapshot().configPath,
-      });
-    } catch (openError) {
-      const localizedError = localizeSettingsError(ui, openError);
+      const result = await this.settingsModel.chooseConfigPath(
+        this.getSettingsModelContext(),
+      );
+      if (result.kind === 'selected') {
+        this.scheduleImmediateAutoSave();
+      }
+    } catch (pickError) {
+      const localizedError = localizeSettingsError(this.context.ui, pickError);
       toast.error(
-        formatLocalized(ui.toastOpenConfigLocationFailed, {
+        formatLocalized(this.context.ui.toastChangeConfigLocationFailed, {
           error: localizedError,
         }),
       );
     }
+  };
+
+  readonly handleResetConfigPath = () => {
+    this.settingsModel.resetConfigPath();
+    this.scheduleImmediateAutoSave();
+  };
+
+  readonly handleResetKnowledgeBaseSettings = () => {
+    this.settingsModel.resetKnowledgeBaseSettings();
+    this.scheduleImmediateAutoSave();
   };
 
   readonly setBatchLimit = (nextBatchLimit: number) => {

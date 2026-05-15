@@ -737,6 +737,25 @@
   width: 100%;
 }
 
+.settings-translation-api-key-control .settings-llm-api-title-wrap {
+  flex: 1 1 auto;
+}
+
+.settings-translation-api-key-control .settings-llm-api-subtitle {
+  max-width: 520px;
+}
+
+.settings-translation-api-key-control .settings-llm-api-row {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.settings-translation-api-key-control .settings-api-key-input {
+  flex: 0 1 340px;
+  width: min(340px, 100%);
+  margin-left: 0;
+}
+
 @media (max-width: 900px) {
   .settings-supported-source-row {
     grid-template-columns: minmax(0, 1fr);

@@ -60,6 +60,7 @@ function createProps(): AgentChatWidgetProps {
       { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
     ],
     activeLlmModelOptionValue: 'auto',
+    activeLlmModelLabel: 'GLM-4.7-Flash',
     onCreateConversation: () => {},
     onActivateConversation: () => {},
     onCloseConversation: () => {},
@@ -386,6 +387,14 @@ test('composer toolbar uses actionbar icon controls', () => {
 
     const dropdownButton = element.querySelector('.agentbar-model-switch-btn');
     assert(dropdownButton instanceof HTMLButtonElement);
+    assert.equal(
+      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      'GLM-4.7-Flash',
+    );
+    assert.equal(
+      dropdownButton.querySelector('.agentbar-model-switch-icon'),
+      null,
+    );
     dropdownButton.click();
 
     const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');

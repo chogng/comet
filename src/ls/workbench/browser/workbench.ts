@@ -99,9 +99,11 @@ import type { WebContentState } from 'ls/workbench/services/webContent/webConten
 import { normalizeBrowserTabKeepAliveLimit } from 'ls/workbench/services/webContent/webContentRetentionConfig';
 import {
   getLlmProviderDefinition,
+  getLlmModelByIdForProvider,
   getLlmModelOptionsForProvider,
   parseLlmModelOptionValue,
 } from 'ls/workbench/services/llm/registry';
+import { resolveLlmRoute } from 'ls/workbench/services/llm/routing';
 
 import { isEditorContentTabInput } from 'ls/workbench/browser/parts/editor/editorInput';
 import type { EditorWorkspaceTab } from 'ls/workbench/browser/parts/editor/editorModel';
@@ -422,6 +424,13 @@ function createAgentChatLlmSettings(
       },
     },
   };
+}
+
+function createAgentChatModelDisplayLabel(
+  llmSettings: ReturnType<typeof createAgentChatLlmSettings>,
+) {
+  const route = resolveLlmRoute(llmSettings, 'reasoning');
+  return getLlmModelByIdForProvider(route.provider, route.model)?.label ?? route.model;
 }
 
 function detectNativeModalKind() {
@@ -1323,6 +1332,7 @@ class WorkbenchHost {
       activeTranslationProvider,
       translationProviders,
       configPath,
+      defaultConfigPath,
       isSettingsLoading,
       isSettingsSaving,
       isTestingRagConnection,
@@ -1932,6 +1942,7 @@ class WorkbenchHost {
         activeConversationId: activeAssistantConversationId,
         llmModelOptions: agentLlmModelOptions,
         activeLlmModelOptionValue,
+        activeLlmModelLabel: createAgentChatModelDisplayLabel(currentLlmSettings),
         isSecondarySidebarVisible: isPrimarySidebarVisible,
       },
       actions: {
@@ -2043,6 +2054,7 @@ class WorkbenchHost {
         translationProviders,
         desktopRuntime,
         configPath,
+        defaultConfigPath,
         isLibraryLoading,
         libraryDocumentCount: librarySnapshot.totalCount,
         libraryFileCount: librarySnapshot.fileCount,
@@ -2159,8 +2171,11 @@ class WorkbenchHost {
           void settingsControllerInstance.handleTestLlmConnection(),
         onTestTranslationConnection: () =>
           void settingsControllerInstance.handleTestTranslationConnection(),
-        onOpenConfigLocation: () =>
-          void settingsControllerInstance.handleOpenConfigLocation(),
+        onChooseConfigPath: () =>
+          void settingsControllerInstance.handleChooseConfigPath(),
+        onResetConfigPath: settingsControllerInstance.handleResetConfigPath,
+        onResetKnowledgeBaseSettings:
+          settingsControllerInstance.handleResetKnowledgeBaseSettings,
         onResetDownloadDir: settingsControllerInstance.handleResetDownloadDir,
       },
     });

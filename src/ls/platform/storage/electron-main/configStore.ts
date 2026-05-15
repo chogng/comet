@@ -68,6 +68,25 @@ type UserSettings = {
   journalSourceOverrides?: JournalSourceOverride[];
 };
 
+function normalizeUserSettingsPathOverride(value: unknown, defaultUserSettingsFile: string) {
+  const normalized = cleanText(typeof value === 'string' ? value : '');
+  if (!normalized || normalized === defaultUserSettingsFile) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function resolveUserSettingsFilePath(
+  payload: Partial<StoredAppSettings>,
+  defaultUserSettingsFile: string,
+) {
+  return normalizeUserSettingsPathOverride(
+    payload.userSettingsPathOverride,
+    defaultUserSettingsFile,
+  ) ?? defaultUserSettingsFile;
+}
+
 async function readJson<T>(filePath: string, fallbackValue: T) {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
@@ -297,6 +316,7 @@ function resolveUserEditorDraftStyle(userSettings: Partial<UserSettings>) {
 function normalizeSettings(
   payload: Partial<StoredAppSettings> = {},
   defaultLocale: 'zh' | 'en',
+  defaultUserSettingsFile?: string,
 ): StoredAppSettings {
   const downloadDir = typeof payload.defaultDownloadDir === 'string' ? cleanText(payload.defaultDownloadDir) : '';
   const parsedLimit = Number.parseInt(String(payload.defaultBatchLimit), 10);
@@ -340,6 +360,9 @@ function normalizeSettings(
     theme: normalizeTheme(payload.theme),
     'workbench.colorCustomizations': normalizeThemeColorCustomizations(payload['workbench.colorCustomizations']),
     locale: normalizeLocale(payload.locale, defaultLocale),
+    userSettingsPathOverride: defaultUserSettingsFile
+      ? normalizeUserSettingsPathOverride(payload.userSettingsPathOverride, defaultUserSettingsFile)
+      : cleanText(typeof payload.userSettingsPathOverride === 'string' ? payload.userSettingsPathOverride : '') || null,
     editorDraftStyle: normalizeEditorDraftStyleSettings(payload.editorDraftStyle),
     llm: normalizeLlmSettings(payload.llm),
     translation: normalizeTranslationSettings(payload.translation),
@@ -578,12 +601,17 @@ function normalizeRelativeApiPath(value: unknown, fallbackValue: string): string
   return pathValue.startsWith('/') ? pathValue : `/${pathValue}`;
 }
 
-function attachConfigPath(settings: StoredAppSettings, configPath: string): AppSettings {
+function attachConfigPath(
+  settings: StoredAppSettings,
+  configPath: string,
+  defaultConfigPath: string,
+): AppSettings {
   return {
     ...settings,
     editorDraftStyle: cloneEditorDraftStyleSettings(settings.editorDraftStyle),
     knowledgeBase: cloneKnowledgeBaseSettings(settings.knowledgeBase),
     configPath,
+    defaultConfigPath,
   };
 }
 
@@ -596,9 +624,10 @@ export function createConfigStore(
 
   async function readSettings() {
     const payload = await readJson<Partial<StoredAppSettings>>(configFile, {});
+    const resolvedUserSettingsFile = resolveUserSettingsFilePath(payload, userSettingsFile);
     const { editorDraftStyle: _legacyEditorDraftStyle, ...configPayload } = payload;
-    await ensureUserSettingsFile(userSettingsFile, payload);
-    const userSettings = await readJson<Partial<UserSettings>>(userSettingsFile, {});
+    await ensureUserSettingsFile(resolvedUserSettingsFile, payload);
+    const userSettings = await readJson<Partial<UserSettings>>(resolvedUserSettingsFile, {});
     const userEditorDraftStyle = resolveUserEditorDraftStyle(userSettings);
     const normalized = normalizeSettings(
       {
@@ -607,8 +636,9 @@ export function createConfigStore(
         ...(userEditorDraftStyle ? { editorDraftStyle: userEditorDraftStyle } : {}),
       },
       defaultLocale,
+      userSettingsFile,
     );
-    return attachConfigPath(normalized, userSettingsFile);
+    return attachConfigPath(normalized, resolvedUserSettingsFile, userSettingsFile);
   }
 
   return {
@@ -626,10 +656,17 @@ export function createConfigStore(
           journalSourceOverrides: [],
         },
         defaultLocale,
+        userSettingsFile,
       );
+      const targetUserSettingsFile =
+        resolveUserSettingsFilePath(saved, userSettingsFile);
       const { editorDraftStyle, ...savedConfig } = saved;
       await writeJson(configFile, savedConfig);
-      await writeUserSettingsEditorDraftStyle(userSettingsFile, editorDraftStyle);
+      await ensureUserSettingsFile(targetUserSettingsFile, {
+        ...saved,
+        journalSourceOverrides: currentStored.journalSourceOverrides,
+      });
+      await writeUserSettingsEditorDraftStyle(targetUserSettingsFile, editorDraftStyle);
       return readSettings();
     },
   };

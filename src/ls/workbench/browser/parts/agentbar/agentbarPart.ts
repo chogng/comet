@@ -29,6 +29,7 @@ type CreateAgentBarPartPropsParams = {
     activeConversationId: AssistantModelSnapshot['activeConversationId'];
     llmModelOptions: DropdownOption[];
     activeLlmModelOptionValue: string;
+    activeLlmModelLabel: string;
     isSecondarySidebarVisible: boolean;
   };
   actions: {
@@ -69,6 +70,7 @@ export function createAgentBarPartProps({
     activeConversationId,
     llmModelOptions,
     activeLlmModelOptionValue,
+    activeLlmModelLabel,
   },
   actions: {
     onQuestionChange,
@@ -97,6 +99,7 @@ export function createAgentBarPartProps({
     activeConversationId,
     llmModelOptions,
     activeLlmModelOptionValue,
+    activeLlmModelLabel,
     onCreateConversation,
     onActivateConversation,
     onCloseConversation,

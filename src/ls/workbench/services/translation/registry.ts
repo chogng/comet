@@ -24,7 +24,7 @@ export const translationProviders: ReadonlyArray<TranslationProviderDefinition> 
   },
   {
     id: 'openai-compatible',
-    label: 'OpenAI-compatible',
+    label: 'OpenAI',
     apiStyle: 'openai-compatible',
     defaultBaseUrl: 'https://api.openai.com/v1',
   },

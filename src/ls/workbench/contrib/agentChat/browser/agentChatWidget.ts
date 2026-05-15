@@ -48,6 +48,7 @@ type AgentModelMenuGroup = {
 export type AgentChatWidgetProps = {
   labels: AgentBarLabels;
   isKnowledgeBaseModeEnabled: boolean;
+  activeLlmModelLabel: string;
   messages: AssistantChatMessage[];
   question: string;
   onQuestionChange: (value: string) => void;
@@ -303,10 +304,11 @@ export class AgentChatWidget {
 
   private createModelDropdownActionViewItem() {
     const currentOption = this.resolveCurrentModelOption();
+    const currentLabel = this.props.activeLlmModelLabel || currentOption?.label || 'Switch model';
 
     return new DropdownMenuActionViewItem({
-      label: currentOption?.label ?? 'Switch model',
-      title: 'Switch model',
+      label: currentLabel,
+      title: currentLabel,
       mode: 'custom',
       buttonClassName: 'agentbar-model-switch-btn',
       className: 'agentbar-model-switch',
@@ -325,10 +327,6 @@ export class AgentChatWidget {
   }
 
   private resolveCurrentModelOption() {
-    if (this.props.activeLlmModelOptionValue === 'auto') {
-      return { value: 'auto', label: 'Auto', icon: 'agent' as LxIconName };
-    }
-
     const exactOption =
       this.props.llmModelOptions.find(
         (option) => option.value === this.props.activeLlmModelOptionValue,
@@ -345,16 +343,10 @@ export class AgentChatWidget {
 
   private renderModelDropdownTrigger(currentOption: DropdownOption | null) {
     const trigger = createElement('span', 'agentbar-model-switch-trigger');
-    const activeIcon = currentOption?.icon
-      ? createLxIcon(currentOption.icon, 'agentbar-model-switch-icon')
-      : null;
     const label = createElement('span', 'agentbar-model-switch-label');
-    label.textContent = currentOption?.label ?? 'Select model';
+    label.textContent = this.props.activeLlmModelLabel || currentOption?.label || 'Select model';
     const chevron = createLxIcon('chevron-down', 'agentbar-model-switch-chevron');
 
-    if (activeIcon) {
-      trigger.append(activeIcon);
-    }
     trigger.append(label, chevron);
     return trigger;
   }

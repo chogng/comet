@@ -83,6 +83,7 @@ export type SettingsModelSnapshot = {
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
   configPath: string;
+  defaultConfigPath: string;
   isSettingsLoading: boolean;
   isSettingsSaving: boolean;
   isTestingRagConnection: boolean;
@@ -162,6 +163,7 @@ function areSettingsModelSnapshotsEqual(
     previous.activeLlmProvider === next.activeLlmProvider &&
     previous.activeTranslationProvider === next.activeTranslationProvider &&
     previous.configPath === next.configPath &&
+    previous.defaultConfigPath === next.defaultConfigPath &&
     previous.isSettingsLoading === next.isSettingsLoading &&
     previous.isSettingsSaving === next.isSettingsSaving &&
     previous.isTestingRagConnection === next.isTestingRagConnection &&
@@ -214,6 +216,7 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     activeTranslationProvider: defaultTranslationSettings.activeProvider,
     translationProviders: defaultTranslationSettings.providers,
     configPath: '',
+    defaultConfigPath: '',
     isSettingsLoading: false,
     isSettingsSaving: false,
     isTestingRagConnection: false,
@@ -567,6 +570,17 @@ export class SettingsModel {
     }));
   };
 
+  readonly setConfigPath = (configPath: string) => {
+    if (this.snapshot.configPath === configPath) {
+      return;
+    }
+
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      configPath,
+    }));
+  };
+
   readonly setPdfFileNameUseSelectionOrder = (pdfFileNameUseSelectionOrder: boolean) => {
     if (this.snapshot.pdfFileNameUseSelectionOrder === pdfFileNameUseSelectionOrder) {
       return;
@@ -883,6 +897,29 @@ export class SettingsModel {
     this.setPdfDownloadDir('');
   };
 
+  readonly resetConfigPath = () => {
+    this.setConfigPath(this.snapshot.defaultConfigPath);
+  };
+
+  readonly resetKnowledgeBaseSettings = () => {
+    const defaultKnowledgeBaseSettings = createDefaultKnowledgeBaseSettings();
+    const defaultRagSettings = createDefaultRagSettings();
+
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      knowledgeBaseEnabled: defaultKnowledgeBaseSettings.enabled,
+      autoIndexDownloadedPdf: defaultKnowledgeBaseSettings.autoIndexDownloadedPdf,
+      knowledgeBasePdfDownloadDir: defaultKnowledgeBaseSettings.downloadDirectory ?? '',
+      libraryStorageMode: defaultKnowledgeBaseSettings.libraryStorageMode,
+      libraryDirectory: defaultKnowledgeBaseSettings.libraryDirectory ?? '',
+      maxConcurrentIndexJobs: defaultKnowledgeBaseSettings.maxConcurrentIndexJobs,
+      activeRagProvider: defaultRagSettings.activeProvider,
+      ragProviders: cloneRagSettings(defaultRagSettings).providers,
+      retrievalCandidateCount: defaultRagSettings.retrievalCandidateCount,
+      retrievalTopK: defaultRagSettings.retrievalTopK,
+    }));
+  };
+
   async loadSettings({
     desktopRuntime,
     invokeDesktop,
@@ -930,6 +967,7 @@ export class SettingsModel {
         activeTranslationProvider: resolved.translation.activeProvider,
         translationProviders: cloneTranslationSettings(resolved.translation).providers,
         configPath: resolved.configPath,
+        defaultConfigPath: resolved.defaultConfigPath,
       }));
 
       return {
@@ -1015,6 +1053,32 @@ export class SettingsModel {
     };
   }
 
+  async chooseConfigPath({
+    desktopRuntime,
+    invokeDesktop,
+  }: SettingsModelContext): Promise<ChoosePdfDownloadDirResult> {
+    if (!desktopRuntime) {
+      return {
+        kind: 'desktop-only',
+      };
+    }
+
+    const selected = await invokeDesktop<string | null>('pick_user_settings_file', {
+      defaultPath: this.snapshot.configPath,
+    });
+    if (!selected) {
+      return {
+        kind: 'not-selected',
+      };
+    }
+
+    this.setConfigPath(selected);
+    return {
+      kind: 'selected',
+      dir: selected,
+    };
+  }
+
   async saveLocale(
     { desktopRuntime, invokeDesktop }: SettingsModelContext,
     locale: Locale,
@@ -1076,6 +1140,7 @@ export class SettingsModel {
       useMica,
       theme,
       workbenchColorCustomizations,
+      configPath,
       editorDraftStyle,
       locale,
       knowledgeBase: {
@@ -1153,6 +1218,7 @@ export class SettingsModel {
       activeTranslationProvider: resolved.translation.activeProvider,
       translationProviders: cloneTranslationSettings(resolved.translation).providers,
       configPath: resolved.configPath,
+      defaultConfigPath: resolved.defaultConfigPath,
     }));
   }
 
@@ -1213,6 +1279,7 @@ export class SettingsModel {
       useMica,
       theme,
       workbenchColorCustomizations,
+      configPath,
       editorDraftStyle,
       locale,
       knowledgeBase: {
@@ -1292,6 +1359,7 @@ export class SettingsModel {
         activeTranslationProvider: resolved.translation.activeProvider,
         translationProviders: cloneTranslationSettings(resolved.translation).providers,
         configPath: resolved.configPath,
+        defaultConfigPath: resolved.defaultConfigPath,
       }));
 
       return {
@@ -1393,17 +1461,17 @@ export class SettingsModel {
       if (activeTranslationProvider === 'glm') {
         const route = resolveLlmRoute(
           {
-            activeProvider: 'glm',
-            providers: this.snapshot.llmProviders,
-          },
-          'chat',
-        );
-        const result = await invokeDesktop('test_llm_connection', {
-          provider: route.provider,
-          apiKey: route.apiKey,
-          baseUrl: route.baseUrl,
-          model: route.model,
-          reasoningEffort: route.reasoningEffort,
+          activeProvider: 'glm',
+          providers: this.snapshot.llmProviders,
+        },
+        'chat',
+      );
+      const result = await invokeDesktop('test_llm_connection', {
+        provider: route.provider,
+        apiKey: translationProviders.glm.apiKey,
+        baseUrl: route.baseUrl,
+        model: route.model,
+        reasoningEffort: route.reasoningEffort,
         });
 
         return {

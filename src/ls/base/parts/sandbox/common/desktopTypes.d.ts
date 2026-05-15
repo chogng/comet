@@ -131,6 +131,7 @@ export interface StoredAppSettings {
   theme: AppTheme;
   'workbench.colorCustomizations': ThemeColorCustomizations;
   locale: Locale;
+  userSettingsPathOverride?: string | null;
   editorDraftStyle: EditorDraftStyleSettings;
   llm: LlmSettings;
   translation: TranslationSettings;
@@ -140,6 +141,7 @@ export interface StoredAppSettings {
 
 export interface AppSettings extends StoredAppSettings {
   configPath: string;
+  defaultConfigPath: string;
 }
 
 export type AppErrorCode =
@@ -446,6 +448,10 @@ export interface OpenPathPayload {
   path?: string;
 }
 
+export interface PickUserSettingsFilePayload {
+  defaultPath?: string;
+}
+
 export interface ReadPdfFilePayload {
   url?: string;
   path?: string;
@@ -699,6 +705,7 @@ export interface AppCommandPayloadMap {
   test_translation_connection: TestTranslationConnectionPayload;
   test_rag_connection: TestRagConnectionPayload;
   pick_download_directory: undefined;
+  pick_user_settings_file: PickUserSettingsFilePayload;
   pick_pdf_file: undefined;
   read_pdf_file: ReadPdfFilePayload;
   open_path: OpenPathPayload;
@@ -728,6 +735,7 @@ export interface AppCommandResultMap {
   test_translation_connection: TranslationConnectionTestResult;
   test_rag_connection: RagConnectionTestResult;
   pick_download_directory: string | null;
+  pick_user_settings_file: string | null;
   pick_pdf_file: string | null;
   read_pdf_file: ReadPdfFileResult;
   open_path: boolean;

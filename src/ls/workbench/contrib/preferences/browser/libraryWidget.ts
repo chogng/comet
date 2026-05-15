@@ -2,7 +2,6 @@ import type {
   LibraryDocumentSummary,
   LibraryStorageMode,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
 import type { SettingsPartLabels } from 'ls/workbench/contrib/preferences/browser/settingsTypes';
 import {
   createSettingsSection,
@@ -83,6 +82,10 @@ export class LibraryWidget {
   }
 
   private renderStorageSection(effectiveManagedDirectory: string) {
+    const usesManagedCopy = this.props.libraryStorageMode === 'managed-copy';
+    const libraryDirectoryDescription = usesManagedCopy
+      ? `${this.props.labels.settingsLibraryDirectoryHint} ${this.props.labels.currentDir} ${effectiveManagedDirectory || '-'}`
+      : `${this.props.labels.settingsLibraryDirectoryInactiveHint} ${effectiveManagedDirectory || '-'}`;
     const section = createSettingsSection({
       title: this.props.labels.settingsLibraryTitle,
       titleClassName: 'settings-section-title',
@@ -100,23 +103,17 @@ export class LibraryWidget {
       }),
     );
 
-    const directoryRow = el('div', 'settings-input-row');
-    directoryRow.append(
-      buildInput({
-        value: this.props.libraryDirectory,
-        className: 'settings-input-control',
-        focusKey: 'settings.library.directory',
-        placeholder: this.props.labels.settingsLibraryDirectoryPlaceholder,
-        onInput: this.props.onLibraryDirectoryChange,
-      }).element,
-      buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-btn-icon', focusKey: 'settings.library.chooseDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseLibraryDirectory }),
-    );
-
     section.list.append(
       createSettingsRow({
         title: this.props.labels.settingsLibraryDirectory,
-        description: `${this.props.labels.settingsLibraryDirectoryHint} ${this.props.labels.currentDir} ${effectiveManagedDirectory || '-'}`,
-        control: directoryRow,
+        description: libraryDirectoryDescription,
+        control: buildButton({
+          label: this.props.labels.change,
+          focusKey: 'settings.library.openDirectory',
+          title: this.props.labels.chooseDirectory,
+          disabled: !this.props.desktopRuntime || this.props.isSettingsSaving || !usesManagedCopy,
+          onClick: this.props.onChooseLibraryDirectory,
+        }),
         itemClassName: 'settings-library-directory-item',
         controlClassName: 'settings-library-directory-control',
       }),
@@ -172,21 +169,18 @@ export class LibraryWidget {
   }
 
   private renderDownloadDirectoryField() {
-    const downloadDirectoryRow = el('div', 'settings-input-row');
-    downloadDirectoryRow.append(
-      buildInput({
-        value: this.props.knowledgeBasePdfDownloadDir,
-        className: 'settings-input-control',
-        focusKey: 'settings.library.downloadDirectory',
-        placeholder: this.props.labels.settingsKnowledgeBasePdfDownloadDirPlaceholder,
-        onInput: this.props.onKnowledgeBasePdfDownloadDirChange,
-      }).element,
-      buildButton({ label: '...', icon: lxIconSemanticMap.settings.chooseDirectory, className: 'settings-btn-icon', focusKey: 'settings.library.chooseDownloadDirectory', title: this.props.labels.chooseDirectory, disabled: !this.props.desktopRuntime || this.props.isSettingsSaving, onClick: this.props.onChooseKnowledgeBasePdfDownloadDir }),
-    );
+    const effectiveDownloadDir =
+      this.props.knowledgeBasePdfDownloadDir.trim() || this.props.labels.systemDownloads;
     return createSettingsRow({
       title: this.props.labels.settingsKnowledgeBasePdfDownloadDir,
-      description: `${this.props.labels.settingsKnowledgeBasePdfDownloadDirHint} ${this.props.labels.currentDir} ${this.props.knowledgeBasePdfDownloadDir.trim() || this.props.labels.systemDownloads}`,
-      control: downloadDirectoryRow,
+      description: `${this.props.labels.settingsKnowledgeBasePdfDownloadDirHint} ${this.props.labels.currentDir} ${effectiveDownloadDir}`,
+      control: buildButton({
+        label: this.props.labels.change,
+        focusKey: 'settings.library.openDownloadDirectory',
+        title: this.props.labels.chooseDirectory,
+        disabled: !this.props.desktopRuntime || this.props.isSettingsSaving,
+        onClick: this.props.onChooseKnowledgeBasePdfDownloadDir,
+      }),
       itemClassName: 'settings-library-download-directory-item',
       controlClassName: 'settings-library-directory-control',
     });

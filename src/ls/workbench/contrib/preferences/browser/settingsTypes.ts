@@ -32,7 +32,7 @@ export type SettingsPartLabels = {
   settingsKnowledgeBaseTitle: string; settingsKnowledgeBaseHint: string; settingsKnowledgeBaseModeHint: string; settingsKnowledgeBaseModeDisabledHint: string; settingsKnowledgeBaseAutoIndex: string; settingsKnowledgeBaseAutoIndexHint: string;
   settingsKnowledgeBasePdfDownloadDir: string; settingsKnowledgeBasePdfDownloadDirPlaceholder: string; settingsKnowledgeBasePdfDownloadDirHint: string;
   settingsLibraryStorageMode: string; settingsLibraryStorageModeLinkedOriginal: string; settingsLibraryStorageModeManagedCopy: string; settingsLibraryDirectory: string;
-  settingsLibraryDirectoryPlaceholder: string; settingsLibraryDirectoryHint: string; settingsLibraryDbFile: string; settingsLibraryFilesDir: string; settingsLibraryCacheDir: string;
+  settingsLibraryDirectoryPlaceholder: string; settingsLibraryDirectoryHint: string; settingsLibraryDirectoryInactiveHint: string; settingsLibraryDbFile: string; settingsLibraryFilesDir: string; settingsLibraryCacheDir: string;
   settingsLibraryStatusDocuments: string; settingsLibraryStatusFiles: string; settingsLibraryStatusQueuedJobs: string; settingsLibraryStatusEmpty: string; settingsLibraryRecentDocuments: string;
   settingsLibraryDocumentRegistered: string; settingsLibraryDocumentQueued: string; settingsLibraryDocumentRunning: string; settingsLibraryDocumentFailed: string;
   settingsLibraryMaxConcurrentJobs: string; settingsLibraryMaxConcurrentJobsHint: string; settingsRagTitle: string; settingsRagProvider: string; settingsRagProviderHint: string;
@@ -40,7 +40,7 @@ export type SettingsPartLabels = {
   settingsRagRerankerModel: string; settingsRagEmbeddingPath: string; settingsRagRerankPath: string; settingsRagCandidateCount: string; settingsRagTopK: string;
   settingsRagTestConnection: string; settingsRagShowApiKey: string; settingsRagHideApiKey: string; settingsRagHint: string; settingsBatchHint: string; defaultPdfDir: string;
   settingsLayoutTitle: string; settingsStatusbar: string; settingsStatusbarHint: string; settingsBrowserTabKeepAliveLimit: string; settingsBrowserTabKeepAliveLimitHint: string; settingsNotificationsTitle: string; settingsNotificationsHint: string; settingsSystemNotifications: string; settingsSystemNotificationsHint: string; settingsWarningNotifications: string; settingsWarningNotificationsHint: string; settingsMenuBarIcon: string; settingsMenuBarIconHint: string; settingsCompletionNotifications: string; settingsCompletionNotificationsHint: string;
-  pdfFileNameUseSelectionOrder: string; pdfFileNameUseSelectionOrderHint: string; downloadDirPlaceholder: string; open: string; chooseDirectory: string; openConfigLocation: string;
+  pdfFileNameUseSelectionOrder: string; pdfFileNameUseSelectionOrderHint: string; downloadDirPlaceholder: string; change: string; open: string; chooseDirectory: string; changeConfigLocation: string;
   resetDefault: string; settingsHintPath: string; settingsConfigPath: string; currentDir: string; systemDownloads: string; settingsLlmTitle: string; settingsLlmProvider: string;
   settingsLlmProviderHint: string; settingsLlmProviderGlm: string; settingsLlmProviderKimi: string; settingsLlmProviderDeepSeek: string; settingsLlmProviderGemini: string; settingsLlmApiKey: string;
   settingsLlmApiKeyPlaceholder: string; settingsLlmModel: string; settingsLlmSearchPlaceholder: string; settingsLlmNoResults: string; settingsLlmMaxContext: string; settingsLlmMaxContextHint: string; settingsLlmTestConnection: string; settingsLlmShowApiKey: string; settingsLlmHideApiKey: string;
@@ -71,7 +71,7 @@ export type SettingsPartProps = {
   activeTranslationProvider: TranslationProviderId; onActiveTranslationProviderChange: (provider: TranslationProviderId) => void; translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
   onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void; onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void; onTestLlmConnection: () => void; onTestTranslationConnection: () => void;
   onEditorDraftFontFamilyChange: (value: string) => void; onEditorDraftFontSizeChange: (value: string) => void; onEditorDraftLineHeightChange: (value: string) => void; onEditorDraftParagraphSpacingBeforeChange: (value: string) => void; onEditorDraftParagraphSpacingAfterChange: (value: string) => void; onEditorDraftColorChange: (value: string) => void; onResetEditorDraftStyle: () => void;
-  onOpenConfigLocation: () => void; desktopRuntime: boolean; configPath: string; isSettingsSaving: boolean; isTestingRagConnection: boolean; isTestingLlmConnection: boolean;
+  onChooseConfigPath: () => void; onResetConfigPath: () => void; onResetKnowledgeBaseSettings: () => void; desktopRuntime: boolean; configPath: string; defaultConfigPath: string; isSettingsSaving: boolean; isTestingRagConnection: boolean; isTestingLlmConnection: boolean;
   isTestingTranslationConnection: boolean; onResetDownloadDir: () => void;
 };
 
@@ -83,7 +83,7 @@ export type SettingsPartState = {
   knowledgeBaseEnabled: boolean; autoIndexDownloadedPdf: boolean; knowledgeBasePdfDownloadDir: string; libraryStorageMode: LibraryStorageMode; libraryDirectory: string; maxConcurrentIndexJobs: number; activeRagProvider: RagProviderId;
   ragProviders: Record<RagProviderId, RagProviderSettings>; retrievalCandidateCount: number; retrievalTopK: number; pdfDownloadDir: string; pdfFileNameUseSelectionOrder: boolean;
   activeLlmProvider: LlmProviderId; llmProviders: Record<LlmProviderId, LlmProviderSettings>; activeTranslationProvider: TranslationProviderId; translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
-  desktopRuntime: boolean; configPath: string; isLibraryLoading: boolean; libraryDocumentCount: number; libraryFileCount: number; libraryQueuedJobCount: number; libraryDocuments: LibraryDocumentSummary[];
+  desktopRuntime: boolean; configPath: string; defaultConfigPath: string; isLibraryLoading: boolean; libraryDocumentCount: number; libraryFileCount: number; libraryQueuedJobCount: number; libraryDocuments: LibraryDocumentSummary[];
   libraryDbFile: string; defaultManagedDirectory: string; ragCacheDir: string; isSettingsSaving: boolean; isTestingRagConnection: boolean; isTestingLlmConnection: boolean; isTestingTranslationConnection: boolean;
 };
 
@@ -98,5 +98,5 @@ export type SettingsPartActions = {
   onChoosePdfDownloadDir: () => void; onActiveLlmProviderChange: (provider: LlmProviderId) => void; onLlmProviderApiKeyChange: (provider: LlmProviderId, apiKey: string) => void; onLlmProviderModelChange: (provider: LlmProviderId, model: string) => void; onLlmProviderSelectedModelOption: (provider: LlmProviderId, optionValue: string) => void; onLlmProviderReasoningEffortChange: (provider: LlmProviderId, reasoningEffort: import('ls/workbench/services/llm/types').LlmReasoningEffort | undefined) => void; onLlmProviderModelEnabledChange: (provider: LlmProviderId, optionValue: string, enabled: boolean) => void; onLlmProviderUseMaxContextWindowChange: (provider: LlmProviderId, useMaxContextWindow: boolean) => void;
   onActiveTranslationProviderChange: (provider: TranslationProviderId) => void; onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void; onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void; onTestRagConnection: () => void;
   onEditorDraftFontFamilyChange: (value: string) => void; onEditorDraftFontSizeChange: (value: string) => void; onEditorDraftLineHeightChange: (value: string) => void; onEditorDraftParagraphSpacingBeforeChange: (value: string) => void; onEditorDraftParagraphSpacingAfterChange: (value: string) => void; onEditorDraftColorChange: (value: string) => void; onResetEditorDraftStyle: () => void;
-  onTestLlmConnection: () => void; onTestTranslationConnection: () => void; onOpenConfigLocation: () => void; onResetDownloadDir: () => void;
+  onTestLlmConnection: () => void; onTestTranslationConnection: () => void; onChooseConfigPath: () => void; onResetConfigPath: () => void; onResetKnowledgeBaseSettings: () => void; onResetDownloadDir: () => void;
 };

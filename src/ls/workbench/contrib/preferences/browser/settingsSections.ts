@@ -1,7 +1,6 @@
 import type { Locale } from 'language/i18n';
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'ls/base/common/editorDraftStyle';
 import { createDateInput } from 'ls/base/browser/ui/dateInput/dateInput';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
 import {
   createSettingsSection,
   createSettingsRow,
@@ -433,9 +432,9 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
       title: props.labels.defaultPdfDir,
       description: effectiveDownloadDir,
       control: buildButton({
-        label: props.labels.open,
+        label: props.labels.change,
         focusKey: 'settings.download.open',
-        title: props.labels.open,
+        title: props.labels.chooseDirectory,
         disabled: !props.desktopRuntime || props.isSettingsSaving,
         onClick: props.onChoosePdfDownloadDir,
       }),
@@ -471,28 +470,17 @@ export function renderConfigPathSection(props: SettingsPartProps) {
     panelClassName: 'settings-config-path-panel',
     listClassName: 'settings-config-path-list',
   });
-  const row = el('div', 'settings-input-row');
-  row.append(
-    buildInput({
-      value: props.configPath,
-      className: 'settings-input-control',
-      focusKey: 'settings.config.path',
-      readOnly: true,
-    }).element,
-    buildButton({
-      label: '...',
-      icon: lxIconSemanticMap.settings.openConfigLocation,
-      className: 'settings-btn-icon',
-      focusKey: 'settings.config.open',
-      title: props.labels.openConfigLocation,
-      disabled: !props.desktopRuntime || props.isSettingsSaving || !props.configPath.trim(),
-      onClick: props.onOpenConfigLocation,
-    }),
-  );
   configPath.list.append(
     createSettingsRow({
       title: props.labels.settingsConfigPath,
-      control: row,
+      description: props.configPath.trim() || '-',
+      control: buildButton({
+        label: props.labels.change,
+        focusKey: 'settings.config.open',
+        title: props.labels.changeConfigLocation,
+        disabled: !props.desktopRuntime || props.isSettingsSaving || !props.configPath.trim(),
+        onClick: props.onChooseConfigPath,
+      }),
       itemClassName: 'settings-config-path-item',
       controlClassName: 'settings-config-path-control',
     }),
@@ -584,14 +572,6 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   });
   colorRow.append(colorPickerInput.element, colorValueInput.element);
 
-  const resetButton = buildButton({
-    label: props.labels.resetDefault,
-    className: 'settings-text-editor-reset-button',
-    focusKey: 'settings.textEditor.resetDefaultBodyStyle',
-    disabled: isDisabled || !hasUserOverride,
-    onClick: props.onResetEditorDraftStyle,
-  });
-
   textEditorPanel.list.append(
     createSettingsRow({
       title: props.labels.settingsTextEditorFontFamily,
@@ -616,10 +596,6 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     createSettingsRow({
       title: props.labels.settingsTextEditorColor,
       control: colorRow,
-    }),
-    createSettingsRow({
-      title: props.labels.resetDefault,
-      control: resetButton,
     }),
   );
 

@@ -490,6 +490,7 @@ function createWorkbenchLayoutViewProps() {
       activeConversationId: 'conversation-1',
       llmModelOptions: [],
       activeLlmModelOptionValue: '',
+      activeLlmModelLabel: '',
       onCreateConversation: () => {},
       onActivateConversation: () => {},
       onCloseConversation: () => {},

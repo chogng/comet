@@ -291,3 +291,50 @@ test('config store migrates legacy journal source overrides into user settings j
     );
   });
 });
+
+test('config store saves user settings into a changed config path', async () => {
+  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+    const customUserSettingsFile = path.join(
+      path.dirname(userSettingsFile),
+      'custom',
+      'settings.json',
+    );
+    const nextEditorDraftStyle = createTestEditorDraftStyle('"Moved Sans", sans-serif');
+
+    await writeFile(
+      userSettingsFile,
+      JSON.stringify({
+        'literature.journalSourceOverrides': [
+          {
+            url: 'https://example.com/latest',
+            journalTitle: 'Example Journal',
+          },
+        ],
+      }),
+      'utf8',
+    );
+
+    await store.saveSettings({
+      userSettingsPathOverride: customUserSettingsFile,
+      editorDraftStyle: nextEditorDraftStyle,
+    });
+
+    const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
+    const movedUserSettings = JSON.parse(await readFile(customUserSettingsFile, 'utf8'));
+    const settings = await store.loadSettings();
+
+    assert.equal(savedConfig.userSettingsPathOverride, customUserSettingsFile);
+    assert.equal(settings.configPath, customUserSettingsFile);
+    assert.ok(
+      getJournalSourceOverrides(movedUserSettings).some(
+        (source) =>
+          source.url === 'https://example.com/latest' &&
+          source.journalTitle === 'Example Journal',
+      ),
+    );
+    assert.equal(
+      movedUserSettings['literature.editorDraftStyle'].defaultBodyStyle.fontFamilyValue,
+      '"Moved Sans", sans-serif',
+    );
+  });
+});

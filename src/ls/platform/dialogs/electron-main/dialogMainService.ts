@@ -42,6 +42,30 @@ export async function pickDirectoryDialog(window?: BrowserWindow | null) {
   return result.filePaths[0];
 }
 
+export async function pickUserSettingsFileDialog(
+  window?: BrowserWindow | null,
+  defaultPath?: string,
+) {
+  const result = await showSaveDialog(
+    {
+      defaultPath,
+      filters: [
+        {
+          name: 'JSON',
+          extensions: ['json'],
+        },
+      ],
+    },
+    window,
+  );
+
+  if (result.canceled || !result.filePath) {
+    return null;
+  }
+
+  return result.filePath;
+}
+
 export async function pickPdfFileDialog(window?: BrowserWindow | null) {
   const result = await showOpenDialog(
     {

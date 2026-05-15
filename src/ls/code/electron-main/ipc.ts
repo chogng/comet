@@ -82,7 +82,11 @@ import type { WebContentExtractionSnapshot, WebContentSnapshot } from 'ls/code/e
 import { resolveBatchWebContentExtractions, resolveBatchWebContentSnapshots, resolveWebContentSnapshotHtml } from 'ls/code/electron-main/fetch/webContentChannel';
 import { previewDownloadPdf } from 'ls/code/electron-main/pdf/pdf';
 import { appError, serializeAppError } from 'ls/base/common/errors';
-import { pickDirectoryDialog, pickPdfFileDialog } from 'ls/platform/dialogs/electron-main/dialogMainService';
+import {
+  pickDirectoryDialog,
+  pickPdfFileDialog,
+  pickUserSettingsFileDialog,
+} from 'ls/platform/dialogs/electron-main/dialogMainService';
 import { testLlmConnection } from 'ls/code/electron-main/llm/llm';
 import { runMainAgentTurn } from 'ls/code/electron-main/agent/agent';
 import { answerQuestionFromArticles, testRagConnection } from 'ls/code/electron-main/rag/rag';
@@ -254,6 +258,11 @@ async function invokeCommand<TCommand extends AppCommand>(
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'pick_download_directory':
       return pickDirectoryDialog(getMainWindow()) as Promise<AppCommandResultMap[TCommand]>;
+    case 'pick_user_settings_file':
+      return pickUserSettingsFileDialog(
+        getMainWindow(),
+        (payload as import('ls/base/parts/sandbox/common/desktopTypes').PickUserSettingsFilePayload)?.defaultPath,
+      ) as Promise<AppCommandResultMap[TCommand]>;
     case 'pick_pdf_file':
       return pickPdfFileDialog(getMainWindow()) as Promise<AppCommandResultMap[TCommand]>;
     case 'read_pdf_file':

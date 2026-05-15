@@ -208,6 +208,7 @@ function shouldUpdateDownloadDirectorySection(
     previousProps.desktopRuntime !== currentProps.desktopRuntime ||
     previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
     previousProps.labels.defaultPdfDir !== currentProps.labels.defaultPdfDir ||
+    previousProps.labels.change !== currentProps.labels.change ||
     previousProps.labels.open !== currentProps.labels.open ||
     previousProps.labels.downloadDirPlaceholder !== currentProps.labels.downloadDirPlaceholder ||
     previousProps.labels.chooseDirectory !== currentProps.labels.chooseDirectory ||
@@ -252,9 +253,12 @@ function shouldUpdateConfigPathSection(
   return (
     !previousProps ||
     previousProps.configPath !== currentProps.configPath ||
+    previousProps.defaultConfigPath !== currentProps.defaultConfigPath ||
     previousProps.desktopRuntime !== currentProps.desktopRuntime ||
     previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
     previousProps.labels.settingsConfigPath !== currentProps.labels.settingsConfigPath ||
-    previousProps.labels.openConfigLocation !== currentProps.labels.openConfigLocation
+    previousProps.labels.change !== currentProps.labels.change ||
+    previousProps.labels.resetDefault !== currentProps.labels.resetDefault ||
+    previousProps.labels.changeConfigLocation !== currentProps.labels.changeConfigLocation
   );
 }

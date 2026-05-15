@@ -32,7 +32,6 @@ export type TranslationWidgetProps = {
   onActiveTranslationProviderChange: (provider: TranslationProviderId) => void;
   onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void;
   onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void;
-  onGlmApiKeyChange: (apiKey: string) => void;
   onGlmModelChange: (optionValue: string) => void;
   onTestTranslationConnection: () => void;
 };
@@ -52,20 +51,6 @@ export class TranslationWidget {
     toggleLabelHide: '',
     onToggle: () => this.props.onToggleShowApiKey(),
     onInput: (value) => this.props.onTranslationProviderApiKeyChange(this.props.activeTranslationProvider, value),
-  });
-  private readonly glmApiKeyWidget = new ApiKeyWidget({
-    title: '',
-    subtitle: '',
-    value: '',
-    placeholder: '',
-    show: false,
-    focusKey: 'settings.translation.glm.apiKey',
-    toggleKey: 'settings.translation.glm.apiKey.toggle',
-    toggleLabelShow: '',
-    toggleLabelHide: '',
-    onToggle: () => this.props.onToggleShowApiKey(),
-    onInput: (value) => this.props.onGlmApiKeyChange(value),
-    className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
   });
 
   constructor(props: TranslationWidgetProps) {
@@ -103,6 +88,7 @@ export class TranslationWidget {
     section.list.append(
       createSettingsRow({
         title: this.props.labels.settingsTranslationProvider,
+        description: this.props.labels.settingsTranslationProviderHint,
         control: providerSelect,
         itemClassName: 'settings-translation-provider-item',
         controlClassName: 'settings-translation-provider-control',
@@ -110,21 +96,8 @@ export class TranslationWidget {
     );
     if (this.props.activeTranslationProvider === 'glm') {
       section.list.append(this.renderGlmModelRow());
-      this.glmApiKeyWidget.setProps({
-        title: this.props.labels.settingsLlmApiKey,
-        subtitle: this.props.labels.settingsTranslationProviderGlm,
-        value: this.props.llmProviders.glm.apiKey,
-        placeholder: this.props.labels.settingsLlmApiKeyPlaceholder,
-        show: this.props.showApiKey,
-        focusKey: 'settings.translation.glm.apiKey',
-        toggleKey: 'settings.translation.glm.apiKey.toggle',
-        toggleLabelShow: this.props.labels.settingsTranslationShowApiKey,
-        toggleLabelHide: this.props.labels.settingsTranslationHideApiKey,
-        onToggle: () => this.props.onToggleShowApiKey(),
-        onInput: (value) => this.props.onGlmApiKeyChange(value),
-        className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
-      });
-      section.list.append(this.renderApiKeyRow(this.glmApiKeyWidget.getElement()));
+      this.renderApiKeyField();
+      section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
       return section.element;
     }
 
@@ -132,21 +105,27 @@ export class TranslationWidget {
       section.list.append(...this.renderOpenAICompatibleRows());
     }
 
+    this.renderApiKeyField();
+    section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
+    return section.element;
+  }
+
+  private renderApiKeyField() {
+    const provider = this.props.activeTranslationProvider;
     this.apiKeyWidget.setProps({
       title: this.props.labels.settingsLlmApiKey,
-      subtitle: this.getTranslationProviderLabel(this.props.activeTranslationProvider),
-      value: this.props.translationProviders[this.props.activeTranslationProvider].apiKey,
+      subtitle: this.getTranslationProviderApiKeyHint(provider),
+      value: this.props.translationProviders[provider].apiKey,
       placeholder: this.props.labels.settingsTranslationApiKeyPlaceholder,
       show: this.props.showApiKey,
-      focusKey: 'settings.translation.apiKey',
-      toggleKey: 'settings.translation.apiKey.toggle',
+      focusKey: `settings.translation.${provider}.apiKey`,
+      toggleKey: `settings.translation.${provider}.apiKey.toggle`,
       toggleLabelShow: this.props.labels.settingsTranslationShowApiKey,
       toggleLabelHide: this.props.labels.settingsTranslationHideApiKey,
       onToggle: () => this.props.onToggleShowApiKey(),
-      onInput: (value) => this.props.onTranslationProviderApiKeyChange(this.props.activeTranslationProvider, value),
+      onInput: (value) => this.props.onTranslationProviderApiKeyChange(provider, value),
+      className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
     });
-    section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
-    return section.element;
   }
 
   private renderOpenAICompatibleRows() {
@@ -230,5 +209,10 @@ export class TranslationWidget {
       default:
         return provider;
     }
+  }
+
+  private getTranslationProviderApiKeyHint(provider: TranslationProviderId) {
+    const label = this.getTranslationProviderLabel(provider);
+    return `you can put in your ${label} key to use the ${label} models at cost`;
   }
 }

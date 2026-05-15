@@ -56,6 +56,7 @@ export type ResolvedSettingsState = {
   workbenchColorCustomizations: ThemeColorCustomizations;
   locale: Locale | null;
   configPath: string;
+  defaultConfigPath: string;
   editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   llm: LlmSettings;
   translation: TranslationSettings;
@@ -79,6 +80,7 @@ export type SaveSettingsDraft = {
   theme: AppTheme;
   workbenchColorCustomizations: ThemeColorCustomizations;
   locale: Locale;
+  configPath: string;
   editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   llm: LlmSettings;
   translation: TranslationSettings;
@@ -101,6 +103,8 @@ export function resolveSettingsState(
   const loadedLocale = loaded.locale === 'zh' || loaded.locale === 'en' ? loaded.locale : null;
   const loadedConfigPath =
     typeof loaded.configPath === 'string' ? loaded.configPath : (options.fallbackConfigPath ?? '');
+  const loadedDefaultConfigPath =
+    typeof loaded.defaultConfigPath === 'string' ? loaded.defaultConfigPath : loadedConfigPath;
 
   const defaultEditorDraftStyle = createDefaultEditorDraftStyleSettings();
   const normalizedUserEditorDraftStyle =
@@ -159,6 +163,7 @@ export function resolveSettingsState(
     workbenchColorCustomizations: { ...(loaded['workbench.colorCustomizations'] ?? {}) },
     locale: loadedLocale,
     configPath: loadedConfigPath,
+    defaultConfigPath: loadedDefaultConfigPath,
     editorDraftStyle,
     llm: cloneLlmSettings(loaded.llm ?? createDefaultLlmSettings()),
     translation: cloneTranslationSettings(loaded.translation ?? createDefaultTranslationSettings()),
@@ -205,6 +210,7 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
       theme: draft.theme,
       'workbench.colorCustomizations': { ...draft.workbenchColorCustomizations },
       locale: draft.locale,
+      userSettingsPathOverride: draft.configPath.trim() || null,
       editorDraftStyle: nextEditorDraftStyle,
       llm: cloneLlmSettings(draft.llm),
       translation: cloneTranslationSettings(draft.translation),
