@@ -356,6 +356,7 @@ function normalizeSettings(
       typeof payload.statusbarVisible === 'boolean'
         ? payload.statusbarVisible
         : true,
+    startupLayout: payload.startupLayout === 'agent' ? 'agent' : 'flow',
     useMica: typeof payload.useMica === 'boolean' ? payload.useMica : true,
     theme: normalizeTheme(payload.theme),
     'workbench.colorCustomizations': normalizeThemeColorCustomizations(payload['workbench.colorCustomizations']),

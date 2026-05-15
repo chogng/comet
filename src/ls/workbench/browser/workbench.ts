@@ -93,7 +93,7 @@ import type { WebContentSurfaceSnapshot } from 'ls/workbench/browser/webContentS
 import { getLocaleMessages } from 'language/i18n';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'ls/workbench/common/url';
-import type { LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { AppStartupLayout, LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
 import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
 import { normalizeBrowserTabKeepAliveLimit } from 'ls/workbench/services/webContent/webContentRetentionConfig';
@@ -681,6 +681,7 @@ class WorkbenchHost {
     'soft' | 'dispose'
   >();
   private appliedKnowledgeBaseModeEnabled: boolean | null = null;
+  private hasAppliedStartupLayoutPreference = false;
   private readonly handleWindowKeydown = (event: KeyboardEvent) => {
     handleWorkbenchEditorShortcut(event);
   };
@@ -1345,6 +1346,34 @@ class WorkbenchHost {
     this.workbenchLayoutView.layout();
   }
 
+  private applyStartupLayoutPreferenceIfNeeded(params: {
+    hasLoadedSettings: boolean;
+    startupLayout: AppStartupLayout;
+    isPrimarySidebarVisible: boolean;
+    isAgentSidebarVisible: boolean;
+    isEditorCollapsed: boolean;
+  }) {
+    if (this.hasAppliedStartupLayoutPreference || !params.hasLoadedSettings) {
+      return false;
+    }
+
+    this.hasAppliedStartupLayoutPreference = true;
+    const shouldShowAgentSidebar = params.startupLayout === 'agent';
+    const needsLayoutUpdate =
+      !params.isPrimarySidebarVisible ||
+      params.isEditorCollapsed ||
+      params.isAgentSidebarVisible !== shouldShowAgentSidebar;
+
+    if (!needsLayoutUpdate) {
+      return false;
+    }
+
+    setPrimarySidebarVisible(true);
+    setAgentSidebarVisible(shouldShowAgentSidebar);
+    setEditorCollapsed(false);
+    return true;
+  }
+
   private performRender() {
     const locale = localeService.getLocale();
     const ui = getLocaleMessages(locale);
@@ -1382,6 +1411,17 @@ class WorkbenchHost {
       locale,
     });
     const settingsSnapshot = settingsControllerInstance.getSnapshot();
+    if (
+      this.applyStartupLayoutPreferenceIfNeeded({
+        hasLoadedSettings: settingsSnapshot.hasLoadedSettings,
+        startupLayout: settingsSnapshot.startupLayout,
+        isPrimarySidebarVisible,
+        isAgentSidebarVisible,
+        isEditorCollapsed,
+      })
+    ) {
+      return;
+    }
     const editorDraftStyleSnapshot = editorDraftStyleService.getSnapshot();
     const {
       batchLimit,
@@ -1390,6 +1430,7 @@ class WorkbenchHost {
       menuBarIconEnabled,
       completionNotificationsEnabled,
       statusbarVisible,
+      startupLayout,
       browserTabKeepAliveLimit,
       useMica,
       theme,
@@ -2115,6 +2156,7 @@ class WorkbenchHost {
         completionNotificationsEnabled,
         useMica,
         statusbarVisible,
+        startupLayout,
         browserTabKeepAliveLimit,
         theme,
         editorDraftStyle: {
@@ -2197,6 +2239,7 @@ class WorkbenchHost {
           settingsControllerInstance.setCompletionNotificationsEnabled,
         onUseMicaChange: settingsControllerInstance.setUseMica,
         onStatusbarVisibleChange: settingsControllerInstance.setStatusbarVisible,
+        onStartupLayoutChange: settingsControllerInstance.setStartupLayout,
         onBrowserTabKeepAliveLimitChange: (value) =>
           settingsControllerInstance.setBrowserTabKeepAliveLimit(
             normalizeBrowserTabKeepAliveLimit(value, browserTabKeepAliveLimit),

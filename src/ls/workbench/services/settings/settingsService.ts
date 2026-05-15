@@ -1,4 +1,5 @@
 import type {
+  AppStartupLayout,
   AppTheme,
   AppSettings as DesktopAppSettings,
   ElectronInvoke,
@@ -51,6 +52,7 @@ export type ResolvedSettingsState = {
   menuBarIconEnabled: boolean;
   completionNotificationsEnabled: boolean;
   statusbarVisible: boolean;
+  startupLayout: AppStartupLayout;
   useMica: boolean;
   theme: AppTheme;
   workbenchColorCustomizations: ThemeColorCustomizations;
@@ -76,6 +78,7 @@ export type SaveSettingsDraft = {
   menuBarIconEnabled: boolean;
   completionNotificationsEnabled: boolean;
   statusbarVisible: boolean;
+  startupLayout: AppStartupLayout;
   useMica: boolean;
   theme: AppTheme;
   workbenchColorCustomizations: ThemeColorCustomizations;
@@ -155,6 +158,7 @@ export function resolveSettingsState(
       typeof loaded.statusbarVisible === 'boolean'
         ? loaded.statusbarVisible
         : true,
+    startupLayout: loaded.startupLayout === 'agent' ? 'agent' : 'flow',
     useMica: typeof loaded.useMica === 'boolean' ? loaded.useMica : true,
     theme:
       loaded.theme === 'dark' || loaded.theme === 'system'
@@ -206,6 +210,7 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
       menuBarIconEnabled: draft.menuBarIconEnabled,
       completionNotificationsEnabled: draft.completionNotificationsEnabled,
       statusbarVisible: draft.statusbarVisible,
+      startupLayout: draft.startupLayout,
       useMica: draft.useMica,
       theme: draft.theme,
       'workbench.colorCustomizations': { ...draft.workbenchColorCustomizations },

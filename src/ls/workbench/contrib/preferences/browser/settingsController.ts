@@ -1,5 +1,6 @@
 import { toast } from 'ls/base/browser/ui/toast/toast';
 import type {
+  AppStartupLayout,
   AppTheme,
   ElectronInvoke,
   LlmProviderId,
@@ -202,6 +203,11 @@ export class SettingsController {
 
   readonly setStatusbarVisible = (nextStatusbarVisible: boolean) => {
     this.settingsModel.setStatusbarVisible(nextStatusbarVisible);
+    this.scheduleImmediateAutoSave();
+  };
+
+  readonly setStartupLayout = (nextStartupLayout: AppStartupLayout) => {
+    this.settingsModel.setStartupLayout(nextStartupLayout);
     this.scheduleImmediateAutoSave();
   };
 

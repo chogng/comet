@@ -80,6 +80,11 @@ const en = {
   settingsStatusbar: 'Status bar',
   settingsStatusbarHint:
     'Controls whether the bottom status bar is shown in the content workspace.',
+  settingsStartupLayout: 'Startup layout',
+  settingsStartupLayoutHint:
+    'Select which workbench layout the app should use on the next launch.',
+  settingsStartupLayoutAgent: 'Agent',
+  settingsStartupLayoutFlow: 'Flow',
   settingsBrowserTabKeepAliveLimit: 'Browser tab keep-alive',
   settingsBrowserTabKeepAliveLimitHint:
     'Keeps inactive browser tabs ready for quick return.',

@@ -44,6 +44,13 @@ function createThemeOptions(props: SettingsPartProps): readonly SelectOption[] {
   ];
 }
 
+function createStartupLayoutOptions(props: SettingsPartProps): readonly SelectOption[] {
+  return [
+    { value: 'agent', label: props.labels.settingsStartupLayoutAgent },
+    { value: 'flow', label: props.labels.settingsStartupLayoutFlow },
+  ];
+}
+
 function ensureCurrentSelectOption(
   options: readonly SelectOption[],
   currentValue: string,
@@ -344,6 +351,16 @@ export function renderLayoutSection(props: SettingsPartProps) {
     panelClassName: 'settings-layout-panel',
     listClassName: 'settings-layout-list',
   });
+  const startupLayoutSelect = buildSelect(
+    createStartupLayoutOptions(props),
+    props.startupLayout,
+    'settings.general.layout.startupLayout',
+    (value) => {
+      props.onStartupLayoutChange(value === 'agent' ? 'agent' : 'flow');
+    },
+    'settings-layout-startup-layout-select',
+  );
+  setSelectHostDisabled(startupLayoutSelect, props.isSettingsSaving);
   const browserTabKeepAliveLimitInput = buildNumberStepperInput({
     value: props.browserTabKeepAliveLimit,
     className: 'settings-limit-input',
@@ -356,6 +373,11 @@ export function renderLayoutSection(props: SettingsPartProps) {
     disabled: props.isSettingsSaving,
   });
   layout.list.append(
+    createSettingsRow({
+      title: props.labels.settingsStartupLayout,
+      description: props.labels.settingsStartupLayoutHint,
+      control: startupLayoutSelect,
+    }),
     createSettingsRow({
       title: props.labels.settingsStatusbar,
       description: props.labels.settingsStatusbarHint,

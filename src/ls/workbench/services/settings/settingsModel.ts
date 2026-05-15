@@ -1,4 +1,5 @@
 import type {
+  AppStartupLayout,
   AppTheme,
   ElectronInvoke,
   JournalSourceOverride,
@@ -65,6 +66,7 @@ export type SettingsModelSnapshot = {
   menuBarIconEnabled: boolean;
   completionNotificationsEnabled: boolean;
   statusbarVisible: boolean;
+  startupLayout: AppStartupLayout;
   useMica: boolean;
   theme: AppTheme;
   workbenchColorCustomizations: ThemeColorCustomizations;
@@ -85,6 +87,7 @@ export type SettingsModelSnapshot = {
   configPath: string;
   defaultConfigPath: string;
   isSettingsLoading: boolean;
+  hasLoadedSettings: boolean;
   isSettingsSaving: boolean;
   isTestingRagConnection: boolean;
   isTestingLlmConnection: boolean;
@@ -145,6 +148,7 @@ function areSettingsModelSnapshotsEqual(
     previous.menuBarIconEnabled === next.menuBarIconEnabled &&
     previous.completionNotificationsEnabled === next.completionNotificationsEnabled &&
     previous.statusbarVisible === next.statusbarVisible &&
+    previous.startupLayout === next.startupLayout &&
     previous.useMica === next.useMica &&
     previous.theme === next.theme &&
     areSettingValuesEqual(
@@ -165,6 +169,7 @@ function areSettingsModelSnapshotsEqual(
     previous.configPath === next.configPath &&
     previous.defaultConfigPath === next.defaultConfigPath &&
     previous.isSettingsLoading === next.isSettingsLoading &&
+    previous.hasLoadedSettings === next.hasLoadedSettings &&
     previous.isSettingsSaving === next.isSettingsSaving &&
     previous.isTestingRagConnection === next.isTestingRagConnection &&
     previous.isTestingLlmConnection === next.isTestingLlmConnection &&
@@ -194,6 +199,7 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     menuBarIconEnabled: false,
     completionNotificationsEnabled: true,
     statusbarVisible: true,
+    startupLayout: 'flow',
     useMica: true,
     theme: 'light',
     workbenchColorCustomizations: {},
@@ -218,6 +224,7 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     configPath: '',
     defaultConfigPath: '',
     isSettingsLoading: false,
+    hasLoadedSettings: false,
     isSettingsSaving: false,
     isTestingRagConnection: false,
     isTestingLlmConnection: false,
@@ -368,6 +375,17 @@ export class SettingsModel {
     this.updateSnapshot((snapshot) => ({
       ...snapshot,
       statusbarVisible,
+    }));
+  };
+
+  readonly setStartupLayout = (startupLayout: AppStartupLayout) => {
+    if (this.snapshot.startupLayout === startupLayout) {
+      return;
+    }
+
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      startupLayout,
     }));
   };
 
@@ -992,6 +1010,7 @@ export class SettingsModel {
         menuBarIconEnabled: resolved.menuBarIconEnabled,
         completionNotificationsEnabled: resolved.completionNotificationsEnabled,
         statusbarVisible: resolved.statusbarVisible,
+        startupLayout: resolved.startupLayout,
         useMica: resolved.useMica,
         theme: resolved.theme,
         workbenchColorCustomizations: resolved.workbenchColorCustomizations,
@@ -1014,6 +1033,7 @@ export class SettingsModel {
         translationProviders: cloneTranslationSettings(resolved.translation).providers,
         configPath: resolved.configPath,
         defaultConfigPath: resolved.defaultConfigPath,
+        hasLoadedSettings: true,
       }));
 
       return {
@@ -1151,6 +1171,7 @@ export class SettingsModel {
       menuBarIconEnabled,
       completionNotificationsEnabled,
       statusbarVisible,
+      startupLayout,
       useMica,
       theme,
       workbenchColorCustomizations,
@@ -1183,6 +1204,7 @@ export class SettingsModel {
       menuBarIconEnabled,
       completionNotificationsEnabled,
       statusbarVisible,
+      startupLayout,
       useMica,
       theme,
       workbenchColorCustomizations,
@@ -1243,6 +1265,7 @@ export class SettingsModel {
       menuBarIconEnabled: resolved.menuBarIconEnabled,
       completionNotificationsEnabled: resolved.completionNotificationsEnabled,
       statusbarVisible: resolved.statusbarVisible,
+      startupLayout: resolved.startupLayout,
       useMica: resolved.useMica,
       theme: resolved.theme,
       workbenchColorCustomizations: resolved.workbenchColorCustomizations,
@@ -1290,6 +1313,7 @@ export class SettingsModel {
       menuBarIconEnabled,
       completionNotificationsEnabled,
       statusbarVisible,
+      startupLayout,
       useMica,
       theme,
       workbenchColorCustomizations,
@@ -1322,6 +1346,7 @@ export class SettingsModel {
       menuBarIconEnabled,
       completionNotificationsEnabled,
       statusbarVisible,
+      startupLayout,
       useMica,
       theme,
       workbenchColorCustomizations,
@@ -1384,6 +1409,7 @@ export class SettingsModel {
         menuBarIconEnabled: resolved.menuBarIconEnabled,
         completionNotificationsEnabled: resolved.completionNotificationsEnabled,
         statusbarVisible: resolved.statusbarVisible,
+        startupLayout: resolved.startupLayout,
         useMica: resolved.useMica,
         theme: resolved.theme,
         workbenchColorCustomizations: resolved.workbenchColorCustomizations,

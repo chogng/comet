@@ -79,6 +79,11 @@ const zh = {
   settingsStatusbar: '状态栏',
   settingsStatusbarHint:
     '用于控制内容工作区底部 status bar 的显示与隐藏。',
+  settingsStartupLayout: '启动布局',
+  settingsStartupLayoutHint:
+    '选择应用下次启动时默认进入的工作台布局。',
+  settingsStartupLayoutAgent: 'Agent',
+  settingsStartupLayoutFlow: 'Flow',
   settingsBrowserTabKeepAliveLimit: '浏览器标签保活数量',
   settingsBrowserTabKeepAliveLimitHint:
     '控制失活的浏览器标签会保留多少个以便快速返回。设为 0 表示关闭保活并降低内存占用。',
