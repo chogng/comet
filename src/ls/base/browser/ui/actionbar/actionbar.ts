@@ -16,6 +16,9 @@ export type ActionBarActionMode = 'icon' | 'text' | 'custom';
 export type ActionBarRenderable = string | Node | (() => string | Node);
 export type ActionBarMenuItem = BaseAction & {
   icon?: LxIconName;
+  description?: string;
+  checkedDisplay?: 'check' | 'switch';
+  keepOpenOnClick?: boolean;
   submenu?: readonly ActionBarMenuItem[];
   onClick?: (event: MouseEvent) => void;
 };

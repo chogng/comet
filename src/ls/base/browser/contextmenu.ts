@@ -30,6 +30,9 @@ export function createMouseContextMenuAnchor(
 export interface ContextMenuAction extends BaseAction {
   value: string;
   icon?: LxIconName;
+  description?: string;
+  checkedDisplay?: 'check' | 'switch';
+  keepOpenOnClick?: boolean;
   submenu?: readonly ContextMenuAction[];
 }
 

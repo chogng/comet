@@ -30,6 +30,8 @@ type CreateAgentBarPartPropsParams = {
     llmModelOptions: DropdownOption[];
     activeLlmModelOptionValue: string;
     activeLlmModelLabel: string;
+    isMaxContextWindowEnabled: boolean;
+    activeLlmModelSupportsMaxContextWindow: boolean;
     isSecondarySidebarVisible: boolean;
   };
   actions: {
@@ -41,7 +43,9 @@ type CreateAgentBarPartPropsParams = {
     onCloseConversation: (conversationId: string) => void;
     onCloseAgentBar: () => void;
     onToggleSecondarySidebar: () => void;
+    onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
     onSelectLlmModel: (value: string) => void;
+    onToggleMaxContextWindow: (options?: { suppressRender?: boolean }) => void;
     onOpenModelSettings: () => void;
   };
 };
@@ -71,6 +75,8 @@ export function createAgentBarPartProps({
     llmModelOptions,
     activeLlmModelOptionValue,
     activeLlmModelLabel,
+    isMaxContextWindowEnabled,
+    activeLlmModelSupportsMaxContextWindow,
   },
   actions: {
     onQuestionChange,
@@ -80,7 +86,9 @@ export function createAgentBarPartProps({
     onActivateConversation,
     onCloseConversation,
     onCloseAgentBar,
+    onToggleAutoModelRouting,
     onSelectLlmModel,
+    onToggleMaxContextWindow,
     onOpenModelSettings,
   },
 }: CreateAgentBarPartPropsParams): AgentBarPartProps {
@@ -100,11 +108,15 @@ export function createAgentBarPartProps({
     llmModelOptions,
     activeLlmModelOptionValue,
     activeLlmModelLabel,
+    isMaxContextWindowEnabled,
+    activeLlmModelSupportsMaxContextWindow,
     onCreateConversation,
     onActivateConversation,
     onCloseConversation,
     onCloseAgentBar,
+    onToggleAutoModelRouting,
     onSelectLlmModel,
+    onToggleMaxContextWindow,
     onOpenModelSettings,
     isPrimarySidebarVisible: true,
   };

@@ -2028,11 +2028,14 @@ class WorkbenchHost {
         onCloseConversation: handleAssistantCloseConversation,
         onCloseAgentBar: handleCloseAgentSidebar,
         onToggleSecondarySidebar: togglePrimarySidebarVisibility,
-        onToggleAutoModelRouting: () => {
+        onToggleAutoModelRouting: (options) => {
           activeAgentChatModelOptionValue = activeAgentChatModelOptionValue
             ? null
             : resolveAgentChatManualModelOptionValue(activeLlmProvider, llmProviders);
-          this.requestRender();
+          if (!options?.suppressRender) {
+            this.requestRender();
+          }
+          return activeAgentChatModelOptionValue ?? AGENT_CHAT_AUTO_MODEL_OPTION_VALUE;
         },
         onSelectLlmModel: (value) => {
           activeAgentChatModelOptionValue =
@@ -2049,7 +2052,7 @@ class WorkbenchHost {
           settingsControllerInstance.setActiveLlmProvider(parsed.providerId);
           settingsControllerInstance.setLlmProviderSelectedModelOption(parsed.providerId, value);
         },
-        onToggleMaxContextWindow: () => {
+        onToggleMaxContextWindow: (options) => {
           const providerId = resolveAgentChatLlmProvider(
             activeLlmProvider,
             activeAgentChatModelOptionValue,
@@ -2057,7 +2060,9 @@ class WorkbenchHost {
           const nextValue =
             !(currentLlmSettings.providers[providerId].useMaxContextWindow ?? false);
           settingsControllerInstance.setLlmProviderUseMaxContextWindow(providerId, nextValue);
-          this.requestRender();
+          if (!options?.suppressRender) {
+            this.requestRender();
+          }
         },
         onOpenModelSettings: () => {
           const selectedOption = activeAgentChatModelOptionValue

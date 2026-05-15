@@ -208,8 +208,11 @@ function toContextMenuActions(
       label: menuItem.label,
       title: menuItem.title,
       icon: menuItem.icon,
+      description: menuItem.description,
       disabled: menuItem.disabled,
       checked: menuItem.checked,
+      checkedDisplay: menuItem.checkedDisplay,
+      keepOpenOnClick: menuItem.keepOpenOnClick,
       run: menuItem.run,
       submenu: menuItem.submenu
         ? toContextMenuActions(
@@ -372,7 +375,15 @@ class ContextMenuDropdownActionPresenter {
       restoreFocusOnHide: openedFromKeyboard,
       onHide: this.onHide,
       onSelect: (value: string) => {
+        const selectedMenuItem = valueToMenuItem.get(value) ?? null;
         runContextMenuAction(valueToMenuItem, value);
+        if (selectedMenuItem?.keepOpenOnClick) {
+          valueToMenuItem = new Map<string, ActionBarMenuItem>();
+          menuActions = toContextMenuActions(
+            this.getOptions().menu ?? [],
+            valueToMenuItem,
+          );
+        }
       },
     });
   };

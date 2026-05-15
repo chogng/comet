@@ -8,6 +8,7 @@ import {
 import {
   createDropdownMenuActionViewItem,
   DropdownMenuActionViewItem,
+  type DropdownMenuActionViewItemOptions,
 } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createFilterMenuHeader } from 'ls/base/browser/ui/dropdown/dropdownSearchHeader';
 import type { DropdownOption } from 'ls/base/browser/ui/dropdown/dropdown';
@@ -49,6 +50,8 @@ export type AgentChatWidgetProps = {
   labels: AgentBarLabels;
   isKnowledgeBaseModeEnabled: boolean;
   activeLlmModelLabel: string;
+  isMaxContextWindowEnabled: boolean;
+  activeLlmModelSupportsMaxContextWindow: boolean;
   messages: AssistantChatMessage[];
   question: string;
   onQuestionChange: (value: string) => void;
@@ -65,7 +68,9 @@ export type AgentChatWidgetProps = {
   onActivateConversation: (conversationId: string) => void;
   onCloseConversation: (conversationId: string) => void;
   onCloseAgentBar: () => void;
+  onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
   onSelectLlmModel: (value: string) => void;
+  onToggleMaxContextWindow: (options?: { suppressRender?: boolean }) => void;
   onOpenModelSettings: () => void;
 };
 
@@ -92,6 +97,9 @@ export class AgentChatWidget {
   private props: AgentChatWidgetProps;
   private readonly element = createElement('div', 'agentbar-content');
   private readonly renderDisposables = new Set<() => void>();
+  private modelDropdownActionViewItem: DropdownMenuActionViewItem | null = null;
+  private transientActiveLlmModelOptionValue: string | null = null;
+  private transientMaxContextWindowEnabled: boolean | null = null;
 
   constructor(props: AgentChatWidgetProps) {
     this.props = props;
@@ -104,6 +112,8 @@ export class AgentChatWidget {
 
   setProps(props: AgentChatWidgetProps) {
     this.props = props;
+    this.transientActiveLlmModelOptionValue = null;
+    this.transientMaxContextWindowEnabled = null;
     this.render();
   }
 
@@ -114,6 +124,7 @@ export class AgentChatWidget {
 
   private render() {
     this.disposeRenderDisposables();
+    this.modelDropdownActionViewItem = null;
     const canSend = !this.props.isAsking && this.props.question.trim().length > 0;
     this.element.replaceChildren(
       this.renderTopbar(),
@@ -303,17 +314,26 @@ export class AgentChatWidget {
   }
 
   private createModelDropdownActionViewItem() {
-    const currentOption = this.resolveCurrentModelOption();
-    const currentLabel = this.props.activeLlmModelLabel || currentOption?.label || 'Switch model';
+    const viewItem = new DropdownMenuActionViewItem(
+      this.createModelDropdownActionViewItemOptions(),
+    );
+    this.modelDropdownActionViewItem = viewItem;
+    return viewItem;
+  }
 
-    return new DropdownMenuActionViewItem({
+  private createModelDropdownActionViewItemOptions(): DropdownMenuActionViewItemOptions {
+    const currentOption = this.resolveCurrentModelOption();
+    const currentLabel = this.getModelDropdownTriggerLabel(currentOption);
+
+    return {
       label: currentLabel,
       title: currentLabel,
       mode: 'custom',
       buttonClassName: 'agentbar-model-switch-btn',
       className: 'agentbar-model-switch',
       disabled: this.props.llmModelOptions.length === 0,
-      minWidth: 280,
+      minWidth: 236,
+      menuClassName: 'agentbar-model-menu',
       menuData: 'agentbar-model-menu',
       content: () => this.renderModelDropdownTrigger(currentOption),
       menu: this.createModelMenuItems(''),
@@ -323,13 +343,14 @@ export class AgentChatWidget {
         ariaLabel: AGENTBAR_MODEL_SEARCH_ARIA_LABEL,
         getMenuItems: (query) => this.createModelMenuItems(query),
       }),
-    });
+    };
   }
 
   private resolveCurrentModelOption() {
+    const activeLlmModelOptionValue = this.getActiveLlmModelOptionValue();
     const exactOption =
       this.props.llmModelOptions.find(
-        (option) => option.value === this.props.activeLlmModelOptionValue,
+        (option) => option.value === activeLlmModelOptionValue,
       ) ?? null;
     if (!exactOption) {
       return null;
@@ -344,15 +365,25 @@ export class AgentChatWidget {
   private renderModelDropdownTrigger(currentOption: DropdownOption | null) {
     const trigger = createElement('span', 'agentbar-model-switch-trigger');
     const label = createElement('span', 'agentbar-model-switch-label');
-    label.textContent = this.props.activeLlmModelLabel || currentOption?.label || 'Select model';
+    label.textContent = this.getModelDropdownTriggerLabel(currentOption);
     const chevron = createLxIcon('chevron-down', 'agentbar-model-switch-chevron');
 
     trigger.append(label, chevron);
     return trigger;
   }
 
+  private getModelDropdownTriggerLabel(currentOption: DropdownOption | null) {
+    if (this.getActiveLlmModelOptionValue() === 'auto') {
+      return 'Auto';
+    }
+
+    return currentOption?.label || this.props.activeLlmModelLabel || 'Select model';
+  }
+
   private createModelMenuItems(keyword: string): readonly ActionBarMenuItem[] {
     const normalizedKeyword = keyword.trim().toLowerCase();
+    const isAutoModelRoutingEnabled =
+      this.getActiveLlmModelOptionValue() === 'auto';
     const matchesKeyword = (value: string | undefined) =>
       !normalizedKeyword || value?.toLowerCase().includes(normalizedKeyword);
     const modelGroups = this.getModelMenuGroups().filter((group) =>
@@ -373,14 +404,30 @@ export class AgentChatWidget {
         .some((value) => matchesKeyword(value)),
     );
 
+    const autoItem: ActionBarMenuItem = {
+      label: 'Auto',
+      title: 'Automatically route to a suitable model for the question.',
+      description: isAutoModelRoutingEnabled
+        ? 'Balanced quality and speed, recommended for most tasks'
+        : undefined,
+      checked: isAutoModelRoutingEnabled,
+      checkedDisplay: 'switch',
+      keepOpenOnClick: true,
+      onClick: () => {
+        this.handleToggleAutoModelRoutingFromMenu();
+      },
+    };
     const items: ActionBarMenuItem[] = [
+      autoItem,
       {
-        label: 'Auto Max mode',
-        title: 'Let the app route to the recommended model automatically.',
-        icon: 'agent' as LxIconName,
-        checked: this.props.activeLlmModelOptionValue === 'auto',
+        label: 'Max mode',
+        title: 'Use the 1M context window when available.',
+        checked: this.getIsMaxContextWindowEnabled(),
+        checkedDisplay: 'switch',
+        keepOpenOnClick: true,
+        disabled: !this.props.activeLlmModelSupportsMaxContextWindow,
         onClick: () => {
-          this.props.onSelectLlmModel('auto');
+          this.handleToggleMaxContextWindowFromMenu();
         },
       },
       {
@@ -391,6 +438,25 @@ export class AgentChatWidget {
       },
     ];
 
+    if (isAutoModelRoutingEnabled) {
+      const autoItems = [autoItem].filter((item) =>
+        [
+          item.label,
+          item.title,
+          item.description,
+        ]
+          .filter(Boolean)
+          .some((value) => matchesKeyword(value)),
+      );
+      return autoItems.length > 0
+        ? autoItems
+        : [{
+            id: 'agentbar-model-empty',
+            label: AGENTBAR_MODEL_SEARCH_EMPTY_LABEL,
+            disabled: true,
+          }];
+    }
+
     const filteredItems = [
       ...items.filter((item) =>
         [
@@ -400,7 +466,9 @@ export class AgentChatWidget {
           .filter(Boolean)
           .some((value) => matchesKeyword(value)),
       ),
-      ...modelGroups.map((group) => this.createModelGroupMenuItem(group)),
+      ...modelGroups.map((group) =>
+        this.createModelGroupMenuItem(group, isAutoModelRoutingEnabled),
+      ),
       ...(matchesKeyword('Add models Open Settings to manage enabled models.')
         ? [{
             label: 'Add models',
@@ -424,6 +492,51 @@ export class AgentChatWidget {
         disabled: true,
       },
     ];
+  }
+
+  private getActiveLlmModelOptionValue() {
+    return this.transientActiveLlmModelOptionValue
+      ?? this.props.activeLlmModelOptionValue;
+  }
+
+  private getIsMaxContextWindowEnabled() {
+    return this.transientMaxContextWindowEnabled
+      ?? this.props.isMaxContextWindowEnabled;
+  }
+
+  private resolveManualModelOptionValue() {
+    if (this.props.activeLlmModelOptionValue !== 'auto') {
+      return this.props.activeLlmModelOptionValue;
+    }
+
+    return this.props.llmModelOptions.find((option) => option.value !== 'auto')?.value
+      ?? this.props.activeLlmModelOptionValue;
+  }
+
+  private handleToggleAutoModelRoutingFromMenu() {
+    const previousValue = this.getActiveLlmModelOptionValue();
+    const nextValue = this.props.onToggleAutoModelRouting({
+      suppressRender: true,
+    });
+    this.transientActiveLlmModelOptionValue =
+      typeof nextValue === 'string'
+        ? nextValue
+        : previousValue === 'auto'
+          ? this.resolveManualModelOptionValue()
+          : 'auto';
+    this.refreshModelDropdownActionViewItem();
+  }
+
+  private handleToggleMaxContextWindowFromMenu() {
+    this.props.onToggleMaxContextWindow({ suppressRender: true });
+    this.transientMaxContextWindowEnabled = !this.getIsMaxContextWindowEnabled();
+    this.refreshModelDropdownActionViewItem();
+  }
+
+  private refreshModelDropdownActionViewItem() {
+    this.modelDropdownActionViewItem?.setOptions(
+      this.createModelDropdownActionViewItemOptions(),
+    );
   }
 
   private getModelMenuGroups(): AgentModelMenuGroup[] {
@@ -481,8 +594,12 @@ export class AgentChatWidget {
       .replace(/\s+[Ff]ast$/, '');
   }
 
-  private createModelGroupMenuItem(group: AgentModelMenuGroup): ActionBarMenuItem {
+  private createModelGroupMenuItem(
+    group: AgentModelMenuGroup,
+    isAutoModelRoutingEnabled: boolean,
+  ): ActionBarMenuItem {
     const active = this.getActiveModelGroupKey() === group.key;
+    const disabled = group.disabled || isAutoModelRoutingEnabled;
     const hasRuntimeOptions = group.options.some((option) =>
       Boolean(option.reasoningEffort ?? parseLlmModelOptionValue(option.value)?.reasoningEffort)
       || Boolean(option.serviceTier ?? parseLlmModelOptionValue(option.value)?.serviceTier),
@@ -494,7 +611,7 @@ export class AgentChatWidget {
         title: group.title,
         icon: group.icon,
         checked: active,
-        disabled: group.disabled,
+        disabled,
         onClick: () => {
           this.props.onSelectLlmModel(this.resolvePreferredModelOptionValue(group));
         },
@@ -506,7 +623,7 @@ export class AgentChatWidget {
       title: group.title,
       icon: group.icon,
       checked: active,
-      disabled: group.disabled,
+      disabled,
       submenu: this.createModelGroupSubmenu(group),
     };
   }

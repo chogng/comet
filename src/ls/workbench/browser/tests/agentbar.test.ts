@@ -61,11 +61,15 @@ function createProps(): AgentChatWidgetProps {
     ],
     activeLlmModelOptionValue: 'auto',
     activeLlmModelLabel: 'GLM-4.7-Flash',
+    isMaxContextWindowEnabled: false,
+    activeLlmModelSupportsMaxContextWindow: false,
     onCreateConversation: () => {},
     onActivateConversation: () => {},
     onCloseConversation: () => {},
     onCloseAgentBar: () => {},
+    onToggleAutoModelRouting: () => {},
     onSelectLlmModel: () => {},
+    onToggleMaxContextWindow: () => {},
     onOpenModelSettings: () => {},
   };
 }
@@ -339,11 +343,15 @@ test('agent bar history action shows no matching agents when there is no history
 
 test('composer toolbar uses actionbar icon controls', () => {
   let askCount = 0;
+  let autoModelRoutingToggleCount = 0;
   let selectedModelValue: string | null = null;
+  let maxContextWindowToggleCount = 0;
   let openedModelSettings = 0;
   const agentBar = createAgentChatWidget({
     ...createProps(),
     question: 'Explain this selection',
+    activeLlmModelOptionValue: 'glm:glm-4.7-flash',
+    activeLlmModelSupportsMaxContextWindow: true,
     llmModelOptions: [
       { value: 'auto', label: 'Auto' },
       { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
@@ -353,8 +361,14 @@ test('composer toolbar uses actionbar icon controls', () => {
     onAsk: () => {
       askCount += 1;
     },
+    onToggleAutoModelRouting: () => {
+      autoModelRoutingToggleCount += 1;
+    },
     onSelectLlmModel: (value) => {
       selectedModelValue = value;
+    },
+    onToggleMaxContextWindow: () => {
+      maxContextWindowToggleCount += 1;
     },
     onOpenModelSettings: () => {
       openedModelSettings += 1;
@@ -402,12 +416,63 @@ test('composer toolbar uses actionbar icon controls', () => {
     assert.equal(menu.getAttribute('data-menu'), 'agentbar-model-menu');
 
     const autoMode = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('Auto Max mode'),
+      (node) =>
+        node.querySelector('.dropdown-menu-item-content')?.textContent?.trim()
+        === 'Auto',
     );
     assert(autoMode instanceof HTMLElement);
-    assert.equal(autoMode.classList.contains('selected'), true);
+    assert.equal(autoMode.classList.contains('selected'), false);
+    assert.equal(autoMode.querySelector('.lx-icon'), null);
+    assert(autoMode.querySelector('.dropdown-menu-item-switch') instanceof HTMLElement);
+    assert.equal(autoMode.querySelector('.dropdown-menu-item-description'), null);
+    autoMode.click();
+    assert.equal(autoModelRoutingToggleCount, 1);
+    assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
+    assert.equal(
+      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      'Auto',
+    );
 
-    const option = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const autoMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    assert(autoMenu instanceof HTMLElement);
+    assert.deepEqual(
+      Array.from(autoMenu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'))
+        .map((node) => node.textContent?.trim()),
+      ['Auto'],
+    );
+
+    const autoToggle = Array.from(autoMenu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) =>
+        node.querySelector('.dropdown-menu-item-content')?.textContent?.trim()
+        === 'Auto',
+    );
+    assert(autoToggle instanceof HTMLElement);
+    autoToggle.click();
+    assert.equal(autoModelRoutingToggleCount, 2);
+
+    const switchMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    assert(switchMenu instanceof HTMLElement);
+    assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
+    assert.equal(
+      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      'GLM-4.7-Flash',
+    );
+
+    const maxMode = Array.from(switchMenu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) =>
+        node.querySelector('.dropdown-menu-item-content')?.textContent?.trim()
+        === 'Max mode',
+    );
+    assert(maxMode instanceof HTMLElement);
+    assert.equal(maxMode.querySelector('.lx-icon'), null);
+    assert(maxMode.querySelector('.dropdown-menu-item-switch') instanceof HTMLElement);
+    maxMode.click();
+    assert.equal(maxContextWindowToggleCount, 1);
+    assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
+
+    const modelMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    assert(modelMenu instanceof HTMLElement);
+    const option = Array.from(modelMenu.querySelectorAll('.dropdown-menu-item')).find(
       (node) => node.textContent?.includes('GPT-5.4'),
     );
     assert(option instanceof HTMLElement);
@@ -456,9 +521,46 @@ test('composer toolbar uses actionbar icon controls', () => {
   }
 });
 
+test('agent bar model trigger and menu collapse to Auto while automatic routing is enabled', async () => {
+  const agentBar = createAgentChatWidget(createProps());
+  const element = agentBar.getElement();
+  document.body.append(element);
+
+  try {
+    const dropdownButton = element.querySelector('.agentbar-model-switch-btn');
+    assert(dropdownButton instanceof HTMLButtonElement);
+    assert.equal(
+      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      'Auto',
+    );
+
+    dropdownButton.click();
+    await delay(0);
+
+    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    assert(menu instanceof HTMLElement);
+
+    const menuItemLabels = Array.from(
+      menu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'),
+    ).map((node) => node.textContent?.trim());
+    assert.deepEqual(menuItemLabels, ['Auto']);
+
+    const autoDescription = menu.querySelector('.dropdown-menu-item-description');
+    assert(autoDescription instanceof HTMLElement);
+    assert.equal(
+      autoDescription.textContent,
+      'Balanced quality and speed, recommended for most tasks',
+    );
+    assert(menu.querySelector('.dropdown-menu-item-switch.checked') instanceof HTMLElement);
+  } finally {
+    agentBar.dispose();
+  }
+});
+
 test('agent bar model menu supports search filtering', async () => {
   const agentBar = createAgentChatWidget({
     ...createProps(),
+    activeLlmModelOptionValue: 'glm:glm-4.7-flash',
     llmModelOptions: [
       { value: 'auto', label: 'Auto' },
       { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },

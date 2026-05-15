@@ -100,6 +100,16 @@ function createCheckSlot(isSelected: boolean) {
   return slot;
 }
 
+function createSwitchSlot(isSelected: boolean) {
+  const slot = createElement('span', 'dropdown-menu-item-switch');
+  slot.setAttribute('aria-hidden', 'true');
+  slot.classList.toggle('checked', isSelected);
+
+  const thumb = createElement('span', 'dropdown-menu-item-switch-thumb');
+  slot.append(thumb);
+  return slot;
+}
+
 function hasSubmenu(item: ContextMenuAction | undefined): item is ContextMenuAction & {
   submenu: readonly ContextMenuAction[];
 } {
@@ -115,7 +125,11 @@ function createSubmenuIndicator() {
 
 function createTrailingSlot(item: ContextMenuAction, isSelected: boolean) {
   const trailing = createElement('span', 'dropdown-menu-item-trailing');
-  trailing.append(createCheckSlot(isSelected));
+  trailing.append(
+    item.checkedDisplay === 'switch'
+      ? createSwitchSlot(isSelected)
+      : createCheckSlot(isSelected),
+  );
   if (hasSubmenu(item)) {
     trailing.append(createSubmenuIndicator());
   }
@@ -124,10 +138,16 @@ function createTrailingSlot(item: ContextMenuAction, isSelected: boolean) {
 
 function createMenuItemContent(item: ContextMenuAction) {
   const content = createElement('div', 'dropdown-option-content');
+  const textWrap = createElement('div', 'dropdown-menu-item-text');
+  const label = createElement('div', 'dropdown-menu-item-content', item.label);
+  textWrap.append(label);
+  if (item.description) {
+    textWrap.append(createElement('div', 'dropdown-menu-item-description', item.description));
+  }
   if (item.icon) {
     content.append(createLxIcon(item.icon, 'dropdown-option-icon'));
   }
-  content.append(createElement('div', 'dropdown-menu-item-content', item.label));
+  content.append(textWrap);
   return content;
 }
 
@@ -426,6 +446,7 @@ export class Menu extends LifecycleOwner {
           'dropdown-menu-item',
           this.options.itemClassName,
           hasSubmenu(item) ? 'has-submenu' : '',
+          item.checkedDisplay === 'switch' && item.description ? 'has-description-switch' : '',
           selected ? 'selected' : '',
           item.disabled ? 'disabled' : '',
         ]),
@@ -434,6 +455,12 @@ export class Menu extends LifecycleOwner {
       node.dataset.index = String(index);
       node.setAttribute('role', itemRole);
       node.setAttribute('aria-disabled', item.disabled ? 'true' : 'false');
+      if (item.checkedDisplay === 'switch') {
+        node.setAttribute('role', 'menuitemcheckbox');
+        node.setAttribute('aria-checked', selected ? 'true' : 'false');
+      } else {
+        node.removeAttribute('aria-checked');
+      }
       if (itemRole === 'option') {
         node.setAttribute('aria-selected', selected ? 'true' : 'false');
       } else {

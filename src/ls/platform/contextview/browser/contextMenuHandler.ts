@@ -7,7 +7,7 @@ import {
   resolveAnchoredVerticalPlacementWithFallback,
   type AnchoredRect,
 } from 'ls/base/browser/ui/contextview/contextview';
-import { Menu } from 'ls/base/browser/ui/menu/menu';
+import { Menu, type MenuOptions } from 'ls/base/browser/ui/menu/menu';
 import type {
   ContextMenuDelegate,
   ContextViewService,
@@ -164,14 +164,29 @@ export class ContextMenuHandler {
             }),
         }
       : undefined;
-    const menu = new Menu({
-      items: options,
-      dataMenu,
-      role: 'menu',
-      placement: delegate.position === 'above' ? 'top' : 'bottom',
-      header: menuHeader,
-      onSelect: ({ value }) => {
+    let menu: Menu;
+    const resolveCurrentPlacement = (): 'top' | 'bottom' =>
+      menu.getElement().classList.contains('dropdown-menu-top')
+        ? 'top'
+        : 'bottom';
+    const createMenuOptions = (
+      items: readonly ContextMenuAction[],
+      placement: 'top' | 'bottom',
+    ): MenuOptions => ({
+        items,
+        dataMenu,
+        role: 'menu',
+        placement,
+        header: menuHeader,
+        onSelect: ({ value, item }) => {
         delegate.onSelect?.(value);
+        if (item.keepOpenOnClick) {
+          menu.setOptions(createMenuOptions(
+            delegate.getActions(),
+            resolveCurrentPlacement(),
+          ));
+          return;
+        }
         this.contextViewService.hideContextView({
           didCancel: false,
           value,
@@ -181,29 +196,17 @@ export class ContextMenuHandler {
         this.contextViewService.hideContextView({ didCancel: true });
       },
     });
+    menu = new Menu(createMenuOptions(
+      options,
+      delegate.position === 'above' ? 'top' : 'bottom',
+    ));
 
     queueMicrotask(() => {
       const placement = resolveMenuPlacement(
         delegate,
         menu.getElement().getBoundingClientRect().height,
       );
-      menu.setOptions({
-        items: options,
-        dataMenu,
-        role: 'menu',
-        placement,
-        header: menuHeader,
-        onSelect: ({ value }) => {
-          delegate.onSelect?.(value);
-          this.contextViewService.hideContextView({
-            didCancel: false,
-            value,
-          });
-        },
-        onCancel: () => {
-          this.contextViewService.hideContextView({ didCancel: true });
-        },
-      });
+      menu.setOptions(createMenuOptions(options, placement));
     });
 
     return menu;
