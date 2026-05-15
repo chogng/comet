@@ -1,6 +1,7 @@
 import 'ls/base/browser/ui/lxicon/lxicon.css';
 import accountSvg from 'ls/base/browser/ui/lxicon/svg/account.svg?raw';
 import addSvg from 'ls/base/browser/ui/lxicon/svg/add.svg?raw';
+import add1Svg from 'ls/base/browser/ui/lxicon/svg/add-1.svg?raw';
 import addFileSvg from 'ls/base/browser/ui/lxicon/svg/add-file.svg?raw';
 import agentSvg from 'ls/base/browser/ui/lxicon/svg/agent.svg?raw';
 import agentFilledSvg from 'ls/base/browser/ui/lxicon/svg/agent-filled.svg?raw';
@@ -150,6 +151,7 @@ import quotesSvg from 'ls/base/browser/ui/lxicon/svg/quotes.svg?raw';
 import reasoningSvg from 'ls/base/browser/ui/lxicon/svg/reasoning.svg?raw';
 import refreshSvg from 'ls/base/browser/ui/lxicon/svg/refresh.svg?raw';
 import removeSvg from 'ls/base/browser/ui/lxicon/svg/remove.svg?raw';
+import remove1Svg from 'ls/base/browser/ui/lxicon/svg/remove-1.svg?raw';
 import repoFetchSvg from 'ls/base/browser/ui/lxicon/svg/repo-fetch.svg?raw';
 import repoPullSvg from 'ls/base/browser/ui/lxicon/svg/repo-pull.svg?raw';
 import repoPushSvg from 'ls/base/browser/ui/lxicon/svg/repo-push.svg?raw';
@@ -196,6 +198,7 @@ import zoomOutSvg from 'ls/base/browser/ui/lxicon/svg/zoom-out.svg?raw';
 export type LxIconName =
   | 'account'
   | 'add'
+  | 'add-1'
   | 'add-file'
   | 'agent'
   | 'agent-filled'
@@ -393,6 +396,7 @@ export type LxIconName =
 const SVG_BY_NAME: Record<LxIconName, string> = {
   'account': accountSvg,
   'add': addSvg,
+  'add-1': add1Svg,
   'add-file': addFileSvg,
   'agent': agentSvg,
   'agent-filled': agentFilledSvg,
@@ -544,6 +548,7 @@ const SVG_BY_NAME: Record<LxIconName, string> = {
   'reasoning': reasoningSvg,
   'refresh': refreshSvg,
   'remove': removeSvg,
+  'remove-1': remove1Svg,
   'repo-fetch': repoFetchSvg,
   'repo-pull': repoPullSvg,
   'repo-push': repoPushSvg,
