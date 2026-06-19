@@ -5,6 +5,8 @@ export interface DisposableLike {
   dispose(): void;
 }
 
+export interface IDisposable extends DisposableLike {}
+
 export type Disposer = () => void;
 
 export type DisposableHandle = DisposableLike & Disposer;
@@ -47,6 +49,10 @@ export function isDisposableLike(value: unknown): value is DisposableLike {
   );
 }
 
+export function isDisposable<E>(thing: E): thing is E & IDisposable {
+  return isDisposableLike(thing);
+}
+
 export function toDisposable(disposer: Disposer): DisposableHandle {
   let disposed = false;
 
@@ -66,12 +72,33 @@ export function toDisposable(disposer: Disposer): DisposableHandle {
   return handle;
 }
 
-export function dispose(input: DisposableInput): void {
+function isIterableDisposableInput(
+  input: DisposableInput | Iterable<DisposableInput>,
+): input is Iterable<DisposableInput> {
+  return (
+    typeof input !== 'function' &&
+    typeof input === 'object' &&
+    input !== null &&
+    Symbol.iterator in input
+  );
+}
+
+export function dispose<T extends DisposableInput>(input: T): T;
+export function dispose<T extends Iterable<DisposableInput>>(input: T): T;
+export function dispose<T extends DisposableInput | Iterable<DisposableInput>>(
+  input: T,
+): T {
   if (!input) {
-    return;
+    return input;
+  }
+
+  if (isIterableDisposableInput(input)) {
+    disposeAll(input);
+    return input;
   }
 
   disposeValue(input);
+  return input;
 }
 
 export function disposeAll(inputs: Iterable<DisposableInput>): void {
@@ -95,6 +122,10 @@ export function combineDisposables(...inputs: DisposableInput[]): DisposableHand
   return toDisposable(() => {
     disposeAll(inputs);
   });
+}
+
+export function combinedDisposable(...inputs: DisposableInput[]): DisposableHandle {
+  return combineDisposables(...inputs);
 }
 
 export class LifecycleStore implements DisposableLike {
@@ -158,6 +189,8 @@ export class LifecycleStore implements DisposableLike {
   }
 }
 
+export class DisposableStore extends LifecycleStore {}
+
 export class MutableLifecycle<T extends DisposableValue = DisposableLike>
   implements DisposableLike
 {
@@ -202,6 +235,46 @@ export class MutableLifecycle<T extends DisposableValue = DisposableLike>
     const currentValue = this.currentValue;
     this.currentValue = undefined;
     dispose(currentValue);
+  }
+}
+
+export class MutableDisposable<
+  T extends DisposableValue = DisposableLike,
+> extends MutableLifecycle<T> {}
+
+export const DisposableNone = Object.freeze<IDisposable>({
+  dispose() {},
+});
+
+export function markAsSingleton<T extends IDisposable>(singleton: T): T {
+  return singleton;
+}
+
+export abstract class Disposable implements IDisposable {
+  private readonly store = new DisposableStore();
+
+  protected _register<T extends null | undefined>(input: T): T;
+  protected _register<T extends DisposableLike>(input: T): T;
+  protected _register(input: Disposer): DisposableHandle;
+  protected _register<T extends DisposableInput>(input: T): T | DisposableHandle {
+    if (!input) {
+      return input;
+    }
+
+    if (typeof input === 'function') {
+      return this.store.add(input);
+    }
+
+    if (Object.is(input, this)) {
+      throw new Error('Cannot register a disposable on itself.');
+    }
+
+    this.store.add(input);
+    return input;
+  }
+
+  dispose(): void {
+    this.store.dispose();
   }
 }
 

@@ -11,10 +11,27 @@ import { EventEmitter } from 'ls/base/common/event';
 
 export { Orientation } from 'ls/base/browser/ui/sash/sash';
 
+export const enum LayoutPriority {
+  Normal,
+  Low,
+  High,
+}
+
+type SplitViewStyleColor = {
+  isTransparent?(): boolean;
+  toString(): string;
+};
+
+export interface ISplitViewStyles {
+  readonly separatorBorder: SplitViewStyleColor;
+}
+
 export interface IView<TLayoutContext = undefined> {
   readonly element: HTMLElement;
   readonly minimumSize: number;
   readonly maximumSize: number;
+  readonly priority?: LayoutPriority;
+  readonly proportionalLayout?: boolean;
   readonly snap?: boolean;
   layout(size: number, offset: number, context: TLayoutContext | undefined): void;
   setVisible?(visible: boolean): void;
@@ -25,6 +42,56 @@ type AddViewOptions = {
   flex?: boolean;
   index?: number;
 };
+
+export interface ISplitViewDescriptor<
+  TLayoutContext = undefined,
+  TView extends IView<TLayoutContext> = IView<TLayoutContext>,
+> {
+  size: number;
+  views: Array<{
+    view: TView;
+    size: number;
+    visible?: boolean;
+  }>;
+}
+
+export interface ISplitViewOptions<
+  TLayoutContext = undefined,
+  TView extends IView<TLayoutContext> = IView<TLayoutContext>,
+> {
+  readonly orientation?: Orientation;
+  readonly styles?: ISplitViewStyles;
+  readonly proportionalLayout?: boolean;
+  readonly descriptor?: ISplitViewDescriptor<TLayoutContext, TView>;
+  readonly inverseAltBehavior?: boolean;
+  readonly getSashOrthogonalSize?: () => number;
+}
+
+export type DistributeSizing = { type: 'distribute' };
+export type SplitSizing = { type: 'split'; index: number };
+export type AutoSizing = { type: 'auto'; index: number };
+export type InvisibleSizing = { type: 'invisible'; cachedVisibleSize: number };
+export type Sizing =
+  | DistributeSizing
+  | SplitSizing
+  | AutoSizing
+  | InvisibleSizing;
+
+export namespace Sizing {
+  export const Distribute: DistributeSizing = { type: 'distribute' };
+
+  export function Split(index: number): SplitSizing {
+    return { type: 'split', index };
+  }
+
+  export function Auto(index: number): AutoSizing {
+    return { type: 'auto', index };
+  }
+
+  export function Invisible(cachedVisibleSize: number): InvisibleSizing {
+    return { type: 'invisible', cachedVisibleSize };
+  }
+}
 
 type ViewItem<TLayoutContext> = {
   view: IView<TLayoutContext>;
@@ -112,6 +179,7 @@ export class SplitView<TLayoutContext = undefined> {
   private readonly items: ViewItem<TLayoutContext>[] = [];
   private readonly onDidSashChangeEmitter = new EventEmitter<SplitViewSashChangeEvent>();
   private readonly onDidSashSnapEmitter = new EventEmitter<SplitViewSashSnapEvent>();
+  private readonly onDidSashResetEmitter = new EventEmitter<number>();
   private readonly onDidSashEndEmitter = new EventEmitter<number>();
   private sashItems: SashItem[] = [];
   private dragState: SashDragState | null = null;
@@ -124,6 +192,7 @@ export class SplitView<TLayoutContext = undefined> {
 
   readonly onDidSashChange = this.onDidSashChangeEmitter.event;
   readonly onDidSashSnap = this.onDidSashSnapEmitter.event;
+  readonly onDidSashReset = this.onDidSashResetEmitter.event;
   readonly onDidSashEnd = this.onDidSashEndEmitter.event;
 
   get startSnappingEnabled() {
@@ -171,13 +240,54 @@ export class SplitView<TLayoutContext = undefined> {
     return this.items.length;
   }
 
+  get minimumSize() {
+    return (
+      this.getVisibleItemIndices().reduce(
+        (total, index) => total + this.items[index].view.minimumSize,
+        0,
+      ) + this.getReservedSashSpace()
+    );
+  }
+
+  get maximumSize() {
+    const visibleIndices = this.getVisibleItemIndices();
+    if (visibleIndices.some((index) => !Number.isFinite(this.items[index].view.maximumSize))) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return (
+      visibleIndices.reduce(
+        (total, index) => total + this.items[index].view.maximumSize,
+        0,
+      ) + this.getReservedSashSpace()
+    );
+  }
+
   addView(
     view: IView<TLayoutContext>,
-    size: number,
-    options: AddViewOptions = {},
+    size: number | Sizing,
+    index?: number,
+    skipLayout?: boolean,
+  ): void;
+  addView(
+    view: IView<TLayoutContext>,
+    size: number | Sizing,
+    options?: AddViewOptions,
+  ): void;
+  addView(
+    view: IView<TLayoutContext>,
+    size: number | Sizing,
+    indexOrOptions: number | AddViewOptions = {},
+    skipLayout = false,
   ) {
-    const visible = options.visible !== false;
-    const initialSize = this.clampSize(view, size);
+    const options =
+      typeof indexOrOptions === 'number'
+        ? { index: indexOrOptions }
+        : indexOrOptions;
+    const index = options.index ?? this.items.length;
+    const resolvedSizing = this.resolveAddViewSizing(view, size, index);
+    const visible = options.visible !== false && resolvedSizing.visible !== false;
+    const initialSize = this.clampSize(view, resolvedSizing.size);
     const container = document.createElement('div');
     container.className = 'split-view-view';
     if (visible) {
@@ -185,7 +295,6 @@ export class SplitView<TLayoutContext = undefined> {
     }
     container.append(view.element);
 
-    const index = options.index ?? this.items.length;
     insertElementAt(this.viewContainer, container, index);
     this.items.splice(index, 0, {
       view,
@@ -198,10 +307,15 @@ export class SplitView<TLayoutContext = undefined> {
     });
     view.setVisible?.(visible);
     this.rebuildSashes();
-    this.applyLayout();
+    if (resolvedSizing.distribute) {
+      this.distributeViewSizes();
+    }
+    if (!skipLayout) {
+      this.applyLayout();
+    }
   }
 
-  removeView(index: number) {
+  removeView(index: number, sizing?: Sizing) {
     const item = this.items[index];
     if (!item) {
       return null;
@@ -214,9 +328,84 @@ export class SplitView<TLayoutContext = undefined> {
     item.container.remove();
     this.items.splice(index, 1);
     this.rebuildSashes();
+    this.applyRemoveSizing(sizing, item);
     this.applyLayout();
 
     return item.view;
+  }
+
+  moveView(from: number, to: number): void {
+    if (from === to) {
+      return;
+    }
+
+    const cachedVisibleSize = this.getViewCachedVisibleSize(from);
+    const size =
+      typeof cachedVisibleSize === 'number'
+        ? Sizing.Invisible(cachedVisibleSize)
+        : this.getViewSize(from);
+    const view = this.removeView(from);
+    if (!view) {
+      return;
+    }
+
+    this.addView(view, size, to);
+  }
+
+  swapViews(from: number, to: number): void {
+    if (from === to) {
+      return;
+    }
+
+    if (from > to) {
+      this.swapViews(to, from);
+      return;
+    }
+
+    const fromSize = this.getViewSize(from);
+    const toSize = this.getViewSize(to);
+    const toView = this.removeView(to);
+    const fromView = this.removeView(from);
+    if (!fromView || !toView) {
+      return;
+    }
+
+    this.addView(toView, fromSize, from);
+    this.addView(fromView, toSize, to);
+  }
+
+  distributeViewSizes(): void {
+    const visibleIndices = this.getVisibleItemIndices();
+    if (visibleIndices.length === 0) {
+      return;
+    }
+
+    const primarySize =
+      this.orientation === Orientation.VERTICAL ? this.width : this.height;
+    const availableSize = Math.max(0, primarySize - this.getReservedSashSpace());
+    if (availableSize <= 0) {
+      return;
+    }
+
+    const flexibleIndices = visibleIndices.filter((index) => {
+      const item = this.items[index];
+      return item.view.maximumSize - item.view.minimumSize > 0;
+    });
+    const targetIndices = flexibleIndices.length > 0 ? flexibleIndices : visibleIndices;
+    const reservedSize = visibleIndices
+      .filter((index) => !targetIndices.includes(index))
+      .reduce((total, index) => total + this.items[index].size, 0);
+    const targetSize = Math.max(0, availableSize - reservedSize);
+    const baseSize = Math.floor(targetSize / targetIndices.length);
+    let remainder = targetSize - baseSize * targetIndices.length;
+
+    for (const index of targetIndices) {
+      const item = this.items[index];
+      const nextSize = this.clampSize(item.view, baseSize + (remainder > 0 ? 1 : 0));
+      remainder -= 1;
+      item.size = nextSize;
+      item.cachedVisibleSize = nextSize;
+    }
   }
 
   setViewVisible(index: number, visible: boolean) {
@@ -313,6 +502,15 @@ export class SplitView<TLayoutContext = undefined> {
     return item.visible ? item.size : item.cachedVisibleSize;
   }
 
+  getViewCachedVisibleSize(index: number) {
+    const item = this.items[index];
+    if (!item || item.visible) {
+      return undefined;
+    }
+
+    return item.cachedVisibleSize;
+  }
+
   isViewVisible(index: number) {
     return this.items[index]?.visible ?? false;
   }
@@ -324,6 +522,20 @@ export class SplitView<TLayoutContext = undefined> {
     this.applyLayout();
   }
 
+  style(styles: ISplitViewStyles): void {
+    if (styles.separatorBorder.isTransparent?.() === true) {
+      this.element.classList.remove('separator-border');
+      this.element.style.removeProperty('--separator-border');
+      return;
+    }
+
+    this.element.classList.add('separator-border');
+    this.element.style.setProperty(
+      '--separator-border',
+      styles.separatorBorder.toString(),
+    );
+  }
+
   dispose() {
     this.dragState = null;
     for (const sashItem of this.sashItems) {
@@ -332,8 +544,95 @@ export class SplitView<TLayoutContext = undefined> {
     this.sashItems = [];
     this.onDidSashChangeEmitter.dispose();
     this.onDidSashSnapEmitter.dispose();
+    this.onDidSashResetEmitter.dispose();
     this.onDidSashEndEmitter.dispose();
     this.element.replaceChildren();
+  }
+
+  private resolveAddViewSizing(
+    view: IView<TLayoutContext>,
+    size: number | Sizing,
+    index: number,
+  ): { size: number; visible?: boolean; distribute?: boolean } {
+    if (typeof size === 'number') {
+      return { size };
+    }
+
+    if (size.type === 'invisible') {
+      return {
+        size: this.clampSize(view, size.cachedVisibleSize),
+        visible: false,
+      };
+    }
+
+    if (size.type === 'distribute') {
+      const primarySize =
+        this.orientation === Orientation.VERTICAL ? this.width : this.height;
+      const availableSize = Math.max(0, primarySize - this.getReservedSashSpace());
+      return {
+        size:
+          availableSize > 0
+            ? Math.max(view.minimumSize, Math.floor(availableSize / (this.items.length + 1)))
+            : view.minimumSize,
+        distribute: true,
+      };
+    }
+
+    const referenceIndex = Math.max(0, Math.min(size.index, this.items.length - 1));
+    const referenceItem = this.items[referenceIndex];
+    if (!referenceItem) {
+      return { size: view.minimumSize };
+    }
+
+    const referenceSize = referenceItem.visible
+      ? referenceItem.size
+      : referenceItem.cachedVisibleSize;
+    const newSize = this.clampSize(view, Math.floor(referenceSize / 2));
+    const nextReferenceSize = this.clampSize(
+      referenceItem.view,
+      Math.max(0, referenceSize - newSize),
+    );
+    referenceItem.cachedVisibleSize = nextReferenceSize;
+    if (referenceItem.visible) {
+      referenceItem.size = nextReferenceSize;
+    }
+
+    if (size.type === 'auto' && index === referenceIndex + 1) {
+      return { size: newSize };
+    }
+
+    return { size: newSize };
+  }
+
+  private applyRemoveSizing(
+    sizing: Sizing | undefined,
+    removedItem: ViewItem<TLayoutContext>,
+  ) {
+    if (!sizing) {
+      return;
+    }
+
+    if (sizing.type === 'distribute' || sizing.type === 'auto') {
+      this.distributeViewSizes();
+      return;
+    }
+
+    if (sizing.type !== 'split') {
+      return;
+    }
+
+    const referenceItem = this.items[sizing.index];
+    if (!referenceItem) {
+      return;
+    }
+
+    const restoredSize =
+      (referenceItem.visible ? referenceItem.size : referenceItem.cachedVisibleSize) +
+      (removedItem.visible ? removedItem.size : removedItem.cachedVisibleSize);
+    referenceItem.cachedVisibleSize = this.clampSize(referenceItem.view, restoredSize);
+    if (referenceItem.visible) {
+      referenceItem.size = referenceItem.cachedVisibleSize;
+    }
   }
 
   private rebuildSashes() {
@@ -363,6 +662,9 @@ export class SplitView<TLayoutContext = undefined> {
       const disposeChange = sash.onDidChange((event) => {
         this.handleSashChange(index, event);
       });
+      const disposeReset = sash.onDidReset(() => {
+        this.onDidSashResetEmitter.fire(index);
+      });
       const disposeEnd = sash.onDidEnd(() => {
         this.handleSashEnd(index);
       });
@@ -375,6 +677,7 @@ export class SplitView<TLayoutContext = undefined> {
         dispose: () => {
           disposeStart();
           disposeChange();
+          disposeReset();
           disposeEnd();
           separator.remove();
           sash.dispose();

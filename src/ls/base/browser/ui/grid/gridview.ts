@@ -1,5 +1,7 @@
 import type {
   IView as ISplitView,
+  LayoutPriority,
+  Sizing,
   SplitViewSashChangeEvent,
   SplitViewSashSnapEvent,
 } from 'ls/base/browser/ui/splitview/splitview';
@@ -11,6 +13,14 @@ import { Orientation, SplitView } from 'ls/base/browser/ui/splitview/splitview';
 import 'ls/base/browser/ui/grid/gridview.css';
 
 export { Orientation } from 'ls/base/browser/ui/splitview/splitview';
+export { LayoutPriority, Sizing } from 'ls/base/browser/ui/splitview/splitview';
+
+export interface IGridViewStyles {}
+
+export interface IViewSize {
+  readonly width: number;
+  readonly height: number;
+}
 
 export interface IGridView {
   readonly element: HTMLElement;
@@ -18,14 +28,50 @@ export interface IGridView {
   readonly maximumWidth: number;
   readonly minimumHeight: number;
   readonly maximumHeight: number;
+  readonly priority?: LayoutPriority;
+  readonly proportionalLayout?: boolean;
   readonly snap?: boolean;
   layout(width: number, height: number): void;
   setVisible?(visible: boolean): void;
 }
 
+export interface IView extends IGridView {}
+
+export interface ISerializableView extends IView {
+  toJSON(): object;
+}
+
+export interface IViewDeserializer<T extends ISerializableView> {
+  fromJSON(json: unknown): T;
+}
+
+export interface ISerializedLeafNode {
+  type: 'leaf';
+  data: unknown;
+  size: number;
+  visible?: boolean;
+  maximized?: boolean;
+}
+
+export interface ISerializedBranchNode {
+  type: 'branch';
+  data: ISerializedNode[];
+  size: number;
+  visible?: boolean;
+}
+
+export type ISerializedNode = ISerializedLeafNode | ISerializedBranchNode;
+
+export interface ISerializedGridView {
+  root: ISerializedNode;
+  orientation: Orientation;
+  width: number;
+  height: number;
+}
+
 export type GridChild = {
   view: IGridView;
-  size: number;
+  size: number | Sizing;
   visible?: boolean;
   flex?: boolean;
 };
@@ -53,6 +99,12 @@ function minFinite(values: number[]) {
     : Math.min(...values);
 }
 
+export function orthogonal(orientation: Orientation): Orientation {
+  return orientation === Orientation.VERTICAL
+    ? Orientation.HORIZONTAL
+    : Orientation.VERTICAL;
+}
+
 class GridChildAdapter implements ISplitView {
   constructor(
     private readonly orientation: Orientation,
@@ -78,6 +130,14 @@ class GridChildAdapter implements ISplitView {
 
   get snap() {
     return this.view.snap;
+  }
+
+  get priority() {
+    return this.view.priority;
+  }
+
+  get proportionalLayout() {
+    return this.view.proportionalLayout;
   }
 
   layout(size: number, offset: number) {
@@ -500,7 +560,7 @@ export class GridView implements IGridView {
 
   addView(
     view: IGridView,
-    size: number,
+    size: number | Sizing,
     location: readonly number[],
     options: AddGridChildOptions = {},
   ) {
@@ -535,7 +595,8 @@ export class GridView implements IGridView {
 
     const parentSize = parent.branch.getChildSize(parent.index);
     const availableSize = Math.max(0, parentSize - parent.branch.getSashSize());
-    const newChildSize = Math.min(size, availableSize);
+    const requestedSize = typeof size === 'number' ? size : Math.floor(availableSize / 2);
+    const newChildSize = Math.min(requestedSize, availableSize);
     const existingSize = Math.max(0, availableSize - newChildSize);
     const branch = new GridBranchView(
       options.splitOrientation,
