@@ -7,6 +7,7 @@ import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lif
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import { FetchTreeView } from 'ls/workbench/browser/parts/sidebar/fetchTreeView';
+import { createSidebarTitlebarLabels } from 'ls/workbench/browser/parts/titlebar/titlebarActions';
 
 export type SidebarArticle = {
   title: string;
@@ -197,11 +198,7 @@ export function createSidebarPartLabels({
     archiveTextPath: ui.articleDetailsArchiveTextPath,
     archivePdfPath: ui.articleDetailsArchivePdfPath,
     revealPath: ui.articleDetailsRevealPath,
-    controlsAriaLabel: ui.titlebarControls,
-    minimize: ui.titlebarMinimize,
-    maximize: ui.titlebarMaximize,
-    restore: ui.titlebarRestore,
-    close: ui.titlebarClose,
+    ...createSidebarTitlebarLabels(ui),
     emptyFiltered: ui.emptyFiltered,
     emptyAll: ui.emptyAll,
     emptyAllInputLinkAction: ui.emptyAllInputLinkAction,
@@ -215,7 +212,6 @@ export function createSidebarPartLabels({
     selectionModeSelectAll: ui.sidebarSelectionModeSelectAll,
     selectionModeExit: ui.sidebarSelectionModeExit,
     loading: ui.settingsLoading,
-    refresh: ui.titlebarRefresh,
     libraryTitle: ui.sidebarLibraryAction,
     libraryAction: ui.sidebarLibraryAction,
     pdfDownloadAction: ui.sidebarPdfDownloadAction,

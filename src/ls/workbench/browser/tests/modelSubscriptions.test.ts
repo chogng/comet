@@ -320,7 +320,7 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
     });
     const sourceTexts: string[] = [];
     const disposeListener = controller.subscribe(() => {
-      sourceTexts.push(controller.getSnapshot().titlebarFetchSourceText);
+      sourceTexts.push(controller.getSnapshot().statusbarFetchSourceText);
     });
 
     controller.start();

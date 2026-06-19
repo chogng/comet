@@ -3,7 +3,6 @@ import { EventEmitter } from 'ls/base/common/event';
 import { MutableLifecycle } from 'ls/base/common/lifecycle';
 import type {
   ElectronInvoke,
-  FetchStatus,
   JournalSourceOverride,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { INativeHostService } from 'ls/platform/native/common/native';
@@ -12,18 +11,13 @@ import { fetchLatestArticlesBatch } from 'ls/workbench/services/article/articleF
 import type { Article } from 'ls/workbench/services/article/articleFetch';
 import { INITIAL_BATCH_FETCH_MACHINE_STATE, reduceBatchFetchMachineState } from 'ls/workbench/services/article/batchFetchState';
 import type { BatchFetchMachineEvent, BatchFetchMachineState } from 'ls/workbench/services/article/batchFetchState';
+import { resolveBatchFetchStatusbarStatus } from 'ls/workbench/browser/parts/statusbar/statusbarFetchStatus';
+import type { BatchFetchStatusbarStatus } from 'ls/workbench/browser/parts/statusbar/statusbarFetchStatus';
 
 import {
   formatLocalized,
   localizeDesktopInvokeError,
 } from 'ls/workbench/services/desktop/desktopError';
-
-type BatchFetchTitlebarStatus = {
-  titlebarFetchSourceText: string;
-  titlebarFetchSourceTitle: string;
-  titlebarFetchStopText: string;
-  titlebarFetchStopTitle: string;
-};
 
 export type BatchFetchControllerContext = {
   desktopRuntime: boolean;
@@ -39,76 +33,9 @@ export type BatchFetchControllerContext = {
 };
 
 export type BatchFetchControllerSnapshot = BatchFetchMachineState &
-  BatchFetchTitlebarStatus & {
+  BatchFetchStatusbarStatus & {
     isBatchLoading: boolean;
   };
-
-const EMPTY_BATCH_FETCH_TITLEBAR_STATUS: BatchFetchTitlebarStatus = {
-  titlebarFetchSourceText: '',
-  titlebarFetchSourceTitle: '',
-  titlebarFetchStopText: '',
-  titlebarFetchStopTitle: '',
-};
-
-function resolveFetchSourceText(fetchStatus: FetchStatus) {
-  if (
-    fetchStatus.fetchChannel === 'web-content' &&
-    fetchStatus.webContentReuseMode === 'live-extract'
-  ) {
-    return 'Source: live web content DOM';
-  }
-
-  if (fetchStatus.fetchChannel === 'web-content') {
-    return 'Source: web content DOM';
-  }
-
-  return 'Source: network';
-}
-
-function resolveFetchSourceTitle(fetchStatus: FetchStatus) {
-  const sourceDetail = fetchStatus.fetchDetail
-    ? ` | ${fetchStatus.fetchDetail}`
-    : '';
-  return `${fetchStatus.sourceId || 'source'} | page ${fetchStatus.pageNumber}${sourceDetail}`;
-}
-
-function resolveFetchStopText(fetchStatus: FetchStatus) {
-  if (!fetchStatus.paginationStopped) {
-    return '';
-  }
-
-  if (fetchStatus.paginationStopReason === 'tail_dates_before_start_date') {
-    return 'Stop: tail-date policy';
-  }
-
-  return 'Stop: extractor policy';
-}
-
-function resolveFetchStopTitle(fetchStatus: FetchStatus) {
-  if (!fetchStatus.paginationStopped) {
-    return '';
-  }
-
-  const sourceLabel = fetchStatus.sourceId || 'source';
-  const reasonLabel =
-    fetchStatus.paginationStopReason || 'extractor_policy';
-  return `${sourceLabel} | page ${fetchStatus.pageNumber} | ${reasonLabel}`;
-}
-
-function resolveBatchFetchTitlebarStatus(
-  fetchStatus: FetchStatus | null,
-): BatchFetchTitlebarStatus {
-  if (!fetchStatus) {
-    return EMPTY_BATCH_FETCH_TITLEBAR_STATUS;
-  }
-
-  return {
-    titlebarFetchSourceText: resolveFetchSourceText(fetchStatus),
-    titlebarFetchSourceTitle: resolveFetchSourceTitle(fetchStatus),
-    titlebarFetchStopText: resolveFetchStopText(fetchStatus),
-    titlebarFetchStopTitle: resolveFetchStopTitle(fetchStatus),
-  };
-}
 
 function createBatchFetchSnapshot(
   machineState: BatchFetchMachineState,
@@ -116,7 +43,7 @@ function createBatchFetchSnapshot(
   return {
     ...machineState,
     isBatchLoading: machineState.phase === 'loading',
-    ...resolveBatchFetchTitlebarStatus(machineState.fetchStatus),
+    ...resolveBatchFetchStatusbarStatus(machineState.fetchStatus),
   };
 }
 

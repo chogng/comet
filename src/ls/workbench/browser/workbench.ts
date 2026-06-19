@@ -41,6 +41,7 @@ import {
   createPrimaryBarTitlebarActionsProps,
   createSidebarTitlebarActionsProps,
   resolveTitlebarAssistantToggleLabel,
+  resolveTitlebarSettingsLabel,
 } from 'ls/workbench/browser/parts/titlebar/titlebarActions';
 import { createTitlebarPart } from 'ls/workbench/browser/parts/titlebar/titlebarPart';
 import type { TitlebarPart } from 'ls/workbench/browser/parts/titlebar/titlebarPart';
@@ -2256,7 +2257,7 @@ class WorkbenchHost {
     syncWorkbenchWindowTitle({
       appName: ui.appName,
       activePage,
-      settingsTitle: ui.titlebarSettings,
+      settingsTitle: resolveTitlebarSettingsLabel(ui),
       activeEditorTab,
       browserPageTitle,
     });

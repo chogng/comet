@@ -21,6 +21,7 @@ import type { EditorPartBaseProps } from 'ls/workbench/browser/parts/editor/edit
 import type { EditorViewStateKey } from 'ls/workbench/browser/parts/editor/editorViewStateStore';
 import type { SerializedEditorViewStateEntry } from 'ls/workbench/browser/parts/editor/editorViewStateStore';
 import type { INativeHostService } from 'ls/platform/native/common/native';
+import { createEditorBrowserToolbarTitlebarLabels } from 'ls/workbench/browser/parts/titlebar/titlebarActions';
 
 export type EditorPartState = {
   ui: LocaleMessages;
@@ -139,12 +140,9 @@ export function createEditorPartProps({
       createFile: ui.editorCreateFile,
       newTab: ui.editorNewTab,
       toolbarSources: ui.agentbarToolbarSources,
-      toolbarBack: ui.titlebarBack,
-      toolbarForward: ui.titlebarForward,
-      toolbarRefresh: ui.titlebarRefresh,
       toolbarFavorite: ui.agentbarToolbarFavorite,
       toolbarArchivePage: ui.editorToolbarArchivePage,
-      toolbarExportDocx: ui.titlebarExportDocx,
+      ...createEditorBrowserToolbarTitlebarLabels(ui),
       toolbarMore: ui.agentbarToolbarMore,
       toolbarHardReload: ui.editorToolbarHardReload,
       toolbarCopyCurrentUrl: ui.editorToolbarCopyCurrentUrl,

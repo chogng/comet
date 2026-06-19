@@ -11,6 +11,7 @@ import {
 } from 'ls/workbench/browser/window';
 import { hasWindowControlsRuntime } from 'ls/base/common/platform';
 import { createChildWindowShellView } from 'ls/workbench/browser/parts/window/childWindowShell';
+import { resolveTitlebarCloseLabel } from 'ls/workbench/browser/parts/titlebar/titlebarActions';
 import 'ls/workbench/browser/media/articleDetailsModalContent.css';
 
 type ArticleDetailsModalWindowState = Extract<
@@ -354,7 +355,7 @@ export class ArticleDetailsModalWindowView {
     if (!modalState) {
       this.renderPlaceholder(
         fallbackUi.articleDetailsUnavailable,
-        fallbackUi.titlebarClose,
+        resolveTitlebarCloseLabel(fallbackUi),
       );
       return;
     }

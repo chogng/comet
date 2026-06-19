@@ -1,5 +1,5 @@
 import type { LocaleMessages } from 'language/locales';
-import type { EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
+import type { EditorPartLabels, EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { EditorTopbarActionsViewProps } from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
 import type { PrimaryBarFooterActionsProps, PrimaryBarFooterLayoutMode } from 'ls/workbench/browser/parts/primarybar/primarybarFooterActions';
 import type { SidebarTopbarActionsProps } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
@@ -9,6 +9,20 @@ export type PrimaryBarTitlebarLabels = Pick<
   PrimaryBarFooterActionsProps,
   'accountLabel' | 'moreLabel' | 'settingsLabel'
 >;
+
+export type EditorBrowserToolbarTitlebarLabels = Pick<
+  EditorPartLabels,
+  'toolbarBack' | 'toolbarForward' | 'toolbarRefresh' | 'toolbarExportDocx'
+>;
+
+export type SidebarTitlebarLabels = {
+  controlsAriaLabel: string;
+  minimize: string;
+  maximize: string;
+  restore: string;
+  close: string;
+  refresh: string;
+};
 
 export function resolvePrimaryBarFooterLayoutMode(props: {
   isAgentSidebarVisible: boolean;
@@ -37,6 +51,14 @@ export function resolveTitlebarPrimarySidebarToggleLabel(
   return isPrimarySidebarVisible
     ? ui.titlebarHidePrimarySidebar
     : ui.titlebarShowPrimarySidebar;
+}
+
+export function resolveTitlebarSettingsLabel(ui: LocaleMessages) {
+  return ui.titlebarSettings;
+}
+
+export function resolveTitlebarCloseLabel(ui: LocaleMessages) {
+  return ui.titlebarClose;
 }
 
 export function createEditorTitlebarActionsProps(params: {
@@ -105,13 +127,37 @@ export function createSidebarTitlebarActionsProps(params: {
   };
 }
 
+export function createEditorBrowserToolbarTitlebarLabels(
+  ui: LocaleMessages,
+): EditorBrowserToolbarTitlebarLabels {
+  return {
+    toolbarBack: ui.titlebarBack,
+    toolbarForward: ui.titlebarForward,
+    toolbarRefresh: ui.titlebarRefresh,
+    toolbarExportDocx: ui.titlebarExportDocx,
+  };
+}
+
+export function createSidebarTitlebarLabels(
+  ui: LocaleMessages,
+): SidebarTitlebarLabels {
+  return {
+    controlsAriaLabel: ui.titlebarControls,
+    minimize: ui.titlebarMinimize,
+    maximize: ui.titlebarMaximize,
+    restore: ui.titlebarRestore,
+    close: ui.titlebarClose,
+    refresh: ui.titlebarRefresh,
+  };
+}
+
 export function createPrimaryBarTitlebarLabels(
   ui: LocaleMessages,
 ): PrimaryBarTitlebarLabels {
   return {
     accountLabel: ui.appName,
     moreLabel: ui.agentbarToolbarMore,
-    settingsLabel: ui.titlebarSettings,
+    settingsLabel: resolveTitlebarSettingsLabel(ui),
   };
 }
 
