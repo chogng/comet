@@ -1,0 +1,49 @@
+import type { Event } from 'ls/base/common/event';
+import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
+import {
+  connectWorkbenchWindowControls,
+  getWindowStateSnapshot,
+  hasWorkbenchWindowControlsProvider,
+  performWorkbenchWindowControl,
+  subscribeWindowState,
+  type WorkbenchWindowControlAction,
+} from 'ls/workbench/browser/window';
+
+export const IHostService = createDecorator<IHostService>('hostService');
+
+export interface IHostService {
+  readonly _serviceBrand: undefined;
+  readonly onDidChangeWindowState: Event<void>;
+  hasWindowControlsProvider(): boolean;
+  getWindowState(): ReturnType<typeof getWindowStateSnapshot>;
+  connectWindowControls(electronRuntime: boolean): () => void;
+  performWindowControl(action: WorkbenchWindowControlAction): void;
+}
+
+export class BrowserWorkbenchHostService implements IHostService {
+  declare readonly _serviceBrand: undefined;
+
+  readonly onDidChangeWindowState = subscribeWindowState;
+
+  hasWindowControlsProvider() {
+    return hasWorkbenchWindowControlsProvider();
+  }
+
+  getWindowState() {
+    return getWindowStateSnapshot();
+  }
+
+  connectWindowControls(electronRuntime: boolean) {
+    return connectWorkbenchWindowControls(electronRuntime);
+  }
+
+  performWindowControl(action: WorkbenchWindowControlAction) {
+    performWorkbenchWindowControl(action);
+  }
+}
+
+export function createWorkbenchHostService(): IHostService {
+  return new BrowserWorkbenchHostService();
+}
+
+export type { WorkbenchWindowControlAction };

@@ -1,0 +1,41 @@
+import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
+import {
+  detectInitialLocale,
+  getLocaleMessages,
+  toDocumentLang,
+  type Locale,
+} from 'language/i18n';
+import type { LocaleMessages } from 'language/locales';
+
+export const IWorkbenchLanguageService =
+  createDecorator<IWorkbenchLanguageService>('workbenchLanguageService');
+
+export interface IWorkbenchLanguageService {
+  readonly _serviceBrand: undefined;
+  detectInitialLocale(): Locale;
+  getLocaleMessages(locale: Locale): LocaleMessages;
+  toDocumentLang(locale: Locale): string;
+}
+
+export class WorkbenchLanguageService implements IWorkbenchLanguageService {
+  declare readonly _serviceBrand: undefined;
+
+  detectInitialLocale() {
+    return detectInitialLocale();
+  }
+
+  getLocaleMessages(locale: Locale) {
+    return getLocaleMessages(locale);
+  }
+
+  toDocumentLang(locale: Locale) {
+    return toDocumentLang(locale);
+  }
+}
+
+export function createWorkbenchLanguageService(): IWorkbenchLanguageService {
+  return new WorkbenchLanguageService();
+}
+
+export { detectInitialLocale, getLocaleMessages, toDocumentLang };
+export type { Locale, LocaleMessages };

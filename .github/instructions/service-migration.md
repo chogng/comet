@@ -75,6 +75,28 @@ infrastructure wholesale.
 - `IInstantiationService` should not be copied in full unless several services
   genuinely need lazy graph construction.
 
+## Priority Service Domains
+
+Start with explicit Literature Studio facades for these upstream workbench
+service domains before porting consumers that depend on them:
+
+- `services/layout`
+- `services/lifecycle`
+- `services/storage`
+- `services/views`
+- `services/commands`
+- `services/configuration`
+- `services/environment`
+- `services/host`
+- `services/keybinding`
+- `services/language`
+- `services/localization`
+
+Keep each facade narrow and backed by existing `ls/*` primitives first. Only
+expand a facade when a real migrated consumer needs the extra contract.
+Register these facades from the relevant `workbench.*.main.ts` composition
+root, not from `contrib/services` or an invented main module.
+
 ## Review Checklist
 
 - Service lifetime is clear and rooted in one runtime surface.

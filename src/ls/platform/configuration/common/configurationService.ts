@@ -139,4 +139,9 @@ export class ConfigurationService implements IConfigurationService {
       },
     });
   }
+
+  dispose(): void {
+    this.didChangeConfigurationEmitter.dispose();
+    this.defaultConfiguration.dispose();
+  }
 }

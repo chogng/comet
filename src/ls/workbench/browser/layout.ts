@@ -40,7 +40,7 @@ export type WorkbenchLayoutStateSnapshot = {
   expandedEditorSize: number;
 };
 
-type WorkbenchLayoutEvent =
+export type WorkbenchLayoutEvent =
   | {
       type: 'SET_SIDEBAR_SIZES';
       sizes: Partial<
