@@ -1,6 +1,12 @@
 export type RuntimeMode = 'web' | 'desktop';
 export type RuntimePlatform = 'web' | 'windows' | 'macos' | 'linux';
 
+export enum OperatingSystem {
+  Windows = 1,
+  Macintosh = 2,
+  Linux = 3,
+}
+
 function getNavigatorPlatform() {
   if (typeof navigator === 'undefined') {
     return '';
@@ -64,3 +70,18 @@ export function getRuntimePlatform(): RuntimePlatform {
 
   return 'web';
 }
+
+export function getOperatingSystem(): OperatingSystem {
+  const runtimePlatform = getRuntimePlatform();
+  if (runtimePlatform === 'macos') {
+    return OperatingSystem.Macintosh;
+  }
+
+  if (runtimePlatform === 'linux') {
+    return OperatingSystem.Linux;
+  }
+
+  return OperatingSystem.Windows;
+}
+
+export const OS = getOperatingSystem();

@@ -1,6 +1,13 @@
 import './anchoredLayout.test';
+import './actions.test';
+import './async.test';
 import './event.test';
 import './json.test';
+import './keybindings.test';
 import './lifecycle.test';
+import 'ls/platform/action/common/tests/action.test';
+import 'ls/platform/actions/common/tests/actions.test';
 import 'ls/platform/commands/common/tests/commands.test';
 import 'ls/platform/contextkey/common/tests/contextkey.test';
+import 'ls/platform/instantiation/common/tests/instantiation.test';
+import 'ls/platform/ipc/common/tests/ipc.test';
