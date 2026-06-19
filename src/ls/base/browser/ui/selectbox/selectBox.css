@@ -67,8 +67,8 @@
   height: 100%;
 }
 
-.ls-select-box-decorator svg path {
-  fill: currentColor;
+.ls-select-box-decorator svg [stroke] {
+  stroke: currentColor;
 }
 
 .ls-select-box:disabled + .ls-select-box-decorator {
