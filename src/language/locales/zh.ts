@@ -493,6 +493,15 @@ const zh = {
   libraryContextEditSourceUrlTitle: '修改来源链接',
   libraryContextEditSourceUrlLabel: '来源链接',
   libraryContextDeleteConfirm: '确定要从知识库中删除“{title}”吗？',
+  'error.invalidSymbol': '\u65e0\u6548\u7b26\u53f7',
+  'error.invalidNumberFormat': '\u65e0\u6548\u6570\u5b57\u683c\u5f0f',
+  'error.propertyNameExpected': '\u9700\u8981\u5c5e\u6027\u540d',
+  'error.valueExpected': '\u9700\u8981\u503c',
+  'error.colonExpected': '\u9700\u8981\u5192\u53f7',
+  'error.commaExpected': '\u9700\u8981\u9017\u53f7',
+  'error.closeBraceExpected': '\u9700\u8981\u53f3\u82b1\u62ec\u53f7',
+  'error.closeBracketExpected': '\u9700\u8981\u53f3\u65b9\u62ec\u53f7',
+  'error.endOfFileExpected': '\u9700\u8981\u6587\u4ef6\u7ed3\u5c3e',
 } as const;
 
 export default zh;

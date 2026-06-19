@@ -491,6 +491,15 @@ const en = {
   libraryContextEditSourceUrlTitle: 'Edit source URL',
   libraryContextEditSourceUrlLabel: 'Source URL',
   libraryContextDeleteConfirm: 'Delete "{title}" from the knowledge base?',
+  'error.invalidSymbol': 'Invalid symbol',
+  'error.invalidNumberFormat': 'Invalid number format',
+  'error.propertyNameExpected': 'Property name expected',
+  'error.valueExpected': 'Value expected',
+  'error.colonExpected': 'Colon expected',
+  'error.commaExpected': 'Comma expected',
+  'error.closeBraceExpected': 'Closing brace expected',
+  'error.closeBracketExpected': 'Closing bracket expected',
+  'error.endOfFileExpected': 'End of file expected',
 } as const;
 
 export default en;

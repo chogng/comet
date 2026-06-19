@@ -1,4 +1,5 @@
 import { EventEmitter } from 'ls/base/common/event';
+import { setNLSLanguage } from 'ls/nls';
 import { detectInitialLocale, toDocumentLang } from 'language/i18n';
 import type { Locale } from 'language/i18n';
 
@@ -34,6 +35,10 @@ class BrowserLocaleService implements ILocaleService {
   private currentLocale = readStoredLocale() ?? detectInitialLocale();
   private readonly onDidChangeEmitter = new EventEmitter<void>();
 
+  constructor() {
+    setNLSLanguage(this.currentLocale);
+  }
+
   subscribe(listener: () => void) {
     return this.onDidChangeEmitter.event(listener);
   }
@@ -44,6 +49,7 @@ class BrowserLocaleService implements ILocaleService {
 
   applyLocale(locale: Locale) {
     persistStoredLocale(locale);
+    setNLSLanguage(locale);
 
     if (this.currentLocale === locale) {
       this.syncDocumentLanguage();
