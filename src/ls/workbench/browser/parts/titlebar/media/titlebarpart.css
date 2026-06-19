@@ -1,0 +1,65 @@
+.app-window {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  background: transparent;
+}
+
+.app-window.has-statusbar {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.app-window.has-titlebar {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app-window.has-titlebar.has-statusbar {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+/* Keep the frameless host transparent and fill the inner shell instead. */
+.app-window:not(.is-mica-enabled) .titlebar,
+.app-window:not(.is-mica-enabled) .app-shell,
+.app-window:not(.is-mica-enabled) .statusbar-part {
+  background-color: var(--workbench-chrome-bg);
+}
+
+.app-shell {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--workbench-chrome-bg-transparent);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-shell.app-shell-settings {
+  grid-template-rows: minmax(0, 1fr);
+  background-color: var(--vscode-settings-contentBackground, #ffffff);
+}
+
+.app-window.has-native-window-controls-overlay .editor-topbar-actions {
+  padding-right: var(--workbench-window-controls-width, 138px);
+}
+
+.app-shell.app-shell-settings .workbench-content-layout,
+.app-shell.app-shell-settings .content-grid,
+.app-shell.app-shell-settings .workbench-content-slot-editor {
+  background: var(--vscode-settings-contentBackground, #ffffff);
+}
+
+@media (max-width: 980px) {
+  .app-shell {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .workbench-content-layout {
+    height: 100%;
+    min-height: 0;
+  }
+}

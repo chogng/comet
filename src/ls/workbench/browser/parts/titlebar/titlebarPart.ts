@@ -4,6 +4,7 @@ import {
   WORKBENCH_PART_IDS,
 } from 'ls/workbench/browser/layout';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
+import 'ls/workbench/browser/parts/titlebar/media/titlebarpart.css';
 
 export type TitlebarPartPage = 'content' | 'settings';
 

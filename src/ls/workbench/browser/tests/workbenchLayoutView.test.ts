@@ -41,6 +41,7 @@ type RawWorkbenchLayoutViewProps = {
   sidebarTopbarActionsElement: HTMLElement;
   primaryBarFooterActionsElement: HTMLElement;
   editorTopbarAuxiliaryActionsElement: HTMLElement;
+  agentTopbarTrailingActionsElement?: HTMLElement | null;
   editorPartProps: any;
   partViews: ReturnType<typeof createWorkbenchContentPartViews> | null;
 };
@@ -81,6 +82,23 @@ function createSettingsTopbarActionsElement(backLabel: string) {
   return host;
 }
 
+function createAgentTopbarActionsElement(props: {
+  label: string;
+  onToggleAgentSidebar: () => void;
+}) {
+  const actionbar = document.createElement('div');
+  actionbar.className = 'sidebar-topbar-actions actionbar is-horizontal';
+  const actions = document.createElement('div');
+  actions.className = 'actionbar-actions-container';
+  const button = document.createElement('button');
+  button.className = 'actionbar-action editor-topbar-agent-btn';
+  button.setAttribute('aria-label', props.label);
+  button.addEventListener('click', props.onToggleAgentSidebar);
+  actions.append(button);
+  actionbar.append(actions);
+  return actionbar;
+}
+
 function waitForNextTask() {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
@@ -111,6 +129,8 @@ function materializeWorkbenchLayoutViewProps(
     sidebarTopbarActionsElement: props.sidebarTopbarActionsElement,
     primaryBarFooterActionsElement: props.primaryBarFooterActionsElement,
     editorTopbarAuxiliaryActionsElement: props.editorTopbarAuxiliaryActionsElement,
+    agentTopbarTrailingActionsElement:
+      props.agentTopbarTrailingActionsElement ?? null,
   });
 
   nextPartViews.setProps({
@@ -126,6 +146,8 @@ function materializeWorkbenchLayoutViewProps(
     sidebarTopbarActionsElement: props.sidebarTopbarActionsElement,
     primaryBarFooterActionsElement: props.primaryBarFooterActionsElement,
     editorTopbarAuxiliaryActionsElement: props.editorTopbarAuxiliaryActionsElement,
+    agentTopbarTrailingActionsElement:
+      props.agentTopbarTrailingActionsElement ?? null,
   });
 
   props.partViews = nextPartViews;
@@ -1218,42 +1240,42 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
   }
 });
 
-test('WorkbenchLayoutView renders the agent sidebar toggle between add and collapse in editor topbar', () => {
+test('WorkbenchLayoutView renders the agent sidebar toggle in agentbar topbar when the agent sidebar is visible', () => {
   let toggleAgentCount = 0;
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = true;
-  props.editorPartProps = {
-    ...props.editorPartProps,
-    isAgentSidebarVisible: true,
-    showAgentSidebarToggle: true,
-    agentSidebarToggleLabel: 'Hide assistant',
+  props.agentTopbarTrailingActionsElement = createAgentTopbarActionsElement({
+    label: 'Hide assistant',
     onToggleAgentSidebar: () => {
       toggleAgentCount += 1;
     },
+  });
+  props.editorPartProps = {
+    ...props.editorPartProps,
+    isAgentSidebarVisible: true,
+    showAgentSidebarToggle: false,
+    agentSidebarToggleLabel: 'Hide assistant',
+    onToggleAgentSidebar: () => {},
   };
 
   const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
   document.body.append(view.getElement());
 
   try {
-    const actionButtons = Array.from(
-      view.getElement().querySelectorAll(
-        '.editor-topbar .editor-topbar-add-btn, .editor-topbar .editor-topbar-agent-btn, .editor-topbar .editor-topbar-toggle-editor-btn',
-      ),
-    );
-    assert.equal(actionButtons.length, 3);
-    assert.equal(actionButtons[0]?.classList.contains('editor-topbar-add-btn'), true);
-    assert.equal(actionButtons[1]?.classList.contains('editor-topbar-agent-btn'), true);
-    assert.equal(actionButtons[2]?.classList.contains('editor-topbar-toggle-editor-btn'), true);
-
     const agentButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-agent-btn');
+      .querySelector('.agentbar-topbar .editor-topbar-agent-btn');
     assert(agentButton instanceof HTMLButtonElement);
     assert.equal(agentButton.getAttribute('aria-label'), 'Hide assistant');
     agentButton.click();
     assert.equal(toggleAgentCount, 1);
+    assert.equal(
+      view
+        .getElement()
+        .querySelector('.editor-topbar .editor-topbar-agent-btn'),
+      null,
+    );
   } finally {
     view.dispose();
   }

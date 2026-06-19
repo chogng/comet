@@ -47,6 +47,7 @@ export type WorkbenchContentPartViewsProps = {
   sidebarTopbarActionsElement: HTMLElement;
   primaryBarFooterActionsElement: HTMLElement;
   editorTopbarAuxiliaryActionsElement?: HTMLElement | null;
+  agentTopbarTrailingActionsElement?: HTMLElement | null;
 };
 
 export type WorkbenchContentPartViewsLayoutState = {
@@ -73,6 +74,18 @@ export class WorkbenchContentPartViews {
     'div',
     'primarybar-topbar-trailing',
   );
+  private readonly agentTopbarTrailingActionsHost = createElement(
+    'div',
+    'agentbar-topbar-trailing-actions-host',
+  );
+  private readonly agentTopbarPrimaryTrailingActionsHost = createElement(
+    'div',
+    'agentbar-topbar-trailing-primary',
+  );
+  private readonly agentTopbarSecondaryTrailingActionsHost = createElement(
+    'div',
+    'agentbar-topbar-trailing-secondary',
+  );
   private disposed = false;
 
   constructor(props: WorkbenchContentPartViewsProps) {
@@ -84,6 +97,10 @@ export class WorkbenchContentPartViews {
     this.primaryTopbarActionsHost.append(
       this.primaryTopbarLeadingActionsHost,
       this.primaryTopbarTrailingActionsHost,
+    );
+    this.agentTopbarTrailingActionsHost.append(
+      this.agentTopbarPrimaryTrailingActionsHost,
+      this.agentTopbarSecondaryTrailingActionsHost,
     );
     this.render();
   }
@@ -303,9 +320,8 @@ export class WorkbenchContentPartViews {
       topbarActionsElement: topbarActionRoute.sidebarTarget === 'agent'
         ? this.props.sidebarTopbarActionsElement
         : null,
-      topbarTrailingActionsElement: topbarActionRoute.editorAuxiliaryTarget === 'agent'
-        ? (this.props.editorTopbarAuxiliaryActionsElement ?? null)
-        : null,
+      topbarTrailingActionsElement:
+        this.resolveAgentTopbarTrailingActionsElement(topbarActionRoute),
     };
 
     if (!this.agentBarView) {
@@ -314,6 +330,45 @@ export class WorkbenchContentPartViews {
     }
 
     this.agentBarView.setProps(nextProps);
+  }
+
+  private resolveAgentTopbarTrailingActionsElement(
+    topbarActionRoute: TopbarActionRoute,
+  ): HTMLElement | null {
+    const agentActionsElement =
+      this.props.agentTopbarTrailingActionsElement ?? null;
+    const editorAuxiliaryActionsElement =
+      topbarActionRoute.editorAuxiliaryTarget === 'agent'
+        ? (this.props.editorTopbarAuxiliaryActionsElement ?? null)
+        : null;
+
+    if (!agentActionsElement && !editorAuxiliaryActionsElement) {
+      this.syncTopbarSlot(this.agentTopbarPrimaryTrailingActionsHost, null);
+      this.syncTopbarSlot(this.agentTopbarSecondaryTrailingActionsHost, null);
+      return null;
+    }
+
+    if (!agentActionsElement) {
+      this.syncTopbarSlot(this.agentTopbarPrimaryTrailingActionsHost, null);
+      this.syncTopbarSlot(this.agentTopbarSecondaryTrailingActionsHost, null);
+      return editorAuxiliaryActionsElement;
+    }
+
+    if (!editorAuxiliaryActionsElement || agentActionsElement === editorAuxiliaryActionsElement) {
+      this.syncTopbarSlot(this.agentTopbarPrimaryTrailingActionsHost, null);
+      this.syncTopbarSlot(this.agentTopbarSecondaryTrailingActionsHost, null);
+      return agentActionsElement;
+    }
+
+    this.syncTopbarSlot(
+      this.agentTopbarPrimaryTrailingActionsHost,
+      agentActionsElement,
+    );
+    this.syncTopbarSlot(
+      this.agentTopbarSecondaryTrailingActionsHost,
+      editorAuxiliaryActionsElement,
+    );
+    return this.agentTopbarTrailingActionsHost;
   }
 
   private handleEditorStatusChange = (status: EditorStatusState) => {

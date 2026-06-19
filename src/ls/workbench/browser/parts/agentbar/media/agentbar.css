@@ -51,6 +51,23 @@
   margin-left: 0;
 }
 
+.agentbar-topbar-trailing-actions-host,
+.agentbar-topbar-trailing-primary,
+.agentbar-topbar-trailing-secondary {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+}
+
+.agentbar-topbar-trailing-actions-host {
+  gap: 0;
+}
+
+.agentbar-topbar-trailing-actions-host .sidebar-topbar-actions {
+  margin-left: 0;
+}
+
 .agentbar-topbar-window-controls-spacer {
   width: var(--window-controls-width, 70px);
   min-width: var(--window-controls-width, 70px);

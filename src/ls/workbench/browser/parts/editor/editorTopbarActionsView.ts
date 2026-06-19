@@ -33,6 +33,31 @@ export type EditorTopbarActionsViewProps = {
   onToggleAgentSidebar?: () => void;
 };
 
+export type AgentSidebarTopbarActionsViewProps = {
+  isAgentSidebarVisible: boolean;
+  agentSidebarToggleLabel?: string;
+  onToggleAgentSidebar?: () => void;
+};
+
+function createAgentSidebarToggleActionItem(
+  props: AgentSidebarTopbarActionsViewProps,
+): ActionBarItem | null {
+  if (!props.agentSidebarToggleLabel) {
+    return null;
+  }
+
+  return {
+    label: props.agentSidebarToggleLabel,
+    title: props.agentSidebarToggleLabel,
+    mode: 'icon' as const,
+    buttonClassName: 'editor-topbar-agent-btn',
+    content: createLxIcon(
+      props.isAgentSidebarVisible ? 'agent-filled' : 'agent',
+    ),
+    onClick: () => props.onToggleAgentSidebar?.(),
+  };
+}
+
 export class EditorTopbarActionsView {
   private props: EditorTopbarActionsViewProps;
   private readonly actionsView = createActionBarView({
@@ -127,17 +152,15 @@ export class EditorTopbarActionsView {
         }),
       }),
     ];
-    if (this.props.showAgentSidebarToggle && this.props.agentSidebarToggleLabel) {
-      actionItems.push({
-        label: this.props.agentSidebarToggleLabel,
-        title: this.props.agentSidebarToggleLabel,
-        mode: 'icon' as const,
-        buttonClassName: 'editor-topbar-agent-btn',
-        content: createLxIcon(
-          this.props.isAgentSidebarVisible ? 'agent-filled' : 'agent',
-        ),
-        onClick: () => this.props.onToggleAgentSidebar?.(),
+    if (this.props.showAgentSidebarToggle) {
+      const agentToggleAction = createAgentSidebarToggleActionItem({
+        isAgentSidebarVisible: Boolean(this.props.isAgentSidebarVisible),
+        agentSidebarToggleLabel: this.props.agentSidebarToggleLabel,
+        onToggleAgentSidebar: this.props.onToggleAgentSidebar,
       });
+      if (agentToggleAction) {
+        actionItems.push(agentToggleAction);
+      }
     }
     actionItems.push({
       label: this.props.isEditorCollapsed
@@ -166,4 +189,46 @@ export class EditorTopbarActionsView {
 
 export function createEditorTopbarActionsView(props: EditorTopbarActionsViewProps) {
   return new EditorTopbarActionsView(props);
+}
+
+export class AgentSidebarTopbarActionsView {
+  private props: AgentSidebarTopbarActionsViewProps;
+  private readonly actionsView = createActionBarView({
+    className: 'sidebar-topbar-actions',
+    ariaRole: 'group',
+  });
+
+  constructor(props: AgentSidebarTopbarActionsViewProps) {
+    this.props = props;
+    this.render();
+  }
+
+  getElement() {
+    return this.actionsView.getElement();
+  }
+
+  setProps(props: AgentSidebarTopbarActionsViewProps) {
+    this.props = props;
+    this.render();
+  }
+
+  dispose() {
+    this.actionsView.dispose();
+  }
+
+  private render() {
+    const agentToggleAction = createAgentSidebarToggleActionItem(this.props);
+
+    this.actionsView.setProps({
+      className: 'sidebar-topbar-actions',
+      ariaRole: 'group',
+      items: agentToggleAction ? [agentToggleAction] : [],
+    });
+  }
+}
+
+export function createAgentSidebarTopbarActionsView(
+  props: AgentSidebarTopbarActionsViewProps,
+) {
+  return new AgentSidebarTopbarActionsView(props);
 }

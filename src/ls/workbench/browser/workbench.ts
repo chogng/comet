@@ -60,7 +60,10 @@ import { createFetchPaneProps } from 'ls/workbench/browser/parts/sidebar/fetchPa
 import { createToastOverlayWindowView } from 'ls/workbench/browser/toastOverlayWindow';
 import { createWorkbenchContentPartViews } from 'ls/workbench/browser/workbenchContentPartViews';
 import { showWorkbenchTextInputModal } from 'ls/workbench/browser/workbenchEditorModals';
-import { createEditorTopbarActionsView } from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
+import {
+  createAgentSidebarTopbarActionsView,
+  createEditorTopbarActionsView,
+} from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
 import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'ls/base/browser/ui/aria/aria';
 import { createToastHost } from 'ls/base/browser/ui/toast/toastHost';
@@ -658,6 +661,12 @@ class WorkbenchHost {
     onToggleEditorCollapse: toggleEditorCollapsed,
     onToggleAgentSidebar: () => {},
   });
+  private readonly agentSidebarTopbarActionsView =
+    createAgentSidebarTopbarActionsView({
+      isAgentSidebarVisible: false,
+      agentSidebarToggleLabel: '',
+      onToggleAgentSidebar: () => {},
+    });
   private readonly sidebarTopbarActionsView = new SidebarTopbarActionsView();
   private readonly settingsTopbarActionsView = createSettingsTopbarActionsView({
     backLabel: '',
@@ -756,6 +765,7 @@ class WorkbenchHost {
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
     this.auxiliaryEditorTopbarActionsView.dispose();
+    this.agentSidebarTopbarActionsView.dispose();
     this.sidebarTopbarActionsView.dispose();
     this.settingsTopbarActionsView.dispose();
     this.primaryBarFooterActionsView.dispose();
@@ -1162,7 +1172,12 @@ class WorkbenchHost {
       editorPartProps: props.editorPartProps,
       sidebarTopbarActionsElement: this.sidebarTopbarActionsView.getElement(),
       primaryBarFooterActionsElement: this.primaryBarFooterActionsView.getElement(),
-      editorTopbarAuxiliaryActionsElement: props.editorTopbarAuxiliaryActionsElement,
+      editorTopbarAuxiliaryActionsElement:
+        props.editorTopbarAuxiliaryActionsElement,
+      agentTopbarTrailingActionsElement:
+        props.isAgentSidebarVisible
+          ? this.agentSidebarTopbarActionsView.getElement()
+          : null,
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createWorkbenchContentPartViews(partViewProps);
@@ -1780,12 +1795,20 @@ class WorkbenchHost {
         ui,
         editorPartProps: contentAwareEditorPartProps,
         isAgentSidebarVisible,
-        showAgentSidebarToggle: true,
+        showAgentSidebarToggle: !isAgentSidebarVisible,
         onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
         onToggleEditorCollapse: toggleEditorCollapsed,
         onToggleAgentSidebar: toggleAgentSidebarVisibility,
       }),
     );
+    this.agentSidebarTopbarActionsView.setProps({
+      isAgentSidebarVisible,
+      agentSidebarToggleLabel: resolveTitlebarAssistantToggleLabel(
+        ui,
+        isAgentSidebarVisible,
+      ),
+      onToggleAgentSidebar: toggleAgentSidebarVisibility,
+    });
 
     const handleBatchFetchStart = () => {};
 
@@ -2322,7 +2345,7 @@ class WorkbenchHost {
         editorPartProps: {
           ...contentAwareEditorPartProps,
           isAgentSidebarVisible,
-          showAgentSidebarToggle: true,
+          showAgentSidebarToggle: !isAgentSidebarVisible,
           agentSidebarToggleLabel: resolveTitlebarAssistantToggleLabel(
             ui,
             isAgentSidebarVisible,
