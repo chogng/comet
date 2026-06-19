@@ -1,10 +1,8 @@
-## Summary
-
-Describe what changed and why.
-
-## Verification
-
-- [ ] `npm run build`
-- [ ] `npm run typecheck:tests`
-- [ ] Other:
+<!-- Thank you for submitting a Pull Request. Please:
+* Read our Pull Request guidelines:
+  wait for me to write
+* Associate an issue with the Pull Request.
+* Ensure that the code is up-to-date with the `main` branch.
+* Include a description of the proposed changes and how to test them.
+-->
 
