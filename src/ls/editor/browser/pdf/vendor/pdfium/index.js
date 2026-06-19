@@ -9190,4 +9190,3 @@ async function init(moduleOverrides) {
 }
 
 export { DEFAULT_PDFIUM_WASM_URL, init };
-//# sourceMappingURL=index.js.map

@@ -8,5 +8,4 @@ script = ""
 [[actions]]
 name = "Dev"
 icon = "run"
-command = "npm run dev"
-
+command = "npm run dev:desktop"
