@@ -565,10 +565,6 @@
   margin-right: 4px;
 }
 
-.article-details-modal.modal-panel {
-  width: min(860px, calc(100vw - 40px));
-}
-
 .fetch-pane-empty-state {
   flex: 1 0 auto;
   min-height: 100%;

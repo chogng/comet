@@ -47,10 +47,6 @@ class ElectronSandboxNativeHostServiceProxy implements INativeHostService {
     return this.api?.document;
   }
 
-  get modal() {
-    return this.api?.modal;
-  }
-
   get toast() {
     return this.api?.toast;
   }

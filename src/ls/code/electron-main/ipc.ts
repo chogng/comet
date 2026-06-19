@@ -13,10 +13,8 @@ import type {
   LibraryDocumentStatusPayload,
   ListLibraryDocumentsPayload,
   NativeToastOptions,
-  OpenArticleDetailsModalPayload,
   UpsertLibraryDocumentMetadataPayload,
   WebContentPdfDownloadPayload,
-  NativeModalState,
   WebContentBounds,
   WebContentHtmlArchivePayload,
   WebContentBridgeResponse,
@@ -54,7 +52,6 @@ import {
   clearWorkbenchSharedSessionCache,
   clearWorkbenchSharedSessionCookies,
 } from 'ls/platform/native/electron-main/sharedWebSession';
-import { getNativeModalState } from 'ls/platform/window/electron-main/articleDetailsWindow';
 import {
   dismissToast,
   getToastState,
@@ -321,11 +318,6 @@ async function invokeCommand<TCommand extends AppCommand>(
           mainWindow,
         ) as Promise<AppCommandResultMap[TCommand]>;
       }
-    case 'open_article_details_modal':
-      return nativeHostMainService.openArticleDetailsModal(
-        getMainWindow(),
-        payload as OpenArticleDetailsModalPayload,
-      ) as Promise<AppCommandResultMap[TCommand]>;
     default:
       throw appError('UNKNOWN_COMMAND', { command });
   }
@@ -350,13 +342,6 @@ export function registerAppIpc(storage: StorageService) {
   electronMainChannelServer.registerChannel('app', {
     async call<T = unknown>(event: IpcMainInvokeEvent, command: string, payload?: unknown) {
       const appCommand = command as AppCommand;
-      if (appCommand === 'open_article_details_modal') {
-        return await nativeHostMainService.openArticleDetailsModal(
-          resolveWindowFromWebContents(event.sender),
-          payload as OpenArticleDetailsModalPayload,
-        ) as T;
-      }
-
       return await invokeCommand(
         appCommand,
         payload as AppCommandPayloadMap[AppCommand],
@@ -377,17 +362,6 @@ export function registerAppIpc(storage: StorageService) {
 
   ipcMain.handle('app:invoke', async (_event, command: AppCommand, payload: AppCommandPayloadMap[AppCommand]) => {
     try {
-      if (command === 'open_article_details_modal') {
-        const target = resolveWindowFromWebContents(_event.sender);
-        return {
-          ok: true,
-          result: await nativeHostMainService.openArticleDetailsModal(
-            target,
-            payload as OpenArticleDetailsModalPayload,
-          ),
-        } satisfies AppInvokeResponse<AppCommandResultMap[typeof command]>;
-      }
-
       return {
         ok: true,
         result: await invokeCommand(command, payload, storage, (channel, eventPayload) => {
@@ -460,11 +434,6 @@ export function registerAppIpc(storage: StorageService) {
     }
 
     resolveWebContentBridgeResponse(event.sender, response);
-  });
-
-  ipcMain.handle('app:modal-get-state', (event) => {
-    const state: NativeModalState | null = getNativeModalState(event.sender.id);
-    return state;
   });
 
   ipcMain.on('app:native-toast-show', (event, options: NativeToastOptions) => {

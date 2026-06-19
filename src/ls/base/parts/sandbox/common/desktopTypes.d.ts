@@ -364,33 +364,6 @@ export interface ExportEditorDocxPayload {
   locale?: Locale;
 }
 
-export interface ArticleDetailsModalLabels {
-  untitled: string;
-  unknown: string;
-  articleType: string;
-  authors: string;
-  abstract: string;
-  description: string;
-  publishedAt: string;
-  source: string;
-  fetchedAt: string;
-  archiveHtmlPath: string;
-  archiveTextPath: string;
-  archivePdfPath: string;
-  revealPath: string;
-  controlsAriaLabel: string;
-  minimize: string;
-  maximize: string;
-  restore: string;
-  close: string;
-}
-
-export interface OpenArticleDetailsModalPayload {
-  article?: Article;
-  labels?: ArticleDetailsModalLabels;
-  locale?: Locale;
-}
-
 export interface FetchArticlePayload {
   url?: string;
 }
@@ -666,15 +639,6 @@ export interface RunMainAgentTurnResult {
   toolTrace: MainAgentToolTrace[];
 }
 
-export interface ArticleDetailsModalState {
-  kind: 'article-details';
-  article: Article;
-  labels: ArticleDetailsModalLabels;
-  locale: Locale;
-}
-
-export type NativeModalState = ArticleDetailsModalState;
-
 export type NativeToastType = 'info' | 'success' | 'error' | 'warning';
 
 export interface NativeToastOptions {
@@ -725,7 +689,6 @@ export interface AppCommandPayloadMap {
   run_main_agent_turn: RunMainAgentTurnPayload;
   export_articles_docx: ExportArticlesDocxPayload;
   export_editor_docx: ExportEditorDocxPayload;
-  open_article_details_modal: OpenArticleDetailsModalPayload;
 }
 
 export interface AppCommandResultMap {
@@ -755,7 +718,6 @@ export interface AppCommandResultMap {
   run_main_agent_turn: RunMainAgentTurnResult;
   export_articles_docx: DocxExportResult | null;
   export_editor_docx: EditorDocxExportResult | null;
-  open_article_details_modal: boolean;
 }
 
 export type AppCommand = keyof AppCommandPayloadMap;
@@ -815,11 +777,6 @@ export interface ElectronDocumentApi {
   onTranslationProgress: (listener: (progress: DocumentTranslationProgress) => void) => () => void;
 }
 
-export interface ElectronModalApi {
-  getState: () => Promise<NativeModalState | null>;
-  onStateChange: (listener: (state: NativeModalState | null) => void) => () => void;
-}
-
 export interface ElectronToastApi {
   show: (options: NativeToastOptions) => void;
   dismiss: (id: number) => void;
@@ -850,6 +807,5 @@ export interface ElectronAPI {
   webContent?: ElectronWebContentApi;
   fetch?: ElectronFetchApi;
   document?: ElectronDocumentApi;
-  modal?: ElectronModalApi;
   toast?: ElectronToastApi;
 }

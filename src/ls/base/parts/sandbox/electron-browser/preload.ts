@@ -9,7 +9,6 @@ import type {
   ElectronAPI,
   DocumentTranslationProgress,
   FetchStatus,
-  NativeModalState,
   NativeToastLayout,
   NativeToastOptions,
   NativeToastState,
@@ -343,14 +342,6 @@ const electronAPI: ElectronAPI = {
         model: '',
         message: null,
       });
-    },
-  },
-  modal: {
-    getState() {
-      return invokeIpc<NativeModalState | null>('app:modal-get-state');
-    },
-    onStateChange(listener: (state: NativeModalState | null) => void) {
-      return subscribeIpc<NativeModalState | null>('app:modal-state', listener, null);
     },
   },
   toast: {

@@ -1,4 +1,3 @@
-import type { ArticleDetailsModalLabels } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
@@ -12,17 +11,17 @@ import {
 } from 'ls/workbench/browser/pdfDownloadStatus';
 import type { SidebarArticle } from 'ls/workbench/browser/parts/sidebar/fetchPanePart';
 
-type ArticleCardLabels = ArticleDetailsModalLabels;
+type ArticleCardLabels = {
+  untitled: string;
+  unknown: string;
+};
 
 export type ArticleCardProps = {
   article: SidebarArticle;
   locale: Locale;
   labels: ArticleCardLabels;
   onDownloadPdf: (article: SidebarArticle) => Promise<void>;
-  onOpenArticleDetails: (
-    article: SidebarArticle,
-    labels: ArticleDetailsModalLabels
-  ) => void | Promise<void>;
+  onOpenArticleDetails: (article: SidebarArticle) => void | Promise<void>;
   isSelectionModeEnabled: boolean;
   isSelected: boolean;
   onToggleSelected: (article: SidebarArticle) => void;
@@ -352,7 +351,7 @@ export class ArticleCard extends LifecycleOwner {
   }
 
   private openArticleDetails() {
-    void this.props.onOpenArticleDetails(this.props.article, this.props.labels);
+    void this.props.onOpenArticleDetails(this.props.article);
   }
 }
 

@@ -1,7 +1,6 @@
 import { toast } from 'ls/base/browser/ui/toast/toast';
 import { EventEmitter } from 'ls/base/common/event';
 import type {
-  ArticleDetailsModalLabels,
   DocumentTranslationProgress,
   ElectronInvoke,
   LibraryDocumentSummary,
@@ -279,30 +278,12 @@ export class DocumentActionsController {
     }
   };
 
-  readonly handleOpenArticleDetails = async (
-    article: Article,
-    labels: ArticleDetailsModalLabels,
-  ) => {
-    const { desktopRuntime, invokeDesktop, locale } = this.context;
-
+  readonly handleOpenArticleDetails = async (article: Article) => {
     if (!article.sourceUrl) {
       return;
     }
 
-    if (!desktopRuntime) {
-      openArticleSourceUrl(article.sourceUrl);
-      return;
-    }
-
-    try {
-      await invokeDesktop('open_article_details_modal', {
-        article,
-        labels,
-        locale,
-      });
-    } catch {
-      openArticleSourceUrl(article.sourceUrl);
-    }
+    openArticleSourceUrl(article.sourceUrl);
   };
 
   readonly handleExportDocx = async () => {

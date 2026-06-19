@@ -9,7 +9,6 @@ export type WindowChromeLayout = {
   platform: RuntimePlatform;
   titleBarStyle: WindowChromeTitleBarStyle;
   nativeWindowControlsOverlay: boolean;
-  renderCustomWindowControls: boolean;
   windowControlsContainerMode: WindowControlsContainerMode;
   leadingWindowControlsWidthPx: number;
   trailingWindowControlsWidthPx: number;
@@ -26,7 +25,6 @@ export function getWindowChromeLayout(): WindowChromeLayout {
     mode === 'desktop' &&
     titleBarStyle === 'custom' &&
     platform === 'windows';
-  const renderCustomWindowControls = false;
   const windowControlsContainerMode: WindowControlsContainerMode =
     mode === 'desktop' &&
     titleBarStyle === 'custom' &&
@@ -39,7 +37,6 @@ export function getWindowChromeLayout(): WindowChromeLayout {
     platform,
     titleBarStyle,
     nativeWindowControlsOverlay,
-    renderCustomWindowControls,
     windowControlsContainerMode,
     leadingWindowControlsWidthPx:
       windowControlsContainerMode === 'native' ? MACOS_WINDOW_CONTROLS_WIDTH_PX : 0,

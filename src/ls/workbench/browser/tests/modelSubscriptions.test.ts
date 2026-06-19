@@ -128,7 +128,6 @@ function createNativeHostService(
     webContent: undefined,
     fetch: undefined,
     document: undefined,
-    modal: undefined,
     toast: undefined,
     ...overrides,
   };

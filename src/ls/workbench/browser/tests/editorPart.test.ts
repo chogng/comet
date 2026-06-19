@@ -34,7 +34,6 @@ function createNativeHostService(): INativeHostService {
     webContent: undefined,
     fetch: undefined,
     document: undefined,
-    modal: undefined,
     toast: undefined,
   };
 }

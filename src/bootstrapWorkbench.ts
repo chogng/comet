@@ -81,7 +81,7 @@ export function isNativeWorkbenchAuxiliaryWindow() {
   }
 
   const query = new URLSearchParams(window.location.search);
-  return query.has('nativeOverlay') || query.has('nativeModal');
+  return query.has('nativeOverlay');
 }
 
 const workbenchDependencyModules = [
@@ -136,10 +136,6 @@ const workbenchDependencyModules = [
   {
     label: 'ls/workbench/browser/toastOverlayWindow',
     load: () => import('ls/workbench/browser/toastOverlayWindow'),
-  },
-  {
-    label: 'ls/workbench/browser/articleDetailsModalWindow',
-    load: () => import('ls/workbench/browser/articleDetailsModalWindow'),
   },
   {
     label: 'ls/workbench/services/localization/browser/localeService',

@@ -1,4 +1,3 @@
-import type { ArticleDetailsModalLabels } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { ActionBarItem } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
@@ -25,14 +24,11 @@ import {
 export type FetchTreeViewProps = {
   articles: SidebarArticle[];
   locale: Locale;
-  labels: FetchTreeLabels & ArticleDetailsModalLabels;
+  labels: FetchTreeLabels;
   selectedArticleKeys: ReadonlySet<string>;
   isSelectionModeEnabled: boolean;
   onDownloadPdf: (article: SidebarArticle) => Promise<void>;
-  onOpenArticleDetails: (
-    article: SidebarArticle,
-    labels: ArticleDetailsModalLabels,
-  ) => void | Promise<void>;
+  onOpenArticleDetails: (article: SidebarArticle) => void | Promise<void>;
   onToggleArticleSelected: (article: SidebarArticle) => void;
 };
 
@@ -101,31 +97,6 @@ function createMetaText(
 
 function getArticleSelectionKey(article: SidebarArticle) {
   return `${article.sourceUrl}::${article.fetchedAt}`;
-}
-
-function createArticleDetailsLabels(
-  labels: FetchTreeViewProps['labels'],
-): ArticleDetailsModalLabels {
-  return {
-    untitled: labels.untitled,
-    unknown: labels.unknown,
-    articleType: labels.articleType,
-    authors: labels.authors,
-    abstract: labels.abstract,
-    description: labels.description,
-    publishedAt: labels.publishedAt,
-    source: labels.source,
-    fetchedAt: labels.fetchedAt,
-    archiveHtmlPath: labels.archiveHtmlPath,
-    archiveTextPath: labels.archiveTextPath,
-    archivePdfPath: labels.archivePdfPath,
-    revealPath: labels.revealPath,
-    controlsAriaLabel: labels.controlsAriaLabel,
-    minimize: labels.minimize,
-    maximize: labels.maximize,
-    restore: labels.restore,
-    close: labels.close,
-  };
 }
 
 export class FetchTreeView extends LifecycleOwner {
@@ -421,9 +392,6 @@ export class FetchTreeView extends LifecycleOwner {
   }
 
   private openArticleDetails(article: SidebarArticle) {
-    void this.props.onOpenArticleDetails(
-      article,
-      createArticleDetailsLabels(this.props.labels),
-    );
+    void this.props.onOpenArticleDetails(article);
   }
 }

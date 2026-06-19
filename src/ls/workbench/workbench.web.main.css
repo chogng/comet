@@ -17,10 +17,6 @@ body.web {
   min-height: 100dvh;
 }
 
-body.web .titlebar-window-controls {
-  display: none;
-}
-
 .app-window {
   width: 100%;
 }

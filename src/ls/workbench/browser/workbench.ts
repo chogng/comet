@@ -58,7 +58,6 @@ import type { PrimaryBarProps } from 'ls/workbench/browser/parts/primarybar/prim
 import { createFetchPaneProps } from 'ls/workbench/browser/parts/sidebar/fetchPanePart';
 
 import { createToastOverlayWindowView } from 'ls/workbench/browser/toastOverlayWindow';
-import { createArticleDetailsModalWindowView } from 'ls/workbench/browser/articleDetailsModalWindow';
 import { createWorkbenchContentPartViews } from 'ls/workbench/browser/workbenchContentPartViews';
 import { showWorkbenchTextInputModal } from 'ls/workbench/browser/workbenchEditorModals';
 import { createEditorTopbarActionsView } from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
@@ -185,10 +184,7 @@ let assistantModel: AssistantModel | null = null;
 let documentActionsController: DocumentActionsController | null = null;
 let batchFetchController: BatchFetchController | null = null;
 let activeWorkbenchHost: WorkbenchHost | null = null;
-let activeOverlayView:
-  | ReturnType<typeof createToastOverlayWindowView>
-  | ReturnType<typeof createArticleDetailsModalWindowView>
-  | null = null;
+let activeOverlayView: ReturnType<typeof createToastOverlayWindowView> | null = null;
 let activeAgentChatModelOptionValue: string | null = null;
 
 const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
@@ -510,14 +506,6 @@ function doesAgentChatModelSupportMaxContextWindow(
   const route = resolveLlmRoute(llmSettings, 'reasoning');
   const model = getLlmModelByIdForProvider(route.provider, route.model);
   return model ? hasLlmMaxContextWindow(model) : false;
-}
-
-function detectNativeModalKind() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  return new URLSearchParams(window.location.search).get('nativeModal');
 }
 
 function detectNativeOverlayKind() {
@@ -2527,16 +2515,9 @@ export function renderWorkbench() {
   activeOverlayView = null;
 
   const nativeOverlayKind = detectNativeOverlayKind();
-  const nativeModalKind = detectNativeModalKind();
 
   if (nativeOverlayKind === 'toast') {
     activeOverlayView = createToastOverlayWindowView();
-    rootElement.replaceChildren(activeOverlayView.getElement());
-    return;
-  }
-
-  if (nativeModalKind === 'article-details') {
-    activeOverlayView = createArticleDetailsModalWindowView();
     rootElement.replaceChildren(activeOverlayView.getElement());
     return;
   }

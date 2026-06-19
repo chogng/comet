@@ -26,7 +26,6 @@ import 'ls/editor/browser/pdf/tests/pdfSelectionController.test';
 import 'ls/editor/browser/pdf/tests/pdfiumLiteParsedDocument.test';
 import 'ls/workbench/services/pdf/tests/featureFlags.test';
 import 'ls/workbench/services/settings/tests/settingValue.test';
-import 'ls/workbench/browser/tests/articleDetailsModalWindow.test';
 import 'ls/workbench/browser/tests/assistantModel.test';
 import 'ls/workbench/browser/tests/agentbar.test';
 import 'ls/workbench/browser/tests/gridview.test';

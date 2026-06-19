@@ -1,13 +1,9 @@
-import type {
-  ArticleDetailsModalLabels,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
 import { DomScrollableElement } from 'ls/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElementOptions';
 import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import { FetchTreeView } from 'ls/workbench/browser/parts/sidebar/fetchTreeView';
-import { createSidebarTitlebarLabels } from 'ls/workbench/browser/parts/titlebar/titlebarActions';
 
 export type SidebarArticle = {
   title: string;
@@ -40,11 +36,6 @@ export type SidebarLabels = {
   archiveTextPath: string;
   archivePdfPath: string;
   revealPath: string;
-  controlsAriaLabel: string;
-  minimize: string;
-  maximize: string;
-  restore: string;
-  close: string;
   emptyFiltered: string;
   emptyAll: string;
   emptyAllInputLinkAction: string;
@@ -114,10 +105,7 @@ export type FetchPaneProps = {
   onFetchEndDateChange: (value: string) => void;
   onFetch: () => void;
   onDownloadPdf: (article: SidebarArticle) => Promise<void>;
-  onOpenArticleDetails: (
-    article: SidebarArticle,
-    labels: ArticleDetailsModalLabels
-  ) => void | Promise<void>;
+  onOpenArticleDetails: (article: SidebarArticle) => void | Promise<void>;
   isFetchLoading: boolean;
   isSelectionModeEnabled: boolean;
   selectionModePhase: SidebarSelectionModePhase;
@@ -198,7 +186,6 @@ export function createSidebarPartLabels({
     archiveTextPath: ui.articleDetailsArchiveTextPath,
     archivePdfPath: ui.articleDetailsArchivePdfPath,
     revealPath: ui.articleDetailsRevealPath,
-    ...createSidebarTitlebarLabels(ui),
     emptyFiltered: ui.emptyFiltered,
     emptyAll: ui.emptyAll,
     emptyAllInputLinkAction: ui.emptyAllInputLinkAction,
@@ -208,6 +195,7 @@ export function createSidebarPartLabels({
     fetchLatestBusy: ui.fetchLatestBusy,
     fetchLatest: ui.fetchLatest,
     fetchTitle: ui.sidebarFetchTitle,
+    refresh: ui.titlebarRefresh,
     selectionModeEnterMulti: ui.sidebarSelectionModeEnterMulti,
     selectionModeSelectAll: ui.sidebarSelectionModeSelectAll,
     selectionModeExit: ui.sidebarSelectionModeExit,
@@ -301,9 +289,7 @@ export function createFetchPaneProps({
   };
 }
 
-function createArticleCardLabels(
-  labels: FetchPaneProps['labels'],
-): ArticleDetailsModalLabels {
+function createArticleCardLabels(labels: FetchPaneProps['labels']) {
   return {
     untitled: labels.untitled,
     unknown: labels.unknown,
@@ -318,11 +304,6 @@ function createArticleCardLabels(
     archiveTextPath: labels.archiveTextPath,
     archivePdfPath: labels.archivePdfPath,
     revealPath: labels.revealPath,
-    controlsAriaLabel: labels.controlsAriaLabel,
-    minimize: labels.minimize,
-    maximize: labels.maximize,
-    restore: labels.restore,
-    close: labels.close,
   };
 }
 

@@ -4,7 +4,6 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import type {
-  OpenArticleDetailsModalPayload,
   OpenPathPayload,
   ReadPdfFilePayload,
   WindowControlAction,
@@ -20,7 +19,6 @@ import {
   getMainWindow,
   resolveWindowFromWebContents,
 } from 'ls/platform/window/electron-main/window';
-import { openArticleDetailsModal as openArticleDetailsModalWindow } from 'ls/platform/window/electron-main/articleDetailsWindow';
 
 function resolvePdfFilePath(payload: ReadPdfFilePayload = {}) {
   const rawPath = payload.path?.trim();
@@ -77,28 +75,6 @@ export class NativeHostMainService {
     }
 
     return true;
-  }
-
-  async openArticleDetailsModal(
-    parentWindow: BrowserWindow | null,
-    payload: OpenArticleDetailsModalPayload = {},
-  ) {
-    const targetWindow = parentWindow ?? getMainWindow();
-    if (!targetWindow || targetWindow.isDestroyed()) {
-      throw appError('MAIN_WINDOW_UNAVAILABLE');
-    }
-
-    return openArticleDetailsModalWindow(targetWindow, payload);
-  }
-
-  async openArticleDetailsModalForEvent(
-    event: IpcMainInvokeEvent,
-    payload: OpenArticleDetailsModalPayload = {},
-  ) {
-    return this.openArticleDetailsModal(
-      resolveWindowFromWebContents(event.sender),
-      payload,
-    );
   }
 
   async performWindowControlActionForEvent(
@@ -186,11 +162,6 @@ export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent>
         return this.service.readPdfFile(payload as ReadPdfFilePayload) as Promise<T>;
       case 'open_path':
         return this.service.openPath(payload as OpenPathPayload) as Promise<T>;
-      case 'open_article_details_modal':
-        return this.service.openArticleDetailsModalForEvent(
-          event,
-          payload as OpenArticleDetailsModalPayload,
-        ) as Promise<T>;
       case 'perform_window_control':
         return this.service.performWindowControlActionForEvent(
           event,
