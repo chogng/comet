@@ -15,10 +15,25 @@
 }
 
 .notifications-status {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 24px;
+  max-width: min(420px, calc(100vw - 24px));
+  pointer-events: auto;
+}
+
+.app-window.has-statusbar .notifications-status {
+  bottom: 34px;
+}
+
+.notifications-status.is-hidden,
+.notifications-center.visible ~ .notifications-status,
+.notifications-toasts.visible ~ .notifications-status {
+  display: none;
 }
 
 .notifications-status-message {

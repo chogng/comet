@@ -18,6 +18,10 @@
   pointer-events: auto;
 }
 
+.app-window.has-statusbar .notifications-toasts {
+  bottom: 34px;
+}
+
 .notifications-toasts.visible {
   display: flex;
 }

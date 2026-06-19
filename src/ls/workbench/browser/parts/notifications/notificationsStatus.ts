@@ -18,7 +18,7 @@ export class NotificationsStatus {
     private readonly model: WorkbenchNotificationsModel,
     private readonly center: NotificationsCenter,
   ) {
-    this.element.className = 'notifications-status';
+    this.element.className = 'notifications-status is-hidden';
     this.button.type = 'button';
     this.button.className = 'notifications-status-button';
     this.button.addEventListener('click', this.handleToggleCenter);
@@ -59,15 +59,17 @@ export class NotificationsStatus {
   };
 
   private readonly handleStatusMessageChange = (_event: StatusMessageChange) => {
-    this.statusMessageElement.textContent =
-      this.model.statusMessage?.messageText ?? '';
+    this.update();
   };
 
   private update() {
     const count = this.model.notifications.length;
+    const statusMessage = this.model.statusMessage?.messageText ?? '';
+    this.statusMessageElement.textContent = statusMessage;
     this.button.textContent = count > 0 ? `Notifications (${count})` : 'Notifications';
     this.button.title = count > 0 ? `${count} notifications` : 'No notifications';
     this.button.classList.toggle('has-notifications', count > 0);
+    this.element.classList.toggle('is-hidden', count === 0 && statusMessage.length === 0);
   }
 }
 
