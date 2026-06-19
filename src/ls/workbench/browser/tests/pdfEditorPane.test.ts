@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import type { Annotation } from 'ls/editor/common/annotation';
 import { readStoredPdfAnnotations } from 'ls/editor/browser/pdf/pdfAnnotationPersistence';
 import { createPdfSelection } from 'ls/editor/browser/pdf/pdfSelection';
@@ -115,6 +116,21 @@ const labels = {
   },
 };
 
+function createNativeHostService(): INativeHostService {
+  return {
+    _serviceBrand: undefined,
+    canInvoke: () => false,
+    invoke: (async () => undefined) as INativeHostService['invoke'],
+    ipc: undefined,
+    windowControls: undefined,
+    webContent: undefined,
+    fetch: undefined,
+    document: undefined,
+    modal: undefined,
+    toast: undefined,
+  };
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
@@ -144,6 +160,7 @@ function createProps(
       },
       ...viewPartProps,
     },
+    nativeHost: createNativeHostService(),
     groupId: DEFAULT_EDITOR_GROUP_ID,
     tabs,
     dirtyDraftTabIds: [],

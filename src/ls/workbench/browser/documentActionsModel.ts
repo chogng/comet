@@ -6,10 +6,10 @@ import type {
   ElectronInvoke,
   LibraryDocumentSummary,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
 import {
   formatLocalized,
   localizeDesktopInvokeError,
@@ -38,6 +38,7 @@ import {
 export type DocumentActionsControllerContext = {
   desktopRuntime: boolean;
   invokeDesktop: ElectronInvoke;
+  nativeHost: INativeHostService;
   locale: Locale;
   ui: LocaleMessages;
   knowledgeBaseEnabled: boolean;
@@ -103,10 +104,11 @@ function openArticleSourceUrl(sourceUrl: string) {
 }
 
 function showAppToast(
+  nativeHost: INativeHostService,
   type: 'info' | 'success' | 'error' | 'warning',
   message: string,
 ) {
-  const toastApi = nativeHostService.toast;
+  const toastApi = nativeHost.toast;
   if (toastApi) {
     toastApi.show({ type, message });
     return;
@@ -179,6 +181,7 @@ export class DocumentActionsController {
     const {
       desktopRuntime,
       invokeDesktop,
+      nativeHost,
       ui,
       knowledgeBaseEnabled,
       pdfDownloadDir,
@@ -192,12 +195,12 @@ export class DocumentActionsController {
 
     const preparedPdfDownload = preparePdfDownload(article.sourceUrl, article.doi);
     if (!preparedPdfDownload) {
-      showAppToast('error', ui.toastEnterArticleUrl);
+      showAppToast(nativeHost, 'error', ui.toastEnterArticleUrl);
       return;
     }
 
     if (!desktopRuntime) {
-      showAppToast('info', ui.toastDesktopPdfDownloadOnly);
+      showAppToast(nativeHost, 'info', ui.toastDesktopPdfDownloadOnly);
       return;
     }
 
@@ -219,7 +222,7 @@ export class DocumentActionsController {
     markPdfDownloadStarted(preparedPdfDownload.normalizedSourceUrl);
 
     if (preparedPdfDownload.isSciencePdfDownload && this.sciencePdfDownloadCount > 0) {
-      showAppToast('info', resolveSciencePdfQueueMessage(ui));
+      showAppToast(nativeHost, 'info', resolveSciencePdfQueueMessage(ui));
     }
 
     if (preparedPdfDownload.isSciencePdfDownload) {
@@ -248,6 +251,7 @@ export class DocumentActionsController {
       markPdfDownloadSucceeded(preparedPdfDownload.normalizedSourceUrl, result);
       void onLibraryUpdated?.();
       showAppToast(
+        nativeHost,
         'success',
         formatLocalized(ui.toastPdfDownloaded, {
           filePath: result.filePath,
@@ -264,6 +268,7 @@ export class DocumentActionsController {
       const localizedError = localizeDesktopInvokeError(ui, parsedError);
       markPdfDownloadFailed(preparedPdfDownload.normalizedSourceUrl, localizedError);
       showAppToast(
+        nativeHost,
         'error',
         formatLocalized(ui.toastPdfDownloadFailed, { error: localizedError }),
       );
@@ -385,7 +390,7 @@ export class DocumentActionsController {
 
   private beginTranslationStatusbarProgress() {
     const previousStatus = getStatusbarStateSnapshot();
-    const unsubscribe = nativeHostService.document?.onTranslationProgress((progress) => {
+    const unsubscribe = this.context.nativeHost.document?.onTranslationProgress((progress) => {
       this.renderTranslationStatusbarProgress(previousStatus, progress);
     });
 

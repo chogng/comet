@@ -9,5 +9,6 @@ import 'ls/workbench/workbench.common.main';
 //#endregion
 
 //#region --- workbench (desktop main)
+import 'ls/workbench/contrib/desktop/ipc.contribution';
 import 'ls/workbench/contrib/desktop/desktop.contribution';
 //#endregion

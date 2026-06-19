@@ -20,10 +20,12 @@ import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartVie
 import type { EditorPartBaseProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { EditorViewStateKey } from 'ls/workbench/browser/parts/editor/editorViewStateStore';
 import type { SerializedEditorViewStateEntry } from 'ls/workbench/browser/parts/editor/editorViewStateStore';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 
 export type EditorPartState = {
   ui: LocaleMessages;
   viewPartProps: ViewPartProps;
+  nativeHost: INativeHostService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];
@@ -57,6 +59,7 @@ export type EditorPartActions = {
 export type EditorPartControllerContext = {
   ui: LocaleMessages;
   viewPartProps: ViewPartProps;
+  nativeHost: INativeHostService;
   browserUrl: string;
   webUrl: string;
 };
@@ -105,6 +108,7 @@ export function createEditorPartProps({
   state: {
     ui,
     viewPartProps,
+    nativeHost,
     groupId,
     tabs,
     dirtyDraftTabIds,
@@ -230,6 +234,7 @@ export function createEditorPartProps({
       fontSizePrompt: ui.editorFontSizePrompt,
     },
     viewPartProps,
+    nativeHost,
     groupId,
     tabs,
     dirtyDraftTabIds,
@@ -261,7 +266,7 @@ function createEditorPartControllerSnapshot(
   actions: EditorPartActions,
 ): EditorPartControllerSnapshot {
   const editorSnapshot = editorModel.getSnapshot();
-  const { ui, viewPartProps } = context;
+  const { ui, viewPartProps, nativeHost } = context;
   const {
     groupId,
     tabs,
@@ -286,6 +291,7 @@ function createEditorPartControllerSnapshot(
       state: {
         ui,
         viewPartProps,
+        nativeHost,
         groupId,
         tabs,
         dirtyDraftTabIds,
@@ -304,6 +310,7 @@ function areEditorPartControllerContextsEqual(
 ) {
   return (
     previous.ui === next.ui &&
+    previous.nativeHost === next.nativeHost &&
     previous.browserUrl === next.browserUrl &&
     previous.webUrl === next.webUrl &&
     previous.viewPartProps.browserUrl === next.viewPartProps.browserUrl &&

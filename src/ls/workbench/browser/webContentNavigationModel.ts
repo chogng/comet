@@ -1,7 +1,7 @@
 import { toast } from 'ls/base/browser/ui/toast/toast';
 import { EventEmitter } from 'ls/base/common/event';
 import type { LocaleMessages } from 'language/locales';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import { formatLocalized } from 'ls/workbench/services/desktop/desktopError';
 import { EMPTY_WEB_CONTENT_STATE, resolveWebContentNavigation, resolveWebContentRefreshMode, resolveWebContentStateUrlUpdate } from 'ls/workbench/services/webContent/webContentNavigationService';
 import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
@@ -92,6 +92,8 @@ export class WebContentNavigationModel {
   private readonly onDidChangeEmitter = new EventEmitter<void>();
   private activeTargetId: string | null = null;
 
+  constructor(private readonly nativeHost: INativeHostService) {}
+
   private emitChange() {
     this.onDidChangeEmitter.fire();
   }
@@ -158,7 +160,7 @@ export class WebContentNavigationModel {
     this.activeTargetId = targetId;
     const requestedTargetId = targetId;
 
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (!webContent) {
       return null;
     }
@@ -190,7 +192,7 @@ export class WebContentNavigationModel {
   }
 
   releaseTarget(targetId: string | null) {
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (!webContent) {
       return;
     }
@@ -199,7 +201,7 @@ export class WebContentNavigationModel {
   }
 
   disposeTarget(targetId: string | null) {
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (!webContent) {
       return;
     }
@@ -212,7 +214,7 @@ export class WebContentNavigationModel {
     setWebUrl,
     setFetchSeedUrl,
   }: WebContentStateSyncContext): () => void {
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
       this.setWebContentState(EMPTY_WEB_CONTENT_STATE);
       return () => {};
@@ -284,7 +286,7 @@ export class WebContentNavigationModel {
       return false;
     }
 
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (webContentNavigation.kind === 'webcontents-content' && webContent) {
       void webContent
         .navigate(webContentNavigation.normalizedUrl, this.activeTargetId, 'browser')
@@ -315,7 +317,7 @@ export class WebContentNavigationModel {
       return;
     }
 
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (webContentRefreshMode === 'webcontents-content' && webContent) {
       webContent.reload(this.activeTargetId);
     }
@@ -336,14 +338,14 @@ export class WebContentNavigationModel {
       return;
     }
 
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (webContentRefreshMode === 'webcontents-content' && webContent) {
       webContent.hardReload(this.activeTargetId);
     }
   }
 
   handleWebContentBack({ webContentRuntime, ui }: WebContentNavigationButtonParams): void {
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
       toast.info(ui.toastWebContentBackUnsupported);
       return;
@@ -353,7 +355,7 @@ export class WebContentNavigationModel {
   }
 
   handleWebContentForward({ webContentRuntime, ui }: WebContentNavigationButtonParams): void {
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
       toast.info(ui.toastWebContentForwardUnsupported);
       return;
@@ -363,7 +365,7 @@ export class WebContentNavigationModel {
   }
 
   handleWebContentClearHistory({ webContentRuntime, ui }: WebContentNavigationButtonParams): void {
-    const webContent = nativeHostService.webContent;
+    const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
       toast.error(ui.toastWebContentRuntimeUnavailable);
       return;

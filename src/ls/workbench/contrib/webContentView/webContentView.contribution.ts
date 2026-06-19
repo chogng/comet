@@ -20,7 +20,7 @@ import type {
   WebContentNavigationMode,
   WebContentState,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'ls/platform/native/electron-main/sharedWebSession';
 import type { Disposable } from 'ls/workbench/contrib/workbench/workbench.contribution';
 import {
@@ -986,7 +986,7 @@ class WebContentDomManager {
   }
 
   private reportActiveState() {
-    const reportState = nativeHostService.webContent?.reportState;
+    const reportState = getNativeHostService().webContent?.reportState;
     if (typeof reportState !== 'function') {
       return;
     }
@@ -1246,9 +1246,12 @@ class WebContentDomManager {
 }
 
 export function createWorkbenchWebContentViewContribution(): Disposable | void {
+  const webContentApi =
+    typeof window === 'undefined' ? undefined : getNativeHostService().webContent;
+
   if (
     typeof window === 'undefined' ||
-    typeof nativeHostService.webContent?.navigate !== 'function'
+    typeof webContentApi?.navigate !== 'function'
   ) {
     return;
   }
@@ -1273,10 +1276,10 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
   );
 
   if (
-    typeof nativeHostService.webContent?.onBridgeCommand === 'function' &&
-    typeof nativeHostService.webContent.respondToBridgeCommand === 'function'
+    typeof webContentApi.onBridgeCommand === 'function' &&
+    typeof webContentApi.respondToBridgeCommand === 'function'
   ) {
-    const unsubscribeBridgeCommand = nativeHostService.webContent.onBridgeCommand(
+    const unsubscribeBridgeCommand = webContentApi.onBridgeCommand(
       (command) => {
         if (!command?.requestId) {
           return;
@@ -1286,14 +1289,14 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
         void manager
           .invokeBridgeCommand(command.method, args)
           .then((result) => {
-            nativeHostService.webContent?.respondToBridgeCommand?.({
+            webContentApi.respondToBridgeCommand?.({
               requestId: command.requestId,
               ok: true,
               result,
             });
           })
           .catch((error) => {
-            nativeHostService.webContent?.respondToBridgeCommand?.({
+            webContentApi.respondToBridgeCommand?.({
               requestId: command.requestId,
               ok: false,
               error: error instanceof Error ? error.message : String(error),
@@ -1415,7 +1418,7 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
     addDisposableListener(window, 'resize', () => scheduleSync()),
   );
 
-  nativeHostService.webContent?.reportBridgeReady?.();
+  getNativeHostService().webContent?.reportBridgeReady?.();
   resetObserver();
   scheduleSync();
 

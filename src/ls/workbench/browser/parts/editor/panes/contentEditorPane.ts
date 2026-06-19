@@ -1,6 +1,7 @@
 import type { EditorWorkspaceContentTab } from 'ls/workbench/browser/parts/editor/editorModel';
 import { ViewPartView } from 'ls/workbench/browser/parts/views/viewPartView';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { EditorPane } from 'ls/workbench/browser/parts/editor/panes/editorPane';
@@ -14,6 +15,7 @@ export type ContentEditorPaneProps = {
   labels: EditorPartLabels;
   contentTab: EditorWorkspaceContentTab;
   viewPartProps: ViewPartProps;
+  nativeHost: INativeHostService;
 };
 
 export class ContentEditorPane extends EditorPane<
@@ -60,6 +62,7 @@ export class ContentEditorPane extends EditorPane<
   override async captureViewState() {
     const capturedViewState = await captureContentEditorPaneViewState(
       this.props.contentTab.id,
+      this.props.nativeHost,
     );
     if (capturedViewState) {
       this.viewState = capturedViewState;
@@ -113,7 +116,11 @@ export class ContentEditorPane extends EditorPane<
         return;
       }
 
-      void restoreContentEditorPaneViewState(targetId, viewState).then((restored) => {
+      void restoreContentEditorPaneViewState(
+        targetId,
+        viewState,
+        this.props.nativeHost,
+      ).then((restored) => {
         if (restored || this.restoreSequence !== restoreSequence) {
           return;
         }

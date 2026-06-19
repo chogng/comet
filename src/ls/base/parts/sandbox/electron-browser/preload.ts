@@ -24,6 +24,9 @@ import type {
 import { parseSerializedAppError } from 'ls/base/common/errors';
 
 const APP_IPC_CHANNEL_PREFIX = 'app:';
+const APP_SERVICE_IPC_CALL_CHANNEL = 'app:ipc-call';
+const APP_SERVICE_IPC_EVENT_CHANNEL = 'app:ipc-event';
+const APP_SERVICE_IPC_DISPOSE_CHANNEL = 'app:ipc-dispose';
 
 type DesktopInvokeError = Error & {
   code?: AppErrorCode;
@@ -94,6 +97,67 @@ type AppInvokeResponse<T> =
   | { ok: false; error: string };
 
 const electronAPI: ElectronAPI = {
+  ipc: {
+    async call<T = unknown>(channelName: string, command: string, arg?: unknown) {
+      const response = await invokeIpc<AppInvokeResponse<T>>(
+        APP_SERVICE_IPC_CALL_CHANNEL,
+        channelName,
+        command,
+        arg,
+      );
+      if (!response.ok) {
+        throw normalizeInvokeError(new Error(response.error));
+      }
+
+      return response.result;
+    },
+    listen<T = unknown>(
+      channelName: string,
+      event: string,
+      arg: unknown,
+      listener: (payload: T) => void,
+    ) {
+      if (typeof listener !== 'function') {
+        return () => {};
+      }
+
+      const subscriptionId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const wrapped = (
+        _event: Electron.IpcRendererEvent,
+        payload:
+          | {
+              subscriptionId?: string;
+              data?: T;
+            }
+          | undefined,
+      ) => {
+        if (payload?.subscriptionId === subscriptionId) {
+          listener(payload.data as T);
+        }
+      };
+
+      ipcRenderer.on(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
+      void invokeIpc<AppInvokeResponse<void>>(
+        APP_SERVICE_IPC_EVENT_CHANNEL,
+        subscriptionId,
+        channelName,
+        event,
+        arg,
+      ).then((response) => {
+        if (!response.ok) {
+          throw new Error(response.error);
+        }
+      }).catch((error) => {
+        ipcRenderer.removeListener(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
+        console.error('Failed to subscribe to IPC channel event.', error);
+      });
+
+      return () => {
+        ipcRenderer.removeListener(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
+        sendIpc(APP_SERVICE_IPC_DISPOSE_CHANNEL, subscriptionId);
+      };
+    },
+  },
   async invoke<TCommand extends AppCommand>(command: TCommand, args?: AppCommandPayloadMap[TCommand]) {
     try {
       const response = await invokeIpc<AppInvokeResponse<AppCommandResultMap[TCommand]>>(

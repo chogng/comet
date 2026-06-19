@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { PdfDocumentReader } from 'ls/editor/browser/pdf/pdfDocumentReader';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import { createPdfSelection } from 'ls/editor/browser/pdf/pdfSelection';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 
@@ -15,6 +16,21 @@ after(() => {
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
 });
+
+function createNativeHostService(): INativeHostService {
+  return {
+    _serviceBrand: undefined,
+    canInvoke: () => false,
+    invoke: (async () => undefined) as INativeHostService['invoke'],
+    ipc: undefined,
+    windowControls: undefined,
+    webContent: undefined,
+    fetch: undefined,
+    document: undefined,
+    modal: undefined,
+    toast: undefined,
+  };
+}
 
 function createReader() {
   return new PdfDocumentReader({
@@ -34,6 +50,7 @@ function createReader() {
         contentUnavailable: 'Unavailable',
       },
     },
+    nativeHost: createNativeHostService(),
   });
 }
 

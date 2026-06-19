@@ -30,7 +30,7 @@ import type {
   PdfReviewerPageInfo,
   PdfTextChar,
 } from 'ls/editor/browser/pdf/pdfReviewerTypes';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import { init as initPdfium } from 'ls/editor/browser/pdf/vendor/pdfium/index.js';
 import type { WrappedPdfiumModule } from 'ls/editor/browser/pdf/vendor/pdfium/index.js';
 
@@ -48,6 +48,7 @@ export type PdfDocumentReaderProps = {
   annotationTargetId?: string;
   labels: PdfDocumentReaderLabels;
   viewPartProps: ViewPartProps;
+  nativeHost: INativeHostService;
   annotations?: readonly Annotation[];
   selection?: PdfSelection | null;
   onViewStateChange?: (viewState: PdfDocumentReaderViewState) => void;
@@ -839,7 +840,7 @@ export class PdfDocumentReader {
       return new Uint8Array(await response.arrayBuffer());
     }
 
-    if (!nativeHostService.canInvoke()) {
+    if (!this.props.nativeHost.canInvoke()) {
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
@@ -848,7 +849,7 @@ export class PdfDocumentReader {
       return new Uint8Array(await response.arrayBuffer());
     }
 
-    const result = await nativeHostService.invoke('read_pdf_file', { url });
+    const result = await this.props.nativeHost.invoke('read_pdf_file', { url });
     return new Uint8Array(result.data);
   }
 

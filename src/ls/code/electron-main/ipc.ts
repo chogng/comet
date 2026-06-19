@@ -1,6 +1,5 @@
-import { Notification, app, ipcMain, shell } from 'electron';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { Notification, app, ipcMain } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
 
 import type {
   AppCommand,
@@ -15,8 +14,6 @@ import type {
   ListLibraryDocumentsPayload,
   NativeToastOptions,
   OpenArticleDetailsModalPayload,
-  OpenPathPayload,
-  ReadPdfFilePayload,
   UpsertLibraryDocumentMetadataPayload,
   WebContentPdfDownloadPayload,
   NativeModalState,
@@ -58,10 +55,7 @@ import {
   clearWorkbenchSharedSessionCache,
   clearWorkbenchSharedSessionCookies,
 } from 'ls/platform/native/electron-main/sharedWebSession';
-import {
-  getNativeModalState,
-  openArticleDetailsModal,
-} from 'ls/platform/window/electron-main/articleDetailsWindow';
+import { getNativeModalState } from 'ls/platform/window/electron-main/articleDetailsWindow';
 import {
   dismissToast,
   getToastState,
@@ -84,7 +78,6 @@ import { previewDownloadPdf } from 'ls/code/electron-main/pdf/pdf';
 import { appError, serializeAppError } from 'ls/base/common/errors';
 import {
   pickDirectoryDialog,
-  pickPdfFileDialog,
   pickUserSettingsFileDialog,
 } from 'ls/platform/dialogs/electron-main/dialogMainService';
 import { testLlmConnection } from 'ls/code/electron-main/llm/llm';
@@ -100,23 +93,17 @@ import {
   resolveWindowFromWebContents,
 } from 'ls/platform/window/electron-main/window';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
+import { electronMainChannelServer } from 'ls/code/electron-main/ipcChannelServer';
+import type { IServerChannel } from 'ls/platform/ipc/common/ipc';
+import {
+  NativeHostMainChannel,
+  nativeHostMainService,
+} from 'ls/platform/native/electron-main/nativeHostMainService';
 const FETCH_STATUS_CHANNEL = 'app:fetch-status';
 const DOCUMENT_TRANSLATION_PROGRESS_CHANNEL = 'app:document-translation-progress';
 type AppInvokeResponse<T> =
   | { ok: true; result: T }
   | { ok: false; error: string };
-
-async function showArticleDetailsModal(
-  parentWindow: ReturnType<typeof getMainWindow>,
-  payload: OpenArticleDetailsModalPayload = {},
-) {
-  const targetWindow = parentWindow ?? getMainWindow();
-  if (!targetWindow || targetWindow.isDestroyed()) {
-    throw appError('MAIN_WINDOW_UNAVAILABLE');
-  }
-
-  return openArticleDetailsModal(targetWindow, payload);
-}
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
 let cachedSettings: AppSettings | null = null;
@@ -131,44 +118,6 @@ function showSystemNotificationFromToast(options: NativeToastOptions, settings: 
     title: payload.title,
     body: payload.body,
   }).show();
-}
-
-function resolvePdfFilePath(payload: ReadPdfFilePayload = {}) {
-  const rawPath = payload.path?.trim();
-  if (rawPath) {
-    return rawPath;
-  }
-
-  const rawUrl = payload.url?.trim();
-  if (!rawUrl) {
-    throw appError('UNKNOWN_ERROR', { message: 'PDF path is required.' });
-  }
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    throw appError('UNKNOWN_ERROR', { message: 'PDF URL is invalid.' });
-  }
-
-  if (parsedUrl.protocol !== 'file:') {
-    throw appError('URL_PROTOCOL_UNSUPPORTED', { url: rawUrl });
-  }
-
-  return fileURLToPath(parsedUrl);
-}
-
-async function readPdfFile(payload: ReadPdfFilePayload = {}) {
-  const filePath = resolvePdfFilePath(payload);
-  if (!/\.pdf$/i.test(filePath)) {
-    throw appError('UNKNOWN_ERROR', { message: 'Only PDF files can be previewed.' });
-  }
-
-  const buffer = await readFile(filePath);
-  return {
-    filePath,
-    data: new Uint8Array(buffer),
-  };
 }
 
 async function loadSettingsWithCache(storage: StorageService) {
@@ -264,21 +213,17 @@ async function invokeCommand<TCommand extends AppCommand>(
         (payload as import('ls/base/parts/sandbox/common/desktopTypes').PickUserSettingsFilePayload)?.defaultPath,
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'pick_pdf_file':
-      return pickPdfFileDialog(getMainWindow()) as Promise<AppCommandResultMap[TCommand]>;
+      return nativeHostMainService.pickPdfFile(
+        getMainWindow(),
+      ) as Promise<AppCommandResultMap[TCommand]>;
     case 'read_pdf_file':
-      return readPdfFile(payload as ReadPdfFilePayload) as Promise<AppCommandResultMap[TCommand]>;
-    case 'open_path': {
-      const targetPath = (payload as OpenPathPayload)?.path?.trim();
-      if (!targetPath) {
-        throw appError('UNKNOWN_ERROR', { message: 'Path is required.' });
-      }
-
-      const openError = await shell.openPath(targetPath);
-      if (openError) {
-        shell.showItemInFolder(targetPath);
-      }
-      return true as AppCommandResultMap[TCommand];
-    }
+      return nativeHostMainService.readPdfFile(
+        payload as AppCommandPayloadMap['read_pdf_file'],
+      ) as Promise<AppCommandResultMap[TCommand]>;
+    case 'open_path':
+      return nativeHostMainService.openPath(
+        payload as AppCommandPayloadMap['open_path'],
+      ) as Promise<AppCommandResultMap[TCommand]>;
     case 'web_content_download_pdf': {
       const previewHtml = await resolveWebContentSnapshotHtml(payload as WebContentPdfDownloadPayload);
       const downloadResult = await previewDownloadPdf(
@@ -380,7 +325,7 @@ async function invokeCommand<TCommand extends AppCommand>(
         ) as Promise<AppCommandResultMap[TCommand]>;
       }
     case 'open_article_details_modal':
-      return showArticleDetailsModal(
+      return nativeHostMainService.openArticleDetailsModal(
         getMainWindow(),
         payload as OpenArticleDetailsModalPayload,
       ) as Promise<AppCommandResultMap[TCommand]>;
@@ -390,13 +335,59 @@ async function invokeCommand<TCommand extends AppCommand>(
 }
 
 export function registerAppIpc(storage: StorageService) {
+  electronMainChannelServer.register();
+  try {
+    electronMainChannelServer.registerChannel(
+      'nativeHost',
+      new NativeHostMainChannel(nativeHostMainService),
+    );
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      error.message !== `IPC channel 'nativeHost' is already registered.`
+    ) {
+      throw error;
+    }
+  }
+
+  electronMainChannelServer.registerChannel('app', {
+    async call<T = unknown>(event: IpcMainInvokeEvent, command: string, payload?: unknown) {
+      const appCommand = command as AppCommand;
+      if (appCommand === 'open_article_details_modal') {
+        return await nativeHostMainService.openArticleDetailsModal(
+          resolveWindowFromWebContents(event.sender),
+          payload as OpenArticleDetailsModalPayload,
+        ) as T;
+      }
+
+      return await invokeCommand(
+        appCommand,
+        payload as AppCommandPayloadMap[AppCommand],
+        storage,
+        (channel, eventPayload) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send(channel, eventPayload);
+          }
+        },
+      ) as T;
+    },
+    listen() {
+      throw appError('UNKNOWN_COMMAND', {
+        command: 'app channel events are exposed through nativeHostService today',
+      });
+    },
+  } satisfies IServerChannel<IpcMainInvokeEvent>);
+
   ipcMain.handle('app:invoke', async (_event, command: AppCommand, payload: AppCommandPayloadMap[AppCommand]) => {
     try {
       if (command === 'open_article_details_modal') {
         const target = resolveWindowFromWebContents(_event.sender);
         return {
           ok: true,
-          result: await showArticleDetailsModal(target, payload as OpenArticleDetailsModalPayload),
+          result: await nativeHostMainService.openArticleDetailsModal(
+            target,
+            payload as OpenArticleDetailsModalPayload,
+          ),
         } satisfies AppInvokeResponse<AppCommandResultMap[typeof command]>;
       }
 

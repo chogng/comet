@@ -10,7 +10,7 @@ import {
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
 import { detectInitialLocale, getLocaleMessages } from 'language/i18n';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import 'ls/base/browser/ui/toast/toast.css';
 import 'ls/workbench/browser/media/toastOverlayWindow.css';
 
@@ -91,7 +91,7 @@ export class ToastOverlayWindowView extends LifecycleOwner {
     'native-toast-overlay-stack native-toast-overlay-stack-empty',
   );
   private readonly ui = getLocaleMessages(detectInitialLocale());
-  private readonly toastApi = nativeHostService.toast;
+  private readonly toastApi = getNativeHostService().toast;
   private readonly renderDisposables = new LifecycleStore();
   private readonly resizeObserver = new MutableLifecycle<DisposableLike>();
   private toastState: NativeToastState = fallbackToastState;

@@ -7,6 +7,7 @@ import type {
   FetchStatus,
   LibraryDocumentSummary,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 import { createLibraryModel } from 'ls/workbench/browser/libraryModel';
 import { WebContentNavigationModel } from 'ls/workbench/browser/webContentNavigationModel';
@@ -113,6 +114,24 @@ function createInvokeDesktop(): ElectronInvoke {
   return (async (command: string) => {
     throw new Error(`Unexpected desktop command in model subscriptions test: ${command}`);
   }) as ElectronInvoke;
+}
+
+function createNativeHostService(
+  overrides: Partial<INativeHostService> = {},
+): INativeHostService {
+  return {
+    _serviceBrand: undefined,
+    canInvoke: () => true,
+    invoke: createInvokeDesktop(),
+    ipc: undefined,
+    windowControls: undefined,
+    webContent: undefined,
+    fetch: undefined,
+    document: undefined,
+    modal: undefined,
+    toast: undefined,
+    ...overrides,
+  };
 }
 
 function createFetchStatus(overrides: Partial<FetchStatus> = {}): FetchStatus {
@@ -272,7 +291,7 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
   let fetchStatusListener: ((status: FetchStatus) => void) | undefined;
   let removed = false;
 
-  withElectronApi(createElectronApi({
+  const nativeHost = createNativeHostService({
     fetch: {
       onFetchStatus(listener) {
         fetchStatusListener = listener;
@@ -284,7 +303,9 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
         };
       },
     } as NonNullable<ElectronAPI['fetch']>,
-  }), () => {
+  });
+
+  withElectronApi(createElectronApi({}), () => {
     const controller = createBatchFetchController({
       desktopRuntime: true,
       addressBarUrl: '',
@@ -292,6 +313,7 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
       batchStartDate: '',
       batchEndDate: '',
       invokeDesktop: createInvokeDesktop(),
+      nativeHost,
       ui: locales.en,
       onBeforeFetch: () => {},
       onFetchSuccess: () => {},
@@ -321,6 +343,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
   const controller = createDocumentActionsController({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
+    nativeHost: createNativeHostService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -340,6 +363,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
   controller.setContext({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
+    nativeHost: createNativeHostService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -362,6 +386,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
   controller.setContext({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
+    nativeHost: createNativeHostService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -405,8 +430,7 @@ test('LibraryModel subscriptions stop after listener disposal and model dispose'
 
 test('WebContentNavigationModel subscriptions stop after listener disposal', async () => {
   let webContentStateListener: ((state: WebContentState) => void) | undefined;
-
-  await withElectronApi(createElectronApi({
+  const nativeHost = createNativeHostService({
     webContent: {
       activate() {},
       async getState() {
@@ -423,8 +447,10 @@ test('WebContentNavigationModel subscriptions stop after listener disposal', asy
         };
       },
     } as NonNullable<ElectronAPI['webContent']>,
-  }), async () => {
-    const model = new WebContentNavigationModel();
+  });
+
+  await withElectronApi(createElectronApi({}), async () => {
+    const model = new WebContentNavigationModel(nativeHost);
     const browserUrls: string[] = [];
     let webUrl = '';
     let fetchSeedUrl = '';
@@ -468,8 +494,7 @@ test('WebContentNavigationModel does not activate a default web content target f
   const activatedTargetIds: Array<string | null | undefined> = [];
   let setWebUrlCalls = 0;
   let setFetchSeedUrlCalls = 0;
-
-  await withElectronApi(createElectronApi({
+  const nativeHost = createNativeHostService({
     webContent: {
       activate(targetId?: string | null) {
         activatedTargetIds.push(targetId);
@@ -481,8 +506,10 @@ test('WebContentNavigationModel does not activate a default web content target f
         return () => {};
       },
     } as unknown as NonNullable<ElectronAPI['webContent']>,
-  }), async () => {
-    const model = new WebContentNavigationModel();
+  });
+
+  await withElectronApi(createElectronApi({}), async () => {
+    const model = new WebContentNavigationModel(nativeHost);
 
     await model.activateTarget(null, {
       setWebUrl: () => {

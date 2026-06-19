@@ -9,6 +9,7 @@ import {
   getEditorFrameSlot,
 } from 'ls/workbench/browser/parts/editor/editorFrame';
 import type { EditorOpenRequest } from 'ls/workbench/services/editor/common/editorOpenTypes';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createWorkbenchLayoutView: typeof import('ls/workbench/browser/workbench').createWorkbenchLayoutView;
@@ -322,6 +323,21 @@ function getEventEmitterListenerCount(
   return emitter?.listeners?.size ?? 0;
 }
 
+function createNativeHostService(): INativeHostService {
+  return {
+    _serviceBrand: undefined,
+    canInvoke: () => false,
+    invoke: (async () => undefined) as INativeHostService['invoke'],
+    ipc: undefined,
+    windowControls: undefined,
+    webContent: undefined,
+    fetch: undefined,
+    document: undefined,
+    modal: undefined,
+    toast: undefined,
+  };
+}
+
 function createWorkbenchLayoutViewProps() {
   const auxiliaryEditorTopbarActionsElement = document.createElement('div');
   auxiliaryEditorTopbarActionsElement.className = 'sidebar-topbar-actions actionbar is-horizontal';
@@ -625,6 +641,7 @@ function createWorkbenchLayoutViewProps() {
           contentUnavailable: 'Unavailable',
         },
       },
+      nativeHost: createNativeHostService(),
       groupId: DEFAULT_EDITOR_GROUP_ID,
       tabs: [],
       dirtyDraftTabIds: [],

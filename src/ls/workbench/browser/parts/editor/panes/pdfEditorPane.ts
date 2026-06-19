@@ -28,7 +28,7 @@ import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartVie
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import { EditorPane } from 'ls/workbench/browser/parts/editor/panes/editorPane';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import { toFileUrl } from 'ls/workbench/common/fileUrl';
 
 export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
@@ -39,6 +39,7 @@ export type PdfEditorPaneProps = {
   labels: EditorPartLabels;
   pdfTab: EditorWorkspacePdfTab;
   viewPartProps: ViewPartProps;
+  nativeHost: INativeHostService;
   onOpenEditor?: EditorOpenHandler;
   onReaderStatusChange?: (
     tabId: string,
@@ -232,6 +233,7 @@ export class PdfEditorPane extends EditorPane<
         openPdfFile: this.props.labels.pdfOpenFile,
       },
       viewPartProps: this.createReaderViewPartProps(this.props),
+      nativeHost: this.props.nativeHost,
       annotations,
       selection: this.editor.getViewState().selection,
       onViewStateChange: (viewState: PdfDocumentReaderViewState) => {
@@ -260,7 +262,7 @@ export class PdfEditorPane extends EditorPane<
 
   private readonly handleOpenPdfFile = async () => {
     try {
-      const filePath = await nativeHostService.invoke('pick_pdf_file');
+      const filePath = await this.props.nativeHost.invoke('pick_pdf_file');
       const fileUrl = toFileUrl(filePath ?? '');
       if (!fileUrl) {
         return;

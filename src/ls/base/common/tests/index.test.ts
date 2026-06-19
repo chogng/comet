@@ -11,3 +11,4 @@ import 'ls/platform/commands/common/tests/commands.test';
 import 'ls/platform/contextkey/common/tests/contextkey.test';
 import 'ls/platform/instantiation/common/tests/instantiation.test';
 import 'ls/platform/ipc/common/tests/ipc.test';
+import 'ls/platform/jsonschema/common/tests/jsonSchemaRegistry.test';

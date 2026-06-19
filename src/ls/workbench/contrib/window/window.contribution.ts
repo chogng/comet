@@ -3,12 +3,12 @@ import {
   registerWorkbenchWindowControlsProvider,
 } from 'ls/workbench/browser/window';
 import { hasDesktopRuntime } from 'ls/base/common/platform';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import { registerWorkbenchContribution } from 'ls/workbench/contrib/workbench/workbench.contribution';
 
 registerWorkbenchWindowControlsProvider({
   getState: async () => {
-    const controls = nativeHostService.windowControls;
+    const controls = getNativeHostService().windowControls;
     if (!controls) {
       return {
         isMaximized: false,
@@ -19,7 +19,7 @@ registerWorkbenchWindowControlsProvider({
     return controls.getState();
   },
   onStateChange: (listener) => {
-    const controls = nativeHostService.windowControls;
+    const controls = getNativeHostService().windowControls;
     if (!controls) {
       return () => {};
     }
@@ -27,7 +27,7 @@ registerWorkbenchWindowControlsProvider({
     return controls.onStateChange(listener);
   },
   perform: (action) => {
-    nativeHostService.windowControls?.perform(action);
+    getNativeHostService().windowControls?.perform(action);
   },
 });
 

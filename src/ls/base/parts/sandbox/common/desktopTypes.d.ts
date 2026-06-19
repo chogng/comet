@@ -829,8 +829,23 @@ export interface ElectronToastApi {
   setHovering: (hovering: boolean) => void;
 }
 
+export interface ElectronIpcApi {
+  call: <T = unknown>(
+    channelName: string,
+    command: string,
+    arg?: unknown,
+  ) => Promise<T>;
+  listen: <T = unknown>(
+    channelName: string,
+    event: string,
+    arg: unknown,
+    listener: (payload: T) => void,
+  ) => () => void;
+}
+
 export interface ElectronAPI {
   invoke: ElectronInvoke;
+  ipc?: ElectronIpcApi;
   windowControls?: ElectronWindowControls;
   webContent?: ElectronWebContentApi;
   fetch?: ElectronFetchApi;

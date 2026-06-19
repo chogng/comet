@@ -2,7 +2,7 @@ import type { NativeModalState } from 'ls/base/parts/sandbox/common/desktopTypes
 import { EventEmitter } from 'ls/base/common/event';
 import { LifecycleStore } from 'ls/base/common/lifecycle';
 import { detectInitialLocale, getLocaleMessages } from 'language/i18n';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import {
   connectWorkbenchWindowControls,
   getWindowStateSnapshot,
@@ -223,7 +223,7 @@ class ArticleDetailsModalController {
       return;
     }
 
-    const modalApi = nativeHostService.modal;
+    const modalApi = getNativeHostService().modal;
     if (!modalApi?.getState) {
       this.setSnapshot({ isLoading: false });
       return;
@@ -317,7 +317,7 @@ export class ArticleDetailsModalWindowView {
           createButton(
             labels.revealPath,
             () => {
-              void nativeHostService.invoke('open_path', {
+              void getNativeHostService().invoke('open_path', {
                 path: row.revealPath ?? '',
               });
             },

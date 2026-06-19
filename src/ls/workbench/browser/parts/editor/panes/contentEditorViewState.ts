@@ -1,4 +1,4 @@
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 
 export type ContentEditorPaneViewState = {
   url: string;
@@ -114,8 +114,9 @@ function createRestoreWebContentViewStateScript(
 
 export async function captureContentEditorPaneViewState(
   targetId: string | null | undefined,
+  nativeHost: INativeHostService,
 ) {
-  const executeJavaScript = nativeHostService.webContent?.executeJavaScript;
+  const executeJavaScript = nativeHost.webContent?.executeJavaScript;
   if (typeof executeJavaScript !== 'function') {
     return undefined;
   }
@@ -137,8 +138,9 @@ export async function captureContentEditorPaneViewState(
 export async function restoreContentEditorPaneViewState(
   targetId: string | null | undefined,
   viewState: ContentEditorPaneViewState | undefined,
+  nativeHost: INativeHostService,
 ) {
-  const executeJavaScript = nativeHostService.webContent?.executeJavaScript;
+  const executeJavaScript = nativeHost.webContent?.executeJavaScript;
   if (!viewState || typeof executeJavaScript !== 'function') {
     return false;
   }

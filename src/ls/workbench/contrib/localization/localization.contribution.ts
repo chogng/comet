@@ -8,7 +8,7 @@ import { registerWorkbenchContribution } from 'ls/workbench/contrib/workbench/wo
 import type { Disposable } from 'ls/workbench/contrib/workbench/workbench.contribution';
 
 import { hasDesktopRuntime } from 'ls/base/common/platform';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 
 function createLocaleServiceContext() {
   return {
@@ -17,7 +17,7 @@ function createLocaleServiceContext() {
       command: string,
       args?: Record<string, unknown>,
     ): Promise<T> => {
-      return nativeHostService.invoke(command as never, args as never) as Promise<T>;
+      return getNativeHostService().invoke(command as never, args as never) as Promise<T>;
     },
   };
 }

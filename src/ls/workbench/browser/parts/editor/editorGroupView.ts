@@ -59,12 +59,14 @@ import type {
   EditorOpenHandler,
   EditorOpenRequest,
 } from 'ls/workbench/services/editor/common/editorOpenTypes';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 export type EditorGroupViewProps = {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
+  nativeHost: INativeHostService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];
@@ -926,6 +928,7 @@ export class EditorGroupView {
     return {
       labels: this.props.labels,
       viewPartProps: this.props.viewPartProps,
+      nativeHost: this.props.nativeHost,
       onOpenEditor: this.props.onOpenEditor,
       onDraftDocumentChange: this.props.onDraftDocumentChange,
       onDraftStatusChange: this.handleDraftStatusChange,

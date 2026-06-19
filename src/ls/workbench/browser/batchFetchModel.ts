@@ -6,6 +6,7 @@ import type {
   FetchStatus,
   JournalSourceOverride,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import type { LocaleMessages } from 'language/locales';
 import { fetchLatestArticlesBatch } from 'ls/workbench/services/article/articleFetch';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
@@ -16,7 +17,6 @@ import {
   formatLocalized,
   localizeDesktopInvokeError,
 } from 'ls/workbench/services/desktop/desktopError';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
 
 type BatchFetchTitlebarStatus = {
   titlebarFetchSourceText: string;
@@ -32,6 +32,7 @@ export type BatchFetchControllerContext = {
   batchStartDate: string;
   batchEndDate: string;
   invokeDesktop: ElectronInvoke;
+  nativeHost: INativeHostService;
   ui: LocaleMessages;
   onBeforeFetch: () => void;
   onFetchSuccess: (articles: Article[]) => void;
@@ -141,7 +142,9 @@ export class BatchFetchController {
 
   readonly setContext = (context: BatchFetchControllerContext) => {
     const shouldReconnect =
-      this.started && context.desktopRuntime !== this.context.desktopRuntime;
+      this.started &&
+      (context.desktopRuntime !== this.context.desktopRuntime ||
+        context.nativeHost !== this.context.nativeHost);
     this.context = context;
 
     if (shouldReconnect) {
@@ -281,13 +284,14 @@ export class BatchFetchController {
   private connectFetchStatus() {
     this.fetchStatusListener.clear();
 
-    if (!this.context.desktopRuntime || !nativeHostService.fetch) {
+    const fetchApi = this.context.nativeHost.fetch;
+    if (!this.context.desktopRuntime || !fetchApi) {
       this.dispatch({ type: 'FETCH_STATUS_CLEARED' });
       return;
     }
 
     this.fetchStatusListener.value =
-      nativeHostService.fetch.onFetchStatus((status) => {
+      fetchApi.onFetchStatus((status) => {
         this.dispatch({ type: 'FETCH_STATUS_UPDATED', status });
       });
   }

@@ -10,6 +10,7 @@ import type {
   EditorPartProps,
 } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 
 const domEnvironment = installDomTestEnvironment();
 
@@ -22,6 +23,21 @@ const defaultViewPartProps: ViewPartProps = {
     contentUnavailable: 'Unavailable',
   },
 };
+
+function createNativeHostService(): INativeHostService {
+  return {
+    _serviceBrand: undefined,
+    canInvoke: () => false,
+    invoke: (async () => undefined) as INativeHostService['invoke'],
+    ipc: undefined,
+    windowControls: undefined,
+    webContent: undefined,
+    fetch: undefined,
+    document: undefined,
+    modal: undefined,
+    toast: undefined,
+  };
+}
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -69,6 +85,7 @@ test('EditorPartController creates a new browser tab as an empty about:blank tab
     browserUrl: 'https://example.com/articles/current',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -93,6 +110,7 @@ test('EditorPartController keeps browser tab creation empty even without an avai
     browserUrl: '',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -117,6 +135,7 @@ test('EditorPartController opens the browser pane as an empty about:blank tab', 
     browserUrl: 'https://example.com/articles/current',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -141,6 +160,7 @@ test('EditorPartController reuses an existing empty draft tab for explicit draft
     browserUrl: '',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
@@ -165,6 +185,7 @@ test('EditorPartController creates a new draft tab when the reusable draft is di
     browserUrl: '',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
@@ -190,6 +211,7 @@ test('EditorPartController reuses an existing empty browser tab for explicit bro
     browserUrl: '',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -218,6 +240,7 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
     browserUrl: 'https://example.com/articles/current',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -243,6 +266,7 @@ test('EditorPartController keeps browser pane active as about:blank when closing
     browserUrl: '',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   controller.createBrowserTab('https://example.com/article');
@@ -271,6 +295,7 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
     browserUrl: '',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   controller.createBrowserTab('https://example.com/article');
@@ -312,6 +337,7 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
       electronRuntime: true,
       webContentRuntime: true,
     },
+    nativeHost: createNativeHostService(),
   });
 
   controller.createBrowserTab(favoriteUrl);
@@ -399,6 +425,7 @@ test('EditorPartController serializes close requests while unsaved confirm is op
     browserUrl: '',
     webUrl: '',
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
   });
 
   const activeDraftTab = controller

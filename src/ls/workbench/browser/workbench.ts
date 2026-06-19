@@ -115,7 +115,7 @@ import {
   hasWebContentRuntime,
 } from 'ls/base/common/platform';
 import { EventEmitter } from 'ls/base/common/event';
-import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostService';
+import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 import { applyWorkbenchTheme } from 'ls/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'ls/workbench/browser/style';
@@ -1394,12 +1394,13 @@ class WorkbenchHost {
     const { electronRuntime, webContentRuntime, desktopRuntime } =
       resolveRuntimeState();
     const { isFullscreen: isWindowFullscreen } = getWindowStateSnapshot();
+    const nativeHost = getNativeHostService();
 
     const invokeDesktop = async <T>(
       command: string,
       args?: DesktopInvokeArgs,
     ): Promise<T> => {
-      return nativeHostService.invoke(command as never, args as never) as Promise<T>;
+      return nativeHost.invoke(command as never, args as never) as Promise<T>;
     };
 
     const settingsControllerInstance = getWorkbenchSettingsController({
@@ -1526,7 +1527,7 @@ class WorkbenchHost {
       retrievalTopK,
     };
 
-    const webContentNavigationModelInstance = getWorkbenchWebContentNavigationModel();
+    const webContentNavigationModelInstance = getWorkbenchWebContentNavigationModel(nativeHost);
     this.syncWebContentRuntime(webContentNavigationModelInstance, webContentRuntime);
     const { browserUrl, webContentState } =
       webContentNavigationModelInstance.getSnapshot();
@@ -1547,6 +1548,7 @@ class WorkbenchHost {
     const editorPartControllerInstance = getWorkbenchEditorPartController({
       ui,
       viewPartProps,
+      nativeHost,
       browserUrl,
       webUrl,
     });
@@ -1661,6 +1663,7 @@ class WorkbenchHost {
       getWorkbenchDocumentActionsController({
         desktopRuntime,
         invokeDesktop,
+        nativeHost,
         locale,
         ui,
         knowledgeBaseEnabled,
@@ -1829,6 +1832,7 @@ class WorkbenchHost {
     });
     const contentAwareEditorPartProps: EditorPartProps = {
       ...baseEditorPartProps,
+      nativeHost,
       ...editorBrowserToolbarActions,
     };
     this.auxiliaryEditorTopbarActionsView.setProps({
@@ -1864,6 +1868,7 @@ class WorkbenchHost {
       batchStartDate,
       batchEndDate,
       invokeDesktop,
+      nativeHost,
       ui,
       onBeforeFetch: handleBatchFetchStart,
       onFetchSuccess: handleBatchFetchSuccess,
@@ -1933,6 +1938,7 @@ class WorkbenchHost {
       editorPartContext: {
         ui,
         viewPartProps,
+        nativeHost,
         browserUrl,
         webUrl,
       },
@@ -1962,6 +1968,7 @@ class WorkbenchHost {
       documentActionsContext: {
         desktopRuntime,
         invokeDesktop,
+        nativeHost,
         locale,
         ui,
         knowledgeBaseEnabled,
@@ -1982,6 +1989,7 @@ class WorkbenchHost {
         batchStartDate,
         batchEndDate,
         invokeDesktop,
+        nativeHost,
         ui,
         onBeforeFetch: handleBatchFetchStart,
         onFetchSuccess: handleBatchFetchSuccess,
@@ -2491,8 +2499,8 @@ export function getWorkbenchLibraryModel(context: LibraryModelContext) {
   return libraryModel;
 }
 
-export function getWorkbenchWebContentNavigationModel() {
-  webContentNavigationModel ??= new WebContentNavigationModel();
+export function getWorkbenchWebContentNavigationModel(nativeHost = getNativeHostService()) {
+  webContentNavigationModel ??= new WebContentNavigationModel(nativeHost);
   return webContentNavigationModel;
 }
 

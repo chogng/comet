@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import type { ElectronAPI } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import { createWritingEditorDocumentFromPlainText } from 'ls/editor/common/writingEditorDocument';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 import { DEFAULT_EDITOR_GROUP_ID } from 'ls/workbench/browser/editorGroupIdentity';
@@ -121,6 +122,41 @@ const defaultViewPartProps = {
   },
 };
 
+function createNativeHostService(): INativeHostService {
+  return {
+    _serviceBrand: undefined,
+    canInvoke: () => typeof window.electronAPI?.invoke === 'function',
+    invoke: (async (command: string, args?: Record<string, unknown>) => {
+      if (!window.electronAPI?.invoke) {
+        throw new Error('Desktop invoke bridge is unavailable.');
+      }
+
+      return window.electronAPI.invoke(command, args);
+    }) as INativeHostService['invoke'],
+    get ipc() {
+      return window.electronAPI?.ipc;
+    },
+    get windowControls() {
+      return window.electronAPI?.windowControls;
+    },
+    get webContent() {
+      return window.electronAPI?.webContent;
+    },
+    get fetch() {
+      return window.electronAPI?.fetch;
+    },
+    get document() {
+      return window.electronAPI?.document;
+    },
+    get modal() {
+      return window.electronAPI?.modal;
+    },
+    get toast() {
+      return window.electronAPI?.toast;
+    },
+  };
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
@@ -156,6 +192,7 @@ function createProps(
   return {
     labels,
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
     groupId: DEFAULT_EDITOR_GROUP_ID,
     tabs,
     dirtyDraftTabIds: [],
@@ -189,6 +226,7 @@ function createResolverContext() {
   return {
     labels,
     viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
     onDraftDocumentChange: () => {},
     onDraftStatusChange: () => {},
     onPdfReaderStatusChange: () => {},

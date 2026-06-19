@@ -4,7 +4,9 @@ import type {
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { INativeHostService } from 'ls/platform/native/common/native';
 
-class ElectronSandboxNativeHostService implements INativeHostService {
+class ElectronSandboxNativeHostServiceProxy implements INativeHostService {
+  declare readonly _serviceBrand: undefined;
+
   private get api(): ElectronAPI | undefined {
     if (typeof window === 'undefined') {
       return undefined;
@@ -24,6 +26,10 @@ class ElectronSandboxNativeHostService implements INativeHostService {
 
     return this.api.invoke(command, args);
   };
+
+  get ipc() {
+    return this.api?.ipc;
+  }
 
   get windowControls() {
     return this.api?.windowControls;
@@ -51,4 +57,4 @@ class ElectronSandboxNativeHostService implements INativeHostService {
 }
 
 export const nativeHostService: INativeHostService =
-  new ElectronSandboxNativeHostService();
+  new ElectronSandboxNativeHostServiceProxy();

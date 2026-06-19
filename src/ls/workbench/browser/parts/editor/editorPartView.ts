@@ -17,6 +17,7 @@ import type { DraftEditorCommandId } from 'ls/workbench/browser/parts/editor/pan
 import type { ViewPartProps } from 'ls/workbench/browser/parts/views/viewPartView';
 import { EditorGroupView } from 'ls/workbench/browser/parts/editor/editorGroupView';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
+import type { INativeHostService } from 'ls/platform/native/common/native';
 import 'ls/workbench/browser/parts/editor/media/editor.css';
 import 'ls/workbench/browser/parts/editor/media/editorToolbar.css';
 import 'ls/workbench/browser/parts/editor/media/editorBrowserLibraryPanel.css';
@@ -100,6 +101,7 @@ export type EditorPartBrowserToolbarActions = {
 export type EditorPartBaseProps = {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
+  nativeHost: INativeHostService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];

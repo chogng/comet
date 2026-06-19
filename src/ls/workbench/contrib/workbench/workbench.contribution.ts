@@ -10,6 +10,7 @@ import {
   getWorkbenchStateSnapshot,
   subscribeWorkbenchState,
 } from 'ls/workbench/browser/workbench';
+import { disposeWorkbenchInstantiationService } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
 import {
   localeService,
 } from 'ls/workbench/contrib/localization/browser/localeService';
@@ -150,6 +151,7 @@ export function createWorkbenchDocumentLocaleContribution(): Disposable {
 export function createWorkbenchServicesLifecycleContribution(): Disposable {
   return {
     dispose: () => {
+      disposeWorkbenchInstantiationService();
       disposeWorkbenchServices();
     },
   };
