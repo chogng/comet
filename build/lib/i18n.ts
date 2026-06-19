@@ -1,5 +1,5 @@
-import { locales } from 'language/locales';
-import type { LocaleMessages } from 'language/locales';
+import { locales } from './locales';
+import type { LocaleMessages } from './locales';
 
 export type Locale = keyof typeof locales;
 

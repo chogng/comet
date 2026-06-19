@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const rootDir = process.cwd();
-const enPath = path.join(rootDir, 'src/language/locales/en.ts');
-const zhPath = path.join(rootDir, 'src/language/locales/zh.ts');
+const enPath = path.join(rootDir, 'build/lib/locales/en.ts');
+const zhPath = path.join(rootDir, 'build/lib/locales/zh.ts');
 
 function extractKeys(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');

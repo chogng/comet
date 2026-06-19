@@ -1,5 +1,5 @@
-import en from 'language/locales/en';
-import zh from 'language/locales/zh';
+import en from './en';
+import zh from './zh';
 
 export type LocaleMessages = {
   [Key in keyof typeof zh]: string;

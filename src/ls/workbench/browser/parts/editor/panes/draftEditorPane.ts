@@ -6,7 +6,7 @@ import { getLocaleMessages } from 'language/i18n';
 import { isDraftEditorCommandEnabled } from 'ls/editor/browser/text/editorCommandRegistry';
 import type { DraftEditorStatusState } from 'ls/editor/browser/text/draftEditorStatusState';
 import { ProseMirrorEditor } from 'ls/editor/browser/text/editor';
-import { localeService } from 'ls/workbench/contrib/localization/browser/localeService';
+import { localeService } from 'ls/workbench/services/localization/browser/localeService';
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { EditorPane } from 'ls/workbench/browser/parts/editor/panes/editorPane';
 import { createDraftEditorCommandAction } from 'ls/workbench/browser/parts/editor/panes/draftEditorCommands';

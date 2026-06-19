@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 
 const appPath = fileURLToPath(new URL('./src', import.meta.url));
-const languagePath = fileURLToPath(new URL('./src/language', import.meta.url));
+const languagePath = fileURLToPath(new URL('./build/lib', import.meta.url));
 const lsPath = fileURLToPath(new URL('./src/ls', import.meta.url));
 const workbenchHtmlPath = fileURLToPath(
   new URL('./src/ls/code/electron-sandbox/workbench/workbench.html', import.meta.url),

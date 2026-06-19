@@ -1,13 +1,16 @@
-import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
+import {
+  createBuiltInLanguagePackItems,
+  type LanguagePackLocale,
+} from 'ls/platform/languagePacks/common/languagePacks';
 
 export type LocalizationUiAction = {
   type: 'SET_DISPLAY_LANGUAGE';
-  locale: Locale;
+  locale: LanguagePackLocale;
 };
 
 export type DisplayLanguageOption = {
-  value: Locale;
+  value: LanguagePackLocale;
   label: string;
 };
 
@@ -30,7 +33,7 @@ export function subscribeLocalizationUiActions(
   };
 }
 
-export function requestSetDisplayLanguage(locale: Locale) {
+export function requestSetDisplayLanguage(locale: LanguagePackLocale) {
   emitLocalizationUiAction({
     type: 'SET_DISPLAY_LANGUAGE',
     locale,
@@ -40,14 +43,8 @@ export function requestSetDisplayLanguage(locale: Locale) {
 export function createDisplayLanguageOptions(
   labels: Pick<LocaleMessages, 'languageChinese' | 'languageEnglish'>,
 ): DisplayLanguageOption[] {
-  return [
-    {
-      value: 'zh',
-      label: labels.languageChinese,
-    },
-    {
-      value: 'en',
-      label: labels.languageEnglish,
-    },
-  ];
+  return createBuiltInLanguagePackItems(labels).map((item) => ({
+    value: item.id,
+    label: item.label,
+  }));
 }

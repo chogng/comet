@@ -1,5 +1,5 @@
 import { getLocaleMessages } from 'language/i18n';
-import { localeService } from 'ls/workbench/contrib/localization/browser/localeService';
+import { localeService } from 'ls/workbench/services/localization/browser/localeService';
 import {
   executeWorkbenchEditorCommand,
   getWorkbenchEditorCommandDefinitions,

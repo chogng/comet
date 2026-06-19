@@ -1,5 +1,7 @@
 const zh = {
   appName: 'Literature Studio',
+  close: '\u5173\u95ed',
+  find: '\u67e5\u627e',
   articleUrlPlaceholder: '文章链接',
   navigateWeb: '网页跳转',
   fetchCurrentBusy: '抓取中...',
@@ -314,7 +316,7 @@ const zh = {
     '仅在多选模式下生效。启用后会命名为“1. 文献标题”；关闭后仅使用文献标题。',
   downloadDirPlaceholder: '默认下载到系统Downloads目录',
   change: '更改',
-  open: 'open',
+  open: '\u6253\u5f00',
   chooseDirectory: '选择目录',
   changeConfigLocation: '更改用户配置位置',
   resetDefault: '恢复默认',

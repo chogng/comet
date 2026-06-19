@@ -12,7 +12,7 @@ import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestU
 import { createLibraryModel } from 'ls/workbench/browser/libraryModel';
 import { WebContentNavigationModel } from 'ls/workbench/browser/webContentNavigationModel';
 import { EMPTY_WEB_CONTENT_STATE } from 'ls/workbench/services/webContent/webContentNavigationService';
-import { localeService } from 'ls/workbench/contrib/localization/browser/localeService';
+import { localeService } from 'ls/workbench/services/localization/browser/localeService';
 import {
   getWorkbenchContentStateSnapshot,
   setBatchEndDate,

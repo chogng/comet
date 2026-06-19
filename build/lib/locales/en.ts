@@ -1,5 +1,7 @@
 const en = {
   appName: 'Literature Studio',
+  close: 'close',
+  find: 'find',
   articleUrlPlaceholder: 'Article URL',
   navigateWeb: 'Navigate',
   fetchCurrentBusy: 'Fetching...',

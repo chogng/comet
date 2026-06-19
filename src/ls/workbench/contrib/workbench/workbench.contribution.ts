@@ -13,7 +13,7 @@ import {
 import { disposeWorkbenchInstantiationService } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
 import {
   localeService,
-} from 'ls/workbench/contrib/localization/browser/localeService';
+} from 'ls/workbench/services/localization/browser/localeService';
 import {
   getStatusbarStateSnapshot,
   subscribeStatusbarState,

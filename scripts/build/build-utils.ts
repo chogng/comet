@@ -4,10 +4,12 @@ import { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createNpmRunArgs, npmCommand, resolveNpmExecPath } from '../../build/npm/install.ts';
+import { resolveViteBinPath } from '../../build/vite/paths.ts';
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const projectRoot = path.resolve(scriptDir, '..', '..');
-export const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 export function resolveProjectPath(...segments: string[]) {
   return path.join(projectRoot, ...segments);
@@ -36,7 +38,7 @@ function resolveNodeBin(binName: string) {
     concurrently: resolveProjectPath('node_modules', 'concurrently', 'dist', 'bin', 'concurrently.js'),
     'electron-builder': resolveProjectPath('node_modules', 'electron-builder', 'cli.js'),
     tsc: resolveProjectPath('node_modules', 'typescript', 'bin', 'tsc'),
-    vite: resolveProjectPath('node_modules', 'vite', 'bin', 'vite.js'),
+    vite: resolveViteBinPath(projectRoot),
   };
 
   return binPaths[binName];
@@ -75,12 +77,9 @@ export async function runBin(binName: string, args: string[] = []) {
 }
 
 export async function runNpmScript(scriptName: string, args: string[] = []) {
-  const npmArgs = ['run', scriptName];
-  if (args.length > 0) {
-    npmArgs.push('--', ...args);
-  }
+  const npmArgs = createNpmRunArgs(scriptName, args);
 
-  const npmExecPath = process.env.npm_execpath;
+  const npmExecPath = resolveNpmExecPath(projectRoot);
   if (npmExecPath && pathExists(npmExecPath)) {
     await run(process.execPath, [npmExecPath, ...npmArgs]);
     return;

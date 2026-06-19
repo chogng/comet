@@ -69,7 +69,7 @@ import type { ToastHost } from 'ls/base/browser/ui/toast/toastHost';
 
 import {
   localeService,
-} from 'ls/workbench/contrib/localization/browser/localeService';
+} from 'ls/workbench/services/localization/browser/localeService';
 import {
   getWorkbenchSessionSnapshot,
   setWorkbenchArticles,

@@ -10,7 +10,7 @@
       "base/*": ["src/ls/base/*"],
       "code/*": ["src/ls/code/*"],
       "editor/*": ["src/ls/editor/*"],
-      "language/*": ["src/language/*"],
+      "language/*": ["build/lib/*"],
       "ls/*": ["src/ls/*"],
       "platform/*": ["src/ls/platform/*"],
       "workbench/*": ["src/ls/workbench/*"]

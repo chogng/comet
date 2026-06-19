@@ -1,6 +1,6 @@
 import {
   localeService,
-} from 'ls/workbench/contrib/localization/browser/localeService';
+} from 'ls/workbench/services/localization/browser/localeService';
 import {
   subscribeLocalizationUiActions,
 } from 'ls/workbench/contrib/localization/browser/localizationsActions';
