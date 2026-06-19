@@ -2,7 +2,7 @@ import 'ls/base/browser/ui/selectbox/selectBox.css';
 import { EventEmitter, type Event as LsEvent } from 'ls/base/common/event';
 import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
 import { SelectBoxCustom } from 'ls/base/browser/ui/selectbox/selectBoxCustom';
-import unfoldSvg from 'ls/base/browser/ui/lxicon/svg/unfold.svg?raw';
+import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
 
 export interface ISelectBoxOptions {
   useCustomDrawn?: boolean;
@@ -69,14 +69,7 @@ function createDecoratorIconElement() {
   const decorator = document.createElement('span');
   decorator.className = 'ls-select-box-decorator';
   decorator.setAttribute('aria-hidden', 'true');
-  const template = document.createElement('template');
-  template.innerHTML = unfoldSvg.trim();
-  const icon = template.content.firstElementChild;
-  if (icon instanceof SVGElement) {
-    icon.removeAttribute('width');
-    icon.removeAttribute('height');
-    decorator.append(icon);
-  }
+  decorator.append(createLxIcon('unfold'));
   return decorator;
 }
 
