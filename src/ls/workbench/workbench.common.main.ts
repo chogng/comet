@@ -5,8 +5,9 @@ import {
   createWorkbenchDocumentLocaleContribution,
   createWorkbenchServicesLifecycleContribution,
   createWorkbenchStatusbarContribution,
-  registerWorkbenchContribution,
 } from 'ls/workbench/contrib/workbench/workbench.contribution';
+import { createWorkbenchContextKeysContribution } from 'ls/workbench/browser/contextkeys';
+import { registerWorkbenchContribution } from 'ls/workbench/browser/workbench.contribution';
 import { createWorkbenchWebContentViewContribution } from 'ls/workbench/contrib/webContentView/webContentView.contribution';
 //#endregion
 
@@ -17,6 +18,7 @@ import 'ls/workbench/contrib/sash/browser/sash.contribution';
 
 //#region --- workbench contributions
 registerWorkbenchContribution(createWorkbenchContainerStateContribution);
+registerWorkbenchContribution(createWorkbenchContextKeysContribution);
 registerWorkbenchContribution(createWorkbenchDocumentLocaleContribution);
 registerWorkbenchContribution(createWorkbenchServicesLifecycleContribution);
 registerWorkbenchContribution(createWorkbenchStatusbarContribution);

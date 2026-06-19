@@ -18,54 +18,17 @@ import {
   subscribeStatusbarState,
 } from 'ls/workbench/browser/parts/statusbar/statusbarModel';
 import { StatusbarPart } from 'ls/workbench/browser/parts/statusbar/statusbarPart';
-
-export type Disposable = {
-  dispose: () => void;
-};
-
-type WorkbenchContributionFactory = () => Disposable | void;
-
-const workbenchContributionFactories: WorkbenchContributionFactory[] = [];
-const activeWorkbenchContributions: Disposable[] = [];
-let workbenchContributionsStarted = false;
-
-export function registerWorkbenchContribution(
-  contributionFactory: WorkbenchContributionFactory,
-) {
-  workbenchContributionFactories.push(contributionFactory);
-
-  if (!workbenchContributionsStarted) {
-    return;
-  }
-
-  const contribution = contributionFactory();
-  if (contribution) {
-    activeWorkbenchContributions.push(contribution);
-  }
-}
-
-export function startWorkbenchContributions() {
-  if (workbenchContributionsStarted) {
-    return;
-  }
-
-  workbenchContributionsStarted = true;
-
-  for (const contributionFactory of workbenchContributionFactories) {
-    const contribution = contributionFactory();
-    if (contribution) {
-      activeWorkbenchContributions.push(contribution);
-    }
-  }
-}
-
-export function stopWorkbenchContributions() {
-  while (activeWorkbenchContributions.length > 0) {
-    activeWorkbenchContributions.pop()?.dispose();
-  }
-
-  workbenchContributionsStarted = false;
-}
+import type { Disposable } from 'ls/workbench/browser/workbench.contribution';
+export {
+  registerWorkbenchContribution,
+  startWorkbenchContributions,
+  stopWorkbenchContributions,
+} from 'ls/workbench/browser/workbench.contribution';
+export type {
+  Disposable,
+  WorkbenchContribution,
+  WorkbenchContributionFactory,
+} from 'ls/workbench/browser/workbench.contribution';
 
 export function createWorkbenchContainerStateContribution(): Disposable {
   let lastContainer: HTMLElement | null = null;

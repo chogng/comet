@@ -23,6 +23,15 @@ const entryPoints = [
     'workbench',
     'browser',
     'tests',
+    'contextkeys.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'ls',
+    'workbench',
+    'browser',
+    'tests',
     'layoutModel.test.ts',
   ),
 ];

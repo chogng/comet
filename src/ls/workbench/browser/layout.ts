@@ -25,6 +25,11 @@ import {
   resolveFlexState,
   updateLeaf,
 } from 'ls/workbench/browser/layoutModel';
+import {
+  WORKBENCH_PART_IDS,
+  type WorkbenchPartId,
+  type WorkbenchPartRefCallback,
+} from 'ls/workbench/browser/part';
 
 export type WorkbenchLayoutStateSnapshot = {
   isPrimarySidebarVisible: boolean;
@@ -102,23 +107,11 @@ const PRIMARY_SIDEBAR_INDEX = 0;
 const AGENT_SIDEBAR_INDEX = 1;
 const EDITOR_INDEX = 2;
 
-export const WORKBENCH_PART_IDS = {
-  container: 'workbench.container',
-  titlebar: 'workbench.titlebar',
-  primaryBar: 'workbench.primaryBar',
-  agentSidebar: 'workbench.agentSidebar',
-  statusbar: 'workbench.statusbar',
-  settings: 'workbench.settings',
-  editor: 'workbench.editor',
-  webContentViewHost: 'workbench.view.webContentViewHost',
-} as const;
-
 export const WORKBENCH_CONTENT_LAYOUT_BREAKPOINT = 980;
 export const WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE = false;
 
-export type WorkbenchPartId =
-  (typeof WORKBENCH_PART_IDS)[keyof typeof WORKBENCH_PART_IDS];
-export type WorkbenchPartRefCallback = (element: HTMLElement | null) => void;
+export { WORKBENCH_PART_IDS };
+export type { WorkbenchPartId, WorkbenchPartRefCallback };
 
 const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
   isPrimarySidebarVisible: true,
