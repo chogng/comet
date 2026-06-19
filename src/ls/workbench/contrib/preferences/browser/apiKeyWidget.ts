@@ -1,5 +1,5 @@
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import {
   buildSettingsInput as buildInput,
   createSettingsElement as el,

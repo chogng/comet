@@ -9,7 +9,7 @@ import {
   SplitView,
   type IView,
 } from 'ls/base/browser/ui/splitview/splitview';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 
 import 'ls/base/browser/ui/splitview/paneview.css';
 

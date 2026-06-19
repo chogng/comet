@@ -9,7 +9,7 @@ import {
   createDropdownView,
 } from 'ls/base/browser/ui/dropdown/dropdown';
 import { getHoverService } from 'ls/base/browser/ui/hover/hover';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 
 import type { WritingEditorToolbarState } from 'ls/editor/browser/text/commands';
 import { createEditorDraftToolbarStyleModel } from 'ls/editor/browser/text/editorDraftToolbarStyleModel';

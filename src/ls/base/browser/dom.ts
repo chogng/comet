@@ -1,5 +1,25 @@
 import { toDisposable } from 'ls/base/common/lifecycle';
 
+export function clearNode(node: HTMLElement): void {
+  while (node.firstChild) {
+    node.firstChild.remove();
+  }
+}
+
+export function append<T extends Node>(parent: HTMLElement, child: T): T;
+export function append<T extends Node>(parent: HTMLElement, ...children: (T | string)[]): void;
+export function append<T extends Node>(parent: HTMLElement, ...children: (T | string)[]): T | void {
+  parent.append(...children);
+  if (children.length === 1 && typeof children[0] !== 'string') {
+    return children[0];
+  }
+}
+
+export function reset(parent: HTMLElement, ...children: Array<Node | string>): void {
+  parent.textContent = '';
+  append(parent, ...children);
+}
+
 export function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
   className?: string,

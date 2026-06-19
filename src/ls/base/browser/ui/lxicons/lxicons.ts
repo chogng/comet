@@ -118,7 +118,7 @@ import {
   renderIcon,
 } from '@chogng/lxicons';
 
-import 'ls/base/browser/ui/lxicon/lxicon.css';
+import 'ls/base/browser/ui/lxicons/lxicons.css';
 
 type LxIconFactory = () => string;
 

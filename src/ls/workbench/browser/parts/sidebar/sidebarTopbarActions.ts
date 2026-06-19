@@ -1,5 +1,5 @@
 import { createActionBarView, type ActionBarItem } from 'ls/base/browser/ui/actionbar/actionbar';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 
 import 'ls/workbench/browser/parts/sidebar/media/sidebarTopbarActions.css';
 

@@ -3,9 +3,9 @@ import type {
   LibraryDocumentsResult,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import { LibraryView } from 'ls/workbench/contrib/knowledgeBase/browser/views/libraryView';
 import {
   FetchPaneContentView,

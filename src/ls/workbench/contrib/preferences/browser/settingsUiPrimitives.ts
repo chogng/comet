@@ -1,7 +1,7 @@
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { SelectBox } from 'ls/base/browser/ui/selectbox/selectBox';
 import { createSwitchView } from 'ls/base/browser/ui/switch/switch';
 

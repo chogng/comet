@@ -1,7 +1,7 @@
 import type { IMouseEvent } from 'ls/base/browser/mouseEvent';
 import { getMouseClientCoordinates } from 'ls/base/browser/mouseEvent';
 import type { BaseAction } from 'ls/base/common/actions';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
+import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import type { ContextViewAnchor } from 'ls/base/browser/ui/contextview/contextview';
 
 export type ContextMenuAnchor = ContextViewAnchor;

@@ -1,7 +1,7 @@
 import 'ls/base/browser/ui/dateInput/dateInput.css';
 import { createContextViewController, type ContextViewHandle } from 'ls/base/browser/ui/contextview/contextview';
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import { formatDateInputValue } from 'ls/base/common/date';
 import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
 

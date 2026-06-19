@@ -3,7 +3,7 @@ import {
   getHoverService,
   type HoverHandle,
 } from 'ls/base/browser/ui/hover/hover';
-import { createLxIcon, type LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon, type LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { HorizontalScrollbar } from 'ls/base/browser/ui/scrollbar/horizontalScrollbar';
 import {
   createMouseContextMenuAnchor,

@@ -2,7 +2,7 @@ import 'ls/base/browser/ui/selectbox/selectBox.css';
 import { EventEmitter, type Event as LsEvent } from 'ls/base/common/event';
 import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
 import { SelectBoxCustom } from 'ls/base/browser/ui/selectbox/selectBoxCustom';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 
 export interface ISelectBoxOptions {
   useCustomDrawn?: boolean;

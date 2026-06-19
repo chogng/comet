@@ -1,8 +1,8 @@
 import type { ActionBarItem } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import type {
   EditorModeToolbarContribution,
   EditorModeToolbarContributionContext,

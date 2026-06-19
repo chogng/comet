@@ -10,8 +10,8 @@ import {
   type HoverInput,
   type HoverService,
 } from 'ls/base/browser/ui/hover/hover';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { Menu } from 'ls/base/browser/ui/menu/menu';
 import {
   LifecycleOwner,

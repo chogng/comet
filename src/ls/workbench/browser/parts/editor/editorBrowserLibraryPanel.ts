@@ -1,6 +1,6 @@
 import { createMouseContextMenuAnchor } from 'ls/base/browser/contextmenu';
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
-import { createLxIcon, createLxLoadingIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon, createLxLoadingIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import { createContextMenuService } from 'ls/workbench/services/contextmenu/electron-sandbox/contextmenuService';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 

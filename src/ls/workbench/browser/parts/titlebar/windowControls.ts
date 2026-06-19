@@ -1,8 +1,8 @@
 import type { WindowControlAction } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { createButtonView } from 'ls/base/browser/ui/button/button';
 import { getHoverService } from 'ls/base/browser/ui/hover/hover';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 
 export type WindowControlsAction = Extract<
   WindowControlAction,

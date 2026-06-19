@@ -9,7 +9,7 @@ import {
 } from 'ls/base/browser/ui/actionbar/actionViewItems';
 import { createActionWithDropdownActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { HoverInput, HoverService } from 'ls/base/browser/ui/hover/hover';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
+import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 
 export type ActionBarOrientation = 'horizontal' | 'vertical';
 export type ActionBarActionMode = 'icon' | 'text' | 'custom';

@@ -5,7 +5,7 @@ import {
 } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createFilterMenuHeader } from 'ls/base/browser/ui/dropdown/dropdownSearchHeader';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 

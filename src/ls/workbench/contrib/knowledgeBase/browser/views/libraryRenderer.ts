@@ -2,8 +2,8 @@ import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/deskto
 import { createMouseContextMenuAnchor } from 'ls/base/browser/contextmenu';
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
 import type { SimpleTreeRenderContext } from 'ls/base/browser/ui/tree/simpleTree';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import { resolveLibraryDocumentStatusLabel } from 'ls/workbench/contrib/knowledgeBase/common/libraryTreeModel';
 import type { LibraryTreeLabels, LibraryTreeFolderNode, LibraryTreeNode } from 'ls/workbench/contrib/knowledgeBase/common/libraryTreeModel';
 

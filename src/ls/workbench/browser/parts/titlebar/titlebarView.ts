@@ -8,10 +8,10 @@ import {
   createDropdownMenuActionViewItem,
   type DropdownMenuActionOverlayContext,
 } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import { getHoverService } from 'ls/base/browser/ui/hover/hover';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 

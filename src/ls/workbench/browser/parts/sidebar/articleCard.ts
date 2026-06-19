@@ -4,8 +4,8 @@ import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dr
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
 import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import {
   getPdfDownloadStatus,
   subscribePdfDownloadStatus,

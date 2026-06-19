@@ -1,4 +1,5 @@
 import './prosemirrorDocument.test';
+import 'base/browser/tests/dom.test';
 import 'ls/code/electron-main/document/tests/editorDocxSerializer.test';
 import 'ls/base/browser/ui/contextview/tests/anchoredLayout.test';
 import 'ls/base/browser/ui/dropdown/tests/dropdown.test';

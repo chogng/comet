@@ -12,10 +12,10 @@ import {
 } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createFilterMenuHeader } from 'ls/base/browser/ui/dropdown/dropdownSearchHeader';
 import type { DropdownOption } from 'ls/base/browser/ui/dropdown/dropdown';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
-import type { LxIconName } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicon/lxiconSemantic';
+import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import type { AgentBarLabels } from 'ls/workbench/browser/parts/agentbar/agentbarLabels';
 import {
   parseLlmModelOptionValue,

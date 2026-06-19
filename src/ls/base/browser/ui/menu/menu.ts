@@ -1,7 +1,7 @@
 import 'ls/base/browser/ui/menu/menu.css';
 
 import type { ContextMenuAction } from 'ls/base/browser/contextmenu';
-import { createLxIcon } from 'ls/base/browser/ui/lxicon/lxicon';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
 
 export type MenuSelectionSource = 'keyboard' | 'pointer';
