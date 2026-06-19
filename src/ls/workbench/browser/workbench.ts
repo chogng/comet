@@ -13,7 +13,6 @@ import { toFileUrl } from 'ls/workbench/common/fileUrl';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchContentClassName,
-  getWorkbenchShellClassName,
   registerWorkbenchPartDomNode,
   WorkbenchContentLayoutController,
   WorkbenchLayoutSlotView,
@@ -35,8 +34,17 @@ import type { EditorPartChangeReason, EditorPartControllerContext, EditorPartMod
 import type { EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { createEditorBrowserToolbarActions } from 'ls/workbench/browser/parts/editor/editorBrowserToolbarActions';
 import { PrimaryBarFooterActionsView } from 'ls/workbench/browser/parts/primarybar/primarybarFooterActions';
-import type { PrimaryBarFooterLayoutMode } from 'ls/workbench/browser/parts/primarybar/primarybarFooterActions';
 import { SidebarTopbarActionsView } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
+import {
+  createEditorTitlebarActionsProps,
+  createPrimaryBarTitlebarLabels,
+  createPrimaryBarTitlebarActionsProps,
+  createSidebarTitlebarActionsProps,
+  resolveTitlebarAssistantToggleLabel,
+} from 'ls/workbench/browser/parts/titlebar/titlebarActions';
+import { createTitlebarPart } from 'ls/workbench/browser/parts/titlebar/titlebarPart';
+import type { TitlebarPart } from 'ls/workbench/browser/parts/titlebar/titlebarPart';
+import { syncWorkbenchWindowTitle } from 'ls/workbench/browser/parts/titlebar/windowTitle';
 import {
   createSettingsPartView,
   createSettingsPartProps,
@@ -116,7 +124,6 @@ import {
 } from 'ls/base/common/platform';
 import { EventEmitter } from 'ls/base/common/event';
 import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
-import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 import { applyWorkbenchTheme } from 'ls/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'ls/workbench/browser/style';
 import type { EditorOpenRequest } from 'ls/workbench/services/editor/common/editorOpenTypes';
@@ -152,17 +159,11 @@ type WorkbenchEvent =
       type: 'TOGGLE_SETTINGS';
     };
 
-export function resolveWorkbenchStatusbarVisibility(statusbarVisible: boolean) {
-  return statusbarVisible;
-}
-
 type DesktopInvokeArgs = Record<string, unknown> | undefined;
 
 const DEFAULT_WORKBENCH_STATE: WorkbenchStateSnapshot = {
   activePage: 'content',
 };
-
-const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 let workbenchState = DEFAULT_WORKBENCH_STATE;
 const onDidChangeWorkbenchStateEmitter = new EventEmitter<void>();
@@ -633,6 +634,7 @@ class WorkbenchHost {
   private readonly pageMount: HTMLDivElement;
   private readonly toastMount: HTMLDivElement;
   private readonly statusbarElement: HTMLElement;
+  private readonly titlebarPart: TitlebarPart;
   private readonly toastHost: ToastHost;
   private workbenchLayoutView: ReturnType<typeof createWorkbenchLayoutView> | null = null;
   private workbenchContentPartViews: ReturnType<typeof createWorkbenchContentPartViews> | null = null;
@@ -693,6 +695,11 @@ class WorkbenchHost {
     this.pageMount = document.createElement('div');
     this.toastMount = document.createElement('div');
     this.statusbarElement = document.createElement('section');
+    this.titlebarPart = createTitlebarPart(
+      this.containerElement,
+      this.shellElement,
+      this.statusbarElement,
+    );
     this.toastHost = createToastHost(this.toastMount);
 
     this.rootElement.replaceChildren(this.containerElement);
@@ -734,7 +741,7 @@ class WorkbenchHost {
     }
 
     setWorkbenchEditorCommandHandlers(null);
-    registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.statusbar, null);
+    this.titlebarPart.dispose();
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, null);
 
     this.workbenchLayoutView?.dispose();
@@ -1021,55 +1028,6 @@ class WorkbenchHost {
     this.previousActiveContentTabId = activeContentTabId;
   }
 
-  private syncStatusbarVisibility(statusbarVisible: boolean) {
-    if (statusbarVisible) {
-      if (!this.statusbarElement.isConnected) {
-        this.containerElement.append(this.statusbarElement);
-      }
-      registerWorkbenchPartDomNode(
-        WORKBENCH_PART_IDS.statusbar,
-        this.statusbarElement,
-      );
-      return;
-    }
-
-    if (this.statusbarElement.parentElement === this.containerElement) {
-      this.containerElement.removeChild(this.statusbarElement);
-    }
-    registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.statusbar, null);
-  }
-
-  private syncWorkbenchChrome(params: {
-    electronRuntime: boolean;
-    useMica: boolean;
-    statusbarVisible: boolean;
-    activePage: WorkbenchPage;
-  }) {
-    const { electronRuntime, useMica, statusbarVisible, activePage } = params;
-    const isStatusbarVisible = resolveWorkbenchStatusbarVisibility(statusbarVisible);
-    const hasNativeWindowControlsOverlay =
-      electronRuntime && WINDOW_CHROME_LAYOUT.nativeWindowControlsOverlay;
-
-    this.containerElement.className = [
-      'app-window',
-      electronRuntime && useMica ? 'is-mica-enabled' : '',
-      isStatusbarVisible ? 'has-statusbar' : '',
-      hasNativeWindowControlsOverlay ? 'has-native-window-controls-overlay' : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-    if (hasNativeWindowControlsOverlay) {
-      this.containerElement.style.setProperty(
-        '--workbench-window-controls-width',
-        `${WINDOW_CHROME_LAYOUT.trailingWindowControlsWidthPx}px`,
-      );
-    } else {
-      this.containerElement.style.removeProperty('--workbench-window-controls-width');
-    }
-    this.shellElement.className = getWorkbenchShellClassName({ activePage });
-    this.syncStatusbarVisibility(isStatusbarVisible);
-  }
-
   private syncEditorCommandHandlers() {
     setWorkbenchEditorCommandHandlers({
       executeActiveDraftCommand: (commandId) =>
@@ -1165,16 +1123,10 @@ class WorkbenchHost {
     fetchPaneProps: ReturnType<typeof createFetchPaneProps>;
     primaryBarProps: PrimaryBarProps;
     agentBarProps: AgentBarPartProps;
-    sidebarTopbarActionsProps: {
-      isPrimarySidebarVisible: boolean;
-      primarySidebarToggleLabel: string;
-      addressBarLabel: string;
-      onTogglePrimarySidebar: () => void;
-      onFocusAddressBar: () => void;
-    };
-    onOpenSettings: () => void;
-    onApplyLayoutAgent: () => void;
-    onApplyLayoutFlow: () => void;
+    sidebarTopbarActionsProps: ReturnType<typeof createSidebarTitlebarActionsProps>;
+    primaryBarFooterActionsProps: ReturnType<
+      typeof createPrimaryBarTitlebarActionsProps
+    >;
     editorTopbarAuxiliaryActionsElement?: HTMLElement | null;
     editorPartProps: EditorPartProps;
   }) {
@@ -1182,19 +1134,9 @@ class WorkbenchHost {
     this.settingsView?.dispose();
     this.settingsView = null;
     this.sidebarTopbarActionsView.setProps(props.sidebarTopbarActionsProps);
-    this.primaryBarFooterActionsView.setProps({
-      accountLabel: props.primaryBarProps.accountLabel,
-      moreLabel: props.primaryBarProps.moreLabel,
-      settingsLabel: props.primaryBarProps.settingsLabel,
-      isSettingsActive: false,
-      activeLayoutMode: this.resolvePrimaryBarFooterLayoutMode({
-        isAgentSidebarVisible: props.isAgentSidebarVisible,
-        isEditorCollapsed: props.isEditorCollapsed,
-      }),
-      onApplyLayoutAgent: props.onApplyLayoutAgent,
-      onApplyLayoutFlow: props.onApplyLayoutFlow,
-      onOpenSettings: props.onOpenSettings,
-    });
+    this.primaryBarFooterActionsView.setProps(
+      props.primaryBarFooterActionsProps,
+    );
     const partViewProps = {
       mode: 'content' as const,
       isPrimarySidebarVisible: props.isPrimarySidebarVisible,
@@ -1245,17 +1187,6 @@ class WorkbenchHost {
     this.workbenchLayoutView.layout();
   }
 
-  private resolvePrimaryBarFooterLayoutMode(props: {
-    isAgentSidebarVisible: boolean;
-    isEditorCollapsed: boolean;
-  }): PrimaryBarFooterLayoutMode | null {
-    if (props.isEditorCollapsed) {
-      return null;
-    }
-
-    return props.isAgentSidebarVisible ? 'agent' : 'flow';
-  }
-
   private renderSettingsPage(
     props: {
       settingsPartProps: ReturnType<typeof createSettingsPartProps>;
@@ -1266,9 +1197,9 @@ class WorkbenchHost {
       primaryBarProps: PrimaryBarProps;
       agentBarProps: AgentBarPartProps;
       editorPartProps: EditorPartProps;
-      onOpenSettings: () => void;
-      onApplyLayoutAgent: () => void;
-      onApplyLayoutFlow: () => void;
+      primaryBarFooterActionsProps: ReturnType<
+        typeof createPrimaryBarTitlebarActionsProps
+      >;
     },
   ) {
     this.retiredWorkbenchContentPartViews = null;
@@ -1282,16 +1213,9 @@ class WorkbenchHost {
       backLabel: props.settingsPartProps.labels.settingsNavigationBack,
       onNavigateBack: props.settingsPartProps.onNavigateBack,
     });
-    this.primaryBarFooterActionsView.setProps({
-      accountLabel: props.primaryBarProps.accountLabel,
-      moreLabel: props.primaryBarProps.moreLabel,
-      settingsLabel: props.primaryBarProps.settingsLabel,
-      isSettingsActive: true,
-      activeLayoutMode: 'flow',
-      onApplyLayoutAgent: props.onApplyLayoutAgent,
-      onApplyLayoutFlow: props.onApplyLayoutFlow,
-      onOpenSettings: props.onOpenSettings,
-    });
+    this.primaryBarFooterActionsView.setProps(
+      props.primaryBarFooterActionsProps,
+    );
     const partViewProps = {
       mode: 'settings' as const,
       isPrimarySidebarVisible: true,
@@ -1835,25 +1759,17 @@ class WorkbenchHost {
       nativeHost,
       ...editorBrowserToolbarActions,
     };
-    this.auxiliaryEditorTopbarActionsView.setProps({
-      isEditorCollapsed: true,
-      isAgentSidebarVisible,
-      showAgentSidebarToggle: true,
-      agentSidebarToggleLabel: isAgentSidebarVisible
-        ? ui.titlebarHideAssistant
-        : ui.titlebarShowAssistant,
-      labels: {
-        topbarAddAction: contentAwareEditorPartProps.labels.topbarAddAction,
-        createDraft: contentAwareEditorPartProps.labels.createDraft,
-        createBrowser: contentAwareEditorPartProps.labels.createBrowser,
-        createFile: contentAwareEditorPartProps.labels.createFile,
-        expandEditor: contentAwareEditorPartProps.labels.expandEditor,
-        collapseEditor: contentAwareEditorPartProps.labels.collapseEditor,
-      },
-      onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
-      onToggleEditorCollapse: toggleEditorCollapsed,
-      onToggleAgentSidebar: toggleAgentSidebarVisibility,
-    });
+    this.auxiliaryEditorTopbarActionsView.setProps(
+      createEditorTitlebarActionsProps({
+        ui,
+        editorPartProps: contentAwareEditorPartProps,
+        isAgentSidebarVisible,
+        showAgentSidebarToggle: true,
+        onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
+        onToggleEditorCollapse: toggleEditorCollapsed,
+        onToggleAgentSidebar: toggleAgentSidebarVisibility,
+      }),
+    );
 
     const handleBatchFetchStart = () => {};
 
@@ -2033,9 +1949,7 @@ class WorkbenchHost {
 
     const primaryBarProps: PrimaryBarProps = {
       labels: fetchPaneProps.labels,
-      accountLabel: ui.appName,
-      moreLabel: ui.agentbarToolbarMore,
-      settingsLabel: ui.titlebarSettings,
+      ...createPrimaryBarTitlebarLabels(ui),
       fetchPaneProps,
       librarySnapshot,
       isLibraryLoading,
@@ -2134,15 +2048,12 @@ class WorkbenchHost {
         },
       },
     });
-    const sidebarTopbarActionsProps = {
+    const sidebarTopbarActionsProps = createSidebarTitlebarActionsProps({
+      ui,
       isPrimarySidebarVisible,
-      primarySidebarToggleLabel: isPrimarySidebarVisible
-        ? ui.titlebarHidePrimarySidebar
-        : ui.titlebarShowPrimarySidebar,
-      addressBarLabel: ui.agentbarToolbarAddressBar,
       onTogglePrimarySidebar: togglePrimarySidebarVisibility,
       onFocusAddressBar: focusWorkbenchWebUrlInput,
-    };
+    });
 
     const settingsPartProps = createSettingsPartProps({
       state: {
@@ -2342,12 +2253,31 @@ class WorkbenchHost {
       },
     });
 
-    this.syncWorkbenchChrome({
+    syncWorkbenchWindowTitle({
+      appName: ui.appName,
+      activePage,
+      settingsTitle: ui.titlebarSettings,
+      activeEditorTab,
+      browserPageTitle,
+    });
+
+    this.titlebarPart.sync({
       electronRuntime,
       useMica,
       statusbarVisible,
       activePage,
     });
+
+    const handleApplyLayoutAgent = () => {
+      setPrimarySidebarVisible(true);
+      setAgentSidebarVisible(true);
+      setEditorCollapsed(false);
+    };
+    const handleApplyLayoutFlow = () => {
+      setPrimarySidebarVisible(true);
+      setAgentSidebarVisible(false);
+      setEditorCollapsed(false);
+    };
 
     if (activePage === 'content') {
       this.renderWorkbenchContentPage({
@@ -2362,26 +2292,25 @@ class WorkbenchHost {
         primaryBarProps,
         agentBarProps,
         sidebarTopbarActionsProps,
-        onOpenSettings: toggleWorkbenchSettings,
-        onApplyLayoutAgent: () => {
-          setPrimarySidebarVisible(true);
-          setAgentSidebarVisible(true);
-          setEditorCollapsed(false);
-        },
-        onApplyLayoutFlow: () => {
-          setPrimarySidebarVisible(true);
-          setAgentSidebarVisible(false);
-          setEditorCollapsed(false);
-        },
+        primaryBarFooterActionsProps: createPrimaryBarTitlebarActionsProps({
+          ui,
+          isSettingsActive: false,
+          isAgentSidebarVisible,
+          isEditorCollapsed,
+          onApplyLayoutAgent: handleApplyLayoutAgent,
+          onApplyLayoutFlow: handleApplyLayoutFlow,
+          onOpenSettings: toggleWorkbenchSettings,
+        }),
         editorTopbarAuxiliaryActionsElement:
           this.auxiliaryEditorTopbarActionsView.getElement(),
         editorPartProps: {
           ...contentAwareEditorPartProps,
           isAgentSidebarVisible,
           showAgentSidebarToggle: true,
-          agentSidebarToggleLabel: isAgentSidebarVisible
-            ? ui.titlebarHideAssistant
-            : ui.titlebarShowAssistant,
+          agentSidebarToggleLabel: resolveTitlebarAssistantToggleLabel(
+            ui,
+            isAgentSidebarVisible,
+          ),
           onToggleAgentSidebar: toggleAgentSidebarVisibility,
         },
       });
@@ -2395,17 +2324,15 @@ class WorkbenchHost {
         primaryBarProps,
         agentBarProps,
         editorPartProps: contentAwareEditorPartProps,
-        onOpenSettings: toggleWorkbenchSettings,
-        onApplyLayoutAgent: () => {
-          setPrimarySidebarVisible(true);
-          setAgentSidebarVisible(true);
-          setEditorCollapsed(false);
-        },
-        onApplyLayoutFlow: () => {
-          setPrimarySidebarVisible(true);
-          setAgentSidebarVisible(false);
-          setEditorCollapsed(false);
-        },
+        primaryBarFooterActionsProps: createPrimaryBarTitlebarActionsProps({
+          ui,
+          isSettingsActive: true,
+          isAgentSidebarVisible: false,
+          isEditorCollapsed: false,
+          onApplyLayoutAgent: handleApplyLayoutAgent,
+          onApplyLayoutFlow: handleApplyLayoutFlow,
+          onOpenSettings: toggleWorkbenchSettings,
+        }),
       });
     }
 
