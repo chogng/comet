@@ -33,7 +33,7 @@ await build({
   bundle: true,
   platform: 'node',
   format: 'esm',
-  target: 'node20',
+  target: 'node22',
   sourcemap: 'inline',
   external: ['node:assert/strict', 'node:test', 'node:sqlite'],
 });
