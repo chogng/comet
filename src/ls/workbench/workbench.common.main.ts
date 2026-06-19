@@ -33,6 +33,9 @@ import {
   createWorkbenchKeybindingService,
 } from 'ls/workbench/services/keybinding/browser/keybindingService';
 import {
+  INotificationService,
+} from 'ls/platform/notification/common/notification';
+import {
   IWorkbenchLanguageService,
   createWorkbenchLanguageService,
 } from 'ls/workbench/services/language/common/languageService';
@@ -58,6 +61,9 @@ import {
   registerWorkbenchDisposable,
   registerWorkbenchService,
 } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
+import {
+  createWorkbenchNotificationService,
+} from 'ls/workbench/browser/parts/notifications/notificationsModel';
 //#endregion
 
 //#region --- workbench services
@@ -73,6 +79,9 @@ const workbenchLifecycleService = workbenchServicesStore.add(
 );
 const workbenchViewsService = workbenchServicesStore.add(
   createWorkbenchViewsService(),
+);
+const workbenchNotificationService = workbenchServicesStore.add(
+  createWorkbenchNotificationService(),
 );
 
 registerWorkbenchService(
@@ -104,6 +113,7 @@ registerWorkbenchService(
   IWorkbenchLocaleService,
   createWorkbenchLocaleService(),
 );
+registerWorkbenchService(INotificationService, workbenchNotificationService);
 registerWorkbenchService(ILifecycleService, workbenchLifecycleService);
 registerWorkbenchService(IViewsService, workbenchViewsService);
 registerWorkbenchDisposable(workbenchServicesStore);

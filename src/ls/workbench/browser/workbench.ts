@@ -66,6 +66,15 @@ import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'ls/base/browser/ui/aria/aria';
 import { createToastHost } from 'ls/base/browser/ui/toast/toastHost';
 import type { ToastHost } from 'ls/base/browser/ui/toast/toastHost';
+import { INotificationService } from 'ls/platform/notification/common/notification';
+import { getWorkbenchServiceCollection } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
+import {
+  WorkbenchNotificationService,
+} from 'ls/workbench/browser/parts/notifications/notificationsModel';
+import {
+  createNotificationsPart,
+  type NotificationsPart,
+} from 'ls/workbench/browser/parts/notifications/notificationsPart';
 
 import {
   localeService,
@@ -634,9 +643,11 @@ class WorkbenchHost {
   private readonly shellElement: HTMLDivElement;
   private readonly pageMount: HTMLDivElement;
   private readonly toastMount: HTMLDivElement;
+  private readonly notificationsMount: HTMLDivElement;
   private readonly statusbarElement: HTMLElement;
   private readonly titlebarPart: TitlebarPart;
   private readonly toastHost: ToastHost;
+  private readonly notificationsPart: NotificationsPart | null;
   private workbenchLayoutView: ReturnType<typeof createWorkbenchLayoutView> | null = null;
   private workbenchContentPartViews: ReturnType<typeof createWorkbenchContentPartViews> | null = null;
   private retiredWorkbenchContentPartViews:
@@ -695,6 +706,7 @@ class WorkbenchHost {
     this.shellElement = document.createElement('div');
     this.pageMount = document.createElement('div');
     this.toastMount = document.createElement('div');
+    this.notificationsMount = document.createElement('div');
     this.statusbarElement = document.createElement('section');
     this.titlebarPart = createTitlebarPart(
       this.containerElement,
@@ -702,10 +714,15 @@ class WorkbenchHost {
       this.statusbarElement,
     );
     this.toastHost = createToastHost(this.toastMount);
+    this.notificationsPart = this.createNotificationsPart();
 
     this.rootElement.replaceChildren(this.containerElement);
     this.containerElement.append(this.shellElement);
-    this.shellElement.append(this.pageMount, this.toastMount);
+    this.shellElement.append(
+      this.pageMount,
+      this.toastMount,
+      this.notificationsMount,
+    );
 
     registerWorkbenchPartDomNode(
       WORKBENCH_PART_IDS.container,
@@ -758,7 +775,17 @@ class WorkbenchHost {
     this.settingsView = null;
     this.editorPartController = null;
     this.toastHost.dispose();
+    this.notificationsPart?.dispose();
     this.rootElement.replaceChildren();
+  }
+
+  private createNotificationsPart() {
+    const candidate = getWorkbenchServiceCollection().get(INotificationService);
+    if (!(candidate instanceof WorkbenchNotificationService)) {
+      return null;
+    }
+
+    return createNotificationsPart(this.notificationsMount, candidate);
   }
 
   private releaseContentTarget(

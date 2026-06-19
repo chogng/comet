@@ -1,0 +1,33 @@
+.notifications-action,
+.notifications-status-button {
+  border: 1px solid var(--ls-border-muted, rgba(0, 0, 0, 0.14));
+  background: var(--ls-surface, #fff);
+  color: var(--ls-foreground, #1f1f1f);
+  border-radius: 4px;
+  font: inherit;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.notifications-action:hover,
+.notifications-status-button:hover {
+  background: var(--ls-surface-hover, rgba(0, 0, 0, 0.06));
+}
+
+.notifications-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.notifications-status-message {
+  color: var(--ls-descriptionForeground, #666);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notifications-status-button.has-notifications {
+  font-weight: 600;
+}
