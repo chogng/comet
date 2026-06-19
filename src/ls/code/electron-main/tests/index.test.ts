@@ -1,2 +1,3 @@
-import './configStore.test';
+import './configurationService.test';
 import './notificationRouting.test';
+import './storageService.test';

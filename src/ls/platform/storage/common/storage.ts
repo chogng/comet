@@ -1,5 +1,4 @@
 import type {
-  AppSettings,
   Article,
   DeleteLibraryDocumentPayload,
   IndexDownloadedPdfPayload,
@@ -11,20 +10,97 @@ import type {
   ListLibraryDocumentsPayload,
   ReindexLibraryDocumentPayload,
   ReindexLibraryDocumentResult,
-  StoredAppSettings,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { IStorage } from 'ls/base/parts/storage/common/storage';
+import type { StorageValue } from 'ls/base/parts/storage/common/storage';
+import type { Event } from 'ls/base/common/event';
+import type { AppSettingsConfigurationService } from 'ls/platform/configuration/common/configuration';
+
+export const IS_NEW_KEY = '__$__isNewStorageMarker';
+export const TARGET_KEY = '__$__targetStorageMarker';
+
+export enum WillSaveStateReason {
+  NONE,
+  SHUTDOWN,
+}
+
+export interface IWillSaveStateEvent {
+  readonly reason: WillSaveStateReason;
+}
+
+export interface IStorageValueChangeEvent {
+  readonly key: string;
+  readonly scope: StorageScope;
+  readonly target?: StorageTarget;
+  readonly external?: boolean;
+}
+
+export enum StorageScope {
+  APPLICATION_SHARED = -2,
+  APPLICATION = -1,
+  PROFILE = 0,
+  WORKSPACE = 1,
+}
+
+export enum StorageTarget {
+  USER,
+  MACHINE,
+}
 
 export interface TranslationCacheRecord {
   key: string;
   value: string;
 }
 
-export interface StorageService {
+export interface StorageService extends AppSettingsConfigurationService {
+  readonly applicationStorage: IStorage;
+  readonly onDidChangeValue: Event<IStorageValueChangeEvent>;
+  readonly onWillSaveState: Event<IWillSaveStateEvent>;
+  init(): Promise<void>;
+  close(): Promise<void>;
+  get(key: string, scope: StorageScope, fallbackValue: string): string;
+  get(key: string, scope: StorageScope, fallbackValue?: string): string | undefined;
+  getBoolean(key: string, scope: StorageScope, fallbackValue: boolean): boolean;
+  getBoolean(
+    key: string,
+    scope: StorageScope,
+    fallbackValue?: boolean,
+  ): boolean | undefined;
+  getNumber(key: string, scope: StorageScope, fallbackValue: number): number;
+  getNumber(
+    key: string,
+    scope: StorageScope,
+    fallbackValue?: number,
+  ): number | undefined;
+  getObject<T extends object>(key: string, scope: StorageScope, fallbackValue: T): T;
+  getObject<T extends object>(
+    key: string,
+    scope: StorageScope,
+    fallbackValue?: T,
+  ): T | undefined;
+  store(
+    key: string,
+    value: StorageValue,
+    scope: StorageScope,
+    target: StorageTarget,
+  ): void;
+  storeAll(
+    entries: Array<{
+      readonly key: string;
+      readonly value: StorageValue;
+      readonly scope: StorageScope;
+      readonly target: StorageTarget;
+    }>,
+    external: boolean,
+  ): void;
+  remove(key: string, scope: StorageScope): void;
+  keys(scope: StorageScope): string[];
+  log(): void;
+  optimize(scope: StorageScope): Promise<void>;
+  flush(reason?: WillSaveStateReason): Promise<void>;
   saveFetchedArticles(items: Article[]): Promise<void>;
   loadTranslationCache(keys: string[]): Promise<Record<string, string>>;
   saveTranslationCache(entries: TranslationCacheRecord[]): Promise<void>;
-  loadSettings(): Promise<AppSettings>;
-  saveSettings(settings?: Partial<StoredAppSettings>): Promise<AppSettings>;
   upsertLibraryDocumentMetadata(
     payload: UpsertLibraryDocumentMetadataPayload,
   ): Promise<LibraryDocumentSummary>;

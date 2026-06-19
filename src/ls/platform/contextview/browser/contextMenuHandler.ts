@@ -6,7 +6,7 @@ import {
   resolveAnchoredVerticalPlacement,
   resolveAnchoredVerticalPlacementWithFallback,
   type AnchoredRect,
-} from 'ls/base/browser/ui/contextview/contextview';
+} from 'ls/base/common/layout';
 import { Menu, type MenuOptions } from 'ls/base/browser/ui/menu/menu';
 import type {
   ContextMenuDelegate,

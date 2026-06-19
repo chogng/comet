@@ -4,13 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 
-import { createConfigStore } from 'ls/platform/storage/electron-main/configStore';
-import { getDefaultBatchSources } from 'ls/platform/config/common/defaultBatchSources';
+import { createConfigurationMainService } from 'ls/platform/configuration/electron-main/configurationService';
+import { getDefaultBatchSources } from 'ls/platform/configuration/common/defaultBatchSources';
 import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
 
-async function withConfigStore(
+async function withConfigurationService(
   run: (
-    store: ReturnType<typeof createConfigStore>,
+    service: ReturnType<typeof createConfigurationMainService>,
     paths: { configFile: string; userSettingsFile: string },
   ) => Promise<void>,
 ) {
@@ -19,11 +19,11 @@ async function withConfigStore(
     const configFile = path.join(tempDir, 'config', 'config.json');
     const userSettingsFile = path.join(tempDir, 'User', 'settings.json');
     await mkdir(path.dirname(userSettingsFile), { recursive: true });
-    const store = createConfigStore(configFile, userSettingsFile, {
+    const service = createConfigurationMainService(configFile, userSettingsFile, {
       defaultLocale: 'en',
     });
 
-    await run(store, { configFile, userSettingsFile });
+    await run(service, { configFile, userSettingsFile });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -59,8 +59,8 @@ function createTestEditorDraftStyle(fontFamilyValue: string): EditorDraftStyleSe
   };
 }
 
-test('config store reads journal source overrides from user settings json', async () => {
-  await withConfigStore(async (store, { userSettingsFile }) => {
+test('configuration service reads journal source overrides from user settings json', async () => {
+  await withConfigurationService(async (service, { userSettingsFile }) => {
     await writeFile(
       userSettingsFile,
       JSON.stringify({
@@ -75,7 +75,7 @@ test('config store reads journal source overrides from user settings json', asyn
       'utf8',
     );
 
-    const settings = await store.loadSettings();
+    const settings = await service.loadSettings();
 
     assert.equal(settings.configPath, userSettingsFile);
     assert.ok(
@@ -97,8 +97,8 @@ test('config store reads journal source overrides from user settings json', asyn
   });
 });
 
-test('config store keeps user settings json separate from saved app settings', async () => {
-  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+test('configuration service keeps user settings json separate from saved app settings', async () => {
+  await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
     const userSettings = {
       'literature.journalSourceOverrides': [
         {
@@ -109,7 +109,7 @@ test('config store keeps user settings json separate from saved app settings', a
     };
     await writeFile(userSettingsFile, JSON.stringify(userSettings), 'utf8');
 
-    await store.saveSettings({
+    await service.saveSettings({
       defaultBatchLimit: 12,
       journalSourceOverrides: [
         {
@@ -121,7 +121,7 @@ test('config store keeps user settings json separate from saved app settings', a
 
     const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
     const savedUserSettings = JSON.parse(await readFile(userSettingsFile, 'utf8'));
-    const settings = await store.loadSettings();
+    const settings = await service.loadSettings();
 
     assert.equal(savedConfig.defaultBatchLimit, 12);
     assert.deepEqual(savedConfig.journalSourceOverrides, []);
@@ -158,8 +158,8 @@ test('config store keeps user settings json separate from saved app settings', a
   });
 });
 
-test('config store reads editor draft style only from user settings json', async () => {
-  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+test('configuration service reads editor draft style only from user settings json', async () => {
+  await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
     await mkdir(path.dirname(configFile), { recursive: true });
     await writeFile(
       configFile,
@@ -176,7 +176,7 @@ test('config store reads editor draft style only from user settings json', async
       'utf8',
     );
 
-    const settings = await store.loadSettings();
+    const settings = await service.loadSettings();
 
     assert.equal(
       settings.editorDraftStyle.defaultBodyStyle.fontFamilyValue,
@@ -185,8 +185,8 @@ test('config store reads editor draft style only from user settings json', async
   });
 });
 
-test('config store ignores legacy editor draft style from config json', async () => {
-  await withConfigStore(async (store, { configFile }) => {
+test('configuration service ignores legacy editor draft style from config json', async () => {
+  await withConfigurationService(async (service, { configFile }) => {
     await mkdir(path.dirname(configFile), { recursive: true });
     await writeFile(
       configFile,
@@ -196,7 +196,7 @@ test('config store ignores legacy editor draft style from config json', async ()
       'utf8',
     );
 
-    const settings = await store.loadSettings();
+    const settings = await service.loadSettings();
 
     assert.notEqual(
       settings.editorDraftStyle.defaultBodyStyle.fontFamilyValue,
@@ -205,11 +205,11 @@ test('config store ignores legacy editor draft style from config json', async ()
   });
 });
 
-test('config store saves editor draft style into user settings json', async () => {
-  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+test('configuration service saves editor draft style into user settings json', async () => {
+  await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
     const nextEditorDraftStyle = createTestEditorDraftStyle('"Saved Sans", sans-serif');
 
-    await store.saveSettings({
+    await service.saveSettings({
       defaultBatchLimit: 12,
       editorDraftStyle: nextEditorDraftStyle,
     });
@@ -217,7 +217,7 @@ test('config store saves editor draft style into user settings json', async () =
     const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
     const savedUserSettings = JSON.parse(await readFile(userSettingsFile, 'utf8'));
     const savedEditorDraftStyle = savedUserSettings['literature.editorDraftStyle'];
-    const settings = await store.loadSettings();
+    const settings = await service.loadSettings();
 
     assert.equal(savedConfig.editorDraftStyle, undefined);
     assert.equal(
@@ -231,9 +231,9 @@ test('config store saves editor draft style into user settings json', async () =
   });
 });
 
-test('config store creates user settings json with editable journal titles on first load', async () => {
-  await withConfigStore(async (store, { userSettingsFile }) => {
-    const settings = await store.loadSettings();
+test('configuration service creates user settings json with editable journal titles on first load', async () => {
+  await withConfigurationService(async (service, { userSettingsFile }) => {
+    const settings = await service.loadSettings();
     const rawUserSettings = await readFile(userSettingsFile, 'utf8');
     const sourceOverrides = getJournalSourceOverrides(JSON.parse(rawUserSettings));
     const defaultSources = getDefaultBatchSources();
@@ -248,8 +248,8 @@ test('config store creates user settings json with editable journal titles on fi
   });
 });
 
-test('config store migrates legacy journal source overrides into user settings json', async () => {
-  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+test('configuration service migrates legacy journal source overrides into user settings json', async () => {
+  await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
     await mkdir(path.dirname(configFile), { recursive: true });
     await writeFile(
       configFile,
@@ -265,7 +265,7 @@ test('config store migrates legacy journal source overrides into user settings j
       'utf8',
     );
 
-    const settings = await store.loadSettings();
+    const settings = await service.loadSettings();
     const rawUserSettings = await readFile(userSettingsFile, 'utf8');
 
     const sourceOverrides = getJournalSourceOverrides(JSON.parse(rawUserSettings));
@@ -292,8 +292,8 @@ test('config store migrates legacy journal source overrides into user settings j
   });
 });
 
-test('config store saves user settings into a changed config path', async () => {
-  await withConfigStore(async (store, { configFile, userSettingsFile }) => {
+test('configuration service saves user settings into a changed config path', async () => {
+  await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
     const customUserSettingsFile = path.join(
       path.dirname(userSettingsFile),
       'custom',
@@ -314,14 +314,14 @@ test('config store saves user settings into a changed config path', async () => 
       'utf8',
     );
 
-    await store.saveSettings({
+    await service.saveSettings({
       userSettingsPathOverride: customUserSettingsFile,
       editorDraftStyle: nextEditorDraftStyle,
     });
 
     const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
     const movedUserSettings = JSON.parse(await readFile(customUserSettingsFile, 'utf8'));
-    const settings = await store.loadSettings();
+    const settings = await service.loadSettings();
 
     assert.equal(savedConfig.userSettingsPathOverride, customUserSettingsFile);
     assert.equal(settings.configPath, customUserSettingsFile);

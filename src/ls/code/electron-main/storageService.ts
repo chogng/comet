@@ -1,12 +1,14 @@
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import { appError } from 'ls/base/common/errors';
-import { createConfigStore } from 'ls/platform/storage/electron-main/configStore';
+import { createConfigurationMainService } from 'ls/platform/configuration/electron-main/configurationService';
 import { createHistoryStore } from 'ls/platform/storage/electron-main/historyStore';
 import { createLibraryStore } from 'ls/platform/storage/electron-main/libraryStore';
 import { createTranslationCacheStore } from 'ls/platform/storage/electron-main/translationCacheStore';
+import { createStorageMainService } from 'ls/platform/storage/electron-main/storageMainService';
 
 interface StoragePaths {
   historyFile: string;
+  stateDbFile: string;
   configFile: string;
   userSettingsFile: string;
   translationCacheFile: string;
@@ -20,8 +22,11 @@ interface StorageOptions {
 }
 
 export function createStorageService(paths: StoragePaths, options: StorageOptions = {}): StorageService {
+  const storageMainService = createStorageMainService({
+    stateDbFile: paths.stateDbFile,
+  });
   const historyStore = createHistoryStore(paths.historyFile);
-  const configStore = createConfigStore(paths.configFile, paths.userSettingsFile, {
+  const configurationService = createConfigurationMainService(paths.configFile, paths.userSettingsFile, {
     defaultLocale: options.defaultLocale,
   });
   const translationCacheStore = createTranslationCacheStore(paths.translationCacheFile);
@@ -32,6 +37,33 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
   });
 
   return {
+    applicationStorage: storageMainService.applicationStorage.storage,
+    onDidChangeValue: storageMainService.onDidChangeValue,
+    onWillSaveState: storageMainService.onWillSaveState,
+
+    async init() {
+      await storageMainService.init();
+    },
+
+    async close() {
+      await Promise.all([
+        storageMainService.close(),
+        Promise.resolve(libraryStore.dispose()),
+      ]);
+    },
+
+    get: storageMainService.get.bind(storageMainService),
+    getBoolean: storageMainService.getBoolean.bind(storageMainService),
+    getNumber: storageMainService.getNumber.bind(storageMainService),
+    getObject: storageMainService.getObject.bind(storageMainService),
+    store: storageMainService.store.bind(storageMainService),
+    storeAll: storageMainService.storeAll.bind(storageMainService),
+    remove: storageMainService.remove.bind(storageMainService),
+    keys: storageMainService.keys.bind(storageMainService),
+    log: storageMainService.log.bind(storageMainService),
+    optimize: storageMainService.optimize.bind(storageMainService),
+    flush: storageMainService.flush.bind(storageMainService),
+
     async saveFetchedArticles(items) {
       await historyStore.saveFetchedArticles(items);
     },
@@ -45,15 +77,15 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
     },
 
     async loadSettings() {
-      return configStore.loadSettings();
+      return configurationService.loadSettings();
     },
 
     async saveSettings(settings = {}) {
-      return configStore.saveSettings(settings);
+      return configurationService.saveSettings(settings);
     },
 
     async upsertLibraryDocumentMetadata(payload) {
-      const settings = await configStore.loadSettings();
+      const settings = await configurationService.loadSettings();
       if (!settings.knowledgeBase.enabled) {
         throw appError('UNKNOWN_ERROR', {
           message: 'Knowledge base mode is disabled.',
@@ -63,7 +95,7 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
     },
 
     async deleteLibraryDocument(payload) {
-      const settings = await configStore.loadSettings();
+      const settings = await configurationService.loadSettings();
       if (!settings.knowledgeBase.enabled) {
         throw appError('UNKNOWN_ERROR', {
           message: 'Knowledge base mode is disabled.',
@@ -73,7 +105,7 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
     },
 
     async registerLibraryDocument(payload) {
-      const settings = await configStore.loadSettings();
+      const settings = await configurationService.loadSettings();
       if (!settings.knowledgeBase.enabled) {
         throw appError('UNKNOWN_ERROR', {
           message: 'Knowledge base mode is disabled.',

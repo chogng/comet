@@ -1,9 +1,5 @@
 import 'ls/base/browser/ui/dropdown/dropdown.css';
-import {
-  createContextViewController,
-  resolveAnchoredVerticalPlacement,
-  resolveAnchoredVerticalPlacementWithFallback,
-} from 'ls/base/browser/ui/contextview/contextview';
+import { createContextViewController } from 'ls/base/browser/ui/contextview/contextview';
 import {
   getHoverService,
   type HoverHandle,
@@ -20,6 +16,10 @@ import {
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
+import {
+  resolveAnchoredVerticalPlacement,
+  resolveAnchoredVerticalPlacementWithFallback,
+} from 'ls/base/common/layout';
 
 export type DropdownMenuAlign = 'start' | 'center' | 'end';
 export type DropdownDomMenuLayer = 'portal';

@@ -1,4 +1,5 @@
 import type { LocaleMessages } from 'language/locales';
+import { commandService, commandsRegistry } from 'ls/platform/commands/common/commands';
 import {
   getDraftEditorCommandIds,
   getDraftEditorWorkbenchLabel,
@@ -24,6 +25,11 @@ export type WorkbenchEditorCommandDefinition = {
   enabled: boolean;
 };
 
+const WORKBENCH_EDITOR_COMMAND_IDS: readonly WorkbenchEditorCommandId[] = [
+  'saveDraft',
+  ...getDraftEditorCommandIds(),
+];
+
 function createWorkbenchEditorCommandDefinition(
   id: WorkbenchEditorCommandId,
 ): WorkbenchEditorCommandDefinition {
@@ -45,12 +51,9 @@ function createWorkbenchEditorCommandDefinition(
 }
 
 export function getWorkbenchEditorCommandDefinitions(): ReadonlyArray<WorkbenchEditorCommandDefinition> {
-  return [
-    createWorkbenchEditorCommandDefinition('saveDraft'),
-    ...getDraftEditorCommandIds().map((id) =>
-      createWorkbenchEditorCommandDefinition(id),
-    ),
-  ];
+  return WORKBENCH_EDITOR_COMMAND_IDS.map((id) =>
+    createWorkbenchEditorCommandDefinition(id),
+  );
 }
 
 let workbenchEditorCommandHandlers: WorkbenchEditorCommandHandlers | null = null;
@@ -66,6 +69,10 @@ export function getWorkbenchEditorCommandHandlers() {
 }
 
 export function executeWorkbenchEditorCommand(commandId: WorkbenchEditorCommandId) {
+  return commandService.executeCommand<boolean>(commandId) ?? false;
+}
+
+function executeRegisteredWorkbenchEditorCommand(commandId: WorkbenchEditorCommandId) {
   if (commandId === 'saveDraft') {
     if (!workbenchEditorCommandHandlers?.canSaveActiveDraft()) {
       return false;
@@ -101,4 +108,10 @@ export function getWorkbenchEditorCommandDefinition(
   commandId: WorkbenchEditorCommandId,
 ) {
   return createWorkbenchEditorCommandDefinition(commandId);
+}
+
+for (const commandId of WORKBENCH_EDITOR_COMMAND_IDS) {
+  commandsRegistry.registerCommand(commandId, () =>
+    executeRegisteredWorkbenchEditorCommand(commandId),
+  );
 }

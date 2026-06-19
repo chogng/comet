@@ -26,7 +26,7 @@ import {
   batchLimitMax,
   batchLimitMin,
   defaultBatchLimit,
-} from 'ls/platform/config/common/defaultBatchSources';
+} from 'ls/platform/configuration/common/defaultBatchSources';
 import {
   createFetchTraceId,
   elapsedMs,

@@ -11,7 +11,7 @@ import {
 import { registerDevShortcuts } from 'ls/platform/window/electron-main/devShortcuts';
 import { registerAppLifecycleHandlers } from 'ls/platform/lifecycle/electron-main/lifecycleMain';
 import { registerAppIpc } from 'ls/code/electron-main/ipc';
-import { createStorageService } from 'ls/platform/storage/electron-main/storageService';
+import { createStorageService } from 'ls/code/electron-main/storageService';
 import { createMainWindow, getMainWindow } from 'ls/platform/window/electron-main/window';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
 
@@ -26,6 +26,7 @@ app.whenReady().then(async () => {
   const storage = createStorageService(
     {
       historyFile: environmentMainPaths.historyFile,
+      stateDbFile: environmentMainPaths.stateDbFile,
       configFile: environmentMainPaths.configFile,
       userSettingsFile: environmentMainPaths.userSettingsFile,
       translationCacheFile: environmentMainPaths.translationCacheFile,
@@ -37,6 +38,10 @@ app.whenReady().then(async () => {
       defaultLocale: resolveEnvironmentMainLocale(),
     },
   );
+  await storage.init();
+  app.once('before-quit', () => {
+    void storage.close();
+  });
 
   if (isDevelopmentEnvironmentMain()) {
     registerDevShortcuts({ getMainWindow });

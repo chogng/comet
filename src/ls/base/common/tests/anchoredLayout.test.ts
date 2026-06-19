@@ -2,40 +2,84 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  layout,
   resolveAnchoredHorizontalLeft,
+  resolveAnchoredOverlayAxisPosition,
   resolveAnchoredVerticalPlacement,
   resolveAnchoredVerticalPlacementWithFallback,
   resolveAnchoredVerticalTop,
-} from 'ls/base/browser/ui/contextview/contextview';
+} from 'ls/base/common/layout';
 
-test('one-dimensional layout matches before/after behavior for zero-size anchors', () => {
-  assert.equal(layout(200, 20, { offset: 0, size: 0, position: 'before' }), 0);
-  assert.equal(layout(200, 20, { offset: 50, size: 0, position: 'before' }), 50);
-  assert.equal(layout(200, 20, { offset: 200, size: 0, position: 'before' }), 180);
-
-  assert.equal(layout(200, 20, { offset: 0, size: 0, position: 'after' }), 0);
-  assert.equal(layout(200, 20, { offset: 50, size: 0, position: 'after' }), 30);
-  assert.equal(layout(200, 20, { offset: 200, size: 0, position: 'after' }), 180);
-});
-
-test('one-dimensional layout matches before/after behavior for sized anchors', () => {
-  assert.equal(layout(200, 20, { offset: 0, size: 50, position: 'before' }), 50);
-  assert.equal(layout(200, 20, { offset: 50, size: 50, position: 'before' }), 100);
-  assert.equal(layout(200, 20, { offset: 150, size: 50, position: 'before' }), 130);
-
-  assert.equal(layout(200, 20, { offset: 0, size: 50, position: 'after' }), 50);
-  assert.equal(layout(200, 20, { offset: 50, size: 50, position: 'after' }), 30);
-  assert.equal(layout(200, 20, { offset: 150, size: 50, position: 'after' }), 130);
-});
-
-test('one-dimensional layout align mode keeps the overlay edge aligned to the anchor', () => {
+test('anchored overlay axis layout matches before/after behavior for zero-size anchors', () => {
   assert.equal(
-    layout(200, 40, { offset: 50, size: 30, position: 'before', mode: 'align' }),
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 0, size: 0, position: 'before' }),
+    0,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 50, size: 0, position: 'before' }),
     50,
   );
   assert.equal(
-    layout(200, 40, { offset: 50, size: 30, position: 'after', mode: 'align' }),
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 200, size: 0, position: 'before' }),
+    180,
+  );
+
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 0, size: 0, position: 'after' }),
+    0,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 50, size: 0, position: 'after' }),
+    30,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 200, size: 0, position: 'after' }),
+    180,
+  );
+});
+
+test('anchored overlay axis layout matches before/after behavior for sized anchors', () => {
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 0, size: 50, position: 'before' }),
+    50,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 50, size: 50, position: 'before' }),
+    100,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 150, size: 50, position: 'before' }),
+    130,
+  );
+
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 0, size: 50, position: 'after' }),
+    50,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 50, size: 50, position: 'after' }),
+    30,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(200, 20, { offset: 150, size: 50, position: 'after' }),
+    130,
+  );
+});
+
+test('anchored overlay axis layout align mode keeps the overlay edge aligned to the anchor', () => {
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(
+      200,
+      40,
+      { offset: 50, size: 30, position: 'before', mode: 'align' },
+    ),
+    50,
+  );
+  assert.equal(
+    resolveAnchoredOverlayAxisPosition(
+      200,
+      40,
+      { offset: 50, size: 30, position: 'after', mode: 'align' },
+    ),
     40,
   );
 });

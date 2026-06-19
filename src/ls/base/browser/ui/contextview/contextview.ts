@@ -4,6 +4,13 @@ import {
   getDomNodeZoomLevel,
 } from 'ls/base/browser/dom';
 import {
+  resolveAnchoredHorizontalLeft,
+  resolveAnchoredOverlayAxisPosition,
+  resolveAnchoredVerticalPlacement,
+  resolveAnchoredVerticalPlacementWithFallback,
+  resolveAnchoredVerticalTop,
+} from 'ls/base/common/layout';
+import {
   LifecycleOwner,
   MutableLifecycle,
   combineDisposables,
@@ -46,35 +53,6 @@ export type ContextViewHandle = {
   dispose: () => void;
 };
 
-export type AnchoredAlignment = 'start' | 'end' | 'center';
-export type AnchoredPlacement = 'above' | 'below';
-export type AnchoredPlacementPreference = 'auto' | AnchoredPlacement;
-
-export type AnchoredRect = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export type AnchoredVerticalPlacementResult = {
-  placement: AnchoredPlacement;
-  canFitAbove: boolean;
-  canFitBelow: boolean;
-  spaceAbove: number;
-  spaceBelow: number;
-};
-
-export type OneDimensionalLayoutMode = 'align' | 'avoid';
-export type OneDimensionalLayoutPosition = 'before' | 'after';
-
-export type OneDimensionalLayoutAnchor = {
-  offset: number;
-  size: number;
-  mode?: OneDimensionalLayoutMode;
-  position: OneDimensionalLayoutPosition;
-};
-
 type ViewportRect = {
   left: number;
   top: number;
@@ -109,171 +87,6 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-function resolveLayoutBoundaries(anchor: OneDimensionalLayoutAnchor) {
-  const mode = anchor.mode ?? 'avoid';
-  return {
-    afterBoundary: mode === 'align' ? anchor.offset : anchor.offset + anchor.size,
-    beforeBoundary: mode === 'align' ? anchor.offset + anchor.size : anchor.offset,
-  };
-}
-
-export function layout(
-  viewportSize: number,
-  viewSize: number,
-  anchor: OneDimensionalLayoutAnchor,
-) {
-  const {
-    afterBoundary,
-    beforeBoundary,
-  } = resolveLayoutBoundaries(anchor);
-
-  if (anchor.position === 'before') {
-    if (viewSize <= viewportSize - afterBoundary) {
-      return afterBoundary;
-    }
-
-    if (viewSize <= beforeBoundary) {
-      return beforeBoundary - viewSize;
-    }
-
-    return Math.max(viewportSize - viewSize, 0);
-  }
-
-  if (viewSize <= beforeBoundary) {
-    return beforeBoundary - viewSize;
-  }
-
-  if (viewSize <= viewportSize - afterBoundary) {
-    return afterBoundary;
-  }
-
-  return 0;
-}
-
-export function resolveAnchoredHorizontalLeft(options: {
-  anchorRect: AnchoredRect;
-  overlayWidth: number;
-  viewportWidth: number;
-  viewportMargin: number;
-  alignment?: AnchoredAlignment;
-}) {
-  const {
-    anchorRect,
-    overlayWidth,
-    viewportWidth,
-    viewportMargin,
-    alignment = 'start',
-  } = options;
-
-  const preferredLeft =
-    alignment === 'center'
-      ? anchorRect.x + (anchorRect.width - overlayWidth) / 2
-      : alignment === 'end'
-        ? anchorRect.x + anchorRect.width - overlayWidth
-        : anchorRect.x;
-
-  return clamp(
-    preferredLeft,
-    viewportMargin,
-    Math.max(viewportMargin, viewportWidth - overlayWidth - viewportMargin),
-  );
-}
-
-export function resolveAnchoredVerticalPlacement(options: {
-  anchorRect: AnchoredRect;
-  overlayHeight: number;
-  viewportHeight: number;
-  viewportMargin: number;
-  offset: number;
-  preference?: AnchoredPlacementPreference;
-}): AnchoredVerticalPlacementResult {
-  const {
-    anchorRect,
-    overlayHeight,
-    viewportHeight,
-    viewportMargin,
-    offset,
-    preference = 'auto',
-  } = options;
-
-  const spaceBelow =
-    viewportHeight - anchorRect.y - anchorRect.height - viewportMargin;
-  const spaceAbove = anchorRect.y - viewportMargin;
-  const canFitBelow = spaceBelow >= overlayHeight + offset;
-  const canFitAbove = spaceAbove >= overlayHeight + offset;
-
-  const placement =
-    preference === 'above'
-      ? 'above'
-      : preference === 'below'
-        ? 'below'
-        : canFitBelow || !canFitAbove
-          ? 'below'
-          : 'above';
-
-  return {
-    placement,
-    canFitAbove,
-    canFitBelow,
-    spaceAbove,
-    spaceBelow,
-  };
-}
-
-export function resolveAnchoredVerticalPlacementWithFallback(options: {
-  preference?: AnchoredPlacementPreference;
-  placement: Pick<AnchoredVerticalPlacementResult, 'placement' | 'canFitAbove' | 'canFitBelow'>;
-}) {
-  const {
-    preference = 'auto',
-    placement,
-  } = options;
-
-  if (preference === 'above') {
-    return placement.canFitAbove || !placement.canFitBelow ? 'above' : 'below';
-  }
-
-  if (preference === 'below') {
-    return placement.canFitBelow || !placement.canFitAbove ? 'below' : 'above';
-  }
-
-  return placement.placement;
-}
-
-export function resolveAnchoredVerticalTop(options: {
-  anchorRect: AnchoredRect;
-  overlayHeight: number;
-  viewportHeight: number;
-  viewportMargin: number;
-  offset: number;
-  placement: AnchoredPlacement;
-}) {
-  const {
-    anchorRect,
-    overlayHeight,
-    viewportHeight,
-    viewportMargin,
-    offset,
-    placement,
-  } = options;
-
-  const nextTop =
-    placement === 'above'
-      ? anchorRect.y - overlayHeight - offset
-      : anchorRect.y + anchorRect.height + offset;
-
-  const maxTop = Math.max(
-    viewportMargin,
-    viewportHeight - overlayHeight - viewportMargin,
-  );
-
-  return clamp(
-    nextTop,
-    viewportMargin,
-    maxTop,
-  );
 }
 
 function rangesIntersect(
@@ -464,12 +277,16 @@ function resolveVerticalAxisLayout(options: {
       anchorRect.top,
       anchorRect.top + anchorRect.height,
     );
-    left = layout(viewportSize.width, overlaySize.width, {
-      offset: anchorRect.left,
-      size: anchorRect.width,
-      position: anchorAlignment === 'left' ? 'before' : 'after',
-      mode: overlapsAnchorVertically ? 'avoid' : 'align',
-    });
+    left = resolveAnchoredOverlayAxisPosition(
+      viewportSize.width,
+      overlaySize.width,
+      {
+        offset: anchorRect.left,
+        size: anchorRect.width,
+        position: anchorAlignment === 'left' ? 'before' : 'after',
+        mode: overlapsAnchorVertically ? 'avoid' : 'align',
+      },
+    );
   }
 
   return {
@@ -504,23 +321,31 @@ function resolveHorizontalAxisLayout(options: {
     offset,
   } = options;
 
-  const left = layout(viewportSize.width, overlaySize.width, {
-    offset: anchorRect.left,
-    size: anchorRect.width,
-    position: anchorAlignment === 'left' ? 'before' : 'after',
-  });
+  const left = resolveAnchoredOverlayAxisPosition(
+    viewportSize.width,
+    overlaySize.width,
+    {
+      offset: anchorRect.left,
+      size: anchorRect.width,
+      position: anchorAlignment === 'left' ? 'before' : 'after',
+    },
+  );
   const overlapsAnchorHorizontally = rangesIntersect(
     left,
     left + overlaySize.width,
     anchorRect.left,
     anchorRect.left + anchorRect.width,
   );
-  let top = layout(viewportSize.height, overlaySize.height, {
-    offset: anchorRect.top,
-    size: anchorRect.height,
-    position: preferredPlacement === 'below' ? 'before' : 'after',
-    mode: overlapsAnchorHorizontally ? 'avoid' : 'align',
-  });
+  let top = resolveAnchoredOverlayAxisPosition(
+    viewportSize.height,
+    overlaySize.height,
+    {
+      offset: anchorRect.top,
+      size: anchorRect.height,
+      position: preferredPlacement === 'below' ? 'before' : 'after',
+      mode: overlapsAnchorHorizontally ? 'avoid' : 'align',
+    },
+  );
 
   if (offset > 0) {
     const separatedPlacement = resolveSeparatedPlacement({

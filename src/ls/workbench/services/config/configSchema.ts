@@ -5,7 +5,7 @@ import {
   batchLimitMin,
   defaultBatchLimit,
   getDefaultBatchSources,
-} from 'ls/platform/config/common/defaultBatchSources';
+} from 'ls/platform/configuration/common/defaultBatchSources';
 
 export {
   batchLimitMax,

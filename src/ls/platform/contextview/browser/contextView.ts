@@ -1,6 +1,6 @@
 import type {
-  ContextMenuAction,
-  ContextMenuHeader,
+  ContextMenuDelegate as BaseContextMenuDelegate,
+  ContextMenuService as BaseContextMenuService,
 } from 'ls/base/browser/contextmenu';
 import type {
   AnchorAlignment,
@@ -47,34 +47,15 @@ export interface ContextViewService {
   dispose: () => void;
 }
 
-export interface ContextMenuDelegate {
-  getAnchor: () => ContextViewAnchor;
-  getActions: () => readonly ContextMenuAction[];
-  getMenuHeader?: () => ContextMenuHeader | undefined;
-  onSelect?: (value: string) => void;
-  onHide?: (didCancel: boolean) => void;
-  autoFocusOnShow?: boolean;
-  restoreFocusOnHide?: boolean;
-  getMenuClassName?: () => string;
-  getMenuData?: () => string;
-  anchorAlignment?: AnchorAlignment;
-  anchorAxisAlignment?: AnchorAxisAlignment;
-  alignment?: ContextViewAlignment;
-  position?: ContextViewPosition;
-  offset?: number;
-  minWidth?: number;
-}
+export type ContextMenuDelegate = BaseContextMenuDelegate;
 
 export type ContextMenuListener = () => void;
 export interface ContextMenuListenerDisposable {
   dispose: () => void;
 }
 
-export interface ContextMenuService {
+export interface ContextMenuService extends BaseContextMenuService {
   onDidShowContextMenu: (listener: ContextMenuListener) => ContextMenuListenerDisposable;
   onDidHideContextMenu: (listener: ContextMenuListener) => ContextMenuListenerDisposable;
-  showContextMenu: (delegate: ContextMenuDelegate) => void;
-  hideContextMenu: () => void;
-  isVisible: () => boolean;
   dispose: () => void;
 }

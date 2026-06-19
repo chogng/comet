@@ -14,14 +14,14 @@ import {
   normalizeEditorDraftStyleSettings,
   type EditorDraftStyleSettings,
 } from 'ls/base/common/editorDraftStyle';
-import type { StorageService } from 'ls/platform/storage/common/storage';
+import type { AppSettingsConfigurationService } from 'ls/platform/configuration/common/configuration';
 import { cleanText } from 'ls/base/common/strings';
 import {
   batchLimitMax,
   batchLimitMin,
   defaultBatchLimit,
   getDefaultBatchSources,
-} from 'ls/platform/config/common/defaultBatchSources';
+} from 'ls/platform/configuration/common/defaultBatchSources';
 import {
   createDefaultLlmSettings,
   defaultLlmProviderSettings,
@@ -52,13 +52,12 @@ import {
   normalizeBrowserTabKeepAliveLimit,
 } from 'ls/workbench/services/webContent/webContentRetentionConfig';
 
-type ConfigStore = Pick<StorageService, 'loadSettings' | 'saveSettings'>;
 const fallbackLocale: 'zh' | 'en' = 'zh';
 const defaultMaxConcurrentIndexJobs = 1;
 const minConcurrentIndexJobs = 1;
 const maxConcurrentIndexJobs = 4;
 
-type ConfigStoreOptions = {
+type ConfigurationMainServiceOptions = {
   defaultLocale?: 'zh' | 'en';
 };
 
@@ -617,11 +616,11 @@ function attachConfigPath(
   };
 }
 
-export function createConfigStore(
+export function createConfigurationMainService(
   configFile: string,
   userSettingsFile: string,
-  options: ConfigStoreOptions = {},
-): ConfigStore {
+  options: ConfigurationMainServiceOptions = {},
+): AppSettingsConfigurationService {
   const defaultLocale = options.defaultLocale === 'en' ? 'en' : fallbackLocale;
 
   async function readSettings() {
