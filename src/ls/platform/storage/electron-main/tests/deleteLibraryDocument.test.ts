@@ -29,6 +29,7 @@ async function withLibraryStore(
   ) => Promise<void>,
 ) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'library-store-delete-'));
+  let store: ReturnType<typeof createLibraryStore> | undefined;
   try {
     const libraryDbFile = path.join(tempDir, 'library.sqlite');
     const libraryFilesDir = path.join(tempDir, 'library-files');
@@ -36,7 +37,7 @@ async function withLibraryStore(
     await mkdir(libraryFilesDir, { recursive: true });
     await mkdir(ragCacheDir, { recursive: true });
 
-    const store = createLibraryStore({
+    store = createLibraryStore({
       libraryDbFile,
       libraryFilesDir,
       ragCacheDir,
@@ -44,6 +45,7 @@ async function withLibraryStore(
 
     await run(store, tempDir);
   } finally {
+    store?.dispose();
     await rm(tempDir, { recursive: true, force: true });
   }
 }

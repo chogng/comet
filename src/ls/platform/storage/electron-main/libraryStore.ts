@@ -29,7 +29,9 @@ type LibraryStore = Pick<
   | 'getLibraryDocumentStatus'
   | 'listLibraryDocuments'
   | 'reindexLibraryDocument'
->;
+> & {
+  dispose(): void;
+};
 
 type StorageMode = KnowledgeBaseSettings['libraryStorageMode'];
 
@@ -661,6 +663,10 @@ export function createLibraryStore(paths: LibraryPaths): LibraryStore {
   }
 
   return {
+    dispose() {
+      db.close();
+    },
+
     async upsertLibraryDocumentMetadata(
       payload: UpsertLibraryDocumentMetadataPayload,
     ) {

@@ -24,3 +24,4 @@ tests/.tmp*
 
 # Local agent/runtime cache
 .snow/
+.tooling/
