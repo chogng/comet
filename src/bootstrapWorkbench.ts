@@ -134,14 +134,6 @@ const workbenchDependencyModules = [
     load: () => import('ls/workbench/browser/parts/sidebar/fetchPanePart'),
   },
   {
-    label: 'ls/workbench/browser/parts/titlebar/titlebarPart',
-    load: () => import('ls/workbench/browser/parts/titlebar/titlebarPart'),
-  },
-  {
-    label: 'ls/workbench/browser/parts/titlebar/titlebarView',
-    load: () => import('ls/workbench/browser/parts/titlebar/titlebarView'),
-  },
-  {
     label: 'ls/workbench/browser/toastOverlayWindow',
     load: () => import('ls/workbench/browser/toastOverlayWindow'),
   },
@@ -156,10 +148,6 @@ const workbenchDependencyModules = [
   {
     label: 'ls/workbench/browser/session',
     load: () => import('ls/workbench/browser/session'),
-  },
-  {
-    label: 'ls/workbench/browser/titlebarCommands',
-    load: () => import('ls/workbench/browser/titlebarCommands'),
   },
   {
     label: 'ls/workbench/browser/window',

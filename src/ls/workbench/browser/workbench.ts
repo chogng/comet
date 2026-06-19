@@ -734,7 +734,6 @@ class WorkbenchHost {
     }
 
     setWorkbenchEditorCommandHandlers(null);
-    registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, null);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.statusbar, null);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, null);
 
@@ -1069,7 +1068,6 @@ class WorkbenchHost {
     }
     this.shellElement.className = getWorkbenchShellClassName({ activePage });
     this.syncStatusbarVisibility(isStatusbarVisible);
-    registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, null);
   }
 
   private syncEditorCommandHandlers() {

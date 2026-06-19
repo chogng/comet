@@ -147,13 +147,6 @@ export function createWorkbenchDocumentLocaleContribution(): Disposable {
   };
 }
 
-export function createWorkbenchTitlebarActionContribution(): Disposable {
-  // LEGACY: the workbench no longer routes active UI through the titlebar bus.
-  return {
-    dispose: () => {},
-  };
-}
-
 export function createWorkbenchServicesLifecycleContribution(): Disposable {
   return {
     dispose: () => {

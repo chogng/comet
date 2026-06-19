@@ -46,7 +46,6 @@ export const WorkbenchContextKeys = {
     false,
   ),
   hasContainer: new RawContextKey<boolean>('workbench.hasContainer', false),
-  hasTitlebar: new RawContextKey<boolean>('workbench.hasTitlebar', false),
   hasPrimaryBar: new RawContextKey<boolean>('workbench.hasPrimaryBar', false),
   hasAgentSidebar: new RawContextKey<boolean>(
     'workbench.hasAgentSidebar',
@@ -80,7 +79,6 @@ export function bindWorkbenchContextKeys(
       WorkbenchContextKeys.agentSidebarVisible.bindTo(service),
     editorCollapsed: WorkbenchContextKeys.editorCollapsed.bindTo(service),
     hasContainer: WorkbenchContextKeys.hasContainer.bindTo(service),
-    hasTitlebar: WorkbenchContextKeys.hasTitlebar.bindTo(service),
     hasPrimaryBar: WorkbenchContextKeys.hasPrimaryBar.bindTo(service),
     hasAgentSidebar: WorkbenchContextKeys.hasAgentSidebar.bindTo(service),
     hasStatusbar: WorkbenchContextKeys.hasStatusbar.bindTo(service),
@@ -105,7 +103,6 @@ export function syncWorkbenchContextKeys(
   keys.agentSidebarVisible.set(layoutState.isAgentSidebarVisible);
   keys.editorCollapsed.set(layoutState.isEditorCollapsed);
   keys.hasContainer.set(Boolean(partDom[WORKBENCH_PART_IDS.container]));
-  keys.hasTitlebar.set(Boolean(partDom[WORKBENCH_PART_IDS.titlebar]));
   keys.hasPrimaryBar.set(Boolean(partDom[WORKBENCH_PART_IDS.primaryBar]));
   keys.hasAgentSidebar.set(Boolean(partDom[WORKBENCH_PART_IDS.agentSidebar]));
   keys.hasStatusbar.set(Boolean(partDom[WORKBENCH_PART_IDS.statusbar]));
