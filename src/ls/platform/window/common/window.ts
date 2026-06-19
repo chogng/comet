@@ -21,8 +21,7 @@ const WINDOWS_WINDOW_CONTROLS_WIDTH_PX = 138;
 export function getWindowChromeLayout(): WindowChromeLayout {
   const mode = getRuntimeMode();
   const platform = getRuntimePlatform();
-  const titleBarStyle: WindowChromeTitleBarStyle =
-    platform === 'linux' ? 'native' : 'custom';
+  const titleBarStyle: WindowChromeTitleBarStyle = 'custom';
   const nativeWindowControlsOverlay =
     mode === 'desktop' &&
     titleBarStyle === 'custom' &&

@@ -72,6 +72,71 @@ function subscribeIpc<TPayload>(
   };
 }
 
+async function callIpcService<TResult>(
+  channelName: string,
+  command: string,
+  arg?: unknown,
+) {
+  const response = await invokeIpc<AppInvokeResponse<TResult>>(
+    APP_SERVICE_IPC_CALL_CHANNEL,
+    channelName,
+    command,
+    arg,
+  );
+  if (!response.ok) {
+    throw normalizeInvokeError(new Error(response.error));
+  }
+
+  return response.result;
+}
+
+function listenIpcService<TPayload>(
+  channelName: string,
+  event: string,
+  arg: unknown,
+  listener: (payload: TPayload) => void,
+) {
+  if (typeof listener !== 'function') {
+    return () => {};
+  }
+
+  const subscriptionId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  const wrapped = (
+    _event: Electron.IpcRendererEvent,
+    payload:
+      | {
+          subscriptionId?: string;
+          data?: TPayload;
+        }
+      | undefined,
+  ) => {
+    if (payload?.subscriptionId === subscriptionId) {
+      listener(payload.data as TPayload);
+    }
+  };
+
+  ipcRenderer.on(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
+  void invokeIpc<AppInvokeResponse<void>>(
+    APP_SERVICE_IPC_EVENT_CHANNEL,
+    subscriptionId,
+    channelName,
+    event,
+    arg,
+  ).then((response) => {
+    if (!response.ok) {
+      throw normalizeInvokeError(new Error(response.error));
+    }
+  }).catch((error) => {
+    ipcRenderer.removeListener(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
+    console.error('Failed to subscribe to IPC channel event.', error);
+  });
+
+  return () => {
+    ipcRenderer.removeListener(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
+    sendIpc(APP_SERVICE_IPC_DISPOSE_CHANNEL, subscriptionId);
+  };
+}
+
 function normalizeInvokeError(error: unknown): DesktopInvokeError {
   const rawMessage = error instanceof Error ? error.message : String(error);
   const parsed = parseSerializedAppError(rawMessage);
@@ -99,17 +164,7 @@ type AppInvokeResponse<T> =
 const electronAPI: ElectronAPI = {
   ipc: {
     async call<T = unknown>(channelName: string, command: string, arg?: unknown) {
-      const response = await invokeIpc<AppInvokeResponse<T>>(
-        APP_SERVICE_IPC_CALL_CHANNEL,
-        channelName,
-        command,
-        arg,
-      );
-      if (!response.ok) {
-        throw normalizeInvokeError(new Error(response.error));
-      }
-
-      return response.result;
+      return callIpcService<T>(channelName, command, arg);
     },
     listen<T = unknown>(
       channelName: string,
@@ -117,45 +172,7 @@ const electronAPI: ElectronAPI = {
       arg: unknown,
       listener: (payload: T) => void,
     ) {
-      if (typeof listener !== 'function') {
-        return () => {};
-      }
-
-      const subscriptionId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
-      const wrapped = (
-        _event: Electron.IpcRendererEvent,
-        payload:
-          | {
-              subscriptionId?: string;
-              data?: T;
-            }
-          | undefined,
-      ) => {
-        if (payload?.subscriptionId === subscriptionId) {
-          listener(payload.data as T);
-        }
-      };
-
-      ipcRenderer.on(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
-      void invokeIpc<AppInvokeResponse<void>>(
-        APP_SERVICE_IPC_EVENT_CHANNEL,
-        subscriptionId,
-        channelName,
-        event,
-        arg,
-      ).then((response) => {
-        if (!response.ok) {
-          throw new Error(response.error);
-        }
-      }).catch((error) => {
-        ipcRenderer.removeListener(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
-        console.error('Failed to subscribe to IPC channel event.', error);
-      });
-
-      return () => {
-        ipcRenderer.removeListener(APP_SERVICE_IPC_EVENT_CHANNEL, wrapped);
-        sendIpc(APP_SERVICE_IPC_DISPOSE_CHANNEL, subscriptionId);
-      };
+      return listenIpcService<T>(channelName, event, arg, listener);
     },
   },
   async invoke<TCommand extends AppCommand>(command: TCommand, args?: AppCommandPayloadMap[TCommand]) {
@@ -175,16 +192,24 @@ const electronAPI: ElectronAPI = {
   },
   windowControls: {
     perform(action: WindowControlAction) {
-      sendIpc('app:window-action', action);
+      void callIpcService<void>(
+        'nativeHost',
+        'perform_window_control',
+        action,
+      ).catch((error) => {
+        console.error('Failed to perform window control action.', error);
+      });
     },
     getState() {
-      return invokeIpc<WindowState>('app:get-window-state');
+      return callIpcService<WindowState>('nativeHost', 'get_window_state');
     },
     onStateChange(listener: (state: WindowState) => void) {
-      return subscribeIpc<WindowState>('app:window-state', listener, {
-        isMaximized: false,
-        isFullscreen: false,
-      });
+      return listenIpcService<WindowState>(
+        'nativeHost',
+        'on_did_change_window_state',
+        undefined,
+        listener,
+      );
     },
   },
   webContent: {

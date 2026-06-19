@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron';
 import type { BrowserWindowConstructorOptions, WebContents } from 'electron';
 
-import type { WindowControlAction, WindowState } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { WindowState } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { isCompatFetchEnvEnabled } from 'ls/code/electron-main/fetchTiming';
 import { disposeToastOverlay } from 'ls/platform/window/electron-main/toastOverlayView';
 import { setTrayMainWindow } from 'ls/platform/window/electron-main/trayIcon';
@@ -114,14 +114,6 @@ function applyWindowBackgroundMaterial(window: BrowserWindow, useMica: boolean) 
   if (process.platform === 'darwin') {
     window.setVibrancy(resolveWindowVibrancy(useMica));
   }
-}
-
-function publishWindowState(window: BrowserWindow) {
-  if (window.isDestroyed()) return;
-
-  window.webContents.send('app:window-state', {
-    isMaximized: window.isMaximized(),
-  });
 }
 
 export function getMainWindow() {
@@ -357,32 +349,6 @@ export function resolveWindowFromWebContents(contents?: WebContents | null) {
   return (contents ? BrowserWindow.fromWebContents(contents) : null) ?? getMainWindow();
 }
 
-export function performWindowControlAction(window: BrowserWindow, action: WindowControlAction) {
-  switch (action) {
-    case 'minimize':
-      window.minimize();
-      break;
-    case 'maximize':
-      window.maximize();
-      break;
-    case 'unmaximize':
-      window.unmaximize();
-      break;
-    case 'toggle-maximize':
-      if (window.isMaximized()) {
-        window.unmaximize();
-      } else {
-        window.maximize();
-      }
-      break;
-    case 'close':
-      window.close();
-      break;
-    default:
-      break;
-  }
-}
-
 export function getWindowState(window?: BrowserWindow | null): WindowState {
   return {
     isMaximized: Boolean(window && !window.isDestroyed() && window.isMaximized()),
@@ -444,13 +410,8 @@ export function createMainWindow(options: { useMica?: boolean } = {}) {
     window.setMenuBarVisibility(false);
   }
 
-  window.on('maximize', () => publishWindowState(window));
   window.on('minimize', () => minimizeAuxiliaryWindows());
   window.on('restore', () => restoreAuxiliaryWindows());
   window.on('show', () => restoreAuxiliaryWindows());
-  window.on('unmaximize', () => publishWindowState(window));
-  window.on('enter-full-screen', () => publishWindowState(window));
-  window.on('leave-full-screen', () => publishWindowState(window));
-  window.webContents.on('did-finish-load', () => publishWindowState(window));
   return window;
 }

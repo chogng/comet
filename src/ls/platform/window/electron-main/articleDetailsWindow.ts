@@ -173,7 +173,7 @@ export async function openArticleDetailsModal(
     });
   }
 
-  const locale = payload.locale === 'en' ? 'en' : 'zh';
+  const locale = payload.locale === 'zh' ? 'zh' : 'en';
   const title = article.title?.trim() || labels.untitled;
   const modalWindow = getOrCreateArticleDetailsWindow(parentWindow, title);
 

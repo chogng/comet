@@ -297,7 +297,7 @@ function resolveSingleJournalDocxFileStem(articles: Article[], locale: Supported
 export function buildBatchDocxFileName(
   {
     articles = [],
-    locale = 'zh',
+    locale = 'en',
     referenceDate = new Date(),
   }: {
     articles?: Article[];
@@ -369,7 +369,7 @@ export async function exportArticlesDocx(
 export async function exportArticlesToDocxFile({
   articles,
   filePath,
-  locale = 'zh',
+  locale = 'en',
 }: {
   articles: Article[];
   filePath: string;

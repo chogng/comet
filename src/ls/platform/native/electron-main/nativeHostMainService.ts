@@ -7,12 +7,16 @@ import type {
   OpenArticleDetailsModalPayload,
   OpenPathPayload,
   ReadPdfFilePayload,
+  WindowControlAction,
+  WindowState,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import { appError } from 'ls/base/common/errors';
 import type { Event } from 'ls/base/common/event';
+import { toDisposable } from 'ls/base/common/lifecycle';
 import type { IServerChannel } from 'ls/platform/ipc/common/ipc';
 import { pickPdfFileDialog } from 'ls/platform/dialogs/electron-main/dialogMainService';
 import {
+  getWindowState,
   getMainWindow,
   resolveWindowFromWebContents,
 } from 'ls/platform/window/electron-main/window';
@@ -96,6 +100,73 @@ export class NativeHostMainService {
       payload,
     );
   }
+
+  async performWindowControlActionForEvent(
+    event: IpcMainInvokeEvent,
+    action: WindowControlAction,
+  ) {
+    const targetWindow = resolveWindowFromWebContents(event.sender);
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return;
+    }
+
+    switch (action) {
+      case 'minimize':
+        targetWindow.minimize();
+        break;
+      case 'maximize':
+        targetWindow.maximize();
+        break;
+      case 'unmaximize':
+        targetWindow.unmaximize();
+        break;
+      case 'toggle-maximize':
+        if (targetWindow.isMaximized()) {
+          targetWindow.unmaximize();
+        } else {
+          targetWindow.maximize();
+        }
+        break;
+      case 'close':
+        targetWindow.close();
+        break;
+      default:
+        break;
+    }
+  }
+
+  async getWindowStateForEvent(event: IpcMainInvokeEvent) {
+    return getWindowState(resolveWindowFromWebContents(event.sender));
+  }
+
+  onDidChangeWindowStateForEvent(event: IpcMainInvokeEvent): Event<WindowState> {
+    const targetWindow = resolveWindowFromWebContents(event.sender);
+    return (listener) => {
+      if (!targetWindow || targetWindow.isDestroyed()) {
+        return toDisposable(() => {});
+      }
+
+      const emitWindowState = () => {
+        listener(getWindowState(targetWindow));
+      };
+
+      targetWindow.on('maximize', emitWindowState);
+      targetWindow.on('unmaximize', emitWindowState);
+      targetWindow.on('enter-full-screen', emitWindowState);
+      targetWindow.on('leave-full-screen', emitWindowState);
+
+      return toDisposable(() => {
+        if (targetWindow.isDestroyed()) {
+          return;
+        }
+
+        targetWindow.off('maximize', emitWindowState);
+        targetWindow.off('unmaximize', emitWindowState);
+        targetWindow.off('enter-full-screen', emitWindowState);
+        targetWindow.off('leave-full-screen', emitWindowState);
+      });
+    };
+  }
 }
 
 export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent> {
@@ -120,15 +191,25 @@ export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent>
           event,
           payload as OpenArticleDetailsModalPayload,
         ) as Promise<T>;
+      case 'perform_window_control':
+        return this.service.performWindowControlActionForEvent(
+          event,
+          payload as WindowControlAction,
+        ) as Promise<T>;
+      case 'get_window_state':
+        return this.service.getWindowStateForEvent(event) as Promise<T>;
       default:
         throw appError('UNKNOWN_COMMAND', { command });
     }
   }
 
-  listen<T = unknown>(): Event<T> {
-    throw appError('UNKNOWN_COMMAND', {
-      command: 'native host main channel does not expose events',
-    });
+  listen<T = unknown>(event: IpcMainInvokeEvent, eventName: string): Event<T> {
+    switch (eventName) {
+      case 'on_did_change_window_state':
+        return this.service.onDidChangeWindowStateForEvent(event) as Event<T>;
+      default:
+        throw appError('UNKNOWN_COMMAND', { command: eventName });
+    }
   }
 }
 

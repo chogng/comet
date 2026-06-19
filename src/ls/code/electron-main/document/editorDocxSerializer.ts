@@ -1256,7 +1256,7 @@ function buildDocumentXml(
 
 export function buildEditorDocxFileName({
   title,
-  locale = 'zh',
+  locale = 'en',
   referenceDate = new Date(),
 }: {
   title?: string | null;
@@ -1277,7 +1277,7 @@ export async function buildEditorDocxBuffer({
   document,
   editorDraftStyle,
   title,
-  locale = 'zh',
+  locale = 'en',
 }: BuildEditorDocxBufferOptions) {
   const normalizedDocument = normalizeWritingEditorDocument(document);
   const proseMirrorDocument = writingEditorSchema.nodeFromJSON(normalizedDocument);

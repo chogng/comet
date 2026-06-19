@@ -30,7 +30,7 @@ const docxExportCopyByLocale: Record<SupportedLocale, DocxExportCopy> = {
 };
 
 export function resolveSupportedLocale(locale?: string | null): SupportedLocale {
-  return locale === 'en' ? 'en' : 'zh';
+  return locale === 'zh' ? 'zh' : 'en';
 }
 
 export function resolveDocxExportDialogCopy(locale?: string | null): DocxExportDialogCopy {

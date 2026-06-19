@@ -28,7 +28,6 @@ import type {
   TestLlmConnectionPayload,
   TestRagConnectionPayload,
   TestTranslationConnectionPayload,
-  WindowControlAction,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import {
@@ -88,8 +87,6 @@ import { resolveSystemNotificationPayloadFromToast } from 'ls/code/electron-main
 import {
   applyMainWindowBackgroundMaterial,
   getMainWindow,
-  getWindowState,
-  performWindowControlAction,
   resolveWindowFromWebContents,
 } from 'ls/platform/window/electron-main/window';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
@@ -405,17 +402,6 @@ export function registerAppIpc(storage: StorageService) {
         error: serializeAppError(error),
       } satisfies AppInvokeResponse<AppCommandResultMap[typeof command]>;
     }
-  });
-
-  ipcMain.on('app:window-action', (event, action: WindowControlAction) => {
-    const target = resolveWindowFromWebContents(event.sender);
-    if (!target || target.isDestroyed()) return;
-
-    performWindowControlAction(target, action);
-  });
-
-  ipcMain.handle('app:get-window-state', (event) => {
-    return getWindowState(resolveWindowFromWebContents(event.sender));
   });
 
   ipcMain.handle('app:web-content-get-state', (_event, payload?: { targetId?: string | null }) => {

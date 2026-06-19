@@ -77,8 +77,7 @@ export function resolveEnvironmentMainPaths(): AppEnvironmentPaths {
 }
 
 export function resolveEnvironmentMainLocale(): 'zh' | 'en' {
-  const locale = app.getLocale().toLowerCase();
-  return locale.startsWith('zh') ? 'zh' : 'en';
+  return 'en';
 }
 
 export function isDevelopmentEnvironmentMain() {

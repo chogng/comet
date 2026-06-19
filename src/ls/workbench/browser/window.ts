@@ -117,13 +117,10 @@ function detectBrowserFullscreen() {
   }
 
   const navigatorPlatform = getNavigatorPlatform();
-  const isMacOrLinux =
-    navigatorPlatform.includes('mac') ||
-    navigatorPlatform.includes('linux') ||
-    navigatorPlatform.includes('x11');
+  const isMac = navigatorPlatform.includes('mac');
 
   return (
-    isMacOrLinux &&
+    isMac &&
     window.outerHeight === screen.height &&
     window.outerWidth === screen.width
   );

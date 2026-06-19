@@ -52,7 +52,7 @@ import {
   normalizeBrowserTabKeepAliveLimit,
 } from 'ls/workbench/services/webContent/webContentRetentionConfig';
 
-const fallbackLocale: 'zh' | 'en' = 'zh';
+const fallbackLocale: 'zh' | 'en' = 'en';
 const defaultMaxConcurrentIndexJobs = 1;
 const minConcurrentIndexJobs = 1;
 const maxConcurrentIndexJobs = 4;
@@ -621,7 +621,7 @@ export function createConfigurationMainService(
   userSettingsFile: string,
   options: ConfigurationMainServiceOptions = {},
 ): AppSettingsConfigurationService {
-  const defaultLocale = options.defaultLocale === 'en' ? 'en' : fallbackLocale;
+  const defaultLocale = options.defaultLocale === 'zh' ? 'zh' : fallbackLocale;
 
   async function readSettings() {
     const payload = await readJson<Partial<StoredAppSettings>>(configFile, {});

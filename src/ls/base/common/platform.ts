@@ -1,5 +1,7 @@
 export type RuntimeMode = 'web' | 'desktop';
-export type RuntimePlatform = 'web' | 'windows' | 'macos' | 'linux';
+export type RuntimePlatform = 'web' | 'windows' | 'macos';
+
+export const LANGUAGE_DEFAULT = 'en';
 
 export enum OperatingSystem {
   Windows = 1,
@@ -7,7 +9,26 @@ export enum OperatingSystem {
   Linux = 3,
 }
 
-function getNavigatorPlatform() {
+export const enum Platform {
+  Web,
+  Mac,
+  Windows,
+}
+
+export type PlatformName = 'Web' | 'Windows' | 'Mac';
+
+export function PlatformToString(platform: Platform): PlatformName {
+  switch (platform) {
+    case Platform.Mac:
+      return 'Mac';
+    case Platform.Windows:
+      return 'Windows';
+    case Platform.Web:
+      return 'Web';
+  }
+}
+
+function readNavigatorPlatform() {
   if (typeof navigator === 'undefined') {
     return '';
   }
@@ -15,11 +36,39 @@ function getNavigatorPlatform() {
   return String(navigator.platform ?? '').toLowerCase();
 }
 
-export function hasDesktopRuntime() {
+function isMacintoshPlatform(platform: string) {
   return (
-    typeof window !== 'undefined' &&
-    typeof window.electronAPI?.invoke === 'function'
+    platform === 'darwin' ||
+    platform.includes('mac') ||
+    platform.includes('iphone') ||
+    platform.includes('ipad') ||
+    platform.includes('ipod')
   );
+}
+
+const navigatorPlatform = readNavigatorPlatform();
+const desktopRuntime =
+  typeof window !== 'undefined' &&
+  typeof window.electronAPI?.invoke === 'function';
+const runtimeMode: RuntimeMode = desktopRuntime ? 'desktop' : 'web';
+const runtimePlatform: RuntimePlatform = !desktopRuntime
+  ? 'web'
+  : isMacintoshPlatform(navigatorPlatform)
+    ? 'macos'
+    : 'windows';
+const operatingSystem =
+  runtimePlatform === 'macos'
+    ? OperatingSystem.Macintosh
+    : OperatingSystem.Windows;
+const platformValue =
+  runtimePlatform === 'macos'
+    ? Platform.Mac
+    : runtimePlatform === 'windows'
+      ? Platform.Windows
+      : Platform.Web;
+
+export function hasDesktopRuntime() {
+  return desktopRuntime;
 }
 
 export function hasWindowControlsRuntime() {
@@ -37,51 +86,37 @@ export function hasWebContentRuntime() {
 }
 
 export function getRuntimeMode(): RuntimeMode {
-  return hasDesktopRuntime() ? 'desktop' : 'web';
+  return runtimeMode;
 }
 
 export function getRuntimePlatform(): RuntimePlatform {
-  if (!hasDesktopRuntime()) {
-    return 'web';
-  }
-
-  const normalizedPlatform = getNavigatorPlatform();
-  if (
-    normalizedPlatform === 'darwin' ||
-    normalizedPlatform.includes('mac') ||
-    normalizedPlatform.includes('iphone') ||
-    normalizedPlatform.includes('ipad') ||
-    normalizedPlatform.includes('ipod')
-  ) {
-    return 'macos';
-  }
-
-  if (normalizedPlatform === 'win32' || normalizedPlatform.includes('win')) {
-    return 'windows';
-  }
-
-  if (
-    normalizedPlatform === 'linux' ||
-    normalizedPlatform.includes('linux') ||
-    normalizedPlatform.includes('x11')
-  ) {
-    return 'linux';
-  }
-
-  return 'web';
+  return runtimePlatform;
 }
 
 export function getOperatingSystem(): OperatingSystem {
-  const runtimePlatform = getRuntimePlatform();
-  if (runtimePlatform === 'macos') {
-    return OperatingSystem.Macintosh;
-  }
-
-  if (runtimePlatform === 'linux') {
-    return OperatingSystem.Linux;
-  }
-
-  return OperatingSystem.Windows;
+  return operatingSystem;
 }
 
-export const OS = getOperatingSystem();
+export const isWindows = runtimePlatform === 'windows';
+export const isMacintosh = runtimePlatform === 'macos';
+export const isNative = desktopRuntime;
+export const isWeb = runtimeMode === 'web';
+export const platform = platformValue;
+export const language: string = LANGUAGE_DEFAULT;
+export const locale: string = LANGUAGE_DEFAULT;
+export const platformLocale: string = LANGUAGE_DEFAULT;
+export const OS = operatingSystem;
+
+export namespace Language {
+  export function value(): string {
+    return language;
+  }
+
+  export function isDefaultVariant(): boolean {
+    return language === LANGUAGE_DEFAULT || language.startsWith(`${LANGUAGE_DEFAULT}-`);
+  }
+
+  export function isDefault(): boolean {
+    return language === LANGUAGE_DEFAULT;
+  }
+}

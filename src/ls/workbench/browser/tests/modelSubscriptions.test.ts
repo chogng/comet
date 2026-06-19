@@ -678,7 +678,7 @@ test('workbenchState subscriptions stop after disposal', async () => {
 
 test('resolveWorkbenchStatusbarVisibility returns the toggle state directly', async () => {
   const { resolveWorkbenchStatusbarVisibility } = await import(
-    'ls/workbench/browser/workbench'
+    'ls/workbench/browser/parts/titlebar/titlebarPart'
   );
 
   assert.equal(resolveWorkbenchStatusbarVisibility(true), true);
