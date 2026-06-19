@@ -1,4 +1,4 @@
-.primarybar-footer-actions-host {
+.sidebar-footer-actions-host {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7,7 +7,7 @@
   min-width: 0;
 }
 
-.primarybar-footer-account {
+.sidebar-footer-account {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -15,7 +15,7 @@
   color: var(--vscode-sideBar-foreground, #1f2d3a);
 }
 
-.primarybar-footer-avatar {
+.sidebar-footer-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -26,13 +26,13 @@
   background: var(--vscode-editorGroupHeader-tabsBackground, rgba(0, 0, 0, 0.05));
 }
 
-.primarybar-footer-avatar .lx-icon {
+.sidebar-footer-avatar .lx-icon {
   width: 14px;
   height: 14px;
   font-size: 14px;
 }
 
-.primarybar-footer-account-label {
+.sidebar-footer-account-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -41,21 +41,21 @@
   line-height: 1.2;
 }
 
-.primarybar-footer-actions {
+.sidebar-footer-actions {
   display: inline-flex;
   align-items: center;
   min-width: 0;
   -webkit-app-region: no-drag;
 }
 
-.primarybar-footer-actions .actionbar-actions-container,
-.primarybar-footer-actions .actionbar-item {
+.sidebar-footer-actions .actionbar-actions-container,
+.sidebar-footer-actions .actionbar-item {
   display: inline-flex;
   align-items: center;
 }
 
-.primarybar-footer-more-btn.actionbar-action,
-.primarybar-footer-settings-btn.actionbar-action {
+.sidebar-footer-more-btn.actionbar-action,
+.sidebar-footer-settings-btn.actionbar-action {
   width: 24px;
   height: 24px;
   border: none;
@@ -69,14 +69,14 @@
   -webkit-app-region: no-drag;
 }
 
-.primarybar-footer-more-btn.actionbar-action .lx-icon,
-.primarybar-footer-settings-btn.actionbar-action .lx-icon {
+.sidebar-footer-more-btn.actionbar-action .lx-icon,
+.sidebar-footer-settings-btn.actionbar-action .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.primarybar-footer-more-menu-overlay .primarybar-footer-more-menu {
+.sidebar-footer-more-menu-overlay .sidebar-footer-more-menu {
   box-sizing: border-box;
   width: 100%;
   min-width: 160px;
@@ -88,6 +88,6 @@
   box-shadow: var(--vscode-menu-shadow, 0 8px 32px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06));
 }
 
-.primarybar-footer-more-menu-overlay .primarybar-footer-more-menu-empty {
+.sidebar-footer-more-menu-overlay .sidebar-footer-more-menu-empty {
   min-height: 20px;
 }

@@ -2,11 +2,11 @@ import type { EditorStatusState } from 'ls/workbench/browser/parts/editor/editor
 import { createEditorPartView } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { DraftEditorCommandId } from 'ls/workbench/browser/parts/editor/panes/draftEditorCommands';
-import type { PrimaryBarProps } from 'ls/workbench/browser/parts/primarybar/primarybarPart';
+import type { SidebarProps } from 'ls/workbench/browser/parts/sidebar/sidebarPart';
 import {
-  createPrimaryBarPartView,
-  PrimaryBarPartView,
-} from 'ls/workbench/browser/parts/primarybar/primarybarPart';
+  createSidebarPartView,
+  SidebarPartView,
+} from 'ls/workbench/browser/parts/sidebar/sidebarPart';
 import type { AgentBarPartProps } from 'ls/workbench/browser/parts/agentbar/agentbarPart';
 import {
   createAgentBarPartView,
@@ -38,14 +38,14 @@ export type WorkbenchContentPartViewsProps = {
   mode?: 'content' | 'settings';
   isPrimarySidebarVisible: boolean;
   isAgentSidebarVisible: boolean;
-  primaryBarProps: PrimaryBarProps;
+  sidebarProps: SidebarProps;
   settingsNavigationElement?: HTMLElement | null;
   settingsTopbarActionsElement?: HTMLElement | null;
   agentBarProps: AgentBarPartProps;
   editorPartProps: EditorPartProps;
   settingsContentElement?: HTMLElement | null;
   sidebarTopbarActionsElement: HTMLElement;
-  primaryBarFooterActionsElement: HTMLElement;
+  sidebarFooterActionsElement: HTMLElement;
   editorTopbarAuxiliaryActionsElement?: HTMLElement | null;
   agentTopbarTrailingActionsElement?: HTMLElement | null;
 };
@@ -58,21 +58,21 @@ export type WorkbenchContentPartViewsLayoutState = {
 export class WorkbenchContentPartViews {
   private props: WorkbenchContentPartViewsProps;
   private layoutState: WorkbenchContentPartViewsLayoutState;
-  private primaryBarView: PrimaryBarPartView | null = null;
+  private sidebarView: SidebarPartView | null = null;
   private agentBarView: AgentBarPartView | null = null;
   private editorView: ReturnType<typeof createEditorPartView> | null = null;
   private retiredEditorView: ReturnType<typeof createEditorPartView> | null = null;
   private readonly primaryTopbarActionsHost = createElement(
     'div',
-    'primarybar-topbar-actions-host',
+    'sidebar-combined-topbar-actions-host',
   );
   private readonly primaryTopbarLeadingActionsHost = createElement(
     'div',
-    'primarybar-topbar-leading',
+    'sidebar-combined-topbar-leading',
   );
   private readonly primaryTopbarTrailingActionsHost = createElement(
     'div',
-    'primarybar-topbar-trailing',
+    'sidebar-combined-topbar-trailing',
   );
   private readonly agentTopbarTrailingActionsHost = createElement(
     'div',
@@ -124,7 +124,7 @@ export class WorkbenchContentPartViews {
   }
 
   getPrimarySidebarElement() {
-    return this.primaryBarView?.getElement() ?? null;
+    return this.sidebarView?.getElement() ?? null;
   }
 
   getEditorElement() {
@@ -170,11 +170,11 @@ export class WorkbenchContentPartViews {
 
     this.disposed = true;
     clearStatusbarCommandHandlers();
-    this.primaryBarView?.dispose();
+    this.sidebarView?.dispose();
     this.agentBarView?.dispose();
     this.retiredEditorView = this.editorView;
     this.retiredEditorView?.dispose();
-    this.primaryBarView = null;
+    this.sidebarView = null;
     this.agentBarView = null;
     this.editorView = null;
   }
@@ -189,8 +189,8 @@ export class WorkbenchContentPartViews {
 
   private renderPrimarySidebar(topbarActionRoute: TopbarActionRoute) {
     if (!this.props.isPrimarySidebarVisible) {
-      this.primaryBarView?.dispose();
-      this.primaryBarView = null;
+      this.sidebarView?.dispose();
+      this.sidebarView = null;
       return;
     }
 
@@ -198,23 +198,23 @@ export class WorkbenchContentPartViews {
       this.props.mode === 'settings'
         ? (this.props.settingsTopbarActionsElement ?? null)
         : this.resolvePrimaryTopbarActionsElement(topbarActionRoute);
-    const nextProps: PrimaryBarProps = {
-      ...this.props.primaryBarProps,
+    const nextProps: SidebarProps = {
+      ...this.props.sidebarProps,
       mode: this.props.mode === 'settings' ? 'settings' : 'content',
       settingsNavigationElement:
         this.props.mode === 'settings'
           ? (this.props.settingsNavigationElement ?? null)
           : null,
       topbarActionsElement,
-      footerActionsElement: this.props.primaryBarFooterActionsElement,
+      footerActionsElement: this.props.sidebarFooterActionsElement,
     };
 
-    if (!this.primaryBarView) {
-      this.primaryBarView = createPrimaryBarPartView(nextProps);
+    if (!this.sidebarView) {
+      this.sidebarView = createSidebarPartView(nextProps);
       return;
     }
 
-    this.primaryBarView.setProps(nextProps);
+    this.sidebarView.setProps(nextProps);
   }
 
   private resolvePrimaryTopbarActionsElement(

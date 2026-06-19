@@ -10,19 +10,19 @@ import { LibraryView } from 'ls/workbench/contrib/knowledgeBase/browser/views/li
 import {
   FetchPaneContentView,
   type FetchPaneProps,
-  type SidebarLabels,
+  type SidebarLabels as FetchPaneSidebarLabels,
 } from 'ls/workbench/browser/parts/sidebar/fetchPanePart';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 
-import 'ls/workbench/browser/parts/primarybar/media/primarybar.css';
+import 'ls/workbench/browser/parts/sidebar/media/sidebar.css';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
-export type PrimaryBarLabels = SidebarLabels;
+export type SidebarLabels = FetchPaneSidebarLabels;
 
-export type PrimaryBarProps = {
+export type SidebarProps = {
   mode?: 'content' | 'settings';
-  labels: PrimaryBarLabels;
+  labels: SidebarLabels;
   accountLabel?: string;
   moreLabel?: string;
   settingsLabel?: string;
@@ -53,48 +53,48 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-type PrimaryBarContentTab = 'library' | 'fetch';
+type SidebarContentTab = 'library' | 'fetch';
 
-export class PrimaryBar {
-  private props: PrimaryBarProps;
-  private readonly element = createElement('div', 'primarybar-root');
+export class Sidebar {
+  private props: SidebarProps;
+  private readonly element = createElement('div', 'sidebar-root');
   private readonly topbarElement = createElement(
     'div',
-    'primarybar-topbar',
+    'sidebar-topbar',
   );
   private readonly leadingWindowControlsSpacer = createElement(
     'div',
-    'primarybar-topbar-window-controls-spacer',
+    'sidebar-topbar-window-controls-spacer',
   );
-  private readonly contentElement = createElement('div', 'primarybar-content');
+  private readonly contentElement = createElement('div', 'sidebar-content');
   private readonly footerElement = createElement(
     'footer',
-    'primarybar-footer',
+    'sidebar-footer',
   );
-  private readonly switcherElement = createElement('div', 'primarybar-switcher');
-  private readonly tabListElement = createElement('div', 'primarybar-tab-list');
-  private readonly libraryTabButton = createElement('button', 'primarybar-tab');
-  private readonly fetchTabButton = createElement('button', 'primarybar-tab');
-  private readonly tabActionsElement = createElement('div', 'primarybar-tab-actions');
-  private readonly contentHostElement = createElement('div', 'primarybar-content-host');
+  private readonly switcherElement = createElement('div', 'sidebar-switcher');
+  private readonly tabListElement = createElement('div', 'sidebar-tab-list');
+  private readonly libraryTabButton = createElement('button', 'sidebar-tab');
+  private readonly fetchTabButton = createElement('button', 'sidebar-tab');
+  private readonly tabActionsElement = createElement('div', 'sidebar-tab-actions');
+  private readonly contentHostElement = createElement('div', 'sidebar-content-host');
   private readonly librarySection = createElement(
     'section',
-    'primarybar-tab-panel primarybar-library-panel',
+    'sidebar-tab-panel sidebar-library-panel',
   );
   private readonly fetchSection = createElement(
     'section',
-    'primarybar-tab-panel primarybar-fetch-panel',
+    'sidebar-tab-panel sidebar-fetch-panel',
   );
   private readonly fetchActionsView = createActionBarView({
-    className: 'primarybar-tab-actionbar fetch-pane-actionbar',
+    className: 'sidebar-tab-actionbar fetch-pane-actionbar',
     ariaRole: 'group',
   });
   private readonly libraryView: LibraryView;
   private readonly fetchContentView: FetchPaneContentView;
-  private activeTab: PrimaryBarContentTab = 'library';
+  private activeTab: SidebarContentTab = 'library';
   private disposed = false;
 
-  constructor(props: PrimaryBarProps) {
+  constructor(props: SidebarProps) {
     this.props = props;
     this.tabListElement.setAttribute('role', 'tablist');
     this.tabListElement.setAttribute('aria-label', props.labels.libraryTitle);
@@ -102,12 +102,12 @@ export class PrimaryBar {
     this.fetchTabButton.type = 'button';
     this.libraryTabButton.setAttribute('role', 'tab');
     this.fetchTabButton.setAttribute('role', 'tab');
-    this.libraryTabButton.classList.add('primarybar-library-tab');
-    this.fetchTabButton.classList.add('primarybar-fetch-tab');
-    this.librarySection.id = `primarybar-library-panel-${Math.random()
+    this.libraryTabButton.classList.add('sidebar-library-tab');
+    this.fetchTabButton.classList.add('sidebar-fetch-tab');
+    this.librarySection.id = `sidebar-library-panel-${Math.random()
       .toString(36)
       .slice(2)}`;
-    this.fetchSection.id = `primarybar-fetch-panel-${Math.random()
+    this.fetchSection.id = `sidebar-fetch-panel-${Math.random()
       .toString(36)
       .slice(2)}`;
     this.libraryTabButton.setAttribute('aria-controls', this.librarySection.id);
@@ -161,7 +161,7 @@ export class PrimaryBar {
     return this.element;
   }
 
-  setProps(props: PrimaryBarProps) {
+  setProps(props: SidebarProps) {
     if (this.disposed) {
       return;
     }
@@ -214,7 +214,7 @@ export class PrimaryBar {
           ? labels.selectionModeSelectAll
           : labels.selectionModeExit;
     this.fetchActionsView.setProps({
-      className: 'primarybar-tab-actionbar fetch-pane-actionbar',
+      className: 'sidebar-tab-actionbar fetch-pane-actionbar',
       ariaRole: 'group',
       items: [
         {
@@ -299,7 +299,7 @@ export class PrimaryBar {
     }
   }
 
-  private setActiveTab(tab: PrimaryBarContentTab) {
+  private setActiveTab(tab: SidebarContentTab) {
     if (this.disposed || this.activeTab === tab) {
       return;
     }
@@ -359,15 +359,15 @@ export class PrimaryBar {
     label: string,
     iconName: LxIconName,
   ) {
-    const labelElement = createElement('span', 'primarybar-tab-label');
+    const labelElement = createElement('span', 'sidebar-tab-label');
     labelElement.textContent = label;
-    button.replaceChildren(createLxIcon(iconName, 'primarybar-tab-icon'), labelElement);
+    button.replaceChildren(createLxIcon(iconName, 'sidebar-tab-icon'), labelElement);
     button.title = label;
   }
 }
 
-export function createPrimaryBar(props: PrimaryBarProps) {
-  return new PrimaryBar(props);
+export function createSidebar(props: SidebarProps) {
+  return new Sidebar(props);
 }
 
-export default PrimaryBar;
+export default Sidebar;

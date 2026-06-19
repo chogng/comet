@@ -1,7 +1,7 @@
 import { Orientation } from 'ls/base/browser/ui/splitview/splitview';
 
 export const WORKBENCH_SPLITVIEW_LIMITS = {
-  primaryBar: {
+  sidebar: {
     minimum: 170,
     maximum: Number.POSITIVE_INFINITY,
     defaultSize: 220,
@@ -29,7 +29,7 @@ export type LayoutLimits = {
 };
 
 const MOBILE_SPLITVIEW_LIMITS = {
-  primaryBar: {
+  sidebar: {
     minimum: 160,
     maximum: Number.POSITIVE_INFINITY,
   },
@@ -52,11 +52,11 @@ export function getLayoutLimits(
   return {
     primarySidebar: {
       minimum: isHorizontal
-        ? MOBILE_SPLITVIEW_LIMITS.primaryBar.minimum
-        : desktop.primaryBar.minimum,
+        ? MOBILE_SPLITVIEW_LIMITS.sidebar.minimum
+        : desktop.sidebar.minimum,
       maximum: isHorizontal
-        ? MOBILE_SPLITVIEW_LIMITS.primaryBar.maximum
-        : desktop.primaryBar.maximum,
+        ? MOBILE_SPLITVIEW_LIMITS.sidebar.maximum
+        : desktop.sidebar.maximum,
     },
     editor: {
       minimum: isHorizontal

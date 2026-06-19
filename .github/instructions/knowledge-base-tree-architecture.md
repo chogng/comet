@@ -31,7 +31,7 @@ The left-side knowledge base tree is now split into layered modules:
 - `src/ls/base/browser/ui/tree/treeTypes.ts`
   - Shared tree contracts
 
-`primarybar` no longer owns tree rendering logic. It only hosts the knowledge base view.
+`sidebar` no longer owns tree rendering logic. It only hosts the knowledge base view.
 
 ## What Is Implemented
 

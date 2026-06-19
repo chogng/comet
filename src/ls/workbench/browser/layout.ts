@@ -116,7 +116,7 @@ export type { WorkbenchPartId, WorkbenchPartRefCallback };
 const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
   isPrimarySidebarVisible: true,
   isAgentSidebarVisible: false,
-  primarySidebarSize: WORKBENCH_SPLITVIEW_LIMITS.primaryBar.defaultSize,
+  primarySidebarSize: WORKBENCH_SPLITVIEW_LIMITS.sidebar.defaultSize,
   agentSidebarSize: WORKBENCH_SPLITVIEW_LIMITS.agentSidebar.defaultSize,
   isEditorCollapsed: false,
   expandedEditorSize: WORKBENCH_SPLITVIEW_LIMITS.editor.minimum,
@@ -124,7 +124,7 @@ const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
 
 const DEFAULT_WORKBENCH_PART_DOM_SNAPSHOT: Record<WorkbenchPartId, HTMLElement | null> = {
   [WORKBENCH_PART_IDS.container]: null,
-  [WORKBENCH_PART_IDS.primaryBar]: null,
+  [WORKBENCH_PART_IDS.sidebar]: null,
   [WORKBENCH_PART_IDS.agentSidebar]: null,
   [WORKBENCH_PART_IDS.statusbar]: null,
   [WORKBENCH_PART_IDS.settings]: null,
@@ -143,10 +143,10 @@ const workbenchPartRefCallbacks = new Map<
 >();
 let activeContentLayoutOrientation: Orientation | null = null;
 
-function clampSidebarSize(target: 'primaryBar' | 'agentSidebar', size: number) {
+function clampSidebarSize(target: 'sidebar' | 'agentSidebar', size: number) {
   const limits = resolveActiveClampLimits();
   const axisLimits =
-    target === 'primaryBar'
+    target === 'sidebar'
       ? limits.primarySidebar
       : limits.agentSidebar;
 
@@ -204,7 +204,7 @@ function reduceWorkbenchLayoutState(
     case 'SET_SIDEBAR_SIZES': {
       const nextPrimarySidebarSize =
         typeof event.sizes.primarySidebarSize === 'number'
-          ? clampSidebarSize('primaryBar', event.sizes.primarySidebarSize)
+          ? clampSidebarSize('sidebar', event.sizes.primarySidebarSize)
           : state.primarySidebarSize;
       const nextAgentSidebarSize =
         typeof event.sizes.agentSidebarSize === 'number'
@@ -238,7 +238,7 @@ function reduceWorkbenchLayoutState(
         isPrimarySidebarVisible: !state.isPrimarySidebarVisible,
       });
     case 'SET_PRIMARY_SIDEBAR_SIZE': {
-      const nextSize = clampSidebarSize('primaryBar', event.size);
+      const nextSize = clampSidebarSize('sidebar', event.size);
       if (state.primarySidebarSize === nextSize) {
         return state;
       }

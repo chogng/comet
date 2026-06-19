@@ -21,7 +21,7 @@ let setWorkbenchSidebarSizes: typeof import('ls/workbench/browser/layout').setWo
 let setEditorCollapsed: typeof import('ls/workbench/browser/layout').setEditorCollapsed;
 let WORKBENCH_CONTENT_LAYOUT_BREAKPOINT: typeof import('ls/workbench/browser/layout').WORKBENCH_CONTENT_LAYOUT_BREAKPOINT;
 let SidebarTopbarActionsView: typeof import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions').SidebarTopbarActionsView;
-let PrimaryBarFooterActionsView: typeof import('ls/workbench/browser/parts/primarybar/primarybarFooterActions').PrimaryBarFooterActionsView;
+let SidebarFooterActionsView: typeof import('ls/workbench/browser/parts/sidebar/sidebarFooterActions').SidebarFooterActionsView;
 
 type RawWorkbenchLayoutViewProps = {
   mode?: 'content' | 'settings';
@@ -35,11 +35,11 @@ type RawWorkbenchLayoutViewProps = {
   settingsNavigationElement?: HTMLElement | null;
   settingsTopbarActionsElement?: HTMLElement | null;
   settingsContentElement?: HTMLElement | null;
-  primaryBarProps: any;
+  sidebarProps: any;
   agentBarProps: any;
   sidebarTopbarActionsProps: any;
   sidebarTopbarActionsElement: HTMLElement;
-  primaryBarFooterActionsElement: HTMLElement;
+  sidebarFooterActionsElement: HTMLElement;
   editorTopbarAuxiliaryActionsElement: HTMLElement;
   agentTopbarTrailingActionsElement?: HTMLElement | null;
   editorPartProps: any;
@@ -57,11 +57,11 @@ function createSidebarTopbarActionsElement(props: {
   return view.getElement();
 }
 
-function createPrimaryBarFooterActionsElement(props: {
+function createSidebarFooterActionsElement(props: {
   accountLabel: string;
   settingsLabel: string;
 }) {
-  const view = new PrimaryBarFooterActionsView();
+  const view = new SidebarFooterActionsView();
   view.setProps(props);
   return view.getElement();
 }
@@ -123,11 +123,11 @@ function materializeWorkbenchLayoutViewProps(
     settingsNavigationElement: props.settingsNavigationElement ?? null,
     settingsTopbarActionsElement: props.settingsTopbarActionsElement ?? null,
     settingsContentElement: props.settingsContentElement ?? null,
-    primaryBarProps: props.primaryBarProps,
+    sidebarProps: props.sidebarProps,
     agentBarProps: props.agentBarProps,
     editorPartProps: props.editorPartProps,
     sidebarTopbarActionsElement: props.sidebarTopbarActionsElement,
-    primaryBarFooterActionsElement: props.primaryBarFooterActionsElement,
+    sidebarFooterActionsElement: props.sidebarFooterActionsElement,
     editorTopbarAuxiliaryActionsElement: props.editorTopbarAuxiliaryActionsElement,
     agentTopbarTrailingActionsElement:
       props.agentTopbarTrailingActionsElement ?? null,
@@ -140,11 +140,11 @@ function materializeWorkbenchLayoutViewProps(
     settingsNavigationElement: props.settingsNavigationElement ?? null,
     settingsTopbarActionsElement: props.settingsTopbarActionsElement ?? null,
     settingsContentElement: props.settingsContentElement ?? null,
-    primaryBarProps: props.primaryBarProps,
+    sidebarProps: props.sidebarProps,
     agentBarProps: props.agentBarProps,
     editorPartProps: props.editorPartProps,
     sidebarTopbarActionsElement: props.sidebarTopbarActionsElement,
-    primaryBarFooterActionsElement: props.primaryBarFooterActionsElement,
+    sidebarFooterActionsElement: props.sidebarFooterActionsElement,
     editorTopbarAuxiliaryActionsElement: props.editorTopbarAuxiliaryActionsElement,
     agentTopbarTrailingActionsElement:
       props.agentTopbarTrailingActionsElement ?? null,
@@ -472,7 +472,7 @@ function createWorkbenchLayoutViewProps() {
     settingsTopbarActionsElement: null,
     settingsContentElement: null,
     fetchPaneProps,
-    primaryBarProps: {
+    sidebarProps: {
       labels: sidebarLabels,
       fetchPaneProps,
       librarySnapshot: {
@@ -551,7 +551,7 @@ function createWorkbenchLayoutViewProps() {
       addressBarLabel: 'Address bar',
       onTogglePrimarySidebar: () => {},
     }),
-    primaryBarFooterActionsElement: createPrimaryBarFooterActionsElement({
+    sidebarFooterActionsElement: createSidebarFooterActionsElement({
       accountLabel: 'Account',
       settingsLabel: 'Settings',
     }),
@@ -706,7 +706,7 @@ before(async () => {
     WORKBENCH_CONTENT_LAYOUT_BREAKPOINT,
   } = await import('ls/workbench/browser/layout'));
   ({ SidebarTopbarActionsView } = await import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions'));
-  ({ PrimaryBarFooterActionsView } = await import('ls/workbench/browser/parts/primarybar/primarybarFooterActions'));
+  ({ SidebarFooterActionsView } = await import('ls/workbench/browser/parts/sidebar/sidebarFooterActions'));
 });
 
 after(() => {
@@ -736,7 +736,7 @@ test('WorkbenchLayoutView mounts primary topbar actions into auxiliary topbar wh
   try {
     let primaryTopbarActionsHost = view
       .getElement()
-      .querySelector('.primarybar-topbar .sidebar-topbar-actions-host');
+      .querySelector('.sidebar-topbar .sidebar-topbar-actions-host');
     assert(primaryTopbarActionsHost instanceof HTMLElement);
     assert.equal(
       view
@@ -776,7 +776,7 @@ test('WorkbenchLayoutView mounts primary topbar actions into auxiliary topbar wh
     assert.equal(
       view
         .getElement()
-        .querySelector('.primarybar-topbar .sidebar-topbar-actions-host'),
+        .querySelector('.sidebar-topbar .sidebar-topbar-actions-host'),
       null,
     );
   } finally {
@@ -825,7 +825,7 @@ test('WorkbenchLayoutView mounts the editor collapse action into auxiliary topba
   }
 });
 
-test('WorkbenchLayoutView collapses editor and mounts expand action into primarybar topbar when only primarybar and editor are visible', () => {
+test('WorkbenchLayoutView collapses editor and mounts expand action into sidebar topbar when only sidebar and editor are visible', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = false;
@@ -856,7 +856,7 @@ test('WorkbenchLayoutView collapses editor and mounts expand action into primary
 
     const primaryToggleButton = view
       .getElement()
-      .querySelector('.primarybar-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn');
     assert(primaryToggleButton instanceof HTMLButtonElement);
     assert.equal(primaryToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
@@ -1002,12 +1002,12 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
   try {
     const initialTopbarActionsHost = view
       .getElement()
-      .querySelector('.primarybar-topbar .sidebar-topbar-actions-host');
+      .querySelector('.sidebar-topbar .sidebar-topbar-actions-host');
     assert.equal(initialTopbarActionsHost, props.sidebarTopbarActionsElement);
     assert(
       view
         .getElement()
-        .querySelector('.primarybar-content .primarybar-content-host') instanceof HTMLElement,
+        .querySelector('.sidebar-content .sidebar-content-host') instanceof HTMLElement,
     );
     assert(
       view
@@ -1041,25 +1041,25 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
 
     const mountedTopbarActionsHost = view
       .getElement()
-      .querySelector('.primarybar-topbar .sidebar-topbar-actions-host');
+      .querySelector('.sidebar-topbar .sidebar-topbar-actions-host');
     assert.equal(mountedTopbarActionsHost, settingsTopbarActionsElement);
     assert.equal(
       view
         .getElement()
-        .querySelector('.primarybar-topbar .sidebar-topbar-toggle-btn')
+        .querySelector('.sidebar-topbar .sidebar-topbar-toggle-btn')
         ?.getAttribute('aria-label'),
       'Back',
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.primarybar-content > .settings-navigation'),
+        .querySelector('.sidebar-content > .settings-navigation'),
       settingsNavigationElement,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.primarybar-content .primarybar-content-host'),
+        .querySelector('.sidebar-content .sidebar-content-host'),
       null,
     );
     assert.equal(
@@ -1305,7 +1305,7 @@ test('WorkbenchLayoutView keeps the agent toggle in editor topbar when the agent
 
     const primaryAgentButton = view
       .getElement()
-      .querySelector('.primarybar-topbar .editor-topbar-agent-btn');
+      .querySelector('.sidebar-topbar .editor-topbar-agent-btn');
     assert.equal(primaryAgentButton, null);
   } finally {
     view.dispose();
@@ -3169,13 +3169,13 @@ test('WorkbenchLayoutView mounts the editor collapse action into agentbar topbar
     assert(
       view
         .getElement()
-        .querySelector('.primarybar-topbar .sidebar-topbar-actions-host')
+        .querySelector('.sidebar-topbar .sidebar-topbar-actions-host')
         instanceof HTMLElement,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.primarybar-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -3544,7 +3544,7 @@ test('WorkbenchLayoutView keeps primary and agent widths fixed when agentbar bec
   }
 });
 
-test('WorkbenchLayoutView keeps editor collapsed and mounts expand action into primarybar when agentbar is hidden from collapsed mode', () => {
+test('WorkbenchLayoutView keeps editor collapsed and mounts expand action into sidebar when agentbar is hidden from collapsed mode', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3595,7 +3595,7 @@ test('WorkbenchLayoutView keeps editor collapsed and mounts expand action into p
     assert(nextGridView.getViewSize([0]) > primarySizeBefore);
     const primaryToggleButton = view
       .getElement()
-      .querySelector('.primarybar-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn');
     assert(primaryToggleButton instanceof HTMLButtonElement);
     assert.equal(primaryToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(

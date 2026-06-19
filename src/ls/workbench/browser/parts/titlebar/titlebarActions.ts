@@ -1,12 +1,12 @@
 import type { LocaleMessages } from 'language/locales';
 import type { EditorPartLabels, EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { EditorTopbarActionsViewProps } from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
-import type { PrimaryBarFooterActionsProps, PrimaryBarFooterLayoutMode } from 'ls/workbench/browser/parts/primarybar/primarybarFooterActions';
+import type { SidebarFooterActionsProps, SidebarFooterLayoutMode } from 'ls/workbench/browser/parts/sidebar/sidebarFooterActions';
 import type { SidebarTopbarActionsProps } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 
-export type PrimaryBarTitlebarLabels = Pick<
-  PrimaryBarFooterActionsProps,
+export type SidebarFooterTitlebarLabels = Pick<
+  SidebarFooterActionsProps,
   'accountLabel' | 'moreLabel' | 'settingsLabel'
 >;
 
@@ -24,10 +24,10 @@ export type SidebarTitlebarLabels = {
   refresh: string;
 };
 
-export function resolvePrimaryBarFooterLayoutMode(props: {
+export function resolveSidebarFooterLayoutMode(props: {
   isAgentSidebarVisible: boolean;
   isEditorCollapsed: boolean;
-}): PrimaryBarFooterLayoutMode | null {
+}): SidebarFooterLayoutMode | null {
   if (props.isEditorCollapsed) {
     return null;
   }
@@ -151,9 +151,9 @@ export function createSidebarTitlebarLabels(
   };
 }
 
-export function createPrimaryBarTitlebarLabels(
+export function createSidebarFooterTitlebarLabels(
   ui: LocaleMessages,
-): PrimaryBarTitlebarLabels {
+): SidebarFooterTitlebarLabels {
   return {
     accountLabel: ui.appName,
     moreLabel: ui.agentbarToolbarMore,
@@ -161,7 +161,7 @@ export function createPrimaryBarTitlebarLabels(
   };
 }
 
-export function createPrimaryBarTitlebarActionsProps(params: {
+export function createSidebarFooterTitlebarActionsProps(params: {
   ui: LocaleMessages;
   isSettingsActive: boolean;
   isAgentSidebarVisible: boolean;
@@ -169,7 +169,7 @@ export function createPrimaryBarTitlebarActionsProps(params: {
   onApplyLayoutAgent: () => void;
   onApplyLayoutFlow: () => void;
   onOpenSettings: () => void;
-}): PrimaryBarFooterActionsProps {
+}): SidebarFooterActionsProps {
   const {
     ui,
     isSettingsActive,
@@ -181,11 +181,11 @@ export function createPrimaryBarTitlebarActionsProps(params: {
   } = params;
 
   return {
-    ...createPrimaryBarTitlebarLabels(ui),
+    ...createSidebarFooterTitlebarLabels(ui),
     isSettingsActive,
     activeLayoutMode: isSettingsActive
       ? 'flow'
-      : resolvePrimaryBarFooterLayoutMode({
+      : resolveSidebarFooterLayoutMode({
           isAgentSidebarVisible,
           isEditorCollapsed,
         }),

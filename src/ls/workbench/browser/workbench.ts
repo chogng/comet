@@ -33,12 +33,12 @@ import type { EditorPartChangeReason, EditorPartControllerContext, EditorPartMod
 
 import type { EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { createEditorBrowserToolbarActions } from 'ls/workbench/browser/parts/editor/editorBrowserToolbarActions';
-import { PrimaryBarFooterActionsView } from 'ls/workbench/browser/parts/primarybar/primarybarFooterActions';
+import { SidebarFooterActionsView } from 'ls/workbench/browser/parts/sidebar/sidebarFooterActions';
 import { SidebarTopbarActionsView } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
 import {
   createEditorTitlebarActionsProps,
-  createPrimaryBarTitlebarLabels,
-  createPrimaryBarTitlebarActionsProps,
+  createSidebarFooterTitlebarLabels,
+  createSidebarFooterTitlebarActionsProps,
   createSidebarTitlebarActionsProps,
   resolveTitlebarAssistantToggleLabel,
   resolveTitlebarSettingsLabel,
@@ -54,7 +54,7 @@ import {
 import { createAgentBarPartProps } from 'ls/workbench/browser/parts/agentbar/agentbarPart';
 import type { AgentBarPartProps } from 'ls/workbench/browser/parts/agentbar/agentbarPart';
 
-import type { PrimaryBarProps } from 'ls/workbench/browser/parts/primarybar/primarybarPart';
+import type { SidebarProps } from 'ls/workbench/browser/parts/sidebar/sidebarPart';
 import { createFetchPaneProps } from 'ls/workbench/browser/parts/sidebar/fetchPanePart';
 
 import { createToastOverlayWindowView } from 'ls/workbench/browser/toastOverlayWindow';
@@ -672,7 +672,7 @@ class WorkbenchHost {
     backLabel: '',
     onNavigateBack: () => {},
   });
-  private readonly primaryBarFooterActionsView = new PrimaryBarFooterActionsView();
+  private readonly sidebarFooterActionsView = new SidebarFooterActionsView();
   private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
   private editorPartController: EditorPartModel | null = null;
   private readonly globalDisposables: Array<() => void> = [];
@@ -768,7 +768,7 @@ class WorkbenchHost {
     this.agentSidebarTopbarActionsView.dispose();
     this.sidebarTopbarActionsView.dispose();
     this.settingsTopbarActionsView.dispose();
-    this.primaryBarFooterActionsView.dispose();
+    this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
     this.settingsView = null;
     this.editorPartController = null;
@@ -1147,11 +1147,11 @@ class WorkbenchHost {
     isEditorCollapsed: boolean;
     expandedEditorSize: number;
     fetchPaneProps: ReturnType<typeof createFetchPaneProps>;
-    primaryBarProps: PrimaryBarProps;
+    sidebarProps: SidebarProps;
     agentBarProps: AgentBarPartProps;
     sidebarTopbarActionsProps: ReturnType<typeof createSidebarTitlebarActionsProps>;
-    primaryBarFooterActionsProps: ReturnType<
-      typeof createPrimaryBarTitlebarActionsProps
+    sidebarFooterActionsProps: ReturnType<
+      typeof createSidebarFooterTitlebarActionsProps
     >;
     editorTopbarAuxiliaryActionsElement?: HTMLElement | null;
     editorPartProps: EditorPartProps;
@@ -1160,18 +1160,18 @@ class WorkbenchHost {
     this.settingsView?.dispose();
     this.settingsView = null;
     this.sidebarTopbarActionsView.setProps(props.sidebarTopbarActionsProps);
-    this.primaryBarFooterActionsView.setProps(
-      props.primaryBarFooterActionsProps,
+    this.sidebarFooterActionsView.setProps(
+      props.sidebarFooterActionsProps,
     );
     const partViewProps = {
       mode: 'content' as const,
       isPrimarySidebarVisible: props.isPrimarySidebarVisible,
       isAgentSidebarVisible: props.isAgentSidebarVisible,
-      primaryBarProps: props.primaryBarProps,
+      sidebarProps: props.sidebarProps,
       agentBarProps: props.agentBarProps,
       editorPartProps: props.editorPartProps,
       sidebarTopbarActionsElement: this.sidebarTopbarActionsView.getElement(),
-      primaryBarFooterActionsElement: this.primaryBarFooterActionsView.getElement(),
+      sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
       editorTopbarAuxiliaryActionsElement:
         props.editorTopbarAuxiliaryActionsElement,
       agentTopbarTrailingActionsElement:
@@ -1225,11 +1225,11 @@ class WorkbenchHost {
       primarySidebarSize: number;
       agentSidebarSize: number;
       expandedEditorSize: number;
-      primaryBarProps: PrimaryBarProps;
+      sidebarProps: SidebarProps;
       agentBarProps: AgentBarPartProps;
       editorPartProps: EditorPartProps;
-      primaryBarFooterActionsProps: ReturnType<
-        typeof createPrimaryBarTitlebarActionsProps
+      sidebarFooterActionsProps: ReturnType<
+        typeof createSidebarFooterTitlebarActionsProps
       >;
     },
   ) {
@@ -1244,21 +1244,21 @@ class WorkbenchHost {
       backLabel: props.settingsPartProps.labels.settingsNavigationBack,
       onNavigateBack: props.settingsPartProps.onNavigateBack,
     });
-    this.primaryBarFooterActionsView.setProps(
-      props.primaryBarFooterActionsProps,
+    this.sidebarFooterActionsView.setProps(
+      props.sidebarFooterActionsProps,
     );
     const partViewProps = {
       mode: 'settings' as const,
       isPrimarySidebarVisible: true,
       isAgentSidebarVisible: false,
-      primaryBarProps: props.primaryBarProps,
+      sidebarProps: props.sidebarProps,
       settingsNavigationElement: this.settingsView.getNavigationElement(),
       settingsTopbarActionsElement: this.settingsTopbarActionsView.getElement(),
       agentBarProps: props.agentBarProps,
       editorPartProps: props.editorPartProps,
       settingsContentElement: this.settingsView.getElement(),
       sidebarTopbarActionsElement: this.sidebarTopbarActionsView.getElement(),
-      primaryBarFooterActionsElement: this.primaryBarFooterActionsView.getElement(),
+      sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
       editorTopbarAuxiliaryActionsElement: null,
     };
     if (!this.workbenchContentPartViews) {
@@ -1986,9 +1986,9 @@ class WorkbenchHost {
       },
     });
 
-    const primaryBarProps: PrimaryBarProps = {
+    const sidebarProps: SidebarProps = {
       labels: fetchPaneProps.labels,
-      ...createPrimaryBarTitlebarLabels(ui),
+      ...createSidebarFooterTitlebarLabels(ui),
       fetchPaneProps,
       librarySnapshot,
       isLibraryLoading,
@@ -2328,10 +2328,10 @@ class WorkbenchHost {
         isEditorCollapsed,
         expandedEditorSize,
         fetchPaneProps,
-        primaryBarProps,
+        sidebarProps,
         agentBarProps,
         sidebarTopbarActionsProps,
-        primaryBarFooterActionsProps: createPrimaryBarTitlebarActionsProps({
+        sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
           ui,
           isSettingsActive: false,
           isAgentSidebarVisible,
@@ -2360,10 +2360,10 @@ class WorkbenchHost {
         primarySidebarSize,
         agentSidebarSize,
         expandedEditorSize,
-        primaryBarProps,
+        sidebarProps,
         agentBarProps,
         editorPartProps: contentAwareEditorPartProps,
-        primaryBarFooterActionsProps: createPrimaryBarTitlebarActionsProps({
+        sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
           ui,
           isSettingsActive: true,
           isAgentSidebarVisible: false,

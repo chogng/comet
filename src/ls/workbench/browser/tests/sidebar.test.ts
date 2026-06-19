@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
-import type { PrimaryBarProps } from 'ls/workbench/browser/parts/primarybar/primarybar';
+import type { SidebarProps } from 'ls/workbench/browser/parts/sidebar/sidebar';
 import type { SidebarTopbarActionsProps } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createPrimaryBar: typeof import('ls/workbench/browser/parts/primarybar/primarybar').createPrimaryBar;
+let createSidebar: typeof import('ls/workbench/browser/parts/sidebar/sidebar').createSidebar;
 let SidebarTopbarActionsView: typeof import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions').SidebarTopbarActionsView;
-let PrimaryBarFooterActionsView: typeof import('ls/workbench/browser/parts/primarybar/primarybarFooterActions').PrimaryBarFooterActionsView;
+let SidebarFooterActionsView: typeof import('ls/workbench/browser/parts/sidebar/sidebarFooterActions').SidebarFooterActionsView;
 
 function delay(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createProps(): PrimaryBarProps {
+function createProps(): SidebarProps {
   const labels = {
     libraryTitle: 'Library',
     fetchTitle: 'Fetch',
@@ -23,7 +23,7 @@ function createProps(): PrimaryBarProps {
     selectionModeExit: 'Exit selection',
     fetchLatest: 'Fetch latest',
     fetchLatestBusy: 'Fetching latest',
-  } as PrimaryBarProps['labels'];
+  } as SidebarProps['labels'];
 
   const fetchPaneProps = {
     articles: [],
@@ -44,7 +44,7 @@ function createProps(): PrimaryBarProps {
     selectedArticleKeys: new Set<string>(),
     onToggleSelectionMode: () => {},
     onToggleArticleSelected: () => {},
-  } as PrimaryBarProps['fetchPaneProps'];
+  } as SidebarProps['fetchPaneProps'];
 
   return {
     labels,
@@ -73,9 +73,9 @@ function createTopbarActionsProps(): SidebarTopbarActionsProps {
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ createPrimaryBar } = await import('ls/workbench/browser/parts/primarybar/primarybar'));
+  ({ createSidebar } = await import('ls/workbench/browser/parts/sidebar/sidebar'));
   ({ SidebarTopbarActionsView } = await import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions'));
-  ({ PrimaryBarFooterActionsView } = await import('ls/workbench/browser/parts/primarybar/primarybarFooterActions'));
+  ({ SidebarFooterActionsView } = await import('ls/workbench/browser/parts/sidebar/sidebarFooterActions'));
 });
 
 after(() => {
@@ -83,7 +83,7 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('primary bar topbar exposes a primary sidebar toggle action', () => {
+test('sidebar topbar exposes a primary sidebar toggle action', () => {
   let toggleCount = 0;
   const topbarActionsView = new SidebarTopbarActionsView({
     ...createTopbarActionsProps(),
@@ -91,16 +91,16 @@ test('primary bar topbar exposes a primary sidebar toggle action', () => {
       toggleCount += 1;
     },
   });
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     topbarActionsElement: topbarActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
     const toggleButton = element.querySelector(
-      '.primarybar-topbar .sidebar-topbar-toggle-btn',
+      '.sidebar-topbar .sidebar-topbar-toggle-btn',
     );
     assert(toggleButton instanceof HTMLButtonElement);
     assert.equal(
@@ -111,40 +111,40 @@ test('primary bar topbar exposes a primary sidebar toggle action', () => {
     toggleButton.click();
     assert.equal(toggleCount, 1);
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     topbarActionsView.dispose();
   }
 });
 
-test('primary bar topbar exposes an address bar action', () => {
+test('sidebar topbar exposes an address bar action', () => {
   const topbarActionsView = new SidebarTopbarActionsView(createTopbarActionsProps());
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     topbarActionsElement: topbarActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
     const searchButton = element.querySelector(
-      '.primarybar-topbar .sidebar-topbar-search-btn',
+      '.sidebar-topbar .sidebar-topbar-search-btn',
     );
     assert(searchButton instanceof HTMLButtonElement);
     assert.equal(searchButton.getAttribute('aria-label'), 'Address bar');
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     topbarActionsView.dispose();
   }
 });
 
-test('primary bar renders library and fetch as switcher tabs', () => {
-  const primaryBar = createPrimaryBar(createProps());
-  const element = primaryBar.getElement();
+test('sidebar renders library and fetch as switcher tabs', () => {
+  const sidebar = createSidebar(createProps());
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
-    const libraryTab = element.querySelector('.primarybar-library-tab');
-    const fetchTab = element.querySelector('.primarybar-fetch-tab');
+    const libraryTab = element.querySelector('.sidebar-library-tab');
+    const fetchTab = element.querySelector('.sidebar-fetch-tab');
     assert(libraryTab instanceof HTMLButtonElement);
     assert(fetchTab instanceof HTMLButtonElement);
     assert.equal(libraryTab.textContent, 'Library');
@@ -153,9 +153,9 @@ test('primary bar renders library and fetch as switcher tabs', () => {
     assert(fetchTab.querySelector('.lx-icon-customize') instanceof HTMLElement);
     assert.equal(libraryTab.getAttribute('aria-selected'), 'true');
     assert.equal(fetchTab.getAttribute('aria-selected'), 'false');
-    assert(element.querySelector('.primarybar-library-panel') instanceof HTMLElement);
-    assert.equal(element.querySelector('.primarybar-fetch-panel'), null);
-    assert.equal(element.querySelector('.primarybar-tab-actions .fetch-pane-actionbar'), null);
+    assert(element.querySelector('.sidebar-library-panel') instanceof HTMLElement);
+    assert.equal(element.querySelector('.sidebar-fetch-panel'), null);
+    assert.equal(element.querySelector('.sidebar-tab-actions .fetch-pane-actionbar'), null);
 
     fetchTab.click();
 
@@ -163,109 +163,109 @@ test('primary bar renders library and fetch as switcher tabs', () => {
     assert.equal(fetchTab.getAttribute('aria-selected'), 'true');
     assert(libraryTab.querySelector('.lx-icon-projects') instanceof HTMLElement);
     assert(fetchTab.querySelector('.lx-icon-customize-filled') instanceof HTMLElement);
-    assert(element.querySelector('.primarybar-fetch-panel') instanceof HTMLElement);
-    assert.equal(element.querySelector('.primarybar-library-panel'), null);
+    assert(element.querySelector('.sidebar-fetch-panel') instanceof HTMLElement);
+    assert.equal(element.querySelector('.sidebar-library-panel'), null);
     assert(
-      element.querySelector('.primarybar-tab-actions .fetch-pane-actionbar') instanceof HTMLElement,
+      element.querySelector('.sidebar-tab-actions .fetch-pane-actionbar') instanceof HTMLElement,
     );
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
   }
 });
 
-test('primary bar renders a footer at the bottom and mounts footer content', () => {
-  const footerActionsView = new PrimaryBarFooterActionsView({
+test('sidebar renders a footer at the bottom and mounts footer content', () => {
+  const footerActionsView = new SidebarFooterActionsView({
     accountLabel: 'Literature Studio',
     settingsLabel: 'Settings',
   });
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     footerActionsElement: footerActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
-    const footer = element.querySelector('.primarybar-footer');
+    const footer = element.querySelector('.sidebar-footer');
     assert(footer instanceof HTMLElement);
     assert.equal(element.lastElementChild, footer);
     assert.equal(
-      footer.querySelector('.primarybar-footer-actions-host'),
+      footer.querySelector('.sidebar-footer-actions-host'),
       footerActionsView.getElement(),
     );
     assert.equal(
-      footer.querySelector('.primarybar-footer-account-label')?.textContent,
+      footer.querySelector('.sidebar-footer-account-label')?.textContent,
       'Literature Studio',
     );
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     footerActionsView.dispose();
   }
 });
 
-test('primary bar footer settings action dispatches the provided handler', () => {
+test('sidebar footer settings action dispatches the provided handler', () => {
   let triggered = false;
-  const footerActionsView = new PrimaryBarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView({
     accountLabel: 'Literature Studio',
     settingsLabel: 'Settings',
     onOpenSettings: () => {
       triggered = true;
     },
   });
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     footerActionsElement: footerActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
     const settingsButton = element.querySelector(
-      '.primarybar-footer .primarybar-footer-settings-btn',
+      '.sidebar-footer .sidebar-footer-settings-btn',
     );
     assert(settingsButton instanceof HTMLButtonElement);
     assert.equal(settingsButton.getAttribute('aria-label'), 'Settings');
     settingsButton.click();
     assert.equal(triggered, true);
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     footerActionsView.dispose();
   }
 });
 
-test('primary bar footer renders more action to the left of settings', () => {
-  const footerActionsView = new PrimaryBarFooterActionsView({
+test('sidebar footer renders more action to the left of settings', () => {
+  const footerActionsView = new SidebarFooterActionsView({
     accountLabel: 'Literature Studio',
     settingsLabel: 'Settings',
   });
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     footerActionsElement: footerActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
     const actions = Array.from(
-      element.querySelectorAll('.primarybar-footer .actionbar-action'),
+      element.querySelectorAll('.sidebar-footer .actionbar-action'),
     );
     assert.equal(actions.length >= 2, true);
-    assert.equal(actions[0]?.classList.contains('primarybar-footer-more-btn'), true);
+    assert.equal(actions[0]?.classList.contains('sidebar-footer-more-btn'), true);
     assert.equal(
       actions[0]?.querySelector('.lx-icon')?.classList.contains('lx-icon-more-2'),
       true,
     );
-    assert.equal(actions[1]?.classList.contains('primarybar-footer-settings-btn'), true);
+    assert.equal(actions[1]?.classList.contains('sidebar-footer-settings-btn'), true);
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     footerActionsView.dispose();
   }
 });
 
-test('primary bar footer more action exposes agent and flow layout actions', async () => {
+test('sidebar footer more action exposes agent and flow layout actions', async () => {
   let appliedAgentLayoutCount = 0;
   let appliedFlowLayoutCount = 0;
-  const footerActionsView = new PrimaryBarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView({
     accountLabel: 'Literature Studio',
     settingsLabel: 'Settings',
     onApplyLayoutAgent: () => {
@@ -275,16 +275,16 @@ test('primary bar footer more action exposes agent and flow layout actions', asy
       appliedFlowLayoutCount += 1;
     },
   });
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     footerActionsElement: footerActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
     const moreButton = element.querySelector(
-      '.primarybar-footer .primarybar-footer-more-btn',
+      '.sidebar-footer .sidebar-footer-more-btn',
     );
     assert(moreButton instanceof HTMLButtonElement);
     assert.equal(moreButton.getAttribute('aria-label'), 'More');
@@ -293,10 +293,10 @@ test('primary bar footer more action exposes agent and flow layout actions', asy
     await delay(0);
 
     const menu = document.body.querySelector(
-      '.actionbar-context-view.primarybar-footer-more-menu-overlay .dropdown-menu',
+      '.actionbar-context-view.sidebar-footer-more-menu-overlay .dropdown-menu',
     );
     assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'primarybar-footer-more');
+    assert.equal(menu.getAttribute('data-menu'), 'sidebar-footer-more');
     assert.equal(moreButton.getAttribute('aria-expanded'), 'true');
 
     const layoutItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
@@ -307,7 +307,7 @@ test('primary bar footer more action exposes agent and flow layout actions', asy
     layoutItem.click();
     await delay(0);
     const submenu = document.body.querySelector(
-      '.actionbar-context-view.primarybar-footer-more-menu-overlay .ls-menu-submenu',
+      '.actionbar-context-view.sidebar-footer-more-menu-overlay .ls-menu-submenu',
     );
     assert(submenu instanceof HTMLElement);
     const submenuLabels = Array.from(
@@ -326,7 +326,7 @@ test('primary bar footer more action exposes agent and flow layout actions', asy
     moreButton.click();
     await delay(0);
     const reopenedMenu = document.body.querySelector(
-      '.actionbar-context-view.primarybar-footer-more-menu-overlay .dropdown-menu',
+      '.actionbar-context-view.sidebar-footer-more-menu-overlay .dropdown-menu',
     );
     assert(reopenedMenu instanceof HTMLElement);
     const reopenedLayoutItem = Array.from(
@@ -336,7 +336,7 @@ test('primary bar footer more action exposes agent and flow layout actions', asy
     reopenedLayoutItem.click();
     await delay(0);
     const reopenedSubmenu = document.body.querySelector(
-      '.actionbar-context-view.primarybar-footer-more-menu-overlay .ls-menu-submenu',
+      '.actionbar-context-view.sidebar-footer-more-menu-overlay .ls-menu-submenu',
     );
     assert(reopenedSubmenu instanceof HTMLElement);
     const flowItem = Array.from(
@@ -349,33 +349,33 @@ test('primary bar footer more action exposes agent and flow layout actions', asy
 
     assert.equal(
       document.body.querySelector(
-        '.actionbar-context-view.primarybar-footer-more-menu-overlay .dropdown-menu',
+        '.actionbar-context-view.sidebar-footer-more-menu-overlay .dropdown-menu',
       ),
       null,
     );
     assert.equal(moreButton.getAttribute('aria-expanded'), 'false');
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     footerActionsView.dispose();
   }
 });
 
-test('primary bar footer layout submenu marks the active layout', async () => {
-  const footerActionsView = new PrimaryBarFooterActionsView({
+test('sidebar footer layout submenu marks the active layout', async () => {
+  const footerActionsView = new SidebarFooterActionsView({
     accountLabel: 'Literature Studio',
     settingsLabel: 'Settings',
     activeLayoutMode: 'agent',
   });
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     footerActionsElement: footerActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
     const moreButton = element.querySelector(
-      '.primarybar-footer .primarybar-footer-more-btn',
+      '.sidebar-footer .sidebar-footer-more-btn',
     );
     assert(moreButton instanceof HTMLButtonElement);
 
@@ -383,7 +383,7 @@ test('primary bar footer layout submenu marks the active layout', async () => {
     await delay(0);
 
     const menu = document.body.querySelector(
-      '.actionbar-context-view.primarybar-footer-more-menu-overlay .dropdown-menu',
+      '.actionbar-context-view.sidebar-footer-more-menu-overlay .dropdown-menu',
     );
     assert(menu instanceof HTMLElement);
     const layoutItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
@@ -394,7 +394,7 @@ test('primary bar footer layout submenu marks the active layout', async () => {
     await delay(0);
 
     const submenu = document.body.querySelector(
-      '.actionbar-context-view.primarybar-footer-more-menu-overlay .ls-menu-submenu',
+      '.actionbar-context-view.sidebar-footer-more-menu-overlay .ls-menu-submenu',
     );
     assert(submenu instanceof HTMLElement);
     const agentItem = Array.from(
@@ -416,34 +416,34 @@ test('primary bar footer layout submenu marks the active layout', async () => {
       true,
     );
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     footerActionsView.dispose();
   }
 });
 
-test('primary bar footer settings action keeps active styling when settings is active', () => {
-  const footerActionsView = new PrimaryBarFooterActionsView({
+test('sidebar footer settings action keeps active styling when settings is active', () => {
+  const footerActionsView = new SidebarFooterActionsView({
     accountLabel: 'Literature Studio',
     settingsLabel: 'Settings',
     isSettingsActive: true,
   });
-  const primaryBar = createPrimaryBar({
+  const sidebar = createSidebar({
     ...createProps(),
     footerActionsElement: footerActionsView.getElement(),
   });
-  const element = primaryBar.getElement();
+  const element = sidebar.getElement();
   document.body.append(element);
 
   try {
     const settingsButton = element.querySelector(
-      '.primarybar-footer .primarybar-footer-settings-btn',
+      '.sidebar-footer .sidebar-footer-settings-btn',
     );
     assert(settingsButton instanceof HTMLButtonElement);
     const settingsItem = settingsButton.closest('.actionbar-item');
     assert(settingsItem instanceof HTMLElement);
     assert.equal(settingsItem.classList.contains('is-active'), true);
   } finally {
-    primaryBar.dispose();
+    sidebar.dispose();
     footerActionsView.dispose();
   }
 });

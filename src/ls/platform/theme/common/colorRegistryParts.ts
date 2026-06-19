@@ -95,72 +95,72 @@ export const sideBarStatusNeutralForeground = registerColor('sideBar.statusNeutr
   light: '#536576',
 });
 
-export const primaryBarBackground = registerColor('primaryBar.background', {
+export const sideBarBackground = registerColor('sideBar.background', {
   dark: '#18222c',
   light: '#fafafa',
 });
 
-export const primaryBarFetchCardBorder = registerColor('primaryBar.fetchCardBorder', {
+export const sideBarFetchCardBorder = registerColor('sideBar.fetchCardBorder', {
   dark: '#3a3f45',
   light: '#ebebeb',
 });
 
-export const primaryBarFetchCardHoverBackground = registerColor('primaryBar.fetchCardHoverBackground', {
+export const sideBarFetchCardHoverBackground = registerColor('sideBar.fetchCardHoverBackground', {
   dark: '#232a31',
   light: '#f3f3f3',
 });
 
-export const primaryBarFetchCardFocusBorder = registerColor('primaryBar.fetchCardFocusBorder', {
+export const sideBarFetchCardFocusBorder = registerColor('sideBar.fetchCardFocusBorder', {
   dark: '#5aa9ff',
   light: '#0078d4',
 });
 
-export const primaryBarFetchCardSelectedBackground = registerColor('primaryBar.fetchCardSelectedBackground', {
+export const sideBarFetchCardSelectedBackground = registerColor('sideBar.fetchCardSelectedBackground', {
   dark: '#1d3147',
   light: '#eef6ff',
 });
 
-export const primaryBarFetchCardSelectedHoverBackground = registerColor('primaryBar.fetchCardSelectedHoverBackground', {
+export const sideBarFetchCardSelectedHoverBackground = registerColor('sideBar.fetchCardSelectedHoverBackground', {
   dark: '#223954',
   light: '#e6f1ff',
 });
 
-export const primaryBarFetchCardSelectedBorder = registerColor('primaryBar.fetchCardSelectedBorder', {
+export const sideBarFetchCardSelectedBorder = registerColor('sideBar.fetchCardSelectedBorder', {
   dark: '#5aa9ff',
   light: '#0a5fbf',
 });
 
-export const primaryBarFetchCardTitleForeground = registerColor('primaryBar.fetchCardTitleForeground', {
+export const sideBarFetchCardTitleForeground = registerColor('sideBar.fetchCardTitleForeground', {
   dark: '#edf3f9',
   light: '#1f1f1f',
 });
 
-export const primaryBarFetchCardMetaForeground = registerColor('primaryBar.fetchCardMetaForeground', {
+export const sideBarFetchCardMetaForeground = registerColor('sideBar.fetchCardMetaForeground', {
   dark: '#a0afbd',
   light: '#6a6a6a',
 });
 
-export const primaryBarFetchCardBodyForeground = registerColor('primaryBar.fetchCardBodyForeground', {
+export const sideBarFetchCardBodyForeground = registerColor('sideBar.fetchCardBodyForeground', {
   dark: '#b6c6d6',
   light: '#334455',
 });
 
-export const primaryBarFetchCardStrongForeground = registerColor('primaryBar.fetchCardStrongForeground', {
+export const sideBarFetchCardStrongForeground = registerColor('sideBar.fetchCardStrongForeground', {
   dark: '#eef4fb',
   light: '#1c2a38',
 });
 
-export const primaryBarEmptyStateForeground = registerColor('primaryBar.emptyStateForeground', {
+export const sideBarEmptyStateForeground = registerColor('sideBar.emptyStateForeground', {
   dark: '#9dafc1',
   light: '#556577',
 });
 
-export const primaryBarLinkForeground = registerColor('primaryBar.linkForeground', {
+export const sideBarLinkForeground = registerColor('sideBar.linkForeground', {
   dark: '#7cb6ff',
   light: '#0a5fbf',
 });
 
-export const primaryBarLinkHoverForeground = registerColor('primaryBar.linkHoverForeground', {
+export const sideBarLinkHoverForeground = registerColor('sideBar.linkHoverForeground', {
   dark: '#9cc8ff',
   light: '#0d6ed8',
 });
