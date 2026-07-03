@@ -47,7 +47,7 @@
   height: 100%;
 }
 
-.agentbar-topbar-trailing > .sidebar-topbar-actions {
+.agentbar-topbar-trailing > .topbar-actions {
   margin-left: 0;
 }
 
@@ -64,7 +64,7 @@
   gap: 0;
 }
 
-.agentbar-topbar-trailing-actions-host .sidebar-topbar-actions {
+.agentbar-topbar-trailing-actions-host .topbar-actions {
   margin-left: 0;
 }
 

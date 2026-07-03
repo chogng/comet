@@ -466,6 +466,7 @@ const en = {
   sidebarSelectionModeSelectAll: 'Select all',
   sidebarSelectionModeExit: 'Cancel',
   titlebarControls: 'Window controls',
+  titlebarMenu: 'Menu',
   titlebarSettings: 'Settings',
   titlebarMinimize: 'Minimize',
   titlebarMaximize: 'Maximize',

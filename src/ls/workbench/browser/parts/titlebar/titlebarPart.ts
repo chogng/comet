@@ -4,16 +4,28 @@ import {
   WORKBENCH_PART_IDS,
 } from 'ls/workbench/browser/layout';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
+import { createActionBarView, type ActionBarItem } from 'ls/base/browser/ui/actionbar/actionbar';
+import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
+import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import 'ls/workbench/browser/parts/titlebar/media/titlebarpart.css';
 
 export type TitlebarPartPage = 'content' | 'settings';
+
+export type TitlebarLeadingActionsProps = {
+  menuLabel?: string;
+  isPrimarySidebarVisible?: boolean;
+  primarySidebarToggleLabel?: string;
+  addressBarLabel?: string;
+  onTogglePrimarySidebar?: () => void;
+  onFocusAddressBar?: () => void;
+};
 
 export type TitlebarPartSyncParams = {
   electronRuntime: boolean;
   useMica: boolean;
   statusbarVisible: boolean;
   activePage: TitlebarPartPage;
-  leftActionbarElement: HTMLElement | null;
+  leadingActions: TitlebarLeadingActionsProps;
 };
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
@@ -27,6 +39,11 @@ export class TitlebarPart {
   private readonly titlebarContainerElement = document.createElement('div');
   private readonly dragRegionElement = document.createElement('div');
   private readonly leftElement = document.createElement('div');
+  private readonly leadingActionsHostElement = document.createElement('div');
+  private readonly leadingActionBarView = createActionBarView({
+    className: 'titlebar-leading-actions',
+    ariaRole: 'group',
+  });
 
   constructor(
     private readonly containerElement: HTMLElement,
@@ -37,6 +54,8 @@ export class TitlebarPart {
     this.titlebarContainerElement.className = 'titlebar-container';
     this.dragRegionElement.className = 'titlebar-drag-region';
     this.leftElement.className = 'titlebar-left';
+    this.leadingActionsHostElement.className = 'titlebar-leading-actions-host';
+    this.leadingActionsHostElement.append(this.leadingActionBarView.getElement());
     this.titlebarContainerElement.append(
       this.dragRegionElement,
       this.leftElement,
@@ -82,31 +101,88 @@ export class TitlebarPart {
 
   dispose() {
     this.leftElement.replaceChildren();
+    this.leadingActionBarView.dispose();
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, null);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.statusbar, null);
   }
 
   private syncTitlebar(params: TitlebarPartSyncParams) {
-    this.syncTitlebarLeftColumn(
-      this.leftElement,
-      params.leftActionbarElement,
-    );
+    this.syncLeadingActions(params.leadingActions);
 
     this.titlebarContainerElement.classList.remove('has-center');
-    this.leftElement.hidden = !params.leftActionbarElement;
+    this.leftElement.hidden = !this.leadingActionsHostElement.isConnected;
   }
 
-  private syncTitlebarLeftColumn(columnElement: HTMLElement, actionbarElement: HTMLElement | null) {
-    if (actionbarElement) {
-      if (columnElement.firstElementChild !== actionbarElement || columnElement.childNodes.length !== 1) {
-        columnElement.replaceChildren(actionbarElement);
+  private syncLeadingActions(props: TitlebarLeadingActionsProps) {
+    const topbarItems = this.createLeadingActionItems(props);
+    this.leadingActionBarView.setProps({
+      className: 'titlebar-leading-actions',
+      ariaRole: 'group',
+      items: topbarItems,
+    });
+
+    if (topbarItems.length > 0) {
+      if (
+        this.leftElement.firstElementChild !== this.leadingActionsHostElement ||
+        this.leftElement.childNodes.length !== 1
+      ) {
+        this.leftElement.replaceChildren(this.leadingActionsHostElement);
       }
-      return;
+    } else if (this.leftElement.childNodes.length > 0) {
+      this.leftElement.replaceChildren();
+    }
+  }
+
+  private createLeadingActionItems(props: TitlebarLeadingActionsProps) {
+    const topbarItems: ActionBarItem[] = [];
+    if (props.menuLabel) {
+      topbarItems.push(createDropdownMenuActionViewItem({
+        label: props.menuLabel,
+        title: props.menuLabel,
+        mode: 'icon',
+        buttonClassName: 'titlebar-menu-btn',
+        content: createLxIcon('three-bars'),
+        renderOverlay: () => this.createEmptyMenuElement(),
+        overlayRole: 'menu',
+        menuClassName: 'titlebar-main-menu-overlay',
+        menuData: 'titlebar-main-menu',
+        minWidth: 180,
+        overlayAlignmentPolicy: 'prefer-start',
+      }));
+    }
+    if (props.onTogglePrimarySidebar && props.primarySidebarToggleLabel) {
+      topbarItems.push({
+        label: props.primarySidebarToggleLabel,
+        title: props.primarySidebarToggleLabel,
+        mode: 'icon',
+        buttonClassName: 'titlebar-primary-sidebar-toggle-btn',
+        content: createLxIcon(
+          props.isPrimarySidebarVisible === false
+            ? 'layout-sidebar-left-off'
+            : 'layout-sidebar-left',
+        ),
+        onClick: () => props.onTogglePrimarySidebar?.(),
+      });
+    }
+    if (props.addressBarLabel) {
+      topbarItems.push({
+        label: props.addressBarLabel,
+        title: props.addressBarLabel,
+        mode: 'icon',
+        buttonClassName: 'titlebar-address-bar-btn',
+        content: createLxIcon('search'),
+        onClick: () => props.onFocusAddressBar?.(),
+      });
     }
 
-    if (columnElement.childNodes.length > 0) {
-      columnElement.replaceChildren();
-    }
+    return topbarItems;
+  }
+
+  private createEmptyMenuElement() {
+    const element = document.createElement('div');
+    element.className = 'titlebar-main-menu';
+    element.setAttribute('role', 'menu');
+    return element;
   }
 
   private syncStatusbarVisibility(statusbarVisible: boolean) {

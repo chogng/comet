@@ -9,7 +9,6 @@ import type { AgentChatWidgetProps } from 'ls/workbench/contrib/agentChat/browse
 let cleanupDomEnvironment: (() => void) | null = null;
 let createAgentChatWidget: typeof import('ls/workbench/contrib/agentChat/browser/agentChatWidget').createAgentChatWidget;
 let createAgentBarPartView: typeof import('ls/workbench/browser/parts/agentbar/agentbarPart').createAgentBarPartView;
-let SidebarTopbarActionsView: typeof import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions').SidebarTopbarActionsView;
 
 function createProps(): AgentChatWidgetProps {
   return {
@@ -79,7 +78,6 @@ before(async () => {
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({ createAgentChatWidget } = await import('ls/workbench/contrib/agentChat/browser/agentChatWidget'));
   ({ createAgentBarPartView } = await import('ls/workbench/browser/parts/agentbar/agentbarPart'));
-  ({ SidebarTopbarActionsView } = await import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions'));
 });
 
 after(() => {
@@ -120,66 +118,49 @@ test('agent bar action buttons expose labels and shared hover', async () => {
   }
 });
 
-test('agent bar topbar exposes a primary sidebar toggle when the primary sidebar is hidden', () => {
+function createTopbarActionsElement() {
+  const host = document.createElement('div');
+  host.className = 'topbar-actions-host';
+  const actionbar = document.createElement('div');
+  actionbar.className = 'topbar-actions actionbar is-horizontal';
+  const actions = document.createElement('div');
+  actions.className = 'actionbar-actions-container';
+  const button = document.createElement('button');
+  button.className = 'actionbar-action titlebar-primary-sidebar-toggle-btn';
+  button.setAttribute('aria-label', 'Topbar action');
+  actions.append(button);
+  actionbar.append(actions);
+  host.append(actionbar);
+  return host;
+}
+
+test('agent bar topbar mounts the provided leading actions element', () => {
   let toggleCount = 0;
-  const topbarActionsView = new SidebarTopbarActionsView({
-    isPrimarySidebarVisible: false,
-    primarySidebarToggleLabel: 'Show primary sidebar',
-    addressBarLabel: 'Address bar',
-    onTogglePrimarySidebar: () => {
+  const topbarActionsElement = createTopbarActionsElement();
+  topbarActionsElement
+    .querySelector('.titlebar-primary-sidebar-toggle-btn')
+    ?.addEventListener('click', () => {
       toggleCount += 1;
-    },
   });
   const agentBar = createAgentBarPartView({
     ...createProps(),
     isPrimarySidebarVisible: false,
-    topbarActionsElement: topbarActionsView.getElement(),
+    topbarActionsElement,
   });
   const element = agentBar.getElement();
   document.body.append(element);
 
   try {
     const toggleButton = element.querySelector(
-      '.agentbar-topbar .sidebar-topbar-toggle-btn',
+      '.agentbar-topbar .titlebar-primary-sidebar-toggle-btn',
     );
     assert(toggleButton instanceof HTMLButtonElement);
-    assert.equal(
-      toggleButton.getAttribute('aria-label'),
-      'Show primary sidebar',
-    );
+    assert.equal(toggleButton.getAttribute('aria-label'), 'Topbar action');
 
     toggleButton.click();
     assert.equal(toggleCount, 1);
   } finally {
     agentBar.dispose();
-    topbarActionsView.dispose();
-  }
-});
-
-test('agent bar topbar exposes an address bar action', () => {
-  const topbarActionsView = new SidebarTopbarActionsView({
-    isPrimarySidebarVisible: false,
-    primarySidebarToggleLabel: 'Show primary sidebar',
-    addressBarLabel: 'Address bar',
-    onTogglePrimarySidebar: () => {},
-  });
-  const agentBar = createAgentBarPartView({
-    ...createProps(),
-    isPrimarySidebarVisible: false,
-    topbarActionsElement: topbarActionsView.getElement(),
-  });
-  const element = agentBar.getElement();
-  document.body.append(element);
-
-  try {
-    const searchButton = element.querySelector(
-      '.agentbar-topbar .sidebar-topbar-search-btn',
-    );
-    assert(searchButton instanceof HTMLButtonElement);
-    assert.equal(searchButton.getAttribute('aria-label'), 'Address bar');
-  } finally {
-    agentBar.dispose();
-    topbarActionsView.dispose();
   }
 });
 

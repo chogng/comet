@@ -2,7 +2,7 @@ import type { LocaleMessages } from 'language/locales';
 import type { EditorPartLabels, EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import type { EditorTopbarActionsViewProps } from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
 import type { SidebarFooterActionsProps, SidebarFooterLayoutMode } from 'ls/workbench/browser/parts/sidebar/sidebarFooterActions';
-import type { SidebarTopbarActionsProps } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
+import type { TitlebarLeadingActionsProps } from 'ls/workbench/browser/parts/titlebar/titlebarPart';
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 
 export type SidebarFooterTitlebarLabels = Pick<
@@ -102,12 +102,12 @@ export function createEditorTitlebarActionsProps(params: {
   };
 }
 
-export function createSidebarTitlebarActionsProps(params: {
+export function createTitlebarLeadingActionsProps(params: {
   ui: LocaleMessages;
   isPrimarySidebarVisible: boolean;
   onTogglePrimarySidebar: () => void;
   onFocusAddressBar: () => void;
-}): SidebarTopbarActionsProps {
+}): TitlebarLeadingActionsProps {
   const {
     ui,
     isPrimarySidebarVisible,
@@ -116,6 +116,7 @@ export function createSidebarTitlebarActionsProps(params: {
   } = params;
 
   return {
+    menuLabel: ui.titlebarMenu,
     isPrimarySidebarVisible,
     primarySidebarToggleLabel: resolveTitlebarPrimarySidebarToggleLabel(
       ui,

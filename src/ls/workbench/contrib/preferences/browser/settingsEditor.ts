@@ -458,10 +458,10 @@ export type SettingsTopbarActionsProps = {
 
 export class SettingsTopbarActionsView {
   private readonly actionBarView = createActionBarView({
-    className: 'sidebar-topbar-actions',
+    className: 'topbar-actions',
     ariaRole: 'group',
   });
-  private readonly hostElement = el('div', 'sidebar-topbar-actions-host');
+  private readonly hostElement = el('div', 'topbar-actions-host');
 
   constructor(_props: SettingsTopbarActionsProps) {
     this.hostElement.append(this.actionBarView.getElement());
@@ -483,7 +483,7 @@ export class SettingsTopbarActionsView {
 
   private render() {
     this.actionBarView.setProps({
-      className: 'sidebar-topbar-actions',
+      className: 'topbar-actions',
       ariaRole: 'group',
       items: [],
     });

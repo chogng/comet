@@ -3,11 +3,9 @@ import test, { after, before } from 'node:test';
 
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 import type { SidebarProps } from 'ls/workbench/browser/parts/sidebar/sidebar';
-import type { SidebarTopbarActionsProps } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createSidebar: typeof import('ls/workbench/browser/parts/sidebar/sidebar').createSidebar;
-let SidebarTopbarActionsView: typeof import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions').SidebarTopbarActionsView;
 let SidebarFooterActionsView: typeof import('ls/workbench/browser/parts/sidebar/sidebarFooterActions').SidebarFooterActionsView;
 
 function delay(ms = 0) {
@@ -62,19 +60,10 @@ function createProps(): SidebarProps {
   };
 }
 
-function createTopbarActionsProps(): SidebarTopbarActionsProps {
-  return {
-    isPrimarySidebarVisible: true,
-    primarySidebarToggleLabel: 'Hide primary sidebar',
-    addressBarLabel: 'Address bar',
-  };
-}
-
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({ createSidebar } = await import('ls/workbench/browser/parts/sidebar/sidebar'));
-  ({ SidebarTopbarActionsView } = await import('ls/workbench/browser/parts/sidebar/sidebarTopbarActions'));
   ({ SidebarFooterActionsView } = await import('ls/workbench/browser/parts/sidebar/sidebarFooterActions'));
 });
 
@@ -83,57 +72,38 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('sidebar topbar exposes a primary sidebar toggle action', () => {
-  let toggleCount = 0;
-  const topbarActionsView = new SidebarTopbarActionsView({
-    ...createTopbarActionsProps(),
-    onTogglePrimarySidebar: () => {
-      toggleCount += 1;
-    },
-  });
+function createTopbarActionsElement() {
+  const host = document.createElement('div');
+  host.className = 'topbar-actions-host';
+  const actionbar = document.createElement('div');
+  actionbar.className = 'topbar-actions actionbar is-horizontal';
+  const actions = document.createElement('div');
+  actions.className = 'actionbar-actions-container';
+  const button = document.createElement('button');
+  button.className = 'actionbar-action titlebar-primary-sidebar-toggle-btn';
+  button.setAttribute('aria-label', 'Topbar action');
+  actions.append(button);
+  actionbar.append(actions);
+  host.append(actionbar);
+  return host;
+}
+
+test('sidebar mounts the provided topbar actions element', () => {
+  const topbarActionsElement = createTopbarActionsElement();
   const sidebar = createSidebar({
     ...createProps(),
-    topbarActionsElement: topbarActionsView.getElement(),
+    topbarActionsElement,
   });
   const element = sidebar.getElement();
   document.body.append(element);
 
   try {
-    const toggleButton = element.querySelector(
-      '.sidebar-topbar .sidebar-topbar-toggle-btn',
-    );
-    assert(toggleButton instanceof HTMLButtonElement);
     assert.equal(
-      toggleButton.getAttribute('aria-label'),
-      'Hide primary sidebar',
+      element.querySelector('.sidebar-topbar > .topbar-actions-host'),
+      topbarActionsElement,
     );
-
-    toggleButton.click();
-    assert.equal(toggleCount, 1);
   } finally {
     sidebar.dispose();
-    topbarActionsView.dispose();
-  }
-});
-
-test('sidebar topbar exposes an address bar action', () => {
-  const topbarActionsView = new SidebarTopbarActionsView(createTopbarActionsProps());
-  const sidebar = createSidebar({
-    ...createProps(),
-    topbarActionsElement: topbarActionsView.getElement(),
-  });
-  const element = sidebar.getElement();
-  document.body.append(element);
-
-  try {
-    const searchButton = element.querySelector(
-      '.sidebar-topbar .sidebar-topbar-search-btn',
-    );
-    assert(searchButton instanceof HTMLButtonElement);
-    assert.equal(searchButton.getAttribute('aria-label'), 'Address bar');
-  } finally {
-    sidebar.dispose();
-    topbarActionsView.dispose();
   }
 });
 

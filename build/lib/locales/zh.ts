@@ -468,6 +468,7 @@ const zh = {
   sidebarSelectionModeSelectAll: '全选',
   sidebarSelectionModeExit: '取消',
   titlebarControls: '窗口控制',
+  titlebarMenu: '\u83dc\u5355',
   titlebarSettings: '设置',
   titlebarMinimize: '最小化',
   titlebarMaximize: '最大化',

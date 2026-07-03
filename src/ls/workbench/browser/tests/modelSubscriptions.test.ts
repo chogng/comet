@@ -684,8 +684,8 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
   const container = document.createElement('div');
   const shell = document.createElement('div');
   const statusbar = document.createElement('section');
-  const leftActionbar = document.createElement('div');
-  leftActionbar.className = 'sidebar-topbar-actions-host';
+  let toggleCount = 0;
+  let focusAddressBarCount = 0;
 
   const titlebarPart = createTitlebarPart(container, shell, statusbar);
   container.append(titlebarPart.getElement(), shell);
@@ -696,7 +696,18 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       useMica: false,
       statusbarVisible: true,
       activePage: 'content',
-      leftActionbarElement: leftActionbar,
+      leadingActions: {
+        menuLabel: 'Menu',
+        isPrimarySidebarVisible: true,
+        primarySidebarToggleLabel: 'Hide primary sidebar',
+        addressBarLabel: 'Address bar',
+        onTogglePrimarySidebar: () => {
+          toggleCount += 1;
+        },
+        onFocusAddressBar: () => {
+          focusAddressBarCount += 1;
+        },
+      },
     });
 
     assert(container.classList.contains('has-titlebar'));
@@ -705,9 +716,22 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     assert.equal(container.children[1], shell);
     assert.equal(container.children[2], statusbar);
     assert.equal(
-      titlebarPart.getElement().querySelector('.titlebar-left > .sidebar-topbar-actions-host'),
-      leftActionbar,
+      titlebarPart.getElement().querySelector('.titlebar-left > .titlebar-leading-actions-host') instanceof HTMLElement,
+      true,
     );
+    const menuButton = titlebarPart.getElement().querySelector('.titlebar-menu-btn');
+    const toggleButton = titlebarPart.getElement().querySelector('.titlebar-primary-sidebar-toggle-btn');
+    const addressBarButton = titlebarPart.getElement().querySelector('.titlebar-address-bar-btn');
+    assert(menuButton instanceof HTMLButtonElement);
+    assert(toggleButton instanceof HTMLButtonElement);
+    assert(addressBarButton instanceof HTMLButtonElement);
+    assert.equal(menuButton.getAttribute('aria-label'), 'Menu');
+    assert.equal(toggleButton.getAttribute('aria-label'), 'Hide primary sidebar');
+    assert.equal(addressBarButton.getAttribute('aria-label'), 'Address bar');
+    toggleButton.click();
+    addressBarButton.click();
+    assert.equal(toggleCount, 1);
+    assert.equal(focusAddressBarCount, 1);
     assert.equal(
       titlebarPart.getElement().querySelector('.titlebar-center'),
       null,

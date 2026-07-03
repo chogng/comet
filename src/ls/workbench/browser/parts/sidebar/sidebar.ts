@@ -229,7 +229,7 @@ export class Sidebar {
 
   private syncTopbarActions(topbarActionsElement: HTMLElement | null) {
     const currentTopbarActionsElement = this.topbarElement.querySelector(
-      '.sidebar-topbar-actions-host',
+      '.topbar-actions-host',
     );
     if (topbarActionsElement) {
       if (currentTopbarActionsElement !== topbarActionsElement) {

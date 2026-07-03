@@ -36,7 +36,7 @@ export type EditorTopbarActionsViewProps = {
 export class EditorTopbarActionsView {
   private props: EditorTopbarActionsViewProps;
   private readonly actionsView = createActionBarView({
-    className: 'sidebar-topbar-actions',
+    className: 'topbar-actions',
     ariaRole: 'group',
   });
 
@@ -157,7 +157,7 @@ export class EditorTopbarActionsView {
     });
 
     this.actionsView.setProps({
-      className: 'sidebar-topbar-actions',
+      className: 'topbar-actions',
       ariaRole: 'group',
       items: actionItems,
     });

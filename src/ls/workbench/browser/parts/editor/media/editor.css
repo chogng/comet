@@ -60,11 +60,11 @@
   -webkit-app-region: no-drag;
 }
 
-.editor-topbar-actions .sidebar-topbar-actions {
+.editor-topbar-actions .topbar-actions {
   margin-left: 0;
 }
 
-.editor-topbar-actions .sidebar-topbar-actions-host {
+.editor-topbar-actions .topbar-actions-host {
   padding-inline-start: 0;
 }
 
