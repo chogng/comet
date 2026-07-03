@@ -1,5 +1,4 @@
 .panel.sidebar-panel {
-  --sidebar-topbar-height: 36px;
   --sidebar-footer-height: 54px;
   --sidebar-surface-bg: var(--vscode-sideBar-background, #fafafa);
   display: flex;
@@ -111,39 +110,6 @@
   flex-direction: column;
 }
 
-.sidebar-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-width: 0;
-  flex: 0 0 var(--sidebar-topbar-height);
-  height: var(--sidebar-topbar-height);
-  min-height: var(--sidebar-topbar-height);
-  -webkit-app-region: drag;
-  user-select: none;
-}
-
-.sidebar-combined-topbar-actions-host {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  height: 100%;
-  flex: 1;
-  padding-right: 8px;
-}
-
-.sidebar-combined-topbar-leading,
-.sidebar-combined-topbar-trailing {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  height: 100%;
-}
-
-.sidebar-combined-topbar-trailing {
-  margin-left: auto;
-}
-
 .sidebar-footer {
   display: flex;
   align-items: center;
@@ -158,13 +124,6 @@
 
 .sidebar-footer > * {
   min-width: 0;
-}
-
-.sidebar-topbar-window-controls-spacer {
-  width: var(--window-controls-width, 70px);
-  min-width: var(--window-controls-width, 70px);
-  flex: 0 0 var(--window-controls-width, 70px);
-  height: 100%;
 }
 
 .sidebar-switcher {

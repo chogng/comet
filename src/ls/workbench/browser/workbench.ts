@@ -48,7 +48,6 @@ import { syncWorkbenchWindowTitle } from 'ls/workbench/browser/parts/titlebar/wi
 import {
   createSettingsPartView,
   createSettingsPartProps,
-  createSettingsTopbarActionsView,
 } from 'ls/workbench/contrib/preferences/browser/settingsEditor';
 import { createAgentBarPartProps } from 'ls/workbench/browser/parts/agentbar/agentbarPart';
 import type { AgentBarPartProps } from 'ls/workbench/browser/parts/agentbar/agentbarPart';
@@ -657,10 +656,6 @@ class WorkbenchHost {
     onToggleEditorCollapse: toggleEditorCollapsed,
     onToggleAgentSidebar: () => {},
   });
-  private readonly settingsTopbarActionsView = createSettingsTopbarActionsView({
-    backLabel: '',
-    onNavigateBack: () => {},
-  });
   private readonly sidebarFooterActionsView = new SidebarFooterActionsView();
   private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
   private editorPartController: EditorPartModel | null = null;
@@ -758,7 +753,6 @@ class WorkbenchHost {
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
     this.auxiliaryEditorTopbarActionsView.dispose();
-    this.settingsTopbarActionsView.dispose();
     this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
     this.settingsView = null;
@@ -1224,10 +1218,6 @@ class WorkbenchHost {
     } else {
       this.settingsView.setProps(props.settingsPartProps);
     }
-    this.settingsTopbarActionsView.setProps({
-      backLabel: props.settingsPartProps.labels.settingsNavigationBack,
-      onNavigateBack: props.settingsPartProps.onNavigateBack,
-    });
     this.sidebarFooterActionsView.setProps(
       props.sidebarFooterActionsProps,
     );
@@ -1237,7 +1227,6 @@ class WorkbenchHost {
       isAgentSidebarVisible: false,
       sidebarProps: props.sidebarProps,
       settingsNavigationElement: this.settingsView.getNavigationElement(),
-      settingsTopbarActionsElement: this.settingsTopbarActionsView.getElement(),
       agentBarProps: props.agentBarProps,
       editorPartProps: props.editorPartProps,
       settingsContentElement: this.settingsView.getElement(),

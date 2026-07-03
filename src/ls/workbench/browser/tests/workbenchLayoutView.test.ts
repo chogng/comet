@@ -32,7 +32,6 @@ type RawWorkbenchLayoutViewProps = {
   isEditorCollapsed: boolean;
   expandedEditorSize: number;
   settingsNavigationElement?: HTMLElement | null;
-  settingsTopbarActionsElement?: HTMLElement | null;
   settingsContentElement?: HTMLElement | null;
   sidebarProps: any;
   agentBarProps: any;
@@ -50,22 +49,6 @@ function createSidebarFooterActionsElement(props: {
   const view = new SidebarFooterActionsView();
   view.setProps(props);
   return view.getElement();
-}
-
-function createSettingsTopbarActionsElement(backLabel: string) {
-  const host = document.createElement('div');
-  host.className = 'topbar-actions-host';
-  const actionbar = document.createElement('div');
-  actionbar.className = 'topbar-actions actionbar is-horizontal';
-  const actions = document.createElement('div');
-  actions.className = 'actionbar-actions-container';
-  const button = document.createElement('button');
-  button.className = 'actionbar-action titlebar-primary-sidebar-toggle-btn';
-  button.setAttribute('aria-label', backLabel);
-  actions.append(button);
-  actionbar.append(actions);
-  host.append(actionbar);
-  return host;
 }
 
 function waitForNextTask() {
@@ -90,7 +73,6 @@ function materializeWorkbenchLayoutViewProps(
     isPrimarySidebarVisible: props.isPrimarySidebarVisible,
     isAgentSidebarVisible: props.isAgentSidebarVisible,
     settingsNavigationElement: props.settingsNavigationElement ?? null,
-    settingsTopbarActionsElement: props.settingsTopbarActionsElement ?? null,
     settingsContentElement: props.settingsContentElement ?? null,
     sidebarProps: props.sidebarProps,
     agentBarProps: props.agentBarProps,
@@ -106,7 +88,6 @@ function materializeWorkbenchLayoutViewProps(
     isPrimarySidebarVisible: props.isPrimarySidebarVisible,
     isAgentSidebarVisible: props.isAgentSidebarVisible,
     settingsNavigationElement: props.settingsNavigationElement ?? null,
-    settingsTopbarActionsElement: props.settingsTopbarActionsElement ?? null,
     settingsContentElement: props.settingsContentElement ?? null,
     sidebarProps: props.sidebarProps,
     agentBarProps: props.agentBarProps,
@@ -440,7 +421,6 @@ function createWorkbenchLayoutViewProps() {
     isEditorCollapsed: false,
     expandedEditorSize: 220,
     settingsNavigationElement: null,
-    settingsTopbarActionsElement: null,
     settingsContentElement: null,
     fetchPaneProps,
     sidebarProps: {
@@ -952,30 +932,17 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     settingsContentBody.className = 'settings-content';
     settingsContentBody.textContent = 'Settings content';
     settingsContentElement.append(settingsContentTopbar, settingsContentBody);
-    const settingsTopbarActionsElement = createSettingsTopbarActionsElement('Back');
-
     const nextProps = {
       ...props,
       mode: 'settings' as const,
       isPrimarySidebarVisible: true,
       isAgentSidebarVisible: false,
       settingsNavigationElement,
-      settingsTopbarActionsElement,
       settingsContentElement,
     };
     view.setProps(materializeWorkbenchLayoutViewProps(nextProps));
 
-    const mountedTopbarActionsHost = view
-      .getElement()
-      .querySelector('.sidebar-topbar .topbar-actions-host');
-    assert.equal(mountedTopbarActionsHost, settingsTopbarActionsElement);
-    assert.equal(
-      view
-        .getElement()
-        .querySelector('.sidebar-topbar .titlebar-primary-sidebar-toggle-btn')
-        ?.getAttribute('aria-label'),
-      'Back',
-    );
+    assert.equal(view.getElement().querySelector('.sidebar-topbar'), null);
     assert.equal(
       view
         .getElement()
@@ -1047,15 +1014,12 @@ test('WorkbenchLayoutView keeps primary width when switching back from settings 
     settingsContentBody.className = 'settings-content';
     settingsContentBody.textContent = 'Settings content';
     settingsContentElement.append(settingsContentTopbar, settingsContentBody);
-    const settingsTopbarActionsElement = createSettingsTopbarActionsElement('Back');
-
     const settingsProps = {
       ...props,
       mode: 'settings' as const,
       isPrimarySidebarVisible: true,
       isAgentSidebarVisible: false,
       settingsNavigationElement,
-      settingsTopbarActionsElement,
       settingsContentElement,
     };
     view.setProps(materializeWorkbenchLayoutViewProps(settingsProps));
@@ -1067,7 +1031,6 @@ test('WorkbenchLayoutView keeps primary width when switching back from settings 
       isPrimarySidebarVisible: true,
       isAgentSidebarVisible: true,
       settingsNavigationElement: null,
-      settingsTopbarActionsElement: null,
       settingsContentElement: null,
     };
     view.setProps(materializeWorkbenchLayoutViewProps(backToContentProps));

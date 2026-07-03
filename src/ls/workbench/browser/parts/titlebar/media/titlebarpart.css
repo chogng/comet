@@ -37,7 +37,6 @@
 }
 
 .titlebar-container {
-  --sidebar-topbar-height: var(--workbench-titlebar-height);
   --editor-topbar-height: var(--workbench-titlebar-height);
   --agentbar-topbar-height: var(--workbench-titlebar-height);
   box-sizing: border-box;

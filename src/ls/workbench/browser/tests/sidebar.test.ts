@@ -72,36 +72,14 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-function createTopbarActionsElement() {
-  const host = document.createElement('div');
-  host.className = 'topbar-actions-host';
-  const actionbar = document.createElement('div');
-  actionbar.className = 'topbar-actions actionbar is-horizontal';
-  const actions = document.createElement('div');
-  actions.className = 'actionbar-actions-container';
-  const button = document.createElement('button');
-  button.className = 'actionbar-action titlebar-primary-sidebar-toggle-btn';
-  button.setAttribute('aria-label', 'Topbar action');
-  actions.append(button);
-  actionbar.append(actions);
-  host.append(actionbar);
-  return host;
-}
-
-test('sidebar mounts the provided topbar actions element', () => {
-  const topbarActionsElement = createTopbarActionsElement();
-  const sidebar = createSidebar({
-    ...createProps(),
-    topbarActionsElement,
-  });
+test('sidebar renders without a topbar', () => {
+  const sidebar = createSidebar(createProps());
   const element = sidebar.getElement();
   document.body.append(element);
 
   try {
-    assert.equal(
-      element.querySelector('.sidebar-topbar > .topbar-actions-host'),
-      topbarActionsElement,
-    );
+    assert.equal(element.querySelector('.sidebar-topbar'), null);
+    assert.equal(element.firstElementChild, element.querySelector('.sidebar-switcher'));
   } finally {
     sidebar.dispose();
   }

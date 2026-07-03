@@ -35,7 +35,6 @@ export type WorkbenchContentPartViewsProps = {
   isAgentSidebarVisible: boolean;
   sidebarProps: SidebarProps;
   settingsNavigationElement?: HTMLElement | null;
-  settingsTopbarActionsElement?: HTMLElement | null;
   agentBarProps: AgentBarPartProps;
   editorPartProps: EditorPartProps;
   settingsContentElement?: HTMLElement | null;
@@ -171,10 +170,6 @@ export class WorkbenchContentPartViews {
       return;
     }
 
-    const topbarActionsElement =
-      this.props.mode === 'settings'
-        ? (this.props.settingsTopbarActionsElement ?? null)
-        : null;
     const nextProps: SidebarProps = {
       ...this.props.sidebarProps,
       mode: this.props.mode === 'settings' ? 'settings' : 'content',
@@ -182,7 +177,6 @@ export class WorkbenchContentPartViews {
         this.props.mode === 'settings'
           ? (this.props.settingsNavigationElement ?? null)
           : null,
-      topbarActionsElement,
       footerActionsElement: this.props.sidebarFooterActionsElement,
     };
 

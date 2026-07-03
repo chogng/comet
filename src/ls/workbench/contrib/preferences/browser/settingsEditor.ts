@@ -1,7 +1,6 @@
 import type { LocaleMessages } from 'language/locales';
 import { DomScrollableElement } from 'ls/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElementOptions';
-import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 
 import { KnowledgeBaseWidget } from 'ls/workbench/contrib/preferences/browser/knowledgeBaseWidget';
 import type { KnowledgeBaseWidgetProps } from 'ls/workbench/contrib/preferences/browser/knowledgeBaseWidget';
@@ -451,53 +450,8 @@ export class SettingsPartView {
 
 }
 
-export type SettingsTopbarActionsProps = {
-  backLabel: string;
-  onNavigateBack: () => void;
-};
-
-export class SettingsTopbarActionsView {
-  private readonly actionBarView = createActionBarView({
-    className: 'topbar-actions',
-    ariaRole: 'group',
-  });
-  private readonly hostElement = el('div', 'topbar-actions-host');
-
-  constructor(_props: SettingsTopbarActionsProps) {
-    this.hostElement.append(this.actionBarView.getElement());
-    this.render();
-  }
-
-  getElement() {
-    return this.hostElement;
-  }
-
-  setProps(_props: SettingsTopbarActionsProps) {
-    this.render();
-  }
-
-  dispose() {
-    this.actionBarView.dispose();
-    this.hostElement.replaceChildren();
-  }
-
-  private render() {
-    this.actionBarView.setProps({
-      className: 'topbar-actions',
-      ariaRole: 'group',
-      items: [],
-    });
-  }
-}
-
 export function createSettingsPartView(props: SettingsPartProps) {
   return new SettingsPartView(props);
-}
-
-export function createSettingsTopbarActionsView(
-  props: SettingsTopbarActionsProps,
-) {
-  return new SettingsTopbarActionsView(props);
 }
 
 export default SettingsPartView;

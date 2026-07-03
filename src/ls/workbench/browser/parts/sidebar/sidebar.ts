@@ -10,11 +10,8 @@ import {
   type FetchPaneProps,
   type SidebarLabels as FetchPaneSidebarLabels,
 } from 'ls/workbench/browser/parts/sidebar/fetchPanePart';
-import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 
 import 'ls/workbench/browser/parts/sidebar/media/sidebar.css';
-
-const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 export type SidebarLabels = FetchPaneSidebarLabels;
 
@@ -36,7 +33,6 @@ export type SidebarProps = {
   onDocumentEditSourceUrl?: (document: LibraryDocumentSummary) => void;
   onDocumentDelete?: (document: LibraryDocumentSummary) => void;
   settingsNavigationElement?: HTMLElement | null;
-  topbarActionsElement?: HTMLElement | null;
   footerActionsElement?: HTMLElement | null;
 };
 
@@ -56,14 +52,6 @@ type SidebarContentTab = 'library' | 'fetch';
 export class Sidebar {
   private props: SidebarProps;
   private readonly element = createElement('div', 'sidebar-root');
-  private readonly topbarElement = createElement(
-    'div',
-    'sidebar-topbar',
-  );
-  private readonly leadingWindowControlsSpacer = createElement(
-    'div',
-    'sidebar-topbar-window-controls-spacer',
-  );
   private readonly contentElement = createElement('div', 'sidebar-content');
   private readonly footerElement = createElement(
     'footer',
@@ -134,16 +122,8 @@ export class Sidebar {
     this.fetchSection.append(this.fetchContentView.getElement());
     this.tabListElement.append(this.libraryTabButton, this.fetchTabButton);
     this.switcherElement.append(this.tabListElement, this.tabActionsElement);
-    if (WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0) {
-      this.leadingWindowControlsSpacer.style.setProperty(
-        '--window-controls-width',
-        `${WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx}px`,
-      );
-      this.topbarElement.append(this.leadingWindowControlsSpacer);
-    }
     this.contentElement.append(this.contentHostElement);
     this.element.append(
-      this.topbarElement,
       this.switcherElement,
       this.contentElement,
       this.footerElement,
@@ -153,10 +133,6 @@ export class Sidebar {
 
   getElement() {
     return this.element;
-  }
-
-  getTopbarElement() {
-    return this.topbarElement;
   }
 
   setProps(props: SidebarProps) {
@@ -202,7 +178,6 @@ export class Sidebar {
       `${labels.libraryTitle} / ${labels.fetchTitle}`,
     );
     this.syncModeContent();
-    this.syncTopbarActions(this.props.topbarActionsElement ?? null);
     this.syncFooterActions(this.props.footerActionsElement ?? null);
     this.syncTabs();
   }
@@ -225,21 +200,6 @@ export class Sidebar {
     if (this.contentElement.firstElementChild !== this.contentHostElement) {
       this.contentElement.replaceChildren(this.contentHostElement);
     }
-  }
-
-  private syncTopbarActions(topbarActionsElement: HTMLElement | null) {
-    const currentTopbarActionsElement = this.topbarElement.querySelector(
-      '.topbar-actions-host',
-    );
-    if (topbarActionsElement) {
-      if (currentTopbarActionsElement !== topbarActionsElement) {
-        currentTopbarActionsElement?.remove();
-        this.topbarElement.append(topbarActionsElement);
-      }
-      return;
-    }
-
-    currentTopbarActionsElement?.remove();
   }
 
   private syncFooterActions(footerActionsElement: HTMLElement | null) {
