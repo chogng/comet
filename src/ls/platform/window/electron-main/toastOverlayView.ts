@@ -17,7 +17,7 @@ import { cleanText } from 'ls/base/common/strings';
 import {
   resolvePreloadScriptPath,
   resolveWorkbenchRendererFilePath,
-} from 'ls/platform/window/electron-main/window';
+} from 'ls/platform/window/electron-main/windowPaths';
 
 const nativeToastStateChannel = 'app:native-toast-state';
 const nativeToastQueryKey = 'nativeOverlay';

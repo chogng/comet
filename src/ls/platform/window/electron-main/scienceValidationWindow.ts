@@ -4,7 +4,7 @@ import {
   getWebContentListingCandidateSnapshot,
   getWebContentState,
 } from 'ls/platform/window/electron-main/webContentView';
-import { createAuxiliaryWindow } from 'ls/platform/window/electron-main/window';
+import { createAuxiliaryWindow } from 'ls/platform/windows/electron-main/windows';
 import { appError, isAppError } from 'ls/base/common/errors';
 import { cleanText } from 'ls/base/common/strings';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'ls/platform/native/electron-main/sharedWebSession';

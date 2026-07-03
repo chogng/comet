@@ -18,10 +18,10 @@ import { toDisposable } from 'ls/base/common/lifecycle';
 import type { IServerChannel } from 'ls/base/parts/ipc/common/ipc';
 import { pickPdfFileDialog } from 'ls/platform/dialogs/electron-main/dialogMainService';
 import {
-  getWindowState,
   getMainWindow,
   resolveWindowFromWebContents,
-} from 'ls/platform/window/electron-main/window';
+} from 'ls/platform/windows/electron-main/windows';
+import { getWindowState } from 'ls/platform/window/electron-main/window';
 import type { IThemeMainService } from 'ls/platform/theme/electron-main/themeMainService';
 
 function resolvePdfFilePath(payload: ReadPdfFilePayload = {}) {

@@ -14,7 +14,7 @@ import type {
   ThemeKind,
 } from 'ls/platform/theme/common/theme';
 import type { IThemeMainService } from 'ls/platform/theme/electron-main/themeMainService';
-import { getWindowById } from 'ls/platform/window/electron-main/window';
+import { getWindowById } from 'ls/platform/windows/electron-main/windows';
 
 const DEFAULT_LIGHT_BACKGROUND = '#ffffff';
 const DEFAULT_DARK_BACKGROUND = '#18222c';

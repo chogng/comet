@@ -12,7 +12,7 @@ import { registerDevShortcuts } from 'ls/platform/window/electron-main/devShortc
 import { registerAppLifecycleHandlers } from 'ls/platform/lifecycle/electron-main/lifecycleMain';
 import { registerAppIpc } from 'ls/code/electron-main/ipc';
 import { createStorageService } from 'ls/code/electron-main/storageService';
-import { createMainWindow, getMainWindow } from 'ls/platform/window/electron-main/window';
+import { createMainWindow, getMainWindow } from 'ls/platform/windows/electron-main/windows';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
 import { ThemeMainService } from 'ls/platform/theme/electron-main/themeMainServiceImpl';
 import { createNativeHostMainService } from 'ls/platform/native/electron-main/nativeHostMainService';

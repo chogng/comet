@@ -85,7 +85,7 @@ import {
   applyMainWindowBackgroundMaterial,
   getMainWindow,
   resolveWindowFromWebContents,
-} from 'ls/platform/window/electron-main/window';
+} from 'ls/platform/windows/electron-main/windows';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
 import { electronMainChannelServer } from 'ls/base/parts/ipc/electron-main/ipcMain';
 import type { IServerChannel } from 'ls/base/parts/ipc/common/ipc';
