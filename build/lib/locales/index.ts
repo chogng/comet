@@ -1,11 +1,13 @@
-import en from './en';
-import zh from './zh';
+import en from './en.json';
+import zh from './zh.json';
 
 export type LocaleMessages = {
-  [Key in keyof typeof zh]: string;
+	[Key in keyof typeof zh]: string;
 };
 
-export const locales: Record<'zh' | 'en', LocaleMessages> = {
-  zh,
-  en,
+export type Locale = 'zh' | 'en';
+
+export const locales: Record<Locale, LocaleMessages> = {
+	zh,
+	en,
 };

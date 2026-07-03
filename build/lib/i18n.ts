@@ -1,16 +1,16 @@
 import { locales } from './locales';
-import type { LocaleMessages } from './locales';
+import type { Locale, LocaleMessages } from './locales';
 
-export type Locale = keyof typeof locales;
+export type { Locale };
 
 export function detectInitialLocale(): Locale {
-  return 'en';
+	return 'en';
 }
 
 export function toDocumentLang(locale: Locale): string {
-  return locale === 'zh' ? 'zh-CN' : 'en';
+	return locale === 'zh' ? 'zh-CN' : 'en';
 }
 
 export function getLocaleMessages(locale: Locale): LocaleMessages {
-  return locales[locale];
+	return locales[locale];
 }

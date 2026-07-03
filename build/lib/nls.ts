@@ -1,128 +1,59 @@
 import { detectInitialLocale, getLocaleMessages } from './i18n';
 import type { Locale } from './i18n';
 
-export interface ILocalizeInfo {
-  key: string;
-  comment: string[];
-}
-
-export interface ILocalizedString {
-  original: string;
-  value: string;
-}
-
-type LocalizeArg = string | number | boolean | undefined | null;
-
-type GlobalNls = typeof globalThis & {
-  _VSCODE_NLS_MESSAGES?: string[];
-  _VSCODE_NLS_LANGUAGE?: string;
-};
+type LocalizePrimitiveValue = string | number | boolean | undefined | null;
+type LocalizeNamedValues = Record<string, LocalizePrimitiveValue>;
+type LocalizeValue = LocalizePrimitiveValue | LocalizeNamedValues;
 
 let currentLocale: Locale = detectInitialLocale();
 
 export function setNLSLanguage(locale: Locale): void {
-  currentLocale = locale;
-  (globalThis as GlobalNls)._VSCODE_NLS_LANGUAGE = locale;
+	currentLocale = locale;
 }
 
-export function getNLSMessages(): string[] | undefined {
-  return (globalThis as GlobalNls)._VSCODE_NLS_MESSAGES;
+function getMessage(key: string): string {
+	const messages = getLocaleMessages(currentLocale) as Record<string, string>;
+	const message = messages[key];
+	if (typeof message === 'string') {
+		return message;
+	}
+
+	throw new Error(`Missing localized string: ${key}`);
 }
 
-export function getNLSLanguage(): string | undefined {
-  return (globalThis as GlobalNls)._VSCODE_NLS_LANGUAGE ?? currentLocale;
+function isNamedValues(value: LocalizeValue): value is LocalizeNamedValues {
+	return typeof value === 'object' && value !== null;
 }
 
-function getLocalizeKey(data: ILocalizeInfo | string | number): string | null {
-  if (typeof data === 'string') {
-    return data;
-  }
-
-  if (typeof data === 'object') {
-    return data.key;
-  }
-
-  return null;
+function stringifyValue(value: LocalizePrimitiveValue): string {
+	return String(value);
 }
 
-function lookupLocaleMessage(key: string, fallback: string): string {
-  const messages = getLocaleMessages(currentLocale) as Record<string, string>;
-  return messages[key] ?? fallback;
+function formatMessage(message: string, values: LocalizeValue[]): string {
+	const namedValues = values.find(isNamedValues);
+	return message.replace(/\{(\w+)\}/g, (match, name) => {
+		if (/^\d+$/.test(name)) {
+			const index = Number(name);
+			if (index >= values.length) {
+				throw new Error(`Missing localized value: ${name}`);
+			}
+
+			const value = values[index];
+			return isNamedValues(value) ? match : stringifyValue(value);
+		}
+
+		if (!namedValues || !Object.prototype.hasOwnProperty.call(namedValues, name)) {
+			throw new Error(`Missing localized value: ${name}`);
+		}
+
+		return stringifyValue(namedValues[name]);
+	});
 }
 
-function lookupMessage(index: number, fallback: string | null): string {
-  const message = getNLSMessages()?.[index];
-  if (typeof message === 'string') {
-    return message;
-  }
-
-  if (typeof fallback === 'string') {
-    return fallback;
-  }
-
-  throw new Error(`!!! NLS MISSING: ${index} !!!`);
-}
-
-function format(message: string, args: LocalizeArg[]): string {
-  if (args.length === 0) {
-    return message;
-  }
-
-  return message.replace(/\{(\d+)\}/g, (match, rest) => {
-    const index = Number(rest);
-    const arg = args[index];
-    if (
-      typeof arg === 'string' ||
-      typeof arg === 'number' ||
-      typeof arg === 'boolean' ||
-      arg === undefined ||
-      arg === null
-    ) {
-      return String(arg);
-    }
-
-    return match;
-  });
-}
-
-export function localize(info: ILocalizeInfo, message: string, ...args: LocalizeArg[]): string;
-export function localize(key: string, message: string, ...args: LocalizeArg[]): string;
 export function localize(
-  data: ILocalizeInfo | string | number,
-  message: string | null,
-  ...args: LocalizeArg[]
+	key: string,
+	_message: string,
+	...values: LocalizeValue[]
 ): string {
-  const resolvedMessage =
-    typeof data === 'number'
-      ? lookupMessage(data, message)
-      : lookupLocaleMessage(getLocalizeKey(data) ?? '', message ?? '');
-
-  return format(resolvedMessage, args);
-}
-
-export function localize2(
-  info: ILocalizeInfo,
-  message: string,
-  ...args: LocalizeArg[]
-): ILocalizedString;
-export function localize2(
-  key: string,
-  message: string,
-  ...args: LocalizeArg[]
-): ILocalizedString;
-export function localize2(
-  data: ILocalizeInfo | string | number,
-  originalMessage: string,
-  ...args: LocalizeArg[]
-): ILocalizedString {
-  const message =
-    typeof data === 'number'
-      ? lookupMessage(data, originalMessage)
-      : lookupLocaleMessage(getLocalizeKey(data) ?? '', originalMessage);
-  const value = format(message, args);
-
-  return {
-    value,
-    original: originalMessage === message ? value : format(originalMessage, args),
-  };
+	return formatMessage(getMessage(key), values);
 }

@@ -3,7 +3,7 @@ import test, { after, beforeEach } from 'node:test';
 
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 import { createWritingEditorDocumentFromPlainText } from 'ls/editor/common/writingEditorDocument';
-import en from 'language/locales/en';
+import en from 'language/locales/en.json';
 import { EMPTY_PDF_TAB_URL } from 'ls/workbench/browser/parts/editor/editorInput';
 import type {
   EditorPartBaseProps,

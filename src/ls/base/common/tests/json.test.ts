@@ -34,8 +34,14 @@ test('json parser reports localized parse errors through nls', () => {
   assert.equal(getParseErrorMessage(errors[0].error), '需要冒号');
 });
 
-test('nls localize uses locale messages and keeps fallback formatting', () => {
+test('nls localize uses locale messages and reports missing keys', () => {
   setNLSLanguage('en');
   assert.equal(localize('error.valueExpected', 'fallback'), 'Value expected');
-  assert.equal(localize('missing.key', 'Hello {0}', 'Literature Studio'), 'Hello Literature Studio');
+  assert.equal(localize('severityPrefix.error', 'Error: {0}', 'Failure'), 'Error: Failure');
+  assert.equal(
+    localize('errorUnknownCommand', 'Unknown command: {command}', { command: 'ls.open' }),
+    'Unknown command: ls.open',
+  );
+  assert.throws(() => localize('severityPrefix.error', 'Error: {0}'), /Missing localized value/);
+  assert.throws(() => localize('missing.key', 'Hello {0}', 'Literature Studio'), /Missing localized string/);
 });
