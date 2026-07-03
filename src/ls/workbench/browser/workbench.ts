@@ -114,7 +114,7 @@ import type { Article } from 'ls/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'ls/workbench/common/url';
 import type { AppStartupLayout, LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
-import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
+import type { WebContentState } from 'ls/platform/browserView/common/browserView';
 import { normalizeBrowserTabKeepAliveLimit } from 'ls/workbench/services/webContent/webContentRetentionConfig';
 import {
   getLlmProviderDefinition,

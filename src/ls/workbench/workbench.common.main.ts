@@ -7,7 +7,7 @@
 import 'ls/base/browser/ui/button/button.css';
 import 'ls/workbench/browser/contextkeys';
 import 'ls/workbench/contrib/workbench/workbench.contribution';
-import 'ls/workbench/contrib/webContentView/webContentView.contribution';
+import 'ls/workbench/contrib/browserView/electron-browser/browserView.contribution';
 
 //#endregion
 

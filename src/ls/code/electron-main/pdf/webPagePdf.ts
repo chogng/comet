@@ -11,7 +11,7 @@ import {
   navigateWebContentForPrint,
   printCurrentWebContentToPdf,
   waitForWebContentPrintLayout,
-} from 'ls/platform/window/electron-main/webContentView';
+} from 'ls/platform/browserView/electron-main/browserViewMainService';
 
 const WEB_PAGE_PDF_LOG_ENABLED = isCompatFetchEnvEnabled(
   'LS_FETCH_TIMING',

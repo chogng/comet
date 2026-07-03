@@ -51,7 +51,7 @@ import {
 } from 'ls/workbench/browser/parts/statusbar/statusbarModel';
 import { createBatchFetchController } from 'ls/workbench/browser/batchFetchModel';
 import { createDocumentActionsController } from 'ls/workbench/browser/documentActionsModel';
-import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
+import type { WebContentState } from 'ls/platform/browserView/common/browserView';
 import {
   getPdfDownloadStatus,
   markPdfDownloadFailed,

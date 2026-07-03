@@ -16,7 +16,7 @@ import {
 } from 'ls/platform/window/electron-main/window';
 import { disposeToastOverlay } from 'ls/platform/window/electron-main/toastOverlayView';
 import { setTrayMainWindow } from 'ls/platform/window/electron-main/trayIcon';
-import { disposeWebContentView, ensureWebContentView } from 'ls/platform/window/electron-main/webContentView';
+import { disposeWebContentView, ensureWebContentView } from 'ls/platform/browserView/electron-main/browserViewMainService';
 import {
 	resolvePreloadScriptPath,
 	resolveWorkbenchRendererFilePath,

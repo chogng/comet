@@ -15,10 +15,7 @@ import type {
   NativeToastOptions,
   UpsertLibraryDocumentMetadataPayload,
   WebContentPdfDownloadPayload,
-  WebContentBounds,
   WebContentHtmlArchivePayload,
-  WebContentNavigatePayload,
-  WebContentState,
   ReindexLibraryDocumentPayload,
   RagAnswerArticlesPayload,
   SaveSettingsPayload,
@@ -26,6 +23,11 @@ import type {
   TestRagConnectionPayload,
   TestTranslationConnectionPayload,
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  WebContentBounds,
+  WebContentNavigatePayload,
+  WebContentState,
+} from 'ls/platform/browserView/common/browserView';
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import {
   getWebContentState,
@@ -44,7 +46,7 @@ import {
   setWebContentLayoutPhaseState,
   setWebContentRetentionLimit,
   setWebContentVisible,
-} from 'ls/platform/window/electron-main/webContentView';
+} from 'ls/platform/browserView/electron-main/browserViewMainService';
 import {
   clearWorkbenchSharedSessionCache,
   clearWorkbenchSharedSessionCookies,

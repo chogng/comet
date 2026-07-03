@@ -7,7 +7,7 @@ import {
   getWebContentDocumentSnapshot,
   getWebContentListingCandidateSnapshot,
   getWebContentState,
-} from 'ls/platform/window/electron-main/webContentView';
+} from 'ls/platform/browserView/electron-main/browserViewMainService';
 import type { WebContentExtractionSnapshot, WebContentSnapshot } from 'ls/code/electron-main/fetch/fetchStrategy';
 import { shouldAllowScienceWebContentWhileLoading } from 'ls/code/electron-main/fetch/scienceValidationRules';
 

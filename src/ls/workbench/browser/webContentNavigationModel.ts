@@ -4,7 +4,7 @@ import type { LocaleMessages } from 'language/locales';
 import type { INativeHostService } from 'ls/platform/native/common/native';
 import { formatLocalized } from 'ls/workbench/services/desktop/desktopError';
 import { EMPTY_WEB_CONTENT_STATE, resolveWebContentNavigation, resolveWebContentRefreshMode, resolveWebContentStateUrlUpdate } from 'ls/workbench/services/webContent/webContentNavigationService';
-import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
+import type { WebContentState } from 'ls/platform/browserView/common/browserView';
 
 type StringSetter = (value: string) => void;
 type StringStateSetter = (value: string | ((current: string) => string)) => void;

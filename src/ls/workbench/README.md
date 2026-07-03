@@ -46,8 +46,8 @@ A file does not belong to the contribution layer when it mainly owns state, rend
 These files are acceptable where they are today, but they are the first candidates to move if we later create a
 dedicated contribution area:
 
-- [`contrib/webContentView/webContentView.contribution.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/contrib/webContentView/webContentView.contribution.ts)
-  - Owns web content view host lifecycle wiring for the shared native content surface.
+- [`contrib/browserView/electron-browser/browserView.contribution.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/contrib/browserView/electron-browser/browserView.contribution.ts)
+  - Owns BrowserView host lifecycle wiring for the shared native content surface.
 - [`contrib/window/window.contribution.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/contrib/window/window.contribution.ts)
   - Registers the desktop window controls provider as a side effect.
 

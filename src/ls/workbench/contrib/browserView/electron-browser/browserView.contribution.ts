@@ -1,3 +1,7 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Literature Studio. All rights reserved.
+ *--------------------------------------------------------------------------------------------*/
+
 import {
   getWorkbenchBrowserTabKeepAliveLimit,
   subscribeWorkbenchWebContentRetention,
@@ -17,7 +21,7 @@ import {
 import type {
   WebContentBounds,
   WebContentLayoutPhase,
-} from 'ls/base/parts/sandbox/common/sandboxTypes';
+} from 'ls/platform/browserView/common/browserView';
 import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import {
   registerWorkbenchContribution,
@@ -29,22 +33,22 @@ type WebContentLayoutSnapshot = {
   bounds: WebContentBounds | null;
 };
 
-function readWebContentViewLayout(webContentViewHostElement: HTMLElement | null) {
-  if (!webContentViewHostElement) {
+function readBrowserViewLayout(browserViewHostElement: HTMLElement | null) {
+  if (!browserViewHostElement) {
     return {
       visible: false,
       bounds: null,
     };
   }
 
-  if (webContentViewHostElement.dataset.webcontentActive !== 'true') {
+  if (browserViewHostElement.dataset.webcontentActive !== 'true') {
     return {
       visible: false,
       bounds: null,
     };
   }
 
-  const rect = webContentViewHostElement.getBoundingClientRect();
+  const rect = browserViewHostElement.getBoundingClientRect();
   const width = Math.round(rect.width);
   const height = Math.round(rect.height);
 
@@ -101,7 +105,7 @@ function addDisposableListener(
   });
 }
 
-export function createWorkbenchWebContentViewContribution(): Disposable | void {
+export function createWorkbenchBrowserViewContribution(): Disposable | void {
   const webContentApi =
     typeof window === 'undefined' ? undefined : getNativeHostService().webContent;
 
@@ -112,7 +116,7 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
     return;
   }
 
-  let webContentViewHostElement =
+  let browserViewHostElement =
     getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.webContentViewHost];
   const contributionDisposables = new DisposableStore();
   const hostObservers = new MutableDisposable<DisposableLike>();
@@ -153,7 +157,7 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
       if (scheduledSync.value === frameDisposable) {
         scheduledSync.clearAndLeak();
       }
-      const nextSnapshot = readWebContentViewLayout(webContentViewHostElement);
+      const nextSnapshot = readBrowserViewLayout(browserViewHostElement);
 
       if (!nextSnapshot.visible) {
         layoutPhase = 'hidden';
@@ -196,7 +200,7 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
   const resetObserver = () => {
     hostObservers.clear();
 
-    if (!webContentViewHostElement) {
+    if (!browserViewHostElement) {
       return;
     }
 
@@ -205,7 +209,7 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
       measuringSnapshot = null;
       scheduleSync();
     });
-    mutationObserver.observe(webContentViewHostElement, {
+    mutationObserver.observe(browserViewHostElement, {
       attributes: true,
       attributeFilter: ['data-webcontent-active'],
     });
@@ -217,7 +221,7 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
 
     if (typeof ResizeObserver !== 'undefined') {
       const resizeObserver = new ResizeObserver(() => scheduleSync());
-      resizeObserver.observe(webContentViewHostElement);
+      resizeObserver.observe(browserViewHostElement);
       observerDisposables.push(
         toDisposable(() => {
           resizeObserver.disconnect();
@@ -229,10 +233,10 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
   };
 
   const syncFromPartDom = () => {
-    const nextWebContentViewHostElement =
+    const nextBrowserViewHostElement =
       getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.webContentViewHost];
-    if (nextWebContentViewHostElement !== webContentViewHostElement) {
-      webContentViewHostElement = nextWebContentViewHostElement;
+    if (nextBrowserViewHostElement !== browserViewHostElement) {
+      browserViewHostElement = nextBrowserViewHostElement;
       layoutPhase = 'hidden';
       measuringSnapshot = null;
       resetObserver();
@@ -258,4 +262,4 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
   };
 }
 
-registerWorkbenchContribution(createWorkbenchWebContentViewContribution);
+registerWorkbenchContribution(createWorkbenchBrowserViewContribution);

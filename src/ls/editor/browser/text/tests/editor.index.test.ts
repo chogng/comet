@@ -43,4 +43,4 @@ import 'ls/workbench/browser/tests/pdfEditorPane.test';
 import 'ls/workbench/browser/tests/editorStorage.test';
 import 'ls/workbench/browser/tests/tabsTitleControl.test';
 import 'ls/workbench/browser/tests/viewPartView.test';
-import 'ls/workbench/browser/tests/webContentViewContribution.test';
+import 'ls/workbench/browser/tests/browserViewContribution.test';

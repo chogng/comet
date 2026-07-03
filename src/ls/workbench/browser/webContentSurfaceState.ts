@@ -3,7 +3,7 @@ import type {
   EditorWorkspaceContentTab,
   EditorWorkspaceTab,
 } from 'ls/workbench/browser/parts/editor/editorModel';
-import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
+import type { WebContentState } from 'ls/platform/browserView/common/browserView';
 
 export type WebContentSurfaceOwner = 'shared-content' | 'editor-content-tab';
 

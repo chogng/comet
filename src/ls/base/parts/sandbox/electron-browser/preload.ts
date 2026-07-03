@@ -8,14 +8,16 @@ import type {
   NativeToastLayout,
   NativeToastOptions,
   NativeToastState,
-  WebContentBounds,
-  WebContentNavigationMode,
-  WebContentLayoutPhase,
-  WebContentSelectionSnapshot,
-  WebContentState,
   WindowControlAction,
   WindowState,
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  WebContentBounds,
+  WebContentLayoutPhase,
+  WebContentNavigationMode,
+  WebContentSelectionSnapshot,
+  WebContentState,
+} from 'ls/platform/browserView/common/browserView';
 import type {
   ElectronAPI,
 } from 'ls/base/parts/sandbox/common/electronTypes';

@@ -7,14 +7,16 @@ import type {
   NativeToastLayout,
   NativeToastOptions,
   NativeToastState,
+  WindowControlAction,
+  WindowState,
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
   WebContentBounds,
   WebContentLayoutPhase,
   WebContentNavigationMode,
   WebContentSelectionSnapshot,
   WebContentState,
-  WindowControlAction,
-  WindowState,
-} from 'ls/base/parts/sandbox/common/sandboxTypes';
+} from 'ls/platform/browserView/common/browserView';
 
 export type ElectronInvoke = {
   <TCommand extends AppCommand>(

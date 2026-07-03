@@ -1,3 +1,7 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Literature Studio. All rights reserved.
+ *--------------------------------------------------------------------------------------------*/
+
 import { BrowserWindow, session, WebContentsView } from 'electron';
 import { normalizeListingCandidateSeed } from 'ls/code/electron-main/fetch/sourceExtractors/types';
 import type { ListingCandidateExtraction, ListingCandidateSeed } from 'ls/code/electron-main/fetch/sourceExtractors/types';
@@ -8,7 +12,7 @@ import type {
   WebContentNavigationMode,
   WebContentSelectionSnapshot,
   WebContentState,
-} from 'ls/base/parts/sandbox/common/sandboxTypes';
+} from 'ls/platform/browserView/common/browserView';
 import { appError } from 'ls/base/common/errors';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'ls/platform/native/electron-main/sharedWebSession';
 import {

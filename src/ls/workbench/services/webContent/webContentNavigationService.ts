@@ -1,5 +1,4 @@
-export type { WebContentState } from 'ls/base/parts/sandbox/common/sandboxTypes';
-import type { WebContentState } from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type { WebContentState } from 'ls/platform/browserView/common/browserView';
 import { normalizeUrl } from 'ls/workbench/common/url';
 
 export const EMPTY_WEB_CONTENT_STATE: WebContentState = {

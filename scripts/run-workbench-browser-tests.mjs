@@ -41,7 +41,7 @@ const entryPoints = [
     'workbench',
     'browser',
     'tests',
-    'webContentViewContribution.test.ts',
+    'browserViewContribution.test.ts',
   ),
 ];
 

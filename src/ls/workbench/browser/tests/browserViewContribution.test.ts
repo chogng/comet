@@ -1,3 +1,7 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Literature Studio. All rights reserved.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before } from 'node:test';
 
@@ -5,12 +9,12 @@ import type {
   WebContentBounds,
   WebContentLayoutPhase,
   WebContentState,
-} from 'ls/base/parts/sandbox/common/sandboxTypes';
+} from 'ls/platform/browserView/common/browserView';
 import type { ElectronAPI } from 'ls/base/parts/sandbox/common/electronTypes';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createWorkbenchWebContentViewContribution: typeof import('ls/workbench/contrib/webContentView/webContentView.contribution').createWorkbenchWebContentViewContribution;
+let createWorkbenchBrowserViewContribution: typeof import('ls/workbench/contrib/browserView/electron-browser/browserView.contribution').createWorkbenchBrowserViewContribution;
 let registerWorkbenchPartDomNode: typeof import('ls/workbench/browser/layout').registerWorkbenchPartDomNode;
 let WORKBENCH_PART_IDS: typeof import('ls/workbench/browser/layout').WORKBENCH_PART_IDS;
 let resetWorkbenchBrowserTabKeepAliveLimit: typeof import('ls/workbench/browser/webContentRetentionState').resetWorkbenchBrowserTabKeepAliveLimit;
@@ -227,8 +231,8 @@ before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({
-    createWorkbenchWebContentViewContribution,
-  } = await import('ls/workbench/contrib/webContentView/webContentView.contribution'));
+    createWorkbenchBrowserViewContribution,
+  } = await import('ls/workbench/contrib/browserView/electron-browser/browserView.contribution'));
   ({
     registerWorkbenchPartDomNode,
     WORKBENCH_PART_IDS,
@@ -250,14 +254,14 @@ after(() => {
   cleanupDomEnvironment?.();
 });
 
-test('web content contribution sends stable BrowserView bounds after measuring', () => {
+test('browser view contribution sends stable BrowserView bounds after measuring', () => {
   const resizeObserver = installResizeObserverSpy();
   const animationFrame = installAnimationFrameSpy();
   const api = installWebContentApiSpy();
   createHost({ x: 10, y: 20, width: 300, height: 200 });
 
   try {
-    const contribution = createWorkbenchWebContentViewContribution();
+    const contribution = createWorkbenchBrowserViewContribution();
     assert(contribution);
 
     animationFrame.flushAll();
@@ -288,14 +292,14 @@ test('web content contribution sends stable BrowserView bounds after measuring',
   }
 });
 
-test('web content contribution hides BrowserView when host is inactive', () => {
+test('browser view contribution hides BrowserView when host is inactive', () => {
   const resizeObserver = installResizeObserverSpy();
   const animationFrame = installAnimationFrameSpy();
   const api = installWebContentApiSpy();
   createHost({ x: 8, y: 12, width: 240, height: 180 }, false);
 
   try {
-    const contribution = createWorkbenchWebContentViewContribution();
+    const contribution = createWorkbenchBrowserViewContribution();
     assert(contribution);
 
     animationFrame.flushUntilIdle();
@@ -312,14 +316,14 @@ test('web content contribution hides BrowserView when host is inactive', () => {
   }
 });
 
-test('web content contribution forwards retention limit changes', () => {
+test('browser view contribution forwards retention limit changes', () => {
   const resizeObserver = installResizeObserverSpy();
   const animationFrame = installAnimationFrameSpy();
   const api = installWebContentApiSpy();
   createHost({ x: 0, y: 0, width: 100, height: 100 });
 
   try {
-    const contribution = createWorkbenchWebContentViewContribution();
+    const contribution = createWorkbenchBrowserViewContribution();
     assert(contribution);
 
     assert.deepEqual(api.retentionLimits, [2]);
@@ -333,7 +337,7 @@ test('web content contribution forwards retention limit changes', () => {
   }
 });
 
-test('web content contribution does not create renderer webview elements', () => {
+test('browser view contribution does not create renderer webview elements', () => {
   const resizeObserver = installResizeObserverSpy();
   const animationFrame = installAnimationFrameSpy();
   const previousCreateElement = document.createElement.bind(document);
@@ -349,7 +353,7 @@ test('web content contribution does not create renderer webview elements', () =>
   createHost({ x: 0, y: 0, width: 100, height: 100 });
 
   try {
-    const contribution = createWorkbenchWebContentViewContribution();
+    const contribution = createWorkbenchBrowserViewContribution();
     assert(contribution);
     animationFrame.flushUntilIdle();
     assert.equal(createdWebviewCount, 0);

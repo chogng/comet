@@ -3,7 +3,7 @@ import {
   getWebContentDocumentSnapshot,
   getWebContentListingCandidateSnapshot,
   getWebContentState,
-} from 'ls/platform/window/electron-main/webContentView';
+} from 'ls/platform/browserView/electron-main/browserViewMainService';
 import { createAuxiliaryWindow } from 'ls/platform/windows/electron-main/windows';
 import { appError, isAppError } from 'ls/base/common/errors';
 import { cleanText } from 'ls/base/common/strings';
