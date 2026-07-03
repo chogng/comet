@@ -12,20 +12,6 @@ import {
 } from 'ls/base/common/lifecycle';
 import type { WorkbenchPage } from 'ls/workbench/browser/workbench';
 import {
-  getLayoutLimits,
-  type LayoutAxisLimits,
-  WORKBENCH_SPLITVIEW_LIMITS,
-} from 'ls/workbench/browser/layoutLimits';
-import type {
-  LayoutLeafId,
-  LayoutNode,
-} from 'ls/workbench/browser/layoutModel';
-import {
-  reconcileLayoutTree,
-  resolveFlexState,
-  updateLeaf,
-} from 'ls/workbench/browser/layoutModel';
-import {
   WORKBENCH_PART_IDS,
   type WorkbenchPartId,
   type WorkbenchPartRefCallback,
@@ -113,6 +99,94 @@ export const WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE = false;
 export { WORKBENCH_PART_IDS };
 export type { WorkbenchPartId, WorkbenchPartRefCallback };
 
+const WORKBENCH_SPLITVIEW_LIMITS = {
+  sidebar: {
+    minimum: 170,
+    maximum: Number.POSITIVE_INFINITY,
+    defaultSize: 220,
+  },
+  editor: {
+    minimum: 220,
+    maximum: Number.POSITIVE_INFINITY,
+  },
+  agentSidebar: {
+    minimum: 332,
+    maximum: Number.POSITIVE_INFINITY,
+    defaultSize: 360,
+  },
+} as const;
+
+const MOBILE_SPLITVIEW_LIMITS = {
+  sidebar: {
+    minimum: 160,
+    maximum: Number.POSITIVE_INFINITY,
+  },
+  editor: {
+    minimum: 180,
+    maximum: Number.POSITIVE_INFINITY,
+  },
+  agentSidebar: {
+    minimum: 160,
+    maximum: Number.POSITIVE_INFINITY,
+  },
+} as const;
+
+type LayoutAxisLimits = {
+  minimum: number;
+  maximum: number;
+};
+
+type LayoutLimits = {
+  primarySidebar: LayoutAxisLimits;
+  editor: LayoutAxisLimits;
+  agentSidebar: LayoutAxisLimits;
+};
+
+type LayoutLeafId =
+  | 'primarySidebar'
+  | 'editor'
+  | 'agentSidebar';
+
+type LayoutLeafNode = {
+  type: 'leaf';
+  id: LayoutLeafId;
+  size: number;
+  visible: boolean;
+  flex?: boolean;
+};
+
+type LayoutBranchNode = {
+  type: 'branch';
+  orientation: Orientation;
+  size: number;
+  children: LayoutNode[];
+};
+
+type LayoutNode =
+  | LayoutBranchNode
+  | LayoutLeafNode;
+
+type LayoutTreeParams = {
+  orientation: Orientation;
+  isPrimarySidebarVisible: boolean;
+  isEditorVisible: boolean;
+  isAgentSidebarVisible: boolean;
+  primarySidebarSize: number;
+  agentSidebarSize: number;
+  editorSize: number;
+};
+
+type LayoutFlexState = {
+  agentSidebarFlex: boolean;
+  editorFlex: boolean;
+};
+
+const CANONICAL_LEAF_ORDER: readonly LayoutLeafId[] = [
+  'primarySidebar',
+  'editor',
+  'agentSidebar',
+];
+
 const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
   isPrimarySidebarVisible: true,
   isAgentSidebarVisible: true,
@@ -143,6 +217,190 @@ const workbenchPartRefCallbacks = new Map<
   WorkbenchPartRefCallback
 >();
 let activeContentLayoutOrientation: Orientation | null = null;
+
+function getLayoutLimits(
+  orientation: Orientation,
+): LayoutLimits {
+  const desktop = WORKBENCH_SPLITVIEW_LIMITS;
+  const isHorizontal = orientation === Orientation.HORIZONTAL;
+
+  return {
+    primarySidebar: {
+      minimum: isHorizontal
+        ? MOBILE_SPLITVIEW_LIMITS.sidebar.minimum
+        : desktop.sidebar.minimum,
+      maximum: isHorizontal
+        ? MOBILE_SPLITVIEW_LIMITS.sidebar.maximum
+        : desktop.sidebar.maximum,
+    },
+    editor: {
+      minimum: isHorizontal
+        ? MOBILE_SPLITVIEW_LIMITS.editor.minimum
+        : desktop.editor.minimum,
+      maximum: desktop.editor.maximum,
+    },
+    agentSidebar: {
+      minimum: isHorizontal
+        ? MOBILE_SPLITVIEW_LIMITS.agentSidebar.minimum
+        : desktop.agentSidebar.minimum,
+      maximum: isHorizontal
+        ? MOBILE_SPLITVIEW_LIMITS.agentSidebar.maximum
+        : desktop.agentSidebar.maximum,
+    },
+  };
+}
+
+function mapLayoutNode(
+  node: LayoutNode,
+  visit: (node: LayoutNode) => LayoutNode | null,
+): LayoutNode | null {
+  const nextNode =
+    node.type === 'branch'
+      ? {
+          type: 'branch' as const,
+          orientation: node.orientation,
+          size: node.size,
+          children: node.children
+            .map(child => mapLayoutNode(child, visit))
+            .filter((child): child is LayoutNode => Boolean(child)),
+        }
+      : { ...node };
+
+  return visit(nextNode);
+}
+
+function getLayoutTreeRootSize(params: LayoutTreeParams) {
+  return (
+    (params.isPrimarySidebarVisible ? params.primarySidebarSize : 0) +
+    (params.isEditorVisible ? params.editorSize : 0) +
+    (params.isAgentSidebarVisible ? params.agentSidebarSize : 0)
+  );
+}
+
+function resolveFlexState(params: {
+  isAgentSidebarVisible: boolean;
+  isEditorVisible: boolean;
+}): LayoutFlexState {
+  const editorFlex = params.isEditorVisible;
+  const agentSidebarFlex =
+    params.isAgentSidebarVisible && !params.isEditorVisible;
+  return {
+    agentSidebarFlex,
+    editorFlex,
+  };
+}
+
+function createCanonicalLayoutTree(params: LayoutTreeParams): LayoutBranchNode {
+  const flexState = resolveFlexState({
+    isAgentSidebarVisible: params.isAgentSidebarVisible,
+    isEditorVisible: params.isEditorVisible,
+  });
+
+  return {
+    type: 'branch',
+    orientation: params.orientation,
+    size: getLayoutTreeRootSize(params),
+    children: [
+      {
+        type: 'leaf',
+        id: 'primarySidebar',
+        size: params.primarySidebarSize,
+        visible: params.isPrimarySidebarVisible,
+      },
+      {
+        type: 'leaf',
+        id: 'editor',
+        size: params.editorSize,
+        visible: params.isEditorVisible,
+        flex: flexState.editorFlex,
+      },
+      {
+        type: 'leaf',
+        id: 'agentSidebar',
+        size: params.agentSidebarSize,
+        visible: params.isAgentSidebarVisible,
+        flex: flexState.agentSidebarFlex,
+      },
+    ],
+  };
+}
+
+function isCanonicalLayoutTree(tree: LayoutNode): tree is LayoutBranchNode {
+  if (tree.type !== 'branch' || tree.children.length !== CANONICAL_LEAF_ORDER.length) {
+    return false;
+  }
+
+  return tree.children.every(
+    (child, index) =>
+      child.type === 'leaf' && child.id === CANONICAL_LEAF_ORDER[index],
+  );
+}
+
+function isLayoutTreeEqual(left: LayoutNode, right: LayoutNode): boolean {
+  if (left.type !== right.type) {
+    return false;
+  }
+
+  if (left.type === 'leaf' && right.type === 'leaf') {
+    return (
+      left.id === right.id &&
+      left.size === right.size &&
+      left.visible === right.visible &&
+      left.flex === right.flex
+    );
+  }
+
+  if (left.type === 'branch' && right.type === 'branch') {
+    if (
+      left.orientation !== right.orientation ||
+      left.size !== right.size ||
+      left.children.length !== right.children.length
+    ) {
+      return false;
+    }
+
+    for (let index = 0; index < left.children.length; index += 1) {
+      const leftChild = left.children[index];
+      const rightChild = right.children[index];
+      if (!leftChild || !rightChild || !isLayoutTreeEqual(leftChild, rightChild)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+function updateLeaf(
+  tree: LayoutNode,
+  targetId: LayoutLeafId,
+  patch: Partial<Omit<LayoutLeafNode, 'type' | 'id'>>,
+): LayoutNode {
+  return mapLayoutNode(tree, node => {
+    if (node.type === 'leaf' && node.id === targetId) {
+      return {
+        ...node,
+        ...patch,
+      };
+    }
+    return node;
+  }) as LayoutNode;
+}
+
+function reconcileLayoutTree(
+  tree: LayoutNode | null,
+  params: LayoutTreeParams,
+): LayoutNode {
+  const nextTree = createCanonicalLayoutTree(params);
+
+  if (!tree || !isCanonicalLayoutTree(tree)) {
+    return nextTree;
+  }
+
+  return isLayoutTreeEqual(tree, nextTree) ? tree : nextTree;
+}
 
 function clampSidebarSize(target: 'sidebar' | 'agentSidebar', size: number) {
   const limits = resolveActiveClampLimits();

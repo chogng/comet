@@ -30,7 +30,6 @@ import 'ls/workbench/browser/tests/assistantModel.test';
 import 'ls/workbench/browser/tests/agentbar.test';
 import 'ls/workbench/browser/tests/gridview.test';
 import 'ls/workbench/browser/tests/modelSubscriptions.test';
-import 'ls/workbench/browser/tests/layoutModel.test';
 import 'ls/workbench/browser/tests/workbenchLayoutView.test';
 import 'ls/workbench/browser/tests/splitview.test';
 import 'ls/workbench/browser/tests/toastOverlayWindow.test';
