@@ -1,7 +1,7 @@
 import type {
   ElectronAPI,
   ElectronInvoke,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import type { INativeHostService } from 'ls/platform/native/common/native';
 
 class ElectronSandboxNativeHostServiceProxy implements INativeHostService {

@@ -1,8 +1,10 @@
 import type {
   WindowControlAction,
   WindowState,
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
   WindowStateListener,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import { EventEmitter } from 'ls/base/common/event';
 import { combineDisposables, toDisposable } from 'ls/base/common/lifecycle';
 

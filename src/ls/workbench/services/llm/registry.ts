@@ -1,4 +1,4 @@
-import type { LlmProviderId } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { LlmProviderId } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { llmModels } from 'ls/workbench/services/llm/models';
 import { llmProviderIds, llmProviders } from 'ls/workbench/services/llm/providers';
 export { getLlmModelBadges, type LlmModelBadge } from 'ls/workbench/services/llm/badges';

@@ -16,7 +16,7 @@ import type {
   LibraryIngestStatus,
   ReindexLibraryDocumentResult,
   UpsertLibraryDocumentMetadataPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'ls/base/common/strings';
 import { createDefaultKnowledgeBaseSettings } from 'ls/workbench/services/knowledgeBase/config';
 import type { StorageService } from 'ls/platform/storage/common/storage';

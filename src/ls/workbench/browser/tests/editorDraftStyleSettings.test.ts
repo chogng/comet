@@ -3,7 +3,9 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { createDefaultEditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
-import type { ElectronInvoke } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import { editorDraftStyleService } from 'ls/editor/browser/text/editorDraftStyleService';
 import { createSettingsController } from 'ls/workbench/contrib/preferences/browser/settingsController';
 import { locales } from 'language/locales';

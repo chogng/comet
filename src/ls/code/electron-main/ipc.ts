@@ -26,7 +26,7 @@ import type {
   TestLlmConnectionPayload,
   TestRagConnectionPayload,
   TestTranslationConnectionPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import {
   getWebContentState,
@@ -87,8 +87,8 @@ import {
   resolveWindowFromWebContents,
 } from 'ls/platform/window/electron-main/window';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
-import { electronMainChannelServer } from 'ls/code/electron-main/ipcChannelServer';
-import type { IServerChannel } from 'ls/platform/ipc/common/ipc';
+import { electronMainChannelServer } from 'ls/base/parts/ipc/electron-main/ipcMain';
+import type { IServerChannel } from 'ls/base/parts/ipc/common/ipc';
 import {
   NativeHostMainChannel,
   nativeHostMainService,
@@ -204,7 +204,7 @@ async function invokeCommand<TCommand extends AppCommand>(
     case 'pick_user_settings_file':
       return pickUserSettingsFileDialog(
         getMainWindow(),
-        (payload as import('ls/base/parts/sandbox/common/desktopTypes').PickUserSettingsFilePayload)?.defaultPath,
+        (payload as import('ls/base/parts/sandbox/common/sandboxTypes').PickUserSettingsFilePayload)?.defaultPath,
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'pick_pdf_file':
       return nativeHostMainService.pickPdfFile(

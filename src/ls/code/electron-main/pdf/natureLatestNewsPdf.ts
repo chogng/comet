@@ -1,6 +1,6 @@
 import { load } from 'cheerio';
 
-import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'ls/base/common/strings';
 import { isNatureMainSiteUrl } from 'ls/base/common/url';
 import { fetchHtml } from 'ls/code/electron-main/fetch/dispatch';

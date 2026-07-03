@@ -2,7 +2,7 @@ import type {
   LlmConnectionTestResult,
   LlmProviderId,
   TestLlmConnectionPayload as TestPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { appError, isAppError } from 'ls/base/common/errors';
 import { cleanText } from 'ls/base/common/strings';
 import { defaultLlmProviderId } from 'ls/workbench/services/llm/config';

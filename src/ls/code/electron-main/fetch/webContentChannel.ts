@@ -1,7 +1,7 @@
 import type {
   FetchLatestArticlesPayload,
   WebContentPdfDownloadPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { normalizeUrl } from 'ls/base/common/url';
 import {
   getWebContentDocumentSnapshot,

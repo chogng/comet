@@ -4,7 +4,7 @@ import type {
   DocumentTranslationProgress,
   LlmSettings,
   TranslationSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'ls/base/common/strings';
 import type { StorageService, TranslationCacheRecord } from 'ls/platform/storage/common/storage';
 import { getLlmTranslationCacheIdentity, translateTextsWithLlm } from 'ls/code/electron-main/llm/llmTranslation';

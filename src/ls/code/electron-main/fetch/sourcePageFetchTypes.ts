@@ -3,7 +3,7 @@ import type {
   FetchChannel,
   FetchStatus,
   WebContentReuseMode,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { CandidateArticleSnapshot } from 'ls/code/electron-main/fetch/merge';
 import type { ListingPaginationStopEvaluation } from 'ls/code/electron-main/fetch/sourceExtractors';
 import type {

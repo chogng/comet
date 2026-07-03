@@ -12,7 +12,7 @@ import type {
   WritingEditorDocumentPayload,
   WritingEditorStableSelectionTargetPayload,
   WritingEditorTextUnitPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type {
   AgentMessage,
   AgentMessagePart,

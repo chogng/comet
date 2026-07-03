@@ -1,4 +1,4 @@
-﻿import { BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import type { WebContents } from 'electron';
 import { normalizeListingCandidateSeed } from 'ls/code/electron-main/fetch/sourceExtractors/types';
 import type { ListingCandidateExtraction, ListingCandidateSeed } from 'ls/code/electron-main/fetch/sourceExtractors/types';
@@ -11,7 +11,7 @@ import type {
   WebContentNavigationMode,
   WebContentSelectionSnapshot,
   WebContentState,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { appError } from 'ls/base/common/errors';
 
 const DEFAULT_WEB_CONTENT_TARGET_ID = '__shared__';

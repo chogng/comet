@@ -1,4 +1,4 @@
-import type { FetchStatus } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { FetchStatus } from 'ls/base/parts/sandbox/common/sandboxTypes';
 
 export type BatchFetchStatusbarStatus = {
   statusbarFetchSourceText: string;

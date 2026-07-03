@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
-import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'ls/base/common/strings';
 import { appError } from 'ls/base/common/errors';
 import { isCompatFetchEnvEnabled } from 'ls/code/electron-main/fetchTiming';

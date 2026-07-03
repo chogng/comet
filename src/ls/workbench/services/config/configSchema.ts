@@ -1,4 +1,4 @@
-import type { BatchSource as DesktopBatchSource } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { BatchSource as DesktopBatchSource } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { sanitizeUrlInput } from 'ls/workbench/common/url';
 import {
   batchLimitMax,

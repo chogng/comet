@@ -1,4 +1,4 @@
-import type { TranslationProviderId } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { TranslationProviderId } from 'ls/base/parts/sandbox/common/sandboxTypes';
 
 export type TranslationApiStyle = 'deepl-compatible' | 'llm-compatible' | 'openai-compatible';
 

@@ -1,8 +1,10 @@
 import type {
   Article as DesktopArticle,
-  ElectronInvoke,
   JournalSourceOverride,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import { isDateRangeValid } from 'ls/workbench/common/dateRange';
 import { normalizeUrl } from 'ls/workbench/common/url';
 import {

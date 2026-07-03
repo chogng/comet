@@ -1,7 +1,7 @@
 import type {
   LibraryDocumentSummary,
   LibraryDocumentsResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 
 export type LibraryTreeLabels = {
   untitled: string;

@@ -2,7 +2,7 @@ import type {
   RagProviderId,
   RagProviderSettings,
   RagSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { getRagProviderDefinition } from 'ls/workbench/services/rag/registry';
 
 export const defaultRagProviderId: RagProviderId = 'moark';

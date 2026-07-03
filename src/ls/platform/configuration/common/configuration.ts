@@ -1,7 +1,7 @@
 import type {
   AppSettings,
   StoredAppSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { Event } from 'ls/base/common/event';
 
 export interface ConfigurationOverrides {

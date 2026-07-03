@@ -2,10 +2,12 @@ import { toast } from 'ls/base/browser/ui/toast/toast';
 import type {
   AppStartupLayout,
   AppTheme,
-  ElectronInvoke,
   LlmProviderId,
   TranslationProviderId,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import {
   areEditorDraftStyleSettingsEqual,
   cloneEditorDraftStyleSettings,

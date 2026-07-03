@@ -1,9 +1,11 @@
 import { toast } from 'ls/base/browser/ui/toast/toast';
 import type {
-  ElectronInvoke,
   LibraryDocumentSummary,
   WebContentHtmlArchiveResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import type { LocaleMessages } from 'language/locales';
 import type { EditorPartBrowserToolbarActions } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { getEditorContentDisplayUrl } from 'ls/workbench/browser/parts/editor/editorUrlPresentation';

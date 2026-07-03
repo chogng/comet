@@ -1,7 +1,7 @@
 import type {
   LibraryDocumentSummary,
   LibraryDocumentsResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { LibraryViewer } from 'ls/workbench/contrib/knowledgeBase/browser/views/libraryViewer';
 import type { LibraryViewerLabels } from 'ls/workbench/contrib/knowledgeBase/browser/views/libraryViewer';
 

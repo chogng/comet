@@ -1,5 +1,5 @@
-import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/desktopTypes';
-import type { LibraryDocumentSummary } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type { LibraryDocumentSummary } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { DataTree } from 'ls/base/browser/ui/tree/dataTree';
 import type {
   LibraryTreeLabels,

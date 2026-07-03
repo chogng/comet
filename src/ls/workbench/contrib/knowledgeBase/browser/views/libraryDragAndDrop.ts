@@ -1,4 +1,4 @@
-import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
   createLibraryTreeDragPayload,
   LIBRARY_TREE_DRAG_MIME,

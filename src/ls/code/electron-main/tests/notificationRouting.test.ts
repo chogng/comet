@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { NativeToastOptions, NativeToastType } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { NativeToastOptions, NativeToastType } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
   normalizeNativeToastType,
   resolveSystemNotificationPayloadFromToast,

@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 import type {
   EditorDocxExportResult,
   ExportEditorDocxPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { appError } from 'ls/base/common/errors';
 import { normalizeWritingEditorDocument } from 'ls/editor/common/writingEditorDocument';
 import { buildEditorDocxBuffer, buildEditorDocxFileName } from 'ls/code/electron-main/document/editorDocxSerializer';

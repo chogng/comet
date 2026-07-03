@@ -8,11 +8,11 @@ import type {
   ReadPdfFilePayload,
   WindowControlAction,
   WindowState,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { appError } from 'ls/base/common/errors';
 import type { Event } from 'ls/base/common/event';
 import { toDisposable } from 'ls/base/common/lifecycle';
-import type { IServerChannel } from 'ls/platform/ipc/common/ipc';
+import type { IServerChannel } from 'ls/base/parts/ipc/common/ipc';
 import { pickPdfFileDialog } from 'ls/platform/dialogs/electron-main/dialogMainService';
 import {
   getWindowState,

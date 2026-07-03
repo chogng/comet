@@ -2,9 +2,11 @@ import { toast } from 'ls/base/browser/ui/toast/toast';
 import { EventEmitter } from 'ls/base/common/event';
 import { MutableLifecycle } from 'ls/base/common/lifecycle';
 import type {
-  ElectronInvoke,
   JournalSourceOverride,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import type { INativeHostService } from 'ls/platform/native/common/native';
 import type { LocaleMessages } from 'language/locales';
 import { fetchLatestArticlesBatch } from 'ls/workbench/services/article/articleFetch';

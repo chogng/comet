@@ -7,7 +7,7 @@ import type {
   DocumentTranslationProgress,
   DocxExportResult,
   ExportArticlesDocxPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { StorageService } from 'ls/platform/storage/common/storage';
 import { defaultDocxExportConfig } from 'ls/code/electron-main/document/docxConfig';
 import { appError } from 'ls/base/common/errors';

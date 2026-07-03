@@ -1,4 +1,4 @@
-import type { LlmProviderId } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { LlmProviderId } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { LlmProviderDefinition } from 'ls/workbench/services/llm/types';
 
 export const llmProviders: ReadonlyArray<LlmProviderDefinition> = [

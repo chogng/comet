@@ -23,7 +23,7 @@ import {
   type LlmReasoningEffort,
   type LlmServiceTier,
 } from 'ls/workbench/services/llm/registry';
-import type { LlmProviderId } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { LlmProviderId } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import 'ls/workbench/browser/parts/agentbar/media/agentbar.css';
 import 'ls/workbench/contrib/agentChat/browser/media/agentChatWidget.css';
 

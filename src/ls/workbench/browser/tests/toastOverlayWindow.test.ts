@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 
 import type {
-  ElectronAPI,
-  ElectronToastApi,
   NativeToastLayout,
   NativeToastState,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronAPI,
+  ElectronToastApi,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;

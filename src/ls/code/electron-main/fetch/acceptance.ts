@@ -1,4 +1,4 @@
-import type { Article } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { Article } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { hasArticlePathSignal } from 'ls/code/electron-main/fetch/articleUrlRules';
 
 export function hasStrongArticleSignals(

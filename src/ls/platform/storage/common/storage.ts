@@ -10,7 +10,7 @@ import type {
   ListLibraryDocumentsPayload,
   ReindexLibraryDocumentPayload,
   ReindexLibraryDocumentResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { IStorage } from 'ls/base/parts/storage/common/storage';
 import type { StorageValue } from 'ls/base/parts/storage/common/storage';
 import type { Event } from 'ls/base/common/event';

@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron';
 
-import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { appError } from 'ls/base/common/errors';
 import { isCompatFetchEnvEnabled } from 'ls/code/electron-main/fetchTiming';
 import { clearWorkbenchSharedSessionOrigins } from 'ls/platform/native/electron-main/sharedWebSession';

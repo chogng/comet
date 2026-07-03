@@ -1,6 +1,6 @@
 import { load } from 'cheerio';
 
-import type { ArticleFigure } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { ArticleFigure } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { cleanText, pickFirstNonEmpty, uniq } from 'ls/base/common/strings';
 
 export function isNatureArticlePage($: ReturnType<typeof load>) {

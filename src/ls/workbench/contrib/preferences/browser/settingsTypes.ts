@@ -13,7 +13,7 @@ import type {
   RagProviderSettings,
   TranslationProviderId,
   TranslationProviderSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
 import type { SettingValue } from 'ls/workbench/services/settings/settingValue';
 

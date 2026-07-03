@@ -1,5 +1,5 @@
 import { load } from 'cheerio';
-import type { Article, FetchChannel, WebContentReuseMode } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { Article, FetchChannel, WebContentReuseMode } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { isWithinDateRange } from 'ls/base/common/date';
 import type { DateRange } from 'ls/base/common/date';
 

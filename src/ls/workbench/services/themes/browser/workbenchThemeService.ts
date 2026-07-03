@@ -1,7 +1,7 @@
 import type {
   AppTheme,
   ThemeColorCustomizations,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
   themeService,
 } from 'ls/platform/theme/browser/themeService';

@@ -1,9 +1,11 @@
 import { EventEmitter } from 'ls/base/common/event';
 import type {
-  ElectronInvoke,
   LibraryDocumentSummary,
   LibraryDocumentsResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 
 export type LibraryModelContext = {
   desktopRuntime: boolean;

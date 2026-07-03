@@ -19,7 +19,7 @@ import type {
   WebContentLayoutPhase,
   WebContentNavigationMode,
   WebContentState,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'ls/platform/native/electron-main/sharedWebSession';
 import type { Disposable } from 'ls/workbench/contrib/workbench/workbench.contribution';

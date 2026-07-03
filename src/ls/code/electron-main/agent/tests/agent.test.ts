@@ -5,7 +5,7 @@ import type {
   LlmSettings,
   RagSettings,
   RunMainAgentTurnPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { runMainAgentTurn } from 'ls/code/electron-main/agent/agent';
 
 const llmSettings: LlmSettings = {

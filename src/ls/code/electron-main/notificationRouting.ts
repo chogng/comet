@@ -1,4 +1,4 @@
-import type { AppSettings, NativeToastOptions, NativeToastType } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { AppSettings, NativeToastOptions, NativeToastType } from 'ls/base/parts/sandbox/common/sandboxTypes';
 
 export type NotificationRoutingSettings = Pick<
   AppSettings,

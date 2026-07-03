@@ -1,7 +1,9 @@
 import type {
-  ElectronInvoke,
   LibraryDocumentSummary,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
 
 export async function syncLibraryMetadataFromArticle({

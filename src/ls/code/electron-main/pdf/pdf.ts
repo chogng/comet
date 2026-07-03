@@ -2,7 +2,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { load } from 'cheerio';
 
-import type { WebContentPdfDownloadPayload } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { WebContentPdfDownloadPayload } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { buildPdfDirectoryName } from 'ls/platform/download/common/pdfFileName';
 import { cleanText } from 'ls/base/common/strings';
 import { normalizeUrl } from 'ls/base/common/url';

@@ -8,7 +8,7 @@ import type {
   KnowledgeBaseSettings,
   RagSettings,
   StoredAppSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
   cloneEditorDraftStyleSettings,
   normalizeEditorDraftStyleSettings,

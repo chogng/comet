@@ -1,7 +1,7 @@
 import type {
   NativeToastState,
   NativeToastType,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
   LifecycleOwner,
   LifecycleStore,

@@ -1,4 +1,4 @@
-import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { LibraryDocumentsResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { createMouseContextMenuAnchor } from 'ls/base/browser/contextmenu';
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
 import type { SimpleTreeRenderContext } from 'ls/base/browser/ui/tree/simpleTree';

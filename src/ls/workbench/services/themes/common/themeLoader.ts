@@ -1,5 +1,5 @@
 import type { ColorIdentifier } from 'ls/platform/theme/common/colorRegistry';
-import type { ThemeColorCustomizations } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { ThemeColorCustomizations } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
   createColorThemeData,
   type ColorThemeData,

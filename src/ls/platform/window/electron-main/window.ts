@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron';
 import type { BrowserWindowConstructorOptions, WebContents } from 'electron';
 
-import type { WindowState } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { WindowState } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { isCompatFetchEnvEnabled } from 'ls/code/electron-main/fetchTiming';
 import { disposeToastOverlay } from 'ls/platform/window/electron-main/toastOverlayView';
 import { setTrayMainWindow } from 'ls/platform/window/electron-main/trayIcon';

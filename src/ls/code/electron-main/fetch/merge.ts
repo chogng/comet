@@ -1,4 +1,4 @@
-import type { Article } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { Article } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'ls/base/common/strings';
 
 export type CandidateArticleSnapshot = {

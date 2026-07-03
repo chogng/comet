@@ -21,6 +21,9 @@
 
 .titlebar {
   --workbench-titlebar-height: 36px;
+  --workbench-titlebar-border: var(--separator-border);
+  --workbench-titlebar-button-hover-background: var(--vscode-titleBar-fieldHoverBackground);
+  --workbench-titlebar-button-active-background: var(--vscode-titleBar-fieldFocusBackground);
   width: 100%;
   min-width: 0;
   min-height: var(--workbench-titlebar-height);
@@ -28,7 +31,9 @@
   display: flex;
   flex-direction: row;
   overflow: hidden;
-  background: transparent;
+  color: var(--vscode-titleBar-buttonForeground);
+  background: var(--workbench-chrome-bg);
+  border-bottom: 1px solid var(--workbench-titlebar-border);
 }
 
 .titlebar-container {
@@ -49,6 +54,66 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: drag;
+}
+
+.titlebar .sidebar-topbar,
+.titlebar .editor-topbar,
+.titlebar .agentbar-topbar {
+  --sidebar-topbar-height: var(--workbench-titlebar-height);
+  --editor-topbar-height: var(--workbench-titlebar-height);
+  --agentbar-topbar-height: var(--workbench-titlebar-height);
+  width: 100%;
+  color: inherit;
+  background: transparent;
+}
+
+.titlebar .sidebar-combined-topbar-actions-host,
+.titlebar .agentbar-topbar-actions {
+  padding-right: 6px;
+}
+
+.titlebar .sidebar-topbar-actions-host {
+  padding-inline-start: 6px;
+}
+
+.titlebar .editor-topbar {
+  padding: 0 6px;
+}
+
+.titlebar .sidebar-topbar-toggle-btn.actionbar-action,
+.titlebar .sidebar-topbar-search-btn.actionbar-action,
+.titlebar .editor-topbar-add-btn.actionbar-action,
+.titlebar .editor-topbar-agent-btn.actionbar-action,
+.titlebar .editor-topbar-toggle-editor-btn.actionbar-action {
+  color: var(--vscode-titleBar-buttonForeground);
+  border-radius: 6px;
+}
+
+.titlebar .sidebar-topbar-toggle-btn.actionbar-action:hover,
+.titlebar .sidebar-topbar-search-btn.actionbar-action:hover,
+.titlebar .editor-topbar-add-btn.actionbar-action:hover,
+.titlebar .editor-topbar-agent-btn.actionbar-action:hover,
+.titlebar .editor-topbar-toggle-editor-btn.actionbar-action:hover {
+  background: var(--workbench-titlebar-button-hover-background);
+}
+
+.titlebar .sidebar-topbar-toggle-btn.actionbar-action:active,
+.titlebar .sidebar-topbar-search-btn.actionbar-action:active,
+.titlebar .editor-topbar-add-btn.actionbar-action:active,
+.titlebar .editor-topbar-agent-btn.actionbar-action:active,
+.titlebar .editor-topbar-toggle-editor-btn.actionbar-action:active {
+  background: var(--workbench-titlebar-button-active-background);
+}
+
+.titlebar input,
+.titlebar textarea {
+  color: var(--vscode-titleBar-fieldForeground);
+  background: var(--vscode-titleBar-fieldBackground);
+}
+
+.titlebar input::placeholder,
+.titlebar textarea::placeholder {
+  color: var(--vscode-titleBar-placeholderForeground);
 }
 
 .titlebar-drag-region {

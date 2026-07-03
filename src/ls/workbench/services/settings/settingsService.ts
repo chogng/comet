@@ -2,7 +2,6 @@ import type {
   AppStartupLayout,
   AppTheme,
   AppSettings as DesktopAppSettings,
-  ElectronInvoke,
   JournalSourceOverride,
   KnowledgeBaseSettings,
   LlmSettings,
@@ -10,7 +9,10 @@ import type {
   ThemeColorCustomizations,
   TranslationSettings,
   StoredAppSettings as DesktopStoredAppSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import {
   cloneEditorDraftStyleSettings,
   createDefaultEditorDraftStyleSettings,

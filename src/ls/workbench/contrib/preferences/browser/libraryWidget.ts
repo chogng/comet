@@ -1,7 +1,7 @@
 import type {
   LibraryDocumentSummary,
   LibraryStorageMode,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type { SettingsPartLabels } from 'ls/workbench/contrib/preferences/browser/settingsTypes';
 import {
   createSettingsSection,

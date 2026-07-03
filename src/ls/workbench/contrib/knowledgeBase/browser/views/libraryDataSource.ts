@@ -1,7 +1,7 @@
 import type {
   LibraryDocumentSummary,
   LibraryDocumentsResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { buildLibraryTree } from 'ls/workbench/contrib/knowledgeBase/common/libraryTreeModel';
 import type { LibraryTreeFolderNode, LibraryTreeLabels, LibraryTreeNode } from 'ls/workbench/contrib/knowledgeBase/common/libraryTreeModel';
 

@@ -1,6 +1,6 @@
 import type { IDisposable } from 'ls/base/common/lifecycle';
-import { IMainProcessService } from 'ls/platform/ipc/common/mainProcessService';
-import { createElectronMainProcessService } from 'ls/platform/ipc/electron-browser/mainProcessService';
+import { IMainProcessService } from 'ls/base/parts/ipc/common/mainProcessService';
+import { createElectronMainProcessService } from 'ls/base/parts/ipc/electron-browser/ipc.electron';
 import { INativeHostService } from 'ls/platform/native/common/native';
 import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceProxy';
 import { registerWorkbenchContribution } from 'ls/workbench/contrib/workbench/workbench.contribution';

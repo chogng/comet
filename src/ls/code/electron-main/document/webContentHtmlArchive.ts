@@ -6,7 +6,7 @@ import type {
   Article,
   WebContentHtmlArchivePayload,
   WebContentHtmlArchiveResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { appError } from 'ls/base/common/errors';
 import { cleanText } from 'ls/base/common/strings';
 import { normalizeUrl } from 'ls/base/common/url';

@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import test, { after, afterEach, before } from 'node:test';
 
 import type {
-  ElectronAPI,
   WebContentBridgeCommand,
   WebContentBridgeResponse,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronAPI,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;

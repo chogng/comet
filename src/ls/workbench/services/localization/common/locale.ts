@@ -1,5 +1,7 @@
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
-import type { ElectronInvoke } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type {
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import type {
   LanguagePackLocale,
 } from 'ls/platform/languagePacks/common/languagePacks';

@@ -2,7 +2,7 @@ import type {
   LlmProviderId,
   LlmProviderSettings,
   LlmSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
   getEnabledLlmModelOptionValuesForProvider,
   getLlmProviderDefinition,

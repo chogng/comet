@@ -1,4 +1,4 @@
-import type { LlmProviderId } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { LlmProviderId } from 'ls/base/parts/sandbox/common/sandboxTypes';
 
 export type LlmApiStyle = 'openai' | 'openai-compatible';
 export type LlmTask = 'chat' | 'reasoning';

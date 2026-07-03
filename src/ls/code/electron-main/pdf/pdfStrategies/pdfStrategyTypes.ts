@@ -1,4 +1,4 @@
-﻿import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { PdfDownloadResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
 
 export type PdfDownloadContext = {
   pageUrl: string;

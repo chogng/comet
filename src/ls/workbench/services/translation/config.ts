@@ -2,7 +2,7 @@ import type {
   TranslationProviderId,
   TranslationProviderSettings,
   TranslationSettings,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { getTranslationProviderDefinition } from 'ls/workbench/services/translation/registry';
 
 export const defaultTranslationProviderId: TranslationProviderId = 'deepl';

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
-import type { ElectronAPI } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type {
+  ElectronAPI,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import type { INativeHostService } from 'ls/platform/native/common/native';
 import { createWritingEditorDocumentFromPlainText } from 'ls/editor/common/writingEditorDocument';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
