@@ -375,11 +375,20 @@ export class FetchPaneContentView extends LifecycleOwner {
         labels: {
           ...articleCardLabels,
           fetchTitle: this.props.labels.fetchTitle,
+          fetchLatestBusy: this.props.labels.fetchLatestBusy,
+          fetchLatest: this.props.labels.fetchLatest,
+          selectionModeEnterMulti: this.props.labels.selectionModeEnterMulti,
+          selectionModeSelectAll: this.props.labels.selectionModeSelectAll,
+          selectionModeExit: this.props.labels.selectionModeExit,
         },
         selectedArticleKeys: this.props.selectedArticleKeys,
         isSelectionModeEnabled: this.props.isSelectionModeEnabled,
+        selectionModePhase: this.props.selectionModePhase,
         onDownloadPdf: this.props.onDownloadPdf,
         onOpenArticleDetails: this.props.onOpenArticleDetails,
+        onFetch: this.props.onFetch,
+        isFetchLoading: this.props.isFetchLoading,
+        onToggleSelectionMode: this.props.onToggleSelectionMode,
         onToggleArticleSelected: this.props.onToggleArticleSelected,
       };
 

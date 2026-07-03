@@ -342,7 +342,9 @@
 
 .fetch-tree-folder-row {
   width: 100%;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: 6px;
   padding-right: 8px;
   color: var(--vscode-sideBar-fetchCardTitleForeground, #1f1f1f);
@@ -352,6 +354,18 @@
 
 .fetch-tree-folder-row:hover {
   background: var(--vscode-sideBar-fetchCardHoverBackground, var(--sidebar-surface-bg));
+}
+
+.fetch-tree-folder-toggle {
+  min-width: 0;
+  min-height: 30px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .fetch-tree-folder-chevron.lx-icon {
@@ -370,10 +384,13 @@
 }
 
 .fetch-tree-folder-count {
-  margin-left: auto;
   color: var(--vscode-sideBar-fetchCardMetaForeground, #6a6a6a);
   font-size: 11px;
   font-weight: 500;
+}
+
+.fetch-tree-folder-actions {
+  flex-shrink: 0;
 }
 
 .fetch-tree-article-row {

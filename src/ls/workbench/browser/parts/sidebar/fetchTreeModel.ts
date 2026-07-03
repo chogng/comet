@@ -2,6 +2,11 @@ import type { SidebarArticle } from 'ls/workbench/browser/parts/sidebar/fetchPan
 
 export type FetchTreeLabels = {
   fetchTitle: string;
+  fetchLatestBusy: string;
+  fetchLatest: string;
+  selectionModeEnterMulti: string;
+  selectionModeSelectAll: string;
+  selectionModeExit: string;
   untitled: string;
   unknown: string;
 };

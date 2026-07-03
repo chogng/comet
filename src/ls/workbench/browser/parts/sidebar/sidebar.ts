@@ -2,10 +2,8 @@ import type {
   LibraryDocumentSummary,
   LibraryDocumentsResult,
 } from 'ls/base/parts/sandbox/common/desktopTypes';
-import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
-import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import { LibraryView } from 'ls/workbench/contrib/knowledgeBase/browser/views/libraryView';
 import {
   FetchPaneContentView,
@@ -85,10 +83,6 @@ export class Sidebar {
     'section',
     'sidebar-tab-panel sidebar-fetch-panel',
   );
-  private readonly fetchActionsView = createActionBarView({
-    className: 'sidebar-tab-actionbar fetch-pane-actionbar',
-    ariaRole: 'group',
-  });
   private readonly libraryView: LibraryView;
   private readonly fetchContentView: FetchPaneContentView;
   private activeTab: SidebarContentTab = 'library';
@@ -190,7 +184,6 @@ export class Sidebar {
     }
 
     this.disposed = true;
-    this.fetchActionsView.dispose();
     this.libraryView.dispose();
     this.fetchContentView.dispose();
     this.element.replaceChildren();
@@ -207,46 +200,6 @@ export class Sidebar {
     this.syncModeContent();
     this.syncTopbarActions(this.props.topbarActionsElement ?? null);
     this.syncFooterActions(this.props.footerActionsElement ?? null);
-    const selectionButtonLabel =
-      this.props.fetchPaneProps.selectionModePhase === 'off'
-        ? labels.selectionModeEnterMulti
-        : this.props.fetchPaneProps.selectionModePhase === 'multi'
-          ? labels.selectionModeSelectAll
-          : labels.selectionModeExit;
-    this.fetchActionsView.setProps({
-      className: 'sidebar-tab-actionbar fetch-pane-actionbar',
-      ariaRole: 'group',
-      items: [
-        {
-          label: selectionButtonLabel,
-          title: selectionButtonLabel,
-          mode: 'icon',
-          active: this.props.fetchPaneProps.isSelectionModeEnabled,
-          checked: this.props.fetchPaneProps.isSelectionModeEnabled,
-          disabled:
-            !this.props.fetchPaneProps.articles.length &&
-            !this.props.fetchPaneProps.isSelectionModeEnabled,
-          buttonClassName: 'fetch-pane-select-action',
-          content: createLxIcon(lxIconSemanticMap.sidebar.selectionMode),
-          onClick: () => this.props.fetchPaneProps.onToggleSelectionMode(),
-        },
-        {
-          label: this.props.fetchPaneProps.isFetchLoading
-            ? labels.fetchLatestBusy
-            : labels.fetchLatest,
-          title: this.props.fetchPaneProps.isFetchLoading
-            ? labels.fetchLatestBusy
-            : labels.fetchLatest,
-          mode: 'icon',
-          disabled: this.props.fetchPaneProps.isFetchLoading,
-          buttonClassName: 'sidebar-fetch-btn fetch-pane-trigger-btn',
-          content: createLxIcon(
-            this.props.fetchPaneProps.isFetchLoading ? 'sync' : lxIconSemanticMap.fetch.batchDownload,
-          ),
-          onClick: () => this.props.fetchPaneProps.onFetch(),
-        },
-      ],
-    });
     this.syncTabs();
   }
 
@@ -341,13 +294,6 @@ export class Sidebar {
     this.fetchTabButton.setAttribute('aria-selected', String(!isLibraryActive));
     this.libraryTabButton.tabIndex = isLibraryActive ? 0 : -1;
     this.fetchTabButton.tabIndex = isLibraryActive ? -1 : 0;
-
-    if (!isLibraryActive) {
-      if (this.tabActionsElement.firstElementChild !== this.fetchActionsView.getElement()) {
-        this.tabActionsElement.replaceChildren(this.fetchActionsView.getElement());
-      }
-      return;
-    }
 
     if (this.tabActionsElement.firstElementChild) {
       this.tabActionsElement.replaceChildren();

@@ -12,7 +12,10 @@ import {
   getPdfDownloadStatus,
   subscribePdfDownloadStatus,
 } from 'ls/workbench/browser/pdfDownloadStatus';
-import type { SidebarArticle } from 'ls/workbench/browser/parts/sidebar/fetchPanePart';
+import type {
+  SidebarArticle,
+  SidebarSelectionModePhase,
+} from 'ls/workbench/browser/parts/sidebar/fetchPanePart';
 import {
   FetchTreeDataSource,
   getFetchTreeNodeLabel,
@@ -27,8 +30,12 @@ export type FetchTreeViewProps = {
   labels: FetchTreeLabels;
   selectedArticleKeys: ReadonlySet<string>;
   isSelectionModeEnabled: boolean;
+  selectionModePhase: SidebarSelectionModePhase;
+  isFetchLoading: boolean;
   onDownloadPdf: (article: SidebarArticle) => Promise<void>;
   onOpenArticleDetails: (article: SidebarArticle) => void | Promise<void>;
+  onFetch: () => void;
+  onToggleSelectionMode: () => void;
   onToggleArticleSelected: (article: SidebarArticle) => void;
 };
 
@@ -103,6 +110,7 @@ export class FetchTreeView extends LifecycleOwner {
   private props: FetchTreeViewProps;
   private readonly dataSource = new FetchTreeDataSource();
   private readonly tree: DataTree<FetchTreeInput, FetchTreeNode>;
+  private readonly folderActionBars = new Map<string, ReturnType<typeof createActionBarView>>();
   private readonly articleActionBars = new Map<string, ReturnType<typeof createActionBarView>>();
   private disposed = false;
 
@@ -160,6 +168,10 @@ export class FetchTreeView extends LifecycleOwner {
     }
 
     this.disposed = true;
+    for (const actionBar of this.folderActionBars.values()) {
+      actionBar.dispose();
+    }
+    this.folderActionBars.clear();
     for (const actionBar of this.articleActionBars.values()) {
       actionBar.dispose();
     }
@@ -168,6 +180,10 @@ export class FetchTreeView extends LifecycleOwner {
   }
 
   private render() {
+    for (const actionBar of this.folderActionBars.values()) {
+      actionBar.dispose();
+    }
+    this.folderActionBars.clear();
     for (const actionBar of this.articleActionBars.values()) {
       actionBar.dispose();
     }
@@ -197,12 +213,17 @@ export class FetchTreeView extends LifecycleOwner {
     node: Extract<FetchTreeNode, { kind: 'folder' }>,
     context: SimpleTreeRenderContext,
   ) {
+    const row = createElement(
+      'div',
+      'fetch-tree-row fetch-tree-folder-row',
+    );
+    row.style.paddingLeft = `${context.depth * 16}px`;
+
     const button = createElement(
       'button',
-      'fetch-tree-row fetch-tree-folder-row btn-base btn-ghost btn-md',
+      'fetch-tree-folder-toggle btn-base btn-ghost btn-md',
     );
     button.type = 'button';
-    button.style.paddingLeft = `${context.depth * 16}px`;
     button.setAttribute('aria-expanded', String(context.isExpanded));
     button.addEventListener('click', () => {
       context.toggleExpanded();
@@ -223,9 +244,17 @@ export class FetchTreeView extends LifecycleOwner {
         'fetch-tree-folder-chevron',
       ),
       label,
-      count,
     );
-    return button;
+
+    const actionBar = this.getFolderActionBar(node.id);
+    actionBar.setProps({
+      className: 'fetch-tree-folder-actions sidebar-tab-actionbar fetch-pane-actionbar',
+      ariaRole: 'group',
+      items: this.createFolderActionItems(),
+    });
+
+    row.append(button, actionBar.getElement(), count);
+    return row;
   }
 
   private renderArticleRow(
@@ -294,6 +323,64 @@ export class FetchTreeView extends LifecycleOwner {
     }
 
     return actionBar;
+  }
+
+  private getFolderActionBar(nodeId: string) {
+    let actionBar = this.folderActionBars.get(nodeId);
+    if (!actionBar) {
+      actionBar = createActionBarView({
+        className: 'fetch-tree-folder-actions sidebar-tab-actionbar fetch-pane-actionbar',
+        ariaRole: 'group',
+      });
+      this.folderActionBars.set(nodeId, actionBar);
+    }
+
+    return actionBar;
+  }
+
+  private createFolderActionItems(): ActionBarItem[] {
+    const selectionButtonLabel =
+      this.props.selectionModePhase === 'off'
+        ? this.props.labels.selectionModeEnterMulti
+        : this.props.selectionModePhase === 'multi'
+          ? this.props.labels.selectionModeSelectAll
+          : this.props.labels.selectionModeExit;
+    const fetchButtonLabel = this.props.isFetchLoading
+      ? this.props.labels.fetchLatestBusy
+      : this.props.labels.fetchLatest;
+
+    return [
+      {
+        label: selectionButtonLabel,
+        title: selectionButtonLabel,
+        mode: 'icon',
+        active: this.props.isSelectionModeEnabled,
+        checked: this.props.isSelectionModeEnabled,
+        disabled:
+          !this.props.articles.length &&
+          !this.props.isSelectionModeEnabled,
+        buttonClassName: 'fetch-pane-select-action',
+        content: createLxIcon(lxIconSemanticMap.sidebar.selectionMode),
+        onClick: (event: MouseEvent) => {
+          event.stopPropagation();
+          this.props.onToggleSelectionMode();
+        },
+      },
+      {
+        label: fetchButtonLabel,
+        title: fetchButtonLabel,
+        mode: 'icon',
+        disabled: this.props.isFetchLoading,
+        buttonClassName: 'sidebar-fetch-btn fetch-pane-trigger-btn',
+        content: createLxIcon(
+          this.props.isFetchLoading ? 'sync' : lxIconSemanticMap.fetch.batchDownload,
+        ),
+        onClick: (event: MouseEvent) => {
+          event.stopPropagation();
+          this.props.onFetch();
+        },
+      },
+    ];
   }
 
   private createArticleActionItems(

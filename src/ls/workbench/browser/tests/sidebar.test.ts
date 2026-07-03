@@ -138,7 +138,22 @@ test('sidebar topbar exposes an address bar action', () => {
 });
 
 test('sidebar renders library and fetch as switcher tabs', () => {
-  const sidebar = createSidebar(createProps());
+  const props = createProps();
+  props.fetchPaneProps.articles = [
+    {
+      title: 'Example article',
+      articleType: 'Article',
+      doi: null,
+      authors: [],
+      abstractText: null,
+      descriptionText: null,
+      publishedAt: '2026-07-01',
+      sourceUrl: 'https://www.nature.com/articles/example',
+      fetchedAt: '2026-07-03T00:00:00.000Z',
+      journalTitle: 'Research Articles',
+    },
+  ];
+  const sidebar = createSidebar(props);
   const element = sidebar.getElement();
   document.body.append(element);
 
@@ -165,8 +180,9 @@ test('sidebar renders library and fetch as switcher tabs', () => {
     assert(fetchTab.querySelector('.lx-icon-customize-filled') instanceof HTMLElement);
     assert(element.querySelector('.sidebar-fetch-panel') instanceof HTMLElement);
     assert.equal(element.querySelector('.sidebar-library-panel'), null);
+    assert.equal(element.querySelector('.sidebar-tab-actions .fetch-pane-actionbar'), null);
     assert(
-      element.querySelector('.sidebar-tab-actions .fetch-pane-actionbar') instanceof HTMLElement,
+      element.querySelector('.fetch-tree-folder-row .fetch-pane-actionbar') instanceof HTMLElement,
     );
   } finally {
     sidebar.dispose();
