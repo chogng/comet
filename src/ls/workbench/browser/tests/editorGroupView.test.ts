@@ -568,7 +568,7 @@ test('EditorGroupView reports draft pane view state changes through persistence 
   }
 });
 
-test('EditorGroupView captures and restores browser pane view state through the web content bridge', async () => {
+test('EditorGroupView captures and restores browser pane view state through the BrowserView service', async () => {
   const browserTab = {
     id: 'browser-a',
     kind: 'browser' as const,

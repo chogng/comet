@@ -3,8 +3,6 @@ import type {
   AppCommand,
   AppCommandPayloadMap,
   AppCommandResultMap,
-  WebContentBridgeCommand,
-  WebContentBridgeResponse,
   DocumentTranslationProgress,
   FetchStatus,
   NativeToastLayout,
@@ -254,6 +252,9 @@ const electronAPI: ElectronAPI = {
     setLayoutPhase(phase: WebContentLayoutPhase) {
       sendIpc('app:web-content-set-layout-phase', phase);
     },
+    setRetentionLimit(limit: number) {
+      sendIpc('app:web-content-set-retention-limit', limit);
+    },
     clearHistory(targetId?: string | null) {
       sendIpc('app:web-content-clear-history', { targetId: targetId ?? null });
     },
@@ -299,26 +300,6 @@ const electronAPI: ElectronAPI = {
         isLoading: false,
         visible: false,
       });
-    },
-    onBridgeCommand(listener: (command: WebContentBridgeCommand) => void) {
-      return subscribeIpc<WebContentBridgeCommand>(
-        'app:web-content-bridge-command',
-        listener,
-        {
-          requestId: '',
-          method: 'getState',
-          args: [],
-        },
-      );
-    },
-    respondToBridgeCommand(response: WebContentBridgeResponse) {
-      sendIpc('app:web-content-bridge-response', response);
-    },
-    reportBridgeReady() {
-      sendIpc('app:web-content-bridge-ready');
-    },
-    reportState(state: WebContentState) {
-      sendIpc('app:web-content-report-state', state);
     },
   },
   fetch: {

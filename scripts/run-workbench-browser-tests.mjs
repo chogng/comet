@@ -34,6 +34,15 @@ const entryPoints = [
     'tests',
     'contextkeys.test.ts',
   ),
+  path.join(
+    rootDir,
+    'src',
+    'ls',
+    'workbench',
+    'browser',
+    'tests',
+    'webContentViewContribution.test.ts',
+  ),
 ];
 
 await rm(outputDir, { recursive: true, force: true });

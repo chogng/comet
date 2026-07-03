@@ -1,7 +1,24 @@
 export type RuntimeMode = 'web' | 'desktop';
-export type RuntimePlatform = 'web' | 'windows' | 'macos';
+export type RuntimePlatform = 'web' | 'windows' | 'macos' | 'linux';
 
 export const LANGUAGE_DEFAULT = 'en';
+
+export interface IProcessEnvironment {
+	[key: string]: string | undefined;
+}
+
+export interface INodeProcess {
+	platform: string;
+	arch: string;
+	env: IProcessEnvironment;
+	versions?: {
+		node?: string;
+		electron?: string;
+		chrome?: string;
+	};
+	type?: string;
+	cwd: () => string;
+}
 
 export enum OperatingSystem {
   Windows = 1,
@@ -13,9 +30,10 @@ export const enum Platform {
   Web,
   Mac,
   Windows,
+  Linux,
 }
 
-export type PlatformName = 'Web' | 'Windows' | 'Mac';
+export type PlatformName = 'Web' | 'Windows' | 'Mac' | 'Linux';
 
 export function PlatformToString(platform: Platform): PlatformName {
   switch (platform) {
@@ -23,6 +41,8 @@ export function PlatformToString(platform: Platform): PlatformName {
       return 'Mac';
     case Platform.Windows:
       return 'Windows';
+    case Platform.Linux:
+      return 'Linux';
     case Platform.Web:
       return 'Web';
   }
@@ -46,26 +66,39 @@ function isMacintoshPlatform(platform: string) {
   );
 }
 
+function isLinuxPlatform(platform: string) {
+  return platform === 'linux' || platform.includes('linux');
+}
+
 const navigatorPlatform = readNavigatorPlatform();
 const desktopRuntime =
   typeof window !== 'undefined' &&
   typeof window.electronAPI?.invoke === 'function';
+const webWorkerRuntime =
+  typeof window === 'undefined' &&
+  typeof (globalThis as { importScripts?: unknown }).importScripts === 'function';
 const runtimeMode: RuntimeMode = desktopRuntime ? 'desktop' : 'web';
 const runtimePlatform: RuntimePlatform = !desktopRuntime
   ? 'web'
   : isMacintoshPlatform(navigatorPlatform)
     ? 'macos'
-    : 'windows';
+    : isLinuxPlatform(navigatorPlatform)
+      ? 'linux'
+      : 'windows';
 const operatingSystem =
   runtimePlatform === 'macos'
     ? OperatingSystem.Macintosh
+    : runtimePlatform === 'linux'
+      ? OperatingSystem.Linux
     : OperatingSystem.Windows;
 const platformValue =
   runtimePlatform === 'macos'
     ? Platform.Mac
     : runtimePlatform === 'windows'
       ? Platform.Windows
-      : Platform.Web;
+      : runtimePlatform === 'linux'
+        ? Platform.Linux
+        : Platform.Web;
 
 export function hasDesktopRuntime() {
   return desktopRuntime;
@@ -99,8 +132,10 @@ export function getOperatingSystem(): OperatingSystem {
 
 export const isWindows = runtimePlatform === 'windows';
 export const isMacintosh = runtimePlatform === 'macos';
+export const isLinux = runtimePlatform === 'linux';
 export const isNative = desktopRuntime;
 export const isWeb = runtimeMode === 'web';
+export const webWorkerOrigin = webWorkerRuntime && typeof globalThis.origin === 'string' ? globalThis.origin : undefined;
 export const platform = platformValue;
 export const language: string = LANGUAGE_DEFAULT;
 export const locale: string = LANGUAGE_DEFAULT;

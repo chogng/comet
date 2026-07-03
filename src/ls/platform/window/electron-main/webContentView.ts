@@ -1,23 +1,25 @@
-import { BrowserWindow } from 'electron';
-import type { WebContents } from 'electron';
+import { BrowserWindow, session, WebContentsView } from 'electron';
 import { normalizeListingCandidateSeed } from 'ls/code/electron-main/fetch/sourceExtractors/types';
 import type { ListingCandidateExtraction, ListingCandidateSeed } from 'ls/code/electron-main/fetch/sourceExtractors/types';
 
 import type {
   WebContentBounds,
-  WebContentBridgeMethod,
-  WebContentBridgeResponse,
   WebContentLayoutPhase,
   WebContentNavigationMode,
   WebContentSelectionSnapshot,
   WebContentState,
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { appError } from 'ls/base/common/errors';
+import { WORKBENCH_SHARED_WEB_PARTITION } from 'ls/platform/native/electron-main/sharedWebSession';
+import {
+  defaultBrowserTabKeepAliveLimit,
+  normalizeBrowserTabKeepAliveLimit,
+} from 'ls/workbench/services/webContent/webContentRetentionConfig';
 
 const DEFAULT_WEB_CONTENT_TARGET_ID = '__shared__';
-const WEB_CONTENT_BRIDGE_KEY = '__lsWebContentBridge';
-const WEB_CONTENT_BRIDGE_UNAVAILABLE_MESSAGE = 'Desktop web content bridge is unavailable.';
-const WEB_CONTENT_BRIDGE_REQUEST_TIMEOUT_MS = 15000;
+const RETAINED_WEB_CONTENT_TARGET_TTL_MS = 3 * 60 * 1000;
+const DEFAULT_WEB_CONTENT_BOUNDS = { x: 0, y: 0, width: 1024, height: 768 };
+const HIDDEN_WEB_CONTENT_BOUNDS = { x: 0, y: 0, width: 1, height: 1 };
 
 type WebContentTargetState = Pick<
   WebContentState,
@@ -29,26 +31,35 @@ type WebContentTargetState = Pick<
   | 'isLoading'
 >;
 
-type PendingRendererBridgeRequest = {
-  reject: (error: unknown) => void;
-  resolve: (value: unknown) => void;
-  timeoutId: ReturnType<typeof setTimeout>;
+type WebContentTargetMetadataMachine = {
+  comparableUrl: string;
+  pendingPageTitle: string;
+  pendingFaviconUrl: string;
 };
 
-type RendererBridgeReadyWaiter = {
-  reject: (error: unknown) => void;
-  resolve: () => void;
-  timeoutId: ReturnType<typeof setTimeout>;
+type ManagedWebContentTarget = {
+  cleanup: Array<() => void>;
+  metadataMachine: WebContentTargetMetadataMachine;
+  state: WebContentTargetState;
+  targetId: string;
+  view: WebContentsView;
+};
+
+type RetainedWebContentTarget = {
+  releasedAt: number;
 };
 
 let webContentWindow: BrowserWindow | null = null;
 let activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
 let lastReportedWebContentState: WebContentState = createDefaultWebContentState();
-let rendererBridgeReady = false;
-let rendererBridgeRequestIdPool = 0;
 let disposeWebContentWindowListeners: (() => void) | null = null;
-const pendingRendererBridgeRequests = new Map<string, PendingRendererBridgeRequest>();
-const rendererBridgeReadyWaiters = new Set<RendererBridgeReadyWaiter>();
+let webContentBounds: WebContentBounds | null = null;
+let webContentVisible = false;
+let webContentLayoutPhase: WebContentLayoutPhase = 'hidden';
+let webContentRetentionSweepTimer: ReturnType<typeof setTimeout> | null = null;
+let browserTabKeepAliveLimit = defaultBrowserTabKeepAliveLimit;
+const webContentTargets = new Map<string, ManagedWebContentTarget>();
+const retainedWebContentTargets = new Map<string, RetainedWebContentTarget>();
 
 function createDefaultWebContentTargetState(): WebContentTargetState {
   return {
@@ -68,6 +79,7 @@ function normalizeWebContentTargetId(targetId?: string | null) {
 
 function createDefaultWebContentState(targetId?: string | null): WebContentState {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
+  const isActiveTarget = normalizedTargetId === activeWebContentTargetId;
   return {
     ...createDefaultWebContentTargetState(),
     targetId:
@@ -77,9 +89,9 @@ function createDefaultWebContentState(targetId?: string | null): WebContentState
         ? null
         : activeWebContentTargetId,
     ownership:
-      normalizedTargetId === activeWebContentTargetId ? 'active' : 'inactive',
-    layoutPhase: normalizedTargetId === activeWebContentTargetId ? 'hidden' : 'hidden',
-    visible: false,
+      isActiveTarget ? 'active' : 'inactive',
+    layoutPhase: isActiveTarget ? webContentLayoutPhase : 'hidden',
+    visible: isActiveTarget ? webContentVisible : false,
   };
 }
 
@@ -90,6 +102,138 @@ function rememberReportedWebContentState(state: WebContentState) {
 
 function getActiveWebContentTargetId() {
   return activeWebContentTargetId;
+}
+
+function createDefaultTargetMetadataMachine(): WebContentTargetMetadataMachine {
+  return {
+    comparableUrl: '',
+    pendingPageTitle: '',
+    pendingFaviconUrl: '',
+  };
+}
+
+function sanitizeWebContentFaviconUrl(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function normalizeComparableWebContentUrl(value: string) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+
+  try {
+    const parsed = new URL(normalized);
+    parsed.hash = '';
+    if (parsed.pathname !== '/') {
+      parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+    }
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+}
+
+function coerceWebContentNavigationUrl(value: string) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^about:blank$/i.test(normalized) || /^https?:\/\/about:blank$/i.test(normalized)) {
+    return 'about:blank';
+  }
+
+  return normalized;
+}
+
+function isWebContentFailureUrl(url: string) {
+  return /^about:blank$/i.test(url) || /^chrome-error:\/\//i.test(url);
+}
+
+function sanitizeWebContentPageTitle(pageTitle: string, currentUrl: string) {
+  const normalizedPageTitle = String(pageTitle ?? '').trim();
+  if (!normalizedPageTitle) {
+    return '';
+  }
+
+  if (
+    /^about:blank$/i.test(normalizedPageTitle) ||
+    /^https?:\/\/about:blank$/i.test(normalizedPageTitle)
+  ) {
+    return '';
+  }
+
+  return coerceWebContentNavigationUrl(currentUrl) === 'about:blank'
+    ? ''
+    : normalizedPageTitle;
+}
+
+function hasWebContentReachedStableDestination(
+  currentUrl: string,
+  targetUrl: string,
+  initialUrl: string,
+  isLoading: boolean,
+) {
+  if (!currentUrl || isWebContentFailureUrl(currentUrl)) {
+    return false;
+  }
+
+  if (currentUrl === targetUrl) {
+    return true;
+  }
+
+  if (isLoading) {
+    return false;
+  }
+
+  return currentUrl !== initialUrl;
+}
+
+function hasWebContentReachedTarget(
+  mode: WebContentNavigationMode,
+  currentUrl: string,
+  targetUrl: string,
+  initialUrl: string,
+  isLoading: boolean,
+) {
+  switch (mode) {
+    case 'strict':
+      return currentUrl === targetUrl;
+    case 'browser':
+    default:
+      return hasWebContentReachedStableDestination(
+        currentUrl,
+        targetUrl,
+        initialUrl,
+        isLoading,
+      );
+  }
+}
+
+function isAbortLikeWebContentNavigationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\bERR_ABORTED\b/i.test(message) || /\(-3\)\s+loading\b/i.test(message);
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function areWebContentStatesEqual(previous: WebContentState, next: WebContentState) {
+  return (
+    previous.targetId === next.targetId &&
+    previous.activeTargetId === next.activeTargetId &&
+    previous.ownership === next.ownership &&
+    previous.layoutPhase === next.layoutPhase &&
+    previous.url === next.url &&
+    (previous.pageTitle ?? '') === (next.pageTitle ?? '') &&
+    (previous.faviconUrl ?? '') === (next.faviconUrl ?? '') &&
+    previous.canGoBack === next.canGoBack &&
+    previous.canGoForward === next.canGoForward &&
+    previous.isLoading === next.isLoading &&
+    previous.visible === next.visible
+  );
 }
 
 export type WebContentDocumentSnapshot = {
@@ -1193,11 +1337,9 @@ function createWebContentListingCandidateExtractionScript(preferredExtractorId?:
   return `(${PREVIEW_LISTING_CANDIDATE_EXTRACTION_SCRIPT})(${JSON.stringify(normalizedPreferredExtractorId)})`;
 }
 
-type WebContentBridgeTimeoutResult = {
+type WebContentExecutionTimeoutResult = {
   __lsTimedOut: true;
 };
-
-const cachedWebContentTargetStatesByTargetId = new Map<string, WebContentTargetState>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -1207,17 +1349,46 @@ function isWebContentLayoutPhase(value: unknown): value is WebContentLayoutPhase
   return value === 'hidden' || value === 'measuring' || value === 'visible';
 }
 
-function isWebContentBridgeTimeoutResult(
+function isWebContentExecutionTimeoutResult(
   value: unknown,
-): value is WebContentBridgeTimeoutResult {
+): value is WebContentExecutionTimeoutResult {
   return isRecord(value) && value.__lsTimedOut === true;
 }
 
-function buildCachedWebContentState(targetId?: string | null): WebContentState {
+function isValidWebContentBounds(bounds: WebContentBounds | null): bounds is WebContentBounds {
+  return Boolean(
+    bounds &&
+      Number.isFinite(bounds.x) &&
+      Number.isFinite(bounds.y) &&
+      Number.isFinite(bounds.width) &&
+      Number.isFinite(bounds.height) &&
+      bounds.width > 0 &&
+      bounds.height > 0,
+  );
+}
+
+function getWebContentOwnerWindow() {
+  if (!webContentWindow || webContentWindow.isDestroyed()) {
+    throw appError('PREVIEW_NOT_READY', {
+      message: 'Desktop web content window is unavailable.',
+    });
+  }
+
+  return webContentWindow;
+}
+
+function shouldShowActiveWebContentTarget() {
+  return Boolean(
+    webContentVisible &&
+      webContentLayoutPhase === 'visible' &&
+      isValidWebContentBounds(webContentBounds),
+  );
+}
+
+function buildWebContentState(targetId?: string | null): WebContentState {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
-  const currentState =
-    cachedWebContentTargetStatesByTargetId.get(normalizedTargetId) ??
-    createDefaultWebContentTargetState();
+  const target = webContentTargets.get(normalizedTargetId);
+  const currentState = target?.state ?? createDefaultWebContentTargetState();
   const activeTargetId = getActiveWebContentTargetId();
   const isActiveTarget = normalizedTargetId === activeTargetId;
 
@@ -1228,274 +1399,9 @@ function buildCachedWebContentState(targetId?: string | null): WebContentState {
     activeTargetId:
       activeTargetId === DEFAULT_WEB_CONTENT_TARGET_ID ? null : activeTargetId,
     ownership: isActiveTarget ? 'active' : 'inactive',
-    layoutPhase: isActiveTarget
-      ? (isWebContentLayoutPhase(lastReportedWebContentState.layoutPhase)
-          ? lastReportedWebContentState.layoutPhase
-          : 'hidden')
-      : 'hidden',
-    visible: isActiveTarget ? Boolean(lastReportedWebContentState.visible) : false,
+    layoutPhase: isActiveTarget ? webContentLayoutPhase : 'hidden',
+    visible: isActiveTarget && Boolean(target?.view.getVisible()),
   };
-}
-
-function coerceWebContentState(value: unknown, targetId?: string | null): WebContentState {
-  const fallback = buildCachedWebContentState(targetId);
-  if (!isRecord(value)) {
-    return fallback;
-  }
-
-  const normalizedTargetId = normalizeWebContentTargetId(
-    typeof value.targetId === 'string' || value.targetId == null
-      ? value.targetId
-      : targetId,
-  );
-  const normalizedActiveTargetId = normalizeWebContentTargetId(
-    typeof value.activeTargetId === 'string' || value.activeTargetId == null
-      ? value.activeTargetId
-      : fallback.activeTargetId,
-  );
-  const isActiveTarget = normalizedTargetId === normalizedActiveTargetId;
-
-  return {
-    url: typeof value.url === 'string' ? value.url : fallback.url,
-    pageTitle:
-      typeof value.pageTitle === 'string'
-        ? value.pageTitle
-        : (fallback.pageTitle ?? ''),
-    faviconUrl:
-      typeof value.faviconUrl === 'string'
-        ? value.faviconUrl
-        : (fallback.faviconUrl ?? ''),
-    canGoBack:
-      typeof value.canGoBack === 'boolean' ? value.canGoBack : fallback.canGoBack,
-    canGoForward:
-      typeof value.canGoForward === 'boolean'
-        ? value.canGoForward
-        : fallback.canGoForward,
-    isLoading:
-      typeof value.isLoading === 'boolean' ? value.isLoading : fallback.isLoading,
-    targetId:
-      normalizedTargetId === DEFAULT_WEB_CONTENT_TARGET_ID ? null : normalizedTargetId,
-    activeTargetId:
-      normalizedActiveTargetId === DEFAULT_WEB_CONTENT_TARGET_ID
-        ? null
-        : normalizedActiveTargetId,
-    ownership:
-      value.ownership === 'active' || value.ownership === 'inactive'
-        ? value.ownership
-        : isActiveTarget
-          ? 'active'
-          : 'inactive',
-    layoutPhase: isWebContentLayoutPhase(value.layoutPhase)
-      ? value.layoutPhase
-      : isActiveTarget
-        ? fallback.layoutPhase
-        : 'hidden',
-    visible:
-      typeof value.visible === 'boolean'
-        ? value.visible
-        : isActiveTarget
-          ? fallback.visible
-          : false,
-  };
-}
-
-function rememberWebContentState(state: WebContentState) {
-  const normalizedTargetId = normalizeWebContentTargetId(
-    state.targetId ?? state.activeTargetId,
-  );
-  cachedWebContentTargetStatesByTargetId.set(normalizedTargetId, {
-    url: state.url,
-    pageTitle: String(state.pageTitle ?? '').trim(),
-    faviconUrl: String(state.faviconUrl ?? '').trim(),
-    canGoBack: state.canGoBack,
-    canGoForward: state.canGoForward,
-    isLoading: state.isLoading,
-  });
-  rememberReportedWebContentState(state);
-}
-
-export function reportWebContentState(state: WebContentState) {
-  rememberWebContentState(coerceWebContentState(state, state.targetId ?? state.activeTargetId));
-}
-
-function createRendererBridgeUnavailableError() {
-  return new Error(WEB_CONTENT_BRIDGE_UNAVAILABLE_MESSAGE);
-}
-
-function rejectPendingRendererBridgeRequests(error: unknown = createRendererBridgeUnavailableError()) {
-  for (const [requestId, pendingRequest] of pendingRendererBridgeRequests) {
-    clearTimeout(pendingRequest.timeoutId);
-    pendingRendererBridgeRequests.delete(requestId);
-    pendingRequest.reject(error);
-  }
-}
-
-function rejectRendererBridgeReadyWaiters(error: unknown = createRendererBridgeUnavailableError()) {
-  for (const waiter of rendererBridgeReadyWaiters) {
-    clearTimeout(waiter.timeoutId);
-    rendererBridgeReadyWaiters.delete(waiter);
-    waiter.reject(error);
-  }
-}
-
-function resetRendererBridgeState() {
-  rendererBridgeReady = false;
-  rejectPendingRendererBridgeRequests();
-  rejectRendererBridgeReadyWaiters();
-}
-
-function markRendererBridgeReady() {
-  rendererBridgeReady = true;
-  for (const waiter of rendererBridgeReadyWaiters) {
-    clearTimeout(waiter.timeoutId);
-    waiter.resolve();
-  }
-  rendererBridgeReadyWaiters.clear();
-}
-
-function getRendererBridgeWebContents() {
-  if (!webContentWindow || webContentWindow.isDestroyed()) {
-    throw createRendererBridgeUnavailableError();
-  }
-
-  const { webContents } = webContentWindow;
-  if (!webContents || webContents.isDestroyed()) {
-    throw createRendererBridgeUnavailableError();
-  }
-
-  return webContents;
-}
-
-async function waitForRendererBridge(timeoutMs = 4000) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    const webContents = getRendererBridgeWebContents();
-    if (rendererBridgeReady) {
-      return;
-    }
-
-    try {
-      const bridgeAvailable = await webContents.executeJavaScript(
-        `(() => {
-          const bridge = window[${JSON.stringify(WEB_CONTENT_BRIDGE_KEY)}];
-          if (!bridge) {
-            return false;
-          }
-
-          try {
-            window.electronAPI?.webContent?.reportBridgeReady?.();
-          } catch {
-            // Ignore recovery signaling failures here; the bridge presence is enough.
-          }
-
-          return true;
-        })()`,
-        true,
-      );
-      if (bridgeAvailable === true) {
-        markRendererBridgeReady();
-        return;
-      }
-    } catch {
-      // Ignore transient renderer bootstrap failures and keep waiting.
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const remainingMs = timeoutMs - (Date.now() - startedAt);
-      const waitBudgetMs = Math.max(0, Math.min(remainingMs, 150));
-      if (waitBudgetMs <= 0) {
-        resolve();
-        return;
-      }
-
-      const waiter: RendererBridgeReadyWaiter = {
-        resolve: () => {
-          rendererBridgeReadyWaiters.delete(waiter);
-          resolve();
-        },
-        reject: (error) => {
-          rendererBridgeReadyWaiters.delete(waiter);
-          reject(error);
-        },
-        timeoutId: setTimeout(() => {
-          rendererBridgeReadyWaiters.delete(waiter);
-          resolve();
-        }, waitBudgetMs),
-      };
-      rendererBridgeReadyWaiters.add(waiter);
-
-      if (rendererBridgeReady) {
-        clearTimeout(waiter.timeoutId);
-        rendererBridgeReadyWaiters.delete(waiter);
-        resolve();
-      }
-    });
-
-    if (rendererBridgeReady) {
-      return;
-    }
-  }
-
-  try {
-    const probe = await getRendererBridgeWebContents().executeJavaScript(
-      `(() => ({
-        hasBridge: Boolean(window[${JSON.stringify(WEB_CONTENT_BRIDGE_KEY)}]),
-        hasElectronApi: Boolean(window.electronAPI?.webContent?.navigate),
-        readyState: document.readyState,
-        location: window.location.href,
-      }))()`,
-      true,
-    );
-    console.warn('[web-content-bridge] renderer unavailable after timeout', probe);
-  } catch (error) {
-    console.warn('[web-content-bridge] renderer probe failed', describeBridgeError(error));
-  }
-
-  throw createRendererBridgeUnavailableError();
-}
-
-async function invokeRendererWebContentBridge<T>(
-  method: WebContentBridgeMethod,
-  args: unknown[] = [],
-): Promise<T> {
-  await waitForRendererBridge();
-  const webContents = getRendererBridgeWebContents();
-  const requestId = `web-content-bridge-${rendererBridgeRequestIdPool++}`;
-
-  return await new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      pendingRendererBridgeRequests.delete(requestId);
-      reject(new Error(`Desktop web content bridge command timed out (${method}).`));
-    }, WEB_CONTENT_BRIDGE_REQUEST_TIMEOUT_MS);
-
-    pendingRendererBridgeRequests.set(requestId, {
-      resolve: (value) => {
-        clearTimeout(timeoutId);
-        resolve(value as T);
-      },
-      reject: (error) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      },
-      timeoutId,
-    });
-
-    try {
-      webContents.send('app:web-content-bridge-command', {
-        requestId,
-        method,
-        args,
-      });
-    } catch (error) {
-      const pendingRequest = pendingRendererBridgeRequests.get(requestId);
-      if (pendingRequest) {
-        pendingRendererBridgeRequests.delete(requestId);
-        clearTimeout(pendingRequest.timeoutId);
-      }
-      reject(error);
-    }
-  });
 }
 
 function normalizeWebContentTimeoutMs(value: unknown) {
@@ -1508,16 +1414,22 @@ async function executeWebContentScriptForTarget<T>(
   options: WebContentDocumentSnapshotOptions = {},
 ): Promise<T | typeof webContentDocumentSnapshotTimedOut> {
   const timeoutMs = normalizeWebContentTimeoutMs(options.timeoutMs);
+  const entry = webContentTargets.get(normalizeWebContentTargetId(targetId));
+  if (!entry || entry.view.webContents.isDestroyed()) {
+    return webContentDocumentSnapshotTimedOut;
+  }
 
   try {
-    const result = await invokeRendererWebContentBridge<
-      T | WebContentBridgeTimeoutResult | null
-    >('executeJavaScript', [
-      normalizeWebContentTargetId(targetId),
-      script,
-      timeoutMs,
-    ]);
-    if (isWebContentBridgeTimeoutResult(result) || result === null) {
+    const execution = entry.view.webContents.executeJavaScript(script, true) as Promise<T>;
+    const result = timeoutMs > 0
+      ? await Promise.race([
+          execution,
+          new Promise<WebContentExecutionTimeoutResult>((resolve) => {
+            setTimeout(() => resolve({ __lsTimedOut: true }), timeoutMs);
+          }),
+        ])
+      : await execution;
+    if (isWebContentExecutionTimeoutResult(result) || result === null) {
       return webContentDocumentSnapshotTimedOut;
     }
     return result as T;
@@ -1570,126 +1482,484 @@ function normalizeWebContentListingCandidateSeeds(value: unknown): ListingCandid
     .filter((candidate): candidate is ListingCandidateSeed => Boolean(candidate));
 }
 
-function describeBridgeError(error: unknown) {
+function describeWebContentError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function reportWebContentRendererReady(sender: WebContents) {
-  if (!webContentWindow || webContentWindow.isDestroyed()) {
-    return;
-  }
-
-  const currentWebContents = webContentWindow.webContents;
-  if (!currentWebContents || currentWebContents.isDestroyed()) {
-    return;
-  }
-
-  if (sender.id !== currentWebContents.id) {
-    return;
-  }
-
-  markRendererBridgeReady();
-}
-
-export function resolveWebContentBridgeResponse(
-  sender: WebContents,
-  response: WebContentBridgeResponse,
-) {
-  if (!response?.requestId) {
-    return;
-  }
-
-  if (!webContentWindow || webContentWindow.isDestroyed()) {
-    return;
-  }
-
-  const currentWebContents = webContentWindow.webContents;
-  if (!currentWebContents || currentWebContents.isDestroyed() || sender.id !== currentWebContents.id) {
-    return;
-  }
-
-  const pendingRequest = pendingRendererBridgeRequests.get(response.requestId);
-  if (!pendingRequest) {
-    return;
-  }
-
-  pendingRendererBridgeRequests.delete(response.requestId);
-  if (response.ok) {
-    pendingRequest.resolve(response.result);
-    return;
-  }
-
-  pendingRequest.reject(new Error(String(response.error ?? WEB_CONTENT_BRIDGE_UNAVAILABLE_MESSAGE)));
-}
-
 export function ensureWebContentView(window: BrowserWindow) {
+  if (webContentWindow && webContentWindow !== window) {
+    disposeWebContentView(webContentWindow);
+  }
+
   disposeWebContentWindowListeners?.();
   webContentWindow = window;
-  resetRendererBridgeState();
 
-  const handleDidStartNavigation = (
-    _event: Electron.Event,
-    _url: string,
-    isInPlace: boolean,
-    isMainFrame: boolean,
-  ) => {
-    if (!isMainFrame || isInPlace) {
-      return;
-    }
-
-    resetRendererBridgeState();
-  };
   const handleDestroyed = () => {
-    resetRendererBridgeState();
+    disposeWebContentView(window);
   };
   const handleRenderProcessGone = () => {
-    resetRendererBridgeState();
+    applyWebContentLayout();
   };
 
-  window.webContents.on('did-start-navigation', handleDidStartNavigation);
   window.webContents.on('destroyed', handleDestroyed);
   window.webContents.on('render-process-gone', handleRenderProcessGone);
   disposeWebContentWindowListeners = () => {
     if (!window.isDestroyed()) {
       const currentWebContents = window.webContents;
       if (!currentWebContents.isDestroyed()) {
-        currentWebContents.removeListener('did-start-navigation', handleDidStartNavigation);
         currentWebContents.removeListener('destroyed', handleDestroyed);
         currentWebContents.removeListener('render-process-gone', handleRenderProcessGone);
       }
     }
     disposeWebContentWindowListeners = null;
   };
+
+  applyWebContentLayout();
 }
 
 export function disposeWebContentView(window?: BrowserWindow | null) {
   if (window && webContentWindow && webContentWindow !== window) return;
 
   disposeWebContentWindowListeners?.();
-  resetRendererBridgeState();
-  cachedWebContentTargetStatesByTargetId.clear();
+  clearRetentionSweepTimer();
+  for (const targetId of [...webContentTargets.keys()]) {
+    disposeWebContentTargetEntry(targetId);
+  }
+  retainedWebContentTargets.clear();
+  webContentBounds = null;
+  webContentVisible = false;
+  webContentLayoutPhase = 'hidden';
   activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
   lastReportedWebContentState = createDefaultWebContentState();
   webContentWindow = null;
 }
 
-export function setWebContentBounds(_bounds: WebContentBounds | null) {}
+function clearRetentionSweepTimer() {
+  if (webContentRetentionSweepTimer === null) {
+    return;
+  }
 
-export function setWebContentVisible(_visible: boolean) {}
+  clearTimeout(webContentRetentionSweepTimer);
+  webContentRetentionSweepTimer = null;
+}
 
-export function setWebContentLayoutPhaseState(_phase: WebContentLayoutPhase) {}
+function scheduleRetentionSweep(nextSweepDelayMs: number | null) {
+  clearRetentionSweepTimer();
+  if (nextSweepDelayMs === null || retainedWebContentTargets.size === 0) {
+    return;
+  }
+
+  webContentRetentionSweepTimer = setTimeout(() => {
+    webContentRetentionSweepTimer = null;
+    sweepReleasedWebContentTargets(Date.now());
+  }, nextSweepDelayMs);
+}
+
+function markWebContentTargetAsRetained(targetId: string, now = Date.now()) {
+  if (targetId === DEFAULT_WEB_CONTENT_TARGET_ID || !webContentTargets.has(targetId)) {
+    retainedWebContentTargets.delete(targetId);
+    return;
+  }
+
+  retainedWebContentTargets.set(targetId, { releasedAt: now });
+}
+
+function markWebContentTargetAsActive(targetId: string) {
+  retainedWebContentTargets.delete(targetId);
+}
+
+function sweepReleasedWebContentTargets(now = Date.now()) {
+  retainedWebContentTargets.delete(activeWebContentTargetId);
+
+  for (const targetId of [...retainedWebContentTargets.keys()]) {
+    if (!webContentTargets.has(targetId)) {
+      retainedWebContentTargets.delete(targetId);
+    }
+  }
+
+  const evictedTargetIds: string[] = [];
+  for (const [targetId, retentionEntry] of retainedWebContentTargets) {
+    if (now - retentionEntry.releasedAt >= RETAINED_WEB_CONTENT_TARGET_TTL_MS) {
+      evictedTargetIds.push(targetId);
+    }
+  }
+
+  if (retainedWebContentTargets.size - evictedTargetIds.length > browserTabKeepAliveLimit) {
+    const overflowCount =
+      retainedWebContentTargets.size -
+      evictedTargetIds.length -
+      browserTabKeepAliveLimit;
+    const overflowEvictions = [...retainedWebContentTargets.entries()]
+      .filter(([targetId]) => !evictedTargetIds.includes(targetId))
+      .sort(([, left], [, right]) => left.releasedAt - right.releasedAt)
+      .slice(0, Math.max(0, overflowCount))
+      .map(([targetId]) => targetId);
+    evictedTargetIds.push(...overflowEvictions);
+  }
+
+  for (const targetId of evictedTargetIds) {
+    retainedWebContentTargets.delete(targetId);
+    disposeWebContentTargetEntry(targetId);
+  }
+
+  let nextSweepDelayMs: number | null = null;
+  for (const retentionEntry of retainedWebContentTargets.values()) {
+    const delayMs = Math.max(
+      0,
+      retentionEntry.releasedAt + RETAINED_WEB_CONTENT_TARGET_TTL_MS - now,
+    );
+    nextSweepDelayMs =
+      nextSweepDelayMs === null ? delayMs : Math.min(nextSweepDelayMs, delayMs);
+  }
+
+  scheduleRetentionSweep(nextSweepDelayMs);
+  applyWebContentLayout();
+}
+
+function disposeWebContentTargetEntry(targetId: string) {
+  const normalizedTargetId = normalizeWebContentTargetId(targetId);
+  retainedWebContentTargets.delete(normalizedTargetId);
+  const entry = webContentTargets.get(normalizedTargetId);
+  if (!entry) {
+    return;
+  }
+
+  webContentTargets.delete(normalizedTargetId);
+  for (const cleanup of entry.cleanup) {
+    cleanup();
+  }
+
+  try {
+    entry.view.webContents.stop();
+  } catch {
+    // Ignore stop failures while tearing down a browser view.
+  }
+
+  try {
+    webContentWindow?.contentView.removeChildView(entry.view);
+  } catch {
+    // Ignore content-view removal races during window teardown.
+  }
+
+  if (!entry.view.webContents.isDestroyed()) {
+    entry.view.webContents.close();
+  }
+}
+
+type WebContentEmitter = {
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  removeListener(event: string, listener: (...args: unknown[]) => void): unknown;
+};
+
+function addWebContentTargetListener(
+  entry: ManagedWebContentTarget,
+  event: string,
+  listener: (...args: unknown[]) => void,
+) {
+  const emitter = entry.view.webContents as unknown as WebContentEmitter;
+  emitter.on(event, listener);
+  entry.cleanup.push(() => {
+    emitter.removeListener(event, listener);
+  });
+}
+
+function resolveFaviconUrl(favicons: unknown) {
+  if (!Array.isArray(favicons)) {
+    return '';
+  }
+
+  for (const candidate of favicons) {
+    const faviconUrl = sanitizeWebContentFaviconUrl(candidate);
+    if (faviconUrl) {
+      return faviconUrl;
+    }
+  }
+
+  return '';
+}
+
+function createWebContentTarget(targetId: string) {
+  const window = getWebContentOwnerWindow();
+  const view = new WebContentsView({
+    webPreferences: {
+      session: session.fromPartition(WORKBENCH_SHARED_WEB_PARTITION),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webviewTag: false,
+      plugins: true,
+      backgroundThrottling: false,
+    },
+  });
+  view.setBackgroundColor('#ffffff');
+  view.setBounds(DEFAULT_WEB_CONTENT_BOUNDS);
+  view.setVisible(false);
+  window.contentView.addChildView(view);
+
+  const entry: ManagedWebContentTarget = {
+    cleanup: [],
+    metadataMachine: createDefaultTargetMetadataMachine(),
+    state: createDefaultWebContentTargetState(),
+    targetId,
+    view,
+  };
+
+  const syncState = () => {
+    syncWebContentTargetState(targetId);
+  };
+
+  for (const event of [
+    'did-start-loading',
+    'did-stop-loading',
+    'did-finish-load',
+    'did-navigate',
+    'did-navigate-in-page',
+    'did-fail-load',
+  ]) {
+    addWebContentTargetListener(entry, event, syncState);
+  }
+
+  addWebContentTargetListener(entry, 'page-title-updated', (_event, title) => {
+    const pageTitle = String(title ?? '').trim();
+    if (!pageTitle) {
+      return;
+    }
+
+    if (
+      entry.metadataMachine.pendingPageTitle === pageTitle &&
+      String(entry.state.pageTitle ?? '').trim() === pageTitle
+    ) {
+      return;
+    }
+
+    entry.metadataMachine = {
+      ...entry.metadataMachine,
+      pendingPageTitle: pageTitle,
+    };
+    syncWebContentTargetState(targetId);
+  });
+
+  addWebContentTargetListener(entry, 'page-favicon-updated', (_event, favicons) => {
+    const faviconUrl = resolveFaviconUrl(favicons);
+    if (!faviconUrl) {
+      return;
+    }
+
+    if (
+      entry.metadataMachine.pendingFaviconUrl === faviconUrl &&
+      sanitizeWebContentFaviconUrl(entry.state.faviconUrl) === faviconUrl
+    ) {
+      return;
+    }
+
+    entry.metadataMachine = {
+      ...entry.metadataMachine,
+      pendingFaviconUrl: faviconUrl,
+    };
+    syncWebContentTargetState(targetId);
+  });
+
+  addWebContentTargetListener(entry, 'destroyed', () => {
+    webContentTargets.delete(targetId);
+    retainedWebContentTargets.delete(targetId);
+    if (activeWebContentTargetId === targetId) {
+      activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
+    }
+    reportActiveWebContentState();
+  });
+
+  view.webContents.setWindowOpenHandler((details) => {
+    const url = coerceWebContentNavigationUrl(details.url);
+    if (url) {
+      void navigateWebContentTarget(url, targetId, 'browser').catch((error) => {
+        console.warn('[web-content-view] failed to navigate popup url', describeWebContentError(error));
+      });
+    }
+    return { action: 'deny' };
+  });
+
+  webContentTargets.set(targetId, entry);
+  syncWebContentTargetState(targetId);
+  applyWebContentLayout();
+  return entry;
+}
+
+function ensureWebContentTarget(targetId?: string | null) {
+  const normalizedTargetId = normalizeWebContentTargetId(targetId);
+  const existingEntry = webContentTargets.get(normalizedTargetId);
+  if (existingEntry && !existingEntry.view.webContents.isDestroyed()) {
+    return existingEntry;
+  }
+
+  if (existingEntry) {
+    webContentTargets.delete(normalizedTargetId);
+  }
+
+  return createWebContentTarget(normalizedTargetId);
+}
+
+function readWebContentTargetState(entry: ManagedWebContentTarget): WebContentTargetState {
+  try {
+    const previousState = entry.state;
+    const previousMetadataMachine = entry.metadataMachine;
+    const webContents = entry.view.webContents;
+    const nextUrl = String(webContents.getURL() ?? '').trim();
+    const nextComparableUrl = normalizeComparableWebContentUrl(nextUrl);
+    const nextIsLoading = webContents.isLoading();
+    const isNavigationTargetChanged =
+      nextComparableUrl !== previousMetadataMachine.comparableUrl;
+    const pendingPageTitle = isNavigationTargetChanged
+      ? ''
+      : sanitizeWebContentPageTitle(
+          previousMetadataMachine.pendingPageTitle,
+          nextUrl,
+        );
+    const pendingFaviconUrl = isNavigationTargetChanged
+      ? ''
+      : sanitizeWebContentFaviconUrl(previousMetadataMachine.pendingFaviconUrl);
+    const sampledPageTitle = sanitizeWebContentPageTitle(
+      String(webContents.getTitle() ?? '').trim(),
+      nextUrl,
+    );
+    const previousPageTitle = isNavigationTargetChanged
+      ? ''
+      : String(previousState.pageTitle ?? '').trim();
+    const previousFaviconUrl = isNavigationTargetChanged
+      ? ''
+      : sanitizeWebContentFaviconUrl(previousState.faviconUrl);
+    const canApplyPendingPageTitle =
+      Boolean(pendingPageTitle) &&
+      !nextIsLoading &&
+      (!sampledPageTitle || sampledPageTitle === pendingPageTitle);
+    const canApplyPendingFaviconUrl =
+      Boolean(pendingFaviconUrl) &&
+      !nextIsLoading;
+    const resolvedPageTitle = canApplyPendingPageTitle
+      ? pendingPageTitle
+      : !nextIsLoading && sampledPageTitle
+        ? sampledPageTitle
+        : previousPageTitle;
+    const resolvedFaviconUrl = canApplyPendingFaviconUrl
+      ? pendingFaviconUrl
+      : previousFaviconUrl;
+
+    entry.metadataMachine = {
+      comparableUrl: nextComparableUrl,
+      pendingPageTitle: canApplyPendingPageTitle ? '' : pendingPageTitle,
+      pendingFaviconUrl: canApplyPendingFaviconUrl ? '' : pendingFaviconUrl,
+    };
+
+    return {
+      url: nextUrl,
+      pageTitle: resolvedPageTitle,
+      faviconUrl: resolvedFaviconUrl,
+      canGoBack: webContents.navigationHistory.canGoBack(),
+      canGoForward: webContents.navigationHistory.canGoForward(),
+      isLoading: nextIsLoading,
+    };
+  } catch {
+    entry.metadataMachine = createDefaultTargetMetadataMachine();
+    return createDefaultWebContentTargetState();
+  }
+}
+
+function syncWebContentTargetState(targetId?: string | null) {
+  const normalizedTargetId = normalizeWebContentTargetId(targetId);
+  const entry = webContentTargets.get(normalizedTargetId);
+  if (!entry) {
+    return createDefaultWebContentTargetState();
+  }
+
+  entry.state = readWebContentTargetState(entry);
+  if (normalizedTargetId === activeWebContentTargetId) {
+    reportActiveWebContentState();
+  }
+  return entry.state;
+}
+
+function reportActiveWebContentState() {
+  const nextState = buildWebContentState(activeWebContentTargetId);
+  if (areWebContentStatesEqual(lastReportedWebContentState, nextState)) {
+    return;
+  }
+
+  rememberReportedWebContentState(nextState);
+  const window = webContentWindow;
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
+    return;
+  }
+
+  window.webContents.send('app:web-content-state', nextState);
+}
+
+function applyWebContentLayout() {
+  const activeTargetId = getActiveWebContentTargetId();
+  const shouldShow = shouldShowActiveWebContentTarget();
+  const visibleBounds = isValidWebContentBounds(webContentBounds)
+    ? {
+        x: Math.round(webContentBounds.x),
+        y: Math.round(webContentBounds.y),
+        width: Math.round(webContentBounds.width),
+        height: Math.round(webContentBounds.height),
+      }
+    : HIDDEN_WEB_CONTENT_BOUNDS;
+
+  for (const [targetId, entry] of webContentTargets) {
+    const shouldShowTarget = shouldShow && targetId === activeTargetId;
+    if (shouldShowTarget) {
+      entry.view.setBounds(visibleBounds);
+      entry.view.setVisible(true);
+      continue;
+    }
+
+    if (entry.view.webContents.isFocused()) {
+      webContentWindow?.webContents.focus();
+    }
+    entry.view.setVisible(false);
+    entry.view.setBounds(HIDDEN_WEB_CONTENT_BOUNDS);
+  }
+
+  reportActiveWebContentState();
+}
+
+export function setWebContentBounds(bounds: WebContentBounds | null) {
+  webContentBounds = isValidWebContentBounds(bounds)
+    ? {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+      }
+    : null;
+  applyWebContentLayout();
+}
+
+export function setWebContentVisible(visible: boolean) {
+  webContentVisible = Boolean(visible);
+  applyWebContentLayout();
+}
+
+export function setWebContentLayoutPhaseState(phase: WebContentLayoutPhase) {
+  if (!isWebContentLayoutPhase(phase)) {
+    return;
+  }
+
+  webContentLayoutPhase = phase;
+  applyWebContentLayout();
+}
+
+export function setWebContentRetentionLimit(limit: unknown) {
+  browserTabKeepAliveLimit = normalizeBrowserTabKeepAliveLimit(limit, browserTabKeepAliveLimit);
+  sweepReleasedWebContentTargets(Date.now());
+}
 
 export function activateWebContentTarget(targetId?: string | null) {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
+  ensureWebContentTarget(normalizedTargetId);
+  markWebContentTargetAsActive(normalizedTargetId);
   activeWebContentTargetId = normalizedTargetId;
-
-  void invokeRendererWebContentBridge<unknown>('activateTarget', [normalizedTargetId])
-    .then((state) => {
-      rememberWebContentState(coerceWebContentState(state, normalizedTargetId));
-    })
-    .catch(() => {
-      // Ignore fire-and-forget activation failures; the next state request will surface them.
-    });
+  syncWebContentTargetState(normalizedTargetId);
+  applyWebContentLayout();
 }
 
 export function releaseWebContentTarget(targetId?: string | null) {
@@ -1698,9 +1968,12 @@ export function releaseWebContentTarget(targetId?: string | null) {
     return;
   }
 
-  void invokeRendererWebContentBridge<void>('releaseTarget', [normalizedTargetId]).catch(() => {
-    // Ignore fire-and-forget release failures.
-  });
+  if (activeWebContentTargetId === normalizedTargetId) {
+    activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
+  }
+  markWebContentTargetAsRetained(normalizedTargetId);
+  sweepReleasedWebContentTargets(Date.now());
+  applyWebContentLayout();
 }
 
 export function disposeWebContentTarget(targetId?: string | null) {
@@ -1709,28 +1982,20 @@ export function disposeWebContentTarget(targetId?: string | null) {
     return;
   }
 
-  cachedWebContentTargetStatesByTargetId.delete(normalizedTargetId);
+  disposeWebContentTargetEntry(normalizedTargetId);
   if (activeWebContentTargetId === normalizedTargetId) {
     activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
-    lastReportedWebContentState = createDefaultWebContentState();
   }
-
-  void invokeRendererWebContentBridge<void>('disposeTarget', [normalizedTargetId]).catch(() => {
-    // Ignore fire-and-forget dispose failures.
-  });
+  applyWebContentLayout();
 }
 
 export function getWebContentState(targetId?: string | null): WebContentState {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
-  const normalizedReportedTargetId = normalizeWebContentTargetId(
-    lastReportedWebContentState.targetId ?? lastReportedWebContentState.activeTargetId,
-  );
-
-  if (normalizedReportedTargetId === normalizedTargetId) {
-    return coerceWebContentState(lastReportedWebContentState, normalizedTargetId);
+  if (webContentTargets.has(normalizedTargetId)) {
+    syncWebContentTargetState(normalizedTargetId);
   }
 
-  return buildCachedWebContentState(normalizedTargetId);
+  return buildWebContentState(normalizedTargetId);
 }
 
 export async function getWebContentDocumentSnapshot(
@@ -1916,23 +2181,7 @@ export async function navigateWebContent(
   url: string,
   mode: WebContentNavigationMode = 'browser',
 ) {
-  const normalizedTargetId = getActiveWebContentTargetId();
-
-  try {
-    const state = await invokeRendererWebContentBridge<unknown>('navigateTo', [
-      url,
-      normalizedTargetId,
-      mode,
-    ]);
-    rememberWebContentState(coerceWebContentState(state, normalizedTargetId));
-  } catch (error) {
-    throw appError('PREVIEW_NOT_READY', {
-      message: describeBridgeError(error),
-      targetUrl: url,
-      currentUrl: getWebContentState().url,
-      navigationMode: mode,
-    });
-  }
+  await navigateWebContentTarget(url, getActiveWebContentTargetId(), mode);
 }
 
 export async function navigateWebContentTarget(
@@ -1940,21 +2189,72 @@ export async function navigateWebContentTarget(
   targetId?: string | null,
   mode: WebContentNavigationMode = 'browser',
 ) {
+  const resolvedUrl = coerceWebContentNavigationUrl(url);
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
+  const entry = ensureWebContentTarget(normalizedTargetId);
+  markWebContentTargetAsActive(normalizedTargetId);
   activeWebContentTargetId = normalizedTargetId;
+  applyWebContentLayout();
+  syncWebContentTargetState(normalizedTargetId);
 
   try {
-    const state = await invokeRendererWebContentBridge<unknown>('navigateTo', [
-      url,
-      normalizedTargetId,
-      mode,
-    ]);
-    const coercedState = coerceWebContentState(state, normalizedTargetId);
-    rememberWebContentState(coercedState);
-    return coercedState;
+    if (!resolvedUrl) {
+      return getWebContentState(normalizedTargetId);
+    }
+
+    const initialUrl = normalizeComparableWebContentUrl(getWebContentState(normalizedTargetId).url);
+    const normalizedTargetUrl = normalizeComparableWebContentUrl(resolvedUrl);
+    if (normalizedTargetUrl === 'about:blank') {
+      await entry.view.webContents.loadURL('about:blank');
+      entry.state = {
+        ...createDefaultWebContentTargetState(),
+        url: 'about:blank',
+      };
+      entry.metadataMachine = createDefaultTargetMetadataMachine();
+      reportActiveWebContentState();
+      return getWebContentState(normalizedTargetId);
+    }
+
+    let navigationFailure: unknown = null;
+    void entry.view.webContents.loadURL(resolvedUrl).catch((error) => {
+      if (isAbortLikeWebContentNavigationError(error)) {
+        return;
+      }
+      navigationFailure = error;
+    });
+
+    const startedAt = Date.now();
+    const timeoutMs = 12000;
+    while (Date.now() - startedAt < timeoutMs) {
+      if (navigationFailure) {
+        throw navigationFailure;
+      }
+
+      const currentState = getWebContentState(normalizedTargetId);
+      const currentUrl = normalizeComparableWebContentUrl(currentState.url);
+      if (
+        hasWebContentReachedTarget(
+          mode,
+          currentUrl,
+          normalizedTargetUrl,
+          initialUrl,
+          currentState.isLoading,
+        )
+      ) {
+        return currentState;
+      }
+
+      await delay(120);
+    }
+
+    throw new Error(
+      mode === 'strict'
+        ? 'Timed out while waiting for the web content URL to match the target exactly.'
+        : 'Timed out while waiting for web content navigation to settle on a destination.',
+    );
   } catch (error) {
     throw appError('PREVIEW_NOT_READY', {
-      message: describeBridgeError(error),
+      message: describeWebContentError(error),
       targetUrl: url,
       currentUrl: getWebContentState(normalizedTargetId).url,
       navigationMode: mode,
@@ -2078,24 +2378,25 @@ export async function waitForWebContentPrintLayout(stabilizeMs = 1200) {
 
 export async function printCurrentWebContentToPdf() {
   try {
-    const base64Pdf = await invokeRendererWebContentBridge<string>('printToPDF', [
-      getActiveWebContentTargetId(),
-      {
-        printBackground: true,
-        preferCSSPageSize: true,
-        displayHeaderFooter: false,
-        margins: {
-          top: 0.4,
-          bottom: 0.4,
-          left: 0.4,
-          right: 0.4,
-        },
+    const entry = webContentTargets.get(getActiveWebContentTargetId());
+    if (!entry || entry.view.webContents.isDestroyed()) {
+      throw new Error('Browser view is unavailable.');
+    }
+
+    return await entry.view.webContents.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+      margins: {
+        top: 0.4,
+        bottom: 0.4,
+        left: 0.4,
+        right: 0.4,
       },
-    ]);
-    return Buffer.from(base64Pdf, 'base64');
+    });
   } catch (error) {
     throw appError('PREVIEW_NOT_READY', {
-      message: describeBridgeError(error),
+      message: describeWebContentError(error),
       currentUrl: getWebContentState().url,
     });
   }
@@ -2107,13 +2408,11 @@ export function reloadWebContent(targetId?: string | null) {
     activeWebContentTargetId = normalizedTargetId;
   }
 
-  void invokeRendererWebContentBridge<unknown>('reload', [normalizedTargetId])
-    .then((state) => {
-      rememberWebContentState(coerceWebContentState(state, normalizedTargetId));
-    })
-    .catch(() => {
-      // Ignore fire-and-forget navigation button failures.
-    });
+  const entry = ensureWebContentTarget(normalizedTargetId);
+  markWebContentTargetAsActive(normalizedTargetId);
+  applyWebContentLayout();
+  entry.view.webContents.reload();
+  syncWebContentTargetState(normalizedTargetId);
 }
 
 export function hardReloadWebContent(targetId?: string | null) {
@@ -2122,13 +2421,11 @@ export function hardReloadWebContent(targetId?: string | null) {
     activeWebContentTargetId = normalizedTargetId;
   }
 
-  void invokeRendererWebContentBridge<unknown>('hardReload', [normalizedTargetId])
-    .then((state) => {
-      rememberWebContentState(coerceWebContentState(state, normalizedTargetId));
-    })
-    .catch(() => {
-      // Ignore fire-and-forget navigation button failures.
-    });
+  const entry = ensureWebContentTarget(normalizedTargetId);
+  markWebContentTargetAsActive(normalizedTargetId);
+  applyWebContentLayout();
+  entry.view.webContents.reloadIgnoringCache();
+  syncWebContentTargetState(normalizedTargetId);
 }
 
 export function clearWebContentHistory(targetId?: string | null) {
@@ -2137,13 +2434,11 @@ export function clearWebContentHistory(targetId?: string | null) {
     activeWebContentTargetId = normalizedTargetId;
   }
 
-  void invokeRendererWebContentBridge<unknown>('clearHistory', [normalizedTargetId])
-    .then((state) => {
-      rememberWebContentState(coerceWebContentState(state, normalizedTargetId));
-    })
-    .catch(() => {
-      // Ignore fire-and-forget navigation button failures.
-    });
+  const entry = ensureWebContentTarget(normalizedTargetId);
+  markWebContentTargetAsActive(normalizedTargetId);
+  entry.view.webContents.navigationHistory.clear();
+  syncWebContentTargetState(normalizedTargetId);
+  applyWebContentLayout();
 }
 
 export function goBackWebContent(targetId?: string | null) {
@@ -2152,13 +2447,13 @@ export function goBackWebContent(targetId?: string | null) {
     activeWebContentTargetId = normalizedTargetId;
   }
 
-  void invokeRendererWebContentBridge<unknown>('goBack', [normalizedTargetId])
-    .then((state) => {
-      rememberWebContentState(coerceWebContentState(state, normalizedTargetId));
-    })
-    .catch(() => {
-      // Ignore fire-and-forget navigation button failures.
-    });
+  const entry = ensureWebContentTarget(normalizedTargetId);
+  markWebContentTargetAsActive(normalizedTargetId);
+  applyWebContentLayout();
+  if (entry.view.webContents.navigationHistory.canGoBack()) {
+    entry.view.webContents.navigationHistory.goBack();
+  }
+  syncWebContentTargetState(normalizedTargetId);
 }
 
 export function goForwardWebContent(targetId?: string | null) {
@@ -2167,11 +2462,11 @@ export function goForwardWebContent(targetId?: string | null) {
     activeWebContentTargetId = normalizedTargetId;
   }
 
-  void invokeRendererWebContentBridge<unknown>('goForward', [normalizedTargetId])
-    .then((state) => {
-      rememberWebContentState(coerceWebContentState(state, normalizedTargetId));
-    })
-    .catch(() => {
-      // Ignore fire-and-forget navigation button failures.
-    });
+  const entry = ensureWebContentTarget(normalizedTargetId);
+  markWebContentTargetAsActive(normalizedTargetId);
+  applyWebContentLayout();
+  if (entry.view.webContents.navigationHistory.canGoForward()) {
+    entry.view.webContents.navigationHistory.goForward();
+  }
+  syncWebContentTargetState(normalizedTargetId);
 }

@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { app, BrowserWindow } from 'electron';
+import electron from 'electron';
+
+const { app, BrowserWindow } = electron;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,13 +27,13 @@ const builtWorkbenchEntry = path.join(
 );
 const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'ls-electron-smoke-'));
 const portableRoot = path.join(tempRoot, 'portable-root');
-const smokePagePath = path.join(tempRoot, 'browser-smoke.html');
 
 process.env.PORTABLE_EXECUTABLE_DIR = portableRoot;
 delete process.env.ELECTRON_RENDERER_URL;
 delete process.env.LS_RENDERER_DEBUG;
 
 let cleanedUp = false;
+let smokeServer = null;
 
 function logStep(message, details) {
   if (details === undefined) {
@@ -38,7 +41,8 @@ function logStep(message, details) {
     return;
   }
 
-  console.log(`[smoke] ${message}`, details);
+  console.log(`[smoke] ${message}`);
+  console.dir(details, { depth: null });
 }
 
 async function cleanupTempRoot() {
@@ -47,6 +51,13 @@ async function cleanupTempRoot() {
   }
 
   cleanedUp = true;
+  if (smokeServer) {
+    await new Promise((resolve) => {
+      smokeServer.close(() => resolve());
+    });
+    smokeServer = null;
+  }
+
   try {
     await rm(tempRoot, { recursive: true, force: true });
   } catch {
@@ -56,7 +67,7 @@ async function cleanupTempRoot() {
 
 function createSmokePageHtml() {
   const sections = Array.from({ length: 180 }, (_, index) => {
-    return `<p>Smoke section ${index + 1}: editor lifecycle release and restore check.</p>`;
+    return `<p>Smoke section ${index + 1}: editor lifecycle hide and restore check.</p>`;
   }).join('\n');
 
   return `<!doctype html>
@@ -93,6 +104,36 @@ function createSmokePageHtml() {
     </main>
   </body>
 </html>`;
+}
+
+async function createSmokeServer(html) {
+  const server = createServer((request, response) => {
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+    if (url.pathname !== '/' && url.pathname !== '/browser-smoke.html') {
+      response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      response.end('Not found');
+      return;
+    }
+
+    response.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+    });
+    response.end(html);
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object', 'Expected local smoke server address.');
+  smokeServer = server;
+  return `http://127.0.0.1:${address.port}/browser-smoke.html`;
 }
 
 function createSeedWorkspace(smokeUrl) {
@@ -216,8 +257,26 @@ async function getRendererSnapshot(window) {
       activePage: document.querySelector('.app-shell')?.classList.contains('app-shell-settings')
         ? 'settings'
         : 'content',
-      activeTabKind: document.querySelector('.editor-tab.is-active')?.dataset.kind ?? null,
-      webviewCount: document.querySelectorAll('webview').length,
+      activeTabKind: document.querySelector('.editor-tab.is-active')?.dataset.paneMode ?? null,
+      rendererWebviewCount: document.querySelectorAll('webview').length,
+      webContentHost: (() => {
+        const host = document.querySelector('[data-webcontent-active]');
+        if (!(host instanceof HTMLElement)) {
+          return null;
+        }
+
+        const rect = host.getBoundingClientRect();
+        return {
+          active: host.dataset.webcontentActive === 'true',
+          childCount: host.childElementCount,
+          rect: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          },
+        };
+      })(),
       hasWorkbench: Boolean(document.querySelector('.workbench-content-layout')),
       hasTabs: document.querySelectorAll('.editor-tab').length,
     }))()`,
@@ -255,6 +314,28 @@ async function clickSelector(window, selector, description) {
   assert.equal(clicked, true, `Expected to click ${description}.`);
 }
 
+async function ensureEditorExpanded(window) {
+  const expanded = await evaluateRenderer(
+    window,
+    `(() => {
+      const contentGrid = document.querySelector('.content-grid');
+      if (!contentGrid?.classList.contains('is-editor-collapsed')) {
+        return true;
+      }
+
+      const button = document.querySelector('.editor-topbar-toggle-editor-btn');
+      if (!(button instanceof HTMLButtonElement)) {
+        return false;
+      }
+
+      button.click();
+      return true;
+    })()`,
+  );
+
+  assert.equal(expanded, true, 'Expected to expand the editor before browser smoke.');
+}
+
 async function getContentState(window, targetId) {
   return await evaluateRenderer(
     window,
@@ -264,11 +345,11 @@ async function getContentState(window, targetId) {
   );
 }
 
-async function getWebviewDomDiagnostics(window) {
+async function getBrowserViewHostDiagnostics(window) {
   return await evaluateRenderer(
     window,
     `(() => {
-      const host = document.querySelector('.native-webcontentview-host');
+      const host = document.querySelector('[data-webcontent-active]');
       return {
         host: host instanceof HTMLElement
           ? {
@@ -286,35 +367,7 @@ async function getWebviewDomDiagnostics(window) {
               })(),
             }
           : null,
-        webviews: Array.from(document.querySelectorAll('webview')).map((node, index) => {
-          const rect = node.getBoundingClientRect();
-          const webview = node;
-          const getURL =
-            typeof webview.getURL === 'function'
-              ? String(webview.getURL() ?? '').trim()
-              : null;
-          const isLoading =
-            typeof webview.isLoading === 'function'
-              ? Boolean(webview.isLoading())
-              : null;
-
-          return {
-            index,
-            src: String(node.getAttribute('src') ?? '').trim(),
-            currentUrl: getURL,
-            isLoading,
-            isConnected: node.isConnected,
-            className: node.className,
-            parentClassName: node.parentElement?.className ?? null,
-            style: node.getAttribute('style') ?? '',
-            rect: {
-              x: Math.round(rect.x),
-              y: Math.round(rect.y),
-              width: Math.round(rect.width),
-              height: Math.round(rect.height),
-            },
-          };
-        }),
+        rendererWebviewCount: document.querySelectorAll('webview').length,
       };
     })()`,
   );
@@ -324,14 +377,9 @@ async function getBrowserLifecycleDiagnostics(window, targetId) {
   return {
     renderer: await getRendererSnapshot(window),
     targetState: await getContentState(window, targetId),
-    releasedProbe: await executeTargetScript(
-      window,
-      targetId,
-      '(() => location.href)()',
-      500,
-    ),
+    browserDom: await getBrowserDomSnapshot(window, targetId, 500),
     scrollTop: await getBrowserScroll(window, targetId),
-    dom: await getWebviewDomDiagnostics(window),
+    host: await getBrowserViewHostDiagnostics(window),
   };
 }
 
@@ -371,12 +419,30 @@ async function getBrowserScroll(window, targetId) {
   return typeof scrollTop === 'number' ? scrollTop : null;
 }
 
+async function getBrowserDomSnapshot(window, targetId, timeoutMs = 2000) {
+  return await executeTargetScript(
+    window,
+    targetId,
+    `(() => {
+      const normalize = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim();
+      return {
+        href: location.href,
+        title: document.title,
+        heading: normalize(document.querySelector('h1')?.textContent),
+        paragraphCount: document.querySelectorAll('main p').length,
+        bodyTextSample: normalize(document.body?.textContent).slice(0, 120),
+      };
+    })()`,
+    timeoutMs,
+  );
+}
+
 async function runSmoke() {
   await access(builtMainEntry);
   await access(builtWorkbenchEntry);
-  await writeFile(smokePagePath, createSmokePageHtml(), 'utf8');
-  const smokeUrl = pathToFileURL(smokePagePath).toString();
+  const smokeUrl = await createSmokeServer(createSmokePageHtml());
   const seedWorkspace = createSeedWorkspace(smokeUrl);
+  logStep('local smoke page ready', { url: smokeUrl });
 
   logStep('importing built electron main entry');
   await import(pathToFileURL(builtMainEntry).toString());
@@ -423,55 +489,30 @@ async function runSmoke() {
     },
     { timeoutMs: 20000, stepMs: 100 },
   );
+  await ensureEditorExpanded(window);
 
   logStep('waiting for initial browser target activation');
-  await waitForCondition(
-    'initial browser webview',
-    async () => {
-      const snapshot = await getRendererSnapshot(window);
-      const state = await getContentState(window, 'browser-a');
-      if (
-        snapshot.activePage === 'content' &&
-        snapshot.activeTabKind === 'browser' &&
-        snapshot.webviewCount === 1 &&
-        state.activeTargetId === 'browser-a'
-      ) {
-        return { snapshot, state };
-      }
-
-      return null;
-    },
-    { timeoutMs: 20000, stepMs: 150 },
-  );
-
-  const scrolledTo = await setBrowserScroll(window, 'browser-a', 960);
-  assert.ok(scrolledTo >= 900, `Expected browser target to scroll, got ${scrolledTo}.`);
-  logStep('browser tab scrolled', { scrollTop: scrolledTo });
-
-  await clickSelector(
-    window,
-    `.editor-tab[data-kind="draft"] .editor-tab-main`,
-    'draft tab button',
-  );
-
-  logStep('waiting for browser target release after switching to draft');
   try {
     await waitForCondition(
-      'draft activation and browser release',
+      'initial browser view',
       async () => {
         const snapshot = await getRendererSnapshot(window);
-        const releasedProbe = await executeTargetScript(
-          window,
-          'browser-a',
-          '(() => location.href)()',
-          500,
-        );
+        const state = await getContentState(window, 'browser-a');
+        const browserDom = await getBrowserDomSnapshot(window, 'browser-a', 500);
         if (
-          snapshot.activeTabKind === 'draft' &&
-          snapshot.webviewCount === 0 &&
-          releasedProbe === null
+          snapshot.activePage === 'content' &&
+          snapshot.activeTabKind === 'browser' &&
+          snapshot.rendererWebviewCount === 0 &&
+          snapshot.webContentHost?.active === true &&
+          state.activeTargetId === 'browser-a' &&
+          state.ownership === 'active' &&
+          state.visible === true &&
+          state.layoutPhase === 'visible' &&
+          browserDom?.href === smokeUrl &&
+          browserDom.heading === 'Editor Lifecycle Smoke' &&
+          browserDom.paragraphCount === 180
         ) {
-          return { snapshot, releasedProbe };
+          return { snapshot, state, browserDom };
         }
 
         return null;
@@ -480,7 +521,50 @@ async function runSmoke() {
     );
   } catch (error) {
     logStep(
-      'draft release diagnostics',
+      'initial browser diagnostics',
+      await getBrowserLifecycleDiagnostics(window, 'browser-a'),
+    );
+    throw error;
+  }
+
+  const scrolledTo = await setBrowserScroll(window, 'browser-a', 960);
+  assert.ok(scrolledTo >= 900, `Expected browser target to scroll, got ${scrolledTo}.`);
+  logStep('browser tab scrolled', { scrollTop: scrolledTo });
+
+  await clickSelector(
+    window,
+    `.editor-tab[data-pane-mode="draft"] .editor-tab-main`,
+    'draft tab button',
+  );
+
+  logStep('waiting for browser target to hide after switching to draft');
+  try {
+    await waitForCondition(
+      'draft activation and browser view hide',
+      async () => {
+        const snapshot = await getRendererSnapshot(window);
+        const state = await getContentState(window, 'browser-a');
+        const retainedDom = await getBrowserDomSnapshot(window, 'browser-a', 500);
+        if (
+          snapshot.activeTabKind === 'draft' &&
+          snapshot.rendererWebviewCount === 0 &&
+          (snapshot.webContentHost === null || snapshot.webContentHost.active === false) &&
+          state.activeTargetId === null &&
+          state.ownership === 'inactive' &&
+          state.visible === false &&
+          state.layoutPhase === 'hidden' &&
+          retainedDom?.heading === 'Editor Lifecycle Smoke'
+        ) {
+          return { snapshot, state, retainedDom };
+        }
+
+        return null;
+      },
+      { timeoutMs: 20000, stepMs: 150 },
+    );
+  } catch (error) {
+    logStep(
+      'draft hide diagnostics',
       await getBrowserLifecycleDiagnostics(window, 'browser-a'),
     );
     throw error;
@@ -488,24 +572,33 @@ async function runSmoke() {
 
   await clickSelector(
     window,
-    `.editor-tab[data-kind="browser"] .editor-tab-main`,
+    `.editor-tab[data-pane-mode="browser"] .editor-tab-main`,
     'browser tab button',
   );
 
-  logStep('waiting for browser target recreation and view-state restore');
+  logStep('waiting for browser target restore');
   try {
     await waitForCondition(
       'browser restoration after returning from draft',
       async () => {
         const snapshot = await getRendererSnapshot(window);
+        const state = await getContentState(window, 'browser-a');
+        const browserDom = await getBrowserDomSnapshot(window, 'browser-a', 500);
         const scrollTop = await getBrowserScroll(window, 'browser-a');
         if (
           snapshot.activeTabKind === 'browser' &&
-          snapshot.webviewCount === 1 &&
+          snapshot.rendererWebviewCount === 0 &&
+          snapshot.webContentHost?.active === true &&
+          state.activeTargetId === 'browser-a' &&
+          state.ownership === 'active' &&
+          state.visible === true &&
+          state.layoutPhase === 'visible' &&
+          browserDom?.heading === 'Editor Lifecycle Smoke' &&
+          browserDom.paragraphCount === 180 &&
           typeof scrollTop === 'number' &&
           scrollTop >= 900
         ) {
-          return { snapshot, scrollTop };
+          return { snapshot, state, browserDom, scrollTop };
         }
 
         return null;

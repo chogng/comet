@@ -1,5 +1,91 @@
 export const APP_ERROR_PREFIX = '__APP_ERROR__:';
 
+export interface ErrorListenerCallback {
+	(error: unknown): void;
+}
+
+export interface ErrorListenerUnbind {
+	(): void;
+}
+
+export class ErrorHandler {
+	private unexpectedErrorHandler: (error: unknown) => void;
+	private readonly listeners: ErrorListenerCallback[] = [];
+
+	constructor() {
+		this.unexpectedErrorHandler = error => {
+			setTimeout(() => {
+				throw error;
+			}, 0);
+		};
+	}
+
+	addListener(listener: ErrorListenerCallback): ErrorListenerUnbind {
+		this.listeners.push(listener);
+
+		return () => {
+			this.removeListener(listener);
+		};
+	}
+
+	private emit(error: unknown): void {
+		for (const listener of this.listeners) {
+			listener(error);
+		}
+	}
+
+	private removeListener(listener: ErrorListenerCallback): void {
+		const index = this.listeners.indexOf(listener);
+		if (index >= 0) {
+			this.listeners.splice(index, 1);
+		}
+	}
+
+	setUnexpectedErrorHandler(unexpectedErrorHandler: (error: unknown) => void): void {
+		this.unexpectedErrorHandler = unexpectedErrorHandler;
+	}
+
+	getUnexpectedErrorHandler(): (error: unknown) => void {
+		return this.unexpectedErrorHandler;
+	}
+
+	onUnexpectedError(error: unknown): void {
+		this.unexpectedErrorHandler(error);
+		this.emit(error);
+	}
+
+	onUnexpectedExternalError(error: unknown): void {
+		this.unexpectedErrorHandler(error);
+	}
+}
+
+export const errorHandler = new ErrorHandler();
+
+export function setUnexpectedErrorHandler(unexpectedErrorHandler: (error: unknown) => void): void {
+	errorHandler.setUnexpectedErrorHandler(unexpectedErrorHandler);
+}
+
+export function onUnexpectedError(error: unknown): undefined {
+	if (!isCancellationError(error)) {
+		errorHandler.onUnexpectedError(error);
+	}
+	return undefined;
+}
+
+export function onUnexpectedExternalError(error: unknown): undefined {
+	if (!isCancellationError(error)) {
+		errorHandler.onUnexpectedExternalError(error);
+	}
+	return undefined;
+}
+
+export class BugIndicatingError extends Error {
+	constructor(message?: string) {
+		super(message ?? 'An unexpected bug occurred.');
+		Object.setPrototypeOf(this, BugIndicatingError.prototype);
+	}
+}
+
 const appErrorCodes = [
   'MAIN_WINDOW_UNAVAILABLE',
   'UNKNOWN_COMMAND',

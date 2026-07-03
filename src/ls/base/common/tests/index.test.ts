@@ -5,6 +5,8 @@ import './event.test';
 import './json.test';
 import './keybindings.test';
 import './lifecycle.test';
+import './resources.test';
+import './uri.test';
 import 'ls/platform/action/tests/action.test';
 import 'ls/platform/actions/tests/actions.test';
 import 'ls/platform/commands/tests/commands.test';

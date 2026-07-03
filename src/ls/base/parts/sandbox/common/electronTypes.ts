@@ -8,8 +8,6 @@ import type {
   NativeToastOptions,
   NativeToastState,
   WebContentBounds,
-  WebContentBridgeCommand,
-  WebContentBridgeResponse,
   WebContentLayoutPhase,
   WebContentNavigationMode,
   WebContentSelectionSnapshot,
@@ -47,6 +45,7 @@ export interface ElectronWebContentApi {
   setBounds: (bounds: WebContentBounds | null) => void;
   setVisible: (visible: boolean) => void;
   setLayoutPhase: (phase: WebContentLayoutPhase) => void;
+  setRetentionLimit: (limit: number) => void;
   clearHistory: (targetId?: string | null) => void;
   hardReload: (targetId?: string | null) => void;
   reload: (targetId?: string | null) => void;
@@ -59,10 +58,6 @@ export interface ElectronWebContentApi {
   ) => Promise<T | null>;
   getSelection: (targetId?: string | null) => Promise<WebContentSelectionSnapshot | null>;
   onStateChange: (listener: (state: WebContentState) => void) => () => void;
-  onBridgeCommand?: (listener: (command: WebContentBridgeCommand) => void) => () => void;
-  respondToBridgeCommand?: (response: WebContentBridgeResponse) => void;
-  reportBridgeReady?: () => void;
-  reportState?: (state: WebContentState) => void;
 }
 
 export interface ElectronFetchApi {

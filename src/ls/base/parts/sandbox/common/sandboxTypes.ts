@@ -196,32 +196,6 @@ export interface WebContentSelectionSnapshot {
 }
 
 export type WebContentNavigationMode = 'browser' | 'strict';
-export type WebContentBridgeMethod =
-  | 'activateTarget'
-  | 'clearHistory'
-  | 'disposeTarget'
-  | 'executeJavaScript'
-  | 'getState'
-  | 'goBack'
-  | 'goForward'
-  | 'hardReload'
-  | 'navigateTo'
-  | 'printToPDF'
-  | 'releaseTarget'
-  | 'reload';
-
-export interface WebContentBridgeCommand {
-  requestId: string;
-  method: WebContentBridgeMethod;
-  args?: unknown[];
-}
-
-export interface WebContentBridgeResponse {
-  requestId: string;
-  ok: boolean;
-  result?: unknown;
-  error?: string;
-}
 
 export interface WebContentTargetPayload {
   targetId?: string | null;

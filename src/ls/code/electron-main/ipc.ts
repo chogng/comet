@@ -17,7 +17,6 @@ import type {
   WebContentPdfDownloadPayload,
   WebContentBounds,
   WebContentHtmlArchivePayload,
-  WebContentBridgeResponse,
   WebContentNavigatePayload,
   WebContentState,
   ReindexLibraryDocumentPayload,
@@ -39,13 +38,11 @@ import {
   goForwardWebContent,
   hardReloadWebContent,
   navigateWebContentTarget,
-  reportWebContentState,
-  reportWebContentRendererReady,
   releaseWebContentTarget,
   reloadWebContent,
-  resolveWebContentBridgeResponse,
   setWebContentBounds,
   setWebContentLayoutPhaseState,
+  setWebContentRetentionLimit,
   setWebContentVisible,
 } from 'ls/platform/window/electron-main/webContentView';
 import {
@@ -428,31 +425,6 @@ export function registerAppIpc(
     return await getWebContentSelection(payload?.targetId);
   });
 
-  ipcMain.on('app:web-content-report-state', (event, state: WebContentState) => {
-    if (event.sender.isDestroyed()) {
-      return;
-    }
-
-    reportWebContentState(state);
-    event.sender.send('app:web-content-state', state);
-  });
-
-  ipcMain.on('app:web-content-bridge-ready', (event) => {
-    if (event.sender.isDestroyed()) {
-      return;
-    }
-
-    reportWebContentRendererReady(event.sender);
-  });
-
-  ipcMain.on('app:web-content-bridge-response', (event, response: WebContentBridgeResponse) => {
-    if (event.sender.isDestroyed()) {
-      return;
-    }
-
-    resolveWebContentBridgeResponse(event.sender, response);
-  });
-
   ipcMain.on('app:native-toast-show', (event, options: NativeToastOptions) => {
     showToast(resolveWindowFromWebContents(event.sender), options);
     void loadSettingsWithCache(storage)
@@ -513,6 +485,10 @@ export function registerAppIpc(
     if (phase === 'measuring' || phase === 'visible' || phase === 'hidden') {
       setWebContentLayoutPhaseState(phase);
     }
+  });
+
+  ipcMain.on('app:web-content-set-retention-limit', (_event, limit) => {
+    setWebContentRetentionLimit(limit);
   });
 
   ipcMain.on('app:web-content-reload', (_event, payload?: { targetId?: string | null }) => {

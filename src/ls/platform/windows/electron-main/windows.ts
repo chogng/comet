@@ -337,7 +337,6 @@ export function createMainWindow(options: { useMica?: boolean; backgroundColor?:
 			contextIsolation: true,
 			nodeIntegration: false,
 			sandbox: false,
-			webviewTag: true,
 		},
 	});
 
