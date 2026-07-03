@@ -11,4 +11,5 @@ import 'ls/workbench/workbench.common.main';
 //#region --- workbench (desktop main)
 import 'ls/workbench/contrib/desktop/ipc.contribution';
 import 'ls/workbench/contrib/desktop/desktop.contribution';
+import 'ls/workbench/contrib/splash/browser/partsSplash';
 //#endregion

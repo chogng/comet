@@ -3,6 +3,7 @@ import {
   getRegisteredColors,
   type ColorIdentifier,
 } from 'ls/platform/theme/common/colorRegistry';
+import { EventEmitter, type Event } from 'ls/base/common/event';
 import {
   createColorThemeData,
   resolveThemeDefaultColor,
@@ -11,6 +12,7 @@ import {
 } from 'ls/platform/theme/common/theme';
 
 export interface IThemeService {
+  readonly onDidColorThemeChange: Event<ColorThemeData>;
   applyTheme(theme?: ColorThemeData, target?: CSSStyleDeclaration): void;
   setTheme(theme: ColorThemeData): void;
   getTheme(): ColorThemeData;
@@ -23,6 +25,8 @@ const DEFAULT_THEME: ColorThemeData = createColorThemeData({
 
 export class ThemeService implements IThemeService {
   private theme = DEFAULT_THEME;
+  private readonly didColorThemeChangeEmitter = new EventEmitter<ColorThemeData>();
+  readonly onDidColorThemeChange = this.didColorThemeChangeEmitter.event;
 
   applyTheme(
     theme: ColorThemeData = this.theme,
@@ -41,6 +45,8 @@ export class ThemeService implements IThemeService {
     for (const [name, value] of Object.entries(nextTheme.variables ?? {})) {
       target.setProperty(name, value);
     }
+
+    this.didColorThemeChangeEmitter.fire(this.getTheme());
   }
 
   setTheme(theme: ColorThemeData) {

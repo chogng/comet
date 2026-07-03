@@ -32,7 +32,6 @@
   flex-direction: row;
   overflow: hidden;
   color: var(--vscode-titleBar-buttonForeground);
-  background: var(--workbench-chrome-bg);
   border-bottom: 1px solid var(--workbench-titlebar-border);
 }
 
@@ -59,12 +58,10 @@
 .titlebar .sidebar-topbar,
 .titlebar .editor-topbar,
 .titlebar .agentbar-topbar {
-  --sidebar-topbar-height: var(--workbench-titlebar-height);
-  --editor-topbar-height: var(--workbench-titlebar-height);
-  --agentbar-topbar-height: var(--workbench-titlebar-height);
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
   color: inherit;
-  background: transparent;
 }
 
 .titlebar .sidebar-combined-topbar-actions-host,

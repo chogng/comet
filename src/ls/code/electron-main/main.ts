@@ -14,6 +14,8 @@ import { registerAppIpc } from 'ls/code/electron-main/ipc';
 import { createStorageService } from 'ls/code/electron-main/storageService';
 import { createMainWindow, getMainWindow } from 'ls/platform/window/electron-main/window';
 import { setMenuBarIconEnabled } from 'ls/platform/window/electron-main/trayIcon';
+import { ThemeMainService } from 'ls/platform/theme/electron-main/themeMainServiceImpl';
+import { createNativeHostMainService } from 'ls/platform/native/electron-main/nativeHostMainService';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
@@ -43,11 +45,19 @@ app.whenReady().then(async () => {
     void storage.close();
   });
 
+  const settings = await storage.loadSettings();
+  const themeMainService = new ThemeMainService(storage, settings);
+  const nativeHostMainService = createNativeHostMainService(themeMainService);
+  app.once('before-quit', () => {
+    themeMainService.dispose();
+  });
   if (isDevelopmentEnvironmentMain()) {
     registerDevShortcuts({ getMainWindow });
   }
-  registerAppIpc(storage);
-  const settings = await storage.loadSettings();
-  createMainWindow({ useMica: settings.useMica });
+  registerAppIpc(storage, nativeHostMainService, themeMainService);
+  createMainWindow({
+    useMica: settings.useMica,
+    backgroundColor: themeMainService.getBackgroundColor(),
+  });
   setMenuBarIconEnabled(settings.menuBarIconEnabled);
 });

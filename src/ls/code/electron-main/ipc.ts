@@ -91,8 +91,9 @@ import { electronMainChannelServer } from 'ls/base/parts/ipc/electron-main/ipcMa
 import type { IServerChannel } from 'ls/base/parts/ipc/common/ipc';
 import {
   NativeHostMainChannel,
-  nativeHostMainService,
 } from 'ls/platform/native/electron-main/nativeHostMainService';
+import type { NativeHostMainService } from 'ls/platform/native/electron-main/nativeHostMainService';
+import type { IThemeMainService } from 'ls/platform/theme/electron-main/themeMainService';
 const FETCH_STATUS_CHANNEL = 'app:fetch-status';
 const DOCUMENT_TRANSLATION_PROGRESS_CHANNEL = 'app:document-translation-progress';
 type AppInvokeResponse<T> =
@@ -128,6 +129,8 @@ async function invokeCommand<TCommand extends AppCommand>(
   command: TCommand,
   payload: AppCommandPayloadMap[TCommand],
   storage: StorageService,
+  nativeHostMainService: NativeHostMainService,
+  themeMainService: IThemeMainService,
   emitToRenderer?: (channel: string, payload: unknown) => void,
 ): Promise<AppCommandResultMap[TCommand]> {
   switch (command) {
@@ -172,16 +175,17 @@ async function invokeCommand<TCommand extends AppCommand>(
       {
         const saved = await storage.saveSettings((payload as SaveSettingsPayload)?.settings ?? {});
         cachedSettings = saved;
+        themeMainService.updateSettings(saved);
         setMenuBarIconEnabled(saved.menuBarIconEnabled);
         if (micaMaterialTimeout) {
           clearTimeout(micaMaterialTimeout);
           micaMaterialTimeout = null;
         }
         if (saved.useMica) {
-          applyMainWindowBackgroundMaterial(true);
+          applyMainWindowBackgroundMaterial(true, themeMainService.getBackgroundColor());
         } else {
           micaMaterialTimeout = setTimeout(() => {
-            applyMainWindowBackgroundMaterial(false);
+            applyMainWindowBackgroundMaterial(false, themeMainService.getBackgroundColor());
             micaMaterialTimeout = null;
           }, 300);
         }
@@ -323,7 +327,11 @@ async function invokeCommand<TCommand extends AppCommand>(
   }
 }
 
-export function registerAppIpc(storage: StorageService) {
+export function registerAppIpc(
+  storage: StorageService,
+  nativeHostMainService: NativeHostMainService,
+  themeMainService: IThemeMainService,
+) {
   electronMainChannelServer.register();
   try {
     electronMainChannelServer.registerChannel(
@@ -346,6 +354,8 @@ export function registerAppIpc(storage: StorageService) {
         appCommand,
         payload as AppCommandPayloadMap[AppCommand],
         storage,
+        nativeHostMainService,
+        themeMainService,
         (channel, eventPayload) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send(channel, eventPayload);
@@ -364,11 +374,18 @@ export function registerAppIpc(storage: StorageService) {
     try {
       return {
         ok: true,
-        result: await invokeCommand(command, payload, storage, (channel, eventPayload) => {
-          if (!_event.sender.isDestroyed()) {
-            _event.sender.send(channel, eventPayload);
-          }
-        }),
+        result: await invokeCommand(
+          command,
+          payload,
+          storage,
+          nativeHostMainService,
+          themeMainService,
+          (channel, eventPayload) => {
+            if (!_event.sender.isDestroyed()) {
+              _event.sender.send(channel, eventPayload);
+            }
+          },
+        ),
       } satisfies AppInvokeResponse<AppCommandResultMap[typeof command]>;
     } catch (error) {
       return {

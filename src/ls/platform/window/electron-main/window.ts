@@ -16,6 +16,7 @@ let mainWindow: BrowserWindow | null = null;
 const auxiliaryWindows = new Set<BrowserWindow>();
 const autoMinimizedAuxiliaryWindowIds = new Set<number>();
 let currentUseMica = true;
+let currentBackgroundColor = '#ffffff';
 const AUX_WINDOW_LOG_ENABLED = isCompatFetchEnvEnabled('LS_FETCH_TIMING', 'READER_FETCH_TIMING');
 const RENDERER_DEBUG_LOG_ENABLED = process.env.LS_RENDERER_DEBUG === '1';
 
@@ -79,12 +80,12 @@ function resolveWindowVibrancy(useMica: boolean) {
   return 'sidebar' as const;
 }
 
-function resolveMainWindowBackgroundColor(useMica: boolean) {
+function resolveMainWindowBackgroundColor(useMica: boolean, backgroundColor: string) {
   if (process.platform === 'darwin' && useMica) {
     return '#00000000';
   }
 
-  return '#edf2f8';
+  return backgroundColor;
 }
 
 function resolveFramelessTitleBarStyle() {
@@ -120,6 +121,19 @@ export function getMainWindow() {
   return mainWindow;
 }
 
+export function getWindowById(windowId: number) {
+  const windows = [
+    mainWindow,
+    ...auxiliaryWindows,
+  ];
+
+  return windows.find((window) =>
+    window &&
+    !window.isDestroyed() &&
+    window.id === windowId,
+  ) ?? null;
+}
+
 export {
   resolvePreloadScriptPath,
   resolveWorkbenchRendererFilePath,
@@ -128,9 +142,11 @@ export {
 
 export function applyMainWindowBackgroundMaterial(
   useMica: boolean,
+  backgroundColor = currentBackgroundColor,
   window: BrowserWindow | null = mainWindow,
 ) {
   currentUseMica = useMica;
+  currentBackgroundColor = backgroundColor;
 
   if (!window || window.isDestroyed()) {
     for (const auxiliaryWindow of auxiliaryWindows) {
@@ -139,7 +155,7 @@ export function applyMainWindowBackgroundMaterial(
     return;
   }
 
-  window.setBackgroundColor(resolveMainWindowBackgroundColor(useMica));
+  window.setBackgroundColor(resolveMainWindowBackgroundColor(useMica, backgroundColor));
   applyWindowBackgroundMaterial(window, useMica);
 
   for (const auxiliaryWindow of auxiliaryWindows) {
@@ -356,8 +372,10 @@ export function getWindowState(window?: BrowserWindow | null): WindowState {
   };
 }
 
-export function createMainWindow(options: { useMica?: boolean } = {}) {
+export function createMainWindow(options: { useMica?: boolean; backgroundColor?: string } = {}) {
   const useMica = options.useMica ?? true;
+  const backgroundColor = options.backgroundColor ?? currentBackgroundColor;
+  currentBackgroundColor = backgroundColor;
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -368,7 +386,7 @@ export function createMainWindow(options: { useMica?: boolean } = {}) {
     titleBarStyle: resolveFramelessTitleBarStyle(),
     titleBarOverlay: resolveTitleBarOverlay(),
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 13, y: 11 } } : {}),
-    backgroundColor: resolveMainWindowBackgroundColor(useMica),
+    backgroundColor: resolveMainWindowBackgroundColor(useMica, backgroundColor),
     backgroundMaterial: resolveWindowBackgroundMaterial(useMica),
     autoHideMenuBar: true,
     webPreferences: {
@@ -381,7 +399,7 @@ export function createMainWindow(options: { useMica?: boolean } = {}) {
   });
 
   const window = mainWindow;
-  applyMainWindowBackgroundMaterial(useMica, window);
+  applyMainWindowBackgroundMaterial(useMica, backgroundColor, window);
   wireRendererDiagnostics(window);
   ensureWebContentView(window);
   setTrayMainWindow(window);

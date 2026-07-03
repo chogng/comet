@@ -4,6 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import type {
+  PartsSplash,
+} from 'ls/platform/theme/common/theme';
+import type {
   OpenPathPayload,
   ReadPdfFilePayload,
   WindowControlAction,
@@ -19,6 +22,7 @@ import {
   getMainWindow,
   resolveWindowFromWebContents,
 } from 'ls/platform/window/electron-main/window';
+import type { IThemeMainService } from 'ls/platform/theme/electron-main/themeMainService';
 
 function resolvePdfFilePath(payload: ReadPdfFilePayload = {}) {
   const rawPath = payload.path?.trim();
@@ -46,6 +50,8 @@ function resolvePdfFilePath(payload: ReadPdfFilePayload = {}) {
 }
 
 export class NativeHostMainService {
+  constructor(private readonly themeMainService: IThemeMainService) {}
+
   async pickPdfFile(parentWindow: BrowserWindow | null = getMainWindow()) {
     return pickPdfFileDialog(parentWindow);
   }
@@ -143,6 +149,24 @@ export class NativeHostMainService {
       });
     };
   }
+
+  async saveWindowSplashForEvent(
+    event: IpcMainInvokeEvent,
+    splash: PartsSplash,
+  ) {
+    this.themeMainService.saveWindowSplash(
+      resolveWindowFromWebContents(event.sender)?.id,
+      splash,
+    );
+  }
+
+  async getOSColorScheme() {
+    return this.themeMainService.getColorScheme();
+  }
+
+  onDidChangeColorScheme(): Event<ReturnType<IThemeMainService['getColorScheme']>> {
+    return this.themeMainService.onDidChangeColorScheme;
+  }
 }
 
 export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent> {
@@ -169,6 +193,13 @@ export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent>
         ) as Promise<T>;
       case 'get_window_state':
         return this.service.getWindowStateForEvent(event) as Promise<T>;
+      case 'save_window_splash':
+        return this.service.saveWindowSplashForEvent(
+          event,
+          payload as PartsSplash,
+        ) as Promise<T>;
+      case 'get_os_color_scheme':
+        return this.service.getOSColorScheme() as Promise<T>;
       default:
         throw appError('UNKNOWN_COMMAND', { command });
     }
@@ -178,10 +209,14 @@ export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent>
     switch (eventName) {
       case 'on_did_change_window_state':
         return this.service.onDidChangeWindowStateForEvent(event) as Event<T>;
+      case 'on_did_change_color_scheme':
+        return this.service.onDidChangeColorScheme() as Event<T>;
       default:
         throw appError('UNKNOWN_COMMAND', { command: eventName });
     }
   }
 }
 
-export const nativeHostMainService = new NativeHostMainService();
+export function createNativeHostMainService(themeMainService: IThemeMainService) {
+  return new NativeHostMainService(themeMainService);
+}
