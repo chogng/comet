@@ -125,7 +125,7 @@ export function createAgentBarPartProps({
 export class AgentBarPartView {
   private readonly element = createElement(
     'section',
-    'panel sidebar-panel agentbar-panel',
+    'agentbar',
   );
   private readonly topbarElement = createElement(
     'div',

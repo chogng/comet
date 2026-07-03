@@ -1,6 +1,7 @@
 .panel.sidebar-panel {
   --sidebar-footer-height: 54px;
-  --sidebar-surface-bg: var(--vscode-sideBar-background, #fafafa);
+  --sidebar-floating-right-gap: 10px;
+  --sidebar-surface-bg: #FFFFFF;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -11,24 +12,25 @@
   gap: 0;
 }
 
-.workbench-content-slot > .panel.sidebar-part-panel {
-  width: calc(100% - 12px - var(--workbench-primary-sidebar-floating-right-gap, 10px));
+.sidebar-part-panel {
+  width: calc(100% - 12px - var(--sidebar-floating-right-gap));
   height: calc(100% - 24px);
-  margin: 12px var(--workbench-primary-sidebar-floating-right-gap, 10px) 12px 12px;
+  margin: 12px var(--sidebar-floating-right-gap) 12px 12px;
   border: 1px solid var(--vscode-sideBar-border, rgba(15, 23, 42, 0.1));
   border-right-color: transparent;
   border-radius: 8px;
   background: var(--sidebar-surface-bg);
   box-shadow:
     0 12px 32px rgba(15, 23, 42, 0.08),
-    0 1px 2px rgba(15, 23, 42, 0.06);
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 0 0 12px #FFFFFF;
 }
 
 .app-window.is-mica-enabled .panel.sidebar-panel.sidebar-platform-windows {
   --sidebar-surface-bg: rgba(248, 250, 253, 0.72);
   --sidebar-surface-bg: color-mix(
     in srgb,
-    var(--vscode-sideBar-background, #fafafa) 72%,
+    #FFFFFF 72%,
     transparent
   );
 }
@@ -37,7 +39,7 @@
   --sidebar-surface-bg: rgba(248, 250, 253, 0.2);
   --sidebar-surface-bg: color-mix(
     in srgb,
-    var(--vscode-sideBar-background, #fafafa) 20%,
+    #FFFFFF 20%,
     transparent
   );
   position: relative;
@@ -87,11 +89,11 @@
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--vscode-sideBar-background, #fafafa) 66%, transparent) 0%,
-      color-mix(in srgb, var(--vscode-sideBar-background, #fafafa) 52%, transparent) 18%,
-      color-mix(in srgb, var(--vscode-sideBar-background, #fafafa) 18%, transparent) 50%,
-      color-mix(in srgb, var(--vscode-sideBar-background, #fafafa) 50%, transparent) 82%,
-      color-mix(in srgb, var(--vscode-sideBar-background, #fafafa) 62%, transparent) 100%
+      color-mix(in srgb, #FFFFFF 66%, transparent) 0%,
+      color-mix(in srgb, #FFFFFF 52%, transparent) 18%,
+      color-mix(in srgb, #FFFFFF 18%, transparent) 50%,
+      color-mix(in srgb, #FFFFFF 50%, transparent) 82%,
+      color-mix(in srgb, #FFFFFF 62%, transparent) 100%
     );
 }
 

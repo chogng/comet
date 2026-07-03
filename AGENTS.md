@@ -1,5 +1,3 @@
-read the upstream [`C:\Users\lanxi\Desktop\vscode` or `/Users/lance/Desktop/vscode`].
-
 These rules have the highest priority.
 - Must read the [Coding Guidelines](.github/instructions/coding-guidelines.instructions.md) before thinking or editing
 - NEVER add fallback logic
@@ -7,3 +5,5 @@ These rules have the highest priority.
 - NEVER keep legacy interfaces or local compatibility code just to avoid updating call sites.
 - Call sites MUST migrate directly to the target interface.
 - When the target interface requires call-site changes, migrate the affected call sites directly instead of adding wrappers, aliases, or compatibility code to shrink the diff.
+
+when coding, see the upstream architechture [`C:\Users\lanxi\Desktop\vscode` or `/Users/lance/Desktop/vscode`].

@@ -135,7 +135,6 @@ import { getNativeHostService } from 'ls/platform/native/electron-sandbox/native
 import { applyWorkbenchTheme } from 'ls/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'ls/workbench/browser/style';
 import type { EditorOpenRequest } from 'ls/workbench/services/editor/common/editorOpenTypes';
-import 'ls/workbench/browser/media/workbench.css';
 
 export type WorkbenchPage = 'content' | 'settings';
 

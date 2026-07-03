@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 :root {
   --workbench-chrome-bg: var(--vscode-workbench-chromeBackground, #ffffff);
   --workbench-chrome-bg-transparent: var(--vscode-workbench-chromeBackgroundTransparent, rgba(255, 255, 255, 0));
@@ -69,7 +74,6 @@ button:disabled {
 }
 
 .content-grid {
-  --workbench-primary-sidebar-floating-right-gap: 10px;
   --workbench-primary-sidebar-sash-shift: -8px;
   position: relative;
   height: 100%;

@@ -12,7 +12,6 @@ import {
 import { detectInitialLocale, getLocaleMessages } from 'language/i18n';
 import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import 'ls/base/browser/ui/toast/toast.css';
-import 'ls/workbench/browser/media/toastOverlayWindow.css';
 
 const fallbackToastState: NativeToastState = {
   items: [],

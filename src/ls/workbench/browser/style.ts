@@ -1,3 +1,4 @@
+import './media/style.css';
 import { themeService } from 'ls/platform/theme/browser/themeService';
 
 const WORKBENCH_STYLE_ELEMENT_ID = 'ls-workbench-browser-style';

@@ -968,9 +968,7 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
       settingsContentTopbar,
     );
     assert.equal(
-      view
-        .getElement()
-        .querySelector('.workbench-content-slot-agent .agentbar-panel'),
+      view.getElement().querySelector('.agentbar'),
       null,
     );
   } finally {

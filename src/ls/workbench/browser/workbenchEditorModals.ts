@@ -3,7 +3,6 @@ import type { LocaleMessages } from 'language/locales';
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
 import { createModalView } from 'ls/base/browser/ui/modal/modal';
 import type { WorkbenchEditorCommandDefinition } from 'ls/workbench/browser/editorCommands';
-import 'ls/workbench/browser/media/workbenchEditorModals.css';
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
