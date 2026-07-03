@@ -1,6 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Literature Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
 import { EventEmitter, type Event as BaseEvent } from 'ls/base/common/event';

@@ -1159,7 +1159,6 @@ class WorkbenchHost {
       sidebarProps: props.sidebarProps,
       agentBarProps: props.agentBarProps,
       editorPartProps: props.editorPartProps,
-      sidebarTopbarActionsElement: this.sidebarTopbarActionsView.getElement(),
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
       editorTopbarAuxiliaryActionsElement:
         props.editorTopbarAuxiliaryActionsElement,
@@ -1243,7 +1242,6 @@ class WorkbenchHost {
       agentBarProps: props.agentBarProps,
       editorPartProps: props.editorPartProps,
       settingsContentElement: this.settingsView.getElement(),
-      sidebarTopbarActionsElement: this.sidebarTopbarActionsView.getElement(),
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
       editorTopbarAuxiliaryActionsElement: null,
     };
@@ -2068,6 +2066,7 @@ class WorkbenchHost {
       onTogglePrimarySidebar: togglePrimarySidebarVisibility,
       onFocusAddressBar: focusWorkbenchWebUrlInput,
     });
+    this.sidebarTopbarActionsView.setProps(sidebarTopbarActionsProps);
 
     const settingsPartProps = createSettingsPartProps({
       state: {
@@ -2348,18 +2347,7 @@ class WorkbenchHost {
       useMica,
       statusbarVisible,
       activePage,
-      isPrimarySidebarVisible:
-        activePage === 'settings' ? true : isPrimarySidebarVisible,
-      isAgentSidebarVisible:
-        activePage === 'settings' ? false : isAgentSidebarVisible,
-      isEditorCollapsed:
-        activePage === 'settings' ? false : isEditorCollapsed,
-      primaryTopbarElement:
-        this.workbenchContentPartViews?.getPrimarySidebarTopbarElement() ?? null,
-      editorTopbarElement:
-        this.workbenchContentPartViews?.getEditorTopbarElement() ?? null,
-      agentTopbarElement:
-        this.workbenchContentPartViews?.getAgentSidebarTopbarElement() ?? null,
+      leftActionbarElement: this.sidebarTopbarActionsView.getElement(),
     });
 
     this.syncPostRenderState({

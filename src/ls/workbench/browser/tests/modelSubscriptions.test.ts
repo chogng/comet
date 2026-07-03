@@ -684,12 +684,8 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
   const container = document.createElement('div');
   const shell = document.createElement('div');
   const statusbar = document.createElement('section');
-  const primaryTopbar = document.createElement('div');
-  const editorTopbar = document.createElement('div');
-  const agentTopbar = document.createElement('div');
-  primaryTopbar.className = 'sidebar-topbar';
-  editorTopbar.className = 'editor-topbar';
-  agentTopbar.className = 'agentbar-topbar';
+  const leftActionbar = document.createElement('div');
+  leftActionbar.className = 'sidebar-topbar-actions-host';
 
   const titlebarPart = createTitlebarPart(container, shell, statusbar);
   container.append(titlebarPart.getElement(), shell);
@@ -700,12 +696,7 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       useMica: false,
       statusbarVisible: true,
       activePage: 'content',
-      isPrimarySidebarVisible: true,
-      isAgentSidebarVisible: true,
-      isEditorCollapsed: false,
-      primaryTopbarElement: primaryTopbar,
-      editorTopbarElement: editorTopbar,
-      agentTopbarElement: agentTopbar,
+      leftActionbarElement: leftActionbar,
     });
 
     assert(container.classList.contains('has-titlebar'));
@@ -714,16 +705,16 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     assert.equal(container.children[1], shell);
     assert.equal(container.children[2], statusbar);
     assert.equal(
-      titlebarPart.getElement().querySelector('.titlebar-left > .sidebar-topbar'),
-      primaryTopbar,
+      titlebarPart.getElement().querySelector('.titlebar-left > .sidebar-topbar-actions-host'),
+      leftActionbar,
     );
     assert.equal(
-      titlebarPart.getElement().querySelector('.titlebar-center > .editor-topbar'),
-      editorTopbar,
+      titlebarPart.getElement().querySelector('.titlebar-center'),
+      null,
     );
     assert.equal(
-      titlebarPart.getElement().querySelector('.titlebar-right > .agentbar-topbar'),
-      agentTopbar,
+      titlebarPart.getElement().querySelector('.titlebar-right'),
+      null,
     );
     assert.equal(
       getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.titlebar],

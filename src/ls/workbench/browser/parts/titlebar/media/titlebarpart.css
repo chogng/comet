@@ -1,4 +1,5 @@
 .app-window {
+  --workbench-window-controls-width: 0px;
   width: 100%;
   height: 100%;
   display: grid;
@@ -46,27 +47,13 @@
   width: 100%;
   flex-shrink: 1;
   flex-grow: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-content: left;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: drag;
-}
-
-.titlebar .sidebar-topbar,
-.titlebar .editor-topbar,
-.titlebar .agentbar-topbar {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  color: inherit;
-}
-
-.titlebar .sidebar-combined-topbar-actions-host,
-.titlebar .agentbar-topbar-actions {
-  padding-right: 6px;
 }
 
 .titlebar .sidebar-topbar-actions-host {
@@ -125,17 +112,13 @@
 
 .app-window.has-native-window-controls-overlay .titlebar-container::after {
   content: '';
-  order: 3;
-  width: var(--workbench-window-controls-width, 138px);
+  width: var(--workbench-window-controls-width);
   height: 100%;
-  flex-grow: 0;
-  flex-shrink: 0;
+  grid-column: 3;
   -webkit-app-region: no-drag;
 }
 
-.titlebar-left,
-.titlebar-center,
-.titlebar-right {
+.titlebar-left {
   position: relative;
   z-index: 1;
   min-width: 0;
@@ -146,55 +129,18 @@
   overflow: hidden;
 }
 
-.titlebar-container.has-center > .titlebar-left {
-  order: 0;
-  width: 20%;
-  flex-grow: 2;
+.titlebar-left {
+  grid-column: 1;
   justify-content: flex-start;
 }
 
-.titlebar-container.has-center > .titlebar-center {
-  order: 1;
-  width: 60%;
-  max-width: fit-content;
-  min-width: 0px;
-  margin: 0 10px;
-  justify-content: center;
-}
-
-.titlebar-container.has-center > .titlebar-right {
-  order: 2;
-  width: 20%;
-  min-width: min-content;
-  flex-grow: 2;
-  justify-content: flex-end;
-}
-
-.titlebar-container:not(.has-center) > .titlebar-left {
-  flex: 1 1 0%;
-  min-width: 0;
-}
-
-.titlebar-container:not(.has-center) > .titlebar-center {
+.titlebar-left[hidden] {
   display: none;
 }
 
-.titlebar-container:not(.has-center) > .titlebar-right {
-  flex: 0 0 auto;
-  padding-left: 16px;
-}
-
-.titlebar-left[hidden],
-.titlebar-center[hidden],
-.titlebar-right[hidden] {
-  display: none;
-}
-
-.titlebar-left > *,
-.titlebar-center > *,
-.titlebar-right > * {
+.titlebar-left > * {
   min-width: 0;
-  width: 100%;
+  width: auto;
   height: 100%;
 }
 

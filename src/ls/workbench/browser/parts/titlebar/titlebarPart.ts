@@ -13,12 +13,7 @@ export type TitlebarPartSyncParams = {
   useMica: boolean;
   statusbarVisible: boolean;
   activePage: TitlebarPartPage;
-  isPrimarySidebarVisible: boolean;
-  isAgentSidebarVisible: boolean;
-  isEditorCollapsed: boolean;
-  primaryTopbarElement: HTMLElement | null;
-  editorTopbarElement: HTMLElement | null;
-  agentTopbarElement: HTMLElement | null;
+  leftActionbarElement: HTMLElement | null;
 };
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
@@ -32,8 +27,6 @@ export class TitlebarPart {
   private readonly titlebarContainerElement = document.createElement('div');
   private readonly dragRegionElement = document.createElement('div');
   private readonly leftElement = document.createElement('div');
-  private readonly centerElement = document.createElement('div');
-  private readonly rightElement = document.createElement('div');
 
   constructor(
     private readonly containerElement: HTMLElement,
@@ -44,13 +37,9 @@ export class TitlebarPart {
     this.titlebarContainerElement.className = 'titlebar-container';
     this.dragRegionElement.className = 'titlebar-drag-region';
     this.leftElement.className = 'titlebar-left';
-    this.centerElement.className = 'titlebar-center';
-    this.rightElement.className = 'titlebar-right';
     this.titlebarContainerElement.append(
       this.dragRegionElement,
       this.leftElement,
-      this.centerElement,
-      this.rightElement,
     );
     this.titlebarElement.append(this.titlebarContainerElement);
   }
@@ -93,43 +82,30 @@ export class TitlebarPart {
 
   dispose() {
     this.leftElement.replaceChildren();
-    this.centerElement.replaceChildren();
-    this.rightElement.replaceChildren();
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, null);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.statusbar, null);
   }
 
   private syncTitlebar(params: TitlebarPartSyncParams) {
-    this.syncTitlebarSlot(
+    this.syncTitlebarLeftColumn(
       this.leftElement,
-      params.isPrimarySidebarVisible ? params.primaryTopbarElement : null,
-    );
-    this.syncTitlebarSlot(
-      this.centerElement,
-      params.isEditorCollapsed ? null : params.editorTopbarElement,
-    );
-    this.syncTitlebarSlot(
-      this.rightElement,
-      params.isAgentSidebarVisible ? params.agentTopbarElement : null,
+      params.leftActionbarElement,
     );
 
-    const hasCenter = !params.isEditorCollapsed && Boolean(params.editorTopbarElement);
-    this.titlebarContainerElement.classList.toggle('has-center', hasCenter);
-    this.leftElement.hidden = !params.isPrimarySidebarVisible;
-    this.centerElement.hidden = !hasCenter;
-    this.rightElement.hidden = !params.isAgentSidebarVisible;
+    this.titlebarContainerElement.classList.remove('has-center');
+    this.leftElement.hidden = !params.leftActionbarElement;
   }
 
-  private syncTitlebarSlot(slotElement: HTMLElement, topbarElement: HTMLElement | null) {
-    if (topbarElement) {
-      if (slotElement.firstElementChild !== topbarElement || slotElement.childNodes.length !== 1) {
-        slotElement.replaceChildren(topbarElement);
+  private syncTitlebarLeftColumn(columnElement: HTMLElement, actionbarElement: HTMLElement | null) {
+    if (actionbarElement) {
+      if (columnElement.firstElementChild !== actionbarElement || columnElement.childNodes.length !== 1) {
+        columnElement.replaceChildren(actionbarElement);
       }
       return;
     }
 
-    if (slotElement.childNodes.length > 0) {
-      slotElement.replaceChildren();
+    if (columnElement.childNodes.length > 0) {
+      columnElement.replaceChildren();
     }
   }
 
