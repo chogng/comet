@@ -1,7 +1,7 @@
 import 'ls/base/browser/ui/actionbar/actionbar.css';
 import * as DOM from 'ls/base/browser/dom';
 import type { BaseAction } from 'ls/base/common/actions';
-import { LifecycleOwner } from 'ls/base/common/lifecycle';
+import { Disposable } from 'ls/base/common/lifecycle';
 import {
   ActionViewItem,
   BaseActionViewItem,
@@ -128,7 +128,7 @@ type RenderedItem = {
   dispose: () => void;
 };
 
-export class ActionBarView extends LifecycleOwner {
+export class ActionBarView extends Disposable {
   private props: ActionBarProps;
   private readonly element = document.createElement('div');
   private readonly actionsContainer = document.createElement('div');
@@ -140,7 +140,7 @@ export class ActionBarView extends LifecycleOwner {
     this.props = this.normalizeProps(props);
     this.actionsContainer.className = 'actionbar-actions-container';
     this.element.append(this.actionsContainer);
-    this.register(DOM.addDisposableListener(this.element, 'keydown', this.handleKeyDown));
+    this._register(DOM.addDisposableListener(this.element, 'keydown', this.handleKeyDown));
     this.render();
   }
 

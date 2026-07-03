@@ -1,6 +1,6 @@
 import 'ls/base/browser/ui/selectbox/selectBox.css';
 import { EventEmitter, type Event as LsEvent } from 'ls/base/common/event';
-import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
 import { SelectBoxCustom } from 'ls/base/browser/ui/selectbox/selectBoxCustom';
 import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 
@@ -73,7 +73,7 @@ function createDecoratorIconElement() {
   return decorator;
 }
 
-export class SelectBox extends LifecycleOwner {
+export class SelectBox extends Disposable {
   private options: ISelectOptionItem[] = [];
   private selected = 0;
   private styles: ISelectBoxStyles;
@@ -121,13 +121,13 @@ export class SelectBox extends LifecycleOwner {
       this.selectElement.setAttribute('aria-description', this.selectBoxOptions.ariaDescription);
     }
 
-    this.register(this.selectEmitter);
+    this._register(this.selectEmitter);
     if (this.customSelectBox) {
-      this.register(this.customSelectBox);
+      this._register(this.customSelectBox);
     }
-    this.register(addDisposableListener(this.selectElement, 'change', this.handleChange));
+    this._register(addDisposableListener(this.selectElement, 'change', this.handleChange));
     if (!this.customSelectBox) {
-      this.register(addDisposableListener(this.selectElement, 'click', this.handleClick));
+      this._register(addDisposableListener(this.selectElement, 'click', this.handleClick));
     }
     this.setOptions(options, selected);
   }

@@ -1,7 +1,7 @@
 import 'ls/base/browser/ui/tree/media/tree.css';
 
 import { ListWidget, type ListKeyDownContext } from 'ls/base/browser/ui/list/listWidget';
-import { LifecycleOwner } from 'ls/base/common/lifecycle';
+import { Disposable } from 'ls/base/common/lifecycle';
 
 export type SimpleTreeDataSource<T> = {
   hasChildren(node: T): boolean;
@@ -49,7 +49,7 @@ type VisibleTreeNode<T> = {
   isExpanded: boolean;
 };
 
-export class SimpleTree<T> extends LifecycleOwner {
+export class SimpleTree<T> extends Disposable {
   private readonly list: ListWidget<VisibleTreeNode<T>>;
   private input: T | null = null;
   private readonly expandedIds: Set<string>;
@@ -63,7 +63,7 @@ export class SimpleTree<T> extends LifecycleOwner {
   ) {
     super();
     this.expandedIds = new Set(options.defaultExpandedIds ?? []);
-    this.list = this.register(new ListWidget<VisibleTreeNode<T>>(
+    this.list = this._register(new ListWidget<VisibleTreeNode<T>>(
       {
         renderElement: (entry, context) => {
           const nodeId = this.options.getId(entry.node);

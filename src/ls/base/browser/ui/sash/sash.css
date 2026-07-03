@@ -50,15 +50,15 @@
     background-color 120ms ease-out,
     width 120ms ease-out,
     height 120ms ease-out;
-  /* Keep a subtle resting divider while preserving the larger drag hit area. */
-  background: var(--vscode-splitViewSeparatorBorder, var(--vscode-sideBar-border, #e5e5e5));
+  background: transparent;
 }
 
 .sash.vertical::before {
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  left: calc(50% - 0.5px);
+  top: 50%;
+  width: 2px;
+  height: 58px;
+  left: calc(50% - 1px);
+  transform: translateY(-50%);
 }
 
 .sash.horizontal::before {
@@ -68,19 +68,14 @@
   top: calc(50% - 0.5px);
 }
 
-.sash.hover.vertical::before,
-.sash.active.vertical::before {
-  width: var(--sash-hover-size);
-  left: calc(50% - (var(--sash-hover-size) / 2));
-}
-
 .sash.hover.horizontal::before,
 .sash.active.horizontal::before {
   height: var(--sash-hover-size);
   top: calc(50% - (var(--sash-hover-size) / 2));
+  background: var(--vscode-sash-hoverBorder, rgba(46, 109, 179, 0.28));
 }
 
-.sash.hover::before,
-.sash.active::before {
-  background: var(--vscode-sash-hoverBorder, rgba(46, 109, 179, 0.28));
+.sash.hover.vertical::before,
+.sash.active.vertical::before {
+  background: #111111;
 }

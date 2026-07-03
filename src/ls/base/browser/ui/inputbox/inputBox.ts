@@ -1,6 +1,6 @@
 import 'ls/base/browser/ui/inputbox/inputBox.css';
 import { EventEmitter } from 'ls/base/common/event';
-import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
 
 export interface IInputBoxOptions {
   readonly placeholder?: string;
@@ -40,7 +40,7 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
   });
 }
 
-export class InputBox extends LifecycleOwner {
+export class InputBox extends Disposable {
   readonly element: HTMLElement;
   readonly inputElement: HTMLInputElement;
   private readonly changeEmitter = new EventEmitter<string>();
@@ -83,7 +83,7 @@ export class InputBox extends LifecycleOwner {
     wrapper.append(this.inputElement);
     this.element.append(wrapper);
     container.append(this.element);
-    this.register(this.changeEmitter);
+    this._register(this.changeEmitter);
 
     if (options.ariaLabel) {
       this.inputElement.setAttribute('aria-label', options.ariaLabel);
@@ -92,9 +92,9 @@ export class InputBox extends LifecycleOwner {
     this.setPlaceHolder(options.placeholder ?? '');
     this.setTooltip(options.tooltip ?? options.placeholder ?? '');
 
-    this.register(addDisposableListener(this.inputElement, 'input', this.handleInput));
-    this.register(addDisposableListener(this.inputElement, 'focus', this.handleFocus));
-    this.register(addDisposableListener(this.inputElement, 'blur', this.handleBlur));
+    this._register(addDisposableListener(this.inputElement, 'input', this.handleInput));
+    this._register(addDisposableListener(this.inputElement, 'focus', this.handleFocus));
+    this._register(addDisposableListener(this.inputElement, 'blur', this.handleBlur));
   }
 
   get value() {

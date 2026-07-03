@@ -1,9 +1,9 @@
 import { formatDateInputValue, isDateRangeValid } from 'ls/base/common/date';
 import {
-  LifecycleOwner,
-  LifecycleStore,
-  MutableLifecycle,
-  combineDisposables,
+  Disposable,
+  DisposableStore,
+  MutableDisposable,
+  combinedDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -221,7 +221,7 @@ function orderDateValues(primaryValue: string, secondaryValue: string) {
   };
 }
 
-export class DateRangePickerView extends LifecycleOwner {
+export class DateRangePickerView extends Disposable {
   private props: DateRangePickerProps;
   private isOpen = false;
   private visibleMonth: Date;
@@ -232,13 +232,13 @@ export class DateRangePickerView extends LifecycleOwner {
   private readonly triggerContent = createElement('span', 'date-range-trigger-content');
   private readonly triggerIcon = createElement('span', 'date-range-trigger-icon');
   private readonly triggerText = createElement('span', 'date-range-trigger-text');
-  private readonly popupDisposables = new LifecycleStore();
+  private readonly popupDisposables = new DisposableStore();
   private popup: HTMLDivElement | null = null;
   private activeSlot: DateRangeSlot = 'primary';
   private draftPrimaryDate = '';
   private draftSecondaryDate = '';
   private pendingFocusDayValue: string | null = null;
-  private readonly openListeners = new MutableLifecycle<DisposableLike>();
+  private readonly openListeners = new MutableDisposable<DisposableLike>();
   private disposed = false;
 
   constructor(props: DateRangePickerProps) {
@@ -247,12 +247,12 @@ export class DateRangePickerView extends LifecycleOwner {
     this.syncDraftValuesFromProps();
     const now = new Date();
     this.visibleMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    this.register(this.openListeners);
-    this.register(this.popupDisposables);
+    this._register(this.openListeners);
+    this._register(this.popupDisposables);
 
     this.trigger.type = 'button';
     this.trigger.setAttribute('aria-haspopup', 'dialog');
-    this.register(addDisposableListener(this.trigger, 'click', this.handleTriggerClick));
+    this._register(addDisposableListener(this.trigger, 'click', this.handleTriggerClick));
     this.triggerContent.append(this.triggerIcon, this.triggerText);
     this.trigger.append(this.triggerContent);
     this.element.append(this.trigger);
@@ -430,7 +430,7 @@ export class DateRangePickerView extends LifecycleOwner {
       this.syncDraftValuesFromProps();
       this.activeSlot = 'primary';
       this.visibleMonth = this.resolveVisibleMonth();
-      this.openListeners.value = combineDisposables(
+      this.openListeners.value = combinedDisposable(
         addDisposableListener(document, 'mousedown', this.handlePointerDown),
         addDisposableListener(document, 'keydown', this.handleEscape),
         addDisposableListener(window, 'resize', this.handleWindowResize),

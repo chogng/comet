@@ -11,9 +11,9 @@ import {
   resolveAnchoredVerticalTop,
 } from 'ls/base/common/layout';
 import {
-  LifecycleOwner,
-  MutableLifecycle,
-  combineDisposables,
+  Disposable,
+  MutableDisposable,
+  combinedDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -412,10 +412,10 @@ function addDisposableListener(
   });
 }
 
-export class ContextViewController extends LifecycleOwner implements ContextViewHandle {
+export class ContextViewController extends Disposable implements ContextViewHandle {
   private readonly element = createElement('div', 'ls-context-view');
   private readonly content = createElement('div', 'ls-context-view-content');
-  private readonly mountedListeners = new MutableLifecycle<DisposableLike>();
+  private readonly mountedListeners = new MutableDisposable<DisposableLike>();
   private options: ContextViewOptions | null = null;
   private visible = false;
   private disposed = false;
@@ -425,8 +425,8 @@ export class ContextViewController extends LifecycleOwner implements ContextView
   constructor() {
     super();
     this.element.append(this.content);
-    this.register(this.mountedListeners);
-    this.register(
+    this._register(this.mountedListeners);
+    this._register(
       addDisposableListener(this.content, 'mousedown', this.handleContentMouseDown, true),
     );
   }
@@ -480,7 +480,7 @@ export class ContextViewController extends LifecycleOwner implements ContextView
     if (!this.visible) {
       this.visible = true;
       document.body.append(this.element);
-      this.mountedListeners.value = combineDisposables(
+      this.mountedListeners.value = combinedDisposable(
         addDisposableListener(document, 'mousedown', this.handleDocumentMouseDown, true),
         addDisposableListener(document, 'keydown', this.handleDocumentKeyDown, true),
         addDisposableListener(document, 'scroll', this.handleDocumentScroll, true),

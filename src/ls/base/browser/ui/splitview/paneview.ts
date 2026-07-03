@@ -1,7 +1,7 @@
 import { getGlobalSashSize, Orientation } from 'ls/base/browser/ui/sash/sash';
 import { EventEmitter } from 'ls/base/common/event';
 import {
-  LifecycleStore,
+  DisposableStore,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -92,7 +92,7 @@ export class Pane implements IView {
   protected readonly headerActionsElement = createElement('div', 'pane-header-actions');
   protected readonly bodyElement = createElement('div', 'pane-body');
   private readonly onDidChangeEmitter = new EventEmitter<PaneChangeEvent>();
-  private readonly disposables = new LifecycleStore();
+  private readonly disposables = new DisposableStore();
   private expandedValue: boolean;
   private minimumBodySizeValue: number;
   private maximumBodySizeValue: number;
@@ -256,7 +256,7 @@ export class PaneView {
   readonly element = createElement('div', 'pane-view');
   private readonly splitView: SplitView;
   private readonly items: PaneItem[] = [];
-  private readonly disposables = new LifecycleStore();
+  private readonly disposables = new DisposableStore();
   private resizeAnimationTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: PaneViewOptions = {}) {

@@ -439,7 +439,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
   constructor(options: DropdownMenuActionViewItemOptions) {
     super(options, options.hoverService);
-    this.register(DOM.addDisposableListener(this.button, 'keydown', this.handleKeyDown));
+    this._register(DOM.addDisposableListener(this.button, 'keydown', this.handleKeyDown));
     this.render();
   }
 
@@ -586,7 +586,7 @@ export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
     this.primaryItem.render(this.element);
     this.element.append(this.separator);
     this.dropdownMenuActionViewItem.render(this.element);
-    this.register(DOM.addDisposableListener(this.element, 'keydown', this.handleKeyDown));
+    this._register(DOM.addDisposableListener(this.element, 'keydown', this.handleKeyDown));
   }
 
   override render(container?: HTMLElement) {

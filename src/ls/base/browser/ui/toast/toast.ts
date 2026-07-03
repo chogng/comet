@@ -1,8 +1,8 @@
 import 'ls/base/browser/ui/toast/toast.css';
 import { EventEmitter } from 'ls/base/common/event';
 import {
-  LifecycleOwner,
-  LifecycleStore,
+  Disposable,
+  DisposableStore,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -41,7 +41,7 @@ let toasts: ToastItem[] = [];
 const TOAST_EXIT_DURATION = 200;
 let toastBridge: ToastBridge | null = null;
 const onDidChangeToastsEmitter = new EventEmitter<ToastItem[]>();
-const toastTimers = new Map<number, LifecycleStore>();
+const toastTimers = new Map<number, DisposableStore>();
 
 function notify() {
   onDidChangeToastsEmitter.fire([...toasts]);
@@ -101,7 +101,7 @@ function createTimeoutDisposable(callback: () => void, delay: number): Disposabl
 function getToastTimerStore(id: number) {
   let store = toastTimers.get(id);
   if (!store) {
-    store = new LifecycleStore();
+    store = new DisposableStore();
     toastTimers.set(id, store);
   }
 
@@ -213,17 +213,17 @@ function renderToastItem(item: ToastItem, closeLabel: string) {
   };
 }
 
-export class ToastContainerView extends LifecycleOwner {
+export class ToastContainerView extends Disposable {
   private readonly element = createElement('div', 'toast-container');
-  private readonly renderDisposables = new LifecycleStore();
+  private readonly renderDisposables = new DisposableStore();
   private closeLabel: string;
   private disposed = false;
 
   constructor({ closeLabel = 'Close' }: ToastContainerOptions = {}) {
     super();
     this.closeLabel = closeLabel;
-    this.register(this.renderDisposables);
-    this.register(onDidChangeToastsEmitter.event(this.render));
+    this._register(this.renderDisposables);
+    this._register(onDidChangeToastsEmitter.event(this.render));
     this.render(toasts);
   }
 

@@ -2,7 +2,7 @@ import 'ls/base/browser/ui/menu/menu.css';
 
 import type { ContextMenuAction } from 'ls/base/browser/contextmenu';
 import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
-import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, DisposableStore, toDisposable } from 'ls/base/common/lifecycle';
 
 export type MenuSelectionSource = 'keyboard' | 'pointer';
 
@@ -205,9 +205,9 @@ function isEditableElement(target: EventTarget | null): target is HTMLElement {
   return false;
 }
 
-export class Menu extends LifecycleOwner {
+export class Menu extends Disposable {
   private readonly element = createElement('div');
-  private readonly renderDisposables = new LifecycleStore();
+  private readonly renderDisposables = new DisposableStore();
   private options: MenuOptions;
   private itemElements: HTMLDivElement[] = [];
   private submenuState: {
@@ -224,11 +224,11 @@ export class Menu extends LifecycleOwner {
 
   constructor(options: MenuOptions) {
     super();
-    this.register(this.renderDisposables);
+    this._register(this.renderDisposables);
     this.options = options;
-    this.register(addDisposableListener(this.element, 'keydown', this.handleKeyDown));
-    this.register(addDisposableListener(this.element, 'mouseenter', this.cancelSubmenuClose));
-    this.register(addDisposableListener(this.element, 'mouseleave', this.handleRootMouseLeave));
+    this._register(addDisposableListener(this.element, 'keydown', this.handleKeyDown));
+    this._register(addDisposableListener(this.element, 'mouseenter', this.cancelSubmenuClose));
+    this._register(addDisposableListener(this.element, 'mouseleave', this.handleRootMouseLeave));
     this.render();
   }
 

@@ -4,7 +4,7 @@ import {
   SashState,
 } from 'ls/base/browser/ui/sash/sash';
 import { EventEmitter } from 'ls/base/common/event';
-import { LifecycleStore } from 'ls/base/common/lifecycle';
+import { DisposableStore } from 'ls/base/common/lifecycle';
 
 export type Dimension = {
   width: number;
@@ -63,7 +63,7 @@ export class ResizableHTMLElement {
   private deltaX = 0;
   private deltaY = 0;
   private resizing = false;
-  private readonly disposables = new LifecycleStore();
+  private readonly disposables = new DisposableStore();
 
   readonly onDidWillResize = this.onDidWillResizeEmitter.event.bind(this.onDidWillResizeEmitter);
   readonly onDidResize = this.onDidResizeEmitter.event.bind(this.onDidResizeEmitter);

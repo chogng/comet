@@ -6,7 +6,7 @@ import type {
   WindowStateListener,
 } from 'ls/base/parts/sandbox/common/electronTypes';
 import { EventEmitter } from 'ls/base/common/event';
-import { combineDisposables, toDisposable } from 'ls/base/common/lifecycle';
+import { combinedDisposable, toDisposable } from 'ls/base/common/lifecycle';
 
 export type WorkbenchWindowControlAction = 'minimize' | 'toggle-maximize' | 'close';
 
@@ -144,7 +144,7 @@ export function connectWorkbenchWindowControls(electronRuntime: boolean) {
     };
 
     syncBrowserWindowState();
-    const listeners = combineDisposables(
+    const listeners = combinedDisposable(
       addDisposableListener(document, 'fullscreenchange', syncBrowserWindowState),
       addDisposableListener(document, 'webkitfullscreenchange', syncBrowserWindowState),
       addDisposableListener(window, 'resize', syncBrowserWindowState),

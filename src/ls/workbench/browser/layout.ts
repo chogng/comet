@@ -5,8 +5,8 @@ import type {
 } from 'ls/base/browser/ui/grid/gridview';
 import { GridBranchView, GridView, Orientation } from 'ls/base/browser/ui/grid/gridview';
 import {
-  LifecycleStore,
-  MutableLifecycle,
+  DisposableStore,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -108,9 +108,9 @@ export type { WorkbenchPartId, WorkbenchPartRefCallback };
 
 const WORKBENCH_SPLITVIEW_LIMITS = {
   sidebar: {
-    minimum: 320,
+    minimum: 220,
     maximum: Number.POSITIVE_INFINITY,
-    defaultSize: 412,
+    defaultSize: 250,
   },
   editor: {
     minimum: 220,
@@ -858,9 +858,9 @@ export class WorkbenchContentLayoutController {
   private reapplySidebarSizesAfterNextLayout = false;
   private splitConstraints = getLayoutLimits(Orientation.VERTICAL);
   private disposed = false;
-  private readonly gridDisposables = new LifecycleStore();
-  private readonly resizeObserver = new MutableLifecycle<DisposableLike>();
-  private readonly layoutAnimationFrame = new MutableLifecycle<DisposableLike>();
+  private readonly gridDisposables = new DisposableStore();
+  private readonly resizeObserver = new MutableDisposable<DisposableLike>();
+  private readonly layoutAnimationFrame = new MutableDisposable<DisposableLike>();
 
   constructor(
     private readonly options: {

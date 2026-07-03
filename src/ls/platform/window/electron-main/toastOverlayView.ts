@@ -8,8 +8,8 @@ import type {
   NativeToastType,
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
-  LifecycleStore,
-  MutableLifecycle,
+  DisposableStore,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -32,7 +32,7 @@ const maxEstimatedLines = 5;
 const hiddenBounds = { x: 0, y: 0, width: 0, height: 0 };
 
 type NativeToastTimerState = {
-  timeout: MutableLifecycle<DisposableLike>;
+  timeout: MutableDisposable<DisposableLike>;
   startedAt: number | null;
   remainingMs: number;
 };
@@ -43,7 +43,7 @@ let nativeToastState: NativeToastState = { items: [] };
 let nativeToastLayout: NativeToastLayout = { width: defaultToastWidth, height: 0 };
 let nativeToastId = 0;
 let nativeToastHovering = false;
-const nativeToastViewBindings = new MutableLifecycle<LifecycleStore>();
+const nativeToastViewBindings = new MutableDisposable<DisposableStore>();
 const nativeToastTimers = new Map<number, NativeToastTimerState>();
 
 type EventEmitterLike = {
@@ -80,7 +80,7 @@ function createTimeoutDisposable(callback: () => void, delay: number): Disposabl
 
 function createNativeToastTimerState(remainingMs: number): NativeToastTimerState {
   return {
-    timeout: new MutableLifecycle<DisposableLike>(),
+    timeout: new MutableDisposable<DisposableLike>(),
     startedAt: null,
     remainingMs,
   };
@@ -312,7 +312,7 @@ function createNativeToastView(window: BrowserWindow) {
   view.setBounds(hiddenBounds);
   window.contentView.addChildView(view);
 
-  const bindings = new LifecycleStore();
+  const bindings = new DisposableStore();
   bindings.add(addDisposableEmitterListener(view.webContents, 'did-finish-load', () => {
     if (nativeToastView !== view) {
       return;

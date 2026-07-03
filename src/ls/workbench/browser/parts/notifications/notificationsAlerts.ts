@@ -1,4 +1,4 @@
-import { LifecycleStore } from 'ls/base/common/lifecycle';
+import { DisposableStore } from 'ls/base/common/lifecycle';
 import { withSeverityPrefix } from 'ls/platform/notification/common/notification';
 import type {
   NotificationModelChange,
@@ -7,7 +7,7 @@ import type {
 
 export class NotificationsAlerts {
   private readonly element = document.createElement('div');
-  private readonly disposables = new LifecycleStore();
+  private readonly disposables = new DisposableStore();
   private disposed = false;
 
   constructor(

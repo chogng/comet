@@ -3,9 +3,9 @@ import type {
   NativeToastType,
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import {
-  LifecycleOwner,
-  LifecycleStore,
-  MutableLifecycle,
+  Disposable,
+  DisposableStore,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -84,7 +84,7 @@ function getToastIconText(type: NativeToastType) {
   }
 }
 
-export class ToastOverlayWindowView extends LifecycleOwner {
+export class ToastOverlayWindowView extends Disposable {
   private readonly element = createElement('main', 'native-toast-overlay-page');
   private readonly stackElement = createElement(
     'div',
@@ -92,8 +92,8 @@ export class ToastOverlayWindowView extends LifecycleOwner {
   );
   private readonly ui = getLocaleMessages(detectInitialLocale());
   private readonly toastApi = getNativeHostService().toast;
-  private readonly renderDisposables = new LifecycleStore();
-  private readonly resizeObserver = new MutableLifecycle<DisposableLike>();
+  private readonly renderDisposables = new DisposableStore();
+  private readonly resizeObserver = new MutableDisposable<DisposableLike>();
   private toastState: NativeToastState = fallbackToastState;
   private disposed = false;
   private readonly handleResize = () => {
@@ -102,18 +102,18 @@ export class ToastOverlayWindowView extends LifecycleOwner {
 
   constructor() {
     super();
-    this.register(this.renderDisposables);
-    this.register(this.resizeObserver);
-    this.register(addDisposableListener(this.stackElement, 'mouseenter', () => {
+    this._register(this.renderDisposables);
+    this._register(this.resizeObserver);
+    this._register(addDisposableListener(this.stackElement, 'mouseenter', () => {
       this.toastApi?.setHovering(true);
     }));
-    this.register(addDisposableListener(this.stackElement, 'mouseleave', () => {
+    this._register(addDisposableListener(this.stackElement, 'mouseleave', () => {
       this.toastApi?.setHovering(false);
     }));
     this.element.append(this.stackElement);
-    this.register(addDisposableListener(window, 'resize', this.handleResize));
+    this._register(addDisposableListener(window, 'resize', this.handleResize));
     if (typeof this.toastApi?.onStateChange === 'function') {
-      this.register(this.toastApi.onStateChange((state) => {
+      this._register(this.toastApi.onStateChange((state) => {
         if (this.disposed) {
           return;
         }

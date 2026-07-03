@@ -8,9 +8,9 @@ import {
   WORKBENCH_PART_IDS,
 } from 'ls/workbench/browser/layout';
 import {
-  combineDisposables,
-  LifecycleStore,
-  MutableLifecycle,
+  combinedDisposable,
+  DisposableStore,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -1260,9 +1260,9 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
   manager.setBrowserTabKeepAliveLimit(getWorkbenchBrowserTabKeepAliveLimit());
   let webContentViewHostElement =
     getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.webContentViewHost];
-  const contributionDisposables = new LifecycleStore();
-  const hostObservers = new MutableLifecycle<DisposableLike>();
-  const scheduledSync = new MutableLifecycle<DisposableLike>();
+  const contributionDisposables = new DisposableStore();
+  const hostObservers = new MutableDisposable<DisposableLike>();
+  const scheduledSync = new MutableDisposable<DisposableLike>();
   let lastSnapshot: WebContentLayoutSnapshot | null = null;
   let layoutPhase: WebContentLayoutPhase = 'hidden';
   let measuringSnapshot: WebContentLayoutSnapshot | null = null;
@@ -1397,7 +1397,7 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
       );
     }
 
-    hostObservers.value = combineDisposables(...observerDisposables);
+    hostObservers.value = combinedDisposable(...observerDisposables);
   };
 
   const syncFromPartDom = () => {

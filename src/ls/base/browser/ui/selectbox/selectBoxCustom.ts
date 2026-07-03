@@ -4,7 +4,7 @@ import {
   type ContextViewHandle,
 } from 'ls/base/browser/ui/contextview/contextview';
 import { Menu } from 'ls/base/browser/ui/menu/menu';
-import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
 import type {
   ISelectOptionItem,
 } from 'ls/base/browser/ui/selectbox/selectBox';
@@ -44,7 +44,7 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
   });
 }
 
-export class SelectBoxCustom extends LifecycleOwner {
+export class SelectBoxCustom extends Disposable {
   private readonly selectElement: HTMLSelectElement;
   private readonly getOptions: () => readonly ISelectOptionItem[];
   private readonly getSelectedIndex: () => number;
@@ -71,9 +71,9 @@ export class SelectBoxCustom extends LifecycleOwner {
       this.ownsContextView = true;
     }
 
-    this.register(addDisposableListener(this.selectElement, 'click', this.handleClick));
-    this.register(addDisposableListener(this.selectElement, 'mousedown', this.handleMouseDown));
-    this.register(addDisposableListener(this.selectElement, 'keydown', this.handleKeyDown));
+    this._register(addDisposableListener(this.selectElement, 'click', this.handleClick));
+    this._register(addDisposableListener(this.selectElement, 'mousedown', this.handleMouseDown));
+    this._register(addDisposableListener(this.selectElement, 'keydown', this.handleKeyDown));
   }
 
   onOptionsChanged() {

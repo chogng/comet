@@ -3,7 +3,7 @@ import { createContextViewController, type ContextViewHandle } from 'ls/base/bro
 import { InputBox } from 'ls/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import { formatDateInputValue } from 'ls/base/common/date';
-import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
 
 export type DateInputLabels = {
   calendar: string;
@@ -132,7 +132,7 @@ function resolveNextFocusValue(value: string, dayOffset: number) {
   return formatDateInputValue(parsed);
 }
 
-export class DateInput extends LifecycleOwner {
+export class DateInput extends Disposable {
   private options: DateInputOptions;
   private readonly contextView: ContextViewHandle;
   private readonly ownsContextView: boolean;
@@ -163,8 +163,8 @@ export class DateInput extends LifecycleOwner {
         spellcheck: false,
       },
     });
-    this.register(this.inputBox);
-    this.register(this.inputBox.onDidChange(this.handleInputChange));
+    this._register(this.inputBox);
+    this._register(this.inputBox.onDidChange(this.handleInputChange));
 
     if (this.options.focusKey) {
       this.inputBox.inputElement.dataset.focusKey = this.options.focusKey;
@@ -172,9 +172,9 @@ export class DateInput extends LifecycleOwner {
 
     this.button.type = 'button';
     this.button.append(createLxIcon('calendar'));
-    this.register(addDisposableListener(this.button, 'click', this.handleButtonClick));
-    this.register(addDisposableListener(this.inputBox.inputElement, 'focus', this.handleInputFocus));
-    this.register(addDisposableListener(this.inputBox.inputElement, 'keydown', this.handleInputKeyDown));
+    this._register(addDisposableListener(this.button, 'click', this.handleButtonClick));
+    this._register(addDisposableListener(this.inputBox.inputElement, 'focus', this.handleInputFocus));
+    this._register(addDisposableListener(this.inputBox.inputElement, 'keydown', this.handleInputKeyDown));
 
     this.element.append(this.inputBox.element, this.button);
     this.syncLabels();

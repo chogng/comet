@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  LifecycleOwner,
-  LifecycleStore,
-  MutableLifecycle,
-  combineDisposables,
+  Disposable,
+  DisposableStore,
+  MutableDisposable,
+  combinedDisposable,
   dispose,
   disposeAll,
   isDisposableLike,
@@ -54,9 +54,9 @@ test('dispose and disposeAll handle functions and disposable objects in reverse 
   assert.deepEqual(log, ['single', 'third', 'second', 'first']);
 });
 
-test('combineDisposables disposes once and preserves reverse disposal order', () => {
+test('combinedDisposable disposes once and preserves reverse disposal order', () => {
   const log: string[] = [];
-  const combined = combineDisposables(
+  const combined = combinedDisposable(
     () => {
       log.push('first');
     },
@@ -72,9 +72,9 @@ test('combineDisposables disposes once and preserves reverse disposal order', ()
   assert.deepEqual(log, ['third', 'second', 'first']);
 });
 
-test('LifecycleStore clear is reusable and dispose is terminal', () => {
+test('DisposableStore clear is reusable and dispose is terminal', () => {
   const log: string[] = [];
-  const store = new LifecycleStore();
+  const store = new DisposableStore();
 
   const functionDisposable = store.add(() => {
     log.push('function');
@@ -97,9 +97,9 @@ test('LifecycleStore clear is reusable and dispose is terminal', () => {
   assert.equal(store.isDisposed, true);
 });
 
-test('LifecycleStore add immediately disposes entries after the store is disposed', () => {
+test('DisposableStore add immediately disposes entries after the store is disposed', () => {
   const log: string[] = [];
-  const store = new LifecycleStore();
+  const store = new DisposableStore();
 
   store.dispose();
   const registered = store.add(() => {
@@ -110,9 +110,9 @@ test('LifecycleStore add immediately disposes entries after the store is dispose
   assert.deepEqual(log, ['late']);
 });
 
-test('MutableLifecycle replaces, leaks, and disposes values predictably', () => {
+test('MutableDisposable replaces, leaks, and disposes values predictably', () => {
   const log: string[] = [];
-  const lifecycle = new MutableLifecycle<DisposableLike>();
+  const lifecycle = new MutableDisposable<DisposableLike>();
   const first = createTrackedDisposable('first', log);
   const second = createTrackedDisposable('second', log);
 
@@ -131,19 +131,19 @@ test('MutableLifecycle replaces, leaks, and disposes values predictably', () => 
   assert.deepEqual(log, ['first', 'late']);
 });
 
-test('LifecycleOwner registers child disposables on behalf of subclasses', () => {
+test('Disposable registers child disposables on behalf of subclasses', () => {
   const log: string[] = [];
 
-  class TestOwner extends LifecycleOwner {
+  class TestOwner extends Disposable {
     constructor() {
       super();
-      this.register(() => {
+      this._register(() => {
         log.push('ctor');
       });
     }
 
     attach(label: string) {
-      return this.register(() => {
+      return this._register(() => {
         log.push(label);
       });
     }

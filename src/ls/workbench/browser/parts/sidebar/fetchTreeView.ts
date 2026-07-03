@@ -6,7 +6,7 @@ import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
 import { DataTree } from 'ls/base/browser/ui/tree/dataTree';
 import type { SimpleTreeRenderContext } from 'ls/base/browser/ui/tree/simpleTree';
-import { LifecycleOwner } from 'ls/base/common/lifecycle';
+import { Disposable } from 'ls/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import {
   getPdfDownloadStatus,
@@ -106,7 +106,7 @@ function getArticleSelectionKey(article: SidebarArticle) {
   return `${article.sourceUrl}::${article.fetchedAt}`;
 }
 
-export class FetchTreeView extends LifecycleOwner {
+export class FetchTreeView extends Disposable {
   private props: FetchTreeViewProps;
   private readonly dataSource = new FetchTreeDataSource();
   private readonly tree: DataTree<FetchTreeInput, FetchTreeNode>;
@@ -117,7 +117,7 @@ export class FetchTreeView extends LifecycleOwner {
   constructor(props: FetchTreeViewProps) {
     super();
     this.props = props;
-    this.tree = this.register(new DataTree<FetchTreeInput, FetchTreeNode>(
+    this.tree = this._register(new DataTree<FetchTreeInput, FetchTreeNode>(
       {
         getRoot: (input) => this.dataSource.getRoot(input),
         hasChildren: (node) => this.dataSource.hasChildren(node),
@@ -142,7 +142,7 @@ export class FetchTreeView extends LifecycleOwner {
         },
       },
     ));
-    this.register(subscribePdfDownloadStatus(() => {
+    this._register(subscribePdfDownloadStatus(() => {
       this.tree.rerender();
     }));
     this.render();

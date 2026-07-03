@@ -1,8 +1,8 @@
 import 'ls/base/browser/ui/list/list.css';
 
 import {
-  LifecycleOwner,
-  LifecycleStore,
+  Disposable,
+  DisposableStore,
   type DisposableInput,
 } from 'ls/base/common/lifecycle';
 
@@ -31,9 +31,9 @@ function escapeAttributeSelectorValue(value: string) {
   return value.replace(/["\\]/g, '\\$&');
 }
 
-export class ListView<T> extends LifecycleOwner {
+export class ListView<T> extends Disposable {
   private readonly element = document.createElement('div');
-  private readonly renderDisposables = new LifecycleStore();
+  private readonly renderDisposables = new DisposableStore();
   private disposed = false;
 
   constructor(
@@ -44,7 +44,7 @@ export class ListView<T> extends LifecycleOwner {
     } = {},
   ) {
     super();
-    this.register(this.renderDisposables);
+    this._register(this.renderDisposables);
     this.element.className = 'list-view';
     this.element.tabIndex = 0;
     this.element.setAttribute('role', options.role ?? 'listbox');

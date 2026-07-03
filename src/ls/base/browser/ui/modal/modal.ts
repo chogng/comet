@@ -6,8 +6,8 @@ import {
 } from 'ls/base/browser/ui/hover/hover';
 import 'ls/base/browser/ui/modal/modal.css';
 import {
-  LifecycleOwner,
-  MutableLifecycle,
+  Disposable,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -164,7 +164,7 @@ function unlockBodyScroll() {
   }
 }
 
-export class ModalView extends LifecycleOwner {
+export class ModalView extends Disposable {
   private props: ModalProps;
   private readonly element = createElement('div', 'modal-backdrop');
   private readonly panelElement = createElement('section', 'modal-panel');
@@ -177,7 +177,7 @@ export class ModalView extends LifecycleOwner {
   ) as HTMLButtonElement;
   private readonly closeHover: HoverHandle;
   private readonly bodyElement = createElement('div', 'modal-body');
-  private readonly openListeners = new MutableLifecycle<DisposableLike>();
+  private readonly openListeners = new MutableDisposable<DisposableLike>();
   private isAttached = false;
   private readonly titleId = `modal-title-${Math.random().toString(36).slice(2, 10)}`;
   private disposed = false;
@@ -194,14 +194,14 @@ export class ModalView extends LifecycleOwner {
     };
     const hoverService = this.props.hoverService ?? getHoverService();
     this.closeHover = hoverService.createHover(this.closeButton, null);
-    this.register(this.closeHover);
-    this.register(this.openListeners);
+    this._register(this.closeHover);
+    this._register(this.openListeners);
 
     this.closeButton.type = 'button';
     this.closeButton.append(createCloseIcon());
-    this.register(addDisposableListener(this.closeButton, 'click', this.handleCloseClick));
-    this.register(addDisposableListener(this.element, 'click', this.handleOverlayClick));
-    this.register(addDisposableListener(this.panelElement, 'click', this.handlePanelClick));
+    this._register(addDisposableListener(this.closeButton, 'click', this.handleCloseClick));
+    this._register(addDisposableListener(this.element, 'click', this.handleOverlayClick));
+    this._register(addDisposableListener(this.panelElement, 'click', this.handlePanelClick));
     this.headerElement.append(this.titleSpacerElement, this.closeButton);
     this.panelElement.append(this.headerElement, this.bodyElement);
     this.element.append(this.panelElement);

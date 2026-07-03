@@ -11,8 +11,8 @@ import type {
 } from 'ls/base/common/scrollable';
 import { EventEmitter, type Listener } from 'ls/base/common/event';
 import {
-  LifecycleStore,
-  MutableLifecycle,
+  DisposableStore,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -43,14 +43,14 @@ export class AbstractScrollableElement {
   protected options: ScrollableElementResolvedOptions;
   private readonly onScrollEmitter = new EventEmitter<ScrollEvent>();
   private readonly onWillScrollEmitter = new EventEmitter<ScrollEvent>();
-  private readonly domDisposables = new LifecycleStore();
+  private readonly domDisposables = new DisposableStore();
   private readonly horizontalScrollbarState: HorizontalScrollbarState;
   private readonly verticalScrollbarState: VerticalScrollbarState;
   private readonly horizontalVisibilityController: ScrollbarVisibilityController;
   private readonly verticalVisibilityController: ScrollbarVisibilityController;
   private scrollDimensions: IScrollDimensions;
   private scrollPosition: IScrollPosition;
-  private readonly scrollbarHideTimeout = new MutableLifecycle<DisposableLike>();
+  private readonly scrollbarHideTimeout = new MutableDisposable<DisposableLike>();
   private isHovered = false;
 
   constructor(

@@ -15,7 +15,7 @@ export type DisposableInput = DisposableLike | Disposer | null | undefined;
 
 type DisposableValue = Exclude<DisposableInput, null | undefined>;
 
-function throwDisposeErrors(errors: unknown[]) {
+function throwDisposeErrors(errors: unknown[]): void {
   if (errors.length === 0) {
     return;
   }
@@ -27,17 +27,13 @@ function throwDisposeErrors(errors: unknown[]) {
   throw new AggregateError(errors, 'Encountered errors while disposing resources.');
 }
 
-function disposeValue(input: DisposableValue) {
+function disposeValue(input: DisposableValue): void {
   if (typeof input === 'function') {
     input();
     return;
   }
 
   input.dispose();
-}
-
-function normalizeDisposable(input: DisposableValue) {
-  return typeof input === 'function' ? toDisposable(input) : input;
 }
 
 export function isDisposableLike(value: unknown): value is DisposableLike {
@@ -118,28 +114,24 @@ export function disposeAll(inputs: Iterable<DisposableInput>): void {
   throwDisposeErrors(errors);
 }
 
-export function combineDisposables(...inputs: DisposableInput[]): DisposableHandle {
+export function combinedDisposable(...inputs: DisposableInput[]): DisposableHandle {
   return toDisposable(() => {
     disposeAll(inputs);
   });
 }
 
-export function combinedDisposable(...inputs: DisposableInput[]): DisposableHandle {
-  return combineDisposables(...inputs);
-}
-
-export class LifecycleStore implements DisposableLike {
+export class DisposableStore implements DisposableLike {
   private readonly entries = new Set<DisposableLike>();
   private disposed = false;
 
-  get isDisposed() {
+  get isDisposed(): boolean {
     return this.disposed;
   }
 
   add<T extends null | undefined>(input: T): T;
   add<T extends DisposableLike>(input: T): T;
   add(input: Disposer): DisposableHandle;
-  add<T extends DisposableInput>(input: T): T | DisposableHandle {
+  add(input: DisposableInput): DisposableInput | DisposableHandle {
     if (!input) {
       return input;
     }
@@ -155,9 +147,9 @@ export class LifecycleStore implements DisposableLike {
       return disposable;
     }
 
-    const disposable = normalizeDisposable(input);
+    const disposable = input;
     if (disposable === this) {
-      throw new Error('Cannot register a lifecycle entry on itself.');
+      throw new Error('Cannot register a disposable on itself.');
     }
 
     if (this.disposed) {
@@ -189,15 +181,13 @@ export class LifecycleStore implements DisposableLike {
   }
 }
 
-export class DisposableStore extends LifecycleStore {}
-
-export class MutableLifecycle<T extends DisposableValue = DisposableLike>
+export class MutableDisposable<T extends DisposableValue = DisposableLike>
   implements DisposableLike
 {
   private currentValue: T | undefined;
   private disposed = false;
 
-  get value() {
+  get value(): T | undefined {
     return this.disposed ? undefined : this.currentValue;
   }
 
@@ -220,7 +210,7 @@ export class MutableLifecycle<T extends DisposableValue = DisposableLike>
     this.value = undefined;
   }
 
-  clearAndLeak() {
+  clearAndLeak(): T | undefined {
     const leakedValue = this.currentValue;
     this.currentValue = undefined;
     return leakedValue;
@@ -238,10 +228,6 @@ export class MutableLifecycle<T extends DisposableValue = DisposableLike>
   }
 }
 
-export class MutableDisposable<
-  T extends DisposableValue = DisposableLike,
-> extends MutableLifecycle<T> {}
-
 export const DisposableNone = Object.freeze<IDisposable>({
   dispose() {},
 });
@@ -251,7 +237,7 @@ export function markAsSingleton<T extends IDisposable>(singleton: T): T {
 }
 
 export abstract class Disposable implements IDisposable {
-  private readonly store = new DisposableStore();
+  private readonly _store = new DisposableStore();
 
   protected _register<T extends null | undefined>(input: T): T;
   protected _register<T extends DisposableLike>(input: T): T;
@@ -262,46 +248,18 @@ export abstract class Disposable implements IDisposable {
     }
 
     if (typeof input === 'function') {
-      return this.store.add(input);
+      return this._store.add(input);
     }
 
     if (Object.is(input, this)) {
       throw new Error('Cannot register a disposable on itself.');
     }
 
-    this.store.add(input);
+    this._store.add(input);
     return input;
   }
 
   dispose(): void {
-    this.store.dispose();
-  }
-}
-
-export abstract class LifecycleOwner implements DisposableLike {
-  private readonly store = new LifecycleStore();
-
-  protected register<T extends null | undefined>(input: T): T;
-  protected register<T extends DisposableLike>(input: T): T;
-  protected register(input: Disposer): DisposableHandle;
-  protected register<T extends DisposableInput>(input: T): T | DisposableHandle {
-    if (!input) {
-      return input;
-    }
-
-    if (typeof input === 'function') {
-      return this.store.add(input);
-    }
-
-    if (Object.is(input, this)) {
-      throw new Error('Cannot register a lifecycle owner on itself.');
-    }
-
-    this.store.add(input);
-    return input;
-  }
-
-  dispose(): void {
-    this.store.dispose();
+    this._store.dispose();
   }
 }

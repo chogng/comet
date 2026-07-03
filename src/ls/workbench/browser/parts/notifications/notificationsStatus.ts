@@ -1,5 +1,5 @@
 import 'ls/workbench/browser/parts/notifications/media/notificationsActions.css';
-import { LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
+import { DisposableStore, toDisposable } from 'ls/base/common/lifecycle';
 import type {
   StatusMessageChange,
   WorkbenchNotificationsModel,
@@ -10,7 +10,7 @@ export class NotificationsStatus {
   private readonly element = document.createElement('div');
   private readonly button = document.createElement('button');
   private readonly statusMessageElement = document.createElement('span');
-  private readonly disposables = new LifecycleStore();
+  private readonly disposables = new DisposableStore();
   private disposed = false;
 
   constructor(

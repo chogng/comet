@@ -1,12 +1,13 @@
 .panel.agentbar-panel {
   --agentbar-topbar-height: 36px;
+  --sidebar-surface-bg: var(--vscode-agentBar-background, #ffffff);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
   border: 0;
   border-radius: 0;
-  background: var(--vscode-agentBar-background, #f8f8f8);
+  background: var(--vscode-agentBar-background, #ffffff);
   gap: 0;
 }
 

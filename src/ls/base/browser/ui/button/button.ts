@@ -5,7 +5,7 @@ import {
   type HoverInput,
   type HoverService,
 } from 'ls/base/browser/ui/hover/hover';
-import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
@@ -116,7 +116,7 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
   });
 }
 
-export class ButtonView extends LifecycleOwner {
+export class ButtonView extends Disposable {
   private props: ButtonProps;
   private readonly element = createElement('button');
   private readonly hoverController: HoverHandle;
@@ -127,10 +127,10 @@ export class ButtonView extends LifecycleOwner {
     this.props = props;
     const hoverService = props.hoverService ?? getHoverService();
     this.hoverController = hoverService.createHover(this.element, null);
-    this.register(this.hoverController);
-    this.register(addDisposableListener(this.element, 'click', this.handleClick));
-    this.register(addDisposableListener(this.element, 'focus', this.handleFocus));
-    this.register(addDisposableListener(this.element, 'blur', this.handleBlur));
+    this._register(this.hoverController);
+    this._register(addDisposableListener(this.element, 'click', this.handleClick));
+    this._register(addDisposableListener(this.element, 'focus', this.handleFocus));
+    this._register(addDisposableListener(this.element, 'blur', this.handleBlur));
     this.render();
   }
 

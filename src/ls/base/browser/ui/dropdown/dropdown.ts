@@ -10,9 +10,9 @@ import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { Menu } from 'ls/base/browser/ui/menu/menu';
 import {
-  LifecycleOwner,
-  MutableLifecycle,
-  combineDisposables,
+  Disposable,
+  MutableDisposable,
+  combinedDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -350,7 +350,7 @@ export function createDomDropdownMenuPresenter(options?: {
 
 let dropdownViewIdSequence = 0;
 
-export class DropdownView extends LifecycleOwner {
+export class DropdownView extends Disposable {
   private props: DropdownProps;
   private isOpen = false;
   private isFocused = false;
@@ -363,7 +363,7 @@ export class DropdownView extends LifecycleOwner {
   private readonly chevronIcon = createChevronIcon();
   private readonly hoverController: HoverHandle;
   private readonly defaultMenuPresenter = createDomDropdownMenuPresenter();
-  private readonly openListeners = new MutableLifecycle<DisposableLike>();
+  private readonly openListeners = new MutableDisposable<DisposableLike>();
   private disposed = false;
 
   constructor(props: DropdownProps) {
@@ -371,16 +371,16 @@ export class DropdownView extends LifecycleOwner {
     this.props = this.normalizeProps(props);
     const hoverService = this.props.hoverService ?? getHoverService();
     this.hoverController = hoverService.createHover(this.element, null);
-    this.register(this.hoverController);
-    this.register(this.defaultMenuPresenter);
-    this.register(this.openListeners);
+    this._register(this.hoverController);
+    this._register(this.defaultMenuPresenter);
+    this._register(this.openListeners);
     this.iconWrapper.append(this.chevronIcon);
     this.element.append(this.field, this.iconWrapper);
 
-    this.register(addDisposableListener(this.element, 'click', this.handleClick));
-    this.register(addDisposableListener(this.element, 'keydown', this.handleKeyDown));
-    this.register(addDisposableListener(this.element, 'focus', this.handleFocus));
-    this.register(addDisposableListener(this.element, 'blur', this.handleBlur));
+    this._register(addDisposableListener(this.element, 'click', this.handleClick));
+    this._register(addDisposableListener(this.element, 'keydown', this.handleKeyDown));
+    this._register(addDisposableListener(this.element, 'focus', this.handleFocus));
+    this._register(addDisposableListener(this.element, 'blur', this.handleBlur));
 
     this.render();
   }
@@ -602,7 +602,7 @@ export class DropdownView extends LifecycleOwner {
   }
 
   private attachOpenListeners() {
-    this.openListeners.value = combineDisposables(
+    this.openListeners.value = combinedDisposable(
       addDisposableListener(document, 'mousedown', this.handleDocumentMouseDown),
       addDisposableListener(document, 'focusin', this.handleDocumentFocusIn),
       addDisposableListener(window, 'resize', this.handleViewportChange),

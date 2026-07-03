@@ -6,7 +6,7 @@ import {
   type HoverInput,
   type HoverService,
 } from 'ls/base/browser/ui/hover/hover';
-import { LifecycleOwner } from 'ls/base/common/lifecycle';
+import { Disposable } from 'ls/base/common/lifecycle';
 import type {
   ActionBarActionItem,
   ActionView,
@@ -26,7 +26,7 @@ type ActionViewRenderable = NonNullable<ActionBarActionItem['content']>;
 type ActionViewMode = NonNullable<ActionBarActionItem['mode']>;
 
 export abstract class BaseActionViewItem
-  extends LifecycleOwner
+  extends Disposable
   implements ActionView
 {
   // Shared lifecycle and DOM ownership live in the base class so concrete items
@@ -145,8 +145,8 @@ export class ActionViewItem extends BaseActionViewItem {
     this.button.append(this.content);
     this.element.append(this.button);
     this.hoverBinding = bindHover(this.button, null, hoverService);
-    this.register(this.hoverBinding);
-    this.register(DOM.addDisposableListener(this.button, 'click', this.handleButtonClick));
+    this._register(this.hoverBinding);
+    this._register(DOM.addDisposableListener(this.button, 'click', this.handleButtonClick));
     this.render();
   }
 

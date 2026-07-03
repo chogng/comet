@@ -10,8 +10,8 @@ import {
   type ContextMenuAction,
 } from 'ls/base/browser/contextmenu';
 import {
-  LifecycleStore,
-  MutableLifecycle,
+  DisposableStore,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -122,10 +122,10 @@ function createTabFaviconImageElement(
 }
 
 export class TabsTitleControl extends TitleControl {
-  private readonly disposables = new LifecycleStore();
-  private readonly resizeObserver = new MutableLifecycle<DisposableLike>();
-  private readonly layoutAnimationFrame = new MutableLifecycle<DisposableLike>();
-  private readonly tabsScrollbar = new MutableLifecycle<HorizontalScrollbar>();
+  private readonly disposables = new DisposableStore();
+  private readonly resizeObserver = new MutableDisposable<DisposableLike>();
+  private readonly layoutAnimationFrame = new MutableDisposable<DisposableLike>();
+  private readonly tabsScrollbar = new MutableDisposable<HorizontalScrollbar>();
   private readonly contextMenuService: WorkbenchContextMenuService;
   private container: HTMLDivElement | null = null;
   private scrollableRoot: HTMLDivElement | null = null;
@@ -269,7 +269,7 @@ export class TabsTitleControl extends TitleControl {
 
   private createTabView(): TabView {
     const tabElement = createElement('div', 'editor-tab');
-    const viewDisposables = new LifecycleStore();
+    const viewDisposables = new DisposableStore();
     const mainButton = createElement(
       'button',
       'editor-tab-main btn-base btn-md',

@@ -3,7 +3,7 @@ import {
   getHoverService,
   type HoverHandle,
 } from 'ls/base/browser/ui/hover/hover';
-import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
 
 export interface SwitchProps {
   checked?: boolean;
@@ -99,7 +99,7 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
   });
 }
 
-export class SwitchView extends LifecycleOwner {
+export class SwitchView extends Disposable {
   private props: SwitchProps;
   private readonly element = createElement('label', 'switch-root');
   private readonly inputElement = createElement('input', 'switch-input');
@@ -114,9 +114,9 @@ export class SwitchView extends LifecycleOwner {
     super();
     this.props = props;
     this.hoverController = getHoverService().createHover(this.element, null);
-    this.register(this.hoverController);
+    this._register(this.hoverController);
     this.inputElement.type = 'checkbox';
-    this.register(addDisposableListener(this.inputElement, 'change', this.handleChange));
+    this._register(addDisposableListener(this.inputElement, 'change', this.handleChange));
     this.sliderElement.setAttribute('aria-hidden', 'true');
     this.element.append(this.inputElement, this.sliderElement);
     this.render();

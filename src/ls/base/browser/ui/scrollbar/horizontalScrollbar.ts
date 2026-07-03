@@ -1,9 +1,9 @@
 import 'ls/base/browser/ui/scrollbar/media/horizontalScrollbar.css';
 import { HorizontalScrollbarState } from 'ls/base/browser/ui/scrollbar/scrollbarState';
 import {
-  LifecycleOwner,
-  MutableLifecycle,
-  combineDisposables,
+  Disposable,
+  MutableDisposable,
+  combinedDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -53,7 +53,7 @@ function addDisposableListener(
   });
 }
 
-export class HorizontalScrollbar extends LifecycleOwner {
+export class HorizontalScrollbar extends Disposable {
   private readonly host: HTMLElement;
   private readonly strip: HTMLElement;
   private readonly track: HTMLElement;
@@ -70,9 +70,9 @@ export class HorizontalScrollbar extends LifecycleOwner {
   private readonly fastScrollSensitivity: number;
   private readonly scrollPredominantAxis: boolean;
   private readonly scrollbarState: HorizontalScrollbarState;
-  private readonly activeClassTimeout = new MutableLifecycle<DisposableLike>();
-  private readonly animationFrame = new MutableLifecycle<DisposableLike>();
-  private readonly dragListeners = new MutableLifecycle<DisposableLike>();
+  private readonly activeClassTimeout = new MutableDisposable<DisposableLike>();
+  private readonly animationFrame = new MutableDisposable<DisposableLike>();
+  private readonly dragListeners = new MutableDisposable<DisposableLike>();
   private dragPointerId: number | null = null;
   private dragStartClientX = 0;
   private dragStartScrollLeft = 0;
@@ -118,27 +118,27 @@ export class HorizontalScrollbar extends LifecycleOwner {
       this.strip.scrollLeft = options.initialScrollLeft;
     }
 
-    this.register(this.activeClassTimeout);
-    this.register(this.animationFrame);
-    this.register(this.dragListeners);
-    this.register(addDisposableListener(this.track, 'pointerdown', this.handleTrackPointerDown));
-    this.register(addDisposableListener(this.thumb, 'pointerdown', this.handleThumbPointerDown));
-    this.register(
+    this._register(this.activeClassTimeout);
+    this._register(this.animationFrame);
+    this._register(this.dragListeners);
+    this._register(addDisposableListener(this.track, 'pointerdown', this.handleTrackPointerDown));
+    this._register(addDisposableListener(this.thumb, 'pointerdown', this.handleThumbPointerDown));
+    this._register(
       addDisposableListener(this.strip, 'wheel', this.handleScrollbarWheel, {
         passive: false,
       }),
     );
-    this.register(
+    this._register(
       addDisposableListener(this.track, 'wheel', this.handleScrollbarWheel, {
         passive: false,
       }),
     );
-    this.register(
+    this._register(
       addDisposableListener(this.thumb, 'wheel', this.handleScrollbarWheel, {
         passive: false,
       }),
     );
-    this.register(
+    this._register(
       addDisposableListener(this.strip, 'scroll', this.handleStripScroll, {
         passive: true,
       }),
@@ -151,13 +151,13 @@ export class HorizontalScrollbar extends LifecycleOwner {
       resizeObserver.observe(this.host);
       resizeObserver.observe(this.strip);
       resizeObserver.observe(this.track);
-      this.register(
+      this._register(
         toDisposable(() => {
           resizeObserver.disconnect();
         }),
       );
     } else {
-      this.register(addDisposableListener(window, 'resize', this.scheduleRender));
+      this._register(addDisposableListener(window, 'resize', this.scheduleRender));
     }
 
     this.scheduleInitialLayout();
@@ -276,7 +276,7 @@ export class HorizontalScrollbar extends LifecycleOwner {
     this.host.classList.add('is-scrollbar-active');
     this.host.classList.add('is-scrollbar-dragging');
     this.thumb.setPointerCapture?.(event.pointerId);
-    this.dragListeners.value = combineDisposables(
+    this.dragListeners.value = combinedDisposable(
       addDisposableListener(window, 'pointermove', this.handleWindowPointerMove),
       addDisposableListener(window, 'pointerup', this.handleWindowPointerUp),
       addDisposableListener(window, 'pointercancel', this.handleWindowPointerUp),

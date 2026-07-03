@@ -1,5 +1,5 @@
 import { clearNode } from 'ls/base/browser/dom';
-import { LifecycleStore } from 'ls/base/common/lifecycle';
+import { DisposableStore } from 'ls/base/common/lifecycle';
 import { renderNotificationItem } from 'ls/workbench/browser/parts/notifications/notificationsViewer';
 import type {
   NotificationModelChange,
@@ -14,7 +14,7 @@ export type NotificationsListOptions = {
 
 export class NotificationsList {
   private readonly listElement: HTMLDivElement;
-  private readonly renderDisposables = new LifecycleStore();
+  private readonly renderDisposables = new DisposableStore();
   private items: WorkbenchNotificationItem[] = [];
   private disposed = false;
 

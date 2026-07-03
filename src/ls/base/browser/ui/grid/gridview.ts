@@ -7,7 +7,7 @@ import type {
 } from 'ls/base/browser/ui/splitview/splitview';
 import { getGlobalSashSize } from 'ls/base/browser/ui/sash/sash';
 import { EventEmitter } from 'ls/base/common/event';
-import { LifecycleStore } from 'ls/base/common/lifecycle';
+import { DisposableStore } from 'ls/base/common/lifecycle';
 import { Orientation, SplitView } from 'ls/base/browser/ui/splitview/splitview';
 
 import 'ls/base/browser/ui/grid/gridview.css';
@@ -192,7 +192,7 @@ export class GridBranchView implements IGridView {
   private leftValue = 0;
   private rootWidthValue = 0;
   private rootHeightValue = 0;
-  private readonly splitViewDisposables = new LifecycleStore();
+  private readonly splitViewDisposables = new DisposableStore();
 
   readonly onDidSashChange = this.onDidSashChangeEmitter.event;
   readonly onDidSashSnap = this.onDidSashSnapEmitter.event;
@@ -512,7 +512,7 @@ export class GridView implements IGridView {
   private readonly onDidSashChangeEmitter = new EventEmitter<GridSashChangeEvent>();
   private readonly onDidSashSnapEmitter = new EventEmitter<GridSashSnapEvent>();
   private readonly onDidSashEndEmitter = new EventEmitter<GridLocation>();
-  private readonly gridDisposables = new LifecycleStore();
+  private readonly gridDisposables = new DisposableStore();
   private edgeSnappingValue = false;
 
   readonly onDidSashChange = this.onDidSashChangeEmitter.event;

@@ -1,8 +1,8 @@
 import { ListView, type ListViewItemState } from 'ls/base/browser/ui/list/listView';
 import {
-  LifecycleOwner,
-  MutableLifecycle,
-  combineDisposables,
+  Disposable,
+  MutableDisposable,
+  combinedDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -64,9 +64,9 @@ export type ListOptions<T> = {
   onKeyDown?: (event: KeyboardEvent, context: ListKeyDownContext<T>) => boolean;
 };
 
-export class ListWidget<T> extends LifecycleOwner {
+export class ListWidget<T> extends Disposable {
   private readonly view: ListView<T>;
-  private readonly typeaheadReset = new MutableLifecycle<DisposableLike>();
+  private readonly typeaheadReset = new MutableDisposable<DisposableLike>();
   private items: readonly T[] = [];
   private selectedId: string | null = null;
   private focusedId: string | null = null;
@@ -78,7 +78,7 @@ export class ListWidget<T> extends LifecycleOwner {
     private readonly options: ListOptions<T>,
   ) {
     super();
-    this.view = this.register(new ListView<T>(
+    this.view = this._register(new ListView<T>(
       {
         renderElement: (item, state) =>
           renderer.renderElement(item, {
@@ -96,9 +96,9 @@ export class ListWidget<T> extends LifecycleOwner {
         ariaLabel: options.ariaLabel,
       },
     ));
-    this.register(this.typeaheadReset);
-    this.register(addDisposableListener(this.view.getElement(), 'keydown', this.handleKeyDown));
-    this.register(addDisposableListener(this.view.getElement(), 'focus', this.handleElementFocus));
+    this._register(this.typeaheadReset);
+    this._register(addDisposableListener(this.view.getElement(), 'keydown', this.handleKeyDown));
+    this._register(addDisposableListener(this.view.getElement(), 'focus', this.handleElementFocus));
   }
 
   getElement() {
@@ -233,7 +233,7 @@ export class ListWidget<T> extends LifecycleOwner {
             isSelected: this.selectedId === itemId,
             isFocused: this.focusedId === itemId,
           },
-          onDidRender: (element: HTMLElement) => combineDisposables(
+          onDidRender: (element: HTMLElement) => combinedDisposable(
             addDisposableListener(element, 'mousedown', () => {
               this.focusedId = itemId;
             }),

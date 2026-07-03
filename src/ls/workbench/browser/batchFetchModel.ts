@@ -1,6 +1,6 @@
 import { toast } from 'ls/base/browser/ui/toast/toast';
 import { EventEmitter } from 'ls/base/common/event';
-import { MutableLifecycle } from 'ls/base/common/lifecycle';
+import { MutableDisposable } from 'ls/base/common/lifecycle';
 import type {
   JournalSourceOverride,
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
@@ -54,7 +54,7 @@ export class BatchFetchController {
   private machineState = INITIAL_BATCH_FETCH_MACHINE_STATE;
   private snapshot = createBatchFetchSnapshot(this.machineState);
   private readonly onDidChangeEmitter = new EventEmitter<void>();
-  private readonly fetchStatusListener = new MutableLifecycle<() => void>();
+  private readonly fetchStatusListener = new MutableDisposable<() => void>();
   private requestId = 0;
   private started = false;
   private disposed = false;

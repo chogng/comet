@@ -1,6 +1,6 @@
 import { DomScrollableElement } from 'ls/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'ls/base/browser/ui/scrollbar/scrollableElementOptions';
-import { LifecycleOwner, LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, DisposableStore, toDisposable } from 'ls/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import { FetchTreeView } from 'ls/workbench/browser/parts/sidebar/fetchTreeView';
@@ -307,19 +307,19 @@ function createArticleCardLabels(labels: FetchPaneProps['labels']) {
   };
 }
 
-export class FetchPaneContentView extends LifecycleOwner {
+export class FetchPaneContentView extends Disposable {
   private props: FetchPaneProps;
   private readonly element = createElement('div', 'fetch-pane-content');
   private readonly contentElement = createElement('div', 'fetch-pane-content-body');
   private readonly scrollableElement: DomScrollableElement;
-  private readonly renderDisposables = new LifecycleStore();
+  private readonly renderDisposables = new DisposableStore();
   private fetchTreeView: FetchTreeView | null = null;
   private disposed = false;
 
   constructor(props: FetchPaneProps) {
     super();
     this.props = props;
-    this.register(this.renderDisposables);
+    this._register(this.renderDisposables);
     this.scrollableElement = new DomScrollableElement(this.contentElement, {
       className: 'fetch-pane-scrollable',
       vertical: ScrollbarVisibility.Auto,

@@ -1,7 +1,7 @@
 import { createActionBarView } from 'ls/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'ls/base/browser/ui/dropdown/dropdownActionViewItem';
 import { applyHover } from 'ls/base/browser/ui/hover/hover';
-import { LifecycleOwner, toDisposable } from 'ls/base/common/lifecycle';
+import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
@@ -107,7 +107,7 @@ function addDisposableListener(
   });
 }
 
-export class ArticleCard extends LifecycleOwner {
+export class ArticleCard extends Disposable {
   private props: ArticleCardProps;
   private readonly element = createElement('li');
   private readonly mainElement = createElement(
@@ -141,10 +141,10 @@ export class ArticleCard extends LifecycleOwner {
       this.metaElement,
       this.archiveBadgesElement,
     );
-    this.register(this.toolbarView);
-    this.register(addDisposableListener(this.element, 'click', this.handleCardClick));
-    this.register(addDisposableListener(this.element, 'keydown', this.handleCardKeyDown));
-    this.register(subscribePdfDownloadStatus(this.render));
+    this._register(this.toolbarView);
+    this._register(addDisposableListener(this.element, 'click', this.handleCardClick));
+    this._register(addDisposableListener(this.element, 'keydown', this.handleCardKeyDown));
+    this._register(subscribePdfDownloadStatus(this.render));
     this.render();
   }
 

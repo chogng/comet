@@ -1,8 +1,8 @@
-import 'ls/base/browser/ui/sash/sash.css';
+import './sash.css';
 import {
-  combineDisposables,
-  LifecycleStore,
-  MutableLifecycle,
+  DisposableStore,
+  MutableDisposable,
+  combinedDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -134,8 +134,8 @@ export class Sash {
   private active = false;
   private hoverDelay = globalSashHoverDelay;
   private hoverTimeout: number | undefined;
-  private readonly disposables = new LifecycleStore();
-  private readonly dragListeners = new MutableLifecycle<DisposableLike>();
+  private readonly disposables = new DisposableStore();
+  private readonly dragListeners = new MutableDisposable<DisposableLike>();
 
   constructor(
     private readonly container: HTMLElement,
@@ -348,7 +348,7 @@ export class Sash {
         handleEnd();
       };
 
-      this.dragListeners.value = combineDisposables(
+      this.dragListeners.value = combinedDisposable(
         addDisposableListener(window, 'pointermove', pointerMoveListener),
         addDisposableListener(window, 'pointerup', pointerUpListener),
         addDisposableListener(window, 'pointercancel', pointerUpListener),
@@ -363,7 +363,7 @@ export class Sash {
       handleEnd();
     };
 
-    this.dragListeners.value = combineDisposables(
+    this.dragListeners.value = combinedDisposable(
       addDisposableListener(window, 'mousemove', mouseMoveListener),
       addDisposableListener(window, 'mouseup', mouseUpListener),
     );

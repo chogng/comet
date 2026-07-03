@@ -1,5 +1,5 @@
 import { EventEmitter, type Event } from 'ls/base/common/event';
-import { DisposableStore, type DisposableLike } from 'ls/base/common/lifecycle';
+import { Disposable, DisposableStore } from 'ls/base/common/lifecycle';
 import type {
   IStorage,
   StorageValue,
@@ -12,20 +12,15 @@ import {
   type IWillSaveStateEvent,
 } from 'ls/platform/storage/common/storage';
 
-export abstract class AbstractStorageService implements DisposableLike {
-  private readonly disposables = new DisposableStore();
-  private readonly didChangeValueEmitter = this.register(new EventEmitter<IStorageValueChangeEvent>());
+export abstract class AbstractStorageService extends Disposable {
+  private readonly didChangeValueEmitter = this._register(new EventEmitter<IStorageValueChangeEvent>());
   readonly onDidChangeValue: Event<IStorageValueChangeEvent> =
     this.didChangeValueEmitter.event;
 
-  private readonly willSaveStateEmitter = this.register(new EventEmitter<IWillSaveStateEvent>());
+  private readonly willSaveStateEmitter = this._register(new EventEmitter<IWillSaveStateEvent>());
   readonly onWillSaveState = this.willSaveStateEmitter.event;
 
   protected abstract getStorage(scope: StorageScope): IStorage | undefined;
-
-  protected register<T extends DisposableLike>(disposable: T): T {
-    return this.disposables.add(disposable);
-  }
 
   protected emitDidChangeValue(
     scope: StorageScope,
@@ -153,13 +148,10 @@ export abstract class AbstractStorageService implements DisposableLike {
     ]);
   }
 
-  dispose(): void {
-    this.disposables.dispose();
-  }
 }
 
 export class ApplicationStorageService extends AbstractStorageService {
-  private readonly storageDisposables = this.register(new DisposableStore());
+  private readonly storageDisposables = this._register(new DisposableStore());
 
   constructor(private readonly applicationStorageValue: IStorage) {
     super();

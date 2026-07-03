@@ -1,8 +1,8 @@
 import 'ls/base/browser/ui/hover/hover.css';
 import {
-  LifecycleOwner,
-  LifecycleStore,
-  MutableLifecycle,
+  Disposable,
+  DisposableStore,
+  MutableDisposable,
   toDisposable,
   type DisposableLike,
 } from 'ls/base/common/lifecycle';
@@ -121,7 +121,7 @@ class HoverInteractionPolicy {
   private inputModality: 'keyboard' | 'pointer' = 'pointer';
   private pointerSuppressedArea: HoverRect | null = null;
   private globalListenersInstalled = false;
-  private readonly globalListeners = new LifecycleStore();
+  private readonly globalListeners = new DisposableStore();
 
   installGlobalListeners() {
     if (this.globalListenersInstalled || typeof document === 'undefined') {
@@ -303,9 +303,9 @@ class HoverWidget {
     'ls-hover-pointer',
   );
   private readonly card = createElement('div', 'ls-hover-card');
-  private readonly domDisposables = new LifecycleStore();
-  private readonly mountDisposables = new LifecycleStore();
-  private readonly renderDisposables = new LifecycleStore();
+  private readonly domDisposables = new DisposableStore();
+  private readonly mountDisposables = new DisposableStore();
+  private readonly renderDisposables = new DisposableStore();
   private owner: HoverController | null = null;
   private target: HTMLElement | null = null;
   private pointerInside = false;
@@ -582,11 +582,11 @@ const sharedHoverWidget = new HoverWidget();
 let activeController: HoverController | null = null;
 let lastHoverHideAt = 0;
 
-class HoverController extends LifecycleOwner implements HoverHandle {
+class HoverController extends Disposable implements HoverHandle {
   private options: HoverOptions | null;
   private disposed = false;
-  private readonly showTimer = new MutableLifecycle<DisposableLike>();
-  private readonly hideTimer = new MutableLifecycle<DisposableLike>();
+  private readonly showTimer = new MutableDisposable<DisposableLike>();
+  private readonly hideTimer = new MutableDisposable<DisposableLike>();
 
   constructor(
     private readonly target: HTMLElement,
@@ -596,15 +596,15 @@ class HoverController extends LifecycleOwner implements HoverHandle {
     hoverInteractionPolicy.installGlobalListeners();
     syncNativeHoverTitle(this.target, input);
     this.options = normalizeHoverInput(input);
-    this.register(this.showTimer);
-    this.register(this.hideTimer);
-    this.register(addDisposableListener(this.target, 'mouseenter', this.handleMouseEnter));
-    this.register(addDisposableListener(this.target, 'mouseleave', this.handleMouseLeave));
-    this.register(
+    this._register(this.showTimer);
+    this._register(this.hideTimer);
+    this._register(addDisposableListener(this.target, 'mouseenter', this.handleMouseEnter));
+    this._register(addDisposableListener(this.target, 'mouseleave', this.handleMouseLeave));
+    this._register(
       addDisposableListener(this.target, 'pointerdown', this.handlePointerDown, true),
     );
-    this.register(addDisposableListener(this.target, 'focus', this.handleFocus, true));
-    this.register(addDisposableListener(this.target, 'blur', this.handleBlur, true));
+    this._register(addDisposableListener(this.target, 'focus', this.handleFocus, true));
+    this._register(addDisposableListener(this.target, 'blur', this.handleBlur, true));
   }
 
   show = () => {

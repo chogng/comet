@@ -1,5 +1,5 @@
 import 'ls/workbench/browser/parts/notifications/media/notificationsToasts.css';
-import { LifecycleStore, toDisposable } from 'ls/base/common/lifecycle';
+import { DisposableStore, toDisposable } from 'ls/base/common/lifecycle';
 import { NotificationPriority } from 'ls/platform/notification/common/notification';
 import { renderNotificationItem } from 'ls/workbench/browser/parts/notifications/notificationsViewer';
 import type {
@@ -13,8 +13,8 @@ const MAX_VISIBLE_TOASTS = 3;
 
 export class NotificationsToasts {
   private readonly element = document.createElement('div');
-  private readonly disposables = new LifecycleStore();
-  private readonly toastTimers = new Map<WorkbenchNotificationItem, LifecycleStore>();
+  private readonly disposables = new DisposableStore();
+  private readonly toastTimers = new Map<WorkbenchNotificationItem, DisposableStore>();
   private visibleItems: WorkbenchNotificationItem[] = [];
   private disposed = false;
 
@@ -95,7 +95,7 @@ export class NotificationsToasts {
       return;
     }
 
-    const timer = new LifecycleStore();
+    const timer = new DisposableStore();
     const handle = window.setTimeout(() => this.removeToast(item), DEFAULT_TOAST_DURATION);
     timer.add(toDisposable(() => window.clearTimeout(handle)));
     this.toastTimers.set(item, timer);
