@@ -2,28 +2,13 @@ import { createContextViewController } from 'ls/base/browser/ui/contextview/cont
 import type {
   ContextViewDelegate,
   ContextViewDisposable,
-  ContextViewRenderResult,
   ContextViewService,
 } from 'ls/platform/contextview/browser/contextView';
-
-function normalizeDisposable(result: ContextViewRenderResult): (() => void) | null {
-  if (!result) {
-    return null;
-  }
-
-  if (typeof result === 'function') {
-    return result;
-  }
-
-  return () => {
-    result.dispose();
-  };
-}
 
 class PlatformContextViewService implements ContextViewService {
   private readonly contextView = createContextViewController();
   private currentDelegate: ContextViewDelegate | null = null;
-  private currentRenderDispose: (() => void) | null = null;
+  private currentRenderDisposable: ContextViewDisposable | (() => void) | null = null;
 
   showContextView(delegate: ContextViewDelegate): ContextViewDisposable {
     this.hideContextView();
@@ -31,8 +16,8 @@ class PlatformContextViewService implements ContextViewService {
     this.currentDelegate = delegate;
 
     const container = document.createElement('div');
-    const renderResult = delegate.render(container);
-    this.currentRenderDispose = normalizeDisposable(renderResult);
+    const renderDisposable = delegate.render(container);
+    this.currentRenderDisposable = renderDisposable ?? null;
 
     this.contextView.show({
       anchor: delegate.getAnchor(),
@@ -85,8 +70,13 @@ class PlatformContextViewService implements ContextViewService {
   };
 
   private cleanupCurrentView() {
-    this.currentRenderDispose?.();
-    this.currentRenderDispose = null;
+    const renderDisposable = this.currentRenderDisposable;
+    this.currentRenderDisposable = null;
+    if (typeof renderDisposable === 'function') {
+      renderDisposable();
+    } else {
+      renderDisposable?.dispose();
+    }
     this.currentDelegate = null;
   }
 
