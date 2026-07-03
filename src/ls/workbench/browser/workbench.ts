@@ -110,7 +110,7 @@ import type { WebContentSurfaceSnapshot } from 'ls/workbench/browser/webContentS
 import { getLocaleMessages } from 'language/i18n';
 import type { Article } from 'ls/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'ls/workbench/common/url';
-import type { AppStartupLayout, LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { AppStartupLayout, LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'ls/workbench/services/config/configSchema';
 import type { WebContentState } from 'ls/workbench/services/webContent/webContentNavigationService';
 import { normalizeBrowserTabKeepAliveLimit } from 'ls/workbench/services/webContent/webContentRetentionConfig';
@@ -704,7 +704,7 @@ class WorkbenchHost {
     this.notificationsPart = this.createNotificationsPart();
 
     this.rootElement.replaceChildren(this.containerElement);
-    this.containerElement.append(this.shellElement);
+    this.containerElement.append(this.titlebarPart.getElement(), this.shellElement);
     this.shellElement.append(
       this.pageMount,
       this.toastMount,
@@ -2275,13 +2275,6 @@ class WorkbenchHost {
       browserPageTitle,
     });
 
-    this.titlebarPart.sync({
-      electronRuntime,
-      useMica,
-      statusbarVisible,
-      activePage,
-    });
-
     const handleApplyLayoutAgent = () => {
       setPrimarySidebarVisible(true);
       setAgentSidebarVisible(true);
@@ -2349,6 +2342,25 @@ class WorkbenchHost {
         }),
       });
     }
+
+    this.titlebarPart.sync({
+      electronRuntime,
+      useMica,
+      statusbarVisible,
+      activePage,
+      isPrimarySidebarVisible:
+        activePage === 'settings' ? true : isPrimarySidebarVisible,
+      isAgentSidebarVisible:
+        activePage === 'settings' ? false : isAgentSidebarVisible,
+      isEditorCollapsed:
+        activePage === 'settings' ? false : isEditorCollapsed,
+      primaryTopbarElement:
+        this.workbenchContentPartViews?.getPrimarySidebarTopbarElement() ?? null,
+      editorTopbarElement:
+        this.workbenchContentPartViews?.getEditorTopbarElement() ?? null,
+      agentTopbarElement:
+        this.workbenchContentPartViews?.getAgentSidebarTopbarElement() ?? null,
+    });
 
     this.syncPostRenderState({
       selectionModePhase,

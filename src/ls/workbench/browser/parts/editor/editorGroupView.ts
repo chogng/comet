@@ -564,6 +564,11 @@ export class EditorGroupView {
     return this.element;
   }
 
+  getTopbarElement() {
+    this.element.classList.add('has-external-topbar');
+    return this.headerElement;
+  }
+
   executeActiveDraftCommand(commandId: DraftEditorCommandId) {
     return this.draftCommandExecutor.execute(commandId);
   }

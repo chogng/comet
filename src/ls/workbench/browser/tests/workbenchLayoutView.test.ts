@@ -960,6 +960,35 @@ test('WorkbenchLayoutView applies editor topbar leading inset only when sidebars
   }
 });
 
+test('WorkbenchLayoutView renders only the middle content grid', () => {
+  const props = createWorkbenchLayoutViewProps();
+  props.isPrimarySidebarVisible = true;
+  props.isAgentSidebarVisible = true;
+  props.sidebarTopbarActionsProps = {
+    ...props.sidebarTopbarActionsProps,
+    isPrimarySidebarVisible: true,
+    primarySidebarToggleLabel: 'Hide primary sidebar',
+  };
+
+  const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
+  document.body.append(view.getElement());
+
+  try {
+    const element = view.getElement();
+    const contentGrid = element.querySelector('.content-grid');
+    assert(contentGrid instanceof HTMLElement);
+    assert.equal(element.children.length, 1);
+    assert.equal(element.children[0], contentGrid);
+    assert.equal(element.querySelector('.workbench-topbar-layout'), null);
+
+    const editorFrame = element.querySelector('.editor-frame');
+    assert(editorFrame instanceof HTMLElement);
+    assert.equal(editorFrame.classList.contains('has-external-topbar'), false);
+  } finally {
+    view.dispose();
+  }
+});
+
 test('WorkbenchLayoutView switches from content mode to settings mode using dedicated slots', () => {
   const props = createWorkbenchLayoutViewProps();
   props.mode = 'content';
@@ -1350,7 +1379,7 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
     const editorFrame = view.getElement().querySelector('.editor-frame');
     assert(editorFrame instanceof HTMLElement);
 
-    const topbar = editorFrame.querySelector('.editor-topbar');
+    const topbar = editorFrame.querySelector(':scope > .editor-topbar');
     assert(topbar instanceof HTMLElement);
     const toolbarHost = editorFrame.querySelector(':scope > .editor-toolbar');
     assert(toolbarHost instanceof HTMLElement);
@@ -1360,7 +1389,7 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
 
     const toolbar = editorFrame.querySelector('.editor-toolbar .editor-browser-toolbar');
     assert(toolbar instanceof HTMLElement);
-    assert.equal(topbar.nextElementSibling, toolbar.parentElement);
+    assert.equal(editorFrame.children[0], topbar);
 
     const leadingButtons = Array.from(
       toolbar.querySelectorAll('.editor-browser-toolbar-leading .editor-browser-toolbar-btn'),
@@ -3081,6 +3110,7 @@ test('WorkbenchLayoutView mounts the draft editor content hierarchy inside edito
   try {
     const editorFrame = view.getElement().querySelector('.editor-frame');
     assert(editorFrame instanceof HTMLElement);
+    assert(editorFrame.querySelector(':scope > .editor-topbar'));
     assert.deepEqual(
       Array.from(editorFrame.children).map((child) =>
         getEditorFrameSlot(child as HTMLElement) ?? '',

@@ -17,6 +17,10 @@
   isolation: isolate;
 }
 
+.editor-frame.has-external-topbar {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .editor-workspace-action-btn.btn-base {
   border-radius: 999px;
 }
@@ -89,6 +93,10 @@
   grid-row: 2;
 }
 
+.editor-frame.has-external-topbar > [data-editor-frame-slot='toolbar'] {
+  grid-row: 1;
+}
+
 .editor-content {
   position: relative;
   z-index: 0;
@@ -101,6 +109,10 @@
 
 .editor-frame > [data-editor-frame-slot='content'] {
   grid-row: 3;
+}
+
+.editor-frame.has-external-topbar > [data-editor-frame-slot='content'] {
+  grid-row: 2;
 }
 
 .editor-draft-pane,

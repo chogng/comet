@@ -175,6 +175,10 @@ export class AgentBarPartView {
     return this.element;
   }
 
+  getTopbarElement() {
+    return this.topbarElement;
+  }
+
   setProps(props: AgentBarPartProps) {
     this.sidebar.setProps(props);
     this.renderTopbar(props);

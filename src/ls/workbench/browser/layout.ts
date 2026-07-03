@@ -124,6 +124,7 @@ const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
 
 const DEFAULT_WORKBENCH_PART_DOM_SNAPSHOT: Record<WorkbenchPartId, HTMLElement | null> = {
   [WORKBENCH_PART_IDS.container]: null,
+  [WORKBENCH_PART_IDS.titlebar]: null,
   [WORKBENCH_PART_IDS.sidebar]: null,
   [WORKBENCH_PART_IDS.agentSidebar]: null,
   [WORKBENCH_PART_IDS.statusbar]: null,

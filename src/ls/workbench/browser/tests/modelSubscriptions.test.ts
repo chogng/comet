@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test, { after, afterEach, before } from 'node:test';
 
 import type {
-  ElectronAPI,
-  ElectronInvoke,
   FetchStatus,
   LibraryDocumentSummary,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronAPI,
+  ElectronInvoke,
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import type { INativeHostService } from 'ls/platform/native/common/native';
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 import { createLibraryModel } from 'ls/workbench/browser/libraryModel';
@@ -682,4 +684,65 @@ test('resolveWorkbenchStatusbarVisibility returns the toggle state directly', as
 
   assert.equal(resolveWorkbenchStatusbarVisibility(true), true);
   assert.equal(resolveWorkbenchStatusbarVisibility(false), false);
+});
+
+test('TitlebarPart mounts the top app row before the middle shell and statusbar', async () => {
+  const { createTitlebarPart } = await import(
+    'ls/workbench/browser/parts/titlebar/titlebarPart'
+  );
+  const container = document.createElement('div');
+  const shell = document.createElement('div');
+  const statusbar = document.createElement('section');
+  const primaryTopbar = document.createElement('div');
+  const editorTopbar = document.createElement('div');
+  const agentTopbar = document.createElement('div');
+  primaryTopbar.className = 'sidebar-topbar';
+  editorTopbar.className = 'editor-topbar';
+  agentTopbar.className = 'agentbar-topbar';
+
+  const titlebarPart = createTitlebarPart(container, shell, statusbar);
+  container.append(titlebarPart.getElement(), shell);
+
+  try {
+    titlebarPart.sync({
+      electronRuntime: false,
+      useMica: false,
+      statusbarVisible: true,
+      activePage: 'content',
+      isPrimarySidebarVisible: true,
+      isAgentSidebarVisible: true,
+      isEditorCollapsed: false,
+      primaryTopbarElement: primaryTopbar,
+      editorTopbarElement: editorTopbar,
+      agentTopbarElement: agentTopbar,
+    });
+
+    assert(container.classList.contains('has-titlebar'));
+    assert(container.classList.contains('has-statusbar'));
+    assert.equal(container.children[0], titlebarPart.getElement());
+    assert.equal(container.children[1], shell);
+    assert.equal(container.children[2], statusbar);
+    assert.equal(
+      titlebarPart.getElement().querySelector('.titlebar-left > .sidebar-topbar'),
+      primaryTopbar,
+    );
+    assert.equal(
+      titlebarPart.getElement().querySelector('.titlebar-center > .editor-topbar'),
+      editorTopbar,
+    );
+    assert.equal(
+      titlebarPart.getElement().querySelector('.titlebar-right > .agentbar-topbar'),
+      agentTopbar,
+    );
+    assert.equal(
+      getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.titlebar],
+      titlebarPart.getElement(),
+    );
+    assert.equal(
+      getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.statusbar],
+      statusbar,
+    );
+  } finally {
+    titlebarPart.dispose();
+  }
 });

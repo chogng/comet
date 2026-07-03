@@ -2,6 +2,7 @@ import type { DisposableLike } from 'ls/base/common/lifecycle';
 
 export const WORKBENCH_PART_IDS = {
   container: 'workbench.container',
+  titlebar: 'workbench.titlebar',
   sidebar: 'workbench.sidebar',
   agentSidebar: 'workbench.agentSidebar',
   statusbar: 'workbench.statusbar',

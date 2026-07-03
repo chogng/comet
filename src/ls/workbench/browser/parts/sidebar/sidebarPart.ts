@@ -40,6 +40,10 @@ export class SidebarPartView {
     return this.element;
   }
 
+  getTopbarElement() {
+    return this.bar.getTopbarElement();
+  }
+
   setProps(props: SidebarProps) {
     this.bar.setProps(props);
   }

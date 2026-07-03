@@ -158,6 +158,10 @@ export class EditorPartView {
     return this.element;
   }
 
+  getTopbarElement() {
+    return this.groupView.getTopbarElement();
+  }
+
   executeActiveDraftCommand(commandId: DraftEditorCommandId) {
     return this.groupView.executeActiveDraftCommand(commandId);
   }

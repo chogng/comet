@@ -127,6 +127,10 @@ export class WorkbenchContentPartViews {
     return this.sidebarView?.getElement() ?? null;
   }
 
+  getPrimarySidebarTopbarElement() {
+    return this.sidebarView?.getTopbarElement() ?? null;
+  }
+
   getEditorElement() {
     if (this.props.mode === 'settings') {
       return this.props.settingsContentElement ?? null;
@@ -135,8 +139,20 @@ export class WorkbenchContentPartViews {
     return this.editorView?.getElement() ?? null;
   }
 
+  getEditorTopbarElement() {
+    if (this.props.mode === 'settings') {
+      return null;
+    }
+
+    return this.editorView?.getTopbarElement() ?? null;
+  }
+
   getAgentSidebarElement() {
     return this.agentBarView?.getElement() ?? null;
+  }
+
+  getAgentSidebarTopbarElement() {
+    return this.agentBarView?.getTopbarElement() ?? null;
   }
 
   executeActiveDraftCommand(commandId: DraftEditorCommandId) {

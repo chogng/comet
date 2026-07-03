@@ -1,7 +1,7 @@
 import type {
   LibraryDocumentSummary,
   LibraryDocumentsResult,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { LibraryView } from 'ls/workbench/contrib/knowledgeBase/browser/views/libraryView';
@@ -153,6 +153,10 @@ export class Sidebar {
 
   getElement() {
     return this.element;
+  }
+
+  getTopbarElement() {
+    return this.topbarElement;
   }
 
   setProps(props: SidebarProps) {
