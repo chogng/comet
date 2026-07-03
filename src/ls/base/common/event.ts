@@ -1,45 +1,78 @@
-// Common event primitives shared by browser, node, and electron-main code.
-// Keep this module free of DOM dependencies.
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-import type { DisposableHandle, DisposableLike } from 'ls/base/common/lifecycle';
-import { toDisposable } from 'ls/base/common/lifecycle';
+import { DisposableStore, toDisposable, type DisposableHandle, type DisposableLike, type IDisposable } from 'ls/base/common/lifecycle';
 
-export type Listener<T> = (event: T) => void;
+export type Listener<T> = (event: T) => unknown;
 
-export type Event<T> = (listener: Listener<T>) => DisposableHandle;
+export interface Event<T> {
+	(
+		listener: Listener<T>,
+		thisArgs?: unknown,
+		disposables?: IDisposable[] | DisposableStore,
+	): DisposableHandle;
+}
+
+export namespace Event {
+	export const None: Event<never> = () => toDisposable(() => {});
+}
+
+function addToDisposables(disposable: IDisposable, disposables: IDisposable[] | DisposableStore | undefined): void {
+	if (disposables instanceof DisposableStore) {
+		disposables.add(disposable);
+		return;
+	}
+
+	if (Array.isArray(disposables)) {
+		disposables.push(disposable);
+	}
+}
+
+interface ListenerEntry<T> {
+	readonly listener: Listener<T>;
+	readonly thisArgs: unknown;
+}
 
 export class EventEmitter<T> implements DisposableLike {
-  private readonly listeners = new Set<Listener<T>>();
-  private disposed = false;
+	private readonly listeners: ListenerEntry<T>[] = [];
+	private disposed = false;
 
-  readonly event: Event<T> = (listener) => {
-    if (this.disposed) {
-      return toDisposable(() => {});
-    }
+	readonly event: Event<T> = (listener, thisArgs, disposables) => {
+		if (this.disposed) {
+			return toDisposable(() => {});
+		}
 
-    this.listeners.add(listener);
-    return toDisposable(() => {
-      this.listeners.delete(listener);
-    });
-  };
+		const entry: ListenerEntry<T> = { listener, thisArgs };
+		this.listeners.push(entry);
 
-  fire(event: T): void {
-    if (this.disposed || this.listeners.size === 0) {
-      return;
-    }
+		const disposable = toDisposable(() => {
+			const index = this.listeners.indexOf(entry);
+			if (index !== -1) {
+				this.listeners.splice(index, 1);
+			}
+		});
+		addToDisposables(disposable, disposables);
+		return disposable;
+	};
 
-    // Fire against a snapshot so subscription changes do not affect this turn.
-    for (const listener of [...this.listeners]) {
-      listener(event);
-    }
-  }
+	fire(event: T): void {
+		if (this.disposed || this.listeners.length === 0) {
+			return;
+		}
 
-  dispose(): void {
-    if (this.disposed) {
-      return;
-    }
+		for (const entry of [...this.listeners]) {
+			entry.listener.call(entry.thisArgs, event);
+		}
+	}
 
-    this.disposed = true;
-    this.listeners.clear();
-  }
+	dispose(): void {
+		if (this.disposed) {
+			return;
+		}
+
+		this.disposed = true;
+		this.listeners.length = 0;
+	}
 }

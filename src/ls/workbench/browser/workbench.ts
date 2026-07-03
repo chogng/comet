@@ -322,6 +322,18 @@ export class WorkbenchLayoutView {
     return this.element;
   }
 
+  getPrimarySidebarSlotElement() {
+    return this.primarySidebarSlot.element;
+  }
+
+  getEditorSlotElement() {
+    return this.editorSlot.element;
+  }
+
+  getAgentSidebarSlotElement() {
+    return this.agentBarSlot.element;
+  }
+
   setProps(props: WorkbenchLayoutViewProps) {
     if (this.disposed) {
       return;
@@ -2360,6 +2372,12 @@ class WorkbenchHost {
         this.workbenchContentPartViews?.getEditorTopbarElement() ?? null,
       agentTopbarElement:
         this.workbenchContentPartViews?.getAgentSidebarTopbarElement() ?? null,
+      primaryContentElement:
+        this.workbenchLayoutView?.getPrimarySidebarSlotElement() ?? null,
+      editorContentElement:
+        this.workbenchLayoutView?.getEditorSlotElement() ?? null,
+      agentContentElement:
+        this.workbenchLayoutView?.getAgentSidebarSlotElement() ?? null,
     });
 
     this.syncPostRenderState({

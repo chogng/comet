@@ -19,6 +19,9 @@ export type TitlebarPartSyncParams = {
   primaryTopbarElement: HTMLElement | null;
   editorTopbarElement: HTMLElement | null;
   agentTopbarElement: HTMLElement | null;
+  primaryContentElement: HTMLElement | null;
+  editorContentElement: HTMLElement | null;
+  agentContentElement: HTMLElement | null;
 };
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
@@ -34,6 +37,15 @@ export class TitlebarPart {
   private readonly leftElement = document.createElement('div');
   private readonly centerElement = document.createElement('div');
   private readonly rightElement = document.createElement('div');
+  private readonly resizeObserver =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => this.scheduleTitlebarSlotSizeSync());
+  private pendingSlotSizeSyncAnimationFrame = 0;
+  private primaryContentElement: HTMLElement | null = null;
+  private editorContentElement: HTMLElement | null = null;
+  private agentContentElement: HTMLElement | null = null;
+  private trailingWindowControlsWidthPx = 0;
 
   constructor(
     private readonly containerElement: HTMLElement,
@@ -87,11 +99,17 @@ export class TitlebarPart {
     }
     this.shellElement.className = getWorkbenchShellClassName({ activePage });
     this.syncTitlebar(params);
+    this.syncTitlebarSlotSizeSources(params);
     this.syncStatusbarVisibility(isStatusbarVisible);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, this.titlebarElement);
   }
 
   dispose() {
+    this.resizeObserver?.disconnect();
+    if (this.pendingSlotSizeSyncAnimationFrame !== 0) {
+      window.cancelAnimationFrame(this.pendingSlotSizeSyncAnimationFrame);
+      this.pendingSlotSizeSyncAnimationFrame = 0;
+    }
     this.leftElement.replaceChildren();
     this.centerElement.replaceChildren();
     this.rightElement.replaceChildren();
@@ -118,6 +136,76 @@ export class TitlebarPart {
     this.leftElement.hidden = !params.isPrimarySidebarVisible;
     this.centerElement.hidden = !hasCenter;
     this.rightElement.hidden = !params.isAgentSidebarVisible;
+  }
+
+  private syncTitlebarSlotSizeSources(params: TitlebarPartSyncParams) {
+    this.primaryContentElement = params.primaryContentElement;
+    this.editorContentElement =
+      params.isEditorCollapsed ? null : params.editorContentElement;
+    this.agentContentElement = params.agentContentElement;
+    this.trailingWindowControlsWidthPx =
+      params.electronRuntime && WINDOW_CHROME_LAYOUT.nativeWindowControlsOverlay
+        ? WINDOW_CHROME_LAYOUT.trailingWindowControlsWidthPx
+        : 0;
+
+    this.resizeObserver?.disconnect();
+    const resizeElements = [
+      this.primaryContentElement,
+      this.editorContentElement,
+      this.agentContentElement,
+    ].filter(element => element !== null);
+    for (const element of resizeElements) {
+      this.resizeObserver?.observe(element);
+    }
+
+    this.syncTitlebarSlotSizes();
+    this.scheduleTitlebarSlotSizeSync();
+  }
+
+  private scheduleTitlebarSlotSizeSync() {
+    if (this.pendingSlotSizeSyncAnimationFrame !== 0) {
+      return;
+    }
+
+    this.pendingSlotSizeSyncAnimationFrame = window.requestAnimationFrame(() => {
+      this.pendingSlotSizeSyncAnimationFrame = 0;
+      this.syncTitlebarSlotSizes();
+    });
+  }
+
+  private syncTitlebarSlotSizes() {
+    this.syncTitlebarSlotSize(this.leftElement, this.primaryContentElement, 0);
+    this.syncTitlebarSlotSize(this.centerElement, this.editorContentElement, 0);
+    this.syncTitlebarSlotSize(
+      this.rightElement,
+      this.agentContentElement,
+      this.trailingWindowControlsWidthPx,
+    );
+  }
+
+  private syncTitlebarSlotSize(
+    slotElement: HTMLElement,
+    sourceElement: HTMLElement | null,
+    reservedWidth: number,
+  ) {
+    if (!sourceElement?.isConnected) {
+      slotElement.style.removeProperty('flex');
+      slotElement.style.removeProperty('width');
+      return;
+    }
+
+    const width = Math.max(
+      0,
+      Math.round(sourceElement.getBoundingClientRect().width) - reservedWidth,
+    );
+    if (width <= 0) {
+      slotElement.style.removeProperty('flex');
+      slotElement.style.removeProperty('width');
+      return;
+    }
+
+    slotElement.style.flex = `0 0 ${width}px`;
+    slotElement.style.width = `${width}px`;
   }
 
   private syncTitlebarSlot(slotElement: HTMLElement, topbarElement: HTMLElement | null) {
