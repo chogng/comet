@@ -19,17 +19,10 @@ import {
   subscribeStatusbarState,
 } from 'ls/workbench/browser/parts/statusbar/statusbarModel';
 import { StatusbarPart } from 'ls/workbench/browser/parts/statusbar/statusbarPart';
-import type { Disposable } from 'ls/workbench/browser/workbench.contribution';
-export {
+import {
   registerWorkbenchContribution,
-  startWorkbenchContributions,
-  stopWorkbenchContributions,
-} from 'ls/workbench/browser/workbench.contribution';
-export type {
-  Disposable,
-  WorkbenchContribution,
-  WorkbenchContributionFactory,
-} from 'ls/workbench/browser/workbench.contribution';
+  type Disposable,
+} from 'ls/workbench/common/contributions';
 
 export function createWorkbenchContainerStateContribution(): Disposable {
   let lastContainer: HTMLElement | null = null;
@@ -156,3 +149,8 @@ export function createWorkbenchServicesLifecycleContribution(): Disposable {
     },
   };
 }
+
+registerWorkbenchContribution(createWorkbenchContainerStateContribution);
+registerWorkbenchContribution(createWorkbenchDocumentLocaleContribution);
+registerWorkbenchContribution(createWorkbenchServicesLifecycleContribution);
+registerWorkbenchContribution(createWorkbenchStatusbarContribution);

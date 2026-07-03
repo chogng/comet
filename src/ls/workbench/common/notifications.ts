@@ -1,10 +1,10 @@
-import { Action, type IAction } from 'ls/base/common/actions';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { EventEmitter } from 'ls/base/common/event';
-import {
-  Disposable,
-  DisposableStore,
-  toDisposable,
-} from 'ls/base/common/lifecycle';
+import { Disposable } from 'ls/base/common/lifecycle';
 import {
   NotificationPriority,
   NotificationsFilter,
@@ -14,58 +14,54 @@ import {
   type INotificationHandle,
   type INotificationProgress,
   type INotificationProgressProperties,
-  type INotificationService,
   type INotificationSource,
   type INotificationSourceFilter,
-  type IPromptChoice,
-  type IPromptChoiceWithMenu,
-  type IPromptOptions,
   type IStatusHandle,
   type IStatusMessageOptions,
   type NotificationMessage,
 } from 'ls/platform/notification/common/notification';
 
-export type NotificationContentChangeKind =
+export type NotificationViewItemContentChangeKind =
   | 'severity'
   | 'message'
   | 'actions'
   | 'progress'
   | 'visibility';
 
-export type NotificationModelChange =
+export type INotificationChangeEvent =
   | {
       kind: 'add';
-      item: WorkbenchNotificationItem;
+      item: NotificationViewItem;
       index: number;
     }
   | {
       kind: 'change';
-      item: WorkbenchNotificationItem;
+      item: NotificationViewItem;
       index: number;
-      detail: NotificationContentChangeKind;
+      detail: NotificationViewItemContentChangeKind;
     }
   | {
       kind: 'remove';
-      item: WorkbenchNotificationItem;
+      item: NotificationViewItem;
       index: number;
     };
 
-export type StatusMessageChange =
+export type IStatusMessageChangeEvent =
   | {
       kind: 'add';
-      item: WorkbenchStatusMessageItem;
+      item: StatusMessageViewItem;
     }
   | {
       kind: 'remove';
-      item: WorkbenchStatusMessageItem;
+      item: StatusMessageViewItem;
     };
 
-export type NotificationFilterChange = {
-  global: NotificationsFilter;
-  sources?: Map<string, NotificationsFilter>;
-};
+export interface INotificationsFilter {
+  readonly global: NotificationsFilter;
+  readonly sources: Map<string, NotificationsFilter>;
+}
 
-type WorkbenchNotificationProgressState = {
+type NotificationProgressState = {
   infinite?: boolean;
   total?: number;
   worked?: number;
@@ -79,8 +75,8 @@ function messageToString(message: NotificationMessage) {
   return typeof message === 'string' ? message : message.message;
 }
 
-class WorkbenchNotificationProgress implements INotificationProgress {
-  private stateValue: WorkbenchNotificationProgressState = {};
+class NotificationViewItemProgress implements INotificationProgress {
+  private stateValue: NotificationProgressState = {};
 
   constructor(
     initialState: INotificationProgressProperties | undefined,
@@ -91,7 +87,7 @@ class WorkbenchNotificationProgress implements INotificationProgress {
     }
   }
 
-  get state(): WorkbenchNotificationProgressState {
+  get state(): NotificationProgressState {
     return { ...this.stateValue };
   }
 
@@ -124,13 +120,13 @@ class WorkbenchNotificationProgress implements INotificationProgress {
   }
 }
 
-export class WorkbenchNotificationItem
+export class NotificationViewItem
   extends Disposable
   implements INotificationHandle
 {
   readonly sequence = ++notificationSequence;
   readonly createdAt = Date.now();
-  readonly progress: WorkbenchNotificationProgress;
+  readonly progress: NotificationViewItemProgress;
   readonly source?: string | INotificationSource;
   readonly sourceId?: string;
   readonly sticky?: boolean;
@@ -152,17 +148,17 @@ export class WorkbenchNotificationItem
   readonly onDidChangeVisibility = this.onDidChangeVisibilityEmitter.event;
 
   private readonly onDidChangeContentEmitter = this._register(
-    new EventEmitter<NotificationContentChangeKind>(),
+    new EventEmitter<NotificationViewItemContentChangeKind>(),
   );
   readonly onDidChangeContent = this.onDidChangeContentEmitter.event;
 
   constructor(
     notification: INotification,
     private readonly onDidMutate: (
-      item: WorkbenchNotificationItem,
-      detail: NotificationContentChangeKind,
+      item: NotificationViewItem,
+      detail: NotificationViewItemContentChangeKind,
     ) => void,
-    private readonly onDidRequestClose: (item: WorkbenchNotificationItem) => void,
+    private readonly onDidRequestClose: (item: NotificationViewItem) => void,
   ) {
     super();
     this.notificationId = notification.id;
@@ -176,7 +172,7 @@ export class WorkbenchNotificationItem
         : notification.source?.id;
     this.sticky = notification.sticky;
     this.priority = notification.priority ?? NotificationPriority.DEFAULT;
-    this.progress = new WorkbenchNotificationProgress(notification.progress, () =>
+    this.progress = new NotificationViewItemProgress(notification.progress, () =>
       this.fireContentChange('progress'),
     );
   }
@@ -256,13 +252,13 @@ export class WorkbenchNotificationItem
     this.onDidCloseEmitter.fire();
   }
 
-  private fireContentChange(detail: NotificationContentChangeKind) {
+  private fireContentChange(detail: NotificationViewItemContentChangeKind) {
     this.onDidChangeContentEmitter.fire(detail);
     this.onDidMutate(this, detail);
   }
 }
 
-export class WorkbenchStatusMessageItem implements IStatusHandle {
+export class StatusMessageViewItem implements IStatusHandle {
   readonly id = ++statusMessageSequence;
   readonly message: NotificationMessage;
   readonly messageText: string;
@@ -273,7 +269,7 @@ export class WorkbenchStatusMessageItem implements IStatusHandle {
   constructor(
     message: NotificationMessage,
     options: IStatusMessageOptions | undefined,
-    private readonly onDidRequestClose: (item: WorkbenchStatusMessageItem) => void,
+    private readonly onDidRequestClose: (item: StatusMessageViewItem) => void,
   ) {
     this.message = message;
     this.messageText = messageToString(message);
@@ -290,24 +286,24 @@ export class WorkbenchStatusMessageItem implements IStatusHandle {
   }
 }
 
-export class WorkbenchNotificationsModel extends Disposable {
-  private notificationItems: WorkbenchNotificationItem[] = [];
-  private statusMessageItem: WorkbenchStatusMessageItem | null = null;
+export class NotificationsModel extends Disposable {
+  private notificationItems: NotificationViewItem[] = [];
+  private statusMessageItem: StatusMessageViewItem | null = null;
   private globalFilter = NotificationsFilter.OFF;
   private readonly sourceFilters = new Map<string, INotificationSourceFilter>();
 
   private readonly onDidChangeNotificationEmitter = this._register(
-    new EventEmitter<NotificationModelChange>(),
+    new EventEmitter<INotificationChangeEvent>(),
   );
   readonly onDidChangeNotification = this.onDidChangeNotificationEmitter.event;
 
   private readonly onDidChangeStatusMessageEmitter = this._register(
-    new EventEmitter<StatusMessageChange>(),
+    new EventEmitter<IStatusMessageChangeEvent>(),
   );
   readonly onDidChangeStatusMessage = this.onDidChangeStatusMessageEmitter.event;
 
   private readonly onDidChangeFilterEmitter = this._register(
-    new EventEmitter<NotificationFilterChange>(),
+    new EventEmitter<Partial<INotificationsFilter>>(),
   );
   readonly onDidChangeFilter = this.onDidChangeFilterEmitter.event;
 
@@ -365,7 +361,7 @@ export class WorkbenchNotificationsModel extends Disposable {
     });
   }
 
-  addNotification(notification: INotification): WorkbenchNotificationItem {
+  addNotification(notification: INotification): NotificationViewItem {
     const duplicateIndex = notification.id
       ? this.notificationItems.findIndex((item) => item.notificationId === notification.id)
       : -1;
@@ -377,7 +373,7 @@ export class WorkbenchNotificationsModel extends Disposable {
       return duplicate;
     }
 
-    const item = new WorkbenchNotificationItem(
+    const item = new NotificationViewItem(
       notification,
       this.handleNotificationMutation,
       this.removeNotification,
@@ -387,12 +383,12 @@ export class WorkbenchNotificationsModel extends Disposable {
     return item;
   }
 
-  setStatusMessage(
+  showStatusMessage(
     message: NotificationMessage,
     options?: IStatusMessageOptions,
-  ): WorkbenchStatusMessageItem {
+  ): StatusMessageViewItem {
     this.statusMessageItem?.close();
-    const item = new WorkbenchStatusMessageItem(
+    const item = new StatusMessageViewItem(
       message,
       options,
       this.removeStatusMessage,
@@ -411,8 +407,8 @@ export class WorkbenchNotificationsModel extends Disposable {
   }
 
   private readonly handleNotificationMutation = (
-    item: WorkbenchNotificationItem,
-    detail: NotificationContentChangeKind,
+    item: NotificationViewItem,
+    detail: NotificationViewItemContentChangeKind,
   ) => {
     const index = this.notificationItems.indexOf(item);
     if (index < 0) {
@@ -427,7 +423,7 @@ export class WorkbenchNotificationsModel extends Disposable {
     });
   };
 
-  private readonly removeNotification = (item: WorkbenchNotificationItem) => {
+  private readonly removeNotification = (item: NotificationViewItem) => {
     const index = this.notificationItems.indexOf(item);
     if (index < 0) {
       return;
@@ -437,7 +433,7 @@ export class WorkbenchNotificationsModel extends Disposable {
     this.onDidChangeNotificationEmitter.fire({ kind: 'remove', item, index });
   };
 
-  private readonly removeStatusMessage = (item: WorkbenchStatusMessageItem) => {
+  private readonly removeStatusMessage = (item: StatusMessageViewItem) => {
     if (this.statusMessageItem !== item) {
       return;
     }
@@ -446,180 +442,3 @@ export class WorkbenchNotificationsModel extends Disposable {
     this.onDidChangeStatusMessageEmitter.fire({ kind: 'remove', item });
   };
 }
-
-export class WorkbenchNotificationService
-  extends Disposable
-  implements INotificationService
-{
-  declare readonly _serviceBrand: undefined;
-
-  private readonly statusTimers = this._register(new DisposableStore());
-  private readonly onDidChangeFilterEmitter = this._register(
-    new EventEmitter<void>(),
-  );
-  readonly onDidChangeFilter = this.onDidChangeFilterEmitter.event;
-
-  constructor(readonly model = new WorkbenchNotificationsModel()) {
-    super();
-    this._register(model);
-    this._register(
-      this.model.onDidChangeFilter(() => {
-        this.onDidChangeFilterEmitter.fire();
-      }),
-    );
-  }
-
-  setFilter(filter: NotificationsFilter | INotificationSourceFilter): void {
-    this.model.setFilter(filter);
-  }
-
-  getFilter(source?: INotificationSource): NotificationsFilter {
-    return this.model.getFilter(source);
-  }
-
-  getFilters(): INotificationSourceFilter[] {
-    return this.model.getFilters();
-  }
-
-  removeFilter(sourceId: string): void {
-    this.model.removeFilter(sourceId);
-  }
-
-  notify(notification: INotification): INotificationHandle {
-    if (this.shouldSuppressNotification(notification)) {
-      return this.createClosedHandle(notification);
-    }
-
-    return this.model.addNotification(notification);
-  }
-
-  info(message: NotificationMessage | NotificationMessage[]): void {
-    this.notifyMany(Severity.Info, message);
-  }
-
-  warn(message: NotificationMessage | NotificationMessage[]): void {
-    this.notifyMany(Severity.Warning, message);
-  }
-
-  error(message: NotificationMessage | NotificationMessage[]): void {
-    this.notifyMany(Severity.Error, message);
-  }
-
-  prompt(
-    severity: Severity,
-    message: string,
-    choices: (IPromptChoice | IPromptChoiceWithMenu)[],
-    options?: IPromptOptions,
-  ): INotificationHandle {
-    let handle: INotificationHandle | null = null;
-    const primary: IAction[] = [];
-    const secondary: IAction[] = [];
-
-    choices.forEach((choice, index) => {
-      const action = new Action(
-        `workbench.notification.prompt.${index}`,
-        choice.label,
-        undefined,
-        true,
-        () => {
-          choice.run();
-          if (!choice.keepOpen) {
-            handle?.close();
-          }
-        },
-      );
-      if (choice.isSecondary) {
-        secondary.push(action);
-      } else {
-        primary.push(action);
-      }
-    });
-
-    handle = this.notify({
-      severity,
-      message,
-      sticky: options?.sticky,
-      priority: options?.priority,
-      neverShowAgain: options?.neverShowAgain,
-      actions: {
-        primary,
-        secondary,
-      },
-    });
-
-    if (options?.onCancel) {
-      const disposable = handle.onDidClose(options.onCancel);
-      this._register(disposable);
-    }
-
-    return handle;
-  }
-
-  status(message: NotificationMessage, options?: IStatusMessageOptions): IStatusHandle {
-    const item = this.model.setStatusMessage(message, options);
-    const disposables = new DisposableStore();
-    this.statusTimers.add(disposables);
-
-    if (typeof options?.showAfter === 'number' && options.showAfter > 0) {
-      const handle = window.setTimeout(() => {}, options.showAfter);
-      disposables.add(toDisposable(() => window.clearTimeout(handle)));
-    }
-
-    if (typeof options?.hideAfter === 'number' && options.hideAfter > 0) {
-      const handle = window.setTimeout(() => item.close(), options.hideAfter);
-      disposables.add(toDisposable(() => window.clearTimeout(handle)));
-    }
-
-    return {
-      close: () => {
-        disposables.dispose();
-        item.close();
-      },
-    };
-  }
-
-  private notifyMany(
-    severity: Severity,
-    messages: NotificationMessage | NotificationMessage[],
-  ) {
-    for (const message of Array.isArray(messages) ? messages : [messages]) {
-      this.notify({ severity, message });
-    }
-  }
-
-  private shouldSuppressNotification(notification: INotification) {
-    if (notification.priority === NotificationPriority.URGENT) {
-      return false;
-    }
-
-    if (this.model.getFilter() === NotificationsFilter.ERROR) {
-      return notification.severity !== Severity.Error;
-    }
-
-    const source =
-      typeof notification.source === 'string'
-        ? { id: notification.source, label: notification.source }
-        : notification.source;
-    return Boolean(
-      source &&
-        this.model.getFilter(source) === NotificationsFilter.ERROR &&
-        notification.severity !== Severity.Error,
-    );
-  }
-
-  private createClosedHandle(notification: INotification): INotificationHandle {
-    const item = new WorkbenchNotificationItem(
-      notification,
-      () => {},
-      () => {},
-    );
-    item.close();
-    return item;
-  }
-}
-
-export function createWorkbenchNotificationService() {
-  return new WorkbenchNotificationService();
-}
-
-export type WorkbenchNotificationServiceInstance = WorkbenchNotificationService;

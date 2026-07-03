@@ -1,15 +1,15 @@
 import { withSeverityPrefix } from 'ls/platform/notification/common/notification';
-import type { WorkbenchNotificationItem } from 'ls/workbench/browser/parts/notifications/notificationsModel';
+import type { NotificationViewItem } from 'ls/workbench/common/notifications';
 import { getNotificationSourceLabel } from 'ls/workbench/browser/parts/notifications/notificationsViewer';
 
-export function getNotificationAccessibleLabel(item: WorkbenchNotificationItem) {
+export function getNotificationAccessibleLabel(item: NotificationViewItem) {
   const source = getNotificationSourceLabel(item);
   const message = source ? `${item.messageText}. Source: ${source}` : item.messageText;
   return withSeverityPrefix(message, item.severity);
 }
 
 export function getNotificationsAccessibleSummary(
-  items: readonly WorkbenchNotificationItem[],
+  items: readonly NotificationViewItem[],
 ) {
   if (items.length === 0) {
     return 'No notifications';

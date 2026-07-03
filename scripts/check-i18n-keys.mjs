@@ -34,7 +34,7 @@ function collectFiles(directory) {
 
 function extractLocalizeKeys(filePath) {
 	const content = fs.readFileSync(filePath, 'utf8');
-	if (!/from\s+['"](?:ls|language)\/nls['"]/.test(content)) {
+	if (!/from\s+['"]language\/nls['"]/.test(content)) {
 		return [];
 	}
 

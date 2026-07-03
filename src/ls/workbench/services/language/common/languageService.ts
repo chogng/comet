@@ -1,5 +1,9 @@
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
+import {
   detectInitialLocale,
   getLocaleMessages,
   toDocumentLang,
@@ -36,6 +40,12 @@ export class WorkbenchLanguageService implements IWorkbenchLanguageService {
 export function createWorkbenchLanguageService(): IWorkbenchLanguageService {
   return new WorkbenchLanguageService();
 }
+
+registerSingleton(
+  IWorkbenchLanguageService,
+  WorkbenchLanguageService,
+  InstantiationType.Delayed,
+);
 
 export { detectInitialLocale, getLocaleMessages, toDocumentLang };
 export type { Locale, LocaleMessages };

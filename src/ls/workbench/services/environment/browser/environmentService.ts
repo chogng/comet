@@ -1,7 +1,11 @@
-import type {
+import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
+import {
   IWorkbenchEnvironmentService,
-  WorkbenchEnvironmentSnapshot,
-  WorkbenchRuntimeKind,
+  type WorkbenchEnvironmentSnapshot,
+  type WorkbenchRuntimeKind,
 } from 'ls/workbench/services/environment/common/environmentService';
 
 type WorkbenchEnvironmentGlobals = Window & {
@@ -68,6 +72,12 @@ export class BrowserWorkbenchEnvironmentService
 export function createWorkbenchEnvironmentService(): IWorkbenchEnvironmentService {
   return new BrowserWorkbenchEnvironmentService();
 }
+
+registerSingleton(
+  IWorkbenchEnvironmentService,
+  BrowserWorkbenchEnvironmentService,
+  InstantiationType.Delayed,
+);
 
 export {
   IWorkbenchEnvironmentService,

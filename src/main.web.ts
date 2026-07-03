@@ -13,7 +13,7 @@ async function bootstrapWorkbench() {
     await import('ls/workbench/workbench.web.main');
 
     const { startWorkbenchContributions, stopWorkbenchContributions } =
-      await import('ls/workbench/browser/workbench.contribution');
+      await import('ls/workbench/common/contributions');
     if (!isNativeWorkbenchAuxiliaryWindow()) {
       startWorkbenchContributions();
       window.addEventListener('beforeunload', stopWorkbenchContributions, {

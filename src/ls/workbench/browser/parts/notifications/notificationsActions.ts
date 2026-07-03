@@ -6,7 +6,7 @@ import {
   TOGGLE_NOTIFICATIONS_CENTER,
 } from 'ls/workbench/browser/parts/notifications/notificationsCommands';
 import type { NotificationsCenter } from 'ls/workbench/browser/parts/notifications/notificationsCenter';
-import type { WorkbenchNotificationsModel } from 'ls/workbench/browser/parts/notifications/notificationsModel';
+import type { NotificationsModel } from 'ls/workbench/common/notifications';
 
 export class ShowNotificationsCenterAction extends Action {
   static readonly ID = SHOW_NOTIFICATIONS_CENTER;
@@ -51,7 +51,7 @@ export class ClearAllNotificationsAction extends Action {
   static readonly ID = CLEAR_ALL_NOTIFICATIONS;
   static readonly LABEL = 'Clear All Notifications';
 
-  constructor(private readonly model: WorkbenchNotificationsModel) {
+  constructor(private readonly model: NotificationsModel) {
     super(ClearAllNotificationsAction.ID, ClearAllNotificationsAction.LABEL);
   }
 

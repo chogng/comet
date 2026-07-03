@@ -1,9 +1,9 @@
 import { DisposableStore } from 'ls/base/common/lifecycle';
 import { NotificationsAlerts } from 'ls/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'ls/workbench/browser/parts/notifications/notificationsCenter';
-import type { WorkbenchNotificationService } from 'ls/workbench/browser/parts/notifications/notificationsModel';
 import { NotificationsStatus } from 'ls/workbench/browser/parts/notifications/notificationsStatus';
 import { NotificationsToasts } from 'ls/workbench/browser/parts/notifications/notificationsToasts';
+import type { NotificationService } from 'ls/workbench/services/notification/common/notificationService';
 
 export class NotificationsPart {
   private readonly element = document.createElement('div');
@@ -16,7 +16,7 @@ export class NotificationsPart {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly notificationService: WorkbenchNotificationService,
+    private readonly notificationService: NotificationService,
   ) {
     this.element.className = 'notifications-part';
     this.container.append(this.element);
@@ -50,7 +50,7 @@ export class NotificationsPart {
 
 export function createNotificationsPart(
   container: HTMLElement,
-  notificationService: WorkbenchNotificationService,
+  notificationService: NotificationService,
 ) {
   return new NotificationsPart(container, notificationService);
 }

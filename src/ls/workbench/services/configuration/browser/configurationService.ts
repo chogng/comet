@@ -1,5 +1,9 @@
 import { ConfigurationService } from 'ls/platform/configuration/common/configurationService';
-import type { IWorkbenchConfigurationService } from 'ls/workbench/services/configuration/common/configuration';
+import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
+import { IWorkbenchConfigurationService } from 'ls/workbench/services/configuration/common/configuration';
 
 export class BrowserWorkbenchConfigurationService
   extends ConfigurationService
@@ -11,6 +15,12 @@ export class BrowserWorkbenchConfigurationService
 export function createWorkbenchConfigurationService(): IWorkbenchConfigurationService {
   return new BrowserWorkbenchConfigurationService();
 }
+
+registerSingleton(
+  IWorkbenchConfigurationService,
+  BrowserWorkbenchConfigurationService,
+  InstantiationType.Delayed,
+);
 
 export { ConfigurationService };
 export {

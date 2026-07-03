@@ -1,3 +1,7 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *--------------------------------------------------------------------------------------------*/
+
 import { createAssistantModel } from 'ls/workbench/browser/assistantModel';
 import type { AssistantModel, AssistantModelContext } from 'ls/workbench/browser/assistantModel';
 import { createBatchFetchController } from 'ls/workbench/browser/batchFetchModel';
@@ -61,18 +65,17 @@ import { showWorkbenchTextInputModal } from 'ls/workbench/browser/workbenchEdito
 import { createEditorTopbarActionsView } from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
 import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'ls/base/browser/ui/aria/aria';
+import { registerToastBridge } from 'ls/base/browser/ui/toast/toast';
 import { createToastHost } from 'ls/base/browser/ui/toast/toastHost';
 import type { ToastHost } from 'ls/base/browser/ui/toast/toastHost';
 import { INotificationService } from 'ls/platform/notification/common/notification';
 import { getWorkbenchInstantiationService } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IWorkbenchLayoutService } from 'ls/workbench/services/layout/browser/layoutService';
 import {
-  WorkbenchNotificationService,
-} from 'ls/workbench/browser/parts/notifications/notificationsModel';
-import {
   createNotificationsPart,
   type NotificationsPart,
 } from 'ls/workbench/browser/parts/notifications/notificationsPart';
+import { NotificationService } from 'ls/workbench/services/notification/common/notificationService';
 
 import {
   localeService,
@@ -514,6 +517,29 @@ function detectNativeOverlayKind() {
   return new URLSearchParams(window.location.search).get('nativeOverlay');
 }
 
+function canUseNativeToastOverlay() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  if (detectNativeOverlayKind() === 'toast') {
+    return false;
+  }
+
+  return typeof getNativeHostService().toast?.show === 'function';
+}
+
+registerToastBridge({
+  canHandle: canUseNativeToastOverlay,
+  show: options => {
+    getNativeHostService().toast?.show(options);
+    return -1;
+  },
+  dismiss: id => {
+    getNativeHostService().toast?.dismiss(id);
+  },
+});
+
 function reduceWorkbenchState(
   state: WorkbenchStateSnapshot,
   event: WorkbenchEvent,
@@ -684,7 +710,7 @@ class WorkbenchHost {
   constructor(
     rootElement: HTMLElement,
     @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
-    @INotificationService private readonly notificationService: INotificationService,
+    @INotificationService private readonly notificationService: NotificationService,
   ) {
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
@@ -763,10 +789,6 @@ class WorkbenchHost {
   }
 
   private createNotificationsPart() {
-    if (!(this.notificationService instanceof WorkbenchNotificationService)) {
-      return null;
-    }
-
     return createNotificationsPart(this.notificationsMount, this.notificationService);
   }
 

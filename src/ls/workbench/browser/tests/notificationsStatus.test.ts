@@ -8,12 +8,12 @@ import {
   NotificationsStatus,
 } from 'ls/workbench/browser/parts/notifications/notificationsStatus';
 import {
-  WorkbenchNotificationsModel,
-} from 'ls/workbench/browser/parts/notifications/notificationsModel';
+  NotificationsModel,
+} from 'ls/workbench/common/notifications';
 
 test('notifications status stays hidden until there is status content', () => {
   const dom = installDomTestEnvironment();
-  const model = new WorkbenchNotificationsModel();
+  const model = new NotificationsModel();
   const container = document.createElement('div');
   let toggleCount = 0;
   const center = {
@@ -44,7 +44,7 @@ test('notifications status stays hidden until there is status content', () => {
     notification.close();
     assert.equal(element.classList.contains('is-hidden'), true);
 
-    const statusMessage = model.setStatusMessage('Indexing');
+    const statusMessage = model.showStatusMessage('Indexing');
     const messageElement = element.querySelector('.notifications-status-message');
     assert(messageElement instanceof window.HTMLSpanElement);
 

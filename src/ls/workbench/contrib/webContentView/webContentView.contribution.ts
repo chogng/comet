@@ -22,7 +22,10 @@ import type {
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'ls/platform/native/electron-main/sharedWebSession';
-import type { Disposable } from 'ls/workbench/contrib/workbench/workbench.contribution';
+import {
+  registerWorkbenchContribution,
+  type Disposable,
+} from 'ls/workbench/common/contributions';
 import {
   defaultBrowserTabKeepAliveLimit,
   normalizeBrowserTabKeepAliveLimit,
@@ -1430,3 +1433,5 @@ export function createWorkbenchWebContentViewContribution(): Disposable | void {
     },
   };
 }
+
+registerWorkbenchContribution(createWorkbenchWebContentViewContribution);

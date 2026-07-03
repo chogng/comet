@@ -4,7 +4,7 @@ import {
   Severity,
   type NotificationMessage,
 } from 'ls/platform/notification/common/notification';
-import type { WorkbenchNotificationItem } from 'ls/workbench/browser/parts/notifications/notificationsModel';
+import type { NotificationViewItem } from 'ls/workbench/common/notifications';
 
 export function notificationMessageToString(message: NotificationMessage) {
   return typeof message === 'string' ? message : message.message;
@@ -36,7 +36,7 @@ export function getNotificationSeverityLabel(severity: Severity) {
   }
 }
 
-export function getNotificationSourceLabel(item: WorkbenchNotificationItem) {
+export function getNotificationSourceLabel(item: NotificationViewItem) {
   if (!item.source) {
     return '';
   }
@@ -70,7 +70,7 @@ export type NotificationRenderOptions = {
 };
 
 export function renderNotificationItem(
-  item: WorkbenchNotificationItem,
+  item: NotificationViewItem,
   container: HTMLElement,
   options: NotificationRenderOptions = {},
 ) {

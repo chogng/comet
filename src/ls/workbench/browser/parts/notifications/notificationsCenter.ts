@@ -2,9 +2,9 @@ import 'ls/workbench/browser/parts/notifications/media/notificationsCenter.css';
 import 'ls/workbench/browser/parts/notifications/media/notificationsActions.css';
 import { NotificationsList } from 'ls/workbench/browser/parts/notifications/notificationsList';
 import type {
-  NotificationModelChange,
-  WorkbenchNotificationsModel,
-} from 'ls/workbench/browser/parts/notifications/notificationsModel';
+  INotificationChangeEvent,
+  NotificationsModel,
+} from 'ls/workbench/common/notifications';
 
 export class NotificationsCenter {
   private readonly element = document.createElement('section');
@@ -18,7 +18,7 @@ export class NotificationsCenter {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly model: WorkbenchNotificationsModel,
+    private readonly model: NotificationsModel,
   ) {
     this.element.className = 'notifications-center bottom-right';
     const header = document.createElement('header');
@@ -103,7 +103,7 @@ export class NotificationsCenter {
     this.element.remove();
   }
 
-  private readonly handleNotificationChange = (_event: NotificationModelChange) => {
+  private readonly handleNotificationChange = (_event: INotificationChangeEvent) => {
     this.updateTitle();
     if (this.visible && this.model.notifications.length === 0) {
       this.hide();
@@ -119,7 +119,7 @@ export class NotificationsCenter {
 
 export function createNotificationsCenter(
   container: HTMLElement,
-  model: WorkbenchNotificationsModel,
+  model: NotificationsModel,
 ) {
   return new NotificationsCenter(container, model);
 }

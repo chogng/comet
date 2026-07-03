@@ -3,6 +3,8 @@ import {
   commandsRegistry,
   type CommandService,
 } from 'ls/platform/commands/common/commands';
+import { SyncDescriptor } from 'ls/platform/instantiation/common/descriptors';
+import { registerSingleton } from 'ls/platform/instantiation/common/extensions';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 
 export const IWorkbenchCommandService =
@@ -32,6 +34,11 @@ export function createWorkbenchCommandService(
 ): IWorkbenchCommandService {
   return new WorkbenchCommandServiceAdapter(delegate);
 }
+
+registerSingleton(
+  IWorkbenchCommandService,
+  new SyncDescriptor(WorkbenchCommandServiceAdapter, [commandService], true),
+);
 
 export { commandService, commandsRegistry };
 export type {

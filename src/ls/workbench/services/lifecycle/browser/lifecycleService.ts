@@ -1,14 +1,32 @@
 import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
+import {
+  ILifecycleService,
   LifecyclePhase,
-  createWorkbenchLifecycleService,
+  WorkbenchLifecycleService,
   type IWorkbenchLifecycleService,
 } from 'ls/workbench/services/lifecycle/common/lifecycle';
 
-export function createBrowserWorkbenchLifecycleService(): IWorkbenchLifecycleService {
-  const service = createWorkbenchLifecycleService();
-  service.setPhase(LifecyclePhase.Ready);
-  return service;
+export class BrowserWorkbenchLifecycleService
+  extends WorkbenchLifecycleService
+{
+  constructor() {
+    super();
+    this.setPhase(LifecyclePhase.Ready);
+  }
 }
+
+export function createBrowserWorkbenchLifecycleService(): IWorkbenchLifecycleService {
+  return new BrowserWorkbenchLifecycleService();
+}
+
+registerSingleton(
+  ILifecycleService,
+  BrowserWorkbenchLifecycleService,
+  InstantiationType.Delayed,
+);
 
 export {
   ILifecycleService,

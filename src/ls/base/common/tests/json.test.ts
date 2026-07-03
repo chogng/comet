@@ -4,7 +4,7 @@ import test from 'node:test';
 import { parse, ParseErrorCode, type ParseError } from 'ls/base/common/json';
 import { getParseErrorMessage } from 'ls/base/common/jsonErrorMessages';
 import { parse as parseJsonc } from 'ls/base/common/jsonc';
-import { localize, setNLSLanguage } from 'ls/nls';
+import { localize, localize2 } from 'ls/nls';
 
 test('jsonc parses comments and trailing commas', () => {
   const parsed = parseJsonc<{ enabled: boolean; values: number[] }>(`
@@ -21,27 +21,52 @@ test('jsonc parses comments and trailing commas', () => {
   });
 });
 
-test('json parser reports localized parse errors through nls', () => {
-  const errors: ParseError[] = [];
-  parse('{ "name" }', errors);
+test('json parser reports parse errors through nls default messages', () => {
+	const errors: ParseError[] = [];
+	parse('{ "name" }', errors);
 
-  assert.equal(errors[0]?.error, ParseErrorCode.ColonExpected);
-
-  setNLSLanguage('en');
-  assert.equal(getParseErrorMessage(errors[0].error), 'Colon expected');
-
-  setNLSLanguage('zh');
-  assert.equal(getParseErrorMessage(errors[0].error), '需要冒号');
+	assert.equal(errors[0]?.error, ParseErrorCode.ColonExpected);
+	assert.equal(getParseErrorMessage(errors[0].error), 'Colon expected');
 });
 
-test('nls localize uses locale messages and reports missing keys', () => {
-  setNLSLanguage('en');
-  assert.equal(localize('error.valueExpected', 'fallback'), 'Value expected');
-  assert.equal(localize('severityPrefix.error', 'Error: {0}', 'Failure'), 'Error: Failure');
-  assert.equal(
-    localize('errorUnknownCommand', 'Unknown command: {command}', { command: 'ls.open' }),
-    'Unknown command: ls.open',
-  );
-  assert.throws(() => localize('severityPrefix.error', 'Error: {0}'), /Missing localized value/);
-  assert.throws(() => localize('missing.key', 'Hello {0}', 'Literature Studio'), /Missing localized string/);
+test('nls localize follows upstream default-message behavior', () => {
+	assert.equal(localize('error.valueExpected', 'Value expected'), 'Value expected');
+	assert.equal(localize('severityPrefix.error', 'Error: {0}', 'Failure'), 'Error: Failure');
+	assert.deepEqual(
+		localize2('welcome', 'Welcome {0}', 'Reader'),
+		{
+			value: 'Welcome Reader',
+			original: 'Welcome Reader',
+		},
+	);
+});
+
+test('nls localize reads indexed built messages from global nls table', () => {
+	const previousMessages = globalThis._VSCODE_NLS_MESSAGES as string[] | undefined;
+	const builtLocalize = localize as unknown as (
+		index: number,
+		message: string | null,
+		...args: (string | number | boolean | undefined | null)[]
+	) => string;
+	const builtLocalize2 = localize2 as unknown as (
+		index: number,
+		message: string,
+		...args: (string | number | boolean | undefined | null)[]
+	) => { value: string; original: string };
+
+	globalThis._VSCODE_NLS_MESSAGES = ['Translated {0}'];
+
+	try {
+		assert.equal(builtLocalize(0, 'Default {0}', 'Reader'), 'Translated Reader');
+		assert.deepEqual(builtLocalize2(0, 'Default {0}', 'Reader'), {
+			value: 'Translated Reader',
+			original: 'Default Reader',
+		});
+	} finally {
+		if (previousMessages === undefined) {
+			Reflect.deleteProperty(globalThis, '_VSCODE_NLS_MESSAGES');
+		} else {
+			globalThis._VSCODE_NLS_MESSAGES = previousMessages;
+		}
+	}
 });

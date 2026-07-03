@@ -1,9 +1,9 @@
 import { DisposableStore } from 'ls/base/common/lifecycle';
 import { withSeverityPrefix } from 'ls/platform/notification/common/notification';
 import type {
-  NotificationModelChange,
-  WorkbenchNotificationsModel,
-} from 'ls/workbench/browser/parts/notifications/notificationsModel';
+  INotificationChangeEvent,
+  NotificationsModel,
+} from 'ls/workbench/common/notifications';
 
 export class NotificationsAlerts {
   private readonly element = document.createElement('div');
@@ -12,7 +12,7 @@ export class NotificationsAlerts {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly model: WorkbenchNotificationsModel,
+    private readonly model: NotificationsModel,
   ) {
     this.element.className = 'notifications-alerts';
     this.element.setAttribute('role', 'status');
@@ -33,7 +33,7 @@ export class NotificationsAlerts {
     this.element.remove();
   }
 
-  private readonly handleNotificationChange = (event: NotificationModelChange) => {
+  private readonly handleNotificationChange = (event: INotificationChangeEvent) => {
     if (event.kind !== 'add') {
       return;
     }
@@ -47,7 +47,7 @@ export class NotificationsAlerts {
 
 export function createNotificationsAlerts(
   container: HTMLElement,
-  model: WorkbenchNotificationsModel,
+  model: NotificationsModel,
 ) {
   return new NotificationsAlerts(container, model);
 }

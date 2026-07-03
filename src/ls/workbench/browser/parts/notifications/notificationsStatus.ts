@@ -1,9 +1,9 @@
 import 'ls/workbench/browser/parts/notifications/media/notificationsActions.css';
 import { DisposableStore, toDisposable } from 'ls/base/common/lifecycle';
 import type {
-  StatusMessageChange,
-  WorkbenchNotificationsModel,
-} from 'ls/workbench/browser/parts/notifications/notificationsModel';
+  IStatusMessageChangeEvent,
+  NotificationsModel,
+} from 'ls/workbench/common/notifications';
 import type { NotificationsCenter } from 'ls/workbench/browser/parts/notifications/notificationsCenter';
 
 export class NotificationsStatus {
@@ -15,7 +15,7 @@ export class NotificationsStatus {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly model: WorkbenchNotificationsModel,
+    private readonly model: NotificationsModel,
     private readonly center: NotificationsCenter,
   ) {
     this.element.className = 'notifications-status is-hidden';
@@ -58,7 +58,7 @@ export class NotificationsStatus {
     this.center.toggle();
   };
 
-  private readonly handleStatusMessageChange = (_event: StatusMessageChange) => {
+  private readonly handleStatusMessageChange = (_event: IStatusMessageChangeEvent) => {
     this.update();
   };
 
@@ -75,7 +75,7 @@ export class NotificationsStatus {
 
 export function createNotificationsStatus(
   container: HTMLElement,
-  model: WorkbenchNotificationsModel,
+  model: NotificationsModel,
   center: NotificationsCenter,
 ) {
   return new NotificationsStatus(container, model, center);

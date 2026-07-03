@@ -1,5 +1,9 @@
 import type { Event } from 'ls/base/common/event';
 import type { IDisposable } from 'ls/base/common/lifecycle';
+import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 import {
   applyWorkbenchLayoutMode,
@@ -143,6 +147,12 @@ export class BrowserWorkbenchLayoutService implements IWorkbenchLayoutService {
 export function createWorkbenchLayoutService(): IWorkbenchLayoutService {
   return new BrowserWorkbenchLayoutService();
 }
+
+registerSingleton(
+  IWorkbenchLayoutService,
+  BrowserWorkbenchLayoutService,
+  InstantiationType.Delayed,
+);
 
 export {
   WORKBENCH_PART_IDS,

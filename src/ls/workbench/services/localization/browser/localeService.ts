@@ -1,5 +1,4 @@
 import { EventEmitter } from 'ls/base/common/event';
-import { setNLSLanguage } from 'ls/nls';
 import { detectInitialLocale, toDocumentLang } from 'language/i18n';
 import {
   isSupportedLanguagePackLocale,
@@ -10,9 +9,12 @@ import {
   loadAppSettings,
   saveAppSettingsPartial,
 } from 'ls/workbench/services/settings/settingsService';
-import type {
+import {
+  registerWorkbenchService,
+} from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
+import {
   IWorkbenchLocaleService,
-  LocaleServiceContext,
+  type LocaleServiceContext,
 } from 'ls/workbench/services/localization/common/locale';
 
 const LOCALE_STORAGE_KEY = 'ls.workbench.locale';
@@ -40,10 +42,6 @@ class BrowserWorkbenchLocaleService implements IWorkbenchLocaleService {
   private currentLocale = readStoredLocale() ?? detectInitialLocale();
   private readonly onDidChangeEmitter = new EventEmitter<void>();
 
-  constructor() {
-    setNLSLanguage(this.currentLocale);
-  }
-
   subscribe(listener: () => void) {
     return this.onDidChangeEmitter.event(listener);
   }
@@ -54,7 +52,6 @@ class BrowserWorkbenchLocaleService implements IWorkbenchLocaleService {
 
   applyLocale(locale: LanguagePackLocale) {
     persistStoredLocale(locale);
-    setNLSLanguage(locale);
 
     if (this.currentLocale === locale) {
       this.syncDocumentLanguage();
@@ -108,6 +105,8 @@ export const localeService = new BrowserWorkbenchLocaleService();
 export function createWorkbenchLocaleService(): IWorkbenchLocaleService {
   return localeService;
 }
+
+registerWorkbenchService(IWorkbenchLocaleService, localeService);
 
 export {
   IWorkbenchLocaleService,

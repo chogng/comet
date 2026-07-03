@@ -4,7 +4,7 @@ import {
 } from 'ls/workbench/browser/window';
 import { hasDesktopRuntime } from 'ls/base/common/platform';
 import { getNativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceAccessor';
-import { registerWorkbenchContribution } from 'ls/workbench/contrib/workbench/workbench.contribution';
+import { registerWorkbenchContribution } from 'ls/workbench/common/contributions';
 
 registerWorkbenchWindowControlsProvider({
   getState: async () => {

@@ -1,4 +1,8 @@
 import type { IDisposable } from 'ls/base/common/lifecycle';
+import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 import {
   KeybindingsRegistry,
@@ -33,6 +37,12 @@ export class BrowserWorkbenchKeybindingService
 export function createWorkbenchKeybindingService(): IWorkbenchKeybindingService {
   return new BrowserWorkbenchKeybindingService();
 }
+
+registerSingleton(
+  IWorkbenchKeybindingService,
+  BrowserWorkbenchKeybindingService,
+  InstantiationType.Delayed,
+);
 
 export { KeybindingsRegistry };
 export type { IKeybindingRule };

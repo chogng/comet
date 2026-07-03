@@ -1,5 +1,9 @@
 import { EventEmitter, type Event } from 'ls/base/common/event';
 import { Disposable, type IDisposable } from 'ls/base/common/lifecycle';
+import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 
 export type WorkbenchViewId = string;
@@ -56,3 +60,5 @@ export class WorkbenchViewsService extends Disposable implements IViewsService {
 export function createWorkbenchViewsService(): IViewsService {
   return new WorkbenchViewsService();
 }
+
+registerSingleton(IViewsService, WorkbenchViewsService, InstantiationType.Delayed);

@@ -1,4 +1,8 @@
 import type { Event } from 'ls/base/common/event';
+import {
+  InstantiationType,
+  registerSingleton,
+} from 'ls/platform/instantiation/common/extensions';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 import {
   connectWorkbenchWindowControls,
@@ -45,5 +49,7 @@ export class BrowserWorkbenchHostService implements IHostService {
 export function createWorkbenchHostService(): IHostService {
   return new BrowserWorkbenchHostService();
 }
+
+registerSingleton(IHostService, BrowserWorkbenchHostService, InstantiationType.Delayed);
 
 export type { WorkbenchWindowControlAction };

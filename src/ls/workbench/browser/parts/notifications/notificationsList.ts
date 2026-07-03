@@ -2,10 +2,10 @@ import { clearNode } from 'ls/base/browser/dom';
 import { DisposableStore } from 'ls/base/common/lifecycle';
 import { renderNotificationItem } from 'ls/workbench/browser/parts/notifications/notificationsViewer';
 import type {
-  NotificationModelChange,
-  WorkbenchNotificationItem,
-  WorkbenchNotificationsModel,
-} from 'ls/workbench/browser/parts/notifications/notificationsModel';
+  INotificationChangeEvent,
+  NotificationViewItem,
+  NotificationsModel,
+} from 'ls/workbench/common/notifications';
 
 export type NotificationsListOptions = {
   compact?: boolean;
@@ -15,12 +15,12 @@ export type NotificationsListOptions = {
 export class NotificationsList {
   private readonly listElement: HTMLDivElement;
   private readonly renderDisposables = new DisposableStore();
-  private items: WorkbenchNotificationItem[] = [];
+  private items: NotificationViewItem[] = [];
   private disposed = false;
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly model: WorkbenchNotificationsModel,
+    private readonly model: NotificationsModel,
     private readonly options: NotificationsListOptions = {},
   ) {
     this.container.classList.add('notifications-list-container');
@@ -37,7 +37,7 @@ export class NotificationsList {
     return this.listElement;
   }
 
-  setNotifications(items: WorkbenchNotificationItem[]) {
+  setNotifications(items: NotificationViewItem[]) {
     if (this.disposed) {
       return;
     }
@@ -62,7 +62,7 @@ export class NotificationsList {
     this.container.replaceChildren();
   }
 
-  private readonly handleNotificationChange = (event: NotificationModelChange) => {
+  private readonly handleNotificationChange = (event: INotificationChangeEvent) => {
     switch (event.kind) {
       case 'add':
         this.items = [event.item, ...this.items.filter((item) => item !== event.item)];
@@ -106,7 +106,7 @@ export class NotificationsList {
 
 export function createNotificationsList(
   container: HTMLElement,
-  model: WorkbenchNotificationsModel,
+  model: NotificationsModel,
   options?: NotificationsListOptions,
 ) {
   return new NotificationsList(container, model, options);

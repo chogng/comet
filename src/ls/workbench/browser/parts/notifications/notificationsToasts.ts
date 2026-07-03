@@ -3,10 +3,10 @@ import { DisposableStore, toDisposable } from 'ls/base/common/lifecycle';
 import { NotificationPriority } from 'ls/platform/notification/common/notification';
 import { renderNotificationItem } from 'ls/workbench/browser/parts/notifications/notificationsViewer';
 import type {
-  NotificationModelChange,
-  WorkbenchNotificationItem,
-  WorkbenchNotificationsModel,
-} from 'ls/workbench/browser/parts/notifications/notificationsModel';
+  INotificationChangeEvent,
+  NotificationViewItem,
+  NotificationsModel,
+} from 'ls/workbench/common/notifications';
 
 const DEFAULT_TOAST_DURATION = 8000;
 const MAX_VISIBLE_TOASTS = 3;
@@ -14,13 +14,13 @@ const MAX_VISIBLE_TOASTS = 3;
 export class NotificationsToasts {
   private readonly element = document.createElement('div');
   private readonly disposables = new DisposableStore();
-  private readonly toastTimers = new Map<WorkbenchNotificationItem, DisposableStore>();
-  private visibleItems: WorkbenchNotificationItem[] = [];
+  private readonly toastTimers = new Map<NotificationViewItem, DisposableStore>();
+  private visibleItems: NotificationViewItem[] = [];
   private disposed = false;
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly model: WorkbenchNotificationsModel,
+    private readonly model: NotificationsModel,
   ) {
     this.element.className = 'notifications-toasts bottom-right';
     this.container.append(this.element);
@@ -53,7 +53,7 @@ export class NotificationsToasts {
     this.element.remove();
   }
 
-  private readonly handleNotificationChange = (event: NotificationModelChange) => {
+  private readonly handleNotificationChange = (event: INotificationChangeEvent) => {
     if (event.kind === 'add') {
       this.showToast(event.item);
       return;
@@ -67,7 +67,7 @@ export class NotificationsToasts {
     this.render();
   };
 
-  private showToast(item: WorkbenchNotificationItem) {
+  private showToast(item: NotificationViewItem) {
     if (
       item.priority === NotificationPriority.SILENT ||
       this.visibleItems.includes(item)
@@ -81,7 +81,7 @@ export class NotificationsToasts {
     this.render();
   }
 
-  private removeToast(item: WorkbenchNotificationItem) {
+  private removeToast(item: NotificationViewItem) {
     const timer = this.toastTimers.get(item);
     timer?.dispose();
     this.toastTimers.delete(item);
@@ -90,7 +90,7 @@ export class NotificationsToasts {
     this.render();
   }
 
-  private installToastTimer(item: WorkbenchNotificationItem) {
+  private installToastTimer(item: NotificationViewItem) {
     if (item.sticky || item.hasProgress) {
       return;
     }
@@ -119,7 +119,7 @@ export class NotificationsToasts {
 
 export function createNotificationsToasts(
   container: HTMLElement,
-  model: WorkbenchNotificationsModel,
+  model: NotificationsModel,
 ) {
   return new NotificationsToasts(container, model);
 }

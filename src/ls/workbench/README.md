@@ -36,10 +36,10 @@ A file does not belong to the contribution layer when it mainly owns state, rend
 
 - [`workbench.common.main.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/workbench.common.main.ts)
   - Shared entry that imports feature registrations and starts workbench contributions.
-- [`contrib/workbench/workbench.contribution.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/contrib/workbench/workbench.contribution.ts)
+- [`common/contributions.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/common/contributions.ts)
   - Contribution runtime for registering, starting, and disposing workbench-scoped contributions.
-- [`contrib/desktop/desktop.contribution.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/contrib/desktop/desktop.contribution.ts)
-  - Desktop-only feature registration imported by the desktop entry.
+- [`workbench.desktop.main.ts`](/c:/Users/lanxi/Desktop/Literature-Studio/src/ls/workbench/workbench.desktop.main.ts)
+  - Desktop entry that registers native workbench services and imports desktop-only feature registrations.
 
 ## Files that already have contribution-like behavior
 

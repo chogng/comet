@@ -6,7 +6,10 @@ import {
   contextKeyService,
   RawContextKey,
 } from 'ls/platform/contextkey/common/contextkey';
-import type { Disposable } from 'ls/workbench/browser/workbench.contribution';
+import {
+  registerWorkbenchContribution,
+  type Disposable,
+} from 'ls/workbench/common/contributions';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchPartDomSnapshot,
@@ -135,3 +138,5 @@ export function createWorkbenchContextKeysContribution(
     },
   };
 }
+
+registerWorkbenchContribution(createWorkbenchContextKeysContribution);

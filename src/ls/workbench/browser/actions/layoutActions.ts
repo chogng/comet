@@ -3,7 +3,7 @@ import type { IDisposable } from 'ls/base/common/lifecycle';
 import { commandsRegistry } from 'ls/platform/commands/common/commands';
 import { getWorkbenchInstantiationService } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IWorkbenchLayoutService } from 'ls/workbench/services/layout/browser/layoutService';
-import { registerWorkbenchContribution } from 'ls/workbench/browser/workbench.contribution';
+import { registerWorkbenchContribution } from 'ls/workbench/common/contributions';
 
 export const WorkbenchLayoutCommandId = {
   applyAgentLayout: 'workbench.action.applyAgentLayout',

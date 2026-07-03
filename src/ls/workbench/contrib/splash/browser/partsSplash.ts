@@ -12,7 +12,7 @@ import {
   subscribeWorkbenchPartDom,
   WORKBENCH_PART_IDS,
 } from 'ls/workbench/browser/layout';
-import { registerWorkbenchContribution } from 'ls/workbench/contrib/workbench/workbench.contribution';
+import { registerWorkbenchContribution } from 'ls/workbench/common/contributions';
 import {
   setWorkbenchHostColorScheme,
 } from 'ls/workbench/services/themes/browser/workbenchThemeService';
