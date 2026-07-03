@@ -35,13 +35,24 @@ interface ListenerEntry<T> {
 	readonly thisArgs: unknown;
 }
 
+interface EventEmitterOptions {
+	readonly onWillAddFirstListener?: () => void;
+	readonly onDidRemoveLastListener?: () => void;
+}
+
 export class EventEmitter<T> implements DisposableLike {
 	private readonly listeners: ListenerEntry<T>[] = [];
 	private disposed = false;
 
+	constructor(private readonly options?: EventEmitterOptions) {}
+
 	readonly event: Event<T> = (listener, thisArgs, disposables) => {
 		if (this.disposed) {
 			return toDisposable(() => {});
+		}
+
+		if (this.listeners.length === 0) {
+			this.options?.onWillAddFirstListener?.();
 		}
 
 		const entry: ListenerEntry<T> = { listener, thisArgs };
@@ -51,6 +62,10 @@ export class EventEmitter<T> implements DisposableLike {
 			const index = this.listeners.indexOf(entry);
 			if (index !== -1) {
 				this.listeners.splice(index, 1);
+
+				if (this.listeners.length === 0) {
+					this.options?.onDidRemoveLastListener?.();
+				}
 			}
 		});
 		addToDisposables(disposable, disposables);
@@ -73,6 +88,11 @@ export class EventEmitter<T> implements DisposableLike {
 		}
 
 		this.disposed = true;
+		const hadListeners = this.listeners.length > 0;
 		this.listeners.length = 0;
+
+		if (hadListeners) {
+			this.options?.onDidRemoveLastListener?.();
+		}
 	}
 }

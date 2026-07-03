@@ -97,6 +97,53 @@ test('EventEmitter supports thisArgs and disposable stores', () => {
 	assert.deepEqual(receiver.events, [6]);
 });
 
+test('EventEmitter invokes first and last listener hooks', () => {
+	const events: string[] = [];
+	const emitter = new EventEmitter<number>({
+		onWillAddFirstListener: () => {
+			events.push('add');
+		},
+		onDidRemoveLastListener: () => {
+			events.push('remove');
+		},
+	});
+
+	const firstSubscription = emitter.event(() => {});
+	const secondSubscription = emitter.event(() => {});
+
+	secondSubscription.dispose();
+	assert.deepEqual(events, ['add']);
+
+	firstSubscription.dispose();
+	assert.deepEqual(events, ['add', 'remove']);
+
+	const store = new DisposableStore();
+	emitter.event(() => {}, undefined, store);
+	assert.deepEqual(events, ['add', 'remove', 'add']);
+
+	store.dispose();
+	assert.deepEqual(events, ['add', 'remove', 'add', 'remove']);
+});
+
+test('EventEmitter dispose invokes last listener hook once', () => {
+	const events: string[] = [];
+	const emitter = new EventEmitter<number>({
+		onWillAddFirstListener: () => {
+			events.push('add');
+		},
+		onDidRemoveLastListener: () => {
+			events.push('remove');
+		},
+	});
+
+	const subscription = emitter.event(() => {});
+
+	emitter.dispose();
+	subscription.dispose();
+
+	assert.deepEqual(events, ['add', 'remove']);
+});
+
 test('Event.None is inert', () => {
 	let didFire = false;
 
