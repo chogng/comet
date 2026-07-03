@@ -115,7 +115,7 @@ export type { WorkbenchPartId, WorkbenchPartRefCallback };
 
 const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
   isPrimarySidebarVisible: true,
-  isAgentSidebarVisible: false,
+  isAgentSidebarVisible: true,
   primarySidebarSize: WORKBENCH_SPLITVIEW_LIMITS.sidebar.defaultSize,
   agentSidebarSize: WORKBENCH_SPLITVIEW_LIMITS.agentSidebar.defaultSize,
   isEditorCollapsed: false,
@@ -248,6 +248,15 @@ function reduceWorkbenchLayoutState(
       };
     }
     case 'SET_AGENT_SIDEBAR_VISIBLE':
+      if (!event.visible) {
+        if (state.isAgentSidebarVisible) {
+          return normalizeEditorCollapseState(state);
+        }
+        return normalizeEditorCollapseState({
+          ...state,
+          isAgentSidebarVisible: true,
+        });
+      }
       if (state.isAgentSidebarVisible === event.visible) {
         return normalizeEditorCollapseState(state);
       }
@@ -256,9 +265,12 @@ function reduceWorkbenchLayoutState(
         isAgentSidebarVisible: event.visible,
       });
     case 'TOGGLE_AGENT_SIDEBAR_VISIBILITY': {
+      if (state.isAgentSidebarVisible) {
+        return normalizeEditorCollapseState(state);
+      }
       return normalizeEditorCollapseState({
         ...state,
-        isAgentSidebarVisible: !state.isAgentSidebarVisible,
+        isAgentSidebarVisible: true,
       });
     }
     case 'SET_AGENT_SIDEBAR_SIZE': {

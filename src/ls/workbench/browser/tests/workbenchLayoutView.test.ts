@@ -82,23 +82,6 @@ function createSettingsTopbarActionsElement(backLabel: string) {
   return host;
 }
 
-function createAgentTopbarActionsElement(props: {
-  label: string;
-  onToggleAgentSidebar: () => void;
-}) {
-  const actionbar = document.createElement('div');
-  actionbar.className = 'sidebar-topbar-actions actionbar is-horizontal';
-  const actions = document.createElement('div');
-  actions.className = 'actionbar-actions-container';
-  const button = document.createElement('button');
-  button.className = 'actionbar-action editor-topbar-agent-btn';
-  button.setAttribute('aria-label', props.label);
-  button.addEventListener('click', props.onToggleAgentSidebar);
-  actions.append(button);
-  actionbar.append(actions);
-  return actionbar;
-}
-
 function waitForNextTask() {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
@@ -1240,17 +1223,10 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
   }
 });
 
-test('WorkbenchLayoutView renders the agent sidebar toggle in agentbar topbar when the agent sidebar is visible', () => {
-  let toggleAgentCount = 0;
+test('WorkbenchLayoutView does not render the agent toggle in agentbar topbar when the agent sidebar is visible', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = true;
-  props.agentTopbarTrailingActionsElement = createAgentTopbarActionsElement({
-    label: 'Hide assistant',
-    onToggleAgentSidebar: () => {
-      toggleAgentCount += 1;
-    },
-  });
   props.editorPartProps = {
     ...props.editorPartProps,
     isAgentSidebarVisible: true,
@@ -1266,10 +1242,7 @@ test('WorkbenchLayoutView renders the agent sidebar toggle in agentbar topbar wh
     const agentButton = view
       .getElement()
       .querySelector('.agentbar-topbar .editor-topbar-agent-btn');
-    assert(agentButton instanceof HTMLButtonElement);
-    assert.equal(agentButton.getAttribute('aria-label'), 'Hide assistant');
-    agentButton.click();
-    assert.equal(toggleAgentCount, 1);
+    assert.equal(agentButton, null);
     assert.equal(
       view
         .getElement()
@@ -1281,7 +1254,7 @@ test('WorkbenchLayoutView renders the agent sidebar toggle in agentbar topbar wh
   }
 });
 
-test('WorkbenchLayoutView keeps the agent toggle in editor topbar when the agent sidebar is hidden', () => {
+test('WorkbenchLayoutView does not render the agent toggle in editor topbar when the agent sidebar is hidden', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = false;
@@ -1300,8 +1273,7 @@ test('WorkbenchLayoutView keeps the agent toggle in editor topbar when the agent
     const editorAgentButton = view
       .getElement()
       .querySelector('.editor-topbar .editor-topbar-agent-btn');
-    assert(editorAgentButton instanceof HTMLButtonElement);
-    assert.equal(editorAgentButton.getAttribute('aria-label'), 'Show assistant');
+    assert.equal(editorAgentButton, null);
 
     const primaryAgentButton = view
       .getElement()
@@ -3544,7 +3516,7 @@ test('WorkbenchLayoutView keeps primary and agent widths fixed when agentbar bec
   }
 });
 
-test('WorkbenchLayoutView keeps editor collapsed and mounts expand action into sidebar when agentbar is hidden from collapsed mode', () => {
+test('WorkbenchLayoutView keeps agentbar visible when agentbar hide is requested from collapsed mode', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3580,7 +3552,7 @@ test('WorkbenchLayoutView keeps editor collapsed and mounts expand action into s
 
     setAgentSidebarVisible(false);
     syncRawPropsWithLayoutState(props);
-    assert.equal(props.isAgentSidebarVisible, false);
+    assert.equal(props.isAgentSidebarVisible, true);
     assert.equal(props.isEditorCollapsed, true);
     view.setProps(materializeWorkbenchLayoutViewProps(props));
     animationFrameSpy.flushAll();
@@ -3592,12 +3564,12 @@ test('WorkbenchLayoutView keeps editor collapsed and mounts expand action into s
     }).gridView;
     assert(nextGridView);
 
-    assert(nextGridView.getViewSize([0]) > primarySizeBefore);
-    const primaryToggleButton = view
+    assert.equal(nextGridView.getViewSize([0]), primarySizeBefore);
+    const agentToggleButton = view
       .getElement()
-      .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn');
-    assert(primaryToggleButton instanceof HTMLButtonElement);
-    assert.equal(primaryToggleButton.getAttribute('aria-label'), 'Expand editor');
+      .querySelector('.agentbar-topbar .editor-topbar-toggle-editor-btn');
+    assert(agentToggleButton instanceof HTMLButtonElement);
+    assert.equal(agentToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()

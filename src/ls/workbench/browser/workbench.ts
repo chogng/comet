@@ -60,10 +60,7 @@ import { createFetchPaneProps } from 'ls/workbench/browser/parts/sidebar/fetchPa
 import { createToastOverlayWindowView } from 'ls/workbench/browser/toastOverlayWindow';
 import { createWorkbenchContentPartViews } from 'ls/workbench/browser/workbenchContentPartViews';
 import { showWorkbenchTextInputModal } from 'ls/workbench/browser/workbenchEditorModals';
-import {
-  createAgentSidebarTopbarActionsView,
-  createEditorTopbarActionsView,
-} from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
+import { createEditorTopbarActionsView } from 'ls/workbench/browser/parts/editor/editorTopbarActionsView';
 import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'ls/base/browser/ui/aria/aria';
 import { createToastHost } from 'ls/base/browser/ui/toast/toastHost';
@@ -274,7 +271,6 @@ export class WorkbenchLayoutView {
   private readonly editorSlot = new WorkbenchLayoutSlotView('workbench-content-slot-editor');
   private readonly agentBarSlot = new WorkbenchLayoutSlotView(
     'workbench-content-slot-agent',
-    true,
   );
   private readonly layoutController: WorkbenchContentLayoutController;
   private disposed = false;
@@ -661,12 +657,6 @@ class WorkbenchHost {
     onToggleEditorCollapse: toggleEditorCollapsed,
     onToggleAgentSidebar: () => {},
   });
-  private readonly agentSidebarTopbarActionsView =
-    createAgentSidebarTopbarActionsView({
-      isAgentSidebarVisible: false,
-      agentSidebarToggleLabel: '',
-      onToggleAgentSidebar: () => {},
-    });
   private readonly sidebarTopbarActionsView = new SidebarTopbarActionsView();
   private readonly settingsTopbarActionsView = createSettingsTopbarActionsView({
     backLabel: '',
@@ -765,7 +755,6 @@ class WorkbenchHost {
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
     this.auxiliaryEditorTopbarActionsView.dispose();
-    this.agentSidebarTopbarActionsView.dispose();
     this.sidebarTopbarActionsView.dispose();
     this.settingsTopbarActionsView.dispose();
     this.sidebarFooterActionsView.dispose();
@@ -903,7 +892,7 @@ class WorkbenchHost {
 
     this.appliedKnowledgeBaseModeEnabled = isKnowledgeBaseModeEnabled;
     setPrimarySidebarVisible(isKnowledgeBaseModeEnabled);
-    setAgentSidebarVisible(isKnowledgeBaseModeEnabled);
+    setAgentSidebarVisible(true);
   }
 
   private syncSelectionState(
@@ -1174,10 +1163,7 @@ class WorkbenchHost {
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
       editorTopbarAuxiliaryActionsElement:
         props.editorTopbarAuxiliaryActionsElement,
-      agentTopbarTrailingActionsElement:
-        props.isAgentSidebarVisible
-          ? this.agentSidebarTopbarActionsView.getElement()
-          : null,
+      agentTopbarTrailingActionsElement: null,
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createWorkbenchContentPartViews(partViewProps);
@@ -1311,18 +1297,17 @@ class WorkbenchHost {
     }
 
     this.hasAppliedStartupLayoutPreference = true;
-    const shouldShowAgentSidebar = params.startupLayout === 'agent';
     const needsLayoutUpdate =
       !params.isPrimarySidebarVisible ||
       params.isEditorCollapsed ||
-      params.isAgentSidebarVisible !== shouldShowAgentSidebar;
+      !params.isAgentSidebarVisible;
 
     if (!needsLayoutUpdate) {
       return false;
     }
 
     setPrimarySidebarVisible(true);
-    setAgentSidebarVisible(shouldShowAgentSidebar);
+    setAgentSidebarVisible(true);
     setEditorCollapsed(false);
     return true;
   }
@@ -1801,14 +1786,6 @@ class WorkbenchHost {
         onToggleAgentSidebar: toggleAgentSidebarVisibility,
       }),
     );
-    this.agentSidebarTopbarActionsView.setProps({
-      isAgentSidebarVisible,
-      agentSidebarToggleLabel: resolveTitlebarAssistantToggleLabel(
-        ui,
-        isAgentSidebarVisible,
-      ),
-      onToggleAgentSidebar: toggleAgentSidebarVisibility,
-    });
 
     const handleBatchFetchStart = () => {};
 
@@ -1865,9 +1842,7 @@ class WorkbenchHost {
       });
     };
 
-    const handleCloseAgentSidebar = () => {
-      setAgentSidebarVisible(false);
-    };
+    const handleCloseAgentSidebar = () => {};
 
     const activeDraftStableSelectionTarget =
       this.workbenchContentPartViews?.getActiveDraftStableSelectionTarget() ?? null;
@@ -2314,7 +2289,7 @@ class WorkbenchHost {
     };
     const handleApplyLayoutFlow = () => {
       setPrimarySidebarVisible(true);
-      setAgentSidebarVisible(false);
+      setAgentSidebarVisible(true);
       setEditorCollapsed(false);
     };
 
