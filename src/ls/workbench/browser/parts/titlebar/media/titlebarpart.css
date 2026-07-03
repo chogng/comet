@@ -148,26 +148,30 @@
 
 .titlebar-container.has-center > .titlebar-left {
   order: 0;
-  flex: 0 0 auto;
+  width: 20%;
+  flex-grow: 2;
   justify-content: flex-start;
 }
 
 .titlebar-container.has-center > .titlebar-center {
   order: 1;
-  flex: 0 0 auto;
+  width: 60%;
+  max-width: fit-content;
   min-width: 0px;
-  margin: 0;
+  margin: 0 10px;
   justify-content: center;
 }
 
 .titlebar-container.has-center > .titlebar-right {
   order: 2;
-  flex: 0 0 auto;
+  width: 20%;
+  min-width: min-content;
+  flex-grow: 2;
   justify-content: flex-end;
 }
 
 .titlebar-container:not(.has-center) > .titlebar-left {
-  flex: 0 0 auto;
+  flex: 1 1 0%;
   min-width: 0;
 }
 
@@ -177,6 +181,7 @@
 
 .titlebar-container:not(.has-center) > .titlebar-right {
   flex: 0 0 auto;
+  padding-left: 16px;
 }
 
 .titlebar-left[hidden],

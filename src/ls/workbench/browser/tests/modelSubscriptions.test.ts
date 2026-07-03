@@ -43,8 +43,6 @@ import {
   WORKBENCH_CONTENT_LAYOUT_BREAKPOINT,
   WORKBENCH_PART_IDS,
 } from 'ls/workbench/browser/layout';
-import { Orientation } from 'ls/base/browser/ui/splitview/splitview';
-import { getLayoutLimits } from 'ls/workbench/browser/layoutLimits';
 import {
   getStatusbarStateSnapshot,
   setStatusbarState,
@@ -604,7 +602,6 @@ test('workbenchLayout subscriptions stop after disposal', () => {
 
 test('setWorkbenchSidebarSizes clamps with horizontal limits on narrow viewport', () => {
   const previousInnerWidth = window.innerWidth;
-  const horizontalLimits = getLayoutLimits(Orientation.HORIZONTAL);
 
   try {
     Object.defineProperty(window, 'innerWidth', {
@@ -619,14 +616,8 @@ test('setWorkbenchSidebarSizes clamps with horizontal limits on narrow viewport'
     });
 
     const nextState = getWorkbenchLayoutStateSnapshot();
-    assert.equal(
-      nextState.primarySidebarSize,
-      horizontalLimits.primarySidebar.minimum,
-    );
-    assert.equal(
-      nextState.agentSidebarSize,
-      horizontalLimits.agentSidebar.minimum,
-    );
+    assert.equal(nextState.primarySidebarSize, 160);
+    assert.equal(nextState.agentSidebarSize, 160);
   } finally {
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -696,49 +687,12 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
   const primaryTopbar = document.createElement('div');
   const editorTopbar = document.createElement('div');
   const agentTopbar = document.createElement('div');
-  const primaryContent = document.createElement('div');
-  const editorContent = document.createElement('div');
-  const agentContent = document.createElement('div');
   primaryTopbar.className = 'sidebar-topbar';
   editorTopbar.className = 'editor-topbar';
   agentTopbar.className = 'agentbar-topbar';
-  primaryContent.getBoundingClientRect = () => ({
-    x: 0,
-    y: 0,
-    width: 260,
-    height: 600,
-    top: 0,
-    right: 260,
-    bottom: 600,
-    left: 0,
-    toJSON: () => ({}),
-  });
-  editorContent.getBoundingClientRect = () => ({
-    x: 260,
-    y: 0,
-    width: 700,
-    height: 600,
-    top: 0,
-    right: 960,
-    bottom: 600,
-    left: 260,
-    toJSON: () => ({}),
-  });
-  agentContent.getBoundingClientRect = () => ({
-    x: 960,
-    y: 0,
-    width: 320,
-    height: 600,
-    top: 0,
-    right: 1280,
-    bottom: 600,
-    left: 960,
-    toJSON: () => ({}),
-  });
 
   const titlebarPart = createTitlebarPart(container, shell, statusbar);
   container.append(titlebarPart.getElement(), shell);
-  shell.append(primaryContent, editorContent, agentContent);
 
   try {
     titlebarPart.sync({
@@ -752,9 +706,6 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       primaryTopbarElement: primaryTopbar,
       editorTopbarElement: editorTopbar,
       agentTopbarElement: agentTopbar,
-      primaryContentElement: primaryContent,
-      editorContentElement: editorContent,
-      agentContentElement: agentContent,
     });
 
     assert(container.classList.contains('has-titlebar'));
@@ -773,18 +724,6 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     assert.equal(
       titlebarPart.getElement().querySelector('.titlebar-right > .agentbar-topbar'),
       agentTopbar,
-    );
-    assert.equal(
-      titlebarPart.getElement().querySelector<HTMLElement>('.titlebar-left')?.style.width,
-      '260px',
-    );
-    assert.equal(
-      titlebarPart.getElement().querySelector<HTMLElement>('.titlebar-center')?.style.width,
-      '700px',
-    );
-    assert.equal(
-      titlebarPart.getElement().querySelector<HTMLElement>('.titlebar-right')?.style.width,
-      '320px',
     );
     assert.equal(
       getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.titlebar],
