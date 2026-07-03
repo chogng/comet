@@ -382,6 +382,7 @@ export class WorkbenchLayoutView {
     this.mainElement.className = getWorkbenchContentClassName({
       isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
       isAgentSidebarVisible: this.props.isAgentSidebarVisible,
+      isEditorCollapsed: this.props.isEditorCollapsed,
     });
 
     this.props.partViews.setLayoutState({
@@ -1285,8 +1286,8 @@ class WorkbenchHost {
     this.hasAppliedStartupLayoutPreference = true;
     const needsLayoutUpdate =
       !params.isPrimarySidebarVisible ||
-      params.isEditorCollapsed ||
-      !params.isAgentSidebarVisible;
+      !params.isAgentSidebarVisible ||
+      !params.isEditorCollapsed;
 
     if (!needsLayoutUpdate) {
       return false;
@@ -1294,7 +1295,7 @@ class WorkbenchHost {
 
     setPrimarySidebarVisible(true);
     setAgentSidebarVisible(true);
-    setEditorCollapsed(false);
+    setEditorCollapsed(true);
     return true;
   }
 

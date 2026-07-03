@@ -36,6 +36,7 @@ import {
   getWorkbenchPartDomSnapshot,
   registerWorkbenchPartDomNode,
   setAgentSidebarVisible,
+  setEditorCollapsed,
   setPrimarySidebarVisible,
   setWorkbenchSidebarSizes,
   subscribeWorkbenchLayoutState,
@@ -188,6 +189,7 @@ function createWebContentState(
 function restoreWorkbenchLayoutState() {
   setPrimarySidebarVisible(originalWorkbenchLayoutState.isPrimarySidebarVisible);
   setAgentSidebarVisible(originalWorkbenchLayoutState.isAgentSidebarVisible);
+  setEditorCollapsed(originalWorkbenchLayoutState.isEditorCollapsed);
   setWorkbenchSidebarSizes({
     primarySidebarSize: originalWorkbenchLayoutState.primarySidebarSize,
     agentSidebarSize: originalWorkbenchLayoutState.agentSidebarSize,

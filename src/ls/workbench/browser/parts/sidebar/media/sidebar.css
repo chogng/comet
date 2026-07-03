@@ -11,6 +11,19 @@
   gap: 0;
 }
 
+.workbench-content-slot > .panel.sidebar-part-panel {
+  width: calc(100% - 12px - var(--workbench-primary-sidebar-floating-right-gap, 10px));
+  height: calc(100% - 24px);
+  margin: 12px var(--workbench-primary-sidebar-floating-right-gap, 10px) 12px 12px;
+  border: 1px solid var(--vscode-sideBar-border, rgba(15, 23, 42, 0.1));
+  border-right-color: transparent;
+  border-radius: 8px;
+  background: var(--sidebar-surface-bg);
+  box-shadow:
+    0 12px 32px rgba(15, 23, 42, 0.08),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
 .app-window.is-mica-enabled .panel.sidebar-panel.sidebar-platform-windows {
   --sidebar-surface-bg: rgba(248, 250, 253, 0.72);
   --sidebar-surface-bg: color-mix(
@@ -35,6 +48,13 @@
     color-mix(in srgb, var(--vscode-sideBar-fetchCardBorder, #ebebeb) 60%, transparent);
   -webkit-backdrop-filter: saturate(200%) blur(30px) brightness(1.02);
   backdrop-filter: saturate(200%) blur(30px) brightness(1.02);
+}
+
+.app-window.is-mica-enabled .panel.sidebar-part-panel.sidebar-platform-macos {
+  border: 1px solid rgba(186, 198, 212, 0.35);
+  border: 1px solid
+    color-mix(in srgb, var(--vscode-sideBar-fetchCardBorder, #ebebeb) 60%, transparent);
+  border-radius: 8px;
 }
 
 .app-window.is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos::before {
@@ -120,6 +140,10 @@
   min-height: var(--sidebar-footer-height);
   padding: 0 8px;
   background: var(--sidebar-surface-bg);
+}
+
+.sidebar-part-panel .sidebar-footer {
+  border-top: 1px solid var(--vscode-sideBar-border, rgba(15, 23, 42, 0.08));
 }
 
 .sidebar-footer > * {

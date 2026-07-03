@@ -102,7 +102,7 @@ test('workbench layout service commands apply agent and flow layouts', async () 
       let layoutState = getWorkbenchLayoutStateSnapshot();
       assert.equal(layoutState.isPrimarySidebarVisible, true);
       assert.equal(layoutState.isAgentSidebarVisible, true);
-      assert.equal(layoutState.isEditorCollapsed, false);
+      assert.equal(layoutState.isEditorCollapsed, true);
 
       setEditorCollapsed(true);
       commandService.executeCommand(WorkbenchLayoutCommandId.applyFlowLayout);

@@ -112,7 +112,7 @@
 
 .agentbar-composer.is-empty-state {
   margin-top: 0;
-  width: min(100%, 560px);
+  width: min(100%, 840px);
 }
 
 .agentbar-composer .agentbar-input {

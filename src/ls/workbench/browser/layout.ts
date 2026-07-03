@@ -77,6 +77,7 @@ type WorkbenchShellLayoutParams = {
 type WorkbenchContentLayoutParams = {
   isPrimarySidebarVisible: boolean;
   isAgentSidebarVisible: boolean;
+  isEditorCollapsed: boolean;
 };
 
 export type WorkbenchContentLayoutControllerState = {
@@ -107,9 +108,9 @@ export type { WorkbenchPartId, WorkbenchPartRefCallback };
 
 const WORKBENCH_SPLITVIEW_LIMITS = {
   sidebar: {
-    minimum: 170,
+    minimum: 320,
     maximum: Number.POSITIVE_INFINITY,
-    defaultSize: 220,
+    defaultSize: 412,
   },
   editor: {
     minimum: 220,
@@ -198,7 +199,7 @@ const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
   isAgentSidebarVisible: true,
   primarySidebarSize: WORKBENCH_SPLITVIEW_LIMITS.sidebar.defaultSize,
   agentSidebarSize: WORKBENCH_SPLITVIEW_LIMITS.agentSidebar.defaultSize,
-  isEditorCollapsed: false,
+  isEditorCollapsed: true,
   expandedEditorSize: WORKBENCH_SPLITVIEW_LIMITS.editor.minimum,
 };
 
@@ -467,11 +468,12 @@ function reduceWorkbenchLayoutState(
 ): WorkbenchLayoutStateSnapshot {
   switch (event.type) {
     case 'APPLY_LAYOUT_MODE': {
+      const isAgentMode = event.mode === 'agent';
       const nextState = {
         ...state,
         isPrimarySidebarVisible: true,
-        isAgentSidebarVisible: event.mode === 'agent',
-        isEditorCollapsed: false,
+        isAgentSidebarVisible: isAgentMode,
+        isEditorCollapsed: isAgentMode,
       };
 
       if (
@@ -537,14 +539,14 @@ function reduceWorkbenchLayoutState(
       return normalizeEditorCollapseState({
         ...state,
         isAgentSidebarVisible: event.visible,
-        isEditorCollapsed: event.visible ? state.isEditorCollapsed : false,
+        isEditorCollapsed: event.visible,
       });
     case 'TOGGLE_AGENT_SIDEBAR_VISIBILITY': {
       const nextVisible = !state.isAgentSidebarVisible;
       return normalizeEditorCollapseState({
         ...state,
         isAgentSidebarVisible: nextVisible,
-        isEditorCollapsed: nextVisible ? state.isEditorCollapsed : false,
+        isEditorCollapsed: nextVisible,
       });
     }
     case 'SET_AGENT_SIDEBAR_SIZE': {
@@ -739,11 +741,13 @@ export function getWorkbenchShellClassName({
 export function getWorkbenchContentClassName({
   isPrimarySidebarVisible,
   isAgentSidebarVisible,
+  isEditorCollapsed,
 }: WorkbenchContentLayoutParams) {
   return [
     'content-grid',
     isPrimarySidebarVisible ? 'is-primary-sidebar-visible' : '',
     isAgentSidebarVisible ? 'is-agent-sidebar-visible' : '',
+    isEditorCollapsed ? 'is-editor-collapsed' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -1125,7 +1129,9 @@ export class WorkbenchContentLayoutController {
     }
 
     this.gridView.setViewSize([PRIMARY_SIDEBAR_INDEX], state.primarySidebarSize);
-    this.gridView.setViewSize([AGENT_SIDEBAR_INDEX], state.agentSidebarSize);
+    if (!state.isEditorCollapsed) {
+      this.gridView.setViewSize([AGENT_SIDEBAR_INDEX], state.agentSidebarSize);
+    }
   }
 
   private captureGridSizes(state: WorkbenchContentLayoutControllerState): SplitViewSizeSnapshot {
