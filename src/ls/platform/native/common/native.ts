@@ -6,7 +6,7 @@ import type {
   ElectronToastApi,
   ElectronWebContentApi,
   ElectronWindowControls,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
+} from 'ls/base/parts/sandbox/common/electronTypes';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 
 export const INativeHostService =

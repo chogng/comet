@@ -1,11 +1,6 @@
-import type {
-  AppErrorCode,
-  AppErrorPayload,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
-
 export const APP_ERROR_PREFIX = '__APP_ERROR__:';
 
-const appErrorCodes: AppErrorCode[] = [
+const appErrorCodes = [
   'MAIN_WINDOW_UNAVAILABLE',
   'UNKNOWN_COMMAND',
   'URL_EMPTY',
@@ -28,8 +23,22 @@ const appErrorCodes: AppErrorCode[] = [
   'LLM_MODEL_MISSING',
   'LLM_BASE_URL_INVALID',
   'LLM_CONNECTION_FAILED',
+  'RAG_PROVIDER_UNSUPPORTED',
+  'RAG_API_KEY_MISSING',
+  'RAG_BASE_URL_INVALID',
+  'RAG_EMBEDDING_MODEL_MISSING',
+  'RAG_RERANKER_MODEL_MISSING',
+  'RAG_CONNECTION_FAILED',
+  'RAG_QUERY_EMPTY',
   'UNKNOWN_ERROR',
-];
+] as const;
+
+export type AppErrorCode = (typeof appErrorCodes)[number];
+
+export interface AppErrorPayload {
+  code: AppErrorCode;
+  details?: Record<string, unknown>;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -100,4 +109,15 @@ export function parseSerializedAppError(message: string): AppErrorPayload | null
   } catch {
     return null;
   }
+}
+
+export class CancellationError extends Error {
+  constructor() {
+    super('Canceled');
+    this.name = 'Canceled';
+  }
+}
+
+export function isCancellationError(error: unknown): error is CancellationError {
+  return error instanceof CancellationError || (error instanceof Error && error.name === 'Canceled');
 }

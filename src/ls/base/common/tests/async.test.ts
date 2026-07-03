@@ -3,19 +3,20 @@ import test from 'node:test';
 import {
   CancellationTokenSource,
   Delayer,
+  Promises,
   RunOnceScheduler,
   createCancelablePromise,
   timeout,
 } from 'ls/base/common/async';
 
-test('createCancelablePromise observes cancellation', async () => {
+test('createCancelablePromise rejects when cancelled', async () => {
   const promise = createCancelablePromise(async (token) => {
-    await timeout(1);
+    await timeout(100);
     return token.isCancellationRequested;
   });
 
   promise.cancel();
-  assert.equal(await promise, true);
+  await assert.rejects(promise, /Canceled/);
 });
 
 test('race timeout token rejects when cancelled', async () => {
@@ -33,6 +34,26 @@ test('Delayer runs latest task', async () => {
 
   assert.equal(await second, 'second');
   assert.equal(await first, 'second');
+});
+
+test('Promises.settled waits for all promises before rejecting', async () => {
+  let secondSettled = false;
+  const firstError = new Error('first');
+  const first = Promise.reject(firstError);
+  const second = timeout(1).then(() => {
+    secondSettled = true;
+    throw new Error('second');
+  });
+
+  await assert.rejects(Promises.settled([first, second]), firstError);
+  assert.equal(secondSettled, true);
+});
+
+test('Promises.settled returns fulfilled values', async () => {
+  assert.deepEqual(
+    await Promises.settled([Promise.resolve(1), Promise.resolve(2)]),
+    [1, 2],
+  );
 });
 
 test('RunOnceScheduler flushes scheduled runner', () => {

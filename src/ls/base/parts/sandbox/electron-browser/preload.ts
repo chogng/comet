@@ -1,12 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppCommand,
-  AppErrorCode,
   AppCommandPayloadMap,
   AppCommandResultMap,
   WebContentBridgeCommand,
   WebContentBridgeResponse,
-  ElectronAPI,
   DocumentTranslationProgress,
   FetchStatus,
   NativeToastLayout,
@@ -19,8 +17,14 @@ import type {
   WebContentState,
   WindowControlAction,
   WindowState,
-} from 'ls/base/parts/sandbox/common/desktopTypes';
-import { parseSerializedAppError } from 'ls/base/common/errors';
+} from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type {
+  ElectronAPI,
+} from 'ls/base/parts/sandbox/common/electronTypes';
+import {
+  parseSerializedAppError,
+  type AppErrorCode,
+} from 'ls/base/common/errors';
 
 const APP_IPC_CHANNEL_PREFIX = 'app:';
 const APP_SERVICE_IPC_CALL_CHANNEL = 'app:ipc-call';

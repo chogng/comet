@@ -3,13 +3,13 @@ import { EventEmitter } from "ls/base/common/event";
 import type {
   AgentMessagePayload,
   Article,
-  ElectronInvoke,
   LlmSettings,
   MainAgentPatchProposal,
   RagAnswerResult,
   RagSettings,
   RunMainAgentTurnResult,
-} from "ls/base/parts/sandbox/common/desktopTypes";
+} from "ls/base/parts/sandbox/common/sandboxTypes";
+import type { ElectronInvoke } from "ls/base/parts/sandbox/common/electronTypes";
 import {
   applyWritingEditorEdits,
   collectWritingEditorTextUnits,

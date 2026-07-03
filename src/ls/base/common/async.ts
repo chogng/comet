@@ -1,13 +1,16 @@
 import {
-  CancellationError,
   CancellationTokenNone,
   CancellationTokenSource,
-  isCancellationError,
   type CancellationToken,
 } from 'ls/base/common/cancellation';
 import {
+  CancellationError,
+  isCancellationError,
+} from 'ls/base/common/errors';
+import {
   DisposableStore,
   type IDisposable,
+  isDisposable,
   toDisposable,
 } from 'ls/base/common/lifecycle';
 
@@ -30,7 +33,36 @@ export function createCancelablePromise<T>(
   callback: (token: CancellationToken) => Promise<T>,
 ): CancelablePromise<T> {
   const source = new CancellationTokenSource();
-  const promise = callback(source.token);
+
+  const thenable = callback(source.token);
+  let isCancelled = false;
+
+  const promise = new Promise<T>((resolve, reject) => {
+    const subscription = source.token.onCancellationRequested(() => {
+      isCancelled = true;
+      subscription.dispose();
+      reject(new CancellationError());
+    });
+
+    Promise.resolve(thenable).then(
+      (value) => {
+        subscription.dispose();
+        source.dispose();
+
+        if (!isCancelled) {
+          resolve(value);
+        } else if (isDisposable(value)) {
+          value.dispose();
+        }
+      },
+      (error) => {
+        subscription.dispose();
+        source.dispose();
+        reject(error);
+      },
+    );
+  });
+
   return Object.assign(promise, {
     cancel() {
       source.cancel();
@@ -460,6 +492,35 @@ export async function firstParallel<T>(
     }
   });
 }
+
+async function settled<T>(promises: Promise<T>[]): Promise<T[]> {
+  let firstError: unknown;
+
+  const result = await Promise.all(
+    promises.map((promise) =>
+      promise.then(
+        (value) => value,
+        (error) => {
+          if (typeof firstError === 'undefined') {
+            firstError = error;
+          }
+
+          return undefined;
+        },
+      ),
+    ),
+  );
+
+  if (typeof firstError !== 'undefined') {
+    throw firstError;
+  }
+
+  return result as T[];
+}
+
+export const Promises = {
+  settled,
+};
 
 export interface ILimiter<T> {
   readonly size: number;

@@ -1,4 +1,4 @@
-import type { AppErrorCode } from 'ls/base/parts/sandbox/common/desktopTypes';
+import type { AppErrorCode } from 'ls/base/common/errors';
 import type { LocaleMessages } from 'language/locales';
 
 export type DesktopErrorCode = AppErrorCode;

@@ -71,13 +71,4 @@ export class CancellationTokenSource extends Disposable {
   }
 }
 
-export class CancellationError extends Error {
-  constructor() {
-    super('Canceled');
-    this.name = 'Canceled';
-  }
-}
-
-export function isCancellationError(error: unknown): error is CancellationError {
-  return error instanceof CancellationError || (error instanceof Error && error.name === 'Canceled');
-}
+export { CancellationError, isCancellationError } from 'ls/base/common/errors';
