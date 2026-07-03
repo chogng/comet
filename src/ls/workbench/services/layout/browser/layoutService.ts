@@ -1,6 +1,8 @@
 import type { Event } from 'ls/base/common/event';
+import type { IDisposable } from 'ls/base/common/lifecycle';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 import {
+  applyWorkbenchLayoutMode,
   createWorkbenchPartRef,
   dispatchWorkbenchLayoutEvent,
   getWorkbenchLayoutStateSnapshot,
@@ -19,6 +21,7 @@ import {
   toggleEditorCollapsed,
   togglePrimarySidebarVisibility,
   type WorkbenchLayoutEvent,
+  type WorkbenchLayoutMode,
   type WorkbenchLayoutStateSnapshot,
   type WorkbenchPartId,
   type WorkbenchPartRefCallback,
@@ -27,7 +30,7 @@ import {
 export const IWorkbenchLayoutService =
   createDecorator<IWorkbenchLayoutService>('workbenchLayoutService');
 
-export interface IWorkbenchLayoutService {
+export interface IWorkbenchLayoutService extends IDisposable {
   readonly _serviceBrand: undefined;
   readonly onDidChangeLayoutState: Event<void>;
   readonly onDidChangePartDom: Event<void>;
@@ -37,6 +40,7 @@ export interface IWorkbenchLayoutService {
   registerPartDomNode(partId: WorkbenchPartId, element: HTMLElement | null): void;
   createPartRef(partId: WorkbenchPartId): WorkbenchPartRefCallback;
   dispatchLayoutEvent(event: WorkbenchLayoutEvent): void;
+  applyLayoutMode(mode: WorkbenchLayoutMode): void;
   setSidebarSizes(
     sizes: Partial<
       Pick<
@@ -61,6 +65,9 @@ export class BrowserWorkbenchLayoutService implements IWorkbenchLayoutService {
   readonly onDidChangeLayoutState = subscribeWorkbenchLayoutState;
   readonly onDidChangePartDom = subscribeWorkbenchPartDom;
 
+  dispose() {
+  }
+
   getLayoutState() {
     return getWorkbenchLayoutStateSnapshot();
   }
@@ -83,6 +90,10 @@ export class BrowserWorkbenchLayoutService implements IWorkbenchLayoutService {
 
   dispatchLayoutEvent(event: WorkbenchLayoutEvent) {
     dispatchWorkbenchLayoutEvent(event);
+  }
+
+  applyLayoutMode(mode: WorkbenchLayoutMode) {
+    applyWorkbenchLayoutMode(mode);
   }
 
   setSidebarSizes(
@@ -140,6 +151,7 @@ export {
 } from 'ls/workbench/browser/layout';
 export type {
   WorkbenchContentLayoutControllerState,
+  WorkbenchLayoutMode,
   WorkbenchLayoutStateSnapshot,
   WorkbenchPartId,
   WorkbenchPartRefCallback,

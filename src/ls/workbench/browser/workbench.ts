@@ -34,12 +34,11 @@ import type { EditorPartChangeReason, EditorPartControllerContext, EditorPartMod
 import type { EditorPartProps } from 'ls/workbench/browser/parts/editor/editorPartView';
 import { createEditorBrowserToolbarActions } from 'ls/workbench/browser/parts/editor/editorBrowserToolbarActions';
 import { SidebarFooterActionsView } from 'ls/workbench/browser/parts/sidebar/sidebarFooterActions';
-import { SidebarTopbarActionsView } from 'ls/workbench/browser/parts/sidebar/sidebarTopbarActions';
 import {
   createEditorTitlebarActionsProps,
   createSidebarFooterTitlebarLabels,
   createSidebarFooterTitlebarActionsProps,
-  createSidebarTitlebarActionsProps,
+  createTitlebarLeadingActionsProps,
   resolveTitlebarAssistantToggleLabel,
   resolveTitlebarSettingsLabel,
 } from 'ls/workbench/browser/parts/titlebar/titlebarActions';
@@ -66,7 +65,8 @@ import { setARIAContainer } from 'ls/base/browser/ui/aria/aria';
 import { createToastHost } from 'ls/base/browser/ui/toast/toastHost';
 import type { ToastHost } from 'ls/base/browser/ui/toast/toastHost';
 import { INotificationService } from 'ls/platform/notification/common/notification';
-import { getWorkbenchServiceCollection } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
+import { getWorkbenchInstantiationService } from 'ls/workbench/services/instantiation/browser/workbenchInstantiationService';
+import { IWorkbenchLayoutService } from 'ls/workbench/services/layout/browser/layoutService';
 import {
   WorkbenchNotificationService,
 } from 'ls/workbench/browser/parts/notifications/notificationsModel';
@@ -657,7 +657,6 @@ class WorkbenchHost {
     onToggleEditorCollapse: toggleEditorCollapsed,
     onToggleAgentSidebar: () => {},
   });
-  private readonly sidebarTopbarActionsView = new SidebarTopbarActionsView();
   private readonly settingsTopbarActionsView = createSettingsTopbarActionsView({
     backLabel: '',
     onNavigateBack: () => {},
@@ -687,7 +686,11 @@ class WorkbenchHost {
     handleWorkbenchEditorShortcut(event);
   };
 
-  constructor(rootElement: HTMLElement) {
+  constructor(
+    rootElement: HTMLElement,
+    @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+    @INotificationService private readonly notificationService: INotificationService,
+  ) {
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
     this.shellElement = document.createElement('div');
@@ -755,7 +758,6 @@ class WorkbenchHost {
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
     this.auxiliaryEditorTopbarActionsView.dispose();
-    this.sidebarTopbarActionsView.dispose();
     this.settingsTopbarActionsView.dispose();
     this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
@@ -767,12 +769,11 @@ class WorkbenchHost {
   }
 
   private createNotificationsPart() {
-    const candidate = getWorkbenchServiceCollection().get(INotificationService);
-    if (!(candidate instanceof WorkbenchNotificationService)) {
+    if (!(this.notificationService instanceof WorkbenchNotificationService)) {
       return null;
     }
 
-    return createNotificationsPart(this.notificationsMount, candidate);
+    return createNotificationsPart(this.notificationsMount, this.notificationService);
   }
 
   private releaseContentTarget(
@@ -1138,7 +1139,6 @@ class WorkbenchHost {
     fetchPaneProps: ReturnType<typeof createFetchPaneProps>;
     sidebarProps: SidebarProps;
     agentBarProps: AgentBarPartProps;
-    sidebarTopbarActionsProps: ReturnType<typeof createSidebarTitlebarActionsProps>;
     sidebarFooterActionsProps: ReturnType<
       typeof createSidebarFooterTitlebarActionsProps
     >;
@@ -1148,7 +1148,6 @@ class WorkbenchHost {
     this.retiredWorkbenchContentPartViews = null;
     this.settingsView?.dispose();
     this.settingsView = null;
-    this.sidebarTopbarActionsView.setProps(props.sidebarTopbarActionsProps);
     this.sidebarFooterActionsView.setProps(
       props.sidebarFooterActionsProps,
     );
@@ -2060,14 +2059,12 @@ class WorkbenchHost {
         },
       },
     });
-    const sidebarTopbarActionsProps = createSidebarTitlebarActionsProps({
+    const titlebarLeadingActionsProps = createTitlebarLeadingActionsProps({
       ui,
       isPrimarySidebarVisible,
       onTogglePrimarySidebar: togglePrimarySidebarVisibility,
       onFocusAddressBar: focusWorkbenchWebUrlInput,
     });
-    this.sidebarTopbarActionsView.setProps(sidebarTopbarActionsProps);
-
     const settingsPartProps = createSettingsPartProps({
       state: {
         ui,
@@ -2275,14 +2272,10 @@ class WorkbenchHost {
     });
 
     const handleApplyLayoutAgent = () => {
-      setPrimarySidebarVisible(true);
-      setAgentSidebarVisible(true);
-      setEditorCollapsed(false);
+      this.layoutService.applyLayoutMode('agent');
     };
     const handleApplyLayoutFlow = () => {
-      setPrimarySidebarVisible(true);
-      setAgentSidebarVisible(true);
-      setEditorCollapsed(false);
+      this.layoutService.applyLayoutMode('flow');
     };
 
     if (activePage === 'content') {
@@ -2297,7 +2290,6 @@ class WorkbenchHost {
         fetchPaneProps,
         sidebarProps,
         agentBarProps,
-        sidebarTopbarActionsProps,
         sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
           ui,
           isSettingsActive: false,
@@ -2347,7 +2339,7 @@ class WorkbenchHost {
       useMica,
       statusbarVisible,
       activePage,
-      leftActionbarElement: this.sidebarTopbarActionsView.getElement(),
+      leadingActions: titlebarLeadingActionsProps,
     });
 
     this.syncPostRenderState({
@@ -2520,6 +2512,9 @@ export function renderWorkbench() {
     return;
   }
 
-  activeWorkbenchHost = new WorkbenchHost(rootElement);
+  activeWorkbenchHost = getWorkbenchInstantiationService().createInstance(
+    WorkbenchHost,
+    rootElement,
+  );
   activeWorkbenchHost.start();
 }

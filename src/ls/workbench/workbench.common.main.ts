@@ -66,6 +66,10 @@ import {
 } from 'ls/workbench/browser/parts/notifications/notificationsModel';
 //#endregion
 
+//#region --- workbench actions
+import 'ls/workbench/browser/actions/layoutActions';
+//#endregion
+
 //#region --- workbench services
 import 'ls/workbench/contrib/localization/localization.contribution';
 import 'ls/workbench/contrib/sash/browser/sash.contribution';
@@ -82,6 +86,9 @@ const workbenchViewsService = workbenchServicesStore.add(
 );
 const workbenchNotificationService = workbenchServicesStore.add(
   createWorkbenchNotificationService(),
+);
+const workbenchLayoutService = workbenchServicesStore.add(
+  createWorkbenchLayoutService(),
 );
 
 registerWorkbenchService(
@@ -107,7 +114,7 @@ registerWorkbenchService(
 );
 registerWorkbenchService(
   IWorkbenchLayoutService,
-  createWorkbenchLayoutService(),
+  workbenchLayoutService,
 );
 registerWorkbenchService(
   IWorkbenchLocaleService,

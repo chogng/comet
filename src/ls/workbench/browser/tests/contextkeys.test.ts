@@ -67,3 +67,56 @@ test('workbench context keys sync page, layout, and part DOM state', async () =>
     dom.cleanup();
   }
 });
+
+test('workbench layout service commands apply agent and flow layouts', async () => {
+  const dom = installDomTestEnvironment();
+  try {
+    const { commandService } = await import(
+      'ls/platform/commands/common/commands'
+    );
+    const {
+      createWorkbenchLayoutService,
+    } = await import('ls/workbench/services/layout/browser/layoutService');
+    const {
+      WorkbenchLayoutActions,
+      WorkbenchLayoutCommandId,
+    } = await import('ls/workbench/browser/actions/layoutActions');
+    const {
+      getWorkbenchLayoutStateSnapshot,
+      setAgentSidebarVisible,
+      setEditorCollapsed,
+      setPrimarySidebarVisible,
+    } = await import('ls/workbench/browser/layout');
+
+    const layoutService = createWorkbenchLayoutService();
+    const layoutActions = new WorkbenchLayoutActions(layoutService);
+    const replacedLayoutActions = new WorkbenchLayoutActions(layoutService);
+
+    try {
+      setPrimarySidebarVisible(false);
+      setAgentSidebarVisible(false);
+      setEditorCollapsed(true);
+
+      commandService.executeCommand(WorkbenchLayoutCommandId.applyAgentLayout);
+
+      let layoutState = getWorkbenchLayoutStateSnapshot();
+      assert.equal(layoutState.isPrimarySidebarVisible, true);
+      assert.equal(layoutState.isAgentSidebarVisible, true);
+      assert.equal(layoutState.isEditorCollapsed, false);
+
+      setEditorCollapsed(true);
+      commandService.executeCommand(WorkbenchLayoutCommandId.applyFlowLayout);
+
+      layoutState = getWorkbenchLayoutStateSnapshot();
+      assert.equal(layoutState.isPrimarySidebarVisible, true);
+      assert.equal(layoutState.isAgentSidebarVisible, false);
+      assert.equal(layoutState.isEditorCollapsed, false);
+    } finally {
+      replacedLayoutActions.dispose();
+      layoutActions.dispose();
+      layoutService.dispose();
+    }
+  } finally {
+    dom.cleanup();
+  }
+});

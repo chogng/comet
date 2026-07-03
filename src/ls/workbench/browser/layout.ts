@@ -26,7 +26,13 @@ export type WorkbenchLayoutStateSnapshot = {
   expandedEditorSize: number;
 };
 
+export type WorkbenchLayoutMode = 'agent' | 'flow';
+
 export type WorkbenchLayoutEvent =
+  | {
+      type: 'APPLY_LAYOUT_MODE';
+      mode: WorkbenchLayoutMode;
+    }
   | {
       type: 'SET_SIDEBAR_SIZES';
       sizes: Partial<
@@ -460,6 +466,24 @@ function reduceWorkbenchLayoutState(
   event: WorkbenchLayoutEvent,
 ): WorkbenchLayoutStateSnapshot {
   switch (event.type) {
+    case 'APPLY_LAYOUT_MODE': {
+      const nextState = {
+        ...state,
+        isPrimarySidebarVisible: true,
+        isAgentSidebarVisible: event.mode === 'agent',
+        isEditorCollapsed: false,
+      };
+
+      if (
+        state.isPrimarySidebarVisible === nextState.isPrimarySidebarVisible &&
+        state.isAgentSidebarVisible === nextState.isAgentSidebarVisible &&
+        state.isEditorCollapsed === nextState.isEditorCollapsed
+      ) {
+        return state;
+      }
+
+      return nextState;
+    }
     case 'SET_SIDEBAR_SIZES': {
       const nextPrimarySidebarSize =
         typeof event.sizes.primarySidebarSize === 'number'
@@ -590,6 +614,13 @@ export function dispatchWorkbenchLayoutEvent(event: WorkbenchLayoutEvent) {
 
   workbenchLayoutState = nextState;
   onDidChangeWorkbenchLayoutStateEmitter.fire();
+}
+
+export function applyWorkbenchLayoutMode(mode: WorkbenchLayoutMode) {
+  dispatchWorkbenchLayoutEvent({
+    type: 'APPLY_LAYOUT_MODE',
+    mode,
+  });
 }
 
 export function setWorkbenchSidebarSizes(
