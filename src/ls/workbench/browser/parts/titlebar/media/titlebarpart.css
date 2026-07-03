@@ -97,6 +97,12 @@
   padding-inline-start: 6px;
 }
 
+.app-window.has-leading-window-controls .titlebar .titlebar-leading-actions-host {
+  padding-inline-start: calc(
+    var(--workbench-leading-window-controls-width, 0px) + 6px
+  );
+}
+
 .titlebar .editor-topbar {
   padding: 0 6px;
 }

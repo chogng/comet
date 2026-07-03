@@ -95,6 +95,15 @@ button:disabled {
   background: transparent;
 }
 
+.content-grid > .grid-view-root > .grid-view-branch > .split-view > .split-view-container > .split-view-view:first-child {
+	overflow: visible;
+	z-index: 1;
+}
+
+.content-grid > .grid-view-root > .grid-view-branch > .split-view > .sash-container {
+	z-index: 2;
+}
+
 .workbench-content-slot {
   min-width: 0;
   min-height: 0;
@@ -141,3 +150,6 @@ button:disabled {
   height: 100%;
 }
 
+.workbench-content-slot.workbench-leading-pane-primary {
+	overflow: visible;
+}

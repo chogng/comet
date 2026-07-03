@@ -73,6 +73,8 @@ export class TitlebarPart {
       resolveWorkbenchStatusbarVisibility(statusbarVisible);
     const hasNativeWindowControlsOverlay =
       electronRuntime && WINDOW_CHROME_LAYOUT.nativeWindowControlsOverlay;
+    const hasLeadingWindowControls =
+      electronRuntime && WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0;
 
     this.containerElement.className = [
       'app-window',
@@ -80,6 +82,7 @@ export class TitlebarPart {
       electronRuntime && useMica ? 'is-mica-enabled' : '',
       isStatusbarVisible ? 'has-statusbar' : '',
       hasNativeWindowControlsOverlay ? 'has-native-window-controls-overlay' : '',
+      hasLeadingWindowControls ? 'has-leading-window-controls' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -91,6 +94,16 @@ export class TitlebarPart {
     } else {
       this.containerElement.style.removeProperty(
         '--workbench-window-controls-width',
+      );
+    }
+    if (hasLeadingWindowControls) {
+      this.containerElement.style.setProperty(
+        '--workbench-leading-window-controls-width',
+        `${WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx}px`,
+      );
+    } else {
+      this.containerElement.style.removeProperty(
+        '--workbench-leading-window-controls-width',
       );
     }
     this.shellElement.className = getWorkbenchShellClassName({ activePage });

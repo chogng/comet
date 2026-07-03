@@ -714,6 +714,11 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
 
     assert(container.classList.contains('has-titlebar'));
     assert(container.classList.contains('has-statusbar'));
+    assert.equal(container.classList.contains('has-leading-window-controls'), false);
+    assert.equal(
+      container.style.getPropertyValue('--workbench-leading-window-controls-width'),
+      '',
+    );
     assert.equal(container.children[0], titlebarPart.getElement());
     assert.equal(container.children[1], shell);
     assert.equal(container.children[2], statusbar);
