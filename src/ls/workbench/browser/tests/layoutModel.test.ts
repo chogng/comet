@@ -41,8 +41,8 @@ test('layout model creates the current shell topology', () => {
   assert.equal(tree.children[1]?.type, 'leaf');
   assert.equal(tree.children[2]?.type, 'leaf');
   assert.deepEqual(findLeafPath(tree, 'primarySidebar'), [0]);
-  assert.deepEqual(findLeafPath(tree, 'agentSidebar'), [1]);
-  assert.deepEqual(findLeafPath(tree, 'editor'), [2]);
+  assert.deepEqual(findLeafPath(tree, 'editor'), [1]);
+  assert.deepEqual(findLeafPath(tree, 'agentSidebar'), [2]);
 });
 
 test('layout model clone and serialize do not mutate the source tree', () => {
@@ -131,14 +131,14 @@ test('layout model updates leaf data immutably', () => {
   });
 
   assert.equal(updatedTree.type, 'branch');
-  const updatedAuxiliary = updatedTree.children[1];
+  const updatedAuxiliary = updatedTree.children[2];
   assert(updatedAuxiliary);
   assert.equal(updatedAuxiliary.type, 'leaf');
   assert.equal(updatedAuxiliary.size, 300);
   assert.equal(updatedAuxiliary.visible, false);
   assert.equal(updatedAuxiliary.flex, false);
 
-  const originalAuxiliary = tree.children[1];
+  const originalAuxiliary = tree.children[2];
   assert(originalAuxiliary);
   assert.equal(originalAuxiliary.type, 'leaf');
   assert.equal(originalAuxiliary.size, 260);
@@ -151,8 +151,8 @@ test('layout model keeps editor flexible when editor and agent sidebar are both 
   assert.equal(tree.type, 'branch');
 
   const primarySidebar = tree.children[0];
-  const agentSidebar = tree.children[1];
-  const editor = tree.children[2];
+  const editor = tree.children[1];
+  const agentSidebar = tree.children[2];
 
   assert(primarySidebar?.type === 'leaf');
   assert(agentSidebar?.type === 'leaf');
@@ -225,13 +225,13 @@ test('layout model reconcile keeps three top-level panes and updates visibility'
   assert.equal(hiddenTree.type, 'branch');
   assert.equal(hiddenTree.children.length, 3);
   assert.deepEqual(findLeafPath(hiddenTree, 'primarySidebar'), [0]);
-  assert.deepEqual(findLeafPath(hiddenTree, 'agentSidebar'), [1]);
-  assert.deepEqual(findLeafPath(hiddenTree, 'editor'), [2]);
+  assert.deepEqual(findLeafPath(hiddenTree, 'editor'), [1]);
+  assert.deepEqual(findLeafPath(hiddenTree, 'agentSidebar'), [2]);
   assert.equal(hiddenTree.children[0]?.type, 'leaf');
   assert.equal(hiddenTree.children[1]?.type, 'leaf');
   assert.equal(hiddenTree.children[2]?.type, 'leaf');
   assert.equal(hiddenTree.children[0].visible, true);
-  assert.equal(hiddenTree.children[1].visible, false);
+  assert.equal(hiddenTree.children[2].visible, false);
 
   const restoredTree = reconcileLayoutTree(hiddenTree, {
     orientation: Orientation.HORIZONTAL,
@@ -244,8 +244,8 @@ test('layout model reconcile keeps three top-level panes and updates visibility'
   });
 
   assert.deepEqual(findLeafPath(restoredTree, 'primarySidebar'), [0]);
-  assert.deepEqual(findLeafPath(restoredTree, 'agentSidebar'), [1]);
-  assert.deepEqual(findLeafPath(restoredTree, 'editor'), [2]);
+  assert.deepEqual(findLeafPath(restoredTree, 'editor'), [1]);
+  assert.deepEqual(findLeafPath(restoredTree, 'agentSidebar'), [2]);
   assert.equal(restoredTree.type, 'branch');
   assert.equal(restoredTree.orientation, Orientation.HORIZONTAL);
   assert.equal(restoredTree.children.length, 3);
@@ -253,7 +253,7 @@ test('layout model reconcile keeps three top-level panes and updates visibility'
   assert.equal(restoredTree.children[1]?.type, 'leaf');
   assert.equal(restoredTree.children[2]?.type, 'leaf');
   assert.equal(restoredTree.children[0].visible, true);
-  assert.equal(restoredTree.children[1].visible, true);
+  assert.equal(restoredTree.children[2].visible, true);
 });
 
 test('layout model reconcile reuses canonical tree when params are unchanged', () => {

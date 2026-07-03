@@ -41,8 +41,8 @@ export type LayoutFlexState = {
 
 const CANONICAL_LEAF_ORDER: readonly LayoutLeafId[] = [
   'primarySidebar',
-  'agentSidebar',
   'editor',
+  'agentSidebar',
 ];
 
 function mapNode(
@@ -91,17 +91,17 @@ function createCanonicalLayoutTree(params: LayoutTreeParams): LayoutBranchNode {
       },
       {
         type: 'leaf',
-        id: 'agentSidebar',
-        size: params.agentSidebarSize,
-        visible: params.isAgentSidebarVisible,
-        flex: flexState.agentSidebarFlex,
-      },
-      {
-        type: 'leaf',
         id: 'editor',
         size: params.editorSize,
         visible: params.isEditorVisible,
         flex: flexState.editorFlex,
+      },
+      {
+        type: 'leaf',
+        id: 'agentSidebar',
+        size: params.agentSidebarSize,
+        visible: params.isAgentSidebarVisible,
+        flex: flexState.agentSidebarFlex,
       },
     ],
   };

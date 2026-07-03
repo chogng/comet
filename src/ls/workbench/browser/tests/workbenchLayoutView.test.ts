@@ -1223,16 +1223,19 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
   }
 });
 
-test('WorkbenchLayoutView does not render the agent toggle in agentbar topbar when the agent sidebar is visible', () => {
+test('WorkbenchLayoutView renders the agent toggle in editor topbar when the agent sidebar is visible', () => {
   const props = createWorkbenchLayoutViewProps();
+  let toggleCount = 0;
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = true;
   props.editorPartProps = {
     ...props.editorPartProps,
     isAgentSidebarVisible: true,
-    showAgentSidebarToggle: false,
+    showAgentSidebarToggle: true,
     agentSidebarToggleLabel: 'Hide assistant',
-    onToggleAgentSidebar: () => {},
+    onToggleAgentSidebar: () => {
+      toggleCount += 1;
+    },
   };
 
   const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
@@ -1241,21 +1244,19 @@ test('WorkbenchLayoutView does not render the agent toggle in agentbar topbar wh
   try {
     const agentButton = view
       .getElement()
-      .querySelector('.agentbar-topbar .editor-topbar-agent-btn');
-    assert.equal(agentButton, null);
-    assert.equal(
-      view
-        .getElement()
-        .querySelector('.editor-topbar .editor-topbar-agent-btn'),
-      null,
-    );
+      .querySelector('.editor-topbar .editor-topbar-agent-btn');
+    assert(agentButton instanceof HTMLButtonElement);
+    assert.equal(agentButton.getAttribute('aria-label'), 'Hide assistant');
+    agentButton.click();
+    assert.equal(toggleCount, 1);
   } finally {
     view.dispose();
   }
 });
 
-test('WorkbenchLayoutView does not render the agent toggle in editor topbar when the agent sidebar is hidden', () => {
+test('WorkbenchLayoutView renders the agent toggle in editor topbar when the agent sidebar is hidden', () => {
   const props = createWorkbenchLayoutViewProps();
+  let toggleCount = 0;
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = false;
   props.editorPartProps = {
@@ -1263,7 +1264,9 @@ test('WorkbenchLayoutView does not render the agent toggle in editor topbar when
     isAgentSidebarVisible: false,
     showAgentSidebarToggle: true,
     agentSidebarToggleLabel: 'Show assistant',
-    onToggleAgentSidebar: () => {},
+    onToggleAgentSidebar: () => {
+      toggleCount += 1;
+    },
   };
 
   const view = createWorkbenchLayoutView(materializeWorkbenchLayoutViewProps(props));
@@ -1273,12 +1276,10 @@ test('WorkbenchLayoutView does not render the agent toggle in editor topbar when
     const editorAgentButton = view
       .getElement()
       .querySelector('.editor-topbar .editor-topbar-agent-btn');
-    assert.equal(editorAgentButton, null);
-
-    const primaryAgentButton = view
-      .getElement()
-      .querySelector('.sidebar-topbar .editor-topbar-agent-btn');
-    assert.equal(primaryAgentButton, null);
+    assert(editorAgentButton instanceof HTMLButtonElement);
+    assert.equal(editorAgentButton.getAttribute('aria-label'), 'Show assistant');
+    editorAgentButton.click();
+    assert.equal(toggleCount, 1);
   } finally {
     view.dispose();
   }
@@ -3186,7 +3187,7 @@ test('WorkbenchLayoutView keeps primary width fixed and expands agentbar when th
     assert(gridView);
 
     const primarySizeBefore = gridView.getViewSize([0]);
-    const agentSizeBefore = gridView.getViewSize([1]);
+    const agentSizeBefore = gridView.getViewSize([2]);
 
     const editorToggleButton = view
       .getElement()
@@ -3204,7 +3205,7 @@ test('WorkbenchLayoutView keeps primary width fixed and expands agentbar when th
     assert(nextGridView);
 
     assert.equal(nextGridView.getViewSize([0]), primarySizeBefore);
-    assert(nextGridView.getViewSize([1]) > agentSizeBefore);
+    assert(nextGridView.getViewSize([2]) > agentSizeBefore);
 
     view.dispose();
   } finally {
@@ -3243,8 +3244,8 @@ test('WorkbenchLayoutView keeps agent width fixed and expands editor when the pr
     }).gridView;
     assert(gridView);
 
-    const editorSizeBefore = gridView.getViewSize([2]);
-    const agentSizeBefore = gridView.getViewSize([1]);
+    const editorSizeBefore = gridView.getViewSize([1]);
+    const agentSizeBefore = gridView.getViewSize([2]);
 
     props.isPrimarySidebarVisible = false;
     props.sidebarTopbarActionsProps = {
@@ -3268,8 +3269,8 @@ test('WorkbenchLayoutView keeps agent width fixed and expands editor when the pr
     }).gridView;
     assert(nextGridView);
 
-    assert(nextGridView.getViewSize([2]) > editorSizeBefore);
-    assert.equal(nextGridView.getViewSize([1]), agentSizeBefore);
+    assert(nextGridView.getViewSize([1]) > editorSizeBefore);
+    assert.equal(nextGridView.getViewSize([2]), agentSizeBefore);
 
     view.dispose();
   } finally {
@@ -3344,8 +3345,8 @@ test('WorkbenchLayoutView measures the pre-toggle editor size before the first a
     }).gridView;
     assert(gridView);
 
-    const editorSize = gridView.getViewSize([2]);
-    const agentSize = gridView.getViewSize([1]);
+    const editorSize = gridView.getViewSize([1]);
+    const agentSize = gridView.getViewSize([2]);
     assert(editorSize > props.expandedEditorSize);
     assert(editorSize > agentSize);
 
@@ -3399,7 +3400,7 @@ test('WorkbenchLayoutView keeps primary width fixed when agentbar becomes visibl
     assert(nextGridView);
 
     assert.equal(nextGridView.getViewSize([0]), props.primarySidebarSize);
-    assert(nextGridView.getViewSize([1]) > props.agentSidebarSize);
+    assert(nextGridView.getViewSize([2]) > props.agentSidebarSize);
 
     view.dispose();
   } finally {
@@ -3439,7 +3440,7 @@ test('WorkbenchLayoutView keeps primary width fixed and expands editor when agen
     assert(gridView);
 
     const primarySizeBefore = gridView.getViewSize([0]);
-    const editorSizeBefore = gridView.getViewSize([2]);
+    const editorSizeBefore = gridView.getViewSize([1]);
 
     props.isAgentSidebarVisible = false;
     view.setProps(materializeWorkbenchLayoutViewProps(props));
@@ -3453,7 +3454,7 @@ test('WorkbenchLayoutView keeps primary width fixed and expands editor when agen
     assert(nextGridView);
 
     assert.equal(nextGridView.getViewSize([0]), primarySizeBefore);
-    assert(nextGridView.getViewSize([2]) > editorSizeBefore);
+    assert(nextGridView.getViewSize([1]) > editorSizeBefore);
 
     view.dispose();
   } finally {
@@ -3493,7 +3494,7 @@ test('WorkbenchLayoutView keeps primary and agent widths fixed when agentbar bec
     assert(gridView);
 
     const primarySizeBefore = gridView.getViewSize([0]);
-    const editorSizeBefore = gridView.getViewSize([2]);
+    const editorSizeBefore = gridView.getViewSize([1]);
 
     props.isAgentSidebarVisible = true;
     view.setProps(materializeWorkbenchLayoutViewProps(props));
@@ -3507,8 +3508,8 @@ test('WorkbenchLayoutView keeps primary and agent widths fixed when agentbar bec
     assert(nextGridView);
 
     assert.equal(nextGridView.getViewSize([0]), primarySizeBefore);
-    assert.equal(nextGridView.getViewSize([1]), props.agentSidebarSize);
-    assert(nextGridView.getViewSize([2]) < editorSizeBefore);
+    assert.equal(nextGridView.getViewSize([2]), props.agentSidebarSize);
+    assert(nextGridView.getViewSize([1]) < editorSizeBefore);
 
     view.dispose();
   } finally {
@@ -3516,7 +3517,7 @@ test('WorkbenchLayoutView keeps primary and agent widths fixed when agentbar bec
   }
 });
 
-test('WorkbenchLayoutView keeps agentbar visible when agentbar hide is requested from collapsed mode', () => {
+test('WorkbenchLayoutView hides agentbar and restores editor when agentbar hide is requested from collapsed mode', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3552,8 +3553,8 @@ test('WorkbenchLayoutView keeps agentbar visible when agentbar hide is requested
 
     setAgentSidebarVisible(false);
     syncRawPropsWithLayoutState(props);
-    assert.equal(props.isAgentSidebarVisible, true);
-    assert.equal(props.isEditorCollapsed, true);
+    assert.equal(props.isAgentSidebarVisible, false);
+    assert.equal(props.isEditorCollapsed, false);
     view.setProps(materializeWorkbenchLayoutViewProps(props));
     animationFrameSpy.flushAll();
 
@@ -3565,15 +3566,21 @@ test('WorkbenchLayoutView keeps agentbar visible when agentbar hide is requested
     assert(nextGridView);
 
     assert.equal(nextGridView.getViewSize([0]), primarySizeBefore);
-    const agentToggleButton = view
-      .getElement()
-      .querySelector('.agentbar-topbar .editor-topbar-toggle-editor-btn');
-    assert(agentToggleButton instanceof HTMLButtonElement);
-    assert.equal(agentToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.agentbar-topbar .editor-topbar-toggle-editor-btn'),
+      null,
+    );
+    const editorToggleButton = view
+      .getElement()
+      .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn');
+    assert(editorToggleButton instanceof HTMLButtonElement);
+    assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
+    assert.equal(
+      view
+        .getElement()
+        .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn'),
       null,
     );
 

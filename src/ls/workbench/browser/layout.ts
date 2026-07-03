@@ -104,8 +104,8 @@ type SplitViewSizeSnapshot = {
 };
 
 const PRIMARY_SIDEBAR_INDEX = 0;
-const AGENT_SIDEBAR_INDEX = 1;
-const EDITOR_INDEX = 2;
+const EDITOR_INDEX = 1;
+const AGENT_SIDEBAR_INDEX = 2;
 
 export const WORKBENCH_CONTENT_LAYOUT_BREAKPOINT = 980;
 export const WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE = false;
@@ -248,29 +248,20 @@ function reduceWorkbenchLayoutState(
       };
     }
     case 'SET_AGENT_SIDEBAR_VISIBLE':
-      if (!event.visible) {
-        if (state.isAgentSidebarVisible) {
-          return normalizeEditorCollapseState(state);
-        }
-        return normalizeEditorCollapseState({
-          ...state,
-          isAgentSidebarVisible: true,
-        });
-      }
       if (state.isAgentSidebarVisible === event.visible) {
         return normalizeEditorCollapseState(state);
       }
       return normalizeEditorCollapseState({
         ...state,
         isAgentSidebarVisible: event.visible,
+        isEditorCollapsed: event.visible ? state.isEditorCollapsed : false,
       });
     case 'TOGGLE_AGENT_SIDEBAR_VISIBILITY': {
-      if (state.isAgentSidebarVisible) {
-        return normalizeEditorCollapseState(state);
-      }
+      const nextVisible = !state.isAgentSidebarVisible;
       return normalizeEditorCollapseState({
         ...state,
-        isAgentSidebarVisible: true,
+        isAgentSidebarVisible: nextVisible,
+        isEditorCollapsed: nextVisible ? state.isEditorCollapsed : false,
       });
     }
     case 'SET_AGENT_SIDEBAR_SIZE': {

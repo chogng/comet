@@ -1780,7 +1780,7 @@ class WorkbenchHost {
         ui,
         editorPartProps: contentAwareEditorPartProps,
         isAgentSidebarVisible,
-        showAgentSidebarToggle: !isAgentSidebarVisible,
+        showAgentSidebarToggle: true,
         onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
         onToggleEditorCollapse: toggleEditorCollapsed,
         onToggleAgentSidebar: toggleAgentSidebarVisibility,
@@ -2320,7 +2320,7 @@ class WorkbenchHost {
         editorPartProps: {
           ...contentAwareEditorPartProps,
           isAgentSidebarVisible,
-          showAgentSidebarToggle: !isAgentSidebarVisible,
+          showAgentSidebarToggle: true,
           agentSidebarToggleLabel: resolveTitlebarAssistantToggleLabel(
             ui,
             isAgentSidebarVisible,

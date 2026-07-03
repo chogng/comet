@@ -127,6 +127,18 @@ export class EditorTopbarActionsView {
         }),
       }),
     ];
+    if (this.props.showAgentSidebarToggle && this.props.onToggleAgentSidebar) {
+      actionItems.push({
+        label: this.props.agentSidebarToggleLabel ?? '',
+        title: this.props.agentSidebarToggleLabel ?? '',
+        mode: 'icon' as const,
+        buttonClassName: 'editor-topbar-agent-btn',
+        content: createLxIcon(
+          this.props.isAgentSidebarVisible ? 'agent-filled' : 'agent',
+        ),
+        onClick: this.props.onToggleAgentSidebar,
+      });
+    }
     actionItems.push({
       label: this.props.isEditorCollapsed
         ? this.props.labels.expandEditor
