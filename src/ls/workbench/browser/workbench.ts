@@ -1969,7 +1969,6 @@ class WorkbenchHost {
 
     const agentBarProps = createAgentBarPartProps({
       state: {
-        ui,
         isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
         question: assistantQuestion,
         messages: assistantMessages,

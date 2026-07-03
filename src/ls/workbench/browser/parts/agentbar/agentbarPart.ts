@@ -5,8 +5,6 @@ import { AgentChatWidget } from 'ls/workbench/contrib/agentChat/browser/agentCha
 import type { AgentChatWidgetProps } from 'ls/workbench/contrib/agentChat/browser/agentChatWidget';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 
-import { createAgentBarLabels } from 'ls/workbench/browser/parts/agentbar/agentbarLabels';
-
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 export type { AgentChatWidgetProps } from 'ls/workbench/contrib/agentChat/browser/agentChatWidget';
@@ -18,7 +16,6 @@ export type AgentBarPartProps = AgentChatWidgetProps & {
 
 type CreateAgentBarPartPropsParams = {
   state: {
-    ui: Parameters<typeof createAgentBarLabels>[0];
     isKnowledgeBaseModeEnabled: boolean;
     question: string;
     messages: AssistantModelSnapshot['messages'];
@@ -63,7 +60,6 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 export function createAgentBarPartProps({
   state: {
-    ui,
     isKnowledgeBaseModeEnabled,
     question,
     messages,
@@ -93,7 +89,6 @@ export function createAgentBarPartProps({
   },
 }: CreateAgentBarPartPropsParams): AgentBarPartProps {
   return {
-    labels: createAgentBarLabels(ui),
     isKnowledgeBaseModeEnabled,
     question,
     messages,

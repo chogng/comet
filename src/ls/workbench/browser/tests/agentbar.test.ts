@@ -12,26 +12,6 @@ let createAgentBarPartView: typeof import('ls/workbench/browser/parts/agentbar/a
 
 function createProps(): AgentChatWidgetProps {
   return {
-    labels: {
-      assistantAnswerTitle: 'Answer',
-      assistantEvidenceTitle: 'Evidence',
-      assistantPatchApply: 'Apply patch',
-      assistantPatchApplied: 'Applied',
-      assistantPatchRequiresExecutor: 'Custom executor required',
-      assistantNewConversation: 'New chat',
-      assistantHistory: 'History',
-      assistantMore: 'More',
-      assistantShowSecondarySidebar: 'Show secondary sidebar',
-      assistantHideSecondarySidebar: 'Hide secondary sidebar',
-      assistantQuestion: 'Question',
-      assistantQuestionPlaceholder: 'Ask something',
-      assistantVoice: 'Voice',
-      assistantImage: 'Image',
-      assistantSend: 'Send',
-      assistantSendBusy: 'Asking...',
-      assistantRerankOn: 'Rerank on',
-      assistantRerankOff: 'Rerank off',
-    },
     isKnowledgeBaseModeEnabled: true,
     messages: [],
     question: '',

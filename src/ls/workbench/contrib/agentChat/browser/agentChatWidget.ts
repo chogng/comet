@@ -16,7 +16,7 @@ import { createLxIcon } from 'ls/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'ls/base/browser/ui/lxicons/lxicons';
 
 import { lxIconSemanticMap } from 'ls/base/browser/ui/lxicons/lxiconsSemantic';
-import type { AgentBarLabels } from 'ls/workbench/browser/parts/agentbar/agentbarLabels';
+import { localize } from 'ls/nls';
 import {
   parseLlmModelOptionValue,
   serializeLlmModelOptionValue,
@@ -47,7 +47,6 @@ type AgentModelMenuGroup = {
 };
 
 export type AgentChatWidgetProps = {
-  labels: AgentBarLabels;
   isKnowledgeBaseModeEnabled: boolean;
   activeLlmModelLabel: string;
   isMaxContextWindowEnabled: boolean;
@@ -87,11 +86,6 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 const AGENTBAR_TOPBAR_MORE_MENU_DATA = 'agentbar-topbar-more';
 const AGENTBAR_TOPBAR_HISTORY_MENU_DATA = 'agentbar-topbar-history';
-const AGENTBAR_HISTORY_SEARCH_PLACEHOLDER = 'Search history';
-const AGENTBAR_HISTORY_SEARCH_ARIA_LABEL = 'Search history';
-const AGENTBAR_MODEL_SEARCH_PLACEHOLDER = 'Search models';
-const AGENTBAR_MODEL_SEARCH_ARIA_LABEL = 'Search models';
-const AGENTBAR_MODEL_SEARCH_EMPTY_LABEL = 'No matching models';
 
 export class AgentChatWidget {
   private props: AgentChatWidgetProps;
@@ -136,7 +130,7 @@ export class AgentChatWidget {
     const topbar = createElement('div', 'agentbar-tabs-header');
     const topbarItems: ActionBarItem[] = [
       this.createTopbarActionItem(
-        this.props.labels.assistantNewConversation,
+        localize('assistantSidebarNewConversation', "New chat"),
         lxIconSemanticMap.assistant.newConversation,
         this.props.onCreateConversation,
       ),
@@ -205,14 +199,14 @@ export class AgentChatWidget {
       const body = createElement('div', 'agentbar-message-body');
       const header = createElement('div', 'agentbar-result-header');
       const strong = document.createElement('strong');
-      strong.textContent = this.props.labels.assistantAnswerTitle;
+      strong.textContent = localize('assistantSidebarAnswerTitle', "Answer");
       const pill = createElement(
         'span',
         `agentbar-mode-pill ${message.result.rerankApplied ? 'is-enabled' : 'is-disabled'}`,
       );
       pill.textContent = message.result.rerankApplied
-        ? this.props.labels.assistantRerankOn
-        : this.props.labels.assistantRerankOff;
+        ? localize('assistantSidebarRerankOn', "Rerank on")
+        : localize('assistantSidebarRerankOff', "Rerank fallback");
       header.append(strong, pill);
       const answer = createElement('p', 'agentbar-answer');
       answer.textContent = message.content;
@@ -221,7 +215,7 @@ export class AgentChatWidget {
       if (message.result.evidence.length > 0) {
         const evidence = createElement('div', 'agentbar-evidence');
         const title = document.createElement('strong');
-        title.textContent = this.props.labels.assistantEvidenceTitle;
+        title.textContent = localize('assistantSidebarEvidenceTitle', "Evidence");
         const list = createElement('ul', 'agentbar-evidence-list');
         for (const evidenceItem of message.result.evidence) {
           const li = createElement('li', 'agentbar-evidence-item');
@@ -267,11 +261,14 @@ export class AgentChatWidget {
 
     if (patchProposal.isApplied) {
       const status = createElement('span', 'agentbar-mode-pill is-enabled');
-      status.textContent = this.props.labels.assistantPatchApplied;
+      status.textContent = localize('assistantSidebarPatchApplied', "Applied");
       header.append(status);
     } else if (patchProposal.requiresCustomExecutor) {
       const status = createElement('span', 'agentbar-mode-pill is-disabled');
-      status.textContent = this.props.labels.assistantPatchRequiresExecutor;
+      status.textContent = localize(
+        'assistantSidebarPatchRequiresExecutor',
+        "Custom executor required",
+      );
       header.append(status);
     }
 
@@ -302,7 +299,7 @@ export class AgentChatWidget {
         'agentbar-patch-btn btn-base btn-secondary btn-sm',
       );
       applyButton.type = 'button';
-      applyButton.textContent = this.props.labels.assistantPatchApply;
+      applyButton.textContent = localize('assistantSidebarPatchApply', "Apply patch");
       applyButton.addEventListener('click', () =>
         this.props.onApplyPatch(message.id),
       );
@@ -339,8 +336,8 @@ export class AgentChatWidget {
       menu: this.createModelMenuItems(''),
       menuHeader: createFilterMenuHeader({
         inputClassName: 'agentbar-model-menu-search-input',
-        placeholder: AGENTBAR_MODEL_SEARCH_PLACEHOLDER,
-        ariaLabel: AGENTBAR_MODEL_SEARCH_ARIA_LABEL,
+        placeholder: localize('agentbarModelSearch', "Search models"),
+        ariaLabel: localize('agentbarModelSearch', "Search models"),
         getMenuItems: (query) => this.createModelMenuItems(query),
       }),
     };
@@ -374,10 +371,12 @@ export class AgentChatWidget {
 
   private getModelDropdownTriggerLabel(currentOption: DropdownOption | null) {
     if (this.getActiveLlmModelOptionValue() === 'auto') {
-      return 'Auto';
+      return localize('agentbarModelAuto', "Auto");
     }
 
-    return currentOption?.label || this.props.activeLlmModelLabel || 'Select model';
+    return currentOption?.label
+      || this.props.activeLlmModelLabel
+      || localize('agentbarModelSelect', "Select model");
   }
 
   private createModelMenuItems(keyword: string): readonly ActionBarMenuItem[] {
@@ -403,12 +402,34 @@ export class AgentChatWidget {
         .filter(Boolean)
         .some((value) => matchesKeyword(value)),
     );
+    const autoLabel = localize('agentbarModelAuto', "Auto");
+    const autoTitle = localize(
+      'agentbarModelAutoTitle',
+      "Automatically route to a suitable model for the question.",
+    );
+    const autoDescription = localize(
+      'agentbarModelAutoDescription',
+      "Balanced quality and speed, recommended for most tasks",
+    );
+    const maxModeLabel = localize('agentbarModelMaxMode', "Max mode");
+    const maxModeTitle = localize(
+      'agentbarModelMaxModeTitle',
+      "Use the 1M context window when available.",
+    );
+    const addModelsLabel = localize('agentbarModelAdd', "Add models");
+    const addModelsTitle = localize(
+      'agentbarModelAddTitle',
+      "Open Settings to manage enabled models.",
+    );
+    const multipleModelsLabel = localize('agentbarModelMultiple', "Use multiple models");
+    const unavailableTitle = localize('agentbarModelUnavailable', "Not available yet.");
+    const emptyLabel = localize('agentbarModelSearchEmpty', "No matching models");
 
     const autoItem: ActionBarMenuItem = {
-      label: 'Auto',
-      title: 'Automatically route to a suitable model for the question.',
+      label: autoLabel,
+      title: autoTitle,
       description: isAutoModelRoutingEnabled
-        ? 'Balanced quality and speed, recommended for most tasks'
+        ? autoDescription
         : undefined,
       checked: isAutoModelRoutingEnabled,
       checkedDisplay: 'switch',
@@ -420,8 +441,8 @@ export class AgentChatWidget {
     const items: ActionBarMenuItem[] = [
       autoItem,
       {
-        label: 'Max mode',
-        title: 'Use the 1M context window when available.',
+        label: maxModeLabel,
+        title: maxModeTitle,
         checked: this.getIsMaxContextWindowEnabled(),
         checkedDisplay: 'switch',
         keepOpenOnClick: true,
@@ -431,8 +452,8 @@ export class AgentChatWidget {
         },
       },
       {
-        label: 'Use multiple models',
-        title: 'Not available yet.',
+        label: multipleModelsLabel,
+        title: unavailableTitle,
         icon: 'reasoning' as LxIconName,
         disabled: true,
       },
@@ -452,7 +473,7 @@ export class AgentChatWidget {
         ? autoItems
         : [{
             id: 'agentbar-model-empty',
-            label: AGENTBAR_MODEL_SEARCH_EMPTY_LABEL,
+            label: emptyLabel,
             disabled: true,
           }];
     }
@@ -469,10 +490,10 @@ export class AgentChatWidget {
       ...modelGroups.map((group) =>
         this.createModelGroupMenuItem(group, isAutoModelRoutingEnabled),
       ),
-      ...(matchesKeyword('Add models Open Settings to manage enabled models.')
+      ...(matchesKeyword(`${addModelsLabel} ${addModelsTitle}`)
         ? [{
-            label: 'Add models',
-            title: 'Open Settings to manage enabled models.',
+            label: addModelsLabel,
+            title: addModelsTitle,
             icon: 'gear' as LxIconName,
             onClick: () => {
               this.props.onOpenModelSettings();
@@ -488,7 +509,7 @@ export class AgentChatWidget {
     return [
       {
         id: 'agentbar-model-empty',
-        label: AGENTBAR_MODEL_SEARCH_EMPTY_LABEL,
+        label: emptyLabel,
         disabled: true,
       },
     ];
@@ -632,7 +653,7 @@ export class AgentChatWidget {
     const activeRuntime = this.getActiveRuntimeParams(group);
     const submenu: ActionBarMenuItem[] = [
       {
-        label: 'Use model',
+        label: localize('agentbarModelUse', "Use model"),
         checked: this.getActiveModelGroupKey() === group.key,
         onClick: () => {
           this.props.onSelectLlmModel(this.resolvePreferredModelOptionValue(group));
@@ -643,7 +664,11 @@ export class AgentChatWidget {
     const reasoningEfforts = this.getGroupReasoningEfforts(group);
     for (const effort of reasoningEfforts) {
       submenu.push({
-        label: `Reasoning: ${this.formatReasoningEffortLabel(effort)}`,
+        label: localize(
+          'agentbarModelReasoning',
+          "Reasoning: {0}",
+          this.formatReasoningEffortLabel(effort),
+        ),
         checked:
           this.getActiveModelGroupKey() === group.key &&
           (activeRuntime.reasoningEffort ?? 'none') === effort,
@@ -661,7 +686,9 @@ export class AgentChatWidget {
     if (supportsFast) {
       for (const serviceTier of [undefined, 'priority' as const]) {
         submenu.push({
-          label: serviceTier === 'priority' ? 'Fast: On' : 'Fast: Off',
+          label: serviceTier === 'priority'
+            ? localize('agentbarModelFastOn', "Fast: On")
+            : localize('agentbarModelFastOff', "Fast: Off"),
           checked:
             this.getActiveModelGroupKey() === group.key &&
             (activeRuntime.serviceTier ?? undefined) === serviceTier,
@@ -756,9 +783,22 @@ export class AgentChatWidget {
   }
 
   private formatReasoningEffortLabel(reasoningEffort: LlmReasoningEffort) {
-    return reasoningEffort === 'none'
-      ? 'None'
-      : reasoningEffort.charAt(0).toUpperCase() + reasoningEffort.slice(1);
+    switch (reasoningEffort) {
+      case 'none':
+        return localize('agentbarReasoningNone', "None");
+      case 'low':
+        return localize('agentbarReasoningLow', "Low");
+      case 'medium':
+        return localize('agentbarReasoningMedium', "Medium");
+      case 'high':
+        return localize('agentbarReasoningHigh', "High");
+      case 'xhigh':
+        return localize('agentbarReasoningXhigh', "Xhigh");
+      case 'higher':
+        return localize('agentbarReasoningHigher', "Higher");
+      case 'highest':
+        return localize('agentbarReasoningHighest', "Highest");
+    }
   }
 
   private renderComposer(canSend: boolean) {
@@ -774,9 +814,15 @@ export class AgentChatWidget {
     const textarea = createElement('textarea', 'agentbar-input');
     textarea.rows = 2;
     textarea.value = this.props.question;
-    textarea.placeholder = this.props.labels.assistantQuestionPlaceholder;
+    textarea.placeholder = localize(
+      'assistantSidebarQuestionPlaceholder',
+      "Ask about the fetched literature, compare findings, or draft a short evidence-backed answer.",
+    );
     textarea.disabled = this.props.isAsking;
-    textarea.setAttribute('aria-label', this.props.labels.assistantQuestion);
+    textarea.setAttribute(
+      'aria-label',
+      localize('assistantSidebarQuestion', "Question"),
+    );
     textarea.addEventListener('input', () =>
       this.props.onQuestionChange(textarea.value),
     );
@@ -797,14 +843,14 @@ export class AgentChatWidget {
       modelDropdownView.dispose();
     });
     const sendLabel = this.props.isAsking
-      ? this.props.labels.assistantSendBusy
-      : this.props.labels.assistantSend;
+      ? localize('assistantSidebarSendBusy', "Asking...")
+      : localize('assistantSidebarSend', "Send");
     const actionsView = createActionBarView({
       className: 'agentbar-composer-actions',
       ariaRole: 'group',
       items: [
         this.createComposerActionItem(
-          this.props.labels.assistantImage,
+          localize('assistantSidebarImage', "Image"),
           'image-filled',
           'agentbar-composer-tool-action',
         ),
@@ -875,7 +921,7 @@ export class AgentChatWidget {
       return [
         {
           id: 'agentbar-history-empty',
-          label: 'no matching agents',
+          label: localize('agentbarHistoryEmpty', "no matching agents"),
           disabled: true,
         },
       ];
@@ -884,7 +930,12 @@ export class AgentChatWidget {
     return matchedConversations.map((conversation, index) => ({
       id: `agentbar-history-${conversation.id}-${index}`,
       label: conversation.title,
-      title: `${conversation.title} (${conversation.messages.length} messages)`,
+      title: localize(
+        'agentbarHistoryConversationTitle',
+        "{0} ({1} messages)",
+        conversation.title,
+        conversation.messages.length,
+      ),
       checked: conversation.id === this.props.activeConversationId,
       onClick: () => {
         this.props.onActivateConversation(conversation.id);
@@ -894,15 +945,15 @@ export class AgentChatWidget {
 
   private createTopbarMoreActionItem(): ActionBarItem {
     return createDropdownMenuActionViewItem({
-      label: this.props.labels.assistantMore,
-      title: this.props.labels.assistantMore,
+      label: localize('assistantSidebarMore', "More"),
+      title: localize('assistantSidebarMore', "More"),
       content: createLxIcon(lxIconSemanticMap.assistant.more),
       buttonClassName: 'sidebar-action-btn',
       overlayAlignment: 'start',
       menuData: AGENTBAR_TOPBAR_MORE_MENU_DATA,
       menu: [
         {
-          label: this.props.labels.assistantNewConversation,
+          label: localize('assistantSidebarNewConversation', "New chat"),
           onClick: () => {
             this.props.onCreateConversation();
           },
@@ -913,8 +964,8 @@ export class AgentChatWidget {
 
   private createTopbarHistoryActionItem(): ActionBarItem {
     return createDropdownMenuActionViewItem({
-      label: this.props.labels.assistantHistory,
-      title: this.props.labels.assistantHistory,
+      label: localize('assistantSidebarHistory', "History"),
+      title: localize('assistantSidebarHistory', "History"),
       content: createLxIcon(lxIconSemanticMap.assistant.history),
       buttonClassName: 'sidebar-action-btn',
       overlayAlignment: 'end',
@@ -923,8 +974,8 @@ export class AgentChatWidget {
       menuHeader: createFilterMenuHeader({
         className: 'agentbar-history-menu-header',
         inputClassName: 'agentbar-history-search-input',
-        placeholder: AGENTBAR_HISTORY_SEARCH_PLACEHOLDER,
-        ariaLabel: AGENTBAR_HISTORY_SEARCH_ARIA_LABEL,
+        placeholder: localize('agentbarHistorySearch', "Search history"),
+        ariaLabel: localize('agentbarHistorySearch', "Search history"),
         getMenuItems: (query) => this.createHistoryMenuItems(query),
       }),
     });
