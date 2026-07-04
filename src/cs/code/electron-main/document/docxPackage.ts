@@ -247,7 +247,7 @@ export function buildDocxBuffer({
       ),
     },
     {
-      name: '_recs/.rels',
+      name: '_rels/.rels',
       data: Buffer.from(buildRootRelationshipsXml(), 'utf8'),
     },
     {
@@ -266,7 +266,7 @@ export function buildDocxBuffer({
 
   if (wordRelationships.length > 0) {
     entries.push({
-      name: 'word/_recs/document.xml.rels',
+      name: 'word/_rels/document.xml.rels',
       data: Buffer.from(buildRelationshipsXml(wordRelationships), 'utf8'),
     });
   }

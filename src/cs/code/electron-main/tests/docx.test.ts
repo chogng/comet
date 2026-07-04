@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import type { Article } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { exportArticlesToDocxFile } from 'cs/code/electron-main/document/docx';
+import { buildDocxBuffer } from 'cs/code/electron-main/document/docxPackage';
 
 function createArticle(fetchOrder: number, title: string): Article {
 	return {
@@ -75,4 +76,26 @@ test('article docx export numbers summaries with fetch order', async () => {
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
+});
+
+test('docx package stores relationship parts in OpenXML relationship directories', () => {
+	const buffer = buildDocxBuffer({
+		documentXml: [
+			'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+			'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+			'<w:body><w:p><w:r><w:t>Example</w:t></w:r></w:p></w:body>',
+			'</w:document>',
+		].join(''),
+		coreTitle: 'Example',
+		wordRelationships: [{
+			id: 'rId1',
+			type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
+			target: 'media/image1.png',
+		}],
+	});
+
+	assert(readStoredZipEntry(buffer, '_rels/.rels'));
+	assert(readStoredZipEntry(buffer, 'word/_rels/document.xml.rels'));
+	assert.equal(readStoredZipEntry(buffer, '_recs/.rels'), null);
+	assert.equal(readStoredZipEntry(buffer, 'word/_recs/document.xml.rels'), null);
 });
