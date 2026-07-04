@@ -1,33 +1,33 @@
-export type TopbarActionRouteMode = 'content' | 'settings';
+export type HeaderActionRouteMode = 'content' | 'settings';
 
-export type TopbarActionSource = 'sidebar' | 'editorAuxiliary';
-export type TopbarActionTarget = 'primary' | 'agent' | 'editor' | null;
+export type HeaderActionSource = 'sidebar' | 'editorAuxiliary';
+export type HeaderActionTarget = 'primary' | 'agent' | 'editor' | null;
 
-export type TopbarActionRouterState = {
-  mode?: TopbarActionRouteMode;
+export type HeaderActionRouterState = {
+  mode?: HeaderActionRouteMode;
   isPrimarySidebarVisible: boolean;
   isAgentSidebarVisible: boolean;
   isEditorCollapsed: boolean;
 };
 
-export type TopbarActionRoute = {
-  sidebarTarget: TopbarActionTarget;
-  editorAuxiliaryTarget: TopbarActionTarget;
-  editorActionOrder: readonly TopbarActionSource[];
+export type HeaderActionRoute = {
+  sidebarTarget: HeaderActionTarget;
+  editorAuxiliaryTarget: HeaderActionTarget;
+  editorActionOrder: readonly HeaderActionSource[];
 };
 
-const DEFAULT_EDITOR_ACTION_ORDER: readonly TopbarActionSource[] = [
+const DEFAULT_EDITOR_ACTION_ORDER: readonly HeaderActionSource[] = [
   'sidebar',
   'editorAuxiliary',
 ];
 
-function resolveMode(mode: TopbarActionRouterState['mode']) {
+function resolveMode(mode: HeaderActionRouterState['mode']) {
   return mode === 'settings' ? 'settings' : 'content';
 }
 
-export function resolveTopbarActionRoute(
-  state: TopbarActionRouterState,
-): TopbarActionRoute {
+export function resolveHeaderActionRoute(
+  state: HeaderActionRouterState,
+): HeaderActionRoute {
   if (resolveMode(state.mode) === 'settings') {
     return {
       sidebarTarget: null,
@@ -36,12 +36,12 @@ export function resolveTopbarActionRoute(
     };
   }
 
-  let sidebarTarget: TopbarActionTarget = 'primary';
+  let sidebarTarget: HeaderActionTarget = 'primary';
   if (!state.isPrimarySidebarVisible) {
     sidebarTarget = state.isAgentSidebarVisible ? 'agent' : 'editor';
   }
 
-  let editorAuxiliaryTarget: TopbarActionTarget = null;
+  let editorAuxiliaryTarget: HeaderActionTarget = null;
   if (state.isEditorCollapsed) {
     editorAuxiliaryTarget = state.isAgentSidebarVisible
       ? 'agent'

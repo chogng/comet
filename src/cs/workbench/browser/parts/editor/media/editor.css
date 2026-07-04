@@ -7,7 +7,7 @@
 }
 
 .editor-frame {
-  --editor-topbar-height: 36px;
+  --editor-header-height: 36px;
   --editor-toolbar-height: 36px;
   min-height: 0;
   height: 100%;
@@ -17,7 +17,7 @@
   isolation: isolate;
 }
 
-.editor-frame.has-external-topbar {
+.editor-frame.has-external-header {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
@@ -25,7 +25,7 @@
   border-radius: 999px;
 }
 
-.editor-topbar {
+.editor-header {
   position: relative;
   z-index: 2;
   display: flex;
@@ -33,7 +33,7 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
-  min-height: var(--editor-topbar-height);
+  min-height: var(--editor-header-height);
   box-sizing: border-box;
   padding: 0px 8px;
   background: transparent;
@@ -41,18 +41,18 @@
   -webkit-app-region: drag;
 }
 
-.editor-topbar.has-leading-window-controls-inset {
-  padding-left: calc(8px + var(--editor-topbar-leading-window-controls-width, 0px));
+.editor-header.has-leading-window-controls-inset {
+  padding-left: calc(8px + var(--editor-header-leading-window-controls-width, 0px));
 }
 
-.editor-topbar-tabs {
+.editor-header-tabs {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
 }
 
-.editor-topbar-actions {
+.editor-header-actions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -60,11 +60,11 @@
   -webkit-app-region: no-drag;
 }
 
-.editor-topbar-actions .topbar-actions {
+.editor-header-actions .header-actions {
   margin-left: 0;
 }
 
-.editor-topbar-actions .topbar-actions-host {
+.editor-header-actions .header-actions-host {
   padding-inline-start: 0;
 }
 
@@ -85,7 +85,7 @@
 }
 
 /* Explicit slot placement keeps the content pane in the 1fr track even when the toolbar is hidden. */
-.editor-frame > [data-editor-frame-slot='topbar'] {
+.editor-frame > [data-editor-frame-slot='header'] {
   grid-row: 1;
 }
 
@@ -93,7 +93,7 @@
   grid-row: 2;
 }
 
-.editor-frame.has-external-topbar > [data-editor-frame-slot='toolbar'] {
+.editor-frame.has-external-header > [data-editor-frame-slot='toolbar'] {
   grid-row: 1;
 }
 
@@ -111,7 +111,7 @@
   grid-row: 3;
 }
 
-.editor-frame.has-external-topbar > [data-editor-frame-slot='content'] {
+.editor-frame.has-external-header > [data-editor-frame-slot='content'] {
   grid-row: 2;
 }
 

@@ -481,10 +481,10 @@ export class EditorGroupView {
   private props: EditorGroupViewProps;
   private readonly controller: EditorGroupController;
   private readonly element = createElement('div', 'editor-frame');
-  private readonly headerElement = createElement('div', 'editor-topbar');
+  private readonly headerElement = createElement('div', 'editor-header');
   private readonly toolbarElement = createElement('div', 'editor-toolbar');
-  private readonly tabsElement = createElement('div', 'editor-topbar-tabs');
-  private readonly actionsElement = createElement('div', 'editor-topbar-actions');
+  private readonly tabsElement = createElement('div', 'editor-header-tabs');
+  private readonly actionsElement = createElement('div', 'editor-header-actions');
   private readonly headerActionsView = createEditorHeaderActionsView({
     isEditorCollapsed: false,
     isAgentSidebarVisible: false,
@@ -536,12 +536,12 @@ export class EditorGroupView {
         onPdfNoteSelection: this.handlePdfNoteSelection,
       }),
     );
-    setEditorFrameSlot(this.headerElement, EDITOR_FRAME_SLOTS.topbar);
+    setEditorFrameSlot(this.headerElement, EDITOR_FRAME_SLOTS.header);
     setEditorFrameSlot(this.toolbarElement, EDITOR_FRAME_SLOTS.toolbar);
     setEditorFrameSlot(this.contentElement, EDITOR_FRAME_SLOTS.content);
     if (WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0) {
       this.headerElement.style.setProperty(
-        '--editor-topbar-leading-window-controls-width',
+        '--editor-header-leading-window-controls-width',
         `${WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx}px`,
       );
     }
@@ -565,7 +565,7 @@ export class EditorGroupView {
   }
 
   getHeaderElement() {
-    this.element.classList.add('has-external-topbar');
+    this.element.classList.add('has-external-header');
     return this.headerElement;
   }
 
@@ -710,7 +710,7 @@ export class EditorGroupView {
 
     if (!group.activeTab) {
       this.releaseActivePane();
-      this.syncTopbarToolbar(null);
+      this.syncHeaderToolbar(null);
       this.emptyWorkspaceView.setProps({
         labels: this.props.labels,
         onOpenEditor: this.openEditorFromEmptyWorkspace,
@@ -758,7 +758,7 @@ export class EditorGroupView {
       }
     }
 
-    this.syncTopbarToolbar(this.resolveToolbarElement());
+    this.syncHeaderToolbar(this.resolveToolbarElement());
     this.flushBrowserPrimaryInputFocus(group.activeTab);
     this.mountBrowserLibraryPanelForResolvedPane(resolvedPane.paneId);
   }
@@ -880,17 +880,17 @@ export class EditorGroupView {
     this.actionsElement.replaceChildren(...nextHeaderActionsElements);
   }
 
-  private syncTopbarToolbar(topbarToolbarElement: HTMLElement | null) {
-    const currentTopbarToolbarElement = this.toolbarElement.firstElementChild;
-    if (topbarToolbarElement) {
-      if (currentTopbarToolbarElement !== topbarToolbarElement) {
-        this.toolbarElement.replaceChildren(topbarToolbarElement);
+  private syncHeaderToolbar(headerToolbarElement: HTMLElement | null) {
+    const currentHeaderToolbarElement = this.toolbarElement.firstElementChild;
+    if (headerToolbarElement) {
+      if (currentHeaderToolbarElement !== headerToolbarElement) {
+        this.toolbarElement.replaceChildren(headerToolbarElement);
       }
       this.toolbarElement.hidden = false;
       return;
     }
 
-    if (currentTopbarToolbarElement) {
+    if (currentHeaderToolbarElement) {
       this.toolbarElement.replaceChildren();
     }
     this.toolbarElement.hidden = true;

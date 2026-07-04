@@ -230,7 +230,7 @@
   "editorFavoriteNewFolderTitle": "New Folder",
   "editorFavoriteNewFolderLabel": "Folder name",
   "editorTitle": "Writing Workspace",
-  "editorTopbarAddAction": "Add",
+  "editorHeaderAddAction": "Add",
   "editorCreateDraft": "Draft",
   "editorCreateBrowser": "Browser",
   "editorCreateFile": "Read",

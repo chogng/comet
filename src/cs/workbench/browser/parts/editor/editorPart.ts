@@ -134,7 +134,7 @@ export function createEditorPartProps({
 }: CreateEditorPartPropsParams): EditorPartBaseProps {
   return {
     labels: {
-      headerAddAction: ui.editorTopbarAddAction,
+      headerAddAction: ui.editorHeaderAddAction,
       createDraft: ui.editorCreateDraft,
       createBrowser: ui.editorCreateBrowser,
       createFile: ui.editorCreateFile,

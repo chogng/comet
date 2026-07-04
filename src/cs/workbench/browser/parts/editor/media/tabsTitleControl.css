@@ -9,7 +9,7 @@
   align-items: center;
   min-width: 0;
   max-width: 100%;
-  height: var(--editor-topbar-height, 36px);
+  height: var(--editor-header-height, 36px);
 }
 
 .editor-tabs-container {

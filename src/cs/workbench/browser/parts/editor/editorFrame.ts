@@ -1,7 +1,7 @@
 export const EDITOR_FRAME_SLOT_ATTR = 'data-editor-frame-slot' as const;
 
 export const EDITOR_FRAME_SLOTS = {
-  topbar: 'topbar',
+  header: 'header',
   toolbar: 'toolbar',
   content: 'content',
 } as const;

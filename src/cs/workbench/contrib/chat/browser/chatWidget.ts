@@ -36,8 +36,8 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 	return element;
 }
 
-const CHAT_TOPBAR_MORE_MENU_DATA = 'agentbar-topbar-more';
-const CHAT_TOPBAR_HISTORY_MENU_DATA = 'agentbar-topbar-history';
+const CHAT_HEADER_MORE_MENU_DATA = 'agentbar-header-more';
+const CHAT_HEADER_HISTORY_MENU_DATA = 'agentbar-header-history';
 
 export class ChatWidget {
 	private props: ChatWidgetProps;
@@ -84,31 +84,31 @@ export class ChatWidget {
 	private render() {
 		this.renderDisposables.clear();
 		this.element.replaceChildren(
-			this.renderTopbar(),
+			this.renderHeader(),
 			this.renderShell(),
 		);
 	}
 
-	private renderTopbar() {
-		const topbar = createElement('div', 'agentbar-tabs-header');
-		const topbarItems: ActionBarItem[] = [
-			this.createTopbarActionItem(
+	private renderHeader() {
+		const header = createElement('div', 'agentbar-tabs-header');
+		const headerItems: ActionBarItem[] = [
+			this.createHeaderActionItem(
 				localize('assistantSidebarNewConversation', "New chat"),
 				lxIconSemanticMap.assistant.newConversation,
 				this.props.onCreateConversation,
 			),
-			this.createTopbarHistoryActionItem(),
-			this.createTopbarMoreActionItem(),
+			this.createHeaderHistoryActionItem(),
+			this.createHeaderMoreActionItem(),
 		];
 
 		const actionsView = createActionBarView({
 			className: 'sidebar-action-bar',
 			ariaRole: 'group',
-			items: topbarItems,
+			items: headerItems,
 		});
 		this.renderDisposables.add(actionsView);
-		topbar.append(actionsView.getElement());
-		return topbar;
+		header.append(actionsView.getElement());
+		return header;
 	}
 
 	private renderShell() {
@@ -154,7 +154,7 @@ export class ChatWidget {
 		};
 	}
 
-	private createTopbarActionItem(
+	private createHeaderActionItem(
 		label: string,
 		icon: LxIconName,
 		onClick?: () => void,
@@ -209,14 +209,14 @@ export class ChatWidget {
 		}));
 	}
 
-	private createTopbarMoreActionItem(): ActionBarItem {
+	private createHeaderMoreActionItem(): ActionBarItem {
 		return createDropdownMenuActionViewItem({
 			label: localize('assistantSidebarMore', "More"),
 			title: localize('assistantSidebarMore', "More"),
 			content: createLxIcon(lxIconSemanticMap.assistant.more),
 			buttonClassName: 'sidebar-action-btn',
 			overlayAlignment: 'start',
-			menuData: CHAT_TOPBAR_MORE_MENU_DATA,
+			menuData: CHAT_HEADER_MORE_MENU_DATA,
 			menu: [
 				{
 					label: localize('assistantSidebarNewConversation', "New chat"),
@@ -228,14 +228,14 @@ export class ChatWidget {
 		});
 	}
 
-	private createTopbarHistoryActionItem(): ActionBarItem {
+	private createHeaderHistoryActionItem(): ActionBarItem {
 		return createDropdownMenuActionViewItem({
 			label: localize('assistantSidebarHistory', "History"),
 			title: localize('assistantSidebarHistory', "History"),
 			content: createLxIcon(lxIconSemanticMap.assistant.history),
 			buttonClassName: 'sidebar-action-btn',
 			overlayAlignment: 'end',
-			menuData: CHAT_TOPBAR_HISTORY_MENU_DATA,
+			menuData: CHAT_HEADER_HISTORY_MENU_DATA,
 			menu: this.createHistoryMenuItems(''),
 			menuHeader: createFilterMenuHeader({
 				className: 'agentbar-history-menu-header',

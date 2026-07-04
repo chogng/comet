@@ -127,14 +127,14 @@ export class TitlebarPart {
   }
 
   private syncLeadingActions(props: TitlebarLeadingActionsProps) {
-    const topbarItems = this.createLeadingActionItems(props);
+    const headerItems = this.createLeadingActionItems(props);
     this.leadingActionBarView.setProps({
       className: 'titlebar-leading-actions',
       ariaRole: 'group',
-      items: topbarItems,
+      items: headerItems,
     });
 
-    if (topbarItems.length > 0) {
+    if (headerItems.length > 0) {
       if (
         this.leftElement.firstElementChild !== this.leadingActionsHostElement ||
         this.leftElement.childNodes.length !== 1
@@ -147,9 +147,9 @@ export class TitlebarPart {
   }
 
   private createLeadingActionItems(props: TitlebarLeadingActionsProps) {
-    const topbarItems: ActionBarItem[] = [];
+    const headerItems: ActionBarItem[] = [];
     if (props.menuLabel) {
-      topbarItems.push(createDropdownMenuActionViewItem({
+      headerItems.push(createDropdownMenuActionViewItem({
         label: props.menuLabel,
         title: props.menuLabel,
         mode: 'icon',
@@ -164,7 +164,7 @@ export class TitlebarPart {
       }));
     }
     if (props.onTogglePrimarySidebar && props.primarySidebarToggleLabel) {
-      topbarItems.push({
+      headerItems.push({
         label: props.primarySidebarToggleLabel,
         title: props.primarySidebarToggleLabel,
         mode: 'icon',
@@ -178,7 +178,7 @@ export class TitlebarPart {
       });
     }
     if (props.addressBarLabel) {
-      topbarItems.push({
+      headerItems.push({
         label: props.addressBarLabel,
         title: props.addressBarLabel,
         mode: 'icon',
@@ -188,7 +188,7 @@ export class TitlebarPart {
       });
     }
 
-    return topbarItems;
+    return headerItems;
   }
 
   private createEmptyMenuElement() {

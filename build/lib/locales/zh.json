@@ -230,7 +230,7 @@
   "editorFavoriteNewFolderTitle": "新建收藏文件夹",
   "editorFavoriteNewFolderLabel": "文件夹名称",
   "editorTitle": "写作工作台",
-  "editorTopbarAddAction": "添加",
+  "editorHeaderAddAction": "添加",
   "editorCreateDraft": "草稿",
   "editorCreateBrowser": "浏览器",
   "editorCreateFile": "Read",

@@ -322,7 +322,7 @@ async function ensureEditorExpanded(window) {
         return true;
       }
 
-      const button = document.querySelector('.editor-topbar-toggle-editor-btn');
+      const button = document.querySelector('.editor-header-toggle-editor-btn');
       if (!(button instanceof HTMLButtonElement)) {
         return false;
       }

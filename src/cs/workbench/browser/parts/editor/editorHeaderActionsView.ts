@@ -9,7 +9,7 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
-const EDITOR_HEADER_ADD_MENU_DATA = 'editor-topbar-add';
+const EDITOR_HEADER_ADD_MENU_DATA = 'editor-header-add';
 const ADD_MENU_SEARCH_PLACEHOLDER = 'Search add actions';
 const ADD_MENU_SEARCH_ARIA_LABEL = 'Search add actions';
 const ADD_MENU_EMPTY_LABEL = 'No matching actions';
@@ -36,7 +36,7 @@ export type EditorHeaderActionsViewProps = {
 export class EditorHeaderActionsView {
   private props: EditorHeaderActionsViewProps;
   private readonly actionsView = createActionBarView({
-    className: 'topbar-actions',
+    className: 'header-actions',
     ariaRole: 'group',
   });
 
@@ -116,7 +116,7 @@ export class EditorHeaderActionsView {
         label: this.props.labels.headerAddAction,
         title: this.props.labels.headerAddAction,
         content: createLxIcon('add'),
-        buttonClassName: 'editor-topbar-add-btn',
+        buttonClassName: 'editor-header-add-btn',
         overlayAlignment: 'end',
         menuData: EDITOR_HEADER_ADD_MENU_DATA,
         menu: this.createAddMenuItems(''),
@@ -132,7 +132,7 @@ export class EditorHeaderActionsView {
         label: this.props.agentSidebarToggleLabel ?? '',
         title: this.props.agentSidebarToggleLabel ?? '',
         mode: 'icon' as const,
-        buttonClassName: 'editor-topbar-agent-btn',
+        buttonClassName: 'editor-header-agent-btn',
         content: createLxIcon(
           this.props.isAgentSidebarVisible ? 'agent-filled' : 'agent',
         ),
@@ -147,7 +147,7 @@ export class EditorHeaderActionsView {
         ? this.props.labels.expandEditor
         : this.props.labels.collapseEditor,
       mode: 'icon' as const,
-      buttonClassName: 'editor-topbar-toggle-editor-btn',
+      buttonClassName: 'editor-header-toggle-editor-btn',
       content: createLxIcon(
         this.props.isEditorCollapsed
           ? 'layout-sidebar-right-off'
@@ -157,7 +157,7 @@ export class EditorHeaderActionsView {
     });
 
     this.actionsView.setProps({
-      className: 'topbar-actions',
+      className: 'header-actions',
       ariaRole: 'group',
       items: actionItems,
     });

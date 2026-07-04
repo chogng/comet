@@ -212,16 +212,16 @@ test('agent chat thread follows new content only when scrolled to the bottom', (
   }
 });
 
-function createTopbarActionsElement() {
+function createHeaderActionsElement() {
   const host = document.createElement('div');
-  host.className = 'topbar-actions-host';
+  host.className = 'header-actions-host';
   const actionbar = document.createElement('div');
-  actionbar.className = 'topbar-actions actionbar is-horizontal';
+  actionbar.className = 'header-actions actionbar is-horizontal';
   const actions = document.createElement('div');
   actions.className = 'actionbar-actions-container';
   const button = document.createElement('button');
   button.className = 'actionbar-action titlebar-primary-sidebar-toggle-btn';
-  button.setAttribute('aria-label', 'Topbar action');
+  button.setAttribute('aria-label', 'Header action');
   actions.append(button);
   actionbar.append(actions);
   host.append(actionbar);
@@ -230,7 +230,7 @@ function createTopbarActionsElement() {
 
 test('agent bar header mounts the provided leading actions element', () => {
   let toggleCount = 0;
-  const headerActionsElement = createTopbarActionsElement();
+  const headerActionsElement = createHeaderActionsElement();
   headerActionsElement
     .querySelector('.titlebar-primary-sidebar-toggle-btn')
     ?.addEventListener('click', () => {
@@ -246,10 +246,10 @@ test('agent bar header mounts the provided leading actions element', () => {
 
   try {
     const toggleButton = element.querySelector(
-      '.agentbar-topbar .titlebar-primary-sidebar-toggle-btn',
+      '.agentbar-header .titlebar-primary-sidebar-toggle-btn',
     );
     assert(toggleButton instanceof HTMLButtonElement);
-    assert.equal(toggleButton.getAttribute('aria-label'), 'Topbar action');
+    assert.equal(toggleButton.getAttribute('aria-label'), 'Header action');
 
     toggleButton.click();
     assert.equal(toggleCount, 1);
@@ -281,7 +281,7 @@ test('agent bar more action uses dropdown action view item', async () => {
 
     const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu');
     assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'agentbar-topbar-more');
+    assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-more');
     assert.equal(moreButton.getAttribute('aria-expanded'), 'true');
 
     const newChatItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
@@ -343,7 +343,7 @@ test('agent bar history action supports search and empty states', async () => {
 
     const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu');
     assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'agentbar-topbar-history');
+    assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-history');
     assert.equal(historyButton.getAttribute('aria-expanded'), 'true');
     const searchInput = menu.querySelector('.cs-menu-header .agentbar-history-search-input .input');
     assert(searchInput instanceof HTMLInputElement);
@@ -405,7 +405,7 @@ test('agent bar history action shows no matching agents when there is no history
 
     const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu');
     assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'agentbar-topbar-history');
+    assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-history');
     const emptyState = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
       (node) => node.textContent?.includes('no matching agents'),
     );

@@ -57,15 +57,15 @@ export class WorkbenchContentPartViews {
   private retiredEditorView: ReturnType<typeof createEditorPartView> | null = null;
   private readonly agentHeaderTrailingActionsHost = createElement(
     'div',
-    'agentbar-topbar-trailing-actions-host',
+    'agentbar-header-trailing-actions-host',
   );
   private readonly agentHeaderPrimaryTrailingActionsHost = createElement(
     'div',
-    'agentbar-topbar-trailing-primary',
+    'agentbar-header-trailing-primary',
   );
   private readonly agentHeaderSecondaryTrailingActionsHost = createElement(
     'div',
-    'agentbar-topbar-trailing-secondary',
+    'agentbar-header-trailing-secondary',
   );
   private disposed = false;
 

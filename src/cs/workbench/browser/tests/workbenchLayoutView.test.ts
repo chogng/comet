@@ -314,11 +314,11 @@ function createNativeHostService(): INativeHostService {
 
 function createWorkbenchLayoutViewProps() {
   const editorHeaderActionsElement = document.createElement('div');
-  editorHeaderActionsElement.className = 'topbar-actions actionbar is-horizontal';
+  editorHeaderActionsElement.className = 'header-actions actionbar is-horizontal';
   const actionsContainer = document.createElement('div');
   actionsContainer.className = 'actionbar-actions-container';
   const toggleButton = document.createElement('button');
-  toggleButton.className = 'actionbar-action editor-topbar-toggle-editor-btn';
+  toggleButton.className = 'actionbar-action editor-header-toggle-editor-btn';
   toggleButton.setAttribute('aria-label', 'Expand editor');
   actionsContainer.append(toggleButton);
   editorHeaderActionsElement.append(actionsContainer);
@@ -663,7 +663,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test('WorkbenchLayoutView leaves primary action container out of content topbars', () => {
+test('WorkbenchLayoutView leaves primary action container out of content headers', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = true;
@@ -674,13 +674,13 @@ test('WorkbenchLayoutView leaves primary action container out of content topbars
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .topbar-actions-host'),
+        .querySelector('.sidebar-topbar .header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-topbar .topbar-actions-host'),
+        .querySelector('.agentbar-header .header-actions-host'),
       null,
     );
 
@@ -693,13 +693,13 @@ test('WorkbenchLayoutView leaves primary action container out of content topbars
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-topbar .topbar-actions-host'),
+        .querySelector('.agentbar-header .header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .topbar-actions-host'),
+        .querySelector('.sidebar-topbar .header-actions-host'),
       null,
     );
   } finally {
@@ -707,7 +707,7 @@ test('WorkbenchLayoutView leaves primary action container out of content topbars
   }
 });
 
-test('WorkbenchLayoutView mounts the editor collapse action into auxiliary topbar when the editor is collapsed', () => {
+test('WorkbenchLayoutView mounts the editor collapse action into auxiliary header when the editor is collapsed', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = false;
   props.isAgentSidebarVisible = true;
@@ -717,7 +717,7 @@ test('WorkbenchLayoutView mounts the editor collapse action into auxiliary topba
   try {
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.editor-header .editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
 
@@ -726,13 +726,13 @@ test('WorkbenchLayoutView mounts the editor collapse action into auxiliary topba
 
     const auxiliaryToggleButton = view
       .getElement()
-      .querySelector('.agentbar-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.agentbar-header .editor-header-toggle-editor-btn');
     assert(auxiliaryToggleButton instanceof HTMLButtonElement);
     assert.equal(auxiliaryToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.editor-header .editor-header-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -751,7 +751,7 @@ test('WorkbenchLayoutView collapses editor and keeps expand action out of the si
   try {
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.editor-header .editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
 
@@ -763,19 +763,19 @@ test('WorkbenchLayoutView collapses editor and keeps expand action out of the si
 
     const editorExpandButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.editor-header .editor-header-toggle-editor-btn');
     assert(editorExpandButton instanceof HTMLButtonElement);
     assert.equal(editorExpandButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.sidebar-topbar .editor-header-toggle-editor-btn'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.agentbar-header .editor-header-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -812,11 +812,11 @@ test('SessionWorkbenchContentPartViews keeps editor actions in session header on
     assert(expandedHeader instanceof HTMLElement);
     assert.equal(expandedHeader.hidden, true);
     assert.equal(
-      host.querySelector('.session-header .editor-topbar-toggle-editor-btn'),
+      host.querySelector('.session-header .editor-header-toggle-editor-btn'),
       null,
     );
     assert.equal(
-      host.querySelectorAll('.editor-topbar .editor-topbar-toggle-editor-btn')
+      host.querySelectorAll('.editor-header .editor-header-toggle-editor-btn')
         .length,
       1,
     );
@@ -837,17 +837,17 @@ test('SessionWorkbenchContentPartViews keeps editor actions in session header on
     assert(collapsedHeader instanceof HTMLElement);
     assert.equal(collapsedHeader.hidden, false);
     const headerToggle = host.querySelector(
-      '.session-header .editor-topbar-toggle-editor-btn',
+      '.session-header .editor-header-toggle-editor-btn',
     );
     assert(headerToggle instanceof HTMLButtonElement);
     assert.equal(headerToggle.getAttribute('aria-label'), 'Expand editor');
-    assert.equal(host.querySelector('.editor-topbar'), null);
+    assert.equal(host.querySelector('.editor-header'), null);
   } finally {
     partViews.dispose();
   }
 });
 
-test('WorkbenchLayoutView does not remount primary action container into content topbars', () => {
+test('WorkbenchLayoutView does not remount primary action container into content headers', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = false;
   props.isAgentSidebarVisible = true;
@@ -858,13 +858,13 @@ test('WorkbenchLayoutView does not remount primary action container into content
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-topbar .topbar-actions-host'),
+        .querySelector('.agentbar-header .header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.editor-topbar .topbar-actions-host'),
+        .querySelector('.editor-header .header-actions-host'),
       null,
     );
 
@@ -878,13 +878,13 @@ test('WorkbenchLayoutView does not remount primary action container into content
     assert.equal(
       view
         .getElement()
-        .querySelector('.editor-topbar .topbar-actions-host'),
+        .querySelector('.editor-header .header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-topbar .topbar-actions-host'),
+        .querySelector('.agentbar-header .header-actions-host'),
       null,
     );
   } finally {
@@ -892,7 +892,7 @@ test('WorkbenchLayoutView does not remount primary action container into content
   }
 });
 
-test('WorkbenchLayoutView applies editor topbar leading inset only when sidebars are hidden', () => {
+test('WorkbenchLayoutView applies editor header leading inset only when sidebars are hidden', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = false;
   props.isAgentSidebarVisible = false;
@@ -901,12 +901,12 @@ test('WorkbenchLayoutView applies editor topbar leading inset only when sidebars
   document.body.append(view.getElement());
 
   try {
-    const hiddenSidebarsTopbar = view
+    const hiddenSidebarsHeader = view
       .getElement()
-      .querySelector('.editor-topbar');
-    assert(hiddenSidebarsTopbar instanceof HTMLElement);
+      .querySelector('.editor-header');
+    assert(hiddenSidebarsHeader instanceof HTMLElement);
     assert.equal(
-      hiddenSidebarsTopbar.classList.contains('has-leading-window-controls-inset'),
+      hiddenSidebarsHeader.classList.contains('has-leading-window-controls-inset'),
       true,
     );
 
@@ -916,12 +916,12 @@ test('WorkbenchLayoutView applies editor topbar leading inset only when sidebars
       isAgentSidebarVisible: false,
     };
     view.setProps(materializeWorkbenchLayoutViewProps(primaryVisibleProps));
-    const primaryVisibleTopbar = view
+    const primaryVisibleHeader = view
       .getElement()
-      .querySelector('.editor-topbar');
-    assert(primaryVisibleTopbar instanceof HTMLElement);
+      .querySelector('.editor-header');
+    assert(primaryVisibleHeader instanceof HTMLElement);
     assert.equal(
-      primaryVisibleTopbar.classList.contains('has-leading-window-controls-inset'),
+      primaryVisibleHeader.classList.contains('has-leading-window-controls-inset'),
       false,
     );
 
@@ -931,12 +931,12 @@ test('WorkbenchLayoutView applies editor topbar leading inset only when sidebars
       isAgentSidebarVisible: true,
     };
     view.setProps(materializeWorkbenchLayoutViewProps(agentVisibleProps));
-    const agentVisibleTopbar = view
+    const agentVisibleHeader = view
       .getElement()
-      .querySelector('.editor-topbar');
-    assert(agentVisibleTopbar instanceof HTMLElement);
+      .querySelector('.editor-header');
+    assert(agentVisibleHeader instanceof HTMLElement);
     assert.equal(
-      agentVisibleTopbar.classList.contains('has-leading-window-controls-inset'),
+      agentVisibleHeader.classList.contains('has-leading-window-controls-inset'),
       false,
     );
   } finally {
@@ -958,11 +958,11 @@ test('WorkbenchLayoutView renders only the middle content grid', () => {
     assert(contentGrid instanceof HTMLElement);
     assert.equal(element.children.length, 1);
     assert.equal(element.children[0], contentGrid);
-    assert.equal(element.querySelector('.workbench-topbar-layout'), null);
+    assert.equal(element.querySelector('.workbench-header-layout'), null);
 
     const editorFrame = element.querySelector('.editor-frame');
     assert(editorFrame instanceof HTMLElement);
-    assert.equal(editorFrame.classList.contains('has-external-topbar'), false);
+    assert.equal(editorFrame.classList.contains('has-external-header'), false);
   } finally {
     view.dispose();
   }
@@ -977,10 +977,10 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
   document.body.append(view.getElement());
 
   try {
-    const initialTopbarActionsHost = view
+    const initialHeaderActionsHost = view
       .getElement()
-      .querySelector('.sidebar-topbar .topbar-actions-host');
-    assert.equal(initialTopbarActionsHost, null);
+      .querySelector('.sidebar-topbar .header-actions-host');
+    assert.equal(initialHeaderActionsHost, null);
     assert(
       view
         .getElement()
@@ -1138,16 +1138,16 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
   try {
     const actionButtons = Array.from(
       view.getElement().querySelectorAll(
-        '.editor-topbar .editor-topbar-add-btn, .editor-topbar .editor-topbar-toggle-editor-btn',
+        '.editor-header .editor-header-add-btn, .editor-header .editor-header-toggle-editor-btn',
       ),
     );
     assert.equal(actionButtons.length, 2);
-    assert.equal(actionButtons[0]?.classList.contains('editor-topbar-add-btn'), true);
-    assert.equal(actionButtons[1]?.classList.contains('editor-topbar-toggle-editor-btn'), true);
+    assert.equal(actionButtons[0]?.classList.contains('editor-header-add-btn'), true);
+    assert.equal(actionButtons[1]?.classList.contains('editor-header-toggle-editor-btn'), true);
 
     const addButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-add-btn');
+      .querySelector('.editor-header .editor-header-add-btn');
     assert(addButton instanceof HTMLButtonElement);
     assert.equal(addButton.getAttribute('aria-label'), 'Add');
 
@@ -1161,7 +1161,7 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
 
       const menu = document.body.querySelector('.dropdown-menu');
       assert(menu instanceof HTMLElement);
-      assert.equal(menu.getAttribute('data-menu'), 'editor-topbar-add');
+      assert.equal(menu.getAttribute('data-menu'), 'editor-header-add');
       const menuItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
         (node) => node.textContent?.includes(label),
       );
@@ -1183,7 +1183,7 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
   }
 });
 
-test('WorkbenchLayoutView renders the agent toggle in editor topbar when the agent sidebar is visible', () => {
+test('WorkbenchLayoutView renders the agent toggle in editor header when the agent sidebar is visible', () => {
   const props = createWorkbenchLayoutViewProps();
   let toggleCount = 0;
   props.isPrimarySidebarVisible = true;
@@ -1204,7 +1204,7 @@ test('WorkbenchLayoutView renders the agent toggle in editor topbar when the age
   try {
     const agentButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-agent-btn');
+      .querySelector('.editor-header .editor-header-agent-btn');
     assert(agentButton instanceof HTMLButtonElement);
     assert.equal(agentButton.getAttribute('aria-label'), 'Hide assistant');
     agentButton.click();
@@ -1214,7 +1214,7 @@ test('WorkbenchLayoutView renders the agent toggle in editor topbar when the age
   }
 });
 
-test('WorkbenchLayoutView renders the agent toggle in editor topbar when the agent sidebar is hidden', () => {
+test('WorkbenchLayoutView renders the agent toggle in editor header when the agent sidebar is hidden', () => {
   const props = createWorkbenchLayoutViewProps();
   let toggleCount = 0;
   props.isPrimarySidebarVisible = true;
@@ -1235,7 +1235,7 @@ test('WorkbenchLayoutView renders the agent toggle in editor topbar when the age
   try {
     const editorAgentButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-agent-btn');
+      .querySelector('.editor-header .editor-header-agent-btn');
     assert(editorAgentButton instanceof HTMLButtonElement);
     assert.equal(editorAgentButton.getAttribute('aria-label'), 'Show assistant');
     editorAgentButton.click();
@@ -1253,13 +1253,13 @@ test('WorkbenchLayoutView add dropdown supports search header filtering', async 
   try {
     const addButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-add-btn');
+      .querySelector('.editor-header .editor-header-add-btn');
     assert(addButton instanceof HTMLButtonElement);
 
     addButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const menu = document.body.querySelector('.dropdown-menu[data-menu=\"editor-topbar-add\"]');
+    const menu = document.body.querySelector('.dropdown-menu[data-menu=\"editor-header-add\"]');
     assert(menu instanceof HTMLElement);
     const searchInput = menu.querySelector('.cs-menu-header .dropdown-menu-search-input .input');
     assert(searchInput instanceof HTMLInputElement);
@@ -1278,7 +1278,7 @@ test('WorkbenchLayoutView add dropdown supports search header filtering', async 
   }
 });
 
-test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', () => {
+test('WorkbenchLayoutView renders the browser toolbar below the editor header', () => {
   const props = createWorkbenchLayoutViewProps();
   props.editorPartProps = {
     ...props.editorPartProps,
@@ -1310,8 +1310,8 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
     const editorFrame = view.getElement().querySelector('.editor-frame');
     assert(editorFrame instanceof HTMLElement);
 
-    const topbar = editorFrame.querySelector(':scope > .editor-topbar');
-    assert(topbar instanceof HTMLElement);
+    const header = editorFrame.querySelector(':scope > .editor-header');
+    assert(header instanceof HTMLElement);
     const toolbarHost = editorFrame.querySelector(':scope > .editor-toolbar');
     assert(toolbarHost instanceof HTMLElement);
     assert.equal(toolbarHost.hidden, false);
@@ -1320,7 +1320,7 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor topbar', 
 
     const toolbar = editorFrame.querySelector('.editor-toolbar .editor-browser-toolbar');
     assert(toolbar instanceof HTMLElement);
-    assert.equal(editorFrame.children[0], topbar);
+    assert.equal(editorFrame.children[0], header);
 
     const leadingButtons = Array.from(
       toolbar.querySelectorAll('.editor-browser-toolbar-leading .editor-browser-toolbar-btn'),
@@ -3041,13 +3041,13 @@ test('WorkbenchLayoutView mounts the draft editor content hierarchy inside edito
   try {
     const editorFrame = view.getElement().querySelector('.editor-frame');
     assert(editorFrame instanceof HTMLElement);
-    assert(editorFrame.querySelector(':scope > .editor-topbar'));
+    assert(editorFrame.querySelector(':scope > .editor-header'));
     assert.deepEqual(
       Array.from(editorFrame.children).map((child) =>
         getEditorFrameSlot(child as HTMLElement) ?? '',
       ),
       [
-        EDITOR_FRAME_SLOTS.topbar,
+        EDITOR_FRAME_SLOTS.header,
         EDITOR_FRAME_SLOTS.toolbar,
         EDITOR_FRAME_SLOTS.content,
       ],
@@ -3070,7 +3070,7 @@ test('WorkbenchLayoutView mounts the draft editor content hierarchy inside edito
   }
 });
 
-test('WorkbenchLayoutView mounts the editor collapse action into agentbar topbar even when the primary sidebar is visible', () => {
+test('WorkbenchLayoutView mounts the editor collapse action into agentbar header even when the primary sidebar is visible', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = true;
@@ -3080,7 +3080,7 @@ test('WorkbenchLayoutView mounts the editor collapse action into agentbar topbar
   try {
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.editor-header .editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
 
@@ -3089,19 +3089,19 @@ test('WorkbenchLayoutView mounts the editor collapse action into agentbar topbar
 
     const auxiliaryToggleButton = view
       .getElement()
-      .querySelector('.agentbar-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.agentbar-header .editor-header-toggle-editor-btn');
     assert(auxiliaryToggleButton instanceof HTMLButtonElement);
     assert.equal(auxiliaryToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .topbar-actions-host'),
+        .querySelector('.sidebar-topbar .header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.sidebar-topbar .editor-header-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -3137,7 +3137,7 @@ test('WorkbenchLayoutView keeps primary width fixed and expands agentbar when th
 
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.editor-header .editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     editorToggleButton.click();
     view.setProps(materializeWorkbenchLayoutViewProps(syncRawPropsWithLayoutState(props)));
@@ -3462,18 +3462,18 @@ test('WorkbenchLayoutView hides agentbar and restores editor when agentbar hide 
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.agentbar-header .editor-header-toggle-editor-btn'),
       null,
     );
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-topbar .editor-topbar-toggle-editor-btn');
+      .querySelector('.editor-header .editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .editor-topbar-toggle-editor-btn'),
+        .querySelector('.sidebar-topbar .editor-header-toggle-editor-btn'),
       null,
     );
 
