@@ -5,13 +5,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { HorizontalScrollbar } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
 import type { RagAnswerResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { AgentChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chatWidget';
+import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createAgentChatWidget: typeof import('cs/workbench/contrib/chat/browser/chatWidget').createAgentChatWidget;
-let createAgentBarPartView: typeof import('cs/workbench/browser/parts/agentbar/agentbarPart').createAgentBarPartView;
+let createChatWidget: typeof import('cs/workbench/contrib/chat/browser/chatWidget').createChatWidget;
+let createChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').createChatViewPane;
 
-function createProps(): AgentChatWidgetProps {
+function createProps(): ChatWidgetProps {
   return {
     isKnowledgeBaseModeEnabled: true,
     messages: [],
@@ -71,8 +71,8 @@ function createResult(overrides: Partial<RagAnswerResult> = {}): RagAnswerResult
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ createAgentChatWidget } = await import('cs/workbench/contrib/chat/browser/chatWidget'));
-  ({ createAgentBarPartView } = await import('cs/workbench/browser/parts/agentbar/agentbarPart'));
+  ({ createChatWidget } = await import('cs/workbench/contrib/chat/browser/chatWidget'));
+  ({ createChatViewPane } = await import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane'));
 });
 
 after(() => {
@@ -81,7 +81,7 @@ after(() => {
 });
 
 test('agent bar action buttons expose labels and shared hover', async () => {
-  const agentBar = createAgentChatWidget(createProps());
+  const agentBar = createChatWidget(createProps());
   const element = agentBar.getElement();
   document.body.append(element);
 
@@ -114,7 +114,7 @@ test('agent bar action buttons expose labels and shared hover', async () => {
 });
 
 test('agent chat thread uses the shared scrollable transcript container', () => {
-  const agentBar = createAgentChatWidget({
+  const agentBar = createChatWidget({
     ...createProps(),
     messages: [
       { id: 'user-1', role: 'user', content: 'Explain this result' },
@@ -145,10 +145,10 @@ test('agent chat thread uses the shared scrollable transcript container', () => 
 });
 
 test('agent chat thread follows new content only when scrolled to the bottom', () => {
-  const firstMessages: AgentChatWidgetProps['messages'] = [
+  const firstMessages: ChatWidgetProps['messages'] = [
     { id: 'user-1', role: 'user', content: 'First question' },
   ];
-  const secondMessages: AgentChatWidgetProps['messages'] = [
+  const secondMessages: ChatWidgetProps['messages'] = [
     ...firstMessages,
     {
       id: 'assistant-1',
@@ -157,7 +157,7 @@ test('agent chat thread follows new content only when scrolled to the bottom', (
       result: createResult(),
     },
   ];
-  const agentBar = createAgentChatWidget({
+  const agentBar = createChatWidget({
     ...createProps(),
     messages: firstMessages,
   });
@@ -231,7 +231,7 @@ test('agent bar topbar mounts the provided leading actions element', () => {
     ?.addEventListener('click', () => {
       toggleCount += 1;
   });
-  const agentBar = createAgentBarPartView({
+  const agentBar = createChatViewPane({
     ...createProps(),
     isPrimarySidebarVisible: false,
     topbarActionsElement,
@@ -255,7 +255,7 @@ test('agent bar topbar mounts the provided leading actions element', () => {
 
 test('agent bar more action uses dropdown action view item', async () => {
   let createConversationCount = 0;
-  const agentBar = createAgentChatWidget({
+  const agentBar = createChatWidget({
     ...createProps(),
     onCreateConversation: () => {
       createConversationCount += 1;
@@ -295,7 +295,7 @@ test('agent bar more action uses dropdown action view item', async () => {
 
 test('agent bar history action supports search and empty states', async () => {
   let activatedConversationId = '';
-  const agentBar = createAgentChatWidget({
+  const agentBar = createChatWidget({
     ...createProps(),
     conversations: [
       {
@@ -380,7 +380,7 @@ test('agent bar history action supports search and empty states', async () => {
 });
 
 test('agent bar history action shows no matching agents when there is no history', async () => {
-  const agentBar = createAgentChatWidget({
+  const agentBar = createChatWidget({
     ...createProps(),
     conversations: [],
     activeConversationId: '',
@@ -417,7 +417,7 @@ test('composer toolbar uses actionbar icon controls', () => {
   let selectedModelValue: string | null = null;
   let maxContextWindowToggleCount = 0;
   let openedModelSettings = 0;
-  const agentBar = createAgentChatWidget({
+  const agentBar = createChatWidget({
     ...createProps(),
     question: 'Explain this selection',
     activeLlmModelOptionValue: 'glm:glm-4.7-flash',
@@ -592,7 +592,7 @@ test('composer toolbar uses actionbar icon controls', () => {
 });
 
 test('agent bar model trigger and menu collapse to Auto while automatic routing is enabled', async () => {
-  const agentBar = createAgentChatWidget(createProps());
+  const agentBar = createChatWidget(createProps());
   const element = agentBar.getElement();
   document.body.append(element);
 
@@ -628,7 +628,7 @@ test('agent bar model trigger and menu collapse to Auto while automatic routing 
 });
 
 test('agent bar model menu supports search filtering', async () => {
-  const agentBar = createAgentChatWidget({
+  const agentBar = createChatWidget({
     ...createProps(),
     activeLlmModelOptionValue: 'glm:glm-4.7-flash',
     llmModelOptions: [

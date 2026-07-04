@@ -1,13 +1,11 @@
 import type { AssistantModelSnapshot } from 'cs/workbench/browser/assistantModel';
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
-import {
-	AgentChatWidget,
-	type AgentChatWidgetProps,
-} from 'cs/workbench/contrib/chat/browser/chatWidget';
+import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
-export type SessionChatViewProps = AgentChatWidgetProps;
+export type SessionChatViewProps = ChatWidgetProps;
 
 type CreateSessionChatViewPropsParams = {
 	state: {
@@ -111,10 +109,10 @@ export function createSessionChatViewProps({
 
 export class SessionChatView {
 	private readonly element = createElement('div', 'session-chat-view');
-	private readonly widget: AgentChatWidget;
+	private readonly widget: ChatWidget;
 
 	constructor(props: SessionChatViewProps) {
-		this.widget = new AgentChatWidget(props);
+		this.widget = new ChatWidget(props);
 		this.element.append(this.widget.getElement());
 	}
 
@@ -127,7 +125,7 @@ export class SessionChatView {
 	}
 
 	focus() {
-		this.element.querySelector<HTMLTextAreaElement>('textarea')?.focus();
+		this.widget.focusInput();
 	}
 
 	dispose() {

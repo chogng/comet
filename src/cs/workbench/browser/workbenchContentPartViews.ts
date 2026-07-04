@@ -7,11 +7,11 @@ import {
   createSidebarPartView,
   SidebarPartView,
 } from 'cs/workbench/browser/parts/sidebar/sidebarPart';
-import type { AgentBarPartProps } from 'cs/workbench/browser/parts/agentbar/agentbarPart';
+import type { ChatViewPaneProps } from 'cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane';
 import {
-  createAgentBarPartView,
-  AgentBarPartView,
-} from 'cs/workbench/browser/parts/agentbar/agentbarPart';
+  ChatViewPane,
+  createChatViewPane,
+} from 'cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane';
 import {
   clearStatusbarCommandHandlers,
   initializeStatusbarState,
@@ -35,7 +35,7 @@ export type WorkbenchContentPartViewsProps = {
   isAgentSidebarVisible: boolean;
   sidebarProps: SidebarProps;
   settingsNavigationElement?: HTMLElement | null;
-  agentBarProps: AgentBarPartProps;
+  agentBarProps: ChatViewPaneProps;
   editorPartProps: EditorPartProps;
   settingsContentElement?: HTMLElement | null;
   sidebarFooterActionsElement: HTMLElement;
@@ -52,7 +52,7 @@ export class WorkbenchContentPartViews {
   private props: WorkbenchContentPartViewsProps;
   private layoutState: WorkbenchContentPartViewsLayoutState;
   private sidebarView: SidebarPartView | null = null;
-  private agentBarView: AgentBarPartView | null = null;
+  private agentBarView: ChatViewPane | null = null;
   private editorView: ReturnType<typeof createEditorPartView> | null = null;
   private retiredEditorView: ReturnType<typeof createEditorPartView> | null = null;
   private readonly agentTopbarTrailingActionsHost = createElement(
@@ -238,7 +238,7 @@ export class WorkbenchContentPartViews {
       return;
     }
 
-    const nextProps: AgentBarPartProps = {
+    const nextProps: ChatViewPaneProps = {
       ...this.props.agentBarProps,
       isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
       topbarActionsElement: null,
@@ -246,7 +246,7 @@ export class WorkbenchContentPartViews {
     };
 
     if (!this.agentBarView) {
-      this.agentBarView = createAgentBarPartView(nextProps);
+      this.agentBarView = createChatViewPane(nextProps);
       return;
     }
 

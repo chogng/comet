@@ -8,9 +8,9 @@ import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElem
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { localize } from 'cs/nls';
-import { AgentChatThreadRenderer } from 'cs/workbench/contrib/chat/browser/chatListRenderer';
+import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/chatListRenderer';
 
-export type AgentChatThreadWidgetOptions = {
+export type ChatListWidgetOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
 };
 
@@ -25,17 +25,17 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 	return element;
 }
 
-export class AgentChatThreadWidget {
+export class ChatListWidget {
 	private readonly element = createElement('div', 'agentbar-thread-widget');
 	private readonly contentElement = createElement('div', 'agentbar-thread');
 	private readonly scrollableElement: DomScrollableElement;
 	private readonly scrollDownButton = createElement('button', 'agentbar-thread-scroll-down');
-	private readonly renderer: AgentChatThreadRenderer;
+	private readonly renderer: ChatListRenderer;
 	private readonly disposables = new DisposableStore();
 	private messages: readonly AssistantChatMessage[] = [];
 
-	constructor(options: AgentChatThreadWidgetOptions) {
-		this.renderer = new AgentChatThreadRenderer({
+	constructor(options: ChatListWidgetOptions) {
+		this.renderer = new ChatListRenderer({
 			onApplyPatch: options.onApplyPatch,
 		});
 		this.scrollableElement = new DomScrollableElement(this.contentElement, {

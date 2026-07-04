@@ -5,7 +5,7 @@
 import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
 import { localize } from 'cs/nls';
 
-export type AgentChatThreadRendererOptions = {
+export type ChatListRendererOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
 };
 
@@ -20,8 +20,8 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 	return element;
 }
 
-export class AgentChatThreadRenderer {
-	constructor(private readonly options: AgentChatThreadRendererOptions) {}
+export class ChatListRenderer {
+	constructor(private readonly options: ChatListRendererOptions) {}
 
 	renderElement(message: AssistantChatMessage) {
 		if (message.role === 'user') {
