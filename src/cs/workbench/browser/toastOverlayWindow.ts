@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type {
   NativeToastState,
   NativeToastType,
@@ -10,7 +15,7 @@ import {
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
 import { detectInitialLocale, getLocaleMessages } from 'language/i18n';
-import { getNativeHostService } from 'cs/platform/native/electron-sandbox/nativeHostServiceAccessor';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import 'cs/base/browser/ui/toast/toast.css';
 
 const fallbackToastState: NativeToastState = {
@@ -31,7 +36,6 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
   }
   return element;
 }
-
 function addDisposableListener(
   target: EventTarget,
   type: string,
@@ -82,7 +86,6 @@ function getToastIconText(type: NativeToastType) {
       return 'i';
   }
 }
-
 export class ToastOverlayWindowView extends Disposable {
   private readonly element = createElement('main', 'native-toast-overlay-page');
   private readonly stackElement = createElement(
@@ -90,7 +93,7 @@ export class ToastOverlayWindowView extends Disposable {
     'native-toast-overlay-stack native-toast-overlay-stack-empty',
   );
   private readonly ui = getLocaleMessages(detectInitialLocale());
-  private readonly toastApi = getNativeHostService().toast;
+  private readonly toastApi: INativeHostService['toast'];
   private readonly renderDisposables = new DisposableStore();
   private readonly resizeObserver = new MutableDisposable<DisposableLike>();
   private toastState: NativeToastState = fallbackToastState;
@@ -99,8 +102,11 @@ export class ToastOverlayWindowView extends Disposable {
     this.reportLayout();
   };
 
-  constructor() {
+  constructor(
+    @INativeHostService nativeHostService: INativeHostService,
+  ) {
     super();
+    this.toastApi = nativeHostService.toast;
     this._register(this.renderDisposables);
     this._register(this.resizeObserver);
     this._register(addDisposableListener(this.stackElement, 'mouseenter', () => {
@@ -252,8 +258,4 @@ export class ToastOverlayWindowView extends Disposable {
 
     this.reportLayout();
   }
-}
-
-export function createToastOverlayWindowView() {
-  return new ToastOverlayWindowView();
 }

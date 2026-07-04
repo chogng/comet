@@ -6,18 +6,18 @@ import type {
   NativeToastState,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
-  ElectronAPI,
   ElectronToastApi,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import type { INativeHostService } from 'cs/platform/native/common/native';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createToastOverlayWindowView: typeof import('cs/workbench/browser/toastOverlayWindow').createToastOverlayWindowView;
+let ToastOverlayWindowView: typeof import('cs/workbench/browser/toastOverlayWindow').ToastOverlayWindowView;
 
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ createToastOverlayWindowView } = await import('cs/workbench/browser/toastOverlayWindow'));
+  ({ ToastOverlayWindowView } = await import('cs/workbench/browser/toastOverlayWindow'));
 });
 
 after(() => {
@@ -98,28 +98,23 @@ function createFakeToastApi(getState: () => Promise<NativeToastState>) {
   };
 }
 
-function createElectronApi(overrides: Partial<ElectronAPI>): ElectronAPI {
+function createNativeHostService(
+  overrides: Partial<INativeHostService> = {},
+): INativeHostService {
   return {
+    _serviceBrand: undefined,
+    canInvoke: () => true,
     invoke: (async () => {
       throw new Error('Unexpected invoke in toast overlay window test.');
-    }) as ElectronAPI['invoke'],
+    }) as INativeHostService['invoke'],
+    ipc: undefined,
+    windowControls: undefined,
+    webContent: undefined,
+    fetch: undefined,
+    document: undefined,
+    toast: undefined,
     ...overrides,
   };
-}
-
-function withElectronApi<T>(electronAPI: ElectronAPI | undefined, run: () => T): T {
-  const testWindow = window as typeof window & {
-    electronAPI?: ElectronAPI;
-  };
-  const previousElectronApi = testWindow.electronAPI;
-
-  testWindow.electronAPI = electronAPI;
-
-  try {
-    return run();
-  } finally {
-    testWindow.electronAPI = previousElectronApi;
-  }
 }
 
 function installResizeObserverSpy() {
@@ -184,26 +179,25 @@ test('toast overlay window dismisses toast items through the native api', async 
   const resizeObserverSpy = installResizeObserverSpy();
   const deferredInitialState = createDeferred<NativeToastState>();
   const fakeApi = createFakeToastApi(() => deferredInitialState.promise);
+  const nativeHostService = createNativeHostService({ toast: fakeApi.api });
 
   try {
-    await withElectronApi(createElectronApi({ toast: fakeApi.api }), async () => {
-      const view = createToastOverlayWindowView();
-      document.body.append(view.getElement());
+    const view = new ToastOverlayWindowView(nativeHostService);
+    document.body.append(view.getElement());
 
-      try {
-        fakeApi.emitState(createToastState());
-        await flushMicrotasks();
+    try {
+      fakeApi.emitState(createToastState());
+      await flushMicrotasks();
 
-        const closeButton = view.getElement().querySelector('.native-toast-close');
-        assert(closeButton instanceof HTMLButtonElement);
+      const closeButton = view.getElement().querySelector('.native-toast-close');
+      assert(closeButton instanceof HTMLButtonElement);
 
-        closeButton.click();
+      closeButton.click();
 
-        assert.deepEqual(fakeApi.dismissCalls, [1]);
-      } finally {
-        view.dispose();
-      }
-    });
+      assert.deepEqual(fakeApi.dismissCalls, [1]);
+    } finally {
+      view.dispose();
+    }
   } finally {
     resizeObserverSpy.restore();
     document.body.replaceChildren();
@@ -214,25 +208,24 @@ test('toast overlay window unsubscribes from state changes and disconnects resiz
   const resizeObserverSpy = installResizeObserverSpy();
   const deferredInitialState = createDeferred<NativeToastState>();
   const fakeApi = createFakeToastApi(() => deferredInitialState.promise);
+  const nativeHostService = createNativeHostService({ toast: fakeApi.api });
 
   try {
-    await withElectronApi(createElectronApi({ toast: fakeApi.api }), async () => {
-      const view = createToastOverlayWindowView();
-      document.body.append(view.getElement());
+    const view = new ToastOverlayWindowView(nativeHostService);
+    document.body.append(view.getElement());
 
-      try {
-        assert.equal(resizeObserverSpy.getActiveObservers(), 1);
+    try {
+      assert.equal(resizeObserverSpy.getActiveObservers(), 1);
 
-        view.dispose();
+      view.dispose();
 
-        assert.equal(fakeApi.wasRemoved(), true);
-        assert.equal(resizeObserverSpy.getActiveObservers(), 0);
-        assert.equal(view.getElement().childElementCount, 0);
-        assert.equal(fakeApi.hoveringCalls.at(-1), false);
-      } finally {
-        view.dispose();
-      }
-    });
+      assert.equal(fakeApi.wasRemoved(), true);
+      assert.equal(resizeObserverSpy.getActiveObservers(), 0);
+      assert.equal(view.getElement().childElementCount, 0);
+      assert.equal(fakeApi.hoveringCalls.at(-1), false);
+    } finally {
+      view.dispose();
+    }
   } finally {
     resizeObserverSpy.restore();
     document.body.replaceChildren();
@@ -243,20 +236,19 @@ test('toast overlay window ignores late initial state after dispose', async () =
   const resizeObserverSpy = installResizeObserverSpy();
   const deferredState = createDeferred<NativeToastState>();
   const fakeApi = createFakeToastApi(() => deferredState.promise);
+  const nativeHostService = createNativeHostService({ toast: fakeApi.api });
 
   try {
-    await withElectronApi(createElectronApi({ toast: fakeApi.api }), async () => {
-      const view = createToastOverlayWindowView();
-      document.body.append(view.getElement());
+    const view = new ToastOverlayWindowView(nativeHostService);
+    document.body.append(view.getElement());
 
-      view.dispose();
-      deferredState.resolve(createToastState());
-      await flushMicrotasks();
+    view.dispose();
+    deferredState.resolve(createToastState());
+    await flushMicrotasks();
 
-      assert.equal(fakeApi.wasRemoved(), true);
-      assert.equal(resizeObserverSpy.getActiveObservers(), 0);
-      assert.equal(view.getElement().childElementCount, 0);
-    });
+    assert.equal(fakeApi.wasRemoved(), true);
+    assert.equal(resizeObserverSpy.getActiveObservers(), 0);
+    assert.equal(view.getElement().childElementCount, 0);
   } finally {
     resizeObserverSpy.restore();
     document.body.replaceChildren();

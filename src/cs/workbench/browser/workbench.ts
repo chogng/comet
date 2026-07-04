@@ -59,7 +59,7 @@ import type { AgentBarPartProps } from 'cs/workbench/browser/parts/agentbar/agen
 import type { SidebarProps } from 'cs/workbench/browser/parts/sidebar/sidebarPart';
 import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 
-import { createToastOverlayWindowView } from 'cs/workbench/browser/toastOverlayWindow';
+import { ToastOverlayWindowView } from 'cs/workbench/browser/toastOverlayWindow';
 import { createWorkbenchContentPartViews } from 'cs/workbench/browser/workbenchContentPartViews';
 import { showWorkbenchTextInputModal } from 'cs/workbench/browser/workbenchEditorModals';
 import { createEditorTopbarActionsView } from 'cs/workbench/browser/parts/editor/editorTopbarActionsView';
@@ -134,7 +134,7 @@ import {
   hasWebContentRuntime,
 } from 'cs/base/common/platform';
 import { EventEmitter } from 'cs/base/common/event';
-import { getNativeHostService } from 'cs/platform/native/electron-sandbox/nativeHostServiceAccessor';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
@@ -185,7 +185,7 @@ let assistantModel: AssistantModel | null = null;
 let documentActionsController: DocumentActionsController | null = null;
 let batchFetchController: BatchFetchController | null = null;
 let activeWorkbenchHost: WorkbenchHost | null = null;
-let activeOverlayView: ReturnType<typeof createToastOverlayWindowView> | null = null;
+let activeOverlayView: ToastOverlayWindowView | null = null;
 let activeAgentChatModelOptionValue: string | null = null;
 
 const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
@@ -517,7 +517,7 @@ function detectNativeOverlayKind() {
   return new URLSearchParams(window.location.search).get('nativeOverlay');
 }
 
-function canUseNativeToastOverlay() {
+function canUseNativeToastOverlay(nativeHostService: INativeHostService) {
   if (typeof window === 'undefined') {
     return false;
   }
@@ -526,19 +526,21 @@ function canUseNativeToastOverlay() {
     return false;
   }
 
-  return typeof getNativeHostService().toast?.show === 'function';
+  return typeof nativeHostService.toast?.show === 'function';
 }
 
-registerToastBridge({
-  canHandle: canUseNativeToastOverlay,
-  show: options => {
-    getNativeHostService().toast?.show(options);
-    return -1;
-  },
-  dismiss: id => {
-    getNativeHostService().toast?.dismiss(id);
-  },
-});
+function registerNativeToastBridge(nativeHostService: INativeHostService) {
+  registerToastBridge({
+    canHandle: () => canUseNativeToastOverlay(nativeHostService),
+    show: options => {
+      nativeHostService.toast?.show(options);
+      return -1;
+    },
+    dismiss: id => {
+      nativeHostService.toast?.dismiss(id);
+    },
+  });
+}
 
 function reduceWorkbenchState(
   state: WorkbenchStateSnapshot,
@@ -711,6 +713,7 @@ class WorkbenchHost {
     rootElement: HTMLElement,
     @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
     @INotificationService private readonly notificationService: NotificationService,
+    @INativeHostService private readonly nativeHostService: INativeHostService,
   ) {
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
@@ -719,6 +722,7 @@ class WorkbenchHost {
     this.toastMount = document.createElement('div');
     this.notificationsMount = document.createElement('div');
     this.statusbarElement = document.createElement('section');
+    registerNativeToastBridge(this.nativeHostService);
     this.titlebarPart = createTitlebarPart(
       this.containerElement,
       this.shellElement,
@@ -785,6 +789,7 @@ class WorkbenchHost {
     this.editorPartController = null;
     this.toastHost.dispose();
     this.notificationsPart?.dispose();
+    registerToastBridge(null);
     this.rootElement.replaceChildren();
   }
 
@@ -1342,7 +1347,7 @@ class WorkbenchHost {
     const { electronRuntime, webContentRuntime, desktopRuntime } =
       resolveRuntimeState();
     const { isFullscreen: isWindowFullscreen } = getWindowStateSnapshot();
-    const nativeHost = getNativeHostService();
+    const nativeHost = this.nativeHostService;
 
     const invokeDesktop = async <T>(
       command: string,
@@ -2442,7 +2447,7 @@ export function getWorkbenchLibraryModel(context: LibraryModelContext) {
   return libraryModel;
 }
 
-export function getWorkbenchWebContentNavigationModel(nativeHost = getNativeHostService()) {
+export function getWorkbenchWebContentNavigationModel(nativeHost: INativeHostService) {
   webContentNavigationModel ??= new WebContentNavigationModel(nativeHost);
   return webContentNavigationModel;
 }
@@ -2517,7 +2522,9 @@ export function renderWorkbench() {
   const nativeOverlayKind = detectNativeOverlayKind();
 
   if (nativeOverlayKind === 'toast') {
-    activeOverlayView = createToastOverlayWindowView();
+    activeOverlayView = getWorkbenchInstantiationService().createInstance(
+      ToastOverlayWindowView,
+    );
     rootElement.replaceChildren(activeOverlayView.getElement());
     return;
   }

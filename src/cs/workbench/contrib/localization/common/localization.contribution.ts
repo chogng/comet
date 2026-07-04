@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import {
   localeService,
 } from 'cs/workbench/services/localization/browser/localeService';
@@ -10,45 +15,52 @@ import {
 } from 'cs/workbench/common/contributions';
 
 import { hasDesktopRuntime } from 'cs/base/common/platform';
-import { getNativeHostService } from 'cs/platform/native/electron-sandbox/nativeHostServiceAccessor';
+import { INativeHostService } from 'cs/platform/native/common/native';
+import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 
-function createLocaleServiceContext() {
+function createLocaleServiceContext(nativeHostService: INativeHostService) {
   return {
     desktopRuntime: hasDesktopRuntime(),
     invokeDesktop: async <T>(
       command: string,
       args?: Record<string, unknown>,
     ): Promise<T> => {
-      return getNativeHostService().invoke(command as never, args as never) as Promise<T>;
+      return nativeHostService.invoke(command as never, args as never) as Promise<T>;
     },
   };
 }
 
-export function createWorkbenchLocalizationContribution(): Disposable {
-  const context = createLocaleServiceContext();
-  void localeService.initialize(context).catch((error) => {
-    console.error('Failed to initialize locale service.', error);
-  });
+export class WorkbenchLocalizationContribution implements Disposable {
+  private readonly unsubscribeLocalizationUiActions: () => void;
 
-  const unsubscribeLocalizationUiActions = subscribeLocalizationUiActions(
-    (action) => {
-      if (action.type !== 'SET_DISPLAY_LANGUAGE') {
-        return;
-      }
+  constructor(
+    @INativeHostService nativeHostService: INativeHostService,
+  ) {
+    const context = createLocaleServiceContext(nativeHostService);
+    void localeService.initialize(context).catch((error) => {
+      console.error('Failed to initialize locale service.', error);
+    });
 
-      void localeService
-        .updateLocalePreference(action.locale, context)
-        .catch((error) => {
-          console.error('Failed to update display language.', error);
-        });
-    },
-  );
+    this.unsubscribeLocalizationUiActions = subscribeLocalizationUiActions(
+      (action) => {
+        if (action.type !== 'SET_DISPLAY_LANGUAGE') {
+          return;
+        }
 
-  return {
-    dispose: () => {
-      unsubscribeLocalizationUiActions();
-    },
-  };
+        void localeService
+          .updateLocalePreference(action.locale, context)
+          .catch((error) => {
+            console.error('Failed to update display language.', error);
+          });
+      },
+    );
+  }
+
+  dispose() {
+    this.unsubscribeLocalizationUiActions();
+  }
 }
 
-registerWorkbenchContribution(createWorkbenchLocalizationContribution);
+registerWorkbenchContribution(() =>
+  getWorkbenchInstantiationService().createInstance(WorkbenchLocalizationContribution),
+);

@@ -7,7 +7,6 @@
 import 'cs/base/browser/ui/button/button.css';
 import 'cs/workbench/browser/contextkeys';
 import 'cs/workbench/contrib/workbench/workbench.contribution';
-import 'cs/workbench/contrib/browserView/electron-browser/browserView.contribution';
 
 //#endregion
 
@@ -21,6 +20,11 @@ import 'cs/workbench/browser/actions/layoutActions';
 
 //#region --- workbench services
 
+import { INativeHostService } from 'cs/platform/native/common/native';
+import { nativeHostService } from 'cs/platform/native/electron-sandbox/nativeHostServiceProxy';
+import {
+  registerWorkbenchService,
+} from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import 'cs/workbench/services/commands/common/commandService';
 import 'cs/workbench/services/configuration/browser/configurationService';
 import 'cs/workbench/services/environment/browser/environmentService';
@@ -32,6 +36,8 @@ import 'cs/workbench/services/lifecycle/browser/lifecycleService';
 import 'cs/workbench/services/localization/browser/localeService';
 import 'cs/workbench/services/notification/common/notificationService';
 import 'cs/workbench/services/views/browser/viewsService';
+
+registerWorkbenchService(INativeHostService, nativeHostService);
 
 //#endregion
 

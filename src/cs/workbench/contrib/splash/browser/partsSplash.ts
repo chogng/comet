@@ -1,10 +1,15 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { themeService } from 'cs/platform/theme/browser/themeService';
 import type {
   AppColorScheme,
   PartsSplash,
 } from 'cs/platform/theme/common/theme';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
-import { getNativeHostService } from 'cs/platform/native/electron-sandbox/nativeHostServiceAccessor';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchPartDomSnapshot,
@@ -16,6 +21,7 @@ import { registerWorkbenchContribution } from 'cs/workbench/common/contributions
 import {
   setWorkbenchHostColorScheme,
 } from 'cs/workbench/services/themes/browser/workbenchThemeService';
+import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 
 function getElementWidth(element: HTMLElement | null) {
   return element?.getBoundingClientRect().width ?? 0;
@@ -66,58 +72,61 @@ function createPartsSplash(): PartsSplash {
   };
 }
 
-export function createWorkbenchPartsSplashContribution() {
-  const nativeHost = getNativeHostService();
-  if (!nativeHost.ipc) {
-    throw new Error('Native host IPC is required for parts splash.');
-  }
+export class WorkbenchPartsSplashContribution {
+  private readonly store = new DisposableStore();
+  private saveHandle: number | null = null;
 
-  const ipc = nativeHost.ipc;
-  const store = new DisposableStore();
-  let saveHandle: number | null = null;
-
-  const saveWindowSplash = () => {
-    saveHandle = null;
-    void ipc.call('nativeHost', 'save_window_splash', createPartsSplash());
-  };
-
-  const scheduleSaveWindowSplash = () => {
-    if (saveHandle !== null) {
-      window.clearTimeout(saveHandle);
+  constructor(
+    @INativeHostService nativeHostService: INativeHostService,
+  ) {
+    const ipc = nativeHostService.ipc;
+    if (!ipc) {
+      throw new Error('Native host IPC is required for parts splash.');
     }
 
-    saveHandle = window.setTimeout(saveWindowSplash, 250);
-  };
+    const saveWindowSplash = () => {
+      this.saveHandle = null;
+      void ipc.call('nativeHost', 'save_window_splash', createPartsSplash());
+    };
 
-  store.add(toDisposable(subscribeWorkbenchPartDom(scheduleSaveWindowSplash)));
-  store.add(toDisposable(subscribeWorkbenchLayoutState(scheduleSaveWindowSplash)));
-  store.add(themeService.onDidColorThemeChange(scheduleSaveWindowSplash));
-  store.add(toDisposable(ipc.listen<AppColorScheme>(
-    'nativeHost',
-    'on_did_change_color_scheme',
-    undefined,
-    colorScheme => {
-      setWorkbenchHostColorScheme(colorScheme);
-      scheduleSaveWindowSplash();
-    },
-  )));
-  void ipc.call<AppColorScheme>('nativeHost', 'get_os_color_scheme')
-    .then(colorScheme => {
-      setWorkbenchHostColorScheme(colorScheme);
-      scheduleSaveWindowSplash();
-    });
-  scheduleSaveWindowSplash();
-
-  return {
-    dispose() {
-      if (saveHandle !== null) {
-        window.clearTimeout(saveHandle);
-        saveHandle = null;
+    const scheduleSaveWindowSplash = () => {
+      if (this.saveHandle !== null) {
+        window.clearTimeout(this.saveHandle);
       }
 
-      store.dispose();
-    },
-  };
+      this.saveHandle = window.setTimeout(saveWindowSplash, 250);
+    };
+
+    this.store.add(toDisposable(subscribeWorkbenchPartDom(scheduleSaveWindowSplash)));
+    this.store.add(toDisposable(subscribeWorkbenchLayoutState(scheduleSaveWindowSplash)));
+    this.store.add(themeService.onDidColorThemeChange(scheduleSaveWindowSplash));
+    this.store.add(toDisposable(ipc.listen<AppColorScheme>(
+      'nativeHost',
+      'on_did_change_color_scheme',
+      undefined,
+      colorScheme => {
+        setWorkbenchHostColorScheme(colorScheme);
+        scheduleSaveWindowSplash();
+      },
+    )));
+    void ipc.call<AppColorScheme>('nativeHost', 'get_os_color_scheme')
+      .then(colorScheme => {
+        setWorkbenchHostColorScheme(colorScheme);
+        scheduleSaveWindowSplash();
+      });
+    scheduleSaveWindowSplash();
+  }
+
+  dispose() {
+    if (this.saveHandle !== null) {
+      window.clearTimeout(this.saveHandle);
+      this.saveHandle = null;
+    }
+
+    this.store.dispose();
+  }
 }
 
-registerWorkbenchContribution(createWorkbenchPartsSplashContribution);
+registerWorkbenchContribution(() =>
+  getWorkbenchInstantiationService().createInstance(WorkbenchPartsSplashContribution),
+);

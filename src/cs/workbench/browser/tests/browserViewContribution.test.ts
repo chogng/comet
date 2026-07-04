@@ -10,11 +10,11 @@ import type {
   WebContentLayoutPhase,
   WebContentState,
 } from 'cs/platform/browserView/common/browserView';
-import type { ElectronAPI } from 'cs/base/parts/sandbox/common/electronTypes';
+import type { INativeHostService } from 'cs/platform/native/common/native';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createWorkbenchBrowserViewContribution: typeof import('cs/workbench/contrib/browserView/electron-browser/browserView.contribution').createWorkbenchBrowserViewContribution;
+let WorkbenchBrowserViewContribution: typeof import('cs/workbench/contrib/browserView/electron-browser/browserView.contribution').WorkbenchBrowserViewContribution;
 let registerWorkbenchPartDomNode: typeof import('cs/workbench/browser/layout').registerWorkbenchPartDomNode;
 let WORKBENCH_PART_IDS: typeof import('cs/workbench/browser/layout').WORKBENCH_PART_IDS;
 let resetWorkbenchBrowserTabKeepAliveLimit: typeof import('cs/workbench/browser/webContentRetentionState').resetWorkbenchBrowserTabKeepAliveLimit;
@@ -159,7 +159,7 @@ function installWebContentApiSpy() {
   let currentBounds: WebContentBounds | null = null;
   let currentVisible = false;
 
-  const webContent: NonNullable<ElectronAPI['webContent']> = {
+  const webContent: NonNullable<INativeHostService['webContent']> = {
     activate() {},
     dispose() {},
     release() {},
@@ -198,18 +198,20 @@ function installWebContentApiSpy() {
     },
   };
 
-  Object.defineProperty(window, 'electronAPI', {
-    configurable: true,
-    writable: true,
-    value: {
-      async invoke() {
-        return undefined;
-      },
-      webContent,
-    } satisfies ElectronAPI,
-  });
+  const nativeHostService: INativeHostService = {
+    _serviceBrand: undefined,
+    canInvoke: () => true,
+    invoke: (async () => undefined) as INativeHostService['invoke'],
+    ipc: undefined,
+    windowControls: undefined,
+    webContent,
+    fetch: undefined,
+    document: undefined,
+    toast: undefined,
+  };
 
   return {
+    nativeHostService,
     retentionLimits,
     surfaceStates,
   };
@@ -231,7 +233,7 @@ before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({
-    createWorkbenchBrowserViewContribution,
+    WorkbenchBrowserViewContribution,
   } = await import('cs/workbench/contrib/browserView/electron-browser/browserView.contribution'));
   ({
     registerWorkbenchPartDomNode,
@@ -246,7 +248,6 @@ before(async () => {
 afterEach(() => {
   registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.webContentViewHost, null);
   resetWorkbenchBrowserTabKeepAliveLimit();
-  Reflect.deleteProperty(window, 'electronAPI');
   document.body.replaceChildren();
 });
 
@@ -261,8 +262,7 @@ test('browser view contribution sends stable BrowserView bounds after measuring'
   createHost({ x: 10, y: 20, width: 300, height: 200 });
 
   try {
-    const contribution = createWorkbenchBrowserViewContribution();
-    assert(contribution);
+    const contribution = new WorkbenchBrowserViewContribution(api.nativeHostService);
 
     animationFrame.flushAll();
     assert.deepEqual(api.surfaceStates.at(-1), {
@@ -299,8 +299,7 @@ test('browser view contribution hides BrowserView when host is inactive', () => 
   createHost({ x: 8, y: 12, width: 240, height: 180 }, false);
 
   try {
-    const contribution = createWorkbenchBrowserViewContribution();
-    assert(contribution);
+    const contribution = new WorkbenchBrowserViewContribution(api.nativeHostService);
 
     animationFrame.flushUntilIdle();
     assert.deepEqual(api.surfaceStates.at(-1), {
@@ -323,8 +322,7 @@ test('browser view contribution forwards retention limit changes', () => {
   createHost({ x: 0, y: 0, width: 100, height: 100 });
 
   try {
-    const contribution = createWorkbenchBrowserViewContribution();
-    assert(contribution);
+    const contribution = new WorkbenchBrowserViewContribution(api.nativeHostService);
 
     assert.deepEqual(api.retentionLimits, [2]);
     setWorkbenchBrowserTabKeepAliveLimit(1);
@@ -349,12 +347,11 @@ test('browser view contribution does not create renderer webview elements', () =
     return previousCreateElement(tagName, options);
   }) as typeof document.createElement;
 
-  installWebContentApiSpy();
+  const api = installWebContentApiSpy();
   createHost({ x: 0, y: 0, width: 100, height: 100 });
 
   try {
-    const contribution = createWorkbenchBrowserViewContribution();
-    assert(contribution);
+    const contribution = new WorkbenchBrowserViewContribution(api.nativeHostService);
     animationFrame.flushUntilIdle();
     assert.equal(createdWebviewCount, 0);
     contribution.dispose();
