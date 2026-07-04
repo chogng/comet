@@ -9,7 +9,7 @@
   "scripts": {
     "predev": "node ./scripts/kill-dev-ports.mjs",
     "dev": "vite",
-    "dev:desktop": "tsx build/lib/preLaunch.ts",
+    "dev:desktop": "tsx build/lib/devDesktop.ts",
     "dev:desktop:mac": "./scripts/code.sh",
     "dev:desktop:win": "scripts\\code.bat",
     "build:web": "tsc -p tsconfig.build.json --noEmit && vite build --config vite.web.config.ts --mode web",
@@ -21,10 +21,7 @@
     "verify": "tsx scripts/verify/verify-all.ts",
     "bench": "tsx scripts/bench/bench-all.ts",
     "dev:renderer": "vite",
-    "build:electron": "tsc -p tsconfig.electron.json --noEmit && node ./scripts/build-electron.mjs",
-    "dev:electron:build": "node ./scripts/build-electron.mjs --watch",
-    "dev:electron:run": "node ./scripts/dev-electron-runner.mjs",
-    "dev:electron": "concurrently -k \"npm:dev:electron:build\" \"npm:dev:electron:run\"",
+    "build:electron": "tsc -p tsconfig.electron.json --noEmit && tsx build/lib/buildElectron.ts",
     "dev:web": "vite --config vite.web.config.ts",
     "check:i18n": "node scripts/check-i18n-keys.mjs",
     "test:base-common": "node scripts/run-base-common-tests.mjs",
@@ -59,7 +56,6 @@
     "prosemirror-view": "^1.41.7"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
     "electron": "^43.0.0",
     "electron-builder": "^26.8.1",
     "jsdom": "^29.0.1",

@@ -1,4 +1,5 @@
-import { copyDirectory, pathExists, removePath, resolveProjectPath, run, runBin, runNpmScript } from './util.ts';
+import { buildElectron } from './electronBuild.ts';
+import { copyDirectory, pathExists, removePath, resolveProjectPath, runBin, runNpmScript } from './util.ts';
 
 const shouldSkipRust = process.argv.includes('--skip-rust');
 const shouldSkipPyWorker = process.argv.includes('--skip-py-worker');
@@ -29,7 +30,7 @@ await removePath(resolveProjectPath('dist-electron'));
 await runBin('tsc', ['-p', 'tsconfig.build.json', '--noEmit']);
 await runBin('vite', ['build', '--mode', 'desktop']);
 await runBin('tsc', ['-p', 'tsconfig.electron.json', '--noEmit']);
-await run('node', [resolveProjectPath('scripts', 'build-electron.mjs')]);
+await buildElectron();
 
 if (!shouldSkipRust) {
   await runNpmScript('build:rust');

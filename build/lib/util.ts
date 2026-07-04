@@ -33,9 +33,19 @@ export async function copyDirectory(sourcePath: string, targetPath: string) {
   return true;
 }
 
+function createBuildEnv() {
+  const localBinPath = resolveProjectPath('node_modules', '.bin');
+  const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+  const pathValue = process.env[pathKey];
+
+  return {
+    ...process.env,
+    [pathKey]: pathValue ? `${localBinPath}${path.delimiter}${pathValue}` : localBinPath,
+  };
+}
+
 function resolveNodeBin(binName: string) {
   const binPaths: Record<string, string> = {
-    concurrently: resolveProjectPath('node_modules', 'concurrently', 'dist', 'bin', 'concurrently.js'),
     'electron-builder': resolveProjectPath('node_modules', 'electron-builder', 'cli.js'),
     tsc: resolveProjectPath('node_modules', 'typescript', 'bin', 'tsc'),
     vite: resolveViteBinPath(projectRoot),
@@ -50,7 +60,7 @@ export async function run(command: string, args: string[] = []) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: projectRoot,
-      env: process.env,
+      env: createBuildEnv(),
       stdio: 'inherit',
     });
 

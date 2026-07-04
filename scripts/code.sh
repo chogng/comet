@@ -23,7 +23,7 @@ function code() {
 		fi
 	fi
 
-	exec node "$ROOT/node_modules/tsx/dist/cli.mjs" "$ROOT/build/lib/preLaunch.ts" "$@"
+	exec node "$ROOT/node_modules/tsx/dist/cli.mjs" "$ROOT/build/lib/devDesktop.ts" "$@"
 }
 
 code "$@"
