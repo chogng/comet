@@ -2,128 +2,147 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
+import type { IListRenderer, IListVirtualDelegate } from 'ls/base/browser/ui/list/list';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let ListWidget: typeof import('ls/base/browser/ui/list/listWidget').ListWidget;
+let List: typeof import('ls/base/browser/ui/list/listWidget').List;
 
 type ListItem = {
-  id: string;
-  label: string;
+	id: string;
+	label: string;
 };
 
+type TemplateData = {
+	container: HTMLElement;
+};
+
+const rowHeight = 20;
+
 before(async () => {
-  const domEnvironment = installDomTestEnvironment();
-  cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ ListWidget } = await import('ls/base/browser/ui/list/listWidget'));
+	const domEnvironment = installDomTestEnvironment();
+	cleanupDomEnvironment = domEnvironment.cleanup;
+	({ List } = await import('ls/base/browser/ui/list/listWidget'));
 });
 
 after(() => {
-  cleanupDomEnvironment?.();
-  cleanupDomEnvironment = null;
+	cleanupDomEnvironment?.();
+	cleanupDomEnvironment = null;
 });
 
 function createList(selected: string[] = []) {
-  const items: ListItem[] = [
-    { id: 'alpha', label: 'Alpha' },
-    { id: 'beta', label: 'Beta' },
-  ];
+	const items: ListItem[] = [
+		{ id: 'alpha', label: 'Alpha' },
+		{ id: 'beta', label: 'Beta' },
+	];
+	const container = document.createElement('div');
+	document.body.append(container);
 
-  const list = new ListWidget<ListItem>(
-    {
-      renderElement: (item) => {
-        const element = document.createElement('div');
-        element.textContent = item.label;
-        return element;
-      },
-    },
-    {
-      getId: (item) => item.id,
-      getLabel: (item) => item.label,
-      onDidChangeSelection: (item) => {
-        selected.push(item?.id ?? 'null');
-      },
-    },
-  );
+	const delegate: IListVirtualDelegate<ListItem> = {
+		getHeight: () => rowHeight,
+		getTemplateId: () => 'listItem',
+	};
+	const renderer: IListRenderer<ListItem, TemplateData> = {
+		templateId: 'listItem',
+		renderTemplate: row => ({ container: row }),
+		renderElement: (item, _index, data) => {
+			data.container.dataset['listItemId'] = item.id;
+			data.container.textContent = item.label;
+		},
+		disposeTemplate: () => {},
+	};
 
-  return { items, list };
+	const list = new List<ListItem>(
+		'testList',
+		container,
+		delegate,
+		[renderer],
+		{
+			identityProvider: {
+				getId: item => item.id,
+			},
+			keyboardNavigationLabelProvider: {
+				getKeyboardNavigationLabel: item => item.label,
+			},
+			accessibilityProvider: {
+				getWidgetAriaLabel: () => 'Test list',
+				getAriaLabel: item => item.label,
+			},
+			multipleSelectionSupport: false,
+		},
+	);
+
+	list.splice(0, 0, items);
+	list.setFocus([0]);
+	list.layout(items.length * rowHeight);
+	list.onDidChangeSelection(({ elements }) => {
+		selected.push(elements[0]?.id ?? 'null');
+	});
+
+	return { container, items, list };
 }
 
-test('list widget typeahead focuses the matching item and click selects it', () => {
-  const selected: string[] = [];
-  const { items, list } = createList(selected);
-  document.body.append(list.getElement());
-  list.setItems(items);
+test('list type navigation focuses the matching item and click selects it', () => {
+	const selected: string[] = [];
+	const { container, items, list } = createList(selected);
 
-  try {
-    list.getElement().dispatchEvent(new window.FocusEvent('focus'));
-    list.getElement().dispatchEvent(new window.KeyboardEvent('keydown', {
-      bubbles: true,
-      key: 'b',
-    }));
+	try {
+		list.domFocus();
+		list.getHTMLElement().dispatchEvent(new window.KeyboardEvent('keydown', {
+			bubbles: true,
+			key: 'b',
+			keyCode: 66,
+			which: 66,
+		}));
 
-    const betaNode = list.getElement().querySelector<HTMLElement>(
-      '[data-list-item-id="beta"]',
-    );
-    assert(betaNode instanceof HTMLElement);
-    assert.equal(betaNode.classList.contains('is-focused'), true);
+		const betaNode = list.getHTMLElement().querySelector<HTMLElement>(
+			'[data-list-item-id="beta"]',
+		);
+		assert(betaNode instanceof HTMLElement);
+		assert.equal(betaNode.classList.contains('focused'), true);
 
-    betaNode.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+		betaNode.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 
-    assert.equal(list.getSelection()?.id, 'beta');
-    assert.deepEqual(selected, ['beta']);
-  } finally {
-    list.dispose();
-    document.body.replaceChildren();
-  }
+		assert.equal(items[list.getSelection()[0]]?.id, 'beta');
+		assert.deepEqual(selected, ['beta']);
+	} finally {
+		list.dispose();
+		container.remove();
+	}
 });
 
-test('list widget applies expected DOM classes and keyboard navigation', () => {
-  const opened: string[] = [];
-  const { items } = createList();
-  const listWithOpen = new ListWidget<ListItem>(
-    {
-      renderElement: (item) => {
-        const element = document.createElement('div');
-        element.textContent = item.label;
-        return element;
-      },
-    },
-    {
-      getId: (item) => item.id,
-      getLabel: (item) => item.label,
-      onDidOpen: (item) => {
-        opened.push(item.id);
-      },
-    },
-  );
-  document.body.append(listWithOpen.getElement());
-  listWithOpen.setItems(items);
+test('list applies expected DOM classes and keyboard navigation', () => {
+	const selected: string[] = [];
+	const { container, items, list } = createList(selected);
 
-  try {
-    assert.equal(listWithOpen.getElement().classList.contains('list-view'), true);
+	try {
+		assert.equal(list.getHTMLElement().classList.contains('monaco-list'), true);
 
-    listWithOpen.getElement().dispatchEvent(new window.FocusEvent('focus'));
-    listWithOpen.getElement().dispatchEvent(new window.KeyboardEvent('keydown', {
-      bubbles: true,
-      key: 'ArrowDown',
-    }));
+		list.domFocus();
+		list.getHTMLElement().dispatchEvent(new window.KeyboardEvent('keydown', {
+			bubbles: true,
+			key: 'ArrowDown',
+			keyCode: 40,
+			which: 40,
+		}));
 
-    const betaNode = listWithOpen.getElement().querySelector<HTMLElement>(
-      '[data-list-item-id="beta"]',
-    );
-    assert(betaNode instanceof HTMLElement);
-    assert.equal(betaNode.classList.contains('list-view-row'), true);
-    assert.equal(betaNode.classList.contains('is-focused'), true);
+		const betaNode = list.getHTMLElement().querySelector<HTMLElement>(
+			'[data-list-item-id="beta"]',
+		);
+		assert(betaNode instanceof HTMLElement);
+		assert.equal(betaNode.classList.contains('monaco-list-row'), true);
+		assert.equal(betaNode.classList.contains('focused'), true);
 
-    listWithOpen.getElement().dispatchEvent(new window.KeyboardEvent('keydown', {
-      bubbles: true,
-      key: 'Enter',
-    }));
+		list.getHTMLElement().dispatchEvent(new window.KeyboardEvent('keydown', {
+			bubbles: true,
+			key: 'Enter',
+			keyCode: 13,
+			which: 13,
+		}));
 
-    assert.equal(listWithOpen.getSelection()?.id, 'beta');
-    assert.deepEqual(opened, ['beta']);
-  } finally {
-    listWithOpen.dispose();
-    document.body.replaceChildren();
-  }
+		assert.equal(items[list.getSelection()[0]]?.id, 'beta');
+		assert.deepEqual(selected, ['beta']);
+	} finally {
+		list.dispose();
+		container.remove();
+	}
 });

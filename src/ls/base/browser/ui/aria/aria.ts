@@ -1,5 +1,19 @@
 import 'ls/base/browser/ui/aria/aria.css';
 
+export type AriaRole =
+  | 'tree'
+  | 'treeitem'
+  | 'list'
+  | 'listitem'
+  | 'listbox'
+  | 'option'
+  | 'checkbox'
+  | 'button'
+  | 'menu'
+  | 'menuitem'
+  | 'presentation'
+  | 'none';
+
 const MAX_MESSAGE_LENGTH = 20_000;
 
 let ariaContainer: HTMLElement | null = null;

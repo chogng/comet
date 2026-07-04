@@ -82,6 +82,19 @@ export enum KeyCode {
   Backslash = 79,
   BracketRight = 80,
   Quote = 81,
+  IntlBackslash = 82,
+  Numpad0 = 83,
+  Numpad1 = 84,
+  Numpad2 = 85,
+  Numpad3 = 86,
+  Numpad4 = 87,
+  Numpad5 = 88,
+  Numpad6 = 89,
+  Numpad7 = 90,
+  Numpad8 = 91,
+  Numpad9 = 92,
+  NumpadAdd = 93,
+  NumpadSubtract = 94,
 }
 
 export enum ScanCode {
@@ -163,10 +176,80 @@ export const KeyCodeUtils = {
     return userSettingsToKeyCode.get(key.trim().toLowerCase()) ?? KeyCode.Unknown;
   },
 
+  fromString(key: string): KeyCode {
+    return userSettingsToKeyCode.get(key.trim().toLowerCase()) ?? KeyCode.Unknown;
+  },
+
   toUserSettings(keyCode: KeyCode): string | null {
     return keyCodeToUserSettings.get(keyCode) ?? null;
   },
+
+  toString(keyCode: KeyCode): string | null {
+    return keyCodeToUserSettings.get(keyCode) ?? null;
+  },
 };
+
+export function isModifierKey(keyCode: KeyCode): boolean {
+  return (
+    keyCode === KeyCode.Ctrl ||
+    keyCode === KeyCode.Shift ||
+    keyCode === KeyCode.Alt ||
+    keyCode === KeyCode.Meta
+  );
+}
+
+export const EVENT_KEY_CODE_MAP: KeyCode[] = [];
+
+EVENT_KEY_CODE_MAP[8] = KeyCode.Backspace;
+EVENT_KEY_CODE_MAP[9] = KeyCode.Tab;
+EVENT_KEY_CODE_MAP[13] = KeyCode.Enter;
+EVENT_KEY_CODE_MAP[16] = KeyCode.Shift;
+EVENT_KEY_CODE_MAP[17] = KeyCode.Ctrl;
+EVENT_KEY_CODE_MAP[18] = KeyCode.Alt;
+EVENT_KEY_CODE_MAP[19] = KeyCode.PauseBreak;
+EVENT_KEY_CODE_MAP[20] = KeyCode.CapsLock;
+EVENT_KEY_CODE_MAP[27] = KeyCode.Escape;
+EVENT_KEY_CODE_MAP[32] = KeyCode.Space;
+EVENT_KEY_CODE_MAP[33] = KeyCode.PageUp;
+EVENT_KEY_CODE_MAP[34] = KeyCode.PageDown;
+EVENT_KEY_CODE_MAP[35] = KeyCode.End;
+EVENT_KEY_CODE_MAP[36] = KeyCode.Home;
+EVENT_KEY_CODE_MAP[37] = KeyCode.LeftArrow;
+EVENT_KEY_CODE_MAP[38] = KeyCode.UpArrow;
+EVENT_KEY_CODE_MAP[39] = KeyCode.RightArrow;
+EVENT_KEY_CODE_MAP[40] = KeyCode.DownArrow;
+EVENT_KEY_CODE_MAP[45] = KeyCode.Insert;
+EVENT_KEY_CODE_MAP[46] = KeyCode.Delete;
+EVENT_KEY_CODE_MAP[91] = KeyCode.Meta;
+EVENT_KEY_CODE_MAP[92] = KeyCode.Meta;
+EVENT_KEY_CODE_MAP[93] = KeyCode.ContextMenu;
+EVENT_KEY_CODE_MAP[106] = KeyCode.NumpadAdd;
+EVENT_KEY_CODE_MAP[107] = KeyCode.NumpadAdd;
+EVENT_KEY_CODE_MAP[109] = KeyCode.NumpadSubtract;
+EVENT_KEY_CODE_MAP[186] = KeyCode.Semicolon;
+EVENT_KEY_CODE_MAP[187] = KeyCode.Equal;
+EVENT_KEY_CODE_MAP[188] = KeyCode.Comma;
+EVENT_KEY_CODE_MAP[189] = KeyCode.Minus;
+EVENT_KEY_CODE_MAP[190] = KeyCode.Period;
+EVENT_KEY_CODE_MAP[191] = KeyCode.Slash;
+EVENT_KEY_CODE_MAP[192] = KeyCode.Backquote;
+EVENT_KEY_CODE_MAP[219] = KeyCode.BracketLeft;
+EVENT_KEY_CODE_MAP[220] = KeyCode.Backslash;
+EVENT_KEY_CODE_MAP[221] = KeyCode.BracketRight;
+EVENT_KEY_CODE_MAP[222] = KeyCode.Quote;
+
+for (let digit = 0; digit <= 9; digit += 1) {
+  EVENT_KEY_CODE_MAP[48 + digit] = KeyCode.Digit0 + digit;
+  EVENT_KEY_CODE_MAP[96 + digit] = KeyCode.Numpad0 + digit;
+}
+
+for (let offset = 0; offset < 26; offset += 1) {
+  EVENT_KEY_CODE_MAP[65 + offset] = KeyCode.KeyA + offset;
+}
+
+for (let offset = 1; offset <= 12; offset += 1) {
+  EVENT_KEY_CODE_MAP[111 + offset] = KeyCode.F1 + offset - 1;
+}
 
 const scanCodeMap = new Map<string, ScanCode>([
   ['controlleft', ScanCode.ControlLeft],

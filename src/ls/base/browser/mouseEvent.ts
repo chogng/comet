@@ -21,6 +21,8 @@ export interface IMouseEvent {
   stopPropagation(): void;
 }
 
+export interface IMouseWheelEvent extends WheelEvent {}
+
 function resolvePageCoordinate(
   value: number,
   clientValue: number,

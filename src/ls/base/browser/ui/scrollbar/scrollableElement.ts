@@ -7,6 +7,7 @@ import type {
   INewScrollPosition,
   IScrollDimensions,
   IScrollPosition,
+  Scrollable,
   ScrollEvent,
 } from 'ls/base/common/scrollable';
 import { EventEmitter, type Listener } from 'ls/base/common/event';
@@ -15,6 +16,7 @@ import {
   MutableDisposable,
   toDisposable,
   type DisposableLike,
+  type IDisposable,
 } from 'ls/base/common/lifecycle';
 
 import 'ls/base/browser/ui/scrollbar/media/verticalScrollbar.css';
@@ -56,6 +58,7 @@ export class AbstractScrollableElement {
   constructor(
     element: HTMLElement,
     options: ScrollableElementCreationOptions = {},
+    private readonly scrollable?: Scrollable,
   ) {
     this.element = element;
     this.options = resolveScrollableElementOptions(options);
@@ -178,12 +181,12 @@ export class AbstractScrollableElement {
     return this.domNode;
   }
 
-  onScroll(listener: Listener<ScrollEvent>) {
-    return this.onScrollEmitter.event(listener);
+  onScroll(listener: Listener<ScrollEvent>, thisArgs?: unknown, disposables?: IDisposable[] | DisposableStore) {
+    return this.onScrollEmitter.event(listener, thisArgs, disposables);
   }
 
-  onWillScroll(listener: Listener<ScrollEvent>) {
-    return this.onWillScrollEmitter.event(listener);
+  onWillScroll(listener: Listener<ScrollEvent>, thisArgs?: unknown, disposables?: IDisposable[] | DisposableStore) {
+    return this.onWillScrollEmitter.event(listener, thisArgs, disposables);
   }
 
   getScrollPosition(): IScrollPosition {
@@ -195,6 +198,7 @@ export class AbstractScrollableElement {
     const nextScrollTop = update.scrollTop ?? this.element.scrollTop;
     this.element.scrollLeft = nextScrollLeft;
     this.element.scrollTop = nextScrollTop;
+    this.scrollable?.setScrollPosition(update);
     this.captureState();
   }
 
@@ -226,6 +230,15 @@ export class AbstractScrollableElement {
       this.scrollDimensions.scrollHeight,
     );
     this.refreshDomState();
+    const event: ScrollEvent = {
+      ...this.scrollPosition,
+      ...this.scrollDimensions,
+      scrollLeftChanged: false,
+      scrollTopChanged: false,
+      inSmoothScrolling: false,
+    };
+    this.onWillScrollEmitter.fire(event);
+    this.onScrollEmitter.fire(event);
   }
 
   updateOptions(update: ScrollableElementChangeOptions) {
@@ -275,8 +288,10 @@ export class AbstractScrollableElement {
     };
     const event: ScrollEvent = {
       ...next,
+      ...this.scrollDimensions,
       scrollLeftChanged: previous.scrollLeft !== next.scrollLeft,
       scrollTopChanged: previous.scrollTop !== next.scrollTop,
+      inSmoothScrolling: false,
     };
     this.onWillScrollEmitter.fire(event);
     this.revealScrollbarsTemporarily();

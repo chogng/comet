@@ -4,6 +4,7 @@
 
 import { EventEmitter, type Event as BaseEvent } from 'ls/base/common/event';
 import type { IDisposable } from 'ls/base/common/lifecycle';
+import type { GestureEvent } from 'ls/base/browser/touch';
 
 export type EventHandler = HTMLElement | Document | Window;
 
@@ -20,6 +21,11 @@ export interface DOMEventMap extends HTMLElementEventMap, DocumentEventMap, Wind
 	compositionstart: CompositionEvent;
 	compositionupdate: CompositionEvent;
 	compositionend: CompositionEvent;
+	'-monaco-gesturetap': GestureEvent;
+	'-monaco-gesturechange': GestureEvent;
+	'-monaco-gesturestart': GestureEvent;
+	'-monaco-gesturesend': GestureEvent;
+	'-monaco-gesturecontextmenu': GestureEvent;
 }
 
 export class DomEmitter<K extends keyof DOMEventMap> implements IDisposable {

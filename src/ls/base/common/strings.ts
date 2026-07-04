@@ -131,3 +131,15 @@ export function startsWithIgnoreCase(str: string, candidate: string): boolean {
 	const length = candidate.length;
 	return length <= str.length && compareSubstringIgnoreCase(str, candidate, 0, length) === 0;
 }
+
+export function isHighSurrogate(charCode: number): boolean {
+	return 0xD800 <= charCode && charCode <= 0xDBFF;
+}
+
+export function isLowSurrogate(charCode: number): boolean {
+	return 0xDC00 <= charCode && charCode <= 0xDFFF;
+}
+
+export function computeCodePoint(highSurrogate: number, lowSurrogate: number): number {
+	return ((highSurrogate - 0xD800) << 10) + (lowSurrogate - 0xDC00) + 0x10000;
+}

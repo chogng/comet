@@ -237,7 +237,9 @@ export function markAsSingleton<T extends IDisposable>(singleton: T): T {
 }
 
 export abstract class Disposable implements IDisposable {
-  private readonly _store = new DisposableStore();
+  static readonly None = DisposableNone;
+
+  protected readonly _store = new DisposableStore();
 
   protected _register<T extends null | undefined>(input: T): T;
   protected _register<T extends DisposableLike>(input: T): T;

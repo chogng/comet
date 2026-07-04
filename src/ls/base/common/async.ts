@@ -633,9 +633,13 @@ export class IntervalTimer implements IDisposable {
     }
   }
 
-  cancelAndSet(runner: () => void, intervalMillis: number): void {
+  cancelAndSet(
+    runner: () => void,
+    intervalMillis: number,
+    target: Pick<typeof globalThis, 'setInterval'> = globalThis,
+  ): void {
     this.cancel();
-    this.handle = setInterval(runner, intervalMillis);
+    this.handle = target.setInterval(runner, intervalMillis);
   }
 }
 
@@ -708,14 +712,17 @@ export interface IdleDeadline {
   timeRemaining(): number;
 }
 
+type IdleTarget = Window | typeof globalThis;
+
 type RunWhenIdle = (
+  target: IdleTarget,
   callback: (deadline: IdleDeadline) => void,
   timeout?: number,
 ) => IDisposable;
 
-let runWhenIdleImpl: RunWhenIdle = (callback, timeoutMillis) => {
+let runWhenIdleImpl: RunWhenIdle = (target, callback, timeoutMillis) => {
   const start = Date.now();
-  const handle = setTimeout(() => {
+  const handle = target.setTimeout(() => {
     callback({
       didTimeout: false,
       timeRemaining: () => Math.max(0, 16 - (Date.now() - start)),
@@ -728,8 +735,11 @@ export function runWhenIdle(
   callback: (deadline: IdleDeadline) => void,
   timeoutMillis?: number,
 ): IDisposable {
-  return runWhenIdleImpl(callback, timeoutMillis);
+  return runWhenIdleImpl(globalThis, callback, timeoutMillis);
 }
+
+export const _runWhenIdle: RunWhenIdle = (target, callback, timeoutMillis) =>
+  runWhenIdleImpl(target, callback, timeoutMillis);
 
 export function installFakeRunWhenIdle(fakeImpl: RunWhenIdle): IDisposable {
   const previous = runWhenIdleImpl;
@@ -743,7 +753,16 @@ export abstract class AbstractIdleValue<T> {
   private didRun = false;
   private value?: T;
 
-  protected constructor(private readonly executor: () => T) {}
+  protected constructor(executor: () => T);
+  protected constructor(targetWindow: IdleTarget, executor: () => T);
+  protected constructor(
+    targetOrExecutor: IdleTarget | (() => T),
+    executor?: () => T,
+  ) {
+    this.executor = typeof targetOrExecutor === 'function' ? targetOrExecutor : executor!;
+  }
+
+  private readonly executor: () => T;
 
   getValue(): T {
     if (!this.didRun) {

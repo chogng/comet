@@ -1,8 +1,5 @@
-export const enum ScrollbarVisibility {
-  Auto = 'auto',
-  Visible = 'visible',
-  Hidden = 'hidden',
-}
+export { ScrollbarVisibility } from 'ls/base/common/scrollable';
+import { ScrollbarVisibility } from 'ls/base/common/scrollable';
 
 export interface ScrollableElementCreationOptions {
   className?: string;
@@ -31,6 +28,8 @@ export interface ScrollableElementChangeOptions {
   horizontalScrollbarSize?: number;
   vertical?: ScrollbarVisibility;
   verticalScrollbarSize?: number;
+  mouseWheelScrollSensitivity?: number;
+  fastScrollSensitivity?: number;
   scrollByPage?: boolean;
 }
 

@@ -154,6 +154,11 @@ export function getOperatingSystem(): OperatingSystem {
 export const isWindows = runtimePlatform === 'windows';
 export const isMacintosh = runtimePlatform === 'macos';
 export const isLinux = runtimePlatform === 'linux';
+export const isIOS = (
+  typeof navigator !== 'undefined' &&
+  (navigatorPlatform.includes('iphone') || navigatorPlatform.includes('ipad') || navigatorPlatform.includes('mac')) &&
+  navigator.maxTouchPoints > 0
+);
 export const isNative = desktopRuntime;
 export const isWeb = runtimeMode === 'web';
 export const webWorkerOrigin = webWorkerRuntime && typeof runtimeGlobal.origin === 'string' ? runtimeGlobal.origin : undefined;
