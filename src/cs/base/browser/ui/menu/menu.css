@@ -1,0 +1,217 @@
+.cs-menu {
+  --cs-menu-hover-bg: var(--vscode-menu-itemHoverBackground, rgba(0, 0, 0, 0.04));
+  --cs-menu-selected-bg: var(--vscode-menu-selectionBackground, rgba(0, 0, 0, 0.06));
+  --cs-menu-selected-fg: var(--vscode-menu-selectionForeground, var(--vscode-menu-itemForeground, #304357));
+  --cs-menu-check-color: var(--vscode-menu-selectionForeground, var(--vscode-menu-itemForeground, #304357));
+
+  position: relative;
+  width: max-content;
+  min-width: 180px;
+  max-width: min(360px, calc(100vw - 16px));
+  background: var(--vscode-menu-background, #ffffff);
+  border: 1px solid var(--vscode-menu-border, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  box-shadow: var(--vscode-menu-shadow, 0 8px 32px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06));
+  padding: 4px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  animation: cs-menu-fade-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--vscode-menu-foreground, #1a2530);
+  outline: none;
+}
+
+.cs-menu .cs-menu-header {
+  flex: 0 0 auto;
+}
+
+.cs-menu.cs-menu-root {
+  min-width: max(180px, 100%);
+}
+
+.cs-menu.cs-menu-submenu {
+  min-width: 180px;
+}
+
+.cs-menu.dropdown-menu-top {
+  animation-name: cs-menu-fade-in-up;
+}
+
+@keyframes cs-menu-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cs-menu-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cs-menu .dropdown-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+  color: var(--vscode-menu-itemForeground, #304357);
+  gap: 8px;
+}
+
+.cs-menu .dropdown-menu-item.has-description-switch {
+  align-items: flex-start;
+}
+
+.cs-menu .dropdown-menu-item-trailing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.cs-menu .dropdown-menu-item.has-description-switch .dropdown-menu-item-trailing {
+  padding-top: 1px;
+}
+
+.cs-menu .dropdown-menu-item-switch {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--vscode-menu-itemForeground, #304357);
+  opacity: 0.22;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.cs-menu .dropdown-menu-item-switch.checked {
+  background: #147f5a;
+  opacity: 1;
+}
+
+.cs-menu .dropdown-menu-item-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.18);
+  transition: transform 0.15s ease;
+}
+
+.cs-menu .dropdown-menu-item-switch.checked .dropdown-menu-item-switch-thumb {
+  transform: translateX(12px);
+}
+
+.cs-menu .dropdown-menu-item:hover,
+.cs-menu .dropdown-menu-item.hovered {
+  background: var(--cs-menu-hover-bg);
+}
+
+.cs-menu .dropdown-menu-item.selected {
+  background: var(--cs-menu-selected-bg);
+  color: var(--cs-menu-selected-fg);
+}
+
+.cs-menu .dropdown-menu-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cs-menu .dropdown-menu-item.disabled:hover {
+  background: transparent;
+}
+
+.cs-menu .dropdown-menu-item-content {
+  font-size: 13px;
+  line-height: 1.25;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-menu .dropdown-menu-item-description {
+  min-width: 0;
+  margin-top: 2px;
+  color: var(--vscode-descriptionForeground, #7a828a);
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.cs-menu .dropdown-option-content {
+  width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-menu .dropdown-menu-item-text {
+  min-width: 0;
+  display: grid;
+}
+
+.cs-menu .dropdown-option-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.cs-menu .dropdown-menu-item-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--cs-menu-check-color);
+  opacity: 0.9;
+}
+
+.cs-menu .dropdown-menu-item-check.placeholder {
+  opacity: 0;
+}
+
+.cs-menu .dropdown-menu-item-submenu-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--vscode-menu-itemForeground, #304357);
+  opacity: 0.75;
+}
+
+.cs-menu .dropdown-menu-item-submenu-indicator .lx-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+
+.cs-menu-submenu {
+  z-index: 1001;
+}

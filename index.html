@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:," />
-    <title>Literature Studio</title>
+    <title>Comet Studio</title>
     <style>
       html,
       body {
@@ -63,7 +63,7 @@
   <body>
     <div id="root">
       <main class="bootstrap-status">
-        <h1>Literature Studio</h1>
+        <h1>Comet Studio</h1>
         <p id="bootstrap-status-text">Bootstrapping web renderer...</p>
         <pre id="bootstrap-status-detail" hidden></pre>
       </main>
@@ -73,7 +73,7 @@
         const text = document.getElementById('bootstrap-status-text');
         const detail = document.getElementById('bootstrap-status-detail');
 
-        window.__lsSetBootstrapStatus = (message, error) => {
+        window.__csSetBootstrapStatus = (message, error) => {
           if (text) {
             text.textContent = message;
           }
@@ -98,15 +98,15 @@
           detail.textContent = normalized;
         };
 
-        window.__lsSetBootstrapStatus('Loading /src/main.web.ts ...');
+        window.__csSetBootstrapStatus('Loading /src/main.web.ts ...');
         window.addEventListener('error', (event) => {
-          window.__lsSetBootstrapStatus(
+          window.__csSetBootstrapStatus(
             'Web renderer failed before workbench mount.',
             event.error || event.message || 'Unknown error',
           );
         });
         window.addEventListener('unhandledrejection', (event) => {
-          window.__lsSetBootstrapStatus(
+          window.__csSetBootstrapStatus(
             'Web renderer rejected during startup.',
             event.reason || 'Unhandled promise rejection',
           );
@@ -116,7 +116,7 @@
     <script
       type="module"
       src="/src/main.web.ts"
-      onerror="window.__lsSetBootstrapStatus && window.__lsSetBootstrapStatus('Failed to load /src/main.web.ts', 'Module script load error.')"
+      onerror="window.__csSetBootstrapStatus && window.__csSetBootstrapStatus('Failed to load /src/main.web.ts', 'Module script load error.')"
     ></script>
   </body>
 </html>

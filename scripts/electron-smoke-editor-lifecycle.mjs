@@ -19,13 +19,13 @@ const builtWorkbenchEntry = path.join(
   projectRoot,
   'dist',
   'src',
-  'ls',
+  'cs',
   'code',
   'electron-sandbox',
   'workbench',
   'workbench.html',
 );
-const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'ls-electron-smoke-'));
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'cs-electron-smoke-'));
 const portableRoot = path.join(tempRoot, 'portable-root');
 
 process.env.PORTABLE_EXECUTABLE_DIR = portableRoot;
@@ -238,8 +238,8 @@ async function seedRendererStorage(window, workspaceState) {
     window,
     `(() => {
       localStorage.clear();
-      localStorage.setItem('ls.writingWorkspace.state', ${JSON.stringify(serializedWorkspace)});
-      return localStorage.getItem('ls.writingWorkspace.state');
+      localStorage.setItem('cs.writingWorkspace.state', ${JSON.stringify(serializedWorkspace)});
+      return localStorage.getItem('cs.writingWorkspace.state');
     })()`,
   );
 }

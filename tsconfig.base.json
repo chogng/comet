@@ -6,13 +6,13 @@
     "module": "ESNext",
     "paths": {
       "app/*": ["./src/*"],
-      "base/*": ["./src/ls/base/*"],
-      "code/*": ["./src/ls/code/*"],
-      "editor/*": ["./src/ls/editor/*"],
+      "base/*": ["./src/cs/base/*"],
+      "code/*": ["./src/cs/code/*"],
+      "editor/*": ["./src/cs/editor/*"],
       "language/*": ["./build/lib/*"],
-      "ls/*": ["./src/ls/*"],
-      "platform/*": ["./src/ls/platform/*"],
-      "workbench/*": ["./src/ls/workbench/*"]
+      "cs/*": ["./src/cs/*"],
+      "platform/*": ["./src/cs/platform/*"],
+      "workbench/*": ["./src/cs/workbench/*"]
     },
     "skipLibCheck": true,
     "moduleResolution": "Bundler",

@@ -1,5 +1,5 @@
 ---
-description: Comet coding guidelines — naming, style, types, strings, and code quality rules. Reference when writing or reviewing code.
+description: Comet Studio coding guidelines — naming, style, types, strings, and code quality rules. Reference when writing or reviewing code.
 applyTo: src/cs/**
 ---
 
@@ -38,7 +38,7 @@ Use tabs, not spaces.
 
 - `"double quotes"` for user-visible strings that need localization
 - `'single quotes'` for everything else
-- All user-visible strings must be externalized via `nls.localize()` — no string concatenation, use `{0}` placeholders
+- All user-visible strings must be externalized via `ncs.localize()` — no string concatenation, use `{0}` placeholders
 
 ## UI Labels
 
@@ -57,7 +57,7 @@ Use tabs, not spaces.
 
 ## Code Quality
 
-- Include literature studio copyright header in all files
+- Include comet studio copyright header in all files
 - Prefer `async`/`await` over `Promise.then()`
 - Localize all user-facing messages
 - Prefer named regex capture groups over numbered ones

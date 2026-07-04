@@ -1,4 +1,4 @@
-import { runNpmScript } from '../build/build-utils.ts';
+import { runNpmScript } from '../build/build-utics.ts';
 
 const verifyScripts = [
   'check:i18n',

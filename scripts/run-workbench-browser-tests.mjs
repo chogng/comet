@@ -13,13 +13,13 @@ const rootDir =
     : path.dirname(scriptFilePath);
 const outputDir = path.join(rootDir, '.tmp', 'workbench-browser-tests');
 const entryPoints = [
-  path.join(rootDir, 'src', 'ls', 'workbench', 'browser', 'tests', 'splitview.test.ts'),
-  path.join(rootDir, 'src', 'ls', 'workbench', 'browser', 'tests', 'gridview.test.ts'),
-  path.join(rootDir, 'src', 'ls', 'workbench', 'browser', 'tests', 'articleFetch.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'splitview.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'gridview.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'articleFetch.test.ts'),
   path.join(
     rootDir,
     'src',
-    'ls',
+    'cs',
     'workbench',
     'browser',
     'tests',
@@ -28,7 +28,7 @@ const entryPoints = [
   path.join(
     rootDir,
     'src',
-    'ls',
+    'cs',
     'workbench',
     'browser',
     'tests',
@@ -37,7 +37,7 @@ const entryPoints = [
   path.join(
     rootDir,
     'src',
-    'ls',
+    'cs',
     'workbench',
     'browser',
     'tests',

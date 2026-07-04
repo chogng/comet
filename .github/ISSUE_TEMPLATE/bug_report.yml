@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in Literature Studio.
+description: Report a reproducible problem in Comet Studio.
 labels: [bug]
 body:
   - type: textarea

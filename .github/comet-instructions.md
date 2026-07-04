@@ -4,6 +4,12 @@
 
 Comet is built with a layered architecture using TypeScript, web APIs and Electron, combining web technologies with native app capabilities. The codebase is organized into key architectural layers:
 
+### Product Names and Source Roots
+- `Comet` is the top-level project and product family.
+- `Comet Studio` is the desktop workbench product.
+- `src/cs/` is the Comet Studio source root; `cs` means Comet Studio and should stay an internal engineering abbreviation.
+- `Comet Code` is the CLI and terminal coding product; use this name for CLI-specific user-facing surfaces and packages instead of the `cs` abbreviation.
+
 ### Root Folders
 - `src/`: Main TypeScript source code with unit tests in `src/cs/*/test/` folders
 - `build/`: Build scripts and CI/CD tools
@@ -81,7 +87,7 @@ We use tabs, not spaces.
 
 - Use "double quotes" for strings shown to the user that need to be externalized (localized)
 - Use 'single quotes' otherwise
-- All strings visible to the user need to be externalized using the `ls/nls` module
+- All strings visible to the user need to be externalized using the `cs/nls` module
 - Externalized strings must not use string concatenation. Use placeholders instead (`{0}`).
 
 ### UI labels
@@ -116,9 +122,9 @@ function f(x: number, y: string): void { }
 
 ### Code Quality
 
-- All files must include Microsoft copyright header
+- All files must include Comet copyright header
 - Prefer `async` and `await` over `Promise` and `then` calls
-- All user facing messages must be localized using the applicable localization framework (for example `nls.localize()` method)
+- All user facing messages must be localized using the applicable localization framework (for example `ncs.localize()` method)
 - Don't add tests to the wrong test suite (e.g., adding to end of file instead of inside relevant suite)
 - Look for existing test patterns before creating new structures
 - Use `describe` and `test` consistently with existing patterns

@@ -18,8 +18,8 @@ const watchMode = process.argv.includes('--watch');
 const appRoot = path.join(projectRoot, 'src');
 const distElectronDir = path.join(projectRoot, 'dist-electron');
 const languageRoot = path.join(projectRoot, 'build', 'lib');
-const srcRoot = path.join(projectRoot, 'src', 'ls');
-const lsRoot = srcRoot;
+const srcRoot = path.join(projectRoot, 'src', 'cs');
+const csRoot = srcRoot;
 const entryPoints = [
   path.join(srcRoot, 'code', 'electron-main', 'launch.ts'),
   path.join(srcRoot, 'code', 'electron-main', 'main.ts'),
@@ -80,11 +80,11 @@ const buildOptions = {
     {
       name: 'source-alias',
       setup(build) {
-        build.onResolve({ filter: /^(?:app|language|ls)\// }, (args) => {
+        build.onResolve({ filter: /^(?:app|language|cs)\// }, (args) => {
           const aliasRoots = {
             app: appRoot,
             language: languageRoot,
-            ls: lsRoot,
+            cs: csRoot,
           };
           const [alias] = args.path.split('/', 1);
           const aliasRoot = aliasRoots[alias];

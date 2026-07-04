@@ -1,0 +1,84 @@
+.cs-select-container {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.cs-select-box {
+  width: 100%;
+  height: 24px;
+  min-height: 24px;
+  padding: 2px 28px 2px 8px;
+  border: 1px solid #d3d3d3;
+  border-radius: 6px;
+  background: var(--vscode-select-background, #fff);
+  color: var(--vscode-select-foreground, #203040);
+  font: inherit;
+  line-height: 1.2;
+  box-sizing: border-box;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
+  position: relative;
+  z-index: 0;
+}
+
+.cs-select-container .cs-select-box {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.cs-select-box::-ms-expand {
+  display: none;
+}
+
+.cs-select-box:focus {
+  outline: 2px solid var(--cs-select-focusBorder, rgba(10, 95, 191, 0.22));
+  border-color: var(--vscode-select-focusBorder, #0a5fbf);
+}
+
+.cs-select-box:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.cs-select-box-decorator {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vscode-dropdown-iconForeground, var(--vscode-select-foreground, #64748b));
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0.72;
+  z-index: 1;
+}
+
+.cs-select-box-decorator svg {
+  width: 100%;
+  height: 100%;
+}
+
+.cs-select-box-decorator svg [stroke] {
+  stroke: currentColor;
+}
+
+.cs-select-box:disabled + .cs-select-box-decorator {
+  opacity: 0.45;
+}
+
+.actionbar .actionbar-item.cs-select-container {
+  cursor: default;
+}
+
+.actionbar .actionbar-item .cs-select-box {
+  min-width: 110px;
+}

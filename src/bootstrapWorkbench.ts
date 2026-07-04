@@ -1,8 +1,8 @@
 type BootstrapTarget = 'web' | 'desktop';
 
 type BootstrapWindow = Window & {
-  __lsWorkbenchBootstrapHandlersInstalled?: boolean;
-  __lsSetBootstrapStatus?: (message: string, error?: unknown) => void;
+  __csWorkbenchBootstrapHandlersInstalled?: boolean;
+  __csSetBootstrapStatus?: (message: string, error?: unknown) => void;
 };
 
 function isBootstrapDebugEnabled() {
@@ -16,7 +16,7 @@ function isBootstrapDebugEnabled() {
       return true;
     }
 
-    return window.localStorage.getItem('ls.debugBootstrap') === '1';
+    return window.localStorage.getItem('cs.debugBootstrap') === '1';
   } catch {
     return false;
   }
@@ -64,7 +64,7 @@ function setBootstrapStatus(message: string, error?: unknown) {
     console.error(`[workbench-bootstrap] ${message}`, error);
   }
 
-  (window as BootstrapWindow).__lsSetBootstrapStatus?.(message, error);
+  (window as BootstrapWindow).__csSetBootstrapStatus?.(message, error);
 }
 
 export function updateWorkbenchBootstrapStatus(
@@ -86,84 +86,84 @@ export function isNativeWorkbenchAuxiliaryWindow() {
 
 const workbenchDependencyModules = [
   {
-    label: 'ls/base/browser/ui/toast/toast',
-    load: () => import('ls/base/browser/ui/toast/toast'),
+    label: 'cs/base/browser/ui/toast/toast',
+    load: () => import('cs/base/browser/ui/toast/toast'),
   },
   {
-    label: 'ls/workbench/services/desktop/desktopError',
-    load: () => import('ls/workbench/services/desktop/desktopError'),
+    label: 'cs/workbench/services/desktop/desktopError',
+    load: () => import('cs/workbench/services/desktop/desktopError'),
   },
   {
-    label: 'ls/workbench/browser/assistantModel',
-    load: () => import('ls/workbench/browser/assistantModel'),
+    label: 'cs/workbench/browser/assistantModel',
+    load: () => import('cs/workbench/browser/assistantModel'),
   },
   {
-    label: 'ls/workbench/browser/batchFetchModel',
-    load: () => import('ls/workbench/browser/batchFetchModel'),
+    label: 'cs/workbench/browser/batchFetchModel',
+    load: () => import('cs/workbench/browser/batchFetchModel'),
   },
   {
-    label: 'ls/workbench/browser/documentActionsModel',
-    load: () => import('ls/workbench/browser/documentActionsModel'),
+    label: 'cs/workbench/browser/documentActionsModel',
+    load: () => import('cs/workbench/browser/documentActionsModel'),
   },
   {
-    label: 'ls/workbench/browser/libraryModel',
-    load: () => import('ls/workbench/browser/libraryModel'),
+    label: 'cs/workbench/browser/libraryModel',
+    load: () => import('cs/workbench/browser/libraryModel'),
   },
   {
-    label: 'ls/workbench/browser/webContentNavigationModel',
-    load: () => import('ls/workbench/browser/webContentNavigationModel'),
+    label: 'cs/workbench/browser/webContentNavigationModel',
+    load: () => import('cs/workbench/browser/webContentNavigationModel'),
   },
   {
-    label: 'ls/workbench/browser/layout',
-    load: () => import('ls/workbench/browser/layout'),
+    label: 'cs/workbench/browser/layout',
+    load: () => import('cs/workbench/browser/layout'),
   },
   {
-    label: 'ls/workbench/contrib/preferences/browser/settingsController',
-    load: () => import('ls/workbench/contrib/preferences/browser/settingsController'),
+    label: 'cs/workbench/contrib/preferences/browser/settingsController',
+    load: () => import('cs/workbench/contrib/preferences/browser/settingsController'),
   },
   {
-    label: 'ls/workbench/browser/parts/editor/editorPart',
-    load: () => import('ls/workbench/browser/parts/editor/editorPart'),
+    label: 'cs/workbench/browser/parts/editor/editorPart',
+    load: () => import('cs/workbench/browser/parts/editor/editorPart'),
   },
   {
-    label: 'ls/workbench/contrib/preferences/browser/settingsEditor',
-    load: () => import('ls/workbench/contrib/preferences/browser/settingsEditor'),
+    label: 'cs/workbench/contrib/preferences/browser/settingsEditor',
+    load: () => import('cs/workbench/contrib/preferences/browser/settingsEditor'),
   },
   {
-    label: 'ls/workbench/browser/parts/sidebar/fetchPanePart',
-    load: () => import('ls/workbench/browser/parts/sidebar/fetchPanePart'),
+    label: 'cs/workbench/browser/parts/sidebar/fetchPanePart',
+    load: () => import('cs/workbench/browser/parts/sidebar/fetchPanePart'),
   },
   {
-    label: 'ls/workbench/browser/toastOverlayWindow',
-    load: () => import('ls/workbench/browser/toastOverlayWindow'),
+    label: 'cs/workbench/browser/toastOverlayWindow',
+    load: () => import('cs/workbench/browser/toastOverlayWindow'),
   },
   {
-    label: 'ls/workbench/services/localization/browser/localeService',
-    load: () => import('ls/workbench/services/localization/browser/localeService'),
+    label: 'cs/workbench/services/localization/browser/localeService',
+    load: () => import('cs/workbench/services/localization/browser/localeService'),
   },
   {
-    label: 'ls/workbench/browser/session',
-    load: () => import('ls/workbench/browser/session'),
+    label: 'cs/workbench/browser/session',
+    load: () => import('cs/workbench/browser/session'),
   },
   {
-    label: 'ls/workbench/browser/window',
-    load: () => import('ls/workbench/browser/window'),
+    label: 'cs/workbench/browser/window',
+    load: () => import('cs/workbench/browser/window'),
   },
   {
-    label: 'ls/workbench/browser/workbenchContentState',
-    load: () => import('ls/workbench/browser/workbenchContentState'),
+    label: 'cs/workbench/browser/workbenchContentState',
+    load: () => import('cs/workbench/browser/workbenchContentState'),
   },
   {
-    label: 'ls/workbench/browser/webContentSurfaceState',
-    load: () => import('ls/workbench/browser/webContentSurfaceState'),
+    label: 'cs/workbench/browser/webContentSurfaceState',
+    load: () => import('cs/workbench/browser/webContentSurfaceState'),
   },
   {
-    label: 'ls/workbench/services/config/configSchema',
-    load: () => import('ls/workbench/services/config/configSchema'),
+    label: 'cs/workbench/services/config/configSchema',
+    load: () => import('cs/workbench/services/config/configSchema'),
   },
   {
-    label: 'ls/workbench/browser/parts/editor/editorModel',
-    load: () => import('ls/workbench/browser/parts/editor/editorModel'),
+    label: 'cs/workbench/browser/parts/editor/editorModel',
+    load: () => import('cs/workbench/browser/parts/editor/editorModel'),
   },
 ] as const;
 
@@ -277,11 +277,11 @@ export function installWorkbenchBootstrapErrorHandlers(
   }
 
   const bootstrapWindow = window as BootstrapWindow;
-  if (bootstrapWindow.__lsWorkbenchBootstrapHandlersInstalled) {
+  if (bootstrapWindow.__csWorkbenchBootstrapHandlersInstalled) {
     return;
   }
 
-  bootstrapWindow.__lsWorkbenchBootstrapHandlersInstalled = true;
+  bootstrapWindow.__csWorkbenchBootstrapHandlersInstalled = true;
   if (isBootstrapDebugEnabled()) {
     setBootstrapStatus(`Installing ${target} bootstrap handlers...`);
   }

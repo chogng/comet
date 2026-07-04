@@ -53,8 +53,8 @@ function createPdfBuffer({ width = 612, height = 792, lines }) {
 const fixtures = [
   {
     fileName: 'selection-smoke.pdf',
-    expectedText: 'Literature Studio PDF smoke',
-    lines: [{ text: 'Literature Studio PDF smoke', x: 72, y: 720 }],
+    expectedText: 'Comet Studio PDF smoke',
+    lines: [{ text: 'Comet Studio PDF smoke', x: 72, y: 720 }],
   },
   {
     fileName: 'selection-two-column.pdf',

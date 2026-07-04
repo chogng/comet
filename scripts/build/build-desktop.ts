@@ -1,4 +1,4 @@
-import { copyDirectory, pathExists, removePath, resolveProjectPath, run, runBin, runNpmScript } from './build-utils.ts';
+import { copyDirectory, pathExists, removePath, resolveProjectPath, run, runBin, runNpmScript } from './build-utics.ts';
 
 const shouldSkipRust = process.argv.includes('--skip-rust');
 const shouldSkipPyWorker = process.argv.includes('--skip-py-worker');

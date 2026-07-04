@@ -10,8 +10,8 @@
     "sourceMap": true
   },
   "include": [
-    "src/ls/code/electron-main/**/*.ts",
-    "src/ls/base/parts/sandbox/electron-browser/preload.ts"
+    "src/cs/code/electron-main/**/*.ts",
+    "src/cs/base/parts/sandbox/electron-browser/preload.ts"
   ],
   "exclude": ["dist-electron", "node_modules"]
 }

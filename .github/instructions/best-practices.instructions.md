@@ -1,5 +1,5 @@
 ---
-description: Comet best practices — reusing common UI primitives and patterns. Reference when writing or reviewing code.
+description: Comet Studio best practices — reusing common UI primitives and patterns. Reference when writing or reviewing code.
 applyTo: src/cs/**
 ---
 
@@ -26,7 +26,7 @@ applyTo: src/cs/**
 
 ## Resource Labels
 
-- Don't set `{ supportIcons: true }` when creating a `ResourceLabel` (`cs/workbench/browser/labels.ts`). This option makes the label parse `$(codicon)` syntax in the name/description and is only needed when you want to render a codicon inline with the resource text. By default (without it), the label computes the proper file-icon CSS classes for the resource, which is what we almost always want. Note that those classes only render as icons when an ancestor DOM element enables file icons (see below); otherwise the label shows text only.
+- Don't set `{ supportIcons: true }` when creating a `ResourceLabel` (`cs/workbench/browser/labecs.ts`). This option makes the label parse `$(codicon)` syntax in the name/description and is only needed when you want to render a codicon inline with the resource text. By default (without it), the label computes the proper file-icon CSS classes for the resource, which is what we almost always want. Note that those classes only render as icons when an ancestor DOM element enables file icons (see below); otherwise the label shows text only.
 - To actually display file icons for resource labels in a tree/list, an ancestor container must have the `show-file-icons` class and be wired to the active file icon theme. Don't add the class by hand — call `createFileIconThemableTreeContainerScope` (`cs/workbench/contrib/files/browser/views/explorerView.ts`) on the container. It adds the required `show-file-icons` / `file-icon-themable-tree` classes and keeps `align-icons-and-twisties` / `hide-arrows` in sync with the file icon theme. Register the returned `IDisposable`. A common bug is placing a resource-label list/tree outside such a scoped container, which makes file icons silently disappear.
 
 ## Styling

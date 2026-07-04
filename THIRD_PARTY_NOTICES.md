@@ -1,12 +1,12 @@
 # Third-party notices
 
-Literature Studio includes code and assets derived from third-party projects.
+Comet Studio includes code and assets derived from third-party projects.
 This file records upstream notices that must stay associated with those
 materials.
 
 ## Visual Studio Code
 
-Portions of the `src/ls` codebase are adapted from Microsoft Visual Studio
+Portions of the `src/cs` codebase are adapted from Microsoft Visual Studio
 Code, including base browser/common infrastructure and IPC primitives.
 
 - Source: https://github.com/microsoft/vscode

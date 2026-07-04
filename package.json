@@ -1,5 +1,5 @@
 {
-  "name": "literature-studio",
+  "name": "comet-studio",
   "private": true,
   "version": "0.1.0",
   "description": "Desktop studio for reading journal websites and organizing literature.",
@@ -66,8 +66,8 @@
     "vite": "^7.2.0"
   },
   "build": {
-    "appId": "com.chogng.literaturestudio",
-    "productName": "Literature Studio",
+    "appId": "com.chogng.cometstudio",
+    "productName": "Comet Studio",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "asar": true,
     "directories": {

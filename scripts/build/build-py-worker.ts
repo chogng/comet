@@ -1,4 +1,4 @@
-import { resolveProjectPath, pathExists, run } from './build-utils.ts';
+import { resolveProjectPath, pathExists, run } from './build-utics.ts';
 
 const legacyBuildScript = resolveProjectPath('scripts', 'build-py-worker.mjs');
 const workerManifestPaths = [

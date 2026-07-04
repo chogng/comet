@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an improvement for Literature Studio.
+description: Suggest an improvement for Comet Studio.
 labels: [enhancement]
 body:
   - type: textarea

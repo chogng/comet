@@ -10,7 +10,7 @@ const outputDir = path.join(rootDir, '.tmp', 'pdf-selection-tests');
 const entryPoint = path.join(
   rootDir,
   'src',
-  'ls',
+  'cs',
   'editor',
   'browser',
   'pdf',

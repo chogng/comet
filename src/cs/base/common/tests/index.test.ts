@@ -1,0 +1,16 @@
+import './anchoredLayout.test';
+import './actions.test';
+import './async.test';
+import './event.test';
+import './json.test';
+import './keybindings.test';
+import './lifecycle.test';
+import './resources.test';
+import './uri.test';
+import 'cs/platform/action/tests/action.test';
+import 'cs/platform/actions/tests/actions.test';
+import 'cs/platform/commands/tests/commands.test';
+import 'cs/platform/contextkey/common/tests/contextkey.test';
+import 'cs/platform/instantiation/common/tests/instantiation.test';
+import 'cs/platform/jsonschema/common/tests/jsonSchemaRegistry.test';
+import 'cs/platform/languagePacks/common/tests/localizedStrings.test';

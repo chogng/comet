@@ -1,5 +1,5 @@
 {
-  "appName": "Literature Studio",
+  "appName": "Comet Studio",
   "close": "close",
   "find": "find",
   "articleUrlPlaceholder": "Article URL",
@@ -190,7 +190,7 @@
   "agentbarModelMultiple": "Use multiple models",
   "agentbarModelUnavailable": "Not available yet.",
   "agentbarModelAdd": "Add models",
-  "agentbarModelAddTitle": "Open Settings to manage enabled models.",
+  "agentbarModelAddTitle": "Open Settings to manage enabled modecs.",
   "agentbarModelUse": "Use model",
   "agentbarModelReasoning": "Reasoning: {0}",
   "agentbarModelFastOn": "Fast: On",

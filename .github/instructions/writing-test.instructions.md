@@ -1,5 +1,5 @@
 ---
-description: Literature Studio test writing guidelines — unit tests, integration tests, snapshot tests, and clean teardown patterns. Reference when writing or updating tests.
+description: Comet Studio test writing guidelines — unit tests, integration tests, snapshot tests, and clean teardown patterns. Reference when writing or updating tests.
 applyTo: "{src/cs/**/test/**,src/cs/**/*.test.ts,src/cs/**/*.integrationTest.ts}"
 ---
 
@@ -21,7 +21,7 @@ Canonical reference: WATING...
   - Filter: `--grep <pattern>`
   - Glob: `--runGlob **/myFile.test.js`
 - **Integration tests:** `scripts/test-integration.sh` or `scripts/test-integration.bat`
-- **Literature Studio UI:** Use the [Selfhost Test Provider]???
+- **Comet Studio UI:** Use the [Selfhost Test Provider]???
 
 ## Writing Unit Tests
 

@@ -1,5 +1,5 @@
 ---
-description: Comet source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
+description: Comet Studio source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
 applyTo: src/cs/**
 ---
 

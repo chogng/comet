@@ -15,7 +15,7 @@ const outputDir = path.join(rootDir, '.tmp', 'electron-main-tests');
 const entryPoint = path.join(
   rootDir,
   'src',
-  'ls',
+  'cs',
   'code',
   'electron-main',
   'tests',

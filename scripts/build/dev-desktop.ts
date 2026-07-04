@@ -1,4 +1,4 @@
-import { run, runBin } from './build-utils.ts';
+import { run, runBin } from './build-utics.ts';
 
 await run('node', ['./scripts/kill-dev-ports.mjs']);
 await runBin('concurrently', [

@@ -1,4 +1,4 @@
-import { pathExists, resolveProjectPath, run } from './build-utils.ts';
+import { pathExists, resolveProjectPath, run } from './build-utics.ts';
 
 const cargoManifestPath = resolveProjectPath('Cargo.toml');
 

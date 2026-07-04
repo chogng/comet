@@ -15,7 +15,7 @@ const outputDir = path.join(rootDir, '.tmp', 'editor-tests');
 const entryPoint = path.join(
   rootDir,
   'src',
-  'ls',
+  'cs',
   'editor',
   'browser',
   'text',

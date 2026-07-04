@@ -1,0 +1,12 @@
+.cs-context-view {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+
+.cs-context-view-content {
+  display: inline-block;
+  max-width: calc(100vw - 16px);
+  pointer-events: auto;
+}

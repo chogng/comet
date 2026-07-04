@@ -16,13 +16,13 @@ const builtWorkbenchEntry = path.join(
   projectRoot,
   'dist',
   'src',
-  'ls',
+  'cs',
   'code',
   'electron-sandbox',
   'workbench',
   'workbench.html',
 );
-const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'ls-electron-pdf-smoke-'));
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'cs-electron-pdf-smoke-'));
 const portableRoot = path.join(tempRoot, 'portable-root');
 const inputPdfPath = process.argv[2]?.trim();
 const pdfPath = inputPdfPath
@@ -76,7 +76,7 @@ function createSimplePdfBuffer() {
       '/Contents 4 0 R >>',
     ].join(' '),
   );
-  const stream = 'BT /F1 16 Tf 48 112 Td (Literature Studio PDF smoke) Tj ET';
+  const stream = 'BT /F1 16 Tf 48 112 Td (Comet Studio PDF smoke) Tj ET';
   addObject(4, `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
   addObject(5, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
 
@@ -229,8 +229,8 @@ async function seedRendererStorage(window, workspaceState) {
     window,
     `(() => {
       localStorage.clear();
-      localStorage.setItem('ls.writingWorkspace.state', ${JSON.stringify(serializedWorkspace)});
-      return localStorage.getItem('ls.writingWorkspace.state');
+      localStorage.setItem('cs.writingWorkspace.state', ${JSON.stringify(serializedWorkspace)});
+      return localStorage.getItem('cs.writingWorkspace.state');
     })()`,
   );
 }
@@ -476,7 +476,7 @@ async function runSmoke() {
     logStep('pdf selection diagnostics', selectionDiagnostics);
     assert.match(
       selectionDiagnostics.editor.selectionText,
-      /Literature Studio PDF smoke/,
+      /Comet Studio PDF smoke/,
       'Expected generated PDF text selection to preserve readable text.',
     );
 

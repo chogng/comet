@@ -15,7 +15,7 @@ const outputDir = path.join(rootDir, '.tmp', 'agent-tests');
 const entryPoint = path.join(
   rootDir,
   'src',
-  'ls',
+  'cs',
   'agent',
   'tests',
   'index.test.ts',

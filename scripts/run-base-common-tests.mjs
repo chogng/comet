@@ -15,7 +15,7 @@ const outputDir = path.join(rootDir, '.tmp', 'base-common-tests');
 const entryPoint = path.join(
   rootDir,
   'src',
-  'ls',
+  'cs',
   'base',
   'common',
   'tests',

@@ -15,7 +15,7 @@ const outputDir = path.join(rootDir, '.tmp', 'library-store-tests');
 const entryPoint = path.join(
   rootDir,
   'src',
-  'ls',
+  'cs',
   'platform',
   'storage',
   'electron-main',
