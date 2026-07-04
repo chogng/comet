@@ -41,7 +41,7 @@ const CHAT_HEADER_HISTORY_MENU_DATA = 'agentbar-header-history';
 
 export class ChatWidget {
 	private props: ChatWidgetProps;
-	private readonly element = createElement('div', 'agentbar-content');
+	private readonly element = createElement('div', 'comet-agentbar-content');
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
 	private readonly renderDisposables = new DisposableStore();
@@ -90,7 +90,7 @@ export class ChatWidget {
 	}
 
 	private renderHeader() {
-		const header = createElement('div', 'agentbar-tabs-header');
+		const header = createElement('div', 'comet-agentbar-tabs-header');
 		const headerItems: ActionBarItem[] = [
 			this.createHeaderActionItem(
 				localize('assistantSidebarNewConversation', "New chat"),
@@ -115,14 +115,14 @@ export class ChatWidget {
 		const shell = createElement(
 			'div',
 			[
-				'agentbar-shell',
-				this.props.messages.length === 0 ? 'is-empty-state' : '',
+				'comet-agentbar-shell',
+				this.props.messages.length === 0 ? 'comet-is-empty-state' : '',
 			]
 				.filter(Boolean)
 				.join(' '),
 		);
 		if (this.props.errorMessage) {
-			const error = createElement('div', 'agentbar-error');
+			const error = createElement('div', 'comet-agentbar-error');
 			error.textContent = this.props.errorMessage;
 			shell.append(error);
 		}
@@ -238,8 +238,8 @@ export class ChatWidget {
 			menuData: CHAT_HEADER_HISTORY_MENU_DATA,
 			menu: this.createHistoryMenuItems(''),
 			menuHeader: createFilterMenuHeader({
-				className: 'agentbar-history-menu-header',
-				inputClassName: 'agentbar-history-search-input',
+				className: 'comet-agentbar-history-menu-header',
+				inputClassName: 'comet-agentbar-history-search-input',
 				placeholder: localize('agentbarHistorySearch', "Search history"),
 				ariaLabel: localize('agentbarHistorySearch', "Search history"),
 				getMenuItems: query => this.createHistoryMenuItems(query),

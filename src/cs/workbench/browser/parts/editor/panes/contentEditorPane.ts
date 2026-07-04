@@ -35,8 +35,8 @@ export class ContentEditorPane extends EditorPane<
   constructor(props: ContentEditorPaneProps) {
     super();
     this.props = props;
-    this.element.className = 'editor-source-pane';
-    this.bodyElement.className = 'editor-source-body';
+    this.element.className = 'comet-editor-source-pane';
+    this.bodyElement.className = 'comet-editor-source-body';
     this.viewPartView = new ViewPartView(props.viewPartProps);
     this.bodyElement.append(this.viewPartView.getElement());
     this.element.append(this.bodyElement);

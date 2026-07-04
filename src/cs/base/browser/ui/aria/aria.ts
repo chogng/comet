@@ -81,23 +81,23 @@ export function setARIAContainer(parent: HTMLElement) {
   ariaContainer?.remove();
 
   ariaContainer = document.createElement('div');
-  ariaContainer.className = 'cs-aria-container';
+  ariaContainer.className = 'comet-aria-container';
 
-  alertContainer = createLiveRegion(ariaContainer, 'cs-aria-alert', (element) => {
+  alertContainer = createLiveRegion(ariaContainer, 'comet-aria-alert', (element) => {
     element.setAttribute('role', 'alert');
     element.setAttribute('aria-atomic', 'true');
   });
-  alertContainerAlt = createLiveRegion(ariaContainer, 'cs-aria-alert', (element) => {
+  alertContainerAlt = createLiveRegion(ariaContainer, 'comet-aria-alert', (element) => {
     element.setAttribute('role', 'alert');
     element.setAttribute('aria-atomic', 'true');
   });
 
-  statusContainer = createLiveRegion(ariaContainer, 'cs-aria-status', (element) => {
+  statusContainer = createLiveRegion(ariaContainer, 'comet-aria-status', (element) => {
     element.setAttribute('role', 'complementary');
     element.setAttribute('aria-live', 'polite');
     element.setAttribute('aria-atomic', 'true');
   });
-  statusContainerAlt = createLiveRegion(ariaContainer, 'cs-aria-status', (element) => {
+  statusContainerAlt = createLiveRegion(ariaContainer, 'comet-aria-status', (element) => {
     element.setAttribute('role', 'complementary');
     element.setAttribute('aria-live', 'polite');
     element.setAttribute('aria-atomic', 'true');

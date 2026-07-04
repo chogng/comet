@@ -14,21 +14,20 @@ const GENERIC_FONT_FAMILIES = new Set([
 ]);
 
 export type EditorNamedFontSizeName =
-  | '初号'
-  | '小初'
-  | '一号'
-  | '小一'
-  | '二号'
-  | '小二'
-  | '三号'
-  | '小三'
-  | '四号'
-  | '小四'
-  | '五号'
-  | '小五'
-  | '六号'
-  | '小六';
-
+  | '\u521d\u53f7'
+  | '\u5c0f\u521d'
+  | '\u4e00\u53f7'
+  | '\u5c0f\u4e00'
+  | '\u4e8c\u53f7'
+  | '\u5c0f\u4e8c'
+  | '\u4e09\u53f7'
+  | '\u5c0f\u4e09'
+  | '\u56db\u53f7'
+  | '\u5c0f\u56db'
+  | '\u4e94\u53f7'
+  | '\u5c0f\u4e94'
+  | '\u516d\u53f7'
+  | '\u5c0f\u516d';
 export type EditorNamedFontSizePreset = {
   name: EditorNamedFontSizeName;
   cssPx: number;
@@ -37,23 +36,23 @@ export type EditorNamedFontSizePreset = {
 };
 
 export const EDITOR_NAMED_FONT_SIZE_PRESETS: readonly EditorNamedFontSizePreset[] = [
-  { name: '初号', cssPx: 56, pointSize: 42, docxHalfPoints: 84 },
-  { name: '小初', cssPx: 48, pointSize: 36, docxHalfPoints: 72 },
-  { name: '一号', cssPx: 35, pointSize: 26, docxHalfPoints: 52 },
-  { name: '小一', cssPx: 32, pointSize: 24, docxHalfPoints: 48 },
-  { name: '二号', cssPx: 29, pointSize: 22, docxHalfPoints: 44 },
-  { name: '小二', cssPx: 24, pointSize: 18, docxHalfPoints: 36 },
-  { name: '三号', cssPx: 21, pointSize: 16, docxHalfPoints: 32 },
-  { name: '小三', cssPx: 20, pointSize: 15, docxHalfPoints: 30 },
-  { name: '四号', cssPx: 19, pointSize: 14, docxHalfPoints: 28 },
-  { name: '小四', cssPx: 16, pointSize: 12, docxHalfPoints: 24 },
-  { name: '五号', cssPx: 14, pointSize: 10.5, docxHalfPoints: 21 },
-  { name: '小五', cssPx: 12, pointSize: 9, docxHalfPoints: 18 },
-  { name: '六号', cssPx: 10, pointSize: 7.5, docxHalfPoints: 15 },
-  { name: '小六', cssPx: 9, pointSize: 6.5, docxHalfPoints: 13 },
+  { name: '\u521d\u53f7', cssPx: 56, pointSize: 42, docxHalfPoints: 84 },
+  { name: '\u5c0f\u521d', cssPx: 48, pointSize: 36, docxHalfPoints: 72 },
+  { name: '\u4e00\u53f7', cssPx: 35, pointSize: 26, docxHalfPoints: 52 },
+  { name: '\u5c0f\u4e00', cssPx: 32, pointSize: 24, docxHalfPoints: 48 },
+  { name: '\u4e8c\u53f7', cssPx: 29, pointSize: 22, docxHalfPoints: 44 },
+  { name: '\u5c0f\u4e8c', cssPx: 24, pointSize: 18, docxHalfPoints: 36 },
+  { name: '\u4e09\u53f7', cssPx: 21, pointSize: 16, docxHalfPoints: 32 },
+  { name: '\u5c0f\u4e09', cssPx: 20, pointSize: 15, docxHalfPoints: 30 },
+  { name: '\u56db\u53f7', cssPx: 19, pointSize: 14, docxHalfPoints: 28 },
+  { name: '\u5c0f\u56db', cssPx: 16, pointSize: 12, docxHalfPoints: 24 },
+  { name: '\u4e94\u53f7', cssPx: 14, pointSize: 10.5, docxHalfPoints: 21 },
+  { name: '\u5c0f\u4e94', cssPx: 12, pointSize: 9, docxHalfPoints: 18 },
+  { name: '\u516d\u53f7', cssPx: 10, pointSize: 7.5, docxHalfPoints: 15 },
+  { name: '\u5c0f\u516d', cssPx: 9, pointSize: 6.5, docxHalfPoints: 13 },
 ] as const;
 
-export const DEFAULT_EDITOR_BODY_FONT_SIZE_PRESET_NAME: EditorNamedFontSizeName = '五号';
+export const DEFAULT_EDITOR_BODY_FONT_SIZE_PRESET_NAME: EditorNamedFontSizeName = '\u4e94\u53f7';
 const DEFAULT_EDITOR_BODY_FONT_SIZE_PRESET_CANDIDATE = EDITOR_NAMED_FONT_SIZE_PRESETS.find(
   (preset) => preset.name === DEFAULT_EDITOR_BODY_FONT_SIZE_PRESET_NAME,
 );

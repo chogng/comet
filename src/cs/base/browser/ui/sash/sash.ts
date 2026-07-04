@@ -59,9 +59,9 @@ function applyGlobalSashStyles() {
     return;
   }
 
-  document.documentElement.style.setProperty('--sash-size', `${globalSashSize}px`);
+  document.documentElement.style.setProperty('--comet-sash-size', `${globalSashSize}px`);
   document.documentElement.style.setProperty(
-    '--sash-hover-size',
+    '--comet-sash-hover-size',
     `${globalSashHoverSize}px`,
   );
 }
@@ -145,11 +145,11 @@ export class Sash {
     this.explicitSize = options.size;
     this.offsetMode = options.offsetMode ?? 'start';
     this.element.className = [
-      'sash',
-      this.orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal',
+      'comet-sash',
+      this.orientation === Orientation.VERTICAL ? 'comet-vertical' : 'comet-horizontal',
     ].join(' ');
     if (typeof options.size === 'number') {
-      this.element.style.setProperty('--sash-size', `${options.size}px`);
+      this.element.style.setProperty('--comet-sash-size', `${options.size}px`);
     }
     this.container.append(this.element);
 
@@ -236,9 +236,9 @@ export class Sash {
   }
 
   private renderState() {
-    this.element.classList.toggle('disabled', this.state === SashState.Disabled);
-    this.element.classList.toggle('minimum', this.state === SashState.AtMinimum);
-    this.element.classList.toggle('maximum', this.state === SashState.AtMaximum);
+    this.element.classList.toggle('comet-disabled', this.state === SashState.Disabled);
+    this.element.classList.toggle('comet-minimum', this.state === SashState.AtMinimum);
+    this.element.classList.toggle('comet-maximum', this.state === SashState.AtMaximum);
   }
 
   private getLayoutSize() {
@@ -269,7 +269,7 @@ export class Sash {
     this.clearHoverTimeout();
 
     if (this.active) {
-      this.element.classList.add('hover');
+      this.element.classList.add('comet-hover');
       return;
     }
 
@@ -277,7 +277,7 @@ export class Sash {
       this.hoverTimeout = undefined;
 
       if (!this.active && this.state !== SashState.Disabled) {
-        this.element.classList.add('hover');
+        this.element.classList.add('comet-hover');
       }
     }, this.hoverDelay);
   };
@@ -311,7 +311,7 @@ export class Sash {
     this.dragListeners.clear();
     this.active = true;
     this.clearHoverState();
-    this.element.classList.add('active');
+    this.element.classList.add('comet-active');
     event.preventDefault();
 
     this.onDidStartEmitter.fire({
@@ -336,7 +336,7 @@ export class Sash {
     const handleEnd = () => {
       this.dragListeners.clear();
       this.active = false;
-      this.element.classList.remove('active');
+      this.element.classList.remove('comet-active');
       this.onDidEndEmitter.fire();
     };
 
@@ -378,7 +378,7 @@ export class Sash {
 
   private clearHoverState() {
     this.clearHoverTimeout();
-    this.element.classList.remove('hover');
+    this.element.classList.remove('comet-hover');
   }
 }
 

@@ -1,4 +1,4 @@
-.editor-mode-toolbar {
+.comet-editor-mode-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -9,18 +9,18 @@
   -webkit-app-region: no-drag;
 }
 
-.editor-browser-toolbar-leading,
-.editor-browser-toolbar-trailing {
+.comet-editor-browser-toolbar-leading,
+.comet-editor-browser-toolbar-trailing {
   flex: 0 0 auto;
   min-width: 0;
 }
 
-.editor-browser-toolbar {
+.comet-editor-browser-toolbar {
   position: relative;
   overflow: visible;
 }
 
-.editor-browser-toolbar-row {
+.comet-editor-browser-toolbar-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -28,12 +28,12 @@
   min-width: 0;
 }
 
-.editor-browser-toolbar-address-host {
+.comet-editor-browser-toolbar-address-host {
   flex: 1;
   min-width: 0;
 }
 
-.editor-browser-toolbar-actions {
+.comet-editor-browser-toolbar-actions {
   --editor-browser-toolbar-action-size: 24px;
   --editor-browser-toolbar-icon-size: 16px;
   display: inline-flex;
@@ -41,13 +41,13 @@
   min-width: 0;
 }
 
-.editor-browser-toolbar-actions .actionbar-actions-container {
+.comet-editor-browser-toolbar-actions .actionbar-actions-container {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
 
-.editor-browser-toolbar-btn.actionbar-action {
+.comet-editor-browser-toolbar-btn.actionbar-action {
   width: var(--editor-browser-toolbar-action-size);
   height: var(--editor-browser-toolbar-action-size);
   border: none;
@@ -59,26 +59,26 @@
   padding: 0;
 }
 
-.editor-browser-toolbar-btn.actionbar-action .lx-icon {
+.comet-editor-browser-toolbar-btn.actionbar-action .lx-icon {
   width: var(--editor-browser-toolbar-icon-size);
   height: var(--editor-browser-toolbar-icon-size);
   font-size: var(--editor-browser-toolbar-icon-size);
 }
 
-.editor-browser-toolbar-address-input.inputbox {
+.comet-editor-browser-toolbar-address-input.inputbox {
   --inputbox-height: 26px;
   --inputbox-border-radius: 7px;
   --inputbox-foreground: var(--vscode-agentBar-inputForeground, #1f2d3a);
   width: 100%;
 }
 
-.editor-pdf-toolbar {
+.comet-editor-pdf-toolbar {
   color: var(--vscode-editor-sourceSubheadingForeground, #698099);
   position: relative;
   overflow: visible;
 }
 
-.editor-pdf-toolbar-row {
+.comet-editor-pdf-toolbar-row {
   display: flex;
   align-items: center;
   width: 100%;
@@ -87,17 +87,17 @@
   gap: 8px;
 }
 
-.editor-pdf-toolbar-leading,
-.editor-pdf-toolbar-trailing {
+.comet-editor-pdf-toolbar-leading,
+.comet-editor-pdf-toolbar-trailing {
   flex: 0 0 auto;
   min-width: 0;
 }
 
-.editor-pdf-toolbar-trailing {
+.comet-editor-pdf-toolbar-trailing {
   margin-left: auto;
 }
 
-.editor-pdf-toolbar-actions {
+.comet-editor-pdf-toolbar-actions {
   --editor-pdf-toolbar-action-size: 24px;
   --editor-pdf-toolbar-icon-size: 16px;
   display: inline-flex;
@@ -105,13 +105,13 @@
   min-width: 0;
 }
 
-.editor-pdf-toolbar-actions .actionbar-actions-container {
+.comet-editor-pdf-toolbar-actions .actionbar-actions-container {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
 
-.editor-pdf-toolbar-btn.actionbar-action {
+.comet-editor-pdf-toolbar-btn.actionbar-action {
   width: var(--editor-pdf-toolbar-action-size);
   height: var(--editor-pdf-toolbar-action-size);
   border: none;
@@ -123,7 +123,7 @@
   padding: 0;
 }
 
-.editor-pdf-toolbar-btn.actionbar-action .lx-icon {
+.comet-editor-pdf-toolbar-btn.actionbar-action .lx-icon {
   width: var(--editor-pdf-toolbar-icon-size);
   height: var(--editor-pdf-toolbar-icon-size);
   font-size: var(--editor-pdf-toolbar-icon-size);

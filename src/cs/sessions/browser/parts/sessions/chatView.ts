@@ -125,7 +125,7 @@ export function createSessionChatViewProps({
 }
 
 export class SessionChatView {
-	private readonly element = createElement('div', 'session-chat-view');
+	private readonly element = createElement('div', 'comet-session-chat-view');
 	private readonly widget: ChatWidget;
 
 	constructor(props: SessionChatViewProps) {

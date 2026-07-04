@@ -50,14 +50,14 @@ test('actionbar renders actions and separators without relying on button base cl
   document.body.append(element);
 
   try {
-    assert.equal(element.classList.contains('actionbar'), true);
-    assert.equal(element.classList.contains('btn-base'), false);
+    assert.equal(element.classList.contains('comet-actionbar'), true);
+    assert.equal(element.classList.contains('comet-btn-base'), false);
     assert.equal(element.getAttribute('role'), 'toolbar');
     assert.equal(element.getAttribute('aria-label'), 'Document actions');
 
-    const buttons = element.querySelectorAll('.actionbar-action');
+    const buttons = element.querySelectorAll('.comet-actionbar-action');
     assert.equal(buttons.length, 2);
-    assert(element.querySelector('.actionbar-separator') instanceof HTMLElement);
+    assert(element.querySelector('.comet-actionbar-separator') instanceof HTMLElement);
 
     const refreshButton = buttons[0] as HTMLButtonElement;
     const disabledButton = buttons[1] as HTMLButtonElement;
@@ -95,7 +95,7 @@ test('actionbar keyboard navigation skips disabled items', () => {
   document.body.append(element);
 
   try {
-    const buttons = element.querySelectorAll('.actionbar-action');
+    const buttons = element.querySelectorAll('.comet-actionbar-action');
     const backButton = buttons[0] as HTMLButtonElement;
     const forwardButton = buttons[2] as HTMLButtonElement;
 
@@ -129,7 +129,7 @@ test('actionbar actions use shared hover content instead of native title tooltip
   document.body.append(element);
 
   try {
-    const button = element.querySelector('.actionbar-action');
+    const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
       throw new Error('Expected actionbar button.');
     }
@@ -138,7 +138,7 @@ test('actionbar actions use shared hover content instead of native title tooltip
     button.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     if (!(overlayContent instanceof HTMLElement)) {
       throw new Error('Expected hover overlay content.');
     }
@@ -166,7 +166,7 @@ test('actionbar forwards custom button attributes', () => {
   document.body.append(element);
 
   try {
-    const button = element.querySelector('.actionbar-action');
+    const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
       throw new Error('Expected actionbar button.');
     }
@@ -200,7 +200,7 @@ test('actionbar can render a dropdown action view item instance', async () => {
   document.body.append(element);
 
   try {
-    const button = element.querySelector('.actionbar-action');
+    const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
       throw new Error('Expected actionbar button.');
     }
@@ -208,10 +208,10 @@ test('actionbar can render a dropdown action view item instance', async () => {
     button.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
 
-    const archiveItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const archiveItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Archive'),
     );
     assert(archiveItem instanceof HTMLElement);
@@ -235,7 +235,7 @@ test('actionbar can render a custom overlay action view item instance', async ()
         overlayRole: 'dialog',
         renderOverlay: ({ hide }) => {
           const overlay = document.createElement('div');
-          overlay.className = 'actionbar-custom-overlay';
+          overlay.className = 'comet-actionbar-custom-overlay';
           const close = document.createElement('button');
           close.type = 'button';
           close.textContent = 'Close';
@@ -253,7 +253,7 @@ test('actionbar can render a custom overlay action view item instance', async ()
   document.body.append(element);
 
   try {
-    const button = element.querySelector('.actionbar-action');
+    const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
       throw new Error('Expected actionbar button.');
     }
@@ -261,7 +261,7 @@ test('actionbar can render a custom overlay action view item instance', async ()
     button.click();
     await delay(0);
 
-    const overlay = document.body.querySelector('.actionbar-custom-overlay');
+    const overlay = document.body.querySelector('.comet-actionbar-custom-overlay');
     assert(overlay instanceof HTMLElement);
     assert.equal(button.getAttribute('aria-haspopup'), 'dialog');
     assert.equal(button.getAttribute('aria-expanded'), 'true');
@@ -286,7 +286,7 @@ test('actionbar can render a split action item with primary and dropdown control
     items: [
       {
         type: 'split',
-        className: 'actionbar-split',
+        className: 'comet-actionbar-split',
         primary: {
           label: 'Paragraph',
           content: 'Tx',
@@ -315,7 +315,7 @@ test('actionbar can render a split action item with primary and dropdown control
   document.body.append(element);
 
   try {
-    const buttons = element.querySelectorAll('.actionbar-action');
+    const buttons = element.querySelectorAll('.comet-actionbar-action');
     assert.equal(buttons.length, 2);
 
     const primaryButton = buttons[0] as HTMLButtonElement;
@@ -327,10 +327,10 @@ test('actionbar can render a split action item with primary and dropdown control
     dropdownButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
 
-    const menuItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const menuItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Heading 1'),
     );
     assert(menuItem instanceof HTMLElement);

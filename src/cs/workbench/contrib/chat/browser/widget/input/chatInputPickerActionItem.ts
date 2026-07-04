@@ -98,16 +98,16 @@ export class ChatInputModelPickerActionViewItem {
 			label: currentLabel,
 			title: currentLabel,
 			mode: 'custom',
-			buttonClassName: 'chat-model-switch-btn',
-			className: 'chat-model-switch',
+			buttonClassName: 'comet-chat-model-switch-btn',
+			className: 'comet-chat-model-switch',
 			disabled: this.props.llmModelOptions.length === 0,
 			minWidth: 236,
-			menuClassName: 'chat-model-menu',
+			menuClassName: 'comet-chat-model-menu',
 			menuData: 'chat-model-menu',
 			content: () => this.renderModelDropdownTrigger(currentOption),
 			menu: this.createModelMenuItems(''),
 			menuHeader: createFilterMenuHeader({
-				inputClassName: 'chat-model-menu-search-input',
+				inputClassName: 'comet-chat-model-menu-search-input',
 				placeholder: localize('chatModelSearch', "Search models"),
 				ariaLabel: localize('chatModelSearch', "Search models"),
 				getMenuItems: query => this.createModelMenuItems(query),
@@ -132,10 +132,10 @@ export class ChatInputModelPickerActionViewItem {
 	}
 
 	private renderModelDropdownTrigger(currentOption: DropdownOption | null) {
-		const trigger = createElement('span', 'chat-model-switch-trigger');
-		const label = createElement('span', 'chat-model-switch-label');
+		const trigger = createElement('span', 'comet-chat-model-switch-trigger');
+		const label = createElement('span', 'comet-chat-model-switch-label');
 		label.textContent = this.getModelDropdownTriggerLabel(currentOption);
-		const chevron = createLxIcon('chevron-down', 'chat-model-switch-chevron');
+		const chevron = createLxIcon('chevron-down', 'comet-chat-model-switch-chevron');
 
 		trigger.append(label, chevron);
 		return trigger;

@@ -27,14 +27,14 @@ export function createBadge(props: BadgeProps) {
   const badge = createElement(
     'span',
     [
-      'cs-badge',
+      'comet-badge',
       props.compact ? 'is-compact' : '',
       props.className ?? '',
     ]
       .filter(Boolean)
       .join(' '),
   );
-  const content = createElement('span', 'cs-badge-content');
+  const content = createElement('span', 'comet-badge-content');
 
   if (props.title) {
     applyHover(badge, props.title);
@@ -44,11 +44,11 @@ export function createBadge(props: BadgeProps) {
   }
 
   if (props.icon) {
-    content.append(createLxIcon(props.icon, 'cs-badge-icon'));
+    content.append(createLxIcon(props.icon, 'comet-badge-icon'));
   }
 
   if (props.label) {
-    const label = createElement('span', 'cs-badge-label');
+    const label = createElement('span', 'comet-badge-label');
     label.textContent = props.label;
     content.append(label);
   }

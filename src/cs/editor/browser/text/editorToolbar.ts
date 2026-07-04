@@ -75,10 +75,10 @@ export class DraftEditorToolbar {
   private props: DraftEditorToolbarProps;
   private readonly element = createElement(
     'div',
-    'editor-mode-toolbar editor-draft-toolbar',
+    'editor-mode-toolbar comet-editor-draft-toolbar',
   );
-  private readonly contentElement = createElement('div', 'editor-draft-toolbar-content');
-  private readonly trailingElement = createElement('div', 'editor-draft-toolbar-trailing');
+  private readonly contentElement = createElement('div', 'comet-editor-draft-toolbar-content');
+  private readonly trailingElement = createElement('div', 'comet-editor-draft-toolbar-trailing');
   private toolbarViews: Array<{ dispose: () => void }> = [];
   private adaptiveOverflowCount = 0;
   private overflowCandidateCount = 0;
@@ -346,7 +346,7 @@ export class DraftEditorToolbar {
 
   private createToolbarGroup(groupConfig: ToolbarGroupConfig) {
     const actionBarView = createActionBarView({
-      className: 'editor-draft-toolbar-group',
+      className: 'comet-editor-draft-toolbar-group',
       ariaLabel: groupConfig.title,
       items: groupConfig.items.map((itemConfig) => this.createToolbarItem(itemConfig)),
     });
@@ -372,14 +372,14 @@ export class DraftEditorToolbar {
 
   private createOverflowMenu(overflowMenuItems: readonly WritingEditorToolbarMenuItemConfig[]) {
     const overflowView = createActionBarView({
-      className: 'editor-draft-toolbar-group editor-draft-toolbar-more',
+      className: 'comet-editor-draft-toolbar-group comet-editor-draft-toolbar-more',
       ariaRole: 'group',
       items: [
         createDropdownMenuActionViewItem({
           label: this.props.labels.toolbarMore,
           title: this.props.labels.toolbarMore,
           mode: 'icon',
-          buttonClassName: 'editor-draft-toolbar-btn',
+          buttonClassName: 'comet-editor-draft-toolbar-btn',
           content: createLxIcon('more'),
           overlayAlignment: 'end',
           menuData: DRAFT_TOOLBAR_OVERFLOW_MENU_DATA,
@@ -409,7 +409,7 @@ export class DraftEditorToolbar {
   private createToolbarDropdown(dropdownConfig: WritingEditorToolbarDropdownConfig) {
     const menuPresenter = createDomDropdownMenuPresenter({ layer: 'portal' });
     const dropdown = createDropdownView({
-      className: 'editor-draft-toolbar-dropdown',
+      className: 'comet-editor-draft-toolbar-dropdown',
       menuPresenter,
       title: dropdownConfig.title,
       value: dropdownConfig.value,
@@ -443,7 +443,7 @@ export class DraftEditorToolbar {
   }
 
   private createToolbarSplitButton(splitButtonConfig: WritingEditorToolbarSplitButtonConfig) {
-    const primaryContent = createElement('span', 'editor-draft-toolbar-btn-icon');
+    const primaryContent = createElement('span', 'comet-editor-draft-toolbar-btn-icon');
     const usesCustomPrimaryContent = !splitButtonConfig.buttonIcon;
     const primaryMode =
       splitButtonConfig.buttonMode
@@ -454,20 +454,20 @@ export class DraftEditorToolbar {
     }
 
     if (primaryMode !== 'text' && !splitButtonConfig.buttonIcon) {
-      const glyph = createElement('span', 'editor-draft-toolbar-btn-glyph');
+      const glyph = createElement('span', 'comet-editor-draft-toolbar-btn-glyph');
       glyph.textContent = splitButtonConfig.buttonGlyph ?? splitButtonConfig.buttonLabel;
       primaryContent.append(glyph);
     }
 
     return {
       type: 'split',
-      className: 'actionbar-split editor-draft-toolbar-split',
+      className: 'comet-actionbar-split comet-editor-draft-toolbar-split',
       primary: {
         label: splitButtonConfig.buttonLabel,
         hover: splitButtonConfig.buttonLabel,
         content: primaryMode === 'text' ? undefined : primaryContent,
         mode: primaryMode,
-        buttonClassName: 'editor-draft-toolbar-btn editor-draft-toolbar-split-primary',
+        buttonClassName: 'comet-editor-draft-toolbar-btn comet-editor-draft-toolbar-split-primary',
         onClick: () => {
           splitButtonConfig.onClick();
         },
@@ -478,7 +478,7 @@ export class DraftEditorToolbar {
         title: splitButtonConfig.title,
         content: createLxIcon('chevron-down'),
         mode: 'icon',
-        buttonClassName: 'editor-draft-toolbar-btn editor-draft-toolbar-split-dropdown',
+        buttonClassName: 'comet-editor-draft-toolbar-btn comet-editor-draft-toolbar-split-dropdown',
         menuData: DRAFT_TOOLBAR_SPLIT_MENU_DATA,
         menu: splitButtonConfig.menu.map((item, index) => ({
           id: `${splitButtonConfig.label}-${index}`,
@@ -496,13 +496,13 @@ export class DraftEditorToolbar {
   }
 
   private createToolbarButton(buttonConfig: WritingEditorToolbarButtonConfig) {
-    const iconSlot = createElement('span', 'editor-draft-toolbar-btn-icon');
+    const iconSlot = createElement('span', 'comet-editor-draft-toolbar-btn-icon');
     const usesCustomContent = !buttonConfig.icon;
 
     if (buttonConfig.icon) {
       iconSlot.append(createLxIcon(buttonConfig.icon));
     } else if (buttonConfig.glyph) {
-      const glyph = createElement('span', 'editor-draft-toolbar-btn-glyph');
+      const glyph = createElement('span', 'comet-editor-draft-toolbar-btn-glyph');
       glyph.textContent = buttonConfig.glyph;
       iconSlot.append(glyph);
     }
@@ -515,7 +515,7 @@ export class DraftEditorToolbar {
       mode: usesCustomContent ? 'custom' : 'icon',
       active: Boolean(buttonConfig.isActive),
       disabled: Boolean(buttonConfig.disabled),
-      buttonClassName: 'editor-draft-toolbar-btn',
+      buttonClassName: 'comet-editor-draft-toolbar-btn',
       buttonAttributes: buttonConfig.isToggle
         ? { 'aria-pressed': String(Boolean(buttonConfig.isActive)) }
         : undefined,
@@ -538,7 +538,7 @@ export class DraftEditorToolbar {
       return;
     }
 
-    if (!event.target.closest('.actionbar-action')) {
+    if (!event.target.closest('.comet-actionbar-action')) {
       return;
     }
 

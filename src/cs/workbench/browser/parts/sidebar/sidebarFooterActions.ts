@@ -36,22 +36,22 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 export class SidebarFooterActionsView {
   private readonly hostElement = createElement(
     'div',
-    'sidebar-footer-actions-host',
+    'comet-sidebar-footer-actions-host',
   );
   private readonly accountElement = createElement(
     'div',
-    'sidebar-footer-account',
+    'comet-sidebar-footer-account',
   );
   private readonly avatarElement = createElement(
     'div',
-    'sidebar-footer-avatar',
+    'comet-sidebar-footer-avatar',
   );
   private readonly accountLabelElement = createElement(
     'span',
-    'sidebar-footer-account-label',
+    'comet-sidebar-footer-account-label',
   );
   private readonly actionBarView = createActionBarView({
-    className: 'sidebar-footer-actions',
+    className: 'comet-sidebar-footer-actions',
     ariaRole: 'group',
   });
 
@@ -72,16 +72,16 @@ export class SidebarFooterActionsView {
     this.accountLabelElement.textContent = props.accountLabel?.trim() || '';
     const moreLabel = props.moreLabel?.trim() || MORE_ACTIONS_LABEL;
     this.actionBarView.setProps({
-      className: 'sidebar-footer-actions',
+      className: 'comet-sidebar-footer-actions',
       ariaRole: 'group',
       items: [
         createDropdownMenuActionViewItem({
           label: moreLabel,
           title: moreLabel,
           mode: 'icon',
-          buttonClassName: 'sidebar-footer-more-btn',
+          buttonClassName: 'comet-sidebar-footer-more-btn',
           content: createLxIcon('more-2'),
-          menuClassName: 'sidebar-footer-more-menu-overlay',
+          menuClassName: 'comet-sidebar-footer-more-menu-overlay',
           minWidth: 160,
           menuData: 'sidebar-footer-more',
           menu: [
@@ -115,7 +115,7 @@ export class SidebarFooterActionsView {
           title: props.settingsLabel ?? '',
           mode: 'icon',
           active: props.isSettingsActive === true,
-          buttonClassName: 'sidebar-footer-settings-btn',
+          buttonClassName: 'comet-sidebar-footer-settings-btn',
           content: createLxIcon('gear'),
           onClick: () => props.onOpenSettings?.(),
         },

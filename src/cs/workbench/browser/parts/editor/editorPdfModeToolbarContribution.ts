@@ -33,17 +33,17 @@ implements EditorModeToolbarContribution {
   private context: EditorModeToolbarContributionContext;
   private readonly element = createElement(
     'div',
-    'editor-mode-toolbar editor-pdf-toolbar',
+    'comet-editor-mode-toolbar comet-editor-pdf-toolbar',
   );
-  private readonly rowElement = createElement('div', 'editor-pdf-toolbar-row');
-  private readonly leadingHost = createElement('div', 'editor-pdf-toolbar-leading');
-  private readonly trailingHost = createElement('div', 'editor-pdf-toolbar-trailing');
+  private readonly rowElement = createElement('div', 'comet-editor-pdf-toolbar-row');
+  private readonly leadingHost = createElement('div', 'comet-editor-pdf-toolbar-leading');
+  private readonly trailingHost = createElement('div', 'comet-editor-pdf-toolbar-trailing');
   private readonly leadingActionsView = createActionBarView({
-    className: 'editor-pdf-toolbar-actions',
+    className: 'comet-editor-pdf-toolbar-actions',
     ariaRole: 'group',
   });
   private readonly trailingActionsView = createActionBarView({
-    className: 'editor-pdf-toolbar-actions',
+    className: 'comet-editor-pdf-toolbar-actions',
     ariaRole: 'group',
   });
 
@@ -73,12 +73,12 @@ implements EditorModeToolbarContribution {
 
   private render() {
     this.leadingActionsView.setProps({
-      className: 'editor-pdf-toolbar-actions',
+      className: 'comet-editor-pdf-toolbar-actions',
       ariaRole: 'group',
       items: this.createLeadingItems(),
     });
     this.trailingActionsView.setProps({
-      className: 'editor-pdf-toolbar-actions',
+      className: 'comet-editor-pdf-toolbar-actions',
       ariaRole: 'group',
       items: this.createTrailingItems(),
     });
@@ -90,7 +90,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarSources,
         title: this.context.labels.toolbarSources,
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon('list-unordered'),
         onClick: this.context.onOpenSources,
       },
@@ -98,7 +98,7 @@ implements EditorModeToolbarContribution {
         label: 'Zoom out',
         title: 'Zoom out',
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon('remove'),
         onClick: () => {},
       },
@@ -106,7 +106,7 @@ implements EditorModeToolbarContribution {
         label: 'Zoom in',
         title: 'Zoom in',
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon('add'),
         onClick: () => {},
       },
@@ -114,7 +114,7 @@ implements EditorModeToolbarContribution {
         label: PDF_PAGINATION_LABEL,
         title: PDF_PAGINATION_LABEL,
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfPagination),
         onClick: () => {},
       },
@@ -122,7 +122,7 @@ implements EditorModeToolbarContribution {
         label: PDF_HIGHLIGHT_LABEL,
         title: PDF_HIGHLIGHT_LABEL,
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfHighlight),
         onClick: this.context.onPdfHighlightSelection,
       },
@@ -130,7 +130,7 @@ implements EditorModeToolbarContribution {
         label: PDF_TRANSLATE_LABEL,
         title: PDF_TRANSLATE_LABEL,
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfTranslate),
         onClick: () => {},
       },
@@ -138,7 +138,7 @@ implements EditorModeToolbarContribution {
         label: PDF_ERASE_LABEL,
         title: PDF_ERASE_LABEL,
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfErase),
         onClick: () => {},
       },
@@ -146,7 +146,7 @@ implements EditorModeToolbarContribution {
         label: PDF_NOTE_LABEL,
         title: PDF_NOTE_LABEL,
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfNote),
         onClick: this.context.onPdfNoteSelection,
       },
@@ -159,7 +159,7 @@ implements EditorModeToolbarContribution {
         label: 'Search',
         title: 'Search',
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon('search'),
         onClick: () => {},
       },
@@ -167,7 +167,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarMore,
         title: this.context.labels.toolbarMore,
         mode: 'icon',
-        buttonClassName: 'editor-pdf-toolbar-btn',
+        buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon('more'),
         overlayAlignment: 'end',
         menuData: EDITOR_PDF_TOOLBAR_MORE_MENU_DATA,

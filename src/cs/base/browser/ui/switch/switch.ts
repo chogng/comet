@@ -101,10 +101,10 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
 
 export class SwitchView extends Disposable {
   private props: SwitchProps;
-  private readonly element = createElement('label', 'switch-root');
-  private readonly inputElement = createElement('input', 'switch-input');
-  private readonly sliderElement = createElement('span', 'switch-slider');
-  private readonly labelElement = createElement('span', 'switch-label');
+  private readonly element = createElement('label', 'comet-switch-root');
+  private readonly inputElement = createElement('input', 'comet-switch-input');
+  private readonly sliderElement = createElement('span', 'comet-switch-slider');
+  private readonly labelElement = createElement('span', 'comet-switch-label');
   private readonly hoverController: HoverHandle;
   private pendingAnimationFrame: number | undefined;
   private rendered = false;
@@ -246,8 +246,8 @@ export class SwitchView extends Disposable {
     } = this.props;
 
     this.element.className = [
-      'switch-root',
-      disabled ? 'switch-disabled' : '',
+      'comet-switch-root',
+      disabled ? 'comet-switch-disabled' : '',
       className,
     ]
       .filter(Boolean)

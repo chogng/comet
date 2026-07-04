@@ -1,4 +1,4 @@
-.settings-page {
+.comet-settings-page {
   --settings-page-content-background: var(--vscode-settings-contentBackground, #fff);
   min-height: 0;
   display: flex;
@@ -8,7 +8,7 @@
   overflow: hidden;
 }
 
-.panel.settings-card {
+.panel.comet-settings-card {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -17,14 +17,14 @@
   border: 0;
 }
 
-.settings-header {
+.comet-settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.settings-body {
+.comet-settings-body {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 0;
@@ -32,7 +32,7 @@
   flex: 1 1 auto;
 }
 
-.settings-navigation {
+.comet-settings-navigation {
   display: grid;
   align-content: start;
   width: 100%;
@@ -44,12 +44,12 @@
   background: var(--vscode-settings-navigationBackground, transparent);
 }
 
-.settings-navigation-nav {
+.comet-settings-navigation-nav {
   width: 100%;
   min-width: 0;
 }
 
-.settings-navigation-list {
+.comet-settings-navigation-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -57,19 +57,19 @@
   gap: 2px;
 }
 
-.settings-navigation-item-entry {
+.comet-settings-navigation-item-entry {
   margin: 0;
   padding: 0;
 }
 
-.settings-navigation-spacer {
+.comet-settings-navigation-spacer {
   height: 12px;
   margin: 0;
   padding: 0;
   pointer-events: none;
 }
-/* 字体14才能等于curosor的12，好奇怪*/
-.settings-navigation-item {
+/* 字体14才能等于curosor�?2，好奇�?/
+.comet-settings-navigation-item {
   display: flex;
   align-items: center;
   width: 100%;
@@ -86,7 +86,7 @@
   cursor: pointer;
 }
 
-.settings-navigation-label {
+.comet-settings-navigation-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -94,31 +94,31 @@
   width: 100%;
 }
 
-.settings-navigation-icon {
+.comet-settings-navigation-icon {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
   color: currentColor;
 }
 
-.settings-navigation-item:hover {
+.comet-settings-navigation-item:hover {
   background: var(--vscode-settings-navigationItemHoverBackground, #ececec);
 }
 
-.settings-navigation-item.active {
+.comet-settings-navigation-item.active {
   background: var(--vscode-settings-navigationItemActiveBackground, #ececec);
   color: var(--vscode-settings-navigationItemActiveForeground, #1f1f1f);
   box-shadow: none;
 }
 
-.settings-content {
+.comet-settings-content {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
   background: var(--settings-page-content-background);
 }
 
-.settings-content-body {
+.comet-settings-content-body {
   display: grid;
   gap: 12px;
   align-content: start;
@@ -127,7 +127,7 @@
   box-sizing: border-box;
 }
 
-.settings-section {
+.comet-settings-section {
   display: grid;
   gap: 10px;
   padding: 0 0 12px;
@@ -138,33 +138,33 @@
   box-shadow: none;
 }
 
-.settings-section[hidden] {
+.comet-settings-section[hidden] {
   display: none;
 }
 
-.settings-section.active {
+.comet-settings-section.active {
   display: grid;
 }
 
-.settings-section:last-child {
+.comet-settings-section:last-child {
   border-bottom: 0;
   padding-bottom: 0;
 }
 
-.settings-page-footer {
+.comet-settings-page-footer {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   padding: 6px 0 0 6px;
 }
 
-.settings-section-title {
+.comet-settings-section-title {
   font-size: 15px;
   font-weight: 700;
   color: var(--vscode-settings-sectionTitleForeground, #203040);
 }
 
-.settings-page-title {
+.comet-settings-page-title {
   margin: 0;
   margin-bottom: 8px;
   margin-left: 8px;
@@ -174,7 +174,7 @@
   color: var(--vscode-settings-pageTitleForeground, #182433);
 }
 
-.settings-page-topbar {
+.comet-settings-page-topbar {
   height: 36px;
   min-height: 36px;
   display: flex;
@@ -183,16 +183,16 @@
   -webkit-app-region: drag;
 }
 
-.settings-page-topbar > * {
+.comet-settings-page-topbar > * {
   -webkit-app-region: no-drag;
 }
 
 @media (max-width: 980px) {
-  .settings-body {
+  .comet-settings-body {
     grid-template-columns: 1fr;
   }
 
-  .settings-navigation {
+  .comet-settings-navigation {
     border-bottom: 1px solid var(--vscode-settings-navigationBorder, #e6edf5);
   }
 }

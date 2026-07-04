@@ -86,8 +86,8 @@ export class PdfSelectionController {
 
   private findPageInfoFromEvent(event: PointerEvent) {
     const pageElement =
-      (event.target as Element | null)?.closest?.('.pdf-reader-page') ??
-      document.elementFromPoint?.(event.clientX, event.clientY)?.closest?.('.pdf-reader-page') ??
+      (event.target as Element | null)?.closest?.('.comet-pdf-reader-page') ??
+      document.elementFromPoint?.(event.clientX, event.clientY)?.closest?.('.comet-pdf-reader-page') ??
       this.findNearestPageElement(event);
     if (!(pageElement instanceof HTMLElement)) {
       return null;
@@ -100,7 +100,7 @@ export class PdfSelectionController {
   private findNearestPageElement(event: PointerEvent) {
     let nearestPageElement: HTMLElement | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
-    const pageElements = this.pagesElement.querySelectorAll<HTMLElement>('.pdf-reader-page');
+    const pageElements = this.pagesElement.querySelectorAll<HTMLElement>('.comet-pdf-reader-page');
 
     for (const pageElement of pageElements) {
       const rect = pageElement.getBoundingClientRect();

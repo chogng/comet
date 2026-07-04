@@ -16,7 +16,7 @@ export function createStatusbarItemElement(item: EditorStatusItem) {
     itemElement.dataset.statusbarItemTitle = item.title;
   }
   itemElement.className = [
-    'editor-statusbar-item',
+    'comet-editor-statusbar-item',
     item.tone ? `is-${item.tone}` : '',
     canRunCommand ? 'is-actionable' : '',
   ]
@@ -24,11 +24,11 @@ export function createStatusbarItemElement(item: EditorStatusItem) {
     .join(' ');
 
   const labelElement = document.createElement('span');
-  labelElement.className = 'editor-statusbar-item-label';
+  labelElement.className = 'comet-editor-statusbar-item-label';
   labelElement.textContent = item.label;
 
   const valueElement = document.createElement('span');
-  valueElement.className = 'editor-statusbar-item-value';
+  valueElement.className = 'comet-editor-statusbar-item-value';
   valueElement.textContent = item.value;
 
   hoverService.createHover(itemElement, {

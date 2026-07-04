@@ -28,9 +28,9 @@ test('menu renders requested placement class', () => {
   document.body.append(menu.getElement());
 
   try {
-    assert.equal(menu.getElement().classList.contains('cs-menu-root'), true);
-    assert.equal(menu.getElement().classList.contains('dropdown-menu-top'), true);
-    assert.equal(menu.getElement().classList.contains('dropdown-menu-bottom'), false);
+    assert.equal(menu.getElement().classList.contains('comet-menu-root'), true);
+    assert.equal(menu.getElement().classList.contains('comet-dropdown-menu-top'), true);
+    assert.equal(menu.getElement().classList.contains('comet-dropdown-menu-bottom'), false);
   } finally {
     menu.dispose();
     document.body.replaceChildren();
@@ -49,7 +49,7 @@ test('menu uses roving item focus for keyboard navigation', () => {
 
   try {
     const menuItems = Array.from(
-      menu.getElement().querySelectorAll<HTMLDivElement>('.dropdown-menu-item'),
+      menu.getElement().querySelectorAll<HTMLDivElement>('.comet-dropdown-menu-item'),
     );
     assert.equal(menuItems.length, 3);
 
@@ -127,13 +127,13 @@ test('menu header can update menu items and request hide', () => {
   document.body.append(menu.getElement());
 
   try {
-    const input = menu.getElement().querySelector('.cs-menu-header.menu-header-test.menu-header-input');
+    const input = menu.getElement().querySelector('.comet-menu-header.menu-header-test.menu-header-input');
     assert(input instanceof HTMLInputElement);
     input.value = 'b';
     input.dispatchEvent(new Event('input', { bubbles: true }));
 
     const menuItems = Array.from(
-      menu.getElement().querySelectorAll<HTMLDivElement>('.dropdown-menu-item'),
+      menu.getElement().querySelectorAll<HTMLDivElement>('.comet-dropdown-menu-item'),
     );
     assert.equal(menuItems.some((item) => item.textContent?.includes('Beta')), true);
 
@@ -166,18 +166,18 @@ test('menu opens submenu with ArrowRight and selects submenu action', () => {
 
   try {
     const menuItems = Array.from(
-      menu.getElement().querySelectorAll<HTMLDivElement>('.dropdown-menu-item'),
+      menu.getElement().querySelectorAll<HTMLDivElement>('.comet-dropdown-menu-item'),
     );
     assert.equal(menuItems.length, 2);
     menu.focusSelectedOrFirstEnabled();
     assert.equal(document.activeElement, menuItems[0]);
 
     menuItems[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    const submenu = document.body.querySelector('.cs-menu-submenu');
+    const submenu = document.body.querySelector('.comet-menu-submenu');
     assert(submenu instanceof HTMLElement);
-    assert.equal(submenu.classList.contains('cs-menu-submenu'), true);
+    assert.equal(submenu.classList.contains('comet-menu-submenu'), true);
     const submenuItems = Array.from(
-      submenu.querySelectorAll<HTMLDivElement>('.dropdown-menu-item'),
+      submenu.querySelectorAll<HTMLDivElement>('.comet-dropdown-menu-item'),
     );
     assert.equal(submenuItems.length, 1);
     assert.equal(document.activeElement, submenuItems[0]);
@@ -210,16 +210,16 @@ test('menu closes only submenu on first Escape and root menu on second Escape', 
 
   try {
     menu.focusSelectedOrFirstEnabled();
-    const parentItem = menu.getElement().querySelector('.dropdown-menu-item');
+    const parentItem = menu.getElement().querySelector('.comet-dropdown-menu-item');
     assert(parentItem instanceof HTMLDivElement);
 
     parentItem.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    const submenuItem = document.body.querySelector('.cs-menu-submenu .dropdown-menu-item');
+    const submenuItem = document.body.querySelector('.comet-menu-submenu .comet-dropdown-menu-item');
     assert(submenuItem instanceof HTMLDivElement);
     assert.equal(document.activeElement, submenuItem);
 
     submenuItem.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    assert.equal(document.body.querySelector('.cs-menu-submenu'), null);
+    assert.equal(document.body.querySelector('.comet-menu-submenu'), null);
     assert.equal(cancelCount, 0);
     assert.equal(document.activeElement, parentItem);
 
@@ -246,11 +246,11 @@ test('menu keeps pointer submenu while hovered and closes it after leaving', asy
   document.body.append(menu.getElement());
 
   try {
-    const parentItem = menu.getElement().querySelector('.dropdown-menu-item');
+    const parentItem = menu.getElement().querySelector('.comet-dropdown-menu-item');
     assert(parentItem instanceof HTMLDivElement);
 
     parentItem.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    const submenu = document.body.querySelector('.cs-menu-submenu');
+    const submenu = document.body.querySelector('.comet-menu-submenu');
     assert(submenu instanceof HTMLElement);
 
     menu.getElement().dispatchEvent(
@@ -260,7 +260,7 @@ test('menu keeps pointer submenu while hovered and closes it after leaving', asy
       }),
     );
     await delay(140);
-    assert.equal(document.body.querySelector('.cs-menu-submenu'), submenu);
+    assert.equal(document.body.querySelector('.comet-menu-submenu'), submenu);
 
     submenu.dispatchEvent(
       new MouseEvent('mouseleave', {
@@ -269,7 +269,7 @@ test('menu keeps pointer submenu while hovered and closes it after leaving', asy
       }),
     );
     await delay(140);
-    assert.equal(document.body.querySelector('.cs-menu-submenu'), null);
+    assert.equal(document.body.querySelector('.comet-menu-submenu'), null);
   } finally {
     menu.dispose();
     document.body.replaceChildren();

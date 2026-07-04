@@ -1,53 +1,54 @@
-.split-view {
+.comet-split-view {
   position: relative;
   width: 100%;
   height: 100%;
 }
 
-.split-view > .split-view-container {
+.comet-split-view > .comet-split-view-container {
   position: absolute;
   inset: 0;
 }
 
-.split-view > .sash-container {
+.comet-split-view > .comet-sash-container {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.split-view > .sash-container > .sash {
+.comet-split-view > .comet-sash-container > .comet-sash {
   pointer-events: auto;
 }
 
-.split-view > .sash-container > .split-view-separator {
+.comet-split-view > .comet-sash-container > .comet-split-view-separator {
   position: absolute;
   pointer-events: none;
-  background: var(--vscode-splitViewSeparatorBorder, var(--vscode-sideBar-border, #e5e5e5));
+  background: var(--comet-separator-border);
   display: none;
   opacity: 0;
 }
 
-.split-view > .sash-container > .split-view-separator.visible {
+.comet-split-view > .comet-sash-container > .comet-split-view-separator.comet-visible {
+  display: block;
   opacity: 1;
 }
 
-.split-view > .split-view-container > .split-view-view {
+.comet-split-view > .comet-split-view-container > .comet-split-view-view {
   position: absolute;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.split-view > .split-view-container > .split-view-view:not(.visible) {
+.comet-split-view > .comet-split-view-container > .comet-split-view-view:not(.comet-visible) {
   display: none;
 }
 
-.split-view.vertical > .split-view-container > .split-view-view {
+.comet-split-view.comet-vertical > .comet-split-view-container > .comet-split-view-view {
   top: 0;
   height: 100%;
 }
 
-.split-view.horizontal > .split-view-container > .split-view-view {
+.comet-split-view.comet-horizontal > .comet-split-view-container > .comet-split-view-view {
   left: 0;
   width: 100%;
 }

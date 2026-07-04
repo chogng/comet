@@ -1,4 +1,4 @@
-.modal-backdrop {
+.comet-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 1600;
@@ -8,7 +8,7 @@
   padding: 20px;
 }
 
-.modal-panel {
+.comet-modal-panel {
   width: min(760px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
   border-radius: 12px;
@@ -20,7 +20,7 @@
   overflow: hidden;
 }
 
-.modal-header {
+.comet-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -30,7 +30,7 @@
   background: var(--vscode-modal-headerBackground, #f8fbff);
 }
 
-.modal-title {
+.comet-modal-title {
   margin: 0;
   font-size: 16px;
   line-height: 1.4;
@@ -38,35 +38,35 @@
   color: var(--vscode-modal-titleForeground, #1c2a38);
 }
 
-.modal-title-spacer {
+.comet-modal-title-spacer {
   min-height: 1px;
 }
 
-.modal-close-btn.btn-base.btn-mode-icon {
-  --btn-icon-size: 30px;
+.comet-modal-close-btn.comet-btn-base.comet-btn-mode-icon {
+  --comet-btn-icon-size: 30px;
   border-radius: 8px;
 }
 
-.modal-body {
+.comet-modal-body {
   padding: 14px;
   overflow: auto;
 }
 
 @media (max-width: 680px) {
-  .modal-backdrop {
+  .comet-modal-backdrop {
     padding: 10px;
   }
 
-  .modal-panel {
+  .comet-modal-panel {
     width: calc(100vw - 20px);
     max-height: calc(100vh - 20px);
   }
 
-  .modal-header {
+  .comet-modal-header {
     padding: 10px 12px;
   }
 
-  .modal-body {
+  .comet-modal-body {
     padding: 12px;
   }
 }

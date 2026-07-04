@@ -1,14 +1,14 @@
-.date-input {
+.comet-date-input {
   position: relative;
   display: inline-flex;
   min-width: 0;
 }
 
-.date-input-field > .ibwrapper > .input {
+.comet-date-input-field > .ibwrapper > .input {
   padding-right: 28px;
 }
 
-.date-input-button {
+.comet-date-input-button {
   position: absolute;
   top: 50%;
   right: 8px;
@@ -26,15 +26,15 @@
   cursor: pointer;
 }
 
-.date-input-button:hover {
+.comet-date-input-button:hover {
   background: var(--vscode-settings-controlHoverBackground, #e6e6e6);
 }
 
-.date-input-button .lx-icon {
+.comet-date-input-button .comet-lx-icon {
   font-size: 16px;
 }
 
-.date-input-popover {
+.comet-date-input-popover {
   width: 280px;
   padding: 12px;
   border: 1px solid var(--vscode-settings-separator, #d7e1ec);
@@ -48,21 +48,21 @@
   gap: 10px;
 }
 
-.date-input-header {
+.comet-date-input-header {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 6px;
 }
 
-.date-input-month-title {
+.comet-date-input-month-title {
   text-align: center;
   font-size: 13px;
   font-weight: 700;
   color: var(--vscode-settings-panelForeground, #203040);
 }
 
-.date-input-month-nav {
+.comet-date-input-month-nav {
   height: 28px;
   border: 0;
   border-radius: 6px;
@@ -75,19 +75,19 @@
   cursor: pointer;
 }
 
-.date-input-month-nav:hover {
+.comet-date-input-month-nav:hover {
   background: var(--vscode-settings-controlHoverBackground, #e6e6e6);
   color: var(--vscode-settings-panelForeground, #203040);
 }
 
-.date-input-weekdays,
-.date-input-grid {
+.comet-date-input-weekdays,
+.comet-date-input-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
 
-.date-input-weekday {
+.comet-date-input-weekday {
   text-align: center;
   font-size: 11px;
   font-weight: 700;
@@ -95,7 +95,7 @@
   padding: 3px 0;
 }
 
-.date-input-day {
+.comet-date-input-day {
   height: 32px;
   border: 0;
   border-radius: 8px;
@@ -110,40 +110,40 @@
   cursor: pointer;
 }
 
-.date-input-day:hover {
+.comet-date-input-day:hover {
   background: var(--vscode-settings-controlHoverBackground, #e6e6e6);
 }
 
-.date-input-day:focus-visible,
-.date-input-month-nav:focus-visible,
-.date-input-footer-button:focus-visible,
-.date-input-button:focus-visible {
+.comet-date-input-day:focus-visible,
+.comet-date-input-month-nav:focus-visible,
+.comet-date-input-footer-button:focus-visible,
+.comet-date-input-button:focus-visible {
   outline: 2px solid var(--vscode-focusBorder, #0a5fbf);
   outline-offset: 1px;
 }
 
-.date-input-day.is-outside {
+.comet-date-input-day.is-outside {
   color: var(--vscode-settings-mutedForeground, #94a3b8);
 }
 
-.date-input-day.is-today {
+.comet-date-input-day.is-today {
   font-weight: 700;
   color: var(--vscode-settings-linkForeground, #0a5fbf);
 }
 
-.date-input-day.is-selected {
+.comet-date-input-day.is-selected {
   background: var(--vscode-button-background, #0a5fbf);
   color: var(--vscode-button-foreground, #ffffff);
 }
 
-.date-input-footer {
+.comet-date-input-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding-top: 4px;
 }
 
-.date-input-footer-button {
+.comet-date-input-footer-button {
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -154,6 +154,6 @@
   cursor: pointer;
 }
 
-.date-input-footer-button:hover {
+.comet-date-input-footer-button:hover {
   background: var(--vscode-settings-controlHoverBackground, #e6e6e6);
 }

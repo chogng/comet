@@ -135,15 +135,15 @@ test('agent chat thread uses the shared scrollable transcript container', () => 
   document.body.append(element);
 
   try {
-    const threadWidget = element.querySelector('.agentbar-thread-widget');
+    const threadWidget = element.querySelector('.comet-agentbar-thread-widget');
     assert(threadWidget instanceof HTMLElement);
     const scrollableRoot = threadWidget.querySelector(
-      '.scrollable-element-root.agentbar-thread-scrollable',
+      '.scrollable-element-root.comet-agentbar-thread-scrollable',
     );
     assert(scrollableRoot instanceof HTMLElement);
-    const thread = scrollableRoot.querySelector('.agentbar-thread.scrollable-content');
+    const thread = scrollableRoot.querySelector('.comet-agentbar-thread.scrollable-content');
     assert(thread instanceof HTMLElement);
-    assert.equal(thread.querySelectorAll('.agentbar-message').length, 2);
+    assert.equal(thread.querySelectorAll('.comet-agentbar-message').length, 2);
   } finally {
     agentBar.dispose();
   }
@@ -170,7 +170,7 @@ test('agent chat thread follows new content only when scrolled to the bottom', (
   document.body.append(element);
 
   try {
-    const thread = element.querySelector('.agentbar-thread');
+    const thread = element.querySelector('.comet-agentbar-thread');
     assert(thread instanceof HTMLElement);
     Object.defineProperty(thread, 'clientHeight', {
       configurable: true,
@@ -204,7 +204,7 @@ test('agent chat thread follows new content only when scrolled to the bottom', (
 
     assert.equal(thread.scrollTop, 20);
     assert.equal(
-      element.querySelector('.agentbar-thread-widget')?.classList.contains('show-scroll-down'),
+      element.querySelector('.comet-agentbar-thread-widget')?.classList.contains('comet-show-scroll-down'),
       true,
     );
   } finally {
@@ -214,13 +214,13 @@ test('agent chat thread follows new content only when scrolled to the bottom', (
 
 function createHeaderActionsElement() {
   const host = document.createElement('div');
-  host.className = 'header-actions-host';
+  host.className = 'comet-header-actions-host';
   const actionbar = document.createElement('div');
-  actionbar.className = 'header-actions actionbar is-horizontal';
+  actionbar.className = 'comet-header-actions actionbar is-horizontal';
   const actions = document.createElement('div');
   actions.className = 'actionbar-actions-container';
   const button = document.createElement('button');
-  button.className = 'actionbar-action titlebar-primary-sidebar-toggle-btn';
+  button.className = 'actionbar-action comet-titlebar-primary-sidebar-toggle-btn';
   button.setAttribute('aria-label', 'Header action');
   actions.append(button);
   actionbar.append(actions);
@@ -232,7 +232,7 @@ test('agent bar header mounts the provided leading actions element', () => {
   let toggleCount = 0;
   const headerActionsElement = createHeaderActionsElement();
   headerActionsElement
-    .querySelector('.titlebar-primary-sidebar-toggle-btn')
+    .querySelector('.comet-titlebar-primary-sidebar-toggle-btn')
     ?.addEventListener('click', () => {
       toggleCount += 1;
   });
@@ -246,7 +246,7 @@ test('agent bar header mounts the provided leading actions element', () => {
 
   try {
     const toggleButton = element.querySelector(
-      '.agentbar-header .titlebar-primary-sidebar-toggle-btn',
+      '.comet-agentbar-header .comet-titlebar-primary-sidebar-toggle-btn',
     );
     assert(toggleButton instanceof HTMLButtonElement);
     assert.equal(toggleButton.getAttribute('aria-label'), 'Header action');
@@ -345,7 +345,7 @@ test('agent bar history action supports search and empty states', async () => {
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-history');
     assert.equal(historyButton.getAttribute('aria-expanded'), 'true');
-    const searchInput = menu.querySelector('.cs-menu-header .agentbar-history-search-input .input');
+    const searchInput = menu.querySelector('.cs-menu-header .comet-agentbar-history-search-input .input');
     assert(searchInput instanceof HTMLInputElement);
     assert.equal(menu.firstElementChild?.classList.contains('cs-menu-header'), true);
 
@@ -368,7 +368,7 @@ test('agent bar history action supports search and empty states', async () => {
     const reopenedMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu');
     assert(reopenedMenu instanceof HTMLElement);
     const reopenedSearchInput = reopenedMenu.querySelector(
-      '.cs-menu-header .agentbar-history-search-input .input',
+      '.cs-menu-header .comet-agentbar-history-search-input .input',
     );
     assert(reopenedSearchInput instanceof HTMLInputElement);
     reopenedSearchInput.value = 'not-found';
@@ -679,20 +679,20 @@ test('agent chat renders fetched article cards with PDF download action', async 
   document.body.append(element);
 
   try {
-    const card = element.querySelector('.agentbar-article-card');
+    const card = element.querySelector('.comet-agentbar-article-card');
     assert(card instanceof HTMLElement);
     assert.equal(
-      card.querySelector('.agentbar-article-title')?.textContent,
+      card.querySelector('.comet-agentbar-article-title')?.textContent,
       'Example article',
     );
 
-    const downloadButton = card.querySelector('.agentbar-article-download-btn');
+    const downloadButton = card.querySelector('.comet-agentbar-article-download-btn');
     assert(downloadButton instanceof HTMLButtonElement);
     downloadButton.click();
     await delay(0);
     assert.equal(downloadedSourceUrl, 'https://www.science.org/doi/example');
 
-    const title = card.querySelector('.agentbar-article-title');
+    const title = card.querySelector('.comet-agentbar-article-title');
     assert(title instanceof HTMLElement);
     title.click();
     assert.equal(openedSourceUrl, 'https://www.science.org/doi/example');

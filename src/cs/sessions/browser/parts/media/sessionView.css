@@ -1,5 +1,5 @@
-.sessions-part,
-.session-view {
+.comet-sessions-part,
+.comet-session-view {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -11,7 +11,7 @@
 	color: var(--vscode-workbench-foreground, #1a2530);
 }
 
-.session-header {
+.comet-session-header {
 	flex: 0 0 36px;
 	min-height: 36px;
 	display: flex;
@@ -23,11 +23,11 @@
 	user-select: none;
 }
 
-.session-header[hidden] {
+.comet-session-header[hidden] {
 	display: none;
 }
 
-.session-header-trailing {
+.comet-session-header-trailing {
 	display: inline-flex;
 	align-items: center;
 	min-width: 0;
@@ -35,8 +35,8 @@
 	-webkit-app-region: no-drag;
 }
 
-.session-view-content,
-.session-chat-view {
+.comet-session-view-content,
+.comet-session-chat-view {
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 0;
@@ -44,7 +44,7 @@
 	overflow: hidden;
 }
 
-.session-chat-view > .agentbar-content {
+.comet-session-chat-view > .comet-agentbar-content {
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 0;

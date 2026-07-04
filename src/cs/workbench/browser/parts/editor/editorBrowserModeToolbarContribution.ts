@@ -29,22 +29,22 @@ implements EditorModeToolbarContribution {
   private context: EditorModeToolbarContributionContext;
   private readonly element = createElement(
     'div',
-    'editor-mode-toolbar editor-browser-toolbar',
+    'comet-editor-mode-toolbar comet-editor-browser-toolbar',
   );
-  private readonly toolbarRow = createElement('div', 'editor-browser-toolbar-row');
-  private readonly leadingHost = createElement('div', 'editor-browser-toolbar-leading');
-  private readonly addressHost = createElement('div', 'editor-browser-toolbar-address-host');
-  private readonly trailingHost = createElement('div', 'editor-browser-toolbar-trailing');
+  private readonly toolbarRow = createElement('div', 'comet-editor-browser-toolbar-row');
+  private readonly leadingHost = createElement('div', 'comet-editor-browser-toolbar-leading');
+  private readonly addressHost = createElement('div', 'comet-editor-browser-toolbar-address-host');
+  private readonly trailingHost = createElement('div', 'comet-editor-browser-toolbar-trailing');
   private readonly leadingActionsView = createActionBarView({
-    className: 'editor-browser-toolbar-actions',
+    className: 'comet-editor-browser-toolbar-actions',
     ariaRole: 'group',
   });
   private readonly trailingActionsView = createActionBarView({
-    className: 'editor-browser-toolbar-actions',
+    className: 'comet-editor-browser-toolbar-actions',
     ariaRole: 'group',
   });
   private readonly addressInput = new InputBox(this.addressHost, undefined, {
-    className: 'editor-browser-toolbar-address-input',
+    className: 'comet-editor-browser-toolbar-address-input',
     value: '',
     placeholder: '',
   });
@@ -98,7 +98,7 @@ implements EditorModeToolbarContribution {
     this.bindLibraryPanelView();
     this.updateLeadingActions();
     this.trailingActionsView.setProps({
-      className: 'editor-browser-toolbar-actions',
+      className: 'comet-editor-browser-toolbar-actions',
       ariaRole: 'group',
       items: this.createTrailingItems(),
     });
@@ -123,7 +123,7 @@ implements EditorModeToolbarContribution {
 
   private updateLeadingActions() {
     this.leadingActionsView.setProps({
-      className: 'editor-browser-toolbar-actions',
+      className: 'comet-editor-browser-toolbar-actions',
       ariaRole: 'group',
       items: this.createLeadingItems(),
     });
@@ -214,7 +214,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarSources,
         title: this.context.labels.toolbarSources,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('list-unordered'),
         active: panel?.getIsOpen() ?? false,
         buttonAttributes: this.getLibraryButtonAttributes(),
@@ -224,7 +224,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarBack,
         title: this.context.labels.toolbarBack,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('arrow-left'),
         disabled: !this.context.browserUrl,
         onClick: this.context.onNavigateBack,
@@ -233,7 +233,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarForward,
         title: this.context.labels.toolbarForward,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('arrow-right'),
         disabled: false,
         onClick: this.context.onNavigateForward,
@@ -242,7 +242,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarRefresh,
         title: this.context.labels.toolbarRefresh,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('refresh'),
         disabled: !this.context.browserUrl,
         onClick: this.context.onNavigateRefresh,
@@ -251,7 +251,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarFavorite,
         title: this.context.labels.toolbarFavorite,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon(
           isCurrentUrlFavorited ? 'favorite-filled' : 'favorite',
         ),
@@ -270,7 +270,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarExportDocx,
         title: this.context.labels.toolbarExportDocx,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('docx'),
         disabled: !this.context.electronRuntime,
         onClick: () => {
@@ -281,7 +281,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarArchivePage,
         title: this.context.labels.toolbarArchivePage,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('download-2'),
         disabled: !this.context.browserUrl || !this.context.electronRuntime,
         onClick: () => {
@@ -292,7 +292,7 @@ implements EditorModeToolbarContribution {
         label: this.context.labels.toolbarMore,
         title: this.context.labels.toolbarMore,
         mode: 'icon',
-        buttonClassName: 'editor-browser-toolbar-btn',
+        buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('more'),
         overlayAlignment: 'end',
         menuData: EDITOR_BROWSER_TOOLBAR_MORE_MENU_DATA,

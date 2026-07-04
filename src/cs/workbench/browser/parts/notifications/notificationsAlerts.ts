@@ -14,7 +14,7 @@ export class NotificationsAlerts {
     private readonly container: HTMLElement,
     private readonly model: NotificationsModel,
   ) {
-    this.element.className = 'notifications-alerts';
+    this.element.className = 'comet-notifications-alerts';
     this.element.setAttribute('role', 'status');
     this.element.setAttribute('aria-live', 'polite');
     this.container.append(this.element);

@@ -166,20 +166,20 @@ function unlockBodyScroll() {
 
 export class ModalView extends Disposable {
   private props: ModalProps;
-  private readonly element = createElement('div', 'modal-backdrop');
-  private readonly panelElement = createElement('section', 'modal-panel');
-  private readonly headerElement = createElement('header', 'modal-header');
-  private readonly titleElement = createElement('h2', 'modal-title');
-  private readonly titleSpacerElement = createElement('span', 'modal-title-spacer');
+  private readonly element = createElement('div', 'comet-modal-backdrop');
+  private readonly panelElement = createElement('section', 'comet-modal-panel');
+  private readonly headerElement = createElement('header', 'comet-modal-header');
+  private readonly titleElement = createElement('h2', 'comet-modal-title');
+  private readonly titleSpacerElement = createElement('span', 'comet-modal-title-spacer');
   private readonly closeButton = createElement(
     'button',
-    'modal-close-btn btn-base btn-ghost btn-mode-icon btn-md',
+    'comet-modal-close-btn comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-md',
   ) as HTMLButtonElement;
   private readonly closeHover: HoverHandle;
-  private readonly bodyElement = createElement('div', 'modal-body');
+  private readonly bodyElement = createElement('div', 'comet-modal-body');
   private readonly openListeners = new MutableDisposable<DisposableLike>();
   private isAttached = false;
-  private readonly titleId = `modal-title-${Math.random().toString(36).slice(2, 10)}`;
+  private readonly titleId = `comet-modal-title-${Math.random().toString(36).slice(2, 10)}`;
   private disposed = false;
 
   constructor(props: ModalProps) {
@@ -286,8 +286,8 @@ export class ModalView extends Disposable {
       ariaLabel,
     } = this.props;
 
-    this.element.className = ['modal-backdrop', className].filter(Boolean).join(' ');
-    this.panelElement.className = ['modal-panel', panelClassName].filter(Boolean).join(' ');
+    this.element.className = ['comet-modal-backdrop', className].filter(Boolean).join(' ');
+    this.panelElement.className = ['comet-modal-panel', panelClassName].filter(Boolean).join(' ');
     this.panelElement.setAttribute('role', 'dialog');
     this.panelElement.setAttribute('aria-modal', 'true');
 

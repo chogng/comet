@@ -27,7 +27,7 @@ export class LibraryView {
 
   constructor(props: LibraryViewProps) {
     this.props = props;
-    this.element.className = 'library-tree';
+    this.element.className = 'comet-library-tree';
     this.viewer = new LibraryViewer({
       labels: props.labels,
       librarySnapshot: props.librarySnapshot,

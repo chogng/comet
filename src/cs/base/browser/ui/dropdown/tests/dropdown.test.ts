@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
+let restoreComputedStyle: (() => void) | null = null;
 let createDropdownView: typeof import('cs/base/browser/ui/dropdown/dropdown').createDropdownView;
 let createDomDropdownMenuPresenter: typeof import('cs/base/browser/ui/dropdown/dropdown').createDomDropdownMenuPresenter;
 let DropdownMenuActionViewItem: typeof import('cs/base/browser/ui/dropdown/dropdownActionViewItem').DropdownMenuActionViewItem;
@@ -32,9 +33,34 @@ function createDomRect({ x, y, width, height }: RectInit) {
   } as DOMRect;
 }
 
+function installStableComputedStyleZoom() {
+  const originalGetComputedStyle = window.getComputedStyle;
+  window.getComputedStyle = ((element: Element) => {
+    const style = originalGetComputedStyle.call(window, element);
+    if (style.zoom) {
+      return style;
+    }
+
+    return new Proxy(style, {
+      get(target, property, receiver) {
+        if (property === 'zoom') {
+          return '1';
+        }
+
+        return Reflect.get(target, property, receiver);
+      },
+    }) as CSSStyleDeclaration;
+  }) as typeof window.getComputedStyle;
+
+  return () => {
+    window.getComputedStyle = originalGetComputedStyle;
+  };
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
+  restoreComputedStyle = installStableComputedStyleZoom();
   ({
     createDropdownView,
     createDomDropdownMenuPresenter,
@@ -43,6 +69,8 @@ before(async () => {
 });
 
 after(() => {
+  restoreComputedStyle?.();
+  restoreComputedStyle = null;
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
 });
@@ -64,7 +92,7 @@ test('dropdown portal menu renders in document.body and follows the trigger rect
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
     configurable: true,
     get() {
-      if (this.classList.contains('dropdown-menu')) {
+      if (this.classList.contains('comet-dropdown-menu')) {
         const minWidth = Number.parseInt(
           (this as HTMLElement).style.minWidth || '0',
           10,
@@ -77,7 +105,7 @@ test('dropdown portal menu renders in document.body and follows the trigger rect
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
     configurable: true,
     get() {
-      if (this.classList.contains('dropdown-menu')) {
+      if (this.classList.contains('comet-dropdown-menu')) {
         return 84;
       }
       return 0;
@@ -101,9 +129,9 @@ test('dropdown portal menu renders in document.body and follows the trigger rect
 
     dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const contextView = document.body.querySelector('.cs-context-view');
-    const contextViewContent = document.body.querySelector('.cs-context-view-content');
-    const menu = document.body.querySelector('.dropdown-menu-portal');
+    const contextView = document.body.querySelector('.comet-context-view');
+    const contextViewContent = document.body.querySelector('.comet-context-view-content');
+    const menu = document.body.querySelector('.comet-dropdown-menu-portal');
     assert(contextView instanceof HTMLElement);
     assert(contextViewContent instanceof HTMLElement);
     assert(menu instanceof HTMLElement);
@@ -112,7 +140,7 @@ test('dropdown portal menu renders in document.body and follows the trigger rect
     assert.equal(contextView.style.top, '156px');
     assert.equal(contextViewContent.style.minWidth, '96px');
     assert.equal(menu.style.minWidth, '100%');
-    assert.equal(menu.classList.contains('dropdown-menu-bottom'), true);
+    assert.equal(menu.classList.contains('comet-dropdown-menu-bottom'), true);
 
     menuPresenter.dispose();
     dropdownView.dispose();
@@ -145,12 +173,12 @@ test('dropdown renders option icons in both trigger field and portal menu items'
   document.body.append(dropdown);
 
   try {
-    const triggerIcon = dropdown.querySelector('.dropdown-field .dropdown-option-icon');
+    const triggerIcon = dropdown.querySelector('.comet-dropdown-field .comet-dropdown-option-icon');
     assert(triggerIcon instanceof HTMLElement);
 
     dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const menuIcon = document.body.querySelector('.dropdown-menu-portal .dropdown-option-icon');
+    const menuIcon = document.body.querySelector('.comet-dropdown-menu-portal .comet-dropdown-option-icon');
     assert(menuIcon instanceof HTMLElement);
   } finally {
     dropdownView.dispose();
@@ -175,7 +203,7 @@ test('dropdown portal menu can opt out of matching the trigger width', () => {
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
     configurable: true,
     get() {
-      if (this.classList.contains('dropdown-menu')) {
+      if (this.classList.contains('comet-dropdown-menu')) {
         return 180;
       }
       return 0;
@@ -184,7 +212,7 @@ test('dropdown portal menu can opt out of matching the trigger width', () => {
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
     configurable: true,
     get() {
-      if (this.classList.contains('dropdown-menu')) {
+      if (this.classList.contains('comet-dropdown-menu')) {
         return 84;
       }
       return 0;
@@ -209,8 +237,8 @@ test('dropdown portal menu can opt out of matching the trigger width', () => {
 
     dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const contextViewContent = document.body.querySelector('.cs-context-view-content');
-    const menu = document.body.querySelector('.dropdown-menu-portal');
+    const contextViewContent = document.body.querySelector('.comet-context-view-content');
+    const menu = document.body.querySelector('.comet-dropdown-menu-portal');
     assert(contextViewContent instanceof HTMLElement);
     assert(menu instanceof HTMLElement);
     assert.equal(contextViewContent.style.minWidth, '0px');
@@ -280,7 +308,7 @@ test('dropdown delegates menu lifecycle to an injected presenter without renderi
   try {
     dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    assert.equal(document.body.querySelector('.dropdown-menu'), null);
+    assert.equal(document.body.querySelector('.comet-dropdown-menu'), null);
     assert.equal(requests.length, 1);
     assert.equal(requests[0]?.source, 'open');
     assert.deepEqual(requests[0]?.triggerRect, {
@@ -325,12 +353,12 @@ test('dropdown portal menu closes when focus moves to another control', async ()
   try {
     dropdown.focus();
     dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    assert(document.body.querySelector('.dropdown-menu-portal') instanceof HTMLElement);
+    assert(document.body.querySelector('.comet-dropdown-menu-portal') instanceof HTMLElement);
 
     otherButton.focus();
     await delay(0);
 
-    assert.equal(document.body.querySelector('.dropdown-menu-portal'), null);
+    assert.equal(document.body.querySelector('.comet-dropdown-menu-portal'), null);
     assert.equal(dropdown.getAttribute('aria-expanded'), 'false');
   } finally {
     menuPresenter.dispose();
@@ -363,7 +391,7 @@ test('dropdown exposes basic aria metadata and keyboard selection for DOM menus'
     dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
     assert.equal(dropdown.contains(menu), false);
     assert.equal(dropdown.getAttribute('aria-expanded'), 'true');
@@ -373,7 +401,7 @@ test('dropdown exposes basic aria metadata and keyboard selection for DOM menus'
     dropdown.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
     assert.deepEqual(selections, ['science']);
-    assert.equal(document.body.querySelector('.dropdown-menu'), null);
+    assert.equal(document.body.querySelector('.comet-dropdown-menu'), null);
   } finally {
     dropdownView.dispose();
     document.body.replaceChildren();
@@ -406,10 +434,10 @@ test('dropdown menu actions fall back to run when onClick is omitted', async () 
     button.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
 
-    const archiveItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const archiveItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Archive'),
     );
     assert(archiveItem instanceof HTMLElement);

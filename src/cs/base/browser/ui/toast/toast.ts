@@ -195,13 +195,13 @@ export const toast = {
 function renderToastItem(item: ToastItem, closeLabel: string) {
   const toastElement = createElement(
     'div',
-    `toast-item toast-${item.type}${item.isExiting ? ' exit' : ''}`,
+    `comet-toast-item comet-toast-${item.type}${item.isExiting ? ' exit' : ''}`,
   );
-  const icon = createElement('div', 'toast-icon', getToastIconText(item.type || 'info'));
-  const content = createElement('div', 'toast-content', item.message);
+  const icon = createElement('div', 'comet-toast-icon', getToastIconText(item.type || 'info'));
+  const content = createElement('div', 'comet-toast-content', item.message);
   const closeButton = createElement(
     'button',
-    'toast-close btn-base btn-ghost btn-mode-icon btn-sm',
+    'comet-toast-close comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-sm',
     'x',
   );
   closeButton.type = 'button';
@@ -214,7 +214,7 @@ function renderToastItem(item: ToastItem, closeLabel: string) {
 }
 
 export class ToastContainerView extends Disposable {
-  private readonly element = createElement('div', 'toast-container');
+  private readonly element = createElement('div', 'comet-toast-container');
   private readonly renderDisposables = new DisposableStore();
   private closeLabel: string;
   private disposed = false;

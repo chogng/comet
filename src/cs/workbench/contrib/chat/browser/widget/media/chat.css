@@ -1,4 +1,4 @@
-.agentbar-error {
+.comet-agentbar-error {
   margin: 0;
   padding: 8px 10px;
   border-radius: 10px;
@@ -9,7 +9,7 @@
   line-height: 1.45;
 }
 
-.agentbar-shell {
+.comet-agentbar-shell {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -19,39 +19,39 @@
   overflow: hidden;
 }
 
-.agentbar-shell.is-empty-state {
+.comet-agentbar-shell.comet-is-empty-state {
   justify-content: center;
   align-items: center;
 }
 
-.agentbar-thread-widget {
+.comet-agentbar-thread-widget {
   flex: 1;
   min-height: 0;
   position: relative;
   width: 100%;
 }
 
-.agentbar-thread-widget.is-empty {
+.comet-agentbar-thread-widget.comet-is-empty {
   display: none;
 }
 
-.agentbar-thread-widget > .agentbar-thread-scrollable {
+.comet-agentbar-thread-widget > .comet-agentbar-thread-scrollable {
   width: 100%;
   height: 100%;
 }
 
-.agentbar-thread {
+.comet-agentbar-thread {
   display: grid;
   align-content: start;
   gap: 10px;
   padding-right: 2px;
 }
 
-.agentbar-thread.is-empty {
+.comet-agentbar-thread.comet-is-empty {
   display: none;
 }
 
-.agentbar-thread-scroll-down {
+.comet-agentbar-thread-scroll-down {
   display: none;
   position: absolute;
   right: 10px;
@@ -69,28 +69,28 @@
   box-shadow: 0 4px 12px rgba(31, 45, 58, 0.14);
 }
 
-.agentbar-thread-scroll-down .lx-icon {
+.comet-agentbar-thread-scroll-down .comet-lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.agentbar-thread-widget.show-scroll-down .agentbar-thread-scroll-down {
+.comet-agentbar-thread-widget.comet-show-scroll-down .comet-agentbar-thread-scroll-down {
   display: inline-flex;
 }
 
-.agentbar-thread-scroll-down:hover {
+.comet-agentbar-thread-scroll-down:hover {
   background: #f3f7fb;
 }
 
-.agentbar-thread-empty {
+.comet-agentbar-thread-empty {
   margin: 0;
   color: #66798f;
   font-size: 12px;
   line-height: 1.5;
 }
 
-.agentbar-message {
+.comet-agentbar-message {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
@@ -99,7 +99,7 @@
   border: 1px solid #e2e9f1;
 }
 
-.agentbar-avatar {
+.comet-agentbar-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -109,23 +109,23 @@
   flex-shrink: 0;
 }
 
-.agentbar-avatar-user {
+.comet-agentbar-avatar-user {
   background: #d9eaff;
   color: #0a5fbf;
 }
 
-.agentbar-avatar-assistant {
+.comet-agentbar-avatar-assistant {
   background: #eaf6ef;
   color: #1f6a3a;
 }
 
-.agentbar-message-body {
+.comet-agentbar-message-body {
   min-width: 0;
   display: grid;
   gap: 8px;
 }
 
-.agentbar-message-text {
+.comet-agentbar-message-text {
   margin: 0;
   color: #203040;
   font-size: 13px;
@@ -133,19 +133,19 @@
   white-space: pre-wrap;
 }
 
-.agentbar-message-user {
+.comet-agentbar-message-user {
   background: #f7fafc;
   justify-self: end;
   max-width: min(82%, 520px);
 }
 
-.agentbar-message-assistant {
+.comet-agentbar-message-assistant {
   background: #ffffff;
   justify-self: start;
   width: 100%;
 }
 
-.chat-composer-host {
+.comet-chat-composer-host {
   position: relative;
   width: 100%;
   margin-top: auto;
@@ -153,12 +153,12 @@
   gap: 8px;
 }
 
-.chat-composer-host.is-empty-state {
+.comet-chat-composer-host.comet-is-empty-state {
   margin-top: 0;
   width: min(100%, 840px);
 }
 
-.chat-composer {
+.comet-chat-composer {
   position: relative;
   width: 100%;
   padding: 0;
@@ -169,7 +169,7 @@
   overflow: hidden;
 }
 
-.chat-composer-input {
+.comet-chat-composer-input {
   width: 100%;
   min-height: 56px;
   resize: none;
@@ -183,7 +183,7 @@
   line-height: 1.45;
 }
 
-.chat-composer-toolbar {
+.comet-chat-composer-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -193,11 +193,11 @@
   background: var(--vscode-chatInput-composerToolbarBackground, #FCFCFC);
 }
 
-.chat-model-switch {
+.comet-chat-model-switch {
   flex: 0 0 auto;
 }
 
-.chat-model-switch .actionbar-action.chat-model-switch-btn {
+.comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn {
   min-height: 26px;
   min-width: 88px;
   padding: 0 8px;
@@ -207,23 +207,23 @@
   color: #304357;
 }
 
-.chat-model-switch .actionbar-action.chat-model-switch-btn .actionbar-content {
+.comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn .comet-actionbar-content {
   line-height: normal;
 }
 
-.chat-model-switch .actionbar-action.chat-model-switch-btn .lx-icon {
+.comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn .comet-lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.chat-model-switch .actionbar-action.chat-model-switch-btn:hover:not(:disabled),
-.chat-model-switch .actionbar-action.chat-model-switch-btn[aria-expanded='true'] {
+.comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn:hover:not(:disabled),
+.comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn[aria-expanded='true'] {
   background: #f3f7fb;
   border-color: #dde7f0;
 }
 
-.chat-model-switch-trigger {
+.comet-chat-model-switch-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -231,12 +231,12 @@
   width: 100%;
 }
 
-.chat-model-switch-icon,
-.chat-model-switch-chevron {
+.comet-chat-model-switch-icon,
+.comet-chat-model-switch-chevron {
   flex-shrink: 0;
 }
 
-.chat-model-switch-label {
+.comet-chat-model-switch-label {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 180px;
@@ -248,63 +248,63 @@
   text-align: left;
 }
 
-.chat-model-switch-chevron {
+.comet-chat-model-switch-chevron {
   opacity: 0.7;
 }
 
-.actionbar-context-view.chat-model-menu .cs-context-view-content,
-.actionbar-context-view.chat-model-menu .cs-menu {
+.actionbar-context-view.comet-chat-model-menu .comet-context-view-content,
+.actionbar-context-view.comet-chat-model-menu .comet-menu {
   width: 236px;
   min-width: 236px;
   max-width: 236px;
 }
 
-.chat-composer-actions.actionbar {
+.comet-chat-composer-actions.comet-actionbar {
   flex: 0 0 auto;
   margin-left: auto;
 }
 
-.chat-composer-actions .actionbar-action {
+.comet-chat-composer-actions .comet-actionbar-action {
   min-height: 28px;
 }
 
-.chat-composer-actions .actionbar-action.is-icon {
+.comet-chat-composer-actions .comet-actionbar-action.is-icon {
   width: 28px;
   height: 28px;
 }
 
-.chat-composer-actions .actionbar-action .lx-icon {
+.comet-chat-composer-actions .comet-actionbar-action .comet-lx-icon {
   width: 18px;
   height: 18px;
   font-size: 18px;
 }
 
-.chat-composer-send-action.actionbar-action {
+.comet-chat-composer-send-action.comet-actionbar-action {
   width: 28px;
   height: 28px;
 }
 
-.chat-composer-send-action.actionbar-action .lx-icon {
+.comet-chat-composer-send-action.comet-actionbar-action .comet-lx-icon {
   width: 22px;
   height: 22px;
   font-size: 22px;
 }
 
-.chat-composer-send-action.actionbar-action:hover:not(:disabled) {
+.comet-chat-composer-send-action.comet-actionbar-action:hover:not(:disabled) {
   background: transparent;
 }
 
-.chat-composer-input:focus {
+.comet-chat-composer-input:focus {
   outline: none;
   box-shadow: none;
 }
 
-.chat-composer-quick-actions-shell {
+.comet-chat-composer-quick-actions-shell {
   position: relative;
   width: 100%;
 }
 
-.chat-composer-quick-actions {
+.comet-chat-composer-quick-actions {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -312,7 +312,7 @@
   gap: 8px;
 }
 
-.chat-composer-quick-action.btn-base {
+.comet-chat-composer-quick-action.comet-btn-base {
   min-height: 32px;
   gap: 6px;
   border-radius: 8px;
@@ -321,13 +321,13 @@
   box-shadow: 0 1px 4px rgba(24, 36, 48, 0.1);
 }
 
-.chat-composer-quick-action.btn-base .lx-icon {
+.comet-chat-composer-quick-action.comet-btn-base .comet-lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.chat-composer-article-menu {
+.comet-chat-composer-article-menu {
   position: absolute;
   top: calc(100% + 8px);
   left: 50%;
@@ -344,14 +344,14 @@
   box-shadow: 0 12px 32px rgba(25, 35, 45, 0.16);
 }
 
-.chat-composer-article-menu-header {
+.comet-chat-composer-article-menu-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.chat-composer-article-menu-title {
+.comet-chat-composer-article-menu-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -361,24 +361,24 @@
   line-height: 1.3;
 }
 
-.chat-composer-article-menu-title .lx-icon {
+.comet-chat-composer-article-menu-title .comet-lx-icon {
   width: 14px;
   height: 14px;
   font-size: 14px;
 }
 
-.chat-composer-article-menu-close.btn-base.btn-mode-icon {
+.comet-chat-composer-article-menu-close.comet-btn-base.comet-btn-mode-icon {
   width: 28px;
   height: 28px;
 }
 
-.chat-composer-article-source-list {
+.comet-chat-composer-article-source-list {
   display: grid;
   max-height: 280px;
   overflow: auto;
 }
 
-.chat-composer-article-source {
+.comet-chat-composer-article-source {
   width: 100%;
   min-height: 38px;
   padding: 0 10px;
@@ -396,22 +396,22 @@
   cursor: pointer;
 }
 
-.chat-composer-article-source:first-child {
+.comet-chat-composer-article-source:first-child {
   border-top: 0;
 }
 
-.chat-composer-article-source:hover:not(:disabled),
-.chat-composer-article-source:focus-visible {
+.comet-chat-composer-article-source:hover:not(:disabled),
+.comet-chat-composer-article-source:focus-visible {
   background: #f6f8fa;
   outline: none;
 }
 
-.chat-composer-article-source:disabled {
+.comet-chat-composer-article-source:disabled {
   color: #9aa7b4;
   cursor: default;
 }
 
-.agentbar-result {
+.comet-agentbar-result {
   display: grid;
   gap: 10px;
   padding: 10px 12px;
@@ -420,13 +420,13 @@
   background: #ffffff;
 }
 
-.agentbar-message-article {
+.comet-agentbar-message-article {
   background: #ffffff;
   justify-self: start;
   width: min(100%, 560px);
 }
 
-.agentbar-article-card {
+.comet-agentbar-article-card {
   display: grid;
   gap: 8px;
   padding: 10px 12px;
@@ -435,14 +435,14 @@
   background: #f8fbfe;
 }
 
-.agentbar-article-card-header {
+.comet-agentbar-article-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.agentbar-article-source {
+.comet-agentbar-article-source {
   min-width: 0;
   color: #5e7186;
   font-size: 12px;
@@ -452,20 +452,20 @@
   white-space: nowrap;
 }
 
-.agentbar-article-download-btn.btn-base {
+.comet-agentbar-article-download-btn.comet-btn-base {
   flex: 0 0 auto;
   min-height: 28px;
   gap: 6px;
   border-radius: 8px;
 }
 
-.agentbar-article-download-btn.btn-base .lx-icon {
+.comet-agentbar-article-download-btn.comet-btn-base .comet-lx-icon {
   width: 15px;
   height: 15px;
   font-size: 15px;
 }
 
-.agentbar-article-title {
+.comet-agentbar-article-title {
   margin: 0;
   color: #203040;
   font-size: 13px;
@@ -473,37 +473,37 @@
   cursor: pointer;
 }
 
-.agentbar-article-title:hover {
+.comet-agentbar-article-title:hover {
   text-decoration: underline;
 }
 
-.agentbar-article-meta {
+.comet-agentbar-article-meta {
   margin: 0;
   color: #5e7186;
   font-size: 12px;
   line-height: 1.35;
 }
 
-.agentbar-result-header {
+.comet-agentbar-result-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.agentbar-answer {
+.comet-agentbar-answer {
   color: #203040;
   font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
 }
 
-.agentbar-evidence {
+.comet-agentbar-evidence {
   display: grid;
   gap: 8px;
 }
 
-.agentbar-patch-card {
+.comet-agentbar-patch-card {
   display: grid;
   gap: 8px;
   padding: 10px 12px;
@@ -512,45 +512,45 @@
   border: 1px solid #dfe8f1;
 }
 
-.agentbar-patch-header {
+.comet-agentbar-patch-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.agentbar-patch-label {
+.comet-agentbar-patch-label {
   color: #203040;
   font-size: 12px;
 }
 
-.agentbar-patch-summary,
-.agentbar-patch-error {
+.comet-agentbar-patch-summary,
+.comet-agentbar-patch-error {
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
 }
 
-.agentbar-patch-summary {
+.comet-agentbar-patch-summary {
   color: #5e7186;
 }
 
-.agentbar-patch-error {
+.comet-agentbar-patch-error {
   color: #a12424;
 }
 
-.agentbar-patch-footer {
+.comet-agentbar-patch-footer {
   display: flex;
   align-items: center;
   justify-content: flex-start;
 }
 
-.agentbar-patch-btn.btn-base {
+.comet-agentbar-patch-btn.comet-btn-base {
   min-height: 28px;
   border-radius: 8px;
 }
 
-.agentbar-evidence-list {
+.comet-agentbar-evidence-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -558,7 +558,7 @@
   gap: 8px;
 }
 
-.agentbar-evidence-item {
+.comet-agentbar-evidence-item {
   display: grid;
   gap: 4px;
   padding: 10px 12px;
@@ -567,20 +567,20 @@
   border: 1px solid #dfe8f1;
 }
 
-.agentbar-evidence-title {
+.comet-agentbar-evidence-title {
   color: #203040;
   font-size: 12px;
 }
 
-.agentbar-evidence-meta,
-.agentbar-evidence-text {
+.comet-agentbar-evidence-meta,
+.comet-agentbar-evidence-text {
   margin: 0;
   color: #5e7186;
   font-size: 12px;
   line-height: 1.45;
 }
 
-.agentbar-mode-pill {
+.comet-agentbar-mode-pill {
   padding: 4px 8px;
   border-radius: 999px;
   font-size: 11px;
@@ -589,13 +589,13 @@
   white-space: nowrap;
 }
 
-.agentbar-mode-pill.is-enabled {
+.comet-agentbar-mode-pill.comet-is-enabled {
   background: #eaf6ef;
   color: #1f6a3a;
   border: 1px solid #b5dfc2;
 }
 
-.agentbar-mode-pill.is-disabled {
+.comet-agentbar-mode-pill.comet-is-disabled {
   background: #f4f6f9;
   color: #66798f;
   border: 1px solid #dbe3ea;

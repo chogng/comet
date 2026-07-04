@@ -6,7 +6,7 @@
   background: var(--vscode-editor-panelBackground, #f8f8f8);
 }
 
-.editor-frame {
+.comet-editor-frame {
   --editor-header-height: 36px;
   --editor-toolbar-height: 36px;
   min-height: 0;
@@ -17,15 +17,15 @@
   isolation: isolate;
 }
 
-.editor-frame.has-external-header {
+.comet-editor-frame.comet-has-external-header {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.editor-workspace-action-btn.btn-base {
+.comet-editor-workspace-action-btn.btn-base {
   border-radius: 999px;
 }
 
-.editor-header {
+.comet-editor-header {
   position: relative;
   z-index: 2;
   display: flex;
@@ -41,18 +41,18 @@
   -webkit-app-region: drag;
 }
 
-.editor-header.has-leading-window-controls-inset {
+.comet-editor-header.comet-has-leading-window-controls-inset {
   padding-left: calc(8px + var(--editor-header-leading-window-controls-width, 0px));
 }
 
-.editor-header-tabs {
+.comet-editor-header-tabs {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
 }
 
-.editor-header-actions {
+.comet-editor-header-actions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -60,15 +60,15 @@
   -webkit-app-region: no-drag;
 }
 
-.editor-header-actions .header-actions {
+.comet-editor-header-actions .comet-header-actions {
   margin-left: 0;
 }
 
-.editor-header-actions .header-actions-host {
+.comet-editor-header-actions .comet-header-actions-host {
   padding-inline-start: 0;
 }
 
-.editor-toolbar {
+.comet-editor-toolbar {
   --editor-toolbar-horizontal-padding: 6px;
   display: flex;
   align-items: center;
@@ -80,24 +80,24 @@
   border-bottom: 1px solid var(--vscode-editor-sourceHeaderBorder, #e1e1e1);
 }
 
-.editor-toolbar[hidden] {
+.comet-editor-toolbar[hidden] {
   display: none;
 }
 
 /* Explicit slot placement keeps the content pane in the 1fr track even when the toolbar is hidden. */
-.editor-frame > [data-editor-frame-slot='header'] {
+.comet-editor-frame > [data-editor-frame-slot='header'] {
   grid-row: 1;
 }
 
-.editor-frame > [data-editor-frame-slot='toolbar'] {
+.comet-editor-frame > [data-editor-frame-slot='toolbar'] {
   grid-row: 2;
 }
 
-.editor-frame.has-external-header > [data-editor-frame-slot='toolbar'] {
+.comet-editor-frame.comet-has-external-header > [data-editor-frame-slot='toolbar'] {
   grid-row: 1;
 }
 
-.editor-content {
+.comet-editor-content {
   position: relative;
   z-index: 0;
   min-height: 0;
@@ -107,40 +107,40 @@
   gap: 0;
 }
 
-.editor-frame > [data-editor-frame-slot='content'] {
+.comet-editor-frame > [data-editor-frame-slot='content'] {
   grid-row: 3;
 }
 
-.editor-frame.has-external-header > [data-editor-frame-slot='content'] {
+.comet-editor-frame.comet-has-external-header > [data-editor-frame-slot='content'] {
   grid-row: 2;
 }
 
-.editor-draft-pane,
-.editor-source-pane,
-.editor-pdf-pane {
+.comet-editor-draft-pane,
+.comet-editor-source-pane,
+.comet-editor-pdf-pane {
   min-height: 0;
   height: 100%;
 }
 
-.editor-draft-pane {
+.comet-editor-draft-pane {
   display: flex;
   flex-direction: column;
   -webkit-app-region: no-drag;
 }
 
-.editor-source-pane {
+.comet-editor-source-pane {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
-.editor-pdf-pane {
+.comet-editor-pdf-pane {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
-.editor-source-header {
+.comet-editor-source-header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -150,13 +150,13 @@
   color: var(--vscode-editor-sourceHeaderForeground, #203040);
 }
 
-.editor-source-heading {
+.comet-editor-source-heading {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.editor-source-subheading {
+.comet-editor-source-subheading {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -164,32 +164,32 @@
   font-size: 12px;
 }
 
-.editor-source-body {
+.comet-editor-source-body {
   display: flex;
   min-height: 0;
   overflow: hidden;
 }
 
-.editor-pdf-body {
+.comet-editor-pdf-body {
   display: flex;
   min-height: 0;
   overflow: hidden;
   background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
-.editor-pdf-body > .pdf-document-reader {
+.comet-editor-pdf-body > .pdf-document-reader {
   flex: 1;
   min-width: 0;
 }
 
-.editor-source-body > .browser-frame-container {
+.comet-editor-source-body > .comet-browser-frame-container {
   flex: 1;
   min-height: 0;
   height: 100%;
   border-radius: 0;
 }
 
-.editor-mode-pill {
+.comet-editor-mode-pill {
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
@@ -199,19 +199,19 @@
   line-height: 1.2;
 }
 
-.editor-mode-pill.is-enabled {
+.comet-editor-mode-pill.is-enabled {
   color: var(--vscode-editor-modeEnabledForeground, #1f6a3a);
   border: 1px solid var(--vscode-editor-modeEnabledBorder, #b5dfc2);
   background: var(--vscode-editor-modeEnabledBackground, #eaf6ef);
 }
 
-.editor-mode-pill.is-disabled {
+.comet-editor-mode-pill.is-disabled {
   color: var(--vscode-editor-modeDisabledForeground, #6b7c8d);
   border: 1px solid var(--vscode-editor-modeDisabledBorder, #d9e3ec);
   background: var(--vscode-editor-modeDisabledBackground, #f4f7fa);
 }
 
-.editor-draft-pane > .pm-editor-surface {
+.comet-editor-draft-pane > .pm-editor-surface {
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
@@ -222,21 +222,21 @@
   box-shadow: inset 0 1px 0 var(--vscode-editor-draftInsetShadow, rgba(255, 255, 255, 0.85));
 }
 
-.editor-placeholder,
-.editor-empty-workspace {
+.comet-editor-placeholder,
+.comet-editor-empty-workspace {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   height: 100%;
 }
 
-.editor-placeholder-scrollable {
+.comet-editor-placeholder-scrollable {
   min-height: 0;
   height: 100%;
 }
 
-.editor-placeholder-scroll-content,
-.editor-empty-workspace .editor-placeholder-scroll-content {
+.comet-editor-placeholder-scroll-content,
+.comet-editor-empty-workspace .comet-editor-placeholder-scroll-content {
   display: grid;
   align-content: center;
   justify-items: center;
@@ -246,30 +246,30 @@
   text-align: center;
 }
 
-.editor-placeholder-title,
-.editor-placeholder-body,
-.editor-empty-workspace-title,
-.editor-empty-workspace-body {
+.comet-editor-placeholder-title,
+.comet-editor-placeholder-body,
+.comet-editor-empty-workspace-title,
+.comet-editor-empty-workspace-body {
   margin: 0;
 }
 
-.editor-placeholder-title,
-.editor-empty-workspace-title {
+.comet-editor-placeholder-title,
+.comet-editor-empty-workspace-title {
   color: var(--vscode-editor-placeholderTitleForeground, #1d3145);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
 }
 
-.editor-placeholder-body,
-.editor-empty-workspace-body {
+.comet-editor-placeholder-body,
+.comet-editor-empty-workspace-body {
   max-width: 420px;
   color: var(--vscode-editor-placeholderBodyForeground, #597086);
   font-size: 12px;
   line-height: 1.6;
 }
 
-.editor-placeholder-actions {
+.comet-editor-placeholder-actions {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -277,7 +277,7 @@
   flex-wrap: wrap;
 }
 
-.editor-statusbar {
+.comet-editor-statusbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -287,7 +287,7 @@
   padding: 0;
 }
 
-.editor-statusbar-group {
+.comet-editor-statusbar-group {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -295,16 +295,16 @@
   flex-wrap: wrap;
 }
 
-.editor-statusbar-group.is-primary {
+.comet-editor-statusbar-group.is-primary {
   flex: 1 1 auto;
 }
 
-.editor-statusbar-group.is-secondary {
+.comet-editor-statusbar-group.is-secondary {
   flex: 0 1 auto;
   justify-content: flex-end;
 }
 
-.editor-statusbar-mode-pill {
+.comet-editor-statusbar-mode-pill {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
@@ -317,7 +317,7 @@
   line-height: 1.2;
 }
 
-.editor-statusbar-summary {
+.comet-editor-statusbar-summary {
   min-width: 0;
   max-width: 260px;
   overflow: hidden;
@@ -328,7 +328,7 @@
   line-height: 1.3;
 }
 
-.editor-statusbar-item {
+.comet-editor-statusbar-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -339,32 +339,32 @@
   background: var(--vscode-editor-statusItemBackground, rgba(255, 255, 255, 0.7));
 }
 
-.editor-statusbar-item.is-accent {
+.comet-editor-statusbar-item.is-accent {
   border-color: var(--vscode-editor-statusItemAccentBorder, rgba(179, 220, 197, 0.95));
   background: var(--vscode-editor-statusItemAccentBackground, rgba(232, 247, 238, 0.92));
 }
 
-.editor-statusbar-item.is-muted {
+.comet-editor-statusbar-item.is-muted {
   opacity: 0.7;
 }
 
-.editor-statusbar-item.is-error {
+.comet-editor-statusbar-item.is-error {
   border-color: var(--vscode-sideBar-statusErrorForeground, #a53333);
   background: var(--vscode-sideBar-statusErrorBackground, #fdecec);
 }
 
-.editor-statusbar-item.is-error .editor-statusbar-item-label,
-.editor-statusbar-item.is-error .editor-statusbar-item-value {
+.comet-editor-statusbar-item.is-error .comet-editor-statusbar-item-label,
+.comet-editor-statusbar-item.is-error .comet-editor-statusbar-item-value {
   color: var(--vscode-sideBar-statusErrorForeground, #a53333);
 }
 
-.editor-statusbar-item-label {
+.comet-editor-statusbar-item-label {
   color: var(--vscode-editor-statusItemLabelForeground, #607488);
   font-size: 11px;
   line-height: 1.2;
 }
 
-.editor-statusbar-item-value {
+.comet-editor-statusbar-item-value {
   min-width: 0;
   max-width: 240px;
   overflow: hidden;
@@ -377,21 +377,21 @@
 }
 
 @media (max-width: 760px) {
-  .editor-draft-pane {
+  .comet-editor-draft-pane {
     padding-left: 10px;
     padding-right: 10px;
   }
 
-  .editor-statusbar {
+  .comet-editor-statusbar {
     align-items: flex-start;
   }
 
-  .editor-statusbar-group.is-secondary {
+  .comet-editor-statusbar-group.is-secondary {
     justify-content: flex-start;
   }
 
-  .editor-statusbar-summary,
-  .editor-statusbar-item-value {
+  .comet-editor-statusbar-summary,
+  .comet-editor-statusbar-item-value {
     max-width: 180px;
   }
 }

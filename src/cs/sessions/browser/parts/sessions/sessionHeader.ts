@@ -17,8 +17,8 @@ export type SessionHeaderViewProps = {
 
 export class SessionHeaderView {
 	private props: SessionHeaderViewProps;
-	private readonly element = createElement('header', 'session-header');
-	private readonly trailingElement = createElement('div', 'session-header-trailing');
+	private readonly element = createElement('header', 'comet-session-header');
+	private readonly trailingElement = createElement('div', 'comet-session-header-trailing');
 	private disposed = false;
 
 	constructor(props: SessionHeaderViewProps) {

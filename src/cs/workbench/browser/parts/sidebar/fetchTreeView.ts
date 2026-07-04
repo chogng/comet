@@ -207,7 +207,7 @@ export class FetchTreeView extends Disposable {
       return this.renderArticleRow(node, context);
     }
 
-    return createElement('div', 'fetch-tree-row');
+    return createElement('div', 'comet-fetch-tree-row');
   }
 
   private renderFolderRow(
@@ -216,13 +216,13 @@ export class FetchTreeView extends Disposable {
   ) {
     const row = createElement(
       'div',
-      'fetch-tree-row fetch-tree-folder-row',
+      'comet-fetch-tree-row comet-fetch-tree-folder-row',
     );
     row.style.paddingLeft = `${context.depth * 16}px`;
 
     const button = createElement(
       'button',
-      'fetch-tree-folder-toggle btn-base btn-ghost btn-md',
+      'comet-fetch-tree-folder-toggle btn-base btn-ghost btn-md',
     );
     button.type = 'button';
     button.setAttribute('aria-expanded', String(context.isExpanded));
@@ -230,11 +230,11 @@ export class FetchTreeView extends Disposable {
       context.toggleExpanded();
     });
 
-    const label = createElement('span', 'fetch-tree-folder-label');
+    const label = createElement('span', 'comet-fetch-tree-folder-label');
     label.textContent = node.name;
     hoverService.applyHover(label, node.name);
 
-    const count = createElement('span', 'fetch-tree-folder-count');
+    const count = createElement('span', 'comet-fetch-tree-folder-count');
     count.textContent = String(node.articles.length);
 
     button.append(
@@ -242,14 +242,14 @@ export class FetchTreeView extends Disposable {
         context.isExpanded
           ? lxIconSemanticMap.library.folderExpanded
           : lxIconSemanticMap.library.folderCollapsed,
-        'fetch-tree-folder-chevron',
+        'comet-fetch-tree-folder-chevron',
       ),
       label,
     );
 
     const actionBar = this.getFolderActionBar(node.id);
     actionBar.setProps({
-      className: 'fetch-tree-folder-actions sidebar-tab-actionbar fetch-pane-actionbar',
+      className: 'comet-fetch-tree-folder-actions comet-sidebar-tab-actionbar comet-fetch-pane-actionbar',
       ariaRole: 'group',
       items: this.createFolderActionItems(),
     });
@@ -276,8 +276,8 @@ export class FetchTreeView extends Disposable {
     const row = createElement(
       'div',
       [
-        'fetch-tree-row',
-        'fetch-tree-article-row',
+        'comet-fetch-tree-row',
+        'comet-fetch-tree-article-row',
         this.props.isSelectionModeEnabled ? 'is-selection-mode' : '',
         isSelected ? 'is-selected' : '',
       ].filter(Boolean).join(' '),
@@ -292,19 +292,19 @@ export class FetchTreeView extends Disposable {
       }
     });
 
-    const main = createElement('div', 'fetch-tree-article-main');
-    const titleElement = createElement('span', 'fetch-tree-article-title');
+    const main = createElement('div', 'comet-fetch-tree-article-main');
+    const titleElement = createElement('span', 'comet-fetch-tree-article-title');
     titleElement.textContent = title;
     hoverService.applyHover(titleElement, title);
 
-    const metaElement = createElement('span', 'fetch-tree-article-meta');
+    const metaElement = createElement('span', 'comet-fetch-tree-article-meta');
     metaElement.textContent = metaText;
     hoverService.applyHover(metaElement, metaText);
     main.append(titleElement, metaElement);
 
     const actionBar = this.getArticleActionBar(node.id);
     actionBar.setProps({
-      className: 'fetch-pane-article-card-toolbar-actions',
+      className: 'comet-fetch-pane-article-card-toolbar-actions',
       ariaRole: 'group',
       items: this.createArticleActionItems(article, title),
     });
@@ -317,7 +317,7 @@ export class FetchTreeView extends Disposable {
     let actionBar = this.articleActionBars.get(nodeId);
     if (!actionBar) {
       actionBar = createActionBarView({
-        className: 'fetch-pane-article-card-toolbar-actions',
+        className: 'comet-fetch-pane-article-card-toolbar-actions',
         ariaRole: 'group',
       });
       this.articleActionBars.set(nodeId, actionBar);
@@ -330,7 +330,7 @@ export class FetchTreeView extends Disposable {
     let actionBar = this.folderActionBars.get(nodeId);
     if (!actionBar) {
       actionBar = createActionBarView({
-        className: 'fetch-tree-folder-actions sidebar-tab-actionbar fetch-pane-actionbar',
+        className: 'comet-fetch-tree-folder-actions comet-sidebar-tab-actionbar comet-fetch-pane-actionbar',
         ariaRole: 'group',
       });
       this.folderActionBars.set(nodeId, actionBar);
@@ -360,7 +360,7 @@ export class FetchTreeView extends Disposable {
         disabled:
           !this.props.articles.length &&
           !this.props.isSelectionModeEnabled,
-        buttonClassName: 'fetch-pane-select-action',
+        buttonClassName: 'comet-fetch-pane-select-action',
         content: createLxIcon(lxIconSemanticMap.sidebar.selectionMode),
         onClick: (event: MouseEvent) => {
           event.stopPropagation();
@@ -372,7 +372,7 @@ export class FetchTreeView extends Disposable {
         title: fetchButtonLabel,
         mode: 'icon',
         disabled: this.props.isFetchLoading,
-        buttonClassName: 'sidebar-fetch-btn fetch-pane-trigger-btn',
+        buttonClassName: 'comet-sidebar-fetch-btn comet-fetch-pane-trigger-btn',
         content: createLxIcon(
           this.props.isFetchLoading ? 'sync' : lxIconSemanticMap.fetch.batchDownload,
         ),
@@ -403,7 +403,7 @@ export class FetchTreeView extends Disposable {
         disabled: isDownloading,
         title: hasDownloaded ? DOWNLOADED_PDF_LABEL : DOWNLOAD_PDF_LABEL,
         buttonClassName: [
-          'fetch-pane-article-card-icon-btn',
+          'comet-fetch-pane-article-card-icon-btn',
           hasDownloaded ? 'is-downloaded' : '',
         ].filter(Boolean).join(' '),
         hover: {
@@ -427,7 +427,7 @@ export class FetchTreeView extends Disposable {
         label: MORE_ACTIONS_LABEL,
         title: MORE_ACTIONS_LABEL,
         content: createLxIcon('more'),
-        buttonClassName: 'fetch-pane-article-card-icon-btn',
+        buttonClassName: 'comet-fetch-pane-article-card-icon-btn',
         overlayAlignment: 'end',
         menuData: ARTICLE_TREE_MORE_MENU_DATA,
         menu: [

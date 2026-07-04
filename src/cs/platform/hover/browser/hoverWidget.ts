@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'cs/platform/hover/browser/hover.css';
-import { addDisposableListener } from 'cs/base/browser/dom';
+import { $, addDisposableListener } from 'cs/base/browser/dom';
 import {
 	normalizeHoverInput,
 	type HoverAction,
@@ -139,20 +139,7 @@ class WorkbenchHoverInteractionPolicy {
 	};
 }
 
-const hoverInteractionPolicy = new WorkbenchHoverInteractionPolicy();
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
-
-function isHoverRenderableEmpty(content: HoverRenderable | undefined) {
+const hoverInteractionPolicy = new WorkbenchHoverInteractionPolicy();function isHoverRenderableEmpty(content: HoverRenderable | undefined) {
 	if (typeof content === 'string') {
 		return content.trim().length === 0;
 	}
@@ -190,18 +177,18 @@ function renderHoverAction(
 	renderDisposables: DisposableStore,
 	hide: () => void,
 ) {
-	const actionContainer = createElement('div', 'cs-hover-action-container action-container');
+	const actionContainer = $<HTMLElementTagNameMap['div']>('div.cs-hover-action-container.action-container');
 	actionContainer.tabIndex = action.disabled ? -1 : 0;
 	actionContainer.setAttribute('aria-disabled', action.disabled ? 'true' : 'false');
 	if (action.disabled) {
 		actionContainer.classList.add('disabled');
 	}
 
-	const button = createElement('button', 'cs-hover-action action') as HTMLButtonElement;
+const button = $<HTMLElementTagNameMap['button']>('button.cs-hover-action.action') as HTMLButtonElement;
 	button.type = 'button';
 	button.disabled = Boolean(action.disabled);
 	if (action.icon && !button.disabled) {
-		const icon = createElement('span', 'cs-hover-action-icon icon');
+		const icon = $<HTMLElementTagNameMap['span']>('span.cs-hover-action-icon.icon');
 		icon.append(cloneHoverRenderable(action.icon));
 		button.append(icon);
 	}
@@ -237,9 +224,9 @@ export function normalizeWorkbenchHoverInput(input: HoverInput): HoverOptions | 
 }
 
 class WorkbenchHoverWidget {
-	private readonly element = createElement('div', 'cs-hover-overlay workbench-hover-overlay');
-	private readonly pointer = createElement('div', 'cs-hover-pointer workbench-hover-pointer');
-	private readonly card = createElement('div', 'cs-hover-card workbench-hover-card');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.cs-hover-overlay.workbench-hover-overlay');
+	private readonly pointer = $<HTMLElementTagNameMap['div']>('div.cs-hover-pointer.workbench-hover-pointer');
+	private readonly card = $<HTMLElementTagNameMap['div']>('div.cs-hover-card.workbench-hover-card');
 	private readonly mountDisposables = new DisposableStore();
 	private readonly renderDisposables = new DisposableStore();
 	private owner: WorkbenchHoverController | null = null;
@@ -322,20 +309,17 @@ class WorkbenchHoverWidget {
 		this.card.style.maxWidth = `${Math.max(options.maxWidth ?? 320, 132)}px`;
 		this.card.setAttribute('role', (options.actions?.length ?? 0) > 0 ? 'dialog' : 'tooltip');
 
-		const contentRow = createElement('div', 'cs-hover-row hover-row markdown-hover');
-		const contents = createElement(
-			'div',
-			`cs-hover-contents hover-contents${typeof options.content === 'string' ? '' : ' is-node'}`,
-		);
+		const contentRow = $<HTMLElementTagNameMap['div']>('div.cs-hover-row.hover-row.markdown-hover');
+		const contents = $<HTMLElementTagNameMap['div']>('div', { class: `cs-hover-contents hover-contents${typeof options.content === 'string' ? '' : ' is-node'}` });
 
 		if (!isHoverRenderableEmpty(options.content)) {
-			const content = createElement('div', 'cs-hover-content');
+			const content = $<HTMLElementTagNameMap['div']>('div.cs-hover-content');
 			content.append(cloneHoverRenderable(options.content!));
 			contents.append(content);
 		}
 
 		if (options.subtitle?.trim()) {
-			const subtitle = createElement('div', 'cs-hover-subtitle');
+			const subtitle = $<HTMLElementTagNameMap['div']>('div.cs-hover-subtitle');
 			subtitle.textContent = options.subtitle;
 			contents.append(subtitle);
 		}
@@ -343,8 +327,8 @@ class WorkbenchHoverWidget {
 		contentRow.append(contents);
 		const nodes: Node[] = [contentRow];
 		if ((options.actions?.length ?? 0) > 0 && this.target) {
-			const statusBarElement = createElement('div', 'cs-hover-row hover-row status-bar');
-			const actionsElement = createElement('div', 'cs-hover-actions actions');
+			const statusBarElement = $<HTMLElementTagNameMap['div']>('div.cs-hover-row.hover-row.status-bar');
+			const actionsElement = $<HTMLElementTagNameMap['div']>('div.cs-hover-actions.actions');
 			for (const action of options.actions ?? []) {
 				actionsElement.append(renderHoverAction(
 					this.target,
@@ -574,7 +558,7 @@ class WorkbenchHoverController extends Disposable implements HoverHandle {
 			return;
 		}
 
-		const remainingCooldown = Math.max(0, HOVER_REENTRY_COOLDOWN_MS - (Date.now() - lastHoverHideAt));
+const remainingCooldown = Math.max(0, HOVER_REENTRY_COOLDOWN_MS - (Date.now() - lastHoverHideAt));
 		this.showTimer.value = createTimeoutDisposable(() => {
 			this.show();
 		}, Math.max(delay, remainingCooldown));

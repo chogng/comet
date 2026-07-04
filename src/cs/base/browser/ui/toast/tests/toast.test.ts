@@ -53,7 +53,7 @@ async function cleanupToastState() {
     activeToastIds = [];
 
     await waitForCondition(
-      () => cleanupContainer.getElement().querySelector('.toast-item') === null,
+      () => cleanupContainer.getElement().querySelector('.comet-toast-item') === null,
     );
   } finally {
     cleanupContainer.dispose();
@@ -78,18 +78,18 @@ test('toast container renders toasts and close button dismisses them', async () 
     });
     activeToastIds.push(id);
 
-    const toastItem = container.getElement().querySelector('.toast-item');
+    const toastItem = container.getElement().querySelector('.comet-toast-item');
     assert(toastItem instanceof HTMLElement);
     assert.equal(toastItem.textContent?.includes('Saved'), true);
 
-    const closeButton = container.getElement().querySelector('.toast-close');
+    const closeButton = container.getElement().querySelector('.comet-toast-close');
     assert(closeButton instanceof HTMLButtonElement);
     assert.equal(closeButton.getAttribute('aria-label'), 'Dismiss');
 
     closeButton.click();
-    await waitForCondition(() => container.getElement().querySelector('.toast-item') === null);
+    await waitForCondition(() => container.getElement().querySelector('.comet-toast-item') === null);
 
-    assert.equal(container.getElement().querySelector('.toast-item'), null);
+    assert.equal(container.getElement().querySelector('.comet-toast-item'), null);
   } finally {
     container.dispose();
     await cleanupToastState();
@@ -107,10 +107,10 @@ test('toast auto dismisses after the configured duration', async () => {
     });
     activeToastIds.push(id);
 
-    assert(container.getElement().querySelector('.toast-item') instanceof HTMLElement);
-    await waitForCondition(() => container.getElement().querySelector('.toast-item') === null);
+    assert(container.getElement().querySelector('.comet-toast-item') instanceof HTMLElement);
+    await waitForCondition(() => container.getElement().querySelector('.comet-toast-item') === null);
 
-    assert.equal(container.getElement().querySelector('.toast-item'), null);
+    assert.equal(container.getElement().querySelector('.comet-toast-item'), null);
   } finally {
     container.dispose();
     await cleanupToastState();

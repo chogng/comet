@@ -25,7 +25,7 @@ test('notifications status stays hidden until there is status content', () => {
 
   try {
     const element = status.getElement();
-    const button = element.querySelector('.notifications-status-button');
+    const button = element.querySelector('.comet-notifications-status-button');
     assert(button instanceof HTMLButtonElement);
 
     assert.equal(element.classList.contains('is-hidden'), true);
@@ -45,7 +45,7 @@ test('notifications status stays hidden until there is status content', () => {
     assert.equal(element.classList.contains('is-hidden'), true);
 
     const statusMessage = model.showStatusMessage('Indexing');
-    const messageElement = element.querySelector('.notifications-status-message');
+    const messageElement = element.querySelector('.comet-notifications-status-message');
     assert(messageElement instanceof window.HTMLSpanElement);
 
     assert.equal(element.classList.contains('is-hidden'), false);

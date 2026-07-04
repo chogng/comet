@@ -22,25 +22,25 @@ export class FigureNodeView implements NodeView {
 
     const ownerDocument = view.dom.ownerDocument;
     this.dom = ownerDocument.createElement('figure');
-    this.dom.className = 'pm-figure';
+    this.dom.className = 'comet-pm-figure';
     this.dom.setAttribute('data-editor-figure', 'true');
 
     this.mediaElement = new ResizableHTMLElement();
-    this.mediaElement.domNode.className = 'pm-figure-media';
+    this.mediaElement.domNode.className = 'comet-pm-figure-media';
     this.mediaElement.domNode.contentEditable = 'false';
 
     this.imageElement = ownerDocument.createElement('img');
-    this.imageElement.className = 'pm-figure-image';
+    this.imageElement.className = 'comet-pm-figure-image';
     this.imageElement.draggable = false;
 
     this.resizeHandleElement = this.mediaElement.getSashElement('east');
-    this.resizeHandleElement.classList.add('pm-resizable-handle');
+    this.resizeHandleElement.classList.add('comet-pm-resizable-handle');
     this.resizeHandleElement.setAttribute('aria-label', 'Resize figure');
     this.resizeHandleElement.setAttribute('role', 'presentation');
     this.resizeHandleElement.setAttribute('data-resize-handle', 'east');
 
     this.contentDOM = ownerDocument.createElement('div');
-    this.contentDOM.className = 'pm-figure-caption-slot';
+    this.contentDOM.className = 'comet-pm-figure-caption-slot';
 
     this.mediaElement.domNode.append(this.imageElement);
     this.dom.append(this.mediaElement.domNode, this.contentDOM);

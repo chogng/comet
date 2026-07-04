@@ -178,7 +178,7 @@ function createFigureSpec(): NodeSpec {
       return [
         'figure',
         {
-          class: 'pm-figure',
+          class: 'comet-pm-figure',
           'data-editor-figure': 'true',
           'data-block-id': attrs.blockId ?? '',
           'data-figure-id': attrs.figureId ?? '',
@@ -186,7 +186,7 @@ function createFigureSpec(): NodeSpec {
         [
           'img',
           {
-            class: 'pm-figure-image',
+            class: 'comet-pm-figure-image',
             src: attrs.src ?? '',
             alt: attrs.alt,
             title: attrs.title,
@@ -232,7 +232,7 @@ function createFigcaptionSpec(): NodeSpec {
       return [
         'figcaption',
         {
-          class: 'pm-figure-caption',
+          class: 'comet-pm-figure-caption',
           'data-block-id': attrs.blockId ?? '',
         },
         0,
@@ -240,7 +240,7 @@ function createFigcaptionSpec(): NodeSpec {
     },
     parseDOM: [
       {
-        tag: 'figcaption.pm-figure-caption',
+        tag: 'figcaption.comet-pm-figure-caption',
         getAttrs: (element) => ({
           blockId: element.getAttribute('data-block-id') || null,
         } satisfies BlockNodeAttrs),
@@ -267,7 +267,7 @@ function createCitationSpec(): NodeSpec {
       return [
         'span',
         {
-          class: 'pm-inline-chip pm-inline-chip-citation',
+          class: 'comet-pm-inline-chip comet-pm-inline-chip-citation',
           'data-citation-ids': attrs.citationIds.join(','),
         },
         displayText,
@@ -275,7 +275,7 @@ function createCitationSpec(): NodeSpec {
     },
     parseDOM: [
       {
-        tag: 'span.pm-inline-chip-citation[data-citation-ids]',
+        tag: 'span.comet-pm-inline-chip-citation[data-citation-ids]',
         getAttrs: (element: ElementLike) => ({
           citationIds: (element.getAttribute('data-citation-ids') ?? '')
             .split(',')
@@ -305,7 +305,7 @@ function createFigureRefSpec(): NodeSpec {
       return [
         'span',
         {
-          class: 'pm-inline-chip pm-inline-chip-figure-ref',
+          class: 'comet-pm-inline-chip comet-pm-inline-chip-figure-ref',
           'data-target-id': attrs.targetId ?? '',
         },
         `${attrs.label}${suffix}`,
@@ -313,7 +313,7 @@ function createFigureRefSpec(): NodeSpec {
     },
     parseDOM: [
       {
-        tag: 'span.pm-inline-chip-figure-ref[data-target-id]',
+        tag: 'span.comet-pm-inline-chip-figure-ref[data-target-id]',
         getAttrs: (element) => {
           const targetId = element.getAttribute('data-target-id');
           const rawText = element.textContent?.trim() || '';
@@ -477,7 +477,7 @@ export function createWritingEditorPlaceholderPlugin(placeholder: string) {
 
         return DecorationSet.create(state.doc, [
           Decoration.node(0, firstChild.nodeSize, {
-            class: 'pm-empty-paragraph',
+            class: 'comet-pm-empty-paragraph',
             'data-placeholder': placeholderState?.placeholder ?? '',
           }),
         ]);

@@ -1,4 +1,4 @@
-.sash {
+.comet-sash {
   position: absolute;
   z-index: 20;
   touch-action: none;
@@ -6,42 +6,42 @@
   background: transparent;
 }
 
-.sash.vertical {
+.comet-sash.comet-vertical {
   top: 0;
-  width: var(--sash-size);
+  width: var(--comet-sash-size);
   height: 100%;
   cursor: ew-resize;
 }
 
-.sash.horizontal {
+.comet-sash.comet-horizontal {
   left: 0;
   width: 100%;
-  height: var(--sash-size);
+  height: var(--comet-sash-size);
   cursor: ns-resize;
 }
 
-.sash.disabled {
+.comet-sash.comet-disabled {
   cursor: default !important;
   pointer-events: none !important;
 }
 
-.sash.vertical.minimum {
+.comet-sash.comet-vertical.comet-minimum {
   cursor: e-resize;
 }
 
-.sash.vertical.maximum {
+.comet-sash.comet-vertical.comet-maximum {
   cursor: w-resize;
 }
 
-.sash.horizontal.minimum {
+.comet-sash.comet-horizontal.comet-minimum {
   cursor: s-resize;
 }
 
-.sash.horizontal.maximum {
+.comet-sash.comet-horizontal.comet-maximum {
   cursor: n-resize;
 }
 
-.sash::before {
+.comet-sash::before {
   content: '';
   position: absolute;
   pointer-events: none;
@@ -53,7 +53,7 @@
   background: transparent;
 }
 
-.sash.vertical::before {
+.comet-sash.comet-vertical::before {
   top: 50%;
   width: 2px;
   height: 58px;
@@ -61,21 +61,21 @@
   transform: translateY(-50%);
 }
 
-.sash.horizontal::before {
+.comet-sash.comet-horizontal::before {
   left: 0;
   right: 0;
   height: 1px;
   top: calc(50% - 0.5px);
 }
 
-.sash.hover.horizontal::before,
-.sash.active.horizontal::before {
-  height: var(--sash-hover-size);
-  top: calc(50% - (var(--sash-hover-size) / 2));
+.comet-sash.comet-hover.comet-horizontal::before,
+.comet-sash.comet-active.comet-horizontal::before {
+  height: var(--comet-sash-hover-size);
+  top: calc(50% - (var(--comet-sash-hover-size) / 2));
   background: var(--vscode-sash-hoverBorder, rgba(46, 109, 179, 0.28));
 }
 
-.sash.hover.vertical::before,
-.sash.active.vertical::before {
+.comet-sash.comet-hover.comet-vertical::before,
+.comet-sash.comet-active.comet-vertical::before {
   background: #111111;
 }

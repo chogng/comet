@@ -36,7 +36,7 @@ export type EditorHeaderActionsViewProps = {
 export class EditorHeaderActionsView {
   private props: EditorHeaderActionsViewProps;
   private readonly actionsView = createActionBarView({
-    className: 'header-actions',
+    className: 'comet-header-actions',
     ariaRole: 'group',
   });
 
@@ -116,7 +116,7 @@ export class EditorHeaderActionsView {
         label: this.props.labels.headerAddAction,
         title: this.props.labels.headerAddAction,
         content: createLxIcon('add'),
-        buttonClassName: 'editor-header-add-btn',
+        buttonClassName: 'comet-editor-header-add-btn',
         overlayAlignment: 'end',
         menuData: EDITOR_HEADER_ADD_MENU_DATA,
         menu: this.createAddMenuItems(''),
@@ -132,7 +132,7 @@ export class EditorHeaderActionsView {
         label: this.props.agentSidebarToggleLabel ?? '',
         title: this.props.agentSidebarToggleLabel ?? '',
         mode: 'icon' as const,
-        buttonClassName: 'editor-header-agent-btn',
+        buttonClassName: 'comet-editor-header-agent-btn',
         content: createLxIcon(
           this.props.isAgentSidebarVisible ? 'agent-filled' : 'agent',
         ),
@@ -147,7 +147,7 @@ export class EditorHeaderActionsView {
         ? this.props.labels.expandEditor
         : this.props.labels.collapseEditor,
       mode: 'icon' as const,
-      buttonClassName: 'editor-header-toggle-editor-btn',
+      buttonClassName: 'comet-editor-header-toggle-editor-btn',
       content: createLxIcon(
         this.props.isEditorCollapsed
           ? 'layout-sidebar-right-off'
@@ -157,7 +157,7 @@ export class EditorHeaderActionsView {
     });
 
     this.actionsView.setProps({
-      className: 'header-actions',
+      className: 'comet-header-actions',
       ariaRole: 'group',
       items: actionItems,
     });

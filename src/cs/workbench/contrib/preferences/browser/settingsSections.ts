@@ -183,16 +183,16 @@ function toColorPickerValue(colorValue: string) {
 
 export function renderLocaleSection(props: SettingsPartProps) {
   const language = createSettingsSection({
-    sectionClassName: 'settings-language-section',
-    panelClassName: 'settings-language-panel',
-    listClassName: 'settings-language-list',
+    sectionClassName: 'comet-settings-language-section',
+    panelClassName: 'comet-settings-language-panel',
+    listClassName: 'comet-settings-language-list',
   });
   const select = buildSelect(
     createDisplayLanguageOptions(props.labels),
     props.locale,
     'settings.locale',
     (value) => requestSetDisplayLanguage(value as Locale),
-    'settings-language-toggle',
+    'comet-settings-language-toggle',
   );
   language.list.append(
     createSettingsRow({
@@ -205,16 +205,16 @@ export function renderLocaleSection(props: SettingsPartProps) {
 }
 
 export function renderBatchOptionsSection(props: SettingsPartProps) {
-  const field = el('div', 'settings-batch-settings');
+  const field = el('div', 'comet-settings-batch-settings');
   const batchOptions = createSettingsSection({
-    sectionClassName: 'settings-batch-options-section',
-    panelClassName: 'settings-batch-options-panel',
-    listClassName: 'settings-batch-options-list',
+    sectionClassName: 'comet-settings-batch-options-section',
+    panelClassName: 'comet-settings-batch-options-panel',
+    listClassName: 'comet-settings-batch-options-list',
   });
-  const wrap = el('div', 'settings-limit-input-wrap');
+  const wrap = el('div', 'comet-settings-limit-input-wrap');
   wrap.append(buildNumberStepperInput({
     value: props.batchLimit,
-    className: 'settings-limit-input',
+    className: 'comet-settings-limit-input',
     focusKey: 'settings.batch.limit',
     min: String(batchLimitMin),
     max: String(batchLimitMax),
@@ -225,9 +225,9 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
   }).element);
 
   const dateOptions = createSettingsSection({
-    sectionClassName: 'settings-batch-date-section',
-    panelClassName: 'settings-batch-date-panel',
-    listClassName: 'settings-batch-date-list',
+    sectionClassName: 'comet-settings-batch-date-section',
+    panelClassName: 'comet-settings-batch-date-panel',
+    listClassName: 'comet-settings-batch-date-list',
   });
   const startDateInput = createDateInput({
     value: props.fetchStartDate,
@@ -236,8 +236,8 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
       clear: props.labels.clearDate,
       today: props.labels.today,
     },
-    className: 'settings-date-input',
-    inputClassName: 'settings-inputbox settings-input-control settings-date-input-field',
+    className: 'comet-settings-date-input',
+    inputClassName: 'comet-settings-inputbox comet-settings-input-control comet-settings-date-input-field',
     focusKey: 'settings.batch.startDate',
     onInput: props.onFetchStartDateChange,
   }).getElement();
@@ -248,8 +248,8 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
       clear: props.labels.clearDate,
       today: props.labels.today,
     },
-    className: 'settings-date-input',
-    inputClassName: 'settings-inputbox settings-input-control settings-date-input-field',
+    className: 'comet-settings-date-input',
+    inputClassName: 'comet-settings-inputbox comet-settings-input-control comet-settings-date-input-field',
     focusKey: 'settings.batch.endDate',
     onInput: props.onFetchEndDateChange,
   }).getElement();
@@ -258,22 +258,22 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
       title: props.labels.settingsBatchOptions,
       description: props.labels.settingsBatchHint,
       control: wrap,
-      itemClassName: 'settings-batch-options-item',
-      controlClassName: 'settings-batch-options-control',
+      itemClassName: 'comet-settings-batch-options-item',
+      controlClassName: 'comet-settings-batch-options-control',
     }),
   );
   dateOptions.list.append(
     createSettingsRow({
       title: props.labels.startDate,
       control: startDateInput,
-      itemClassName: 'settings-batch-date-item',
-      controlClassName: 'settings-batch-date-control',
+      itemClassName: 'comet-settings-batch-date-item',
+      controlClassName: 'comet-settings-batch-date-control',
     }),
     createSettingsRow({
       title: props.labels.endDate,
       control: endDateInput,
-      itemClassName: 'settings-batch-date-item',
-      controlClassName: 'settings-batch-date-control',
+      itemClassName: 'comet-settings-batch-date-item',
+      controlClassName: 'comet-settings-batch-date-control',
     }),
   );
   field.append(batchOptions.element, dateOptions.element);
@@ -289,27 +289,27 @@ export function renderSupportedSourcesSection(props: SettingsPartProps) {
   const supportedSources = createSettingsSection({
     title: props.labels.settingsSupportedSources,
     description: props.labels.settingsSupportedSourcesHint,
-    sectionClassName: 'settings-supported-sources-section',
-    panelClassName: 'settings-supported-sources-panel',
-    listClassName: 'settings-supported-sources-list',
+    sectionClassName: 'comet-settings-supported-sources-section',
+    panelClassName: 'comet-settings-supported-sources-panel',
+    listClassName: 'comet-settings-supported-sources-list',
   });
 
-  const table = el('div', 'settings-supported-sources-table');
+  const table = el('div', 'comet-settings-supported-sources-table');
   table.hidden = !props.showSupportedSources;
   for (const [index, source] of props.supportedSources.entries()) {
-    const row = el('div', 'settings-supported-source-row');
-    const url = el('div', 'settings-supported-source-url');
+    const row = el('div', 'comet-settings-supported-source-row');
+    const url = el('div', 'comet-settings-supported-source-url');
     url.textContent = source.url;
     url.title = `${props.labels.settingsSupportedSourceUrl}: ${source.url}`;
 
-    const journalCell = el('div', 'settings-supported-source-journal-cell');
+    const journalCell = el('div', 'comet-settings-supported-source-journal-cell');
     const effectiveJournalTitle = getJournalOverrideTitle(props, source.url) ?? source.journalTitle;
-    const journalLabel = el('div', 'settings-supported-source-journal');
+    const journalLabel = el('div', 'comet-settings-supported-source-journal');
     journalLabel.textContent = effectiveJournalTitle || '-';
     journalLabel.title = props.labels.settingsSupportedSourceJournalTitle;
     const journalInput = buildInput({
       value: effectiveJournalTitle,
-      className: 'settings-supported-source-journal-input',
+      className: 'comet-settings-supported-source-journal-input',
       focusKey: `settings.supportedSources.${index}.journalTitle`,
       disabled: props.isSettingsSaving,
       onInput: (value) => props.onJournalSourceTitleChange(source.url, value),
@@ -336,8 +336,8 @@ export function renderSupportedSourcesSection(props: SettingsPartProps) {
         disabled: props.isSettingsSaving,
         onClick: props.onToggleSupportedSources,
       }),
-      itemClassName: 'settings-supported-sources-actions-item',
-      controlClassName: 'settings-supported-sources-actions',
+      itemClassName: 'comet-settings-supported-sources-actions-item',
+      controlClassName: 'comet-settings-supported-sources-actions',
     }),
   );
   supportedSources.panel.append(table);
@@ -347,9 +347,9 @@ export function renderSupportedSourcesSection(props: SettingsPartProps) {
 export function renderLayoutSection(props: SettingsPartProps) {
   const layout = createSettingsSection({
     title: props.labels.settingsLayoutTitle,
-    sectionClassName: 'settings-layout-section',
-    panelClassName: 'settings-layout-panel',
-    listClassName: 'settings-layout-list',
+    sectionClassName: 'comet-settings-layout-section',
+    panelClassName: 'comet-settings-layout-panel',
+    listClassName: 'comet-settings-layout-list',
   });
   const startupLayoutSelect = buildSelect(
     createStartupLayoutOptions(props),
@@ -358,12 +358,12 @@ export function renderLayoutSection(props: SettingsPartProps) {
     (value) => {
       props.onStartupLayoutChange(value === 'agent' ? 'agent' : 'flow');
     },
-    'settings-layout-startup-layout-select',
+    'comet-settings-layout-startup-layout-select',
   );
   setSelectHostDisabled(startupLayoutSelect, props.isSettingsSaving);
   const browserTabKeepAliveLimitInput = buildNumberStepperInput({
     value: props.browserTabKeepAliveLimit,
-    className: 'settings-limit-input',
+    className: 'comet-settings-limit-input',
     focusKey: 'settings.general.layout.browserTabKeepAliveLimit',
     min: String(minBrowserTabKeepAliveLimit),
     max: String(maxBrowserTabKeepAliveLimit),
@@ -399,7 +399,7 @@ export function renderLayoutSection(props: SettingsPartProps) {
 }
 
 export function renderAppearanceSection(props: SettingsPartProps) {
-  const field = el('div', 'settings-appearance-settings');
+  const field = el('div', 'comet-settings-appearance-settings');
   const themeSelect = buildSelect(
     createThemeOptions(props),
     props.theme,
@@ -411,13 +411,13 @@ export function renderAppearanceSection(props: SettingsPartProps) {
           : 'light';
       props.onThemeChange(nextTheme);
     },
-    'settings-appearance-theme-select',
+    'comet-settings-appearance-theme-select',
   );
   setSelectHostDisabled(themeSelect, props.isSettingsSaving);
   const appearanceTheme = createSettingsSection({
-    sectionClassName: 'settings-appearance-theme-section',
-    panelClassName: 'settings-appearance-theme-panel',
-    listClassName: 'settings-appearance-theme-list',
+    sectionClassName: 'comet-settings-appearance-theme-section',
+    panelClassName: 'comet-settings-appearance-theme-panel',
+    listClassName: 'comet-settings-appearance-theme-list',
   });
   appearanceTheme.list.append(
     createSettingsRow({
@@ -427,9 +427,9 @@ export function renderAppearanceSection(props: SettingsPartProps) {
     }),
   );
   const appearanceToggles = createSettingsSection({
-    sectionClassName: 'settings-appearance-toggles-section',
-    panelClassName: 'settings-appearance-toggles-panel',
-    listClassName: 'settings-appearance-toggles-list',
+    sectionClassName: 'comet-settings-appearance-toggles-section',
+    panelClassName: 'comet-settings-appearance-toggles-panel',
+    listClassName: 'comet-settings-appearance-toggles-list',
   });
   appearanceToggles.list.append(
     createSettingsRow({
@@ -451,9 +451,9 @@ export function renderAppearanceSection(props: SettingsPartProps) {
 export function renderNotificationsSection(props: SettingsPartProps) {
   const notifications = createSettingsSection({
     title: props.labels.settingsNotificationsTitle,
-    sectionClassName: 'settings-notifications-section',
-    panelClassName: 'settings-notifications-panel',
-    listClassName: 'settings-notifications-list',
+    sectionClassName: 'comet-settings-notifications-section',
+    panelClassName: 'comet-settings-notifications-panel',
+    listClassName: 'comet-settings-notifications-list',
   });
   const notificationsDisabled = props.isSettingsSaving || !props.desktopRuntime;
   notifications.list.append(
@@ -506,12 +506,12 @@ export function renderNotificationsSection(props: SettingsPartProps) {
 }
 
 export function renderDownloadDirectorySection(props: SettingsPartProps) {
-  const field = el('div', 'settings-download-settings');
+  const field = el('div', 'comet-settings-download-settings');
   const effectiveDownloadDir = props.pdfDownloadDir.trim() || props.labels.systemDownloads;
   const downloadDirectory = createSettingsSection({
-    sectionClassName: 'settings-download-directory-section',
-    panelClassName: 'settings-download-directory-panel',
-    listClassName: 'settings-download-directory-list',
+    sectionClassName: 'comet-settings-download-directory-section',
+    panelClassName: 'comet-settings-download-directory-panel',
+    listClassName: 'comet-settings-download-directory-list',
   });
   downloadDirectory.list.append(
     createSettingsRow({
@@ -524,14 +524,14 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
         disabled: !props.desktopRuntime || props.isSettingsSaving,
         onClick: props.onChoosePdfDownloadDir,
       }),
-      itemClassName: 'settings-download-directory-item',
-      controlClassName: 'settings-download-directory-control',
+      itemClassName: 'comet-settings-download-directory-item',
+      controlClassName: 'comet-settings-download-directory-control',
     }),
   );
   const downloadOptions = createSettingsSection({
-    sectionClassName: 'settings-download-options-section',
-    panelClassName: 'settings-download-options-panel',
-    listClassName: 'settings-download-options-list',
+    sectionClassName: 'comet-settings-download-options-section',
+    panelClassName: 'comet-settings-download-options-panel',
+    listClassName: 'comet-settings-download-options-list',
   });
   downloadOptions.list.append(
     createSettingsRow({
@@ -552,9 +552,9 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
 
 export function renderConfigPathSection(props: SettingsPartProps) {
   const configPath = createSettingsSection({
-    sectionClassName: 'settings-config-path-section',
-    panelClassName: 'settings-config-path-panel',
-    listClassName: 'settings-config-path-list',
+    sectionClassName: 'comet-settings-config-path-section',
+    panelClassName: 'comet-settings-config-path-panel',
+    listClassName: 'comet-settings-config-path-list',
   });
   configPath.list.append(
     createSettingsRow({
@@ -567,8 +567,8 @@ export function renderConfigPathSection(props: SettingsPartProps) {
         disabled: !props.desktopRuntime || props.isSettingsSaving || !props.configPath.trim(),
         onClick: props.onChooseConfigPath,
       }),
-      itemClassName: 'settings-config-path-item',
-      controlClassName: 'settings-config-path-control',
+      itemClassName: 'comet-settings-config-path-item',
+      controlClassName: 'comet-settings-config-path-control',
     }),
   );
   return configPath.element;
@@ -580,9 +580,9 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   const textEditorPanel = createSettingsSection({
     title: props.labels.settingsTextEditorDefaultBodyStyle,
     description: props.labels.settingsTextEditorHint,
-    sectionClassName: 'settings-text-editor-section',
-    panelClassName: 'settings-text-editor-panel',
-    listClassName: 'settings-text-editor-list',
+    sectionClassName: 'comet-settings-text-editor-section',
+    panelClassName: 'comet-settings-text-editor-panel',
+    listClassName: 'comet-settings-text-editor-list',
   });
 
   const fontFamilySelect = buildSelect(
@@ -593,7 +593,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     defaultBodyStyle.fontFamilyValue,
     'settings.textEditor.fontFamily',
     props.onEditorDraftFontFamilyChange,
-    'settings-text-editor-select',
+    'comet-settings-text-editor-select',
   );
   setSelectHostDisabled(fontFamilySelect, isDisabled);
   const fontSizeSelect = buildSelect(
@@ -604,12 +604,12 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     defaultBodyStyle.fontSizeValue,
     'settings.textEditor.fontSize',
     props.onEditorDraftFontSizeChange,
-    'settings-text-editor-select',
+    'comet-settings-text-editor-select',
   );
   setSelectHostDisabled(fontSizeSelect, isDisabled);
   const lineHeightInput = buildNumberStepperInput({
     value: defaultBodyStyle.lineHeight,
-    className: 'settings-text-editor-line-height-input',
+    className: 'comet-settings-text-editor-line-height-input',
     focusKey: 'settings.textEditor.lineHeight',
     min: '0.5',
     max: '4',
@@ -620,7 +620,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   });
   const paragraphSpacingBeforeInput = buildNumberStepperInput({
     value: defaultBodyStyle.paragraphSpacingBeforePt,
-    className: 'settings-text-editor-spacing-input',
+    className: 'comet-settings-text-editor-spacing-input',
     focusKey: 'settings.textEditor.paragraphSpacingBefore',
     min: '0',
     max: '200',
@@ -631,7 +631,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   });
   const paragraphSpacingAfterInput = buildNumberStepperInput({
     value: defaultBodyStyle.paragraphSpacingAfterPt,
-    className: 'settings-text-editor-spacing-input',
+    className: 'comet-settings-text-editor-spacing-input',
     focusKey: 'settings.textEditor.paragraphSpacingAfter',
     min: '0',
     max: '200',
@@ -640,18 +640,18 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     onInput: props.onEditorDraftParagraphSpacingAfterChange,
     disabled: isDisabled,
   });
-  const colorRow = el('div', 'settings-text-editor-color-row');
+  const colorRow = el('div', 'comet-settings-text-editor-color-row');
   const colorPickerInput = buildInput({
     type: 'color',
     value: toColorPickerValue(defaultBodyStyle.color),
-    className: 'settings-text-editor-color-picker',
+    className: 'comet-settings-text-editor-color-picker',
     focusKey: 'settings.textEditor.colorPicker',
     onInput: props.onEditorDraftColorChange,
   });
   colorPickerInput.inputElement.disabled = isDisabled;
   const colorValueInput = buildInput({
     value: defaultBodyStyle.color,
-    className: 'settings-input-control settings-text-editor-color-value',
+    className: 'comet-settings-input-control comet-settings-text-editor-color-value',
     focusKey: 'settings.textEditor.colorValue',
     readOnly: true,
   });

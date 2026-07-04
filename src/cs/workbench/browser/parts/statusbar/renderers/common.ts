@@ -13,13 +13,13 @@ export const renderCommonStatusbarMode: StatusbarModeRenderer = (status, context
 
   if (status.modeLabel) {
     primaryGroupElement.append(
-      createTextElement('editor-statusbar-mode-pill', status.modeLabel),
+      createTextElement('comet-editor-statusbar-mode-pill', status.modeLabel),
     );
   }
 
   if (status.summary) {
     primaryGroupElement.append(
-      createTextElement('editor-statusbar-summary', status.summary, status.summary),
+      createTextElement('comet-editor-statusbar-summary', status.summary, status.summary),
     );
   }
 

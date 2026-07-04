@@ -253,7 +253,7 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
   assert(pdfTab);
   assert.equal(pdfTab.url, EMPTY_PDF_TAB_URL);
   assert.equal(controller.getSnapshot().activeTab?.id, pdfTab.id);
-  assert.equal(document.querySelectorAll('.workbench-editor-modal-panel').length, 0);
+  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 0);
 
   controller.dispose();
 });
@@ -363,22 +363,22 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
   try {
     const favoriteButton = view
       .getElement()
-      .querySelector(`.editor-browser-toolbar-leading [aria-label="${en.agentbarToolbarFavorite}"]`);
+      .querySelector(`.comet-editor-browser-toolbar-leading [aria-label="${en.agentbarToolbarFavorite}"]`);
     assert(favoriteButton instanceof HTMLButtonElement);
     favoriteButton.click();
 
     const sourcesButton = view
       .getElement()
-      .querySelector(`.editor-browser-toolbar-leading [aria-label="${en.agentbarToolbarSources}"]`);
+      .querySelector(`.comet-editor-browser-toolbar-leading [aria-label="${en.agentbarToolbarSources}"]`);
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await waitForNextTask();
     await waitForNextTask();
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = panel.querySelector(
-      `.editor-browser-library-item.is-favorite[title="${favoriteUrl}"]`,
+      `.comet-editor-browser-library-item.is-favorite[title="${favoriteUrl}"]`,
     );
     assert(favoriteItem instanceof HTMLButtonElement);
     favoriteItem.dispatchEvent(new MouseEvent('contextmenu', {
@@ -437,11 +437,11 @@ test('EditorPartController serializes close requests while unsaved confirm is op
   const secondClose = controller.onCloseTab(activeDraftTab.id);
 
   await Promise.resolve();
-  assert.equal(document.querySelectorAll('.workbench-editor-modal-panel').length, 1);
+  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 1);
 
   const discardButton = Array.from(
     document.querySelectorAll<HTMLButtonElement>(
-      '.workbench-editor-modal-actions button',
+      '.comet-workbench-editor-modal-actions button',
     ),
   ).find(
     (button) => button.textContent?.trim() === en.editorUnsavedChangesDiscard,
@@ -455,7 +455,7 @@ test('EditorPartController serializes close requests while unsaved confirm is op
   ]);
   assert.equal(didCloseFirst, true);
   assert.equal(didCloseSecond, false);
-  assert.equal(document.querySelectorAll('.workbench-editor-modal-panel').length, 0);
+  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 0);
 
   controller.dispose();
 });

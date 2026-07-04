@@ -1,4 +1,4 @@
-.pdf-document-reader {
+.comet-pdf-document-reader {
   position: relative;
   display: flex;
   min-height: 0;
@@ -6,7 +6,7 @@
   background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
-.pdf-annotation-surface {
+.comet-pdf-annotation-surface {
   position: relative;
   flex: 1;
   min-width: 0;
@@ -15,7 +15,7 @@
   background: var(--vscode-editor-webContentBackground, #fff);
 }
 
-.pdf-reader-view {
+.comet-pdf-reader-view {
   position: absolute;
   inset: 0;
   display: flex;
@@ -25,11 +25,11 @@
   background: var(--vscode-editor-webContentBackground, #fff);
 }
 
-.pdf-reader-view[hidden] {
+.comet-pdf-reader-view[hidden] {
   display: none;
 }
 
-.pdf-reader-pages {
+.comet-pdf-reader-pages {
   position: relative;
   flex: 1;
   min-width: 0;
@@ -40,11 +40,11 @@
   background: var(--vscode-editor-pdfWorkbenchBackground, #f1f3f6);
 }
 
-.pdf-reader-pages.is-zooming {
+.comet-pdf-reader-pages.comet-is-zooming {
   cursor: zoom-in;
 }
 
-.pdf-reader-status {
+.comet-pdf-reader-status {
   position: absolute;
   top: 10px;
   left: 50%;
@@ -64,12 +64,12 @@
   pointer-events: none;
 }
 
-.pdf-reader-status[hidden],
-.pdf-reader-unavailable[hidden] {
+.comet-pdf-reader-status[hidden],
+.comet-pdf-reader-unavailable[hidden] {
   display: none;
 }
 
-.pdf-reader-unavailable {
+.comet-pdf-reader-unavailable {
   display: flex;
   flex: 1;
   align-items: center;
@@ -77,7 +77,7 @@
   text-align: center;
 }
 
-.pdf-reader-page {
+.comet-pdf-reader-page {
   display: grid;
   width: max-content;
   min-width: 100%;
@@ -86,13 +86,13 @@
   margin: 0 auto 18px;
 }
 
-.pdf-reader-page-meta {
+.comet-pdf-reader-page-meta {
   color: var(--vscode-descriptionForeground, #64748b);
   font-size: 11px;
   line-height: 1.4;
 }
 
-.pdf-reader-page canvas {
+.comet-pdf-reader-page canvas {
   display: block;
   max-width: none;
   background: #fff;
@@ -100,7 +100,7 @@
   transform-origin: top left;
 }
 
-.pdf-reader-page-canvas-wrap {
+.comet-pdf-reader-page-canvas-wrap {
   position: relative;
   max-width: none;
   background: #fff;
@@ -109,11 +109,11 @@
   user-select: none;
 }
 
-.pdf-reader-page-canvas-wrap canvas {
+.comet-pdf-reader-page-canvas-wrap canvas {
   box-shadow: none;
 }
 
-.pdf-reader-page-canvas-wrap canvas.pdf-reader-page-preview-canvas {
+.comet-pdf-reader-page-canvas-wrap canvas.comet-pdf-reader-page-preview-canvas {
   position: absolute;
   top: 0;
   left: 0;
@@ -123,17 +123,17 @@
   transition: opacity 80ms linear;
 }
 
-.pdf-reader-page-canvas-wrap canvas.pdf-reader-page-preview-canvas.is-fading {
+.comet-pdf-reader-page-canvas-wrap canvas.comet-pdf-reader-page-preview-canvas.comet-is-fading {
   opacity: 0;
 }
 
-.pdf-reader-pages.is-zoom-previewing .pdf-reader-page-canvas-wrap canvas,
-.pdf-reader-pages.is-zoom-previewing .pdf-reader-page-tile-layer,
-.pdf-reader-pages.is-zoom-previewing .pdf-reader-highlight-layer {
+.comet-pdf-reader-pages.comet-is-zoom-previewing .comet-pdf-reader-page-canvas-wrap canvas,
+.comet-pdf-reader-pages.comet-is-zoom-previewing .comet-pdf-reader-page-tile-layer,
+.comet-pdf-reader-pages.comet-is-zoom-previewing .comet-pdf-reader-highlight-layer {
   will-change: transform;
 }
 
-.pdf-reader-page-tile-layer {
+.comet-pdf-reader-page-tile-layer {
   position: absolute;
   top: 0;
   left: 0;
@@ -142,12 +142,12 @@
   transform-origin: top left;
 }
 
-.pdf-reader-page-tile-layer canvas {
+.comet-pdf-reader-page-tile-layer canvas {
   position: absolute;
   box-shadow: none;
 }
 
-.pdf-reader-highlight-layer {
+.comet-pdf-reader-highlight-layer {
   position: absolute;
   top: 0;
   left: 0;
@@ -156,7 +156,7 @@
   transform-origin: top left;
 }
 
-.pdf-reader-highlight {
+.comet-pdf-reader-highlight {
   position: absolute;
   appearance: none;
   padding: 0;
@@ -165,30 +165,30 @@
   mix-blend-mode: multiply;
 }
 
-.pdf-reader-highlight.is-selection {
+.comet-pdf-reader-highlight.comet-is-selection {
   background: rgba(69, 135, 236, 0.26);
   border-radius: 0;
   mix-blend-mode: normal;
 }
 
-.pdf-reader-highlight.is-annotation {
+.comet-pdf-reader-highlight.comet-is-annotation {
   background: rgba(255, 211, 61, 0.44);
   outline: 1px solid rgba(188, 140, 0, 0.32);
   cursor: pointer;
   pointer-events: auto;
 }
 
-.pdf-reader-highlight.is-annotation.is-note {
+.comet-pdf-reader-highlight.comet-is-annotation.comet-is-note {
   background: rgba(255, 190, 92, 0.42);
   outline-color: rgba(176, 101, 0, 0.42);
 }
 
-.pdf-reader-highlight.is-annotation.is-selected {
+.comet-pdf-reader-highlight.comet-is-annotation.comet-is-selected {
   outline: 2px solid rgba(37, 99, 235, 0.72);
   outline-offset: 1px;
 }
 
-.pdf-annotation-panel {
+.comet-pdf-annotation-panel {
   position: absolute;
   top: 16px;
   right: 18px;
@@ -206,33 +206,33 @@
   color: var(--vscode-foreground, #1f2937);
 }
 
-.pdf-annotation-panel[hidden] {
+.comet-pdf-annotation-panel[hidden] {
   display: none;
 }
 
-.pdf-annotation-panel-header,
-.pdf-annotation-panel-actions {
+.comet-pdf-annotation-panel-header,
+.comet-pdf-annotation-panel-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.pdf-annotation-panel-header {
+.comet-pdf-annotation-panel-header {
   justify-content: space-between;
 }
 
-.pdf-annotation-panel-actions {
+.comet-pdf-annotation-panel-actions {
   justify-content: flex-end;
 }
 
-.pdf-annotation-panel-title {
+.comet-pdf-annotation-panel-title {
   min-width: 0;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
 }
 
-.pdf-annotation-panel-quote {
+.comet-pdf-annotation-panel-quote {
   max-height: 92px;
   overflow: auto;
   padding: 8px;
@@ -243,7 +243,7 @@
   line-height: 1.45;
 }
 
-.pdf-annotation-panel-comment {
+.comet-pdf-annotation-panel-comment {
   width: 100%;
   min-height: 88px;
   resize: vertical;
@@ -258,9 +258,9 @@
   line-height: 1.45;
 }
 
-.pdf-annotation-panel-close,
-.pdf-annotation-panel-save,
-.pdf-annotation-panel-delete {
+.comet-pdf-annotation-panel-close,
+.comet-pdf-annotation-panel-save,
+.comet-pdf-annotation-panel-delete {
   appearance: none;
   height: 28px;
   padding: 0 10px;
@@ -273,17 +273,17 @@
   cursor: pointer;
 }
 
-.pdf-annotation-panel-save {
+.comet-pdf-annotation-panel-save {
   background: var(--vscode-button-background, #2563eb);
   color: var(--vscode-button-foreground, #fff);
   border-color: var(--vscode-button-background, #2563eb);
 }
 
-.pdf-annotation-panel-delete {
+.comet-pdf-annotation-panel-delete {
   color: var(--vscode-errorForeground, #b91c1c);
 }
 
-.pdf-annotation-open-empty {
+.comet-pdf-annotation-open-empty {
   position: absolute;
   inset: 0;
   display: grid;
@@ -293,11 +293,11 @@
   pointer-events: none;
 }
 
-.pdf-annotation-open-empty[hidden] {
+.comet-pdf-annotation-open-empty[hidden] {
   display: none;
 }
 
-.pdf-annotation-open-btn {
+.comet-pdf-annotation-open-btn {
   appearance: none;
   height: 32px;
   padding: 0 12px;
@@ -312,13 +312,13 @@
   pointer-events: auto;
 }
 
-.pdf-annotation-open-btn:hover {
+.comet-pdf-annotation-open-btn:hover {
   background: var(--vscode-button-secondaryHoverBackground, #f8fafc);
   border-color: var(--vscode-button-secondaryHoverBorder, #b8c7d9);
 }
 
 @media (max-width: 760px) {
-  .pdf-document-reader {
+  .comet-pdf-document-reader {
     min-width: 0;
   }
 }

@@ -27,8 +27,8 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 }
 
 export class SessionView {
-	private readonly element = createElement('section', 'session-view');
-	private readonly contentElement = createElement('div', 'session-view-content');
+	private readonly element = createElement('section', 'comet-session-view');
+	private readonly contentElement = createElement('div', 'comet-session-view-content');
 	private readonly headerView: SessionHeaderView;
 	private readonly chatView: SessionChatView;
 	private disposed = false;

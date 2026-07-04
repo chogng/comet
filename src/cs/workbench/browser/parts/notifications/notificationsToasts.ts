@@ -22,7 +22,7 @@ export class NotificationsToasts {
     private readonly container: HTMLElement,
     private readonly model: NotificationsModel,
   ) {
-    this.element.className = 'notifications-toasts bottom-right';
+    this.element.className = 'comet-notifications-toasts bottom-right';
     this.container.append(this.element);
     this.disposables.add(
       this.model.onDidChangeNotification(this.handleNotificationChange),
@@ -106,7 +106,7 @@ export class NotificationsToasts {
     this.element.classList.toggle('visible', this.visibleItems.length > 0);
     for (const item of this.visibleItems) {
       const toast = document.createElement('section');
-      toast.className = 'notification-toast';
+      toast.className = 'comet-notification-toast';
       renderNotificationItem(item, toast, {
         compact: true,
         onDidClose: () => this.removeToast(item),

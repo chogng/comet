@@ -13,13 +13,13 @@ export function notificationMessageToString(message: NotificationMessage) {
 export function getNotificationSeverityClassName(severity: Severity) {
   switch (severity) {
     case Severity.Error:
-      return 'notification-severity-error';
+      return 'comet-notification-severity-error';
     case Severity.Warning:
-      return 'notification-severity-warning';
+      return 'comet-notification-severity-warning';
     case Severity.Info:
-      return 'notification-severity-info';
+      return 'comet-notification-severity-info';
     default:
-      return 'notification-severity-ignore';
+      return 'comet-notification-severity-ignore';
   }
 }
 
@@ -76,7 +76,7 @@ export function renderNotificationItem(
 ) {
   clearNode(container);
   container.className = [
-    'notification-list-item',
+    'comet-notification-list-item',
     getNotificationSeverityClassName(item.severity),
     options.compact ? 'is-compact' : '',
   ]
@@ -84,19 +84,19 @@ export function renderNotificationItem(
     .join(' ');
 
   const mainRow = document.createElement('div');
-  mainRow.className = 'notification-list-item-main-row';
+  mainRow.className = 'comet-notification-list-item-main-row';
 
   const icon = document.createElement('span');
-  icon.className = 'notification-list-item-icon';
+  icon.className = 'comet-notification-list-item-icon';
   icon.textContent = getNotificationSeverityLabel(item.severity).charAt(0);
 
   const message = document.createElement('div');
-  message.className = 'notification-list-item-message';
+  message.className = 'comet-notification-list-item-message';
   message.textContent = item.messageText;
 
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
-  closeButton.className = 'notification-list-item-close';
+  closeButton.className = 'comet-notification-list-item-close';
   closeButton.textContent = 'x';
   closeButton.title = 'Close';
   closeButton.addEventListener('click', () => {
@@ -110,7 +110,7 @@ export function renderNotificationItem(
   const sourceLabel = getNotificationSourceLabel(item);
   if (sourceLabel) {
     const source = document.createElement('div');
-    source.className = 'notification-list-item-source';
+    source.className = 'comet-notification-list-item-source';
     source.textContent = sourceLabel;
     container.append(source);
   }
@@ -118,12 +118,12 @@ export function renderNotificationItem(
   const primaryActions = item.actions?.primary ?? [];
   if (primaryActions.length > 0) {
     const actionBar = document.createElement('div');
-    actionBar.className = 'notification-list-item-actions';
+    actionBar.className = 'comet-notification-list-item-actions';
     for (const action of primaryActions) {
       actionBar.append(
         createActionButton(
           action,
-          'notification-list-item-action is-primary',
+          'comet-notification-list-item-action is-primary',
           options.onDidRunAction,
         ),
       );
@@ -134,12 +134,12 @@ export function renderNotificationItem(
   const secondaryActions = item.actions?.secondary ?? [];
   if (!options.compact && secondaryActions.length > 0) {
     const actionBar = document.createElement('div');
-    actionBar.className = 'notification-list-item-actions is-secondary';
+    actionBar.className = 'comet-notification-list-item-actions is-secondary';
     for (const action of secondaryActions) {
       actionBar.append(
         createActionButton(
           action,
-          'notification-list-item-action is-secondary',
+          'comet-notification-list-item-action is-secondary',
           options.onDidRunAction,
         ),
       );
@@ -149,9 +149,9 @@ export function renderNotificationItem(
 
   if (item.hasProgress) {
     const progress = document.createElement('div');
-    progress.className = 'notification-list-item-progress';
+    progress.className = 'comet-notification-list-item-progress';
     const bar = document.createElement('div');
-    bar.className = 'notification-list-item-progress-bar';
+    bar.className = 'comet-notification-list-item-progress-bar';
     const state = item.progress.state;
     if (typeof state.total === 'number' && typeof state.worked === 'number') {
       bar.style.width = `${Math.max(0, Math.min(100, (state.worked / state.total) * 100))}%`;

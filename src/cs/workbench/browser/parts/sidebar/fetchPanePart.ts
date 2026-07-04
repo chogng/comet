@@ -309,8 +309,8 @@ function createArticleCardLabels(labels: FetchPaneProps['labels']) {
 
 export class FetchPaneContentView extends Disposable {
   private props: FetchPaneProps;
-  private readonly element = createElement('div', 'fetch-pane-content');
-  private readonly contentElement = createElement('div', 'fetch-pane-content-body');
+  private readonly element = createElement('div', 'comet-fetch-pane-content');
+  private readonly contentElement = createElement('div', 'comet-fetch-pane-content-body');
   private readonly scrollableElement: DomScrollableElement;
   private readonly renderDisposables = new DisposableStore();
   private fetchTreeView: FetchTreeView | null = null;
@@ -321,7 +321,7 @@ export class FetchPaneContentView extends Disposable {
     this.props = props;
     this._register(this.renderDisposables);
     this.scrollableElement = new DomScrollableElement(this.contentElement, {
-      className: 'fetch-pane-scrollable',
+      className: 'comet-fetch-pane-scrollable',
       vertical: ScrollbarVisibility.Auto,
       horizontal: ScrollbarVisibility.Hidden,
       useShadows: false,
@@ -410,7 +410,7 @@ export class FetchPaneContentView extends Disposable {
       this.fetchTreeView = null;
     }
 
-    const empty = createElement('div', 'fetch-pane-empty-state');
+    const empty = createElement('div', 'comet-fetch-pane-empty-state');
     if (this.props.hasData) {
       empty.textContent = this.props.labels.emptyFiltered;
       this.contentElement.replaceChildren(empty);
@@ -420,7 +420,7 @@ export class FetchPaneContentView extends Disposable {
 
     const inputLink = createElement(
       'button',
-      'fetch-pane-empty-state-action',
+      'comet-fetch-pane-empty-state-action',
     );
     inputLink.type = 'button';
     inputLink.textContent = this.props.labels.emptyAllInputLinkAction;

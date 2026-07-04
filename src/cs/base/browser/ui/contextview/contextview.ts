@@ -1,5 +1,6 @@
 import 'cs/base/browser/ui/contextview/contextview.css';
 import {
+  $,
   getDomNodePagePosition,
   getDomNodeZoomLevel,
 } from 'cs/base/browser/dom';
@@ -72,20 +73,7 @@ type LayoutResult = {
 };
 
 const VIEWPORT_MARGIN_PX = 8;
-const DEFAULT_OFFSET_PX = 0;
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-function clamp(value: number, min: number, max: number) {
+const DEFAULT_OFFSET_PX = 0;function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
@@ -128,7 +116,7 @@ function resolveViewportAnchorRect(anchor: ContextViewAnchor): ViewportRect {
     };
   }
 
-  const pagePosition = getDomNodePagePosition(anchor);
+const pagePosition = getDomNodePagePosition(anchor);
   const zoom = getDomNodeZoomLevel(anchor);
 
   return {
@@ -413,8 +401,8 @@ function addDisposableListener(
 }
 
 export class ContextViewController extends Disposable implements ContextViewHandle {
-  private readonly element = createElement('div', 'cs-context-view');
-  private readonly content = createElement('div', 'cs-context-view-content');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-context-view');
+  private readonly content = $<HTMLElementTagNameMap['div']>('div.comet-context-view-content');
   private readonly mountedListeners = new MutableDisposable<DisposableLike>();
   private options: ContextViewOptions | null = null;
   private visible = false;
@@ -437,7 +425,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
     }
 
     this.options = options;
-    this.content.className = 'cs-context-view-content';
+    this.content.className = 'comet-context-view-content';
     if (options.className) {
       this.content.classList.add(...options.className.split(/\s+/).filter(Boolean));
     }
@@ -453,7 +441,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
       return;
     }
 
-    const onHide = this.options?.onHide;
+const onHide = this.options?.onHide;
     this.visible = false;
     this.options = null;
     this.unmount();
@@ -505,7 +493,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
       return;
     }
 
-    const {
+const {
       anchor,
       offset = DEFAULT_OFFSET_PX,
       matchAnchorWidth = false,
@@ -582,7 +570,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
       return;
     }
 
-    const targetNode = event.target;
+const targetNode = event.target;
     if (!(targetNode instanceof Node)) {
       this.hide();
       return;

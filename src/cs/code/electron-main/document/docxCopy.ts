@@ -18,9 +18,9 @@ const docxExportDialogCopyByLocale: Record<SupportedLocale, DocxExportDialogCopy
 
 const docxExportCopyByLocale: Record<SupportedLocale, DocxExportCopy> = {
   zh: {
-    untitled: '无标题',
-    unknown: '未识别',
-    uncategorizedJournal: '未分类期刊',
+    untitled: '无标�?,
+    unknown: '未识�?,
+    uncategorizedJournal: '未分类期�?,
   },
   en: {
     untitled: 'Untitled',

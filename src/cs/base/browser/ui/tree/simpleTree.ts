@@ -93,7 +93,7 @@ export class SimpleTree<T> extends Disposable {
 	) {
 		super();
 		this.expandedIds = new Set(options.defaultExpandedIds ?? []);
-		this.container.className = 'simple-tree';
+		this.container.className = 'comet-simple-tree';
 
 		const listOptions: IListOptions<VisibleTreeNode<T>> = {
 			keyboardSupport: true,
@@ -117,7 +117,7 @@ export class SimpleTree<T> extends Disposable {
 			[this.createRenderer()],
 			listOptions,
 		));
-		this.list.getHTMLElement().classList.add('simple-tree');
+		this.list.getHTMLElement().classList.add('comet-simple-tree');
 
 		this._register(this.list.onDidChangeFocus(() => {
 			this.syncRenderedNodeState();
@@ -257,7 +257,7 @@ export class SimpleTree<T> extends Disposable {
 
 				rendered.dataset['simpleTreeNodeId'] = nodeId;
 				rendered.dataset['simpleTreeIndex'] = String(index);
-				rendered.classList.add('simple-tree-node');
+				rendered.classList.add('comet-simple-tree-node');
 				rendered.classList.toggle('is-selected', isSelected);
 				rendered.classList.toggle('is-focused', isFocused);
 				rendered.setAttribute('aria-level', String(entry.depth + 1));

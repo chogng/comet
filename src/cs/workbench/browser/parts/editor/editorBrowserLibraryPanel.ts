@@ -3,6 +3,7 @@ import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon, createLxLoadingIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import { $ } from 'cs/base/browser/dom';
 
 const EDITOR_BROWSER_LIBRARY_STORAGE_KEY = 'cs.editor.browser.library.v1';
 const MAX_RECENT_BROWSER_LIBRARY_ENTRIES = 25;
@@ -10,7 +11,7 @@ const MAX_FAVORITE_BROWSER_LIBRARY_ENTRIES = 25;
 const MAX_FAVORITE_BROWSER_LIBRARY_FOLDERS = 25;
 const EDITOR_BROWSER_LIBRARY_DESKTOP_OVERLAY_CLASS = 'is-desktop-overlay';
 const NATIVE_WEBCONTENT_ACTIVE_SELECTOR =
-  '.browser-frame-placeholder[data-webcontent-active="true"]';
+  '.comet-browser-frame-placeholder[data-webcontent-active="true"]';
 
 type StoredBrowserLibraryFavoriteFolder = {
   id: string;
@@ -80,24 +81,7 @@ export type EditorBrowserLibraryPanelContext = {
 type EditorBrowserLibraryPanelOptions = {
   isInteractionWithin?: (target: Node) => boolean;
   onDidChangeOpenState?: (isOpen: boolean) => void;
-};
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
-}
-
-function normalizeBrowserLibraryUrl(url: string) {
+};function normalizeBrowserLibraryUrl(url: string) {
   return String(url).trim();
 }
 
@@ -157,7 +141,7 @@ function createBrowserLibraryUrlMatchKey(url: string) {
       }
     }
 
-    const stableParams = Array.from(searchParams.entries())
+const stableParams = Array.from(searchParams.entries())
       .filter(([key, value]) => {
         const normalizedKey = key.toLocaleLowerCase();
         return (
@@ -279,14 +263,14 @@ function sanitizeStoredBrowserLibraryFaviconByUrl(
     return {};
   }
 
-  const faviconByUrl: Record<string, string> = {};
+const faviconByUrl: Record<string, string> = {};
   for (const [url, favicon] of Object.entries(value)) {
     const normalizedUrl = normalizeBrowserLibraryUrl(url);
     if (!validUrls.has(normalizedUrl)) {
       continue;
     }
 
-    const normalizedFavicon = sanitizeBrowserLibraryFaviconUrl(favicon);
+const normalizedFavicon = sanitizeBrowserLibraryFaviconUrl(favicon);
     if (!normalizedFavicon) {
       continue;
     }
@@ -301,14 +285,14 @@ function sanitizeStoredBrowserLibraryFavoriteFolders(value: unknown) {
     return [];
   }
 
-  const favoriteFolders: StoredBrowserLibraryFavoriteFolder[] = [];
+const favoriteFolders: StoredBrowserLibraryFavoriteFolder[] = [];
   const seenIds = new Set<string>();
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') {
       continue;
     }
 
-    const folderId = sanitizeBrowserLibraryFavoriteFolderId(
+const folderId = sanitizeBrowserLibraryFavoriteFolderId(
       (entry as { id?: unknown }).id,
     );
     const folderName = sanitizeBrowserLibraryFavoriteFolderName(
@@ -336,14 +320,14 @@ function sanitizeStoredBrowserLibraryPageTitleByUrl(
     return {};
   }
 
-  const pageTitleByUrl: Record<string, string> = {};
+const pageTitleByUrl: Record<string, string> = {};
   for (const [url, pageTitle] of Object.entries(value)) {
     const normalizedUrl = normalizeBrowserLibraryUrl(url);
     if (!validUrls.has(normalizedUrl)) {
       continue;
     }
 
-    const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(pageTitle);
+const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(pageTitle);
     if (!normalizedPageTitle) {
       continue;
     }
@@ -361,14 +345,14 @@ function sanitizeStoredBrowserLibraryRecentVisitedAtByUrl(
     return {};
   }
 
-  const recentVisitedAtByUrl: Record<string, number> = {};
+const recentVisitedAtByUrl: Record<string, number> = {};
   for (const [url, visitedAt] of Object.entries(value)) {
     const normalizedUrl = normalizeBrowserLibraryUrl(url);
     if (!validUrls.has(normalizedUrl)) {
       continue;
     }
 
-    const normalizedVisitedAt =
+const normalizedVisitedAt =
       typeof visitedAt === 'number'
         ? visitedAt
         : Number.parseInt(String(visitedAt), 10);
@@ -391,14 +375,14 @@ function sanitizeStoredBrowserLibraryFavoriteFolderByUrl(
     return {};
   }
 
-  const favoriteFolderByUrl: Record<string, string> = {};
+const favoriteFolderByUrl: Record<string, string> = {};
   for (const [url, folderId] of Object.entries(value)) {
     const normalizedUrl = normalizeBrowserLibraryUrl(url);
     if (!favoriteUrls.has(normalizedUrl)) {
       continue;
     }
 
-    const normalizedFolderId = sanitizeBrowserLibraryFavoriteFolderId(folderId);
+const normalizedFolderId = sanitizeBrowserLibraryFavoriteFolderId(folderId);
     if (!normalizedFolderId || !validFolderIds.has(normalizedFolderId)) {
       continue;
     }
@@ -417,14 +401,14 @@ function sanitizeStoredBrowserLibraryFavoriteCustomTitleByUrl(
     return {};
   }
 
-  const favoriteCustomTitleByUrl: Record<string, string> = {};
+const favoriteCustomTitleByUrl: Record<string, string> = {};
   for (const [url, title] of Object.entries(value)) {
     const normalizedUrl = normalizeBrowserLibraryUrl(url);
     if (!favoriteUrls.has(normalizedUrl)) {
       continue;
     }
 
-    const normalizedTitle = sanitizeBrowserLibraryPageTitle(title);
+const normalizedTitle = sanitizeBrowserLibraryPageTitle(title);
     if (!normalizedTitle) {
       continue;
     }
@@ -481,7 +465,7 @@ function sanitizeStoredBrowserLibraryState(
     return createStoredBrowserLibraryState();
   }
 
-  const recentUrls = Array.isArray(value.recentUrls)
+const recentUrls = Array.isArray(value.recentUrls)
     ? value.recentUrls.map((url) => String(url))
     : [];
   const favoriteUrls = Array.isArray(value.favoriteUrls)
@@ -564,7 +548,7 @@ function readStoredBrowserLibraryStateFromStorage() {
       return createStoredBrowserLibraryState();
     }
 
-    const parsed = JSON.parse(serialized) as Partial<StoredBrowserLibraryState>;
+const parsed = JSON.parse(serialized) as Partial<StoredBrowserLibraryState>;
     return sanitizeStoredBrowserLibraryState(parsed);
   } catch {
     return createStoredBrowserLibraryState();
@@ -645,7 +629,7 @@ function recordBrowserLibraryEntryVisit({
     return false;
   }
 
-  const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
+const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
   const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(pageTitle);
   const visitedAt = Date.now();
 
@@ -757,7 +741,7 @@ function removeFavoriteBrowserLibraryEntry(url: string) {
       return state;
     }
 
-    const favoriteUrls = state.favoriteUrls.filter((entry) => entry !== existingFavoriteUrl);
+const favoriteUrls = state.favoriteUrls.filter((entry) => entry !== existingFavoriteUrl);
     const recentUrls = trimUrlList(
       [
         normalizedUrl,
@@ -798,7 +782,7 @@ function renameFavoriteBrowserLibraryEntry(url: string, title: string) {
       return state;
     }
 
-    const favoriteCustomTitleByUrl = {
+const favoriteCustomTitleByUrl = {
       ...state.favoriteCustomTitleByUrl,
     };
     favoriteCustomTitleByUrl[normalizedUrl] = normalizedTitle;
@@ -822,7 +806,7 @@ function createFavoriteBrowserLibraryFolder(url: string, folderName: string) {
       return state;
     }
 
-    const nextFolderId = createBrowserLibraryFavoriteFolderId();
+const nextFolderId = createBrowserLibraryFavoriteFolderId();
     const favoriteFolderByUrl = {
       ...state.favoriteFolderByUrl,
       [normalizedUrl]: nextFolderId,
@@ -882,7 +866,7 @@ function removeRecentBrowserLibraryEntry(url: string) {
       return state;
     }
 
-    const recentUrls = state.recentUrls.filter((entry) => entry !== normalizedUrl);
+const recentUrls = state.recentUrls.filter((entry) => entry !== normalizedUrl);
     if (state.favoriteUrls.includes(normalizedUrl)) {
       return {
         ...state,
@@ -890,7 +874,7 @@ function removeRecentBrowserLibraryEntry(url: string) {
       };
     }
 
-    const faviconByUrl = { ...state.faviconByUrl };
+const faviconByUrl = { ...state.faviconByUrl };
     const pageTitleByUrl = { ...state.pageTitleByUrl };
     const recentVisitedAtByUrl = { ...state.recentVisitedAtByUrl };
     delete faviconByUrl[normalizedUrl];
@@ -961,12 +945,12 @@ function resolveRecentBrowserLibraryBucket(
     return 'older';
   }
 
-  const visitedAtDate = new Date(visitedAt);
+const visitedAtDate = new Date(visitedAt);
   if (Number.isNaN(visitedAtDate.getTime())) {
     return 'older';
   }
 
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const visitedDayStart = new Date(
     visitedAtDate.getFullYear(),
     visitedAtDate.getMonth(),
@@ -1015,18 +999,12 @@ export class EditorBrowserLibraryPanel {
   private onDidChangeOpenState?: (isOpen: boolean) => void;
   private onDidChangeState?: () => void;
   private readonly contextMenuService = createContextMenuService();
-  private readonly backdropElement = createElement(
-    'div',
-    'editor-browser-library-panel-backdrop',
-  );
-  private readonly element = createElement('div', 'editor-browser-library-panel');
-  private readonly desktopOverlayContainer = createElement(
-    'div',
-    'editor-browser-library-panel-overlay',
-  );
-  private readonly headerElement = createElement('header', 'editor-browser-library-header');
-  private readonly searchInputHost = createElement('div', 'editor-browser-library-search-host');
-  private readonly bodyElement = createElement('div', 'editor-browser-library-body');
+  private readonly backdropElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-panel-backdrop');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-panel');
+  private readonly desktopOverlayContainer = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-panel-overlay');
+  private readonly headerElement = $<HTMLElementTagNameMap['header']>('header.comet-editor-browser-library-header');
+  private readonly searchInputHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-search-host');
+  private readonly bodyElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-body');
   private listElement: HTMLElement | null = null;
   private emptyStateElement: HTMLElement | null = null;
   private readonly searchInput: InputBox;
@@ -1049,7 +1027,7 @@ export class EditorBrowserLibraryPanel {
     this.isInteractionWithin = options.isInteractionWithin;
     this.onDidChangeOpenState = options.onDidChangeOpenState;
     this.searchInput = new InputBox(this.searchInputHost, undefined, {
-      className: 'editor-browser-library-search-input',
+      className: 'comet-editor-browser-library-search-input',
       type: 'text',
       value: '',
       placeholder: 'Search',
@@ -1177,7 +1155,7 @@ export class EditorBrowserLibraryPanel {
       return false;
     }
 
-    const changed = toggleFavoriteBrowserLibraryEntry(libraryUrl);
+const changed = toggleFavoriteBrowserLibraryEntry(libraryUrl);
     if (changed) {
       this.render();
       this.onDidChangeState?.();
@@ -1213,7 +1191,7 @@ export class EditorBrowserLibraryPanel {
       return;
     }
 
-    const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(
+const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(
       this.context.browserPageTitle,
     );
     let nextPageTitleToPersist = normalizedPageTitle;
@@ -1348,7 +1326,7 @@ export class EditorBrowserLibraryPanel {
       return;
     }
 
-    const changed = renameFavoriteBrowserLibraryEntry(itemState.url, nextTitle);
+const changed = renameFavoriteBrowserLibraryEntry(itemState.url, nextTitle);
     if (!changed) {
       return;
     }
@@ -1368,7 +1346,7 @@ export class EditorBrowserLibraryPanel {
       return;
     }
 
-    const changed = createFavoriteBrowserLibraryFolder(
+const changed = createFavoriteBrowserLibraryFolder(
       itemState.url,
       nextFolderName,
     );
@@ -1410,7 +1388,8 @@ export class EditorBrowserLibraryPanel {
       if (!url) {
         return;
       }
-      const pageTitle = sanitizeBrowserLibraryPageTitle(
+
+const pageTitle = sanitizeBrowserLibraryPageTitle(
         getBrowserLibraryEntryPageTitle(url),
       );
       const favoriteFolderId =
@@ -1493,7 +1472,7 @@ export class EditorBrowserLibraryPanel {
       return;
     }
 
-    const useDesktopOverlay = this.hasActiveNativeWebContent(hostElement);
+const useDesktopOverlay = this.hasActiveNativeWebContent(hostElement);
     const mountAsDesktopOverlay = useDesktopOverlay;
     if (mountAsDesktopOverlay) {
       const overlayContainer = this.getOrCreateDesktopOverlayContainer();
@@ -1543,7 +1522,7 @@ export class EditorBrowserLibraryPanel {
       return;
     }
 
-    const hostRect = this.hostElement.getBoundingClientRect();
+const hostRect = this.hostElement.getBoundingClientRect();
     this.desktopOverlayContainer.style.left = `${Math.round(hostRect.left)}px`;
     this.desktopOverlayContainer.style.top = `${Math.round(hostRect.top)}px`;
     this.desktopOverlayContainer.style.width = `${Math.max(0, Math.round(hostRect.width))}px`;
@@ -1570,7 +1549,7 @@ export class EditorBrowserLibraryPanel {
       return;
     }
 
-    const schedule = () => {
+const schedule = () => {
       this.overlayPositionFrame = window.requestAnimationFrame(() => {
         this.overlayPositionFrame = 0;
         if (
@@ -1617,7 +1596,7 @@ export class EditorBrowserLibraryPanel {
       this.emptyStateElement = null;
     }
 
-    const listElement = this.getOrCreateListElement();
+const listElement = this.getOrCreateListElement();
     const fragment = document.createDocumentFragment();
     const listItemsBySection: Record<BrowserLibrarySectionKind, BrowserLibraryListItem[]> = {
       favorites: [],
@@ -1627,7 +1606,7 @@ export class EditorBrowserLibraryPanel {
       listItemsBySection[itemState.sectionKind].push(itemState);
     }
 
-    const orderedSections: Array<{
+const orderedSections: Array<{
       kind: BrowserLibrarySectionKind;
       title: string;
     }> = [
@@ -1643,13 +1622,9 @@ export class EditorBrowserLibraryPanel {
         continue;
       }
 
-      const sectionElement = createElement('section', 'editor-browser-library-section');
-      const sectionTitleElement = createElement(
-        'p',
-        'editor-browser-library-section-title',
-        section.title,
-      );
-      const sectionListElement = createElement('div', 'editor-browser-library-section-list');
+const sectionElement = $<HTMLElementTagNameMap['section']>('section.comet-editor-browser-library-section');
+      const sectionTitleElement = $<HTMLElementTagNameMap['p']>('p.comet-editor-browser-library-section-title', undefined, section.title);
+      const sectionListElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-section-list');
       sectionElement.append(sectionTitleElement, sectionListElement);
 
       if (section.kind === 'favorites') {
@@ -1663,7 +1638,7 @@ export class EditorBrowserLibraryPanel {
       fragment.append(sectionElement);
     }
 
-    const recentItems = listItemsBySection.recent;
+const recentItems = listItemsBySection.recent;
     if (recentItems.length > 0) {
       const recentBuckets = this.groupRecentItemsByBucket(recentItems);
       const recentBucketOrder: BrowserLibraryRecentBucket[] = [
@@ -1680,13 +1655,9 @@ export class EditorBrowserLibraryPanel {
           continue;
         }
 
-        const sectionElement = createElement('section', 'editor-browser-library-section');
-        const sectionTitleElement = createElement(
-          'p',
-          'editor-browser-library-section-title',
-          this.getRecentBucketTitle(bucket),
-        );
-        const sectionListElement = createElement('div', 'editor-browser-library-section-list');
+const sectionElement = $<HTMLElementTagNameMap['section']>('section.comet-editor-browser-library-section');
+        const sectionTitleElement = $<HTMLElementTagNameMap['p']>('p.comet-editor-browser-library-section-title', undefined, this.getRecentBucketTitle(bucket));
+        const sectionListElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-section-list');
         for (const itemState of sectionItems) {
           sectionListElement.append(this.createLibraryItemRow(itemState));
         }
@@ -1732,22 +1703,19 @@ export class EditorBrowserLibraryPanel {
   private createLibraryItemFaviconElement(faviconUrl: string, isLoading = false) {
     if (isLoading) {
       return createLxLoadingIcon(
-        'editor-browser-library-item-favicon is-loading',
+        'comet-editor-browser-library-item-favicon is-loading',
       );
     }
 
-    const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
+const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
     if (!normalizedFaviconUrl) {
       return createLxIcon(
         'browser-1',
-        'editor-browser-library-item-favicon is-fallback',
+        'comet-editor-browser-library-item-favicon is-fallback',
       );
     }
 
-    const image = createElement(
-      'img',
-      'editor-browser-library-item-favicon',
-    ) as HTMLImageElement;
+const image = $<HTMLElementTagNameMap['img']>('img.comet-editor-browser-library-item-favicon') as HTMLImageElement;
     image.alt = '';
     image.src = normalizedFaviconUrl;
     image.loading = 'lazy';
@@ -1757,9 +1725,10 @@ export class EditorBrowserLibraryPanel {
       if (!image.parentElement) {
         return;
       }
-      const fallback = createLxIcon(
+
+const fallback = createLxIcon(
         'browser-1',
-        'editor-browser-library-item-favicon is-fallback',
+        'comet-editor-browser-library-item-favicon is-fallback',
       );
       image.replaceWith(fallback);
     });
@@ -1775,13 +1744,13 @@ export class EditorBrowserLibraryPanel {
       container.append(this.createLibraryItemRow(itemState));
     }
 
-    const itemsByFolderId = new Map<string, BrowserLibraryListItem[]>();
+const itemsByFolderId = new Map<string, BrowserLibraryListItem[]>();
     for (const itemState of items) {
       if (!itemState.favoriteFolderId) {
         continue;
       }
 
-      const existingItems = itemsByFolderId.get(itemState.favoriteFolderId) ?? [];
+const existingItems = itemsByFolderId.get(itemState.favoriteFolderId) ?? [];
       existingItems.push(itemState);
       itemsByFolderId.set(itemState.favoriteFolderId, existingItems);
     }
@@ -1792,13 +1761,9 @@ export class EditorBrowserLibraryPanel {
         continue;
       }
 
-      const folderGroup = createElement('div', 'editor-browser-library-folder-group');
-      const folderTitle = createElement(
-        'p',
-        'editor-browser-library-folder-title',
-        folder.name,
-      );
-      const folderList = createElement('div', 'editor-browser-library-folder-list');
+const folderGroup = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-folder-group');
+      const folderTitle = $<HTMLElementTagNameMap['p']>('p.comet-editor-browser-library-folder-title', undefined, folder.name);
+      const folderList = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-folder-list');
       for (const itemState of folderItems) {
         folderList.append(this.createLibraryItemRow(itemState));
       }
@@ -1814,9 +1779,9 @@ export class EditorBrowserLibraryPanel {
       Boolean(this.context.browserIsLoading) &&
       toTrackableBrowserLibraryUrl(this.context.browserUrl) ===
         toTrackableBrowserLibraryUrl(url);
-    const itemRow = createElement('div', 'editor-browser-library-item-row');
+    const itemRow = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-item-row');
     itemRow.classList.toggle('is-deletable', canDeleteHistory);
-    const item = createElement('button', 'editor-browser-library-item');
+    const item = $<HTMLElementTagNameMap['button']>('button.comet-editor-browser-library-item');
     item.type = 'button';
     item.title = url;
     if (sectionKind === 'favorites') {
@@ -1832,27 +1797,17 @@ export class EditorBrowserLibraryPanel {
       event.stopPropagation();
       this.handleLibraryItemClick(url);
     });
-    const headerElement = createElement(
-      'span',
-      'editor-browser-library-item-header',
-    );
+    const headerElement = $<HTMLElementTagNameMap['span']>('span.comet-editor-browser-library-item-header');
     const faviconElement = this.createLibraryItemFaviconElement(
       faviconUrl,
       isCurrentLoading,
     );
-    const titleElement = createElement(
-      'span',
-      'editor-browser-library-item-title',
-      title,
-    );
+    const titleElement = $<HTMLElementTagNameMap['span']>('span.comet-editor-browser-library-item-title', undefined, title);
     headerElement.append(faviconElement, titleElement);
     item.append(headerElement);
     itemRow.append(item);
     if (canDeleteHistory) {
-      const deleteButton = createElement(
-        'button',
-        'editor-browser-library-item-delete-btn btn-base btn-md',
-      ) as HTMLButtonElement;
+      const deleteButton = $<HTMLElementTagNameMap['button']>('button.comet-editor-browser-library-item-delete-btn.btn-base.btn-md') as HTMLButtonElement;
       const deleteLabel = this.getDeleteHistoryEntryLabel();
       deleteButton.type = 'button';
       deleteButton.title = deleteLabel;
@@ -1930,7 +1885,7 @@ export class EditorBrowserLibraryPanel {
       return this.listElement;
     }
 
-    const listElement = createElement('div', 'editor-browser-library-list');
+const listElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-list');
     this.listElement = listElement;
     this.bodyElement.append(listElement);
     return listElement;
@@ -1941,7 +1896,7 @@ export class EditorBrowserLibraryPanel {
       return this.emptyStateElement;
     }
 
-    this.emptyStateElement = createElement('div', 'editor-browser-library-empty');
+    this.emptyStateElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-empty');
     this.bodyElement.append(this.emptyStateElement);
     return this.emptyStateElement;
   }
@@ -1951,7 +1906,7 @@ export class EditorBrowserLibraryPanel {
     const query = this.searchQuery.trim();
     const iconName = isNoMatch ? 'search' : 'favorite';
     const label = isNoMatch
-      ? `No matches for “${query}”`
+      ? `No matches for "${query}"`
       : this.context.labels.emptyState;
 
     const nextStateSignature = `${iconName}:${label}`;
@@ -1959,8 +1914,8 @@ export class EditorBrowserLibraryPanel {
       return;
     }
 
-    const emptyIconElement = createLxIcon(iconName, 'editor-browser-library-empty-icon');
-    const emptyLabelElement = createElement('p', 'editor-browser-library-empty-label', label);
+const emptyIconElement = createLxIcon(iconName, 'comet-editor-browser-library-empty-icon');
+    const emptyLabelElement = $<HTMLElementTagNameMap['p']>('p.comet-editor-browser-library-empty-label', undefined, label);
     emptyStateElement.replaceChildren(emptyIconElement, emptyLabelElement);
     emptyStateElement.dataset.state = nextStateSignature;
   }

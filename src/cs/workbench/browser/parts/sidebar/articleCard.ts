@@ -113,22 +113,22 @@ export class ArticleCard extends Disposable {
   private readonly element = createElement('li');
   private readonly mainElement = createElement(
     'div',
-    'fetch-pane-article-card-main',
+    'comet-fetch-pane-article-card-main',
   );
   private readonly titleElement = createElement(
     'h3',
-    'fetch-pane-article-card-title',
+    'comet-fetch-pane-article-card-title',
   );
   private readonly metaElement = createElement(
     'span',
-    'fetch-pane-article-card-meta',
+    'comet-fetch-pane-article-card-meta',
   );
   private readonly archiveBadgesElement = createElement(
     'div',
-    'fetch-pane-article-card-archive-badges',
+    'comet-fetch-pane-article-card-archive-badges',
   );
   private readonly toolbarView = createActionBarView({
-    className: 'fetch-pane-article-card-toolbar-actions',
+    className: 'comet-fetch-pane-article-card-toolbar-actions',
     ariaRole: 'group',
   });
   private disposed = false;
@@ -186,7 +186,7 @@ export class ArticleCard extends Disposable {
     const hasDownloaded = downloadStatus.hasSucceeded;
 
     this.element.className = [
-      'fetch-pane-article-card',
+      'comet-fetch-pane-article-card',
       isSelectionModeEnabled ? 'is-selection-mode' : '',
       isSelected ? 'is-selected' : '',
     ]
@@ -209,7 +209,7 @@ export class ArticleCard extends Disposable {
     this.renderArchiveBadges();
 
     this.toolbarView.setProps({
-      className: 'fetch-pane-article-card-toolbar-actions',
+      className: 'comet-fetch-pane-article-card-toolbar-actions',
       ariaRole: 'group',
       items: [
         {
@@ -234,7 +234,7 @@ export class ArticleCard extends Disposable {
             ],
           },
           buttonClassName: [
-            'fetch-pane-article-card-icon-btn',
+            'comet-fetch-pane-article-card-icon-btn',
             hasDownloaded ? 'is-downloaded' : '',
           ]
             .filter(Boolean)
@@ -248,7 +248,7 @@ export class ArticleCard extends Disposable {
           label: MORE_ACTIONS_LABEL,
           title: MORE_ACTIONS_LABEL,
           content: createLxIcon('more'),
-          buttonClassName: 'fetch-pane-article-card-icon-btn',
+          buttonClassName: 'comet-fetch-pane-article-card-icon-btn',
           overlayAlignment: 'end',
           menuData: ARTICLE_CARD_MORE_MENU_DATA,
           menu: [
@@ -309,7 +309,7 @@ export class ArticleCard extends Disposable {
       ...badges.map((badge) => {
         const badgeElement = createElement(
           'span',
-          'fetch-pane-article-card-archive-badge',
+          'comet-fetch-pane-article-card-archive-badge',
         );
         badgeElement.textContent = badge.label;
         badgeElement.title = badge.title;

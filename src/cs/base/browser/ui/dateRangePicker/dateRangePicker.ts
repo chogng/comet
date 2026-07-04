@@ -227,11 +227,11 @@ export class DateRangePickerView extends Disposable {
   private visibleMonth: Date;
   private readonly weekdayLabels = createWeekdayLabels();
   private readonly todayValue = formatDateInputValue(new Date());
-  private readonly element = createElement('div', 'date-range-picker');
-  private readonly trigger = createElement('button', 'date-range-trigger');
-  private readonly triggerContent = createElement('span', 'date-range-trigger-content');
-  private readonly triggerIcon = createElement('span', 'date-range-trigger-icon');
-  private readonly triggerText = createElement('span', 'date-range-trigger-text');
+  private readonly element = createElement('div', 'comet-date-range-picker');
+  private readonly trigger = createElement('button', 'comet-date-range-trigger');
+  private readonly triggerContent = createElement('span', 'comet-date-range-trigger-content');
+  private readonly triggerIcon = createElement('span', 'comet-date-range-trigger-icon');
+  private readonly triggerText = createElement('span', 'comet-date-range-trigger-text');
   private readonly popupDisposables = new DisposableStore();
   private popup: HTMLDivElement | null = null;
   private activeSlot: DateRangeSlot = 'primary';
@@ -459,7 +459,7 @@ export class DateRangePickerView extends Disposable {
 
     const targetValue = this.pendingFocusDayValue;
     this.pendingFocusDayValue = null;
-    const dayButtons = this.popup.querySelectorAll<HTMLButtonElement>('.date-range-day');
+    const dayButtons = this.popup.querySelectorAll<HTMLButtonElement>('.comet-date-range-day');
     for (const button of dayButtons) {
       if (button.dataset.dateValue === targetValue && !button.disabled) {
         button.focus({ preventScroll: true });
@@ -495,7 +495,7 @@ export class DateRangePickerView extends Disposable {
   private renderSlot(slot: DateRangeSlot, indexText: string) {
     const slotElement = createElement(
       'button',
-      ['date-range-slot', this.activeSlot === slot ? 'is-active' : ''].filter(Boolean).join(' '),
+      ['comet-date-range-slot', this.activeSlot === slot ? 'is-active' : ''].filter(Boolean).join(' '),
     );
     slotElement.type = 'button';
     slotElement.dataset.slot = slot;
@@ -506,8 +506,8 @@ export class DateRangePickerView extends Disposable {
       }),
     );
     slotElement.append(
-      createElement('span', 'date-range-slot-index', indexText),
-      createElement('span', 'date-range-slot-value', this.getSlotValue(slot) || '--'),
+      createElement('span', 'comet-date-range-slot-index', indexText),
+      createElement('span', 'comet-date-range-slot-value', this.getSlotValue(slot) || '--'),
     );
     return slotElement;
   }
@@ -521,22 +521,22 @@ export class DateRangePickerView extends Disposable {
       return;
     }
 
-    const popup = createElement('div', 'date-range-popup');
+    const popup = createElement('div', 'comet-date-range-popup');
     popup.setAttribute('role', 'dialog');
     popup.setAttribute('aria-modal', 'false');
     popup.setAttribute('aria-label', createTriggerLabel(this.props.labels));
 
-    const slots = createElement('div', 'date-range-slots');
+    const slots = createElement('div', 'comet-date-range-slots');
     slots.append(
       this.renderSlot('primary', '1'),
-      createElement('div', 'date-range-slot-divider'),
+      createElement('div', 'comet-date-range-slot-divider'),
       this.renderSlot('secondary', '2'),
     );
 
-    const header = createElement('div', 'date-range-popup-header');
+    const header = createElement('div', 'comet-date-range-popup-header');
     const prevButton = createElement(
       'button',
-      'date-range-month-nav btn-base btn-ghost btn-mode-icon btn-sm',
+      'comet-date-range-month-nav comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-sm',
     );
     prevButton.type = 'button';
     prevButton.append(createChevronIcon('left'));
@@ -546,11 +546,11 @@ export class DateRangePickerView extends Disposable {
       }),
     );
 
-    const title = createElement('div', 'date-range-month-title', formatMonthTitle(this.visibleMonth));
+    const title = createElement('div', 'comet-date-range-month-title', formatMonthTitle(this.visibleMonth));
 
     const nextButton = createElement(
       'button',
-      'date-range-month-nav btn-base btn-ghost btn-mode-icon btn-sm',
+      'comet-date-range-month-nav comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-sm',
     );
     nextButton.type = 'button';
     nextButton.append(createChevronIcon('right'));
@@ -561,9 +561,9 @@ export class DateRangePickerView extends Disposable {
     );
     header.append(prevButton, title, nextButton);
 
-    const weekdays = createElement('div', 'date-range-weekdays');
+    const weekdays = createElement('div', 'comet-date-range-weekdays');
     weekdays.append(
-      ...this.weekdayLabels.map((weekday) => createElement('span', 'date-range-weekday', weekday)),
+      ...this.weekdayLabels.map((weekday) => createElement('span', 'comet-date-range-weekday', weekday)),
     );
 
     const orderedDraft = orderDateValues(this.draftPrimaryDate, this.draftSecondaryDate);
@@ -576,7 +576,7 @@ export class DateRangePickerView extends Disposable {
         orderedDraft.end &&
         isDateRangeValid(orderedDraft.start, orderedDraft.end),
     );
-    const grid = createElement('div', 'date-range-grid');
+    const grid = createElement('div', 'comet-date-range-grid');
     grid.append(
       ...createMonthCells(this.visibleMonth).map((cell) => {
         const isSelected = selectedValues.has(cell.value);
@@ -591,10 +591,10 @@ export class DateRangePickerView extends Disposable {
         const day = createElement(
           'button',
           [
-            'date-range-day',
-            'btn-base',
-            'btn-ghost',
-            'btn-sm',
+            'comet-date-range-day',
+            'comet-btn-base',
+            'comet-btn-ghost',
+            'comet-btn-sm',
             cell.inCurrentMonth ? '' : 'is-outside',
             isSelected ? 'is-selected' : '',
             isStart ? 'is-start' : '',
@@ -629,12 +629,12 @@ export class DateRangePickerView extends Disposable {
   }
 
   private renderView() {
-    this.element.className = ['date-range-picker', this.props.className].filter(Boolean).join(' ');
+    this.element.className = ['comet-date-range-picker', this.props.className].filter(Boolean).join(' ');
 
     const triggerLabel = createTriggerLabel(this.props.labels);
     this.trigger.className = [
-      'date-range-trigger',
-      'actionbar-action',
+      'comet-date-range-trigger',
+      'comet-actionbar-action',
       this.props.triggerMode === 'icon' ? 'is-icon' : 'is-text',
       this.isOpen ? 'is-active' : '',
     ]

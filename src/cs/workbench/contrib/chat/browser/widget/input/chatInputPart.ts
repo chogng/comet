@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { addDisposableListener, EventType } from 'cs/base/browser/dom';
+import { $, addDisposableListener, EventType } from 'cs/base/browser/dom';
 import {
 	createActionBarView,
 	type ActionBarActionItem,
@@ -42,17 +42,6 @@ export type ChatInputPartProps = Pick<
 	readonly isEmpty: boolean;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
-
 function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerProps {
 	return {
 		activeLlmModelLabel: props.activeLlmModelLabel,
@@ -74,7 +63,7 @@ function getArticleSourceLabel(source: BatchSource) {
 
 export class ChatInputPart {
 	private props: ChatInputPartProps;
-	private readonly element = createElement('div');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div');
 	private readonly renderDisposables = new DisposableStore();
 	private readonly modelPicker: ChatInputModelPickerActionViewItem;
 	private isArticleMenuOpen = false;
@@ -107,23 +96,20 @@ export class ChatInputPart {
 	private render() {
 		this.renderDisposables.clear();
 		this.element.className = [
-			'chat-composer-host',
-			this.props.isEmpty ? 'is-empty-state' : '',
+			'comet-chat-composer-host',
+			this.props.isEmpty ? 'comet-is-empty-state' : '',
 		]
 			.filter(Boolean)
 			.join(' ');
 
-		const composer = createElement(
-			'div',
-			[
-				'chat-composer',
-				this.props.isEmpty ? 'is-empty-state' : '',
+		const composer = $<HTMLElementTagNameMap['div']>('div', { class: [
+				'comet-chat-composer',
+				this.props.isEmpty ? 'comet-is-empty-state' : '',
 			]
 				.filter(Boolean)
-				.join(' '),
-		);
+				.join(' ') });
 
-		const textarea = createElement('textarea', 'chat-composer-input');
+		const textarea = $<HTMLElementTagNameMap['textarea']>('textarea.comet-chat-composer-input');
 		textarea.rows = 2;
 		textarea.value = this.props.question;
 		textarea.placeholder = localize(
@@ -148,19 +134,19 @@ export class ChatInputPart {
 			}
 		}));
 
-		const toolbar = createElement('div', 'chat-composer-toolbar');
+		const toolbar = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-toolbar');
 		this.renderDisposables.add(this.modelPicker.render(toolbar));
 		const sendLabel = this.props.isAsking
 			? localize('assistantSidebarSendBusy', "Asking...")
 			: localize('assistantSidebarSend', "Send");
 		const actionsView = createActionBarView({
-			className: 'chat-composer-actions',
+			className: 'comet-chat-composer-actions',
 			ariaRole: 'group',
 			items: [
 				this.createComposerActionItem(
 					localize('assistantSidebarImage', "Image"),
 					'image-filled',
-					'chat-composer-tool-action',
+					'comet-chat-composer-tool-action',
 				),
 				{
 					label: sendLabel,
@@ -170,7 +156,7 @@ export class ChatInputPart {
 							? lxIconSemanticMap.assistant.busy
 							: 'voice-circle-filled',
 					),
-					buttonClassName: 'chat-composer-send-action',
+					buttonClassName: 'comet-chat-composer-send-action',
 					onClick: () => this.props.onAsk(),
 				},
 			],
@@ -204,7 +190,7 @@ export class ChatInputPart {
 	private createComposerActionItem(
 		label: string,
 		icon: LxIconName,
-		buttonClassName = 'chat-composer-tool-action',
+		buttonClassName = 'comet-chat-composer-tool-action',
 	): ActionBarActionItem {
 		return {
 			label,
@@ -215,8 +201,8 @@ export class ChatInputPart {
 	}
 
 	private renderQuickActions() {
-		const wrapper = createElement('div', 'chat-composer-quick-actions-shell');
-		const row = createElement('div', 'chat-composer-quick-actions');
+		const wrapper = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions-shell');
+		const row = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions');
 		row.append(
 			this.createQuickActionButton(localize('chatQuickActionWrite', "Write"), 'write'),
 			this.createQuickActionButton(localize('chatQuickActionLearn', "Learn"), 'book'),
@@ -243,10 +229,7 @@ export class ChatInputPart {
 		onClick?: () => void,
 		expanded = false,
 	) {
-		const button = createElement(
-			'button',
-			'chat-composer-quick-action btn-base btn-secondary btn-sm',
-		);
+		const button = $<HTMLElementTagNameMap['button']>('button.comet-chat-composer-quick-action.comet-btn-base.comet-btn-secondary.comet-btn-sm');
 		button.type = 'button';
 		button.setAttribute('aria-label', label);
 		if (expanded) {
@@ -262,17 +245,14 @@ export class ChatInputPart {
 	}
 
 	private renderArticleMenu() {
-		const menu = createElement('div', 'chat-composer-article-menu');
-		const header = createElement('div', 'chat-composer-article-menu-header');
-		const title = createElement('span', 'chat-composer-article-menu-title');
+		const menu = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-menu');
+		const header = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-menu-header');
+		const title = $<HTMLElementTagNameMap['span']>('span.comet-chat-composer-article-menu-title');
 		title.append(
 			createLxIcon('file-text'),
 			document.createTextNode(localize('chatArticleMenuTitle', "Article")),
 		);
-		const closeButton = createElement(
-			'button',
-			'chat-composer-article-menu-close btn-base btn-ghost btn-mode-icon btn-sm',
-		);
+		const closeButton = $<HTMLElementTagNameMap['button']>('button.comet-chat-composer-article-menu-close.comet-btn-base.comet-btn-ghost.comet-btn-mode-icon.comet-btn-sm');
 		closeButton.type = 'button';
 		closeButton.setAttribute(
 			'aria-label',
@@ -286,9 +266,9 @@ export class ChatInputPart {
 		);
 		header.append(title, closeButton);
 
-		const list = createElement('div', 'chat-composer-article-source-list');
+		const list = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-source-list');
 		for (const source of this.props.articleQuickSources) {
-			const sourceButton = createElement('button', 'chat-composer-article-source');
+			const sourceButton = $<HTMLElementTagNameMap['button']>('button.comet-chat-composer-article-source');
 			const sourceLabel = getArticleSourceLabel(source);
 			sourceButton.type = 'button';
 			sourceButton.disabled = this.props.isArticleSourceFetching;

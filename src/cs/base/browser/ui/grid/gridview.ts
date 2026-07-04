@@ -213,8 +213,8 @@ export class GridBranchView implements IGridView {
     this.sashSize = sashSize;
     this.reserveSashSpace = reserveSashSpace;
     this.element.className = [
-      'grid-view-branch',
-      this.orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal',
+      'comet-grid-view-branch',
+      this.orientation === Orientation.VERTICAL ? 'comet-vertical' : 'comet-horizontal',
     ].join(' ');
     this.splitView = new SplitView(orientation, sashSize, reserveSashSpace);
     this.element.append(this.splitView.element);
@@ -465,7 +465,7 @@ export class GridBranchView implements IGridView {
   }
 
   setVisible(visible: boolean) {
-    this.splitView.element.classList.toggle('is-hidden', !visible);
+    this.splitView.element.classList.toggle('comet-is-hidden', !visible);
   }
 
   dispose() {
@@ -520,7 +520,7 @@ export class GridView implements IGridView {
   readonly onDidSashEnd = this.onDidSashEndEmitter.event;
 
   constructor(readonly root: GridBranchView) {
-    this.element.className = 'grid-view-root';
+    this.element.className = 'comet-grid-view-root';
     this.element.append(root.element);
     this.bindBranchEvents(root, []);
   }

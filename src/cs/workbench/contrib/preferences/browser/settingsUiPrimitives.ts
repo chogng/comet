@@ -34,7 +34,7 @@ export function setSettingsFocusKey<T extends HTMLElement>(node: T, key: string)
   return node;
 }
 
-export function buildSettingsHint(value: string, className = 'settings-hint') {
+export function buildSettingsHint(value: string, className = 'comet-settings-hint') {
   const hint = createSettingsElement('p', className);
   hint.textContent = value;
   return hint;
@@ -56,7 +56,7 @@ export function buildSettingsInput(config: {
 }) {
   const host = createSettingsElement('div');
   const inputBox = new InputBox(host, undefined, {
-    className: `settings-inputbox ${config.className}`.trim(),
+    className: `comet-settings-inputbox ${config.className}`.trim(),
     type: config.type ?? 'text',
     value: String(config.value),
     placeholder: config.placeholder ?? '',
@@ -96,7 +96,7 @@ export function buildSettingsSelect(
     {},
     {
       useCustomDrawn: true,
-      className: `settings-select-trigger ${className}`.trim(),
+      className: `comet-settings-select-trigger ${className}`.trim(),
     },
   );
   const host = createSettingsElement('div');
@@ -116,12 +116,12 @@ export function buildSettingsButton(config: {
   onClick: () => void;
 }) {
   const extraClasses = (config.className ?? '').trim();
-  const isIconButton = extraClasses.includes('settings-btn-icon');
+  const isIconButton = extraClasses.includes('comet-settings-btn-icon');
   const buttonClassName = [
-    'settings-btn',
-    'btn-base',
-    'btn-secondary',
-    isIconButton ? 'btn-mode-icon btn-sm' : 'btn-md',
+    'comet-settings-btn',
+    'comet-btn-base',
+    'comet-btn-secondary',
+    isIconButton ? 'comet-btn-mode-icon comet-btn-sm' : 'comet-btn-md',
     extraClasses,
   ]
     .filter(Boolean)
@@ -153,7 +153,7 @@ export function buildSettingsSwitch(config: {
   const view = createSwitchView({
     checked: config.checked,
     disabled: config.disabled,
-    className: 'settings-toggle-switch',
+    className: 'comet-settings-toggle-switch',
     title: config.title,
     animationKey: config.focusKey,
     onChange: config.onChange,

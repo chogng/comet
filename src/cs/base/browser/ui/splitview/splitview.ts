@@ -228,11 +228,11 @@ export class SplitView<TLayoutContext = undefined> {
   ) {
     this.explicitSashSize = sashSize;
     this.element.className = [
-      'split-view',
-      this.orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal',
+      'comet-split-view',
+      this.orientation === Orientation.VERTICAL ? 'comet-vertical' : 'comet-horizontal',
     ].join(' ');
-    this.viewContainer.className = 'split-view-container';
-    this.sashContainer.className = 'sash-container';
+    this.viewContainer.className = 'comet-split-view-container';
+    this.sashContainer.className = 'comet-sash-container';
     this.element.append(this.viewContainer, this.sashContainer);
   }
 
@@ -289,9 +289,9 @@ export class SplitView<TLayoutContext = undefined> {
     const visible = options.visible !== false && resolvedSizing.visible !== false;
     const initialSize = this.clampSize(view, resolvedSizing.size);
     const container = document.createElement('div');
-    container.className = 'split-view-view';
+    container.className = 'comet-split-view-view';
     if (visible) {
-      container.classList.add('visible');
+      container.classList.add('comet-visible');
     }
     container.append(view.element);
 
@@ -524,14 +524,14 @@ export class SplitView<TLayoutContext = undefined> {
 
   style(styles: ISplitViewStyles): void {
     if (styles.separatorBorder.isTransparent?.() === true) {
-      this.element.classList.remove('separator-border');
-      this.element.style.removeProperty('--separator-border');
+      this.element.classList.remove('comet-separator-border');
+      this.element.style.removeProperty('--comet-separator-border');
       return;
     }
 
-    this.element.classList.add('separator-border');
+    this.element.classList.add('comet-separator-border');
     this.element.style.setProperty(
-      '--separator-border',
+      '--comet-separator-border',
       styles.separatorBorder.toString(),
     );
   }
@@ -647,8 +647,8 @@ export class SplitView<TLayoutContext = undefined> {
       const rightItemIndex = index + 1;
       const separator = document.createElement('div');
       separator.className = [
-        'split-view-separator',
-        this.orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal',
+        'comet-split-view-separator',
+        this.orientation === Orientation.VERTICAL ? 'comet-vertical' : 'comet-horizontal',
       ].join(' ');
       separator.setAttribute('aria-hidden', 'true');
       this.sashContainer.append(separator);
@@ -835,7 +835,7 @@ export class SplitView<TLayoutContext = undefined> {
     let offset = 0;
     for (let index = 0; index < this.items.length; index += 1) {
       const item = this.items[index];
-      item.container.classList.toggle('visible', item.visible);
+      item.container.classList.toggle('comet-visible', item.visible);
       if (this.orientation === Orientation.VERTICAL) {
         item.container.style.left = `${offset}px`;
         item.container.style.top = '0';
@@ -1046,7 +1046,7 @@ export class SplitView<TLayoutContext = undefined> {
       const hasVisibleAfter = this.items
         .slice(sashItem.leftItemIndex + 1)
         .some((item) => item.visible === true);
-      sashItem.separator.classList.toggle('visible', leftVisible && hasVisibleAfter);
+      sashItem.separator.classList.toggle('comet-visible', leftVisible && hasVisibleAfter);
       position += this.items[index].size;
 
       const min = !(collapsesDown[index] && expandsUp[index + 1]);
@@ -1178,7 +1178,7 @@ export class SplitView<TLayoutContext = undefined> {
       item.size = 0;
     }
 
-    item.container.classList.toggle('visible', visible);
+    item.container.classList.toggle('comet-visible', visible);
     item.view.setVisible?.(visible);
     return true;
   }

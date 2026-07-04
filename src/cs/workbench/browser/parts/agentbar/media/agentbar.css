@@ -12,7 +12,7 @@
   gap: 0;
 }
 
-.agentbar-header {
+.comet-agentbar-header {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -23,7 +23,7 @@
   user-select: none;
 }
 
-.agentbar-header-actions {
+.comet-agentbar-header-actions {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -32,7 +32,7 @@
   padding-inline: 0 8px;
 }
 
-.agentbar-header-leading {
+.comet-agentbar-header-leading {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -40,7 +40,7 @@
   height: 100%;
 }
 
-.agentbar-header-trailing {
+.comet-agentbar-header-trailing {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -49,60 +49,60 @@
   height: 100%;
 }
 
-.agentbar-header-trailing > .header-actions {
+.comet-agentbar-header-trailing > .comet-header-actions {
   margin-left: 0;
 }
 
-.agentbar-header-trailing-actions-host,
-.agentbar-header-trailing-primary,
-.agentbar-header-trailing-secondary {
+.comet-agentbar-header-trailing-actions-host,
+.comet-agentbar-header-trailing-primary,
+.comet-agentbar-header-trailing-secondary {
   display: inline-flex;
   align-items: center;
   min-width: 0;
   height: 100%;
 }
 
-.agentbar-header-trailing-actions-host {
+.comet-agentbar-header-trailing-actions-host {
   gap: 0;
 }
 
-.agentbar-header-trailing-actions-host .header-actions {
+.comet-agentbar-header-trailing-actions-host .comet-header-actions {
   margin-left: 0;
 }
 
-.agentbar-header-window-controls-spacer {
+.comet-agentbar-header-window-controls-spacer {
   width: var(--window-controls-width, 70px);
   min-width: var(--window-controls-width, 70px);
   flex: 0 0 var(--window-controls-width, 70px);
   height: 100%;
 }
 
-.agentbar-placeholder {
+.comet-agentbar-placeholder {
   display: grid;
   gap: 10px;
   padding: 12px;
   overflow: auto;
 }
 
-.agentbar-placeholder p {
+.comet-agentbar-placeholder p {
   margin: 0;
   color: var(--vscode-sideBar-secondaryForeground, #415366);
   font-size: 12px;
   line-height: 1.5;
 }
 
-.agentbar-field {
+.comet-agentbar-field {
   display: grid;
   gap: 6px;
 }
 
-.agentbar-label {
+.comet-agentbar-label {
   font-size: 12px;
   font-weight: 600;
   color: var(--vscode-sideBar-secondaryForeground, #415366);
 }
 
-.agentbar-input {
+.comet-agentbar-input {
   width: 100%;
   min-height: 96px;
   resize: none;
@@ -116,37 +116,37 @@
   line-height: 1.45;
 }
 
-.agentbar-input::placeholder {
+.comet-agentbar-input::placeholder {
   font-size: 12px;
 }
 
-.agentbar-context-input {
+.comet-agentbar-context-input {
   min-height: 120px;
 }
 
-.agentbar-tabs-header {
+.comet-agentbar-tabs-header {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   padding: 4px 4px;
 }
 
-.agentbar-tabs-header > .sidebar-action-bar {
+.comet-agentbar-tabs-header > .sidebar-action-bar {
   flex: 0 0 auto;
   padding: 0;
   border-bottom: none;
 }
 
-.agentbar-tabs-header > .sidebar-action-bar .actionbar-action {
+.comet-agentbar-tabs-header > .sidebar-action-bar .actionbar-action {
   min-height: 26px;
 }
 
-.agentbar-tabs-header > .sidebar-action-bar .actionbar-action.is-icon {
+.comet-agentbar-tabs-header > .sidebar-action-bar .actionbar-action.is-icon {
   width: 26px;
   height: 26px;
 }
 
-.agentbar-tabs-header > .sidebar-action-bar .actionbar-action .lx-icon {
+.comet-agentbar-tabs-header > .sidebar-action-bar .actionbar-action .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;

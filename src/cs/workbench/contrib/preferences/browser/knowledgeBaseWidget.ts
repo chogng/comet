@@ -16,7 +16,7 @@ export type KnowledgeBaseWidgetProps = {
 
 export class KnowledgeBaseWidget {
   private props: KnowledgeBaseWidgetProps;
-  private readonly element = el('section', 'settings-field settings-knowledge-base-field');
+  private readonly element = el('section', 'comet-settings-field comet-settings-knowledge-base-field');
   private readonly libraryWidget: LibraryWidget;
   private readonly ragWidget: RagWidget;
 
@@ -39,8 +39,8 @@ export class KnowledgeBaseWidget {
   }
 
   private render() {
-    const root = el('div', 'settings-field');
-    const title = el('span', 'settings-section-title');
+    const root = el('div', 'comet-settings-field');
+    const title = el('span', 'comet-settings-section-title');
     title.textContent = this.props.title;
     root.append(
       title,

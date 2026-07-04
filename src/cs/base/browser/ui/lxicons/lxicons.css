@@ -1,4 +1,4 @@
-.lx-icon {
+.comet-lx-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -10,24 +10,24 @@
   flex-shrink: 0;
 }
 
-.lx-icon svg {
+.comet-lx-icon svg {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-@keyframes lx-icon-spin {
+@keyframes comet-lx-icon-spin {
   100% {
     transform: rotate(360deg);
   }
 }
 
-.lx-icon-modifier-spin {
-  animation: lx-icon-spin 1.5s steps(30) infinite;
+.comet-lx-icon-modifier-spin {
+  animation: comet-lx-icon-spin 1.5s steps(30) infinite;
 }
 
-.lx-icon-loading,
-.lx-icon-sync.lx-icon-modifier-spin {
+.comet-lx-icon-loading,
+.comet-lx-icon-sync.comet-lx-icon-modifier-spin {
   animation-duration: 1s;
   animation-timing-function: cubic-bezier(0.53, 0.21, 0.29, 0.67);
 }

@@ -70,7 +70,7 @@ function appendButtonContent(target: HTMLElement, content: ButtonContent) {
 
 function createSpinnerIcon() {
   const spinner = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  spinner.setAttribute('class', 'btn-spinner');
+  spinner.setAttribute('class', 'comet-btn-spinner');
   spinner.setAttribute('viewBox', '0 0 24 24');
   spinner.setAttribute('width', '16');
   spinner.setAttribute('height', '16');
@@ -211,11 +211,11 @@ export class ButtonView extends Disposable {
       hasContent;
 
     this.element.className = [
-      'btn-base',
-      `btn-${variant}`,
-      `btn-${size}`,
-      `btn-mode-${mode}`,
-      isLoading ? 'btn-loading' : '',
+      'comet-btn-base',
+      `comet-btn-${variant}`,
+      `comet-btn-${size}`,
+      `comet-btn-mode-${mode}`,
+      isLoading ? 'comet-btn-loading' : '',
       className,
     ]
       .filter(Boolean)
@@ -240,19 +240,19 @@ export class ButtonView extends Disposable {
     }
 
     if (showLeftIcon) {
-      nextChildren.push(createContentWrapper('btn-icon-left', leftIcon));
+      nextChildren.push(createContentWrapper('comet-btn-icon-left', leftIcon));
     }
 
     if (showChildrenAsIcon) {
-      nextChildren.push(createContentWrapper('btn-icon-only', content));
+      nextChildren.push(createContentWrapper('comet-btn-icon-only', content));
     }
 
     if (showText) {
-      nextChildren.push(createContentWrapper('btn-content', content));
+      nextChildren.push(createContentWrapper('comet-btn-content', content));
     }
 
     if (showRightIcon) {
-      nextChildren.push(createContentWrapper('btn-icon-right', rightIcon));
+      nextChildren.push(createContentWrapper('comet-btn-icon-right', rightIcon));
     }
 
     this.element.replaceChildren(...nextChildren);

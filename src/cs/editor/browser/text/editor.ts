@@ -298,9 +298,9 @@ function areSurfaceLabelsEqual(
 
 export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
   private props: WritingEditorSurfaceProps;
-  private readonly element = createElement('div', 'pm-editor-surface');
-  private readonly hostWrapperElement = createElement('div', 'pm-editor-host');
-  private readonly editorRootElement = createElement('div', 'pm-editor-root');
+  private readonly element = createElement('div', 'comet-pm-editor-surface');
+  private readonly hostWrapperElement = createElement('div', 'comet-pm-editor-host');
+  private readonly editorRootElement = createElement('div', 'comet-pm-editor-root');
   private readonly scrollableElement: DomScrollableElement;
   private readonly toolbar: DraftEditorToolbar;
   private readonly disposeDraftStyleServiceSubscription: () => void;
@@ -326,7 +326,7 @@ export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
     );
     this.hostWrapperElement.append(this.editorRootElement);
     this.scrollableElement = new DomScrollableElement(this.hostWrapperElement, {
-      className: 'pm-editor-scrollable',
+      className: 'comet-pm-editor-scrollable',
       useShadows: true,
       horizontal: ScrollbarVisibility.Hidden,
       vertical: ScrollbarVisibility.Auto,

@@ -18,24 +18,24 @@ export function buildSettingsNumberStepperInput(config: {
 }) {
   const stepper = createSettingsElement(
     'div',
-    `settings-number-stepper ${config.className}`.trim(),
+    `comet-settings-number-stepper ${config.className}`.trim(),
   );
   const decrementButton = createSettingsElement(
     'button',
-    'settings-number-stepper-button settings-number-stepper-button-decrement',
+    'comet-settings-number-stepper-button comet-settings-number-stepper-button-decrement',
   );
   decrementButton.type = 'button';
   decrementButton.append(
     createLxIcon(
       lxIconSemanticMap.settings.decrement,
-      'settings-number-stepper-button-icon',
+      'comet-settings-number-stepper-button-icon',
     ),
   );
   decrementButton.ariaLabel = 'Decrease value';
   const inputBox = buildSettingsInput({
     type: 'number',
     value: config.value,
-    className: 'settings-number-stepper-input',
+    className: 'comet-settings-number-stepper-input',
     focusKey: config.focusKey,
     min: config.min,
     max: config.max,
@@ -46,13 +46,13 @@ export function buildSettingsNumberStepperInput(config: {
   });
   const incrementButton = createSettingsElement(
     'button',
-    'settings-number-stepper-button settings-number-stepper-button-increment',
+    'comet-settings-number-stepper-button comet-settings-number-stepper-button-increment',
   );
   incrementButton.type = 'button';
   incrementButton.append(
     createLxIcon(
       lxIconSemanticMap.settings.increment,
-      'settings-number-stepper-button-icon',
+      'comet-settings-number-stepper-button-icon',
     ),
   );
   incrementButton.ariaLabel = 'Increase value';

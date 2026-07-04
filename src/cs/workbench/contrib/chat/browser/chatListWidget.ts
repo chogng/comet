@@ -29,10 +29,10 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 }
 
 export class ChatListWidget {
-	private readonly element = createElement('div', 'agentbar-thread-widget');
-	private readonly contentElement = createElement('div', 'agentbar-thread');
+	private readonly element = createElement('div', 'comet-agentbar-thread-widget');
+	private readonly contentElement = createElement('div', 'comet-agentbar-thread');
 	private readonly scrollableElement: DomScrollableElement;
-	private readonly scrollDownButton = createElement('button', 'agentbar-thread-scroll-down');
+	private readonly scrollDownButton = createElement('button', 'comet-agentbar-thread-scroll-down');
 	private readonly renderer: ChatListRenderer;
 	private readonly disposables = new DisposableStore();
 	private messages: readonly AssistantChatMessage[] = [];
@@ -44,7 +44,7 @@ export class ChatListWidget {
 			onOpenArticleDetails: options.onOpenArticleDetails,
 		});
 		this.scrollableElement = new DomScrollableElement(this.contentElement, {
-			className: 'agentbar-thread-scrollable',
+			className: 'comet-agentbar-thread-scrollable',
 			horizontal: ScrollbarVisibility.Hidden,
 			vertical: ScrollbarVisibility.Auto,
 			useShadows: true,
@@ -102,8 +102,8 @@ export class ChatListWidget {
 
 	private updateEmptyState() {
 		const isEmpty = this.messages.length === 0;
-		this.element.classList.toggle('is-empty', isEmpty);
-		this.contentElement.classList.toggle('is-empty', isEmpty);
+		this.element.classList.toggle('comet-is-empty', isEmpty);
+		this.contentElement.classList.toggle('comet-is-empty', isEmpty);
 	}
 
 	private isScrolledToBottom() {
@@ -125,7 +125,7 @@ export class ChatListWidget {
 
 	private updateScrollDownButtonVisibility() {
 		this.element.classList.toggle(
-			'show-scroll-down',
+			'comet-show-scroll-down',
 			this.messages.length > 0 && !this.isScrolledToBottom(),
 		);
 	}

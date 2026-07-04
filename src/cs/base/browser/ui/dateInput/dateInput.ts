@@ -136,9 +136,9 @@ export class DateInput extends Disposable {
   private options: DateInputOptions;
   private readonly contextView: ContextViewHandle;
   private readonly ownsContextView: boolean;
-  private readonly element = createElement('div', 'date-input');
+  private readonly element = createElement('div', 'comet-date-input');
   private readonly inputBox: InputBox;
-  private readonly button = createElement('button', 'date-input-button');
+  private readonly button = createElement('button', 'comet-date-input-button');
   private readonly weekdayLabels = createWeekdayLabels();
   private visibleMonth: Date;
   private selectedValue: string;
@@ -156,7 +156,7 @@ export class DateInput extends Disposable {
 
     const host = createElement('div');
     this.inputBox = new InputBox(host, undefined, {
-      className: ['date-input-field', this.options.inputClassName ?? ''].filter(Boolean).join(' '),
+      className: ['comet-date-input-field', this.options.inputClassName ?? ''].filter(Boolean).join(' '),
       value: this.selectedValue,
       inputAttributes: {
         autocomplete: 'off',
@@ -239,7 +239,7 @@ export class DateInput extends Disposable {
   }
 
   private syncClassName() {
-    this.element.className = ['date-input', this.options.className].filter(Boolean).join(' ');
+    this.element.className = ['comet-date-input', this.options.className].filter(Boolean).join(' ');
   }
 
   private scheduleDetachedCleanup() {
@@ -302,7 +302,7 @@ export class DateInput extends Disposable {
     this.visibleMonth = resolveVisibleMonth(this.selectedValue);
     this.contextView.show({
       anchor: this.element,
-      className: 'date-input-context-view',
+      className: 'comet-date-input-context-view',
       render: () => this.renderPopover(),
       alignment: 'end',
       offset: 4,
@@ -340,7 +340,7 @@ export class DateInput extends Disposable {
 
     this.contextView.show({
       anchor: this.element,
-      className: 'date-input-context-view',
+      className: 'comet-date-input-context-view',
       render: () => this.renderPopover(),
       alignment: 'end',
       offset: 4,
@@ -369,7 +369,7 @@ export class DateInput extends Disposable {
     this.pendingFocusValue = null;
     const dayButtons = this.contextView
       .getViewElement()
-      .querySelectorAll<HTMLButtonElement>('.date-input-day');
+      .querySelectorAll<HTMLButtonElement>('.comet-date-input-day');
     for (const button of dayButtons) {
       if (button.dataset.dateValue === targetValue) {
         button.focus({ preventScroll: true });
@@ -379,37 +379,37 @@ export class DateInput extends Disposable {
   }
 
   private renderPopover() {
-    const popover = createElement('div', 'date-input-popover');
+    const popover = createElement('div', 'comet-date-input-popover');
     popover.setAttribute('role', 'dialog');
     popover.setAttribute('aria-modal', 'false');
     popover.setAttribute('aria-label', this.options.labels.calendar);
 
-    const header = createElement('div', 'date-input-header');
-    const previousButton = createElement('button', 'date-input-month-nav');
+    const header = createElement('div', 'comet-date-input-header');
+    const previousButton = createElement('button', 'comet-date-input-month-nav');
     previousButton.type = 'button';
     previousButton.append(createLxIcon('chevron-left'));
     previousButton.addEventListener('click', () => this.stepMonth(-1));
 
-    const title = createElement('div', 'date-input-month-title', formatMonthTitle(this.visibleMonth));
+    const title = createElement('div', 'comet-date-input-month-title', formatMonthTitle(this.visibleMonth));
 
-    const nextButton = createElement('button', 'date-input-month-nav');
+    const nextButton = createElement('button', 'comet-date-input-month-nav');
     nextButton.type = 'button';
     nextButton.append(createLxIcon('chevron-right'));
     nextButton.addEventListener('click', () => this.stepMonth(1));
     header.append(previousButton, title, nextButton);
 
-    const weekdays = createElement('div', 'date-input-weekdays');
+    const weekdays = createElement('div', 'comet-date-input-weekdays');
     weekdays.append(
-      ...this.weekdayLabels.map((weekday) => createElement('span', 'date-input-weekday', weekday)),
+      ...this.weekdayLabels.map((weekday) => createElement('span', 'comet-date-input-weekday', weekday)),
     );
 
     const todayValue = formatDateInputValue(new Date());
-    const grid = createElement('div', 'date-input-grid');
+    const grid = createElement('div', 'comet-date-input-grid');
     grid.append(...createMonthCells(this.visibleMonth).map((cell) => {
       const day = createElement(
         'button',
         [
-          'date-input-day',
+          'comet-date-input-day',
           cell.inCurrentMonth ? '' : 'is-outside',
           cell.value === todayValue ? 'is-today' : '',
           cell.value === this.selectedValue ? 'is-selected' : '',
@@ -428,8 +428,8 @@ export class DateInput extends Disposable {
       return day;
     }));
 
-    const footer = createElement('div', 'date-input-footer');
-    const clearButton = createElement('button', 'date-input-footer-button', this.options.labels.clear);
+    const footer = createElement('div', 'comet-date-input-footer');
+    const clearButton = createElement('button', 'comet-date-input-footer-button', this.options.labels.clear);
     clearButton.type = 'button';
     clearButton.addEventListener('click', () => {
       this.commitValue('');
@@ -437,7 +437,7 @@ export class DateInput extends Disposable {
       this.inputBox.focus();
     });
 
-    const todayButton = createElement('button', 'date-input-footer-button', this.options.labels.today);
+    const todayButton = createElement('button', 'comet-date-input-footer-button', this.options.labels.today);
     todayButton.type = 'button';
     todayButton.addEventListener('click', () => {
       this.commitValue(todayValue);

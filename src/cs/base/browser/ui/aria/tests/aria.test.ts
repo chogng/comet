@@ -9,11 +9,11 @@ let alert: typeof import('cs/base/browser/ui/aria/aria').alert;
 let status: typeof import('cs/base/browser/ui/aria/aria').status;
 
 function getAlertRegions() {
-  return Array.from(document.querySelectorAll('.cs-aria-alert')) as HTMLElement[];
+  return Array.from(document.querySelectorAll('.comet-aria-alert')) as HTMLElement[];
 }
 
 function getStatusRegions() {
-  return Array.from(document.querySelectorAll('.cs-aria-status')) as HTMLElement[];
+  return Array.from(document.querySelectorAll('.comet-aria-status')) as HTMLElement[];
 }
 
 function setNavigatorPlatform(platform: string) {
@@ -41,7 +41,7 @@ test('setARIAContainer creates hidden live regions once per parent', () => {
   setARIAContainer(host);
   setARIAContainer(host);
 
-  const containers = host.querySelectorAll('.cs-aria-container');
+  const containers = host.querySelectorAll('.comet-aria-container');
   assert.equal(containers.length, 1);
   assert.equal(getAlertRegions().length, 2);
   assert.equal(getStatusRegions().length, 2);

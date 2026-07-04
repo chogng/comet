@@ -138,7 +138,7 @@ export class ActionBarView extends Disposable {
   constructor(props: ActionBarProps = {}) {
     super();
     this.props = this.normalizeProps(props);
-    this.actionsContainer.className = 'actionbar-actions-container';
+    this.actionsContainer.className = 'comet-actionbar-actions-container';
     this.element.append(this.actionsContainer);
     this._register(DOM.addDisposableListener(this.element, 'keydown', this.handleKeyDown));
     this.render();
@@ -188,7 +188,7 @@ export class ActionBarView extends Disposable {
   private render() {
     this.clearRenderedItems();
     this.element.className = DOM.composeClassName([
-      'actionbar',
+      'comet-actionbar',
       this.props.orientation === 'vertical' ? 'is-vertical' : 'is-horizontal',
       this.props.className,
     ]);
@@ -259,7 +259,7 @@ export class ActionBarView extends Disposable {
 
       const itemElement = document.createElement('div');
       itemElement.className = DOM.composeClassName([
-        'actionbar-item',
+        'comet-actionbar-item',
         'is-separator',
         item.className,
       ]);
@@ -267,7 +267,7 @@ export class ActionBarView extends Disposable {
         itemElement.dataset.actionbarItemId = item.id;
       }
       const separator = document.createElement('div');
-      separator.className = 'actionbar-separator';
+      separator.className = 'comet-actionbar-separator';
       separator.setAttribute('aria-hidden', 'true');
       itemElement.append(separator);
       return itemElement;

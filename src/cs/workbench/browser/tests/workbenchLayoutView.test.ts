@@ -314,11 +314,11 @@ function createNativeHostService(): INativeHostService {
 
 function createWorkbenchLayoutViewProps() {
   const editorHeaderActionsElement = document.createElement('div');
-  editorHeaderActionsElement.className = 'header-actions actionbar is-horizontal';
+  editorHeaderActionsElement.className = 'comet-header-actions actionbar is-horizontal';
   const actionsContainer = document.createElement('div');
   actionsContainer.className = 'actionbar-actions-container';
   const toggleButton = document.createElement('button');
-  toggleButton.className = 'actionbar-action editor-header-toggle-editor-btn';
+  toggleButton.className = 'actionbar-action comet-editor-header-toggle-editor-btn';
   toggleButton.setAttribute('aria-label', 'Expand editor');
   actionsContainer.append(toggleButton);
   editorHeaderActionsElement.append(actionsContainer);
@@ -674,13 +674,13 @@ test('WorkbenchLayoutView leaves primary action container out of content headers
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .header-actions-host'),
+        .querySelector('.sidebar-header .comet-header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-header .header-actions-host'),
+        .querySelector('.comet-agentbar-header .comet-header-actions-host'),
       null,
     );
 
@@ -693,13 +693,13 @@ test('WorkbenchLayoutView leaves primary action container out of content headers
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-header .header-actions-host'),
+        .querySelector('.comet-agentbar-header .comet-header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .header-actions-host'),
+        .querySelector('.sidebar-header .comet-header-actions-host'),
       null,
     );
   } finally {
@@ -717,7 +717,7 @@ test('WorkbenchLayoutView mounts the editor collapse action into auxiliary heade
   try {
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
 
@@ -726,13 +726,13 @@ test('WorkbenchLayoutView mounts the editor collapse action into auxiliary heade
 
     const auxiliaryToggleButton = view
       .getElement()
-      .querySelector('.agentbar-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-agentbar-header .comet-editor-header-toggle-editor-btn');
     assert(auxiliaryToggleButton instanceof HTMLButtonElement);
     assert.equal(auxiliaryToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.editor-header .editor-header-toggle-editor-btn'),
+        .querySelector('.comet-editor-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -740,7 +740,7 @@ test('WorkbenchLayoutView mounts the editor collapse action into auxiliary heade
   }
 });
 
-test('WorkbenchLayoutView collapses editor and keeps expand action out of the sidebar topbar', () => {
+test('WorkbenchLayoutView collapses editor and keeps expand action out of the sidebar header', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = false;
@@ -751,7 +751,7 @@ test('WorkbenchLayoutView collapses editor and keeps expand action out of the si
   try {
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
 
@@ -763,19 +763,19 @@ test('WorkbenchLayoutView collapses editor and keeps expand action out of the si
 
     const editorExpandButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-toggle-editor-btn');
     assert(editorExpandButton instanceof HTMLButtonElement);
     assert.equal(editorExpandButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .editor-header-toggle-editor-btn'),
+        .querySelector('.sidebar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-header .editor-header-toggle-editor-btn'),
+        .querySelector('.comet-agentbar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -812,11 +812,11 @@ test('SessionWorkbenchContentPartViews keeps editor actions in session header on
     assert(expandedHeader instanceof HTMLElement);
     assert.equal(expandedHeader.hidden, true);
     assert.equal(
-      host.querySelector('.session-header .editor-header-toggle-editor-btn'),
+      host.querySelector('.session-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
     assert.equal(
-      host.querySelectorAll('.editor-header .editor-header-toggle-editor-btn')
+      host.querySelectorAll('.comet-editor-header .comet-editor-header-toggle-editor-btn')
         .length,
       1,
     );
@@ -837,11 +837,11 @@ test('SessionWorkbenchContentPartViews keeps editor actions in session header on
     assert(collapsedHeader instanceof HTMLElement);
     assert.equal(collapsedHeader.hidden, false);
     const headerToggle = host.querySelector(
-      '.session-header .editor-header-toggle-editor-btn',
+      '.session-header .comet-editor-header-toggle-editor-btn',
     );
     assert(headerToggle instanceof HTMLButtonElement);
     assert.equal(headerToggle.getAttribute('aria-label'), 'Expand editor');
-    assert.equal(host.querySelector('.editor-header'), null);
+    assert.equal(host.querySelector('.comet-editor-header'), null);
   } finally {
     partViews.dispose();
   }
@@ -858,13 +858,13 @@ test('WorkbenchLayoutView does not remount primary action container into content
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-header .header-actions-host'),
+        .querySelector('.comet-agentbar-header .comet-header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.editor-header .header-actions-host'),
+        .querySelector('.comet-editor-header .comet-header-actions-host'),
       null,
     );
 
@@ -878,13 +878,13 @@ test('WorkbenchLayoutView does not remount primary action container into content
     assert.equal(
       view
         .getElement()
-        .querySelector('.editor-header .header-actions-host'),
+        .querySelector('.comet-editor-header .comet-header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-header .header-actions-host'),
+        .querySelector('.comet-agentbar-header .comet-header-actions-host'),
       null,
     );
   } finally {
@@ -903,10 +903,10 @@ test('WorkbenchLayoutView applies editor header leading inset only when sidebars
   try {
     const hiddenSidebarsHeader = view
       .getElement()
-      .querySelector('.editor-header');
+      .querySelector('.comet-editor-header');
     assert(hiddenSidebarsHeader instanceof HTMLElement);
     assert.equal(
-      hiddenSidebarsHeader.classList.contains('has-leading-window-controls-inset'),
+      hiddenSidebarsHeader.classList.contains('comet-has-leading-window-controls-inset'),
       true,
     );
 
@@ -918,10 +918,10 @@ test('WorkbenchLayoutView applies editor header leading inset only when sidebars
     view.setProps(materializeWorkbenchLayoutViewProps(primaryVisibleProps));
     const primaryVisibleHeader = view
       .getElement()
-      .querySelector('.editor-header');
+      .querySelector('.comet-editor-header');
     assert(primaryVisibleHeader instanceof HTMLElement);
     assert.equal(
-      primaryVisibleHeader.classList.contains('has-leading-window-controls-inset'),
+      primaryVisibleHeader.classList.contains('comet-has-leading-window-controls-inset'),
       false,
     );
 
@@ -933,10 +933,10 @@ test('WorkbenchLayoutView applies editor header leading inset only when sidebars
     view.setProps(materializeWorkbenchLayoutViewProps(agentVisibleProps));
     const agentVisibleHeader = view
       .getElement()
-      .querySelector('.editor-header');
+      .querySelector('.comet-editor-header');
     assert(agentVisibleHeader instanceof HTMLElement);
     assert.equal(
-      agentVisibleHeader.classList.contains('has-leading-window-controls-inset'),
+      agentVisibleHeader.classList.contains('comet-has-leading-window-controls-inset'),
       false,
     );
   } finally {
@@ -954,15 +954,13 @@ test('WorkbenchLayoutView renders only the middle content grid', () => {
 
   try {
     const element = view.getElement();
-    const contentGrid = element.querySelector('.content-grid');
+    const contentGrid = element.querySelector('.comet-content-grid');
     assert(contentGrid instanceof HTMLElement);
     assert.equal(element.children.length, 1);
     assert.equal(element.children[0], contentGrid);
-    assert.equal(element.querySelector('.workbench-header-layout'), null);
-
-    const editorFrame = element.querySelector('.editor-frame');
+		const editorFrame = element.querySelector('.comet-editor-frame');
     assert(editorFrame instanceof HTMLElement);
-    assert.equal(editorFrame.classList.contains('has-external-header'), false);
+    assert.equal(editorFrame.classList.contains('comet-has-external-header'), false);
   } finally {
     view.dispose();
   }
@@ -979,7 +977,7 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
   try {
     const initialHeaderActionsHost = view
       .getElement()
-      .querySelector('.sidebar-topbar .header-actions-host');
+      .querySelector('.sidebar-header .comet-header-actions-host');
     assert.equal(initialHeaderActionsHost, null);
     assert(
       view
@@ -989,7 +987,7 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     assert(
       view
         .getElement()
-        .querySelector('.workbench-content-slot-editor .editor-frame') instanceof HTMLElement,
+        .querySelector('.comet-workbench-content-slot-editor .comet-editor-frame') instanceof HTMLElement,
     );
 
     const settingsNavigationElement = document.createElement('aside');
@@ -1013,7 +1011,7 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     };
     view.setProps(materializeWorkbenchLayoutViewProps(nextProps));
 
-    assert.equal(view.getElement().querySelector('.sidebar-topbar'), null);
+    assert.equal(view.getElement().querySelector('.sidebar-header'), null);
     assert.equal(
       view
         .getElement()
@@ -1029,13 +1027,13 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     assert.equal(
       view
         .getElement()
-        .querySelector('.workbench-content-slot-editor > .settings-page'),
+        .querySelector('.comet-workbench-content-slot-editor > .settings-page'),
       settingsContentElement,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.workbench-content-slot-editor .settings-page-topbar'),
+        .querySelector('.comet-workbench-content-slot-editor .settings-page-topbar'),
       settingsContentTopbar,
     );
     assert.equal(
@@ -1138,16 +1136,16 @@ test('WorkbenchLayoutView renders an add dropdown before the collapse action and
   try {
     const actionButtons = Array.from(
       view.getElement().querySelectorAll(
-        '.editor-header .editor-header-add-btn, .editor-header .editor-header-toggle-editor-btn',
+        '.comet-editor-header .comet-editor-header-add-btn, .comet-editor-header .comet-editor-header-toggle-editor-btn',
       ),
     );
     assert.equal(actionButtons.length, 2);
-    assert.equal(actionButtons[0]?.classList.contains('editor-header-add-btn'), true);
-    assert.equal(actionButtons[1]?.classList.contains('editor-header-toggle-editor-btn'), true);
+    assert.equal(actionButtons[0]?.classList.contains('comet-editor-header-add-btn'), true);
+    assert.equal(actionButtons[1]?.classList.contains('comet-editor-header-toggle-editor-btn'), true);
 
     const addButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-add-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-add-btn');
     assert(addButton instanceof HTMLButtonElement);
     assert.equal(addButton.getAttribute('aria-label'), 'Add');
 
@@ -1204,7 +1202,7 @@ test('WorkbenchLayoutView renders the agent toggle in editor header when the age
   try {
     const agentButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-agent-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-agent-btn');
     assert(agentButton instanceof HTMLButtonElement);
     assert.equal(agentButton.getAttribute('aria-label'), 'Hide assistant');
     agentButton.click();
@@ -1235,7 +1233,7 @@ test('WorkbenchLayoutView renders the agent toggle in editor header when the age
   try {
     const editorAgentButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-agent-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-agent-btn');
     assert(editorAgentButton instanceof HTMLButtonElement);
     assert.equal(editorAgentButton.getAttribute('aria-label'), 'Show assistant');
     editorAgentButton.click();
@@ -1253,7 +1251,7 @@ test('WorkbenchLayoutView add dropdown supports search header filtering', async 
   try {
     const addButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-add-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-add-btn');
     assert(addButton instanceof HTMLButtonElement);
 
     addButton.click();
@@ -1307,36 +1305,36 @@ test('WorkbenchLayoutView renders the browser toolbar below the editor header', 
   document.body.append(view.getElement());
 
   try {
-    const editorFrame = view.getElement().querySelector('.editor-frame');
+    const editorFrame = view.getElement().querySelector('.comet-editor-frame');
     assert(editorFrame instanceof HTMLElement);
 
-    const header = editorFrame.querySelector(':scope > .editor-header');
+    const header = editorFrame.querySelector(':scope > .comet-editor-header');
     assert(header instanceof HTMLElement);
-    const toolbarHost = editorFrame.querySelector(':scope > .editor-toolbar');
+    const toolbarHost = editorFrame.querySelector(':scope > .comet-editor-toolbar');
     assert(toolbarHost instanceof HTMLElement);
     assert.equal(toolbarHost.hidden, false);
     assert.equal(getEditorFrameSlot(toolbarHost), EDITOR_FRAME_SLOTS.toolbar);
     assert.equal(toolbarHost.dataset.toolbarMode, 'browser');
 
-    const toolbar = editorFrame.querySelector('.editor-toolbar .editor-browser-toolbar');
+    const toolbar = editorFrame.querySelector('.comet-editor-toolbar .comet-editor-browser-toolbar');
     assert(toolbar instanceof HTMLElement);
     assert.equal(editorFrame.children[0], header);
 
     const leadingButtons = Array.from(
-      toolbar.querySelectorAll('.editor-browser-toolbar-leading .editor-browser-toolbar-btn'),
+      toolbar.querySelectorAll('.comet-editor-browser-toolbar-leading .comet-editor-browser-toolbar-btn'),
     );
     assert.deepEqual(
       leadingButtons.map((button) => button.getAttribute('aria-label')),
       ['Source menu', 'Back', 'Forward', 'Refresh', 'Favorite'],
     );
 
-    const addressInput = toolbar.querySelector('.editor-browser-toolbar-address-input input');
+    const addressInput = toolbar.querySelector('.comet-editor-browser-toolbar-address-input input');
     assert(addressInput instanceof HTMLInputElement);
     assert.equal(addressInput.getAttribute('aria-label'), 'Address bar');
     assert.equal(addressInput.value, 'https://example.com/current');
 
     const trailingButtons = Array.from(
-      toolbar.querySelectorAll('.editor-browser-toolbar-trailing .editor-browser-toolbar-btn'),
+      toolbar.querySelectorAll('.comet-editor-browser-toolbar-trailing .comet-editor-browser-toolbar-btn'),
     );
     assert.deepEqual(
       trailingButtons.map((button) => button.getAttribute('aria-label')),
@@ -1396,7 +1394,7 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
   try {
     let favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     assert.equal(favoriteButton.getAttribute('aria-pressed'), 'false');
     assert(
@@ -1405,7 +1403,7 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
     favoriteButton.click();
     favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     assert.equal(favoriteButton.getAttribute('aria-pressed'), 'true');
     const favoriteItem = favoriteButton.closest('.actionbar-item');
@@ -1418,12 +1416,12 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
 
     const sourcesButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Source menu"]');
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     assert.equal(panel.classList.contains('is-open'), true);
     assert.equal(
@@ -1431,17 +1429,17 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
       true,
     );
     const panelBackdrop = document.body.querySelector(
-      '.editor-browser-library-panel-backdrop',
+      '.comet-editor-browser-library-panel-backdrop',
     );
     assert(panelBackdrop instanceof HTMLElement);
     assert.equal(panelBackdrop.classList.contains('is-open'), true);
 
     const favoriteItems = Array.from(
-      panel.querySelectorAll('.editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
     );
     assert.equal(favoriteItems.length, 1);
     const sectionTitles = Array.from(
-      panel.querySelectorAll('.editor-browser-library-section-title'),
+      panel.querySelectorAll('.comet-editor-browser-library-section-title'),
     );
     assert.equal(
       sectionTitles.some((node) => node.textContent === 'Favorites'),
@@ -1452,16 +1450,16 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
       true,
     );
     const matchingItems = panel.querySelectorAll(
-      '.editor-browser-library-item[title="https://example.com/current"]',
+      '.comet-editor-browser-library-item[title="https://example.com/current"]',
     );
     assert.equal(matchingItems.length, 2);
     const favoriteFavicon = favoriteItems[0]?.querySelector(
-      '.editor-browser-library-item-favicon',
+      '.comet-editor-browser-library-item-favicon',
     );
     assert(favoriteFavicon instanceof HTMLElement);
     assert.equal(favoriteFavicon.classList.contains('is-loading'), true);
     const favoriteTitle = favoriteItems[0]?.querySelector(
-      '.editor-browser-library-item-title',
+      '.comet-editor-browser-library-item-title',
     );
     assert(favoriteTitle instanceof HTMLElement);
     assert.equal(favoriteTitle.textContent, 'Example Current Page');
@@ -1532,22 +1530,22 @@ test('WorkbenchLayoutView opens the favorite item context menu and dispatches Op
   try {
     const favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     favoriteButton.click();
 
     const sourcesButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Source menu"]');
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await waitForNextTask();
     await waitForNextTask();
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll('.editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
     )[0];
     assert(favoriteItem instanceof HTMLButtonElement);
 
@@ -1634,22 +1632,22 @@ test('WorkbenchLayoutView keeps favorite context menu Open in New Tab enabled fr
   try {
     const favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     favoriteButton.click();
 
     const sourcesButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Source menu"]');
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await waitForNextTask();
     await waitForNextTask();
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll('.editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
     )[0];
     assert(favoriteItem instanceof HTMLButtonElement);
 
@@ -1790,7 +1788,7 @@ test('WorkbenchLayoutView shows a filled favorite icon after loading a favorite 
   try {
     let favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     favoriteButton.click();
 
@@ -1798,22 +1796,22 @@ test('WorkbenchLayoutView shows a filled favorite icon after loading a favorite 
 
     favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     assert.equal(favoriteButton.getAttribute('aria-pressed'), 'false');
 
     const sourcesButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Source menu"]');
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await waitForNextTask();
     await waitForNextTask();
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll('.editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
     ).find((item) => item.getAttribute('title') === FAVORITE_URL);
     assert(favoriteItem instanceof HTMLButtonElement);
     favoriteItem.click();
@@ -1821,7 +1819,7 @@ test('WorkbenchLayoutView shows a filled favorite icon after loading a favorite 
 
     favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     assert.equal(favoriteButton.getAttribute('aria-pressed'), 'true');
     assert(
@@ -1873,13 +1871,13 @@ test('WorkbenchLayoutView keeps the toolbar favorite icon in sync when a current
   try {
     let favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     favoriteButton.click();
 
     favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     assert.equal(favoriteButton.getAttribute('aria-pressed'), 'true');
     assert(
@@ -1888,16 +1886,16 @@ test('WorkbenchLayoutView keeps the toolbar favorite icon in sync when a current
 
     const sourcesButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Source menu"]');
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await waitForNextTask();
     await waitForNextTask();
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll(`.editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`),
+      panel.querySelectorAll(`.comet-editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`),
     )[0];
     assert(favoriteItem instanceof HTMLButtonElement);
 
@@ -1923,7 +1921,7 @@ test('WorkbenchLayoutView keeps the toolbar favorite icon in sync when a current
 
     favoriteButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Favorite"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     assert.equal(favoriteButton.getAttribute('aria-pressed'), 'false');
     assert(
@@ -1978,7 +1976,7 @@ test('EditorBrowserLibraryPanel keeps the recent item and creates a separate fav
 
     const panelElement = panel.getElement();
     const beforeItems = panelElement.querySelectorAll(
-      `.editor-browser-library-item[title="${FAVORITE_URL}"]`,
+      `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]`,
     );
     assert.equal(beforeItems.length, 1);
 
@@ -1987,34 +1985,34 @@ test('EditorBrowserLibraryPanel keeps the recent item and creates a separate fav
     await waitForNextTask();
 
     const matchingItems = panelElement.querySelectorAll(
-      `.editor-browser-library-item[title="${FAVORITE_URL}"]`,
+      `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]`,
     );
     assert.equal(matchingItems.length, 2);
     const favoriteItems = panelElement.querySelectorAll(
-      `.editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`,
+      `.comet-editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`,
     );
     assert.equal(favoriteItems.length, 1);
     const recentItems = panelElement.querySelectorAll(
-      `.editor-browser-library-item[title="${FAVORITE_URL}"]:not(.is-favorite)`,
+      `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]:not(.is-favorite)`,
     );
     assert.equal(recentItems.length, 1);
     assert.notEqual(favoriteItems[0], recentItems[0]);
 
-    const favoriteItemRow = favoriteItems[0]?.closest('.editor-browser-library-item-row');
+    const favoriteItemRow = favoriteItems[0]?.closest('.comet-editor-browser-library-item-row');
     assert(favoriteItemRow instanceof HTMLElement);
     assert.equal(favoriteItemRow.classList.contains('is-deletable'), false);
-    assert.equal(favoriteItemRow.querySelector('.editor-browser-library-item-delete-btn'), null);
+    assert.equal(favoriteItemRow.querySelector('.comet-editor-browser-library-item-delete-btn'), null);
 
-    const recentItemRow = recentItems[0]?.closest('.editor-browser-library-item-row');
+    const recentItemRow = recentItems[0]?.closest('.comet-editor-browser-library-item-row');
     assert(recentItemRow instanceof HTMLElement);
     assert.equal(recentItemRow.classList.contains('is-deletable'), true);
     assert(
-      recentItemRow.querySelector('.editor-browser-library-item-delete-btn')
+      recentItemRow.querySelector('.comet-editor-browser-library-item-delete-btn')
         instanceof HTMLButtonElement,
     );
 
     const sectionTitles = Array.from(
-      panelElement.querySelectorAll('.editor-browser-library-section-title'),
+      panelElement.querySelectorAll('.comet-editor-browser-library-section-title'),
     );
     assert.equal(
       sectionTitles.some((node) => node.textContent === 'Favorites'),
@@ -2025,7 +2023,7 @@ test('EditorBrowserLibraryPanel keeps the recent item and creates a separate fav
       true,
     );
     const sectionItemCount = panelElement.querySelectorAll(
-      `.editor-browser-library-item[title="${FAVORITE_URL}"]`,
+      `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]`,
     );
     assert.equal(sectionItemCount.length, 2);
   } finally {
@@ -2094,8 +2092,8 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
     await waitForNextTask();
 
     const panelElement = panel.getElement();
-    const favoriteItemSelector = `.editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`;
-    const anyItemSelector = `.editor-browser-library-item[title="${FAVORITE_URL}"]`;
+    const favoriteItemSelector = `.comet-editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`;
+    const anyItemSelector = `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]`;
     let favoriteItem = panelElement.querySelector(favoriteItemSelector);
     assert(favoriteItem instanceof HTMLButtonElement);
     favoriteItem.dispatchEvent(new MouseEvent('contextmenu', {
@@ -2122,7 +2120,7 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
 
     favoriteItem = panelElement.querySelector(favoriteItemSelector);
     assert(favoriteItem instanceof HTMLButtonElement);
-    let favoriteTitle = favoriteItem.querySelector('.editor-browser-library-item-title');
+    let favoriteTitle = favoriteItem.querySelector('.comet-editor-browser-library-item-title');
     assert(favoriteTitle instanceof HTMLElement);
     assert.equal(favoriteTitle.textContent, 'Pinned Example');
 
@@ -2148,12 +2146,12 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
     await waitForNextTask();
     await waitForNextTask();
 
-    const folderTitle = panelElement.querySelector('.editor-browser-library-folder-title');
+    const folderTitle = panelElement.querySelector('.comet-editor-browser-library-folder-title');
     assert(folderTitle instanceof HTMLElement);
     assert.equal(folderTitle.textContent, 'Reading List');
     favoriteItem = panelElement.querySelector(favoriteItemSelector);
     assert(favoriteItem instanceof HTMLButtonElement);
-    favoriteTitle = favoriteItem.querySelector('.editor-browser-library-item-title');
+    favoriteTitle = favoriteItem.querySelector('.comet-editor-browser-library-item-title');
     assert(favoriteTitle instanceof HTMLElement);
     assert.equal(favoriteTitle.textContent, 'Pinned Example');
 
@@ -2212,13 +2210,13 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
       null,
     );
     const folderTitles = Array.from(
-      panelElement.querySelectorAll('.editor-browser-library-folder-title'),
+      panelElement.querySelectorAll('.comet-editor-browser-library-folder-title'),
     ).map((node) => node.textContent);
     assert.equal(folderTitles.includes('Reading List'), false);
     const recentItem = panelElement.querySelector(anyItemSelector);
     assert(recentItem instanceof HTMLButtonElement);
     assert.equal(recentItem.classList.contains('is-favorite'), false);
-    const recentTitle = recentItem.querySelector('.editor-browser-library-item-title');
+    const recentTitle = recentItem.querySelector('.comet-editor-browser-library-item-title');
     assert(recentTitle instanceof HTMLElement);
     assert.equal(recentTitle.textContent, FAVORITE_TITLE);
   } finally {
@@ -2341,14 +2339,14 @@ test('EditorBrowserLibraryPanel groups recent history by visit time buckets inst
 
     const panelElement = panel.getElement();
     const sectionTitles = Array.from(
-      panelElement.querySelectorAll('.editor-browser-library-section-title'),
+      panelElement.querySelectorAll('.comet-editor-browser-library-section-title'),
     ).map((node) => node.textContent?.trim());
     assert.equal(sectionTitles.includes('Today'), true);
     assert.equal(sectionTitles.includes('Last 30 Days'), true);
     assert.equal(sectionTitles.includes('Older'), true);
 
     const recentItemTitles = Array.from(
-      panelElement.querySelectorAll('.editor-browser-library-item-title'),
+      panelElement.querySelectorAll('.comet-editor-browser-library-item-title'),
     ).map((node) => node.textContent?.trim());
     assert.equal(recentItemTitles.includes('Today article'), true);
     assert.equal(recentItemTitles.includes('Two weeks ago article'), true);
@@ -2409,23 +2407,23 @@ test('WorkbenchLayoutView removes a recent browser library entry without trigger
   try {
     const sourcesButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Source menu"]');
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     assert.equal(panel.classList.contains('is-open'), true);
     const recentItem = Array.from(
-      panel.querySelectorAll('.editor-browser-library-item'),
+      panel.querySelectorAll('.comet-editor-browser-library-item'),
     ).find((node) => {
-      const titleElement = node.querySelector('.editor-browser-library-item-title');
+      const titleElement = node.querySelector('.comet-editor-browser-library-item-title');
       return titleElement?.textContent === RECENT_ENTRY_TITLE;
     });
     assert(recentItem instanceof HTMLButtonElement);
     const deleteButton = recentItem.parentElement?.querySelector(
-      '.editor-browser-library-item-delete-btn',
+      '.comet-editor-browser-library-item-delete-btn',
     );
     assert(deleteButton instanceof HTMLButtonElement);
     deleteButton.click();
@@ -2434,7 +2432,7 @@ test('WorkbenchLayoutView removes a recent browser library entry without trigger
     assert.equal(navigateCount, 0);
     assert.deepEqual(addressChanges, []);
     const remainingItemTitles = Array.from(
-      panel.querySelectorAll('.editor-browser-library-item-title'),
+      panel.querySelectorAll('.comet-editor-browser-library-item-title'),
     ).map((node) => node.textContent ?? '');
     assert.equal(remainingItemTitles.includes(RECENT_ENTRY_TITLE), false);
     const serializedState = window.localStorage?.getItem(BROWSER_LIBRARY_STORAGE_KEY);
@@ -2556,20 +2554,20 @@ test('WorkbenchLayoutView keeps browser library titles scoped to each URL across
 
     const sourcesButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-leading [aria-label="Source menu"]');
+      .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Source menu"]');
     assert(sourcesButton instanceof HTMLButtonElement);
     sourcesButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const panel = document.body.querySelector('.editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const itemTitlesByUrl = new Map(
-      Array.from(panel.querySelectorAll('.editor-browser-library-item')).flatMap((node) => {
+      Array.from(panel.querySelectorAll('.comet-editor-browser-library-item')).flatMap((node) => {
         if (!(node instanceof HTMLButtonElement)) {
           return [];
         }
         const title = node
-          .querySelector('.editor-browser-library-item-title')
+          .querySelector('.comet-editor-browser-library-item-title')
           ?.textContent
           ?.trim() ?? '';
         return [[node.title, title] as const];
@@ -2634,7 +2632,7 @@ test('WorkbenchLayoutView opens the browser toolbar more menu and dispatches han
   try {
     const moreButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-trailing [aria-label="More"]');
+      .querySelector('.comet-editor-browser-toolbar-trailing [aria-label="More"]');
     assert(moreButton instanceof HTMLElement);
 
     for (const label of [
@@ -2708,7 +2706,7 @@ test('WorkbenchLayoutView dispatches the browser toolbar archive action', async 
   try {
     const archiveButton = view
       .getElement()
-      .querySelector('.editor-browser-toolbar-trailing [aria-label="Archive page"]');
+      .querySelector('.comet-editor-browser-toolbar-trailing [aria-label="Archive page"]');
     assert(archiveButton instanceof HTMLButtonElement);
 
     archiveButton.click();
@@ -2751,7 +2749,7 @@ test('WorkbenchLayoutView hides about:blank in the browser toolbar address input
 
   try {
     const addressInput = view.getElement().querySelector(
-      '.editor-browser-toolbar-address-input input',
+      '.comet-editor-browser-toolbar-address-input input',
     );
     assert(addressInput instanceof HTMLInputElement);
     assert.equal(addressInput.value, '');
@@ -2793,7 +2791,7 @@ test('WorkbenchLayoutView syncs focused browser address input when it has not be
 
   try {
     const initialAddressInput = view.getElement().querySelector(
-      '.editor-browser-toolbar-address-input input',
+      '.comet-editor-browser-toolbar-address-input input',
     );
     assert(initialAddressInput instanceof HTMLInputElement);
     assert.equal(initialAddressInput.value, initialUrl);
@@ -2828,7 +2826,7 @@ test('WorkbenchLayoutView syncs focused browser address input when it has not be
     );
 
     const updatedAddressInput = view.getElement().querySelector(
-      '.editor-browser-toolbar-address-input input',
+      '.comet-editor-browser-toolbar-address-input input',
     );
     assert(updatedAddressInput instanceof HTMLInputElement);
     assert.equal(updatedAddressInput.value, updatedUrl);
@@ -2890,7 +2888,7 @@ test('WorkbenchLayoutView keeps typed browser address input while focused during
 
   try {
     const addressInput = view.getElement().querySelector(
-      '.editor-browser-toolbar-address-input input',
+      '.comet-editor-browser-toolbar-address-input input',
     );
     assert(addressInput instanceof HTMLInputElement);
 
@@ -2936,18 +2934,18 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
   document.body.append(view.getElement());
 
   try {
-    const toolbarHost = view.getElement().querySelector('.editor-frame > .editor-toolbar');
+    const toolbarHost = view.getElement().querySelector('.comet-editor-frame > .comet-editor-toolbar');
     assert(toolbarHost instanceof HTMLElement);
     assert.equal(toolbarHost.hidden, false);
     assert.equal(toolbarHost.dataset.toolbarMode, 'draft');
-    const contentHost = view.getElement().querySelector('.editor-frame > .editor-content');
+    const contentHost = view.getElement().querySelector('.comet-editor-frame > .comet-editor-content');
     assert(contentHost instanceof HTMLElement);
     assert.equal(getEditorFrameSlot(contentHost), EDITOR_FRAME_SLOTS.content);
     assert.equal(
-      view.getElement().querySelector('.editor-toolbar .editor-browser-toolbar'),
+      view.getElement().querySelector('.comet-editor-toolbar .comet-editor-browser-toolbar'),
       null,
     );
-    const draftToolbar = view.getElement().querySelector('.editor-toolbar .editor-draft-toolbar');
+		const draftToolbar = view.getElement().querySelector('.comet-editor-toolbar .comet-editor-draft-toolbar');
     assert(draftToolbar instanceof HTMLElement);
 
     const nextProps = {
@@ -2973,22 +2971,22 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
     };
     view.setProps(materializeWorkbenchLayoutViewProps(nextProps));
 
-    const pdfToolbar = view.getElement().querySelector('.editor-toolbar .editor-pdf-toolbar');
+    const pdfToolbar = view.getElement().querySelector('.comet-editor-toolbar .comet-editor-pdf-toolbar');
     assert.equal(toolbarHost.hidden, false);
     assert.equal(toolbarHost.dataset.toolbarMode, 'pdf');
     assert(pdfToolbar instanceof HTMLElement);
     assert.equal(
-      view.getElement().querySelector('.editor-toolbar .editor-draft-toolbar'),
+			view.getElement().querySelector('.comet-editor-toolbar .comet-editor-draft-toolbar'),
       null,
     );
     const pdfLeadingButtons = Array.from(
       pdfToolbar.querySelectorAll(
-        '.editor-pdf-toolbar-leading .editor-pdf-toolbar-btn.actionbar-action[aria-label]',
+        '.comet-editor-pdf-toolbar-leading .comet-editor-pdf-toolbar-btn.actionbar-action[aria-label]',
       ),
     ).map((button) => button.getAttribute('aria-label'));
     const pdfTrailingButtons = Array.from(
       pdfToolbar.querySelectorAll(
-        '.editor-pdf-toolbar-trailing .editor-pdf-toolbar-btn.actionbar-action[aria-label]',
+        '.comet-editor-pdf-toolbar-trailing .comet-editor-pdf-toolbar-btn.actionbar-action[aria-label]',
       ),
     ).map((button) => button.getAttribute('aria-label'));
     assert.deepEqual(pdfLeadingButtons, [
@@ -3002,9 +3000,9 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
       'Note',
     ]);
     assert.deepEqual(pdfTrailingButtons, ['Search', 'More']);
-    const pdfPane = view.getElement().querySelector('.editor-content .editor-pdf-pane');
+    const pdfPane = view.getElement().querySelector('.comet-editor-content .comet-editor-pdf-pane');
     assert(pdfPane instanceof HTMLElement);
-    const pdfBody = pdfPane.querySelector(':scope > .editor-pdf-body');
+    const pdfBody = pdfPane.querySelector(':scope > .comet-editor-pdf-body');
     assert(pdfBody instanceof HTMLElement);
   } finally {
     view.dispose();
@@ -3012,7 +3010,7 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
   }
 });
 
-test('WorkbenchLayoutView mounts the draft editor content hierarchy inside editor-frame', () => {
+test('WorkbenchLayoutView mounts the draft editor content hierarchy inside comet-editor-frame', () => {
   const props = createWorkbenchLayoutViewProps();
   props.editorPartProps = {
     ...props.editorPartProps,
@@ -3039,9 +3037,9 @@ test('WorkbenchLayoutView mounts the draft editor content hierarchy inside edito
   document.body.append(view.getElement());
 
   try {
-    const editorFrame = view.getElement().querySelector('.editor-frame');
+    const editorFrame = view.getElement().querySelector('.comet-editor-frame');
     assert(editorFrame instanceof HTMLElement);
-    assert(editorFrame.querySelector(':scope > .editor-header'));
+    assert(editorFrame.querySelector(':scope > .comet-editor-header'));
     assert.deepEqual(
       Array.from(editorFrame.children).map((child) =>
         getEditorFrameSlot(child as HTMLElement) ?? '',
@@ -3053,10 +3051,10 @@ test('WorkbenchLayoutView mounts the draft editor content hierarchy inside edito
       ],
     );
 
-    const editorContent = editorFrame.querySelector(':scope > .editor-content.is-mode-draft');
+    const editorContent = editorFrame.querySelector(':scope > .comet-editor-content.is-mode-draft');
     assert(editorContent instanceof HTMLElement);
 
-    const draftPane = editorContent.querySelector(':scope > .editor-draft-pane');
+    const draftPane = editorContent.querySelector(':scope > .comet-editor-draft-pane');
     assert(draftPane instanceof HTMLElement);
 
     const proseMirrorSurface = draftPane.querySelector(':scope > .pm-editor-surface');
@@ -3080,7 +3078,7 @@ test('WorkbenchLayoutView mounts the editor collapse action into agentbar header
   try {
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
 
@@ -3089,19 +3087,19 @@ test('WorkbenchLayoutView mounts the editor collapse action into agentbar header
 
     const auxiliaryToggleButton = view
       .getElement()
-      .querySelector('.agentbar-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-agentbar-header .comet-editor-header-toggle-editor-btn');
     assert(auxiliaryToggleButton instanceof HTMLButtonElement);
     assert.equal(auxiliaryToggleButton.getAttribute('aria-label'), 'Expand editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .header-actions-host'),
+        .querySelector('.sidebar-header .comet-header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .editor-header-toggle-editor-btn'),
+        .querySelector('.sidebar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -3137,7 +3135,7 @@ test('WorkbenchLayoutView keeps primary width fixed and expands agentbar when th
 
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     editorToggleButton.click();
     view.setProps(materializeWorkbenchLayoutViewProps(syncRawPropsWithLayoutState(props)));
@@ -3462,18 +3460,18 @@ test('WorkbenchLayoutView hides agentbar and restores editor when agentbar hide 
     assert.equal(
       view
         .getElement()
-        .querySelector('.agentbar-header .editor-header-toggle-editor-btn'),
+        .querySelector('.comet-agentbar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
     const editorToggleButton = view
       .getElement()
-      .querySelector('.editor-header .editor-header-toggle-editor-btn');
+      .querySelector('.comet-editor-header .comet-editor-header-toggle-editor-btn');
     assert(editorToggleButton instanceof HTMLButtonElement);
     assert.equal(editorToggleButton.getAttribute('aria-label'), 'Collapse editor');
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-topbar .editor-header-toggle-editor-btn'),
+        .querySelector('.sidebar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
 

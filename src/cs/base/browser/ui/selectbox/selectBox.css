@@ -1,4 +1,4 @@
-.cs-select-container {
+.comet-select-container {
   display: inline-flex;
   position: relative;
   align-items: center;
@@ -6,7 +6,7 @@
   min-width: 0;
 }
 
-.cs-select-box {
+.comet-select-box {
   width: 100%;
   height: 24px;
   min-height: 24px;
@@ -27,26 +27,26 @@
   z-index: 0;
 }
 
-.cs-select-container .cs-select-box {
+.comet-select-container .comet-select-box {
   font-size: 13px;
   font-weight: 400;
 }
 
-.cs-select-box::-ms-expand {
+.comet-select-box::-ms-expand {
   display: none;
 }
 
-.cs-select-box:focus {
+.comet-select-box:focus {
   outline: 2px solid var(--cs-select-focusBorder, rgba(10, 95, 191, 0.22));
   border-color: var(--vscode-select-focusBorder, #0a5fbf);
 }
 
-.cs-select-box:disabled {
+.comet-select-box:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.cs-select-box-decorator {
+.comet-select-box-decorator {
   position: absolute;
   top: 50%;
   right: 8px;
@@ -62,23 +62,23 @@
   z-index: 1;
 }
 
-.cs-select-box-decorator svg {
+.comet-select-box-decorator svg {
   width: 100%;
   height: 100%;
 }
 
-.cs-select-box-decorator svg [stroke] {
+.comet-select-box-decorator svg [stroke] {
   stroke: currentColor;
 }
 
-.cs-select-box:disabled + .cs-select-box-decorator {
+.comet-select-box:disabled + .comet-select-box-decorator {
   opacity: 0.45;
 }
 
-.actionbar .actionbar-item.cs-select-container {
+.comet-actionbar .comet-actionbar-item.comet-select-container {
   cursor: default;
 }
 
-.actionbar .actionbar-item .cs-select-box {
+.comet-actionbar .comet-actionbar-item .comet-select-box {
   min-width: 110px;
 }

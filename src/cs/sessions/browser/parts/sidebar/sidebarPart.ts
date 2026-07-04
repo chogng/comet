@@ -58,7 +58,7 @@ export class SessionSidebar {
 	private props: SessionSidebarProps;
 	private readonly element = createElement(
 		'div',
-		'session-sidebar-root sidebar-root',
+		'comet-session-sidebar-root sidebar-root',
 	);
 	private readonly contentElement = createElement('div', 'sidebar-content');
 	private readonly footerElement = createElement(
@@ -286,7 +286,7 @@ export class SessionSidebarPartView {
 
 	private readonly element = createElement(
 		'section',
-		'session-sidebar-part',
+		'comet-session-sidebar-part',
 	);
 	private readonly sidebar: SessionSidebar;
 

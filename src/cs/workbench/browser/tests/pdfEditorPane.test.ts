@@ -523,10 +523,10 @@ test('EditorGroupView renders a pdf empty-state shell with a body container', ()
   document.body.append(view.getElement());
 
   try {
-    const pdfPane = view.getElement().querySelector('.editor-content .editor-pdf-pane');
+    const pdfPane = view.getElement().querySelector('.comet-editor-content .comet-editor-pdf-pane');
     assert(pdfPane instanceof HTMLElement);
 
-    const pdfBody = pdfPane.querySelector(':scope > .editor-pdf-body');
+    const pdfBody = pdfPane.querySelector(':scope > .comet-editor-pdf-body');
     assert(pdfBody instanceof HTMLElement);
     assert.equal(pdfBody.childElementCount, 1);
     assert(pdfBody.firstElementChild?.classList.contains('pdf-document-reader'));

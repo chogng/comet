@@ -33,16 +33,16 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 export class ViewPartView {
   private props: ViewPartProps;
-  private readonly element = createElement('div', 'browser-frame-container');
+  private readonly element = createElement('div', 'comet-browser-frame-container');
   private readonly contentElement = createElement(
     'div',
-    'native-webcontentview-host',
+    'comet-native-webcontentview-host',
   );
   private readonly webContentHost = createElement(
     'div',
-    'browser-frame browser-frame-placeholder',
+    'comet-browser-frame comet-browser-frame-placeholder',
   );
-  private readonly overlayElement = createElement('div', 'webcontent-overlay');
+  private readonly overlayElement = createElement('div', 'comet-webcontent-overlay');
   private isWebContentHostRegistered = false;
 
   constructor(props: ViewPartProps) {
@@ -81,9 +81,9 @@ export class ViewPartView {
 
     if (!this.props.browserUrl) {
       this.setWebContentHostRegistered(canHostNativeWebContent);
-      const emptyFrame = createElement('div', 'browser-frame');
+      const emptyFrame = createElement('div', 'comet-browser-frame');
       emptyFrame.setAttribute('aria-hidden', 'true');
-      this.overlayElement.className = 'webcontent-overlay visible';
+      this.overlayElement.className = 'comet-webcontent-overlay visible';
       this.overlayElement.append(emptyFrame);
       return;
     }
@@ -95,13 +95,13 @@ export class ViewPartView {
         'empty-state webcontent-runtime-warning',
       );
       warning.textContent = this.props.labels.contentUnavailable;
-      this.overlayElement.className = 'webcontent-overlay visible';
+      this.overlayElement.className = 'comet-webcontent-overlay visible';
       this.overlayElement.append(warning);
       return;
     }
 
     this.setWebContentHostRegistered(true);
-    this.overlayElement.className = 'webcontent-overlay';
+    this.overlayElement.className = 'comet-webcontent-overlay';
   }
 
   private setWebContentHostRegistered(registered: boolean) {

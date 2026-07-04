@@ -189,7 +189,7 @@ test('toast overlay window dismisses toast items through the native api', async 
       fakeApi.emitState(createToastState());
       await flushMicrotasks();
 
-      const closeButton = view.getElement().querySelector('.native-toast-close');
+      const closeButton = view.getElement().querySelector('.comet-native-toast-close');
       assert(closeButton instanceof HTMLButtonElement);
 
       closeButton.click();

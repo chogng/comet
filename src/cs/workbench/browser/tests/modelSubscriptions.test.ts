@@ -715,9 +715,9 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       },
     });
 
-    assert(container.classList.contains('has-titlebar'));
-    assert(container.classList.contains('has-statusbar'));
-    assert.equal(container.classList.contains('has-leading-window-controls'), false);
+    assert(container.classList.contains('comet-has-titlebar'));
+    assert(container.classList.contains('comet-has-statusbar'));
+    assert.equal(container.classList.contains('comet-has-leading-window-controls'), false);
     assert.equal(
       container.style.getPropertyValue('--workbench-leading-window-controls-width'),
       '',
@@ -726,12 +726,12 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     assert.equal(container.children[1], shell);
     assert.equal(container.children[2], statusbar);
     assert.equal(
-      titlebarPart.getElement().querySelector('.titlebar-left > .titlebar-leading-actions-host') instanceof HTMLElement,
+      titlebarPart.getElement().querySelector('.comet-titlebar-left > .comet-titlebar-leading-actions-host') instanceof HTMLElement,
       true,
     );
-    const menuButton = titlebarPart.getElement().querySelector('.titlebar-menu-btn');
-    const toggleButton = titlebarPart.getElement().querySelector('.titlebar-primary-sidebar-toggle-btn');
-    const addressBarButton = titlebarPart.getElement().querySelector('.titlebar-address-bar-btn');
+    const menuButton = titlebarPart.getElement().querySelector('.comet-titlebar-menu-btn');
+    const toggleButton = titlebarPart.getElement().querySelector('.comet-titlebar-primary-sidebar-toggle-btn');
+    const addressBarButton = titlebarPart.getElement().querySelector('.comet-titlebar-address-bar-btn');
     assert(menuButton instanceof HTMLButtonElement);
     assert(toggleButton instanceof HTMLButtonElement);
     assert(addressBarButton instanceof HTMLButtonElement);
@@ -743,11 +743,11 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     assert.equal(toggleCount, 1);
     assert.equal(focusAddressBarCount, 1);
     assert.equal(
-      titlebarPart.getElement().querySelector('.titlebar-center'),
+      titlebarPart.getElement().querySelector('.comet-titlebar-center'),
       null,
     );
     assert.equal(
-      titlebarPart.getElement().querySelector('.titlebar-right'),
+      titlebarPart.getElement().querySelector('.comet-titlebar-right'),
       null,
     );
     assert.equal(

@@ -94,7 +94,7 @@ function getEditorText(editor: InstanceType<typeof ProseMirrorEditor>) {
 }
 
 function getPlaceholderNode(editor: InstanceType<typeof ProseMirrorEditor>) {
-  const element = editor.getElement().querySelector('.pm-empty-paragraph');
+  const element = editor.getElement().querySelector('.comet-pm-empty-paragraph');
   assert(element instanceof HTMLElement, 'Placeholder node was not rendered.');
   return element;
 }
@@ -259,7 +259,7 @@ test('ProseMirrorEditor writes resized figure widths back to the document', asyn
     assert.equal(changes.length, 1);
     assert.equal(getLatestFigureWidth(changes[0]), 220);
 
-    const resizeHandle = editor.getElement().querySelector('.pm-resizable-handle');
+    const resizeHandle = editor.getElement().querySelector('.comet-pm-resizable-handle');
     assert(resizeHandle instanceof HTMLElement, 'Figure resize handle was not rendered.');
 
     resizeHandle.dispatchEvent(
@@ -337,7 +337,7 @@ test('DraftEditorToolbar shows preset font labels for normalized browser font-fa
   try {
     const fontFamilyPrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.editor-draft-toolbar-split-primary.actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === 'Times New Roman');
     assert(fontFamilyPrimary instanceof HTMLButtonElement);
@@ -393,7 +393,7 @@ test('DraftEditorToolbar shows Chinese named font-size presets for matching px v
   try {
     const fontSizePrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.editor-draft-toolbar-split-primary.actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === '小四');
     assert(fontSizePrimary instanceof HTMLButtonElement);
@@ -449,24 +449,24 @@ test('DraftEditorToolbar orders Chinese named font-size presets from large to sm
   try {
     const fontSizePrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.editor-draft-toolbar-split-primary.actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === '五号');
     assert(fontSizePrimary instanceof HTMLButtonElement);
     assert.equal(fontSizePrimary.textContent?.trim(), '五号');
 
-    const splitDropdowns = toolbar.getElement().querySelectorAll('.editor-draft-toolbar-split-dropdown');
+    const splitDropdowns = toolbar.getElement().querySelectorAll('.comet-editor-draft-toolbar-split-dropdown');
     const fontSizeDropdown = Array.from(splitDropdowns).find(
       (candidate) => candidate.getAttribute('aria-label') === labels.fontSize,
     );
     assert(fontSizeDropdown instanceof HTMLElement);
     fontSizeDropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'draft-toolbar-split');
 
-    const menuItems = Array.from(document.body.querySelectorAll('.dropdown-menu-item'));
+    const menuItems = Array.from(document.body.querySelectorAll('.comet-dropdown-menu-item'));
     const menuItemLabels = menuItems
       .map((item) => item.textContent?.trim())
       .filter((value): value is string => Boolean(value));
@@ -498,7 +498,7 @@ test('ProseMirrorEditor syncs default body style from editorDraftStyleService', 
 
   try {
     await withEditor(({ editor }) => {
-      const editorRoot = editor.getElement().querySelector('.pm-editor-root');
+      const editorRoot = editor.getElement().querySelector('.comet-pm-editor-root');
       assert(editorRoot instanceof HTMLElement);
       assert.equal(
         editorRoot.style.getPropertyValue('--cs-editor-default-font-family').trim(),
@@ -568,7 +568,7 @@ test('ProseMirrorEditor syncs default body style from editorDraftStyleService', 
 
       const fontSizePrimary = Array.from(
         editor.getToolbarElement().querySelectorAll<HTMLButtonElement>(
-          '.editor-draft-toolbar-split-primary.actionbar-action.is-text',
+          '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
         ),
       ).find(
         (candidate) => candidate.getAttribute('aria-label') === '小四',
@@ -626,20 +626,20 @@ test('DraftEditorToolbar uses DengXian as the implicit default font and hides De
   try {
     const fontFamilyPrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.editor-draft-toolbar-split-primary.actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === '等线');
     assert(fontFamilyPrimary instanceof HTMLButtonElement);
     assert.equal(fontFamilyPrimary.textContent?.trim(), '等线');
 
-    const splitDropdowns = toolbar.getElement().querySelectorAll('.editor-draft-toolbar-split-dropdown');
+    const splitDropdowns = toolbar.getElement().querySelectorAll('.comet-editor-draft-toolbar-split-dropdown');
     const fontFamilyDropdown = Array.from(splitDropdowns).find(
       (candidate) => candidate.getAttribute('aria-label') === labels.fontFamily,
     );
     assert(fontFamilyDropdown instanceof HTMLElement);
     fontFamilyDropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const menuItems = Array.from(document.body.querySelectorAll('.dropdown-menu-item'));
+    const menuItems = Array.from(document.body.querySelectorAll('.comet-dropdown-menu-item'));
     const menuItemLabels = menuItems
       .map((item) => item.textContent?.trim())
       .filter((value): value is string => Boolean(value));
@@ -710,14 +710,14 @@ test('DraftEditorToolbar marks unavailable preset fonts in the dropdown', () => 
   document.body.append(toolbar.getElement());
 
   try {
-    const splitDropdowns = toolbar.getElement().querySelectorAll('.editor-draft-toolbar-split-dropdown');
+    const splitDropdowns = toolbar.getElement().querySelectorAll('.comet-editor-draft-toolbar-split-dropdown');
     const fontFamilyDropdown = Array.from(splitDropdowns).find(
       (candidate) => candidate.getAttribute('aria-label') === labels.fontFamily,
     );
     assert(fontFamilyDropdown instanceof HTMLElement);
     fontFamilyDropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const menuItems = Array.from(document.body.querySelectorAll('.dropdown-menu-item'));
+    const menuItems = Array.from(document.body.querySelectorAll('.comet-dropdown-menu-item'));
     const unavailableSongti = menuItems.find((item) => item.textContent?.includes('宋体 (未安装)'));
 
     assert(unavailableSongti instanceof HTMLElement);
@@ -782,10 +782,10 @@ test('DraftEditorToolbar disables figure-ref action when no figures are availabl
 
     moreButton.click();
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'draft-toolbar-overflow');
-    const menuItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const menuItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (candidate) => candidate.textContent?.includes(labels.insertFigureRef),
     );
     assert(menuItem instanceof HTMLElement);
@@ -866,9 +866,9 @@ test('DraftEditorToolbar opens the more menu and dispatches overflow actions', a
       moreButton.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      const menu = document.body.querySelector('.dropdown-menu');
+      const menu = document.body.querySelector('.comet-dropdown-menu');
       assert(menu instanceof HTMLElement);
-      const menuItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+      const menuItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
         (node) => node.textContent?.includes(label),
       );
       assert(menuItem instanceof HTMLElement);
@@ -928,37 +928,37 @@ test('DraftEditorToolbar renders draft-specific toolbar content classes', () => 
   try {
     const toolbarElement = toolbar.getElement();
     const toolbarContent = toolbarElement.querySelector(
-      ':scope > .editor-draft-toolbar-content',
+      ':scope > .comet-editor-draft-toolbar-content',
     );
     const toolbarGroup = toolbarElement.querySelector(
-      '.editor-draft-toolbar-content > .actionbar.editor-draft-toolbar-group',
+      '.comet-editor-draft-toolbar-content > .comet-actionbar.comet-editor-draft-toolbar-group',
     );
     const toolbarMore = toolbarElement.querySelector(
-      ':scope > .editor-draft-toolbar-trailing .editor-draft-toolbar-more',
+      ':scope > .comet-editor-draft-toolbar-trailing .comet-editor-draft-toolbar-more',
     );
     const toolbarAction = toolbarElement.querySelector(
-      '.editor-draft-toolbar-group .editor-draft-toolbar-btn.actionbar-action',
+      '.comet-editor-draft-toolbar-group .comet-editor-draft-toolbar-btn.comet-actionbar-action',
     );
     const textStylePrimary = toolbarElement.querySelector(
-      '.editor-draft-toolbar-split .editor-draft-toolbar-split-primary.actionbar-action',
+      '.comet-editor-draft-toolbar-split .comet-editor-draft-toolbar-split-primary.comet-actionbar-action',
     );
     const textStyleDropdown = toolbarElement.querySelector(
-      '.editor-draft-toolbar-split .editor-draft-toolbar-split-dropdown.actionbar-action',
+      '.comet-editor-draft-toolbar-split .comet-editor-draft-toolbar-split-dropdown.comet-actionbar-action',
     );
     const fontSizePrimary = toolbarElement.querySelector(
-      '.editor-draft-toolbar-split-primary.actionbar-action.is-text',
+      '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
     );
     const splitDropdownLabels = Array.from(
-      toolbarElement.querySelectorAll('.editor-draft-toolbar-split-dropdown.actionbar-action'),
+      toolbarElement.querySelectorAll('.comet-editor-draft-toolbar-split-dropdown.comet-actionbar-action'),
     ).map((button) => button.getAttribute('aria-label'));
     const actionOrder = Array.from(
-      toolbarElement.querySelectorAll('.editor-draft-toolbar-group .actionbar-action[aria-label]'),
+      toolbarElement.querySelectorAll('.comet-editor-draft-toolbar-group .comet-actionbar-action[aria-label]'),
     ).map((button) => button.getAttribute('aria-label'));
     const boldIndex = actionOrder.indexOf(labels.bold);
     const fontFamilyDropdownIndex = actionOrder.indexOf(labels.fontFamily);
     const fontSizeDropdownIndex = actionOrder.indexOf(labels.fontSize);
 
-    assert.equal(toolbarElement.classList.contains('editor-draft-toolbar'), true);
+    assert.equal(toolbarElement.classList.contains('comet-editor-draft-toolbar'), true);
     assert(toolbarContent instanceof HTMLElement);
     assert(toolbarGroup instanceof HTMLElement);
     assert(toolbarMore instanceof HTMLElement);
@@ -1026,10 +1026,10 @@ test('DraftEditorToolbar moves overflowing action buttons into the more menu', a
   try {
     const toolbarElement = toolbar.getElement();
     const contentElement = toolbarElement.querySelector(
-      ':scope > .editor-draft-toolbar-content',
+      ':scope > .comet-editor-draft-toolbar-content',
     );
     const trailingElement = toolbarElement.querySelector(
-      ':scope > .editor-draft-toolbar-trailing',
+      ':scope > .comet-editor-draft-toolbar-trailing',
     );
     assert(contentElement instanceof HTMLElement);
     assert(trailingElement instanceof HTMLElement);
@@ -1058,7 +1058,7 @@ test('DraftEditorToolbar moves overflowing action buttons into the more menu', a
       configurable: true,
       get: () => {
         const collapsibleActionButtons = contentElement.querySelectorAll(
-          '.editor-draft-toolbar-btn.actionbar-action:not(.editor-draft-toolbar-split-primary):not(.editor-draft-toolbar-split-dropdown)',
+          '.comet-editor-draft-toolbar-btn.comet-actionbar-action:not(.comet-editor-draft-toolbar-split-primary):not(.comet-editor-draft-toolbar-split-dropdown)',
         ).length;
         return 180 + (collapsibleActionButtons * 28);
       },
@@ -1078,9 +1078,9 @@ test('DraftEditorToolbar moves overflowing action buttons into the more menu', a
     moreButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
-    const alignRightMenuItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const alignRightMenuItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (candidate) => candidate.textContent?.includes(labels.alignRight),
     );
     assert(alignRightMenuItem instanceof HTMLElement);
@@ -1113,9 +1113,9 @@ test('ProseMirrorEditor refreshes placeholder text during an external document r
 test('ProseMirrorEditor mounts the editing surface inside the shared scrollable container', async () => {
   await withEditor(({ editor }) => {
     const scrollableRoot = getScrollableRoot(editor);
-    const host = scrollableRoot.querySelector('.pm-editor-host');
+    const host = scrollableRoot.querySelector('.comet-pm-editor-host');
     assert(host instanceof HTMLElement);
-    assert.equal(scrollableRoot.classList.contains('pm-editor-scrollable'), true);
+    assert.equal(scrollableRoot.classList.contains('comet-pm-editor-scrollable'), true);
     assert.equal(host.classList.contains('scrollable-content'), true);
   });
 });
@@ -1241,9 +1241,9 @@ test('ProseMirrorEditor clears undo history after an external document replaceme
     const moreButton = getToolbarButton(editor, labels.toolbarMore);
     moreButton.click();
 
-    const menu = document.body.querySelector('.dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
-    const undoItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const undoItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (candidate) => candidate.textContent?.includes(labels.undo),
     );
     assert(undoItem instanceof HTMLElement);

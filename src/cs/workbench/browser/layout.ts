@@ -735,7 +735,7 @@ export function createWorkbenchPartRef(
 export function getWorkbenchShellClassName({
   activePage,
 }: WorkbenchShellLayoutParams) {
-  return `app-shell ${activePage === 'settings' ? 'app-shell-settings' : ''}`.trim();
+  return `comet-app-shell ${activePage === 'settings' ? 'comet-app-shell-settings' : ''}`.trim();
 }
 
 export function getWorkbenchContentClassName({
@@ -744,10 +744,10 @@ export function getWorkbenchContentClassName({
   isEditorCollapsed,
 }: WorkbenchContentLayoutParams) {
   return [
-    'content-grid',
-    isPrimarySidebarVisible ? 'is-primary-sidebar-visible' : '',
-    isAgentSidebarVisible ? 'is-agent-sidebar-visible' : '',
-    isEditorCollapsed ? 'is-editor-collapsed' : '',
+    'comet-content-grid',
+    isPrimarySidebarVisible ? 'comet-is-primary-sidebar-visible' : '',
+    isAgentSidebarVisible ? 'comet-is-agent-sidebar-visible' : '',
+    isEditorCollapsed ? 'comet-is-editor-collapsed' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -800,7 +800,7 @@ export class WorkbenchLayoutSlotView implements IGridView {
   constructor(className: string, snap = false) {
     this.snap = snap;
     this.element = document.createElement('div');
-    this.element.className = `workbench-content-slot ${className}`.trim();
+    this.element.className = `comet-workbench-content-slot ${className}`.trim();
   }
 
   get minimumWidth() {

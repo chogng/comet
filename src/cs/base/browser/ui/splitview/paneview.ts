@@ -83,14 +83,14 @@ type PaneChangeEvent = {
 export class Pane implements IView {
   static readonly HEADER_SIZE = 34;
 
-  readonly element = createElement('section', 'pane');
-  protected readonly headerElement = createElement('div', 'pane-header');
-  protected readonly headerButtonElement = createElement('button', 'pane-header-toggle');
-  protected readonly headerContentElement = createElement('span', 'pane-header-content');
-  protected readonly chevronElement = createLxIcon('chevron-down', 'pane-header-chevron');
+  readonly element = createElement('section', 'comet-pane');
+  protected readonly headerElement = createElement('div', 'comet-pane-header');
+  protected readonly headerButtonElement = createElement('button', 'comet-pane-header-toggle');
+  protected readonly headerContentElement = createElement('span', 'comet-pane-header-content');
+  protected readonly chevronElement = createLxIcon('chevron-down', 'comet-pane-header-chevron');
   protected readonly titleElement: HTMLSpanElement;
-  protected readonly headerActionsElement = createElement('div', 'pane-header-actions');
-  protected readonly bodyElement = createElement('div', 'pane-body');
+  protected readonly headerActionsElement = createElement('div', 'comet-pane-header-actions');
+  protected readonly bodyElement = createElement('div', 'comet-pane-body');
   private readonly onDidChangeEmitter = new EventEmitter<PaneChangeEvent>();
   private readonly disposables = new DisposableStore();
   private expandedValue: boolean;
@@ -108,8 +108,8 @@ export class Pane implements IView {
     this.maximumBodySizeValue =
       options.maximumBodySize ?? Number.POSITIVE_INFINITY;
     this.headerSizeValue = options.headerSize ?? Pane.HEADER_SIZE;
-    this.titleElement = createElement('span', 'pane-header-title', options.title);
-    this.element.style.setProperty('--cs-pane-header-size', `${this.headerSizeValue}px`);
+    this.titleElement = createElement('span', 'comet-pane-header-title', options.title);
+    this.element.style.setProperty('--comet-pane-header-size', `${this.headerSizeValue}px`);
     appendClassNames(
       this.element,
       options.classNames?.pane,
@@ -137,7 +137,7 @@ export class Pane implements IView {
     this.renderHeader(this.headerActionsElement);
     this.headerElement.append(this.headerButtonElement, this.headerActionsElement);
     this.element.append(this.headerElement);
-    this.element.classList.toggle('expanded', this.expandedValue);
+    this.element.classList.toggle('comet-expanded', this.expandedValue);
     this.updateBodyAttachment();
 
     this.disposables.add(
@@ -183,7 +183,7 @@ export class Pane implements IView {
     }
 
     this.expandedValue = expanded;
-    this.element.classList.toggle('expanded', expanded);
+    this.element.classList.toggle('comet-expanded', expanded);
     this.updateBodyAttachment();
     this.headerButtonElement.setAttribute('aria-expanded', String(expanded));
     const preferredSize = expanded
@@ -253,7 +253,7 @@ export type PaneViewOptions = {
 
 export class PaneView {
   private static readonly RESIZE_ANIMATION_DURATION_MS = 540;
-  readonly element = createElement('div', 'pane-view');
+  readonly element = createElement('div', 'comet-pane-view');
   private readonly splitView: SplitView;
   private readonly items: PaneItem[] = [];
   private readonly disposables = new DisposableStore();
@@ -262,7 +262,7 @@ export class PaneView {
   constructor(options: PaneViewOptions = {}) {
     const orientation = options.orientation ?? Orientation.HORIZONTAL;
     this.element.classList.add(
-      orientation === Orientation.HORIZONTAL ? 'horizontal' : 'vertical',
+      orientation === Orientation.HORIZONTAL ? 'comet-horizontal' : 'comet-vertical',
     );
     this.splitView = new SplitView(
       orientation,
@@ -304,7 +304,7 @@ export class PaneView {
       clearTimeout(this.resizeAnimationTimer);
       this.resizeAnimationTimer = undefined;
     }
-    this.splitView.element.classList.remove('pane-view-resize-animating');
+    this.splitView.element.classList.remove('comet-pane-view-resize-animating');
     for (const item of this.items) {
       item.changeListener.dispose();
       item.pane.dispose();
@@ -315,13 +315,13 @@ export class PaneView {
   }
 
   private triggerResizeAnimation() {
-    this.splitView.element.classList.add('pane-view-resize-animating');
+    this.splitView.element.classList.add('comet-pane-view-resize-animating');
     if (this.resizeAnimationTimer) {
       clearTimeout(this.resizeAnimationTimer);
     }
     this.resizeAnimationTimer = setTimeout(() => {
       this.resizeAnimationTimer = undefined;
-      this.splitView.element.classList.remove('pane-view-resize-animating');
+      this.splitView.element.classList.remove('comet-pane-view-resize-animating');
     }, PaneView.RESIZE_ANIMATION_DURATION_MS);
   }
 }

@@ -1,6 +1,6 @@
 @import './notificationsList.css';
 
-.notifications-center {
+.comet-notifications-center {
   position: absolute;
   right: 12px;
   bottom: 12px;
@@ -15,16 +15,16 @@
   overflow: hidden;
 }
 
-.app-window.has-statusbar .notifications-center {
+.comet-app-window.comet-has-statusbar .comet-notifications-center {
   bottom: 34px;
 }
 
-.notifications-center.visible {
+.comet-notifications-center.visible {
   display: flex;
   flex-direction: column;
 }
 
-.notifications-center-header {
+.comet-notifications-center-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -33,20 +33,20 @@
   border-bottom: 1px solid var(--cs-border-muted, rgba(0, 0, 0, 0.12));
 }
 
-.notifications-center-header-title {
+.comet-notifications-center-header-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.notifications-center-header-toolbar {
+.comet-notifications-center-header-toolbar {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
 }
 
-.notifications-center .notifications-list-container {
+.comet-notifications-center .comet-notifications-list-container {
   overflow: auto;
   padding: 10px;
 }

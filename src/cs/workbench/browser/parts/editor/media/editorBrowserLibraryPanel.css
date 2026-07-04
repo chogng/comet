@@ -1,11 +1,11 @@
-.editor-browser-library-panel-overlay {
+.comet-editor-browser-library-panel-overlay {
   position: fixed;
   z-index: 2;
   overflow: hidden;
   pointer-events: none;
 }
 
-.editor-browser-library-panel-backdrop {
+.comet-editor-browser-library-panel-backdrop {
   position: absolute;
   inset: 0;
   margin: 0;
@@ -17,12 +17,12 @@
   transition: opacity 160ms ease;
 }
 
-.editor-browser-library-panel-backdrop.is-open {
+.comet-editor-browser-library-panel-backdrop.is-open {
   opacity: 1;
   pointer-events: auto;
 }
 
-.editor-browser-library-panel {
+.comet-editor-browser-library-panel {
   --editor-browser-library-panel-width: 220px;
   --editor-browser-library-panel-closed-offset: calc(-100% - 14px);
   --editor-browser-library-item-height: 26px;
@@ -52,27 +52,27 @@
   overflow: hidden;
 }
 
-.editor-browser-library-panel.is-desktop-overlay {
+.comet-editor-browser-library-panel.is-desktop-overlay {
   --editor-browser-library-panel-closed-offset: -100%;
 }
 
-.editor-browser-library-panel.is-open {
+.comet-editor-browser-library-panel.is-open {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
 }
 
-.editor-browser-library-header {
+.comet-editor-browser-library-header {
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.editor-browser-library-search-host {
+.comet-editor-browser-library-search-host {
   min-width: 0;
 }
 
-.editor-browser-library-search-input.inputbox {
+.comet-editor-browser-library-search-input.inputbox {
   --inputbox-height: 26px;
   --inputbox-border-radius: 7px;
   --inputbox-border: 1px solid #e6e6e6;
@@ -81,27 +81,27 @@
   width: 100%;
 }
 
-.editor-browser-library-body {
+.comet-editor-browser-library-body {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.editor-browser-library-list {
+.comet-editor-browser-library-list {
   display: grid;
   gap: 10px;
   min-width: 0;
   padding-right: 2px;
 }
 
-.editor-browser-library-section {
+.comet-editor-browser-library-section {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.editor-browser-library-section-title {
+.comet-editor-browser-library-section-title {
   margin: 0;
   min-width: 0;
   padding: 0 2px;
@@ -118,19 +118,19 @@
   text-transform: none;
 }
 
-.editor-browser-library-section-list {
+.comet-editor-browser-library-section-list {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.editor-browser-library-folder-group {
+.comet-editor-browser-library-folder-group {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.editor-browser-library-folder-title {
+.comet-editor-browser-library-folder-title {
   margin: 0;
   min-width: 0;
   min-height: var(--editor-browser-library-item-height);
@@ -145,13 +145,13 @@
   white-space: nowrap;
 }
 
-.editor-browser-library-folder-list {
+.comet-editor-browser-library-folder-list {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.editor-browser-library-empty {
+.comet-editor-browser-library-empty {
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -163,19 +163,19 @@
   text-align: center;
 }
 
-.editor-browser-library-empty-icon.lx-icon {
+.comet-editor-browser-library-empty-icon.lx-icon {
   font-size: 22px;
   color: var(--vscode-editor-browserLibraryEmptyForeground, #505050);
 }
 
-.editor-browser-library-empty-label {
+.comet-editor-browser-library-empty-label {
   margin: 0;
   color: var(--vscode-editor-browserLibraryEmptyForeground, #505050);
   font-size: 12px;
   line-height: 1.4;
 }
 
-.editor-browser-library-item-row {
+.comet-editor-browser-library-item-row {
   position: relative;
   min-width: 0;
   min-height: var(--editor-browser-library-item-height);
@@ -183,7 +183,7 @@
   align-items: stretch;
 }
 
-.editor-browser-library-item {
+.comet-editor-browser-library-item {
   width: 100%;
   min-width: 0;
   min-height: var(--editor-browser-library-item-height);
@@ -205,15 +205,15 @@
   overflow: hidden;
 }
 
-.editor-browser-library-item-row:hover .editor-browser-library-item,
-.editor-browser-library-item-row:focus-within .editor-browser-library-item,
-.editor-browser-library-item:focus-visible {
+.comet-editor-browser-library-item-row:hover .comet-editor-browser-library-item,
+.comet-editor-browser-library-item-row:focus-within .comet-editor-browser-library-item,
+.comet-editor-browser-library-item:focus-visible {
   background: #ebebeb;
   color: var(--vscode-agentBar-inputForeground, #1f2d3a);
   outline: none;
 }
 
-.editor-browser-library-item-delete-btn.btn-base.btn-md {
+.comet-editor-browser-library-item-delete-btn.btn-base.btn-md {
   position: absolute;
   top: 50%;
   right: 3px;
@@ -235,27 +235,27 @@
   transition: opacity 120ms ease;
 }
 
-.editor-browser-library-item-delete-btn.btn-base.btn-md .lx-icon {
+.comet-editor-browser-library-item-delete-btn.btn-base.btn-md .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.editor-browser-library-item-row.is-deletable:hover .editor-browser-library-item-delete-btn.btn-base.btn-md,
-.editor-browser-library-item-row.is-deletable:focus-within .editor-browser-library-item-delete-btn.btn-base.btn-md {
+.comet-editor-browser-library-item-row.is-deletable:hover .comet-editor-browser-library-item-delete-btn.btn-base.btn-md,
+.comet-editor-browser-library-item-row.is-deletable:focus-within .comet-editor-browser-library-item-delete-btn.btn-base.btn-md {
   opacity: 1;
   pointer-events: auto;
 }
 
-.editor-browser-library-item-row.is-deletable:hover .editor-browser-library-item-delete-btn.btn-base.btn-md:hover,
-.editor-browser-library-item-row.is-deletable:focus-within .editor-browser-library-item-delete-btn.btn-base.btn-md:focus-visible {
+.comet-editor-browser-library-item-row.is-deletable:hover .comet-editor-browser-library-item-delete-btn.btn-base.btn-md:hover,
+.comet-editor-browser-library-item-row.is-deletable:focus-within .comet-editor-browser-library-item-delete-btn.btn-base.btn-md:focus-visible {
   background: var(--vscode-editor-tabCloseHoverBackground, #e9e9e9);
   color: var(--vscode-editor-tabCloseHoverForeground, #1f2d3a);
   outline: none;
 }
 
-.editor-browser-library-item-row.is-deletable:hover .editor-browser-library-item-title,
-.editor-browser-library-item-row.is-deletable:focus-within .editor-browser-library-item-title {
+.comet-editor-browser-library-item-row.is-deletable:hover .comet-editor-browser-library-item-title,
+.comet-editor-browser-library-item-row.is-deletable:focus-within .comet-editor-browser-library-item-title {
   mask-image: linear-gradient(
     to right,
     black calc(100% - 36px),
@@ -268,7 +268,7 @@
   );
 }
 
-.editor-browser-library-item-title {
+.comet-editor-browser-library-item-title {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
@@ -279,7 +279,7 @@
   font-weight: 500;
 }
 
-.editor-browser-library-item-header {
+.comet-editor-browser-library-item-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -287,7 +287,7 @@
   width: 100%;
 }
 
-.editor-browser-library-item-favicon {
+.comet-editor-browser-library-item-favicon {
   flex: 0 0 auto;
   width: 14px;
   height: 14px;
@@ -295,12 +295,12 @@
   object-fit: contain;
 }
 
-.editor-browser-library-item-favicon.is-fallback {
+.comet-editor-browser-library-item-favicon.is-fallback {
   color: var(--vscode-editor-sourceSubheadingForeground, #7a8ca0);
   font-size: 12px;
 }
 
-.editor-browser-library-item-favicon.is-loading {
+.comet-editor-browser-library-item-favicon.is-loading {
   color: var(--vscode-editor-sourceForeground, #111827);
   font-size: 14px;
 }

@@ -49,14 +49,14 @@ export function createDropdownSearchInputView(
   const header = createElement(
     'div',
     composeClassName([
-      'dropdown-menu-search-header',
+      'comet-dropdown-menu-search-header',
       options.className,
     ]),
   );
   const inputHost = createElement('div');
   const inputBox = new InputBox(inputHost, undefined, {
     className: composeClassName([
-      'dropdown-menu-search-input',
+      'comet-dropdown-menu-search-input',
       options.inputClassName,
     ]),
     type: options.type ?? 'search',

@@ -1,4 +1,4 @@
-.app-window {
+.comet-app-window {
   --workbench-window-controls-width: 0px;
   width: 100%;
   height: 100%;
@@ -8,21 +8,21 @@
   background: transparent;
 }
 
-.app-window.has-statusbar {
+.comet-app-window.comet-has-statusbar {
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
-.app-window.has-titlebar {
+.comet-app-window.comet-has-titlebar {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.app-window.has-titlebar.has-statusbar {
+.comet-app-window.comet-has-titlebar.comet-has-statusbar {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.titlebar {
+.comet-titlebar {
   --workbench-titlebar-height: 36px;
-  --workbench-titlebar-border: var(--separator-border);
+  --workbench-titlebar-border: var(--comet-separator-border);
   --workbench-titlebar-button-hover-background: var(--vscode-titleBar-fieldHoverBackground);
   --workbench-titlebar-button-active-background: var(--vscode-titleBar-fieldFocusBackground);
   width: 100%;
@@ -36,7 +36,7 @@
   border-bottom: 1px solid var(--workbench-titlebar-border);
 }
 
-.titlebar-container {
+.comet-titlebar-container {
   --editor-header-height: var(--workbench-titlebar-height);
   --agentbar-header-height: var(--workbench-titlebar-height);
   box-sizing: border-box;
@@ -55,8 +55,8 @@
   -webkit-app-region: drag;
 }
 
-.titlebar-leading-actions-host,
-.header-actions-host {
+.comet-titlebar-leading-actions-host,
+.comet-header-actions-host {
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -64,8 +64,8 @@
   padding-inline-start: 8px;
 }
 
-.titlebar-leading-actions,
-.header-actions {
+.comet-titlebar-leading-actions,
+.comet-header-actions {
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -74,45 +74,45 @@
   -webkit-app-region: no-drag;
 }
 
-.titlebar-leading-actions.actionbar,
-.header-actions.actionbar {
+.comet-titlebar-leading-actions.actionbar,
+.comet-header-actions.actionbar {
   height: 100%;
 }
 
-.titlebar-leading-actions .actionbar-actions-container,
-.header-actions .actionbar-actions-container {
+.comet-titlebar-leading-actions .actionbar-actions-container,
+.comet-header-actions .actionbar-actions-container {
   display: inline-flex;
   align-items: center;
   height: 100%;
 }
 
-.titlebar-leading-actions .actionbar-item,
-.header-actions .actionbar-item {
+.comet-titlebar-leading-actions .actionbar-item,
+.comet-header-actions .actionbar-item {
   display: inline-flex;
   align-items: center;
   height: 100%;
 }
 
-.titlebar .titlebar-leading-actions-host {
+.comet-titlebar .comet-titlebar-leading-actions-host {
   padding-inline-start: 6px;
 }
 
-.app-window.has-leading-window-controls .titlebar .titlebar-leading-actions-host {
+.comet-app-window.comet-has-leading-window-controls .comet-titlebar .comet-titlebar-leading-actions-host {
   padding-inline-start: calc(
     var(--workbench-leading-window-controls-width, 0px) + 6px
   );
 }
 
-.titlebar .editor-header {
+.comet-titlebar .comet-editor-header {
   padding: 0 6px;
 }
 
-.titlebar-menu-btn.actionbar-action,
-.titlebar-primary-sidebar-toggle-btn.actionbar-action,
-.titlebar-address-bar-btn.actionbar-action,
-.editor-header-add-btn.actionbar-action,
-.editor-header-agent-btn.actionbar-action,
-.editor-header-toggle-editor-btn.actionbar-action {
+.comet-titlebar-menu-btn.actionbar-action,
+.comet-titlebar-primary-sidebar-toggle-btn.actionbar-action,
+.comet-titlebar-address-bar-btn.actionbar-action,
+.comet-editor-header-add-btn.actionbar-action,
+.comet-editor-header-agent-btn.actionbar-action,
+.comet-editor-header-toggle-editor-btn.actionbar-action {
   width: 24px;
   height: 24px;
   border: none;
@@ -129,65 +129,65 @@
   -webkit-app-region: no-drag;
 }
 
-.titlebar-menu-btn.actionbar-action .lx-icon,
-.titlebar-primary-sidebar-toggle-btn.actionbar-action .lx-icon,
-.titlebar-address-bar-btn.actionbar-action .lx-icon,
-.editor-header-add-btn.actionbar-action .lx-icon,
-.editor-header-agent-btn.actionbar-action .lx-icon,
-.editor-header-toggle-editor-btn.actionbar-action .lx-icon {
+.comet-titlebar-menu-btn.actionbar-action .lx-icon,
+.comet-titlebar-primary-sidebar-toggle-btn.actionbar-action .lx-icon,
+.comet-titlebar-address-bar-btn.actionbar-action .lx-icon,
+.comet-editor-header-add-btn.actionbar-action .lx-icon,
+.comet-editor-header-agent-btn.actionbar-action .lx-icon,
+.comet-editor-header-toggle-editor-btn.actionbar-action .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.titlebar .titlebar-menu-btn.actionbar-action,
-.titlebar .titlebar-primary-sidebar-toggle-btn.actionbar-action,
-.titlebar .titlebar-address-bar-btn.actionbar-action,
-.titlebar .editor-header-add-btn.actionbar-action,
-.titlebar .editor-header-agent-btn.actionbar-action,
-.titlebar .editor-header-toggle-editor-btn.actionbar-action {
+.comet-titlebar .comet-titlebar-menu-btn.actionbar-action,
+.comet-titlebar .comet-titlebar-primary-sidebar-toggle-btn.actionbar-action,
+.comet-titlebar .comet-titlebar-address-bar-btn.actionbar-action,
+.comet-titlebar .comet-editor-header-add-btn.actionbar-action,
+.comet-titlebar .comet-editor-header-agent-btn.actionbar-action,
+.comet-titlebar .comet-editor-header-toggle-editor-btn.actionbar-action {
   color: var(--vscode-titleBar-buttonForeground);
   border-radius: 6px;
 }
 
-.titlebar .titlebar-menu-btn.actionbar-action:hover,
-.titlebar .titlebar-primary-sidebar-toggle-btn.actionbar-action:hover,
-.titlebar .titlebar-address-bar-btn.actionbar-action:hover,
-.titlebar .editor-header-add-btn.actionbar-action:hover,
-.titlebar .editor-header-agent-btn.actionbar-action:hover,
-.titlebar .editor-header-toggle-editor-btn.actionbar-action:hover {
+.comet-titlebar .comet-titlebar-menu-btn.actionbar-action:hover,
+.comet-titlebar .comet-titlebar-primary-sidebar-toggle-btn.actionbar-action:hover,
+.comet-titlebar .comet-titlebar-address-bar-btn.actionbar-action:hover,
+.comet-titlebar .comet-editor-header-add-btn.actionbar-action:hover,
+.comet-titlebar .comet-editor-header-agent-btn.actionbar-action:hover,
+.comet-titlebar .comet-editor-header-toggle-editor-btn.actionbar-action:hover {
   background: var(--workbench-titlebar-button-hover-background);
 }
 
-.titlebar .titlebar-menu-btn.actionbar-action:active,
-.titlebar .titlebar-primary-sidebar-toggle-btn.actionbar-action:active,
-.titlebar .titlebar-address-bar-btn.actionbar-action:active,
-.titlebar .editor-header-add-btn.actionbar-action:active,
-.titlebar .editor-header-agent-btn.actionbar-action:active,
-.titlebar .editor-header-toggle-editor-btn.actionbar-action:active {
+.comet-titlebar .comet-titlebar-menu-btn.actionbar-action:active,
+.comet-titlebar .comet-titlebar-primary-sidebar-toggle-btn.actionbar-action:active,
+.comet-titlebar .comet-titlebar-address-bar-btn.actionbar-action:active,
+.comet-titlebar .comet-editor-header-add-btn.actionbar-action:active,
+.comet-titlebar .comet-editor-header-agent-btn.actionbar-action:active,
+.comet-titlebar .comet-editor-header-toggle-editor-btn.actionbar-action:active {
   background: var(--workbench-titlebar-button-active-background);
 }
 
-.titlebar-main-menu {
+.comet-titlebar-main-menu {
   width: 180px;
   min-height: 72px;
   background: var(--vscode-menu-background);
-  border: 1px solid var(--separator-border);
+  border: 1px solid var(--comet-separator-border);
   border-radius: 6px;
 }
 
-.titlebar input,
-.titlebar textarea {
+.comet-titlebar input,
+.comet-titlebar textarea {
   color: var(--vscode-titleBar-fieldForeground);
   background: var(--vscode-titleBar-fieldBackground);
 }
 
-.titlebar input::placeholder,
-.titlebar textarea::placeholder {
+.comet-titlebar input::placeholder,
+.comet-titlebar textarea::placeholder {
   color: var(--vscode-titleBar-placeholderForeground);
 }
 
-.titlebar-drag-region {
+.comet-titlebar-drag-region {
   position: absolute;
   top: 0;
   left: 0;
@@ -197,7 +197,7 @@
   -webkit-app-region: drag;
 }
 
-.app-window.has-native-window-controls-overlay .titlebar-container::after {
+.comet-app-window.comet-has-native-window-controls-overlay .comet-titlebar-container::after {
   content: '';
   width: var(--workbench-window-controls-width);
   height: 100%;
@@ -205,7 +205,7 @@
   -webkit-app-region: no-drag;
 }
 
-.titlebar-left {
+.comet-titlebar-left {
   position: relative;
   z-index: 1;
   min-width: 0;
@@ -216,29 +216,29 @@
   overflow: hidden;
 }
 
-.titlebar-left {
+.comet-titlebar-left {
   grid-column: 1;
   justify-content: flex-start;
 }
 
-.titlebar-left[hidden] {
+.comet-titlebar-left[hidden] {
   display: none;
 }
 
-.titlebar-left > * {
+.comet-titlebar-left > * {
   min-width: 0;
   width: auto;
   height: 100%;
 }
 
 /* Keep the frameless host transparent and fill the inner shell instead. */
-.app-window:not(.is-mica-enabled) .titlebar,
-.app-window:not(.is-mica-enabled) .app-shell,
-.app-window:not(.is-mica-enabled) .statusbar-part {
+.comet-app-window:not(.comet-is-mica-enabled) .comet-titlebar,
+.comet-app-window:not(.comet-is-mica-enabled) .comet-app-shell,
+.comet-app-window:not(.comet-is-mica-enabled) .comet-statusbar-part {
   background-color: var(--workbench-chrome-bg);
 }
 
-.app-shell {
+.comet-app-shell {
   height: 100%;
   min-height: 0;
   display: grid;
@@ -249,24 +249,24 @@
   transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.app-shell.app-shell-settings {
+.comet-app-shell.comet-app-shell-settings {
   grid-template-rows: minmax(0, 1fr);
   background-color: var(--vscode-settings-contentBackground, #ffffff);
 }
 
-.app-shell.app-shell-settings .workbench-content-layout,
-.app-shell.app-shell-settings .content-grid,
-.app-shell.app-shell-settings .workbench-content-slot-editor {
+.comet-app-shell.comet-app-shell-settings .comet-workbench-content-layout,
+.comet-app-shell.comet-app-shell-settings .comet-content-grid,
+.comet-app-shell.comet-app-shell-settings .comet-workbench-content-slot-editor {
   background: var(--vscode-settings-contentBackground, #ffffff);
 }
 
 @media (max-width: 980px) {
-  .app-shell {
+  .comet-app-shell {
     height: 100%;
     min-height: 0;
   }
 
-  .workbench-content-layout {
+  .comet-workbench-content-layout {
     height: 100%;
     min-height: 0;
   }

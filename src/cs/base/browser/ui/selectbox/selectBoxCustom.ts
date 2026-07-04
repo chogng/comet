@@ -202,7 +202,7 @@ export class SelectBoxCustom extends Disposable {
     this.isMenuVisible = true;
     this.contextView.show({
       anchor: this.selectElement,
-      className: 'cs-select-box-context-view',
+      className: 'comet-select-box-context-view',
       render: () => menuElement,
       onHide: this.handleMenuHide,
       alignment: 'start',

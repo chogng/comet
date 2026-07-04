@@ -23,9 +23,9 @@ export class NotificationsList {
     private readonly model: NotificationsModel,
     private readonly options: NotificationsListOptions = {},
   ) {
-    this.container.classList.add('notifications-list-container');
+    this.container.classList.add('comet-notifications-list-container');
     this.listElement = document.createElement('div');
-    this.listElement.className = 'notifications-list';
+    this.listElement.className = 'comet-notifications-list';
     this.container.append(this.listElement);
     this.renderDisposables.add(
       this.model.onDidChangeNotification(this.handleNotificationChange),
@@ -58,7 +58,7 @@ export class NotificationsList {
 
     this.disposed = true;
     this.renderDisposables.dispose();
-    this.container.classList.remove('notifications-list-container');
+    this.container.classList.remove('comet-notifications-list-container');
     this.container.replaceChildren();
   }
 
@@ -83,7 +83,7 @@ export class NotificationsList {
     clearNode(this.listElement);
     if (this.items.length === 0) {
       const empty = document.createElement('div');
-      empty.className = 'notifications-list-empty';
+      empty.className = 'comet-notifications-list-empty';
       empty.textContent = this.options.emptyMessage ?? 'No notifications';
       this.listElement.append(empty);
       return;

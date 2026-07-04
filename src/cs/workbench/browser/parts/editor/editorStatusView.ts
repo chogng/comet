@@ -20,13 +20,13 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 function renderStatusItem(item: EditorStatusItem) {
   const element = createElement(
     'span',
-    ['editor-statusbar-item', item.tone ? `is-${item.tone}` : '']
+    ['comet-editor-statusbar-item', item.tone ? `is-${item.tone}` : '']
       .filter(Boolean)
       .join(' '),
   );
-  const label = createElement('span', 'editor-statusbar-item-label');
+  const label = createElement('span', 'comet-editor-statusbar-item-label');
   label.textContent = item.label;
-  const value = createElement('span', 'editor-statusbar-item-value');
+  const value = createElement('span', 'comet-editor-statusbar-item-value');
   hoverService.applyHover(value, item.value);
   value.textContent = item.value;
   element.append(label, value);
@@ -45,18 +45,18 @@ export class EditorStatusView {
   }
 
   setStatus(status: EditorStatusState) {
-    this.element.className = ['editor-statusbar', `is-pane-mode-${status.paneMode}`].join(' ');
+    this.element.className = ['comet-editor-statusbar', `is-pane-mode-${status.paneMode}`].join(' ');
     this.element.setAttribute('role', 'status');
     this.element.setAttribute('aria-label', status.ariaLabel);
 
-    const primary = createElement('div', 'editor-statusbar-group is-primary');
+    const primary = createElement('div', 'comet-editor-statusbar-group is-primary');
     if (status.modeLabel) {
-      const mode = createElement('span', 'editor-statusbar-mode-pill');
+      const mode = createElement('span', 'comet-editor-statusbar-mode-pill');
       mode.textContent = status.modeLabel;
       primary.append(mode);
     }
     if (status.summary) {
-      const summary = createElement('span', 'editor-statusbar-summary');
+      const summary = createElement('span', 'comet-editor-statusbar-summary');
       hoverService.applyHover(summary, status.summary);
       summary.textContent = status.summary;
       primary.append(summary);
@@ -65,7 +65,7 @@ export class EditorStatusView {
       primary.append(renderStatusItem(item));
     }
 
-    const secondary = createElement('div', 'editor-statusbar-group is-secondary');
+    const secondary = createElement('div', 'comet-editor-statusbar-group is-secondary');
     for (const item of status.rightItems) {
       secondary.append(renderStatusItem(item));
     }

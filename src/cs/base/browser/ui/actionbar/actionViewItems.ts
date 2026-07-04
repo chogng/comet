@@ -128,8 +128,8 @@ function applyButtonAttributes(
 }
 
 export class ActionViewItem extends BaseActionViewItem {
-  protected readonly button = DOM.createElement('button', 'actionbar-action');
-  protected readonly content = DOM.createElement('span', 'actionbar-content');
+  protected readonly button = DOM.createElement('button', 'comet-actionbar-action');
+  protected readonly content = DOM.createElement('span', 'comet-actionbar-content');
   protected item: ActionBarActionItem;
   protected readonly hoverBinding: HoverBinding;
 
@@ -141,7 +141,7 @@ export class ActionViewItem extends BaseActionViewItem {
   ) {
     const hoverService = resolveHoverService(optionsOrHoverService);
 
-    super(DOM.createElement('div', 'actionbar-item is-action'));
+    super(DOM.createElement('div', 'comet-actionbar-item is-action'));
     this.item = item;
     this.button.type = 'button';
     this.button.append(this.content);
@@ -197,7 +197,7 @@ export class ActionViewItem extends BaseActionViewItem {
 
   protected updateContainerClassName() {
     this.element.className = DOM.composeClassName([
-      'actionbar-item',
+      'comet-actionbar-item',
       'is-action',
       this.item.disabled ? 'is-disabled' : '',
       this.item.active ? 'is-active' : '',
@@ -209,7 +209,7 @@ export class ActionViewItem extends BaseActionViewItem {
   protected updateButtonState() {
     const mode = resolveMode(this.item);
     this.button.className = DOM.composeClassName([
-      'actionbar-action',
+      'comet-actionbar-action',
       `is-${mode}`,
       this.item.buttonClassName,
     ]);

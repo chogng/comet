@@ -1,5 +1,5 @@
-.notifications-action,
-.notifications-status-button {
+.comet-notifications-action,
+.comet-notifications-status-button {
   border: 1px solid var(--cs-border-muted, rgba(0, 0, 0, 0.14));
   background: var(--cs-surface, #fff);
   color: var(--cs-foreground, #1f1f1f);
@@ -9,12 +9,12 @@
   cursor: pointer;
 }
 
-.notifications-action:hover,
-.notifications-status-button:hover {
+.comet-notifications-action:hover,
+.comet-notifications-status-button:hover {
   background: var(--cs-surface-hover, rgba(0, 0, 0, 0.06));
 }
 
-.notifications-status {
+.comet-notifications-status {
   position: absolute;
   right: 12px;
   bottom: 12px;
@@ -26,23 +26,23 @@
   pointer-events: auto;
 }
 
-.app-window.has-statusbar .notifications-status {
+.comet-app-window.comet-has-statusbar .comet-notifications-status {
   bottom: 34px;
 }
 
-.notifications-status.is-hidden,
-.notifications-center.visible ~ .notifications-status,
-.notifications-toasts.visible ~ .notifications-status {
+.comet-notifications-status.is-hidden,
+.comet-notifications-center.visible ~ .comet-notifications-status,
+.comet-notifications-toasts.visible ~ .comet-notifications-status {
   display: none;
 }
 
-.notifications-status-message {
+.comet-notifications-status-message {
   color: var(--cs-descriptionForeground, #666);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.notifications-status-button.has-notifications {
+.comet-notifications-status-button.has-notifications {
   font-weight: 600;
 }

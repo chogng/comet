@@ -83,7 +83,7 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('gridview nested branches preserve outer and inner sash resizing', () => {
+test('gridview nested branches preserve outer and inner comet-sash resizing', () => {
   const fetchLeaf = new TestGridLeaf(120, 420, 100, Number.POSITIVE_INFINITY);
   const primaryLeaf = new TestGridLeaf(160, 420, 100, Number.POSITIVE_INFINITY);
   const editorLeaf = new TestGridLeaf(240, Number.POSITIVE_INFINITY, 100, Number.POSITIVE_INFINITY);
@@ -105,11 +105,11 @@ test('gridview nested branches preserve outer and inner sash resizing', () => {
     gridView.layout(1200, 600);
 
     const rootSashContainer = rootBranch.element.querySelector(
-      ':scope > .split-view > .sash-container',
+      ':scope > .comet-split-view > .comet-sash-container',
     );
     assert(rootSashContainer);
 
-    const outerSashes = rootSashContainer.querySelectorAll(':scope > .sash.vertical');
+    const outerSashes = rootSashContainer.querySelectorAll(':scope > .comet-sash.comet-vertical');
     assert.equal(outerSashes.length, 2);
 
     dispatchDrag(outerSashes[0], {
@@ -123,7 +123,7 @@ test('gridview nested branches preserve outer and inner sash resizing', () => {
     assert.equal(rootBranch.getChildSize(1), 370);
 
     const innerSash = leftBranch.element.querySelector(
-      ':scope > .split-view > .sash-container > .sash.vertical',
+      ':scope > .comet-split-view > .comet-sash-container > .comet-sash.comet-vertical',
     );
     assert(innerSash);
     const initialFetchSize = leftBranch.getChildSize(0);
@@ -146,7 +146,7 @@ test('gridview nested branches preserve outer and inner sash resizing', () => {
   }
 });
 
-test('gridview exposes location-based sizing, visibility, and sash events', () => {
+test('gridview exposes location-based sizing, visibility, and comet-sash events', () => {
   const fetchLeaf = new TestGridLeaf(120, 420, 100, Number.POSITIVE_INFINITY);
   const primaryLeaf = new TestGridLeaf(160, 420, 100, Number.POSITIVE_INFINITY);
   const editorLeaf = new TestGridLeaf(240, Number.POSITIVE_INFINITY, 100, Number.POSITIVE_INFINITY);
@@ -183,7 +183,7 @@ test('gridview exposes location-based sizing, visibility, and sash events', () =
     assert.equal(gridView.getViewSize([0, 0]), 260);
 
     const innerSash = leftBranch.element.querySelector(
-      ':scope > .split-view > .sash-container > .sash.vertical',
+      ':scope > .comet-split-view > .comet-sash-container > .comet-sash.comet-vertical',
     );
     assert(innerSash);
 
@@ -267,7 +267,7 @@ test('gridview surfaces snap events with root-relative locations', () => {
     gridView.layout(900, 600);
 
     const sash = rootBranch.element.querySelector(
-      ':scope > .split-view > .sash-container > .sash.vertical',
+      ':scope > .comet-split-view > .comet-sash-container > .comet-sash.comet-vertical',
     );
     assert(sash);
 
@@ -318,7 +318,7 @@ test('gridview surfaces snap events with root-relative locations', () => {
   }
 });
 
-test('gridview edge snapping controls whether an edge snap sash stays enabled', () => {
+test('gridview edge snapping controls whether an edge snap comet-sash stays enabled', () => {
   const fetchLeaf = new TestGridLeaf(120, 420, 100, Number.POSITIVE_INFINITY, true);
   const editorLeaf = new TestGridLeaf(
     240,
@@ -338,18 +338,18 @@ test('gridview edge snapping controls whether an edge snap sash stays enabled', 
     gridView.setViewVisible([0], false);
 
     const sash = rootBranch.element.querySelector(
-      ':scope > .split-view > .sash-container > .sash.vertical',
+      ':scope > .comet-split-view > .comet-sash-container > .comet-sash.comet-vertical',
     );
     assert(sash);
-    assert.equal(sash.classList.contains('disabled'), true);
+    assert.equal(sash.classList.contains('comet-disabled'), true);
 
     gridView.edgeSnapping = true;
 
-    assert.equal(sash.classList.contains('disabled'), false);
+    assert.equal(sash.classList.contains('comet-disabled'), false);
 
     gridView.edgeSnapping = false;
 
-    assert.equal(sash.classList.contains('disabled'), true);
+    assert.equal(sash.classList.contains('comet-disabled'), true);
   } finally {
     gridView.dispose();
     gridView.element.remove();

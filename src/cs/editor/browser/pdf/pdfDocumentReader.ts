@@ -511,24 +511,24 @@ class PdfViewportModel {
 
 export class PdfDocumentReader {
   private props: PdfDocumentReaderProps;
-  private readonly element = createElement('div', 'pdf-document-reader');
-  private readonly surfaceElement = createElement('div', 'pdf-annotation-surface');
-  private readonly readerElement = createElement('div', 'pdf-reader-view');
-  private readonly pagesElement = createElement('div', 'pdf-reader-pages');
-  private readonly loadingElement = createElement('div', 'pdf-reader-status');
+  private readonly element = createElement('div', 'comet-pdf-document-reader');
+  private readonly surfaceElement = createElement('div', 'comet-pdf-annotation-surface');
+  private readonly readerElement = createElement('div', 'comet-pdf-reader-view');
+  private readonly pagesElement = createElement('div', 'comet-pdf-reader-pages');
+  private readonly loadingElement = createElement('div', 'comet-pdf-reader-status');
   private readonly unavailableElement = createElement(
     'div',
-    'empty-state webcontent-runtime-warning pdf-reader-unavailable',
+    'empty-state webcontent-runtime-warning comet-pdf-reader-unavailable',
   );
-  private readonly emptyOpenElement = createElement('div', 'pdf-annotation-open-empty');
-  private readonly openPdfButton = createElement('button', 'pdf-annotation-open-btn');
-  private readonly annotationPanelElement = createElement('aside', 'pdf-annotation-panel');
-  private readonly annotationPanelTitleElement = createElement('div', 'pdf-annotation-panel-title');
-  private readonly annotationPanelCloseButton = createElement('button', 'pdf-annotation-panel-close');
-  private readonly annotationPanelQuoteElement = createElement('div', 'pdf-annotation-panel-quote');
-  private readonly annotationPanelCommentInput = createElement('textarea', 'pdf-annotation-panel-comment');
-  private readonly annotationPanelSaveButton = createElement('button', 'pdf-annotation-panel-save');
-  private readonly annotationPanelDeleteButton = createElement('button', 'pdf-annotation-panel-delete');
+  private readonly emptyOpenElement = createElement('div', 'comet-pdf-annotation-open-empty');
+  private readonly openPdfButton = createElement('button', 'comet-pdf-annotation-open-btn');
+  private readonly annotationPanelElement = createElement('aside', 'comet-pdf-annotation-panel');
+  private readonly annotationPanelTitleElement = createElement('div', 'comet-pdf-annotation-panel-title');
+  private readonly annotationPanelCloseButton = createElement('button', 'comet-pdf-annotation-panel-close');
+  private readonly annotationPanelQuoteElement = createElement('div', 'comet-pdf-annotation-panel-quote');
+  private readonly annotationPanelCommentInput = createElement('textarea', 'comet-pdf-annotation-panel-comment');
+  private readonly annotationPanelSaveButton = createElement('button', 'comet-pdf-annotation-panel-save');
+  private readonly annotationPanelDeleteButton = createElement('button', 'comet-pdf-annotation-panel-delete');
   private readonly store = new PdfAnnotationStore();
   private readonly unsubscribeStore: () => void;
   private selectedAnnotationId: string | null = null;
@@ -622,8 +622,8 @@ export class PdfDocumentReader {
     this.annotationPanelDeleteButton.type = 'button';
     this.annotationPanelDeleteButton.textContent = 'Delete';
     this.annotationPanelDeleteButton.addEventListener('click', this.handleAnnotationPanelDelete);
-    const annotationPanelHeader = createElement('div', 'pdf-annotation-panel-header');
-    const annotationPanelActions = createElement('div', 'pdf-annotation-panel-actions');
+    const annotationPanelHeader = createElement('div', 'comet-pdf-annotation-panel-header');
+    const annotationPanelActions = createElement('div', 'comet-pdf-annotation-panel-actions');
     annotationPanelHeader.append(
       this.annotationPanelTitleElement,
       this.annotationPanelCloseButton,
@@ -1039,11 +1039,11 @@ export class PdfDocumentReader {
     pageWidth: number,
     pageHeight: number,
   ): PdfPageShell {
-    const pageElement = createElement('section', 'pdf-reader-page');
-    const pageMetaElement = createElement('div', 'pdf-reader-page-meta');
-    const pageCanvasWrap = createElement('div', 'pdf-reader-page-canvas-wrap');
-    const tileLayer = createElement('div', 'pdf-reader-page-tile-layer');
-    const highlightLayer = createElement('div', 'pdf-reader-highlight-layer');
+    const pageElement = createElement('section', 'comet-pdf-reader-page');
+    const pageMetaElement = createElement('div', 'comet-pdf-reader-page-meta');
+    const pageCanvasWrap = createElement('div', 'comet-pdf-reader-page-canvas-wrap');
+    const tileLayer = createElement('div', 'comet-pdf-reader-page-tile-layer');
+    const highlightLayer = createElement('div', 'comet-pdf-reader-highlight-layer');
     const geometry = this.getPageGeometry(pageWidth, pageHeight);
 
     pageElement.dataset.pdfPage = String(pageNumber);
@@ -1326,15 +1326,15 @@ export class PdfDocumentReader {
     const hasPreview = [...this.pageShells.values()].some((shell) =>
       [...shell.pageCanvasWrap.children].some((previewLayer) =>
         previewLayer instanceof HTMLElement &&
-        !previewLayer.classList.contains('pdf-reader-page-preview-canvas') &&
+        !previewLayer.classList.contains('comet-pdf-reader-page-preview-canvas') &&
         Boolean(previewLayer.style.transform),
       ),
     );
-    this.pagesElement.classList.toggle('is-zoom-previewing', hasPreview);
+    this.pagesElement.classList.toggle('comet-is-zoom-previewing', hasPreview);
   }
 
   private clearShellPreviewCanvases(shell: PdfPageShell) {
-    for (const previewCanvas of shell.pageCanvasWrap.querySelectorAll('.pdf-reader-page-preview-canvas')) {
+    for (const previewCanvas of shell.pageCanvasWrap.querySelectorAll('.comet-pdf-reader-page-preview-canvas')) {
       previewCanvas.remove();
     }
   }
@@ -1360,8 +1360,8 @@ export class PdfDocumentReader {
 
     const { canvas } = previewCanvas;
     this.clearShellPreviewCanvases(shell);
-    canvas.classList.add('pdf-reader-page-preview-canvas');
-    canvas.classList.remove('is-fading');
+    canvas.classList.add('comet-pdf-reader-page-preview-canvas');
+    canvas.classList.remove('comet-is-fading');
     canvas.style.transform = previewCanvas.transform;
     canvas.setAttribute('aria-hidden', 'true');
     shell.pageCanvasWrap.append(canvas);
@@ -1370,7 +1370,7 @@ export class PdfDocumentReader {
     window.setTimeout(removePreviewCanvas, 140);
     window.requestAnimationFrame(() => {
       if (canvas.isConnected) {
-        canvas.classList.add('is-fading');
+        canvas.classList.add('comet-is-fading');
       }
     });
   }
@@ -2566,7 +2566,7 @@ export class PdfDocumentReader {
         this.appendHighlightRects(
           info,
           selectionRange.rects,
-          'pdf-reader-highlight is-selection',
+          'comet-pdf-reader-highlight comet-is-selection',
         );
       }
     }
@@ -2580,8 +2580,8 @@ export class PdfDocumentReader {
           range.rects,
           annotation,
           annotation.mode === 'note'
-            ? 'pdf-reader-highlight is-annotation is-note'
-            : 'pdf-reader-highlight is-annotation',
+            ? 'comet-pdf-reader-highlight comet-is-annotation comet-is-note'
+            : 'comet-pdf-reader-highlight comet-is-annotation',
         );
       }
     }
@@ -2626,7 +2626,7 @@ export class PdfDocumentReader {
     rects: readonly PdfRect[],
     className: string,
   ) {
-    if (className.includes('is-selection')) {
+    if (className.includes('comet-is-selection')) {
       this.appendSelectionHighlightRects(info, rects, className);
       return;
     }
@@ -2860,7 +2860,7 @@ export class PdfDocumentReader {
     className: string,
   ) {
     const selectedClassName = annotation.id === this.selectedAnnotationId
-      ? `${className} is-selected`
+      ? `${className} comet-is-selected`
       : className;
     for (const rect of rects) {
       const viewportRect = pdfRectToViewportRect(info, rect);
@@ -2900,7 +2900,7 @@ export class PdfDocumentReader {
     const viewportRect = this.pagesElement.getBoundingClientRect();
     const viewportX = viewportPoint?.clientX ?? viewportRect.left + viewportRect.width / 2;
     const viewportY = viewportPoint?.clientY ?? viewportRect.top + viewportRect.height / 2;
-    const pageElements = this.pagesElement.querySelectorAll<HTMLElement>('.pdf-reader-page');
+    const pageElements = this.pagesElement.querySelectorAll<HTMLElement>('.comet-pdf-reader-page');
     let nearestAnchor: PdfZoomAnchor | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
@@ -2910,7 +2910,7 @@ export class PdfDocumentReader {
         continue;
       }
 
-      const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.pdf-reader-page-canvas-wrap');
+      const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.comet-pdf-reader-page-canvas-wrap');
       const rect = pageCanvasWrap?.getBoundingClientRect() ?? pageElement.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) {
         continue;
@@ -2940,13 +2940,13 @@ export class PdfDocumentReader {
     }
 
     const pageElement = this.pagesElement.querySelector<HTMLElement>(
-      `.pdf-reader-page[data-pdf-page="${anchor.page}"]`,
+      `.comet-pdf-reader-page[data-pdf-page="${anchor.page}"]`,
     );
     if (!pageElement) {
       return;
     }
 
-    const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.pdf-reader-page-canvas-wrap');
+    const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.comet-pdf-reader-page-canvas-wrap');
     const pageRect = pageCanvasWrap?.getBoundingClientRect() ?? pageElement.getBoundingClientRect();
     const anchoredX = pageRect.left + pageRect.width * anchor.ratioX;
     const anchoredY = pageRect.top + pageRect.height * anchor.ratioY;
@@ -3000,7 +3000,7 @@ export class PdfDocumentReader {
       isPreviewing = true;
     }
 
-    this.pagesElement.classList.toggle('is-zoom-previewing', isPreviewing);
+    this.pagesElement.classList.toggle('comet-is-zoom-previewing', isPreviewing);
   }
 
   private clearInstantZoomPreview() {
@@ -3008,7 +3008,7 @@ export class PdfDocumentReader {
       this.clearShellInstantZoomPreview(shell);
     }
 
-    this.pagesElement.classList.remove('is-zoom-previewing');
+    this.pagesElement.classList.remove('comet-is-zoom-previewing');
   }
 
   private clearScheduledZoomRender() {
@@ -3164,7 +3164,7 @@ export class PdfDocumentReader {
   }
 
   private handleZoomRenderError(error: unknown) {
-    this.pagesElement.classList.remove('is-zooming');
+    this.pagesElement.classList.remove('comet-is-zooming');
     this.loadingElement.hidden = true;
     this.viewportModel.clearZoomAnchor();
     this.updateInstantZoomPreviewClass();
@@ -3207,7 +3207,7 @@ export class PdfDocumentReader {
 
     this.loadingElement.hidden = false;
     this.loadingElement.textContent = `${Math.round(this.viewportModel.getZoomScale() * 100)}%`;
-    this.pagesElement.classList.add('is-zooming');
+    this.pagesElement.classList.add('comet-is-zooming');
     this.selectionController.reset();
     this.element.dataset.pdfReaderZoom = String(this.viewportModel.getZoomScale());
 
@@ -3227,7 +3227,7 @@ export class PdfDocumentReader {
     );
 
     if (pageRenderVersion !== this.pageRenderVersion) {
-      this.pagesElement.classList.remove('is-zooming');
+      this.pagesElement.classList.remove('comet-is-zooming');
       return;
     }
 
@@ -3235,7 +3235,7 @@ export class PdfDocumentReader {
     this.renderAllHighlights();
     this.updateInstantZoomPreviewClass();
     this.restoreVisiblePageAnchor(anchor);
-    this.pagesElement.classList.remove('is-zooming');
+    this.pagesElement.classList.remove('comet-is-zooming');
     this.loadingElement.hidden = true;
     this.viewportModel.clearZoomAnchor();
     this.scheduleViewportQualityRender(pageRenderVersion);

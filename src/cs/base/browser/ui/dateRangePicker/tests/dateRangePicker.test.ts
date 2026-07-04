@@ -42,7 +42,7 @@ test('date range picker keeps popup open when the start day is clicked repeatedl
   document.body.append(picker.getElement());
 
   try {
-    const trigger = picker.getElement().querySelector('.date-range-trigger');
+    const trigger = picker.getElement().querySelector('.comet-date-range-trigger');
     if (!(trigger instanceof HTMLButtonElement)) {
       throw new Error('Expected date range trigger button.');
     }
@@ -66,7 +66,7 @@ test('date range picker keeps popup open when the start day is clicked repeatedl
 
     assert.equal(startDate, '2026-03-03');
     assert.equal(endDate, '2026-03-07');
-    assert(picker.getElement().querySelector('.date-range-popup') instanceof HTMLElement);
+    assert(picker.getElement().querySelector('.comet-date-range-popup') instanceof HTMLElement);
   } finally {
     picker.dispose();
     document.body.replaceChildren();
@@ -98,7 +98,7 @@ test('date range picker calendar writes into slot 2 after switching the active s
   document.body.append(picker.getElement());
 
   try {
-    const trigger = picker.getElement().querySelector('.date-range-trigger');
+    const trigger = picker.getElement().querySelector('.comet-date-range-trigger');
     if (!(trigger instanceof HTMLButtonElement)) {
       throw new Error('Expected date range trigger button.');
     }
@@ -106,7 +106,7 @@ test('date range picker calendar writes into slot 2 after switching the active s
 
     const secondarySlot = picker
       .getElement()
-      .querySelector<HTMLButtonElement>('.date-range-slot[data-slot="secondary"]');
+      .querySelector<HTMLButtonElement>('.comet-date-range-slot[data-slot="secondary"]');
     if (!(secondarySlot instanceof HTMLButtonElement)) {
       throw new Error('Expected secondary slot.');
     }
@@ -123,7 +123,7 @@ test('date range picker calendar writes into slot 2 after switching the active s
 
     assert.equal(startDate, '2026-03-01');
     assert.equal(endDate, '2026-03-04');
-    assert(picker.getElement().querySelector('.date-range-popup') instanceof HTMLElement);
+    assert(picker.getElement().querySelector('.comet-date-range-popup') instanceof HTMLElement);
   } finally {
     picker.dispose();
     document.body.replaceChildren();
@@ -155,7 +155,7 @@ test('date range picker still commits an ordered range when slot 1 is moved afte
   document.body.append(picker.getElement());
 
   try {
-    const trigger = picker.getElement().querySelector('.date-range-trigger');
+    const trigger = picker.getElement().querySelector('.comet-date-range-trigger');
     if (!(trigger instanceof HTMLButtonElement)) {
       throw new Error('Expected date range trigger button.');
     }

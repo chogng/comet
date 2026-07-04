@@ -85,7 +85,7 @@ function createHarness(
   const hitTests: Array<Parameters<NonNullable<ConstructorParameters<typeof PdfSelectionController>[0]['onHitTestStatusChange']>>[0]> = [];
   const dragStates: boolean[] = [];
 
-  pageElement.className = 'pdf-reader-page';
+  pageElement.className = 'comet-pdf-reader-page';
   pageElement.dataset.pdfPage = '1';
   canvas.style.width = '100px';
   canvas.style.height = '100px';

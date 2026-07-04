@@ -28,15 +28,15 @@ export function showWorkbenchTextInputModal(params: {
 }): Promise<string | null> {
   return new Promise((resolve) => {
     const hoverService = getHoverService();
-    const body = createElement('div', 'workbench-editor-modal-body');
-    const label = createElement('label', 'workbench-editor-modal-label', params.label);
+    const body = createElement('div', 'comet-workbench-editor-modal-body');
+    const label = createElement('label', 'comet-workbench-editor-modal-label', params.label);
     const inputHost = createElement('div');
     const inputBox = new InputBox(inputHost, undefined, {
       value: params.defaultValue ?? '',
       placeholder: params.placeholder ?? '',
-      className: 'workbench-editor-modal-input',
+      className: 'comet-workbench-editor-modal-input',
     });
-    const actions = createElement('div', 'workbench-editor-modal-actions');
+    const actions = createElement('div', 'comet-workbench-editor-modal-actions');
     const cancelButton = createElement(
       'button',
       'btn-base btn-secondary btn-md',
@@ -81,7 +81,7 @@ export function showWorkbenchTextInputModal(params: {
       content: body,
       closeLabel: params.ui.toastClose,
       onClose: () => finish(null),
-      panelClassName: 'workbench-editor-modal-panel',
+      panelClassName: 'comet-workbench-editor-modal-panel',
       hoverService,
     });
 
@@ -100,13 +100,13 @@ export function showWorkbenchSaveConfirmModal(params: {
 }): Promise<'save' | 'discard' | 'cancel'> {
   return new Promise((resolve) => {
     const hoverService = getHoverService();
-    const body = createElement('div', 'workbench-editor-modal-body');
+    const body = createElement('div', 'comet-workbench-editor-modal-body');
     const message = createElement(
       'p',
-      'workbench-editor-confirm-message',
+      'comet-workbench-editor-confirm-message',
       params.message,
     );
-    const actions = createElement('div', 'workbench-editor-modal-actions');
+    const actions = createElement('div', 'comet-workbench-editor-modal-actions');
     const cancelButton = createElement(
       'button',
       'btn-base btn-secondary btn-md',
@@ -150,7 +150,7 @@ export function showWorkbenchSaveConfirmModal(params: {
       content: body,
       closeLabel: params.closeLabel,
       onClose: () => finish('cancel'),
-      panelClassName: 'workbench-editor-modal-panel',
+      panelClassName: 'comet-workbench-editor-modal-panel',
       hoverService,
     });
 
@@ -166,8 +166,8 @@ export function showWorkbenchCommandPaletteModal(params: {
   onSelect: (commandId: WorkbenchEditorCommandDefinition['id']) => void;
 }) {
   const hoverService = getHoverService();
-  const body = createElement('div', 'workbench-command-palette-body');
-  const list = createElement('div', 'workbench-command-palette-list');
+	const body = createElement('div', 'comet-workbench-command-palette-body');
+	const list = createElement('div', 'comet-workbench-command-palette-list');
 
   const modal = createModalView({
     open: true,
@@ -175,19 +175,19 @@ export function showWorkbenchCommandPaletteModal(params: {
     content: body,
     closeLabel: params.ui.toastClose,
     onClose: () => modal.dispose(),
-    panelClassName: 'workbench-command-palette-panel',
+    panelClassName: 'comet-workbench-command-palette-panel',
     hoverService,
   });
 
   for (const command of params.commands) {
     const button = createElement(
       'button',
-      'workbench-command-palette-item btn-base btn-secondary btn-md',
+		'comet-workbench-command-palette-item btn-base btn-secondary btn-md',
     ) as HTMLButtonElement;
-    const text = createElement('span', 'workbench-command-palette-text', command.labelText);
+		const text = createElement('span', 'comet-workbench-command-palette-text', command.labelText);
     const shortcut = createElement(
       'span',
-      'workbench-command-palette-shortcut',
+			'comet-workbench-command-palette-shortcut',
       command.shortcutLabel,
     );
     button.type = 'button';

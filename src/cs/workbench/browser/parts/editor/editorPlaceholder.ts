@@ -28,11 +28,11 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 }
 
 export class EditorPlaceholder {
-  private readonly container = createElement('div', 'editor-placeholder');
-  private readonly bodyScrollContent = createElement('div', 'editor-placeholder-scroll-content');
-  private readonly titleElement = createElement('h2', 'editor-placeholder-title');
-  private readonly bodyElement = createElement('p', 'editor-placeholder-body');
-  private readonly actionsElement = createElement('div', 'editor-placeholder-actions');
+  private readonly container = createElement('div', 'comet-editor-placeholder');
+  private readonly bodyScrollContent = createElement('div', 'comet-editor-placeholder-scroll-content');
+  private readonly titleElement = createElement('h2', 'comet-editor-placeholder-title');
+  private readonly bodyElement = createElement('p', 'comet-editor-placeholder-body');
+  private readonly actionsElement = createElement('div', 'comet-editor-placeholder-actions');
   private readonly scrollable: DomScrollableElement;
 
   constructor(props: EditorPlaceholderProps) {
@@ -42,7 +42,7 @@ export class EditorPlaceholder {
       this.actionsElement,
     );
     this.scrollable = new DomScrollableElement(this.bodyScrollContent, {
-      className: 'editor-placeholder-scrollable',
+      className: 'comet-editor-placeholder-scrollable',
       vertical: ScrollbarVisibility.Auto,
       horizontal: ScrollbarVisibility.Hidden,
       useShadows: false,
@@ -56,7 +56,7 @@ export class EditorPlaceholder {
   }
 
   setProps(props: EditorPlaceholderProps) {
-    this.container.className = ['editor-placeholder', props.className ?? '']
+    this.container.className = ['comet-editor-placeholder', props.className ?? '']
       .filter(Boolean)
       .join(' ');
     this.titleElement.textContent = props.title;
@@ -66,7 +66,7 @@ export class EditorPlaceholder {
         const button = createElement(
           'button',
           [
-            'editor-placeholder-action-btn',
+						'comet-editor-placeholder-action-btn',
             'btn-base',
             action.className ?? 'btn-secondary btn-md',
           ].join(' '),

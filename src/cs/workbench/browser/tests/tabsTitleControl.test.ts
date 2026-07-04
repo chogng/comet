@@ -158,7 +158,7 @@ function createContextMenuServiceSpy() {
 }
 
 function getTabsContainer(rootElement: HTMLElement) {
-  const tabsContainer = rootElement.querySelector('.editor-tabs-container');
+  const tabsContainer = rootElement.querySelector('.comet-editor-tabs-container');
   assert(tabsContainer instanceof HTMLDivElement);
   return tabsContainer;
 }
@@ -298,10 +298,10 @@ test('TabsTitleControl reuses tab nodes across prop updates', () => {
 
   assert.equal(container.children.length, 2);
   assert.equal(container.children[0], browserTab);
-  assert.equal(container.children[1].querySelector('.editor-tab-label-text')?.textContent, 'PDF C');
+  assert.equal(container.children[1].querySelector('.comet-editor-tab-label-text')?.textContent, 'PDF C');
   assert.equal(draftTab.isConnected, false);
 
-  const updatedMainButton = browserTab.querySelector('.editor-tab-main');
+  const updatedMainButton = browserTab.querySelector('.comet-editor-tab-main');
   assert(updatedMainButton instanceof HTMLButtonElement);
   assert.equal(updatedMainButton.title, 'Web B Updated');
   assert.equal(updatedMainButton.getAttribute('aria-selected'), 'true');
@@ -852,7 +852,7 @@ test('TabsTitleControl allows resident real tabs to be dragged for reordering', 
 
   try {
     const tabs = Array.from(
-      element.querySelectorAll<HTMLButtonElement>('.editor-tab-main'),
+      element.querySelectorAll<HTMLButtonElement>('.comet-editor-tab-main'),
     );
     assert.equal(tabs[0]?.draggable, true);
     assert.equal(tabs[1]?.draggable, true);
@@ -944,7 +944,7 @@ test('TabsTitleControl opens a pane mode when a resident entry has no target tab
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
 
-  const browserButton = container.children[1]?.querySelector('.editor-tab-main');
+  const browserButton = container.children[1]?.querySelector('.comet-editor-tab-main');
   assert(browserButton instanceof HTMLButtonElement);
 
   browserButton.click();
@@ -983,7 +983,7 @@ test('TabsTitleControl uses file-text for both inactive and active pdf tabs', ()
   const container = getTabsContainer(rootElement);
 
   const getPdfIcon = () =>
-    container.children[1]?.querySelector('.editor-tab-icon .lx-icon');
+    container.children[1]?.querySelector('.comet-editor-tab-icon .lx-icon');
 
   assert.equal(getPdfIcon()?.classList.contains('lx-icon-file-text'), true);
   assert.equal(getPdfIcon()?.classList.contains('lx-icon-pdf'), false);
@@ -1057,7 +1057,7 @@ test('TabsTitleControl reorders tabs by drag and drop', () => {
   const container = getTabsContainer(rootElement);
 
   const [draftTab, browserTab] = Array.from(container.children);
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
   assert(draftButton instanceof HTMLButtonElement);
   assert.equal(draftButton.draggable, true);
 
@@ -1130,7 +1130,7 @@ test('TabsTitleControl anchors the drag preview to the left edge of the dragged 
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const draftTab = container.children[0];
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(draftButton instanceof HTMLButtonElement);
 
@@ -1158,17 +1158,17 @@ test('TabsTitleControl anchors the drag preview to the left edge of the dragged 
   assert.equal(dataTransfer.setDragImageCalls[0]?.x, 0);
   assert.equal(dataTransfer.setDragImageCalls[0]?.y, 13);
 
-  const previewElement = document.body.querySelector('.editor-tab-drag-preview');
+  const previewElement = document.body.querySelector('.comet-editor-tab-drag-preview');
   assert(previewElement instanceof HTMLDivElement);
   assert.equal(
     (dataTransfer.setDragImageCalls[0]?.element as Element | undefined)?.classList.contains(
-      'editor-tab-drag-preview',
+      'comet-editor-tab-drag-preview',
     ),
     true,
   );
 
   dispatchDragEvent(draftTab, 'dragend', { dataTransfer });
-  assert.equal(document.body.querySelector('.editor-tab-drag-preview'), null);
+  assert.equal(document.body.querySelector('.comet-editor-tab-drag-preview'), null);
 
   control.dispose();
 });
@@ -1202,7 +1202,7 @@ test('TabsTitleControl clears hovered state after drag ends', () => {
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const draftTab = container.children[0];
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(draftButton instanceof HTMLButtonElement);
 
@@ -1247,7 +1247,7 @@ test('TabsTitleControl clears focused tab controls after drag ends without a reo
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const draftTab = container.children[0];
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(draftButton instanceof HTMLButtonElement);
 
@@ -1292,7 +1292,7 @@ test('TabsTitleControl clears hovered and focused source tab state on drag start
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const draftTab = container.children[0];
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(draftButton instanceof HTMLButtonElement);
 
@@ -1373,8 +1373,8 @@ test('TabsTitleControl activates the dragged tab on drag start', () => {
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const draftTab = container.children[0];
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
-  const browserButton = container.children[1]?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
+  const browserButton = container.children[1]?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(draftButton instanceof HTMLButtonElement);
   assert(browserButton instanceof HTMLButtonElement);
@@ -1384,7 +1384,7 @@ test('TabsTitleControl activates the dragged tab on drag start', () => {
   const dataTransfer = createDataTransferStub();
   dispatchDragEvent(draftButton, 'dragstart', { dataTransfer });
 
-  const updatedDraftButton = draftTab.querySelector('.editor-tab-main');
+  const updatedDraftButton = draftTab.querySelector('.comet-editor-tab-main');
   assert(updatedDraftButton instanceof HTMLButtonElement);
   assert.deepEqual(activatedTabIds, ['draft-a']);
   assert.equal(updatedDraftButton.getAttribute('aria-selected'), 'true');
@@ -1429,7 +1429,7 @@ test('TabsTitleControl keeps one stable insertion indicator between adjacent tab
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const [draftTab, browserTab, pdfTab] = Array.from(container.children);
-  const pdfButton = pdfTab?.querySelector('.editor-tab-main');
+  const pdfButton = pdfTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(browserTab instanceof HTMLElement);
   assert(pdfTab instanceof HTMLElement);
@@ -1542,7 +1542,7 @@ test('TabsTitleControl keeps the insertion indicator visible when host drag even
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const [draftTab, browserTab, pdfTab] = Array.from(container.children);
-  const pdfButton = pdfTab?.querySelector('.editor-tab-main');
+  const pdfButton = pdfTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(browserTab instanceof HTMLElement);
   assert(pdfButton instanceof HTMLButtonElement);
@@ -1630,7 +1630,7 @@ test('TabsTitleControl keeps the same drop side for small cursor moves near a ta
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
   const [draftTab, browserTab] = Array.from(container.children);
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(browserTab instanceof HTMLElement);
   assert(draftButton instanceof HTMLButtonElement);
@@ -1707,7 +1707,7 @@ test('TabsTitleControl keeps the first drop indicator fully visible at the leadi
   const container = getTabsContainer(rootElement);
 
   const [draftTab, browserTab, pdfTab] = Array.from(container.children);
-  const pdfButton = pdfTab?.querySelector('.editor-tab-main');
+  const pdfButton = pdfTab?.querySelector('.comet-editor-tab-main');
   assert(draftTab instanceof HTMLElement);
   assert(browserTab instanceof HTMLElement);
   assert(pdfButton instanceof HTMLButtonElement);
@@ -1798,7 +1798,7 @@ test('TabsTitleControl supports dropping a tab after the last tab from container
   const container = getTabsContainer(rootElement);
 
   const [draftTab, browserTab, pdfTab] = Array.from(container.children);
-  const draftButton = draftTab?.querySelector('.editor-tab-main');
+  const draftButton = draftTab?.querySelector('.comet-editor-tab-main');
   assert(draftButton instanceof HTMLButtonElement);
 
   Object.defineProperty(draftTab, 'getBoundingClientRect', {
@@ -1894,9 +1894,9 @@ test('TabsTitleControl replaces browser pane icon with favicon when available', 
   document.body.append(rootElement);
   const container = getTabsContainer(rootElement);
 
-  const iconContainer = container.children[0]?.querySelector('.editor-tab-icon');
+  const iconContainer = container.children[0]?.querySelector('.comet-editor-tab-icon');
   assert(iconContainer instanceof HTMLElement);
-  const favicon = iconContainer.querySelector('.editor-tab-favicon');
+  const favicon = iconContainer.querySelector('.comet-editor-tab-favicon');
   assert(favicon instanceof HTMLElement);
   assert.equal(favicon.tagName, 'IMG');
   assert.equal(favicon.getAttribute('src'), 'https://example.com/favicon.ico');
@@ -1934,7 +1934,7 @@ test('TabsTitleControl renders unsave for dirty closable tabs and close for clea
   const container = getTabsContainer(rootElement);
 
   const getCloseActionIcon = () =>
-    container.children[0]?.querySelector('.editor-tab-close-btn.actionbar-action .lx-icon');
+    container.children[0]?.querySelector('.comet-editor-tab-close-btn.actionbar-action .lx-icon');
 
   assert.equal(getCloseActionIcon()?.classList.contains('lx-icon-unsave'), true);
   assert.equal(getCloseActionIcon()?.classList.contains('lx-icon-close'), false);
@@ -2491,7 +2491,7 @@ test('TabsTitleControl renders its DOM context menu below the cursor for availab
   });
 
   HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.classList.contains('editor-tab-main')) {
+    if (this.classList.contains('comet-editor-tab-main')) {
       return {
         x: 40,
         y: 5,
@@ -2549,9 +2549,9 @@ test('TabsTitleControl renders its DOM context menu below the cursor for availab
   const container = getTabsContainer(rootElement);
 
   try {
-    const tab = container.querySelector('.editor-tab');
+    const tab = container.querySelector('.comet-editor-tab');
     assert(tab instanceof HTMLElement);
-    const button = tab.querySelector('.editor-tab-main');
+    const button = tab.querySelector('.comet-editor-tab-main');
     assert(button instanceof HTMLButtonElement);
 
     const buttonRect = button.getBoundingClientRect();

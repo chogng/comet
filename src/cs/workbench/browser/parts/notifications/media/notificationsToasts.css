@@ -1,13 +1,13 @@
 @import './notificationsList.css';
 
-.notifications-part {
+.comet-notifications-part {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 2600;
 }
 
-.notifications-toasts {
+.comet-notifications-toasts {
   position: absolute;
   right: 12px;
   bottom: 12px;
@@ -18,15 +18,15 @@
   pointer-events: auto;
 }
 
-.app-window.has-statusbar .notifications-toasts {
+.comet-app-window.comet-has-statusbar .comet-notifications-toasts {
   bottom: 34px;
 }
 
-.notifications-toasts.visible {
+.comet-notifications-toasts.visible {
   display: flex;
 }
 
-.notification-toast {
+.comet-notification-toast {
   animation: notification-toast-enter 140ms ease-out;
 }
 

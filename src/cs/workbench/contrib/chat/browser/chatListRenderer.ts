@@ -45,9 +45,9 @@ export class ChatListRenderer {
 	) {
 		const item = createElement(
 			'div',
-			'agentbar-message agentbar-message-user',
+			'comet-agentbar-message comet-agentbar-message-user',
 		);
-		const text = createElement('p', 'agentbar-message-text');
+		const text = createElement('p', 'comet-agentbar-message-text');
 		text.textContent = message.content;
 		item.append(text);
 		return item;
@@ -58,16 +58,16 @@ export class ChatListRenderer {
 	) {
 		const item = createElement(
 			'div',
-			'agentbar-message agentbar-message-article',
+			'comet-agentbar-message comet-agentbar-message-article',
 		);
-		const body = createElement('div', 'agentbar-message-body');
-		const card = createElement('article', 'agentbar-article-card');
-		const header = createElement('div', 'agentbar-article-card-header');
-		const source = createElement('span', 'agentbar-article-source');
+		const body = createElement('div', 'comet-agentbar-message-body');
+		const card = createElement('article', 'comet-agentbar-article-card');
+		const header = createElement('div', 'comet-agentbar-article-card-header');
+		const source = createElement('span', 'comet-agentbar-article-source');
 		source.textContent = message.sourceLabel;
 		const downloadButton = createElement(
 			'button',
-			'agentbar-article-download-btn btn-base btn-secondary btn-sm',
+			'comet-agentbar-article-download-btn comet-btn-base comet-btn-secondary comet-btn-sm',
 		);
 		downloadButton.type = 'button';
 		downloadButton.append(
@@ -82,13 +82,13 @@ export class ChatListRenderer {
 		});
 		header.append(source, downloadButton);
 
-		const title = createElement('h3', 'agentbar-article-title');
+		const title = createElement('h3', 'comet-agentbar-article-title');
 		title.textContent = message.article.title;
 		title.addEventListener('click', () => {
 			void this.options.onOpenArticleDetails(message.article);
 		});
 
-		const meta = createElement('p', 'agentbar-article-meta');
+		const meta = createElement('p', 'comet-agentbar-article-meta');
 		meta.textContent = [
 			message.article.journalTitle,
 			message.article.publishedAt,
@@ -106,21 +106,21 @@ export class ChatListRenderer {
 	) {
 		const item = createElement(
 			'div',
-			'agentbar-message agentbar-message-assistant',
+			'comet-agentbar-message comet-agentbar-message-assistant',
 		);
-		const body = createElement('div', 'agentbar-message-body');
-		const header = createElement('div', 'agentbar-result-header');
+		const body = createElement('div', 'comet-agentbar-message-body');
+		const header = createElement('div', 'comet-agentbar-result-header');
 		const strong = document.createElement('strong');
 		strong.textContent = localize('assistantSidebarAnswerTitle', "Answer");
 		const pill = createElement(
 			'span',
-			`agentbar-mode-pill ${message.result.rerankApplied ? 'is-enabled' : 'is-disabled'}`,
+			`comet-agentbar-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}`,
 		);
 		pill.textContent = message.result.rerankApplied
 			? localize('assistantSidebarRerankOn', "Rerank on")
 			: localize('assistantSidebarRerankOff', "Rerank fallback");
 		header.append(strong, pill);
-		const answer = createElement('p', 'agentbar-answer');
+		const answer = createElement('p', 'comet-agentbar-answer');
 		answer.textContent = message.content;
 		body.append(header, answer);
 
@@ -140,24 +140,24 @@ export class ChatListRenderer {
 	private renderEvidence(
 		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
 	) {
-		const evidence = createElement('div', 'agentbar-evidence');
+		const evidence = createElement('div', 'comet-agentbar-evidence');
 		const title = document.createElement('strong');
 		title.textContent = localize('assistantSidebarEvidenceTitle', "Evidence");
-		const list = createElement('ul', 'agentbar-evidence-list');
+		const list = createElement('ul', 'comet-agentbar-evidence-list');
 		for (const evidenceItem of message.result.evidence) {
-			const li = createElement('li', 'agentbar-evidence-item');
-			const titleNode = createElement('strong', 'agentbar-evidence-title');
+			const li = createElement('li', 'comet-agentbar-evidence-item');
+			const titleNode = createElement('strong', 'comet-agentbar-evidence-title');
 			titleNode.textContent = localize(
 				'agentbarEvidenceRankTitle',
 				"[{0}] {1}",
 				evidenceItem.rank,
 				evidenceItem.title,
 			);
-			const meta = createElement('p', 'agentbar-evidence-meta');
+			const meta = createElement('p', 'comet-agentbar-evidence-meta');
 			meta.textContent = [evidenceItem.journalTitle, evidenceItem.publishedAt]
 				.filter(Boolean)
 				.join(' | ');
-			const text = createElement('p', 'agentbar-evidence-text');
+			const text = createElement('p', 'comet-agentbar-evidence-text');
 			text.textContent = evidenceItem.excerpt;
 			li.append(titleNode, meta, text);
 			list.append(li);
@@ -174,18 +174,18 @@ export class ChatListRenderer {
 			return null;
 		}
 
-		const card = createElement('div', 'agentbar-patch-card');
-		const header = createElement('div', 'agentbar-patch-header');
-		const label = createElement('strong', 'agentbar-patch-label');
+		const card = createElement('div', 'comet-agentbar-patch-card');
+		const header = createElement('div', 'comet-agentbar-patch-header');
+		const label = createElement('strong', 'comet-agentbar-patch-label');
 		label.textContent = patchProposal.patch.label;
 		header.append(label);
 
 		if (patchProposal.isApplied) {
-			const status = createElement('span', 'agentbar-mode-pill is-enabled');
+			const status = createElement('span', 'comet-agentbar-mode-pill comet-is-enabled');
 			status.textContent = localize('assistantSidebarPatchApplied', "Applied");
 			header.append(status);
 		} else if (patchProposal.requiresCustomExecutor) {
-			const status = createElement('span', 'agentbar-mode-pill is-disabled');
+			const status = createElement('span', 'comet-agentbar-mode-pill comet-is-disabled');
 			status.textContent = localize(
 				'assistantSidebarPatchRequiresExecutor',
 				"Custom executor required",
@@ -196,14 +196,14 @@ export class ChatListRenderer {
 		card.append(header);
 
 		if (patchProposal.patch.summary) {
-			const summary = createElement('p', 'agentbar-patch-summary');
+			const summary = createElement('p', 'comet-agentbar-patch-summary');
 			summary.textContent = patchProposal.patch.summary;
 			card.append(summary);
 		}
 
 		const errorText = patchProposal.validationError || patchProposal.applyError;
 		if (errorText) {
-			const error = createElement('p', 'agentbar-patch-error');
+			const error = createElement('p', 'comet-agentbar-patch-error');
 			error.textContent = errorText;
 			card.append(error);
 		}
@@ -214,10 +214,10 @@ export class ChatListRenderer {
 			!patchProposal.validationError &&
 			!patchProposal.isApplied
 		) {
-			const footer = createElement('div', 'agentbar-patch-footer');
+			const footer = createElement('div', 'comet-agentbar-patch-footer');
 			const applyButton = createElement(
 				'button',
-				'agentbar-patch-btn btn-base btn-secondary btn-sm',
+				'comet-agentbar-patch-btn comet-btn-base comet-btn-secondary comet-btn-sm',
 			);
 			applyButton.type = 'button';
 			applyButton.textContent = localize('assistantSidebarPatchApply', "Apply patch");

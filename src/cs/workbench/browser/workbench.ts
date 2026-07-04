@@ -262,15 +262,15 @@ function createWorkbenchLayoutElement<K extends keyof HTMLElementTagNameMap>(
 export class WorkbenchLayoutView {
   private props: WorkbenchLayoutViewProps;
   private lastContentEditorSize: number | null = null;
-  private readonly element = createWorkbenchLayoutElement('section', 'workbench-content-layout');
+  private readonly element = createWorkbenchLayoutElement('section', 'comet-workbench-content-layout');
   private readonly mainElement = createWorkbenchLayoutElement('main');
   private readonly primarySidebarSlot = new WorkbenchLayoutSlotView(
-    'workbench-content-slot-leading-group workbench-leading-pane workbench-leading-pane-primary',
+    'comet-workbench-content-slot-leading-group comet-workbench-leading-pane comet-workbench-leading-pane-primary',
     true,
   );
-  private readonly editorSlot = new WorkbenchLayoutSlotView('workbench-content-slot-editor');
+  private readonly editorSlot = new WorkbenchLayoutSlotView('comet-workbench-content-slot-editor');
   private readonly agentBarSlot = new WorkbenchLayoutSlotView(
-    'workbench-content-slot-agent',
+    'comet-workbench-content-slot-agent',
   );
   private readonly layoutController: WorkbenchContentLayoutController;
   private disposed = false;

@@ -73,13 +73,13 @@ test('hover controller renders actions and runs them from the overlay', async ()
   target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
   await delay(0);
 
-  const overlayAction = document.querySelector('.cs-hover-action');
+  const overlayAction = document.querySelector('.comet-hover-action');
   assert(overlayAction instanceof HTMLButtonElement);
   assert.equal(overlayAction.textContent, 'View details');
 
   overlayAction.click();
   assert.equal(actionRuns, 1);
-  assert.equal(document.querySelector('.cs-hover-card'), null);
+  assert.equal(document.querySelector('.comet-hover-card'), null);
 
   hover.dispose();
 });
@@ -103,7 +103,7 @@ test('button view uses shared hover content instead of native title tooltips', a
     button.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'Settings');
   } finally {
@@ -140,7 +140,7 @@ test('button view can use an injected hover service delegate', async () => {
     button.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'Injected hover');
   } finally {
@@ -165,7 +165,7 @@ test('input box can be used with shared hover content instead of native title to
     inputBox.element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'Article URL');
   } finally {
@@ -218,7 +218,7 @@ test('dropdown view uses shared hover content instead of native title tooltips',
     dropdown.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(650);
 
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'Quick access source');
   } finally {
@@ -238,14 +238,14 @@ test('string hover input hides when the pointer leaves the target', async () => 
   try {
     target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
-    assert(document.querySelector('.cs-hover-card') instanceof HTMLElement);
+    assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
 
     target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
     await delay(40);
-    assert(document.querySelector('.cs-hover-card') instanceof HTMLElement);
+    assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
     await delay(120);
     await delay(0);
-    assert.equal(document.querySelector('.cs-hover-card'), null);
+    assert.equal(document.querySelector('.comet-hover-card'), null);
   } finally {
     hover.dispose();
   }
@@ -270,14 +270,14 @@ test('hover with actions stays open when the pointer moves into the overlay', as
     target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    const overlay = document.querySelector('.cs-hover-card');
+    const overlay = document.querySelector('.comet-hover-card');
     assert(overlay instanceof HTMLElement);
 
     target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
     overlay.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    assert(document.querySelector('.cs-hover-card') instanceof HTMLElement);
+    assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
   } finally {
     hover.dispose();
   }
@@ -297,7 +297,7 @@ test('compact hover applies the compact class', async () => {
     target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    const overlay = document.querySelector('.cs-hover-card');
+    const overlay = document.querySelector('.comet-hover-card');
     assert(overlay instanceof HTMLElement);
     assert.equal(overlay.classList.contains('compact'), true);
   } finally {
@@ -314,10 +314,10 @@ test('plain hover waits for the higher default mouse delay', async () => {
   try {
     target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(450);
-    assert.equal(document.querySelector('.cs-hover-card'), null);
+    assert.equal(document.querySelector('.comet-hover-card'), null);
 
     await delay(220);
-    const overlay = document.querySelector('.cs-hover-card');
+    const overlay = document.querySelector('.comet-hover-card');
     assert(overlay instanceof HTMLElement);
   } finally {
     hover.dispose();
@@ -335,7 +335,7 @@ test('focus shows hover immediately without waiting for mouse intent delay', asy
     target.dispatchEvent(new window.FocusEvent('focus', { bubbles: true }));
     await delay(0);
 
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'Focus hover');
   } finally {
@@ -354,7 +354,7 @@ test('pointer-driven focus does not show hover immediately', async () => {
     target.dispatchEvent(new window.FocusEvent('focus', { bubbles: true }));
     await delay(0);
 
-    assert.equal(document.querySelector('.cs-hover-card'), null);
+    assert.equal(document.querySelector('.comet-hover-card'), null);
   } finally {
     hover.dispose();
   }
@@ -388,10 +388,10 @@ test('pointer down suppresses hover while the pointer stays on the target', asyn
     target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(200);
 
-    assert.equal(document.querySelector('.cs-hover-card'), null);
+    assert.equal(document.querySelector('.comet-hover-card'), null);
 
     await delay(600);
-    assert.equal(document.querySelector('.cs-hover-card'), null);
+    assert.equal(document.querySelector('.comet-hover-card'), null);
 
     dispatchPointerMove(document, {
       clientX: 80,
@@ -400,7 +400,7 @@ test('pointer down suppresses hover while the pointer stays on the target', asyn
     target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
 
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'Suppressed hover');
   } finally {
@@ -458,10 +458,10 @@ test('pointer down suppression carries across a recreated hover target', async (
     try {
       secondTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
       await delay(200);
-      assert.equal(document.querySelector('.cs-hover-card'), null);
+      assert.equal(document.querySelector('.comet-hover-card'), null);
 
       await delay(600);
-      assert.equal(document.querySelector('.cs-hover-card'), null);
+      assert.equal(document.querySelector('.comet-hover-card'), null);
 
       dispatchPointerMove(document, {
         clientX: 80,
@@ -470,7 +470,7 @@ test('pointer down suppression carries across a recreated hover target', async (
       secondTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
       await delay(0);
 
-      const overlayContent = document.querySelector('.cs-hover-content');
+      const overlayContent = document.querySelector('.comet-hover-content');
       assert(overlayContent instanceof HTMLElement);
       assert.equal(overlayContent.textContent, 'Second target');
     } finally {
@@ -495,18 +495,18 @@ test('plain hover applies cooldown before reopening on a nearby target', async (
   try {
     firstTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(0);
-    assert(document.querySelector('.cs-hover-card') instanceof HTMLElement);
+    assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
 
     firstTarget.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
     await delay(140);
-    assert.equal(document.querySelector('.cs-hover-card'), null);
+    assert.equal(document.querySelector('.comet-hover-card'), null);
 
     secondTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await delay(250);
-    assert.equal(document.querySelector('.cs-hover-card'), null);
+    assert.equal(document.querySelector('.comet-hover-card'), null);
 
     await delay(420);
-    const overlayContent = document.querySelector('.cs-hover-content');
+    const overlayContent = document.querySelector('.comet-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'Second hover');
   } finally {

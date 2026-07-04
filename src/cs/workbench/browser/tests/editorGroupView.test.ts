@@ -339,7 +339,7 @@ test('EditorGroupView schedules browser primary input focus when opening browser
   try {
     const browserButton = [...view
       .getElement()
-      .querySelectorAll('.editor-placeholder-action-btn')]
+			.querySelectorAll('.comet-editor-placeholder-action-btn')]
       .find((button) => button.textContent === labels.createBrowser);
     assert(browserButton instanceof HTMLButtonElement);
 
@@ -378,7 +378,7 @@ test('EditorGroupView schedules browser primary input focus when activating an e
   try {
     const browserButton = view
       .getElement()
-      .querySelector('[data-tab-id="browser-a"] .editor-tab-main');
+      .querySelector('[data-tab-id="browser-a"] .comet-editor-tab-main');
     assert(browserButton instanceof HTMLButtonElement);
 
     browserButton.click();

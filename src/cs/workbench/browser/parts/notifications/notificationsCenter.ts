@@ -20,21 +20,21 @@ export class NotificationsCenter {
     private readonly container: HTMLElement,
     private readonly model: NotificationsModel,
   ) {
-    this.element.className = 'notifications-center bottom-right';
+    this.element.className = 'comet-notifications-center bottom-right';
     const header = document.createElement('header');
-    header.className = 'notifications-center-header';
-    this.titleElement.className = 'notifications-center-header-title';
-    this.toolbarElement.className = 'notifications-center-header-toolbar';
+    header.className = 'comet-notifications-center-header';
+    this.titleElement.className = 'comet-notifications-center-header-title';
+    this.toolbarElement.className = 'comet-notifications-center-header-toolbar';
 
     const clearButton = document.createElement('button');
     clearButton.type = 'button';
-    clearButton.className = 'notifications-action';
+    clearButton.className = 'comet-notifications-action';
     clearButton.textContent = 'Clear All';
     clearButton.addEventListener('click', () => this.model.clearAll());
 
     const hideButton = document.createElement('button');
     hideButton.type = 'button';
-    hideButton.className = 'notifications-action';
+    hideButton.className = 'comet-notifications-action';
     hideButton.textContent = 'Hide';
     hideButton.addEventListener('click', () => this.hide());
 

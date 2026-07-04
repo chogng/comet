@@ -90,20 +90,20 @@ type FocusSnapshot = {
 export class SettingsPartView {
   private props: SettingsPartProps;
   private readonly navigationView: ReturnType<typeof createSettingsNavigationView>;
-  private readonly container = el('div', 'settings-page');
-  private readonly content = el('div', 'settings-content-body');
+  private readonly container = el('div', 'comet-settings-page');
+  private readonly content = el('div', 'comet-settings-content-body');
   private readonly contentScrollable = new DomScrollableElement(this.content, {
-    className: 'settings-content',
+    className: 'comet-settings-content',
     vertical: ScrollbarVisibility.Auto,
     horizontal: ScrollbarVisibility.Hidden,
     useShadows: false,
   });
-  private readonly topbar = el('div', 'settings-page-topbar');
-  private readonly pageTitle = el('h2', 'settings-page-title');
+  private readonly topbar = el('div', 'comet-settings-page-topbar');
+  private readonly pageTitle = el('h2', 'comet-settings-page-title');
   private readonly loadingHint = buildHint('');
   // Keep section containers stable so updates can replace only local content
   // without recreating the whole settings page.
-  private readonly sections = createSettingsSectionMap(() => el('section', 'settings-section'));
+  private readonly sections = createSettingsSectionMap(() => el('section', 'comet-settings-section'));
   private readonly knowledgeBaseWidget: KnowledgeBaseWidget;
   private readonly llmWidget: LlmWidget;
   private readonly translationWidget: TranslationWidget;

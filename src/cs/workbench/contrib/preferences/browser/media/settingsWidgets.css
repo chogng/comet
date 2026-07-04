@@ -1,5 +1,5 @@
 /* ===== Settings Form Primitives ===== */
-.inline-field {
+.comet-inline-field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -7,11 +7,11 @@
   color: var(--vscode-settings-fieldForeground, #304050);
 }
 
-.checkbox-field {
+.comet-checkbox-field {
   gap: 4px;
 }
 
-.radix-checkbox {
+.comet-radix-checkbox {
   appearance: none;
   width: 16px;
   height: 16px;
@@ -23,12 +23,12 @@
   cursor: pointer;
 }
 
-.radix-checkbox:checked {
+.comet-radix-checkbox:checked {
   border-color: var(--vscode-settings-checkboxCheckedBorder, #0a5fbf);
   background: var(--vscode-settings-checkboxCheckedBackground, #0a5fbf);
 }
 
-.radix-checkbox:checked::after {
+.comet-radix-checkbox:checked::after {
   content: '';
   position: absolute;
   left: 5px;
@@ -40,41 +40,41 @@
   transform: rotate(45deg);
 }
 
-.radix-checkbox:disabled {
+.comet-radix-checkbox:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.radix-checkbox:focus-visible {
+.comet-radix-checkbox:focus-visible {
   outline: 2px solid var(--vscode-settings-checkboxFocusBorder, #0a5fbf);
   outline-offset: 2px;
 }
 
 /* ===== Text Editor Controls ===== */
-.settings-placeholder-field {
+.comet-settings-placeholder-field {
   min-height: 96px;
   align-content: start;
 }
 
-.settings-text-editor-field {
+.comet-settings-text-editor-field {
   align-content: start;
 }
 
-.settings-text-editor-group-title {
+.comet-settings-text-editor-group-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--vscode-settings-fieldForeground, #2d4052);
 }
 
-.settings-text-editor-line-height-input,
-.settings-text-editor-spacing-input {
+.comet-settings-text-editor-line-height-input,
+.comet-settings-text-editor-spacing-input {
   width: 120px;
   min-width: 120px;
   max-width: 120px;
 }
 
 /* ===== Number Stepper (Decrease/Input/Increase) ===== */
-.settings-number-stepper {
+.comet-settings-number-stepper {
   display: inline-flex;
   align-items: stretch;
   min-width: 0;
@@ -89,15 +89,15 @@
   overflow: hidden;
 }
 
-.settings-number-stepper:hover {
+.comet-settings-number-stepper:hover {
   background: var(--vscode-settings-selectHoverBackground, #e6e6e6);
 }
 
-.settings-number-stepper:focus-within {
+.comet-settings-number-stepper:focus-within {
   border-color: #d3d3d3;
 }
 
-.settings-number-stepper > .settings-inputbox.inputbox {
+.comet-settings-number-stepper > .comet-settings-inputbox.inputbox {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
@@ -114,18 +114,18 @@
   --inputbox-text-align: center;
 }
 
-.settings-number-stepper > .settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-number-stepper > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
   -moz-appearance: textfield;
   appearance: textfield;
 }
 
-.settings-number-stepper > .settings-inputbox.inputbox > .ibwrapper > .input::-webkit-outer-spin-button,
-.settings-number-stepper > .settings-inputbox.inputbox > .ibwrapper > .input::-webkit-inner-spin-button {
+.comet-settings-number-stepper > .comet-settings-inputbox.inputbox > .ibwrapper > .input::-webkit-outer-spin-button,
+.comet-settings-number-stepper > .comet-settings-inputbox.inputbox > .ibwrapper > .input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.settings-number-stepper-button {
+.comet-settings-number-stepper-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -142,7 +142,7 @@
   cursor: pointer;
 }
 
-.settings-number-stepper-button-icon {
+.comet-settings-number-stepper-button-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -153,35 +153,35 @@
   pointer-events: none;
 }
 
-.settings-number-stepper-button-icon svg path {
+.comet-settings-number-stepper-button-icon svg path {
   fill: currentColor;
   stroke: currentColor;
 }
 
-.settings-number-stepper-button-decrement {
+.comet-settings-number-stepper-button-decrement {
   border-right: 1px solid #d3d3d3;
 }
 
-.settings-number-stepper-button-increment {
+.comet-settings-number-stepper-button-increment {
   border-left: 1px solid #d3d3d3;
 }
 
-.settings-number-stepper-button:disabled {
+.comet-settings-number-stepper-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.settings-number-stepper-button:focus-visible {
+.comet-settings-number-stepper-button:focus-visible {
   outline: none;
 }
 
-.settings-text-editor-color-row {
+.comet-settings-text-editor-color-row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.settings-inputbox.settings-text-editor-color-picker.inputbox {
+.comet-settings-inputbox.comet-settings-text-editor-color-picker.inputbox {
   width: 48px;
   min-width: 48px;
   flex: 0 0 48px;
@@ -189,89 +189,89 @@
   --inputbox-padding-x: 4px;
 }
 
-.settings-inputbox.settings-text-editor-color-picker.inputbox > .ibwrapper > .input {
+.comet-settings-inputbox.comet-settings-text-editor-color-picker.inputbox > .ibwrapper > .input {
   cursor: pointer;
 }
 
-.settings-inputbox.settings-text-editor-color-value.inputbox {
+.comet-settings-inputbox.comet-settings-text-editor-color-value.inputbox {
   max-width: 120px;
   min-width: 120px;
 }
 
-.settings-text-editor-reset-button {
+.comet-settings-text-editor-reset-button {
   justify-self: start;
 }
 
 /* ===== Shared Settings Field Layout ===== */
-.settings-knowledge-base-field {
+.comet-settings-knowledge-base-field {
   gap: 14px;
 }
 
-.settings-field {
+.comet-settings-field {
   display: grid;
   gap: 8px;
   color: var(--vscode-settings-fieldForeground, #2d4052);
   font-size: 14px;
 }
 
-.settings-language-row {
+.comet-settings-language-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.settings-input-row {
+.comet-settings-input-row {
   display: flex;
   gap: 8px;
 }
 
-.settings-checkbox-row {
+.comet-settings-checkbox-row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.settings-url-list {
+.comet-settings-url-list {
   display: grid;
   gap: 8px;
 }
 
-.settings-url-row {
+.comet-settings-url-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, 320px) auto;
   gap: 8px;
   align-items: center;
 }
 
-.settings-url-row > .settings-input-control,
-.settings-url-row > .settings-journal-control {
+.comet-settings-url-row > .comet-settings-input-control,
+.comet-settings-url-row > .comet-settings-journal-control {
   width: 100%;
   min-width: 0;
   max-width: none;
 }
 
-.settings-url-order-controls {
+.comet-settings-url-order-controls {
   display: inline-flex;
   flex-direction: row;
   gap: 4px;
   align-items: center;
 }
 
-.settings-url-order-btn.btn-mode-icon.btn-sm,
-.settings-url-row > .btn-mode-icon.btn-sm {
+.comet-settings-url-order-btn.comet-btn-mode-icon.comet-btn-sm,
+.comet-settings-url-row > .comet-btn-mode-icon.comet-btn-sm {
   --btn-icon-size: 32px;
   min-width: var(--btn-icon-size);
   max-width: var(--btn-icon-size);
 }
 
 /* ===== Shared Input / Select / Button Skin ===== */
-.settings-input-control {
+.comet-settings-input-control {
   flex: 0 0 120px;
   width: 120px;
   min-width: 120px;
 }
 
-.settings-inputbox.inputbox {
+.comet-settings-inputbox.inputbox {
   --inputbox-height: 24px;
   --inputbox-border-radius: 6px;
   --inputbox-border: 1px solid transparent;
@@ -284,12 +284,12 @@
   --inputbox-font-size: 13px;
 }
 
-.settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-inputbox.inputbox > .ibwrapper > .input {
   line-height: 1.2;
   font-weight: 400;
 }
 
-.settings-select-trigger {
+.comet-settings-select-trigger {
   width: 100%;
   min-height: 34px;
   padding: 6px 10px;
@@ -302,7 +302,7 @@
   box-sizing: border-box;
 }
 
-.settings-select-trigger.cs-select-box {
+.comet-settings-select-trigger.cs-select-box {
   height: 24px;
   min-height: 24px;
   min-width: 120px;
@@ -310,28 +310,28 @@
   border-color: #d3d3d3;
 }
 
-.settings-select-trigger.settings-text-editor-select.cs-select-box {
+.comet-settings-select-trigger.comet-settings-text-editor-select.cs-select-box {
   width: 150px;
 }
 
-.settings-select-trigger:hover {
+.comet-settings-select-trigger:hover {
   background: var(--vscode-settings-selectHoverBackground, #e6e6e6);
   --vscode-select-background: var(--vscode-settings-selectHoverBackground, #e6e6e6);
 }
 
-.settings-inputbox.inputbox.synthetic-focus,
-.settings-inputbox.inputbox:focus-within {
+.comet-settings-inputbox.inputbox.synthetic-focus,
+.comet-settings-inputbox.inputbox:focus-within {
   outline: none;
   border-color: #cecece;
   box-shadow: none;
 }
 
-.settings-select-trigger:focus,
-.settings-select-trigger:focus-visible {
+.comet-settings-select-trigger:focus,
+.comet-settings-select-trigger:focus-visible {
   outline: none;
 }
 
-.settings-btn {
+.comet-settings-btn {
   --vscode-button-secondaryBackground: transparent;
   --vscode-button-secondaryForeground: var(--vscode-select-foreground, #203040);
   --vscode-button-secondaryBorder: #d3d3d3;
@@ -363,38 +363,38 @@
   box-shadow: none;
 }
 
-.settings-btn:hover:not(:disabled) {
+.comet-settings-btn:hover:not(:disabled) {
   background: var(--vscode-settings-selectHoverBackground, #e6e6e6);
   border-color: #d3d3d3;
   box-shadow: none;
 }
 
-.settings-btn:active:not(:disabled) {
+.comet-settings-btn:active:not(:disabled) {
   background: var(--vscode-settings-selectHoverBackground, #e6e6e6);
   border-color: #d3d3d3;
   box-shadow: none;
   transform: none;
 }
 
-.settings-btn:focus,
-.settings-btn:focus-visible {
+.comet-settings-btn:focus,
+.comet-settings-btn:focus-visible {
   outline: none;
   border-color: #d3d3d3;
   box-shadow: none;
 }
 
-.settings-btn:disabled {
+.comet-settings-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   filter: none;
 }
 
-.settings-btn-icon {
+.comet-settings-btn-icon {
   min-width: 34px;
   padding: 6px 8px;
 }
 
-.settings-native-input-wrap {
+.comet-settings-native-input-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -402,96 +402,96 @@
 }
 
 /* ===== Size Variants for Numeric Inputs ===== */
-.settings-toggle-input {
+.comet-settings-toggle-input {
   width: 18px;
   height: 18px;
 }
 
-.settings-journal-control {
+.comet-settings-journal-control {
   width: 100%;
   min-width: 240px;
 }
 
-.settings-limit-input-wrap {
+.comet-settings-limit-input-wrap {
   display: flex;
   justify-content: flex-end;
   width: 120px;
 }
 
-.settings-number-stepper.settings-limit-input {
+.comet-settings-number-stepper.comet-settings-limit-input {
   min-width: 0;
   width: 100%;
 }
 
 /* ===== General / Appearance / Batch Sections ===== */
-.settings-language-toggle {
+.comet-settings-language-toggle {
   gap: 8px;
   margin-left: auto;
   width: 120px;
 }
 
-.settings-appearance-theme-select {
+.comet-settings-appearance-theme-select {
   width: 120px;
 }
 
-.settings-appearance-settings {
+.comet-settings-appearance-settings {
   display: grid;
   gap: 10px;
   min-width: 0;
 }
 
 /* ===== Reusable Toggle Row ===== */
-.settings-toggle-row {
+.comet-settings-toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
-.settings-toggle-switch {
+.comet-settings-toggle-switch {
   flex: 0 0 auto;
 }
 
-.settings-toggle-subtitle {
+.comet-settings-toggle-subtitle {
   color: var(--vscode-settings-fieldForeground, #2d4052);
   font-size: 14px;
 }
 
 /* ===== Generic Block Section/Card Structure ===== */
-.settings-block-section {
+.comet-settings-block-section {
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.settings-block-title {
+.comet-settings-block-title {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--vscode-settings-sectionTitleForeground, #203040);
 }
 
-.settings-block-description {
+.comet-settings-block-description {
   margin: 0;
   color: var(--vscode-settings-mutedForeground, #64748b);
   font-size: 13px;
 }
 
-.settings-block-panel {
+.comet-settings-block-panel {
   display: grid;
   min-width: 0;
   border-radius: 18px;
   background: var(--vscode-settings-panelBackground, #f6f6f6);
 }
 
-.settings-block-list {
+.comet-settings-block-list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
 }
 
-.settings-block-list-item {
+.comet-settings-block-list-item {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -500,7 +500,7 @@
   padding: 12px;
 }
 
-.settings-block-list-item::before {
+.comet-settings-block-list-item::before {
   content: '';
   position: absolute;
   top: 0;
@@ -510,46 +510,46 @@
   background: var(--vscode-settings-separator, #e5e5e5);
 }
 
-.settings-block-list-item:first-child::before {
+.comet-settings-block-list-item:first-child::before {
   display: none;
 }
 
-.settings-block-list-item-content {
+.comet-settings-block-list-item-content {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-.settings-block-list-item-title {
+.comet-settings-block-list-item-title {
   color: var(--vscode-settings-panelForeground, #203040);
   font-size: 14px;
   font-weight: 500;
 }
 
-.settings-block-list-item-title-empty {
+.comet-settings-block-list-item-title-empty {
   display: none;
 }
 
-.settings-block-list-item-description {
+.comet-settings-block-list-item-description {
   margin: 0;
   color: var(--vscode-settings-mutedForeground, #64748b);
   font-size: 13px;
 }
 
-.settings-block-list-item-control {
+.comet-settings-block-list-item-control {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   flex: 0 0 auto;
 }
 
-.settings-supported-sources-actions {
+.comet-settings-supported-sources-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.settings-supported-sources-table {
+.comet-settings-supported-sources-table {
   display: grid;
   min-width: 0;
   margin: 0 12px 12px;
@@ -558,11 +558,11 @@
   background: transparent;
 }
 
-.settings-supported-sources-table[hidden] {
+.comet-settings-supported-sources-table[hidden] {
   display: none !important;
 }
 
-.settings-supported-source-row {
+.comet-settings-supported-source-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
   gap: 16px;
@@ -573,12 +573,12 @@
   border-top: 1px solid var(--vscode-settings-separator, #e5e5e5);
 }
 
-.settings-supported-source-row:first-child {
+.comet-settings-supported-source-row:first-child {
   border-top: 0;
 }
 
-.settings-supported-source-url,
-.settings-supported-source-journal {
+.comet-settings-supported-source-url,
+.comet-settings-supported-source-journal {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -586,13 +586,13 @@
   line-height: 1.35;
 }
 
-.settings-supported-source-url {
+.comet-settings-supported-source-url {
   font-family: var(--monaco-monospace-font, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
   font-size: 12px;
   color: var(--vscode-settings-mutedForeground, #64748b);
 }
 
-.settings-supported-source-journal {
+.comet-settings-supported-source-journal {
   display: flex;
   align-items: center;
   position: absolute;
@@ -603,7 +603,7 @@
   line-height: 1.2;
 }
 
-.settings-supported-source-journal-cell {
+.comet-settings-supported-source-journal-cell {
   position: relative;
   display: flex;
   align-items: center;
@@ -613,7 +613,7 @@
   line-height: 1.35;
 }
 
-.settings-supported-source-journal-input {
+.comet-settings-supported-source-journal-input {
   --inputbox-height: 24px;
   --inputbox-padding-y: 2px;
   --inputbox-padding-x: 8px;
@@ -627,33 +627,33 @@
   min-width: 0;
 }
 
-.settings-supported-source-journal-input > .ibwrapper > .input {
+.comet-settings-supported-source-journal-input > .ibwrapper > .input {
   padding: 2px 8px;
   line-height: 1.2;
 }
 
 /* ===== Literature Batch / Download / Translation Blocks ===== */
-.settings-batch-settings,
-.settings-download-settings {
+.comet-settings-batch-settings,
+.comet-settings-download-settings {
   display: grid;
   gap: 10px;
   min-width: 0;
 }
 
-.settings-batch-options-control,
-.settings-batch-date-control {
+.comet-settings-batch-options-control,
+.comet-settings-batch-date-control {
   justify-content: flex-end;
 }
 
-.settings-date-input,
-.settings-batch-date-control .settings-input-control {
+.comet-settings-date-input,
+.comet-settings-batch-date-control .comet-settings-input-control {
   flex: 0 0 120px;
   width: 120px;
   min-width: 120px;
   max-width: 120px;
 }
 
-.settings-date-input > .settings-date-input-field.inputbox {
+.comet-settings-date-input > .comet-settings-date-input-field.inputbox {
   width: 100%;
   min-width: 0;
   --inputbox-border: 1px solid transparent;
@@ -661,196 +661,196 @@
   --inputbox-background-hover: var(--vscode-settings-inputBackground, #fff);
 }
 
-.settings-date-input > .settings-date-input-field.inputbox:focus-within,
-.settings-date-input > .settings-date-input-field.inputbox.synthetic-focus {
+.comet-settings-date-input > .comet-settings-date-input-field.inputbox:focus-within,
+.comet-settings-date-input > .comet-settings-date-input-field.inputbox.synthetic-focus {
   border-color: #cecece;
   box-shadow: none;
 }
 
-.settings-date-input .date-input-button:hover {
+.comet-settings-date-input .comet-date-input-button:hover {
   background: transparent;
 }
 
-.settings-download-directory-control {
+.comet-settings-download-directory-control {
   min-width: 0;
   width: min(100%, 520px);
 }
 
-.settings-download-directory-control .settings-input-row {
+.comet-settings-download-directory-control .comet-settings-input-row {
   width: 100%;
   min-width: 0;
 }
 
-.settings-download-directory-control .settings-inputbox.inputbox {
+.comet-settings-download-directory-control .comet-settings-inputbox.inputbox {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
 }
 
-.settings-translation-panel {
+.comet-settings-translation-panel {
   overflow: hidden;
 }
 
-.settings-translation-provider-control,
-.settings-translation-base-url-control,
-.settings-translation-model-control {
+.comet-settings-translation-provider-control,
+.comet-settings-translation-base-url-control,
+.comet-settings-translation-model-control {
   width: 140px;
   min-width: 140px;
 }
 
-.settings-translation-provider-control > *,
-.settings-translation-base-url-control > *,
-.settings-translation-model-control > * {
+.comet-settings-translation-provider-control > *,
+.comet-settings-translation-base-url-control > *,
+.comet-settings-translation-model-control > * {
   width: 140px;
 }
 
-.settings-translation-base-url-input {
+.comet-settings-translation-base-url-input {
   width: 140px;
   min-width: 140px;
 }
 
-.settings-translation-model-value {
+.comet-settings-translation-model-value {
   margin: 0;
   color: var(--vscode-settings-panelForeground, #203040);
 }
 
-.settings-translation-api-key-item {
+.comet-settings-translation-api-key-item {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.settings-translation-api-key-content {
+.comet-settings-translation-api-key-content {
   display: none;
 }
 
-.settings-translation-api-key-row-control {
+.comet-settings-translation-api-key-row-control {
   justify-content: stretch;
   width: 100%;
   min-width: 0;
 }
 
-.settings-translation-api-key-control,
-.settings-translation-api-key-control > .settings-field {
+.comet-settings-translation-api-key-control,
+.comet-settings-translation-api-key-control > .comet-settings-field {
   width: 100%;
   min-width: 0;
 }
 
-.settings-translation-api-key-control .settings-llm-api-header {
+.comet-settings-translation-api-key-control .comet-settings-llm-api-header {
   width: 100%;
 }
 
-.settings-translation-api-key-control .settings-llm-api-title-wrap {
+.comet-settings-translation-api-key-control .comet-settings-llm-api-title-wrap {
   flex: 1 1 auto;
 }
 
-.settings-translation-api-key-control .settings-llm-api-subtitle {
+.comet-settings-translation-api-key-control .comet-settings-llm-api-subtitle {
   max-width: 520px;
 }
 
-.settings-translation-api-key-control .settings-llm-api-row {
+.comet-settings-translation-api-key-control .comet-settings-llm-api-row {
   flex: 0 0 auto;
   justify-content: flex-end;
 }
 
-.settings-translation-api-key-control .settings-api-key-input {
+.comet-settings-translation-api-key-control .comet-settings-api-key-input {
   flex: 0 1 140px;
   width: min(140px, 100%);
   margin-left: 0;
 }
 
-.settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox {
+.comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
   width: 140px;
   min-width: 140px;
 }
 
-.settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
   padding: 2px 28px 2px 8px;
 }
 
-.settings-translation-api-key-control .settings-api-key-empty .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-translation-api-key-control .comet-settings-api-key-empty .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
   padding: 2px 8px;
 }
 
-.settings-translation-api-key-control .settings-password-toggle {
+.comet-settings-translation-api-key-control .comet-settings-password-toggle {
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
 }
 
-.settings-translation-api-key-control .settings-password-toggle[hidden] {
+.comet-settings-translation-api-key-control .comet-settings-password-toggle[hidden] {
   display: none;
 }
 
-.settings-translation-api-key-control .settings-api-key-input:hover .settings-password-toggle,
-.settings-translation-api-key-control .settings-api-key-input:focus-within .settings-password-toggle {
+.comet-settings-translation-api-key-control .comet-settings-api-key-input:hover .comet-settings-password-toggle,
+.comet-settings-translation-api-key-control .comet-settings-api-key-input:focus-within .comet-settings-password-toggle {
   opacity: 1;
   pointer-events: auto;
 }
 
 @media (max-width: 900px) {
-  .settings-supported-source-row {
+  .comet-settings-supported-source-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
     padding: 10px 0;
   }
 }
 
-.settings-library-mode-note {
+.comet-settings-library-mode-note {
   margin: -2px 0 0;
   padding-left: 2px;
 }
 
-.settings-library-sections {
+.comet-settings-library-sections {
   gap: 16px;
 }
 
-.settings-library-section {
+.comet-settings-library-section {
   gap: 10px;
 }
 
-.settings-config-path-control,
-.settings-library-directory-control,
-.settings-library-readonly-control,
-.settings-library-recent-documents-control {
+.comet-settings-config-path-control,
+.comet-settings-library-directory-control,
+.comet-settings-library-readonly-control,
+.comet-settings-library-recent-documents-control {
   min-width: 0;
   width: min(100%, 560px);
 }
 
-.settings-config-path-control .settings-input-row,
-.settings-library-directory-control .settings-input-row {
+.comet-settings-config-path-control .comet-settings-input-row,
+.comet-settings-library-directory-control .comet-settings-input-row {
   width: 100%;
   min-width: 0;
 }
 
-.settings-config-path-control .settings-inputbox.inputbox,
-.settings-library-directory-control .settings-inputbox.inputbox,
-.settings-library-readonly-control .settings-inputbox.inputbox {
+.comet-settings-config-path-control .comet-settings-inputbox.inputbox,
+.comet-settings-library-directory-control .comet-settings-inputbox.inputbox,
+.comet-settings-library-readonly-control .comet-settings-inputbox.inputbox {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
 }
 
-.settings-library-stats-item,
-.settings-library-recent-documents-item {
+.comet-settings-library-stats-item,
+.comet-settings-library-recent-documents-item {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
-.settings-library-stats-content {
+.comet-settings-library-stats-content {
   display: none;
 }
 
-.settings-library-stats-control {
+.comet-settings-library-stats-control {
   justify-content: stretch;
   width: 100%;
   min-width: 0;
 }
 
-.settings-library-recent-documents-control {
+.comet-settings-library-recent-documents-control {
   justify-content: stretch;
   width: 100%;
 }
 
-.settings-library-recent-documents-content {
+.comet-settings-library-recent-documents-content {
   display: grid;
   gap: 8px;
   width: 100%;
@@ -858,97 +858,97 @@
 }
 
 /* ===== LLM / RAG API & Model Picker ===== */
-.settings-llm-settings {
+.comet-settings-llm-settings {
   display: grid;
   gap: 10px;
   min-width: 0;
 }
 
-.settings-llm-grid {
+.comet-settings-llm-grid {
   display: grid;
   gap: 12px;
 }
 
-.settings-llm-api-field {
+.comet-settings-llm-api-field {
   min-width: 0;
 }
 
-.settings-llm-api-key-item,
-.settings-llm-model-picker-item {
+.comet-settings-llm-api-key-item,
+.comet-settings-llm-model-picker-item {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.settings-llm-api-key-content,
-.settings-llm-model-picker-content {
+.comet-settings-llm-api-key-content,
+.comet-settings-llm-model-picker-content {
   display: none;
 }
 
-.settings-llm-api-key-row-control,
-.settings-llm-model-picker-control {
+.comet-settings-llm-api-key-row-control,
+.comet-settings-llm-model-picker-control {
   justify-content: stretch;
   width: 100%;
   min-width: 0;
 }
 
-.settings-llm-api-key-control,
-.settings-llm-api-key-control > .settings-field {
+.comet-settings-llm-api-key-control,
+.comet-settings-llm-api-key-control > .comet-settings-field {
   width: 100%;
   min-width: 0;
 }
 
-.settings-llm-max-context-control {
+.comet-settings-llm-max-context-control {
   display: inline-flex;
   align-items: center;
 }
 
-.settings-llm-api-panel {
+.comet-settings-llm-api-panel {
   gap: 16px;
   padding: 12px;
   border-radius: 18px;
   background: var(--vscode-settings-panelBackground, #f6f6f6);
 }
 
-.settings-llm-api-header {
+.comet-settings-llm-api-header {
   display: flex;
   align-items: center;
   gap: 16px;
   min-width: 0;
 }
 
-.settings-llm-api-title-wrap {
+.comet-settings-llm-api-title-wrap {
   display: grid;
   gap: 2px;
   flex: 0 0 auto;
   min-width: 0;
 }
 
-.settings-llm-api-title {
+.comet-settings-llm-api-title {
   min-width: 0;
   color: var(--vscode-settings-fieldForeground, #2d4052);
   font-size: 14px;
   font-weight: 500;
 }
 
-.settings-llm-api-subtitle {
+.comet-settings-llm-api-subtitle {
   color: var(--vscode-settings-mutedForeground, #64748b);
   font-size: 12px;
   line-height: 1.3;
 }
 
-.settings-llm-api-row {
+.comet-settings-llm-api-row {
   flex: 1 1 auto;
   flex-wrap: nowrap;
   align-items: stretch;
   min-width: 0;
 }
 
-.settings-api-key-input {
+.comet-settings-api-key-input {
   flex: 0 1 480px;
   margin-left: auto;
   min-width: 0;
 }
 
-.settings-password-toggle {
+.comet-settings-password-toggle {
   position: absolute;
   top: 50%;
   right: 8px;
@@ -967,34 +967,34 @@
   z-index: 1;
 }
 
-.settings-password-toggle .lx-icon {
+.comet-settings-password-toggle .comet-lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.settings-api-key-input > .settings-inputbox.inputbox {
+.comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
   --inputbox-padding-x: 10px;
 }
 
-.settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
   padding-right: 34px;
 }
 
-.settings-password-toggle:hover {
+.comet-settings-password-toggle:hover {
   color: var(--vscode-settings-fieldForeground, #304357);
   background: var(--vscode-settings-cardBackgroundAlt, #f1f5f9);
 }
 
-.settings-password-toggle:focus-visible {
+.comet-settings-password-toggle:focus-visible {
   outline: none;
 }
 
-.settings-llm-span-2 {
+.comet-settings-llm-span-2 {
   grid-column: 1 / -1;
 }
 
-.settings-model-panel {
+.comet-settings-model-panel {
   display: grid;
   gap: 0px;
   width: 100%;
@@ -1004,39 +1004,39 @@
   box-shadow: none;
 }
 
-.settings-model-search-input-host {
+.comet-settings-model-search-input-host {
   min-width: 0;
   flex: 1 1 auto;
   width: 100%;
 }
 
-.settings-model-search-row {
+.comet-settings-model-search-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 0 12px;
 }
 
-.settings-model-search-actions {
+.comet-settings-model-search-actions {
   flex: 0 0 auto;
 }
 
-.settings-model-search-action.actionbar-action {
+.comet-settings-model-search-action.comet-actionbar-action {
   width: 28px;
   height: 28px;
 }
 
-.settings-model-search-action.actionbar-action .lx-icon {
+.comet-settings-model-search-action.comet-actionbar-action .comet-lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.settings-model-list {
+.comet-settings-model-list {
   display: grid;
 }
 
-.settings-model-list-item {
+.comet-settings-model-list-item {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1045,11 +1045,11 @@
   padding: 12px 0;
 }
 
-.settings-model-list-item:first-child {
+.comet-settings-model-list-item:first-child {
   padding-top: 16px;
 }
 
-.settings-model-list-item::before {
+.comet-settings-model-list-item::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1059,15 +1059,15 @@
   background: var(--vscode-settings-separator, #e5e5e5);
 }
 
-.settings-model-list-item:first-child::before {
+.comet-settings-model-list-item:first-child::before {
   display: none;
 }
 
-.settings-model-list-item-toggle {
+.comet-settings-model-list-item-toggle {
   grid-template-columns: 1fr;
 }
 
-.settings-model-list-button {
+.comet-settings-model-list-button {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -1080,11 +1080,11 @@
   cursor: pointer;
 }
 
-.settings-model-list-button:hover:not(:disabled) .settings-model-list-name {
+.comet-settings-model-list-button:hover:not(:disabled) .comet-settings-model-list-name {
   color: var(--vscode-settings-linkForeground, #0a5fbf);
 }
 
-.settings-model-list-title-row {
+.comet-settings-model-list-title-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1092,28 +1092,28 @@
   min-width: 0;
 }
 
-.settings-model-list-name {
+.comet-settings-model-list-name {
   color: var(--vscode-settings-panelForeground, #203040);
   font-size: 12px;
   font-weight: 500;
 }
 
-.settings-model-list-capabilities {
+.comet-settings-model-list-capabilities {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.settings-model-list-capability {
+.comet-settings-model-list-capability {
   flex: 0 0 auto;
 }
 
-.settings-model-list-meta-badge {
+.comet-settings-model-list-meta-badge {
   flex: 0 0 auto;
 }
 
-.settings-model-list-provider {
+.comet-settings-model-list-provider {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
@@ -1126,13 +1126,13 @@
   line-height: 1;
 }
 
-.settings-model-list-button:disabled {
+.comet-settings-model-list-button:disabled {
   color: var(--vscode-settings-panelForeground, #203040);
   cursor: default;
   opacity: 1;
 }
 
-.settings-model-list-toggle-button {
+.comet-settings-model-list-toggle-button {
   justify-self: start;
   padding: 0;
   border: 0;
@@ -1142,73 +1142,73 @@
   cursor: pointer;
 }
 
-.settings-model-list-toggle-button:hover {
+.comet-settings-model-list-toggle-button:hover {
   color: var(--vscode-settings-panelForeground, #203040);
 }
 
-.settings-model-list-switch {
+.comet-settings-model-list-switch {
   flex: 0 0 auto;
 }
 
-.settings-model-list-empty {
+.comet-settings-model-list-empty {
   padding: 8px 2px 2px;
   color: var(--vscode-settings-mutedForeground, #66788b);
   font-size: 13px;
 }
 
 /* ===== RAG Block Rows ===== */
-.settings-rag-provider-row-control,
-.settings-rag-text-control {
+.comet-settings-rag-provider-row-control,
+.comet-settings-rag-text-control {
   min-width: min(100%, 420px);
 }
 
-.settings-rag-provider-control-stack {
+.comet-settings-rag-provider-control-stack {
   display: grid;
   gap: 6px;
   width: 100%;
   min-width: 0;
 }
 
-.settings-rag-text-input {
+.comet-settings-rag-text-input {
   width: 100%;
   min-width: 0;
 }
 
-.settings-rag-api-key-item {
+.comet-settings-rag-api-key-item {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.settings-rag-api-key-content {
+.comet-settings-rag-api-key-content {
   display: none;
 }
 
-.settings-rag-api-key-row-control {
+.comet-settings-rag-api-key-row-control {
   justify-content: stretch;
   width: 100%;
   min-width: 0;
 }
 
-.settings-rag-api-key-control,
-.settings-rag-api-key-control > .settings-field {
+.comet-settings-rag-api-key-control,
+.comet-settings-rag-api-key-control > .comet-settings-field {
   width: 100%;
   min-width: 0;
 }
 
 /* ===== Shared Hint Text ===== */
-.settings-hint {
+.comet-settings-hint {
   margin: 0;
   color: var(--vscode-settings-mutedForeground, #5b6b7b);
   font-size: 13px;
 }
 
 /* ===== Library Section ===== */
-.settings-library-stats {
+.comet-settings-library-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
-.settings-library-stat-card {
+.comet-settings-library-stat-card {
   display: grid;
   gap: 6px;
   padding: 12px;
@@ -1217,17 +1217,17 @@
   background: linear-gradient(180deg, var(--vscode-settings-cardBackground, #f9fbfe) 0%, var(--vscode-settings-cardBackgroundAlt, #f3f7fb) 100%);
 }
 
-.settings-library-stat-label {
+.comet-settings-library-stat-label {
   color: var(--vscode-settings-cardLabelForeground, #607285);
   font-size: 12px;
 }
 
-.settings-library-doc-list {
+.comet-settings-library-doc-list {
   display: grid;
   gap: 8px;
 }
 
-.settings-library-doc-item {
+.comet-settings-library-doc-item {
   display: grid;
   gap: 4px;
   padding: 10px 12px;
@@ -1236,101 +1236,101 @@
   background: var(--vscode-settings-cardBackground, #f9fbfd);
 }
 
-.settings-library-doc-title {
+.comet-settings-library-doc-title {
   color: var(--vscode-settings-cardTitleForeground, #203040);
   font-size: 14px;
 }
 
-.settings-library-doc-meta {
+.comet-settings-library-doc-meta {
   color: var(--vscode-settings-cardLabelForeground, #607285);
   font-size: 12px;
 }
 
-.settings-library-doc-status {
+.comet-settings-library-doc-status {
   color: var(--vscode-settings-cardAccentForeground, #35536e);
   font-size: 12px;
 }
 
 /* ===== Responsive Adjustments ===== */
 @media (max-width: 980px) {
-  .settings-language-row {
+  .comet-settings-language-row {
     flex-wrap: wrap;
     align-items: flex-start;
   }
 
-  .settings-language-toggle {
+  .comet-settings-language-toggle {
     margin-left: 0;
   }
 
-  .settings-input-control {
+  .comet-settings-input-control {
     min-width: 0;
   }
 
-  .settings-url-row {
+  .comet-settings-url-row {
     grid-template-columns: 1fr;
   }
 
-  .settings-header {
+  .comet-settings-header {
     flex-wrap: wrap;
   }
 
-  .settings-toggle-row {
+  .comet-settings-toggle-row {
     flex-wrap: wrap;
   }
 
-  .settings-llm-api-header {
+  .comet-settings-llm-api-header {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .settings-llm-api-row {
+  .comet-settings-llm-api-row {
     flex-direction: column;
   }
 
-  .settings-api-key-input {
+  .comet-settings-api-key-input {
     flex-basis: auto;
     width: 100%;
     margin-left: 0;
   }
 
-  .settings-api-key-input > .settings-inputbox.inputbox {
+  .comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
     width: 100%;
   }
 
-  .settings-translation-api-key-control .settings-api-key-input {
+  .comet-settings-translation-api-key-control .comet-settings-api-key-input {
     width: 140px;
   }
 
-  .settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox {
+  .comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
     width: 140px;
   }
 
-  .settings-translation-api-key-control .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+  .comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
     padding: 2px 28px 2px 8px;
   }
 
-  .settings-translation-api-key-control .settings-api-key-empty .settings-api-key-input > .settings-inputbox.inputbox > .ibwrapper > .input {
+  .comet-settings-translation-api-key-control .comet-settings-api-key-empty .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
     padding: 2px 8px;
   }
 
-  .settings-llm-span-2 {
+  .comet-settings-llm-span-2 {
     grid-column: auto;
   }
 
-  .settings-model-panel {
+  .comet-settings-model-panel {
     padding: 14px;
   }
 
-  .settings-model-list-item {
+  .comet-settings-model-list-item {
     grid-template-columns: 1fr;
     align-items: start;
   }
 
-  .settings-model-list-switch {
+  .comet-settings-model-list-switch {
     justify-self: start;
   }
 
-  .settings-library-stats {
+  .comet-settings-library-stats {
     grid-template-columns: 1fr;
   }
 }

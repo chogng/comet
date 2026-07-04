@@ -21,7 +21,7 @@ export class EditorEmptyWorkspaceView {
   constructor(props: EditorEmptyWorkspaceViewProps) {
     this.onOpenEditor = props.onOpenEditor;
     this.placeholder = new EditorPlaceholder({
-      className: 'editor-empty-workspace',
+      className: 'comet-editor-empty-workspace',
       title: props.labels.emptyWorkspaceTitle,
       body: props.labels.emptyWorkspaceBody,
       actions: [],
@@ -36,7 +36,7 @@ export class EditorEmptyWorkspaceView {
   setProps(props: EditorEmptyWorkspaceViewProps) {
     this.onOpenEditor = props.onOpenEditor;
     this.placeholder.setProps({
-      className: 'editor-empty-workspace',
+      className: 'comet-editor-empty-workspace',
       title: props.labels.emptyWorkspaceTitle,
       body: props.labels.emptyWorkspaceBody,
       actions: [
@@ -48,7 +48,7 @@ export class EditorEmptyWorkspaceView {
               disposition: 'reveal-or-open',
             });
           },
-          className: 'editor-workspace-action-btn btn-secondary btn-md',
+          className: 'comet-editor-workspace-action-btn btn-secondary btn-md',
         },
         {
           label: props.labels.createBrowser,
@@ -58,7 +58,7 @@ export class EditorEmptyWorkspaceView {
               disposition: 'reveal-or-open',
             });
           },
-          className: 'editor-workspace-action-btn btn-secondary btn-md',
+          className: 'comet-editor-workspace-action-btn btn-secondary btn-md',
         },
         {
           label: props.labels.createFile,
@@ -68,7 +68,7 @@ export class EditorEmptyWorkspaceView {
               disposition: 'reveal-or-open',
             });
           },
-          className: 'editor-workspace-action-btn btn-secondary btn-md',
+          className: 'comet-editor-workspace-action-btn btn-secondary btn-md',
         },
       ],
     });

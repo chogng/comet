@@ -23,7 +23,7 @@ export type SessionsPartViewProps = SessionViewProps;
 export class SessionsPartView {
 	readonly id = SESSION_PART_IDS.sessions;
 
-	private readonly element = createElement('section', 'sessions-part');
+	private readonly element = createElement('section', 'comet-sessions-part');
 	private readonly sessionView: SessionView;
 	private disposed = false;
 

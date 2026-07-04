@@ -70,7 +70,7 @@ export class LibraryRenderer {
 
     const button = createElement(
       'button',
-      'library-tree-row library-tree-row-folder btn-base btn-ghost btn-md',
+      'comet-library-tree-row comet-library-tree-row-folder comet-btn-base comet-btn-ghost comet-btn-md',
     );
     button.type = 'button';
     button.style.paddingLeft = this.props.delegate.getNodePaddingLeft(
@@ -82,19 +82,19 @@ export class LibraryRenderer {
       context.toggleExpanded();
     });
 
-    const label = createElement('span', 'library-tree-folder-label');
+    const label = createElement('span', 'comet-library-tree-folder-label');
     label.textContent = node.name;
     button.append(
       createLxIcon(
         context.isExpanded
           ? lxIconSemanticMap.library.folderExpanded
           : lxIconSemanticMap.library.folderCollapsed,
-        'library-tree-chevron',
+        'comet-library-tree-chevron',
       ),
       label,
     );
     if (node.id === 'root') {
-      const count = createElement('span', 'library-tree-folder-count');
+      const count = createElement('span', 'comet-library-tree-folder-count');
       count.textContent = String(
         this.props.dataSource.getDocumentCount(node as LibraryTreeFolderNode),
       );
@@ -119,7 +119,7 @@ export class LibraryRenderer {
 
     const row = createElement(
       'div',
-      'library-tree-row library-tree-row-document',
+      'comet-library-tree-row comet-library-tree-row-document',
     );
     row.setAttribute('role', 'treeitem');
     row.style.paddingLeft = this.props.delegate.getNodePaddingLeft(context.depth);
@@ -136,24 +136,24 @@ export class LibraryRenderer {
       this.openDocumentContextMenu(event, document);
     });
 
-    const titleElement = createElement('span', 'library-tree-document-title');
+    const titleElement = createElement('span', 'comet-library-tree-document-title');
     titleElement.textContent = title;
     hoverService.applyHover(titleElement, title);
 
-    const metaElement = createElement('span', 'library-tree-document-meta');
+    const metaElement = createElement('span', 'comet-library-tree-document-meta');
     metaElement.textContent = authors;
     hoverService.applyHover(metaElement, authors);
 
     const statusElement = createElement(
       'span',
-      `library-doc-status library-doc-status-${document.ingestStatus}`,
+      `comet-library-doc-status comet-library-doc-status-${document.ingestStatus}`,
     );
     statusElement.textContent = statusLabel;
 
-    const main = createElement('div', 'library-tree-document-main');
+    const main = createElement('div', 'comet-library-tree-document-main');
     main.append(titleElement, metaElement);
 
-    const aside = createElement('div', 'library-tree-document-aside');
+    const aside = createElement('div', 'comet-library-tree-document-aside');
     aside.append(statusElement);
 
     row.append(main, aside);

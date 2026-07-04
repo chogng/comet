@@ -304,12 +304,12 @@ export function normalizeHoverInput(input: HoverInput): HoverOptions | null {
 }
 
 class HoverWidget {
-  private readonly element = createElement('div', 'cs-hover-overlay');
+  private readonly element = createElement('div', 'comet-hover-overlay');
   private readonly pointer = createElement(
     'div',
-    'cs-hover-pointer',
+    'comet-hover-pointer',
   );
-  private readonly card = createElement('div', 'cs-hover-card');
+  private readonly card = createElement('div', 'comet-hover-card');
   private readonly domDisposables = new DisposableStore();
   private readonly mountDisposables = new DisposableStore();
   private readonly renderDisposables = new DisposableStore();
@@ -398,7 +398,7 @@ class HoverWidget {
 
   private render(options: HoverOptions) {
     this.renderDisposables.clear();
-    this.card.className = 'cs-hover-card';
+    this.card.className = 'comet-hover-card';
     this.card.classList.toggle('compact', Boolean(options.compact));
     this.card.classList.remove('right-aligned');
     if (options.className) {
@@ -410,20 +410,20 @@ class HoverWidget {
       (options.actions?.length ?? 0) > 0 ? 'dialog' : 'tooltip',
     );
 
-    const contentRow = createElement('div', 'cs-hover-row hover-row markdown-hover');
+    const contentRow = createElement('div', 'comet-hover-row hover-row markdown-hover');
     const contents = createElement(
       'div',
-      `cs-hover-contents hover-contents${typeof options.content === 'string' ? '' : ' is-node'}`,
+      `comet-hover-contents hover-contents${typeof options.content === 'string' ? '' : ' is-node'}`,
     );
 
     if (!isHoverRenderableEmpty(options.content)) {
-      const content = createElement('div', 'cs-hover-content');
+      const content = createElement('div', 'comet-hover-content');
       content.append(cloneHoverRenderable(options.content!));
       contents.append(content);
     }
 
     if (options.subtitle?.trim()) {
-      const subtitle = createElement('div', 'cs-hover-subtitle');
+      const subtitle = createElement('div', 'comet-hover-subtitle');
       subtitle.textContent = options.subtitle;
       contents.append(subtitle);
     }
@@ -431,12 +431,12 @@ class HoverWidget {
     contentRow.append(contents);
     const nodes: Node[] = [contentRow];
     if ((options.actions?.length ?? 0) > 0) {
-      const statusBarElement = createElement('div', 'cs-hover-row hover-row status-bar');
-      const actionsElement = createElement('div', 'cs-hover-actions actions');
+      const statusBarElement = createElement('div', 'comet-hover-row hover-row status-bar');
+      const actionsElement = createElement('div', 'comet-hover-actions actions');
       for (const action of options.actions ?? []) {
         const actionContainer = createElement(
           'div',
-          'cs-hover-action-container action-container',
+          'comet-hover-action-container action-container',
         );
         actionContainer.tabIndex = action.disabled ? -1 : 0;
         actionContainer.setAttribute(
@@ -447,11 +447,11 @@ class HoverWidget {
           actionContainer.classList.add('disabled');
         }
 
-        const button = createElement('button', 'cs-hover-action action') as HTMLButtonElement;
+        const button = createElement('button', 'comet-hover-action action') as HTMLButtonElement;
         button.type = 'button';
         button.disabled = Boolean(action.disabled);
         if (action.icon && !button.disabled) {
-          const icon = createElement('span', 'cs-hover-action-icon icon');
+          const icon = createElement('span', 'comet-hover-action-icon icon');
           icon.append(cloneHoverRenderable(action.icon));
           button.append(icon);
         }
@@ -550,7 +550,7 @@ class HoverWidget {
     this.pointer.style.left = `${Math.round(pointerLeft - 3)}px`;
     this.card.classList.toggle('right-aligned', isRightAligned);
     this.element.style.setProperty(
-      '--cs-hover-pointer-left',
+      '--comet-hover-pointer-left',
       `${Math.round(pointerLeft)}px`,
     );
   }

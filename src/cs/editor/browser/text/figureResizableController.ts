@@ -58,7 +58,7 @@ export class FigureResizableController {
   }
 
   dispose() {
-    this.options.figureElement.classList.remove('pm-resizable-active');
+    this.options.figureElement.classList.remove('comet-pm-resizable-active');
     this.options.imageElement.removeEventListener('load', this.handleImageLoad);
     for (const dispose of this.disposers) {
       dispose();
@@ -68,7 +68,7 @@ export class FigureResizableController {
 
   private readonly handleResizeStart = () => {
     this.options.selectFigureNode();
-    this.options.figureElement.classList.add('pm-resizable-active');
+    this.options.figureElement.classList.add('comet-pm-resizable-active');
   };
 
   private readonly handleResize = (event: { dimension: { width: number }; done: boolean }) => {
@@ -76,7 +76,7 @@ export class FigureResizableController {
       return;
     }
 
-    this.options.figureElement.classList.remove('pm-resizable-active');
+    this.options.figureElement.classList.remove('comet-pm-resizable-active');
     this.commitWidth(event.dimension.width);
   };
 

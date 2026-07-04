@@ -26,22 +26,22 @@ export type ApiKeyWidgetProps = {
 
 export class ApiKeyWidget {
   private props: ApiKeyWidgetProps;
-  private readonly element = el('div', 'settings-field settings-llm-api-field settings-llm-span-2');
-  private readonly header = el('div', 'settings-llm-api-header');
-  private readonly titleWrap = el('div', 'settings-llm-api-title-wrap');
-  private readonly title = el('span', 'settings-llm-api-title');
-  private readonly subtitle = el('span', 'settings-llm-api-subtitle');
-  private readonly row = el('div', 'settings-input-row settings-llm-api-row');
-  private readonly inputWrap = el('div', 'settings-native-input-wrap settings-api-key-input');
+  private readonly element = el('div', 'comet-settings-field comet-settings-llm-api-field comet-settings-llm-span-2');
+  private readonly header = el('div', 'comet-settings-llm-api-header');
+  private readonly titleWrap = el('div', 'comet-settings-llm-api-title-wrap');
+  private readonly title = el('span', 'comet-settings-llm-api-title');
+  private readonly subtitle = el('span', 'comet-settings-llm-api-subtitle');
+  private readonly row = el('div', 'comet-settings-input-row comet-settings-llm-api-row');
+  private readonly inputWrap = el('div', 'comet-settings-native-input-wrap comet-settings-api-key-input');
   private readonly inputBox = buildInput({
     value: '',
-    className: 'settings-input-control',
+    className: 'comet-settings-input-control',
     focusKey: '',
     placeholder: '',
     onInput: (value) => this.props.onInput(value),
   });
   private readonly input = this.inputBox.inputElement;
-  private readonly toggle = el('button', 'settings-password-toggle');
+  private readonly toggle = el('button', 'comet-settings-password-toggle');
 
   constructor(props: ApiKeyWidgetProps) {
     this.props = props;
@@ -62,7 +62,7 @@ export class ApiKeyWidget {
 
   setProps(props: ApiKeyWidgetProps) {
     this.props = props;
-    this.element.className = props.className ?? 'settings-field settings-llm-api-field settings-llm-span-2';
+    this.element.className = props.className ?? 'comet-settings-field comet-settings-llm-api-field comet-settings-llm-span-2';
     this.title.textContent = props.title;
     this.subtitle.textContent = props.subtitle ?? '';
     this.subtitle.hidden = !props.subtitle;
@@ -74,7 +74,7 @@ export class ApiKeyWidget {
     const shouldHideToggle = Boolean(props.hideToggleWhenEmpty && !props.value);
     this.toggle.hidden = shouldHideToggle;
     this.toggle.style.display = shouldHideToggle ? 'none' : '';
-    this.element.classList.toggle('settings-api-key-empty', shouldHideToggle);
+    this.element.classList.toggle('comet-settings-api-key-empty', shouldHideToggle);
     if (!shouldHideToggle) {
       this.toggle.replaceChildren(createLxIcon(props.show ? 'hidden' : 'show'));
       hoverService.applyHover(this.toggle, props.show ? props.toggleLabelHide : props.toggleLabelShow);

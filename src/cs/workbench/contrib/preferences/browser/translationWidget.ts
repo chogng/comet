@@ -41,7 +41,7 @@ const openAITranslationModelIds = ['gpt-5.2', 'gpt-5.4', 'gpt-5.4-mini'] as cons
 
 export class TranslationWidget {
   private props: TranslationWidgetProps;
-  private readonly element = el('div', 'settings-field');
+  private readonly element = el('div', 'comet-settings-field');
   private readonly apiKeyWidget = new ApiKeyWidget({
     title: '',
     subtitle: '',
@@ -73,9 +73,9 @@ export class TranslationWidget {
   private render() {
     const section = createSettingsSection({
       title: this.props.labels.settingsTranslationTitle,
-      sectionClassName: 'settings-translation-section',
-      panelClassName: 'settings-translation-panel',
-      listClassName: 'settings-translation-list',
+      sectionClassName: 'comet-settings-translation-section',
+      panelClassName: 'comet-settings-translation-panel',
+      listClassName: 'comet-settings-translation-list',
     });
     const providerSelect = buildSelect([
         { value: 'glm', label: this.props.labels.settingsTranslationProviderGlm },
@@ -85,14 +85,14 @@ export class TranslationWidget {
       this.props.activeTranslationProvider,
       'settings.translation.provider',
       (value) => this.props.onActiveTranslationProviderChange(value as TranslationProviderId),
-      'settings-llm-provider',
+      'comet-settings-llm-provider',
     );
     section.list.append(
       createSettingsRow({
         title: this.props.labels.settingsTranslationProvider,
         control: providerSelect,
-        itemClassName: 'settings-translation-provider-item',
-        controlClassName: 'settings-translation-provider-control',
+        itemClassName: 'comet-settings-translation-provider-item',
+        controlClassName: 'comet-settings-translation-provider-control',
       }),
     );
     if (this.props.activeTranslationProvider === 'glm') {
@@ -124,7 +124,7 @@ export class TranslationWidget {
       toggleLabelHide: this.props.labels.settingsTranslationHideApiKey,
       onToggle: () => this.props.onToggleShowApiKey(),
       onInput: (value) => this.props.onTranslationProviderApiKeyChange(provider, value),
-      className: 'settings-field settings-llm-api-field settings-translation-ai-field settings-llm-span-2',
+      className: 'comet-settings-field comet-settings-llm-api-field comet-settings-translation-ai-field comet-settings-llm-span-2',
       hideToggleWhenEmpty: true,
     });
   }
@@ -133,7 +133,7 @@ export class TranslationWidget {
     const provider = this.props.translationProviders['openai-compatible'];
     const baseUrlInput = buildInput({
       value: provider.baseUrl,
-      className: 'settings-input-control settings-translation-base-url-input',
+      className: 'comet-settings-input-control comet-settings-translation-base-url-input',
       focusKey: 'settings.translation.openai.baseUrl',
       placeholder: 'https://api.openai.com/v1',
       onInput: (value) => this.props.onTranslationProviderBaseUrlChange('openai-compatible', value),
@@ -143,8 +143,8 @@ export class TranslationWidget {
       createSettingsRow({
         title: this.props.labels.settingsTranslationBaseUrl,
         control: baseUrlInput,
-        itemClassName: 'settings-translation-base-url-item',
-        controlClassName: 'settings-translation-base-url-control',
+        itemClassName: 'comet-settings-translation-base-url-item',
+        controlClassName: 'comet-settings-translation-base-url-control',
       }),
       this.renderOpenAICompatibleModelRow(),
     ];
@@ -172,23 +172,23 @@ export class TranslationWidget {
         selectedValue,
         'settings.translation.glm.model',
         (value) => this.props.onGlmModelChange(value),
-        'settings-llm-provider',
+        'comet-settings-llm-provider',
       ),
-      itemClassName: 'settings-translation-model-item',
-      controlClassName: 'settings-translation-model-control',
+      itemClassName: 'comet-settings-translation-model-item',
+      controlClassName: 'comet-settings-translation-model-control',
     });
   }
 
   private renderApiKeyRow(apiKeyElement: HTMLElement) {
-    const rowContent = el('div', 'settings-translation-api-key-control');
+    const rowContent = el('div', 'comet-settings-translation-api-key-control');
     rowContent.append(apiKeyElement);
     return createSettingsRow({
       title: '',
       control: rowContent,
-      itemClassName: 'settings-translation-api-key-item',
-      titleClassName: 'settings-block-list-item-title-empty',
-      contentClassName: 'settings-translation-api-key-content',
-      controlClassName: 'settings-translation-api-key-row-control',
+      itemClassName: 'comet-settings-translation-api-key-item',
+      titleClassName: 'comet-settings-block-list-item-title-empty',
+      contentClassName: 'comet-settings-translation-api-key-content',
+      controlClassName: 'comet-settings-translation-api-key-row-control',
     });
   }
 
@@ -214,10 +214,10 @@ export class TranslationWidget {
         selectedValue,
         'settings.translation.openai.model',
         (value) => this.props.onTranslationProviderModelChange('openai-compatible', value),
-        'settings-llm-provider',
+        'comet-settings-llm-provider',
       ),
-      itemClassName: 'settings-translation-model-item',
-      controlClassName: 'settings-translation-model-control',
+      itemClassName: 'comet-settings-translation-model-item',
+      controlClassName: 'comet-settings-translation-model-control',
     });
   }
 }

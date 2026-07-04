@@ -3,13 +3,13 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-.cs-hover-overlay {
+.comet-hover-overlay {
 	position: fixed;
 	z-index: 3000;
 	pointer-events: none;
 }
 
-.cs-hover-card {
+.comet-hover-card {
 	position: relative;
 	display: inline-block;
 	width: max-content;
@@ -27,14 +27,14 @@
 	user-select: text;
 	-webkit-user-select: text;
 	pointer-events: auto;
-	animation: cs-hover-fade-in 100ms linear;
+	animation: comet-hover-fade-in 100ms linear;
 }
 
-.cs-hover-row:not(:first-child):not(:empty) {
+.comet-hover-row:not(:first-child):not(:empty) {
 	border-top: 1px solid rgba(195, 204, 214, 0.75);
 }
 
-.cs-hover-contents {
+.comet-hover-contents {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -42,17 +42,17 @@
 	text-align: center;
 }
 
-.cs-hover-row.markdown-hover > .cs-hover-contents {
+.comet-hover-row.markdown-hover > .comet-hover-contents {
 	max-width: min(500px, calc(100vw - 24px));
 	word-wrap: break-word;
 }
 
-.cs-hover-contents.is-node {
+.comet-hover-contents.is-node {
 	padding-top: 6px;
 	padding-bottom: 6px;
 }
 
-.cs-hover-content {
+.comet-hover-content {
 	min-width: 0;
 	color: inherit;
 	white-space: pre-wrap;
@@ -60,7 +60,7 @@
 	text-align: center;
 }
 
-.cs-hover-subtitle {
+.comet-hover-subtitle {
 	margin-top: 4px;
 	color: #5e6b78;
 	font-size: 12px;
@@ -69,7 +69,7 @@
 	overflow-wrap: anywhere;
 }
 
-.cs-hover-row.status-bar {
+.comet-hover-row.status-bar {
 	display: flex;
 	justify-content: center;
 	font-size: 12px;
@@ -77,32 +77,32 @@
 	background: #f3f5f7;
 }
 
-.cs-hover-actions {
+.comet-hover-actions {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: center;
 	padding: 0 8px;
 }
 
-.cs-hover-action-container {
+.comet-hover-action-container {
 	display: inline-flex;
 	align-items: center;
 	margin-right: 16px;
 	cursor: pointer;
 }
 
-.cs-hover-action-container.disabled {
+.comet-hover-action-container.disabled {
 	pointer-events: none;
 	opacity: 0.4;
 	cursor: default;
 }
 
-.cs-hover-action-container:focus-visible {
+.comet-hover-action-container:focus-visible {
 	outline: 1px solid #0a5fbf;
 	outline-offset: -1px;
 }
 
-.cs-hover-action {
+.comet-hover-action {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -115,37 +115,37 @@
 	cursor: inherit;
 }
 
-.cs-hover-action-icon {
+.comet-hover-action-icon {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
 }
 
-.cs-hover-action {
+.comet-hover-action {
 	color: #0a5fbf;
 }
 
-.cs-hover-action:hover,
-.cs-hover-action:active {
+.comet-hover-action:hover,
+.comet-hover-action:active {
 	color: #084c9a;
 }
 
-.cs-hover-action:focus-visible {
+.comet-hover-action:focus-visible {
 	outline: none;
 }
 
-.cs-hover-pointer {
+.comet-hover-pointer {
 	position: absolute;
 	z-index: 3001;
 	pointer-events: none;
 }
 
-.cs-hover-overlay:not(.has-pointer) .cs-hover-pointer {
+.comet-hover-overlay:not(.has-pointer) .comet-hover-pointer {
 	display: none;
 }
 
-.cs-hover-pointer::after {
+.comet-hover-pointer::after {
 	content: '';
 	position: absolute;
 	width: 5px;
@@ -155,23 +155,23 @@
 	border-bottom: 1px solid #c3ccd6;
 }
 
-.cs-hover-pointer.top {
+.comet-hover-pointer.top {
 	top: -3px;
 }
 
-.cs-hover-pointer.bottom {
+.comet-hover-pointer.bottom {
 	bottom: 3px;
 }
 
-.cs-hover-pointer.top::after {
+.comet-hover-pointer.top::after {
 	transform: rotate(225deg);
 }
 
-.cs-hover-pointer.bottom::after {
+.comet-hover-pointer.bottom::after {
 	transform: rotate(45deg);
 }
 
-@keyframes cs-hover-fade-in {
+@keyframes comet-hover-fade-in {
 	from {
 		opacity: 0;
 	}

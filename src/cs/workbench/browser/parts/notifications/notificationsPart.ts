@@ -18,7 +18,7 @@ export class NotificationsPart {
     private readonly container: HTMLElement,
     private readonly notificationService: NotificationService,
   ) {
-    this.element.className = 'notifications-part';
+    this.element.className = 'comet-notifications-part';
     this.container.append(this.element);
     this.center = this.store.add(
       new NotificationsCenter(this.element, this.notificationService.model),

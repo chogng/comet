@@ -194,7 +194,7 @@ function createContextMenuValue(
 function toContextMenuActions(
   menuItems: readonly ActionBarMenuItem[],
   valueToMenuItem: Map<string, ActionBarMenuItem>,
-  parentKey = 'dropdown-menu-action-option',
+  parentKey = 'comet-dropdown-menu-action-option',
 ): ContextMenuAction[] {
   return menuItems.map((menuItem, index) => {
     const value = createContextMenuValue(
@@ -313,8 +313,8 @@ class DomDropdownActionOverlayPresenter {
     }
 
     const contextViewElement = this.contextView.getViewElement();
-    overlay.classList.toggle('dropdown-menu-top', contextViewElement.classList.contains('top'));
-    overlay.classList.toggle('dropdown-menu-bottom', contextViewElement.classList.contains('bottom'));
+    overlay.classList.toggle('comet-dropdown-menu-top', contextViewElement.classList.contains('top'));
+    overlay.classList.toggle('comet-dropdown-menu-bottom', contextViewElement.classList.contains('bottom'));
   }
 }
 
@@ -466,7 +466,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
   protected override updateContainerClassName() {
     this.element.className = DOM.composeClassName([
-      'actionbar-item',
+      'comet-actionbar-item',
       'is-action',
       this.item.disabled ? 'is-disabled' : '',
       this.item.active || this.isOpen ? 'is-active' : '',
@@ -525,7 +525,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
     return {
       anchor,
-      className: DOM.composeClassName(['actionbar-context-view', this.options.menuClassName]),
+      className: DOM.composeClassName(['comet-actionbar-context-view', this.options.menuClassName]),
       minWidth: this.options.minWidth,
       alignment: resolvedAlignment,
       position: this.options.overlayPosition ?? 'below',
@@ -566,10 +566,10 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
   private readonly primaryItem: ActionViewItem;
   protected readonly dropdownMenuActionViewItem: DropdownMenuActionViewItem;
-  private readonly separator = DOM.createElement('div', 'action-dropdown-item-separator');
+  private readonly separator = DOM.createElement('div', 'comet-action-dropdown-item-separator');
 
   constructor(options: ActionWithDropdownActionViewItemOptions) {
-    super(DOM.createElement('div', 'actionbar-item is-action action-dropdown-item'));
+    super(DOM.createElement('div', 'comet-actionbar-item is-action comet-action-dropdown-item'));
     const hoverService = options.primary.hoverService ?? options.dropdown.hoverService;
     this.primaryItem = new ActionViewItem(options.primary, hoverService);
     this.dropdownMenuActionViewItem = new DropdownMenuActionViewItem({

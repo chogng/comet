@@ -87,10 +87,10 @@ function getToastIconText(type: NativeToastType) {
   }
 }
 export class ToastOverlayWindowView extends Disposable {
-  private readonly element = createElement('main', 'native-toast-overlay-page');
+  private readonly element = createElement('main', 'comet-native-toast-overlay-page');
   private readonly stackElement = createElement(
     'div',
-    'native-toast-overlay-stack native-toast-overlay-stack-empty',
+    'comet-native-toast-overlay-stack comet-native-toast-overlay-stack-empty',
   );
   private readonly ui = getLocaleMessages(detectInitialLocale());
   private readonly toastApi: INativeHostService['toast'];
@@ -186,7 +186,7 @@ export class ToastOverlayWindowView extends Disposable {
     }
 
     const toastItems = Array.from(
-      this.stackElement.querySelectorAll<HTMLElement>('.native-toast-item'),
+      this.stackElement.querySelectorAll<HTMLElement>('.comet-native-toast-item'),
     );
     if (toastItems.length === 0) {
       this.toastApi.reportLayout({
@@ -221,8 +221,8 @@ export class ToastOverlayWindowView extends Disposable {
     }
 
     this.renderDisposables.clear();
-    this.stackElement.className = `native-toast-overlay-stack${
-      this.toastState.items.length === 0 ? ' native-toast-overlay-stack-empty' : ''
+    this.stackElement.className = `comet-native-toast-overlay-stack${
+      this.toastState.items.length === 0 ? ' comet-native-toast-overlay-stack-empty' : ''
     }`;
 
     if (this.toastState.items.length === 0) {
@@ -233,7 +233,7 @@ export class ToastOverlayWindowView extends Disposable {
       ...this.toastState.items.map((item) => {
         const section = createElement(
           'section',
-          `toast-item toast-${item.type} native-toast-item`,
+          `comet-toast-item toast-${item.type} comet-native-toast-item`,
         );
         const icon = createElement(
           'div',
@@ -243,7 +243,7 @@ export class ToastOverlayWindowView extends Disposable {
         const content = createElement('div', 'toast-content', item.message);
         const close = createElement(
           'button',
-          'toast-close native-toast-close',
+          'comet-toast-close comet-native-toast-close',
           'x',
         );
         close.type = 'button';

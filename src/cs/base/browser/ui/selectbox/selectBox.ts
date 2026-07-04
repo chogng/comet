@@ -67,7 +67,7 @@ function clampSelectedIndex(index: number, optionCount: number) {
 
 function createDecoratorIconElement() {
   const decorator = document.createElement('span');
-  decorator.className = 'cs-select-box-decorator';
+  decorator.className = 'comet-select-box-decorator';
   decorator.setAttribute('aria-hidden', 'true');
   decorator.append(createLxIcon('unfold'));
   return decorator;
@@ -108,10 +108,10 @@ export class SelectBox extends Disposable {
         })
       : null;
 
-    this.selectElement.className = ['cs-select-box', selectBoxOptions.className ?? '']
+    this.selectElement.className = ['comet-select-box', selectBoxOptions.className ?? '']
       .filter(Boolean)
       .join(' ');
-    this.selectElement.classList.toggle('cs-select-box-custom', useCustomDrawn);
+    this.selectElement.classList.toggle('comet-select-box-custom', useCustomDrawn);
 
     if (typeof this.selectBoxOptions.ariaLabel === 'string') {
       this.selectElement.setAttribute('aria-label', this.selectBoxOptions.ariaLabel);
@@ -213,7 +213,7 @@ export class SelectBox extends Disposable {
     }
 
     this.renderContainer = container;
-    container.classList.add('cs-select-container');
+    container.classList.add('comet-select-container');
     container.append(this.selectElement, this.decoratorElement);
     this.applyStyles();
   }

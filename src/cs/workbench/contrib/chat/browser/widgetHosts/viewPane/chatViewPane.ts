@@ -34,23 +34,23 @@ export class ChatViewPane {
 	);
 	private readonly headerElement = createElement(
 		'div',
-		'agentbar-header',
+		'comet-agentbar-header',
 	);
 	private readonly headerActionsContainerElement = createElement(
 		'div',
-		'agentbar-header-actions',
+		'comet-agentbar-header-actions',
 	);
 	private readonly headerLeadingActionsElement = createElement(
 		'div',
-		'agentbar-header-leading',
+		'comet-agentbar-header-leading',
 	);
 	private readonly headerTrailingActionsElement = createElement(
 		'div',
-		'agentbar-header-trailing',
+		'comet-agentbar-header-trailing',
 	);
 	private readonly leadingWindowControlsSpacer = createElement(
 		'div',
-		'agentbar-header-window-controls-spacer',
+		'comet-agentbar-header-window-controls-spacer',
 	);
 	private readonly chatWidget: ChatWidget;
 

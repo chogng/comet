@@ -18,7 +18,7 @@ export type SettingsNavigationViewProps = {
 
 export class SettingsNavigationView {
   private props: SettingsNavigationViewProps;
-  private readonly element = el('aside', 'settings-navigation');
+  private readonly element = el('aside', 'comet-settings-navigation');
   private pendingFocusItemId: string | null = null;
 
   constructor(props: SettingsNavigationViewProps) {
@@ -104,28 +104,28 @@ export class SettingsNavigationView {
     const focusTargetItemId = this.pendingFocusItemId ?? focusedItemBeforeRender;
     this.pendingFocusItemId = null;
 
-    const nav = el('nav', 'settings-navigation-nav');
+    const nav = el('nav', 'comet-settings-navigation-nav');
     nav.ariaLabel = this.props.title;
-    const list = el('ul', 'settings-navigation-list');
+    const list = el('ul', 'comet-settings-navigation-list');
     list.replaceChildren(
       ...entries.map((entryData) => {
         if (entryData.kind === 'spacer') {
-          const spacer = el('li', 'settings-navigation-spacer');
+          const spacer = el('li', 'comet-settings-navigation-spacer');
           spacer.style.height = `${entryData.height}px`;
           spacer.setAttribute('aria-hidden', 'true');
           return spacer;
         }
 
         const entryDataItem = entryData;
-        const entry = el('li', 'settings-navigation-item-entry');
-        const button = el('button', 'settings-navigation-item');
-        const label = el('span', 'settings-navigation-label');
+        const entry = el('li', 'comet-settings-navigation-item-entry');
+        const button = el('button', 'comet-settings-navigation-item');
+        const label = el('span', 'comet-settings-navigation-label');
         const isActive =
           entryDataItem.action.kind === 'page'
             && entryDataItem.action.pageId === this.props.activePageId;
         button.type = 'button';
         if (entryDataItem.icon) {
-          label.append(createLxIcon(entryDataItem.icon, 'settings-navigation-icon'));
+          label.append(createLxIcon(entryDataItem.icon, 'comet-settings-navigation-icon'));
         }
         label.append(document.createTextNode(entryDataItem.label));
         button.append(label);
@@ -260,7 +260,7 @@ export class SettingsNavigationView {
 
   private focusNavigationItemButton(itemId: string) {
     const buttons = this.element.querySelectorAll<HTMLButtonElement>(
-      '.settings-navigation-item',
+      '.comet-settings-navigation-item',
     );
     for (const button of buttons) {
       if (button.dataset.navigationItemId === itemId) {
@@ -277,7 +277,7 @@ export class SettingsNavigationView {
     }
 
     const activeButton = activeElement.closest<HTMLButtonElement>(
-      '.settings-navigation-item',
+      '.comet-settings-navigation-item',
     );
     const navigationItemId = activeButton?.dataset.navigationItemId;
     return navigationItemId ?? null;

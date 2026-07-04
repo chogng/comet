@@ -84,10 +84,10 @@ function isTabClosable(tab: Pick<EditorGroupTabItem, 'targetTabId' | 'state'>) {
 }
 
 function createDirtyCloseButtonContent() {
-  const container = createElement('span', 'editor-tab-dirty-close-icon');
+  const container = createElement('span', 'comet-editor-tab-dirty-close-icon');
   container.append(
-    createLxIcon('unsave', 'editor-tab-close-icon-unsave'),
-    createLxIcon('close', 'editor-tab-close-icon-close'),
+    createLxIcon('unsave', 'comet-editor-tab-close-icon-unsave'),
+    createLxIcon('close', 'comet-editor-tab-close-icon-close'),
   );
   return container;
 }
@@ -112,7 +112,7 @@ function createTabFaviconImageElement(
   faviconUrl: string,
   onError: () => void,
 ) {
-  const faviconImage = createElement('img', 'editor-tab-favicon');
+  const faviconImage = createElement('img', 'comet-editor-tab-favicon');
   faviconImage.alt = '';
   faviconImage.decoding = 'async';
   faviconImage.draggable = false;
@@ -151,20 +151,20 @@ export class TabsTitleControl extends TitleControl {
   }
 
   protected override create() {
-    this.container = createElement('div', 'editor-tabs-container horizontal-scrollbar-strip');
+    this.container = createElement('div', 'comet-editor-tabs-container comet-horizontal-scrollbar-strip');
     this.container.setAttribute('role', 'tablist');
     const scrollHost = createElement(
       'div',
-      'editor-tabs-scroll-host horizontal-scrollbar-host',
+      'comet-editor-tabs-scroll-host comet-horizontal-scrollbar-host',
     );
     const scrollbarTrack = createElement(
       'div',
-      'editor-tabs-scrollbar horizontal-scrollbar-track',
+      'comet-editor-tabs-scrollbar comet-horizontal-scrollbar-track',
     );
     scrollbarTrack.setAttribute('aria-hidden', 'true');
     const scrollbarThumb = createElement(
       'div',
-      'editor-tabs-scrollbar-thumb horizontal-scrollbar-thumb',
+      'comet-editor-tabs-scrollbar-thumb comet-horizontal-scrollbar-thumb',
     );
     scrollbarThumb.setAttribute('aria-hidden', 'true');
     scrollbarTrack.append(scrollbarThumb);
@@ -270,11 +270,11 @@ export class TabsTitleControl extends TitleControl {
   }
 
   private createTabView(): TabView {
-    const tabElement = createElement('div', 'editor-tab');
+    const tabElement = createElement('div', 'comet-editor-tab');
     const viewDisposables = new DisposableStore();
     const mainButton = createElement(
       'button',
-      'editor-tab-main btn-base btn-md',
+      'comet-editor-tab-main btn-base btn-md',
     );
     mainButton.type = 'button';
     mainButton.setAttribute('role', 'tab');
@@ -289,14 +289,14 @@ export class TabsTitleControl extends TitleControl {
     viewDisposables.add(addDisposableListener(tabElement, 'drop', this.handleTabDrop));
     viewDisposables.add(addDisposableListener(tabElement, 'dragend', this.handleTabDragEnd));
 
-    const label = createElement('span', 'editor-tab-label');
-    const icon = createElement('span', 'editor-tab-icon');
-    const labelText = createElement('span', 'editor-tab-label-text');
+    const label = createElement('span', 'comet-editor-tab-label');
+    const icon = createElement('span', 'comet-editor-tab-icon');
+    const labelText = createElement('span', 'comet-editor-tab-label-text');
     label.append(icon, labelText);
     mainButton.append(label);
     const mainHover = this.hoverService.createHover(mainButton, null);
     const actionsView = createActionBarView({
-      className: 'editor-tab-actions',
+      className: 'comet-editor-tab-actions',
       ariaRole: 'group',
     });
     tabElement.append(mainButton, actionsView.getElement());
@@ -376,7 +376,7 @@ export class TabsTitleControl extends TitleControl {
 
     tabView.labelText.textContent = tab.label;
     tabView.actionsView.setProps({
-      className: 'editor-tab-actions',
+      className: 'comet-editor-tab-actions',
       ariaRole: 'group',
       items: closable
         ? [
@@ -385,7 +385,7 @@ export class TabsTitleControl extends TitleControl {
               label: this.props.labels.close,
               title: this.props.labels.close,
               mode: 'icon',
-              buttonClassName: 'editor-tab-close-btn',
+              buttonClassName: 'comet-editor-tab-close-btn',
               content: tab.state.isDirty
                 ? createDirtyCloseButtonContent()
                 : createLxIcon('close'),
@@ -424,7 +424,7 @@ export class TabsTitleControl extends TitleControl {
     return Array.from(this.container.children).filter(
       (child): child is HTMLElement =>
         child instanceof HTMLElement &&
-        child.classList.contains('editor-tab'),
+        child.classList.contains('comet-editor-tab'),
     );
   }
 
@@ -677,7 +677,7 @@ export class TabsTitleControl extends TitleControl {
       return null;
     }
 
-    previewElement.classList.add('editor-tab-drag-preview');
+    previewElement.classList.add('comet-editor-tab-drag-preview');
     previewElement.classList.remove('is-dragging');
     previewElement.removeAttribute('data-hovered');
 
@@ -848,7 +848,7 @@ export class TabsTitleControl extends TitleControl {
     }
 
     const activeTab = this.container.querySelector(
-      '.editor-tab.is-active',
+      '.comet-editor-tab.is-active',
     ) as HTMLElement | null;
     if (!activeTab) {
       return;
@@ -1005,7 +1005,7 @@ export class TabsTitleControl extends TitleControl {
 
     if (
       event.target instanceof HTMLElement &&
-      event.target.closest('.editor-tab')
+      event.target.closest('.comet-editor-tab')
     ) {
       return;
     }
@@ -1028,7 +1028,7 @@ export class TabsTitleControl extends TitleControl {
 
     if (
       event.target instanceof HTMLElement &&
-      event.target.closest('.editor-tab')
+      event.target.closest('.comet-editor-tab')
     ) {
       return;
     }

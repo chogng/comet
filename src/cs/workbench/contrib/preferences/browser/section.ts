@@ -28,13 +28,13 @@ export function createSettingsSection(
 ): SettingsSection {
   const section = el(
     'section',
-    classNames('settings-block-section', options.sectionClassName),
+    classNames('comet-settings-block-section', options.sectionClassName),
   );
 
   if (options.title) {
     const title = el(
       'h3',
-      classNames('settings-block-title', options.titleClassName),
+      classNames('comet-settings-block-title', options.titleClassName),
     );
     title.textContent = options.title;
     section.append(title);
@@ -43,7 +43,7 @@ export function createSettingsSection(
   if (options.description) {
     const description = el(
       'p',
-      classNames('settings-block-description', options.descriptionClassName),
+      classNames('comet-settings-block-description', options.descriptionClassName),
     );
     description.textContent = options.description;
     section.append(description);
@@ -51,11 +51,11 @@ export function createSettingsSection(
 
   const panel = el(
     'div',
-    classNames('settings-block-panel', options.panelClassName),
+    classNames('comet-settings-block-panel', options.panelClassName),
   );
   const list = el(
     'ul',
-    classNames('settings-block-list', options.listClassName),
+    classNames('comet-settings-block-list', options.listClassName),
   );
   panel.append(list);
   section.append(panel);
@@ -83,15 +83,15 @@ export function createSettingsRow(
 ): HTMLLIElement {
   const item = el(
     'li',
-    classNames('settings-block-list-item', options.itemClassName),
+    classNames('comet-settings-block-list-item', options.itemClassName),
   );
   const content = el(
     'div',
-    classNames('settings-block-list-item-content', options.contentClassName),
+    classNames('comet-settings-block-list-item-content', options.contentClassName),
   );
   const title = el(
     'span',
-    classNames('settings-block-list-item-title', options.titleClassName),
+    classNames('comet-settings-block-list-item-title', options.titleClassName),
   );
   title.textContent = options.title;
   content.append(title);
@@ -99,7 +99,7 @@ export function createSettingsRow(
     const description = el(
       'p',
       classNames(
-        'settings-block-list-item-description',
+        'comet-settings-block-list-item-description',
         options.descriptionClassName,
       ),
     );
@@ -108,7 +108,7 @@ export function createSettingsRow(
   }
   const control = el(
     'div',
-    classNames('settings-block-list-item-control', options.controlClassName),
+    classNames('comet-settings-block-list-item-control', options.controlClassName),
   );
   control.append(options.control);
   item.append(content, control);
@@ -130,16 +130,16 @@ export function createSettingsSwitchRow(
 ): HTMLDivElement {
   const row = el(
     'div',
-    classNames('settings-toggle-row', options.rowClassName),
+    classNames('comet-settings-toggle-row', options.rowClassName),
   );
   const textBlock = el('div', options.textBlockClassName);
-  const label = el('span', options.labelClassName ?? 'settings-hint');
+  const label = el('span', options.labelClassName ?? 'comet-settings-hint');
   label.textContent = options.title;
   textBlock.append(label);
   if (options.hint) {
     const hint = el(
       'p',
-      options.hintClassName ?? 'settings-hint settings-toggle-subtitle',
+      options.hintClassName ?? 'comet-settings-hint comet-settings-toggle-subtitle',
     );
     hint.textContent = options.hint;
     textBlock.append(hint);

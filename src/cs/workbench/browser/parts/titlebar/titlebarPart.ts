@@ -41,7 +41,7 @@ export class TitlebarPart {
   private readonly leftElement = document.createElement('div');
   private readonly leadingActionsHostElement = document.createElement('div');
   private readonly leadingActionBarView = createActionBarView({
-    className: 'titlebar-leading-actions',
+    className: 'comet-titlebar-leading-actions',
     ariaRole: 'group',
   });
 
@@ -50,11 +50,11 @@ export class TitlebarPart {
     private readonly shellElement: HTMLElement,
     private readonly statusbarElement: HTMLElement,
   ) {
-    this.titlebarElement.className = 'titlebar';
-    this.titlebarContainerElement.className = 'titlebar-container';
-    this.dragRegionElement.className = 'titlebar-drag-region';
-    this.leftElement.className = 'titlebar-left';
-    this.leadingActionsHostElement.className = 'titlebar-leading-actions-host';
+    this.titlebarElement.className = 'comet-titlebar';
+    this.titlebarContainerElement.className = 'comet-titlebar-container';
+    this.dragRegionElement.className = 'comet-titlebar-drag-region';
+    this.leftElement.className = 'comet-titlebar-left';
+    this.leadingActionsHostElement.className = 'comet-titlebar-leading-actions-host';
     this.leadingActionsHostElement.append(this.leadingActionBarView.getElement());
     this.titlebarContainerElement.append(
       this.dragRegionElement,
@@ -77,12 +77,12 @@ export class TitlebarPart {
       electronRuntime && WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0;
 
     this.containerElement.className = [
-      'app-window',
-      'has-titlebar',
-      electronRuntime && useMica ? 'is-mica-enabled' : '',
-      isStatusbarVisible ? 'has-statusbar' : '',
-      hasNativeWindowControlsOverlay ? 'has-native-window-controls-overlay' : '',
-      hasLeadingWindowControls ? 'has-leading-window-controls' : '',
+      'comet-app-window',
+      'comet-has-titlebar',
+      electronRuntime && useMica ? 'comet-is-mica-enabled' : '',
+      isStatusbarVisible ? 'comet-has-statusbar' : '',
+      hasNativeWindowControlsOverlay ? 'comet-has-native-window-controls-overlay' : '',
+      hasLeadingWindowControls ? 'comet-has-leading-window-controls' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -129,7 +129,7 @@ export class TitlebarPart {
   private syncLeadingActions(props: TitlebarLeadingActionsProps) {
     const headerItems = this.createLeadingActionItems(props);
     this.leadingActionBarView.setProps({
-      className: 'titlebar-leading-actions',
+      className: 'comet-titlebar-leading-actions',
       ariaRole: 'group',
       items: headerItems,
     });
@@ -153,11 +153,11 @@ export class TitlebarPart {
         label: props.menuLabel,
         title: props.menuLabel,
         mode: 'icon',
-        buttonClassName: 'titlebar-menu-btn',
+        buttonClassName: 'comet-titlebar-menu-btn',
         content: createLxIcon('three-bars'),
         renderOverlay: () => this.createEmptyMenuElement(),
         overlayRole: 'menu',
-        menuClassName: 'titlebar-main-menu-overlay',
+        menuClassName: 'comet-titlebar-main-menu-overlay',
         menuData: 'titlebar-main-menu',
         minWidth: 180,
         overlayAlignmentPolicy: 'prefer-start',
@@ -168,7 +168,7 @@ export class TitlebarPart {
         label: props.primarySidebarToggleLabel,
         title: props.primarySidebarToggleLabel,
         mode: 'icon',
-        buttonClassName: 'titlebar-primary-sidebar-toggle-btn',
+        buttonClassName: 'comet-titlebar-primary-sidebar-toggle-btn',
         content: createLxIcon(
           props.isPrimarySidebarVisible === false
             ? 'layout-sidebar-left-off'
@@ -182,7 +182,7 @@ export class TitlebarPart {
         label: props.addressBarLabel,
         title: props.addressBarLabel,
         mode: 'icon',
-        buttonClassName: 'titlebar-address-bar-btn',
+        buttonClassName: 'comet-titlebar-address-bar-btn',
         content: createLxIcon('search'),
         onClick: () => props.onFocusAddressBar?.(),
       });
@@ -193,7 +193,7 @@ export class TitlebarPart {
 
   private createEmptyMenuElement() {
     const element = document.createElement('div');
-    element.className = 'titlebar-main-menu';
+    element.className = 'comet-titlebar-main-menu';
     element.setAttribute('role', 'menu');
     return element;
   }

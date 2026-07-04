@@ -2133,7 +2133,7 @@ export class DisposableResizeObserver extends Disposable {
  * so the slot only carries an attribution within the same task as the
  * `ResizeObserver loop completed with undelivered notifications` warning
  * (which fires synchronously at the end of the resize-observation phase).
- * A microtask would be too eager â€” microtask checkpoints run between each
+ * A microtask would be too eager â€?microtask checkpoints run between each
  * callback, before the loop-error dispatch.
  */
 let _lastInvokedDisposableResizeObserver: DisposableResizeObserver | undefined;

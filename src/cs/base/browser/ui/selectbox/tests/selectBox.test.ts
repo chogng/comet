@@ -4,6 +4,7 @@ import test, { after, before } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
+let restoreComputedStyle: (() => void) | null = null;
 let SelectBox: typeof import('cs/base/browser/ui/selectbox/selectBox').SelectBox;
 
 function createDomRect(x: number, y: number, width: number, height: number) {
@@ -22,13 +23,40 @@ function createDomRect(x: number, y: number, width: number, height: number) {
   } as DOMRect;
 }
 
+function installStableComputedStyleZoom() {
+  const originalGetComputedStyle = window.getComputedStyle;
+  window.getComputedStyle = ((element: Element) => {
+    const style = originalGetComputedStyle.call(window, element);
+    if (style.zoom) {
+      return style;
+    }
+
+    return new Proxy(style, {
+      get(target, property, receiver) {
+        if (property === 'zoom') {
+          return '1';
+        }
+
+        return Reflect.get(target, property, receiver);
+      },
+    }) as CSSStyleDeclaration;
+  }) as typeof window.getComputedStyle;
+
+  return () => {
+    window.getComputedStyle = originalGetComputedStyle;
+  };
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
+  restoreComputedStyle = installStableComputedStyleZoom();
   ({ SelectBox } = await import('cs/base/browser/ui/selectbox/selectBox'));
 });
 
 after(() => {
+  restoreComputedStyle?.();
+  restoreComputedStyle = null;
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
 });
@@ -53,13 +81,13 @@ test('selectbox renders a native select with configured options', () => {
     if (!(select instanceof HTMLElement)) {
       throw new Error('Expected a native select element.');
     }
-    const decorator = container.querySelector('.cs-select-box-decorator');
+    const decorator = container.querySelector('.comet-select-box-decorator');
     if (!(decorator instanceof HTMLElement)) {
       throw new Error('Expected select trigger decorator icon element.');
     }
-    assert.equal(decorator.querySelector('.lx-icon-unfold') instanceof HTMLElement, true);
+    assert.equal(decorator.querySelector('.comet-lx-icon-unfold') instanceof HTMLElement, true);
 
-    assert.equal(select.classList.contains('cs-select-box'), true);
+    assert.equal(select.classList.contains('comet-select-box'), true);
     assert.equal(select.getAttribute('aria-label'), null);
     assert.equal((select as HTMLSelectElement).options.length, 3);
     assert.equal((select as HTMLSelectElement).selectedIndex, 2);
@@ -179,12 +207,12 @@ test('selectbox custom drawn mode opens contextview menu and selects an option',
     selectBox.render(container);
     selectBox.domNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const menu = document.body.querySelector('.cs-menu[role="listbox"]');
+    const menu = document.body.querySelector('.comet-menu[role="listbox"]');
     if (!(menu instanceof HTMLElement)) {
       throw new Error('Expected custom drawn selectbox menu.');
     }
 
-    const options = menu.querySelectorAll<HTMLElement>('.dropdown-menu-item');
+    const options = menu.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item');
     assert.equal(options.length, 2);
     options[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
@@ -217,8 +245,8 @@ test('selectbox custom drawn mode keeps the popup overlay matched to the trigger
 
     selectBox.domNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const contextViewContent = document.body.querySelector('.cs-context-view-content');
-    const menu = document.body.querySelector('.cs-menu[role="listbox"]');
+    const contextViewContent = document.body.querySelector('.comet-context-view-content');
+    const menu = document.body.querySelector('.comet-menu[role="listbox"]');
     if (!(contextViewContent instanceof HTMLElement)) {
       throw new Error('Expected selectbox context view content.');
     }
@@ -227,7 +255,7 @@ test('selectbox custom drawn mode keeps the popup overlay matched to the trigger
     }
 
     assert.equal(contextViewContent.style.minWidth, '140px');
-    assert.equal(menu.classList.contains('cs-menu-root'), true);
+    assert.equal(menu.classList.contains('comet-menu-root'), true);
   } finally {
     selectBox.dispose();
     document.body.replaceChildren();

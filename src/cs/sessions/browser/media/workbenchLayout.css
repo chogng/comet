@@ -1,4 +1,4 @@
-.session-workbench-layout {
+.comet-session-workbench-layout {
 	height: 100%;
 	min-height: 0;
 	display: grid;
@@ -6,19 +6,19 @@
 	overflow: hidden;
 }
 
-.session-workbench-content-grid {
+.comet-session-workbench-content-grid {
 	position: relative;
 	height: 100%;
 	min-height: 0;
 	overflow: hidden;
 }
 
-.session-workbench-content-grid .grid-view-branch > .split-view {
+.comet-session-workbench-content-grid .comet-grid-view-branch > .comet-split-view {
 	width: 100%;
 	height: 100%;
 }
 
-.session-workbench-slot {
+.comet-session-workbench-slot {
 	min-width: 0;
 	min-height: 0;
 	width: 100%;
@@ -27,13 +27,13 @@
 	overflow: hidden;
 }
 
-.session-workbench-slot > * {
+.comet-session-workbench-slot > * {
 	min-width: 0;
 	min-height: 0;
 	width: 100%;
 	height: 100%;
 }
 
-.session-workbench-slot-sidebar {
+.comet-session-workbench-slot-sidebar {
 	overflow: visible;
 }

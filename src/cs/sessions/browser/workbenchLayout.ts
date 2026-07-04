@@ -119,7 +119,7 @@ export class SessionWorkbenchLayoutSlotView implements IGridView {
 	constructor(className: string, snap = false) {
 		this.snap = snap;
 		this.element = document.createElement('div');
-		this.element.className = `session-workbench-slot ${className}`.trim();
+		this.element.className = `comet-session-workbench-slot ${className}`.trim();
 	}
 
 	get minimumWidth() {
@@ -427,18 +427,18 @@ export class SessionWorkbenchLayoutView {
 	private props: SessionWorkbenchLayoutViewProps;
 	private readonly element = createElement(
 		'section',
-		'session-workbench-layout',
+		'comet-session-workbench-layout',
 	);
 	private readonly mainElement = createElement('main');
 	private readonly sidebarSlot = new SessionWorkbenchLayoutSlotView(
-		'session-workbench-slot-sidebar',
+		'comet-session-workbench-slot-sidebar',
 		true,
 	);
 	private readonly sessionsSlot = new SessionWorkbenchLayoutSlotView(
-		'session-workbench-slot-sessions',
+		'comet-session-workbench-slot-sessions',
 	);
 	private readonly editorSlot = new SessionWorkbenchLayoutSlotView(
-		'session-workbench-slot-editor',
+		'comet-session-workbench-slot-editor',
 	);
 	private readonly layoutController: SessionWorkbenchLayoutController;
 	private disposed = false;
@@ -502,9 +502,9 @@ export class SessionWorkbenchLayoutView {
 	private render() {
 		const isEditorVisible = !this.props.isEditorCollapsed;
 		this.mainElement.className = [
-			'session-workbench-content-grid',
+			'comet-session-workbench-content-grid',
 			this.props.mode === 'settings' ? 'is-settings' : '',
-			this.props.isPrimarySidebarVisible ? 'is-primary-sidebar-visible' : '',
+			this.props.isPrimarySidebarVisible ? 'comet-is-primary-sidebar-visible' : '',
 			isEditorVisible ? 'is-editor-visible' : '',
 		]
 			.filter(Boolean)

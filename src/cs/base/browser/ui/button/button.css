@@ -1,4 +1,4 @@
-.btn-base {
+.comet-btn-base {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -18,149 +18,149 @@
 }
 
 /* Sizes */
-.btn-sm {
+.comet-btn-sm {
   height: 28px;
   padding: 0 10px;
   font-size: 13px;
 }
 
-.btn-md {
+.comet-btn-md {
   height: 32px;
   padding: 0 12px;
   font-size: 14px;
 }
 
-.btn-lg {
+.comet-btn-lg {
   height: 40px;
   padding: 0 16px;
   font-size: 16px;
 }
 
-.btn-icon {
+.comet-btn-icon {
   width: 28px;
   height: 28px;
   padding: 0;
   border-radius: 6px;
 }
 
-.btn-icon.btn-md {
+.comet-btn-icon.comet-btn-md {
   width: 32px;
   height: 32px;
 }
 
-.btn-icon.btn-lg {
+.comet-btn-icon.comet-btn-lg {
   width: 40px;
   height: 40px;
 }
 
-.btn-mode-icon {
-  --btn-icon-size: 32px;
-  width: var(--btn-icon-size);
-  min-width: var(--btn-icon-size);
-  max-width: var(--btn-icon-size);
-  height: var(--btn-icon-size);
+.comet-btn-mode-icon {
+  --comet-btn-icon-size: 32px;
+  width: var(--comet-btn-icon-size);
+  min-width: var(--comet-btn-icon-size);
+  max-width: var(--comet-btn-icon-size);
+  height: var(--comet-btn-icon-size);
   padding: 0;
   gap: 0;
   border-radius: 6px;
   aspect-ratio: 1 / 1;
 }
 
-.btn-mode-icon:hover:not(:disabled) {
+.comet-btn-mode-icon:hover:not(:disabled) {
   border-radius: 6px;
 }
 
-.btn-mode-icon.btn-sm {
-  --btn-icon-size: 28px;
+.comet-btn-mode-icon.comet-btn-sm {
+  --comet-btn-icon-size: 28px;
 }
 
-.btn-mode-icon.btn-md {
-  --btn-icon-size: 32px;
+.comet-btn-mode-icon.comet-btn-md {
+  --comet-btn-icon-size: 32px;
 }
 
-.btn-mode-icon.btn-lg {
-  --btn-icon-size: 40px;
+.comet-btn-mode-icon.comet-btn-lg {
+  --comet-btn-icon-size: 40px;
 }
 
-.btn-mode-icon.btn-icon {
-  --btn-icon-size: 28px;
+.comet-btn-mode-icon.comet-btn-icon {
+  --comet-btn-icon-size: 28px;
 }
 
 /* Variants */
-.btn-primary {
+.comet-btn-primary {
   background: var(--vscode-button-primaryBackground, #0a5fbf);
   color: var(--vscode-button-primaryForeground, #ffffff);
   border-color: var(--vscode-button-primaryBorder, #0955ac);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--vscode-button-primaryBackground, #0a5fbf) 18%, transparent);
 }
 
-.btn-primary:hover:not(:disabled) {
+.comet-btn-primary:hover:not(:disabled) {
   background: var(--vscode-button-primaryHoverBackground, #0d6ed8);
   border-color: var(--vscode-button-primaryHoverBorder, #0c67ca);
 }
 
-.btn-primary:active:not(:disabled) {
+.comet-btn-primary:active:not(:disabled) {
   background: var(--vscode-button-primaryActiveBackground, #084c9a);
   transform: translateY(1px);
 }
 
-.btn-secondary {
+.comet-btn-secondary {
   background: var(--vscode-button-secondaryBackground, #ffffff);
   color: var(--vscode-button-secondaryForeground, #1a2530);
   border-color: var(--vscode-button-secondaryBorder, #cfdae7);
   box-shadow: var(--vscode-button-secondaryShadow, 0 1px 2px rgba(0, 0, 0, 0.04));
 }
 
-.btn-secondary:hover:not(:disabled) {
+.comet-btn-secondary:hover:not(:disabled) {
   background: var(--vscode-button-secondaryHoverBackground, #f8fafc);
   border-color: var(--vscode-button-secondaryHoverBorder, #b8c7d9);
 }
 
-.btn-secondary:active:not(:disabled) {
+.comet-btn-secondary:active:not(:disabled) {
   background: var(--vscode-button-secondaryActiveBackground, #edf2f7);
 }
 
-.btn-outline {
+.comet-btn-outline {
   background: transparent;
   color: var(--vscode-button-outlineForeground, #0a5fbf);
   border-color: var(--vscode-button-outlineBorder, #0a5fbf);
 }
 
-.btn-outline:hover:not(:disabled) {
+.comet-btn-outline:hover:not(:disabled) {
   background: var(--vscode-button-outlineHoverBackground, rgba(10, 95, 191, 0.05));
 }
 
-.btn-ghost {
+.comet-btn-ghost {
   background: transparent;
   color: var(--vscode-button-ghostForeground, #425468);
   border-color: transparent;
 }
 
-.btn-ghost:hover:not(:disabled) {
+.comet-btn-ghost:hover:not(:disabled) {
   background: var(--vscode-button-ghostHoverBackground, rgba(0, 0, 0, 0.04));
   color: var(--vscode-button-ghostHoverForeground, #1a2530);
 }
 
-.btn-danger {
+.comet-btn-danger {
   background: var(--vscode-button-dangerBackground, #fee2e2);
   color: var(--vscode-button-dangerForeground, #ef4444);
   border-color: var(--vscode-button-dangerBorder, #fecaca);
 }
 
-.btn-danger:hover:not(:disabled) {
+.comet-btn-danger:hover:not(:disabled) {
   background: var(--vscode-button-dangerHoverBackground, #fecaca);
   color: var(--vscode-button-dangerHoverForeground, #dc2626);
 }
 
 /* Loading State */
-.btn-loading {
+.comet-btn-loading {
   cursor: wait;
 }
 
-.btn-spinner {
-  animation: btn-spin 1s linear infinite;
+.comet-btn-spinner {
+  animation: comet-btn-spin 1s linear infinite;
 }
 
-@keyframes btn-spin {
+@keyframes comet-btn-spin {
   from {
     transform: rotate(0deg);
   }
@@ -170,22 +170,22 @@
 }
 
 /* Disabled */
-.btn-base:disabled {
+.comet-btn-base:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   filter: grayscale(0.5);
 }
 
 /* Special icons handling */
-.btn-icon-left,
-.btn-icon-right,
-.btn-icon-only {
+.comet-btn-icon-left,
+.comet-btn-icon-right,
+.comet-btn-icon-only {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.btn-content {
+.comet-btn-content {
   display: inline-flex;
   align-items: center;
 }

@@ -267,6 +267,6 @@
     "titleBar.fetchStopForeground": "#f2c572"
   },
   "variables": {
-    "--separator-border": "#3a4652"
+    "--comet-separator-border": "#3a4652"
   }
 }

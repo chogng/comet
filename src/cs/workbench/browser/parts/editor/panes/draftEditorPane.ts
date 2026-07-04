@@ -34,7 +34,7 @@ export class DraftEditorPane extends EditorPane<
   constructor(props: DraftEditorPaneProps) {
     super();
     this.props = props;
-    this.element.className = 'editor-draft-pane';
+    this.element.className = 'comet-editor-draft-pane';
     this.editor = new ProseMirrorEditor(this.toEditorProps(props));
     this.element.append(this.editor.getElement());
   }

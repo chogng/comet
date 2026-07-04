@@ -54,7 +54,7 @@ export type LibraryWidgetProps = {
 
 export class LibraryWidget {
   private props: LibraryWidgetProps;
-  private readonly element = el('div', 'settings-field');
+  private readonly element = el('div', 'comet-settings-field');
 
   constructor(props: LibraryWidgetProps) {
     this.props = props;
@@ -71,7 +71,7 @@ export class LibraryWidget {
   }
 
   private render() {
-    const field = el('div', 'settings-field settings-library-sections');
+    const field = el('div', 'comet-settings-field comet-settings-library-sections');
     const effectiveManagedDirectory = this.props.libraryDirectory.trim() || this.props.defaultManagedDirectory;
 
     field.append(
@@ -88,10 +88,10 @@ export class LibraryWidget {
       : `${this.props.labels.settingsLibraryDirectoryInactiveHint} ${effectiveManagedDirectory || '-'}`;
     const section = createSettingsSection({
       title: this.props.labels.settingsLibraryTitle,
-      titleClassName: 'settings-section-title',
-      sectionClassName: 'settings-library-section settings-library-storage-section',
-      panelClassName: 'settings-library-storage-panel',
-      listClassName: 'settings-library-storage-list',
+      titleClassName: 'comet-settings-section-title',
+      sectionClassName: 'comet-settings-library-section comet-settings-library-storage-section',
+      panelClassName: 'comet-settings-library-storage-panel',
+      listClassName: 'comet-settings-library-storage-list',
     });
     section.list.append(
       createSettingsRow({
@@ -99,7 +99,7 @@ export class LibraryWidget {
         control: buildSelect([
           { value: 'linked-original', label: this.props.labels.settingsLibraryStorageModeLinkedOriginal },
           { value: 'managed-copy', label: this.props.labels.settingsLibraryStorageModeManagedCopy },
-        ], this.props.libraryStorageMode, 'settings.library.storage', (value) => this.props.onLibraryStorageModeChange(value as LibraryStorageMode), 'settings-llm-provider'),
+        ], this.props.libraryStorageMode, 'settings.library.storage', (value) => this.props.onLibraryStorageModeChange(value as LibraryStorageMode), 'comet-settings-llm-provider'),
       }),
     );
 
@@ -114,8 +114,8 @@ export class LibraryWidget {
           disabled: !this.props.desktopRuntime || this.props.isSettingsSaving || !usesManagedCopy,
           onClick: this.props.onChooseLibraryDirectory,
         }),
-        itemClassName: 'settings-library-directory-item',
-        controlClassName: 'settings-library-directory-control',
+        itemClassName: 'comet-settings-library-directory-item',
+        controlClassName: 'comet-settings-library-directory-control',
       }),
       this.renderReadOnlyField(this.props.labels.settingsLibraryDbFile, this.props.libraryDbFile, 'settings.library.db'),
       this.renderReadOnlyField(this.props.labels.settingsLibraryFilesDir, effectiveManagedDirectory, 'settings.library.filesDir'),
@@ -127,10 +127,10 @@ export class LibraryWidget {
   private renderIndexingSection() {
     const section = createSettingsSection({
       title: this.props.labels.settingsNavigationKnowledgeBase,
-      titleClassName: 'settings-section-title',
-      sectionClassName: 'settings-library-section settings-library-indexing-section',
-      panelClassName: 'settings-library-indexing-panel',
-      listClassName: 'settings-library-indexing-list',
+      titleClassName: 'comet-settings-section-title',
+      sectionClassName: 'comet-settings-library-section comet-settings-library-indexing-section',
+      panelClassName: 'comet-settings-library-indexing-panel',
+      listClassName: 'comet-settings-library-indexing-list',
     });
     section.list.append(
       createSettingsRow({
@@ -157,7 +157,7 @@ export class LibraryWidget {
       }),
     );
     if (!this.props.knowledgeBaseEnabled) {
-      section.element.append(buildHint(this.props.labels.settingsKnowledgeBaseModeDisabledHint, 'settings-hint settings-library-mode-note'));
+      section.element.append(buildHint(this.props.labels.settingsKnowledgeBaseModeDisabledHint, 'comet-settings-hint comet-settings-library-mode-note'));
     }
     section.list.append(
       this.renderDownloadDirectoryField(),
@@ -181,16 +181,16 @@ export class LibraryWidget {
         disabled: !this.props.desktopRuntime || this.props.isSettingsSaving,
         onClick: this.props.onChooseKnowledgeBasePdfDownloadDir,
       }),
-      itemClassName: 'settings-library-download-directory-item',
-      controlClassName: 'settings-library-directory-control',
+      itemClassName: 'comet-settings-library-download-directory-item',
+      controlClassName: 'comet-settings-library-directory-control',
     });
   }
 
   private renderMaxConcurrentJobsField() {
-    const jobsWrap = el('div', 'settings-limit-input-wrap');
+    const jobsWrap = el('div', 'comet-settings-limit-input-wrap');
     jobsWrap.append(buildNumberStepperInput({
       value: this.props.maxConcurrentIndexJobs,
-      className: 'settings-limit-input',
+      className: 'comet-settings-limit-input',
       focusKey: 'settings.library.maxJobs',
       min: '1',
       max: '4',
@@ -203,16 +203,16 @@ export class LibraryWidget {
       title: this.props.labels.settingsLibraryMaxConcurrentJobs,
       description: this.props.labels.settingsLibraryMaxConcurrentJobsHint,
       control: jobsWrap,
-      itemClassName: 'settings-library-max-jobs-item',
-      controlClassName: 'settings-library-max-jobs-control',
+      itemClassName: 'comet-settings-library-max-jobs-item',
+      controlClassName: 'comet-settings-library-max-jobs-control',
     });
   }
 
   private renderLibraryStats() {
-    const stats = el('div', 'settings-library-stats');
+    const stats = el('div', 'comet-settings-library-stats');
     const addCard = (label: string, value: number) => {
-      const card = el('div', 'settings-library-stat-card');
-      const cardLabel = el('span', 'settings-library-stat-label');
+      const card = el('div', 'comet-settings-library-stat-card');
+      const cardLabel = el('span', 'comet-settings-library-stat-label');
       cardLabel.textContent = label;
       const strong = el('strong');
       strong.textContent = String(value);
@@ -225,15 +225,15 @@ export class LibraryWidget {
     return createSettingsRow({
       title: '',
       control: stats,
-      itemClassName: 'settings-library-stats-item',
-      titleClassName: 'settings-block-list-item-title-empty',
-      contentClassName: 'settings-library-stats-content',
-      controlClassName: 'settings-library-stats-control',
+      itemClassName: 'comet-settings-library-stats-item',
+      titleClassName: 'comet-settings-block-list-item-title-empty',
+      contentClassName: 'comet-settings-library-stats-content',
+      controlClassName: 'comet-settings-library-stats-control',
     });
   }
 
   private renderLibraryRecentDocuments() {
-    const content = el('div', 'settings-library-recent-documents-content');
+    const content = el('div', 'comet-settings-library-recent-documents-content');
     if (this.props.isLibraryLoading) {
       content.append(buildHint(this.props.labels.settingsLoading));
     }
@@ -242,18 +242,18 @@ export class LibraryWidget {
       return createSettingsRow({
         title: this.props.labels.settingsLibraryRecentDocuments,
         control: content,
-        itemClassName: 'settings-library-recent-documents-item',
-        controlClassName: 'settings-library-recent-documents-control',
+        itemClassName: 'comet-settings-library-recent-documents-item',
+        controlClassName: 'comet-settings-library-recent-documents-control',
       });
     }
-    const list = el('div', 'settings-library-doc-list');
+    const list = el('div', 'comet-settings-library-doc-list');
     for (const document of this.props.libraryDocuments) {
-      const item = el('div', 'settings-library-doc-item');
-      const strong = el('strong', 'settings-library-doc-title');
+      const item = el('div', 'comet-settings-library-doc-item');
+      const strong = el('strong', 'comet-settings-library-doc-title');
       strong.textContent = document.title || '-';
-      const meta = el('span', 'settings-library-doc-meta');
+      const meta = el('span', 'comet-settings-library-doc-meta');
       meta.textContent = [document.journalTitle, document.publishedAt].filter(Boolean).join(' | ');
-      const status = el('span', 'settings-library-doc-status');
+      const status = el('span', 'comet-settings-library-doc-status');
       status.textContent = resolveLibraryDocumentStatusLabel(this.props.labels, document);
       item.append(strong, meta, status);
       list.append(item);
@@ -262,8 +262,8 @@ export class LibraryWidget {
     return createSettingsRow({
       title: this.props.labels.settingsLibraryRecentDocuments,
       control: content,
-      itemClassName: 'settings-library-recent-documents-item',
-      controlClassName: 'settings-library-recent-documents-control',
+      itemClassName: 'comet-settings-library-recent-documents-item',
+      controlClassName: 'comet-settings-library-recent-documents-control',
     });
   }
 
@@ -272,12 +272,12 @@ export class LibraryWidget {
       title: label,
       control: buildInput({
       value,
-      className: 'settings-input-control',
+      className: 'comet-settings-input-control',
       focusKey,
       readOnly: true,
       }).element,
-      itemClassName: 'settings-library-readonly-item',
-      controlClassName: 'settings-library-readonly-control',
+      itemClassName: 'comet-settings-library-readonly-item',
+      controlClassName: 'comet-settings-library-readonly-control',
     });
   }
 }

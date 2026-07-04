@@ -95,7 +95,7 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('splitview sash drag resizes adjacent views', () => {
+test('splitview comet-sash drag resizes adjacent views', () => {
   const splitView = new SplitView(Orientation.VERTICAL, 10);
   const leadingView = new TestView(120, 420);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
@@ -109,7 +109,7 @@ test('splitview sash drag resizes adjacent views', () => {
   try {
     splitView.layout(1000, 640);
 
-    const firstSash = splitView.element.querySelector('.sash.vertical');
+    const firstSash = splitView.element.querySelector('.comet-sash.comet-vertical');
     assert(firstSash);
     assert.equal(splitView.getViewSize(0), 200);
     assert.equal(splitView.getViewSize(1), 480);
@@ -175,7 +175,7 @@ test('splitview collapses a snap-enabled view after dragging past its minimum', 
   try {
     splitView.layout(900, 520);
 
-    const firstSash = splitView.element.querySelector('.sash.vertical');
+    const firstSash = splitView.element.querySelector('.comet-sash.comet-vertical');
     assert(firstSash);
 
     dispatchDrag(firstSash, {
@@ -226,7 +226,7 @@ test('splitview re-expands a snapped view only after crossing the reopen hystere
     splitView.layout(900, 520);
     splitView.setViewVisible(0, false);
 
-    const firstSash = splitView.element.querySelector('.sash.vertical');
+    const firstSash = splitView.element.querySelector('.comet-sash.comet-vertical');
     assert(firstSash);
 
     dispatchDrag(firstSash, {
@@ -257,7 +257,7 @@ test('splitview re-expands a snapped view only after crossing the reopen hystere
   }
 });
 
-test('paneview bottom pane header remains clickable without reserved sash space', () => {
+test('comet-paneview bottom comet-pane header remains clickable without reserved comet-sash space', () => {
   const paneView = new PaneView({
     orientation: Orientation.HORIZONTAL,
     reserveSashSpace: false,
@@ -279,9 +279,9 @@ test('paneview bottom pane header remains clickable without reserved sash space'
   try {
     paneView.layout(320, 400);
 
-    const toggle = bottomPane.element.querySelector<HTMLButtonElement>('.pane-header-toggle');
+    const toggle = bottomPane.element.querySelector<HTMLButtonElement>('.comet-pane-header-toggle');
     assert(toggle);
-    const body = bottomPane.element.querySelector<HTMLElement>('.pane-body');
+    const body = bottomPane.element.querySelector<HTMLElement>('.comet-pane-body');
     assert(body);
 
     toggle.click();
@@ -299,7 +299,7 @@ test('paneview bottom pane header remains clickable without reserved sash space'
   }
 });
 
-test('splitview disables snapped edge sash when start snapping is turned off', () => {
+test('splitview disables snapped edge comet-sash when start snapping is turned off', () => {
   const splitView = new SplitView(Orientation.VERTICAL, 10);
   const leadingView = new TestView(120, 420, true);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
@@ -312,17 +312,17 @@ test('splitview disables snapped edge sash when start snapping is turned off', (
     splitView.layout(900, 520);
     splitView.setViewVisible(0, false);
 
-    const firstSash = splitView.element.querySelector('.sash.vertical');
+    const firstSash = splitView.element.querySelector('.comet-sash.comet-vertical');
     assert(firstSash);
-    assert.equal(firstSash.classList.contains('disabled'), false);
+    assert.equal(firstSash.classList.contains('comet-disabled'), false);
 
     splitView.startSnappingEnabled = false;
 
-    assert.equal(firstSash.classList.contains('disabled'), true);
+    assert.equal(firstSash.classList.contains('comet-disabled'), true);
 
     splitView.startSnappingEnabled = true;
 
-    assert.equal(firstSash.classList.contains('disabled'), false);
+    assert.equal(firstSash.classList.contains('comet-disabled'), false);
   } finally {
     splitView.dispose();
     splitView.element.remove();
@@ -342,19 +342,19 @@ test('splitview separator is visible only when there is a visible view after the
     splitView.layout(900, 520);
 
     const separator = splitView.element.querySelector<HTMLElement>(
-      '.split-view-separator.vertical',
+      '.comet-split-view-separator.comet-vertical',
     );
     assert(separator);
-    assert.equal(separator.classList.contains('visible'), true);
+    assert.equal(separator.classList.contains('comet-visible'), true);
 
     splitView.setViewVisible(1, false);
 
-    assert.equal(separator.classList.contains('visible'), false);
+    assert.equal(separator.classList.contains('comet-visible'), false);
 
     splitView.setViewVisible(1, true);
     splitView.layout(900, 520);
 
-    assert.equal(separator.classList.contains('visible'), true);
+    assert.equal(separator.classList.contains('comet-visible'), true);
   } finally {
     splitView.dispose();
     splitView.element.remove();
@@ -376,17 +376,17 @@ test('splitview keeps a single separator between non-adjacent visible views', ()
     splitView.layout(900, 520);
 
     const separators = Array.from(
-      splitView.element.querySelectorAll<HTMLElement>('.split-view-separator.vertical'),
+      splitView.element.querySelectorAll<HTMLElement>('.comet-split-view-separator.comet-vertical'),
     );
     assert.equal(separators.length, 2);
-    assert.equal(separators[0]?.classList.contains('visible'), true);
-    assert.equal(separators[1]?.classList.contains('visible'), true);
+    assert.equal(separators[0]?.classList.contains('comet-visible'), true);
+    assert.equal(separators[1]?.classList.contains('comet-visible'), true);
 
     splitView.setViewVisible(1, false);
     splitView.layout(900, 520);
 
     const visibleSeparators = separators.filter((separator) =>
-      separator.classList.contains('visible'),
+      separator.classList.contains('comet-visible'),
     );
     assert.equal(visibleSeparators.length, 1);
     assert.equal(visibleSeparators[0], separators[0]);
@@ -394,15 +394,15 @@ test('splitview keeps a single separator between non-adjacent visible views', ()
     splitView.setViewVisible(1, true);
     splitView.layout(900, 520);
 
-    assert.equal(separators[0]?.classList.contains('visible'), true);
-    assert.equal(separators[1]?.classList.contains('visible'), true);
+    assert.equal(separators[0]?.classList.contains('comet-visible'), true);
+    assert.equal(separators[1]?.classList.contains('comet-visible'), true);
   } finally {
     splitView.dispose();
     splitView.element.remove();
   }
 });
 
-test('splitview sash change does not crash when layout side effects clear drag state', () => {
+test('splitview comet-sash change does not crash when layout side effects clear drag state', () => {
   const splitView = new SplitView(Orientation.VERTICAL, 10);
   const leadingView = new TestView(120, 420);
   let shouldRemoveViewOnLayout = false;
@@ -422,7 +422,7 @@ test('splitview sash change does not crash when layout side effects clear drag s
   try {
     splitView.layout(900, 520);
 
-    const firstSash = splitView.element.querySelector('.sash.vertical');
+    const firstSash = splitView.element.querySelector('.comet-sash.comet-vertical');
     assert(firstSash);
 
     shouldRemoveViewOnLayout = true;

@@ -105,7 +105,7 @@ function createChevronIcon() {
   icon.setAttribute('width', '14');
   icon.setAttribute('height', '14');
   icon.setAttribute('aria-hidden', 'true');
-  icon.classList.add('dropdown-chevron');
+  icon.classList.add('comet-dropdown-chevron');
 
   const path = document.createElementNS(SVG_NS, 'path');
   path.setAttribute('d', 'M4 6l4 4 4-4');
@@ -120,11 +120,11 @@ function createChevronIcon() {
 }
 
 function createOptionContent(option: DropdownOption) {
-  const content = createElement('div', 'dropdown-option-content');
+  const content = createElement('div', 'comet-dropdown-option-content');
   if (option.icon) {
-    content.append(createLxIcon(option.icon, 'dropdown-option-icon'));
+    content.append(createLxIcon(option.icon, 'comet-dropdown-option-icon'));
   }
-  content.append(createElement('div', 'dropdown-menu-item-content', option.label));
+  content.append(createElement('div', 'comet-dropdown-menu-item-content', option.label));
   return content;
 }
 
@@ -225,7 +225,7 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
 
     this.contextView.show({
       anchor: request.anchor,
-      className: 'dropdown-context-view',
+      className: 'comet-dropdown-context-view',
       render: () => menuElement,
       onHide: this.handlePortalHide,
       alignment: request.align,
@@ -278,7 +278,7 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
         disabled: option.disabled,
         checked: request.value === option.value,
       })),
-      className: 'dropdown-menu-portal',
+      className: 'comet-dropdown-menu-portal',
       role: 'listbox',
       itemRole: 'option',
       itemId: (index) => request.getMenuItemId(index),
@@ -330,8 +330,8 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
       ? placement.spaceAbove
       : placement.spaceBelow;
 
-    menu.classList.toggle('dropdown-menu-top', shouldOpenUpwards);
-    menu.classList.toggle('dropdown-menu-bottom', !shouldOpenUpwards);
+    menu.classList.toggle('comet-dropdown-menu-top', shouldOpenUpwards);
+    menu.classList.toggle('comet-dropdown-menu-bottom', !shouldOpenUpwards);
     menu.style.maxHeight = `${Math.max(availableSpace - menuOffset, 120)}px`;
     menu.style.position = 'static';
     menu.style.left = 'auto';
@@ -356,10 +356,10 @@ export class DropdownView extends Disposable {
   private isFocused = false;
   private activeOptionIndex = -1;
   private readonly instanceId = ++dropdownViewIdSequence;
-  private readonly menuId = `dropdown-menu-${this.instanceId}`;
+  private readonly menuId = `comet-dropdown-menu-${this.instanceId}`;
   private readonly element = createElement('div');
-  private readonly field = createElement('div', 'dropdown-field custom-dropdown-field');
-  private readonly iconWrapper = createElement('div', 'dropdown-icon-wrapper');
+  private readonly field = createElement('div', 'comet-dropdown-field');
+  private readonly iconWrapper = createElement('div', 'comet-dropdown-icon-wrapper');
   private readonly chevronIcon = createChevronIcon();
   private readonly hoverController: HoverHandle;
   private readonly defaultMenuPresenter = createDomDropdownMenuPresenter();
@@ -717,9 +717,9 @@ export class DropdownView extends Disposable {
     const presenter = this.getMenuPresenter();
     const selectedOption = resolveSelectedOption(this.props);
     this.element.className = composeClassName([
-      'dropdown-wrapper',
-      this.isOpen || this.isFocused ? 'dropdown-focused' : '',
-      this.props.disabled ? 'dropdown-disabled' : '',
+      'comet-dropdown-wrapper',
+      this.isOpen || this.isFocused ? 'comet-dropdown-focused' : '',
+      this.props.disabled ? 'comet-dropdown-disabled' : '',
       this.props.className,
     ]);
     this.element.setAttribute('role', 'combobox');

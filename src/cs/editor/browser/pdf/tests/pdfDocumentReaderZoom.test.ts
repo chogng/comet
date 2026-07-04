@@ -175,7 +175,7 @@ test('PdfDocumentReader defers zoom completion while a visible page is still ren
     rerenderPdfAtCurrentZoom: () => Promise<void>;
   };
 
-  pageElement.className = 'pdf-reader-page';
+  pageElement.className = 'comet-pdf-reader-page';
   pageElement.dataset.pdfPage = '1';
   pageCanvasWrap.append(tileLayer, highlightLayer);
   pageElement.append(pageCanvasWrap);
@@ -1666,7 +1666,7 @@ test('PdfDocumentReader applies continuous wheel zoom without waiting for a step
     };
     zoomRenderTimer: number | null;
   };
-  const pagesElement = reader.getElement().querySelector('.pdf-reader-pages');
+  const pagesElement = reader.getElement().querySelector('.comet-pdf-reader-pages');
   assert(pagesElement);
 
   try {

@@ -51,7 +51,7 @@ function renderSettingsPageFooter(
     case 'general': {
       const button = buildSettingsButton({
         label: props.labels.resetDefault,
-        className: 'settings-page-footer-button',
+        className: 'comet-settings-page-footer-button',
         focusKey: 'settings.page.general.reset',
         disabled:
           !props.desktopRuntime ||
@@ -60,31 +60,31 @@ function renderSettingsPageFooter(
           props.configPath === props.defaultConfigPath,
         onClick: props.onResetConfigPath,
       });
-      const footer = createSettingsElement('div', 'settings-page-footer');
+      const footer = createSettingsElement('div', 'comet-settings-page-footer');
       footer.append(button);
       return footer;
     }
     case 'textEditor': {
       const button = buildSettingsButton({
         label: props.labels.resetDefault,
-        className: 'settings-page-footer-button',
+        className: 'comet-settings-page-footer-button',
         focusKey: 'settings.page.textEditor.reset',
         disabled: props.isSettingsSaving || props.editorDraftStyle.userValue === null,
         onClick: props.onResetEditorDraftStyle,
       });
-      const footer = createSettingsElement('div', 'settings-page-footer');
+      const footer = createSettingsElement('div', 'comet-settings-page-footer');
       footer.append(button);
       return footer;
     }
     case 'knowledgeBase': {
       const button = buildSettingsButton({
         label: props.labels.resetDefault,
-        className: 'settings-page-footer-button',
+        className: 'comet-settings-page-footer-button',
         focusKey: 'settings.page.knowledgeBase.reset',
         disabled: props.isSettingsSaving || isKnowledgeBasePageAtDefaults(props),
         onClick: props.onResetKnowledgeBaseSettings,
       });
-      const footer = createSettingsElement('div', 'settings-page-footer');
+      const footer = createSettingsElement('div', 'comet-settings-page-footer');
       footer.append(button);
       return footer;
     }

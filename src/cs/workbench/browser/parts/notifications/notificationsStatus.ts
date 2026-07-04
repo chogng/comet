@@ -18,11 +18,11 @@ export class NotificationsStatus {
     private readonly model: NotificationsModel,
     private readonly center: NotificationsCenter,
   ) {
-    this.element.className = 'notifications-status is-hidden';
+    this.element.className = 'comet-notifications-status is-hidden';
     this.button.type = 'button';
-    this.button.className = 'notifications-status-button';
+    this.button.className = 'comet-notifications-status-button';
     this.button.addEventListener('click', this.handleToggleCenter);
-    this.statusMessageElement.className = 'notifications-status-message';
+    this.statusMessageElement.className = 'comet-notifications-status-message';
     this.element.append(this.statusMessageElement, this.button);
     this.container.append(this.element);
 

@@ -103,8 +103,8 @@ export class PdfEditorPane extends EditorPane<
     super();
     this.props = props;
     this.readerSnapshot = this.createReaderSnapshot(props);
-    this.element.className = 'editor-pdf-pane';
-    this.bodyElement.className = 'editor-pdf-body';
+    this.element.className = 'comet-editor-pdf-pane';
+    this.bodyElement.className = 'comet-editor-pdf-body';
     this.element.append(this.bodyElement);
     this.render();
   }
