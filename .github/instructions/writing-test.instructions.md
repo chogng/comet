@@ -1,6 +1,6 @@
 ---
 description: Literature Studio test writing guidelines — unit tests, integration tests, snapshot tests, and clean teardown patterns. Reference when writing or updating tests.
-applyTo: "{src/ls/**/test/**,src/ls/**/*.test.ts,src/ls/**/*.integrationTest.ts}"
+applyTo: "{src/cs/**/test/**,src/cs/**/*.test.ts,src/cs/**/*.integrationTest.ts}"
 ---
 
 # Writing Tests
@@ -11,8 +11,8 @@ Canonical reference: WATING...
 
 | Type | File suffix | Location | Runs in |
 |------|-------------|----------|---------|
-| Unit tests | `.test.ts` | `src/ls/**/test/` | Browser, Electron, or Node.js (depends on layer) |
-| Integration tests | `.integrationTest.ts` | `src/ls/**/test/` | Real external APIs |
+| Unit tests | `.test.ts` | `src/cs/**/test/` | Browser, Electron, or Node.js (depends on layer) |
+| Integration tests | `.integrationTest.ts` | `src/cs/**/test/` | Real external APIs |
 | Extension tests | Standard extension test system | `extensions/*/` | Extension host |
 
 ## Running Tests

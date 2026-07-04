@@ -1,6 +1,6 @@
 ---
-description: literature studio source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
-applyTo: src/ls/**
+description: Comet source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
+applyTo: src/cs/**
 ---
 
 # Source Code Organization
@@ -9,7 +9,7 @@ Canonical reference: WAITING...
 
 ## Layers
 
-The `src/ls/` core is partitioned into ordered layers — each may only import from layers below it:
+The `src/cs/` core is partitioned into ordered layers — each may only import from layers below it:
 
 1. **`base`** — General utilities and UI building blocks (no service dependencies)
 2. **`platform`** — Service injection support and base services shared across layers
@@ -34,10 +34,10 @@ Within each layer, code is organized by runtime environment:
 
 ## Workbench Organization
 
-- `ls/workbench/{common|browser|electron-browser}` — minimal workbench core
-- `ls/workbench/api` — `vscode.d.ts` API provider
-- `ls/workbench/services` — core services (not contrib-specific)
-- `ls/workbench/contrib` — feature contributions
+- `cs/workbench/{common|browser|electron-browser}` — minimal workbench core
+- `cs/workbench/api` — `vscode.d.ts` API provider
+- `cs/workbench/services` — core services (not contrib-specific)
+- `cs/workbench/contrib` — feature contributions
 
 ### Contribution Rules
 

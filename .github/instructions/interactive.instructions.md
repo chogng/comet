@@ -1,10 +1,10 @@
 ---
-description: Architecture documentation for literature studio interactive window component. Use when working in `src/ls/workbench/contrib/interactive`
+description: Architecture documentation for Comet interactive window component. Use when working in `src/cs/workbench/contrib/interactive`
 ---
 
 # Interactive Window
 
-The interactive window component enables extensions to offer REPL like experience to its users. literature studio provides the user interface and extensions provide the execution environment, code completions, execution results rendering and so on.
+The interactive window component enables extensions to offer REPL like experience to its users. Comet provides the user interface and extensions provide the execution environment, code completions, execution results rendering and so on.
 
 The interactive window consists of notebook editor at the top and regular monaco editor at the bottom of the viewport. Extensions can extend the interactive window by leveraging the notebook editor API and text editor/document APIs:
 

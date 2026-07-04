@@ -1,33 +1,33 @@
 ---
-description: Literature Studio best practices — reusing common UI primitives and patterns. Reference when writing or reviewing code.
-applyTo: src/ls/**
+description: Comet best practices — reusing common UI primitives and patterns. Reference when writing or reviewing code.
+applyTo: src/cs/**
 ---
 
 # Best Practices
 
 ## Buttons & Actions
 
-- Don't create a new class or custom CSS to render a button or action. Reuse the existing `Button` class (`ls/base/browser/ui/button/button.ts`) and the existing `Action` types (`ls/base/common/actions.ts`). This keeps theming, accessibility, and behavior consistent.
-- Render actions inside a toolbar rather than by hand. Prefer `MenuWorkbenchToolBar` (`ls/platform/actions/browser/toolbar.ts`): give it a `MenuId` so actions can be contributed from anywhere (contributions, other components) without coupling.
+- Don't create a new class or custom CSS to render a button or action. Reuse the existing `Button` class (`cs/base/browser/ui/button/button.ts`) and the existing `Action` types (`cs/base/common/actions.ts`). This keeps theming, accessibility, and behavior consistent.
+- Render actions inside a toolbar rather than by hand. Prefer `MenuWorkbenchToolBar` (`cs/platform/actions/browser/toolbar.ts`): give it a `MenuId` so actions can be contributed from anywhere (contributions, other components) without coupling.
 - Use `WorkbenchToolBar` when you need explicit control over which actions render and where separators go.
-- Never add a separator while rendering an action. Add separators with the existing `Separator` class (`ls/base/common/actions.ts`).
+- Never add a separator while rendering an action. Add separators with the existing `Separator` class (`cs/base/common/actions.ts`).
 - If a `MenuWorkbenchToolBar` lives in a widget/view that can be rendered multiple times at once, give the toolbar a scoped `IContextKeyService` which is scoped to the dom element of that widget/view and set the context keys per individual widget/view instance.
 
 ## Editor/Session Actions
 
 - Don't assume the action runs on the active editor/session. An action (e.g. one contributed to some editor or session related toolbar) can be triggered for an editor/session that isn't active. The `run` method receives arguments describing the invocation context (such as the originating editor group or the originating session).
-- Resolve editor action arguments with `resolveCommandsContext` (`ls/workbench/browser/parts/editor/editorCommandsContext.ts`) to get the correct editor(s) instead of reading `editorService.activeEditor`.
+- Resolve editor action arguments with `resolveCommandsContext` (`cs/workbench/browser/parts/editor/editorCommandsContext.ts`) to get the correct editor(s) instead of reading `editorService.activeEditor`.
 - Support multi-selection. The resolved editor actions context can contain several editors (e.g. multi-selected tabs).
 
 ## URI
 
-- Don't hardcode URI scheme strings like `'file'`, `'untitled'`, or `'vscode-remote'`. Use the `Schemas` constants from `ls/base/common/network.ts` (e.g. `Schemas.file`, `Schemas.untitled`, `Schemas.vscodeRemote`).
-- Don't compare URIs with `===` or `uri.toString()`. Use the comparison utilities from `ls/base/common/resources.ts`: `isEqual` for equality, `isEqualOrParent` for containment, and `getComparisonKey` when a URI is used as a map/set key. These handle path-case sensitivity and fragment/authority correctly. When you need explicit control over case sensitivity, use an `ExtUri` instance (`extUri`, `extUriIgnorePathCase`, or `extUriBiasedIgnorePathCase`) instead of the bound helpers.
+- Don't hardcode URI scheme strings like `'file'`, `'untitled'`, or `'vscode-remote'`. Use the `Schemas` constants from `cs/base/common/network.ts` (e.g. `Schemas.file`, `Schemas.untitled`, `Schemas.vscodeRemote`).
+- Don't compare URIs with `===` or `uri.toString()`. Use the comparison utilities from `cs/base/common/resources.ts`: `isEqual` for equality, `isEqualOrParent` for containment, and `getComparisonKey` when a URI is used as a map/set key. These handle path-case sensitivity and fragment/authority correctly. When you need explicit control over case sensitivity, use an `ExtUri` instance (`extUri`, `extUriIgnorePathCase`, or `extUriBiasedIgnorePathCase`) instead of the bound helpers.
 
 ## Resource Labels
 
-- Don't set `{ supportIcons: true }` when creating a `ResourceLabel` (`ls/workbench/browser/labels.ts`). This option makes the label parse `$(codicon)` syntax in the name/description and is only needed when you want to render a codicon inline with the resource text. By default (without it), the label computes the proper file-icon CSS classes for the resource, which is what we almost always want. Note that those classes only render as icons when an ancestor DOM element enables file icons (see below); otherwise the label shows text only.
-- To actually display file icons for resource labels in a tree/list, an ancestor container must have the `show-file-icons` class and be wired to the active file icon theme. Don't add the class by hand — call `createFileIconThemableTreeContainerScope` (`ls/workbench/contrib/files/browser/views/explorerView.ts`) on the container. It adds the required `show-file-icons` / `file-icon-themable-tree` classes and keeps `align-icons-and-twisties` / `hide-arrows` in sync with the file icon theme. Register the returned `IDisposable`. A common bug is placing a resource-label list/tree outside such a scoped container, which makes file icons silently disappear.
+- Don't set `{ supportIcons: true }` when creating a `ResourceLabel` (`cs/workbench/browser/labels.ts`). This option makes the label parse `$(codicon)` syntax in the name/description and is only needed when you want to render a codicon inline with the resource text. By default (without it), the label computes the proper file-icon CSS classes for the resource, which is what we almost always want. Note that those classes only render as icons when an ancestor DOM element enables file icons (see below); otherwise the label shows text only.
+- To actually display file icons for resource labels in a tree/list, an ancestor container must have the `show-file-icons` class and be wired to the active file icon theme. Don't add the class by hand — call `createFileIconThemableTreeContainerScope` (`cs/workbench/contrib/files/browser/views/explorerView.ts`) on the container. It adds the required `show-file-icons` / `file-icon-themable-tree` classes and keeps `align-icons-and-twisties` / `hide-arrows` in sync with the file icon theme. Register the returned `IDisposable`. A common bug is placing a resource-label list/tree outside such a scoped container, which makes file icons silently disappear.
 
 ## Styling
 

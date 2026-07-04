@@ -1,11 +1,11 @@
-# Literature Studio Copilot Instructions
+# Comet Instructions
 
 ## Project Overview
 
-Literature Studio is built with a layered architecture using TypeScript, web APIs and Electron, combining web technologies with native app capabilities. The codebase is organized into key architectural layers:
+Comet is built with a layered architecture using TypeScript, web APIs and Electron, combining web technologies with native app capabilities. The codebase is organized into key architectural layers:
 
 ### Root Folders
-- `src/`: Main TypeScript source code with unit tests in `src/ls/*/test/` folders
+- `src/`: Main TypeScript source code with unit tests in `src/cs/*/test/` folders
 - `build/`: Build scripts and CI/CD tools
 - `test/`: Integration tests and test infrastructure
 - `scripts/`: Development and build scripts
@@ -13,17 +13,17 @@ Literature Studio is built with a layered architecture using TypeScript, web API
 - `out/`: Compiled JavaScript output (generated during build)
 
 ### Core Architecture (`src/` folder)
-- `src/ls/base/` - Foundation utilities and cross-platform abstractions
-- `src/ls/platform/` - Platform services and dependency injection infrastructure
-- `src/ls/editor/` - Text editor implementation with language services, syntax highlighting, and editing features
-- `src/ls/workbench/` - Main application workbench for web and desktop
+- `src/cs/base/` - Foundation utilities and cross-platform abstractions
+- `src/cs/platform/` - Platform services and dependency injection infrastructure
+- `src/cs/editor/` - Text editor implementation with language services, syntax highlighting, and editing features
+- `src/cs/workbench/` - Main application workbench for web and desktop
   - `workbench/browser/` - Core workbench UI components (parts, layout, actions)
   - `workbench/services/` - Service implementations
   - `workbench/contrib/` - Feature contributions (git, debug, search, terminal, etc.)
   - `workbench/api/` - Extension host and VS Code API implementation
-- `src/ls/code/` - Electron main process specific implementation
-- `src/ls/server/` - Server specific implementation
-- `src/ls/sessions/` - Agent sessions window, a dedicated workbench layer for agentic workflows (sits alongside `ls/workbench`, may import from it but not vice versa)
+- `src/cs/code/` - Electron main process specific implementation
+- `src/cs/server/` - Server specific implementation
+- `src/cs/sessions/` - Agent sessions window, a dedicated workbench layer for agentic workflows (sits alongside `cs/workbench`, may import from it but not vice versa)
 
 The core architecture follows these principles:
 - **Layered architecture** - from `base`, `platform`, `editor`, to `workbench`
@@ -140,18 +140,6 @@ function f(x: number, y: string): void { }
 ## Learnings
 - Minimize the amount of assertions in tests. Prefer one snapshot-style `assert.deepStrictEqual` over multiple precise assertions, as they are much more difficult to understand and to update.
 - Do not stub a global object (e.g. `(mainWindow as any).ResizeObserver = ...`) or use `any` casts to install fakes in tests. Instead, make the dependency injectable: add an optional constructor parameter on the production class that defaults to the real implementation (e.g. `targetWindow.ResizeObserver`), and have the test pass a fake that implements the real interface.
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
