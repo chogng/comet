@@ -31,7 +31,7 @@ export function createChatInputToolbarActionItem({
 	return {
 		label,
 		title: label,
-		mode: 'custom',
+		mode: 'text',
 		content: () => {
 			const content = $<HTMLSpanElement>('span.comet-chat-composer-input-toolbar-action-content');
 			const labelElement = $<HTMLSpanElement>('span.comet-chat-composer-input-toolbar-action-label');

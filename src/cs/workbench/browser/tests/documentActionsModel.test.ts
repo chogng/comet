@@ -4,8 +4,13 @@ import test from 'node:test';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import type {
+  PdfDownloadResult,
+  WebContentPdfDownloadPayload,
+} from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import type { DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
@@ -30,6 +35,31 @@ function createInvokeDesktop(): ElectronInvoke {
   }) as ElectronInvoke;
 }
 
+function createSuccessfulDownloadInvoke(
+  payloads: WebContentPdfDownloadPayload[],
+): ElectronInvoke {
+  return (async (command: string, payload?: Record<string, unknown>) => {
+    assert.equal(command, 'web_content_download_pdf');
+    payloads.push(payload as WebContentPdfDownloadPayload);
+    return {
+      filePath: 'C:\\Downloads\\article.pdf',
+      sourceUrl: String((payload as WebContentPdfDownloadPayload | undefined)?.downloadUrl ?? ''),
+      libraryRegistration: null,
+    } satisfies PdfDownloadResult;
+  }) as ElectronInvoke;
+}
+
+function createNoopToastApi(): NonNullable<INativeHostService['toast']> {
+  return {
+    show: () => {},
+    dismiss: () => {},
+    getState: async () => ({ items: [] }),
+    onStateChange: () => () => {},
+    reportLayout: () => {},
+    setHovering: () => {},
+  };
+}
+
 function createNativeHostService(
   overrides: Partial<INativeHostService> = {},
 ): INativeHostService {
@@ -43,6 +73,33 @@ function createNativeHostService(
     fetch: undefined,
     document: undefined,
     toast: undefined,
+    ...overrides,
+  };
+}
+
+function createDocumentActionsContext(
+  overrides: Partial<DocumentActionsControllerContext> = {},
+): DocumentActionsControllerContext {
+  const invokeDesktop = overrides.invokeDesktop ?? createInvokeDesktop();
+  return {
+    desktopRuntime: true,
+    invokeDesktop,
+    nativeHost: createNativeHostService({
+      invoke: invokeDesktop,
+      toast: createNoopToastApi(),
+    }),
+    locale: 'en',
+    ui: locales.en,
+    knowledgeBaseEnabled: false,
+    pdfDownloadDir: '',
+    knowledgeBasePdfDownloadDir: '',
+    pdfFileNameUseSelectionOrder: false,
+    isSelectionModeEnabled: false,
+    selectedArticleOrderLookup: new Map(),
+    exportableArticles: [],
+    createBrowserTab: () => {},
+    onExportArticleSummaries: () => {},
+    activeDraftExport: null,
     ...overrides,
   };
 }
@@ -122,4 +179,47 @@ test('DocumentActionsController delegates article summary export', async () => {
 
   controller.dispose();
   assert.deepEqual(delegatedArticles, [[article]]);
+});
+
+test('DocumentActionsController prefixes PDF titles by fetch order outside selection mode', async () => {
+  const payloads: WebContentPdfDownloadPayload[] = [];
+  const invokeDesktop = createSuccessfulDownloadInvoke(payloads);
+  const controller = createDocumentActionsController(createDocumentActionsContext({
+    invokeDesktop,
+    pdfFileNameUseSelectionOrder: false,
+    isSelectionModeEnabled: false,
+  }));
+
+  await controller.handleSharedPdfDownload(createArticle({
+    title: 'Second article',
+    sourceUrl: 'https://example.com/articles/second',
+    fetchOrder: 2,
+  }));
+
+  controller.dispose();
+  assert.equal(payloads[0]?.articleTitle, '2. Second article');
+});
+
+test('DocumentActionsController uses selected order for PDF titles when enabled in selection mode', async () => {
+  const payloads: WebContentPdfDownloadPayload[] = [];
+  const invokeDesktop = createSuccessfulDownloadInvoke(payloads);
+  const article = createArticle({
+    title: 'Selected article',
+    sourceUrl: 'https://example.com/articles/selected',
+    fetchedAt: '2026-07-04T00:00:02.000Z',
+    fetchOrder: 7,
+  });
+  const controller = createDocumentActionsController(createDocumentActionsContext({
+    invokeDesktop,
+    pdfFileNameUseSelectionOrder: true,
+    isSelectionModeEnabled: true,
+    selectedArticleOrderLookup: new Map([
+      [`${article.sourceUrl}::${article.fetchedAt}`, 1],
+    ]),
+  }));
+
+  await controller.handleSharedPdfDownload(article);
+
+  controller.dispose();
+  assert.equal(payloads[0]?.articleTitle, '1. Selected article');
 });

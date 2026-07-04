@@ -647,7 +647,7 @@ function resolveCurrentPdfDownloadArticle(
   | 'authors'
   | 'publishedAt'
   | 'sourceId'
-> | null {
+> & { fetchOrder: number | null } | null {
   const normalizedSourceUrl = normalizeUrl(sourceUrl);
   if (!normalizedSourceUrl) {
     return null;
@@ -666,6 +666,7 @@ function resolveCurrentPdfDownloadArticle(
     authors: matchedArticle?.authors ?? [],
     publishedAt: matchedArticle?.publishedAt ?? null,
     sourceId: matchedArticle?.sourceId ?? null,
+    fetchOrder: matchedArticle?.fetchOrder ?? null,
   };
 }
 

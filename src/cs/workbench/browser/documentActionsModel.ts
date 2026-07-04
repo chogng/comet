@@ -58,12 +58,42 @@ export type DocumentActionsControllerSnapshot = {
   canExportDocx: boolean;
 };
 
+type DownloadableArticle = Pick<
+  Article,
+  | 'title'
+  | 'sourceUrl'
+  | 'fetchedAt'
+  | 'journalTitle'
+  | 'doi'
+  | 'authors'
+  | 'publishedAt'
+  | 'sourceId'
+> & { fetchOrder: number | null };
+
 function getArticleSelectionKey(article: Pick<Article, 'sourceUrl' | 'fetchedAt'>) {
   return `${article.sourceUrl}::${article.fetchedAt}`;
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function getDownloadArticleOrder(
+  article: Pick<Article, 'sourceUrl' | 'fetchedAt'> & { fetchOrder: number | null },
+  pdfFileNameUseSelectionOrder: boolean,
+  isSelectionModeEnabled: boolean,
+  selectedArticleOrderLookup: ReadonlyMap<string, number>,
+) {
+  if (pdfFileNameUseSelectionOrder && isSelectionModeEnabled) {
+    const selectedOrder = selectedArticleOrderLookup.get(getArticleSelectionKey(article));
+    return isPositiveInteger(selectedOrder) ? selectedOrder : null;
+  }
+
+  return isPositiveInteger(article.fetchOrder) ? article.fetchOrder : null;
+}
+
 function buildDownloadArticleTitle(
-  article: Pick<Article, 'title' | 'sourceUrl' | 'fetchedAt'>,
+  article: Pick<Article, 'title' | 'sourceUrl' | 'fetchedAt'> & { fetchOrder: number | null },
   pdfFileNameUseSelectionOrder: boolean,
   isSelectionModeEnabled: boolean,
   selectedArticleOrderLookup: ReadonlyMap<string, number>,
@@ -73,11 +103,12 @@ function buildDownloadArticleTitle(
     return article.title;
   }
 
-  if (!pdfFileNameUseSelectionOrder || !isSelectionModeEnabled) {
-    return article.title;
-  }
-
-  const order = selectedArticleOrderLookup.get(getArticleSelectionKey(article));
+  const order = getDownloadArticleOrder(
+    article,
+    pdfFileNameUseSelectionOrder,
+    isSelectionModeEnabled,
+    selectedArticleOrderLookup,
+  );
   return typeof order === 'number' ? `${order}. ${articleTitle}` : article.title;
 }
 
@@ -159,17 +190,7 @@ export class DocumentActionsController {
   };
 
   readonly handleSharedPdfDownload = async (
-    article: Pick<
-      Article,
-      | 'title'
-      | 'sourceUrl'
-      | 'fetchedAt'
-      | 'journalTitle'
-      | 'doi'
-      | 'authors'
-      | 'publishedAt'
-      | 'sourceId'
-    >,
+    article: DownloadableArticle,
   ) => {
     const {
       desktopRuntime,

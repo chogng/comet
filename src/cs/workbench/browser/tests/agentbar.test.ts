@@ -681,6 +681,10 @@ test('composer input toolbar hosts article batch actions', async () => {
       inputToolbarButtons.map((button) => button.textContent?.trim()),
       ['下载全部', '翻译并导出摘要'],
     );
+    assert.deepEqual(
+      inputToolbarButtons.map((button) => button.classList.contains('comet-is-text')),
+      [true, true],
+    );
 
     const downloadAllButton = inputToolbarButtons[0];
     const exportSummariesButton = inputToolbarButtons[1];
