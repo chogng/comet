@@ -16,11 +16,11 @@ import { extUri as defaultExtUri, type IExtUri } from './resources.js';
 import { URI } from './uri.js';
 
 /**
- * 提供通用异步基础能力：
- * - 取消、超时、延迟执行
- * - 顺序执行、限流、节流队列
- * - 按 URI 隔离的资源队列
- * - idle 调度与 lazy promise 状态读取
+ * 提供 base/common 层可复用的异步控制工具：
+ * - Promise 取消、超时竞态、延迟触发
+ * - 串行执行、按 key 串行、限流与队列 drain 通知
+ * - 按 URI 隔离的资源队列，避免同一资源并发写入
+ * - idle 调度、DeferredPromise、StatefulPromise 与 lazy promise 状态读取
  */
 
 export type Thenable<T> = PromiseLike<T>;
@@ -294,6 +294,9 @@ export interface LatestAsyncOperationToken {
   isCurrent(): boolean;
 }
 
+/**
+ * Tracks the latest async operation so older callbacks can detect that they are stale.
+ */
 export class LatestAsyncOperation {
   private currentOperationId = 0;
 
@@ -559,6 +562,9 @@ type LimiterEntry<T> = {
   readonly reject: (error?: unknown) => void;
 };
 
+/**
+ * Runs queued tasks up to a maximum concurrency and fires drain when all owned work is done.
+ */
 export class Limiter<T> implements ILimiter<T>, IDisposable {
   private sizeValue = 0;
   private disposed = false;
@@ -652,6 +658,9 @@ export class Queue<T> extends Limiter<T> {
   }
 }
 
+/**
+ * Maintains one serial queue per URI so matching resources run in order while different resources stay independent.
+ */
 export class ResourceQueue implements IDisposable {
   private readonly queues = new Map<string, Queue<void>>();
   private readonly drainers = new Set<DeferredPromise<void>>();
@@ -948,6 +957,9 @@ export class GlobalIdleValue<T> extends AbstractIdleValue<T> {
 
 export type ValueCallback<T = unknown> = (value: T | Promise<T>) => void;
 
+/**
+ * Wraps a promise and records its settled value or error for synchronous reads after completion.
+ */
 export class StatefulPromise<T> {
   private currentValue: T | undefined;
   private currentError: unknown;
@@ -997,6 +1009,9 @@ export class StatefulPromise<T> {
   }
 }
 
+/**
+ * Creates the stateful promise only when the promise or resolved value is requested.
+ */
 export class LazyStatefulPromise<T> {
   private readonly promise = new Lazy(() => new StatefulPromise(this.compute()));
 
