@@ -5,6 +5,7 @@ import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import { $ } from 'cs/base/browser/dom';
+import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
@@ -28,6 +29,8 @@ type CreateSessionChatViewPropsParams = {
 		articleQuickSources: BatchSource[];
 		isArticleSourceFetching: boolean;
 		showArticleBatchActions: boolean;
+		downloadAllProgress: ArticleBatchTaskProgress | null;
+		translationExportProgress: ArticleBatchTaskProgress | null;
 		isArticleSelected: (href: string) => boolean;
 	};
 	actions: {
@@ -36,7 +39,7 @@ type CreateSessionChatViewPropsParams = {
 		onApplyPatch: (messageId: string) => void;
 		onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
 		onDownloadAllArticles: () => void | Promise<void>;
-		onExportArticleSummaries: () => void | Promise<void>;
+		onExportArticleSummaries: (translateSummaries: boolean) => void | Promise<void>;
 		onToggleArticleSelected: (href: string) => void;
 		onCreateConversation: () => void;
 		onActivateConversation: (conversationId: string) => void;
@@ -67,6 +70,8 @@ export function createSessionChatViewProps({
 		articleQuickSources,
 		isArticleSourceFetching,
 		showArticleBatchActions,
+		downloadAllProgress,
+		translationExportProgress,
 		isArticleSelected,
 	},
 	actions: {
@@ -100,6 +105,8 @@ export function createSessionChatViewProps({
 		isArticleSourceFetching,
 		onFetchArticleSource,
 		showArticleBatchActions,
+		downloadAllProgress,
+		translationExportProgress,
 		onDownloadAllArticles,
 		onExportArticleSummaries,
 		isArticleSelected,

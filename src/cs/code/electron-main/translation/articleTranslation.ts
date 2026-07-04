@@ -37,6 +37,7 @@ export async function translateArticlesToChinese(
   articles: Article[],
   storage: StorageService,
   onProgress?: TranslationProgressReporter,
+  signal?: AbortSignal,
 ): Promise<Article[]> {
   const selectedContent = articles
     .map((article, index) => {
@@ -56,6 +57,7 @@ export async function translateArticlesToChinese(
     settings.translation,
     storage,
     onProgress,
+    signal,
   );
   const translatedArticles = [...articles];
 

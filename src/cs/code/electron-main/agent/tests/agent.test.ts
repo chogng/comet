@@ -77,37 +77,28 @@ test('runMainAgentTurn returns the last validated patch proposal from apply_edit
       return new Response(
         JSON.stringify({
           id: 'resp_patch_1',
-          choices: [
+          status: 'completed',
+          output: [
             {
-              finish_reason: 'tool_calls',
-              message: {
-                role: 'assistant',
-                content: null,
-                tool_calls: [
+              type: 'function_call',
+              id: 'fc_patch_1',
+              call_id: 'call_patch_1',
+              name: 'apply_editor_patch',
+              arguments: JSON.stringify({
+                label: 'Tighten draft sentence',
+                summary: 'Replace the first paragraph with a shorter sentence.',
+                operations: [
                   {
-                    id: 'call_patch_1',
-                    type: 'function',
-                    function: {
-                      name: 'apply_editor_patch',
-                      arguments: JSON.stringify({
-                        label: 'Tighten draft sentence',
-                        summary: 'Replace the first paragraph with a shorter sentence.',
-                        operations: [
-                          {
-                            kind: 'text-edit',
-                            edit: {
-                              kind: 'replaceBlock',
-                              blockId: 'block_1',
-                              expectedText: 'Draft paragraph for the agent.',
-                              text: 'Revised paragraph for the agent.',
-                            },
-                          },
-                        ],
-                      }),
+                    kind: 'text-edit',
+                    edit: {
+                      kind: 'replaceBlock',
+                      blockId: 'block_1',
+                      expectedText: 'Draft paragraph for the agent.',
+                      text: 'Revised paragraph for the agent.',
                     },
                   },
                 ],
-              },
+              }),
             },
           ],
         }),
@@ -123,13 +114,17 @@ test('runMainAgentTurn returns the last validated patch proposal from apply_edit
     return new Response(
       JSON.stringify({
         id: 'resp_patch_2',
-        choices: [
+        status: 'completed',
+        output: [
           {
-            finish_reason: 'stop',
-            message: {
-              role: 'assistant',
-              content: 'Patch prepared.',
-            },
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Patch prepared.',
+              },
+            ],
           },
         ],
       }),

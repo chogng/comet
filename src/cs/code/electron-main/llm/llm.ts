@@ -3,98 +3,112 @@ import type {
   LlmProviderId,
   TestLlmConnectionPayload as TestPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError, isAppError } from 'cs/base/common/errors';
+import { appError, CancellationError, isAppError } from 'cs/base/common/errors';
 import { cleanText } from 'cs/base/common/strings';
 import { defaultLlmProviderId } from 'cs/workbench/services/llm/config';
 import { isLlmProviderId } from 'cs/workbench/services/llm/registry';
 
 const llmTestTimeoutMs = 15000;
-export type OpenAiCompatibleMessageRole =
+export type OpenAiCompatibleResponseMessageRole =
   | 'system'
   | 'user'
-  | 'assistant'
-  | 'tool';
+  | 'assistant';
 
-export type OpenAiCompatibleChatCompletionContentPart = {
+export type OpenAiCompatibleResponseContentPart = {
   type: 'text';
   text: string;
 };
 
-export type OpenAiCompatibleChatCompletionToolCall = {
+export type OpenAiCompatibleResponseMessage = {
+  role: OpenAiCompatibleResponseMessageRole;
+  content: string | OpenAiCompatibleResponseContentPart[];
+};
+
+export type OpenAiCompatibleResponseFunctionCall = {
+  type: 'function_call';
   id?: string;
-  type: 'function';
-  function: {
-    name: string;
-    arguments: string;
-  };
+  call_id: string;
+  name: string;
+  arguments: string;
 };
 
-export type OpenAiCompatibleChatCompletionMessage = {
-  role: OpenAiCompatibleMessageRole;
-  content: string | OpenAiCompatibleChatCompletionContentPart[] | null;
-  tool_call_id?: string;
-  tool_calls?: OpenAiCompatibleChatCompletionToolCall[];
+export type OpenAiCompatibleResponseFunctionCallOutput = {
+  type: 'function_call_output';
+  call_id: string;
+  output: string;
 };
 
-export type OpenAiCompatibleChatCompletionTool = {
+export type OpenAiCompatibleResponseInputItem =
+  | OpenAiCompatibleResponseMessage
+  | OpenAiCompatibleResponseFunctionCall
+  | OpenAiCompatibleResponseFunctionCallOutput;
+
+export type OpenAiCompatibleResponseTool = {
   type: 'function';
-  function: {
-    name: string;
-    description?: string;
-    parameters?: Record<string, unknown>;
-  };
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
 };
 
 export type OpenAiCompatibleToolChoice =
   | 'auto'
   | 'none'
+  | 'required'
   | {
       type: 'function';
-      function: {
-        name: string;
-      };
+      name: string;
     };
 
-export type OpenAiCompatibleChatCompletionRequest = {
+export type OpenAiCompatibleResponseRequest = {
   model: string;
-  messages: OpenAiCompatibleChatCompletionMessage[];
-  reasoning_effort?: string;
+  input: string | OpenAiCompatibleResponseInputItem[];
+  instructions?: string;
+  reasoning?: {
+    effort?: string;
+  };
   service_tier?: string;
-  max_tokens?: number;
+  max_output_tokens?: number;
   temperature?: number;
-  tools?: OpenAiCompatibleChatCompletionTool[];
+  tools?: OpenAiCompatibleResponseTool[];
   tool_choice?: OpenAiCompatibleToolChoice;
+  parallel_tool_calls?: boolean;
 };
 
-export type OpenAiCompatibleChatCompletionResponse = {
+export type OpenAiCompatibleResponseOutputText = {
+  type: 'output_text' | 'text';
+  text?: unknown;
+  value?: unknown;
+};
+
+export type OpenAiCompatibleResponseOutputMessage = {
+  type: 'message';
   id?: string;
-  choices?: Array<{
-    index?: number;
-    message?: OpenAiCompatibleChatCompletionMessage;
-    finish_reason?: string | null;
-  }>;
+  role?: string;
+  content?: OpenAiCompatibleResponseOutputText[];
+};
+
+export type OpenAiCompatibleResponseOutputItem =
+  | OpenAiCompatibleResponseOutputMessage
+  | OpenAiCompatibleResponseFunctionCall;
+
+export type OpenAiCompatibleResponse = {
+  id?: string;
+  status?: string;
+  output_text?: unknown;
+  output?: OpenAiCompatibleResponseOutputItem[];
   usage?: Record<string, unknown>;
-};
-
-export type ChatCompletionMessage = {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-};
-
-export type ChatCompletionRequest = {
-  model: string;
-  messages: ChatCompletionMessage[];
-  reasoning_effort?: string;
   service_tier?: string;
-  max_tokens: number;
-  temperature: number;
 };
 
-export type ResolvedLlmRequest = {
-  provider: LlmProviderId;
+export type OpenAiCompatibleRequestContext = {
+  provider: string;
   apiKey: string;
   baseUrl: string;
   model: string;
+};
+
+export type ResolvedLlmRequest = OpenAiCompatibleRequestContext & {
+  provider: LlmProviderId;
   reasoningEffort?: TestPayload['reasoningEffort'];
   serviceTier?: TestPayload['serviceTier'];
 };
@@ -163,20 +177,70 @@ function resolveLlmRequest(payload: TestPayload = {}): ResolvedLlmRequest {
   };
 }
 
-export async function requestOpenAiCompatibleChatCompletion<
-  TResponse = OpenAiCompatibleChatCompletionResponse,
+function extractProviderErrorText(value: string): string {
+  const errorText = cleanText(value);
+  if (!errorText) {
+    return '';
+  }
+
+  try {
+    const payload = JSON.parse(errorText) as unknown;
+    if (!payload || typeof payload !== 'object') {
+      return errorText;
+    }
+
+    const record = payload as Record<string, unknown>;
+    const nestedError = record.error;
+    if (nestedError && typeof nestedError === 'object') {
+      const nestedRecord = nestedError as Record<string, unknown>;
+      const message = cleanText(nestedRecord.message);
+      if (message) {
+        return message;
+      }
+    }
+
+    const message = cleanText(record.message);
+    if (message) {
+      return message;
+    }
+
+    const msg = cleanText(record.msg);
+    if (msg) {
+      return msg;
+    }
+  } catch {
+    return errorText;
+  }
+
+  return errorText;
+}
+
+export async function requestOpenAiCompatibleResponse<
+  TResponse = OpenAiCompatibleResponse,
 >(
-  request: ResolvedLlmRequest,
-  payload: OpenAiCompatibleChatCompletionRequest,
+  request: OpenAiCompatibleRequestContext,
+  payload: OpenAiCompatibleResponseRequest,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<TResponse> {
   const controller = new AbortController();
+  let timedOut = false;
+  const abortFromExternalSignal = () => {
+    controller.abort();
+  };
   const timeoutId = setTimeout(() => {
+    timedOut = true;
     controller.abort();
   }, timeoutMs);
 
+  if (signal?.aborted) {
+    abortFromExternalSignal();
+  } else if (signal) {
+    signal.addEventListener('abort', abortFromExternalSignal, { once: true });
+  }
+
   try {
-    const response = await fetch(`${request.baseUrl}/chat/completions`, {
+    const response = await fetch(`${request.baseUrl}/responses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -191,13 +255,17 @@ export async function requestOpenAiCompatibleChatCompletion<
       throw appError('LLM_CONNECTION_FAILED', {
         provider: request.provider,
         status: response.status,
-        statusText: response.statusText || errorText || 'Request failed',
+        statusText: extractProviderErrorText(errorText) || response.statusText || 'Request failed',
       });
     }
 
     return (await response.json()) as TResponse;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
+      if (signal?.aborted && !timedOut) {
+        throw new CancellationError();
+      }
+
       throw appError('LLM_CONNECTION_FAILED', {
         provider: request.provider,
         status: 'TIMEOUT',
@@ -215,16 +283,9 @@ export async function requestOpenAiCompatibleChatCompletion<
       statusText: error instanceof Error ? error.message : String(error),
     });
   } finally {
+    signal?.removeEventListener('abort', abortFromExternalSignal);
     clearTimeout(timeoutId);
   }
-}
-
-export async function requestChatCompletion(
-  request: ResolvedLlmRequest,
-  payload: ChatCompletionRequest,
-  timeoutMs: number,
-): Promise<unknown> {
-  return requestOpenAiCompatibleChatCompletion(request, payload, timeoutMs);
 }
 
 function extractResponsePreview(payload: unknown): string {
@@ -266,28 +327,63 @@ export function extractResponseContent(payload: unknown): string {
     return '';
   }
 
-  const choices = (payload as { choices?: Array<{ message?: { content?: unknown } }> }).choices;
-  const content = choices?.[0]?.message?.content;
-  return extractTextContent(content);
+  const outputText = (payload as { output_text?: unknown }).output_text;
+  if (typeof outputText === 'string') {
+    return cleanText(outputText);
+  }
+
+  const output = (payload as { output?: unknown }).output;
+  if (!Array.isArray(output)) {
+    return '';
+  }
+
+  return cleanText(
+    output
+      .flatMap((item) => {
+        if (!item || typeof item !== 'object' || (item as { type?: unknown }).type !== 'message') {
+          return [];
+        }
+
+        const content = (item as { content?: unknown }).content;
+        if (!Array.isArray(content)) {
+          return [];
+        }
+
+        return content.map((part) => {
+          if (!part || typeof part !== 'object') {
+            return '';
+          }
+
+          const text = (part as { text?: unknown }).text;
+          if (typeof text === 'string') {
+            return text;
+          }
+
+          const value = (part as { value?: unknown }).value;
+          return typeof value === 'string' ? value : '';
+        });
+      })
+      .join('\n'),
+  );
 }
 
 export async function testLlmConnection(
   payload: TestPayload = {},
 ): Promise<LlmConnectionTestResult> {
   const request = resolveLlmRequest(payload);
-  const responseJson = await requestChatCompletion(
+  const responseJson = await requestOpenAiCompatibleResponse(
     request,
     {
       model: request.model,
-      reasoning_effort: request.reasoningEffort,
+      reasoning: request.reasoningEffort ? { effort: request.reasoningEffort } : undefined,
       service_tier: request.serviceTier,
-      messages: [
+      input: [
         {
           role: 'user',
           content: 'Reply with OK only.',
         },
       ],
-      max_tokens: 8,
+      max_output_tokens: 8,
       temperature: 0,
     },
     llmTestTimeoutMs,

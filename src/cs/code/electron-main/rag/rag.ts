@@ -14,7 +14,7 @@ import { resolveLlmRoute } from 'cs/workbench/services/llm/routing';
 import { resolveRagRoute } from 'cs/workbench/services/rag/routing';
 import {
   extractResponseContent,
-  requestChatCompletion,
+  requestOpenAiCompatibleResponse,
   resolveLlmRequestFromPayload,
 } from 'cs/code/electron-main/llm/llm';
 import {
@@ -299,13 +299,14 @@ export async function answerQuestionFromArticles(
     reasoningEffort: llmRoute.reasoningEffort,
     serviceTier: llmRoute.serviceTier,
   });
-  const llmResponse = await requestChatCompletion(
+  const llmResponse = await requestOpenAiCompatibleResponse(
     llmRequest,
     {
       model: llmRoute.model,
+      reasoning: llmRoute.reasoningEffort ? { effort: llmRoute.reasoningEffort } : undefined,
       service_tier: llmRoute.serviceTier,
-      messages: buildRagMessages(question, writingContext, evidence),
-      max_tokens: 1200,
+      input: buildRagMessages(question, writingContext, evidence),
+      max_output_tokens: 1200,
       temperature: 0.2,
     },
     ragAnswerTimeoutMs,

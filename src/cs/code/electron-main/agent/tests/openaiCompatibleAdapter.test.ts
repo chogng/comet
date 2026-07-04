@@ -22,23 +22,14 @@ test('openai-compatible agent adapter sends tools and maps tool calls', async ()
     return new Response(
       JSON.stringify({
         id: 'resp_1',
-        choices: [
+        status: 'completed',
+        output: [
           {
-            finish_reason: 'tool_calls',
-            message: {
-              role: 'assistant',
-              content: null,
-              tool_calls: [
-                {
-                  id: 'call_1',
-                  type: 'function',
-                  function: {
-                    name: 'retrieve_evidence',
-                    arguments: '{"question":"What changed?"}',
-                  },
-                },
-              ],
-            },
+            type: 'function_call',
+            id: 'fc_1',
+            call_id: 'call_1',
+            name: 'retrieve_evidence',
+            arguments: '{"question":"What changed?"}',
           },
         ],
       }),
@@ -90,13 +81,15 @@ test('openai-compatible agent adapter sends tools and maps tool calls', async ()
     assert.ok(body);
     const requestBody = body as {
       model?: string;
-      messages?: Array<{ role: string }>;
-      tools?: Array<{ function: { name: string } }>;
+      input?: Array<{ role?: string }>;
+      instructions?: string;
+      tools?: Array<{ name: string }>;
     };
-    assert.equal(requestUrl, 'https://example.test/v1/chat/completions');
+    assert.equal(requestUrl, 'https://example.test/v1/responses');
     assert.equal(requestBody.model, 'glm-4.6');
-    assert.equal(requestBody.messages?.[0]?.role, 'system');
-    assert.equal(requestBody.tools?.[0]?.function.name, 'retrieve_evidence');
+    assert.equal(requestBody.instructions, 'Use tools when needed.');
+    assert.equal(requestBody.input?.[0]?.role, 'user');
+    assert.equal(requestBody.tools?.[0]?.name, 'retrieve_evidence');
     assert.equal(result.stopReason, 'tool-call');
     assert.deepEqual(result.message.parts, [
       {
@@ -120,18 +113,17 @@ test('openai-compatible agent adapter extracts assistant text from content array
     new Response(
       JSON.stringify({
         id: 'resp_2',
-        choices: [
+        status: 'completed',
+        output: [
           {
-            finish_reason: 'stop',
-            message: {
-              role: 'assistant',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Grounded answer.',
-                },
-              ],
-            },
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Grounded answer.',
+              },
+            ],
           },
         ],
       }),

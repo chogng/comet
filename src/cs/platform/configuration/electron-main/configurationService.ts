@@ -208,8 +208,10 @@ function serializeConfigValue(value: unknown) {
         const hasApiKey = Boolean(cleanText(provider.apiKey));
         const hasCustomBaseUrl = cleanText(provider.baseUrl) !== defaultProvider.baseUrl;
         const hasCustomModel = cleanText(provider.model) !== defaultProvider.model;
+        const hasModels =
+          JSON.stringify(provider.models) !== JSON.stringify(defaultProvider.models);
 
-        if (!hasApiKey && !hasCustomBaseUrl && !hasCustomModel) {
+        if (!hasApiKey && !hasCustomBaseUrl && !hasCustomModel && !hasModels) {
           return [];
         }
 
@@ -219,6 +221,7 @@ function serializeConfigValue(value: unknown) {
             apiKey: provider.apiKey,
             baseUrl: provider.baseUrl,
             model: provider.model,
+            models: provider.models,
           },
         ]];
       }),
@@ -499,7 +502,16 @@ function normalizeTranslationProviderSettings(
     apiKey: cleanText(providerPayload.apiKey),
     baseUrl: cleanText(providerPayload.baseUrl) || defaults.baseUrl,
     model: cleanText(providerPayload.model) || defaults.model,
+    models: normalizeTranslationProviderModels(providerPayload.models),
   };
+}
+
+function normalizeTranslationProviderModels(models: unknown): string[] {
+  if (!Array.isArray(models)) {
+    return [];
+  }
+
+  return Array.from(new Set(models.map((model) => cleanText(model)).filter(Boolean)));
 }
 
 function normalizeKnowledgeBaseSettings(payload: unknown): KnowledgeBaseSettings {

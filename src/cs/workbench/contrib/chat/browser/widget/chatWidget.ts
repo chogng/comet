@@ -24,6 +24,7 @@ import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/widget/chatLis
 import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
 import {
 	createChatInputToolbarActionItem,
+	renderChatInputToolbarActionContent,
 	type ChatInputToolbarActionItem,
 } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar';
 import { $ } from 'cs/base/browser/dom';
@@ -33,6 +34,7 @@ import 'cs/workbench/contrib/chat/browser/widget/media/chat.css';
 
 const CHAT_HEADER_MORE_MENU_DATA = 'agentbar-header-more';
 const CHAT_HEADER_HISTORY_MENU_DATA = 'agentbar-header-history';
+const CHAT_ARTICLE_SUMMARY_EXPORT_MENU_DATA = 'agentbar-article-summary-export';
 
 export class ChatWidget {
 	private props: ChatWidgetProps;
@@ -156,19 +158,53 @@ export class ChatWidget {
 			return [];
 		}
 
+		const exportArticleSummariesLabel = localize('chatQuickActionExportArticleSummaries', "导出摘要");
 		return [
 			createChatInputToolbarActionItem({
 				label: localize('chatQuickActionDownloadAllArticles', "下载全部"),
 				icon: lxIconSemanticMap.fetch.batchDownload,
-				disabled: this.props.isArticleSourceFetching,
+				disabled: this.props.isArticleSourceFetching && !this.props.downloadAllProgress,
+				progress: this.props.downloadAllProgress,
 				onClick: this.props.onDownloadAllArticles,
 			}),
-			createChatInputToolbarActionItem({
-				label: localize('chatQuickActionExportArticleSummaries', "翻译并导出摘要"),
-				icon: 'translate',
-				disabled: this.props.isArticleSourceFetching,
-				onClick: this.props.onExportArticleSummaries,
-			}),
+			this.props.translationExportProgress
+				? createChatInputToolbarActionItem({
+					label: exportArticleSummariesLabel,
+					icon: 'translate',
+					progress: this.props.translationExportProgress,
+					onClick: () => this.props.onExportArticleSummaries(true),
+				})
+				: createDropdownMenuActionViewItem({
+					label: exportArticleSummariesLabel,
+					title: exportArticleSummariesLabel,
+					mode: 'text',
+					content: () => renderChatInputToolbarActionContent(
+						exportArticleSummariesLabel,
+						'translate',
+						'chevron-down',
+					),
+					buttonClassName: 'comet-chat-composer-input-toolbar-action',
+					disabled: this.props.isArticleSourceFetching,
+					menuData: CHAT_ARTICLE_SUMMARY_EXPORT_MENU_DATA,
+					menu: [
+						{
+							id: 'agentbar-article-summary-export-original',
+							label: localize('chatQuickActionExportOriginalArticleSummaries', "直接导出摘要"),
+							icon: 'export',
+							onClick: () => {
+								void this.props.onExportArticleSummaries(false);
+							},
+						},
+						{
+							id: 'agentbar-article-summary-export-translated',
+							label: localize('chatQuickActionExportTranslatedArticleSummaries', "翻译并导出摘要"),
+							icon: 'translate',
+							onClick: () => {
+								void this.props.onExportArticleSummaries(true);
+							},
+						},
+					],
+				}),
 		];
 	}
 

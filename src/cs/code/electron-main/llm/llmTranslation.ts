@@ -4,14 +4,14 @@ import { cleanText } from 'cs/base/common/strings';
 import { parseLlmModelOptionValue } from 'cs/workbench/services/llm/registry';
 import {
   extractResponseContent,
-  requestChatCompletion,
+  requestOpenAiCompatibleResponse,
   resolveLlmRequestFromPayload,
 } from 'cs/code/electron-main/llm/llm';
 
 // LLM-based translation implementation only.
 // This module owns the prompt contract and response normalization for the
-// chat-completions translation path, but does not decide when that path should
-// be used. Routing, caching, and concurrency live in translationRouter.ts.
+// Responses API translation path. Routing, caching, and concurrency live in
+// translationRouter.ts.
 const llmTranslationTimeoutMs = 45000;
 
 type TranslationBatchResponse = {
@@ -120,18 +120,20 @@ export function getLlmTranslationCacheIdentity(settings: LlmSettings) {
 export async function translateTextsWithLlm(
   batch: TranslationBatchItem[],
   settings: LlmSettings,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   if (batch.length === 0) {
     return [];
   }
 
   const request = resolveLlmRequestFromSettings(settings);
-  const responseJson = await requestChatCompletion(
+  const responseJson = await requestOpenAiCompatibleResponse(
     request,
     {
       model: request.model,
+      reasoning: request.reasoningEffort ? { effort: request.reasoningEffort } : undefined,
       service_tier: request.serviceTier,
-      messages: [
+      input: [
         {
           role: 'system',
           content:
@@ -142,10 +144,11 @@ export async function translateTextsWithLlm(
           content: createBatchRequestMessage(batch),
         },
       ],
-      max_tokens: 4000,
+      max_output_tokens: 4000,
       temperature: 0,
     },
     llmTranslationTimeoutMs,
+    signal,
   );
   const responseText = extractResponseContent(responseJson);
   return normalizeTranslationBatch(responseText, batch, request.provider);

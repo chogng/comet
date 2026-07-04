@@ -260,7 +260,6 @@ function shouldUpdateTranslationSection(
     !previousProps ||
     previousProps.activeTranslationProvider !== currentProps.activeTranslationProvider ||
     previousProps.translationProviders !== currentProps.translationProviders ||
-    previousProps.customTranslationModels !== currentProps.customTranslationModels ||
     previousProps.llmProviders !== currentProps.llmProviders ||
     previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
     previousProps.isTestingTranslationConnection !== currentProps.isTestingTranslationConnection ||

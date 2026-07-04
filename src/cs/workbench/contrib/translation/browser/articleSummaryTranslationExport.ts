@@ -4,8 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { toast } from 'cs/base/browser/ui/toast/toast';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
+import type { CancellationToken } from 'cs/base/common/cancellation';
+import { EventEmitter } from 'cs/base/common/event';
 import type {
   DocumentTranslationProgress,
+  DocxExportResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
   ElectronInvoke,
@@ -14,11 +18,13 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
+import { showWorkbenchSaveConfirmModal } from 'cs/workbench/browser/workbenchEditorModals';
 import {
   canExportArticlesDocx,
   resolvePreferredDirectory,
 } from 'cs/workbench/services/document/documentActionService';
 import {
+  type DesktopInvokeErrorData,
   formatLocalized,
   localizeDesktopInvokeError,
   parseDesktopInvokeError,
@@ -28,6 +34,7 @@ import {
   getStatusbarStateSnapshot,
   setStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
+import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 
 export type ArticleSummaryTranslationExportControllerContext = {
   desktopRuntime: boolean;
@@ -38,18 +45,92 @@ export type ArticleSummaryTranslationExportControllerContext = {
   pdfDownloadDir: string;
 };
 
+export type ArticleSummaryTranslationExportControllerSnapshot = {
+  translationExportProgress: ArticleBatchTaskProgress | null;
+};
+
+type ArticleSummaryTranslationExportTask = {
+  taskId: string;
+  source: CancellationTokenSource;
+  restoreStatusbar: (restoreStatus: boolean) => void;
+};
+
+type ArticleSummaryTranslationFailureChoice = 'retry' | 'exportOriginal' | 'cancel';
+
+let articleSummaryTranslationExportTaskCounter = 0;
+
+function createArticleSummaryTranslationExportTaskId() {
+  articleSummaryTranslationExportTaskCounter += 1;
+  return `article-summary-translation-${Date.now()}-${articleSummaryTranslationExportTaskCounter}`;
+}
+
+function createSnapshot(
+  translationExportProgress: ArticleBatchTaskProgress | null = null,
+): ArticleSummaryTranslationExportControllerSnapshot {
+  return {
+    translationExportProgress,
+  };
+}
+
+function sameArticleBatchTaskProgress(
+  left: ArticleBatchTaskProgress | null,
+  right: ArticleBatchTaskProgress | null,
+) {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return left.phase === right.phase && left.current === right.current && left.total === right.total;
+}
+
+function detailString(details: Record<string, unknown> | undefined, key: string) {
+  const value = details?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function isDocxTranslationFailure(error: DesktopInvokeErrorData) {
+  return error.code === 'DOCX_TRANSLATION_FAILED';
+}
+
 export class ArticleSummaryTranslationExportController {
   private context: ArticleSummaryTranslationExportControllerContext;
+  private snapshot = createSnapshot();
+  private currentTask: ArticleSummaryTranslationExportTask | null = null;
+  private readonly onDidChangeEmitter = new EventEmitter<void>();
 
   constructor(context: ArticleSummaryTranslationExportControllerContext) {
     this.context = context;
   }
 
+  readonly subscribe = (listener: () => void) => {
+    return this.onDidChangeEmitter.event(listener);
+  };
+
+  readonly getSnapshot = () => this.snapshot;
+
   readonly setContext = (context: ArticleSummaryTranslationExportControllerContext) => {
     this.context = context;
   };
 
-  readonly handleExportArticleSummaries = async (articles: readonly Article[]) => {
+  readonly dispose = () => {
+    this.currentTask?.source.cancel();
+    this.currentTask?.source.dispose();
+    this.currentTask?.restoreStatusbar(true);
+    this.currentTask = null;
+    this.onDidChangeEmitter.dispose();
+  };
+
+  readonly handleExportArticleSummaries = async (
+    articles: readonly Article[],
+    translateSummaries: boolean,
+  ) => {
+    if (this.currentTask) {
+      this.cancelExportArticleSummaries();
+      return;
+    }
+
     const {
       desktopRuntime,
       invokeDesktop,
@@ -68,46 +149,187 @@ export class ArticleSummaryTranslationExportController {
       return;
     }
 
-    const restoreTranslationStatus = this.beginTranslationStatusbarProgress();
-    try {
-      const result = await invokeDesktop('export_articles_docx', {
-        articles: exportArticles,
-        preferredDirectory: resolvePreferredDirectory(pdfDownloadDir),
-        locale,
-      });
+    const source = new CancellationTokenSource();
+    const taskId = createArticleSummaryTranslationExportTaskId();
+    const restoreTranslationStatus = this.beginTranslationStatusbarProgress(
+      source.token,
+      exportArticles.length,
+    );
+    this.currentTask = {
+      taskId,
+      source,
+      restoreStatusbar: restoreTranslationStatus,
+    };
+    this.setTranslationExportProgress({
+      phase: 'running',
+      current: 0,
+      total: exportArticles.length,
+    });
 
-      if (!result) {
+    let shouldTranslateSummaries = translateSummaries;
+    let targetFilePath = '';
+
+    try {
+      while (!source.token.isCancellationRequested) {
+        let result: DocxExportResult | null;
+        try {
+          result = await invokeDesktop('export_articles_docx', {
+            taskId,
+            articles: exportArticles,
+            preferredDirectory: resolvePreferredDirectory(pdfDownloadDir),
+            targetFilePath: targetFilePath || null,
+            translateSummaries: shouldTranslateSummaries,
+            locale,
+          });
+        } catch (exportError) {
+          const parsedError = parseDesktopInvokeError(exportError);
+          targetFilePath = detailString(parsedError.details, 'filePath') || targetFilePath;
+
+          if (source.token.isCancellationRequested) {
+            return;
+          }
+
+          if (shouldTranslateSummaries && isDocxTranslationFailure(parsedError)) {
+            const choice = await this.promptTranslationFailure(parsedError, source.token);
+            if (source.token.isCancellationRequested) {
+              return;
+            }
+
+            if (choice === 'retry') {
+              this.setTranslationExportProgress({
+                phase: 'running',
+                current: 0,
+                total: exportArticles.length,
+              });
+              continue;
+            }
+
+            if (choice === 'exportOriginal') {
+              shouldTranslateSummaries = false;
+              this.setTranslationExportProgress({
+                phase: 'running',
+                current: exportArticles.length,
+                total: exportArticles.length,
+              });
+              continue;
+            }
+
+            return;
+          }
+
+          const localizedError = localizeDesktopInvokeError(ui, parsedError);
+          toast.error(
+            formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
+          );
+          return;
+        }
+
+        if (source.token.isCancellationRequested || !result) {
+          return;
+        }
+
+        toast.success(
+          formatLocalized(ui.toastDocxExported, {
+            count: result.articleCount,
+            filePath: result.filePath,
+          }),
+        );
         return;
       }
-
-      toast.success(
-        formatLocalized(ui.toastDocxExported, {
-          count: result.articleCount,
-          filePath: result.filePath,
-        }),
-      );
-    } catch (exportError) {
-      const localizedError = localizeDesktopInvokeError(
-        ui,
-        parseDesktopInvokeError(exportError),
-      );
-      toast.error(
-        formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
-      );
     } finally {
-      restoreTranslationStatus();
+      const ownsCurrentTask = this.currentTask?.taskId === taskId;
+      restoreTranslationStatus(ownsCurrentTask || !this.currentTask);
+      if (ownsCurrentTask) {
+        this.currentTask = null;
+        this.setTranslationExportProgress(null);
+      }
+      source.dispose();
     }
   };
 
-  private beginTranslationStatusbarProgress() {
-    const previousStatus = getStatusbarStateSnapshot();
-    const unsubscribe = this.context.nativeHost.document?.onTranslationProgress((progress) => {
-      this.renderTranslationStatusbarProgress(previousStatus, progress);
+  private cancelExportArticleSummaries() {
+    const task = this.currentTask;
+    if (!task) {
+      return;
+    }
+
+    task.source.cancel();
+    task.restoreStatusbar(true);
+    this.currentTask = null;
+    this.setTranslationExportProgress(null);
+    void this.context.invokeDesktop('cancel_document_task', { taskId: task.taskId })
+      .catch((error) => {
+        console.warn('Failed to cancel article summary translation task.', error);
+      });
+  }
+
+  private async promptTranslationFailure(
+    error: DesktopInvokeErrorData,
+    token: CancellationToken,
+  ): Promise<ArticleSummaryTranslationFailureChoice> {
+    const { ui } = this.context;
+    const confirmation = await showWorkbenchSaveConfirmModal({
+      title: ui.translationFailureDialogTitle,
+      message: formatLocalized(ui.translationFailureDialogMessage, {
+        error: localizeDesktopInvokeError(ui, error),
+      }),
+      saveLabel: ui.translationFailureDialogRetry,
+      discardLabel: ui.translationFailureDialogExportOriginal,
+      cancelLabel: ui.editorModalCancel,
+      closeLabel: ui.toastClose,
+      cancellationToken: token,
     });
 
-    return () => {
+    if (confirmation === 'save') {
+      return 'retry';
+    }
+
+    if (confirmation === 'discard') {
+      return 'exportOriginal';
+    }
+
+    return 'cancel';
+  }
+
+  private beginTranslationStatusbarProgress(
+    token: CancellationToken,
+    initialTotal: number,
+  ) {
+    const previousStatus = getStatusbarStateSnapshot();
+    const unsubscribe = this.context.nativeHost.document?.onTranslationProgress((progress) => {
+      if (token.isCancellationRequested) {
+        return;
+      }
+      this.renderTranslationStatusbarProgress(previousStatus, progress);
+      this.setTranslationExportProgress(this.resolveTranslationExportProgress(progress, initialTotal));
+    });
+    let disposed = false;
+
+    return (restoreStatus: boolean) => {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
       unsubscribe?.();
-      setStatusbarState(previousStatus);
+      if (restoreStatus) {
+        setStatusbarState(previousStatus);
+      }
+    };
+  }
+
+  private resolveTranslationExportProgress(
+    progress: DocumentTranslationProgress,
+    initialTotal: number,
+  ): ArticleBatchTaskProgress {
+    const total = Math.max(0, progress.total || initialTotal);
+    const current =
+      progress.phase === 'completed'
+        ? total
+        : Math.max(0, Math.min(progress.current, total));
+    return {
+      phase: 'running',
+      current,
+      total,
     };
   }
 
@@ -144,6 +366,25 @@ export class ArticleSummaryTranslationExportController {
         },
       ],
     });
+  }
+
+  private emitChange() {
+    this.onDidChangeEmitter.fire();
+  }
+
+  private setTranslationExportProgress(progress: ArticleBatchTaskProgress | null) {
+    const nextSnapshot = createSnapshot(progress);
+    if (
+      sameArticleBatchTaskProgress(
+        this.snapshot.translationExportProgress,
+        nextSnapshot.translationExportProgress,
+      )
+    ) {
+      return;
+    }
+
+    this.snapshot = nextSnapshot;
+    this.emitChange();
   }
 }
 

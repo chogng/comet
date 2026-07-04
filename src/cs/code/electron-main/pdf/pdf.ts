@@ -6,7 +6,7 @@ import type { WebContentPdfDownloadPayload } from 'cs/base/parts/sandbox/common/
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
 import { cleanText } from 'cs/base/common/strings';
 import { normalizeUrl } from 'cs/base/common/url';
-import { appError } from 'cs/base/common/errors';
+import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
 import { fetchHtml } from 'cs/code/electron-main/fetch/dispatch';
 import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
 import {
@@ -51,6 +51,12 @@ function summarizeStrategyFailure(error: unknown) {
   return {
     message: String(error),
   };
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CancellationError();
+  }
 }
 
 function pickMetaContent($: ReturnType<typeof load>, selectors: string[]) {
@@ -219,6 +225,7 @@ function resolveMatchingPdfDownloadStrategies(request: PdfDownloadContext) {
 }
 
 async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext) {
+  throwIfAborted(request.abortSignal);
   const directCandidateUrls = [
     ...new Set([
       ...request.naturePdfCandidateUrls,
@@ -231,7 +238,9 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
     request.pageUrl,
     request.downloadDir,
     request.articleTitle,
+    request.abortSignal,
   );
+  throwIfAborted(request.abortSignal);
   if (browserDownloadAttempt.downloaded) {
     logPdfStrategy('generic_browser_session_success', {
       pageUrl: request.pageUrl,
@@ -243,9 +252,10 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
 
   const directDownloadAttempt =
     directCandidateUrls.length > 0
-      ? await tryDownloadPdfCandidates(directCandidateUrls, request.pageUrl)
+      ? await tryDownloadPdfCandidates(directCandidateUrls, request.pageUrl, request.abortSignal)
       : { downloaded: null, failures: [] as PdfDownloadAttemptFailure[] };
 
+  throwIfAborted(request.abortSignal);
   let downloaded = directDownloadAttempt.downloaded;
   const failures: PdfDownloadAttemptFailure[] = [
     ...browserDownloadAttempt.failures,
@@ -259,8 +269,9 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
         : '';
     if (!html) {
       try {
-        html = await fetchHtml(request.pageUrl);
+        html = await fetchHtml(request.pageUrl, { signal: request.abortSignal });
       } catch (error) {
+        throwIfAborted(request.abortSignal);
         if (failures.length > 0) {
           const latestFailure = failures[failures.length - 1];
           logPdfStrategy('generic_failed', {
@@ -289,6 +300,7 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
       }
     }
 
+    throwIfAborted(request.abortSignal);
     const pdfUrl = extractPdfUrl(request.pageUrl, html);
     if (!pdfUrl) {
       logPdfStrategy('generic_pdf_link_not_found', {
@@ -301,7 +313,9 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
     const resolvedDownloadAttempt = await tryDownloadPdfCandidates(
       resolvedCandidateUrls,
       request.pageUrl,
+      request.abortSignal,
     );
+    throwIfAborted(request.abortSignal);
     downloaded = resolvedDownloadAttempt.downloaded;
     failures.push(...resolvedDownloadAttempt.failures);
 
@@ -334,6 +348,7 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
     pageUrl: request.pageUrl,
     finalUrl: downloaded.finalUrl,
   });
+  throwIfAborted(request.abortSignal);
   return await persistDownloadedPdf(downloaded, request.downloadDir, request.articleTitle);
 }
 
@@ -341,6 +356,7 @@ function createPdfDownloadContext(
   payload: WebContentPdfDownloadPayload,
   defaultDownloadDir: string,
   webContentHtmlSnapshot: string | null,
+  abortSignal?: AbortSignal,
 ): PdfDownloadContext {
   const pageUrl = normalizeUrl(payload.pageUrl ?? '');
   const requestedDownloadUrl =
@@ -368,6 +384,7 @@ function createPdfDownloadContext(
     journalTitle,
     downloadDir,
     webContentHtmlSnapshot,
+    abortSignal,
     sciencePdfCandidateUrls: [
       ...new Set([
         ...buildScienceDirectPdfDownloadCandidates(pageUrl, doi),
@@ -390,9 +407,12 @@ export async function previewDownloadPdf(
   payload: WebContentPdfDownloadPayload = {},
   defaultDownloadDir: string,
   webContentHtmlSnapshot: string | null = null,
+  abortSignal?: AbortSignal,
 ) {
-  const request = createPdfDownloadContext(payload, defaultDownloadDir, webContentHtmlSnapshot);
+  const request = createPdfDownloadContext(payload, defaultDownloadDir, webContentHtmlSnapshot, abortSignal);
+  throwIfAborted(request.abortSignal);
   await fs.mkdir(request.downloadDir, { recursive: true });
+  throwIfAborted(request.abortSignal);
 
   logPdfStrategy('request_built', {
     pageUrl: request.pageUrl,
@@ -420,6 +440,7 @@ export async function previewDownloadPdf(
       strategyId: exclusiveStrategy.id,
     });
     const result = await exclusiveStrategy.download(request);
+    throwIfAborted(request.abortSignal);
     if (result) {
       return result;
     }
@@ -438,7 +459,9 @@ export async function previewDownloadPdf(
       strategyId: strategy.id,
     });
     try {
+      throwIfAborted(request.abortSignal);
       const result = await strategy.download(request);
+      throwIfAborted(request.abortSignal);
       if (!result) {
         logPdfStrategy('preferred_skipped', {
           pageUrl: request.pageUrl,
@@ -453,6 +476,9 @@ export async function previewDownloadPdf(
       });
       return result;
     } catch (error) {
+      if (isCancellationError(error)) {
+        throw error;
+      }
       logPdfStrategy('preferred_failed', {
         pageUrl: request.pageUrl,
         strategyId: strategy.id,

@@ -4,7 +4,7 @@ import type { DownloadItem, WebContents } from 'electron';
 
 import { buildPdfFileName } from 'cs/platform/download/common/pdfFileName';
 import { cleanText } from 'cs/base/common/strings';
-import { appError, isAppError } from 'cs/base/common/errors';
+import { appError, CancellationError, isAppError, isCancellationError } from 'cs/base/common/errors';
 import {
   WORKBENCH_SHARED_WEB_PARTITION,
   resolveWorkbenchSharedSession,
@@ -63,6 +63,51 @@ type SessionDownloadListener = {
 
 let browserPdfFetchPromise: Promise<BrowserPdfFetch | null> | null = null;
 let browserPdfFetchUnsupported = false;
+
+function throwIfAborted(abortSignal?: AbortSignal): void {
+  if (abortSignal?.aborted) {
+    throw new CancellationError();
+  }
+}
+
+async function waitForDelay(timeoutMs: number, abortSignal?: AbortSignal) {
+  throwIfAborted(abortSignal);
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      abortSignal?.removeEventListener('abort', handleAbort);
+    };
+
+    const resolveOnce = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const handleAbort = () => {
+      rejectOnce(new CancellationError());
+    };
+
+    timeoutId = setTimeout(resolveOnce, Math.max(0, timeoutMs));
+    abortSignal?.addEventListener('abort', handleAbort, { once: true });
+    if (abortSignal?.aborted) {
+      handleAbort();
+    }
+  });
+}
 
 export function toAbsoluteHttpUrl(rawUrl: string, pageUrl: string) {
   try {
@@ -224,13 +269,7 @@ export async function waitForPdfDownloadFromSession({
     };
 
     const handleAbort = () => {
-      rejectOnce(
-        appError('PDF_DOWNLOAD_FAILED', {
-          status: 'DOWNLOAD_INTERRUPTED',
-          statusText: `${origin} download aborted`,
-          downloadUrl,
-        }),
-      );
+      rejectOnce(new CancellationError());
     };
 
     const handleWillDownload = (
@@ -350,26 +389,33 @@ async function resolveBrowserPdfFetch() {
   return resolved;
 }
 
-async function fetchPdfWithPreferredTransport(candidateUrl: string, pageUrl: string) {
+async function fetchPdfWithPreferredTransport(candidateUrl: string, pageUrl: string, abortSignal?: AbortSignal) {
+  throwIfAborted(abortSignal);
   const headers = buildPdfFetchHeaders(pageUrl);
   const browserPdfFetch = await resolveBrowserPdfFetch();
   if (browserPdfFetch) {
     try {
       return await browserPdfFetch.fetch(candidateUrl, {
         headers,
+        signal: abortSignal,
       });
-    } catch {
+    } catch (error) {
+      if (abortSignal?.aborted || isCancellationError(error)) {
+        throw new CancellationError();
+      }
       // Fall back to node fetch when browser-session fetch is unavailable for this request.
     }
   }
 
-  return fetch(candidateUrl, { headers });
+  throwIfAborted(abortSignal);
+  return fetch(candidateUrl, { headers, signal: abortSignal });
 }
 
 export async function attemptPdfDownloadWithFetcher(
   fetcher: (url: string, init: RequestInit) => Promise<Response>,
   candidateUrl: string,
   pageUrl: string,
+  abortSignal?: AbortSignal,
 ): Promise<
   | {
       ok: true;
@@ -381,8 +427,10 @@ export async function attemptPdfDownloadWithFetcher(
     }
 > {
   try {
+    throwIfAborted(abortSignal);
     const response = await fetcher(candidateUrl, {
       headers: buildPdfFetchHeaders(pageUrl),
+      signal: abortSignal,
     });
     if (!response.ok) {
       return {
@@ -422,6 +470,10 @@ export async function attemptPdfDownloadWithFetcher(
       },
     };
   } catch (error) {
+    if (abortSignal?.aborted || isCancellationError(error)) {
+      throw new CancellationError();
+    }
+
     return {
       ok: false,
       failure: {
@@ -444,6 +496,7 @@ export async function tryPdfDownloadWithFetcherPolling({
   unavailableStatus = 'FETCH_UNAVAILABLE',
   unavailableStatusText = 'Session fetch is unavailable',
   shouldRetry,
+  abortSignal,
 }: {
   fetcher?: ((url: string, init: RequestInit) => Promise<Response>) | null;
   downloadUrl: string;
@@ -455,8 +508,10 @@ export async function tryPdfDownloadWithFetcherPolling({
   unavailableStatus?: string;
   unavailableStatusText?: string;
   shouldRetry?: (failure: PdfDownloadAttemptFailure) => boolean;
+  abortSignal?: AbortSignal;
 }) {
   const failures: PdfDownloadAttemptFailure[] = [];
+  throwIfAborted(abortSignal);
   if (!fetcher) {
     return {
       downloaded: null,
@@ -476,8 +531,10 @@ export async function tryPdfDownloadWithFetcherPolling({
       fetcher,
       downloadUrl,
       refererUrl,
+      abortSignal,
     );
     if (attempt.ok) {
+      throwIfAborted(abortSignal);
       return {
         downloaded: await persistDownloadedPdf(attempt.value, downloadDir, articleTitle),
         failures,
@@ -489,7 +546,7 @@ export async function tryPdfDownloadWithFetcherPolling({
       break;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    await waitForDelay(pollMs, abortSignal);
   }
 
   return {
@@ -501,6 +558,7 @@ export async function tryPdfDownloadWithFetcherPolling({
 async function attemptPdfDownload(
   candidateUrl: string,
   pageUrl: string,
+  abortSignal?: AbortSignal,
 ): Promise<
   | {
       ok: true;
@@ -512,18 +570,20 @@ async function attemptPdfDownload(
     }
 > {
   return await attemptPdfDownloadWithFetcher(
-    async (url, _init) => await fetchPdfWithPreferredTransport(url, pageUrl),
+    async (url, _init) => await fetchPdfWithPreferredTransport(url, pageUrl, abortSignal),
     candidateUrl,
     pageUrl,
+    abortSignal,
   );
 }
 
-export async function tryDownloadPdfCandidates(candidateUrls: string[], pageUrl: string) {
+export async function tryDownloadPdfCandidates(candidateUrls: string[], pageUrl: string, abortSignal?: AbortSignal) {
   const failures: PdfDownloadAttemptFailure[] = [];
   let downloaded: PdfDownloadAttemptSuccess | null = null;
 
   for (const candidateUrl of candidateUrls) {
-    const attempt = await attemptPdfDownload(candidateUrl, pageUrl);
+    throwIfAborted(abortSignal);
+    const attempt = await attemptPdfDownload(candidateUrl, pageUrl, abortSignal);
     if (attempt.ok) {
       downloaded = attempt.value;
       break;
@@ -570,7 +630,9 @@ async function triggerBrowserSessionDownload(
   downloadDir: string,
   articleTitle = '',
   timeoutMs = 45000,
+  abortSignal?: AbortSignal,
 ): Promise<BrowserSessionDownloadResult | null> {
+  throwIfAborted(abortSignal);
   const session = await resolveBrowserDownloadSession();
   if (!session) {
     return null;
@@ -583,6 +645,7 @@ async function triggerBrowserSessionDownload(
     articleTitle,
     timeoutMs,
     origin: 'browser_session',
+    abortSignal,
     triggerDownload: () => {
       session.downloadURL(downloadUrl, {
         headers: buildPdfFetchHeaders(pageUrl),
@@ -596,16 +659,20 @@ export async function tryBrowserSessionDownloadCandidates(
   pageUrl: string,
   downloadDir: string,
   articleTitle = '',
+  abortSignal?: AbortSignal,
 ) {
   const failures: PdfDownloadAttemptFailure[] = [];
 
   for (const downloadUrl of candidateUrls) {
+    throwIfAborted(abortSignal);
     try {
       const browserDownload = await triggerBrowserSessionDownload(
         downloadUrl,
         pageUrl,
         downloadDir,
         articleTitle,
+        45000,
+        abortSignal,
       );
       if (browserDownload) {
         return {
@@ -622,6 +689,9 @@ export async function tryBrowserSessionDownloadCandidates(
         ),
       );
     } catch (error) {
+      if (isCancellationError(error)) {
+        throw error;
+      }
       failures.push(toPdfDownloadFailureFromError(downloadUrl, error));
     }
   }

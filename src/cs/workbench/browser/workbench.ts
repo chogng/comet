@@ -963,6 +963,7 @@ class WorkbenchHost {
     webContentNavigationModel: WebContentNavigationModel;
     editorPartController: EditorPartModel;
     assistantModel: AssistantModel;
+    articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
     documentActionsController: DocumentActionsController;
     batchFetchController: BatchFetchController;
   }) {
@@ -977,6 +978,7 @@ class WorkbenchHost {
       services.webContentNavigationModel.subscribe(this.requestRender),
       services.editorPartController.subscribe(this.handleEditorPartChange),
       services.assistantModel.subscribe(this.requestRender),
+      services.articleSummaryTranslationExportController.subscribe(this.requestRender),
       services.documentActionsController.subscribe(this.requestRender),
       services.batchFetchController.subscribe(this.requestRender),
     );
@@ -1499,7 +1501,6 @@ class WorkbenchHost {
       llmProviders,
       activeTranslationProvider,
       translationProviders,
-      customTranslationModels,
       configPath,
       defaultConfigPath,
       isSettingsLoading,
@@ -2113,6 +2114,8 @@ class WorkbenchHost {
       webContentNavigationModel: webContentNavigationModelInstance,
       editorPartController: editorPartControllerInstance,
       assistantModel: assistantModelInstance,
+      articleSummaryTranslationExportController:
+        articleSummaryTranslationExportControllerInstance,
       documentActionsController: documentActionsControllerInstance,
       batchFetchController: batchFetchControllerInstance,
     });
@@ -2162,6 +2165,9 @@ class WorkbenchHost {
       },
     };
 
+    const documentActionsSnapshot = documentActionsControllerInstance.getSnapshot();
+    const articleSummaryTranslationExportSnapshot =
+      articleSummaryTranslationExportControllerInstance.getSnapshot();
     const sessionChatProps = createSessionChatViewProps({
       state: {
         isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
@@ -2187,7 +2193,13 @@ class WorkbenchHost {
         articleQuickSources,
         isArticleSourceFetching: isBatchLoading,
         showArticleBatchActions:
-          chatArticleBatch.length > 0 && !isBatchLoading,
+          chatArticleBatch.length > 0 &&
+          (!isBatchLoading ||
+            Boolean(documentActionsSnapshot.downloadAllProgress) ||
+            Boolean(articleSummaryTranslationExportSnapshot.translationExportProgress)),
+        downloadAllProgress: documentActionsSnapshot.downloadAllProgress,
+        translationExportProgress:
+          articleSummaryTranslationExportSnapshot.translationExportProgress,
         isArticleSelected: (href) => {
           const sourceUrl = normalizeUrl(href);
           return Boolean(sourceUrl && selectedChatArticleUrlSet.has(sourceUrl));
@@ -2200,8 +2212,11 @@ class WorkbenchHost {
         onFetchArticleSource: (source) => void handleFetchArticleSource(source),
         onDownloadAllArticles: () =>
           documentActionsControllerInstance.handleDownloadAllArticles(selectedChatArticleBatch),
-        onExportArticleSummaries: () =>
-          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries(selectedChatArticleBatch),
+        onExportArticleSummaries: (translateSummaries) =>
+          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries(
+            selectedChatArticleBatch,
+            translateSummaries,
+          ),
         onToggleArticleSelected: (href) => {
           setWorkbenchSelectedChatArticleUrlsInOrder((previousUrls) =>
             toggleSelectedChatArticleUrl(previousUrls, href),
@@ -2329,7 +2344,6 @@ class WorkbenchHost {
         llmProviders,
         activeTranslationProvider,
         translationProviders,
-        customTranslationModels,
         desktopRuntime,
         configPath,
         defaultConfigPath,
@@ -2599,6 +2613,7 @@ export function disposeWorkbenchServices() {
   editorPartController?.dispose();
   editorPartController = null;
 
+  articleSummaryTranslationExportController?.dispose();
   articleSummaryTranslationExportController = null;
 
   documentActionsController?.dispose();

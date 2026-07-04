@@ -11,6 +11,7 @@ import type {
   AppCommandPayloadMap,
   AppCommandResultMap,
   AppSettings,
+  CancelDocumentTaskPayload,
   DeleteLibraryDocumentPayload,
   FetchArticlePayload,
   FetchLatestArticlesPayload,
@@ -106,8 +107,49 @@ type AppInvokeResponse<T> =
   | { ok: true; result: T }
   | { ok: false; error: string };
 
+const documentTaskAbortControllers = new Map<string, AbortController>();
+
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
 let cachedSettings: AppSettings | null = null;
+
+function getDocumentTaskId(payload: { taskId?: string } | undefined) {
+  return typeof payload?.taskId === 'string' ? payload.taskId.trim() : '';
+}
+
+function startDocumentTaskAbortController(payload: { taskId?: string } | undefined) {
+  const taskId = getDocumentTaskId(payload);
+  if (!taskId) {
+    return null;
+  }
+
+  const abortController = new AbortController();
+  documentTaskAbortControllers.set(taskId, abortController);
+  return {
+    taskId,
+    abortController,
+    dispose: () => {
+      if (documentTaskAbortControllers.get(taskId) === abortController) {
+        documentTaskAbortControllers.delete(taskId);
+      }
+    },
+  };
+}
+
+function cancelDocumentTask(payload: CancelDocumentTaskPayload | undefined) {
+  const taskId = getDocumentTaskId(payload);
+  if (!taskId) {
+    return false;
+  }
+
+  const abortController = documentTaskAbortControllers.get(taskId);
+  if (!abortController) {
+    return false;
+  }
+
+  abortController.abort();
+  documentTaskAbortControllers.delete(taskId);
+  return true;
+}
 
 function showSystemNotificationFromToast(options: NativeToastOptions, settings: AppSettings) {
   const payload = resolveSystemNotificationPayloadFromToast(options, settings);
@@ -233,34 +275,41 @@ async function invokeCommand<TCommand extends AppCommand>(
         payload as AppCommandPayloadMap['open_path'],
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'web_content_download_pdf': {
-      const previewHtml = await resolveWebContentSnapshotHtml(payload as WebContentPdfDownloadPayload);
-      const downloadResult = await previewDownloadPdf(
-        payload as WebContentPdfDownloadPayload,
-        app.getPath('downloads'),
-        previewHtml,
-      );
-
+      const downloadPayload = payload as WebContentPdfDownloadPayload;
+      const taskAbortController = startDocumentTaskAbortController(downloadPayload);
       try {
-        const settings = await storage.loadSettings();
-        if (settings.knowledgeBase.enabled && settings.knowledgeBase.autoIndexDownloadedPdf) {
-          const registration = await storage.registerLibraryDocument({
-            ...(payload as WebContentPdfDownloadPayload),
-            filePath: downloadResult.filePath,
-            sourceUrl: downloadResult.sourceUrl,
-          });
-          return {
-            ...downloadResult,
-            libraryRegistration: registration,
-          } as AppCommandResultMap[TCommand];
-        }
-      } catch (registrationError) {
-        console.error('Failed to auto-register downloaded PDF in the library.', registrationError);
-      }
+        const previewHtml = await resolveWebContentSnapshotHtml(downloadPayload);
+        const downloadResult = await previewDownloadPdf(
+          downloadPayload,
+          app.getPath('downloads'),
+          previewHtml,
+          taskAbortController?.abortController.signal,
+        );
 
-      return {
-        ...downloadResult,
-        libraryRegistration: null,
-      } as AppCommandResultMap[TCommand];
+        try {
+          const settings = await storage.loadSettings();
+          if (settings.knowledgeBase.enabled && settings.knowledgeBase.autoIndexDownloadedPdf) {
+            const registration = await storage.registerLibraryDocument({
+              ...downloadPayload,
+              filePath: downloadResult.filePath,
+              sourceUrl: downloadResult.sourceUrl,
+            });
+            return {
+              ...downloadResult,
+              libraryRegistration: registration,
+            } as AppCommandResultMap[TCommand];
+          }
+        } catch (registrationError) {
+          console.error('Failed to auto-register downloaded PDF in the library.', registrationError);
+        }
+
+        return {
+          ...downloadResult,
+          libraryRegistration: null,
+        } as AppCommandResultMap[TCommand];
+      } finally {
+        taskAbortController?.dispose();
+      }
     }
     case 'web_content_archive_html':
       return archiveWebContentHtml(
@@ -268,6 +317,10 @@ async function invokeCommand<TCommand extends AppCommand>(
         app.getPath('downloads'),
         storage,
       ) as Promise<AppCommandResultMap[TCommand]>;
+    case 'cancel_document_task':
+      return cancelDocumentTask(
+        payload as CancelDocumentTaskPayload,
+      ) as AppCommandResultMap[TCommand];
     case 'index_downloaded_pdf':
       return storage.registerLibraryDocument(
         payload as IndexDownloadedPdfPayload,
@@ -308,17 +361,24 @@ async function invokeCommand<TCommand extends AppCommand>(
         if (!mainWindow) {
           throw appError('MAIN_WINDOW_UNAVAILABLE');
         }
-        return exportArticlesDocx(
-          payload as AppCommandPayloadMap['export_articles_docx'],
-          app.getPath('downloads'),
-          storage,
-          mainWindow,
-          {
-            onTranslationProgress: (progress) => {
-              emitToRenderer?.(DOCUMENT_TRANSLATION_PROGRESS_CHANNEL, progress);
+        const exportPayload = payload as AppCommandPayloadMap['export_articles_docx'];
+        const taskAbortController = startDocumentTaskAbortController(exportPayload);
+        try {
+          return await exportArticlesDocx(
+            exportPayload,
+            app.getPath('downloads'),
+            storage,
+            mainWindow,
+            {
+              signal: taskAbortController?.abortController.signal,
+              onTranslationProgress: (progress) => {
+                emitToRenderer?.(DOCUMENT_TRANSLATION_PROGRESS_CHANNEL, progress);
+              },
             },
-          },
-        ) as Promise<AppCommandResultMap[TCommand]>;
+          ) as AppCommandResultMap[TCommand];
+        } finally {
+          taskAbortController?.dispose();
+        }
       }
     case 'export_editor_docx':
       {

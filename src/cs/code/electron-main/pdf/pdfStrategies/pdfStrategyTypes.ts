@@ -8,6 +8,7 @@ export type PdfDownloadContext = {
   journalTitle: string;
   downloadDir: string;
   webContentHtmlSnapshot: string | null;
+  abortSignal?: AbortSignal;
   sciencePdfCandidateUrls: string[];
   naturePdfCandidateUrls: string[];
 };

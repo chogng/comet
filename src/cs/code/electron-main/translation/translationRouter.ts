@@ -7,6 +7,7 @@ import type {
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
 import type { StorageService, TranslationCacheRecord } from 'cs/platform/storage/common/storage';
+import { CancellationError, isAppError, isCancellationError } from 'cs/base/common/errors';
 import { getLlmTranslationCacheIdentity, translateTextsWithLlm } from 'cs/code/electron-main/llm/llmTranslation';
 import type { TranslationBatchItem } from 'cs/code/electron-main/llm/llmTranslation';
 
@@ -22,13 +23,19 @@ const maxTranslationBatchItems = 8;
 const maxTranslationBatchChars = 12000;
 const translationBatchConcurrency = 3;
 const translationCacheVersion = 'scientific-zh-v1';
-const openAICompatibleTranslationModel = 'gpt-5.4-mini';
+const openAICompatibleTranslationModel = 'gpt-5.5';
 
 type TranslationCacheItem = TranslationBatchItem & {
   cacheKey: string;
 };
 
 export type TranslationProgressReporter = (progress: DocumentTranslationProgress) => void;
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CancellationError();
+  }
+}
 
 function buildTranslationBatches(items: TranslationBatchItem[]) {
   const batches: TranslationBatchItem[][] = [];
@@ -131,6 +138,22 @@ function applyTranslatedValue(
   }
 }
 
+function resolveTranslationFailureMessage(error: unknown) {
+  if (isAppError(error)) {
+    const statusText = error.details?.statusText;
+    if (typeof statusText === 'string' && statusText) {
+      return statusText;
+    }
+
+    const message = error.details?.message;
+    if (typeof message === 'string' && message) {
+      return message;
+    }
+  }
+
+  return error instanceof Error ? error.message : String(error);
+}
+
 function resolveDedicatedTranslationModel(
   activeProvider: TranslationSettings['activeProvider'],
   providerSettings: TranslationSettings['providers'][TranslationSettings['activeProvider']],
@@ -217,12 +240,14 @@ export async function translateTextsToChinese(
   translationSettings: TranslationSettings,
   storage: StorageService,
   onProgress?: TranslationProgressReporter,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   const normalizedTexts = texts.map((text) => cleanText(text));
   if (normalizedTexts.length === 0) {
     return [];
   }
 
+  throwIfAborted(signal);
   const route = resolveTranslationCacheIdentity(llmSettings, translationSettings);
   const translatedTexts = [...normalizedTexts];
   const { uniqueItems, cacheKeyToIndexes } = buildUniqueTranslationItems(
@@ -232,82 +257,107 @@ export async function translateTextsToChinese(
     route.model,
   );
 
-  const cachedTranslations = await storage.loadTranslationCache(uniqueItems.map((item) => item.cacheKey));
   const uncachedItems: TranslationCacheItem[] = [];
-
-  uniqueItems.forEach((item) => {
-    const cachedValue = cachedTranslations[item.cacheKey];
-    if (cachedValue) {
-      applyTranslatedValue(translatedTexts, cacheKeyToIndexes, item.cacheKey, cachedValue);
-      return;
-    }
-
-    uncachedItems.push(item);
-  });
-
-  const batches = buildTranslationBatches(uncachedItems.map((item) => ({ index: item.index, text: item.text })));
-  const uncachedByIndex = new Map(
-    uncachedItems.map((item) => [item.index, item] satisfies [number, TranslationCacheItem]),
-  );
-  const cacheEntriesToSave: TranslationCacheRecord[] = [];
+  let totalBatches = 0;
   let completedBatches = 0;
 
-  onProgress?.({
-    phase: 'started',
-    current: 0,
-    total: batches.length,
-    provider: route.provider,
-    model: route.model,
-    message: null,
-  });
+  try {
+    throwIfAborted(signal);
+    const cachedTranslations = await storage.loadTranslationCache(uniqueItems.map((item) => item.cacheKey));
 
-  await runBatchesWithConcurrency(batches, translationBatchConcurrency, async (batch) => {
-    const batchTranslations =
-      route.mode === 'dedicated'
-        ? await translateTextsWithDedicatedApi(
-            batch.map((item) => item.text),
-            translationSettings,
-          )
-        : await translateTextsWithLlm(
-            batch,
-            shouldUseGlmTranslation(llmSettings, translationSettings)
-              ? toGlmLlmSettings(llmSettings, translationSettings)
-              : llmSettings,
-          );
-
-    batch.forEach((item, index) => {
-      const uncachedItem = uncachedByIndex.get(item.index);
-      if (!uncachedItem) {
+    uniqueItems.forEach((item) => {
+      const cachedValue = cachedTranslations[item.cacheKey];
+      if (cachedValue) {
+        applyTranslatedValue(translatedTexts, cacheKeyToIndexes, item.cacheKey, cachedValue);
         return;
       }
 
-      const translatedValue = batchTranslations[index];
-      applyTranslatedValue(translatedTexts, cacheKeyToIndexes, uncachedItem.cacheKey, translatedValue);
-      cacheEntriesToSave.push({
-        key: uncachedItem.cacheKey,
-        value: translatedValue,
-      });
+      uncachedItems.push(item);
     });
-    completedBatches += 1;
+
+    const batches = buildTranslationBatches(uncachedItems.map((item) => ({ index: item.index, text: item.text })));
+    totalBatches = batches.length;
+    const uncachedByIndex = new Map(
+      uncachedItems.map((item) => [item.index, item] satisfies [number, TranslationCacheItem]),
+    );
+    const cacheEntriesToSave: TranslationCacheRecord[] = [];
+
     onProgress?.({
-      phase: 'batch',
-      current: completedBatches,
-      total: batches.length,
+      phase: 'started',
+      current: 0,
+      total: totalBatches,
       provider: route.provider,
       model: route.model,
       message: null,
     });
-  });
 
-  await storage.saveTranslationCache(cacheEntriesToSave);
-  onProgress?.({
-    phase: 'completed',
-    current: batches.length,
-    total: batches.length,
-    provider: route.provider,
-    model: route.model,
-    message: null,
-  });
+    await runBatchesWithConcurrency(batches, translationBatchConcurrency, async (batch) => {
+      throwIfAborted(signal);
+      const batchTranslations =
+        route.mode === 'dedicated'
+          ? await translateTextsWithDedicatedApi(
+              batch.map((item) => item.text),
+              translationSettings,
+              signal,
+            )
+          : await translateTextsWithLlm(
+              batch,
+              shouldUseGlmTranslation(llmSettings, translationSettings)
+                ? toGlmLlmSettings(llmSettings, translationSettings)
+                : llmSettings,
+              signal,
+            );
 
-  return translatedTexts;
+      throwIfAborted(signal);
+      batch.forEach((item, index) => {
+        const uncachedItem = uncachedByIndex.get(item.index);
+        if (!uncachedItem) {
+          return;
+        }
+
+        const translatedValue = batchTranslations[index];
+        applyTranslatedValue(translatedTexts, cacheKeyToIndexes, uncachedItem.cacheKey, translatedValue);
+        cacheEntriesToSave.push({
+          key: uncachedItem.cacheKey,
+          value: translatedValue,
+        });
+      });
+      completedBatches += 1;
+      onProgress?.({
+        phase: 'batch',
+        current: completedBatches,
+        total: totalBatches,
+        provider: route.provider,
+        model: route.model,
+        message: null,
+      });
+    });
+
+    throwIfAborted(signal);
+    await storage.saveTranslationCache(cacheEntriesToSave);
+    onProgress?.({
+      phase: 'completed',
+      current: totalBatches,
+      total: totalBatches,
+      provider: route.provider,
+      model: route.model,
+      message: null,
+    });
+
+    return translatedTexts;
+  } catch (error) {
+    if (isCancellationError(error)) {
+      throw error;
+    }
+
+    onProgress?.({
+      phase: 'failed',
+      current: completedBatches,
+      total: totalBatches,
+      provider: route.provider,
+      model: route.model,
+      message: resolveTranslationFailureMessage(error),
+    });
+    throw error;
+  }
 }

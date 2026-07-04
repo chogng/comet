@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 
 import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
-import { appError } from 'cs/base/common/errors';
+import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
 import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
 import { buildPdfFileName } from 'cs/platform/download/common/pdfFileName';
 import {
@@ -18,6 +18,12 @@ const WEB_PAGE_PDF_LOG_ENABLED = isCompatFetchEnvEnabled(
   'READER_FETCH_TIMING',
 );
 const WEB_PAGE_PDF_STABILIZE_MS = 1200;
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CancellationError();
+  }
+}
 
 function logWebPagePdf(stage: string, details: Record<string, unknown>) {
   if (!WEB_PAGE_PDF_LOG_ENABLED) return;
@@ -61,14 +67,18 @@ export async function printWebPageToPdf({
   pageUrl,
   articleTitle = '',
   downloadDir,
+  abortSignal,
 }: {
   pageUrl: string;
   articleTitle?: string;
   downloadDir: string;
+  abortSignal?: AbortSignal;
 }): Promise<PdfDownloadResult> {
   const startedAt = Date.now();
   try {
+    throwIfAborted(abortSignal);
     await fs.mkdir(downloadDir, { recursive: true });
+    throwIfAborted(abortSignal);
 
     const navigateStartedAt = Date.now();
     logWebPagePdf('web_content_navigate_start', {
@@ -80,6 +90,7 @@ export async function printWebPageToPdf({
     if (cleanText(getWebContentState().url) !== pageUrl) {
       await navigateWebContentForPdf(pageUrl);
     }
+    throwIfAborted(abortSignal);
 
     logWebPagePdf('web_content_navigate_done', {
       pageUrl,
@@ -89,6 +100,7 @@ export async function printWebPageToPdf({
 
     const waitStartedAt = Date.now();
     await waitForWebContentPrintLayout(WEB_PAGE_PDF_STABILIZE_MS);
+    throwIfAborted(abortSignal);
     logWebPagePdf('wait_main_ready_done', {
       pageUrl,
       currentWebContentUrl: cleanText(getWebContentState().url),
@@ -102,6 +114,7 @@ export async function printWebPageToPdf({
     });
 
     const pdfBuffer = await printCurrentWebContentToPdf();
+    throwIfAborted(abortSignal);
     logWebPagePdf('print_to_pdf_done', {
       pageUrl,
       currentWebContentUrl: cleanText(getWebContentState().url),
@@ -120,6 +133,7 @@ export async function printWebPageToPdf({
     const fileName = buildPdfFileName(articleTitle, fallbackName);
     const filePath = path.join(downloadDir, fileName);
     const writeStartedAt = Date.now();
+    throwIfAborted(abortSignal);
     await fs.writeFile(filePath, pdfBuffer);
     logWebPagePdf('file_write_done', {
       pageUrl,
@@ -140,6 +154,10 @@ export async function printWebPageToPdf({
       sourceUrl: targetUrl,
     };
   } catch (error) {
+    if (isCancellationError(error)) {
+      throw error;
+    }
+
     logWebPagePdf('print_failed', {
       pageUrl,
       currentWebContentUrl: cleanText(getWebContentState().url),

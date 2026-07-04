@@ -88,7 +88,6 @@ export type SettingsModelSnapshot = {
   llmProviders: Record<LlmProviderId, LlmProviderSettings>;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
-  customTranslationModels: string[];
   configPath: string;
   defaultConfigPath: string;
   isSettingsLoading: boolean;
@@ -184,8 +183,7 @@ function areSettingsModelSnapshotsEqual(
     areJsonEqual(previous.workbenchColorCustomizations, next.workbenchColorCustomizations) &&
     areJsonEqual(previous.ragProviders, next.ragProviders) &&
     areJsonEqual(previous.llmProviders, next.llmProviders) &&
-    areJsonEqual(previous.translationProviders, next.translationProviders) &&
-    areJsonEqual(previous.customTranslationModels, next.customTranslationModels)
+    areJsonEqual(previous.translationProviders, next.translationProviders)
   );
 }
 
@@ -229,7 +227,6 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     llmProviders: defaultLlmSettings.providers,
     activeTranslationProvider: defaultTranslationSettings.activeProvider,
     translationProviders: defaultTranslationSettings.providers,
-    customTranslationModels: [],
     configPath: '',
     defaultConfigPath: '',
     isSettingsLoading: false,
@@ -933,12 +930,12 @@ export class SettingsModel {
   readonly setTranslationProviderApiKey = (provider: TranslationProviderId, apiKey: string) => {
     this.updateSnapshot((snapshot) => ({
       ...snapshot,
-      customTranslationModels: provider === 'custom' ? [] : snapshot.customTranslationModels,
       translationProviders: {
         ...snapshot.translationProviders,
         [provider]: {
           ...snapshot.translationProviders[provider],
           apiKey,
+          models: provider === 'custom' ? [] : snapshot.translationProviders[provider].models,
         },
       },
     }));
@@ -947,12 +944,12 @@ export class SettingsModel {
   readonly setTranslationProviderBaseUrl = (provider: TranslationProviderId, baseUrl: string) => {
     this.updateSnapshot((snapshot) => ({
       ...snapshot,
-      customTranslationModels: provider === 'custom' ? [] : snapshot.customTranslationModels,
       translationProviders: {
         ...snapshot.translationProviders,
         [provider]: {
           ...snapshot.translationProviders[provider],
           baseUrl,
+          models: provider === 'custom' ? [] : snapshot.translationProviders[provider].models,
         },
       },
     }));
@@ -1404,9 +1401,21 @@ export class SettingsModel {
     const nextTranslationProviders = cloneTranslationSettings(resolved.translation).providers;
 
     this.updateSnapshot((snapshot) => {
-      const keepCustomTranslationModels =
-        snapshot.translationProviders.custom.apiKey === nextTranslationProviders.custom.apiKey &&
-        snapshot.translationProviders.custom.baseUrl === nextTranslationProviders.custom.baseUrl;
+      const currentCustomProvider = snapshot.translationProviders.custom;
+      const nextCustomProvider = nextTranslationProviders.custom;
+      const keepCustomModels =
+        currentCustomProvider.apiKey === nextCustomProvider.apiKey &&
+        currentCustomProvider.baseUrl === nextCustomProvider.baseUrl &&
+        currentCustomProvider.models.length > nextCustomProvider.models.length;
+      const translationProviders = keepCustomModels
+        ? {
+            ...nextTranslationProviders,
+            custom: {
+              ...nextCustomProvider,
+              models: currentCustomProvider.models,
+            },
+          }
+        : nextTranslationProviders;
 
       return {
         ...snapshot,
@@ -1441,8 +1450,7 @@ export class SettingsModel {
         activeLlmProvider: resolved.llm.activeProvider,
         llmProviders: cloneLlmSettings(resolved.llm).providers,
         activeTranslationProvider: resolved.translation.activeProvider,
-        translationProviders: nextTranslationProviders,
-        customTranslationModels: keepCustomTranslationModels ? snapshot.customTranslationModels : [],
+        translationProviders,
         configPath: resolved.configPath,
         defaultConfigPath: resolved.defaultConfigPath,
       };
@@ -1551,7 +1559,13 @@ export class SettingsModel {
 
         return {
           ...snapshot,
-          customTranslationModels: result.models,
+          translationProviders: {
+            ...snapshot.translationProviders,
+            custom: {
+              ...currentProviderSettings,
+              models: result.models,
+            },
+          },
         };
       });
 

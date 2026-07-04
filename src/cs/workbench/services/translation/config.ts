@@ -12,29 +12,45 @@ export const defaultTranslationProviderSettings: Record<TranslationProviderId, T
     apiKey: '',
     baseUrl: getTranslationProviderDefinition('deepl').defaultBaseUrl,
     model: '',
+    models: [],
   },
   glm: {
     apiKey: '',
     baseUrl: getTranslationProviderDefinition('glm').defaultBaseUrl,
     model: '',
+    models: [],
   },
   'openai-compatible': {
     apiKey: '',
     baseUrl: getTranslationProviderDefinition('openai-compatible').defaultBaseUrl,
-    model: 'gpt-5.4-mini',
+    model: 'gpt-5.5',
+    models: [],
   },
   custom: {
     apiKey: '',
     baseUrl: getTranslationProviderDefinition('custom').defaultBaseUrl,
     model: '',
+    models: [],
   },
 };
+
+function cloneProviderModels(models: readonly string[] | undefined): string[] {
+  if (!models) {
+    return [];
+  }
+
+  const normalizedModels = models
+    .map((model) => (typeof model === 'string' ? model.trim() : ''))
+    .filter(Boolean);
+  return Array.from(new Set(normalizedModels));
+}
 
 function cloneProviderSettings(settings: TranslationProviderSettings): TranslationProviderSettings {
   return {
     apiKey: settings.apiKey,
     baseUrl: settings.baseUrl,
     model: settings.model,
+    models: cloneProviderModels(settings.models),
   };
 }
 

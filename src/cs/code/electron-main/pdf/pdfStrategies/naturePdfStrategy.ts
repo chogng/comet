@@ -1,4 +1,4 @@
-import { appError } from 'cs/base/common/errors';
+import { appError, CancellationError } from 'cs/base/common/errors';
 import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
 import { persistDownloadedPdf, tryBrowserSessionDownloadCandidates, tryDownloadPdfCandidates } from 'cs/platform/download/electron-main/pdfDownload';
 import type { PdfDownloadAttemptFailure } from 'cs/platform/download/electron-main/pdfDownload';
@@ -9,6 +9,12 @@ const NATURE_PDF_LOG_ENABLED = isCompatFetchEnvEnabled(
   'LS_FETCH_TIMING',
   'READER_FETCH_TIMING',
 );
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CancellationError();
+  }
+}
 
 function logNaturePdf(stage: string, details: Record<string, unknown>) {
   if (!NATURE_PDF_LOG_ENABLED) return;
@@ -45,7 +51,9 @@ async function downloadNatureResearchPdfWithFallbacks(request: PdfDownloadContex
     request.pageUrl,
     request.downloadDir,
     request.articleTitle,
+    request.abortSignal,
   );
+  throwIfAborted(request.abortSignal);
   if (browserDownloadAttempt.downloaded) {
     logNaturePdf('browser_session_success', {
       pageUrl: request.pageUrl,
@@ -65,13 +73,18 @@ async function downloadNatureResearchPdfWithFallbacks(request: PdfDownloadContex
 
   const directDownloadAttempt =
     request.naturePdfCandidateUrls.length > 0
-      ? await tryDownloadPdfCandidates(request.naturePdfCandidateUrls, request.pageUrl)
+      ? await tryDownloadPdfCandidates(
+          request.naturePdfCandidateUrls,
+          request.pageUrl,
+          request.abortSignal,
+        )
       : { downloaded: null, failures: [] as PdfDownloadAttemptFailure[] };
   if (directDownloadAttempt.downloaded) {
     logNaturePdf('http_fetch_success', {
       pageUrl: request.pageUrl,
       finalUrl: directDownloadAttempt.downloaded.finalUrl,
     });
+    throwIfAborted(request.abortSignal);
     return await persistDownloadedPdf(
       directDownloadAttempt.downloaded,
       request.downloadDir,

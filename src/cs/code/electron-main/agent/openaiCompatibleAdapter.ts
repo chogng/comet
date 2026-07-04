@@ -10,16 +10,16 @@ import type {
 } from 'cs/agent/common/protocol';
 import { cleanText } from 'cs/base/common/strings';
 import type {
-  OpenAiCompatibleChatCompletionMessage,
-  OpenAiCompatibleChatCompletionRequest,
-  OpenAiCompatibleChatCompletionResponse,
-  OpenAiCompatibleChatCompletionTool,
-  OpenAiCompatibleChatCompletionToolCall,
+  OpenAiCompatibleResponse,
+  OpenAiCompatibleResponseFunctionCall,
+  OpenAiCompatibleResponseInputItem,
+  OpenAiCompatibleResponseRequest,
+  OpenAiCompatibleResponseTool,
   ResolvedLlmRequest,
 } from 'cs/code/electron-main/llm/llm';
 import {
   extractTextContent,
-  requestOpenAiCompatibleChatCompletion,
+  requestOpenAiCompatibleResponse,
 } from 'cs/code/electron-main/llm/llm';
 
 function createToolCallId() {
@@ -70,14 +70,12 @@ function toOpenAiCompatibleParameters(schema?: AgentJsonSchema): Record<string, 
 
 function toOpenAiCompatibleTool(
   tool: AgentToolDescriptor,
-): OpenAiCompatibleChatCompletionTool {
+): OpenAiCompatibleResponseTool {
   return {
     type: 'function',
-    function: {
-      name: tool.id,
-      description: tool.description,
-      parameters: toOpenAiCompatibleParameters(tool.inputSchema),
-    },
+    name: tool.id,
+    description: tool.description,
+    parameters: toOpenAiCompatibleParameters(tool.inputSchema),
   };
 }
 
@@ -89,42 +87,33 @@ function serializeToolResultOutput(output: unknown) {
   return JSON.stringify(output ?? null);
 }
 
-function toOpenAiCompatibleToolCalls(parts: AgentMessagePart[]) {
-  const toolCalls = extractToolCallParts(parts).map(
-    (part): OpenAiCompatibleChatCompletionToolCall => ({
-      id: part.toolCallId,
-      type: 'function',
-      function: {
-        name: part.toolName,
-        arguments: JSON.stringify(part.input ?? {}),
-      },
-    }),
-  );
-
-  return toolCalls.length > 0 ? toolCalls : undefined;
-}
-
-function toOpenAiCompatibleMessages(
+function toOpenAiCompatibleInputItems(
   systemPrompt: string,
   messages: AgentMessage[],
-): OpenAiCompatibleChatCompletionMessage[] {
-  const normalizedMessages: OpenAiCompatibleChatCompletionMessage[] = [];
+): { instructions: string | undefined; input: OpenAiCompatibleResponseInputItem[] } {
+  const instructions: string[] = [];
+  const input: OpenAiCompatibleResponseInputItem[] = [];
   const normalizedSystemPrompt = cleanText(systemPrompt);
 
   if (normalizedSystemPrompt) {
-    normalizedMessages.push({
-      role: 'system',
-      content: normalizedSystemPrompt,
-    });
+    instructions.push(normalizedSystemPrompt);
   }
 
   for (const message of messages) {
+    if (message.role === 'system') {
+      const textContent = extractTextParts(message.parts).join('\n').trim();
+      if (textContent) {
+        instructions.push(textContent);
+      }
+      continue;
+    }
+
     if (message.role === 'tool') {
       for (const part of extractToolResultParts(message.parts)) {
-        normalizedMessages.push({
-          role: 'tool',
-          tool_call_id: part.toolCallId,
-          content: serializeToolResultOutput(part.output),
+        input.push({
+          type: 'function_call_output',
+          call_id: part.toolCallId,
+          output: serializeToolResultOutput(part.output),
         });
       }
       continue;
@@ -132,19 +121,28 @@ function toOpenAiCompatibleMessages(
 
     const textParts = extractTextParts(message.parts);
     const textContent = textParts.join('\n').trim();
-    const toolCalls = toOpenAiCompatibleToolCalls(message.parts);
 
-    normalizedMessages.push({
-      role: message.role,
-      content:
-        message.role === 'assistant' && !textContent && toolCalls
-          ? null
-          : textContent,
-      tool_calls: toolCalls,
-    });
+    if (textContent) {
+      input.push({
+        role: message.role,
+        content: textContent,
+      });
+    }
+
+    for (const part of extractToolCallParts(message.parts)) {
+      input.push({
+        type: 'function_call',
+        call_id: part.toolCallId,
+        name: part.toolName,
+        arguments: JSON.stringify(part.input ?? {}),
+      });
+    }
   }
 
-  return normalizedMessages;
+  return {
+    instructions: instructions.length > 0 ? instructions.join('\n\n') : undefined,
+    input,
+  };
 }
 
 function parseToolCallInput(rawArguments: string): unknown {
@@ -164,13 +162,14 @@ function parseToolCallInput(rawArguments: string): unknown {
 }
 
 function mapFinishReason(
-  value: string | null | undefined,
+  response: OpenAiCompatibleResponse,
 ): AgentCompletionResult['stopReason'] {
-  if (value === 'tool_calls') {
+  const hasToolCall = response.output?.some((item) => item.type === 'function_call');
+  if (hasToolCall) {
     return 'tool-call';
   }
 
-  if (value === 'stop' || value === 'length' || value === 'content_filter') {
+  if (response.status === undefined || response.status === 'completed' || response.status === 'incomplete') {
     return 'completed';
   }
 
@@ -178,12 +177,16 @@ function mapFinishReason(
 }
 
 function toAgentAssistantMessage(
-  response: OpenAiCompatibleChatCompletionResponse,
+  response: OpenAiCompatibleResponse,
 ): AgentCompletionResult {
-  const choice = response.choices?.[0];
-  const message = choice?.message;
   const parts: AgentMessagePart[] = [];
-  const text = extractTextContent(message?.content);
+  const messageItems = response.output?.filter((item) => item.type === 'message') ?? [];
+  const toolCallItems = response.output?.filter(
+    (item): item is OpenAiCompatibleResponseFunctionCall => item.type === 'function_call',
+  ) ?? [];
+  const text = extractTextContent(
+    messageItems.flatMap((item) => (Array.isArray(item.content) ? item.content : [])),
+  );
 
   if (text) {
     parts.push({
@@ -192,21 +195,17 @@ function toAgentAssistantMessage(
     });
   }
 
-  for (const toolCall of message?.tool_calls ?? []) {
-    if (!toolCall || toolCall.type !== 'function') {
-      continue;
-    }
-
-    const toolName = cleanText(toolCall.function?.name);
+  for (const toolCall of toolCallItems) {
+    const toolName = cleanText(toolCall.name);
     if (!toolName) {
       continue;
     }
 
     parts.push({
       type: 'tool-call',
-      toolCallId: cleanText(toolCall.id) || createToolCallId(),
+      toolCallId: cleanText(toolCall.call_id) || cleanText(toolCall.id) || createToolCallId(),
       toolName,
-      input: parseToolCallInput(toolCall.function.arguments),
+      input: parseToolCallInput(toolCall.arguments ?? ''),
     });
   }
 
@@ -217,10 +216,10 @@ function toAgentAssistantMessage(
       createdAt: Date.now(),
       id: cleanText(response.id) || undefined,
     },
-    stopReason: mapFinishReason(choice?.finish_reason),
+    stopReason: mapFinishReason(response),
     providerMetadata: {
       responseId: cleanText(response.id) || null,
-      finishReason: choice?.finish_reason ?? null,
+      status: response.status ?? null,
       usage: response.usage ?? null,
     },
   };
@@ -234,14 +233,16 @@ export function createOpenAiCompatibleAgentAdapter(
     async completeTurn(
       completionRequest: AgentCompletionRequest,
     ): Promise<AgentCompletionResult> {
-      const payload: OpenAiCompatibleChatCompletionRequest = {
+      const inputItems = toOpenAiCompatibleInputItems(
+        completionRequest.systemPrompt,
+        completionRequest.messages,
+      );
+      const payload: OpenAiCompatibleResponseRequest = {
         model: request.model,
-        reasoning_effort: request.reasoningEffort,
+        instructions: inputItems.instructions,
+        reasoning: request.reasoningEffort ? { effort: request.reasoningEffort } : undefined,
         service_tier: request.serviceTier,
-        messages: toOpenAiCompatibleMessages(
-          completionRequest.systemPrompt,
-          completionRequest.messages,
-        ),
+        input: inputItems.input,
         tools:
           completionRequest.tools.length > 0
             ? completionRequest.tools.map(toOpenAiCompatibleTool)
@@ -249,13 +250,14 @@ export function createOpenAiCompatibleAgentAdapter(
         tool_choice:
           completionRequest.tools.length > 0 ? 'auto' : undefined,
         temperature: 0.2,
-        max_tokens: 1200,
+        max_output_tokens: 1200,
       };
       const response =
-        await requestOpenAiCompatibleChatCompletion<OpenAiCompatibleChatCompletionResponse>(
+        await requestOpenAiCompatibleResponse<OpenAiCompatibleResponse>(
           request,
           payload,
           60000,
+          completionRequest.signal,
         );
 
       return toAgentAssistantMessage(response);

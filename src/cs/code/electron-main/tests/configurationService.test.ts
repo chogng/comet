@@ -348,6 +348,7 @@ test('configuration service saves custom translation provider settings', async (
       apiKey: 'custom-key',
       baseUrl: 'https://custom.example/v1',
       model: 'custom-model',
+      models: ['custom-model', 'custom-large'],
     };
 
     await service.saveSettings({ translation });
@@ -360,11 +361,13 @@ test('configuration service saves custom translation provider settings', async (
       apiKey: 'custom-key',
       baseUrl: 'https://custom.example/v1',
       model: 'custom-model',
+      models: ['custom-model', 'custom-large'],
     });
     assert.deepEqual(settings.translation.providers.custom, {
       apiKey: 'custom-key',
       baseUrl: 'https://custom.example/v1',
       model: 'custom-model',
+      models: ['custom-model', 'custom-large'],
     });
   });
 });

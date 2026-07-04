@@ -10,7 +10,7 @@ import type {
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { StorageService } from 'cs/platform/storage/common/storage';
 import { defaultDocxExportConfig } from 'cs/code/electron-main/document/docxConfig';
-import { appError } from 'cs/base/common/errors';
+import { appError, CancellationError, isAppError, isCancellationError } from 'cs/base/common/errors';
 import { resolveDocxExportCopy, resolveDocxExportDialogCopy, resolveSupportedLocale } from 'cs/code/electron-main/document/docxCopy';
 import type { SupportedLocale } from 'cs/code/electron-main/document/docxCopy';
 import { buildDocxBuffer as buildDocxArchiveBuffer, escapeXml, normalizeDocxPath } from 'cs/code/electron-main/document/docxPackage';
@@ -156,24 +156,48 @@ function groupArticlesByJournal(articles: Article[], locale: SupportedLocale): J
 
 type DocumentTranslationProgressReporter = (progress: DocumentTranslationProgress) => void;
 
-async function translateDocxArticlesToChinese(
-  articles: Article[],
-  storage: StorageService,
-  onProgress?: DocumentTranslationProgressReporter,
-) {
-  try {
-    return await translateArticlesToChinese(articles, storage, onProgress);
-  } catch (error) {
-    onProgress?.({
-      phase: 'failed',
-      current: 0,
-      total: 0,
-      provider: '',
-      model: '',
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return articles;
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CancellationError();
   }
+}
+
+function resolveTranslationFailureMessage(error: unknown) {
+  if (isAppError(error)) {
+    const statusText = error.details?.statusText;
+    if (typeof statusText === 'string' && statusText.trim()) {
+      return statusText.trim();
+    }
+
+    const message = error.details?.message;
+    if (typeof message === 'string' && message.trim()) {
+      return message.trim();
+    }
+
+    return error.code;
+  }
+
+  return error instanceof Error ? error.message : String(error);
+}
+
+function createDocxTranslationFailedError(error: unknown, filePath: string) {
+  if (isCancellationError(error)) {
+    throw error;
+  }
+
+  const details: Record<string, unknown> = {
+    filePath,
+    message: resolveTranslationFailureMessage(error),
+  };
+
+  if (isAppError(error)) {
+    details.translationCode = error.code;
+    if (error.details) {
+      details.translationDetails = error.details;
+    }
+  }
+
+  return appError('DOCX_TRANSLATION_FAILED', details);
 }
 
 function articleParagraphsXml(
@@ -336,7 +360,10 @@ export async function exportArticlesDocx(
   defaultDownloadDir: string,
   storage: StorageService,
   window?: BrowserWindow | null,
-  options: { onTranslationProgress?: DocumentTranslationProgressReporter } = {},
+  options: {
+    onTranslationProgress?: DocumentTranslationProgressReporter;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<DocxExportResult | null> {
   const articles = Array.isArray(payload.articles) ? payload.articles : [];
   if (articles.length === 0) {
@@ -346,35 +373,61 @@ export async function exportArticlesDocx(
   const preferredDirectory =
     typeof payload.preferredDirectory === 'string' ? payload.preferredDirectory.trim() : '';
   const locale = resolveSupportedLocale(payload.locale);
-  const dialogCopy = resolveDocxExportDialogCopy(locale);
-  const { showSaveDialog } = await import('cs/platform/dialogs/electron-main/dialogMainService');
-  const result = await showSaveDialog(
-    {
-      title: dialogCopy.title,
-      buttonLabel: dialogCopy.buttonLabel,
-      defaultPath: path.join(
-        preferredDirectory || defaultDownloadDir,
-        buildBatchDocxFileName({ articles, locale }),
-      ),
-      filters: [
-        {
-          name: 'Word Document',
-          extensions: ['docx'],
-        },
-      ],
-      properties: ['showOverwriteConfirmation'],
-    },
-    window,
-  );
+  const requestedFilePath =
+    typeof payload.targetFilePath === 'string' ? payload.targetFilePath.trim() : '';
+  let filePath = requestedFilePath;
+  if (!filePath) {
+    const dialogCopy = resolveDocxExportDialogCopy(locale);
+    const { showSaveDialog } = await import('cs/platform/dialogs/electron-main/dialogMainService');
+    const result = await showSaveDialog(
+      {
+        title: dialogCopy.title,
+        buttonLabel: dialogCopy.buttonLabel,
+        defaultPath: path.join(
+          preferredDirectory || defaultDownloadDir,
+          buildBatchDocxFileName({ articles, locale }),
+        ),
+        filters: [
+          {
+            name: 'Word Document',
+            extensions: ['docx'],
+          },
+        ],
+        properties: ['showOverwriteConfirmation'],
+      },
+      window,
+    );
 
-  if (result.canceled || !result.filePath) {
-    return null;
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+
+    filePath = result.filePath;
   }
 
+  const outputPath = normalizeDocxPath(filePath);
+  throwIfAborted(options.signal);
+  const shouldTranslateSummaries = payload.translateSummaries !== false;
+  let exportArticles = articles;
+  if (shouldTranslateSummaries) {
+    try {
+      exportArticles = await translateArticlesToChinese(
+        articles,
+        storage,
+        options.onTranslationProgress,
+        options.signal,
+      );
+    } catch (error) {
+      throw createDocxTranslationFailedError(error, outputPath);
+    }
+  }
+
+  throwIfAborted(options.signal);
   return exportArticlesToDocxFile({
-    articles: await translateDocxArticlesToChinese(articles, storage, options.onTranslationProgress),
-    filePath: result.filePath,
+    articles: exportArticles,
+    filePath: outputPath,
     locale,
+    signal: options.signal,
   });
 }
 
@@ -382,10 +435,12 @@ export async function exportArticlesToDocxFile({
   articles,
   filePath,
   locale = 'en',
+  signal,
 }: {
   articles: Article[];
   filePath: string;
   locale?: SupportedLocale;
+  signal?: AbortSignal;
 }): Promise<DocxExportResult> {
   if (articles.length === 0) {
     throw appError('DOCX_EXPORT_NO_ARTICLES');
@@ -394,9 +449,15 @@ export async function exportArticlesToDocxFile({
   const outputPath = normalizeDocxPath(filePath);
 
   try {
+    throwIfAborted(signal);
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    throwIfAborted(signal);
     await fs.writeFile(outputPath, buildDocxBuffer(articles, locale));
   } catch (error) {
+    if (error instanceof CancellationError) {
+      throw error;
+    }
+
     throw appError('DOCX_EXPORT_FAILED', {
       filePath: outputPath,
       message: error instanceof Error ? error.message : String(error),

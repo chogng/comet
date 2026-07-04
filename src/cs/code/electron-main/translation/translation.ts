@@ -6,13 +6,13 @@ import type {
   TranslationProviderId,
   TranslationSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError, isAppError } from 'cs/base/common/errors';
+import { appError, CancellationError, isAppError } from 'cs/base/common/errors';
 import { cleanText } from 'cs/base/common/strings';
 import { defaultTranslationProviderId } from 'cs/workbench/services/translation/config';
 import { isTranslationProviderId } from 'cs/workbench/services/translation/registry';
 import {
   extractResponseContent,
-  requestOpenAiCompatibleChatCompletion,
+  requestOpenAiCompatibleResponse,
 } from 'cs/code/electron-main/llm/llm';
 
 // Dedicated translation API implementations live here.
@@ -22,7 +22,7 @@ import {
 // 3. connection testing
 // It should not own cross-provider routing, batching, or cache orchestration.
 const translationTimeoutMs = 20000;
-const openAICompatibleTranslationModel = 'gpt-5.4-mini';
+const openAICompatibleTranslationModel = 'gpt-5.5';
 
 type ResolvedTranslationRequest = {
   provider: TranslationProviderId;
@@ -48,16 +48,6 @@ type OpenAICompatibleTranslationResponse = {
     index?: unknown;
     text?: unknown;
   }>;
-};
-
-type OpenAICompatibleResponsesPayload = {
-  model: string;
-  input: Array<{
-    role: 'system' | 'user';
-    content: string;
-  }>;
-  max_output_tokens: number;
-  temperature: number;
 };
 
 type OpenAICompatibleModelsResponse = {
@@ -160,9 +150,21 @@ async function requestDeepLTranslations(
   request: ResolvedTranslationRequest,
   texts: string[],
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const abortFromExternalSignal = () => controller.abort();
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  if (signal?.aborted) {
+    abortFromExternalSignal();
+  } else if (signal) {
+    signal.addEventListener('abort', abortFromExternalSignal, { once: true });
+  }
 
   try {
     const payload = new URLSearchParams();
@@ -209,6 +211,10 @@ async function requestDeepLTranslations(
     return resolvedTexts;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
+      if (signal?.aborted && !timedOut) {
+        throw new CancellationError();
+      }
+
       throw appError('LLM_CONNECTION_FAILED', {
         provider: request.provider,
         status: 'TIMEOUT',
@@ -226,6 +232,7 @@ async function requestDeepLTranslations(
       statusText: error instanceof Error ? error.message : String(error),
     });
   } finally {
+    signal?.removeEventListener('abort', abortFromExternalSignal);
     clearTimeout(timeoutId);
   }
 }
@@ -321,51 +328,6 @@ function createOpenAICompatibleTranslationMessage(texts: string[]) {
   });
 }
 
-function extractResponsesTextContent(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') {
-    return '';
-  }
-
-  const outputText = (payload as { output_text?: unknown }).output_text;
-  if (typeof outputText === 'string') {
-    return cleanText(outputText);
-  }
-
-  const output = (payload as { output?: unknown }).output;
-  if (!Array.isArray(output)) {
-    return '';
-  }
-
-  return cleanText(
-    output
-      .flatMap((item) => {
-        if (!item || typeof item !== 'object') {
-          return [];
-        }
-
-        const content = (item as { content?: unknown }).content;
-        if (!Array.isArray(content)) {
-          return [];
-        }
-
-        return content.map((part) => {
-          if (!part || typeof part !== 'object') {
-            return '';
-          }
-
-          const text = (part as { text?: unknown }).text;
-          if (typeof text === 'string') {
-            return text;
-          }
-
-          const value = (part as { value?: unknown }).value;
-          return typeof value === 'string' ? value : '';
-        });
-      })
-      .join('\n'),
-  );
-}
-
 function normalizeOpenAICompatibleTranslations(
   responseText: string,
   texts: string[],
@@ -404,64 +366,13 @@ function normalizeOpenAICompatibleTranslations(
   return texts.map((_, index) => translatedByIndex.get(index) || texts[index]);
 }
 
-async function requestOpenAICompatibleResponse(
-  request: ResolvedTranslationRequest,
-  payload: OpenAICompatibleResponsesPayload,
-  timeoutMs: number,
-): Promise<unknown> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(`${request.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${request.apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = cleanText(await response.text());
-      throw appError('LLM_CONNECTION_FAILED', {
-        provider: request.provider,
-        status: response.status,
-        statusText: response.statusText || errorText || 'Request failed',
-      });
-    }
-
-    return response.json();
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw appError('LLM_CONNECTION_FAILED', {
-        provider: request.provider,
-        status: 'TIMEOUT',
-        statusText: `Connection timed out after ${timeoutMs}ms`,
-      });
-    }
-
-    if (isAppError(error)) {
-      throw error;
-    }
-
-    throw appError('LLM_CONNECTION_FAILED', {
-      provider: request.provider,
-      status: 'NETWORK_ERROR',
-      statusText: error instanceof Error ? error.message : String(error),
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 async function requestOpenAICompatibleTranslations(
   request: ResolvedTranslationRequest,
   texts: string[],
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<string[]> {
-  const responseJson = await requestOpenAICompatibleResponse(
+  const responseJson = await requestOpenAiCompatibleResponse(
     request,
     {
       model: request.model,
@@ -480,8 +391,9 @@ async function requestOpenAICompatibleTranslations(
       temperature: 0,
     },
     timeoutMs,
+    signal,
   );
-  const responseText = extractResponsesTextContent(responseJson);
+  const responseText = extractResponseContent(responseJson);
   return normalizeOpenAICompatibleTranslations(responseText, texts, request.provider);
 }
 
@@ -489,17 +401,13 @@ async function requestCustomOpenAICompatibleTranslations(
   request: ResolvedTranslationRequest,
   texts: string[],
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<string[]> {
-  const responseJson = await requestOpenAiCompatibleChatCompletion(
-    {
-      provider: 'custom',
-      apiKey: request.apiKey,
-      baseUrl: request.baseUrl,
-      model: request.model,
-    },
+  const responseJson = await requestOpenAiCompatibleResponse(
+    request,
     {
       model: request.model,
-      messages: [
+      input: [
         {
           role: 'system',
           content:
@@ -510,10 +418,11 @@ async function requestCustomOpenAICompatibleTranslations(
           content: createOpenAICompatibleTranslationMessage(texts),
         },
       ],
-      max_tokens: 4000,
+      max_output_tokens: 4000,
       temperature: 0,
     },
     timeoutMs,
+    signal,
   );
   const responseText = extractResponseContent(responseJson);
   return normalizeOpenAICompatibleTranslations(responseText, texts, request.provider);
@@ -527,6 +436,7 @@ export function hasUsableTranslationSettings(settings: TranslationSettings): boo
 export async function translateTextsWithDedicatedApi(
   texts: string[],
   settings: TranslationSettings,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   if (texts.length === 0) {
     return [];
@@ -536,11 +446,11 @@ export async function translateTextsWithDedicatedApi(
 
   switch (request.provider) {
     case 'deepl':
-      return requestDeepLTranslations(request, texts, translationTimeoutMs);
+      return requestDeepLTranslations(request, texts, translationTimeoutMs, signal);
     case 'openai-compatible':
-      return requestOpenAICompatibleTranslations(request, texts, translationTimeoutMs);
+      return requestOpenAICompatibleTranslations(request, texts, translationTimeoutMs, signal);
     case 'custom':
-      return requestCustomOpenAICompatibleTranslations(request, texts, translationTimeoutMs);
+      return requestCustomOpenAICompatibleTranslations(request, texts, translationTimeoutMs, signal);
     default:
       throw appError('LLM_PROVIDER_UNSUPPORTED', { provider: request.provider });
   }

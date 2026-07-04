@@ -74,6 +74,7 @@ export interface TranslationProviderSettings {
   apiKey: string;
   baseUrl: string;
   model: string;
+  models: string[];
 }
 
 export interface TranslationSettings {
@@ -196,6 +197,7 @@ export interface FetchLatestArticlesPayload {
 }
 
 export interface WebContentPdfDownloadPayload {
+  taskId?: string;
   pageUrl?: string;
   downloadUrl?: string;
   doi?: string;
@@ -224,9 +226,16 @@ export interface WebContentHtmlArchiveResult {
 }
 
 export interface ExportArticlesDocxPayload {
+  taskId?: string;
   articles?: Article[];
   preferredDirectory?: string | null;
+  targetFilePath?: string | null;
+  translateSummaries?: boolean;
   locale?: Locale;
+}
+
+export interface CancelDocumentTaskPayload {
+  taskId?: string;
 }
 
 export interface WritingEditorMarkPayload {
@@ -583,6 +592,7 @@ export interface AppCommandPayloadMap {
   open_path: OpenPathPayload;
   web_content_download_pdf: WebContentPdfDownloadPayload;
   web_content_archive_html: WebContentHtmlArchivePayload;
+  cancel_document_task: CancelDocumentTaskPayload;
   index_downloaded_pdf: IndexDownloadedPdfPayload;
   upsert_library_document_metadata: UpsertLibraryDocumentMetadataPayload;
   delete_library_document: DeleteLibraryDocumentPayload;
@@ -613,6 +623,7 @@ export interface AppCommandResultMap {
   open_path: boolean;
   web_content_download_pdf: PdfDownloadResult;
   web_content_archive_html: WebContentHtmlArchiveResult;
+  cancel_document_task: boolean;
   index_downloaded_pdf: LibraryRegistrationResult;
   upsert_library_document_metadata: LibraryDocumentSummary;
   delete_library_document: boolean;

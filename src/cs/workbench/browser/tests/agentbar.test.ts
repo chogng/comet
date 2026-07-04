@@ -25,6 +25,8 @@ function createProps(): ChatWidgetProps {
     isArticleSourceFetching: false,
     onFetchArticleSource: () => {},
     showArticleBatchActions: false,
+    downloadAllProgress: null,
+    translationExportProgress: null,
     onDownloadAllArticles: () => {},
     onExportArticleSummaries: () => {},
     isArticleSelected: () => false,
@@ -648,15 +650,15 @@ test('composer article quick comet-hover-action opens source menu and runs selec
 
 test('composer input toolbar hosts article batch actions', async () => {
   let downloadAllCount = 0;
-  let exportSummariesCount = 0;
+  const exportSummaryChoices: boolean[] = [];
   const agentBar = createChatWidget({
     ...createProps(),
     showArticleBatchActions: true,
     onDownloadAllArticles: () => {
       downloadAllCount += 1;
     },
-    onExportArticleSummaries: () => {
-      exportSummariesCount += 1;
+    onExportArticleSummaries: (translateSummaries) => {
+      exportSummaryChoices.push(translateSummaries);
     },
   });
   const element = agentBar.getElement();
@@ -679,10 +681,8 @@ test('composer input toolbar hosts article batch actions', async () => {
     const inputToolbarButtons = Array.from(
       inputToolbar.querySelectorAll('.comet-chat-composer-input-toolbar-action'),
     );
-    assert.deepEqual(
-      inputToolbarButtons.map((button) => button.textContent?.trim()),
-      ['下载全部', '翻译并导出摘要'],
-    );
+    assert.equal(inputToolbarButtons[0].textContent?.trim(), '下载全部');
+    assert.equal(inputToolbarButtons[1].textContent?.trim(), '导出摘要');
     assert.deepEqual(
       inputToolbarButtons.map((button) => button.classList.contains('comet-is-text')),
       [true, true],
@@ -697,7 +697,81 @@ test('composer input toolbar hosts article batch actions', async () => {
     await delay(0);
 
     assert.equal(downloadAllCount, 1);
-    assert.equal(exportSummariesCount, 1);
+    const menu = document.body.querySelector('.dropdown-menu[data-menu="agentbar-article-summary-export"]');
+    assert(menu instanceof HTMLElement);
+    assert.equal(exportSummariesButton.getAttribute('aria-expanded'), 'true');
+    const originalExportItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) => node.textContent?.includes('直接导出摘要'),
+    );
+    assert(originalExportItem instanceof HTMLElement);
+    originalExportItem.click();
+    await delay(0);
+
+    exportSummariesButton.click();
+    await delay(0);
+    const reopenedMenu = document.body.querySelector('.dropdown-menu[data-menu="agentbar-article-summary-export"]');
+    assert(reopenedMenu instanceof HTMLElement);
+    const translatedExportItem = Array.from(reopenedMenu.querySelectorAll('.dropdown-menu-item')).find(
+      (node) => node.textContent?.includes('翻译并导出摘要'),
+    );
+    assert(translatedExportItem instanceof HTMLElement);
+    translatedExportItem.click();
+    await delay(0);
+
+    assert.deepEqual(exportSummaryChoices, [false, true]);
+  } finally {
+    agentBar.dispose();
+  }
+});
+
+test('composer input toolbar renders inline article batch progress', async () => {
+  let downloadAllCount = 0;
+  const exportSummaryChoices: boolean[] = [];
+  const agentBar = createChatWidget({
+    ...createProps(),
+    showArticleBatchActions: true,
+    downloadAllProgress: { phase: 'running', current: 1, total: 3 },
+    translationExportProgress: { phase: 'running', current: 2, total: 5 },
+    onDownloadAllArticles: () => {
+      downloadAllCount += 1;
+    },
+    onExportArticleSummaries: (translateSummaries) => {
+      exportSummaryChoices.push(translateSummaries);
+    },
+  });
+  const element = agentBar.getElement();
+  document.body.append(element);
+
+  try {
+    const inputToolbarButtons = Array.from(
+      element.querySelectorAll('.comet-chat-composer-input-toolbar-action'),
+    );
+    assert.equal(inputToolbarButtons.length, 2);
+    assert.equal(inputToolbarButtons[0].textContent?.trim(), '1/3');
+    assert.equal(inputToolbarButtons[1].textContent?.trim(), '2/5');
+    assert.equal(
+      inputToolbarButtons[0]
+        .querySelector('.comet-chat-composer-input-toolbar-action-progress-fill')
+        ?.getAttribute('style'),
+      'width: 33%;',
+    );
+    assert.equal(
+      inputToolbarButtons[1]
+        .querySelector('.comet-chat-composer-input-toolbar-action-progress-fill')
+        ?.getAttribute('style'),
+      'width: 40%;',
+    );
+
+    const downloadAllButton = inputToolbarButtons[0];
+    const exportSummariesButton = inputToolbarButtons[1];
+    assert(downloadAllButton instanceof HTMLButtonElement);
+    assert(exportSummariesButton instanceof HTMLButtonElement);
+    downloadAllButton.click();
+    exportSummariesButton.click();
+    await delay(0);
+
+    assert.equal(downloadAllCount, 1);
+    assert.deepEqual(exportSummaryChoices, [true]);
   } finally {
     agentBar.dispose();
   }

@@ -472,6 +472,8 @@ function createWorkbenchLayoutViewProps() {
       isArticleSourceFetching: false,
       onFetchArticleSource: () => {},
       showArticleBatchActions: false,
+      downloadAllProgress: null,
+      translationExportProgress: null,
       onDownloadAllArticles: () => {},
       onExportArticleSummaries: () => {},
       isArticleSelected: () => false,

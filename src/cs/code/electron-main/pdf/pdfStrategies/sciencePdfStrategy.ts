@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron';
 
 import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError } from 'cs/base/common/errors';
+import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
 import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
 import { clearWorkbenchSharedSessionOrigins } from 'cs/platform/native/electron-main/sharedWebSession';
 import { persistDownloadedPdf, toPdfDownloadFailure, toPdfDownloadFailureFromError, tryBrowserSessionDownloadCandidates, tryPdfDownloadWithFetcherPolling, tryDownloadPdfCandidates, waitForPdfDownloadFromSession } from 'cs/platform/download/electron-main/pdfDownload';
@@ -16,6 +16,7 @@ import type { PdfDownloadContext, PdfDownloadStrategy } from 'cs/code/electron-m
 
 type ScienceValidatedPageDownloadOptions = {
   useWindowFetchProbe?: boolean;
+  abortSignal?: AbortSignal;
 };
 
 const SCIENCE_PDF_LOG_ENABLED = isCompatFetchEnvEnabled(
@@ -55,6 +56,56 @@ function findScienceValidationRequiredFailure(failures: PdfDownloadAttemptFailur
   );
 }
 
+function throwIfAborted(abortSignal?: AbortSignal): void {
+  if (abortSignal?.aborted) {
+    throw new CancellationError();
+  }
+}
+
+async function waitForPromiseOrAbort<T>(
+  promise: Promise<T>,
+  abortSignal?: AbortSignal,
+): Promise<T> {
+  throwIfAborted(abortSignal);
+  if (!abortSignal) {
+    return await promise;
+  }
+
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = () => {
+      abortSignal.removeEventListener('abort', handleAbort);
+    };
+
+    const resolveOnce = (value: T) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const handleAbort = () => {
+      rejectOnce(new CancellationError());
+    };
+
+    abortSignal.addEventListener('abort', handleAbort, { once: true });
+    if (abortSignal.aborted) {
+      handleAbort();
+      return;
+    }
+
+    promise.then(resolveOnce, rejectOnce);
+  });
+}
+
 function throwScienceDownloadFailure(
   request: PdfDownloadContext,
   failures: PdfDownloadAttemptFailure[],
@@ -74,9 +125,11 @@ function throwScienceDownloadFailure(
 async function runSerializedSciencePdfDownload<T>(
   pageUrl: string,
   task: () => Promise<T>,
+  abortSignal?: AbortSignal,
 ): Promise<T> {
   const waitForTurn = sciencePdfDownloadQueueTail;
   let releaseTurn = () => {};
+  let enteredQueue = false;
   sciencePdfDownloadQueueDepth += 1;
   const queuePosition = sciencePdfDownloadQueueDepth;
   sciencePdfDownloadQueueTail = new Promise<void>((resolve) => {
@@ -90,13 +143,15 @@ async function runSerializedSciencePdfDownload<T>(
     });
   }
 
-  await waitForTurn.catch(() => {});
-  logSciencePdf('queue_enter', {
-    pageUrl,
-    queuePosition,
-  });
-
   try {
+    await waitForPromiseOrAbort(waitForTurn.catch(() => {}), abortSignal);
+    throwIfAborted(abortSignal);
+    enteredQueue = true;
+    logSciencePdf('queue_enter', {
+      pageUrl,
+      queuePosition,
+    });
+
     const result = await task();
     logSciencePdf('task_resolved', {
       pageUrl,
@@ -120,7 +175,11 @@ async function runSerializedSciencePdfDownload<T>(
     throw error;
   } finally {
     sciencePdfDownloadQueueDepth = Math.max(0, sciencePdfDownloadQueueDepth - 1);
-    releaseTurn();
+    if (enteredQueue) {
+      releaseTurn();
+    } else {
+      waitForTurn.finally(releaseTurn);
+    }
     logSciencePdf('queue_exit', {
       pageUrl,
       remainingQueueDepth: sciencePdfDownloadQueueDepth,
@@ -141,7 +200,9 @@ async function triggerValidatedSciencePageDownload(
   downloadDir: string,
   articleTitle = '',
   timeoutMs = 45000,
+  abortSignal?: AbortSignal,
 ): Promise<BrowserSessionDownloadResult | null> {
+  throwIfAborted(abortSignal);
   const webContents = window.webContents;
   if (webContents.isDestroyed()) {
     return null;
@@ -151,7 +212,11 @@ async function triggerValidatedSciencePageDownload(
   const handleWindowClosed = () => {
     abortController.abort();
   };
+  const handleAbort = () => {
+    abortController.abort();
+  };
   window.once('closed', handleWindowClosed);
+  abortSignal?.addEventListener('abort', handleAbort, { once: true });
 
   try {
     return await waitForPdfDownloadFromSession({
@@ -173,6 +238,7 @@ async function triggerValidatedSciencePageDownload(
     if (!window.isDestroyed()) {
       window.removeListener('closed', handleWindowClosed);
     }
+    abortSignal?.removeEventListener('abort', handleAbort);
   }
 }
 
@@ -191,6 +257,7 @@ async function tryValidatedScienceWindowFetch(
   articleTitle = '',
   timeoutMs = 20000,
   pollMs = 500,
+  abortSignal?: AbortSignal,
 ) {
   const session = window.webContents.session;
   return await tryPdfDownloadWithFetcherPolling({
@@ -204,6 +271,7 @@ async function tryValidatedScienceWindowFetch(
     unavailableStatus: 'SCIENCE_VALIDATION_FETCH_UNAVAILABLE',
     unavailableStatusText: 'Validation window session fetch is unavailable',
     shouldRetry: shouldContinueWaitingForValidatedScienceAuthorization,
+    abortSignal,
   });
 }
 
@@ -214,10 +282,12 @@ async function tryValidatedSciencePageDownload(
   articleTitle = '',
   options: ScienceValidatedPageDownloadOptions = {},
 ) {
-  const { useWindowFetchProbe = true } = options;
+  const { useWindowFetchProbe = true, abortSignal } = options;
+  throwIfAborted(abortSignal);
 
   try {
     const downloaded = await withValidatedSciencePageWindow(pageUrl, async (window, validation) => {
+      throwIfAborted(abortSignal);
       const validatedWindowFetchAttempt = useWindowFetchProbe
         ? await tryValidatedScienceWindowFetch(
             window,
@@ -225,11 +295,15 @@ async function tryValidatedSciencePageDownload(
             validation.finalUrl || pageUrl,
             downloadDir,
             articleTitle,
+            20000,
+            500,
+            abortSignal,
           )
         : {
             downloaded: null,
             failures: [] as PdfDownloadAttemptFailure[],
           };
+      throwIfAborted(abortSignal);
       if (validatedWindowFetchAttempt.downloaded) {
         logSciencePdf('validated_window_fetch_success', {
           pageUrl,
@@ -251,7 +325,10 @@ async function tryValidatedSciencePageDownload(
         downloadUrl,
         downloadDir,
         articleTitle,
+        45000,
+        abortSignal,
       );
+      throwIfAborted(abortSignal);
       if (clickedDownload) {
         return clickedDownload;
       }
@@ -276,6 +353,10 @@ async function tryValidatedSciencePageDownload(
       failures: [] as PdfDownloadAttemptFailure[],
     };
   } catch (error) {
+    if (isCancellationError(error) || abortSignal?.aborted) {
+      throw new CancellationError();
+    }
+
     logSciencePdf('validated_page_exception', {
       pageUrl,
       downloadUrl,
@@ -336,6 +417,7 @@ function resolveStrictScienceDownloadTargets(request: PdfDownloadContext) {
 
 async function downloadSciencePdf(request: PdfDownloadContext): Promise<PdfDownloadResult> {
   return await runSerializedSciencePdfDownload(request.pageUrl, async () => {
+    throwIfAborted(request.abortSignal);
     logSciencePdf('start', {
       pageUrl: request.pageUrl,
       requestedDownloadUrl: request.requestedDownloadUrl,
@@ -362,8 +444,10 @@ async function downloadSciencePdf(request: PdfDownloadContext): Promise<PdfDownl
         request.articleTitle,
         {
           useWindowFetchProbe: true,
+          abortSignal: request.abortSignal,
         },
       );
+      throwIfAborted(request.abortSignal);
       if (validatedPageDownloadAttempt.downloaded) {
         logSciencePdf('validated_page_success', {
           pageUrl: request.pageUrl,
@@ -398,6 +482,7 @@ async function downloadSciencePdf(request: PdfDownloadContext): Promise<PdfDownl
           failures: summarizeScienceFailures(failures),
         });
         await clearScienceSessionState();
+        throwIfAborted(request.abortSignal);
 
         const cleanValidatedPageDownloadAttempt = await tryValidatedSciencePageDownload(
           strictDownloadTargets.validationPageUrl,
@@ -406,8 +491,10 @@ async function downloadSciencePdf(request: PdfDownloadContext): Promise<PdfDownl
           request.articleTitle,
           {
             useWindowFetchProbe: true,
+            abortSignal: request.abortSignal,
           },
         );
+        throwIfAborted(request.abortSignal);
         if (cleanValidatedPageDownloadAttempt.downloaded) {
           logSciencePdf('session_reset_validated_page_success', {
             pageUrl: request.pageUrl,
@@ -440,7 +527,9 @@ async function downloadSciencePdf(request: PdfDownloadContext): Promise<PdfDownl
       request.pageUrl,
       request.downloadDir,
       request.articleTitle,
+      request.abortSignal,
     );
+    throwIfAborted(request.abortSignal);
     if (browserDownloadAttempt.downloaded) {
       logSciencePdf('browser_session_success', {
         pageUrl: request.pageUrl,
@@ -463,14 +552,20 @@ async function downloadSciencePdf(request: PdfDownloadContext): Promise<PdfDownl
 
     const directDownloadAttempt =
       request.sciencePdfCandidateUrls.length > 0
-        ? await tryDownloadPdfCandidates(request.sciencePdfCandidateUrls, request.pageUrl)
+        ? await tryDownloadPdfCandidates(
+            request.sciencePdfCandidateUrls,
+            request.pageUrl,
+            request.abortSignal,
+          )
         : { downloaded: null, failures: [] as PdfDownloadAttemptFailure[] };
+    throwIfAborted(request.abortSignal);
     if (directDownloadAttempt.downloaded) {
       logSciencePdf('http_fetch_success', {
         pageUrl: request.pageUrl,
         finalUrl: directDownloadAttempt.downloaded.finalUrl,
         strategy: 'fallback_http_fetch',
       });
+      throwIfAborted(request.abortSignal);
       return await persistDownloadedPdf(
         directDownloadAttempt.downloaded,
         request.downloadDir,
@@ -485,7 +580,7 @@ async function downloadSciencePdf(request: PdfDownloadContext): Promise<PdfDownl
       failures: summarizeScienceFailures(failures),
     });
     throwScienceDownloadFailure(request, failures);
-  });
+  }, request.abortSignal);
 }
 
 export const sciencePdfStrategy: PdfDownloadStrategy = {

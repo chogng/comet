@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import type {
   ElectronInvoke,
@@ -154,7 +155,10 @@ test('DocumentActionsController delegates article summary export', async () => {
   const article = createArticle({
     sourceUrl: 'https://www.nature.com/articles/export',
   });
-  const delegatedArticles: Array<readonly Article[]> = [];
+  const delegatedExports: Array<{
+    articles: readonly Article[];
+    translateSummaries: boolean;
+  }> = [];
   const controller = createDocumentActionsController({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
@@ -169,8 +173,8 @@ test('DocumentActionsController delegates article summary export', async () => {
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [article],
     createBrowserTab: () => {},
-    onExportArticleSummaries: (articles) => {
-      delegatedArticles.push(articles);
+    onExportArticleSummaries: (articles, translateSummaries) => {
+      delegatedExports.push({ articles, translateSummaries });
     },
     activeDraftExport: null,
   });
@@ -178,7 +182,10 @@ test('DocumentActionsController delegates article summary export', async () => {
   await controller.handleExportDocx();
 
   controller.dispose();
-  assert.deepEqual(delegatedArticles, [[article]]);
+  assert.deepEqual(delegatedExports, [{
+    articles: [article],
+    translateSummaries: true,
+  }]);
 });
 
 test('DocumentActionsController prefixes PDF titles by fetch order outside selection mode', async () => {
@@ -227,6 +234,52 @@ test('DocumentActionsController numbers batch PDF titles by batch order', async 
     payloads.map((payload) => payload.articleTitle),
     ['1. Checked first', '2. Checked second'],
   );
+});
+
+test('DocumentActionsController cancels an active batch PDF download task', async () => {
+  const downloadPayloads: WebContentPdfDownloadPayload[] = [];
+  const cancelPayloads: Array<{ taskId?: string }> = [];
+  let rejectDownload: ((error: unknown) => void) | null = null;
+  const invokeDesktop = (async (command: string, payload?: Record<string, unknown>) => {
+    if (command === 'web_content_download_pdf') {
+      downloadPayloads.push(payload as WebContentPdfDownloadPayload);
+      return await new Promise<PdfDownloadResult>((_resolve, reject) => {
+        rejectDownload = reject;
+      });
+    }
+
+    if (command === 'cancel_document_task') {
+      cancelPayloads.push(payload as { taskId?: string });
+      rejectDownload?.(new Error('Canceled'));
+      return true;
+    }
+
+    throw new Error(`Unexpected desktop command in cancellation test: ${command}`);
+  }) as ElectronInvoke;
+  const controller = createDocumentActionsController(createDocumentActionsContext({
+    invokeDesktop,
+  }));
+
+  const running = controller.handleDownloadAllArticles([
+    createArticle({
+      title: 'Cancelable article',
+      sourceUrl: 'https://example.com/articles/cancelable',
+    }),
+  ]);
+  await delay(0);
+
+  await controller.handleDownloadAllArticles([
+    createArticle({
+      title: 'Cancelable article',
+      sourceUrl: 'https://example.com/articles/cancelable',
+    }),
+  ]);
+  await running;
+
+  controller.dispose();
+  assert.equal(typeof downloadPayloads[0]?.taskId, 'string');
+  assert.deepEqual(cancelPayloads, [{ taskId: downloadPayloads[0]?.taskId }]);
+  assert.equal(controller.getSnapshot().downloadAllProgress, null);
 });
 
 test('DocumentActionsController uses selected order for PDF titles when enabled in selection mode', async () => {

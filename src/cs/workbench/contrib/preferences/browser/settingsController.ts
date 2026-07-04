@@ -649,6 +649,7 @@ export class SettingsController {
       const result = await this.settingsModel.listCustomTranslationModels(
         this.getSettingsModelContext(),
       );
+      this.scheduleImmediateAutoSave();
       toast.success(
         formatLocalized(ui.toastTranslationModelsLoaded, {
           count: String(result.models.length),

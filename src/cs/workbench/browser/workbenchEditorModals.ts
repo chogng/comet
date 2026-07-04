@@ -4,6 +4,8 @@ import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createModalView } from 'cs/base/browser/ui/modal/modal';
 import { $ } from 'cs/base/browser/dom';
 import type { WorkbenchEditorCommandDefinition } from 'cs/workbench/browser/editorCommands';
+import type { CancellationToken } from 'cs/base/common/cancellation';
+import type { IDisposable } from 'cs/base/common/lifecycle';
 
 export function showWorkbenchTextInputModal(params: {
   title: string;
@@ -75,6 +77,7 @@ export function showWorkbenchSaveConfirmModal(params: {
   discardLabel: string;
   cancelLabel: string;
   closeLabel: string;
+  cancellationToken?: CancellationToken;
 }): Promise<'save' | 'discard' | 'cancel'> {
   return new Promise((resolve) => {
     const hoverService = getHoverService();
@@ -86,12 +89,14 @@ export function showWorkbenchSaveConfirmModal(params: {
     const saveButton = $<HTMLElementTagNameMap['button']>('button.comet-btn-base.comet-btn-primary.comet-btn-md', undefined, params.saveLabel) as HTMLButtonElement;
 
     let resolved = false;
+    let cancellationListener: IDisposable | undefined;
     const finish = (value: 'save' | 'discard' | 'cancel') => {
       if (resolved) {
         return;
       }
 
       resolved = true;
+      cancellationListener?.dispose();
       modal.dispose();
       resolve(value);
     };
@@ -116,8 +121,11 @@ export function showWorkbenchSaveConfirmModal(params: {
       hoverService,
     });
 
-    modal.open();
-    queueMicrotask(() => saveButton.focus());
+    cancellationListener = params.cancellationToken?.onCancellationRequested(() => finish('cancel'));
+    if (!resolved) {
+      modal.open();
+      queueMicrotask(() => saveButton.focus());
+    }
   });
 }
 

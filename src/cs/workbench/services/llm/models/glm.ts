@@ -9,6 +9,14 @@ const glmDefaults = {
 const glm: ReadonlyArray<LlmModelDefinition> = [
   {
     ...glmDefaults,
+    id: 'glm-5.2',
+    label: 'GLM-5.2',
+    description: 'Flagship GLM model for long-context coding and agent tasks.',
+    context_window_tokens: 1_000_000,
+    recommendedTasks: ['chat', 'reasoning'],
+  },
+  {
+    ...glmDefaults,
     id: 'glm-4.7-flash',
     label: 'GLM-4.7-Flash',
     description: 'Fast GLM model for lightweight chat tasks.',

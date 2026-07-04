@@ -21,8 +21,8 @@ const defaultEnabledLlmModelOptions: Record<LlmProviderId, string[]> = {
   deepseek: [serializeLlmModelOptionValue('deepseek', 'deepseek-chat')],
   anthropic: [],
   openai: [
-    serializeLlmModelOptionValue('openai', 'gpt-5.3-codex', 'medium'),
-    serializeLlmModelOptionValue('openai', 'gpt-5.4', 'medium'),
+    serializeLlmModelOptionValue('openai', 'gpt-5-codex', 'medium'),
+    serializeLlmModelOptionValue('openai', 'gpt-5.5', 'medium'),
   ],
   gemini: [],
   custom: [],

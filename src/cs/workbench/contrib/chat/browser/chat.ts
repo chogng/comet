@@ -14,6 +14,7 @@ import type {
 	LlmReasoningEffort,
 	LlmServiceTier,
 } from 'cs/workbench/services/llm/registry';
+import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 
 export type ChatModelDropdownOption = DropdownOption & {
 	readonly providerId?: LlmProviderId;
@@ -43,8 +44,10 @@ export type ChatWidgetProps = {
 	readonly isArticleSourceFetching: boolean;
 	readonly onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
 	readonly showArticleBatchActions: boolean;
+	readonly downloadAllProgress: ArticleBatchTaskProgress | null;
+	readonly translationExportProgress: ArticleBatchTaskProgress | null;
 	readonly onDownloadAllArticles: () => void | Promise<void>;
-	readonly onExportArticleSummaries: () => void | Promise<void>;
+	readonly onExportArticleSummaries: (translateSummaries: boolean) => void | Promise<void>;
 	readonly isArticleSelected: (href: string) => boolean;
 	readonly onToggleArticleSelected: (href: string) => void;
 	readonly availableArticleCount: number;

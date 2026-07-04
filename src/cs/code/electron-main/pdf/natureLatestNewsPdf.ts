@@ -1,6 +1,7 @@
 import { load } from 'cheerio';
 
 import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { CancellationError } from 'cs/base/common/errors';
 import { cleanText } from 'cs/base/common/strings';
 import { isNatureMainSiteUrl } from 'cs/base/common/url';
 import { fetchHtml } from 'cs/code/electron-main/fetch/dispatch';
@@ -12,6 +13,12 @@ const NATURE_LATEST_NEWS_PDF_LOG_ENABLED = isCompatFetchEnvEnabled(
   'LS_FETCH_TIMING',
   'READER_FETCH_TIMING',
 );
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new CancellationError();
+  }
+}
 
 function logNatureLatestNewsPdf(stage: string, details: Record<string, unknown>) {
   if (!NATURE_LATEST_NEWS_PDF_LOG_ENABLED) return;
@@ -91,8 +98,9 @@ async function resolveNatureLatestNewsHtml(request: PdfDownloadContext) {
   }
 
   try {
-    return await fetchHtml(request.pageUrl);
+    return await fetchHtml(request.pageUrl, { signal: request.abortSignal });
   } catch {
+    throwIfAborted(request.abortSignal);
     return '';
   }
 }
@@ -100,7 +108,9 @@ async function resolveNatureLatestNewsHtml(request: PdfDownloadContext) {
 export async function tryDownloadNatureLatestNewsPdf(
   request: PdfDownloadContext,
 ): Promise<PdfDownloadResult | null> {
+  throwIfAborted(request.abortSignal);
   const html = await resolveNatureLatestNewsHtml(request);
+  throwIfAborted(request.abortSignal);
   if (!isNatureLatestNewsArticlePage(request.pageUrl, html)) {
     logNatureLatestNewsPdf('not_applicable', {
       pageUrl: request.pageUrl,
@@ -117,6 +127,7 @@ export async function tryDownloadNatureLatestNewsPdf(
     pageUrl: request.pageUrl,
     articleTitle: request.articleTitle,
     downloadDir: request.downloadDir,
+    abortSignal: request.abortSignal,
   });
 
   logNatureLatestNewsPdf('print_success', {

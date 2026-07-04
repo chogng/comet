@@ -25,7 +25,6 @@ export type TranslationWidgetProps = {
   labels: SettingsPartLabels;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
-  customTranslationModels: string[];
   llmProviders: Record<'glm', LlmProviderSettings>;
   isSettingsSaving: boolean;
   isTestingTranslationConnection: boolean;
@@ -41,7 +40,15 @@ export type TranslationWidgetProps = {
   onTestTranslationConnection: () => void;
 };
 
-const openAITranslationModelIds = ['gpt-5.2', 'gpt-5.4', 'gpt-5.4-mini'] as const;
+const openAITranslationModelIds = ['gpt-5.5', 'gpt-5-codex', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.2'] as const;
+
+function createCustomTranslationModelOptions(models: readonly string[]) {
+  return models.map((model) => ({
+    value: model,
+    label: model,
+    title: model,
+  }));
+}
 
 export class TranslationWidget {
   private props: TranslationWidgetProps;
@@ -169,25 +176,22 @@ export class TranslationWidget {
       focusKey: 'settings.translation.custom.baseUrl',
       onInput: (value) => this.props.onTranslationProviderBaseUrlChange('custom', value),
     }).element;
-    const modelInput = buildInput({
-      value: provider.model,
-      className: 'comet-settings-input-control comet-settings-translation-model-input',
-      focusKey: 'settings.translation.custom.model',
-      onInput: (value) => this.props.onTranslationProviderModelChange('custom', value),
-    });
-    const modelOptionsId = 'settings-translation-custom-model-options';
-    modelInput.inputElement.setAttribute('list', modelOptionsId);
     const modelControl = el('div', 'comet-settings-translation-model-action-control');
-    modelControl.append(modelInput.element);
-    if (this.props.customTranslationModels.length > 0) {
-      const modelOptions = el('datalist');
-      modelOptions.id = modelOptionsId;
-      this.props.customTranslationModels.forEach((model) => {
-        const option = el('option');
-        option.value = model;
-        modelOptions.append(option);
-      });
-      modelControl.append(modelOptions);
+    if (provider.models.length > 0) {
+      modelControl.append(buildSelect(
+        createCustomTranslationModelOptions(provider.models),
+        provider.model,
+        'settings.translation.custom.model',
+        (value) => this.props.onTranslationProviderModelChange('custom', value),
+        'comet-settings-translation-model-input',
+      ));
+    } else {
+      modelControl.append(buildInput({
+        value: provider.model,
+        className: 'comet-settings-input-control comet-settings-translation-model-input',
+        focusKey: 'settings.translation.custom.model',
+        onInput: (value) => this.props.onTranslationProviderModelChange('custom', value),
+      }).element);
     }
     modelControl.append(buildButton({
       label: this.props.labels.settingsTranslationFetchModels,
@@ -288,7 +292,7 @@ export class TranslationWidget {
     });
     const selectedValue = options.some((option) => option.value === provider.model)
       ? provider.model
-      : 'gpt-5.4-mini';
+      : 'gpt-5.5';
 
     return createSettingsRow({
       title: this.props.labels.settingsLlmModel,

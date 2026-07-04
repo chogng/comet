@@ -90,6 +90,25 @@ export function localizeDesktopInvokeError(
       }).trim();
     case 'DOCX_EXPORT_NO_ARTICLES':
       return ui.errorDocxExportNoArticles;
+    case 'DOCX_TRANSLATION_FAILED':
+      {
+        const translationCode = detailValue(details, 'translationCode');
+        const translationDetailsValue = details?.translationDetails;
+        const translationDetails = isRecord(translationDetailsValue)
+          ? translationDetailsValue
+          : undefined;
+        const translationError = translationCode
+          ? localizeDesktopInvokeError(ui, {
+            code: translationCode,
+            message: detailValue(details, 'message', error.message || ui.errorUnknown),
+            details: translationDetails,
+          })
+          : detailValue(details, 'message', error.message || ui.errorUnknown);
+
+        return formatLocalized(ui.errorDocxTranslationFailed, {
+          error: translationError,
+        });
+      }
     case 'DOCX_EXPORT_FAILED':
       return formatLocalized(ui.errorDocxExportFailed, {
         error: detailValue(details, 'message', error.message || ui.errorUnknown),

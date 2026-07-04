@@ -1,5 +1,7 @@
 import { toast } from 'cs/base/browser/ui/toast/toast';
 import { EventEmitter } from 'cs/base/common/event';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
+import type { CancellationToken } from 'cs/base/common/cancellation';
 import type {
   LibraryDocumentSummary,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -29,6 +31,7 @@ import {
 import { syncLibraryMetadataFromArticle } from 'cs/workbench/services/knowledgeBase/libraryMetadataService';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
+import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 
 export type DocumentActionsControllerContext = {
   desktopRuntime: boolean;
@@ -44,7 +47,7 @@ export type DocumentActionsControllerContext = {
   selectedArticleOrderLookup: ReadonlyMap<string, number>;
   exportableArticles: Article[];
   createBrowserTab: (url: string) => void;
-  onExportArticleSummaries: (articles: readonly Article[]) => void | Promise<void>;
+  onExportArticleSummaries: (articles: readonly Article[], translateSummaries: boolean) => void | Promise<void>;
   activeDraftExport: {
     title: string;
     document: WritingEditorDocument;
@@ -56,6 +59,17 @@ export type DocumentActionsControllerContext = {
 
 export type DocumentActionsControllerSnapshot = {
   canExportDocx: boolean;
+  downloadAllProgress: ArticleBatchTaskProgress | null;
+};
+
+type DocumentDownloadTask = {
+  taskId: string;
+  source: CancellationTokenSource;
+};
+
+type SharedPdfDownloadOptions = {
+  taskId?: string;
+  token?: CancellationToken;
 };
 
 type DownloadableArticle = Pick<
@@ -127,6 +141,12 @@ function isScienceValidationWindowClosedCancel(
   );
 }
 
+function isDesktopCancellation(
+  error: ReturnType<typeof parseDesktopInvokeError>,
+) {
+  return error.message === 'Canceled' || error.details?.message === 'Canceled';
+}
+
 function showAppToast(
   nativeHost: INativeHostService,
   type: 'info' | 'success' | 'error' | 'warning',
@@ -153,14 +173,36 @@ function showAppToast(
   }
 }
 
+let documentBatchTaskCounter = 0;
+
+function createDocumentBatchTaskId() {
+  documentBatchTaskCounter += 1;
+  return `document-batch-${Date.now()}-${documentBatchTaskCounter}`;
+}
+
 function createSnapshot(
   context: DocumentActionsControllerContext,
+  downloadAllProgress: ArticleBatchTaskProgress | null = null,
 ): DocumentActionsControllerSnapshot {
   return {
     canExportDocx:
       Boolean(context.activeDraftExport) ||
       canExportArticlesDocx(context.exportableArticles.length),
+    downloadAllProgress,
   };
+}
+
+function sameArticleBatchTaskProgress(
+  left: ArticleBatchTaskProgress | null,
+  right: ArticleBatchTaskProgress | null,
+) {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return left.phase === right.phase && left.current === right.current && left.total === right.total;
 }
 
 export class DocumentActionsController {
@@ -168,6 +210,7 @@ export class DocumentActionsController {
   private snapshot: DocumentActionsControllerSnapshot;
   private readonly onDidChangeEmitter = new EventEmitter<void>();
   private sciencePdfDownloadCount = 0;
+  private currentDownloadTask: DocumentDownloadTask | null = null;
 
   constructor(context: DocumentActionsControllerContext) {
     this.context = context;
@@ -182,15 +225,19 @@ export class DocumentActionsController {
 
   readonly setContext = (context: DocumentActionsControllerContext) => {
     this.context = context;
-    this.setSnapshot(createSnapshot(context));
+    this.setSnapshot(createSnapshot(context, this.snapshot.downloadAllProgress));
   };
 
   readonly dispose = () => {
+    this.currentDownloadTask?.source.cancel();
+    this.currentDownloadTask?.source.dispose();
+    this.currentDownloadTask = null;
     this.onDidChangeEmitter.dispose();
   };
 
   readonly handleSharedPdfDownload = async (
     article: DownloadableArticle,
+    options: SharedPdfDownloadOptions = {},
   ) => {
     const {
       desktopRuntime,
@@ -209,11 +256,17 @@ export class DocumentActionsController {
 
     const preparedPdfDownload = preparePdfDownload(article.sourceUrl, article.doi);
     if (!preparedPdfDownload) {
+      if (options.token?.isCancellationRequested) {
+        return;
+      }
       showAppToast(nativeHost, 'error', ui.toastEnterArticleUrl);
       return;
     }
 
     if (!desktopRuntime) {
+      if (options.token?.isCancellationRequested) {
+        return;
+      }
       showAppToast(nativeHost, 'info', ui.toastDesktopPdfDownloadOnly);
       return;
     }
@@ -233,6 +286,10 @@ export class DocumentActionsController {
         console.error('Failed to upsert library document metadata.', metadataError);
       }
     }
+    if (options.token?.isCancellationRequested) {
+      markPdfDownloadCancelled(preparedPdfDownload.normalizedSourceUrl);
+      return;
+    }
     markPdfDownloadStarted(preparedPdfDownload.normalizedSourceUrl);
 
     if (preparedPdfDownload.isSciencePdfDownload && this.sciencePdfDownloadCount > 0) {
@@ -245,6 +302,7 @@ export class DocumentActionsController {
 
     try {
       const result = await invokeDesktop('web_content_download_pdf', {
+        taskId: options.taskId,
         pageUrl: preparedPdfDownload.normalizedSourceUrl,
         downloadUrl: preparedPdfDownload.preferredPdfUrl,
         doi: typeof article.doi === 'string' ? article.doi : undefined,
@@ -262,6 +320,10 @@ export class DocumentActionsController {
           knowledgeBaseEnabled ? knowledgeBasePdfDownloadDir : pdfDownloadDir,
         ),
       });
+      if (options.token?.isCancellationRequested) {
+        markPdfDownloadCancelled(preparedPdfDownload.normalizedSourceUrl);
+        return;
+      }
       markPdfDownloadSucceeded(preparedPdfDownload.normalizedSourceUrl, result);
       void onLibraryUpdated?.();
       showAppToast(
@@ -273,8 +335,13 @@ export class DocumentActionsController {
         }),
       );
     } catch (downloadError) {
+      if (options.token?.isCancellationRequested) {
+        markPdfDownloadCancelled(preparedPdfDownload.normalizedSourceUrl);
+        return;
+      }
+
       const parsedError = parseDesktopInvokeError(downloadError);
-      if (isScienceValidationWindowClosedCancel(parsedError)) {
+      if (isScienceValidationWindowClosedCancel(parsedError) || isDesktopCancellation(parsedError)) {
         markPdfDownloadCancelled(preparedPdfDownload.normalizedSourceUrl);
         return;
       }
@@ -302,13 +369,67 @@ export class DocumentActionsController {
   };
 
   readonly handleDownloadAllArticles = async (articles: readonly Article[]) => {
-    for (const [index, article] of articles.entries()) {
-      await this.handleSharedPdfDownload({
-        ...article,
-        fetchOrder: index + 1,
-      });
+    if (this.currentDownloadTask) {
+      this.cancelDownloadAllArticles();
+      return;
+    }
+
+    if (articles.length === 0) {
+      return;
+    }
+
+    const source = new CancellationTokenSource();
+    const taskId = createDocumentBatchTaskId();
+    this.currentDownloadTask = { taskId, source };
+    const total = articles.length;
+    let completed = 0;
+    this.setDownloadAllProgress({ phase: 'running', current: completed, total });
+
+    try {
+      for (const [index, article] of articles.entries()) {
+        if (source.token.isCancellationRequested) {
+          break;
+        }
+
+        await this.handleSharedPdfDownload({
+          ...article,
+          fetchOrder: index + 1,
+        }, {
+          taskId,
+          token: source.token,
+        });
+        if (source.token.isCancellationRequested) {
+          break;
+        }
+
+        completed += 1;
+        if (this.currentDownloadTask?.taskId === taskId) {
+          this.setDownloadAllProgress({ phase: 'running', current: completed, total });
+        }
+      }
+    } finally {
+      if (this.currentDownloadTask?.taskId === taskId) {
+        this.currentDownloadTask = null;
+        this.setDownloadAllProgress(null);
+      }
+      source.dispose();
     }
   };
+
+  private cancelDownloadAllArticles() {
+    const task = this.currentDownloadTask;
+    if (!task) {
+      return;
+    }
+
+    task.source.cancel();
+    this.currentDownloadTask = null;
+    this.setDownloadAllProgress(null);
+    void this.context.invokeDesktop('cancel_document_task', { taskId: task.taskId })
+      .catch((error) => {
+        console.warn('Failed to cancel document download task.', error);
+      });
+  }
 
   readonly handleExportDocx = async () => {
     const {
@@ -358,7 +479,7 @@ export class DocumentActionsController {
       return;
     }
 
-    await onExportArticleSummaries(exportableArticles);
+    await onExportArticleSummaries(exportableArticles, true);
   };
 
   private emitChange() {
@@ -366,12 +487,19 @@ export class DocumentActionsController {
   }
 
   private setSnapshot(nextSnapshot: DocumentActionsControllerSnapshot) {
-    if (this.snapshot.canExportDocx === nextSnapshot.canExportDocx) {
+    if (
+      this.snapshot.canExportDocx === nextSnapshot.canExportDocx &&
+      sameArticleBatchTaskProgress(this.snapshot.downloadAllProgress, nextSnapshot.downloadAllProgress)
+    ) {
       return;
     }
 
     this.snapshot = nextSnapshot;
     this.emitChange();
+  }
+
+  private setDownloadAllProgress(progress: ArticleBatchTaskProgress | null) {
+    this.setSnapshot(createSnapshot(this.context, progress));
   }
 }
 
