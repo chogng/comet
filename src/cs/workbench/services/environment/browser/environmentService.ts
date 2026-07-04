@@ -9,8 +9,12 @@ import {
 } from 'cs/workbench/services/environment/common/environmentService';
 
 type WorkbenchEnvironmentGlobals = Window & {
-  electronAPI?: unknown;
-  __CS_WEB_CONTENT_RUNTIME__?: boolean;
+  electronAPI?: {
+    invoke?: unknown;
+    webContent?: {
+      navigate?: unknown;
+    };
+  };
 };
 
 function resolveRuntimeKind(): WorkbenchRuntimeKind {
@@ -19,7 +23,7 @@ function resolveRuntimeKind(): WorkbenchRuntimeKind {
   }
 
   const globals = window as WorkbenchEnvironmentGlobals;
-  return globals.electronAPI ? 'desktop' : 'web';
+  return typeof globals.electronAPI?.invoke === 'function' ? 'desktop' : 'web';
 }
 
 function resolveDevelopment() {
@@ -40,7 +44,7 @@ function resolveWebContentRuntime() {
   }
 
   const globals = window as WorkbenchEnvironmentGlobals;
-  return Boolean(globals.__CS_WEB_CONTENT_RUNTIME__ ?? globals.electronAPI);
+  return typeof globals.electronAPI?.webContent?.navigate === 'function';
 }
 
 export class BrowserWorkbenchEnvironmentService

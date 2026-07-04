@@ -46,9 +46,6 @@ type RuntimeGlobal = typeof globalThis & {
       windowControls?: {
         perform?: unknown;
       };
-      webContent?: {
-        navigate?: unknown;
-      };
     };
   };
   importScripts?: unknown;
@@ -130,13 +127,6 @@ export function hasWindowControlsRuntime() {
   return (
     typeof runtimeGlobal.window !== 'undefined' &&
     typeof runtimeGlobal.window.electronAPI?.windowControls?.perform === 'function'
-  );
-}
-
-export function hasWebContentRuntime() {
-  return (
-    typeof runtimeGlobal.window !== 'undefined' &&
-    typeof runtimeGlobal.window.electronAPI?.webContent?.navigate === 'function'
   );
 }
 

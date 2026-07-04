@@ -131,10 +131,6 @@ import { isEditorContentTabInput } from 'cs/workbench/browser/parts/editor/edito
 import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writingEditorDocument';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
-import {
-  hasDesktopRuntime,
-  hasWebContentRuntime,
-} from 'cs/base/common/platform';
 import { EventEmitter } from 'cs/base/common/event';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
@@ -228,9 +224,10 @@ function buildSelectedArticleOrderLookup(
   );
 }
 
-function resolveRuntimeState() {
-  const electronRuntime = hasDesktopRuntime();
-  const webContentRuntime = hasWebContentRuntime();
+function resolveRuntimeState(nativeHost: INativeHostService) {
+  const electronRuntime = nativeHost.canInvoke();
+  const webContentRuntime =
+    typeof nativeHost.webContent?.navigate === 'function';
 
   return {
     electronRuntime,
@@ -1337,10 +1334,10 @@ class WorkbenchHost {
       isEditorCollapsed,
       expandedEditorSize,
     } = getWorkbenchLayoutStateSnapshot();
-    const { electronRuntime, webContentRuntime, desktopRuntime } =
-      resolveRuntimeState();
     const { isFullscreen: isWindowFullscreen } = getWindowStateSnapshot();
     const nativeHost = this.nativeHostService;
+    const { electronRuntime, webContentRuntime, desktopRuntime } =
+      resolveRuntimeState(nativeHost);
 
     const invokeDesktop = async <T>(
       command: string,
