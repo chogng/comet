@@ -1,6 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Literature Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
 import type {
@@ -9,7 +8,7 @@ import type {
 	IRoutingChannelClient,
 	IServerChannel,
 } from 'ls/base/parts/ipc/common/ipc';
-import type { IRemoteService } from 'ls/base/parts/ipc/common/services';
+import type { IRemoteService } from 'ls/platform/ipc/common/service';
 import { createDecorator } from 'ls/platform/instantiation/common/instantiation';
 
 export const IMainProcessService =

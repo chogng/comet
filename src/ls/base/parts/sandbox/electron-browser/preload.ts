@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  IServerChannel,
+} from 'ls/base/parts/ipc/common/ipc';
+import type {
   AppCommand,
   AppCommandPayloadMap,
   AppCommandResultMap,
@@ -23,13 +26,23 @@ import type {
 } from 'ls/base/parts/sandbox/common/electronTypes';
 import {
   parseSerializedAppError,
+  serializeAppError,
   type AppErrorCode,
 } from 'ls/base/common/errors';
+import type { DisposableLike } from 'ls/base/common/lifecycle';
 
 const APP_IPC_CHANNEL_PREFIX = 'app:';
 const APP_SERVICE_IPC_CALL_CHANNEL = 'app:ipc-call';
 const APP_SERVICE_IPC_EVENT_CHANNEL = 'app:ipc-event';
 const APP_SERVICE_IPC_DISPOSE_CHANNEL = 'app:ipc-dispose';
+const APP_SERVICE_IPC_RENDERER_CHANNEL_REGISTER_CHANNEL = 'app:ipc-renderer-channel-register';
+const APP_SERVICE_IPC_RENDERER_CHANNEL_DISPOSE_CHANNEL = 'app:ipc-renderer-channel-dispose';
+const APP_SERVICE_IPC_RENDERER_CALL_CHANNEL = 'app:ipc-renderer-call';
+const APP_SERVICE_IPC_RENDERER_CALL_RESULT_CHANNEL = 'app:ipc-renderer-call-result';
+const APP_SERVICE_IPC_RENDERER_EVENT_SUBSCRIBE_CHANNEL = 'app:ipc-renderer-event-subscribe';
+const APP_SERVICE_IPC_RENDERER_EVENT_CHANNEL = 'app:ipc-renderer-event';
+const APP_SERVICE_IPC_RENDERER_EVENT_DISPOSE_CHANNEL = 'app:ipc-renderer-event-dispose';
+const APP_SERVICE_IPC_RENDERER_CONTEXT = 'main';
 
 type DesktopInvokeError = Error & {
   code?: AppErrorCode;
@@ -164,6 +177,149 @@ type AppInvokeResponse<T> =
   | { ok: true; result: T }
   | { ok: false; error: string };
 
+type RendererCallRequest = {
+  readonly requestId: string;
+  readonly channelName: string;
+  readonly command: string;
+  readonly arg?: unknown;
+};
+
+type RendererCallResponse = {
+  readonly requestId: string;
+} & AppInvokeResponse<unknown>;
+
+type RendererEventSubscribeRequest = {
+  readonly subscriptionId: string;
+  readonly channelName: string;
+  readonly eventName: string;
+  readonly arg?: unknown;
+};
+
+type RendererEventPayload = {
+  readonly subscriptionId: string;
+  readonly data?: unknown;
+  readonly error?: string;
+};
+
+type RendererEventSubscription = {
+  readonly channelName: string;
+  readonly disposable: DisposableLike;
+};
+
+const rendererChannels = new Map<string, IServerChannel<string>>();
+const rendererEventSubscriptions = new Map<string, RendererEventSubscription>();
+
+function getRendererChannel(channelName: string): IServerChannel<string> {
+  const channel = rendererChannels.get(channelName);
+  if (!channel) {
+    throw new Error(`Unknown renderer IPC channel '${channelName}'.`);
+  }
+
+  return channel;
+}
+
+function disposeRendererEventSubscription(subscriptionId: string): void {
+  const subscription = rendererEventSubscriptions.get(subscriptionId);
+  if (!subscription) {
+    return;
+  }
+
+  subscription.disposable.dispose();
+  rendererEventSubscriptions.delete(subscriptionId);
+}
+
+function disposeRendererChannelSubscriptions(channelName: string): void {
+  for (const [subscriptionId, subscription] of rendererEventSubscriptions) {
+    if (subscription.channelName === channelName) {
+      subscription.disposable.dispose();
+      rendererEventSubscriptions.delete(subscriptionId);
+    }
+  }
+}
+
+function registerIpcServiceChannel(
+  channelName: string,
+  channel: IServerChannel<string>,
+) {
+  if (rendererChannels.has(channelName)) {
+    throw new Error(`Renderer IPC channel '${channelName}' is already registered.`);
+  }
+
+  rendererChannels.set(channelName, channel);
+  sendIpc(APP_SERVICE_IPC_RENDERER_CHANNEL_REGISTER_CHANNEL, channelName);
+
+  return () => {
+    disposeRendererChannelSubscriptions(channelName);
+    rendererChannels.delete(channelName);
+    sendIpc(APP_SERVICE_IPC_RENDERER_CHANNEL_DISPOSE_CHANNEL, channelName);
+  };
+}
+
+function registerRendererChannelHandlers(): void {
+  ipcRenderer.on(
+    APP_SERVICE_IPC_RENDERER_CALL_CHANNEL,
+    async (_event, request: RendererCallRequest) => {
+      try {
+        const channel = getRendererChannel(request.channelName);
+        const result = await channel.call(
+          APP_SERVICE_IPC_RENDERER_CONTEXT,
+          request.command,
+          request.arg,
+        );
+        sendIpc(APP_SERVICE_IPC_RENDERER_CALL_RESULT_CHANNEL, {
+          requestId: request.requestId,
+          ok: true,
+          result,
+        } satisfies RendererCallResponse);
+      } catch (error) {
+        sendIpc(APP_SERVICE_IPC_RENDERER_CALL_RESULT_CHANNEL, {
+          requestId: request.requestId,
+          ok: false,
+          error: serializeAppError(error),
+        } satisfies RendererCallResponse);
+      }
+    },
+  );
+
+  ipcRenderer.on(
+    APP_SERVICE_IPC_RENDERER_EVENT_SUBSCRIBE_CHANNEL,
+    (_event, request: RendererEventSubscribeRequest) => {
+      try {
+        disposeRendererEventSubscription(request.subscriptionId);
+        const channel = getRendererChannel(request.channelName);
+        const disposable = channel.listen(
+          APP_SERVICE_IPC_RENDERER_CONTEXT,
+          request.eventName,
+          request.arg,
+        )(data => {
+          sendIpc(APP_SERVICE_IPC_RENDERER_EVENT_CHANNEL, {
+            subscriptionId: request.subscriptionId,
+            data,
+          } satisfies RendererEventPayload);
+        });
+        rendererEventSubscriptions.set(request.subscriptionId, {
+          channelName: request.channelName,
+          disposable,
+        });
+      } catch (error) {
+        sendIpc(APP_SERVICE_IPC_RENDERER_EVENT_CHANNEL, {
+          subscriptionId: request.subscriptionId,
+          error: serializeAppError(error),
+        } satisfies RendererEventPayload);
+      }
+    },
+  );
+
+  ipcRenderer.on(
+    APP_SERVICE_IPC_RENDERER_EVENT_DISPOSE_CHANNEL,
+    (_event, subscriptionId: string) => {
+      disposeRendererEventSubscription(subscriptionId);
+    },
+  );
+}
+
+registerRendererChannelHandlers();
+
 const electronAPI: ElectronAPI = {
   ipc: {
     async call<T = unknown>(channelName: string, command: string, arg?: unknown) {
@@ -176,6 +332,9 @@ const electronAPI: ElectronAPI = {
       listener: (payload: T) => void,
     ) {
       return listenIpcService<T>(channelName, event, arg, listener);
+    },
+    registerChannel(channelName: string, channel: IServerChannel<string>) {
+      return registerIpcServiceChannel(channelName, channel);
     },
   },
   async invoke<TCommand extends AppCommand>(command: TCommand, args?: AppCommandPayloadMap[TCommand]) {

@@ -12,8 +12,8 @@
 import 'ls/workbench/workbench.common.main';
 //#endregion
 
-import { IMainProcessService } from 'ls/base/parts/ipc/common/mainProcessService';
-import { createElectronMainProcessService } from 'ls/base/parts/ipc/electron-browser/ipc.electron';
+import { ElectronIPCMainProcessService } from 'ls/platform/ipc/electron-browser/mainProcessService';
+import { IMainProcessService } from 'ls/platform/ipc/common/mainProcessService';
 import { INativeHostService } from 'ls/platform/native/common/native';
 import { nativeHostService } from 'ls/platform/native/electron-sandbox/nativeHostServiceProxy';
 import {
@@ -29,9 +29,11 @@ import 'ls/workbench/contrib/splash/browser/partsSplash';
 //#region --- workbench (desktop services)
 registerWorkbenchService(INativeHostService, nativeHostService);
 
-const mainProcessService = createElectronMainProcessService(nativeHostService.ipc);
-if (mainProcessService) {
-  registerWorkbenchService(IMainProcessService, mainProcessService);
-  registerWorkbenchDisposable(mainProcessService);
+const ipc = nativeHostService.ipc;
+if (!ipc) {
+  throw new Error('Desktop IPC bridge is unavailable.');
 }
+const mainProcessService = new ElectronIPCMainProcessService(ipc);
+registerWorkbenchService(IMainProcessService, mainProcessService);
+registerWorkbenchDisposable(mainProcessService);
 //#endregion

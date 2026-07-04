@@ -1,13 +1,12 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Literature Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
 import type { Event } from 'ls/base/common/event';
 import { Disposable, toDisposable } from 'ls/base/common/lifecycle';
-import type { ElectronIpcApi } from 'ls/base/parts/sandbox/common/electronTypes';
 import type { IChannel, IServerChannel } from 'ls/base/parts/ipc/common/ipc';
-import type { IMainProcessService } from 'ls/base/parts/ipc/common/mainProcessService';
+import type { ElectronIpcApi } from 'ls/base/parts/sandbox/common/electronTypes';
+import type { IMainProcessService } from 'ls/platform/ipc/common/mainProcessService';
 
 export class ElectronIPCMainProcessService
 	extends Disposable
@@ -22,11 +21,7 @@ export class ElectronIPCMainProcessService
 	getChannel(channelName: string): IChannel {
 		return {
 			call: async <T = unknown>(command: string, arg?: unknown) => {
-				return this.ipc.call<T>(
-					channelName,
-					command,
-					arg,
-				);
+				return await this.ipc.call<T>(channelName, command, arg);
 			},
 			listen: <T = unknown>(event: string, arg?: unknown): Event<T> => {
 				return listener =>
@@ -35,17 +30,7 @@ export class ElectronIPCMainProcessService
 		};
 	}
 
-	registerChannel(_channelName: string, _channel: IServerChannel<string>): void {
-		throw new Error('Renderer-to-main channel registration is not supported yet.');
+	registerChannel(channelName: string, channel: IServerChannel<string>): void {
+		this._register(toDisposable(this.ipc.registerChannel(channelName, channel)));
 	}
-}
-
-export function createElectronMainProcessService(
-	ipc: ElectronIpcApi | undefined,
-): ElectronIPCMainProcessService | null {
-	if (!ipc) {
-		return null;
-	}
-
-	return new ElectronIPCMainProcessService(ipc);
 }

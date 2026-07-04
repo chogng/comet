@@ -1,6 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Literature Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
 import type { IChannel } from 'ls/base/parts/ipc/common/ipc';
@@ -8,8 +7,8 @@ import { ProxyChannel } from 'ls/base/parts/ipc/common/ipc';
 import {
 	IMainProcessService,
 	type IMainProcessService as MainProcessServiceShape,
-} from 'ls/base/parts/ipc/common/mainProcessService';
-import type { IRemoteService } from 'ls/base/parts/ipc/common/services';
+} from 'ls/platform/ipc/common/mainProcessService';
+import type { IRemoteService } from 'ls/platform/ipc/common/service';
 import { SyncDescriptor } from 'ls/platform/instantiation/common/descriptors';
 import { registerSingleton } from 'ls/platform/instantiation/common/extensions';
 import {

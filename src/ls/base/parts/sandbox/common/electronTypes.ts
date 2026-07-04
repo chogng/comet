@@ -11,6 +11,9 @@ import type {
   WindowState,
 } from 'ls/base/parts/sandbox/common/sandboxTypes';
 import type {
+  IServerChannel,
+} from 'ls/base/parts/ipc/common/ipc';
+import type {
   WebContentBounds,
   WebContentLayoutPhase,
   WebContentNavigationMode,
@@ -90,6 +93,10 @@ export interface ElectronIpcApi {
     event: string,
     arg: unknown,
     listener: (payload: T) => void,
+  ) => () => void;
+  registerChannel: (
+    channelName: string,
+    channel: IServerChannel<string>,
   ) => () => void;
 }
 
