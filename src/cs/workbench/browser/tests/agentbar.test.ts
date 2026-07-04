@@ -24,8 +24,6 @@ function createProps(): ChatWidgetProps {
     articleQuickSources: [],
     isArticleSourceFetching: false,
     onFetchArticleSource: () => {},
-    onDownloadArticlePdf: async () => {},
-    onOpenArticleDetails: () => {},
     availableArticleCount: 1,
     conversations: [
       {
@@ -643,60 +641,51 @@ test('composer article quick comet-hover-action opens source menu and runs selec
   }
 });
 
-test('agent chat renders fetched article cards with PDF download comet-hover-action', async () => {
-  let downloadedSourceUrl = '';
-  let openedSourceUrl = '';
-  const agentBar = createChatWidget({
+test('agent chat renders fetched article links as ordinary message content', async () => {
+  let openedHref = '';
+  const agentBar = createChatViewPane({
     ...createProps(),
     messages: [
       {
         id: 'article-1',
-        role: 'article',
-        sourceLabel: 'Science',
-        article: {
-          title: 'Example article',
-          articleType: 'Research Article',
-          doi: '10.1126/example',
-          authors: ['Ada Lovelace'],
-          abstractText: 'Abstract',
-          descriptionText: 'Description',
-          publishedAt: '2026-07-03',
-          sourceUrl: 'https://www.science.org/doi/example',
-          fetchedAt: '2026-07-04T00:00:00.000Z',
-          sourceId: 'science',
-          journalTitle: 'Science',
-        },
+        role: 'assistant',
+        content: 'Science',
+        includeInAgentHistory: false,
+        links: [
+          {
+            label: 'Example article',
+            href: 'https://www.science.org/doi/example',
+            description: 'Science | 2026-07-03 | Research Article',
+          },
+        ],
       },
     ],
-    onDownloadArticlePdf: async (article) => {
-      downloadedSourceUrl = article.sourceUrl;
-    },
-    onOpenArticleDetails: (article) => {
-      openedSourceUrl = article.sourceUrl;
-    },
+  });
+  const openLinkSubscription = agentBar.onDidRequestOpenLink(request => {
+    openedHref = request.href;
   });
   const element = agentBar.getElement();
   document.body.append(element);
 
   try {
-    const card = element.querySelector('.comet-agentbar-article-card');
-    assert(card instanceof HTMLElement);
+    assert.equal(element.querySelector('.comet-agentbar-article-card'), null);
     assert.equal(
-      card.querySelector('.comet-agentbar-article-title')?.textContent,
-      'Example article',
+      element.querySelector('.comet-agentbar-message-text')?.textContent,
+      'Science',
     );
 
-    const downloadButton = card.querySelector('.comet-agentbar-article-download-btn');
-    assert(downloadButton instanceof HTMLButtonElement);
-    downloadButton.click();
-    await delay(0);
-    assert.equal(downloadedSourceUrl, 'https://www.science.org/doi/example');
+    const link = element.querySelector('.comet-agentbar-message-link');
+    assert(link instanceof window.HTMLAnchorElement);
+    assert.equal(link.textContent, 'Example article');
+    assert.equal(
+      element.querySelector('.comet-agentbar-message-link-description')?.textContent,
+      'Science | 2026-07-03 | Research Article',
+    );
 
-    const title = card.querySelector('.comet-agentbar-article-title');
-    assert(title instanceof HTMLElement);
-    title.click();
-    assert.equal(openedSourceUrl, 'https://www.science.org/doi/example');
+    link.click();
+    assert.equal(openedHref, 'https://www.science.org/doi/example');
   } finally {
+    openLinkSubscription.dispose();
     agentBar.dispose();
   }
 });

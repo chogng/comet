@@ -471,8 +471,6 @@ function createWorkbenchLayoutViewProps() {
       articleQuickSources: [],
       isArticleSourceFetching: false,
       onFetchArticleSource: () => {},
-      onDownloadArticlePdf: async () => {},
-      onOpenArticleDetails: () => {},
       availableArticleCount: 0,
       conversations: [
         {

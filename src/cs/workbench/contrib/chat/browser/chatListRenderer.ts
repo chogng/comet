@@ -2,18 +2,20 @@
  *  Copyright (c) Comet Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
-import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
-import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
+import type {
+	AssistantChatMessage,
+	AssistantMessageLink,
+} from 'cs/workbench/browser/assistantModel';
 import { localize } from 'cs/nls';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { $ } from 'cs/base/browser/dom';
 
 export type ChatListRendererOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
-	readonly onDownloadArticlePdf: (article: Article) => Promise<void>;
-	readonly onOpenArticleDetails: (article: Article) => void | Promise<void>;
+	readonly onRequestOpenLink: (href: string) => void;
 };
+
+type AssistantMessage = Extract<AssistantChatMessage, { role: 'assistant' }>;
+type AssistantResult = NonNullable<AssistantMessage['result']>;
 
 export class ChatListRenderer {
 	constructor(private readonly options: ChatListRendererOptions) {}
@@ -21,10 +23,6 @@ export class ChatListRenderer {
 	renderElement(message: AssistantChatMessage) {
 		if (message.role === 'user') {
 			return this.renderUserMessage(message);
-		}
-
-		if (message.role === 'article') {
-			return this.renderArticleMessage(message);
 		}
 
 		return this.renderAssistantMessage(message);
@@ -40,70 +38,32 @@ export class ChatListRenderer {
 		return item;
 	}
 
-	private renderArticleMessage(
-		message: Extract<AssistantChatMessage, { role: 'article' }>,
-	) {
-		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-article');
-		const body = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message-body');
-		const card = $<HTMLElementTagNameMap['article']>('article.comet-agentbar-article-card');
-		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-article-card-header');
-		const source = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-article-source');
-		source.textContent = message.sourceLabel;
-		const downloadButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-article-download-btn.comet-btn-base.comet-btn-secondary.comet-btn-sm');
-		downloadButton.type = 'button';
-		downloadButton.append(
-			createLxIcon(lxIconSemanticMap.articleCard.download),
-			document.createTextNode(
-				localize('agentbarArticleDownloadPdf', "Download PDF"),
-			),
-		);
-		downloadButton.addEventListener('click', event => {
-			event.stopPropagation();
-			void this.options.onDownloadArticlePdf(message.article);
-		});
-		header.append(source, downloadButton);
-
-		const title = $<HTMLElementTagNameMap['h3']>('h3.comet-agentbar-article-title');
-		title.textContent = message.article.title;
-		title.addEventListener('click', () => {
-			void this.options.onOpenArticleDetails(message.article);
-		});
-
-		const meta = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-article-meta');
-		meta.textContent = [
-			message.article.journalTitle,
-			message.article.publishedAt,
-			message.article.articleType,
-		].filter(Boolean).join(' | ');
-
-		card.append(header, title, meta);
-		body.append(card);
-		item.append(body);
-		return item;
-	}
-
 	private renderAssistantMessage(
 		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
 	) {
 		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-assistant');
 		const body = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message-body');
-		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-result-header');
-		const strong = document.createElement('strong');
-		strong.textContent = localize('assistantSidebarAnswerTitle', "Answer");
-		const pill = $<HTMLElementTagNameMap['span']>('span', { class: `comet-agentbar-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}` });
-		pill.textContent = message.result.rerankApplied
-			? localize('assistantSidebarRerankOn', "Rerank on")
-			: localize('assistantSidebarRerankOff', "Rerank fallback");
-		header.append(strong, pill);
-		const answer = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-answer');
-		answer.textContent = message.content;
-		body.append(header, answer);
 
-		if (message.result.evidence.length > 0) {
-			body.append(this.renderEvidence(message));
+		if (message.result) {
+			const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-result-header');
+			const strong = document.createElement('strong');
+			strong.textContent = localize('assistantSidebarAnswerTitle', "Answer");
+			const pill = $<HTMLElementTagNameMap['span']>('span', { class: `comet-agentbar-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}` });
+			pill.textContent = message.result.rerankApplied
+				? localize('assistantSidebarRerankOn', "Rerank on")
+				: localize('assistantSidebarRerankOff', "Rerank fallback");
+			header.append(strong, pill);
+			body.append(header);
 		}
 
-const patchProposal = this.renderPatchProposal(message);
+		body.append(this.renderMessageContent(message));
+
+		const result = message.result ?? null;
+		if (result && result.evidence.length > 0) {
+			body.append(this.renderEvidence(result));
+		}
+
+		const patchProposal = this.renderPatchProposal(message);
 		if (patchProposal) {
 			body.append(patchProposal);
 		}
@@ -112,14 +72,55 @@ const patchProposal = this.renderPatchProposal(message);
 		return item;
 	}
 
-	private renderEvidence(
-		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
+	private renderMessageContent(
+		message: AssistantMessage,
 	) {
+		const content = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-answer');
+
+		if (message.content.trim()) {
+			const text = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-message-text');
+			text.textContent = message.content;
+			content.append(text);
+		}
+
+		if (message.links?.length) {
+			content.append(this.renderMessageLinks(message.links));
+		}
+
+		return content;
+	}
+
+	private renderMessageLinks(links: readonly AssistantMessageLink[]) {
+		const list = $<HTMLElementTagNameMap['ul']>('ul.comet-agentbar-message-link-list');
+		for (const link of links) {
+			const item = $<HTMLElementTagNameMap['li']>('li.comet-agentbar-message-link-item');
+			const anchor = $<HTMLElementTagNameMap['a']>('a.comet-agentbar-message-link');
+			anchor.href = link.href;
+			anchor.textContent = link.label;
+			anchor.addEventListener('click', event => {
+				event.preventDefault();
+				this.options.onRequestOpenLink(link.href);
+			});
+			item.append(anchor);
+
+			if (link.description) {
+				const description = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-message-link-description');
+				description.textContent = link.description;
+				item.append(description);
+			}
+
+			list.append(item);
+		}
+
+		return list;
+	}
+
+	private renderEvidence(result: AssistantResult) {
 		const evidence = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-evidence');
 		const title = document.createElement('strong');
 		title.textContent = localize('assistantSidebarEvidenceTitle', "Evidence");
 		const list = $<HTMLElementTagNameMap['ul']>('ul.comet-agentbar-evidence-list');
-		for (const evidenceItem of message.result.evidence) {
+		for (const evidenceItem of result.evidence) {
 			const li = $<HTMLElementTagNameMap['li']>('li.comet-agentbar-evidence-item');
 			const titleNode = $<HTMLElementTagNameMap['strong']>('strong.comet-agentbar-evidence-title');
 			titleNode.textContent = localize(
@@ -142,14 +143,14 @@ const patchProposal = this.renderPatchProposal(message);
 	}
 
 	private renderPatchProposal(
-		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
+		message: AssistantMessage,
 	) {
 		const patchProposal = message.patchProposal ?? null;
 		if (!patchProposal) {
 			return null;
 		}
 
-const card = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-card');
+		const card = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-card');
 		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-header');
 		const label = $<HTMLElementTagNameMap['strong']>('strong.comet-agentbar-patch-label');
 		label.textContent = patchProposal.patch.label;
@@ -176,7 +177,7 @@ const card = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-card');
 			card.append(summary);
 		}
 
-const errorText = patchProposal.validationError || patchProposal.applyError;
+		const errorText = patchProposal.validationError || patchProposal.applyError;
 		if (errorText) {
 			const error = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-patch-error');
 			error.textContent = errorText;

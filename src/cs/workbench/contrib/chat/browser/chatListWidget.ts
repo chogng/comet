@@ -9,13 +9,11 @@ import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { localize } from 'cs/nls';
 import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/chatListRenderer';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { $ } from 'cs/base/browser/dom';
 
 export type ChatListWidgetOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
-	readonly onDownloadArticlePdf: (article: Article) => Promise<void>;
-	readonly onOpenArticleDetails: (article: Article) => void | Promise<void>;
+	readonly onRequestOpenLink: (href: string) => void;
 };
 
 export class ChatListWidget {
@@ -30,8 +28,7 @@ export class ChatListWidget {
 	constructor(options: ChatListWidgetOptions) {
 		this.renderer = new ChatListRenderer({
 			onApplyPatch: options.onApplyPatch,
-			onDownloadArticlePdf: options.onDownloadArticlePdf,
-			onOpenArticleDetails: options.onOpenArticleDetails,
+			onRequestOpenLink: options.onRequestOpenLink,
 		});
 		this.scrollableElement = new DomScrollableElement(this.contentElement, {
 			className: 'comet-agentbar-thread-scrollable',

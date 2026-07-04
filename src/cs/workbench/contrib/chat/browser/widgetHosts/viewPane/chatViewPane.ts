@@ -5,7 +5,8 @@
 
 import { getWindowChromeLayout } from 'cs/platform/window/common/window';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
-import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import type { Event } from 'cs/base/common/event';
+import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
 import { $ } from 'cs/base/browser/dom';
 
@@ -25,6 +26,7 @@ export class ChatViewPane {
 	private readonly headerTrailingActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing');
 	private readonly leadingWindowControlsSpacer = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-window-controls-spacer');
 	private readonly chatWidget: ChatWidget;
+	readonly onDidRequestOpenLink: Event<ChatOpenLinkRequest>;
 
 	constructor(props: ChatViewPaneProps) {
 		registerWorkbenchPartDomNode(
@@ -32,6 +34,7 @@ export class ChatViewPane {
 			this.element,
 		);
 		this.chatWidget = new ChatWidget(props);
+		this.onDidRequestOpenLink = this.chatWidget.onDidRequestOpenLink;
 		if (WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0) {
 			this.leadingWindowControlsSpacer.style.setProperty(
 				'--window-controls-width',

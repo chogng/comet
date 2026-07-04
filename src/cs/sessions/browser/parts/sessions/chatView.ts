@@ -1,8 +1,8 @@
 import type { AssistantModelSnapshot } from 'cs/workbench/browser/assistantModel';
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
-import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import type { Event } from 'cs/base/common/event';
+import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import { $ } from 'cs/base/browser/dom';
 
@@ -33,8 +33,6 @@ type CreateSessionChatViewPropsParams = {
 		onAsk: () => void;
 		onApplyPatch: (messageId: string) => void;
 		onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
-		onDownloadArticlePdf: (article: Article) => Promise<void>;
-		onOpenArticleDetails: (article: Article) => void | Promise<void>;
 		onCreateConversation: () => void;
 		onActivateConversation: (conversationId: string) => void;
 		onCloseConversation: (conversationId: string) => void;
@@ -69,8 +67,6 @@ export function createSessionChatViewProps({
 		onAsk,
 		onApplyPatch,
 		onFetchArticleSource,
-		onDownloadArticlePdf,
-		onOpenArticleDetails,
 		onCreateConversation,
 		onActivateConversation,
 		onCloseConversation,
@@ -93,8 +89,6 @@ export function createSessionChatViewProps({
 		articleQuickSources,
 		isArticleSourceFetching,
 		onFetchArticleSource,
-		onDownloadArticlePdf,
-		onOpenArticleDetails,
 		availableArticleCount,
 		conversations,
 		activeConversationId,
@@ -117,9 +111,11 @@ export function createSessionChatViewProps({
 export class SessionChatView {
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view');
 	private readonly widget: ChatWidget;
+	readonly onDidRequestOpenLink: Event<ChatOpenLinkRequest>;
 
 	constructor(props: SessionChatViewProps) {
 		this.widget = new ChatWidget(props);
+		this.onDidRequestOpenLink = this.widget.onDidRequestOpenLink;
 		this.element.append(this.widget.getElement());
 	}
 

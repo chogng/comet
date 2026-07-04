@@ -16,9 +16,10 @@ import { createFilterMenuHeader } from 'cs/base/browser/ui/dropdown/dropdownSear
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
+import { EventEmitter } from 'cs/base/common/event';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
-import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/chatListWidget';
 import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
 import { $ } from 'cs/base/browser/dom';
@@ -32,9 +33,12 @@ const CHAT_HEADER_HISTORY_MENU_DATA = 'agentbar-header-history';
 export class ChatWidget {
 	private props: ChatWidgetProps;
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-content');
+	private readonly disposables = new DisposableStore();
+	private readonly onDidRequestOpenLinkEmitter = this.disposables.add(new EventEmitter<ChatOpenLinkRequest>());
+	readonly onDidRequestOpenLink = this.onDidRequestOpenLinkEmitter.event;
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
-	private readonly renderDisposables = new DisposableStore();
+	private readonly renderDisposables = this.disposables.add(new DisposableStore());
 
 	constructor(props: ChatWidgetProps) {
 		this.props = props;
@@ -42,10 +46,9 @@ export class ChatWidget {
 			onApplyPatch: messageId => {
 				this.props.onApplyPatch(messageId);
 			},
-			onDownloadArticlePdf: article =>
-				this.props.onDownloadArticlePdf(article),
-			onOpenArticleDetails: article =>
-				this.props.onOpenArticleDetails(article),
+			onRequestOpenLink: href => {
+				this.onDidRequestOpenLinkEmitter.fire({ href });
+			},
 		});
 		this.inputPart = new ChatInputPart(this.createInputPartProps());
 		this.render();
@@ -65,7 +68,7 @@ export class ChatWidget {
 	}
 
 	dispose() {
-		this.renderDisposables.dispose();
+		this.disposables.dispose();
 		this.inputPart.dispose();
 		this.listWidget.dispose();
 		this.element.replaceChildren();

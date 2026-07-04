@@ -2,6 +2,8 @@ import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editor
 import { createEditorPartView } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
+import { EventEmitter } from 'cs/base/common/event';
+import { DisposableStore } from 'cs/base/common/lifecycle';
 import type { SidebarProps } from 'cs/workbench/browser/parts/sidebar/sidebarPart';
 import {
   createSidebarPartView,
@@ -46,6 +48,9 @@ export class WorkbenchContentPartViews {
   private agentBarView: ChatViewPane | null = null;
   private editorView: ReturnType<typeof createEditorPartView> | null = null;
   private retiredEditorView: ReturnType<typeof createEditorPartView> | null = null;
+  private readonly onDidRequestOpenLinkEmitter = new EventEmitter<{ readonly href: string }>();
+  readonly onDidRequestOpenLink = this.onDidRequestOpenLinkEmitter.event;
+  private readonly agentBarDisposables = new DisposableStore();
   private readonly agentHeaderTrailingActionsHost = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing-actions-host');
   private readonly agentHeaderPrimaryTrailingActionsHost = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing-primary');
   private readonly agentHeaderSecondaryTrailingActionsHost = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing-secondary');
@@ -130,12 +135,13 @@ export class WorkbenchContentPartViews {
     this.disposed = true;
     clearStatusbarCommandHandlers();
     this.sidebarView?.dispose();
-    this.agentBarView?.dispose();
+    this.disposeAgentBarView();
     this.retiredEditorView = this.editorView;
     this.retiredEditorView?.dispose();
     this.sidebarView = null;
-    this.agentBarView = null;
     this.editorView = null;
+    this.agentBarDisposables.dispose();
+    this.onDidRequestOpenLinkEmitter.dispose();
   }
 
   private render() {
@@ -209,14 +215,12 @@ const headerActionsElement =
 
   private renderAgentBar() {
     if (this.props.mode === 'settings') {
-      this.agentBarView?.dispose();
-      this.agentBarView = null;
+      this.disposeAgentBarView();
       return;
     }
 
     if (!this.props.isAgentSidebarVisible) {
-      this.agentBarView?.dispose();
-      this.agentBarView = null;
+      this.disposeAgentBarView();
       return;
     }
 
@@ -229,6 +233,11 @@ const nextProps: ChatViewPaneProps = {
 
     if (!this.agentBarView) {
       this.agentBarView = createChatViewPane(nextProps);
+      this.agentBarView.onDidRequestOpenLink(
+        request => this.onDidRequestOpenLinkEmitter.fire(request),
+        undefined,
+        this.agentBarDisposables,
+      );
       return;
     }
 
@@ -275,6 +284,12 @@ const nextProps: ChatViewPaneProps = {
   private handleEditorStatusChange = (status: EditorStatusState) => {
     updateStatusbarState(status);
   };
+
+  private disposeAgentBarView() {
+    this.agentBarDisposables.clear();
+    this.agentBarView?.dispose();
+    this.agentBarView = null;
+  }
 
   private syncStatusbarCommandHandlers() {
     setStatusbarCommandHandlers({

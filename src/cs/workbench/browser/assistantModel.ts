@@ -46,25 +46,28 @@ export type AssistantPatchProposal = MainAgentPatchProposal & {
   applyError: string | null;
 };
 
+export type AssistantMessageLink = {
+  label: string;
+  href: string;
+  description: string;
+};
+
+type AssistantTextMessageBase = {
+  id: string;
+  content: string;
+  links?: AssistantMessageLink[];
+  includeInAgentHistory?: boolean;
+};
+
 export type AssistantChatMessage =
-  | {
-      id: string;
+  | (AssistantTextMessageBase & {
       role: "user";
-      content: string;
-    }
-  | {
-      id: string;
+    })
+  | (AssistantTextMessageBase & {
       role: "assistant";
-      content: string;
-      result: RagAnswerResult;
+      result?: RagAnswerResult | null;
       patchProposal?: AssistantPatchProposal | null;
-    }
-  | {
-      id: string;
-      role: "article";
-      article: Article;
-      sourceLabel: string;
-    };
+    });
 
 export type AssistantConversation = {
   id: string;
@@ -159,7 +162,22 @@ function createMessageId() {
 function isAgentTextMessage(
   message: AssistantChatMessage,
 ): message is Extract<AssistantChatMessage, { role: "user" | "assistant" }> {
-  return message.role === "user" || message.role === "assistant";
+  return (
+    (message.role === "user" || message.role === "assistant") &&
+    message.includeInAgentHistory !== false
+  );
+}
+
+function createArticleMessageLink(article: Article): AssistantMessageLink {
+  return {
+    label: article.title,
+    href: article.sourceUrl,
+    description: [
+      article.journalTitle,
+      article.publishedAt,
+      article.articleType,
+    ].filter(Boolean).join(' | '),
+  };
 }
 
 function createConversationId() {
@@ -362,6 +380,8 @@ export class AssistantModel {
       return;
     }
 
+    const links = articles.map(createArticleMessageLink);
+
     this.updateActiveConversation((conversation) => {
       const isFirstMessage = conversation.messages.length === 0;
       const articleTitle = articles[0].title.trim().slice(0, 18);
@@ -380,12 +400,13 @@ export class AssistantModel {
         autoTitleIndex: isFirstMessage ? null : conversation.autoTitleIndex,
         messages: [
           ...conversation.messages,
-          ...articles.map(article => ({
+          {
             id: createMessageId(),
-            role: "article" as const,
-            article,
-            sourceLabel,
-          })),
+            role: "assistant",
+            content: sourceLabel,
+            links,
+            includeInAgentHistory: false,
+          },
         ],
         errorMessage: null,
       };

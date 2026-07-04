@@ -9,7 +9,6 @@ import type {
 	AssistantChatMessage,
 	AssistantConversation,
 } from 'cs/workbench/browser/assistantModel';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import type {
 	LlmReasoningEffort,
@@ -22,6 +21,10 @@ export type ChatModelDropdownOption = DropdownOption & {
 	readonly modelLabel?: string;
 	readonly reasoningEffort?: LlmReasoningEffort;
 	readonly serviceTier?: LlmServiceTier;
+};
+
+export type ChatOpenLinkRequest = {
+	readonly href: string;
 };
 
 export type ChatWidgetProps = {
@@ -39,8 +42,6 @@ export type ChatWidgetProps = {
 	readonly articleQuickSources: BatchSource[];
 	readonly isArticleSourceFetching: boolean;
 	readonly onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
-	readonly onDownloadArticlePdf: (article: Article) => Promise<void>;
-	readonly onOpenArticleDetails: (article: Article) => void | Promise<void>;
 	readonly availableArticleCount: number;
 	readonly conversations: AssistantConversation[];
 	readonly activeConversationId: string;

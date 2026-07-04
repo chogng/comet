@@ -371,7 +371,7 @@ test('assistant asks through run_main_agent_turn and stores the returned answer'
   assert.equal(snapshot.result?.llmModel, 'test-model');
 });
 
-test('assistant inserts all fetched article cards without sending them as agent text turns', async () => {
+test('assistant inserts fetched article links without sending them as agent text turns', async () => {
   const capture: InvokeCapture = {
     commands: [],
     payloads: [],
@@ -413,9 +413,23 @@ test('assistant inserts all fetched article cards without sending them as agent 
   await assistantModel.handleAsk();
 
   const snapshot = assistantModel.getSnapshot();
-  assert.equal(snapshot.messages[0]?.role, 'article');
-  assert.equal(snapshot.messages[1]?.role, 'article');
-  assert.equal(snapshot.messages[2]?.role, 'user');
+  const articlesMessage = snapshot.messages[0];
+  assert.equal(articlesMessage?.role, 'assistant');
+  assert.equal(articlesMessage?.content, 'Science');
+  assert.equal(articlesMessage?.includeInAgentHistory, false);
+  assert.deepEqual(articlesMessage?.links, [
+    {
+      label: 'Fetched article',
+      href: 'https://www.science.org/doi/example',
+      description: 'Science | 2026-07-03 | Research Article',
+    },
+    {
+      label: 'Second fetched article',
+      href: 'https://www.science.org/doi/example-2',
+      description: 'Science | 2026-07-04 | Research Article',
+    },
+  ]);
+  assert.equal(snapshot.messages[1]?.role, 'user');
   assert.deepEqual((capture.payloads[0] as { messages: unknown[] }).messages, [
     {
       role: 'user',
