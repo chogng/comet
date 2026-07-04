@@ -690,7 +690,6 @@ class WorkbenchHost {
   private readonly sidebarFooterActionsView = new SidebarFooterActionsView();
   private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
   private editorPartController: EditorPartModel | null = null;
-  private workbenchContentPartViewsOpenLinkDisposable: { dispose(): void } | null = null;
   private readonly globalDisposables: Array<() => void> = [];
   private webContentStateDisposable: (() => void) | null = null;
   private servicesSubscribed = false;
@@ -783,8 +782,6 @@ class WorkbenchHost {
 
     this.workbenchLayoutView?.dispose();
     this.workbenchLayoutView = null;
-    this.workbenchContentPartViewsOpenLinkDisposable?.dispose();
-    this.workbenchContentPartViewsOpenLinkDisposable = null;
     this.workbenchContentPartViews?.dispose();
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
@@ -1189,7 +1186,6 @@ class WorkbenchHost {
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
-      this.subscribeWorkbenchContentPartViews(this.workbenchContentPartViews);
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1261,7 +1257,6 @@ class WorkbenchHost {
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
-      this.subscribeWorkbenchContentPartViews(this.workbenchContentPartViews);
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1293,20 +1288,6 @@ class WorkbenchHost {
     }
     this.workbenchLayoutView.layout();
   }
-
-  private subscribeWorkbenchContentPartViews(
-    partViews: ReturnType<typeof createSessionWorkbenchContentPartViews>,
-  ) {
-    this.workbenchContentPartViewsOpenLinkDisposable?.dispose();
-    this.workbenchContentPartViewsOpenLinkDisposable =
-      partViews.onDidRequestOpenLink(this.handleChatOpenLinkRequest);
-  }
-
-  private readonly handleChatOpenLinkRequest = (
-    request: { readonly href: string },
-  ) => {
-    this.editorPartController!.createBrowserTab(request.href);
-  };
 
   private applyStartupLayoutPreferenceIfNeeded(params: {
     hasLoadedSettings: boolean;
@@ -1833,6 +1814,12 @@ class WorkbenchHost {
       onFetchSuccess: handleBatchFetchSuccess,
     });
     const { isBatchLoading } = batchFetchControllerInstance.getSnapshot();
+    const chatArticleBatch: Article[] = [];
+    for (const message of assistantMessages) {
+      if (message.role === 'article') {
+        chatArticleBatch.push(message.article);
+      }
+    }
     const handleFetchLatestBatch =
       batchFetchControllerInstance.handleFetchLatestBatch;
     const articleQuickSources = getConfigBatchSourceSeed();
@@ -2051,12 +2038,20 @@ class WorkbenchHost {
           doesAgentChatModelSupportMaxContextWindow(currentLlmSettings),
         articleQuickSources,
         isArticleSourceFetching: isBatchLoading,
+        showArticleBatchActions:
+          chatArticleBatch.length > 0 && !isBatchLoading,
       },
       actions: {
         onQuestionChange: setAssistantQuestion,
         onAsk: () => void handleAssistantAsk(),
         onApplyPatch: handleAssistantApplyPatch,
         onFetchArticleSource: (source) => void handleFetchArticleSource(source),
+        onDownloadArticlePdf: handleSharedPdfDownload,
+        onDownloadAllArticles: () =>
+          documentActionsControllerInstance.handleDownloadAllArticles(chatArticleBatch),
+        onExportArticleSummaries: () =>
+          documentActionsControllerInstance.handleExportArticleSummaries(chatArticleBatch),
+        onOpenArticleDetails: handleOpenArticleDetails,
         onCreateConversation: handleAssistantCreateConversation,
         onActivateConversation: handleAssistantActivateConversation,
         onCloseConversation: handleAssistantCloseConversation,

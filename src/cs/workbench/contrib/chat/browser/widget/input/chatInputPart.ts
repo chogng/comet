@@ -38,6 +38,9 @@ export type ChatInputPartProps = Pick<
 	| 'articleQuickSources'
 	| 'isArticleSourceFetching'
 	| 'onFetchArticleSource'
+	| 'showArticleBatchActions'
+	| 'onDownloadAllArticles'
+	| 'onExportArticleSummaries'
 > & {
 	readonly isEmpty: boolean;
 };
@@ -203,7 +206,7 @@ export class ChatInputPart {
 	private renderQuickActions() {
 		const wrapper = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions-shell');
 		const row = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions');
-		row.append(
+		const quickActionButtons = [
 			this.createQuickActionButton(localize('chatQuickActionWrite', "Write"), 'write'),
 			this.createQuickActionButton(localize('chatQuickActionLearn', "Learn"), 'book'),
 			this.createQuickActionButton(localize('chatQuickActionCode', "Code"), 'code'),
@@ -213,7 +216,30 @@ export class ChatInputPart {
 				() => this.toggleArticleMenu(),
 				this.isArticleMenuOpen,
 			),
-		);
+		];
+		if (this.props.showArticleBatchActions) {
+			quickActionButtons.push(
+				this.createQuickActionButton(
+					localize('chatQuickActionDownloadAllArticles', "下载全部"),
+					lxIconSemanticMap.fetch.batchDownload,
+					() => {
+						void this.props.onDownloadAllArticles();
+					},
+					false,
+					this.props.isArticleSourceFetching,
+				),
+				this.createQuickActionButton(
+					localize('chatQuickActionExportArticleSummaries', "翻译并导出摘要"),
+					'translate',
+					() => {
+						void this.props.onExportArticleSummaries();
+					},
+					false,
+					this.props.isArticleSourceFetching,
+				),
+			);
+		}
+		row.append(...quickActionButtons);
 		wrapper.append(row);
 
 		if (this.isArticleMenuOpen) {
@@ -228,9 +254,11 @@ export class ChatInputPart {
 		icon: LxIconName,
 		onClick?: () => void,
 		expanded = false,
+		disabled = false,
 	) {
 		const button = $<HTMLElementTagNameMap['button']>('button.comet-chat-composer-quick-action.comet-btn-base.comet-btn-secondary.comet-btn-sm');
 		button.type = 'button';
+		button.disabled = disabled;
 		button.setAttribute('aria-label', label);
 		if (expanded) {
 			button.setAttribute('aria-expanded', 'true');

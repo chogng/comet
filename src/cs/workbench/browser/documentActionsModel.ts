@@ -285,6 +285,62 @@ export class DocumentActionsController {
     this.context.createBrowserTab(article.sourceUrl);
   };
 
+  readonly handleDownloadAllArticles = async (articles: readonly Article[]) => {
+    for (const article of articles) {
+      await this.handleSharedPdfDownload(article);
+    }
+  };
+
+  readonly handleExportArticleSummaries = async (articles: readonly Article[]) => {
+    const {
+      desktopRuntime,
+      invokeDesktop,
+      locale,
+      ui,
+      pdfDownloadDir,
+    } = this.context;
+
+    if (!desktopRuntime) {
+      return;
+    }
+
+    const exportArticles = [...articles];
+    if (!canExportArticlesDocx(exportArticles.length)) {
+      toast.info(ui.toastNoExportableArticles);
+      return;
+    }
+
+    const restoreTranslationStatus = this.beginTranslationStatusbarProgress();
+    try {
+      const result = await invokeDesktop('export_articles_docx', {
+        articles: exportArticles,
+        preferredDirectory: resolvePreferredDirectory(pdfDownloadDir),
+        locale,
+      });
+
+      if (!result) {
+        return;
+      }
+
+      toast.success(
+        formatLocalized(ui.toastDocxExported, {
+          count: result.articleCount,
+          filePath: result.filePath,
+        }),
+      );
+    } catch (exportError) {
+      const localizedError = localizeDesktopInvokeError(
+        ui,
+        parseDesktopInvokeError(exportError),
+      );
+      toast.error(
+        formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
+      );
+    } finally {
+      restoreTranslationStatus();
+    }
+  };
+
   readonly handleExportDocx = async () => {
     const {
       desktopRuntime,
@@ -332,40 +388,7 @@ export class DocumentActionsController {
       return;
     }
 
-    if (!canExportArticlesDocx(exportableArticles.length)) {
-      toast.info(ui.toastNoExportableArticles);
-      return;
-    }
-
-    const restoreTranslationStatus = this.beginTranslationStatusbarProgress();
-    try {
-      const result = await invokeDesktop('export_articles_docx', {
-        articles: exportableArticles,
-        preferredDirectory: resolvePreferredDirectory(pdfDownloadDir),
-        locale,
-      });
-
-      if (!result) {
-        return;
-      }
-
-      toast.success(
-        formatLocalized(ui.toastDocxExported, {
-          count: result.articleCount,
-          filePath: result.filePath,
-        }),
-      );
-    } catch (exportError) {
-      const localizedError = localizeDesktopInvokeError(
-        ui,
-        parseDesktopInvokeError(exportError),
-      );
-      toast.error(
-        formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
-      );
-    } finally {
-      restoreTranslationStatus();
-    }
+    await this.handleExportArticleSummaries(exportableArticles);
   };
 
   private beginTranslationStatusbarProgress() {

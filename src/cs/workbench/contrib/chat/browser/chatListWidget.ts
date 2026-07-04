@@ -69,7 +69,14 @@ export class ChatListWidget {
 	}
 
 	setMessages(messages: readonly AssistantChatMessage[]) {
-		const shouldScrollToEnd = this.messages.length === 0 || this.isScrolledToBottom();
+		const appendedMessages =
+			messages.length > this.messages.length
+				? messages.slice(this.messages.length)
+				: [];
+		const shouldScrollToEnd =
+			this.messages.length === 0 ||
+			this.isScrolledToBottom() ||
+			appendedMessages.some(message => message.role === 'article');
 		this.messages = messages;
 		this.contentElement.replaceChildren(
 			...messages.map((message) => this.renderer.renderElement(message)),
