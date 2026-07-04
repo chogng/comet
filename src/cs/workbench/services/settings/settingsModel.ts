@@ -20,6 +20,7 @@ import {
   createDefaultEditorDraftStyleSettings,
   type EditorDraftStyleSettings,
 } from 'cs/base/common/editorDraftStyle';
+import { LatestAsyncOperation } from 'cs/base/common/async';
 import { EventEmitter } from 'cs/base/common/event';
 import type { Locale } from 'language/i18n';
 import { defaultBatchLimit } from 'cs/workbench/services/config/configSchema';
@@ -37,6 +38,7 @@ import {
   resolveSettingsState,
   saveAppSettings,
   saveAppSettingsPartial,
+  type ResolvedSettingsState,
 } from 'cs/workbench/services/settings/settingsService';
 import {
   createDefaultKnowledgeBaseSettings,
@@ -237,6 +239,8 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
 export class SettingsModel {
   private snapshot: SettingsModelSnapshot;
   private readonly onDidChangeEmitter = new EventEmitter<void>();
+  private readonly saveOperation = new LatestAsyncOperation();
+  private readonly explicitSaveOperation = new LatestAsyncOperation();
 
   constructor() {
     this.snapshot = createInitialSettingsModelSnapshot();
@@ -1249,48 +1253,17 @@ export class SettingsModel {
         }).providers,
       },
     });
+    const saveOperation = this.saveOperation.begin();
     const saved = await saveAppSettings(desktopRuntime, invokeDesktop, payload);
+    if (!saveOperation.isCurrent()) {
+      return;
+    }
+
     const resolved = resolveSettingsState(saved, {
       fallbackConfigPath: configPath,
     });
 
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      pdfDownloadDir: resolved.pdfDownloadDir,
-      knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
-      pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
-      browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
-      batchLimit: resolved.batchLimit,
-      journalSourceOverrides: resolved.journalSourceOverrides,
-      systemNotificationsEnabled: resolved.systemNotificationsEnabled,
-      warningNotificationsEnabled: resolved.warningNotificationsEnabled,
-      menuBarIconEnabled: resolved.menuBarIconEnabled,
-      completionNotificationsEnabled: resolved.completionNotificationsEnabled,
-      statusbarVisible: resolved.statusbarVisible,
-      startupLayout: resolved.startupLayout,
-      useMica: resolved.useMica,
-      theme: resolved.theme,
-      workbenchColorCustomizations: resolved.workbenchColorCustomizations,
-      editorDraftStyle: cloneSettingValue(
-        resolved.editorDraftStyle,
-        cloneEditorDraftStyleSettings,
-      ),
-      knowledgeBaseEnabled: resolved.knowledgeBase.enabled,
-      autoIndexDownloadedPdf: resolved.knowledgeBase.autoIndexDownloadedPdf,
-      libraryStorageMode: resolved.knowledgeBase.libraryStorageMode,
-      libraryDirectory: resolved.knowledgeBase.libraryDirectory ?? '',
-      maxConcurrentIndexJobs: resolved.knowledgeBase.maxConcurrentIndexJobs,
-      activeRagProvider: resolved.rag.activeProvider,
-      ragProviders: cloneRagSettings(resolved.rag).providers,
-      retrievalCandidateCount: resolved.rag.retrievalCandidateCount,
-      retrievalTopK: resolved.rag.retrievalTopK,
-      activeLlmProvider: resolved.llm.activeProvider,
-      llmProviders: cloneLlmSettings(resolved.llm).providers,
-      activeTranslationProvider: resolved.translation.activeProvider,
-      translationProviders: cloneTranslationSettings(resolved.translation).providers,
-      configPath: resolved.configPath,
-      defaultConfigPath: resolved.defaultConfigPath,
-    }));
+    this.applyResolvedSettingsState(resolved);
   }
 
   async saveSettings({
@@ -1392,60 +1365,71 @@ export class SettingsModel {
       },
     });
 
+    const saveOperation = this.saveOperation.begin();
+    const explicitSaveOperation = this.explicitSaveOperation.begin();
+
     try {
       const saved = await saveAppSettings(desktopRuntime, invokeDesktop, payload);
       const resolved = resolveSettingsState(saved, {
         fallbackConfigPath: configPath,
       });
 
-      this.updateSnapshot((snapshot) => ({
-        ...snapshot,
-        pdfDownloadDir: resolved.pdfDownloadDir,
-        knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
-        pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
-        browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
-        batchLimit: resolved.batchLimit,
-        journalSourceOverrides: resolved.journalSourceOverrides,
-        systemNotificationsEnabled: resolved.systemNotificationsEnabled,
-        warningNotificationsEnabled: resolved.warningNotificationsEnabled,
-        menuBarIconEnabled: resolved.menuBarIconEnabled,
-        completionNotificationsEnabled: resolved.completionNotificationsEnabled,
-        statusbarVisible: resolved.statusbarVisible,
-        startupLayout: resolved.startupLayout,
-        useMica: resolved.useMica,
-        theme: resolved.theme,
-        workbenchColorCustomizations: resolved.workbenchColorCustomizations,
-        editorDraftStyle: cloneSettingValue(
-          resolved.editorDraftStyle,
-          cloneEditorDraftStyleSettings,
-        ),
-        knowledgeBaseEnabled: resolved.knowledgeBase.enabled,
-        autoIndexDownloadedPdf: resolved.knowledgeBase.autoIndexDownloadedPdf,
-        libraryStorageMode: resolved.knowledgeBase.libraryStorageMode,
-        libraryDirectory: resolved.knowledgeBase.libraryDirectory ?? '',
-        maxConcurrentIndexJobs: resolved.knowledgeBase.maxConcurrentIndexJobs,
-        activeRagProvider: resolved.rag.activeProvider,
-        ragProviders: cloneRagSettings(resolved.rag).providers,
-        retrievalCandidateCount: resolved.rag.retrievalCandidateCount,
-        retrievalTopK: resolved.rag.retrievalTopK,
-        activeLlmProvider: resolved.llm.activeProvider,
-        llmProviders: cloneLlmSettings(resolved.llm).providers,
-        activeTranslationProvider: resolved.translation.activeProvider,
-        translationProviders: cloneTranslationSettings(resolved.translation).providers,
-        configPath: resolved.configPath,
-        defaultConfigPath: resolved.defaultConfigPath,
-      }));
+      if (saveOperation.isCurrent()) {
+        this.applyResolvedSettingsState(resolved);
+      }
 
       return {
         nextDir,
         locale: resolved.locale,
       };
     } finally {
-      this.updateSnapshot((snapshot) => ({
-        ...snapshot,
-        isSettingsSaving: false,
-      }));
+      if (explicitSaveOperation.isCurrent()) {
+        this.updateSnapshot((snapshot) => ({
+          ...snapshot,
+          isSettingsSaving: false,
+        }));
+      }
     }
+  }
+
+  private applyResolvedSettingsState(resolved: ResolvedSettingsState) {
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      pdfDownloadDir: resolved.pdfDownloadDir,
+      knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
+      pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
+      browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
+      batchLimit: resolved.batchLimit,
+      journalSourceOverrides: resolved.journalSourceOverrides,
+      systemNotificationsEnabled: resolved.systemNotificationsEnabled,
+      warningNotificationsEnabled: resolved.warningNotificationsEnabled,
+      menuBarIconEnabled: resolved.menuBarIconEnabled,
+      completionNotificationsEnabled: resolved.completionNotificationsEnabled,
+      statusbarVisible: resolved.statusbarVisible,
+      startupLayout: resolved.startupLayout,
+      useMica: resolved.useMica,
+      theme: resolved.theme,
+      workbenchColorCustomizations: resolved.workbenchColorCustomizations,
+      editorDraftStyle: cloneSettingValue(
+        resolved.editorDraftStyle,
+        cloneEditorDraftStyleSettings,
+      ),
+      knowledgeBaseEnabled: resolved.knowledgeBase.enabled,
+      autoIndexDownloadedPdf: resolved.knowledgeBase.autoIndexDownloadedPdf,
+      libraryStorageMode: resolved.knowledgeBase.libraryStorageMode,
+      libraryDirectory: resolved.knowledgeBase.libraryDirectory ?? '',
+      maxConcurrentIndexJobs: resolved.knowledgeBase.maxConcurrentIndexJobs,
+      activeRagProvider: resolved.rag.activeProvider,
+      ragProviders: cloneRagSettings(resolved.rag).providers,
+      retrievalCandidateCount: resolved.rag.retrievalCandidateCount,
+      retrievalTopK: resolved.rag.retrievalTopK,
+      activeLlmProvider: resolved.llm.activeProvider,
+      llmProviders: cloneLlmSettings(resolved.llm).providers,
+      activeTranslationProvider: resolved.translation.activeProvider,
+      translationProviders: cloneTranslationSettings(resolved.translation).providers,
+      configPath: resolved.configPath,
+      defaultConfigPath: resolved.defaultConfigPath,
+    }));
   }
 
   async testLlmConnection({

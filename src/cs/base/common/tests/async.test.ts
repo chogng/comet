@@ -3,11 +3,16 @@ import test from 'node:test';
 import {
   CancellationTokenSource,
   Delayer,
+  LazyStatefulPromise,
+  LatestAsyncOperation,
+  Limiter,
   Promises,
+  ResourceQueue,
   RunOnceScheduler,
   createCancelablePromise,
   timeout,
 } from 'cs/base/common/async';
+import { URI } from 'cs/base/common/uri';
 
 test('createCancelablePromise rejects when cancelled', async () => {
   const promise = createCancelablePromise(async (token) => {
@@ -67,4 +72,89 @@ test('RunOnceScheduler flushes scheduled runner', () => {
 
   assert.equal(count, 1);
   assert.equal(scheduler.isScheduled(), false);
+});
+
+test('LatestAsyncOperation invalidates previous operations', () => {
+  const operation = new LatestAsyncOperation();
+  const first = operation.begin();
+
+  assert.equal(first.isCurrent(), true);
+
+  const second = operation.begin();
+
+  assert.equal(first.isCurrent(), false);
+  assert.equal(second.isCurrent(), true);
+});
+
+test('Limiter reports size until running work drains', async () => {
+  const limiter = new Limiter<void>(1);
+  let releaseTask!: () => void;
+  const blockedTask = new Promise<void>((resolve) => {
+    releaseTask = resolve;
+  });
+
+  const queued = limiter.queue(() => blockedTask);
+  const idle = limiter.whenIdle();
+
+  assert.equal(limiter.size, 1);
+
+  releaseTask();
+  await queued;
+  await idle;
+
+  assert.equal(limiter.size, 0);
+});
+
+test('ResourceQueue serializes matching resources independently from others', async () => {
+  const queue = new ResourceQueue();
+  const firstResource = URI.parse('file:///tmp/first.txt');
+  const secondResource = URI.parse('file:///tmp/second.txt');
+  const order: string[] = [];
+  let releaseFirst!: () => void;
+  const blockedFirst = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+
+  const first = queue.queueFor(firstResource, async () => {
+    order.push('first:start');
+    await blockedFirst;
+    order.push('first:end');
+  });
+  const second = queue.queueFor(firstResource, async () => {
+    order.push('second');
+  });
+  const other = queue.queueFor(secondResource, async () => {
+    order.push('other');
+  });
+
+  await other;
+
+  assert.equal(queue.queueSize(firstResource), 2);
+  assert.deepEqual(order, ['first:start', 'other']);
+
+  releaseFirst();
+  await Promise.all([first, second]);
+  await queue.whenDrained();
+
+  assert.equal(queue.queueSize(firstResource), 0);
+  assert.deepEqual(order, ['first:start', 'other', 'first:end', 'second']);
+});
+
+test('LazyStatefulPromise computes on demand and exposes current value', async () => {
+  let computeCount = 0;
+  const lazy = new LazyStatefulPromise(async () => {
+    computeCount += 1;
+    return 42;
+  });
+
+  assert.equal(lazy.currentValue, undefined);
+  assert.equal(computeCount, 0);
+
+  const promise = lazy.getPromise();
+
+  assert.equal(computeCount, 1);
+  assert.strictEqual(lazy.getPromise(), promise);
+  assert.equal(await promise, 42);
+  assert.equal(lazy.currentValue, 42);
+  assert.equal(lazy.requireValue(), 42);
 });

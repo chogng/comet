@@ -8,6 +8,7 @@ import type {
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 import { createSettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
+import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import { locales } from 'language/locales';
 import { defaultBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
 
@@ -349,4 +350,55 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
   } finally {
     controller.dispose();
   }
+});
+
+test('SettingsModel ignores stale save results that resolve after newer saves', async () => {
+  type SaveRequest = {
+    readonly settings: Record<string, unknown>;
+    readonly resolve: (value: Record<string, unknown>) => void;
+  };
+
+  const saveRequests: SaveRequest[] = [];
+  const invokeDesktop = (async (command: string, args?: { settings?: unknown }) => {
+    if (command === 'save_settings') {
+      return new Promise<Record<string, unknown>>((resolve) => {
+        saveRequests.push({
+          settings: args?.settings as Record<string, unknown>,
+          resolve,
+        });
+      });
+    }
+
+    throw new Error(`Unexpected desktop command in stale settings save test: ${command}`);
+  }) as ElectronInvoke;
+  const model = new SettingsModel();
+  const saveContext = {
+    desktopRuntime: true,
+    invokeDesktop,
+    locale: 'en' as const,
+  };
+
+  model.setBrowserTabKeepAliveLimit(1);
+  const firstSave = model.saveSettingsDraft(saveContext);
+  assert.equal(saveRequests.length, 1);
+
+  model.setBrowserTabKeepAliveLimit(2);
+  const secondSave = model.saveSettingsDraft(saveContext);
+  assert.equal(saveRequests.length, 2);
+
+  saveRequests[1]!.resolve({
+    ...saveRequests[1]!.settings,
+    configPath: '/tmp/comet-studio.json',
+  });
+  await secondSave;
+
+  assert.equal(model.getSnapshot().browserTabKeepAliveLimit, 2);
+
+  saveRequests[0]!.resolve({
+    ...saveRequests[0]!.settings,
+    configPath: '/tmp/comet-studio.json',
+  });
+  await firstSave;
+
+  assert.equal(model.getSnapshot().browserTabKeepAliveLimit, 2);
 });

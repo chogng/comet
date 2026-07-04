@@ -1,18 +1,19 @@
 import {
+  type CancellationToken,
   CancellationTokenNone,
   CancellationTokenSource,
-  type CancellationToken,
-} from 'cs/base/common/cancellation';
-import {
-  CancellationError,
-  isCancellationError,
-} from 'cs/base/common/errors';
+} from './cancellation.js';
+import { BugIndicatingError, CancellationError, isCancellationError } from './errors.js';
+import { Emitter, Event } from './event.js';
+import { Lazy } from './lazy.js';
 import {
   DisposableStore,
-  type IDisposable,
   isDisposable,
   toDisposable,
-} from 'cs/base/common/lifecycle';
+  type IDisposable,
+} from './lifecycle.js';
+import { extUri as defaultExtUri, type IExtUri } from './resources.js';
+import { URI } from './uri.js';
 
 export type Thenable<T> = PromiseLike<T>;
 
@@ -281,6 +282,21 @@ export class SequencerByKey<TKey> {
   }
 }
 
+export interface LatestAsyncOperationToken {
+  isCurrent(): boolean;
+}
+
+export class LatestAsyncOperation {
+  private currentOperationId = 0;
+
+  begin(): LatestAsyncOperationToken {
+    const operationId = ++this.currentOperationId;
+    return {
+      isCurrent: () => this.currentOperationId === operationId,
+    };
+  }
+}
+
 export class Delayer<T> implements IDisposable {
   private completionPromise: Promise<T> | null = null;
   private doResolve: ((value: T | PromiseLike<T>) => void) | null = null;
@@ -524,6 +540,8 @@ export const Promises = {
 
 export interface ILimiter<T> {
   readonly size: number;
+  readonly onDrained: Event<void>;
+  whenIdle(): Promise<void>;
   queue(factory: ITask<Promise<T>>): Promise<T>;
 }
 
@@ -533,17 +551,40 @@ type LimiterEntry<T> = {
   readonly reject: (error?: unknown) => void;
 };
 
-export class Limiter<T> implements ILimiter<T> {
+export class Limiter<T> implements ILimiter<T>, IDisposable {
+  private sizeValue = 0;
+  private disposed = false;
   private runningPromises = 0;
   private readonly outstandingPromises: LimiterEntry<T>[] = [];
+  private readonly onDrainedEmitter = new Emitter<void>();
 
   constructor(private readonly maxDegreeOfParalellism: number) {}
 
   get size(): number {
-    return this.outstandingPromises.length;
+    return this.sizeValue;
+  }
+
+  get onDrained(): Event<void> {
+    return this.onDrainedEmitter.event;
+  }
+
+  whenIdle(): Promise<void> {
+    if (this.size === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      Event.once(this.onDrained)(resolve);
+    });
   }
 
   queue(factory: ITask<Promise<T>>): Promise<T> {
+    if (this.disposed) {
+      throw new Error('Object has been disposed');
+    }
+
+    this.sizeValue += 1;
+
     return new Promise<T>((resolve, reject) => {
       this.outstandingPromises.push({ factory, resolve, reject });
       this.consume();
@@ -551,6 +592,10 @@ export class Limiter<T> implements ILimiter<T> {
   }
 
   private consume(): void {
+    if (this.disposed) {
+      return;
+    }
+
     while (
       this.outstandingPromises.length > 0 &&
       this.runningPromises < this.maxDegreeOfParalellism
@@ -558,16 +603,129 @@ export class Limiter<T> implements ILimiter<T> {
       const entry = this.outstandingPromises.shift()!;
       this.runningPromises += 1;
       entry.factory().then(entry.resolve, entry.reject).finally(() => {
-        this.runningPromises -= 1;
-        this.consume();
+        this.consumed();
       });
     }
+  }
+
+  private consumed(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.runningPromises -= 1;
+    this.sizeValue -= 1;
+    if (this.sizeValue === 0) {
+      this.onDrainedEmitter.fire();
+    }
+    this.consume();
+  }
+
+  clear(): void {
+    if (this.disposed) {
+      throw new Error('Object has been disposed');
+    }
+
+    this.outstandingPromises.length = 0;
+    this.sizeValue = this.runningPromises;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.outstandingPromises.length = 0;
+    this.sizeValue = 0;
+    this.onDrainedEmitter.dispose();
   }
 }
 
 export class Queue<T> extends Limiter<T> {
   constructor() {
     super(1);
+  }
+}
+
+export class ResourceQueue implements IDisposable {
+  private readonly queues = new Map<string, Queue<void>>();
+  private readonly drainers = new Set<DeferredPromise<void>>();
+  private readonly drainListeners = new Map<string, IDisposable>();
+
+  async whenDrained(): Promise<void> {
+    if (this.isDrained()) {
+      return;
+    }
+
+    const promise = new DeferredPromise<void>();
+    this.drainers.add(promise);
+    return promise.p;
+  }
+
+  queueSize(resource: URI, extUri: IExtUri = defaultExtUri): number {
+    const key = extUri.getComparisonKey(resource);
+    return this.queues.get(key)?.size ?? 0;
+  }
+
+  queueFor(
+    resource: URI,
+    factory: ITask<Promise<void>>,
+    extUri: IExtUri = defaultExtUri,
+  ): Promise<void> {
+    const key = extUri.getComparisonKey(resource);
+
+    let queue = this.queues.get(key);
+    if (!queue) {
+      queue = new Queue<void>();
+      let drainListener: IDisposable;
+      drainListener = Event.once(queue.onDrained)(() => {
+        drainListener.dispose();
+        queue?.dispose();
+        this.queues.delete(key);
+        this.drainListeners.delete(key);
+        this.onDidQueueDrain();
+      });
+      this.drainListeners.set(key, drainListener);
+      this.queues.set(key, queue);
+    }
+
+    return queue.queue(factory);
+  }
+
+  dispose(): void {
+    for (const queue of this.queues.values()) {
+      queue.dispose();
+    }
+
+    this.queues.clear();
+
+    for (const listener of this.drainListeners.values()) {
+      listener.dispose();
+    }
+
+    this.drainListeners.clear();
+    this.releaseDrainers();
+  }
+
+  private isDrained(): boolean {
+    for (const queue of this.queues.values()) {
+      if (queue.size > 0) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private onDidQueueDrain(): void {
+    if (this.isDrained()) {
+      this.releaseDrainers();
+    }
+  }
+
+  private releaseDrainers(): void {
+    for (const drainer of this.drainers) {
+      drainer.complete();
+    }
+
+    this.drainers.clear();
   }
 }
 
@@ -781,6 +939,73 @@ export class GlobalIdleValue<T> extends AbstractIdleValue<T> {
 }
 
 export type ValueCallback<T = unknown> = (value: T | Promise<T>) => void;
+
+export class StatefulPromise<T> {
+  private currentValue: T | undefined;
+  private currentError: unknown;
+  private settled = false;
+  private rejected = false;
+
+  readonly promise: Promise<T>;
+
+  constructor(promise: Promise<T>) {
+    this.promise = promise.then(
+      (value) => {
+        this.currentValue = value;
+        this.settled = true;
+        return value;
+      },
+      (error) => {
+        this.currentError = error;
+        this.settled = true;
+        this.rejected = true;
+        throw error;
+      },
+    );
+  }
+
+  get value(): T | undefined {
+    return this.currentValue;
+  }
+
+  get error(): unknown {
+    return this.currentError;
+  }
+
+  get isResolved(): boolean {
+    return this.settled;
+  }
+
+  requireValue(): T {
+    if (!this.settled) {
+      throw new BugIndicatingError('Promise is not resolved yet');
+    }
+
+    if (this.rejected) {
+      throw this.currentError;
+    }
+
+    return this.currentValue as T;
+  }
+}
+
+export class LazyStatefulPromise<T> {
+  private readonly promise = new Lazy(() => new StatefulPromise(this.compute()));
+
+  constructor(private readonly compute: () => Promise<T>) {}
+
+  requireValue(): T {
+    return this.promise.value.requireValue();
+  }
+
+  getPromise(): Promise<T> {
+    return this.promise.value.promise;
+  }
+
+  get currentValue(): T | undefined {
+    return this.promise.rawValue?.value;
+  }
+}
 
 export class DeferredPromise<T> {
   private readonly state = promiseWithResolvers<T>();
