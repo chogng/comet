@@ -30,7 +30,7 @@ import {
 type SelectOption = SettingsDropdownOption;
 
 function setSelectHostDisabled(host: HTMLElement, disabled: boolean) {
-  const selectElement = host.querySelector<HTMLSelectElement>('.cs-select-box');
+  const selectElement = host.querySelector<HTMLSelectElement>('.comet-select-box');
   if (selectElement) {
     selectElement.disabled = disabled;
   }

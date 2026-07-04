@@ -12,6 +12,7 @@ import {
 	type SidebarLabels as FetchPaneSidebarLabels,
 } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/workbench/browser/parts/sidebar/media/sidebar.css';
 import 'cs/sessions/browser/parts/sidebar/media/sidebarPart.css';
@@ -43,42 +44,19 @@ type SessionSidebarContentTab = 'library' | 'fetch';
 
 let panelIdPool = 0;
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
-
 export class SessionSidebar {
 	private props: SessionSidebarProps;
-	private readonly element = createElement(
-		'div',
-		'comet-session-sidebar-root sidebar-root',
-	);
-	private readonly contentElement = createElement('div', 'sidebar-content');
-	private readonly footerElement = createElement(
-		'footer',
-		'sidebar-footer',
-	);
-	private readonly switcherElement = createElement('div', 'sidebar-switcher');
-	private readonly tabListElement = createElement('div', 'sidebar-tab-list');
-	private readonly libraryTabButton = createElement('button', 'sidebar-tab');
-	private readonly fetchTabButton = createElement('button', 'sidebar-tab');
-	private readonly tabActionsElement = createElement('div', 'sidebar-tab-actions');
-	private readonly contentHostElement = createElement('div', 'sidebar-content-host');
-	private readonly librarySection = createElement(
-		'section',
-		'sidebar-tab-panel sidebar-library-panel',
-	);
-	private readonly fetchSection = createElement(
-		'section',
-		'sidebar-tab-panel sidebar-fetch-panel',
-	);
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-sidebar-root.comet-sidebar-root');
+	private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-content');
+	private readonly footerElement = $<HTMLElementTagNameMap['footer']>('footer.comet-sidebar-footer');
+	private readonly switcherElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-switcher');
+	private readonly tabListElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-list');
+	private readonly libraryTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
+	private readonly fetchTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
+	private readonly tabActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-actions');
+	private readonly contentHostElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-content-host');
+	private readonly librarySection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-library-panel');
+	private readonly fetchSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-fetch-panel');
 	private readonly libraryView: LibraryView;
 	private readonly fetchContentView: FetchPaneContentView;
 	private activeTab: SessionSidebarContentTab = 'library';
@@ -92,8 +70,8 @@ export class SessionSidebar {
 		this.fetchTabButton.type = 'button';
 		this.libraryTabButton.setAttribute('role', 'tab');
 		this.fetchTabButton.setAttribute('role', 'tab');
-		this.libraryTabButton.classList.add('sidebar-library-tab');
-		this.fetchTabButton.classList.add('sidebar-fetch-tab');
+		this.libraryTabButton.classList.add('comet-sidebar-library-tab');
+		this.fetchTabButton.classList.add('comet-sidebar-fetch-tab');
 		this.librarySection.id = `session-sidebar-library-panel-${panelIdPool}`;
 		this.fetchSection.id = `session-sidebar-fetch-panel-${panelIdPool}`;
 		panelIdPool += 1;
@@ -239,13 +217,13 @@ export class SessionSidebar {
 			return;
 		}
 
-		const activePanel =
+const activePanel =
 			this.activeTab === 'library' ? this.librarySection : this.fetchSection;
 		if (this.contentHostElement.firstElementChild !== activePanel) {
 			this.contentHostElement.replaceChildren(activePanel);
 		}
 
-		const isLibraryActive = this.activeTab === 'library';
+const isLibraryActive = this.activeTab === 'library';
 		const { labels } = this.props;
 		this.renderTabButton(
 			this.libraryTabButton,
@@ -257,8 +235,8 @@ export class SessionSidebar {
 			labels.fetchTitle,
 			isLibraryActive ? 'customize' : 'customize-filled',
 		);
-		this.libraryTabButton.classList.toggle('is-active', isLibraryActive);
-		this.fetchTabButton.classList.toggle('is-active', !isLibraryActive);
+		this.libraryTabButton.classList.toggle('comet-is-active', isLibraryActive);
+		this.fetchTabButton.classList.toggle('comet-is-active', !isLibraryActive);
 		this.libraryTabButton.setAttribute('aria-selected', String(isLibraryActive));
 		this.fetchTabButton.setAttribute('aria-selected', String(!isLibraryActive));
 		this.libraryTabButton.tabIndex = isLibraryActive ? 0 : -1;
@@ -274,9 +252,9 @@ export class SessionSidebar {
 		label: string,
 		iconName: LxIconName,
 	) {
-		const labelElement = createElement('span', 'sidebar-tab-label');
+		const labelElement = $<HTMLElementTagNameMap['span']>('span.comet-sidebar-tab-label');
 		labelElement.textContent = label;
-		button.replaceChildren(createLxIcon(iconName, 'sidebar-tab-icon'), labelElement);
+		button.replaceChildren(createLxIcon(iconName, 'comet-sidebar-tab-icon'), labelElement);
 		button.title = label;
 	}
 }
@@ -284,10 +262,7 @@ export class SessionSidebar {
 export class SessionSidebarPartView {
 	readonly id = SESSION_PART_IDS.sidebar;
 
-	private readonly element = createElement(
-		'section',
-		'comet-session-sidebar-part',
-	);
+	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-session-sidebar-part');
 	private readonly sidebar: SessionSidebar;
 
 	constructor(props: SessionSidebarProps) {

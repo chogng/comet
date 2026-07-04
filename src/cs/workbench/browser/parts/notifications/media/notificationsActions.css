@@ -30,7 +30,7 @@
   bottom: 34px;
 }
 
-.comet-notifications-status.is-hidden,
+.comet-notifications-status.comet-is-hidden,
 .comet-notifications-center.visible ~ .comet-notifications-status,
 .comet-notifications-toasts.visible ~ .comet-notifications-status {
   display: none;
@@ -43,6 +43,6 @@
   white-space: nowrap;
 }
 
-.comet-notifications-status-button.has-notifications {
+.comet-notifications-status-button.comet-has-notifications {
   font-weight: 600;
 }

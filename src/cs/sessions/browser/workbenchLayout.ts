@@ -19,6 +19,7 @@ import {
 	setWorkbenchSidebarSizes,
 } from 'cs/workbench/browser/layout';
 import type { createSessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/sessions/browser/media/workbenchLayout.css';
 
@@ -333,7 +334,7 @@ class SessionWorkbenchLayoutController {
 			return;
 		}
 
-		const resizeObserver = new ResizeObserver(() => {
+const resizeObserver = new ResizeObserver(() => {
 			this.handleContainerResize();
 		});
 		resizeObserver.observe(this.options.container);
@@ -374,7 +375,7 @@ class SessionWorkbenchLayoutController {
 				return;
 			}
 
-			const state = this.options.getState();
+const state = this.options.getState();
 			const nextOrientation = this.resolveSplitOrientation();
 			this.syncSplitSlotConstraints(nextOrientation);
 			if (nextOrientation !== this.gridOrientation) {
@@ -412,24 +413,10 @@ class SessionWorkbenchLayoutController {
 	}
 }
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
-
 export class SessionWorkbenchLayoutView {
 	private props: SessionWorkbenchLayoutViewProps;
-	private readonly element = createElement(
-		'section',
-		'comet-session-workbench-layout',
-	);
-	private readonly mainElement = createElement('main');
+	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-session-workbench-layout');
+	private readonly mainElement = $<HTMLElementTagNameMap['main']>('main');
 	private readonly sidebarSlot = new SessionWorkbenchLayoutSlotView(
 		'comet-session-workbench-slot-sidebar',
 		true,
@@ -503,9 +490,9 @@ export class SessionWorkbenchLayoutView {
 		const isEditorVisible = !this.props.isEditorCollapsed;
 		this.mainElement.className = [
 			'comet-session-workbench-content-grid',
-			this.props.mode === 'settings' ? 'is-settings' : '',
+			this.props.mode === 'settings' ? 'comet-is-settings' : '',
 			this.props.isPrimarySidebarVisible ? 'comet-is-primary-sidebar-visible' : '',
-			isEditorVisible ? 'is-editor-visible' : '',
+			isEditorVisible ? 'comet-is-editor-visible' : '',
 		]
 			.filter(Boolean)
 			.join(' ');

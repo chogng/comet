@@ -63,7 +63,7 @@ export class AbstractScrollableElement {
     this.element = element;
     this.options = resolveScrollableElementOptions(options);
     this.domNode = document.createElement('div');
-    this.domNode.className = 'scrollable-element-root';
+    this.domNode.className = 'comet-scrollable-element-root';
     this.horizontalScrollbar = this.createScrollbarElement('horizontal');
     this.horizontalSlider = this.createSliderElement();
     this.verticalScrollbar = this.createScrollbarElement('vertical');
@@ -72,7 +72,7 @@ export class AbstractScrollableElement {
     this.verticalScrollbar.append(this.verticalSlider);
     this.domNode.append(this.element, this.horizontalScrollbar, this.verticalScrollbar);
 
-    this.element.classList.add('scrollable-content');
+    this.element.classList.add('comet-scrollable-content');
     this.element.style.minHeight = this.element.style.minHeight || '0';
     this.element.style.minWidth = this.element.style.minWidth || '0';
 
@@ -113,11 +113,11 @@ export class AbstractScrollableElement {
     });
     this.horizontalVisibilityController = new ScrollbarVisibilityController(
       this.options.horizontal,
-      'is-horizontal-scrollbar-visible',
+      'comet-is-horizontal-scrollbar-visible',
     );
     this.verticalVisibilityController = new ScrollbarVisibilityController(
       this.options.vertical,
-      'is-vertical-scrollbar-visible',
+      'comet-is-vertical-scrollbar-visible',
     );
     this.horizontalVisibilityController.setIsNeeded(this.horizontalScrollbarState.isNeeded());
     this.verticalVisibilityController.setIsNeeded(this.verticalScrollbarState.isNeeded());
@@ -341,20 +341,20 @@ export class AbstractScrollableElement {
   };
 
   private applyOptions() {
-    const classNames = ['scrollable-element-root'];
+    const classNames = ['comet-scrollable-element-root'];
     if (this.options.className) {
       classNames.push(this.options.className);
     }
     if (this.options.useShadows) {
-      classNames.push('use-shadows');
+      classNames.push('comet-use-shadows');
     }
     this.domNode.className = classNames.join(' ');
     this.domNode.style.setProperty(
-      '--scrollbar-size-vertical',
+      '--comet-scrollbar-size-vertical',
       `${this.options.verticalScrollbarSize}px`,
     );
     this.domNode.style.setProperty(
-      '--scrollbar-size-horizontal',
+      '--comet-scrollbar-size-horizontal',
       `${this.options.horizontalScrollbarSize}px`,
     );
     this.horizontalScrollbarState.setScrollbarSize(
@@ -409,11 +409,11 @@ export class AbstractScrollableElement {
     this.verticalVisibilityController.setIsNeeded(needsVertical);
 
     this.domNode.classList.toggle(
-      'is-scrollbar-needed',
+      'comet-is-scrollbar-needed',
       needsVertical || needsHorizontal,
     );
     this.domNode.classList.toggle(
-      'has-top-shadow',
+      'comet-has-top-shadow',
       this.options.useShadows && this.scrollPosition.scrollTop > 0,
     );
     this.renderScrollbars();
@@ -422,14 +422,14 @@ export class AbstractScrollableElement {
 
   private createScrollbarElement(orientation: 'horizontal' | 'vertical') {
     const scrollbar = document.createElement('div');
-    scrollbar.className = `overlay-scrollbar overlay-scrollbar-${orientation}`;
+    scrollbar.className = `comet-overlay-scrollbar comet-overlay-scrollbar-${orientation}`;
     scrollbar.setAttribute('aria-hidden', 'true');
     return scrollbar;
   }
 
   private createSliderElement() {
     const slider = document.createElement('div');
-    slider.className = 'overlay-scrollbar-slider';
+    slider.className = 'comet-overlay-scrollbar-slider';
     return slider;
   }
 

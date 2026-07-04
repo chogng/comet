@@ -1,15 +1,5 @@
 import 'cs/sessions/browser/parts/media/sessionView.css';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
+import { $ } from 'cs/base/browser/dom';
 
 export type SessionHeaderViewProps = {
 	trailingActionsElement?: HTMLElement | null;
@@ -17,8 +7,8 @@ export type SessionHeaderViewProps = {
 
 export class SessionHeaderView {
 	private props: SessionHeaderViewProps;
-	private readonly element = createElement('header', 'comet-session-header');
-	private readonly trailingElement = createElement('div', 'comet-session-header-trailing');
+	private readonly element = $<HTMLElementTagNameMap['header']>('header.comet-session-header');
+	private readonly trailingElement = $<HTMLElementTagNameMap['div']>('div.comet-session-header-trailing');
 	private disposed = false;
 
 	constructor(props: SessionHeaderViewProps) {

@@ -258,8 +258,8 @@ export class SimpleTree<T> extends Disposable {
 				rendered.dataset['simpleTreeNodeId'] = nodeId;
 				rendered.dataset['simpleTreeIndex'] = String(index);
 				rendered.classList.add('comet-simple-tree-node');
-				rendered.classList.toggle('is-selected', isSelected);
-				rendered.classList.toggle('is-focused', isFocused);
+				rendered.classList.toggle('comet-is-selected', isSelected);
+				rendered.classList.toggle('comet-is-focused', isFocused);
 				rendered.setAttribute('aria-level', String(entry.depth + 1));
 				rendered.setAttribute('aria-selected', String(isSelected));
 				rendered.toggleAttribute('aria-busy', Boolean(nodeState.loading));
@@ -276,8 +276,8 @@ export class SimpleTree<T> extends Disposable {
 				} else {
 					rendered.removeAttribute('aria-expanded');
 				}
-				rendered.classList.toggle('is-loading', Boolean(nodeState.loading));
-				rendered.classList.toggle('has-error', Boolean(nodeState.error));
+				rendered.classList.toggle('comet-is-loading', Boolean(nodeState.loading));
+				rendered.classList.toggle('comet-has-error', Boolean(nodeState.error));
 				templateData.container.append(rendered);
 			},
 			disposeElement: (_entry, _index, templateData) => {
@@ -322,8 +322,8 @@ export class SimpleTree<T> extends Disposable {
 			}
 
 			const isSelected = selected.has(index);
-			node.classList.toggle('is-selected', isSelected);
-			node.classList.toggle('is-focused', focused.has(index));
+			node.classList.toggle('comet-is-selected', isSelected);
+			node.classList.toggle('comet-is-focused', focused.has(index));
 			node.setAttribute('aria-selected', String(isSelected));
 		}
 	}

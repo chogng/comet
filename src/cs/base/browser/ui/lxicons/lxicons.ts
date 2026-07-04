@@ -338,7 +338,7 @@ export type LxIconName = keyof typeof SVG_BY_NAME;
 
 export function createLxIcon(name: LxIconName, className = '') {
   const icon = document.createElement('span');
-  icon.className = ['comet-lx-icon', `comet-lx-icon-${name}`, className].filter(Boolean).join(' ');
+  icon.className = ['lx-icon', `lx-icon-${name}`, className].filter(Boolean).join(' ');
   icon.setAttribute('aria-hidden', 'true');
   renderIcon(SVG_BY_NAME[name], icon);
   return icon;
@@ -347,6 +347,6 @@ export function createLxIcon(name: LxIconName, className = '') {
 export function createLxLoadingIcon(className = '') {
   return createLxIcon(
     'sync',
-    ['comet-lx-icon-loading', 'comet-lx-icon-modifier-spin', className].filter(Boolean).join(' '),
+    ['lx-icon-loading', 'lx-icon-modifier-spin', className].filter(Boolean).join(' '),
   );
 }

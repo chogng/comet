@@ -2,32 +2,19 @@ import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/b
 import { Sidebar } from 'cs/workbench/browser/parts/sidebar/sidebar';
 import type { SidebarProps } from 'cs/workbench/browser/parts/sidebar/sidebar';
 import { getWindowChromeLayout } from 'cs/platform/window/common/window';
+import { $ } from 'cs/base/browser/dom';
 
 export type { SidebarLabels, SidebarProps } from 'cs/workbench/browser/parts/sidebar/sidebar';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 export class SidebarPartView {
-  private readonly element = createElement(
-    'section',
-    [
-      'panel',
-      'sidebar-panel',
-      'sidebar-part-panel',
-      `sidebar-platform-${WINDOW_CHROME_LAYOUT.platform}`,
-    ].join(' '),
-  );
+  private readonly element = $<HTMLElementTagNameMap['section']>('section', { class: [
+      'comet-panel',
+      'comet-sidebar-panel',
+      'comet-sidebar-part-panel',
+      `comet-sidebar-platform-${WINDOW_CHROME_LAYOUT.platform}`,
+    ].join(' ') });
   private readonly bar: Sidebar;
 
   constructor(props: SidebarProps) {

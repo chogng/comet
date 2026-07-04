@@ -25,25 +25,25 @@ export function applyWorkbenchBrowserStyles() {
     'rgba(0, 0, 0, 0.1)';
 
   styleElement.textContent = `
-.actionbar-split {
+.comet-actionbar-split {
   transition: background-color 0.15s ease;
   border-radius: 6px;
 }
 
-.actionbar-split:hover,
-.actionbar-split:focus-within {
+.comet-actionbar-split:hover,
+.comet-actionbar-split:focus-within {
   background: ${toolbarHoverBackground};
 }
 
-.actionbar-split .actionbar-action:hover:not(:disabled),
-.actionbar-split .actionbar-item.is-active .actionbar-action,
-.actionbar-split .actionbar-item.is-active .actionbar-action:hover:not(:disabled),
-.actionbar-split .actionbar-item.is-checked .actionbar-action,
-.actionbar-split .actionbar-item.is-checked .actionbar-action:hover:not(:disabled) {
+.comet-actionbar-split .comet-actionbar-action:hover:not(:disabled),
+.comet-actionbar-split .comet-actionbar-item.comet-is-active .comet-actionbar-action,
+.comet-actionbar-split .comet-actionbar-item.comet-is-active .comet-actionbar-action:hover:not(:disabled),
+.comet-actionbar-split .comet-actionbar-item.comet-is-checked .comet-actionbar-action,
+.comet-actionbar-split .comet-actionbar-item.comet-is-checked .comet-actionbar-action:hover:not(:disabled) {
   background: transparent;
 }
 
-.actionbar-split:active {
+.comet-actionbar-split:active {
   background: ${toolbarActiveBackground};
 }
 `.trim();

@@ -25,6 +25,7 @@ import {
 	type LlmReasoningEffort,
 	type LlmServiceTier,
 } from 'cs/workbench/services/llm/registry';
+import { $ } from 'cs/base/browser/dom';
 
 export type ChatInputModelPickerProps = {
 	readonly activeLlmModelLabel: string;
@@ -48,17 +49,6 @@ type ChatModelMenuGroup = {
 	disabled: boolean;
 	readonly options: ChatModelDropdownOption[];
 };
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
 
 export class ChatInputModelPickerActionViewItem {
 	private props: ChatInputModelPickerProps;
@@ -132,8 +122,8 @@ export class ChatInputModelPickerActionViewItem {
 	}
 
 	private renderModelDropdownTrigger(currentOption: DropdownOption | null) {
-		const trigger = createElement('span', 'comet-chat-model-switch-trigger');
-		const label = createElement('span', 'comet-chat-model-switch-label');
+		const trigger = $<HTMLElementTagNameMap['span']>('span.comet-chat-model-switch-trigger');
+		const label = $<HTMLElementTagNameMap['span']>('span.comet-chat-model-switch-label');
 		label.textContent = this.getModelDropdownTriggerLabel(currentOption);
 		const chevron = createLxIcon('chevron-down', 'comet-chat-model-switch-chevron');
 
@@ -250,7 +240,7 @@ export class ChatInputModelPickerActionViewItem {
 				}];
 		}
 
-		const filteredItems = [
+const filteredItems = [
 			...items.filter(item =>
 				[
 					item.label,
@@ -340,14 +330,14 @@ export class ChatInputModelPickerActionViewItem {
 				continue;
 			}
 
-			const parsed = parseLlmModelOptionValue(option.value);
+const parsed = parseLlmModelOptionValue(option.value);
 			const providerId = option.providerId ?? parsed?.providerId;
 			const modelId = option.modelId ?? parsed?.modelId;
 			if (!providerId || !modelId) {
 				continue;
 			}
 
-			const key = `${providerId}:${modelId}`;
+const key = `${providerId}:${modelId}`;
 			const existing = groups.get(key);
 			if (existing) {
 				existing.options.push(option);
@@ -452,7 +442,7 @@ export class ChatInputModelPickerActionViewItem {
 			});
 		}
 
-		const supportsFast = group.options.some(option =>
+const supportsFast = group.options.some(option =>
 			(option.serviceTier ?? parseLlmModelOptionValue(option.value)?.serviceTier) === 'priority',
 		);
 		if (supportsFast) {
@@ -537,7 +527,7 @@ export class ChatInputModelPickerActionViewItem {
 			return candidate;
 		}
 
-		const withoutServiceTier = serializeLlmModelOptionValue(
+const withoutServiceTier = serializeLlmModelOptionValue(
 			group.providerId,
 			group.modelId,
 			reasoningEffort,
@@ -546,7 +536,7 @@ export class ChatInputModelPickerActionViewItem {
 			return withoutServiceTier;
 		}
 
-		const base = serializeLlmModelOptionValue(group.providerId, group.modelId);
+const base = serializeLlmModelOptionValue(group.providerId, group.modelId);
 		if (group.options.some(option => option.value === base)) {
 			return base;
 		}

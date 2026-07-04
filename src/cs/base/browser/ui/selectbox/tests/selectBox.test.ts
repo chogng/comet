@@ -85,7 +85,7 @@ test('selectbox renders a native select with configured options', () => {
     if (!(decorator instanceof HTMLElement)) {
       throw new Error('Expected select trigger decorator icon element.');
     }
-    assert.equal(decorator.querySelector('.comet-lx-icon-unfold') instanceof HTMLElement, true);
+    assert.equal(decorator.querySelector('.lx-icon-unfold') instanceof HTMLElement, true);
 
     assert.equal(select.classList.contains('comet-select-box'), true);
     assert.equal(select.getAttribute('aria-label'), null);

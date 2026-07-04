@@ -1,4 +1,5 @@
 import 'cs/base/browser/ui/menu/menu.css';
+import { $ } from 'cs/base/browser/dom';
 
 import type { ContextMenuAction } from 'cs/base/browser/contextmenu';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -42,24 +43,7 @@ export interface MenuHeaderOptions {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const SUBMENU_OFFSET_PX = 4;
-const VIEWPORT_MARGIN_PX = 8;
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
-}
-
-function composeClassName(parts: Array<string | undefined | null | false>) {
+const VIEWPORT_MARGIN_PX = 8;function composeClassName(parts: Array<string | undefined | null | false>) {
   return parts.filter(Boolean).join(' ');
 }
 
@@ -88,7 +72,7 @@ function createCheckIcon() {
 }
 
 function createCheckSlot(isSelected: boolean) {
-  const slot = createElement('span', 'comet-dropdown-menu-item-check');
+  const slot = $<HTMLElementTagNameMap['span']>('span.comet-dropdown-menu-item-check');
   slot.setAttribute('aria-hidden', 'true');
 
   if (isSelected) {
@@ -101,11 +85,11 @@ function createCheckSlot(isSelected: boolean) {
 }
 
 function createSwitchSlot(isSelected: boolean) {
-  const slot = createElement('span', 'comet-dropdown-menu-item-switch');
+  const slot = $<HTMLElementTagNameMap['span']>('span.comet-dropdown-menu-item-switch');
   slot.setAttribute('aria-hidden', 'true');
   slot.classList.toggle('checked', isSelected);
 
-  const thumb = createElement('span', 'comet-dropdown-menu-item-switch-thumb');
+  const thumb = $<HTMLElementTagNameMap['span']>('span.comet-dropdown-menu-item-switch-thumb');
   slot.append(thumb);
   return slot;
 }
@@ -117,14 +101,14 @@ function hasSubmenu(item: ContextMenuAction | undefined): item is ContextMenuAct
 }
 
 function createSubmenuIndicator() {
-  const slot = createElement('span', 'comet-dropdown-menu-item-submenu-indicator');
+  const slot = $<HTMLElementTagNameMap['span']>('span.comet-dropdown-menu-item-submenu-indicator');
   slot.setAttribute('aria-hidden', 'true');
   slot.append(createLxIcon('chevron-right'));
   return slot;
 }
 
 function createTrailingSlot(item: ContextMenuAction, isSelected: boolean) {
-  const trailing = createElement('span', 'comet-dropdown-menu-item-trailing');
+  const trailing = $<HTMLElementTagNameMap['span']>('span.comet-dropdown-menu-item-trailing');
   trailing.append(
     item.checkedDisplay === 'switch'
       ? createSwitchSlot(isSelected)
@@ -137,12 +121,12 @@ function createTrailingSlot(item: ContextMenuAction, isSelected: boolean) {
 }
 
 function createMenuItemContent(item: ContextMenuAction) {
-  const content = createElement('div', 'comet-dropdown-option-content');
-  const textWrap = createElement('div', 'comet-dropdown-menu-item-text');
-  const label = createElement('div', 'comet-dropdown-menu-item-content', item.label);
+  const content = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-option-content');
+  const textWrap = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-text');
+  const label = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-content', undefined, item.label);
   textWrap.append(label);
   if (item.description) {
-    textWrap.append(createElement('div', 'comet-dropdown-menu-item-description', item.description));
+    textWrap.append($<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-description', undefined, item.description));
   }
   if (item.icon) {
     content.append(createLxIcon(item.icon, 'comet-dropdown-option-icon'));
@@ -206,7 +190,7 @@ function isEditableElement(target: EventTarget | null): target is HTMLElement {
 }
 
 export class Menu extends Disposable {
-  private readonly element = createElement('div');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div');
   private readonly renderDisposables = new DisposableStore();
   private options: MenuOptions;
   private itemElements: HTMLDivElement[] = [];
@@ -270,7 +254,7 @@ export class Menu extends Disposable {
       return;
     }
 
-    const selectedIndex = this.findSelectedEnabledIndex();
+const selectedIndex = this.findSelectedEnabledIndex();
     if (selectedIndex >= 0) {
       this.focusByIndex(selectedIndex);
       return;
@@ -328,7 +312,7 @@ export class Menu extends Disposable {
       return;
     }
 
-    const relatedTarget = event.relatedTarget;
+const relatedTarget = event.relatedTarget;
     if (
       relatedTarget instanceof Node
       && this.submenuState.element.contains(relatedTarget)
@@ -344,7 +328,7 @@ export class Menu extends Disposable {
       return;
     }
 
-    const relatedTarget = event.relatedTarget;
+const relatedTarget = event.relatedTarget;
     if (
       relatedTarget instanceof Node
       && (this.element.contains(relatedTarget)
@@ -389,7 +373,7 @@ export class Menu extends Disposable {
       return null;
     }
 
-    const node = header.render({
+const node = header.render({
       updateItems: (items) => {
         if (this.disposed) {
           return;
@@ -423,7 +407,7 @@ export class Menu extends Disposable {
       return;
     }
 
-    const selectedIndex = this.findSelectedEnabledIndex();
+const selectedIndex = this.findSelectedEnabledIndex();
     if (selectedIndex >= 0) {
       this.setActiveIndex(selectedIndex, false, false);
       return;
@@ -440,17 +424,14 @@ export class Menu extends Disposable {
     for (let index = 0; index < this.options.items.length; index += 1) {
       const item = this.options.items[index];
       const selected = Boolean(item.checked);
-      const node = createElement(
-        'div',
-        composeClassName([
+      const node = $<HTMLElementTagNameMap['div']>('div', { class: composeClassName([
           'comet-dropdown-menu-item',
           this.options.itemClassName,
-          hasSubmenu(item) ? 'has-submenu' : '',
-          item.checkedDisplay === 'switch' && item.description ? 'has-description-switch' : '',
+          hasSubmenu(item) ? 'comet-has-submenu' : '',
+          item.checkedDisplay === 'switch' && item.description ? 'comet-has-description-switch' : '',
           selected ? 'selected' : '',
           item.disabled ? 'disabled' : '',
-        ]),
-      );
+        ]) });
       node.tabIndex = -1;
       node.dataset.index = String(index);
       node.setAttribute('role', itemRole);
@@ -466,7 +447,8 @@ export class Menu extends Disposable {
       } else {
         node.removeAttribute('aria-selected');
       }
-      const itemId = this.options.itemId?.(index, item) ?? '';
+
+const itemId = this.options.itemId?.(index, item) ?? '';
       if (itemId) {
         node.id = itemId;
       } else {
@@ -865,8 +847,8 @@ export class Menu extends Disposable {
     );
     const top = clamp(parentRect.top, VIEWPORT_MARGIN_PX, maxTop);
 
-    submenuElement.classList.toggle('is-left', opensToLeft);
-    submenuElement.classList.toggle('is-right', !opensToLeft);
+    submenuElement.classList.toggle('comet-is-left', opensToLeft);
+    submenuElement.classList.toggle('comet-is-right', !opensToLeft);
     submenuElement.style.position = 'fixed';
     submenuElement.style.left = `${Math.round(left)}px`;
     submenuElement.style.top = `${Math.round(top)}px`;

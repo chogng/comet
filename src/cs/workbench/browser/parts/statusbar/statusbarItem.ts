@@ -18,7 +18,7 @@ export function createStatusbarItemElement(item: EditorStatusItem) {
   itemElement.className = [
     'comet-editor-statusbar-item',
     item.tone ? `is-${item.tone}` : '',
-    canRunCommand ? 'is-actionable' : '',
+    canRunCommand ? 'comet-is-actionable' : '',
   ]
     .filter(Boolean)
     .join(' ');

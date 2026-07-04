@@ -50,15 +50,15 @@ export class InputBox extends Disposable {
     super();
     const inputAttributes = options.inputAttributes;
     this.element = document.createElement('div');
-    this.element.className = ['inputbox', 'idle', options.className ?? '']
+    this.element.className = ['comet-inputbox', 'comet-idle', options.className ?? '']
       .filter(Boolean)
       .join(' ');
 
     const wrapper = document.createElement('div');
-    wrapper.className = 'ibwrapper';
+    wrapper.className = 'comet-inputbox-wrapper';
 
     this.inputElement = document.createElement('input');
-    this.inputElement.className = 'input';
+    this.inputElement.className = 'comet-input';
     this.inputElement.type = options.type ?? 'text';
     this.inputElement.value = options.value ?? '';
     this.inputElement.readOnly = Boolean(inputAttributes?.readOnly);
@@ -163,16 +163,16 @@ export class InputBox extends Disposable {
   };
 
   private readonly handleFocus = () => {
-    this.element.classList.add('synthetic-focus');
+    this.element.classList.add('comet-synthetic-focus');
   };
 
   private readonly handleBlur = () => {
-    this.element.classList.remove('synthetic-focus');
+    this.element.classList.remove('comet-synthetic-focus');
   };
 
   private syncEmptyState() {
-    this.element.classList.toggle('empty', this.inputElement.value.length === 0);
-    this.inputElement.classList.toggle('empty', this.inputElement.value.length === 0);
+    this.element.classList.toggle('comet-empty', this.inputElement.value.length === 0);
+    this.inputElement.classList.toggle('comet-empty', this.inputElement.value.length === 0);
   }
 
   private syncHover() {

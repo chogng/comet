@@ -97,7 +97,7 @@
   border-color: #d3d3d3;
 }
 
-.comet-settings-number-stepper > .comet-settings-inputbox.inputbox {
+.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
@@ -105,22 +105,22 @@
   height: 100%;
   border: 0;
   border-radius: 0;
-  --inputbox-border: 0;
-  --inputbox-background: transparent;
-  --inputbox-background-hover: transparent;
-  --inputbox-foreground: var(--vscode-settings-inputForeground, #203040);
-  --inputbox-font-size: 13px;
-  --inputbox-padding-x: 6px;
-  --inputbox-text-align: center;
+  --comet-inputbox-border: 0;
+  --comet-inputbox-background: transparent;
+  --comet-inputbox-background-hover: transparent;
+  --comet-inputbox-foreground: var(--vscode-settings-inputForeground, #203040);
+  --comet-inputbox-font-size: 13px;
+  --comet-inputbox-padding-x: 6px;
+  --comet-inputbox-text-align: center;
 }
 
-.comet-settings-number-stepper > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
   -moz-appearance: textfield;
   appearance: textfield;
 }
 
-.comet-settings-number-stepper > .comet-settings-inputbox.inputbox > .ibwrapper > .input::-webkit-outer-spin-button,
-.comet-settings-number-stepper > .comet-settings-inputbox.inputbox > .ibwrapper > .input::-webkit-inner-spin-button {
+.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input::-webkit-outer-spin-button,
+.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
@@ -181,19 +181,19 @@
   gap: 10px;
 }
 
-.comet-settings-inputbox.comet-settings-text-editor-color-picker.inputbox {
+.comet-settings-inputbox.comet-settings-text-editor-color-picker.comet-inputbox {
   width: 48px;
   min-width: 48px;
   flex: 0 0 48px;
-  --inputbox-padding-y: 4px;
-  --inputbox-padding-x: 4px;
+  --comet-inputbox-padding-y: 4px;
+  --comet-inputbox-padding-x: 4px;
 }
 
-.comet-settings-inputbox.comet-settings-text-editor-color-picker.inputbox > .ibwrapper > .input {
+.comet-settings-inputbox.comet-settings-text-editor-color-picker.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
   cursor: pointer;
 }
 
-.comet-settings-inputbox.comet-settings-text-editor-color-value.inputbox {
+.comet-settings-inputbox.comet-settings-text-editor-color-value.comet-inputbox {
   max-width: 120px;
   min-width: 120px;
 }
@@ -271,20 +271,20 @@
   min-width: 120px;
 }
 
-.comet-settings-inputbox.inputbox {
-  --inputbox-height: 24px;
-  --inputbox-border-radius: 6px;
-  --inputbox-border: 1px solid transparent;
-  --inputbox-background: var(--vscode-settings-inputBackground, #fff);
-  --inputbox-background-hover: var(--vscode-settings-inputBackground, #fff);
-  --inputbox-foreground: var(--vscode-settings-inputForeground, #203040);
-  --inputbox-placeholder-foreground: var(--vscode-input-placeholderForeground, #94a3b8);
-  --inputbox-padding-y: 2px;
-  --inputbox-padding-x: 8px;
-  --inputbox-font-size: 13px;
+.comet-settings-inputbox.comet-inputbox {
+  --comet-inputbox-height: 24px;
+  --comet-inputbox-border-radius: 6px;
+  --comet-inputbox-border: 1px solid transparent;
+  --comet-inputbox-background: var(--vscode-settings-inputBackground, #fff);
+  --comet-inputbox-background-hover: var(--vscode-settings-inputBackground, #fff);
+  --comet-inputbox-foreground: var(--vscode-settings-inputForeground, #203040);
+  --comet-inputbox-placeholder-foreground: var(--vscode-input-placeholderForeground, #94a3b8);
+  --comet-inputbox-padding-y: 2px;
+  --comet-inputbox-padding-x: 8px;
+  --comet-inputbox-font-size: 13px;
 }
 
-.comet-settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
   line-height: 1.2;
   font-weight: 400;
 }
@@ -302,7 +302,7 @@
   box-sizing: border-box;
 }
 
-.comet-settings-select-trigger.cs-select-box {
+.comet-settings-select-trigger.comet-select-box {
   height: 24px;
   min-height: 24px;
   min-width: 120px;
@@ -310,7 +310,7 @@
   border-color: #d3d3d3;
 }
 
-.comet-settings-select-trigger.comet-settings-text-editor-select.cs-select-box {
+.comet-settings-select-trigger.comet-settings-text-editor-select.comet-select-box {
   width: 150px;
 }
 
@@ -319,8 +319,8 @@
   --vscode-select-background: var(--vscode-settings-selectHoverBackground, #e6e6e6);
 }
 
-.comet-settings-inputbox.inputbox.synthetic-focus,
-.comet-settings-inputbox.inputbox:focus-within {
+.comet-settings-inputbox.comet-inputbox.comet-synthetic-focus,
+.comet-settings-inputbox.comet-inputbox:focus-within {
   outline: none;
   border-color: #cecece;
   box-shadow: none;
@@ -614,10 +614,10 @@
 }
 
 .comet-settings-supported-source-journal-input {
-  --inputbox-height: 24px;
-  --inputbox-padding-y: 2px;
-  --inputbox-padding-x: 8px;
-  --inputbox-font-size: 13px;
+  --comet-inputbox-height: 24px;
+  --comet-inputbox-padding-y: 2px;
+  --comet-inputbox-padding-x: 8px;
+  --comet-inputbox-font-size: 13px;
   position: absolute;
   /* Keeps the edited text visually anchored to the read-only label baseline. */
   top: -1px;
@@ -627,7 +627,7 @@
   min-width: 0;
 }
 
-.comet-settings-supported-source-journal-input > .ibwrapper > .input {
+.comet-settings-supported-source-journal-input > .comet-inputbox-wrapper > .comet-input {
   padding: 2px 8px;
   line-height: 1.2;
 }
@@ -653,16 +653,16 @@
   max-width: 120px;
 }
 
-.comet-settings-date-input > .comet-settings-date-input-field.inputbox {
+.comet-settings-date-input > .comet-settings-date-input-field.comet-inputbox {
   width: 100%;
   min-width: 0;
-  --inputbox-border: 1px solid transparent;
-  --inputbox-background: var(--vscode-settings-inputBackground, #fff);
-  --inputbox-background-hover: var(--vscode-settings-inputBackground, #fff);
+  --comet-inputbox-border: 1px solid transparent;
+  --comet-inputbox-background: var(--vscode-settings-inputBackground, #fff);
+  --comet-inputbox-background-hover: var(--vscode-settings-inputBackground, #fff);
 }
 
-.comet-settings-date-input > .comet-settings-date-input-field.inputbox:focus-within,
-.comet-settings-date-input > .comet-settings-date-input-field.inputbox.synthetic-focus {
+.comet-settings-date-input > .comet-settings-date-input-field.comet-inputbox:focus-within,
+.comet-settings-date-input > .comet-settings-date-input-field.comet-inputbox.comet-synthetic-focus {
   border-color: #cecece;
   box-shadow: none;
 }
@@ -681,7 +681,7 @@
   min-width: 0;
 }
 
-.comet-settings-download-directory-control .comet-settings-inputbox.inputbox {
+.comet-settings-download-directory-control .comet-settings-inputbox.comet-inputbox {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
@@ -757,16 +757,16 @@
   margin-left: 0;
 }
 
-.comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
+.comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox {
   width: 140px;
   min-width: 140px;
 }
 
-.comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
   padding: 2px 28px 2px 8px;
 }
 
-.comet-settings-translation-api-key-control .comet-settings-api-key-empty .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-translation-api-key-control .comet-settings-api-key-empty .comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
   padding: 2px 8px;
 }
 
@@ -821,9 +821,9 @@
   min-width: 0;
 }
 
-.comet-settings-config-path-control .comet-settings-inputbox.inputbox,
-.comet-settings-library-directory-control .comet-settings-inputbox.inputbox,
-.comet-settings-library-readonly-control .comet-settings-inputbox.inputbox {
+.comet-settings-config-path-control .comet-settings-inputbox.comet-inputbox,
+.comet-settings-library-directory-control .comet-settings-inputbox.comet-inputbox,
+.comet-settings-library-readonly-control .comet-settings-inputbox.comet-inputbox {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
@@ -967,17 +967,17 @@
   z-index: 1;
 }
 
-.comet-settings-password-toggle .comet-lx-icon {
+.comet-settings-password-toggle .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
-  --inputbox-padding-x: 10px;
+.comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox {
+  --comet-inputbox-padding-x: 10px;
 }
 
-.comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
+.comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
   padding-right: 34px;
 }
 
@@ -1026,7 +1026,7 @@
   height: 28px;
 }
 
-.comet-settings-model-search-action.comet-actionbar-action .comet-lx-icon {
+.comet-settings-model-search-action.comet-actionbar-action .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
@@ -1293,7 +1293,7 @@
     margin-left: 0;
   }
 
-  .comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
+  .comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox {
     width: 100%;
   }
 
@@ -1301,15 +1301,15 @@
     width: 140px;
   }
 
-  .comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox {
+  .comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox {
     width: 140px;
   }
 
-  .comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
+  .comet-settings-translation-api-key-control .comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
     padding: 2px 28px 2px 8px;
   }
 
-  .comet-settings-translation-api-key-control .comet-settings-api-key-empty .comet-settings-api-key-input > .comet-settings-inputbox.inputbox > .ibwrapper > .input {
+  .comet-settings-translation-api-key-control .comet-settings-api-key-empty .comet-settings-api-key-input > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
     padding: 2px 8px;
   }
 

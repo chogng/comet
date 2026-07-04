@@ -109,7 +109,7 @@ test('DropdownMenuActionViewItem renders and opens a menu overlay', async () => 
     const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
     assert.equal(document.activeElement, menu);
-    assert.equal(actionItem.classList.contains('is-active'), true);
+    assert.equal(actionItem.classList.contains('comet-is-active'), true);
 
     const archiveItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Archive'),
@@ -120,7 +120,7 @@ test('DropdownMenuActionViewItem renders and opens a menu overlay', async () => 
 
     assert.equal(selected, 'archive');
     assert.equal(button.getAttribute('aria-expanded'), 'false');
-    assert.equal(actionItem.classList.contains('is-active'), false);
+    assert.equal(actionItem.classList.contains('comet-is-active'), false);
   } finally {
     item.dispose();
     document.body.replaceChildren();
@@ -167,7 +167,7 @@ test('DropdownMenuActionViewItem can render a custom overlay', async () => {
     assert.equal(trigger.getAttribute('aria-haspopup'), 'dialog');
     assert.equal(trigger.getAttribute('aria-expanded'), 'true');
     assert.equal(contextViewContent.style.minWidth, '0px');
-    assert.equal(actionItem.classList.contains('is-active'), true);
+    assert.equal(actionItem.classList.contains('comet-is-active'), true);
 
     const closeButton = overlay.querySelector('button');
     assert(closeButton instanceof HTMLButtonElement);
@@ -176,7 +176,7 @@ test('DropdownMenuActionViewItem can render a custom overlay', async () => {
 
     assert.equal(closed, 1);
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
-    assert.equal(actionItem.classList.contains('is-active'), false);
+    assert.equal(actionItem.classList.contains('comet-is-active'), false);
   } finally {
     item.dispose();
     document.body.replaceChildren();

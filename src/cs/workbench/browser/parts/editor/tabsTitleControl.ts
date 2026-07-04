@@ -26,6 +26,7 @@ import {
   createContextMenuService,
   type WorkbenchContextMenuService,
 } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
+import { $ } from 'cs/base/browser/dom';
 
 type TabView = {
   element: HTMLDivElement;
@@ -36,17 +37,6 @@ type TabView = {
   labelText: HTMLSpanElement;
   dispose: () => void;
 };
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
 
 function addDisposableListener(
   target: EventTarget,
@@ -84,7 +74,7 @@ function isTabClosable(tab: Pick<EditorGroupTabItem, 'targetTabId' | 'state'>) {
 }
 
 function createDirtyCloseButtonContent() {
-  const container = createElement('span', 'comet-editor-tab-dirty-close-icon');
+  const container = $<HTMLElementTagNameMap['span']>('span.comet-editor-tab-dirty-close-icon');
   container.append(
     createLxIcon('unsave', 'comet-editor-tab-close-icon-unsave'),
     createLxIcon('close', 'comet-editor-tab-close-icon-close'),
@@ -112,7 +102,7 @@ function createTabFaviconImageElement(
   faviconUrl: string,
   onError: () => void,
 ) {
-  const faviconImage = createElement('img', 'comet-editor-tab-favicon');
+  const faviconImage = $<HTMLElementTagNameMap['img']>('img.comet-editor-tab-favicon');
   faviconImage.alt = '';
   faviconImage.decoding = 'async';
   faviconImage.draggable = false;
@@ -151,21 +141,12 @@ export class TabsTitleControl extends TitleControl {
   }
 
   protected override create() {
-    this.container = createElement('div', 'comet-editor-tabs-container comet-horizontal-scrollbar-strip');
+    this.container = $<HTMLElementTagNameMap['div']>('div.comet-editor-tabs-container.comet-horizontal-scrollbar-strip');
     this.container.setAttribute('role', 'tablist');
-    const scrollHost = createElement(
-      'div',
-      'comet-editor-tabs-scroll-host comet-horizontal-scrollbar-host',
-    );
-    const scrollbarTrack = createElement(
-      'div',
-      'comet-editor-tabs-scrollbar comet-horizontal-scrollbar-track',
-    );
+    const scrollHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-tabs-scroll-host.comet-horizontal-scrollbar-host');
+    const scrollbarTrack = $<HTMLElementTagNameMap['div']>('div.comet-editor-tabs-scrollbar.comet-horizontal-scrollbar-track');
     scrollbarTrack.setAttribute('aria-hidden', 'true');
-    const scrollbarThumb = createElement(
-      'div',
-      'comet-editor-tabs-scrollbar-thumb comet-horizontal-scrollbar-thumb',
-    );
+    const scrollbarThumb = $<HTMLElementTagNameMap['div']>('div.comet-editor-tabs-scrollbar-thumb.comet-horizontal-scrollbar-thumb');
     scrollbarThumb.setAttribute('aria-hidden', 'true');
     scrollbarTrack.append(scrollbarThumb);
     scrollHost.append(this.container, scrollbarTrack);
@@ -232,7 +213,7 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const nextTabElements: HTMLDivElement[] = [];
+const nextTabElements: HTMLDivElement[] = [];
     const nextTabIds = new Set<string>();
     const totalTabs = this.props.group.tabs.length;
 
@@ -270,12 +251,9 @@ export class TabsTitleControl extends TitleControl {
   }
 
   private createTabView(): TabView {
-    const tabElement = createElement('div', 'comet-editor-tab');
+    const tabElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-tab');
     const viewDisposables = new DisposableStore();
-    const mainButton = createElement(
-      'button',
-      'comet-editor-tab-main btn-base btn-md',
-    );
+    const mainButton = $<HTMLElementTagNameMap['button']>('button.comet-editor-tab-main.comet-btn-base.comet-btn-md');
     mainButton.type = 'button';
     mainButton.setAttribute('role', 'tab');
     viewDisposables.add(addDisposableListener(tabElement, 'pointerenter', () => {
@@ -289,9 +267,9 @@ export class TabsTitleControl extends TitleControl {
     viewDisposables.add(addDisposableListener(tabElement, 'drop', this.handleTabDrop));
     viewDisposables.add(addDisposableListener(tabElement, 'dragend', this.handleTabDragEnd));
 
-    const label = createElement('span', 'comet-editor-tab-label');
-    const icon = createElement('span', 'comet-editor-tab-icon');
-    const labelText = createElement('span', 'comet-editor-tab-label-text');
+    const label = $<HTMLElementTagNameMap['span']>('span.comet-editor-tab-label');
+    const icon = $<HTMLElementTagNameMap['span']>('span.comet-editor-tab-icon');
+    const labelText = $<HTMLElementTagNameMap['span']>('span.comet-editor-tab-label-text');
     label.append(icon, labelText);
     mainButton.append(label);
     const mainHover = this.hoverService.createHover(mainButton, null);
@@ -324,11 +302,11 @@ export class TabsTitleControl extends TitleControl {
     totalTabs: number,
   ) {
     const closable = isTabClosable(tab);
-    tabView.element.classList.toggle('is-active', tab.state.isActive);
-    tabView.element.classList.toggle('is-closable', closable);
-    tabView.element.classList.toggle('is-dirty', tab.state.isDirty);
-    tabView.element.classList.toggle('has-title', Boolean(tab.label.trim()));
-    tabView.element.classList.toggle('is-available', Boolean(tab.targetTabId));
+    tabView.element.classList.toggle('comet-is-active', tab.state.isActive);
+    tabView.element.classList.toggle('comet-is-closable', closable);
+    tabView.element.classList.toggle('comet-is-dirty', tab.state.isDirty);
+    tabView.element.classList.toggle('comet-has-title', Boolean(tab.label.trim()));
+    tabView.element.classList.toggle('comet-is-available', Boolean(tab.targetTabId));
     tabView.element.dataset.paneMode = tab.paneMode;
     tabView.element.dataset.tabId = tab.id;
     tabView.element.dataset.targetTabId = tab.targetTabId ?? '';
@@ -404,7 +382,7 @@ export class TabsTitleControl extends TitleControl {
       return null;
     }
 
-    const viewTabId = element.dataset.tabId?.trim() ?? '';
+const viewTabId = element.dataset.tabId?.trim() ?? '';
     const targetTabId = element.dataset.targetTabId?.trim() ?? '';
     if (!viewTabId || !targetTabId) {
       return null;
@@ -447,12 +425,12 @@ export class TabsTitleControl extends TitleControl {
       return null;
     }
 
-    const rect = tabElement.getBoundingClientRect();
+const rect = tabElement.getBoundingClientRect();
     if (rect.width <= 0) {
       return tabIndex + 1;
     }
 
-    const midpoint = rect.left + rect.width / 2;
+const midpoint = rect.left + rect.width / 2;
     const currentTargetSlotIndex = this.dragState?.targetSlotIndex ?? null;
     const leadingSlotIndex = tabIndex;
     const trailingSlotIndex = tabIndex + 1;
@@ -478,7 +456,7 @@ export class TabsTitleControl extends TitleControl {
       return null;
     }
 
-    const currentTargetSlotIndex = this.dragState?.targetSlotIndex ?? null;
+const currentTargetSlotIndex = this.dragState?.targetSlotIndex ?? null;
     if (currentTargetSlotIndex !== null) {
       const leftBoundary =
         currentTargetSlotIndex <= 0
@@ -503,7 +481,7 @@ export class TabsTitleControl extends TitleControl {
         continue;
       }
 
-      const rect = tabElement.getBoundingClientRect();
+const rect = tabElement.getBoundingClientRect();
       if (rect.width <= 0) {
         continue;
       }
@@ -521,7 +499,7 @@ export class TabsTitleControl extends TitleControl {
       return 0;
     }
 
-    const scrollHostRect = this.scrollableRoot.getBoundingClientRect();
+const scrollHostRect = this.scrollableRoot.getBoundingClientRect();
     return clientX - scrollHostRect.left;
   }
 
@@ -530,7 +508,7 @@ export class TabsTitleControl extends TitleControl {
       return null;
     }
 
-    const tabCount = this.props.group.tabs.length;
+const tabCount = this.props.group.tabs.length;
     const normalizedTargetSlotIndex = Math.max(
       0,
       Math.min(targetSlotIndex, tabCount),
@@ -587,14 +565,14 @@ export class TabsTitleControl extends TitleControl {
     }
 
     if (left === null) {
-      this.scrollableRoot.classList.remove('is-drop-indicator-visible');
+      this.scrollableRoot.classList.remove('comet-is-drop-indicator-visible');
       this.scrollableRoot.style.removeProperty(
         '--editor-tab-drop-indicator-left',
       );
       return;
     }
 
-    this.scrollableRoot.classList.add('is-drop-indicator-visible');
+    this.scrollableRoot.classList.add('comet-is-drop-indicator-visible');
     this.scrollableRoot.style.setProperty(
       '--editor-tab-drop-indicator-left',
       `${left}px`,
@@ -606,7 +584,7 @@ export class TabsTitleControl extends TitleControl {
       return null;
     }
 
-    const targetElement = event.currentTarget;
+const targetElement = event.currentTarget;
     const targetMetadata =
       targetElement instanceof HTMLElement
         ? this.getReorderableTabMetadata(targetElement)
@@ -652,7 +630,7 @@ export class TabsTitleControl extends TitleControl {
       ? this.tabViews.get(this.dragState.sourceViewTabId)?.element ?? null
       : null;
     if (sourceTabElement) {
-      sourceTabElement.classList.remove('is-dragging');
+      sourceTabElement.classList.remove('comet-is-dragging');
       const activeElement = document.activeElement;
       if (
         activeElement instanceof HTMLElement &&
@@ -665,7 +643,7 @@ export class TabsTitleControl extends TitleControl {
     this.dragState = null;
     for (const tabView of this.tabViews.values()) {
       delete tabView.element.dataset.hovered;
-      tabView.element.classList.remove('is-dragging');
+      tabView.element.classList.remove('comet-is-dragging');
     }
   }
 
@@ -678,7 +656,7 @@ export class TabsTitleControl extends TitleControl {
     }
 
     previewElement.classList.add('comet-editor-tab-drag-preview');
-    previewElement.classList.remove('is-dragging');
+    previewElement.classList.remove('comet-is-dragging');
     previewElement.removeAttribute('data-hovered');
 
     const { width, height } = sourceTabElement.getBoundingClientRect();
@@ -710,7 +688,7 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const actions: ContextMenuAction[] = [
+const actions: ContextMenuAction[] = [
       ...(tab.state.isClosable
         ? [
             {
@@ -819,7 +797,7 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const lastTab = this.container.lastElementChild as HTMLElement | null;
+const lastTab = this.container.lastElementChild as HTMLElement | null;
     const contentRight = lastTab
       ? lastTab.offsetLeft + lastTab.offsetWidth
       : this.container.scrollWidth;
@@ -831,13 +809,13 @@ export class TabsTitleControl extends TitleControl {
       this.container.clientWidth > 0 && maxScrollLeft > 1;
     const scrollLeft = this.container.scrollLeft;
 
-    this.container.classList.toggle('is-overflowing', isOverflowing);
+    this.container.classList.toggle('comet-is-overflowing', isOverflowing);
     this.container.classList.toggle(
-      'is-scroll-start',
+      'comet-is-scroll-start',
       !isOverflowing || scrollLeft <= 1,
     );
     this.container.classList.toggle(
-      'is-scroll-end',
+      'comet-is-scroll-end',
       !isOverflowing || scrollLeft >= maxScrollLeft - 1,
     );
   }
@@ -847,14 +825,14 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const activeTab = this.container.querySelector(
-      '.comet-editor-tab.is-active',
+const activeTab = this.container.querySelector(
+      '.comet-editor-tab.comet-is-active',
     ) as HTMLElement | null;
     if (!activeTab) {
       return;
     }
 
-    const visibleLeft = this.container.scrollLeft;
+const visibleLeft = this.container.scrollLeft;
     const visibleRight = visibleLeft + this.container.clientWidth;
     const activeLeft = activeTab.offsetLeft;
     const activeRight = activeLeft + activeTab.offsetWidth;
@@ -897,12 +875,12 @@ export class TabsTitleControl extends TitleControl {
       return false;
     }
 
-    const tabElement = this.tabViews.get(tabId)?.element;
+const tabElement = this.tabViews.get(tabId)?.element;
     if (!tabElement) {
       return false;
     }
 
-    const visibleLeft = this.container.scrollLeft;
+const visibleLeft = this.container.scrollLeft;
     const visibleRight = visibleLeft + this.container.clientWidth;
     const tabLeft = tabElement.offsetLeft;
     const tabRight = tabLeft + tabElement.offsetWidth;
@@ -923,12 +901,12 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const tabElement = event.currentTarget;
+const tabElement = event.currentTarget;
     if (!(tabElement instanceof HTMLElement)) {
       return;
     }
 
-    const tabMetadata = this.getReorderableTabMetadata(tabElement);
+const tabMetadata = this.getReorderableTabMetadata(tabElement);
     if (!tabMetadata) {
       return;
     }
@@ -948,7 +926,7 @@ export class TabsTitleControl extends TitleControl {
     if (activeElement instanceof HTMLElement && tabElement.contains(activeElement)) {
       activeElement.blur();
     }
-    tabElement.classList.add('is-dragging');
+    tabElement.classList.add('comet-is-dragging');
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', tabMetadata.targetTabId);
@@ -969,7 +947,7 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const nextDropTarget = this.syncDropTargetFromEvent(event);
+const nextDropTarget = this.syncDropTargetFromEvent(event);
     if (!nextDropTarget) {
       return;
     }
@@ -985,7 +963,7 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const nextDropTarget = this.syncDropTargetFromEvent(event);
+const nextDropTarget = this.syncDropTargetFromEvent(event);
     if (!nextDropTarget || !this.props.onReorderTab) {
       this.clearDragState();
       return;
@@ -1010,7 +988,7 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const nextDropTarget = this.syncDropTargetFromContainerEvent(event);
+const nextDropTarget = this.syncDropTargetFromContainerEvent(event);
     if (!nextDropTarget) {
       return;
     }
@@ -1037,7 +1015,7 @@ export class TabsTitleControl extends TitleControl {
       return;
     }
 
-    const nextDropTarget = this.syncDropTargetFromContainerEvent(event);
+const nextDropTarget = this.syncDropTargetFromContainerEvent(event);
     if (!nextDropTarget) {
       this.clearDragState();
       return;

@@ -4,6 +4,7 @@ import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { formatDateInputValue } from 'cs/base/common/date';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
+import { $ } from 'cs/base/browser/dom';
 
 export type DateInputLabels = {
   calendar: string;
@@ -31,21 +32,6 @@ const defaultLabels: DateInputLabels = {
   clear: 'Clear',
   today: 'Today',
 };
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
-}
 
 function addDisposableListener<K extends keyof HTMLElementEventMap>(
   target: HTMLElement,
@@ -136,9 +122,9 @@ export class DateInput extends Disposable {
   private options: DateInputOptions;
   private readonly contextView: ContextViewHandle;
   private readonly ownsContextView: boolean;
-  private readonly element = createElement('div', 'comet-date-input');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-date-input');
   private readonly inputBox: InputBox;
-  private readonly button = createElement('button', 'comet-date-input-button');
+  private readonly button = $<HTMLElementTagNameMap['button']>('button.comet-date-input-button');
   private readonly weekdayLabels = createWeekdayLabels();
   private visibleMonth: Date;
   private selectedValue: string;
@@ -154,7 +140,7 @@ export class DateInput extends Disposable {
     this.contextView = contextView ?? createContextViewController();
     this.ownsContextView = !contextView;
 
-    const host = createElement('div');
+    const host = $<HTMLElementTagNameMap['div']>('div');
     this.inputBox = new InputBox(host, undefined, {
       className: ['comet-date-input-field', this.options.inputClassName ?? ''].filter(Boolean).join(' '),
       value: this.selectedValue,
@@ -379,43 +365,39 @@ export class DateInput extends Disposable {
   }
 
   private renderPopover() {
-    const popover = createElement('div', 'comet-date-input-popover');
+    const popover = $<HTMLElementTagNameMap['div']>('div.comet-date-input-popover');
     popover.setAttribute('role', 'dialog');
     popover.setAttribute('aria-modal', 'false');
     popover.setAttribute('aria-label', this.options.labels.calendar);
 
-    const header = createElement('div', 'comet-date-input-header');
-    const previousButton = createElement('button', 'comet-date-input-month-nav');
+    const header = $<HTMLElementTagNameMap['div']>('div.comet-date-input-header');
+    const previousButton = $<HTMLElementTagNameMap['button']>('button.comet-date-input-month-nav');
     previousButton.type = 'button';
     previousButton.append(createLxIcon('chevron-left'));
     previousButton.addEventListener('click', () => this.stepMonth(-1));
 
-    const title = createElement('div', 'comet-date-input-month-title', formatMonthTitle(this.visibleMonth));
+    const title = $<HTMLElementTagNameMap['div']>('div.comet-date-input-month-title', undefined, formatMonthTitle(this.visibleMonth));
 
-    const nextButton = createElement('button', 'comet-date-input-month-nav');
+    const nextButton = $<HTMLElementTagNameMap['button']>('button.comet-date-input-month-nav');
     nextButton.type = 'button';
     nextButton.append(createLxIcon('chevron-right'));
     nextButton.addEventListener('click', () => this.stepMonth(1));
     header.append(previousButton, title, nextButton);
 
-    const weekdays = createElement('div', 'comet-date-input-weekdays');
+    const weekdays = $<HTMLElementTagNameMap['div']>('div.comet-date-input-weekdays');
     weekdays.append(
-      ...this.weekdayLabels.map((weekday) => createElement('span', 'comet-date-input-weekday', weekday)),
+      ...this.weekdayLabels.map((weekday) => $<HTMLElementTagNameMap['span']>('span.comet-date-input-weekday', undefined, weekday)),
     );
 
     const todayValue = formatDateInputValue(new Date());
-    const grid = createElement('div', 'comet-date-input-grid');
+    const grid = $<HTMLElementTagNameMap['div']>('div.comet-date-input-grid');
     grid.append(...createMonthCells(this.visibleMonth).map((cell) => {
-      const day = createElement(
-        'button',
-        [
+      const day = $<HTMLElementTagNameMap['button']>('button', { class: [
           'comet-date-input-day',
-          cell.inCurrentMonth ? '' : 'is-outside',
-          cell.value === todayValue ? 'is-today' : '',
-          cell.value === this.selectedValue ? 'is-selected' : '',
-        ].filter(Boolean).join(' '),
-        String(cell.date.getDate()),
-      );
+          cell.inCurrentMonth ? '' : 'comet-is-outside',
+          cell.value === todayValue ? 'comet-is-today' : '',
+          cell.value === this.selectedValue ? 'comet-is-selected' : '',
+        ].filter(Boolean).join(' ') }, String(cell.date.getDate()));
       day.type = 'button';
       day.dataset.dateValue = cell.value;
       day.setAttribute('aria-pressed', String(cell.value === this.selectedValue));
@@ -428,8 +410,8 @@ export class DateInput extends Disposable {
       return day;
     }));
 
-    const footer = createElement('div', 'comet-date-input-footer');
-    const clearButton = createElement('button', 'comet-date-input-footer-button', this.options.labels.clear);
+    const footer = $<HTMLElementTagNameMap['div']>('div.comet-date-input-footer');
+    const clearButton = $<HTMLElementTagNameMap['button']>('button.comet-date-input-footer-button', undefined, this.options.labels.clear);
     clearButton.type = 'button';
     clearButton.addEventListener('click', () => {
       this.commitValue('');
@@ -437,7 +419,7 @@ export class DateInput extends Disposable {
       this.inputBox.focus();
     });
 
-    const todayButton = createElement('button', 'comet-date-input-footer-button', this.options.labels.today);
+    const todayButton = $<HTMLElementTagNameMap['button']>('button.comet-date-input-footer-button', undefined, this.options.labels.today);
     todayButton.type = 'button';
     todayButton.addEventListener('click', () => {
       this.commitValue(todayValue);

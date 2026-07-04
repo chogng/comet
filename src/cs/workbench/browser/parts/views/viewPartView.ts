@@ -4,6 +4,7 @@ import {
   registerWorkbenchPartDomNode,
 } from 'cs/workbench/browser/layout';
 import 'cs/workbench/browser/parts/views/media/view.css';
+import { $ } from 'cs/base/browser/dom';
 
 export type ViewPartLabels = {
   emptyState: string;
@@ -20,29 +21,12 @@ export type ViewPartProps = {
   labels: ViewPartLabels;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 export class ViewPartView {
   private props: ViewPartProps;
-  private readonly element = createElement('div', 'comet-browser-frame-container');
-  private readonly contentElement = createElement(
-    'div',
-    'comet-native-webcontentview-host',
-  );
-  private readonly webContentHost = createElement(
-    'div',
-    'comet-browser-frame comet-browser-frame-placeholder',
-  );
-  private readonly overlayElement = createElement('div', 'comet-webcontent-overlay');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-browser-frame-container');
+  private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-native-webcontentview-host');
+  private readonly webContentHost = $<HTMLElementTagNameMap['div']>('div.comet-browser-frame.comet-browser-frame-placeholder');
+  private readonly overlayElement = $<HTMLElementTagNameMap['div']>('div.comet-webcontent-overlay');
   private isWebContentHostRegistered = false;
 
   constructor(props: ViewPartProps) {
@@ -81,7 +65,7 @@ export class ViewPartView {
 
     if (!this.props.browserUrl) {
       this.setWebContentHostRegistered(canHostNativeWebContent);
-      const emptyFrame = createElement('div', 'comet-browser-frame');
+      const emptyFrame = $<HTMLElementTagNameMap['div']>('div.comet-browser-frame');
       emptyFrame.setAttribute('aria-hidden', 'true');
       this.overlayElement.className = 'comet-webcontent-overlay visible';
       this.overlayElement.append(emptyFrame);
@@ -90,10 +74,7 @@ export class ViewPartView {
 
     if (!canHostNativeWebContent) {
       this.setWebContentHostRegistered(false);
-      const warning = createElement(
-        'div',
-        'empty-state webcontent-runtime-warning',
-      );
+      const warning = $<HTMLElementTagNameMap['div']>('div.comet-empty-state.comet-webcontent-runtime-warning');
       warning.textContent = this.props.labels.contentUnavailable;
       this.overlayElement.className = 'comet-webcontent-overlay visible';
       this.overlayElement.append(warning);

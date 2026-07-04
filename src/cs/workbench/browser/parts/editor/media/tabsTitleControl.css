@@ -24,7 +24,7 @@
   padding: 0;
 }
 
-.comet-editor-tabs-scroll-host.is-drop-indicator-visible::after {
+.comet-editor-tabs-scroll-host.comet-is-drop-indicator-visible::after {
   content: '';
   position: absolute;
   top: 4px;
@@ -67,7 +67,7 @@
   background: transparent;
 }
 
-.comet-editor-tab.is-active {
+.comet-editor-tab.comet-is-active {
   background: transparent;
 }
 
@@ -89,8 +89,8 @@
   transition: none;
   -webkit-app-region: no-drag;
 }
-/* Tab actions containerï¼?the padding-right connects with the close button position*/
-.comet-editor-tab-actions.actionbar {
+/* Tab actions containerï¿½?the padding-right connects with the close button position*/
+.comet-editor-tab-actions.comet-actionbar {
   position: absolute;
   top: 0;
   right: 0;
@@ -106,14 +106,14 @@
   isolation: isolate;
 }
 
-.comet-editor-tab-actions .actionbar-actions-container,
-.comet-editor-tab-actions .actionbar-item {
+.comet-editor-tab-actions .comet-actionbar-actions-container,
+.comet-editor-tab-actions .comet-actionbar-item {
   display: inline-flex;
   align-items: center;
   height: 100%;
 }
 
-.comet-editor-tab-close-btn.actionbar-action {
+.comet-editor-tab-close-btn.comet-actionbar-action {
   width: 20px;
   height: 20px;
   border: none;
@@ -129,16 +129,16 @@
   gap: 0;
 }
 
-.comet-editor-tab.is-dragging {
+.comet-editor-tab.comet-is-dragging {
   opacity: 0.86;
 }
 
-.comet-editor-tab.is-dragging .comet-editor-tab-actions.actionbar {
+.comet-editor-tab.comet-is-dragging .comet-editor-tab-actions.comet-actionbar {
   opacity: 0;
   pointer-events: none;
 }
 
-.comet-editor-tab.is-dragging .comet-editor-tab-close-btn.actionbar-action {
+.comet-editor-tab.comet-is-dragging .comet-editor-tab-close-btn.comet-actionbar-action {
   background: transparent;
   color: var(--vscode-editor-tabForeground, #58697b);
 }
@@ -152,14 +152,14 @@
   opacity: 0.94;
 }
 
-.comet-editor-tab-close-btn.actionbar-action .lx-icon {
+.comet-editor-tab-close-btn.comet-actionbar-action .lx-icon {
   width: 14px;
   height: 14px;
   font-size: 14px;
 }
 
 .comet-editor-tab[data-hovered='true'] .comet-editor-tab-main,
-.comet-editor-tab.is-active .comet-editor-tab-main {
+.comet-editor-tab.comet-is-active .comet-editor-tab-main {
   color: var(--vscode-editor-tabActiveForeground, #1d2f41);
 }
 
@@ -167,24 +167,24 @@
   background: var(--vscode-editor-tabHoverBackground, #eaeaea);
 }
 
-.comet-editor-tab.is-active .comet-editor-tab-main {
+.comet-editor-tab.comet-is-active .comet-editor-tab-main {
   background: var(--vscode-editor-tabActiveBackground, #eaeaea);
 }
 
-.comet-editor-tab.is-closable[data-hovered='true'] .comet-editor-tab-actions.actionbar,
-.comet-editor-tab.is-closable:focus-within .comet-editor-tab-actions.actionbar {
+.comet-editor-tab.comet-is-closable[data-hovered='true'] .comet-editor-tab-actions.comet-actionbar,
+.comet-editor-tab.comet-is-closable:focus-within .comet-editor-tab-actions.comet-actionbar {
   opacity: 1;
   pointer-events: auto;
 }
 
-.comet-editor-tab.is-closable.is-dirty .comet-editor-tab-actions.actionbar {
+.comet-editor-tab.comet-is-closable.comet-is-dirty .comet-editor-tab-actions.comet-actionbar {
   opacity: 1;
   pointer-events: auto;
 }
 /* When the tab is hovered or focused, we apply a mask to the label to fade out the text towards the right edge, revealing the close button. */
-.comet-editor-tab.is-closable[data-hovered='true'] .comet-editor-tab-label,
-.comet-editor-tab.is-closable:focus-within .comet-editor-tab-label,
-.comet-editor-tab.is-closable.is-dirty .comet-editor-tab-label {
+.comet-editor-tab.comet-is-closable[data-hovered='true'] .comet-editor-tab-label,
+.comet-editor-tab.comet-is-closable:focus-within .comet-editor-tab-label,
+.comet-editor-tab.comet-is-closable.comet-is-dirty .comet-editor-tab-label {
   mask-image: linear-gradient(
     to right,
     black calc(100% - 36px),
@@ -197,8 +197,8 @@
   );
 }
 
-.comet-editor-tab.is-closable[data-hovered='true'] .comet-editor-tab-close-btn.actionbar-action,
-.comet-editor-tab.is-closable:focus-within .comet-editor-tab-close-btn.actionbar-action {
+.comet-editor-tab.comet-is-closable[data-hovered='true'] .comet-editor-tab-close-btn.comet-actionbar-action,
+.comet-editor-tab.comet-is-closable:focus-within .comet-editor-tab-close-btn.comet-actionbar-action {
   background: var(--vscode-editor-tabCloseHoverBackground, #e9e9e9);
   color: var(--vscode-editor-tabCloseHoverForeground, #1f2d3a);
 }
@@ -215,13 +215,13 @@
   display: none;
 }
 
-.comet-editor-tab.is-closable.is-dirty[data-hovered='true'] .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-unsave,
-.comet-editor-tab.is-closable.is-dirty:focus-within .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-unsave {
+.comet-editor-tab.comet-is-closable.comet-is-dirty[data-hovered='true'] .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-unsave,
+.comet-editor-tab.comet-is-closable.comet-is-dirty:focus-within .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-unsave {
   display: none;
 }
 
-.comet-editor-tab.is-closable.is-dirty[data-hovered='true'] .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-close,
-.comet-editor-tab.is-closable.is-dirty:focus-within .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-close {
+.comet-editor-tab.comet-is-closable.comet-is-dirty[data-hovered='true'] .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-close,
+.comet-editor-tab.comet-is-closable.comet-is-dirty:focus-within .comet-editor-tab-dirty-close-icon .comet-editor-tab-close-icon-close {
   display: inline-flex;
 }
 
@@ -279,43 +279,43 @@
   line-height: 1.3;
 }
 
-.comet-editor-tab:not(.has-title) .comet-editor-tab-label-text {
+.comet-editor-tab:not(.comet-has-title) .comet-editor-tab-label-text {
   display: none;
 }
 
-.comet-editor-tab:not(.has-title) {
+.comet-editor-tab:not(.comet-has-title) {
   width: 26px;
   min-width: 26px;
   max-width: 26px;
   flex-basis: 26px;
 }
 
-.comet-editor-tab:not(.has-title) .comet-editor-tab-main {
+.comet-editor-tab:not(.comet-has-title) .comet-editor-tab-main {
   width: 100%;
   padding: 0;
   flex: 1 0 100%;
   justify-content: center;
 }
 
-.comet-editor-tab:not(.has-title) .comet-editor-tab-label {
+.comet-editor-tab:not(.comet-has-title) .comet-editor-tab-label {
   flex: 0 0 auto;
   justify-content: center;
 }
 
-.comet-editor-tab:not(.has-title) .comet-editor-tab-actions.actionbar {
+.comet-editor-tab:not(.comet-has-title) .comet-editor-tab-actions.comet-actionbar {
   width: 100%;
   padding-right: 0;
   justify-content: center;
 }
 
-.comet-editor-tab:not(.has-title).is-closable[data-hovered='true'] .comet-editor-tab-label,
-.comet-editor-tab:not(.has-title).is-closable:focus-within .comet-editor-tab-label,
-.comet-editor-tab:not(.has-title).is-closable.is-dirty .comet-editor-tab-label {
+.comet-editor-tab:not(.comet-has-title).comet-is-closable[data-hovered='true'] .comet-editor-tab-label,
+.comet-editor-tab:not(.comet-has-title).comet-is-closable:focus-within .comet-editor-tab-label,
+.comet-editor-tab:not(.comet-has-title).comet-is-closable.comet-is-dirty .comet-editor-tab-label {
   mask-image: none;
   -webkit-mask-image: none;
 }
 
-.comet-editor-tab:not(.is-closable) .comet-editor-tab-actions.actionbar {
+.comet-editor-tab:not(.comet-is-closable) .comet-editor-tab-actions.comet-actionbar {
   display: none;
 }
 

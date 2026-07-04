@@ -1,4 +1,4 @@
-.panel.sidebar-panel {
+.comet-panel.comet-sidebar-panel {
 	--sidebar-footer-height: 54px;
 	--sidebar-floating-inset: 12px;
 	--sidebar-surface-bg: #FFFFFF;
@@ -12,7 +12,7 @@
 	gap: 0;
 }
 
-.panel.sidebar-panel.sidebar-part-panel {
+.comet-panel.comet-sidebar-panel.comet-sidebar-part-panel {
 	width: calc(100% - var(--sidebar-floating-inset) - var(--sidebar-floating-inset));
 	height: calc(100% - var(--sidebar-floating-inset) - var(--sidebar-floating-inset));
 	margin: var(--sidebar-floating-inset);
@@ -24,7 +24,7 @@
 		0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-windows {
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-windows {
   --sidebar-surface-bg: rgba(248, 250, 253, 0.72);
   --sidebar-surface-bg: color-mix(
     in srgb,
@@ -33,7 +33,7 @@
   );
 }
 
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos {
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos {
   --sidebar-surface-bg: rgba(248, 250, 253, 0.2);
   --sidebar-surface-bg: color-mix(
     in srgb,
@@ -50,14 +50,14 @@
   backdrop-filter: saturate(200%) blur(30px) brightness(1.02);
 }
 
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-part-panel.sidebar-platform-macos {
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-part-panel.comet-sidebar-platform-macos {
   border: 1px solid rgba(186, 198, 212, 0.35);
   border: 1px solid
     color-mix(in srgb, var(--vscode-sideBar-fetchCardBorder, #ebebeb) 60%, transparent);
   border-radius: 8px;
 }
 
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos::before {
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -95,7 +95,7 @@
     );
 }
 
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos::after {
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -112,25 +112,25 @@
   opacity: 0.52;
 }
 
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos > * {
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos > * {
   position: relative;
   z-index: 1;
 }
 
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos .sidebar-footer,
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos .sidebar-switcher,
-.comet-app-window.comet-is-mica-enabled .panel.sidebar-panel.sidebar-platform-macos .sidebar-tab-panel {
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-footer,
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-switcher,
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-tab-panel {
   background: transparent;
 }
 
-.sidebar-root {
+.comet-sidebar-root {
   min-height: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
 }
 
-.sidebar-footer {
+.comet-sidebar-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -142,15 +142,15 @@
   background: var(--sidebar-surface-bg);
 }
 
-.sidebar-part-panel .sidebar-footer {
+.comet-sidebar-part-panel .comet-sidebar-footer {
   border-top: 1px solid var(--vscode-sideBar-border, rgba(15, 23, 42, 0.08));
 }
 
-.sidebar-footer > * {
+.comet-sidebar-footer > * {
   min-width: 0;
 }
 
-.sidebar-switcher {
+.comet-sidebar-switcher {
   min-width: 0;
   flex: 0 0 auto;
   display: flex;
@@ -160,11 +160,11 @@
   background: var(--sidebar-surface-bg);
 }
 
-.sidebar-switcher[hidden] {
+.comet-sidebar-switcher[hidden] {
   display: none;
 }
 
-.sidebar-tab-list {
+.comet-sidebar-tab-list {
   min-width: 0;
   flex: 1;
   display: grid;
@@ -177,7 +177,7 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
-.sidebar-tab {
+.comet-sidebar-tab {
   appearance: none;
   min-width: 0;
   height: 30px;
@@ -197,13 +197,13 @@
   -webkit-app-region: no-drag;
 }
 
-.sidebar-tab-icon {
+.comet-sidebar-tab-icon {
   flex: 0 0 auto;
   width: 14px;
   height: 14px;
 }
 
-.sidebar-tab-label {
+.comet-sidebar-tab-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -211,12 +211,12 @@
   line-height: 1;
 }
 
-.sidebar-tab:hover {
+.comet-sidebar-tab:hover {
   color: var(--vscode-sideBar-tabHoverForeground, #23272b);
   background: var(--vscode-sideBar-tabHoverBackground, rgba(255, 255, 255, 0.42));
 }
 
-.sidebar-tab.is-active {
+.comet-sidebar-tab.comet-is-active {
   color: var(--vscode-sideBar-tabActiveForeground, #1f2328);
   background: var(--vscode-sideBar-tabActiveBackground, #ffffff);
   box-shadow:
@@ -224,12 +224,12 @@
     0 0 0 1px rgba(15, 23, 42, 0.05);
 }
 
-.sidebar-tab:focus-visible {
+.comet-sidebar-tab:focus-visible {
   outline: 2px solid var(--vscode-focusBorder, #0078d4);
   outline-offset: 1px;
 }
 
-.sidebar-tab-actions {
+.comet-sidebar-tab-actions {
   flex: 0 0 auto;
   min-width: 0;
   display: inline-flex;
@@ -237,25 +237,25 @@
   justify-content: flex-end;
 }
 
-.sidebar-content {
+.comet-sidebar-content {
   min-height: 0;
   flex: 1;
   display: flex;
 }
 
-.sidebar-content-host,
-.sidebar-tab-panel {
+.comet-sidebar-content-host,
+.comet-sidebar-tab-panel {
   min-height: 0;
   flex: 1;
   display: flex;
   background: var(--sidebar-surface-bg);
 }
 
-.sidebar-tab-panel {
+.comet-sidebar-tab-panel {
   flex-direction: column;
 }
 
-.sidebar-library-panel > .library-tree {
+.comet-sidebar-library-panel > .comet-library-tree {
   flex: 1;
   min-height: 0;
 }
@@ -274,22 +274,22 @@
   padding: 0;
 }
 
-.comet-sidebar-tab-actionbar .actionbar-actions-container,
-.comet-sidebar-tab-actionbar .actionbar-item {
+.comet-sidebar-tab-actionbar .comet-actionbar-actions-container,
+.comet-sidebar-tab-actionbar .comet-actionbar-item {
   display: flex;
   align-items: center;
 }
 
-.comet-sidebar-tab-actionbar .actionbar-action {
+.comet-sidebar-tab-actionbar .comet-actionbar-action {
   min-height: var(--pane-header-actionbar-item-size);
 }
 
-.comet-sidebar-tab-actionbar .actionbar-action.is-icon {
+.comet-sidebar-tab-actionbar .comet-actionbar-action.comet-is-icon {
   width: var(--pane-header-actionbar-item-size);
   height: var(--pane-header-actionbar-item-size);
 }
 
-.comet-sidebar-tab-actionbar .actionbar-action .lx-icon {
+.comet-sidebar-tab-actionbar .comet-actionbar-action .lx-icon {
   width: var(--pane-header-actionbar-icon-size);
   height: var(--pane-header-actionbar-icon-size);
   font-size: var(--pane-header-actionbar-icon-size);
@@ -306,12 +306,12 @@
   min-height: 100%;
 }
 
-.comet-fetch-pane-scrollable > .comet-fetch-pane-content-body.scrollable-content {
+.comet-fetch-pane-scrollable > .comet-fetch-pane-content-body.comet-scrollable-content {
   display: flex;
   flex-direction: column;
 }
 
-.comet-fetch-pane-content .simple-tree {
+.comet-fetch-pane-content .comet-simple-tree {
   flex: 0 0 auto;
   padding: 4px 0;
 }
@@ -391,11 +391,11 @@
   background: var(--vscode-sideBar-fetchCardHoverBackground, var(--sidebar-surface-bg));
 }
 
-.comet-fetch-tree-article-row.is-selection-mode {
+.comet-fetch-tree-article-row.comet-is-selection-mode {
   cursor: pointer;
 }
 
-.comet-fetch-tree-article-row.is-selected {
+.comet-fetch-tree-article-row.comet-is-selected {
   background: var(--vscode-sideBar-fetchCardSelectedBackground, #eef6ff);
   box-shadow: inset 0 0 0 1px var(--vscode-sideBar-fetchCardSelectedBorder, #0a5fbf);
 }
@@ -461,7 +461,7 @@
   background: var(--vscode-sideBar-fetchCardHoverBackground, var(--sidebar-surface-bg));
 }
 
-.comet-fetch-pane-article-card.is-selection-mode {
+.comet-fetch-pane-article-card.comet-is-selection-mode {
   cursor: pointer;
 }
 
@@ -470,20 +470,20 @@
   box-shadow: inset 0 0 0 1px var(--vscode-sideBar-fetchCardFocusBorder, #0078d4);
 }
 
-.comet-fetch-pane-article-card.is-selection-mode:focus-visible {
+.comet-fetch-pane-article-card.comet-is-selection-mode:focus-visible {
   outline: none;
   background: var(--vscode-sideBar-fetchCardHoverBackground, var(--sidebar-surface-bg));
   box-shadow: inset 0 0 0 1px var(--vscode-sideBar-fetchCardFocusBorder, #0078d4);
 }
 
-.comet-fetch-pane-article-card.is-selected {
+.comet-fetch-pane-article-card.comet-is-selected {
   background: var(--vscode-sideBar-fetchCardSelectedBackground, #eef6ff);
   box-shadow: inset 0 0 0 1px var(--vscode-sideBar-fetchCardSelectedBorder, #0a5fbf);
 }
 
-.comet-fetch-pane-article-card.is-selected:hover,
-.comet-fetch-pane-article-card.is-selected:focus-within,
-.comet-fetch-pane-article-card.is-selected.is-selection-mode:focus-visible {
+.comet-fetch-pane-article-card.comet-is-selected:hover,
+.comet-fetch-pane-article-card.comet-is-selected:focus-within,
+.comet-fetch-pane-article-card.comet-is-selected.comet-is-selection-mode:focus-visible {
   background: var(--vscode-sideBar-fetchCardSelectedHoverBackground, #e6f1ff);
   box-shadow: inset 0 0 0 1px var(--vscode-sideBar-fetchCardSelectedBorder, #0a5fbf);
 }
@@ -612,16 +612,16 @@ html[lang="en"] .comet-fetch-pane-empty-state {
   flex-shrink: 0;
 }
 
-.comet-fetch-pane-article-card-icon-btn.actionbar-action {
+.comet-fetch-pane-article-card-icon-btn.comet-actionbar-action {
   min-height: 24px;
 }
 
-.comet-fetch-pane-article-card-icon-btn.actionbar-action.is-icon {
+.comet-fetch-pane-article-card-icon-btn.comet-actionbar-action.comet-is-icon {
   width: 24px;
   height: 24px;
 }
 
-.comet-fetch-pane-article-card-icon-btn.actionbar-action .lx-icon {
+.comet-fetch-pane-article-card-icon-btn.comet-actionbar-action .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;

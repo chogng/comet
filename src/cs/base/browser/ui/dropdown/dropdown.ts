@@ -20,6 +20,7 @@ import {
   resolveAnchoredVerticalPlacement,
   resolveAnchoredVerticalPlacementWithFallback,
 } from 'cs/base/common/layout';
+import { $ } from 'cs/base/browser/dom';
 
 export type DropdownMenuAlign = 'start' | 'center' | 'end';
 export type DropdownDomMenuLayer = 'portal';
@@ -82,24 +83,7 @@ export type DropdownProps = {
   onBlur?: (event: FocusEvent) => void;
 };
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
-}
-
-function createChevronIcon() {
+const SVG_NS = 'http://www.w3.org/2000/svg';function createChevronIcon() {
   const icon = document.createElementNS(SVG_NS, 'svg');
   icon.setAttribute('viewBox', '0 0 16 16');
   icon.setAttribute('width', '14');
@@ -120,11 +104,11 @@ function createChevronIcon() {
 }
 
 function createOptionContent(option: DropdownOption) {
-  const content = createElement('div', 'comet-dropdown-option-content');
+  const content = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-option-content');
   if (option.icon) {
     content.append(createLxIcon(option.icon, 'comet-dropdown-option-icon'));
   }
-  content.append(createElement('div', 'comet-dropdown-menu-item-content', option.label));
+  content.append($<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-content', undefined, option.label));
   return content;
 }
 
@@ -357,9 +341,9 @@ export class DropdownView extends Disposable {
   private activeOptionIndex = -1;
   private readonly instanceId = ++dropdownViewIdSequence;
   private readonly menuId = `comet-dropdown-menu-${this.instanceId}`;
-  private readonly element = createElement('div');
-  private readonly field = createElement('div', 'comet-dropdown-field');
-  private readonly iconWrapper = createElement('div', 'comet-dropdown-icon-wrapper');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div');
+  private readonly field = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-field');
+  private readonly iconWrapper = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-icon-wrapper');
   private readonly chevronIcon = createChevronIcon();
   private readonly hoverController: HoverHandle;
   private readonly defaultMenuPresenter = createDomDropdownMenuPresenter();
@@ -541,7 +525,7 @@ export class DropdownView extends Disposable {
       return;
     }
 
-    const relatedTarget = event.relatedTarget;
+const relatedTarget = event.relatedTarget;
     if (!(relatedTarget instanceof Node) || !this.element.contains(relatedTarget)) {
       this.isFocused = false;
       this.setOpen(false);
@@ -737,7 +721,8 @@ export class DropdownView extends Disposable {
     } else {
       this.element.removeAttribute('aria-activedescendant');
     }
-    const resolvedHover =
+
+const resolvedHover =
       this.props.hover === undefined
         ? this.props.title ?? selectedOption?.title ?? null
         : this.props.hover;

@@ -31,12 +31,12 @@ test('hover service can show and hide instant hovers', async () => {
 		assert(hover);
 		await delay(0);
 
-		const overlayContent = document.querySelector('.cs-hover-content');
+		const overlayContent = document.querySelector('.comet-hover-content');
 		assert(overlayContent instanceof HTMLElement);
 		assert.equal(overlayContent.textContent, 'Instant service hover');
 
 		hoverService.hideHover();
-		assert.equal(document.querySelector('.cs-hover-card'), null);
+		assert.equal(document.querySelector('.comet-hover-card'), null);
 	} finally {
 		hover?.dispose();
 	}
@@ -56,7 +56,7 @@ test('hover service cancels pending delayed hovers when the pointer leaves', asy
 		target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 		await delay(80);
 
-		assert.equal(document.querySelector('.cs-hover-card'), null);
+		assert.equal(document.querySelector('.comet-hover-card'), null);
 	} finally {
 		binding.dispose();
 		hoverService.hideHover();
@@ -82,7 +82,7 @@ test('hover service can anchor delayed hovers at the mouse position', async () =
 		);
 		await delay(0);
 
-		const overlayContent = document.querySelector('.cs-hover-content');
+		const overlayContent = document.querySelector('.comet-hover-content');
 		assert(overlayContent instanceof HTMLElement);
 		assert.equal(overlayContent.textContent, 'Mouse anchored hover');
 	} finally {

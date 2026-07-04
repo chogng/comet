@@ -21,27 +21,17 @@ import { localize } from 'cs/nls';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/chatListWidget';
 import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/workbench/browser/parts/agentbar/media/agentbar.css';
 import 'cs/workbench/contrib/chat/browser/widget/media/chat.css';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
 
 const CHAT_HEADER_MORE_MENU_DATA = 'agentbar-header-more';
 const CHAT_HEADER_HISTORY_MENU_DATA = 'agentbar-header-history';
 
 export class ChatWidget {
 	private props: ChatWidgetProps;
-	private readonly element = createElement('div', 'comet-agentbar-content');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-content');
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
 	private readonly renderDisposables = new DisposableStore();
@@ -90,7 +80,7 @@ export class ChatWidget {
 	}
 
 	private renderHeader() {
-		const header = createElement('div', 'comet-agentbar-tabs-header');
+		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-tabs-header');
 		const headerItems: ActionBarItem[] = [
 			this.createHeaderActionItem(
 				localize('assistantSidebarNewConversation', "New chat"),
@@ -102,7 +92,7 @@ export class ChatWidget {
 		];
 
 		const actionsView = createActionBarView({
-			className: 'sidebar-action-bar',
+			className: 'comet-sidebar-action-bar',
 			ariaRole: 'group',
 			items: headerItems,
 		});
@@ -112,17 +102,14 @@ export class ChatWidget {
 	}
 
 	private renderShell() {
-		const shell = createElement(
-			'div',
-			[
+		const shell = $<HTMLElementTagNameMap['div']>('div', { class: [
 				'comet-agentbar-shell',
 				this.props.messages.length === 0 ? 'comet-is-empty-state' : '',
 			]
 				.filter(Boolean)
-				.join(' '),
-		);
+				.join(' ') });
 		if (this.props.errorMessage) {
-			const error = createElement('div', 'comet-agentbar-error');
+			const error = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-error');
 			error.textContent = this.props.errorMessage;
 			shell.append(error);
 		}
@@ -165,7 +152,7 @@ export class ChatWidget {
 		return {
 			label,
 			content: createLxIcon(icon),
-			buttonClassName: 'sidebar-action-btn',
+			buttonClassName: 'comet-sidebar-action-btn',
 			checked: isToggle ? isActive : undefined,
 			active: isActive,
 			buttonAttributes: triggerId
@@ -214,7 +201,7 @@ export class ChatWidget {
 			label: localize('assistantSidebarMore', "More"),
 			title: localize('assistantSidebarMore', "More"),
 			content: createLxIcon(lxIconSemanticMap.assistant.more),
-			buttonClassName: 'sidebar-action-btn',
+			buttonClassName: 'comet-sidebar-action-btn',
 			overlayAlignment: 'start',
 			menuData: CHAT_HEADER_MORE_MENU_DATA,
 			menu: [
@@ -233,7 +220,7 @@ export class ChatWidget {
 			label: localize('assistantSidebarHistory', "History"),
 			title: localize('assistantSidebarHistory', "History"),
 			content: createLxIcon(lxIconSemanticMap.assistant.history),
-			buttonClassName: 'sidebar-action-btn',
+			buttonClassName: 'comet-sidebar-action-btn',
 			overlayAlignment: 'end',
 			menuData: CHAT_HEADER_HISTORY_MENU_DATA,
 			menu: this.createHistoryMenuItems(''),

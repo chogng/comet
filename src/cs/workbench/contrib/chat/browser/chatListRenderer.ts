@@ -7,23 +7,13 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { localize } from 'cs/nls';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
+import { $ } from 'cs/base/browser/dom';
 
 export type ChatListRendererOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
 	readonly onDownloadArticlePdf: (article: Article) => Promise<void>;
 	readonly onOpenArticleDetails: (article: Article) => void | Promise<void>;
 };
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
 
 export class ChatListRenderer {
 	constructor(private readonly options: ChatListRendererOptions) {}
@@ -43,11 +33,8 @@ export class ChatListRenderer {
 	private renderUserMessage(
 		message: Extract<AssistantChatMessage, { role: 'user' }>,
 	) {
-		const item = createElement(
-			'div',
-			'comet-agentbar-message comet-agentbar-message-user',
-		);
-		const text = createElement('p', 'comet-agentbar-message-text');
+		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-user');
+		const text = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-message-text');
 		text.textContent = message.content;
 		item.append(text);
 		return item;
@@ -56,19 +43,13 @@ export class ChatListRenderer {
 	private renderArticleMessage(
 		message: Extract<AssistantChatMessage, { role: 'article' }>,
 	) {
-		const item = createElement(
-			'div',
-			'comet-agentbar-message comet-agentbar-message-article',
-		);
-		const body = createElement('div', 'comet-agentbar-message-body');
-		const card = createElement('article', 'comet-agentbar-article-card');
-		const header = createElement('div', 'comet-agentbar-article-card-header');
-		const source = createElement('span', 'comet-agentbar-article-source');
+		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-article');
+		const body = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message-body');
+		const card = $<HTMLElementTagNameMap['article']>('article.comet-agentbar-article-card');
+		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-article-card-header');
+		const source = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-article-source');
 		source.textContent = message.sourceLabel;
-		const downloadButton = createElement(
-			'button',
-			'comet-agentbar-article-download-btn comet-btn-base comet-btn-secondary comet-btn-sm',
-		);
+		const downloadButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-article-download-btn.comet-btn-base.comet-btn-secondary.comet-btn-sm');
 		downloadButton.type = 'button';
 		downloadButton.append(
 			createLxIcon(lxIconSemanticMap.articleCard.download),
@@ -82,13 +63,13 @@ export class ChatListRenderer {
 		});
 		header.append(source, downloadButton);
 
-		const title = createElement('h3', 'comet-agentbar-article-title');
+		const title = $<HTMLElementTagNameMap['h3']>('h3.comet-agentbar-article-title');
 		title.textContent = message.article.title;
 		title.addEventListener('click', () => {
 			void this.options.onOpenArticleDetails(message.article);
 		});
 
-		const meta = createElement('p', 'comet-agentbar-article-meta');
+		const meta = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-article-meta');
 		meta.textContent = [
 			message.article.journalTitle,
 			message.article.publishedAt,
@@ -104,23 +85,17 @@ export class ChatListRenderer {
 	private renderAssistantMessage(
 		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
 	) {
-		const item = createElement(
-			'div',
-			'comet-agentbar-message comet-agentbar-message-assistant',
-		);
-		const body = createElement('div', 'comet-agentbar-message-body');
-		const header = createElement('div', 'comet-agentbar-result-header');
+		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-assistant');
+		const body = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message-body');
+		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-result-header');
 		const strong = document.createElement('strong');
 		strong.textContent = localize('assistantSidebarAnswerTitle', "Answer");
-		const pill = createElement(
-			'span',
-			`comet-agentbar-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}`,
-		);
+		const pill = $<HTMLElementTagNameMap['span']>('span', { class: `comet-agentbar-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}` });
 		pill.textContent = message.result.rerankApplied
 			? localize('assistantSidebarRerankOn', "Rerank on")
 			: localize('assistantSidebarRerankOff', "Rerank fallback");
 		header.append(strong, pill);
-		const answer = createElement('p', 'comet-agentbar-answer');
+		const answer = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-answer');
 		answer.textContent = message.content;
 		body.append(header, answer);
 
@@ -128,7 +103,7 @@ export class ChatListRenderer {
 			body.append(this.renderEvidence(message));
 		}
 
-		const patchProposal = this.renderPatchProposal(message);
+const patchProposal = this.renderPatchProposal(message);
 		if (patchProposal) {
 			body.append(patchProposal);
 		}
@@ -140,24 +115,24 @@ export class ChatListRenderer {
 	private renderEvidence(
 		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
 	) {
-		const evidence = createElement('div', 'comet-agentbar-evidence');
+		const evidence = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-evidence');
 		const title = document.createElement('strong');
 		title.textContent = localize('assistantSidebarEvidenceTitle', "Evidence");
-		const list = createElement('ul', 'comet-agentbar-evidence-list');
+		const list = $<HTMLElementTagNameMap['ul']>('ul.comet-agentbar-evidence-list');
 		for (const evidenceItem of message.result.evidence) {
-			const li = createElement('li', 'comet-agentbar-evidence-item');
-			const titleNode = createElement('strong', 'comet-agentbar-evidence-title');
+			const li = $<HTMLElementTagNameMap['li']>('li.comet-agentbar-evidence-item');
+			const titleNode = $<HTMLElementTagNameMap['strong']>('strong.comet-agentbar-evidence-title');
 			titleNode.textContent = localize(
 				'agentbarEvidenceRankTitle',
 				"[{0}] {1}",
 				evidenceItem.rank,
 				evidenceItem.title,
 			);
-			const meta = createElement('p', 'comet-agentbar-evidence-meta');
+			const meta = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-evidence-meta');
 			meta.textContent = [evidenceItem.journalTitle, evidenceItem.publishedAt]
 				.filter(Boolean)
 				.join(' | ');
-			const text = createElement('p', 'comet-agentbar-evidence-text');
+			const text = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-evidence-text');
 			text.textContent = evidenceItem.excerpt;
 			li.append(titleNode, meta, text);
 			list.append(li);
@@ -174,18 +149,18 @@ export class ChatListRenderer {
 			return null;
 		}
 
-		const card = createElement('div', 'comet-agentbar-patch-card');
-		const header = createElement('div', 'comet-agentbar-patch-header');
-		const label = createElement('strong', 'comet-agentbar-patch-label');
+const card = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-card');
+		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-header');
+		const label = $<HTMLElementTagNameMap['strong']>('strong.comet-agentbar-patch-label');
 		label.textContent = patchProposal.patch.label;
 		header.append(label);
 
 		if (patchProposal.isApplied) {
-			const status = createElement('span', 'comet-agentbar-mode-pill comet-is-enabled');
+			const status = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-mode-pill.comet-is-enabled');
 			status.textContent = localize('assistantSidebarPatchApplied', "Applied");
 			header.append(status);
 		} else if (patchProposal.requiresCustomExecutor) {
-			const status = createElement('span', 'comet-agentbar-mode-pill comet-is-disabled');
+			const status = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-mode-pill.comet-is-disabled');
 			status.textContent = localize(
 				'assistantSidebarPatchRequiresExecutor',
 				"Custom executor required",
@@ -196,14 +171,14 @@ export class ChatListRenderer {
 		card.append(header);
 
 		if (patchProposal.patch.summary) {
-			const summary = createElement('p', 'comet-agentbar-patch-summary');
+			const summary = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-patch-summary');
 			summary.textContent = patchProposal.patch.summary;
 			card.append(summary);
 		}
 
-		const errorText = patchProposal.validationError || patchProposal.applyError;
+const errorText = patchProposal.validationError || patchProposal.applyError;
 		if (errorText) {
-			const error = createElement('p', 'comet-agentbar-patch-error');
+			const error = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-patch-error');
 			error.textContent = errorText;
 			card.append(error);
 		}
@@ -214,11 +189,8 @@ export class ChatListRenderer {
 			!patchProposal.validationError &&
 			!patchProposal.isApplied
 		) {
-			const footer = createElement('div', 'comet-agentbar-patch-footer');
-			const applyButton = createElement(
-				'button',
-				'comet-agentbar-patch-btn comet-btn-base comet-btn-secondary comet-btn-sm',
-			);
+			const footer = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-footer');
+			const applyButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-patch-btn.comet-btn-base.comet-btn-secondary.comet-btn-sm');
 			applyButton.type = 'button';
 			applyButton.textContent = localize('assistantSidebarPatchApply', "Apply patch");
 			applyButton.addEventListener('click', () => {

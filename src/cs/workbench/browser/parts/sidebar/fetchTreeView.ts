@@ -23,6 +23,7 @@ import {
   type FetchTreeLabels,
   type FetchTreeNode,
 } from 'cs/workbench/browser/parts/sidebar/fetchTreeModel';
+import { $ } from 'cs/base/browser/dom';
 
 export type FetchTreeViewProps = {
   articles: SidebarArticle[];
@@ -43,21 +44,8 @@ const DOWNLOAD_PDF_LABEL = 'Download PDF';
 const VIEW_DETAILS_LABEL = 'View details';
 const DOWNLOADED_PDF_LABEL = 'PDF downloaded';
 const MORE_ACTIONS_LABEL = 'More actions';
-const ARTICLE_TREE_MORE_MENU_DATA = 'sidebar-article-tree-more';
-const hoverService = getHoverService();
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-function formatPublishedDate(
+const ARTICLE_TREE_MORE_MENU_DATA = 'comet-sidebar-article-tree-more';
+const hoverService = getHoverService();function formatPublishedDate(
   value: string | null,
   locale: Locale,
   fallback: string,
@@ -67,7 +55,7 @@ function formatPublishedDate(
     return fallback;
   }
 
-  const dateOnlyMatched = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+const dateOnlyMatched = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnlyMatched) {
     const year = Number.parseInt(dateOnlyMatched[1], 10);
     const month = Number.parseInt(dateOnlyMatched[2], 10);
@@ -79,7 +67,7 @@ function formatPublishedDate(
     }
   }
 
-  const parsed = new Date(normalized);
+const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
     return normalized;
   }
@@ -207,34 +195,28 @@ export class FetchTreeView extends Disposable {
       return this.renderArticleRow(node, context);
     }
 
-    return createElement('div', 'comet-fetch-tree-row');
+    return $<HTMLElementTagNameMap['div']>('div.comet-fetch-tree-row');
   }
 
   private renderFolderRow(
     node: Extract<FetchTreeNode, { kind: 'folder' }>,
     context: SimpleTreeRenderContext,
   ) {
-    const row = createElement(
-      'div',
-      'comet-fetch-tree-row comet-fetch-tree-folder-row',
-    );
+    const row = $<HTMLElementTagNameMap['div']>('div.comet-fetch-tree-row.comet-fetch-tree-folder-row');
     row.style.paddingLeft = `${context.depth * 16}px`;
 
-    const button = createElement(
-      'button',
-      'comet-fetch-tree-folder-toggle btn-base btn-ghost btn-md',
-    );
+    const button = $<HTMLElementTagNameMap['button']>('button.comet-fetch-tree-folder-toggle.comet-btn-base.comet-btn-ghost.comet-btn-md');
     button.type = 'button';
     button.setAttribute('aria-expanded', String(context.isExpanded));
     button.addEventListener('click', () => {
       context.toggleExpanded();
     });
 
-    const label = createElement('span', 'comet-fetch-tree-folder-label');
+    const label = $<HTMLElementTagNameMap['span']>('span.comet-fetch-tree-folder-label');
     label.textContent = node.name;
     hoverService.applyHover(label, node.name);
 
-    const count = createElement('span', 'comet-fetch-tree-folder-count');
+    const count = $<HTMLElementTagNameMap['span']>('span.comet-fetch-tree-folder-count');
     count.textContent = String(node.articles.length);
 
     button.append(
@@ -273,15 +255,12 @@ export class FetchTreeView extends Disposable {
       getArticleSelectionKey(article),
     );
 
-    const row = createElement(
-      'div',
-      [
+    const row = $<HTMLElementTagNameMap['div']>('div', { class: [
         'comet-fetch-tree-row',
         'comet-fetch-tree-article-row',
-        this.props.isSelectionModeEnabled ? 'is-selection-mode' : '',
-        isSelected ? 'is-selected' : '',
-      ].filter(Boolean).join(' '),
-    );
+        this.props.isSelectionModeEnabled ? 'comet-is-selection-mode' : '',
+        isSelected ? 'comet-is-selected' : '',
+      ].filter(Boolean).join(' ') });
     row.style.paddingLeft = `${context.depth * 16}px`;
     row.addEventListener('dblclick', () => {
       this.openArticleDetails(article);
@@ -292,12 +271,12 @@ export class FetchTreeView extends Disposable {
       }
     });
 
-    const main = createElement('div', 'comet-fetch-tree-article-main');
-    const titleElement = createElement('span', 'comet-fetch-tree-article-title');
+    const main = $<HTMLElementTagNameMap['div']>('div.comet-fetch-tree-article-main');
+    const titleElement = $<HTMLElementTagNameMap['span']>('span.comet-fetch-tree-article-title');
     titleElement.textContent = title;
     hoverService.applyHover(titleElement, title);
 
-    const metaElement = createElement('span', 'comet-fetch-tree-article-meta');
+    const metaElement = $<HTMLElementTagNameMap['span']>('span.comet-fetch-tree-article-meta');
     metaElement.textContent = metaText;
     hoverService.applyHover(metaElement, metaText);
     main.append(titleElement, metaElement);
@@ -404,7 +383,7 @@ export class FetchTreeView extends Disposable {
         title: hasDownloaded ? DOWNLOADED_PDF_LABEL : DOWNLOAD_PDF_LABEL,
         buttonClassName: [
           'comet-fetch-pane-article-card-icon-btn',
-          hasDownloaded ? 'is-downloaded' : '',
+          hasDownloaded ? 'comet-is-downloaded' : '',
         ].filter(Boolean).join(' '),
         hover: {
           content: hasDownloaded ? DOWNLOADED_PDF_LABEL : DOWNLOAD_PDF_LABEL,

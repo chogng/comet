@@ -148,7 +148,7 @@ export class EditorPartView {
   private readonly groupView: EditorGroupView;
 
   constructor(props: EditorPartProps) {
-    this.element.className = 'panel editor-panel';
+    this.element.className = 'comet-panel comet-editor-panel';
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, this.element);
     this.groupView = new EditorGroupView(props);
     this.element.append(this.groupView.getElement());

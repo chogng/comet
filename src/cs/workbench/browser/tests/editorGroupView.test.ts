@@ -459,17 +459,17 @@ test('editor pane registry resolves pane identity and content classes from descr
   const draftPane = resolveEditorPane(draftTab, createResolverContext());
   assert.equal(draftPane.paneId, 'draft');
   assert.equal(draftPane.paneKey, 'draft:draft-a');
-  assert.deepEqual(draftPane.contentClassNames, ['is-mode-draft']);
+  assert.deepEqual(draftPane.contentClassNames, ['comet-is-mode-draft']);
 
   const browserPane = resolveEditorPane(browserTab, createResolverContext());
   assert.equal(browserPane.paneId, 'browser');
   assert.equal(browserPane.paneKey, 'browser');
-  assert.deepEqual(browserPane.contentClassNames, ['is-mode-browser']);
+  assert.deepEqual(browserPane.contentClassNames, ['comet-is-mode-browser']);
 
   const pdfPane = resolveEditorPane(pdfTab, createResolverContext());
   assert.equal(pdfPane.paneId, 'pdf');
   assert.equal(pdfPane.paneKey, 'pdf:pdf-a');
-  assert.deepEqual(pdfPane.contentClassNames, ['is-mode-pdf']);
+  assert.deepEqual(pdfPane.contentClassNames, ['comet-is-mode-pdf']);
 });
 
 test('EditorGroupView reports draft pane view state changes through persistence callbacks', () => {

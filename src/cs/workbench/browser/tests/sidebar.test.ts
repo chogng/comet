@@ -78,8 +78,8 @@ test('sidebar renders without a topbar', () => {
   document.body.append(element);
 
   try {
-    assert.equal(element.querySelector('.sidebar-topbar'), null);
-    assert.equal(element.firstElementChild, element.querySelector('.sidebar-switcher'));
+    assert.equal(element.querySelector('.comet-sidebar-topbar'), null);
+    assert.equal(element.firstElementChild, element.querySelector('.comet-sidebar-switcher'));
   } finally {
     sidebar.dispose();
   }
@@ -106,8 +106,8 @@ test('sidebar renders library and fetch as switcher tabs', () => {
   document.body.append(element);
 
   try {
-    const libraryTab = element.querySelector('.sidebar-library-tab');
-    const fetchTab = element.querySelector('.sidebar-fetch-tab');
+    const libraryTab = element.querySelector('.comet-sidebar-library-tab');
+    const fetchTab = element.querySelector('.comet-sidebar-fetch-tab');
     assert(libraryTab instanceof HTMLButtonElement);
     assert(fetchTab instanceof HTMLButtonElement);
     assert.equal(libraryTab.textContent, 'Library');
@@ -116,9 +116,9 @@ test('sidebar renders library and fetch as switcher tabs', () => {
     assert(fetchTab.querySelector('.lx-icon-customize') instanceof HTMLElement);
     assert.equal(libraryTab.getAttribute('aria-selected'), 'true');
     assert.equal(fetchTab.getAttribute('aria-selected'), 'false');
-    assert(element.querySelector('.sidebar-library-panel') instanceof HTMLElement);
-    assert.equal(element.querySelector('.sidebar-fetch-panel'), null);
-    assert.equal(element.querySelector('.sidebar-tab-actions .comet-fetch-pane-actionbar'), null);
+    assert(element.querySelector('.comet-sidebar-library-panel') instanceof HTMLElement);
+    assert.equal(element.querySelector('.comet-sidebar-fetch-panel'), null);
+    assert.equal(element.querySelector('.comet-sidebar-tab-actions .comet-fetch-pane-actionbar'), null);
 
     fetchTab.click();
 
@@ -126,9 +126,9 @@ test('sidebar renders library and fetch as switcher tabs', () => {
     assert.equal(fetchTab.getAttribute('aria-selected'), 'true');
     assert(libraryTab.querySelector('.lx-icon-projects') instanceof HTMLElement);
     assert(fetchTab.querySelector('.lx-icon-customize-filled') instanceof HTMLElement);
-    assert(element.querySelector('.sidebar-fetch-panel') instanceof HTMLElement);
-    assert.equal(element.querySelector('.sidebar-library-panel'), null);
-    assert.equal(element.querySelector('.sidebar-tab-actions .comet-fetch-pane-actionbar'), null);
+    assert(element.querySelector('.comet-sidebar-fetch-panel') instanceof HTMLElement);
+    assert.equal(element.querySelector('.comet-sidebar-library-panel'), null);
+    assert.equal(element.querySelector('.comet-sidebar-tab-actions .comet-fetch-pane-actionbar'), null);
     assert(
       element.querySelector('.comet-fetch-tree-folder-row .comet-fetch-pane-actionbar') instanceof HTMLElement,
     );
@@ -150,7 +150,7 @@ test('sidebar renders a footer at the bottom and mounts footer content', () => {
   document.body.append(element);
 
   try {
-    const footer = element.querySelector('.sidebar-footer');
+    const footer = element.querySelector('.comet-sidebar-footer');
     assert(footer instanceof HTMLElement);
     assert.equal(element.lastElementChild, footer);
     assert.equal(
@@ -185,7 +185,7 @@ test('sidebar footer settings action dispatches the provided handler', () => {
 
   try {
     const settingsButton = element.querySelector(
-      '.sidebar-footer .comet-sidebar-footer-settings-btn',
+      '.comet-sidebar-footer .comet-sidebar-footer-settings-btn',
     );
     assert(settingsButton instanceof HTMLButtonElement);
     assert.equal(settingsButton.getAttribute('aria-label'), 'Settings');
@@ -211,7 +211,7 @@ test('sidebar footer renders more action to the left of settings', () => {
 
   try {
     const actions = Array.from(
-      element.querySelectorAll('.sidebar-footer .actionbar-action'),
+      element.querySelectorAll('.comet-sidebar-footer .comet-actionbar-action'),
     );
     assert.equal(actions.length >= 2, true);
     assert.equal(actions[0]?.classList.contains('comet-sidebar-footer-more-btn'), true);
@@ -248,7 +248,7 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
 
   try {
     const moreButton = element.querySelector(
-      '.sidebar-footer .comet-sidebar-footer-more-btn',
+      '.comet-sidebar-footer .comet-sidebar-footer-more-btn',
     );
     assert(moreButton instanceof HTMLButtonElement);
     assert.equal(moreButton.getAttribute('aria-label'), 'More');
@@ -257,10 +257,10 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
     await delay(0);
 
     const menu = document.body.querySelector(
-      '.actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
     );
     assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'sidebar-footer-more');
+    assert.equal(menu.getAttribute('data-menu'), 'comet-sidebar-footer-more');
     assert.equal(moreButton.getAttribute('aria-expanded'), 'true');
 
     const layoutItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
@@ -271,7 +271,7 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
     layoutItem.click();
     await delay(0);
     const submenu = document.body.querySelector(
-      '.actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
     );
     assert(submenu instanceof HTMLElement);
     const submenuLabels = Array.from(
@@ -290,7 +290,7 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
     moreButton.click();
     await delay(0);
     const reopenedMenu = document.body.querySelector(
-      '.actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
     );
     assert(reopenedMenu instanceof HTMLElement);
     const reopenedLayoutItem = Array.from(
@@ -300,7 +300,7 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
     reopenedLayoutItem.click();
     await delay(0);
     const reopenedSubmenu = document.body.querySelector(
-      '.actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
     );
     assert(reopenedSubmenu instanceof HTMLElement);
     const flowItem = Array.from(
@@ -313,7 +313,7 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
 
     assert.equal(
       document.body.querySelector(
-        '.actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+        '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
       ),
       null,
     );
@@ -339,7 +339,7 @@ test('sidebar footer layout submenu marks the active layout', async () => {
 
   try {
     const moreButton = element.querySelector(
-      '.sidebar-footer .comet-sidebar-footer-more-btn',
+      '.comet-sidebar-footer .comet-sidebar-footer-more-btn',
     );
     assert(moreButton instanceof HTMLButtonElement);
 
@@ -347,7 +347,7 @@ test('sidebar footer layout submenu marks the active layout', async () => {
     await delay(0);
 
     const menu = document.body.querySelector(
-      '.actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
     );
     assert(menu instanceof HTMLElement);
     const layoutItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
@@ -358,7 +358,7 @@ test('sidebar footer layout submenu marks the active layout', async () => {
     await delay(0);
 
     const submenu = document.body.querySelector(
-      '.actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
     );
     assert(submenu instanceof HTMLElement);
     const agentItem = Array.from(
@@ -400,12 +400,12 @@ test('sidebar footer settings action keeps active styling when settings is activ
 
   try {
     const settingsButton = element.querySelector(
-      '.sidebar-footer .comet-sidebar-footer-settings-btn',
+      '.comet-sidebar-footer .comet-sidebar-footer-settings-btn',
     );
     assert(settingsButton instanceof HTMLButtonElement);
-    const settingsItem = settingsButton.closest('.actionbar-item');
+    const settingsItem = settingsButton.closest('.comet-actionbar-item');
     assert(settingsItem instanceof HTMLElement);
-    assert.equal(settingsItem.classList.contains('is-active'), true);
+    assert.equal(settingsItem.classList.contains('comet-is-active'), true);
   } finally {
     sidebar.dispose();
     footerActionsView.dispose();

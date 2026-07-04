@@ -1,51 +1,51 @@
-.inputbox {
-  --inputbox-height: 26px;
-  --inputbox-border-radius: 6px;
-  --inputbox-border: 1px solid transparent;
-  --inputbox-background: transparent;
-  --inputbox-background-hover: #e6e6e6;
-  --inputbox-foreground: var(--vscode-input-foreground, #1a2530);
-  --inputbox-placeholder-foreground: var(--vscode-input-placeholderForeground, #94a3b8);
-  --inputbox-padding-y: 4px;
-  --inputbox-padding-x: 8px;
-  --inputbox-font-size: 12px;
-  --inputbox-text-align: left;
+.comet-inputbox {
+  --comet-inputbox-height: 26px;
+  --comet-inputbox-border-radius: 6px;
+  --comet-inputbox-border: 1px solid transparent;
+  --comet-inputbox-background: transparent;
+  --comet-inputbox-background-hover: #e6e6e6;
+  --comet-inputbox-foreground: var(--vscode-input-foreground, #1a2530);
+  --comet-inputbox-placeholder-foreground: var(--vscode-input-placeholderForeground, #94a3b8);
+  --comet-inputbox-padding-y: 4px;
+  --comet-inputbox-padding-x: 8px;
+  --comet-inputbox-font-size: 12px;
+  --comet-inputbox-text-align: left;
   position: relative;
   width: 100%;
-  height: var(--inputbox-height);
-  border-radius: var(--inputbox-border-radius);
-  border: var(--inputbox-border);
-  background: var(--inputbox-background);
+  height: var(--comet-inputbox-height);
+  border-radius: var(--comet-inputbox-border-radius);
+  border: var(--comet-inputbox-border);
+  background: var(--comet-inputbox-background);
   box-sizing: border-box;
   transition: background-color 180ms ease-out;
 }
 
-.inputbox:hover {
-  background: var(--inputbox-background-hover);
+.comet-inputbox:hover {
+  background: var(--comet-inputbox-background-hover);
 }
 
-.inputbox > .ibwrapper {
+.comet-inputbox > .comet-inputbox-wrapper {
   display: flex;
   align-items: center;
   width: 100%;
   height: 100%;
 }
 
-.inputbox > .ibwrapper > .input {
+.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
   width: 100%;
   height: 100%;
-  padding: var(--inputbox-padding-y) var(--inputbox-padding-x);
+  padding: var(--comet-inputbox-padding-y) var(--comet-inputbox-padding-x);
   border: 0;
   background: transparent;
-  color: var(--inputbox-foreground);
+  color: var(--comet-inputbox-foreground);
   font: inherit;
   line-height: normal;
-  font-size: var(--inputbox-font-size);
-  text-align: var(--inputbox-text-align);
+  font-size: var(--comet-inputbox-font-size);
+  text-align: var(--comet-inputbox-text-align);
   outline: none;
   box-sizing: border-box;
 }
 
-.inputbox > .ibwrapper > .input::placeholder {
-  color: var(--inputbox-placeholder-foreground);
+.comet-inputbox > .comet-inputbox-wrapper > .comet-input::placeholder {
+  color: var(--comet-inputbox-placeholder-foreground);
 }

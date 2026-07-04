@@ -42,7 +42,7 @@
   gap: 6px;
 }
 
-.comet-date-range-trigger.is-icon .comet-date-range-trigger-content {
+.comet-date-range-trigger.comet-is-icon .comet-date-range-trigger-content {
   gap: 0;
 }
 
@@ -63,7 +63,7 @@
   outline-offset: 1px;
 }
 
-.comet-date-range-trigger.is-active {
+.comet-date-range-trigger.comet-is-active {
   background: var(--comet-date-range-trigger-bg-active);
   color: var(--comet-date-range-trigger-color-active);
 }
@@ -131,7 +131,7 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-.comet-date-range-slot.is-active {
+.comet-date-range-slot.comet-is-active {
   border-color: #0a5fbf;
   background: linear-gradient(180deg, #f4f9ff 0%, #e8f2ff 100%);
   box-shadow:
@@ -154,7 +154,7 @@
   color: #64748b;
 }
 
-.comet-date-range-slot.is-active .comet-date-range-slot-index {
+.comet-date-range-slot.comet-is-active .comet-date-range-slot-index {
   background: rgba(10, 95, 191, 0.12);
   color: #0a5fbf;
 }
@@ -263,44 +263,44 @@
   box-shadow: 0 0 0 3px rgba(10, 95, 191, 0.16);
 }
 
-.comet-date-range-day.is-outside {
+.comet-date-range-day.comet-is-outside {
   color: #9baabd;
 }
 
-.comet-date-range-day.is-in-range {
+.comet-date-range-day.comet-is-in-range {
   background: #f1f7ff;
   color: #0b64c7;
 }
 
-.comet-date-range-day.is-selected {
+.comet-date-range-day.comet-is-selected {
   background: #e7f0fc;
   color: #0b64c7;
 }
 
-.comet-date-range-day.is-start,
-.comet-date-range-day.is-end {
+.comet-date-range-day.comet-is-start,
+.comet-date-range-day.comet-is-end {
   background: linear-gradient(180deg, #1272dd 0%, #0a5fbf 100%);
   color: #ffffff;
   box-shadow: 0 6px 14px rgba(10, 95, 191, 0.22);
 }
 
-.comet-date-range-day.is-active-value {
+.comet-date-range-day.comet-is-active-value {
   box-shadow: inset 0 0 0 2px rgba(10, 95, 191, 0.28);
 }
 
-.comet-date-range-day.is-today {
+.comet-date-range-day.comet-is-today {
   font-weight: 700;
   color: #0f4f99;
 }
 
-.comet-date-range-day.is-disabled,
+.comet-date-range-day.comet-is-disabled,
 .comet-date-range-day:disabled {
   color: #94a3b8;
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.comet-date-range-day.is-disabled:hover,
+.comet-date-range-day.comet-is-disabled:hover,
 .comet-date-range-day:disabled:hover {
   background: transparent;
 }

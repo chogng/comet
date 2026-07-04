@@ -10,6 +10,7 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { localize } from 'cs/nls';
 import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/chatListRenderer';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
+import { $ } from 'cs/base/browser/dom';
 
 export type ChatListWidgetOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
@@ -17,22 +18,11 @@ export type ChatListWidgetOptions = {
 	readonly onOpenArticleDetails: (article: Article) => void | Promise<void>;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
-
 export class ChatListWidget {
-	private readonly element = createElement('div', 'comet-agentbar-thread-widget');
-	private readonly contentElement = createElement('div', 'comet-agentbar-thread');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-thread-widget');
+	private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-thread');
 	private readonly scrollableElement: DomScrollableElement;
-	private readonly scrollDownButton = createElement('button', 'comet-agentbar-thread-scroll-down');
+	private readonly scrollDownButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-thread-scroll-down');
 	private readonly renderer: ChatListRenderer;
 	private readonly disposables = new DisposableStore();
 	private messages: readonly AssistantChatMessage[] = [];

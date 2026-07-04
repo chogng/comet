@@ -10,6 +10,7 @@ import {
   subscribePdfDownloadStatus,
 } from 'cs/workbench/browser/pdfDownloadStatus';
 import type { SidebarArticle } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
+import { $ } from 'cs/base/browser/dom';
 
 type ArticleCardLabels = {
   untitled: string;
@@ -31,26 +32,13 @@ const DOWNLOAD_PDF_LABEL = 'Download PDF';
 const VIEW_DETAILS_LABEL = 'View details';
 const DOWNLOADED_PDF_LABEL = 'PDF downloaded';
 const MORE_ACTIONS_LABEL = 'More actions';
-const ARTICLE_CARD_MORE_MENU_DATA = 'sidebar-article-card-more';
+const ARTICLE_CARD_MORE_MENU_DATA = 'comet-sidebar-article-card-more';
 const ARCHIVE_BADGE_TITLES = {
   html: 'Archived HTML available',
   txt: 'Extracted text available',
   pdf: 'Archived PDF available',
 } as const;
-const hoverService = getHoverService();
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-function formatPublishedDate(
+const hoverService = getHoverService();function formatPublishedDate(
   value: string | null,
   locale: Locale,
   fallback: string,
@@ -60,7 +48,7 @@ function formatPublishedDate(
     return fallback;
   }
 
-  const dateOnlyMatched = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+const dateOnlyMatched = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnlyMatched) {
     const year = Number.parseInt(dateOnlyMatched[1], 10);
     const month = Number.parseInt(dateOnlyMatched[2], 10);
@@ -72,7 +60,7 @@ function formatPublishedDate(
     }
   }
 
-  const parsed = new Date(normalized);
+const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
     return normalized;
   }
@@ -110,23 +98,11 @@ function addDisposableListener(
 
 export class ArticleCard extends Disposable {
   private props: ArticleCardProps;
-  private readonly element = createElement('li');
-  private readonly mainElement = createElement(
-    'div',
-    'comet-fetch-pane-article-card-main',
-  );
-  private readonly titleElement = createElement(
-    'h3',
-    'comet-fetch-pane-article-card-title',
-  );
-  private readonly metaElement = createElement(
-    'span',
-    'comet-fetch-pane-article-card-meta',
-  );
-  private readonly archiveBadgesElement = createElement(
-    'div',
-    'comet-fetch-pane-article-card-archive-badges',
-  );
+  private readonly element = $<HTMLElementTagNameMap['li']>('li');
+  private readonly mainElement = $<HTMLElementTagNameMap['div']>('div.comet-fetch-pane-article-card-main');
+  private readonly titleElement = $<HTMLElementTagNameMap['h3']>('h3.comet-fetch-pane-article-card-title');
+  private readonly metaElement = $<HTMLElementTagNameMap['span']>('span.comet-fetch-pane-article-card-meta');
+  private readonly archiveBadgesElement = $<HTMLElementTagNameMap['div']>('div.comet-fetch-pane-article-card-archive-badges');
   private readonly toolbarView = createActionBarView({
     className: 'comet-fetch-pane-article-card-toolbar-actions',
     ariaRole: 'group',
@@ -177,7 +153,7 @@ export class ArticleCard extends Disposable {
       return;
     }
 
-    const { article, locale, labels, isSelectionModeEnabled, isSelected } =
+const { article, locale, labels, isSelectionModeEnabled, isSelected } =
       this.props;
     const title = article.title || labels.untitled;
     const metaText = createMetaText(article, locale, labels.unknown);
@@ -187,8 +163,8 @@ export class ArticleCard extends Disposable {
 
     this.element.className = [
       'comet-fetch-pane-article-card',
-      isSelectionModeEnabled ? 'is-selection-mode' : '',
-      isSelected ? 'is-selected' : '',
+      isSelectionModeEnabled ? 'comet-is-selection-mode' : '',
+      isSelected ? 'comet-is-selected' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -235,7 +211,7 @@ export class ArticleCard extends Disposable {
           },
           buttonClassName: [
             'comet-fetch-pane-article-card-icon-btn',
-            hasDownloaded ? 'is-downloaded' : '',
+            hasDownloaded ? 'comet-is-downloaded' : '',
           ]
             .filter(Boolean)
             .join(' '),
@@ -307,10 +283,7 @@ export class ArticleCard extends Disposable {
 
     this.archiveBadgesElement.replaceChildren(
       ...badges.map((badge) => {
-        const badgeElement = createElement(
-          'span',
-          'comet-fetch-pane-article-card-archive-badge',
-        );
+        const badgeElement = $<HTMLElementTagNameMap['span']>('span.comet-fetch-pane-article-card-archive-badge');
         badgeElement.textContent = badge.label;
         badgeElement.title = badge.title;
         return badgeElement;
@@ -332,7 +305,7 @@ export class ArticleCard extends Disposable {
       return;
     }
 
-    const keyboardEvent = event as KeyboardEvent;
+const keyboardEvent = event as KeyboardEvent;
     if (keyboardEvent.key !== 'Enter' && keyboardEvent.key !== ' ') {
       return;
     }

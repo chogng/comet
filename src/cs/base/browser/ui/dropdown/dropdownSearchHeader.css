@@ -1,6 +1,6 @@
-.comet-dropdown-menu-search-header .inputbox.comet-dropdown-menu-search-input {
-  --inputbox-height: 26px;
-  --inputbox-border-radius: 7px;
-  --inputbox-background-hover: transparent;
-  --inputbox-foreground: var(--vscode-agentBar-inputForeground, #1f2d3a);
+.comet-dropdown-menu-search-header .comet-inputbox.comet-dropdown-menu-search-input {
+  --comet-inputbox-height: 26px;
+  --comet-inputbox-border-radius: 7px;
+  --comet-inputbox-background-hover: transparent;
+  --comet-inputbox-foreground: var(--vscode-agentBar-inputForeground, #1f2d3a);
 }

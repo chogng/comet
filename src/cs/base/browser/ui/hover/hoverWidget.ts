@@ -6,6 +6,7 @@ import {
   toDisposable,
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
+import { $ } from 'cs/base/browser/dom';
 
 export type HoverRenderable = string | Node | (() => string | Node);
 
@@ -205,20 +206,7 @@ class HoverInteractionPolicy {
   };
 }
 
-const hoverInteractionPolicy = new HoverInteractionPolicy();
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-function isHoverRenderableEmpty(content: HoverRenderable | undefined) {
+const hoverInteractionPolicy = new HoverInteractionPolicy();function isHoverRenderableEmpty(content: HoverRenderable | undefined) {
   if (typeof content === 'string') {
     return content.trim().length === 0;
   }
@@ -304,12 +292,9 @@ export function normalizeHoverInput(input: HoverInput): HoverOptions | null {
 }
 
 class HoverWidget {
-  private readonly element = createElement('div', 'comet-hover-overlay');
-  private readonly pointer = createElement(
-    'div',
-    'comet-hover-pointer',
-  );
-  private readonly card = createElement('div', 'comet-hover-card');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-hover-overlay');
+  private readonly pointer = $<HTMLElementTagNameMap['div']>('div.comet-hover-pointer');
+  private readonly card = $<HTMLElementTagNameMap['div']>('div.comet-hover-card');
   private readonly domDisposables = new DisposableStore();
   private readonly mountDisposables = new DisposableStore();
   private readonly renderDisposables = new DisposableStore();
@@ -399,8 +384,8 @@ class HoverWidget {
   private render(options: HoverOptions) {
     this.renderDisposables.clear();
     this.card.className = 'comet-hover-card';
-    this.card.classList.toggle('compact', Boolean(options.compact));
-    this.card.classList.remove('right-aligned');
+    this.card.classList.toggle('comet-is-compact', Boolean(options.compact));
+    this.card.classList.remove('comet-is-right-aligned');
     if (options.className) {
       this.card.classList.add(...options.className.split(/\s+/).filter(Boolean));
     }
@@ -410,20 +395,17 @@ class HoverWidget {
       (options.actions?.length ?? 0) > 0 ? 'dialog' : 'tooltip',
     );
 
-    const contentRow = createElement('div', 'comet-hover-row hover-row markdown-hover');
-    const contents = createElement(
-      'div',
-      `comet-hover-contents hover-contents${typeof options.content === 'string' ? '' : ' is-node'}`,
-    );
+    const contentRow = $<HTMLElementTagNameMap['div']>('div.comet-hover-row.comet-hover-markdown');
+    const contents = $<HTMLElementTagNameMap['div']>('div', { class: `comet-hover-contents${typeof options.content === 'string' ? '' : ' comet-is-node'}` });
 
     if (!isHoverRenderableEmpty(options.content)) {
-      const content = createElement('div', 'comet-hover-content');
+      const content = $<HTMLElementTagNameMap['div']>('div.comet-hover-content');
       content.append(cloneHoverRenderable(options.content!));
       contents.append(content);
     }
 
     if (options.subtitle?.trim()) {
-      const subtitle = createElement('div', 'comet-hover-subtitle');
+      const subtitle = $<HTMLElementTagNameMap['div']>('div.comet-hover-subtitle');
       subtitle.textContent = options.subtitle;
       contents.append(subtitle);
     }
@@ -431,27 +413,24 @@ class HoverWidget {
     contentRow.append(contents);
     const nodes: Node[] = [contentRow];
     if ((options.actions?.length ?? 0) > 0) {
-      const statusBarElement = createElement('div', 'comet-hover-row hover-row status-bar');
-      const actionsElement = createElement('div', 'comet-hover-actions actions');
+      const statusBarElement = $<HTMLElementTagNameMap['div']>('div.comet-hover-row.comet-hover-status-bar');
+      const actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-hover-actions');
       for (const action of options.actions ?? []) {
-        const actionContainer = createElement(
-          'div',
-          'comet-hover-action-container action-container',
-        );
+        const actionContainer = $<HTMLElementTagNameMap['div']>('div.comet-hover-action-container');
         actionContainer.tabIndex = action.disabled ? -1 : 0;
         actionContainer.setAttribute(
           'aria-disabled',
           action.disabled ? 'true' : 'false',
         );
         if (action.disabled) {
-          actionContainer.classList.add('disabled');
+          actionContainer.classList.add('comet-is-disabled');
         }
 
-        const button = createElement('button', 'comet-hover-action action') as HTMLButtonElement;
+const button = $<HTMLElementTagNameMap['button']>('button.comet-hover-action') as HTMLButtonElement;
         button.type = 'button';
         button.disabled = Boolean(action.disabled);
         if (action.icon && !button.disabled) {
-          const icon = createElement('span', 'comet-hover-action-icon icon');
+          const icon = $<HTMLElementTagNameMap['span']>('span.comet-hover-action-icon');
           icon.append(cloneHoverRenderable(action.icon));
           button.append(icon);
         }
@@ -498,9 +477,9 @@ class HoverWidget {
     const viewportHeight =
       window.innerHeight || document.documentElement.clientHeight || 0;
 
-    this.element.classList.toggle('has-pointer', options.showPointer !== false);
-    this.element.classList.remove('is-above', 'is-below');
-    this.pointer.classList.remove('top', 'bottom');
+    this.element.classList.toggle('comet-has-pointer', options.showPointer !== false);
+    this.element.classList.remove('comet-is-above', 'comet-is-below');
+    this.pointer.classList.remove('comet-is-top', 'comet-is-bottom');
     this.element.style.left = `${VIEWPORT_MARGIN_PX}px`;
     this.element.style.top = `${VIEWPORT_MARGIN_PX}px`;
 
@@ -519,8 +498,8 @@ class HoverWidget {
             ? 'below'
             : 'above';
 
-    this.element.classList.add(placement === 'above' ? 'is-above' : 'is-below');
-    this.pointer.classList.add(placement === 'above' ? 'bottom' : 'top');
+    this.element.classList.add(placement === 'above' ? 'comet-is-above' : 'comet-is-below');
+    this.pointer.classList.add(placement === 'above' ? 'comet-is-bottom' : 'comet-is-top');
 
     const nextTop =
       placement === 'above'
@@ -546,9 +525,9 @@ class HoverWidget {
     );
 
     this.element.style.left = `${Math.round(left)}px`;
-    this.element.style.top = `${Math.round(top)}px`;
+    this.element.style.top = `${Math.round(comet-is-top)}px`;
     this.pointer.style.left = `${Math.round(pointerLeft - 3)}px`;
-    this.card.classList.toggle('right-aligned', isRightAligned);
+    this.card.classList.toggle('comet-is-right-aligned', isRightAligned);
     this.element.style.setProperty(
       '--comet-hover-pointer-left',
       `${Math.round(pointerLeft)}px`,
@@ -727,7 +706,7 @@ class HoverController extends Disposable implements HoverHandle {
       return;
     }
 
-    const remainingCooldown = Math.max(
+const remainingCooldown = Math.max(
       0,
       HOVER_REENTRY_COOLDOWN_MS - (Date.now() - lastHoverHideAt),
     );

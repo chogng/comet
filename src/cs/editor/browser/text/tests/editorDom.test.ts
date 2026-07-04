@@ -100,7 +100,7 @@ function getPlaceholderNode(editor: InstanceType<typeof ProseMirrorEditor>) {
 }
 
 function getScrollableRoot(editor: InstanceType<typeof ProseMirrorEditor>) {
-  const element = editor.getElement().querySelector('.scrollable-element-root');
+  const element = editor.getElement().querySelector('.comet-scrollable-element-root');
   assert(element instanceof HTMLElement, 'Scrollable root was not rendered.');
   return element;
 }
@@ -337,7 +337,7 @@ test('DraftEditorToolbar shows preset font labels for normalized browser font-fa
   try {
     const fontFamilyPrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === 'Times New Roman');
     assert(fontFamilyPrimary instanceof HTMLButtonElement);
@@ -393,7 +393,7 @@ test('DraftEditorToolbar shows Chinese named font-size presets for matching px v
   try {
     const fontSizePrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === '小四');
     assert(fontSizePrimary instanceof HTMLButtonElement);
@@ -449,7 +449,7 @@ test('DraftEditorToolbar orders Chinese named font-size presets from large to sm
   try {
     const fontSizePrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === '五号');
     assert(fontSizePrimary instanceof HTMLButtonElement);
@@ -568,7 +568,7 @@ test('ProseMirrorEditor syncs default body style from editorDraftStyleService', 
 
       const fontSizePrimary = Array.from(
         editor.getToolbarElement().querySelectorAll<HTMLButtonElement>(
-          '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
+          '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text',
         ),
       ).find(
         (candidate) => candidate.getAttribute('aria-label') === '小四',
@@ -626,7 +626,7 @@ test('DraftEditorToolbar uses DengXian as the implicit default font and hides De
   try {
     const fontFamilyPrimary = Array.from(
       toolbar.getElement().querySelectorAll<HTMLButtonElement>(
-        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
+        '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text',
       ),
     ).find((candidate) => candidate.getAttribute('aria-label') === '等线');
     assert(fontFamilyPrimary instanceof HTMLButtonElement);
@@ -946,7 +946,7 @@ test('DraftEditorToolbar renders draft-specific toolbar content classes', () => 
       '.comet-editor-draft-toolbar-split .comet-editor-draft-toolbar-split-dropdown.comet-actionbar-action',
     );
     const fontSizePrimary = toolbarElement.querySelector(
-      '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text',
+      '.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text',
     );
     const splitDropdownLabels = Array.from(
       toolbarElement.querySelectorAll('.comet-editor-draft-toolbar-split-dropdown.comet-actionbar-action'),
@@ -1116,7 +1116,7 @@ test('ProseMirrorEditor mounts the editing surface inside the shared scrollable 
     const host = scrollableRoot.querySelector('.comet-pm-editor-host');
     assert(host instanceof HTMLElement);
     assert.equal(scrollableRoot.classList.contains('comet-pm-editor-scrollable'), true);
-    assert.equal(host.classList.contains('scrollable-content'), true);
+    assert.equal(host.classList.contains('comet-scrollable-content'), true);
   });
 });
 
@@ -1270,25 +1270,25 @@ test('DomScrollableElement uses visibility controllers to reveal auto scrollbars
   document.body.append(root);
 
   try {
-    assert(root.querySelector('.overlay-scrollbar-vertical'));
-    assert(root.querySelector('.overlay-scrollbar-horizontal'));
-    assert.equal(root.classList.contains('is-vertical-scrollbar-visible'), false);
+    assert(root.querySelector('.comet-overlay-scrollbar-vertical'));
+    assert(root.querySelector('.comet-overlay-scrollbar-horizontal'));
+    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), false);
 
     root.dispatchEvent(new Event('mouseenter'));
     await delay(0);
-    assert.equal(root.classList.contains('is-vertical-scrollbar-visible'), true);
+    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), true);
 
     root.dispatchEvent(new Event('mouseleave'));
     await delay(550);
-    assert.equal(root.classList.contains('is-vertical-scrollbar-visible'), false);
+    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), false);
 
     content.scrollTop = 48;
     content.dispatchEvent(new Event('scroll'));
     await delay(0);
-    assert.equal(root.classList.contains('is-vertical-scrollbar-visible'), true);
+    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), true);
 
     await delay(550);
-    assert.equal(root.classList.contains('is-vertical-scrollbar-visible'), false);
+    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), false);
   } finally {
     scrollable.dispose();
     document.body.replaceChildren();

@@ -78,7 +78,7 @@ export function renderNotificationItem(
   container.className = [
     'comet-notification-list-item',
     getNotificationSeverityClassName(item.severity),
-    options.compact ? 'is-compact' : '',
+    options.compact ? 'comet-is-compact' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -123,7 +123,7 @@ export function renderNotificationItem(
       actionBar.append(
         createActionButton(
           action,
-          'comet-notification-list-item-action is-primary',
+          'comet-notification-list-item-action comet-is-primary',
           options.onDidRunAction,
         ),
       );
@@ -134,12 +134,12 @@ export function renderNotificationItem(
   const secondaryActions = item.actions?.secondary ?? [];
   if (!options.compact && secondaryActions.length > 0) {
     const actionBar = document.createElement('div');
-    actionBar.className = 'comet-notification-list-item-actions is-secondary';
+    actionBar.className = 'comet-notification-list-item-actions comet-is-secondary';
     for (const action of secondaryActions) {
       actionBar.append(
         createActionButton(
           action,
-          'comet-notification-list-item-action is-secondary',
+          'comet-notification-list-item-action comet-is-secondary',
           options.onDidRunAction,
         ),
       );

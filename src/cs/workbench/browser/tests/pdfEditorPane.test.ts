@@ -511,7 +511,7 @@ test('EditorGroupView reports pdf hit-test diagnostics to the editor statusbar s
   }
 });
 
-test('EditorGroupView renders a pdf empty-state shell with a body container', () => {
+test('EditorGroupView renders a pdf comet-empty-state shell with a body container', () => {
   const pdfTab = {
     id: 'pdf-empty',
     kind: 'pdf' as const,
@@ -529,7 +529,7 @@ test('EditorGroupView renders a pdf empty-state shell with a body container', ()
     const pdfBody = pdfPane.querySelector(':scope > .comet-editor-pdf-body');
     assert(pdfBody instanceof HTMLElement);
     assert.equal(pdfBody.childElementCount, 1);
-    assert(pdfBody.firstElementChild?.classList.contains('pdf-document-reader'));
+    assert(pdfBody.firstElementChild?.classList.contains('comet-pdf-document-reader'));
 
     const readerSurface = pdfBody.querySelector('.pdf-annotation-surface');
     assert(readerSurface instanceof HTMLElement);

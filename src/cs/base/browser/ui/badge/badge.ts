@@ -1,4 +1,5 @@
 import 'cs/base/browser/ui/badge/badge.css';
+import { $ } from 'cs/base/browser/dom';
 
 import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -12,29 +13,15 @@ export type BadgeProps = {
   compact?: boolean;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 export function createBadge(props: BadgeProps) {
-  const badge = createElement(
-    'span',
-    [
+  const badge = $<HTMLElementTagNameMap['span']>('span', { class: [
       'comet-badge',
-      props.compact ? 'is-compact' : '',
+      props.compact ? 'comet-is-compact' : '',
       props.className ?? '',
     ]
       .filter(Boolean)
-      .join(' '),
-  );
-  const content = createElement('span', 'comet-badge-content');
+      .join(' ') });
+  const content = $<HTMLElementTagNameMap['span']>('span.comet-badge-content');
 
   if (props.title) {
     applyHover(badge, props.title);
@@ -48,7 +35,7 @@ export function createBadge(props: BadgeProps) {
   }
 
   if (props.label) {
-    const label = createElement('span', 'comet-badge-label');
+    const label = $<HTMLElementTagNameMap['span']>('span.comet-badge-label');
     label.textContent = props.label;
     content.append(label);
   }

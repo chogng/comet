@@ -18,7 +18,7 @@ export class NotificationsStatus {
     private readonly model: NotificationsModel,
     private readonly center: NotificationsCenter,
   ) {
-    this.element.className = 'comet-notifications-status is-hidden';
+    this.element.className = 'comet-notifications-status comet-is-hidden';
     this.button.type = 'button';
     this.button.className = 'comet-notifications-status-button';
     this.button.addEventListener('click', this.handleToggleCenter);
@@ -68,8 +68,8 @@ export class NotificationsStatus {
     this.statusMessageElement.textContent = statusMessage;
     this.button.textContent = count > 0 ? `Notifications (${count})` : 'Notifications';
     this.button.title = count > 0 ? `${count} notifications` : 'No notifications';
-    this.button.classList.toggle('has-notifications', count > 0);
-    this.element.classList.toggle('is-hidden', count === 0 && statusMessage.length === 0);
+    this.button.classList.toggle('comet-has-notifications', count > 0);
+    this.element.classList.toggle('comet-is-hidden', count === 0 && statusMessage.length === 0);
   }
 }
 

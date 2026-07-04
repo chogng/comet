@@ -3,30 +3,15 @@ import type {
   EditorStatusItem,
   EditorStatusState,
 } from 'cs/workbench/browser/parts/editor/editorStatus';
+import { $ } from 'cs/base/browser/dom';
 
-const hoverService = getHoverService();
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-function renderStatusItem(item: EditorStatusItem) {
-  const element = createElement(
-    'span',
-    ['comet-editor-statusbar-item', item.tone ? `is-${item.tone}` : '']
+const hoverService = getHoverService();function renderStatusItem(item: EditorStatusItem) {
+  const element = $<HTMLElementTagNameMap['span']>('span', { class: ['comet-editor-statusbar-item', item.tone ? `is-${item.tone}` : '']
       .filter(Boolean)
-      .join(' '),
-  );
-  const label = createElement('span', 'comet-editor-statusbar-item-label');
+      .join(' ') });
+  const label = $<HTMLElementTagNameMap['span']>('span.comet-editor-statusbar-item-label');
   label.textContent = item.label;
-  const value = createElement('span', 'comet-editor-statusbar-item-value');
+  const value = $<HTMLElementTagNameMap['span']>('span.comet-editor-statusbar-item-value');
   hoverService.applyHover(value, item.value);
   value.textContent = item.value;
   element.append(label, value);
@@ -34,7 +19,7 @@ function renderStatusItem(item: EditorStatusItem) {
 }
 
 export class EditorStatusView {
-  private readonly element = createElement('footer');
+  private readonly element = $<HTMLElementTagNameMap['footer']>('footer');
 
   constructor(status: EditorStatusState) {
     this.setStatus(status);
@@ -45,18 +30,18 @@ export class EditorStatusView {
   }
 
   setStatus(status: EditorStatusState) {
-    this.element.className = ['comet-editor-statusbar', `is-pane-mode-${status.paneMode}`].join(' ');
+    this.element.className = ['comet-editor-statusbar', `comet-is-pane-mode-${status.paneMode}`].join(' ');
     this.element.setAttribute('role', 'status');
     this.element.setAttribute('aria-label', status.ariaLabel);
 
-    const primary = createElement('div', 'comet-editor-statusbar-group is-primary');
+    const primary = $<HTMLElementTagNameMap['div']>('div.comet-editor-statusbar-group.comet-is-primary');
     if (status.modeLabel) {
-      const mode = createElement('span', 'comet-editor-statusbar-mode-pill');
+      const mode = $<HTMLElementTagNameMap['span']>('span.comet-editor-statusbar-mode-pill');
       mode.textContent = status.modeLabel;
       primary.append(mode);
     }
     if (status.summary) {
-      const summary = createElement('span', 'comet-editor-statusbar-summary');
+      const summary = $<HTMLElementTagNameMap['span']>('span.comet-editor-statusbar-summary');
       hoverService.applyHover(summary, status.summary);
       summary.textContent = status.summary;
       primary.append(summary);
@@ -65,7 +50,7 @@ export class EditorStatusView {
       primary.append(renderStatusItem(item));
     }
 
-    const secondary = createElement('div', 'comet-editor-statusbar-group is-secondary');
+const secondary = $<HTMLElementTagNameMap['div']>('div.comet-editor-statusbar-group.comet-is-secondary');
     for (const item of status.rightItems) {
       secondary.append(renderStatusItem(item));
     }

@@ -22,7 +22,7 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('actionbar renders actions and separators without relying on button base classes', () => {
+test('comet-actionbar renders actions and separators without relying on button base classes', () => {
   let refreshClicks = 0;
   const actionBarView = createActionBarView({
     ariaLabel: 'Document actions',
@@ -73,7 +73,7 @@ test('actionbar renders actions and separators without relying on button base cl
   }
 });
 
-test('actionbar keyboard navigation skips disabled items', () => {
+test('comet-actionbar keyboard navigation skips disabled items', () => {
   const actionBarView = createActionBarView({
     items: [
       {
@@ -111,7 +111,7 @@ test('actionbar keyboard navigation skips disabled items', () => {
   }
 });
 
-test('actionbar actions use shared hover content instead of native title tooltips', async () => {
+test('comet-actionbar actions use shared hover content instead of native title tooltips', async () => {
   const actionBarView = createActionBarView({
     items: [
       {
@@ -131,7 +131,7 @@ test('actionbar actions use shared hover content instead of native title tooltip
   try {
     const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
-      throw new Error('Expected actionbar button.');
+      throw new Error('Expected comet-actionbar button.');
     }
     assert.equal(button.getAttribute('title'), null);
 
@@ -149,7 +149,7 @@ test('actionbar actions use shared hover content instead of native title tooltip
   }
 });
 
-test('actionbar forwards custom button attributes', () => {
+test('comet-actionbar forwards custom button attributes', () => {
   const actionBarView = createActionBarView({
     items: [
       {
@@ -168,7 +168,7 @@ test('actionbar forwards custom button attributes', () => {
   try {
     const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
-      throw new Error('Expected actionbar button.');
+      throw new Error('Expected comet-actionbar button.');
     }
 
     assert.equal(button.getAttribute('aria-haspopup'), 'dialog');
@@ -179,7 +179,7 @@ test('actionbar forwards custom button attributes', () => {
   }
 });
 
-test('actionbar can render a dropdown action view item instance', async () => {
+test('comet-actionbar can render a dropdown action view item instance', async () => {
   let selected = '';
   const dropdownItem = new DropdownMenuActionViewItem({
     label: 'More',
@@ -202,7 +202,7 @@ test('actionbar can render a dropdown action view item instance', async () => {
   try {
     const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
-      throw new Error('Expected actionbar button.');
+      throw new Error('Expected comet-actionbar button.');
     }
 
     button.click();
@@ -225,7 +225,7 @@ test('actionbar can render a dropdown action view item instance', async () => {
   }
 });
 
-test('actionbar can render a custom overlay action view item instance', async () => {
+test('comet-actionbar can render a custom overlay action view item instance', async () => {
   let closeCount = 0;
   const actionBarView = createActionBarView({
     items: [
@@ -255,7 +255,7 @@ test('actionbar can render a custom overlay action view item instance', async ()
   try {
     const button = element.querySelector('.comet-actionbar-action');
     if (!(button instanceof HTMLButtonElement)) {
-      throw new Error('Expected actionbar button.');
+      throw new Error('Expected comet-actionbar button.');
     }
 
     button.click();
@@ -279,7 +279,7 @@ test('actionbar can render a custom overlay action view item instance', async ()
   }
 });
 
-test('actionbar can render a split action item with primary and dropdown controls', async () => {
+test('comet-actionbar can render a split action item with primary and dropdown controls', async () => {
   let primaryRuns = 0;
   let selected = '';
   const actionBarView = createActionBarView({

@@ -18,16 +18,7 @@ import {
   setStatusbarCommandHandlers,
   updateStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarActions';
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
+import { $ } from 'cs/base/browser/dom';
 
 export type WorkbenchContentPartViewsProps = {
   mode?: 'content' | 'settings';
@@ -55,18 +46,9 @@ export class WorkbenchContentPartViews {
   private agentBarView: ChatViewPane | null = null;
   private editorView: ReturnType<typeof createEditorPartView> | null = null;
   private retiredEditorView: ReturnType<typeof createEditorPartView> | null = null;
-  private readonly agentHeaderTrailingActionsHost = createElement(
-    'div',
-    'comet-agentbar-header-trailing-actions-host',
-  );
-  private readonly agentHeaderPrimaryTrailingActionsHost = createElement(
-    'div',
-    'comet-agentbar-header-trailing-primary',
-  );
-  private readonly agentHeaderSecondaryTrailingActionsHost = createElement(
-    'div',
-    'comet-agentbar-header-trailing-secondary',
-  );
+  private readonly agentHeaderTrailingActionsHost = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing-actions-host');
+  private readonly agentHeaderPrimaryTrailingActionsHost = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing-primary');
+  private readonly agentHeaderSecondaryTrailingActionsHost = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing-secondary');
   private disposed = false;
 
   constructor(props: WorkbenchContentPartViewsProps) {
@@ -170,7 +152,7 @@ export class WorkbenchContentPartViews {
       return;
     }
 
-    const nextProps: SidebarProps = {
+const nextProps: SidebarProps = {
       ...this.props.sidebarProps,
       mode: this.props.mode === 'settings' ? 'settings' : 'content',
       settingsNavigationElement:
@@ -197,7 +179,7 @@ export class WorkbenchContentPartViews {
       return;
     }
 
-    const headerActionsElement =
+const headerActionsElement =
       !this.props.isAgentSidebarVisible && this.layoutState.isEditorCollapsed
         ? (this.props.editorHeaderActionsElement ?? null)
         : null;
@@ -238,7 +220,7 @@ export class WorkbenchContentPartViews {
       return;
     }
 
-    const nextProps: ChatViewPaneProps = {
+const nextProps: ChatViewPaneProps = {
       ...this.props.agentBarProps,
       isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
       headerActionsElement: null,

@@ -1,7 +1,7 @@
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 
 export class ScrollbarVisibilityController {
-  private static readonly HIDING_CLASS_NAME = 'is-scrollbar-hiding';
+  private static readonly HIDING_CLASS_NAME = 'comet-is-scrollbar-hiding';
   private visibility: ScrollbarVisibility;
   private domNode: HTMLElement | null = null;
   private rawShouldBeVisible = false;

@@ -122,7 +122,7 @@ export class TitlebarPart {
   private syncTitlebar(params: TitlebarPartSyncParams) {
     this.syncLeadingActions(params.leadingActions);
 
-    this.titlebarContainerElement.classList.remove('has-center');
+    this.titlebarContainerElement.classList.remove('comet-has-center');
     this.leftElement.hidden = !this.leadingActionsHostElement.isConnected;
   }
 

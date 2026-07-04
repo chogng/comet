@@ -28,31 +28,31 @@ test('notifications status stays hidden until there is status content', () => {
     const button = element.querySelector('.comet-notifications-status-button');
     assert(button instanceof HTMLButtonElement);
 
-    assert.equal(element.classList.contains('is-hidden'), true);
+    assert.equal(element.classList.contains('comet-is-hidden'), true);
 
     const notification = model.addNotification({
       severity: Severity.Info,
       message: 'Saved',
     });
 
-    assert.equal(element.classList.contains('is-hidden'), false);
+    assert.equal(element.classList.contains('comet-is-hidden'), false);
     assert.equal(button.textContent, 'Notifications (1)');
 
     button.click();
     assert.equal(toggleCount, 1);
 
     notification.close();
-    assert.equal(element.classList.contains('is-hidden'), true);
+    assert.equal(element.classList.contains('comet-is-hidden'), true);
 
     const statusMessage = model.showStatusMessage('Indexing');
     const messageElement = element.querySelector('.comet-notifications-status-message');
     assert(messageElement instanceof window.HTMLSpanElement);
 
-    assert.equal(element.classList.contains('is-hidden'), false);
+    assert.equal(element.classList.contains('comet-is-hidden'), false);
     assert.equal(messageElement.textContent, 'Indexing');
 
     statusMessage.close();
-    assert.equal(element.classList.contains('is-hidden'), true);
+    assert.equal(element.classList.contains('comet-is-hidden'), true);
   } finally {
     status.dispose();
     model.dispose();

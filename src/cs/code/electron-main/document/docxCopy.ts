@@ -13,14 +13,14 @@ export type DocxExportCopy = {
 
 const docxExportDialogCopyByLocale: Record<SupportedLocale, DocxExportDialogCopy> = {
   en: { title: 'Export DOCX', buttonLabel: 'Export' },
-  zh: { title: '导出 DOCX', buttonLabel: '导出' },
+  zh: { title: '\u5bfc\u51fa DOCX', buttonLabel: '\u5bfc\u51fa' },
 };
 
 const docxExportCopyByLocale: Record<SupportedLocale, DocxExportCopy> = {
   zh: {
-    untitled: '无标�?,
-    unknown: '未识�?,
-    uncategorizedJournal: '未分类期�?,
+    untitled: '\u65e0\u6807\u9898',
+    unknown: '\u672a\u8bc6\u522b',
+    uncategorizedJournal: '\u672a\u5206\u7c7b\u671f\u520a',
   },
   en: {
     untitled: 'Untitled',

@@ -48,7 +48,7 @@ export class EditorEmptyWorkspaceView {
               disposition: 'reveal-or-open',
             });
           },
-          className: 'comet-editor-workspace-action-btn btn-secondary btn-md',
+          className: 'comet-editor-workspace-action-btn comet-btn-secondary comet-btn-md',
         },
         {
           label: props.labels.createBrowser,
@@ -58,7 +58,7 @@ export class EditorEmptyWorkspaceView {
               disposition: 'reveal-or-open',
             });
           },
-          className: 'comet-editor-workspace-action-btn btn-secondary btn-md',
+          className: 'comet-editor-workspace-action-btn comet-btn-secondary comet-btn-md',
         },
         {
           label: props.labels.createFile,
@@ -68,7 +68,7 @@ export class EditorEmptyWorkspaceView {
               disposition: 'reveal-or-open',
             });
           },
-          className: 'comet-editor-workspace-action-btn btn-secondary btn-md',
+          className: 'comet-editor-workspace-action-btn comet-btn-secondary comet-btn-md',
         },
       ],
     });

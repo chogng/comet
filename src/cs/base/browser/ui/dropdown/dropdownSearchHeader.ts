@@ -4,6 +4,7 @@ import type {
   DropdownMenuHeaderContext,
 } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/base/browser/ui/dropdown/dropdownSearchHeader.css';
 
@@ -28,17 +29,6 @@ type CreateFilterMenuHeaderOptions = {
   getMenuItems: (query: string) => readonly ActionBarMenuItem[];
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 function composeClassName(parts: Array<string | undefined | null | false>) {
   return parts.filter(Boolean).join(' ');
 }
@@ -46,14 +36,11 @@ function composeClassName(parts: Array<string | undefined | null | false>) {
 export function createDropdownSearchInputView(
   options: DropdownSearchInputViewOptions,
 ) {
-  const header = createElement(
-    'div',
-    composeClassName([
+  const header = $<HTMLElementTagNameMap['div']>('div', { class: composeClassName([
       'comet-dropdown-menu-search-header',
       options.className,
-    ]),
-  );
-  const inputHost = createElement('div');
+    ]) });
+  const inputHost = $<HTMLElementTagNameMap['div']>('div');
   const inputBox = new InputBox(inputHost, undefined, {
     className: composeClassName([
       'comet-dropdown-menu-search-input',

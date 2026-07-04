@@ -4,10 +4,25 @@ import test from 'node:test';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
-import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
-import { locales } from 'language/locales';
+
+let cleanupDomEnvironment: (() => void) | null = null;
+let createDocumentActionsController: typeof import('cs/workbench/browser/documentActionsModel').createDocumentActionsController;
+let locales: typeof import('language/locales').locales;
+
+test.before(async () => {
+  const domEnvironment = installDomTestEnvironment();
+  cleanupDomEnvironment = domEnvironment.cleanup;
+  ({ createDocumentActionsController } = await import('cs/workbench/browser/documentActionsModel'));
+  ({ locales } = await import('language/locales'));
+});
+
+test.after(() => {
+  cleanupDomEnvironment?.();
+  cleanupDomEnvironment = null;
+});
 
 function createInvokeDesktop(): ElectronInvoke {
   return (async (command: string) => {

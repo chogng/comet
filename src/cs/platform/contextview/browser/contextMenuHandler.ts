@@ -98,7 +98,7 @@ export class ContextMenuHandler {
       getAnchor: delegate.getAnchor,
       canRelayout: false,
       className: composeClassName([
-        'actionbar-context-view',
+        'comet-actionbar-context-view',
         delegate.getMenuClassName?.(),
       ]),
       anchorAlignment: delegate.anchorAlignment

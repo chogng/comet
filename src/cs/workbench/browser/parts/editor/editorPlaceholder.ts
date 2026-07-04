@@ -1,5 +1,6 @@
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
+import { $ } from 'cs/base/browser/dom';
 
 // EditorPlaceholder owns pane-level empty/loading/error surfaces inside the editor area.
 // Document-internal placeholders, such as the ProseMirror writing hint, stay with the editor itself.
@@ -16,23 +17,12 @@ export type EditorPlaceholderProps = {
   actions?: readonly EditorPlaceholderAction[];
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 export class EditorPlaceholder {
-  private readonly container = createElement('div', 'comet-editor-placeholder');
-  private readonly bodyScrollContent = createElement('div', 'comet-editor-placeholder-scroll-content');
-  private readonly titleElement = createElement('h2', 'comet-editor-placeholder-title');
-  private readonly bodyElement = createElement('p', 'comet-editor-placeholder-body');
-  private readonly actionsElement = createElement('div', 'comet-editor-placeholder-actions');
+  private readonly container = $<HTMLElementTagNameMap['div']>('div.comet-editor-placeholder');
+  private readonly bodyScrollContent = $<HTMLElementTagNameMap['div']>('div.comet-editor-placeholder-scroll-content');
+  private readonly titleElement = $<HTMLElementTagNameMap['h2']>('h2.comet-editor-placeholder-title');
+  private readonly bodyElement = $<HTMLElementTagNameMap['p']>('p.comet-editor-placeholder-body');
+  private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-placeholder-actions');
   private readonly scrollable: DomScrollableElement;
 
   constructor(props: EditorPlaceholderProps) {
@@ -63,14 +53,11 @@ export class EditorPlaceholder {
     this.bodyElement.textContent = props.body;
     this.actionsElement.replaceChildren(
       ...(props.actions ?? []).map((action) => {
-        const button = createElement(
-          'button',
-          [
+        const button = $<HTMLElementTagNameMap['button']>('button', { class: [
 						'comet-editor-placeholder-action-btn',
-            'btn-base',
-            action.className ?? 'btn-secondary btn-md',
-          ].join(' '),
-        );
+            'comet-btn-base',
+            action.className ?? 'comet-btn-secondary comet-btn-md',
+          ].join(' ') });
         button.type = 'button';
         button.textContent = action.label;
         button.addEventListener('click', action.onRun);

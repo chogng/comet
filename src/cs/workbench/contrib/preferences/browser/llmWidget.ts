@@ -474,7 +474,7 @@ export class LlmWidget {
 
       item.className = [
         'comet-settings-model-list-item',
-        isCurrent ? 'is-current' : '',
+        isCurrent ? 'comet-is-current' : '',
       ]
         .filter(Boolean)
         .join(' ');

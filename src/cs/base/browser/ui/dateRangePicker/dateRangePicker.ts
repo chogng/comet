@@ -8,6 +8,7 @@ import {
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
 import 'cs/base/browser/ui/dateRangePicker/dateRangePicker.css';
+import { $ } from 'cs/base/browser/dom';
 
 export type DateRangePickerLabels = {
   startDate: string;
@@ -34,24 +35,7 @@ type CalendarCell = {
   inCurrentMonth: boolean;
 };
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
-}
-
-function addDisposableListener<K extends keyof DocumentEventMap>(
+const SVG_NS = 'http://www.w3.org/2000/svg';function addDisposableListener<K extends keyof DocumentEventMap>(
   target: Document,
   type: K,
   listener: (event: DocumentEventMap[K]) => void,
@@ -227,11 +211,11 @@ export class DateRangePickerView extends Disposable {
   private visibleMonth: Date;
   private readonly weekdayLabels = createWeekdayLabels();
   private readonly todayValue = formatDateInputValue(new Date());
-  private readonly element = createElement('div', 'comet-date-range-picker');
-  private readonly trigger = createElement('button', 'comet-date-range-trigger');
-  private readonly triggerContent = createElement('span', 'comet-date-range-trigger-content');
-  private readonly triggerIcon = createElement('span', 'comet-date-range-trigger-icon');
-  private readonly triggerText = createElement('span', 'comet-date-range-trigger-text');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-date-range-picker');
+  private readonly trigger = $<HTMLElementTagNameMap['button']>('button.comet-date-range-trigger');
+  private readonly triggerContent = $<HTMLElementTagNameMap['span']>('span.comet-date-range-trigger-content');
+  private readonly triggerIcon = $<HTMLElementTagNameMap['span']>('span.comet-date-range-trigger-icon');
+  private readonly triggerText = $<HTMLElementTagNameMap['span']>('span.comet-date-range-trigger-text');
   private readonly popupDisposables = new DisposableStore();
   private popup: HTMLDivElement | null = null;
   private activeSlot: DateRangeSlot = 'primary';
@@ -385,19 +369,19 @@ export class DateRangePickerView extends Disposable {
       return;
     }
 
-    const container = this.element.parentElement;
+const container = this.element.parentElement;
     if (!container) {
       return;
     }
 
-    const containerWidth = container.clientWidth;
+const containerWidth = container.clientWidth;
     const triggerOffsetLeft = this.element.offsetLeft;
     const availableWidth = Math.max(0, containerWidth - triggerOffsetLeft);
     if (availableWidth <= 0) {
       return;
     }
 
-    const popupWidth = Math.min(280, availableWidth);
+const popupWidth = Math.min(280, availableWidth);
     this.popup.style.width = `${popupWidth}px`;
     this.popup.style.maxWidth = `${availableWidth}px`;
 
@@ -493,10 +477,7 @@ export class DateRangePickerView extends Disposable {
   }
 
   private renderSlot(slot: DateRangeSlot, indexText: string) {
-    const slotElement = createElement(
-      'button',
-      ['comet-date-range-slot', this.activeSlot === slot ? 'is-active' : ''].filter(Boolean).join(' '),
-    );
+    const slotElement = $<HTMLElementTagNameMap['button']>('button', { class: ['comet-date-range-slot', this.activeSlot === slot ? 'comet-is-active' : ''].filter(Boolean).join(' ') });
     slotElement.type = 'button';
     slotElement.dataset.slot = slot;
     slotElement.setAttribute('aria-pressed', String(this.activeSlot === slot));
@@ -506,8 +487,8 @@ export class DateRangePickerView extends Disposable {
       }),
     );
     slotElement.append(
-      createElement('span', 'comet-date-range-slot-index', indexText),
-      createElement('span', 'comet-date-range-slot-value', this.getSlotValue(slot) || '--'),
+      $<HTMLElementTagNameMap['span']>('span.comet-date-range-slot-index', undefined, indexText),
+      $<HTMLElementTagNameMap['span']>('span.comet-date-range-slot-value', undefined, this.getSlotValue(slot) || '--'),
     );
     return slotElement;
   }
@@ -521,23 +502,20 @@ export class DateRangePickerView extends Disposable {
       return;
     }
 
-    const popup = createElement('div', 'comet-date-range-popup');
+const popup = $<HTMLElementTagNameMap['div']>('div.comet-date-range-popup');
     popup.setAttribute('role', 'dialog');
     popup.setAttribute('aria-modal', 'false');
     popup.setAttribute('aria-label', createTriggerLabel(this.props.labels));
 
-    const slots = createElement('div', 'comet-date-range-slots');
+    const slots = $<HTMLElementTagNameMap['div']>('div.comet-date-range-slots');
     slots.append(
       this.renderSlot('primary', '1'),
-      createElement('div', 'comet-date-range-slot-divider'),
+      $<HTMLElementTagNameMap['div']>('div.comet-date-range-slot-divider'),
       this.renderSlot('secondary', '2'),
     );
 
-    const header = createElement('div', 'comet-date-range-popup-header');
-    const prevButton = createElement(
-      'button',
-      'comet-date-range-month-nav comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-sm',
-    );
+    const header = $<HTMLElementTagNameMap['div']>('div.comet-date-range-popup-header');
+    const prevButton = $<HTMLElementTagNameMap['button']>('button.comet-date-range-month-nav.comet-btn-base.comet-btn-ghost.comet-btn-mode-icon.comet-btn-sm');
     prevButton.type = 'button';
     prevButton.append(createChevronIcon('left'));
     this.popupDisposables.add(
@@ -546,12 +524,9 @@ export class DateRangePickerView extends Disposable {
       }),
     );
 
-    const title = createElement('div', 'comet-date-range-month-title', formatMonthTitle(this.visibleMonth));
+    const title = $<HTMLElementTagNameMap['div']>('div.comet-date-range-month-title', undefined, formatMonthTitle(this.visibleMonth));
 
-    const nextButton = createElement(
-      'button',
-      'comet-date-range-month-nav comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-sm',
-    );
+    const nextButton = $<HTMLElementTagNameMap['button']>('button.comet-date-range-month-nav.comet-btn-base.comet-btn-ghost.comet-btn-mode-icon.comet-btn-sm');
     nextButton.type = 'button';
     nextButton.append(createChevronIcon('right'));
     this.popupDisposables.add(
@@ -561,9 +536,9 @@ export class DateRangePickerView extends Disposable {
     );
     header.append(prevButton, title, nextButton);
 
-    const weekdays = createElement('div', 'comet-date-range-weekdays');
+    const weekdays = $<HTMLElementTagNameMap['div']>('div.comet-date-range-weekdays');
     weekdays.append(
-      ...this.weekdayLabels.map((weekday) => createElement('span', 'comet-date-range-weekday', weekday)),
+      ...this.weekdayLabels.map((weekday) => $<HTMLElementTagNameMap['span']>('span.comet-date-range-weekday', undefined, weekday)),
     );
 
     const orderedDraft = orderDateValues(this.draftPrimaryDate, this.draftSecondaryDate);
@@ -576,7 +551,7 @@ export class DateRangePickerView extends Disposable {
         orderedDraft.end &&
         isDateRangeValid(orderedDraft.start, orderedDraft.end),
     );
-    const grid = createElement('div', 'comet-date-range-grid');
+    const grid = $<HTMLElementTagNameMap['div']>('div.comet-date-range-grid');
     grid.append(
       ...createMonthCells(this.visibleMonth).map((cell) => {
         const isSelected = selectedValues.has(cell.value);
@@ -588,26 +563,22 @@ export class DateRangePickerView extends Disposable {
         const isActiveValue = Boolean(activeValue) && cell.value === activeValue;
         const disabled = this.isCellDisabled(cell);
 
-        const day = createElement(
-          'button',
-          [
+        const day = $<HTMLElementTagNameMap['button']>('button', { class: [
             'comet-date-range-day',
             'comet-btn-base',
             'comet-btn-ghost',
             'comet-btn-sm',
-            cell.inCurrentMonth ? '' : 'is-outside',
-            isSelected ? 'is-selected' : '',
-            isStart ? 'is-start' : '',
-            isEnd ? 'is-end' : '',
-            isInRange ? 'is-in-range' : '',
-            isActiveValue ? 'is-active-value' : '',
-            isToday ? 'is-today' : '',
-            disabled ? 'is-disabled' : '',
+            cell.inCurrentMonth ? '' : 'comet-is-outside',
+            isSelected ? 'comet-is-selected' : '',
+            isStart ? 'comet-is-start' : '',
+            isEnd ? 'comet-is-end' : '',
+            isInRange ? 'comet-is-in-range' : '',
+            isActiveValue ? 'comet-is-active-value' : '',
+            isToday ? 'comet-is-today' : '',
+            disabled ? 'comet-is-disabled' : '',
           ]
             .filter(Boolean)
-            .join(' '),
-          String(cell.date.getDate()),
-        );
+            .join(' ') }, String(cell.date.getDate()));
         day.type = 'button';
         day.disabled = disabled;
         day.dataset.dateValue = cell.value;
@@ -635,8 +606,8 @@ export class DateRangePickerView extends Disposable {
     this.trigger.className = [
       'comet-date-range-trigger',
       'comet-actionbar-action',
-      this.props.triggerMode === 'icon' ? 'is-icon' : 'is-text',
-      this.isOpen ? 'is-active' : '',
+      this.props.triggerMode === 'icon' ? 'comet-is-icon' : 'comet-is-text',
+      this.isOpen ? 'comet-is-active' : '',
     ]
       .filter(Boolean)
       .join(' ');

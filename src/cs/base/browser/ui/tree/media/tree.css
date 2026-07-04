@@ -3,7 +3,7 @@
   outline: none;
 }
 
-.comet-simple-tree .list-view-row {
+.comet-simple-tree .comet-list-view-row {
   min-width: 0;
 }
 
@@ -14,19 +14,19 @@
   outline: none;
 }
 
-.comet-simple-tree-node.is-selected {
+.comet-simple-tree-node.comet-is-selected {
   background: var(--vscode-tree-activeSelectionBackground, #e8f1fc);
 }
 
-.comet-simple-tree-node.is-focused {
+.comet-simple-tree-node.comet-is-focused {
   outline: 1px solid var(--vscode-tree-focusOutline, #8cb4ea);
   outline-offset: -1px;
 }
 
-.comet-simple-tree-node.is-loading {
+.comet-simple-tree-node.comet-is-loading {
   opacity: 0.72;
 }
 
-.comet-simple-tree-node.has-error {
+.comet-simple-tree-node.comet-has-error {
   box-shadow: inset 0 0 0 1px var(--vscode-tree-errorOutline, rgba(204, 88, 88, 0.22));
 }

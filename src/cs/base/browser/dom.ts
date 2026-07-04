@@ -2451,21 +2451,6 @@ export function isEditableElement(element: Element): boolean {
 		|| isHTMLElement(element) && !!(element as HTMLElement & { editContext?: unknown }).editContext;
 }
 
-export function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-	textContent?: string,
-): HTMLElementTagNameMap[K] {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	if (typeof textContent === 'string') {
-		element.textContent = textContent;
-	}
-	return element;
-}
-
 export function composeClassName(parts: Array<string | undefined | null | false>): string {
 	return parts.filter(Boolean).join(' ');
 }

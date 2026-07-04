@@ -32,22 +32,22 @@
   border-radius: 0;
 }
 
-.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.is-actionable {
+.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.comet-is-actionable {
   cursor: pointer;
   transition:
     background 0.18s ease,
     transform 0.18s ease;
 }
 
-.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.is-actionable:hover {
+.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.comet-is-actionable:hover {
   background: rgba(244, 249, 255, 0.96);
 }
 
-.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.is-actionable:active {
+.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.comet-is-actionable:active {
   transform: translateY(1px);
 }
 
-.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.is-actionable:focus-visible {
+.comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.comet-is-actionable:focus-visible {
   outline: 2px solid rgba(48, 126, 214, 0.38);
   outline-offset: 2px;
 }

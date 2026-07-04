@@ -4,6 +4,7 @@ import type {
   HoverHandle,
 } from 'cs/base/browser/ui/hover/hover';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
+import { $ } from 'cs/base/browser/dom';
 
 export interface SwitchProps {
   checked?: boolean;
@@ -40,7 +41,7 @@ function raf(callback: FrameRequestCallback) {
     return requestAnimationFrame(callback);
   }
 
-  const handle = globalThis.setTimeout(() => callback(now()), 16) as unknown as number;
+const handle = globalThis.setTimeout(() => callback(now()), 16) as unknown as number;
   return handle;
 }
 
@@ -51,17 +52,6 @@ function cancelRaf(handle: number) {
   }
 
   globalThis.clearTimeout(handle);
-}
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
 }
 
 function setOptionalAttribute(
@@ -101,10 +91,10 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
 
 export class SwitchView extends Disposable {
   private props: SwitchProps;
-  private readonly element = createElement('label', 'comet-switch-root');
-  private readonly inputElement = createElement('input', 'comet-switch-input');
-  private readonly sliderElement = createElement('span', 'comet-switch-slider');
-  private readonly labelElement = createElement('span', 'comet-switch-label');
+  private readonly element = $<HTMLElementTagNameMap['label']>('label.comet-switch-root');
+  private readonly inputElement = $<HTMLElementTagNameMap['input']>('input.comet-switch-input');
+  private readonly sliderElement = $<HTMLElementTagNameMap['span']>('span.comet-switch-slider');
+  private readonly labelElement = $<HTMLElementTagNameMap['span']>('span.comet-switch-label');
   private readonly hoverController: HoverHandle;
   private pendingAnimationFrame: number | undefined;
   private rendered = false;
@@ -178,7 +168,7 @@ export class SwitchView extends Disposable {
       return;
     }
 
-    const memory: SwitchTransitionMemory = {
+const memory: SwitchTransitionMemory = {
       from,
       to,
       expiresAt: now() + switchTransitionMemoryTtlMs,
@@ -197,7 +187,7 @@ export class SwitchView extends Disposable {
       return undefined;
     }
 
-    const memory = switchTransitionMemory.get(key);
+const memory = switchTransitionMemory.get(key);
     if (!memory || memory.to !== targetChecked || memory.from === targetChecked) {
       return undefined;
     }

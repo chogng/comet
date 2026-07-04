@@ -18,6 +18,7 @@ import type {
   EditorStatusState,
 } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { PdfReaderRuntimeStatus } from 'cs/editor/browser/pdf/pdfDocumentReader';
+import { $ } from 'cs/base/browser/dom';
 
 import { createActiveDraftEditorCommandExecutor } from 'cs/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
 import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
@@ -124,17 +125,6 @@ type EditorGroupControllerSnapshot = {
   editorStatus: EditorStatusState;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 function createTitleControlProps(
   props: Pick<
     EditorGroupViewProps,
@@ -158,7 +148,7 @@ function createTitleControlProps(
       return false;
     }
 
-    const targetTab = group.activeTabId === tabId
+const targetTab = group.activeTabId === tabId
       ? group.activeTab
       : props.tabs.find((tab) => tab.id === tabId) ?? null;
     return isEmptyBrowserTabInput(targetTab);
@@ -305,7 +295,7 @@ function createPdfContentStatus(
     return undefined;
   }
 
-  const value = status.detail && status.state === 'error'
+const value = status.detail && status.state === 'error'
     ? `${status.message}: ${status.detail}`
     : status.message;
   const hitTest = status.hitTest;
@@ -480,11 +470,11 @@ class EditorGroupController {
 export class EditorGroupView {
   private props: EditorGroupViewProps;
   private readonly controller: EditorGroupController;
-  private readonly element = createElement('div', 'comet-editor-frame');
-  private readonly headerElement = createElement('div', 'comet-editor-header');
-  private readonly toolbarElement = createElement('div', 'comet-editor-toolbar');
-  private readonly tabsElement = createElement('div', 'comet-editor-header-tabs');
-  private readonly actionsElement = createElement('div', 'comet-editor-header-actions');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-editor-frame');
+  private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-header');
+  private readonly toolbarElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-toolbar');
+  private readonly tabsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-header-tabs');
+  private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-header-actions');
   private readonly headerActionsView = createEditorHeaderActionsView({
     isEditorCollapsed: false,
     isAgentSidebarVisible: false,
@@ -504,7 +494,7 @@ export class EditorGroupView {
   });
   private readonly modeToolbarHost: ReturnType<typeof createEditorModeToolbarHost>;
   private readonly titleAreaControl: TitleControl;
-  private readonly contentElement = createElement('div', 'comet-editor-content');
+  private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-content');
   private readonly browserLibraryPanel: EditorBrowserLibraryPanel;
   private readonly emptyWorkspaceView: EditorEmptyWorkspaceView;
   private readonly viewStateStore: ReturnType<typeof createEditorViewStateStore>;
@@ -661,7 +651,7 @@ export class EditorGroupView {
         this.requestBrowserPrimaryInputFocus,
       ),
     );
-    this.headerElement.classList.toggle('has-tabs', group.tabs.length > 0);
+    this.headerElement.classList.toggle('comet-has-tabs', group.tabs.length > 0);
     this.headerElement.classList.toggle(
       'comet-has-leading-window-controls-inset',
       Boolean(this.props.hasLeadingWindowControlsInset),
@@ -721,7 +711,7 @@ export class EditorGroupView {
       return;
     }
 
-    const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
+const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
 
     this.contentElement.className = [
       'comet-editor-content',
@@ -770,7 +760,7 @@ export class EditorGroupView {
       return;
     }
 
-    const panelHost = this.contentElement.querySelector('.comet-browser-frame-container');
+const panelHost = this.contentElement.querySelector('.comet-browser-frame-container');
     this.browserLibraryPanel.mountTo(panelHost instanceof HTMLElement ? panelHost : null);
   }
 
@@ -867,7 +857,7 @@ export class EditorGroupView {
       nextHeaderActionsElements.push(headerActionsElement);
     }
 
-    const currentHeaderActionsElements = Array.from(this.actionsElement.children);
+const currentHeaderActionsElements = Array.from(this.actionsElement.children);
     const hasSameOrder =
       currentHeaderActionsElements.length === nextHeaderActionsElements.length &&
       currentHeaderActionsElements.every(
@@ -910,7 +900,7 @@ export class EditorGroupView {
       return null;
     }
 
-    const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
+const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     if (paneToolbarElement) {
       return paneToolbarElement;
     }
@@ -991,7 +981,7 @@ export class EditorGroupView {
       return;
     }
 
-    const pane = this.activePane;
+const pane = this.activePane;
     const tabId = this.activePaneTabId;
     const viewStateKey = this.activePaneViewStateKey;
     const syncViewState = pane.getViewState();
@@ -1004,7 +994,7 @@ export class EditorGroupView {
       this.setPaneViewState(viewStateKey, syncViewState);
     }
 
-    const pendingSave = pane
+const pendingSave = pane
       .captureViewState()
       .then((capturedViewState) => {
         if (capturedViewState === undefined) {

@@ -69,7 +69,7 @@
   box-shadow: 0 4px 12px rgba(31, 45, 58, 0.14);
 }
 
-.comet-agentbar-thread-scroll-down .comet-lx-icon {
+.comet-agentbar-thread-scroll-down .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
@@ -211,7 +211,7 @@
   line-height: normal;
 }
 
-.comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn .comet-lx-icon {
+.comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
@@ -252,8 +252,8 @@
   opacity: 0.7;
 }
 
-.actionbar-context-view.comet-chat-model-menu .comet-context-view-content,
-.actionbar-context-view.comet-chat-model-menu .comet-menu {
+.comet-actionbar-context-view.comet-chat-model-menu .comet-context-view-content,
+.comet-actionbar-context-view.comet-chat-model-menu .comet-menu {
   width: 236px;
   min-width: 236px;
   max-width: 236px;
@@ -268,12 +268,12 @@
   min-height: 28px;
 }
 
-.comet-chat-composer-actions .comet-actionbar-action.is-icon {
+.comet-chat-composer-actions .comet-actionbar-action.comet-is-icon {
   width: 28px;
   height: 28px;
 }
 
-.comet-chat-composer-actions .comet-actionbar-action .comet-lx-icon {
+.comet-chat-composer-actions .comet-actionbar-action .lx-icon {
   width: 18px;
   height: 18px;
   font-size: 18px;
@@ -284,7 +284,7 @@
   height: 28px;
 }
 
-.comet-chat-composer-send-action.comet-actionbar-action .comet-lx-icon {
+.comet-chat-composer-send-action.comet-actionbar-action .lx-icon {
   width: 22px;
   height: 22px;
   font-size: 22px;
@@ -321,7 +321,7 @@
   box-shadow: 0 1px 4px rgba(24, 36, 48, 0.1);
 }
 
-.comet-chat-composer-quick-action.comet-btn-base .comet-lx-icon {
+.comet-chat-composer-quick-action.comet-btn-base .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
@@ -361,7 +361,7 @@
   line-height: 1.3;
 }
 
-.comet-chat-composer-article-menu-title .comet-lx-icon {
+.comet-chat-composer-article-menu-title .lx-icon {
   width: 14px;
   height: 14px;
   font-size: 14px;
@@ -459,7 +459,7 @@
   border-radius: 8px;
 }
 
-.comet-agentbar-article-download-btn.comet-btn-base .comet-lx-icon {
+.comet-agentbar-article-download-btn.comet-btn-base .lx-icon {
   width: 15px;
   height: 15px;
   font-size: 15px;

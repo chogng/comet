@@ -51,7 +51,7 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('hover controller renders actions and runs them from the overlay', async () => {
+test('hover controller renders comet-hover-actions and runs them from the overlay', async () => {
   let actionRuns = 0;
   const target = document.createElement('button');
   document.body.append(target);
@@ -251,7 +251,7 @@ test('string hover input hides when the pointer leaves the target', async () => 
   }
 });
 
-test('hover with actions stays open when the pointer moves into the overlay', async () => {
+test('hover with comet-hover-actions stays open when the pointer moves into the overlay', async () => {
   const target = document.createElement('button');
   document.body.append(target);
 
@@ -283,7 +283,7 @@ test('hover with actions stays open when the pointer moves into the overlay', as
   }
 });
 
-test('compact hover applies the compact class', async () => {
+test('comet-is-compact hover applies the comet-is-compact class', async () => {
   const target = document.createElement('button');
   document.body.append(target);
 
@@ -299,7 +299,7 @@ test('compact hover applies the compact class', async () => {
 
     const overlay = document.querySelector('.comet-hover-card');
     assert(overlay instanceof HTMLElement);
-    assert.equal(overlay.classList.contains('compact'), true);
+    assert.equal(overlay.classList.contains('comet-is-compact'), true);
   } finally {
     hover.dispose();
   }

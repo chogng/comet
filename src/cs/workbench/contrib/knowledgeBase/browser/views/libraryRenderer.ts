@@ -6,6 +6,7 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { resolveLibraryDocumentStatusLabel } from 'cs/workbench/contrib/knowledgeBase/common/libraryTreeModel';
 import type { LibraryTreeLabels, LibraryTreeFolderNode, LibraryTreeNode } from 'cs/workbench/contrib/knowledgeBase/common/libraryTreeModel';
+import { $ } from 'cs/base/browser/dom';
 
 import { LibraryDataSource } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDataSource';
 import { LibraryDelegate } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDelegate';
@@ -33,17 +34,6 @@ export type LibraryRendererProps = {
   onDocumentDelete?: (document: LibraryDocumentsResult['items'][number]) => void;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 export class LibraryRenderer {
   private props: LibraryRendererProps;
   private readonly contextMenuService = createContextMenuService();
@@ -68,10 +58,7 @@ export class LibraryRenderer {
       return this.renderDocumentRow(node.document, context);
     }
 
-    const button = createElement(
-      'button',
-      'comet-library-tree-row comet-library-tree-row-folder comet-btn-base comet-btn-ghost comet-btn-md',
-    );
+const button = $<HTMLElementTagNameMap['button']>('button.comet-library-tree-row.comet-library-tree-row-folder.comet-btn-base.comet-btn-ghost.comet-btn-md');
     button.type = 'button';
     button.style.paddingLeft = this.props.delegate.getNodePaddingLeft(
       context.depth,
@@ -82,7 +69,7 @@ export class LibraryRenderer {
       context.toggleExpanded();
     });
 
-    const label = createElement('span', 'comet-library-tree-folder-label');
+    const label = $<HTMLElementTagNameMap['span']>('span.comet-library-tree-folder-label');
     label.textContent = node.name;
     button.append(
       createLxIcon(
@@ -94,7 +81,7 @@ export class LibraryRenderer {
       label,
     );
     if (node.id === 'root') {
-      const count = createElement('span', 'comet-library-tree-folder-count');
+      const count = $<HTMLElementTagNameMap['span']>('span.comet-library-tree-folder-count');
       count.textContent = String(
         this.props.dataSource.getDocumentCount(node as LibraryTreeFolderNode),
       );
@@ -117,10 +104,7 @@ export class LibraryRenderer {
       document,
     );
 
-    const row = createElement(
-      'div',
-      'comet-library-tree-row comet-library-tree-row-document',
-    );
+    const row = $<HTMLElementTagNameMap['div']>('div.comet-library-tree-row.comet-library-tree-row-document');
     row.setAttribute('role', 'treeitem');
     row.style.paddingLeft = this.props.delegate.getNodePaddingLeft(context.depth);
     row.draggable = true;
@@ -136,24 +120,21 @@ export class LibraryRenderer {
       this.openDocumentContextMenu(event, document);
     });
 
-    const titleElement = createElement('span', 'comet-library-tree-document-title');
+    const titleElement = $<HTMLElementTagNameMap['span']>('span.comet-library-tree-document-title');
     titleElement.textContent = title;
     hoverService.applyHover(titleElement, title);
 
-    const metaElement = createElement('span', 'comet-library-tree-document-meta');
+    const metaElement = $<HTMLElementTagNameMap['span']>('span.comet-library-tree-document-meta');
     metaElement.textContent = authors;
     hoverService.applyHover(metaElement, authors);
 
-    const statusElement = createElement(
-      'span',
-      `comet-library-doc-status comet-library-doc-status-${document.ingestStatus}`,
-    );
+    const statusElement = $<HTMLElementTagNameMap['span']>('span', { class: `comet-library-doc-status comet-library-doc-status-${document.ingestStatus}` });
     statusElement.textContent = statusLabel;
 
-    const main = createElement('div', 'comet-library-tree-document-main');
+    const main = $<HTMLElementTagNameMap['div']>('div.comet-library-tree-document-main');
     main.append(titleElement, metaElement);
 
-    const aside = createElement('div', 'comet-library-tree-document-aside');
+    const aside = $<HTMLElementTagNameMap['div']>('div.comet-library-tree-document-aside');
     aside.append(statusElement);
 
     row.append(main, aside);

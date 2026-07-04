@@ -6,6 +6,7 @@ import {
   toDisposable,
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
+import { $ } from 'cs/base/browser/dom';
 
 export type ToastType = 'info' | 'success' | 'error' | 'warning';
 
@@ -45,21 +46,6 @@ const toastTimers = new Map<number, DisposableStore>();
 
 function notify() {
   onDidChangeToastsEmitter.fire([...toasts]);
-}
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
 }
 
 function createToastOptions(options: ToastOptions | string): ResolvedToastOptions {
@@ -141,7 +127,7 @@ function dismissToast(id: number) {
     return;
   }
 
-  const timerStore = getToastTimerStore(id);
+const timerStore = getToastTimerStore(id);
   timerStore.clear();
   toasts = toasts.map((item) =>
     item.id === id ? { ...item, isExiting: true } : item,
@@ -162,7 +148,7 @@ export const toast = {
       return toastBridge.show(defaultOptions) ?? -1;
     }
 
-    const id = ++toastId;
+const id = ++toastId;
     const newToast: ToastItem = { ...defaultOptions, id, isExiting: false };
     toasts.push(newToast);
     notify();
@@ -193,17 +179,10 @@ export const toast = {
 };
 
 function renderToastItem(item: ToastItem, closeLabel: string) {
-  const toastElement = createElement(
-    'div',
-    `comet-toast-item comet-toast-${item.type}${item.isExiting ? ' exit' : ''}`,
-  );
-  const icon = createElement('div', 'comet-toast-icon', getToastIconText(item.type || 'info'));
-  const content = createElement('div', 'comet-toast-content', item.message);
-  const closeButton = createElement(
-    'button',
-    'comet-toast-close comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-sm',
-    'x',
-  );
+  const toastElement = $<HTMLElementTagNameMap['div']>('div', { class: `comet-toast-item comet-toast-${item.type}${item.isExiting ? ' exit' : ''}` });
+  const icon = $<HTMLElementTagNameMap['div']>('div.comet-toast-icon', undefined, getToastIconText(item.type || 'info'));
+  const content = $<HTMLElementTagNameMap['div']>('div.comet-toast-content', undefined, item.message);
+  const closeButton = $<HTMLElementTagNameMap['button']>('button.comet-toast-close.comet-btn-base.comet-btn-ghost.comet-btn-mode-icon.comet-btn-sm', undefined, 'x');
   closeButton.type = 'button';
   closeButton.setAttribute('aria-label', closeLabel);
   toastElement.append(icon, content, closeButton);
@@ -214,7 +193,7 @@ function renderToastItem(item: ToastItem, closeLabel: string) {
 }
 
 export class ToastContainerView extends Disposable {
-  private readonly element = createElement('div', 'comet-toast-container');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-toast-container');
   private readonly renderDisposables = new DisposableStore();
   private closeLabel: string;
   private disposed = false;

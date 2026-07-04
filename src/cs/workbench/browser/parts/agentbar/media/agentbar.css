@@ -1,4 +1,4 @@
-.agentbar {
+.comet-agentbar {
   --agentbar-header-height: 36px;
   --sidebar-surface-bg: #FDFDFC;
   display: flex;
@@ -131,22 +131,22 @@
   padding: 4px 4px;
 }
 
-.comet-agentbar-tabs-header > .sidebar-action-bar {
+.comet-agentbar-tabs-header > .comet-sidebar-action-bar {
   flex: 0 0 auto;
   padding: 0;
   border-bottom: none;
 }
 
-.comet-agentbar-tabs-header > .sidebar-action-bar .actionbar-action {
+.comet-agentbar-tabs-header > .comet-sidebar-action-bar .comet-actionbar-action {
   min-height: 26px;
 }
 
-.comet-agentbar-tabs-header > .sidebar-action-bar .actionbar-action.is-icon {
+.comet-agentbar-tabs-header > .comet-sidebar-action-bar .comet-actionbar-action.comet-is-icon {
   width: 26px;
   height: 26px;
 }
 
-.comet-agentbar-tabs-header > .sidebar-action-bar .actionbar-action .lx-icon {
+.comet-agentbar-tabs-header > .comet-sidebar-action-bar .comet-actionbar-action .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;

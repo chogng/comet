@@ -41,13 +41,13 @@
   min-width: 0;
 }
 
-.comet-editor-browser-toolbar-actions .actionbar-actions-container {
+.comet-editor-browser-toolbar-actions .comet-actionbar-actions-container {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
 
-.comet-editor-browser-toolbar-btn.actionbar-action {
+.comet-editor-browser-toolbar-btn.comet-actionbar-action {
   width: var(--editor-browser-toolbar-action-size);
   height: var(--editor-browser-toolbar-action-size);
   border: none;
@@ -59,16 +59,16 @@
   padding: 0;
 }
 
-.comet-editor-browser-toolbar-btn.actionbar-action .lx-icon {
+.comet-editor-browser-toolbar-btn.comet-actionbar-action .lx-icon {
   width: var(--editor-browser-toolbar-icon-size);
   height: var(--editor-browser-toolbar-icon-size);
   font-size: var(--editor-browser-toolbar-icon-size);
 }
 
-.comet-editor-browser-toolbar-address-input.inputbox {
-  --inputbox-height: 26px;
-  --inputbox-border-radius: 7px;
-  --inputbox-foreground: var(--vscode-agentBar-inputForeground, #1f2d3a);
+.comet-editor-browser-toolbar-address-input.comet-inputbox {
+  --comet-inputbox-height: 26px;
+  --comet-inputbox-border-radius: 7px;
+  --comet-inputbox-foreground: var(--vscode-agentBar-inputForeground, #1f2d3a);
   width: 100%;
 }
 
@@ -105,13 +105,13 @@
   min-width: 0;
 }
 
-.comet-editor-pdf-toolbar-actions .actionbar-actions-container {
+.comet-editor-pdf-toolbar-actions .comet-actionbar-actions-container {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
 
-.comet-editor-pdf-toolbar-btn.actionbar-action {
+.comet-editor-pdf-toolbar-btn.comet-actionbar-action {
   width: var(--editor-pdf-toolbar-action-size);
   height: var(--editor-pdf-toolbar-action-size);
   border: none;
@@ -123,7 +123,7 @@
   padding: 0;
 }
 
-.comet-editor-pdf-toolbar-btn.actionbar-action .lx-icon {
+.comet-editor-pdf-toolbar-btn.comet-actionbar-action .lx-icon {
   width: var(--editor-pdf-toolbar-icon-size);
   height: var(--editor-pdf-toolbar-icon-size);
   font-size: var(--editor-pdf-toolbar-icon-size);

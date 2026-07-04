@@ -4,6 +4,7 @@ import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
@@ -44,17 +45,6 @@ type CreateSessionChatViewPropsParams = {
 		onOpenModelSettings: () => void;
 	};
 };
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
 
 export function createSessionChatViewProps({
 	state: {
@@ -125,7 +115,7 @@ export function createSessionChatViewProps({
 }
 
 export class SessionChatView {
-	private readonly element = createElement('div', 'comet-session-chat-view');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view');
 	private readonly widget: ChatWidget;
 
 	constructor(props: SessionChatViewProps) {

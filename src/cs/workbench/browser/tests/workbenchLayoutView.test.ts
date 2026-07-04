@@ -314,11 +314,11 @@ function createNativeHostService(): INativeHostService {
 
 function createWorkbenchLayoutViewProps() {
   const editorHeaderActionsElement = document.createElement('div');
-  editorHeaderActionsElement.className = 'comet-header-actions actionbar is-horizontal';
+  editorHeaderActionsElement.className = 'comet-header-actions comet-actionbar comet-is-horizontal';
   const actionsContainer = document.createElement('div');
-  actionsContainer.className = 'actionbar-actions-container';
+  actionsContainer.className = 'comet-actionbar-actions-container';
   const toggleButton = document.createElement('button');
-  toggleButton.className = 'actionbar-action comet-editor-header-toggle-editor-btn';
+  toggleButton.className = 'comet-actionbar-action comet-editor-header-toggle-editor-btn';
   toggleButton.setAttribute('aria-label', 'Expand editor');
   actionsContainer.append(toggleButton);
   editorHeaderActionsElement.append(actionsContainer);
@@ -674,7 +674,7 @@ test('WorkbenchLayoutView leaves primary action container out of content headers
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-header .comet-header-actions-host'),
+        .querySelector('.comet-sidebar-header .comet-header-actions-host'),
       null,
     );
     assert.equal(
@@ -699,7 +699,7 @@ test('WorkbenchLayoutView leaves primary action container out of content headers
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-header .comet-header-actions-host'),
+        .querySelector('.comet-sidebar-header .comet-header-actions-host'),
       null,
     );
   } finally {
@@ -769,7 +769,7 @@ test('WorkbenchLayoutView collapses editor and keeps expand action out of the si
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-header .comet-editor-header-toggle-editor-btn'),
+        .querySelector('.comet-sidebar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
     assert.equal(
@@ -977,12 +977,12 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
   try {
     const initialHeaderActionsHost = view
       .getElement()
-      .querySelector('.sidebar-header .comet-header-actions-host');
+      .querySelector('.comet-sidebar-header .comet-header-actions-host');
     assert.equal(initialHeaderActionsHost, null);
     assert(
       view
         .getElement()
-        .querySelector('.sidebar-content .sidebar-content-host') instanceof HTMLElement,
+        .querySelector('.comet-sidebar-content .comet-sidebar-content-host') instanceof HTMLElement,
     );
     assert(
       view
@@ -1011,17 +1011,17 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
     };
     view.setProps(materializeWorkbenchLayoutViewProps(nextProps));
 
-    assert.equal(view.getElement().querySelector('.sidebar-header'), null);
+    assert.equal(view.getElement().querySelector('.comet-sidebar-header'), null);
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-content > .settings-navigation'),
+        .querySelector('.comet-sidebar-content > .settings-navigation'),
       settingsNavigationElement,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-content .sidebar-content-host'),
+        .querySelector('.comet-sidebar-content .comet-sidebar-content-host'),
       null,
     );
     assert.equal(
@@ -1037,7 +1037,7 @@ test('WorkbenchLayoutView switches from content mode to settings mode using dedi
       settingsContentTopbar,
     );
     assert.equal(
-      view.getElement().querySelector('.agentbar'),
+      view.getElement().querySelector('.comet-agentbar'),
       null,
     );
   } finally {
@@ -1259,7 +1259,7 @@ test('WorkbenchLayoutView add dropdown supports search header filtering', async 
 
     const menu = document.body.querySelector('.dropdown-menu[data-menu=\"editor-header-add\"]');
     assert(menu instanceof HTMLElement);
-    const searchInput = menu.querySelector('.cs-menu-header .dropdown-menu-search-input .input');
+    const searchInput = menu.querySelector('.cs-menu-header .dropdown-menu-search-input .comet-input');
     assert(searchInput instanceof HTMLInputElement);
 
     searchInput.value = 'bro';
@@ -1406,10 +1406,10 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
       .querySelector('.comet-editor-browser-toolbar-leading [aria-label="Favorite"]');
     assert(favoriteButton instanceof HTMLButtonElement);
     assert.equal(favoriteButton.getAttribute('aria-pressed'), 'true');
-    const favoriteItem = favoriteButton.closest('.actionbar-item');
+    const favoriteItem = favoriteButton.closest('.comet-actionbar-item');
     assert(favoriteItem instanceof HTMLElement);
-    assert.equal(favoriteItem.classList.contains('is-active'), false);
-    assert.equal(favoriteItem.classList.contains('is-checked'), false);
+    assert.equal(favoriteItem.classList.contains('comet-is-active'), false);
+    assert.equal(favoriteItem.classList.contains('comet-is-checked'), false);
     assert(
       favoriteButton.querySelector('.lx-icon-favorite-filled') instanceof HTMLElement,
     );
@@ -1423,19 +1423,19 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
 
     const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
-    assert.equal(panel.classList.contains('is-open'), true);
+    assert.equal(panel.classList.contains('comet-is-open'), true);
     assert.equal(
-      panel.classList.contains('is-desktop-overlay'),
+      panel.classList.contains('comet-is-desktop-overlay'),
       true,
     );
     const panelBackdrop = document.body.querySelector(
       '.comet-editor-browser-library-panel-backdrop',
     );
     assert(panelBackdrop instanceof HTMLElement);
-    assert.equal(panelBackdrop.classList.contains('is-open'), true);
+    assert.equal(panelBackdrop.classList.contains('comet-is-open'), true);
 
     const favoriteItems = Array.from(
-      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.comet-is-favorite'),
     );
     assert.equal(favoriteItems.length, 1);
     const sectionTitles = Array.from(
@@ -1457,7 +1457,7 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
       '.comet-editor-browser-library-item-favicon',
     );
     assert(favoriteFavicon instanceof HTMLElement);
-    assert.equal(favoriteFavicon.classList.contains('is-loading'), true);
+    assert.equal(favoriteFavicon.classList.contains('comet-is-loading'), true);
     const favoriteTitle = favoriteItems[0]?.querySelector(
       '.comet-editor-browser-library-item-title',
     );
@@ -1471,12 +1471,12 @@ test('WorkbenchLayoutView shows browser library panel entries and navigates when
 
     assert.equal(addressChanges.at(-1), 'https://example.com/current');
     assert.equal(navigateCount, 1);
-    assert.equal(panel.classList.contains('is-open'), false);
+    assert.equal(panel.classList.contains('comet-is-open'), false);
     assert.equal(
-      panel.classList.contains('is-desktop-overlay'),
+      panel.classList.contains('comet-is-desktop-overlay'),
       true,
     );
-    assert.equal(panelBackdrop.classList.contains('is-open'), false);
+    assert.equal(panelBackdrop.classList.contains('comet-is-open'), false);
   } finally {
     view.dispose();
     document.body.replaceChildren();
@@ -1545,7 +1545,7 @@ test('WorkbenchLayoutView opens the favorite item context menu and dispatches Op
     const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.comet-is-favorite'),
     )[0];
     assert(favoriteItem instanceof HTMLButtonElement);
 
@@ -1574,7 +1574,7 @@ test('WorkbenchLayoutView opens the favorite item context menu and dispatches Op
 
     assert.equal(addressChanges.at(-1), FAVORITE_URL);
     assert.equal(navigateCount, 1);
-    assert.equal(panel.classList.contains('is-open'), false);
+    assert.equal(panel.classList.contains('comet-is-open'), false);
   } finally {
     view.dispose();
     document.body.replaceChildren();
@@ -1647,7 +1647,7 @@ test('WorkbenchLayoutView keeps favorite context menu Open in New Tab enabled fr
     const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.comet-is-favorite'),
     )[0];
     assert(favoriteItem instanceof HTMLButtonElement);
 
@@ -1673,7 +1673,7 @@ test('WorkbenchLayoutView keeps favorite context menu Open in New Tab enabled fr
     await waitForNextTask();
 
     assert.deepEqual(openedInNewTab, [FAVORITE_URL]);
-    assert.equal(panel.classList.contains('is-open'), false);
+    assert.equal(panel.classList.contains('comet-is-open'), false);
   } finally {
     view.dispose();
     document.body.replaceChildren();
@@ -1811,7 +1811,7 @@ test('WorkbenchLayoutView shows a filled favorite icon after loading a favorite 
     const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll('.comet-editor-browser-library-item.is-favorite'),
+      panel.querySelectorAll('.comet-editor-browser-library-item.comet-is-favorite'),
     ).find((item) => item.getAttribute('title') === FAVORITE_URL);
     assert(favoriteItem instanceof HTMLButtonElement);
     favoriteItem.click();
@@ -1895,7 +1895,7 @@ test('WorkbenchLayoutView keeps the toolbar favorite icon in sync when a current
     const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = Array.from(
-      panel.querySelectorAll(`.comet-editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`),
+      panel.querySelectorAll(`.comet-editor-browser-library-item.comet-is-favorite[title="${FAVORITE_URL}"]`),
     )[0];
     assert(favoriteItem instanceof HTMLButtonElement);
 
@@ -1989,23 +1989,23 @@ test('EditorBrowserLibraryPanel keeps the recent item and creates a separate fav
     );
     assert.equal(matchingItems.length, 2);
     const favoriteItems = panelElement.querySelectorAll(
-      `.comet-editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`,
+      `.comet-editor-browser-library-item.comet-is-favorite[title="${FAVORITE_URL}"]`,
     );
     assert.equal(favoriteItems.length, 1);
     const recentItems = panelElement.querySelectorAll(
-      `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]:not(.is-favorite)`,
+      `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]:not(.comet-is-favorite)`,
     );
     assert.equal(recentItems.length, 1);
     assert.notEqual(favoriteItems[0], recentItems[0]);
 
     const favoriteItemRow = favoriteItems[0]?.closest('.comet-editor-browser-library-item-row');
     assert(favoriteItemRow instanceof HTMLElement);
-    assert.equal(favoriteItemRow.classList.contains('is-deletable'), false);
+    assert.equal(favoriteItemRow.classList.contains('comet-is-deletable'), false);
     assert.equal(favoriteItemRow.querySelector('.comet-editor-browser-library-item-delete-btn'), null);
 
     const recentItemRow = recentItems[0]?.closest('.comet-editor-browser-library-item-row');
     assert(recentItemRow instanceof HTMLElement);
-    assert.equal(recentItemRow.classList.contains('is-deletable'), true);
+    assert.equal(recentItemRow.classList.contains('comet-is-deletable'), true);
     assert(
       recentItemRow.querySelector('.comet-editor-browser-library-item-delete-btn')
         instanceof HTMLButtonElement,
@@ -2092,7 +2092,7 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
     await waitForNextTask();
 
     const panelElement = panel.getElement();
-    const favoriteItemSelector = `.comet-editor-browser-library-item.is-favorite[title="${FAVORITE_URL}"]`;
+    const favoriteItemSelector = `.comet-editor-browser-library-item.comet-is-favorite[title="${FAVORITE_URL}"]`;
     const anyItemSelector = `.comet-editor-browser-library-item[title="${FAVORITE_URL}"]`;
     let favoriteItem = panelElement.querySelector(favoriteItemSelector);
     assert(favoriteItem instanceof HTMLButtonElement);
@@ -2177,7 +2177,7 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
     await waitForNextTask();
 
     assert.deepEqual(openedInNewTab, [FAVORITE_URL]);
-    assert.equal(panelElement.classList.contains('is-open'), false);
+    assert.equal(panelElement.classList.contains('comet-is-open'), false);
 
     panel.setOpen(true);
     await waitForNextTask();
@@ -2215,7 +2215,7 @@ test('EditorBrowserLibraryPanel favorite item context menu can rename, group, op
     assert.equal(folderTitles.includes('Reading List'), false);
     const recentItem = panelElement.querySelector(anyItemSelector);
     assert(recentItem instanceof HTMLButtonElement);
-    assert.equal(recentItem.classList.contains('is-favorite'), false);
+    assert.equal(recentItem.classList.contains('comet-is-favorite'), false);
     const recentTitle = recentItem.querySelector('.comet-editor-browser-library-item-title');
     assert(recentTitle instanceof HTMLElement);
     assert.equal(recentTitle.textContent, FAVORITE_TITLE);
@@ -2414,7 +2414,7 @@ test('WorkbenchLayoutView removes a recent browser library entry without trigger
 
     const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
-    assert.equal(panel.classList.contains('is-open'), true);
+    assert.equal(panel.classList.contains('comet-is-open'), true);
     const recentItem = Array.from(
       panel.querySelectorAll('.comet-editor-browser-library-item'),
     ).find((node) => {
@@ -2981,12 +2981,12 @@ test('WorkbenchLayoutView shows the active-tab toolbar for draft tabs and pdf ta
     );
     const pdfLeadingButtons = Array.from(
       pdfToolbar.querySelectorAll(
-        '.comet-editor-pdf-toolbar-leading .comet-editor-pdf-toolbar-btn.actionbar-action[aria-label]',
+        '.comet-editor-pdf-toolbar-leading .comet-editor-pdf-toolbar-btn.comet-actionbar-action[aria-label]',
       ),
     ).map((button) => button.getAttribute('aria-label'));
     const pdfTrailingButtons = Array.from(
       pdfToolbar.querySelectorAll(
-        '.comet-editor-pdf-toolbar-trailing .comet-editor-pdf-toolbar-btn.actionbar-action[aria-label]',
+        '.comet-editor-pdf-toolbar-trailing .comet-editor-pdf-toolbar-btn.comet-actionbar-action[aria-label]',
       ),
     ).map((button) => button.getAttribute('aria-label'));
     assert.deepEqual(pdfLeadingButtons, [
@@ -3051,13 +3051,13 @@ test('WorkbenchLayoutView mounts the draft editor content hierarchy inside comet
       ],
     );
 
-    const editorContent = editorFrame.querySelector(':scope > .comet-editor-content.is-mode-draft');
+    const editorContent = editorFrame.querySelector(':scope > .comet-editor-content.comet-is-mode-draft');
     assert(editorContent instanceof HTMLElement);
 
     const draftPane = editorContent.querySelector(':scope > .comet-editor-draft-pane');
     assert(draftPane instanceof HTMLElement);
 
-    const proseMirrorSurface = draftPane.querySelector(':scope > .pm-editor-surface');
+    const proseMirrorSurface = draftPane.querySelector(':scope > .comet-pm-editor-surface');
     assert(proseMirrorSurface instanceof HTMLElement);
 
     const proseMirrorRoot = proseMirrorSurface.querySelector('.ProseMirror');
@@ -3068,7 +3068,7 @@ test('WorkbenchLayoutView mounts the draft editor content hierarchy inside comet
   }
 });
 
-test('WorkbenchLayoutView mounts the editor collapse action into agentbar header even when the primary sidebar is visible', () => {
+test('WorkbenchLayoutView mounts the editor collapse action into comet-agentbar header even when the primary sidebar is visible', () => {
   const props = createWorkbenchLayoutViewProps();
   props.isPrimarySidebarVisible = true;
   props.isAgentSidebarVisible = true;
@@ -3093,13 +3093,13 @@ test('WorkbenchLayoutView mounts the editor collapse action into agentbar header
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-header .comet-header-actions-host'),
+        .querySelector('.comet-sidebar-header .comet-header-actions-host'),
       null,
     );
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-header .comet-editor-header-toggle-editor-btn'),
+        .querySelector('.comet-sidebar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
   } finally {
@@ -3107,7 +3107,7 @@ test('WorkbenchLayoutView mounts the editor collapse action into agentbar header
   }
 });
 
-test('WorkbenchLayoutView keeps primary width fixed and expands agentbar when the editor is collapsed', () => {
+test('WorkbenchLayoutView keeps primary width fixed and expands comet-agentbar when the editor is collapsed', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3237,7 +3237,7 @@ test('WorkbenchLayoutView clamps sidebar sizes with content layout orientation i
   }
 });
 
-test('WorkbenchLayoutView measures the pre-toggle editor size before the first animation frame when agentbar becomes visible', () => {
+test('WorkbenchLayoutView measures the pre-toggle editor size before the first animation frame when comet-agentbar becomes visible', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3275,7 +3275,7 @@ test('WorkbenchLayoutView measures the pre-toggle editor size before the first a
   }
 });
 
-test('WorkbenchLayoutView keeps primary width fixed when agentbar becomes visible in collapsed mode', () => {
+test('WorkbenchLayoutView keeps primary width fixed when comet-agentbar becomes visible in collapsed mode', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3320,7 +3320,7 @@ test('WorkbenchLayoutView keeps primary width fixed when agentbar becomes visibl
   }
 });
 
-test('WorkbenchLayoutView keeps primary width fixed and expands editor when agentbar becomes hidden', () => {
+test('WorkbenchLayoutView keeps primary width fixed and expands editor when comet-agentbar becomes hidden', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3367,7 +3367,7 @@ test('WorkbenchLayoutView keeps primary width fixed and expands editor when agen
   }
 });
 
-test('WorkbenchLayoutView keeps primary and agent widths fixed when agentbar becomes visible', () => {
+test('WorkbenchLayoutView keeps primary and agent widths fixed when comet-agentbar becomes visible', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3415,7 +3415,7 @@ test('WorkbenchLayoutView keeps primary and agent widths fixed when agentbar bec
   }
 });
 
-test('WorkbenchLayoutView hides agentbar and restores editor when agentbar hide is requested from collapsed mode', () => {
+test('WorkbenchLayoutView hides comet-agentbar and restores editor when comet-agentbar hide is requested from collapsed mode', () => {
   const animationFrameSpy = installAnimationFrameSpy();
   setWindowInnerWidth(1280);
 
@@ -3471,7 +3471,7 @@ test('WorkbenchLayoutView hides agentbar and restores editor when agentbar hide 
     assert.equal(
       view
         .getElement()
-        .querySelector('.sidebar-header .comet-editor-header-toggle-editor-btn'),
+        .querySelector('.comet-sidebar-header .comet-editor-header-toggle-editor-btn'),
       null,
     );
 

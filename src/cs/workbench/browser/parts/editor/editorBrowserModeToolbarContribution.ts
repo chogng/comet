@@ -7,34 +7,19 @@ import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/ed
 import type {
   EditorModeToolbarContribution,
   EditorModeToolbarContributionContext,
-} from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-const EDITOR_BROWSER_TOOLBAR_MORE_MENU_DATA = 'editor-browser-toolbar-more';
+} from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';const EDITOR_BROWSER_TOOLBAR_MORE_MENU_DATA = 'editor-browser-toolbar-more';
+import { $ } from 'cs/base/browser/dom';
 
 export class EditorBrowserModeToolbarContribution
 implements EditorModeToolbarContribution {
   readonly mode = 'browser' as const;
 
   private context: EditorModeToolbarContributionContext;
-  private readonly element = createElement(
-    'div',
-    'comet-editor-mode-toolbar comet-editor-browser-toolbar',
-  );
-  private readonly toolbarRow = createElement('div', 'comet-editor-browser-toolbar-row');
-  private readonly leadingHost = createElement('div', 'comet-editor-browser-toolbar-leading');
-  private readonly addressHost = createElement('div', 'comet-editor-browser-toolbar-address-host');
-  private readonly trailingHost = createElement('div', 'comet-editor-browser-toolbar-trailing');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-editor-mode-toolbar.comet-editor-browser-toolbar');
+  private readonly toolbarRow = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-toolbar-row');
+  private readonly leadingHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-toolbar-leading');
+  private readonly addressHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-toolbar-address-host');
+  private readonly trailingHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-toolbar-trailing');
   private readonly leadingActionsView = createActionBarView({
     className: 'comet-editor-browser-toolbar-actions',
     ariaRole: 'group',
@@ -196,7 +181,7 @@ implements EditorModeToolbarContribution {
       return;
     }
 
-    const changed = panel.toggleCurrentBrowserUrlFavorite();
+const changed = panel.toggleCurrentBrowserUrlFavorite();
     if (!changed) {
       return;
     }

@@ -26,7 +26,7 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-.comet-notification-list-item.is-compact {
+.comet-notification-list-item.comet-is-compact {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
 }
 
@@ -99,7 +99,7 @@
   padding: 4px 8px;
 }
 
-.comet-notification-list-item-action.is-primary {
+.comet-notification-list-item-action.comet-is-primary {
   background: var(--cs-accent, #0969da);
   border-color: var(--cs-accent, #0969da);
   color: #fff;

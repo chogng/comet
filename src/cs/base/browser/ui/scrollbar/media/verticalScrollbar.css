@@ -1,4 +1,4 @@
-.scrollable-element-root {
+.comet-scrollable-element-root {
   position: relative;
   display: block;
   overflow: hidden;
@@ -8,7 +8,7 @@
   min-width: 0;
 }
 
-.scrollable-element-root .scrollable-content {
+.comet-scrollable-element-root .comet-scrollable-content {
   position: absolute;
   inset: 0;
   display: block;
@@ -21,19 +21,19 @@
   scrollbar-width: none;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar:vertical {
+.comet-scrollable-element-root .comet-scrollable-content::-webkit-scrollbar:vertical {
   width: 0;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar:horizontal {
+.comet-scrollable-element-root .comet-scrollable-content::-webkit-scrollbar:horizontal {
   height: 0;
 }
 
-.scrollable-element-root .scrollable-content::-webkit-scrollbar-corner {
+.comet-scrollable-element-root .comet-scrollable-content::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-.scrollable-element-root .overlay-scrollbar {
+.comet-scrollable-element-root .comet-overlay-scrollbar {
   position: absolute;
   z-index: 2;
   opacity: 0;
@@ -42,31 +42,31 @@
   contain: strict;
 }
 
-.scrollable-element-root .overlay-scrollbar-vertical {
+.comet-scrollable-element-root .comet-overlay-scrollbar-vertical {
   top: 0;
   right: 0;
   bottom: 0;
-  width: var(--scrollbar-size-vertical, 10px);
+  width: var(--comet-scrollbar-size-vertical, 10px);
 }
 
-.scrollable-element-root .overlay-scrollbar-horizontal {
+.comet-scrollable-element-root .comet-overlay-scrollbar-horizontal {
   right: 0;
   bottom: 0;
   left: 0;
-  height: var(--scrollbar-size-horizontal, 10px);
+  height: var(--comet-scrollbar-size-horizontal, 10px);
 }
 
-.scrollable-element-root.is-vertical-scrollbar-visible .overlay-scrollbar-vertical,
-.scrollable-element-root.is-horizontal-scrollbar-visible .overlay-scrollbar-horizontal {
+.comet-scrollable-element-root.comet-is-vertical-scrollbar-visible .comet-overlay-scrollbar-vertical,
+.comet-scrollable-element-root.comet-is-horizontal-scrollbar-visible .comet-overlay-scrollbar-horizontal {
   opacity: 1;
   pointer-events: auto;
 }
 
-.scrollable-element-root.is-scrollbar-hiding .overlay-scrollbar {
+.comet-scrollable-element-root.comet-is-scrollbar-hiding .comet-overlay-scrollbar {
   transition-duration: 500ms;
 }
 
-.scrollable-element-root .overlay-scrollbar-slider {
+.comet-scrollable-element-root .comet-overlay-scrollbar-slider {
   position: absolute;
   top: 0;
   left: 0;
@@ -79,27 +79,27 @@
   contain: strict;
 }
 
-.scrollable-element-root .overlay-scrollbar-vertical .overlay-scrollbar-slider {
+.comet-scrollable-element-root .comet-overlay-scrollbar-vertical .comet-overlay-scrollbar-slider {
   width: 100%;
 }
 
-.scrollable-element-root .overlay-scrollbar-horizontal .overlay-scrollbar-slider {
+.comet-scrollable-element-root .comet-overlay-scrollbar-horizontal .comet-overlay-scrollbar-slider {
   height: 100%;
 }
 
-.scrollable-element-root .overlay-scrollbar-slider:hover {
+.comet-scrollable-element-root .comet-overlay-scrollbar-slider:hover {
   background:
     var(--vscode-scrollbarSlider-hoverBackground, rgba(92, 92, 92, 0.58))
     padding-box;
 }
 
-.scrollable-element-root .overlay-scrollbar-slider:active {
+.comet-scrollable-element-root .comet-overlay-scrollbar-slider:active {
   background:
     var(--vscode-scrollbarSlider-activeBackground, rgba(72, 72, 72, 0.76))
     padding-box;
 }
 
-.scrollable-element-root.use-shadows::before {
+.comet-scrollable-element-root.comet-use-shadows::before {
   content: '';
   position: absolute;
   inset: 0 auto auto 0;
@@ -111,6 +111,6 @@
   transition: opacity 120ms linear;
 }
 
-.scrollable-element-root.use-shadows.has-top-shadow::before {
+.comet-scrollable-element-root.comet-use-shadows.comet-has-top-shadow::before {
   opacity: 1;
 }

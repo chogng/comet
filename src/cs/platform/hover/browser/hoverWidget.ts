@@ -177,18 +177,18 @@ function renderHoverAction(
 	renderDisposables: DisposableStore,
 	hide: () => void,
 ) {
-	const actionContainer = $<HTMLElementTagNameMap['div']>('div.cs-hover-action-container.action-container');
+	const actionContainer = $<HTMLElementTagNameMap['div']>('div.comet-hover-action-container');
 	actionContainer.tabIndex = action.disabled ? -1 : 0;
 	actionContainer.setAttribute('aria-disabled', action.disabled ? 'true' : 'false');
 	if (action.disabled) {
-		actionContainer.classList.add('disabled');
+		actionContainer.classList.add('comet-is-disabled');
 	}
 
-const button = $<HTMLElementTagNameMap['button']>('button.cs-hover-action.action') as HTMLButtonElement;
+const button = $<HTMLElementTagNameMap['button']>('button.comet-hover-action') as HTMLButtonElement;
 	button.type = 'button';
 	button.disabled = Boolean(action.disabled);
 	if (action.icon && !button.disabled) {
-		const icon = $<HTMLElementTagNameMap['span']>('span.cs-hover-action-icon.icon');
+		const icon = $<HTMLElementTagNameMap['span']>('span.comet-hover-action-icon');
 		icon.append(cloneHoverRenderable(action.icon));
 		button.append(icon);
 	}
@@ -224,9 +224,9 @@ export function normalizeWorkbenchHoverInput(input: HoverInput): HoverOptions | 
 }
 
 class WorkbenchHoverWidget {
-	private readonly element = $<HTMLElementTagNameMap['div']>('div.cs-hover-overlay.workbench-hover-overlay');
-	private readonly pointer = $<HTMLElementTagNameMap['div']>('div.cs-hover-pointer.workbench-hover-pointer');
-	private readonly card = $<HTMLElementTagNameMap['div']>('div.cs-hover-card.workbench-hover-card');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-hover-overlay');
+	private readonly pointer = $<HTMLElementTagNameMap['div']>('div.comet-hover-pointer');
+	private readonly card = $<HTMLElementTagNameMap['div']>('div.comet-hover-card');
 	private readonly mountDisposables = new DisposableStore();
 	private readonly renderDisposables = new DisposableStore();
 	private owner: WorkbenchHoverController | null = null;
@@ -300,26 +300,26 @@ class WorkbenchHoverWidget {
 
 	private render(options: HoverOptions) {
 		this.renderDisposables.clear();
-		this.card.className = 'cs-hover-card workbench-hover-card';
-		this.card.classList.toggle('compact', Boolean(options.compact));
-		this.card.classList.remove('right-aligned');
+		this.card.className = 'comet-hover-card';
+		this.card.classList.toggle('comet-is-compact', Boolean(options.compact));
+		this.card.classList.remove('comet-is-right-aligned');
 		if (options.className) {
 			this.card.classList.add(...options.className.split(/\s+/).filter(Boolean));
 		}
 		this.card.style.maxWidth = `${Math.max(options.maxWidth ?? 320, 132)}px`;
 		this.card.setAttribute('role', (options.actions?.length ?? 0) > 0 ? 'dialog' : 'tooltip');
 
-		const contentRow = $<HTMLElementTagNameMap['div']>('div.cs-hover-row.hover-row.markdown-hover');
-		const contents = $<HTMLElementTagNameMap['div']>('div', { class: `cs-hover-contents hover-contents${typeof options.content === 'string' ? '' : ' is-node'}` });
+		const contentRow = $<HTMLElementTagNameMap['div']>('div.comet-hover-row.comet-hover-markdown');
+		const contents = $<HTMLElementTagNameMap['div']>('div', { class: `comet-hover-contents${typeof options.content === 'string' ? '' : ' comet-is-node'}` });
 
 		if (!isHoverRenderableEmpty(options.content)) {
-			const content = $<HTMLElementTagNameMap['div']>('div.cs-hover-content');
+			const content = $<HTMLElementTagNameMap['div']>('div.comet-hover-content');
 			content.append(cloneHoverRenderable(options.content!));
 			contents.append(content);
 		}
 
 		if (options.subtitle?.trim()) {
-			const subtitle = $<HTMLElementTagNameMap['div']>('div.cs-hover-subtitle');
+			const subtitle = $<HTMLElementTagNameMap['div']>('div.comet-hover-subtitle');
 			subtitle.textContent = options.subtitle;
 			contents.append(subtitle);
 		}
@@ -327,8 +327,8 @@ class WorkbenchHoverWidget {
 		contentRow.append(contents);
 		const nodes: Node[] = [contentRow];
 		if ((options.actions?.length ?? 0) > 0 && this.target) {
-			const statusBarElement = $<HTMLElementTagNameMap['div']>('div.cs-hover-row.hover-row.status-bar');
-			const actionsElement = $<HTMLElementTagNameMap['div']>('div.cs-hover-actions.actions');
+			const statusBarElement = $<HTMLElementTagNameMap['div']>('div.comet-hover-row.comet-hover-status-bar');
+			const actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-hover-actions');
 			for (const action of options.actions ?? []) {
 				actionsElement.append(renderHoverAction(
 					this.target,
@@ -349,9 +349,9 @@ class WorkbenchHoverWidget {
 		const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
 		const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
 
-		this.element.classList.toggle('has-pointer', options.showPointer !== false);
-		this.element.classList.remove('is-above', 'is-below');
-		this.pointer.classList.remove('top', 'bottom');
+		this.element.classList.toggle('comet-has-pointer', options.showPointer !== false);
+		this.element.classList.remove('comet-is-above', 'comet-is-below');
+		this.pointer.classList.remove('comet-is-top', 'comet-is-bottom');
 		this.element.style.left = `${VIEWPORT_MARGIN_PX}px`;
 		this.element.style.top = `${VIEWPORT_MARGIN_PX}px`;
 
@@ -366,8 +366,8 @@ class WorkbenchHoverWidget {
 					? 'below'
 					: 'above';
 
-		this.element.classList.add(placement === 'above' ? 'is-above' : 'is-below');
-		this.pointer.classList.add(placement === 'above' ? 'bottom' : 'top');
+		this.element.classList.add(placement === 'above' ? 'comet-is-above' : 'comet-is-below');
+		this.pointer.classList.add(placement === 'above' ? 'comet-is-bottom' : 'comet-is-top');
 
 		const nextTop = placement === 'above'
 			? targetRect.top - hoverRect.height - POINTER_OFFSET_PX
@@ -391,10 +391,10 @@ class WorkbenchHoverWidget {
 		);
 
 		this.element.style.left = `${Math.round(left)}px`;
-		this.element.style.top = `${Math.round(top)}px`;
+		this.element.style.top = `${Math.round(comet-is-top)}px`;
 		this.pointer.style.left = `${Math.round(pointerLeft - 3)}px`;
-		this.card.classList.toggle('right-aligned', isRightAligned);
-		this.element.style.setProperty('--cs-hover-pointer-left', `${Math.round(pointerLeft)}px`);
+		this.card.classList.toggle('comet-is-right-aligned', isRightAligned);
+		this.element.style.setProperty('--comet-hover-pointer-left', `${Math.round(pointerLeft)}px`);
 	}
 
 	private readonly handleMouseEnter = () => {

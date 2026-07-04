@@ -4,26 +4,16 @@ import {
 	type SessionView,
 	type SessionViewProps,
 } from 'cs/sessions/browser/parts/sessions/sessionView';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
 
 export type SessionsPartViewProps = SessionViewProps;
 
 export class SessionsPartView {
 	readonly id = SESSION_PART_IDS.sessions;
 
-	private readonly element = createElement('section', 'comet-sessions-part');
+	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-sessions-part');
 	private readonly sessionView: SessionView;
 	private disposed = false;
 

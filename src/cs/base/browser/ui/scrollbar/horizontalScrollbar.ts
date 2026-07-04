@@ -207,13 +207,13 @@ export class HorizontalScrollbar extends Disposable {
     this.scrollbarState.setDimensions(trackWidth, scrollWidth);
     this.scrollbarState.setScrollLeft(this.strip.scrollLeft);
 
-    this.host.classList.toggle('horizontal-scrollbar-host', true);
-    this.host.classList.toggle('is-scrollable', isScrollable);
+    this.host.classList.toggle('comet-horizontal-scrollbar-host', true);
+    this.host.classList.toggle('comet-is-scrollable', isScrollable);
     if (!isScrollable) {
       this.thumb.style.width = '0px';
       this.thumb.style.transform = 'translate3d(0, 0, 0)';
-      this.host.classList.remove('is-scrollbar-active');
-      this.host.classList.remove('is-scrollbar-dragging');
+      this.host.classList.remove('comet-is-scrollbar-active');
+      this.host.classList.remove('comet-is-scrollbar-dragging');
       this.emitScrollLeft();
       return;
     }
@@ -249,7 +249,7 @@ export class HorizontalScrollbar extends Disposable {
     if (
       event.button !== 0 ||
       event.target !== this.track ||
-      !this.host.classList.contains('is-scrollable')
+      !this.host.classList.contains('comet-is-scrollable')
     ) {
       return;
     }
@@ -264,7 +264,7 @@ export class HorizontalScrollbar extends Disposable {
   };
 
   private readonly handleThumbPointerDown = (event: PointerEvent) => {
-    if (event.button !== 0 || !this.host.classList.contains('is-scrollable')) {
+    if (event.button !== 0 || !this.host.classList.contains('comet-is-scrollable')) {
       return;
     }
 
@@ -273,8 +273,8 @@ export class HorizontalScrollbar extends Disposable {
     this.dragPointerId = event.pointerId;
     this.dragStartClientX = event.clientX;
     this.dragStartScrollLeft = this.strip.scrollLeft;
-    this.host.classList.add('is-scrollbar-active');
-    this.host.classList.add('is-scrollbar-dragging');
+    this.host.classList.add('comet-is-scrollbar-active');
+    this.host.classList.add('comet-is-scrollbar-dragging');
     this.thumb.setPointerCapture?.(event.pointerId);
     this.dragListeners.value = combinedDisposable(
       addDisposableListener(window, 'pointermove', this.handleWindowPointerMove),
@@ -315,7 +315,7 @@ export class HorizontalScrollbar extends Disposable {
     }
     this.dragPointerId = null;
     this.dragListeners.clear();
-    this.host.classList.remove('is-scrollbar-dragging');
+    this.host.classList.remove('comet-is-scrollbar-dragging');
   }
 
   private readonly handleScrollbarWheel = (event: WheelEvent) => {
@@ -323,7 +323,7 @@ export class HorizontalScrollbar extends Disposable {
       return;
     }
 
-    const isScrollable = this.host.classList.contains('is-scrollable');
+    const isScrollable = this.host.classList.contains('comet-is-scrollable');
     if (!isScrollable) {
       if (this.alwaysConsumeMouseWheel) {
         event.preventDefault();
@@ -413,11 +413,11 @@ export class HorizontalScrollbar extends Disposable {
   }
 
   private showScrollbarTemporarily() {
-    if (!this.host.classList.contains('is-scrollable')) {
+    if (!this.host.classList.contains('comet-is-scrollable')) {
       return;
     }
 
-    this.host.classList.add('is-scrollbar-active');
+    this.host.classList.add('comet-is-scrollbar-active');
     this.clearActiveClassTimeout();
     let timeoutId = 0;
     const timeoutHandle = toDisposable(() => {
@@ -428,7 +428,7 @@ export class HorizontalScrollbar extends Disposable {
         this.activeClassTimeout.clear();
       }
       if (this.dragPointerId === null) {
-        this.host.classList.remove('is-scrollbar-active');
+        this.host.classList.remove('comet-is-scrollbar-active');
       }
     }, ACTIVE_CLASS_TIMEOUT);
     this.activeClassTimeout.value = timeoutHandle;

@@ -34,6 +34,7 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import { URI } from 'cs/base/common/uri';
 import { init as initPdfium } from 'cs/editor/browser/pdf/vendor/pdfium/index.js';
 import type { WrappedPdfiumModule } from 'cs/editor/browser/pdf/vendor/pdfium/index.js';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/editor/browser/pdf/media/pdfDocumentReader.css';
 
@@ -69,20 +70,7 @@ export type PdfReaderRuntimeStatus = {
   message: string;
   detail?: string;
   hitTest?: PdfSelectionHitTestStatus;
-};
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-type PdfiumDocumentHandle = {
+};type PdfiumDocumentHandle = {
   pdfium: PdfiumModuleWithHeap;
   documentPtr: number;
   filePtr: number;
@@ -272,7 +260,8 @@ function normalizePdfError(error: unknown) {
     if (error.message) {
       details.push(error.message);
     }
-    const errorWithCode = error as Error & {
+
+const errorWithCode = error as Error & {
       code?: string;
       details?: Record<string, unknown>;
     };
@@ -326,7 +315,8 @@ class PdfRenderScheduler {
       if (!latestCallback || !latestOnError) {
         return;
       }
-      const generation = this.generation;
+
+const generation = this.generation;
       const token: PdfRenderToken = {
         isStale: () => generation !== this.generation,
       };
@@ -445,12 +435,12 @@ class PdfViewportModel {
       return [];
     }
 
-    const viewportHeight = this.pagesElement.clientHeight;
+const viewportHeight = this.pagesElement.clientHeight;
     if (viewportHeight <= 0) {
       return shells.slice(0, 2).map((shell) => ({ shell, priority: 0 }));
     }
 
-    const viewportTop = this.pagesElement.scrollTop;
+const viewportTop = this.pagesElement.scrollTop;
     const viewportBottom = viewportTop + viewportHeight;
     const viewportCenter = viewportTop + viewportHeight / 2;
     const margin = this.getVirtualizationMargin();
@@ -511,24 +501,21 @@ class PdfViewportModel {
 
 export class PdfDocumentReader {
   private props: PdfDocumentReaderProps;
-  private readonly element = createElement('div', 'comet-pdf-document-reader');
-  private readonly surfaceElement = createElement('div', 'comet-pdf-annotation-surface');
-  private readonly readerElement = createElement('div', 'comet-pdf-reader-view');
-  private readonly pagesElement = createElement('div', 'comet-pdf-reader-pages');
-  private readonly loadingElement = createElement('div', 'comet-pdf-reader-status');
-  private readonly unavailableElement = createElement(
-    'div',
-    'empty-state webcontent-runtime-warning comet-pdf-reader-unavailable',
-  );
-  private readonly emptyOpenElement = createElement('div', 'comet-pdf-annotation-open-empty');
-  private readonly openPdfButton = createElement('button', 'comet-pdf-annotation-open-btn');
-  private readonly annotationPanelElement = createElement('aside', 'comet-pdf-annotation-panel');
-  private readonly annotationPanelTitleElement = createElement('div', 'comet-pdf-annotation-panel-title');
-  private readonly annotationPanelCloseButton = createElement('button', 'comet-pdf-annotation-panel-close');
-  private readonly annotationPanelQuoteElement = createElement('div', 'comet-pdf-annotation-panel-quote');
-  private readonly annotationPanelCommentInput = createElement('textarea', 'comet-pdf-annotation-panel-comment');
-  private readonly annotationPanelSaveButton = createElement('button', 'comet-pdf-annotation-panel-save');
-  private readonly annotationPanelDeleteButton = createElement('button', 'comet-pdf-annotation-panel-delete');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-pdf-document-reader');
+  private readonly surfaceElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-annotation-surface');
+  private readonly readerElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-reader-view');
+  private readonly pagesElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-reader-pages');
+  private readonly loadingElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-reader-status');
+  private readonly unavailableElement = $<HTMLElementTagNameMap['div']>('div.comet-empty-state.comet-webcontent-runtime-warning.comet-pdf-reader-unavailable');
+  private readonly emptyOpenElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-annotation-open-empty');
+  private readonly openPdfButton = $<HTMLElementTagNameMap['button']>('button.comet-pdf-annotation-open-btn');
+  private readonly annotationPanelElement = $<HTMLElementTagNameMap['aside']>('aside.comet-pdf-annotation-panel');
+  private readonly annotationPanelTitleElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-annotation-panel-title');
+  private readonly annotationPanelCloseButton = $<HTMLElementTagNameMap['button']>('button.comet-pdf-annotation-panel-close');
+  private readonly annotationPanelQuoteElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-annotation-panel-quote');
+  private readonly annotationPanelCommentInput = $<HTMLElementTagNameMap['textarea']>('textarea.comet-pdf-annotation-panel-comment');
+  private readonly annotationPanelSaveButton = $<HTMLElementTagNameMap['button']>('button.comet-pdf-annotation-panel-save');
+  private readonly annotationPanelDeleteButton = $<HTMLElementTagNameMap['button']>('button.comet-pdf-annotation-panel-delete');
   private readonly store = new PdfAnnotationStore();
   private readonly unsubscribeStore: () => void;
   private selectedAnnotationId: string | null = null;
@@ -622,8 +609,8 @@ export class PdfDocumentReader {
     this.annotationPanelDeleteButton.type = 'button';
     this.annotationPanelDeleteButton.textContent = 'Delete';
     this.annotationPanelDeleteButton.addEventListener('click', this.handleAnnotationPanelDelete);
-    const annotationPanelHeader = createElement('div', 'comet-pdf-annotation-panel-header');
-    const annotationPanelActions = createElement('div', 'comet-pdf-annotation-panel-actions');
+    const annotationPanelHeader = $<HTMLElementTagNameMap['div']>('div.comet-pdf-annotation-panel-header');
+    const annotationPanelActions = $<HTMLElementTagNameMap['div']>('div.comet-pdf-annotation-panel-actions');
     annotationPanelHeader.append(
       this.annotationPanelTitleElement,
       this.annotationPanelCloseButton,
@@ -786,7 +773,7 @@ export class PdfDocumentReader {
         return;
       }
 
-      const pdfData = await this.loadPdfData(url);
+const pdfData = await this.loadPdfData(url);
       if (version !== this.loadVersion) {
         return;
       }
@@ -850,7 +837,7 @@ export class PdfDocumentReader {
       return new Uint8Array(await response.arrayBuffer());
     }
 
-    const result = await this.props.nativeHost.invoke('read_pdf_file', {
+const result = await this.props.nativeHost.invoke('read_pdf_file', {
       resource: URI.parse(url, true).toJSON(),
     });
     return new Uint8Array(result.data);
@@ -951,7 +938,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const client = new PdfiumRenderWorkerClient();
+const client = new PdfiumRenderWorkerClient();
     const documentId = this.pdfRenderWorkerDocumentId + 1;
     this.pdfRenderWorkerClient = client;
     this.pdfRenderWorkerDocumentId = documentId;
@@ -1012,7 +999,7 @@ export class PdfDocumentReader {
         return;
       }
 
-      const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
+const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
         documentHandle.documentPtr,
         pageNumber - 1,
       );
@@ -1039,11 +1026,11 @@ export class PdfDocumentReader {
     pageWidth: number,
     pageHeight: number,
   ): PdfPageShell {
-    const pageElement = createElement('section', 'comet-pdf-reader-page');
-    const pageMetaElement = createElement('div', 'comet-pdf-reader-page-meta');
-    const pageCanvasWrap = createElement('div', 'comet-pdf-reader-page-canvas-wrap');
-    const tileLayer = createElement('div', 'comet-pdf-reader-page-tile-layer');
-    const highlightLayer = createElement('div', 'comet-pdf-reader-highlight-layer');
+    const pageElement = $<HTMLElementTagNameMap['section']>('section.comet-pdf-reader-page');
+    const pageMetaElement = $<HTMLElementTagNameMap['div']>('div.comet-pdf-reader-page-meta');
+    const pageCanvasWrap = $<HTMLElementTagNameMap['div']>('div.comet-pdf-reader-page-canvas-wrap');
+    const tileLayer = $<HTMLElementTagNameMap['div']>('div.comet-pdf-reader-page-tile-layer');
+    const highlightLayer = $<HTMLElementTagNameMap['div']>('div.comet-pdf-reader-highlight-layer');
     const geometry = this.getPageGeometry(pageWidth, pageHeight);
 
     pageElement.dataset.pdfPage = String(pageNumber);
@@ -1281,7 +1268,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const candidates = [...this.viewportTileCache.entries()]
+const candidates = [...this.viewportTileCache.entries()]
       .filter(([cacheKey]) => !protectedTileKeys.has(cacheKey))
       .sort((a, b) => a[1].lastUsedAt - b[1].lastUsedAt);
 
@@ -1358,7 +1345,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const { canvas } = previewCanvas;
+const { canvas } = previewCanvas;
     this.clearShellPreviewCanvases(shell);
     canvas.classList.add('comet-pdf-reader-page-preview-canvas');
     canvas.classList.remove('comet-is-fading');
@@ -1457,7 +1444,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const visibleShells = this.getVisiblePageShells()
+const visibleShells = this.getVisiblePageShells()
       .filter(({ priority }) =>
         options.maxPriority === undefined || priority <= options.maxPriority,
       );
@@ -1557,7 +1544,7 @@ export class PdfDocumentReader {
       return false;
     }
 
-    const outputScale = this.getOutputScale(
+const outputScale = this.getOutputScale(
       shell.cssWidth,
       shell.cssHeight,
       options.quality ?? 'quality',
@@ -1572,7 +1559,7 @@ export class PdfDocumentReader {
       return false;
     }
 
-    const previousRenderState = shell.renderState;
+const previousRenderState = shell.renderState;
     const previousCanvas = shell.canvas;
     shell.renderState = 'rendering';
     const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
@@ -1584,7 +1571,7 @@ export class PdfDocumentReader {
       throw new Error(`PDFium failed to load page ${shell.pageNumber}.`);
     }
 
-    const canvas = document.createElement('canvas');
+const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
 
     if (!context) {
@@ -1654,7 +1641,7 @@ export class PdfDocumentReader {
         return false;
       }
 
-      const previewCanvas = this.createShellPreviewCanvas(previousCanvas);
+const previewCanvas = this.createShellPreviewCanvas(previousCanvas);
       const didClearPreview = this.clearShellInstantZoomPreview(shell);
       this.clearShellViewportTiles(shell);
       if (previousCanvas?.isConnected) {
@@ -1737,7 +1724,7 @@ export class PdfDocumentReader {
         return false;
       }
 
-      const workerPage: PdfWorkerPageRenderRequest = {
+const workerPage: PdfWorkerPageRenderRequest = {
         pageNumber: shell.pageNumber,
         bitmapWidth,
         bitmapHeight,
@@ -1820,7 +1807,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const pdfium = documentHandle.pdfium;
+const pdfium = documentHandle.pdfium;
     const runtime = pdfium.pdfium;
     let sliceStartedAt = performance.now();
     const pauseCallbackPtr = runtime.addFunction(() => {
@@ -1906,7 +1893,7 @@ export class PdfDocumentReader {
       return [];
     }
 
-    const tileSize = PDF_READER_VIEWPORT_TILE_SIZE_PX;
+const tileSize = PDF_READER_VIEWPORT_TILE_SIZE_PX;
     const startColumn = Math.floor(tileRect.x / tileSize);
     const endColumn = Math.floor((tileRect.x + tileRect.width - 1) / tileSize);
     const startRow = Math.floor(tileRect.y / tileSize);
@@ -1957,7 +1944,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const visibleShells = this.getVisiblePageShells()
+const visibleShells = this.getVisiblePageShells()
       .filter(({ priority, shell }) =>
         priority === 0 && shell.renderState === 'rendered',
       );
@@ -1999,7 +1986,7 @@ export class PdfDocumentReader {
       return false;
     }
 
-    const outputScale = this.getOutputScale(shell.cssWidth, shell.cssHeight, 'quality');
+const outputScale = this.getOutputScale(shell.cssWidth, shell.cssHeight, 'quality');
     if (
       shell.outputScale >= outputScale - 0.01 &&
       this.isShellRenderedAtCurrentGeometry(shell, outputScale)
@@ -2012,7 +1999,7 @@ export class PdfDocumentReader {
       shell.tileOutputScale = outputScale;
     }
 
-    const visibleTileKeys = new Set(tiles.map((tile) => tile.key));
+const visibleTileKeys = new Set(tiles.map((tile) => tile.key));
     for (const key of shell.tileCache.keys()) {
       if (!visibleTileKeys.has(key)) {
         this.deleteViewportTileCacheEntry(shell, key);
@@ -2022,7 +2009,7 @@ export class PdfDocumentReader {
       }
     }
 
-    const missingTiles = tiles.filter((tile) => !shell.tileCache.has(tile.key));
+const missingTiles = tiles.filter((tile) => !shell.tileCache.has(tile.key));
     const renderedTiles: Array<{ tile: PdfViewportTile; canvas: HTMLCanvasElement }> = [];
     let renderSliceStartedAt = performance.now();
     for (let tileIndex = 0; tileIndex < missingTiles.length; tileIndex += 1) {
@@ -2036,7 +2023,8 @@ export class PdfDocumentReader {
       ) {
         return false;
       }
-      const tileRenderStartedAt = performance.now();
+
+const tileRenderStartedAt = performance.now();
       const canvas = await this.renderPdfViewportTileIntoCanvas(
         documentHandle,
         shell,
@@ -2070,7 +2058,7 @@ export class PdfDocumentReader {
       return false;
     }
 
-    const fragment = document.createDocumentFragment();
+const fragment = document.createDocumentFragment();
     for (const { tile, canvas } of renderedTiles) {
       fragment.append(canvas);
       this.addShellViewportTile(shell, tile, canvas, outputScale);
@@ -2115,7 +2103,7 @@ export class PdfDocumentReader {
       return canvas;
     }
 
-    const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
+const pagePtr = documentHandle.pdfium.FPDF_LoadPage(
       documentHandle.documentPtr,
       shell.pageNumber - 1,
     );
@@ -2123,7 +2111,7 @@ export class PdfDocumentReader {
       throw new Error(`PDFium failed to load page ${shell.pageNumber}.`);
     }
 
-    const bitmapPtr = documentHandle.pdfium.FPDFBitmap_Create(bitmapWidth, bitmapHeight, 0);
+const bitmapPtr = documentHandle.pdfium.FPDFBitmap_Create(bitmapWidth, bitmapHeight, 0);
 
     if (!bitmapPtr) {
       documentHandle.pdfium.FPDF_ClosePage(pagePtr);
@@ -2192,7 +2180,7 @@ export class PdfDocumentReader {
         return false;
       }
 
-      const workerTile: PdfWorkerTileRenderRequest = {
+const workerTile: PdfWorkerTileRenderRequest = {
         pageNumber: shell.pageNumber,
         bitmapWidth,
         bitmapHeight,
@@ -2256,7 +2244,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const candidates = renderedShells
+const candidates = renderedShells
       .filter((shell) => !this.isShellNearViewport(shell, this.viewportModel.getVirtualizationMargin()))
       .sort((a, b) => a.lastVisibleAt - b.lastVisibleAt);
     while (
@@ -2487,7 +2475,7 @@ export class PdfDocumentReader {
       return [];
     }
 
-    const pdfium = documentHandle.pdfium;
+const pdfium = documentHandle.pdfium;
     const leftPtr = pdfium.pdfium.wasmExports.malloc(8);
     const rightPtr = pdfium.pdfium.wasmExports.malloc(8);
     const bottomPtr = pdfium.pdfium.wasmExports.malloc(8);
@@ -2516,7 +2504,7 @@ export class PdfDocumentReader {
           continue;
         }
 
-        const left = pdfium.pdfium.getValue(leftPtr, 'double') as number;
+const left = pdfium.pdfium.getValue(leftPtr, 'double') as number;
         const right = pdfium.pdfium.getValue(rightPtr, 'double') as number;
         const bottom = pdfium.pdfium.getValue(bottomPtr, 'double') as number;
         const top = pdfium.pdfium.getValue(topPtr, 'double') as number;
@@ -2596,7 +2584,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const migratedAnnotation = createV2PdfAnnotationFromResolvedRangesForPage(
+const migratedAnnotation = createV2PdfAnnotationFromResolvedRangesForPage(
       annotation,
       layoutPage,
       ranges,
@@ -2642,7 +2630,8 @@ export class PdfDocumentReader {
       if (!Number.isFinite(left) || !Number.isFinite(top) || width === 0 || height === 0) {
         continue;
       }
-      const highlight = createElement('div', className);
+
+const highlight = $<HTMLElementTagNameMap['div']>('div', { class: className });
       highlight.style.left = `${left}px`;
       highlight.style.top = `${top}px`;
       highlight.style.width = `${width}px`;
@@ -2682,7 +2671,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const getMedian = (values: readonly number[]) => {
+const getMedian = (values: readonly number[]) => {
       const sorted = values
         .filter((value) => Number.isFinite(value) && value > 0)
         .slice()
@@ -2690,7 +2679,8 @@ export class PdfDocumentReader {
       if (sorted.length === 0) {
         return 0;
       }
-      const middle = Math.floor(sorted.length / 2);
+
+const middle = Math.floor(sorted.length / 2);
       return sorted.length % 2 === 0
         ? (sorted[middle - 1]! + sorted[middle]!) / 2
         : sorted[middle]!;
@@ -2734,7 +2724,7 @@ export class PdfDocumentReader {
       });
     }
 
-    const maxWidth = Math.max(0, Math.round(info.pageWidth * info.scale));
+const maxWidth = Math.max(0, Math.round(info.pageWidth * info.scale));
     const maxHeight = Math.max(0, Math.round(info.pageHeight * info.scale));
     const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -2754,7 +2744,7 @@ export class PdfDocumentReader {
         bottom = clamp(top + 1, 0, maxHeight);
       }
 
-      const segments = row.rects
+const segments = row.rects
         .map((rect) => {
           let left = Math.floor(rect.left);
           let right = Math.ceil(rect.right);
@@ -2772,7 +2762,7 @@ export class PdfDocumentReader {
         continue;
       }
 
-      const segmentGaps: number[] = [];
+const segmentGaps: number[] = [];
       for (let index = 1; index < segments.length; index += 1) {
         const previous = segments[index - 1];
         const current = segments[index];
@@ -2780,12 +2770,13 @@ export class PdfDocumentReader {
           continue;
         }
 
-        const gap = current.left - previous.right;
+const gap = current.left - previous.right;
         if (Number.isFinite(gap) && gap > 0) {
           segmentGaps.push(gap);
         }
       }
-      const medianSegmentGap = getMedian(segmentGaps);
+
+const medianSegmentGap = getMedian(segmentGaps);
       const rowMergeGap = Math.max(
         8,
         Math.min(
@@ -2824,7 +2815,7 @@ export class PdfDocumentReader {
         continue;
       }
 
-      const gap = current.top - previous.bottom;
+const gap = current.top - previous.bottom;
       if (gap <= 1) {
         current.top = previous.bottom;
         if (current.bottom <= current.top) {
@@ -2843,7 +2834,8 @@ export class PdfDocumentReader {
         if (width <= 0) {
           continue;
         }
-        const highlight = createElement('div', className);
+
+const highlight = $<HTMLElementTagNameMap['div']>('div', { class: className });
         highlight.style.left = `${segment.left}px`;
         highlight.style.top = `${row.top}px`;
         highlight.style.width = `${width}px`;
@@ -2873,7 +2865,8 @@ export class PdfDocumentReader {
       if (!Number.isFinite(left) || !Number.isFinite(top) || width === 0 || height === 0) {
         continue;
       }
-      const highlight = createElement('button', selectedClassName);
+
+const highlight = $<HTMLElementTagNameMap['button']>('button', { class: selectedClassName });
       highlight.type = 'button';
       highlight.dataset.pdfAnnotationId = annotation.id;
       highlight.setAttribute('aria-label', annotation.mode === 'note' ? 'Open note' : 'Open highlight');
@@ -2910,13 +2903,13 @@ export class PdfDocumentReader {
         continue;
       }
 
-      const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.comet-pdf-reader-page-canvas-wrap');
+const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.comet-pdf-reader-page-canvas-wrap');
       const rect = pageCanvasWrap?.getBoundingClientRect() ?? pageElement.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) {
         continue;
       }
 
-      const clampedX = Math.min(Math.max(viewportX, rect.left), rect.right);
+const clampedX = Math.min(Math.max(viewportX, rect.left), rect.right);
       const clampedY = Math.min(Math.max(viewportY, rect.top), rect.bottom);
       const distance = Math.hypot(viewportX - clampedX, viewportY - clampedY);
       if (distance < nearestDistance) {
@@ -2939,14 +2932,14 @@ export class PdfDocumentReader {
       return;
     }
 
-    const pageElement = this.pagesElement.querySelector<HTMLElement>(
+const pageElement = this.pagesElement.querySelector<HTMLElement>(
       `.comet-pdf-reader-page[data-pdf-page="${anchor.page}"]`,
     );
     if (!pageElement) {
       return;
     }
 
-    const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.comet-pdf-reader-page-canvas-wrap');
+const pageCanvasWrap = pageElement.querySelector<HTMLElement>('.comet-pdf-reader-page-canvas-wrap');
     const pageRect = pageCanvasWrap?.getBoundingClientRect() ?? pageElement.getBoundingClientRect();
     const anchoredX = pageRect.left + pageRect.width * anchor.ratioX;
     const anchoredY = pageRect.top + pageRect.height * anchor.ratioY;
@@ -3048,7 +3041,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const version = this.loadVersion;
+const version = this.loadVersion;
     const pageRenderVersion = this.pageRenderVersion;
     this.renderScheduler.request(
       async (renderToken) => {
@@ -3089,7 +3082,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const version = this.loadVersion;
+const version = this.loadVersion;
     if (this.hasPendingUserInput()) {
       if (this.viewportQualityRenderFrame !== null) {
         return;
@@ -3186,7 +3179,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const anchor = this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
+const anchor = this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
     this.viewportModel.setZoomAnchor(anchor);
     this.relayoutPdfPreview(anchor);
   };
@@ -3202,7 +3195,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const pageRenderVersion = ++this.pageRenderVersion;
+const pageRenderVersion = ++this.pageRenderVersion;
     const anchor = this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
 
     this.loadingElement.hidden = false;
@@ -3250,7 +3243,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const zoomAnchor = anchor ?? this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
+const zoomAnchor = anchor ?? this.viewportModel.getZoomAnchor() ?? this.getVisiblePageAnchor();
     this.viewportModel.setZoomScale(normalizedZoomScale);
     this.viewportModel.setZoomAnchor(zoomAnchor);
     this.relayoutPdfPreview(zoomAnchor);
@@ -3271,7 +3264,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const nextLevel = direction > 0
+const nextLevel = direction > 0
       ? levels.find((level) => level > zoomScale)
       : [...levels].reverse().find((level) => level < zoomScale);
     if (nextLevel === undefined) {
@@ -3314,7 +3307,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const quote = this.getAnnotationQuote(annotation);
+const quote = this.getAnnotationQuote(annotation);
     this.annotationPanelElement.hidden = false;
     this.annotationPanelTitleElement.textContent = annotation.mode === 'note'
       ? 'Note'
@@ -3403,7 +3396,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const annotationId = target.dataset.pdfAnnotationId;
+const annotationId = target.dataset.pdfAnnotationId;
     if (annotationId) {
       this.selectAnnotation(annotationId);
     }
@@ -3419,7 +3412,7 @@ export class PdfDocumentReader {
       return;
     }
 
-    const updatedAnnotation: Annotation = {
+const updatedAnnotation: Annotation = {
       ...annotation,
       comment: this.annotationPanelCommentInput.value.trim(),
       updatedAt: new Date().toISOString(),

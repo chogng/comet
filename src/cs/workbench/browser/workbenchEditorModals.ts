@@ -2,22 +2,8 @@ import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { LocaleMessages } from 'language/locales';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createModalView } from 'cs/base/browser/ui/modal/modal';
+import { $ } from 'cs/base/browser/dom';
 import type { WorkbenchEditorCommandDefinition } from 'cs/workbench/browser/editorCommands';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
-}
 
 export function showWorkbenchTextInputModal(params: {
   title: string;
@@ -28,25 +14,17 @@ export function showWorkbenchTextInputModal(params: {
 }): Promise<string | null> {
   return new Promise((resolve) => {
     const hoverService = getHoverService();
-    const body = createElement('div', 'comet-workbench-editor-modal-body');
-    const label = createElement('label', 'comet-workbench-editor-modal-label', params.label);
-    const inputHost = createElement('div');
+    const body = $<HTMLElementTagNameMap['div']>('div.comet-workbench-editor-modal-body');
+    const label = $<HTMLElementTagNameMap['label']>('label.comet-workbench-editor-modal-label', undefined, params.label);
+    const inputHost = $<HTMLElementTagNameMap['div']>('div');
     const inputBox = new InputBox(inputHost, undefined, {
       value: params.defaultValue ?? '',
       placeholder: params.placeholder ?? '',
       className: 'comet-workbench-editor-modal-input',
     });
-    const actions = createElement('div', 'comet-workbench-editor-modal-actions');
-    const cancelButton = createElement(
-      'button',
-      'btn-base btn-secondary btn-md',
-      params.ui.editorModalCancel,
-    ) as HTMLButtonElement;
-    const submitButton = createElement(
-      'button',
-      'btn-base btn-primary btn-md',
-      params.ui.editorModalConfirm,
-    ) as HTMLButtonElement;
+    const actions = $<HTMLElementTagNameMap['div']>('div.comet-workbench-editor-modal-actions');
+    const cancelButton = $<HTMLElementTagNameMap['button']>('button.comet-btn-base.comet-btn-secondary.comet-btn-md', undefined, params.ui.editorModalCancel) as HTMLButtonElement;
+    const submitButton = $<HTMLElementTagNameMap['button']>('button.comet-btn-base.comet-btn-primary.comet-btn-md', undefined, params.ui.editorModalConfirm) as HTMLButtonElement;
 
     let resolved = false;
     const finish = (value: string | null) => {
@@ -100,28 +78,12 @@ export function showWorkbenchSaveConfirmModal(params: {
 }): Promise<'save' | 'discard' | 'cancel'> {
   return new Promise((resolve) => {
     const hoverService = getHoverService();
-    const body = createElement('div', 'comet-workbench-editor-modal-body');
-    const message = createElement(
-      'p',
-      'comet-workbench-editor-confirm-message',
-      params.message,
-    );
-    const actions = createElement('div', 'comet-workbench-editor-modal-actions');
-    const cancelButton = createElement(
-      'button',
-      'btn-base btn-secondary btn-md',
-      params.cancelLabel,
-    ) as HTMLButtonElement;
-    const discardButton = createElement(
-      'button',
-      'btn-base btn-secondary btn-md',
-      params.discardLabel,
-    ) as HTMLButtonElement;
-    const saveButton = createElement(
-      'button',
-      'btn-base btn-primary btn-md',
-      params.saveLabel,
-    ) as HTMLButtonElement;
+    const body = $<HTMLElementTagNameMap['div']>('div.comet-workbench-editor-modal-body');
+    const message = $<HTMLElementTagNameMap['p']>('p.comet-workbench-editor-confirm-message', undefined, params.message);
+    const actions = $<HTMLElementTagNameMap['div']>('div.comet-workbench-editor-modal-actions');
+    const cancelButton = $<HTMLElementTagNameMap['button']>('button.comet-btn-base.comet-btn-secondary.comet-btn-md', undefined, params.cancelLabel) as HTMLButtonElement;
+    const discardButton = $<HTMLElementTagNameMap['button']>('button.comet-btn-base.comet-btn-secondary.comet-btn-md', undefined, params.discardLabel) as HTMLButtonElement;
+    const saveButton = $<HTMLElementTagNameMap['button']>('button.comet-btn-base.comet-btn-primary.comet-btn-md', undefined, params.saveLabel) as HTMLButtonElement;
 
     let resolved = false;
     const finish = (value: 'save' | 'discard' | 'cancel') => {
@@ -166,8 +128,8 @@ export function showWorkbenchCommandPaletteModal(params: {
   onSelect: (commandId: WorkbenchEditorCommandDefinition['id']) => void;
 }) {
   const hoverService = getHoverService();
-	const body = createElement('div', 'comet-workbench-command-palette-body');
-	const list = createElement('div', 'comet-workbench-command-palette-list');
+	const body = $<HTMLElementTagNameMap['div']>('div.comet-workbench-command-palette-body');
+	const list = $<HTMLElementTagNameMap['div']>('div.comet-workbench-command-palette-list');
 
   const modal = createModalView({
     open: true,
@@ -180,16 +142,9 @@ export function showWorkbenchCommandPaletteModal(params: {
   });
 
   for (const command of params.commands) {
-    const button = createElement(
-      'button',
-		'comet-workbench-command-palette-item btn-base btn-secondary btn-md',
-    ) as HTMLButtonElement;
-		const text = createElement('span', 'comet-workbench-command-palette-text', command.labelText);
-    const shortcut = createElement(
-      'span',
-			'comet-workbench-command-palette-shortcut',
-      command.shortcutLabel,
-    );
+    const button = $<HTMLElementTagNameMap['button']>('button.comet-workbench-command-palette-item.comet-btn-base.comet-btn-secondary.comet-btn-md') as HTMLButtonElement;
+		const text = $<HTMLElementTagNameMap['span']>('span.comet-workbench-command-palette-text', undefined, command.labelText);
+    const shortcut = $<HTMLElementTagNameMap['span']>('span.comet-workbench-command-palette-shortcut', undefined, command.shortcutLabel);
     button.type = 'button';
     button.disabled = !command.enabled;
     button.append(text, shortcut);

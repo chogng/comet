@@ -4,7 +4,7 @@
   min-width: 0;
 }
 
-.comet-date-input-field > .ibwrapper > .input {
+.comet-date-input-field > .comet-inputbox-wrapper > .comet-input {
   padding-right: 28px;
 }
 
@@ -30,7 +30,7 @@
   background: var(--vscode-settings-controlHoverBackground, #e6e6e6);
 }
 
-.comet-date-input-button .comet-lx-icon {
+.comet-date-input-button .lx-icon {
   font-size: 16px;
 }
 
@@ -122,16 +122,16 @@
   outline-offset: 1px;
 }
 
-.comet-date-input-day.is-outside {
+.comet-date-input-day.comet-is-outside {
   color: var(--vscode-settings-mutedForeground, #94a3b8);
 }
 
-.comet-date-input-day.is-today {
+.comet-date-input-day.comet-is-today {
   font-weight: 700;
   color: var(--vscode-settings-linkForeground, #0a5fbf);
 }
 
-.comet-date-input-day.is-selected {
+.comet-date-input-day.comet-is-selected {
   background: var(--vscode-button-background, #0a5fbf);
   color: var(--vscode-button-foreground, #ffffff);
 }

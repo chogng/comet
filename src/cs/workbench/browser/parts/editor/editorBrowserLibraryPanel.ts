@@ -9,7 +9,7 @@ const EDITOR_BROWSER_LIBRARY_STORAGE_KEY = 'cs.editor.browser.library.v1';
 const MAX_RECENT_BROWSER_LIBRARY_ENTRIES = 25;
 const MAX_FAVORITE_BROWSER_LIBRARY_ENTRIES = 25;
 const MAX_FAVORITE_BROWSER_LIBRARY_FOLDERS = 25;
-const EDITOR_BROWSER_LIBRARY_DESKTOP_OVERLAY_CLASS = 'is-desktop-overlay';
+const EDITOR_BROWSER_LIBRARY_DESKTOP_OVERLAY_CLASS = 'comet-is-desktop-overlay';
 const NATIVE_WEBCONTENT_ACTIVE_SELECTOR =
   '.comet-browser-frame-placeholder[data-webcontent-active="true"]';
 
@@ -81,7 +81,9 @@ export type EditorBrowserLibraryPanelContext = {
 type EditorBrowserLibraryPanelOptions = {
   isInteractionWithin?: (target: Node) => boolean;
   onDidChangeOpenState?: (isOpen: boolean) => void;
-};function normalizeBrowserLibraryUrl(url: string) {
+};
+
+function normalizeBrowserLibraryUrl(url: string) {
   return String(url).trim();
 }
 
@@ -1446,8 +1448,8 @@ const pageTitle = sanitizeBrowserLibraryPageTitle(
 
   private render() {
     this.mountElementToHost();
-    this.backdropElement.classList.toggle('is-open', this.isOpen);
-    this.element.classList.toggle('is-open', this.isOpen);
+    this.backdropElement.classList.toggle('comet-is-open', this.isOpen);
+    this.element.classList.toggle('comet-is-open', this.isOpen);
     this.element.setAttribute('aria-hidden', String(!this.isOpen));
     this.element.setAttribute('aria-label', this.context.labels.title);
     this.searchInput.inputElement.setAttribute('aria-label', this.context.labels.title);
@@ -1703,7 +1705,7 @@ const sectionElement = $<HTMLElementTagNameMap['section']>('section.comet-editor
   private createLibraryItemFaviconElement(faviconUrl: string, isLoading = false) {
     if (isLoading) {
       return createLxLoadingIcon(
-        'comet-editor-browser-library-item-favicon is-loading',
+        'comet-editor-browser-library-item-favicon comet-is-loading',
       );
     }
 
@@ -1711,7 +1713,7 @@ const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
     if (!normalizedFaviconUrl) {
       return createLxIcon(
         'browser-1',
-        'comet-editor-browser-library-item-favicon is-fallback',
+        'comet-editor-browser-library-item-favicon comet-is-fallback',
       );
     }
 
@@ -1728,7 +1730,7 @@ const image = $<HTMLElementTagNameMap['img']>('img.comet-editor-browser-library-
 
 const fallback = createLxIcon(
         'browser-1',
-        'comet-editor-browser-library-item-favicon is-fallback',
+        'comet-editor-browser-library-item-favicon comet-is-fallback',
       );
       image.replaceWith(fallback);
     });
@@ -1780,12 +1782,12 @@ const folderGroup = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-li
       toTrackableBrowserLibraryUrl(this.context.browserUrl) ===
         toTrackableBrowserLibraryUrl(url);
     const itemRow = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-library-item-row');
-    itemRow.classList.toggle('is-deletable', canDeleteHistory);
+    itemRow.classList.toggle('comet-is-deletable', canDeleteHistory);
     const item = $<HTMLElementTagNameMap['button']>('button.comet-editor-browser-library-item');
     item.type = 'button';
     item.title = url;
     if (sectionKind === 'favorites') {
-      item.classList.add('is-favorite');
+      item.classList.add('comet-is-favorite');
       item.addEventListener('contextmenu', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1807,7 +1809,7 @@ const folderGroup = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-li
     item.append(headerElement);
     itemRow.append(item);
     if (canDeleteHistory) {
-      const deleteButton = $<HTMLElementTagNameMap['button']>('button.comet-editor-browser-library-item-delete-btn.btn-base.btn-md') as HTMLButtonElement;
+      const deleteButton = $<HTMLElementTagNameMap['button']>('button.comet-editor-browser-library-item-delete-btn.comet-btn-base.comet-btn-md') as HTMLButtonElement;
       const deleteLabel = this.getDeleteHistoryEntryLabel();
       deleteButton.type = 'button';
       deleteButton.title = deleteLabel;

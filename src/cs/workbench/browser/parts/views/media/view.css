@@ -41,13 +41,13 @@
   pointer-events: none;
 }
 
-.empty-state {
+.comet-empty-state {
   flex: 1;
   padding: 16px;
   color: var(--vscode-editor-webContentForeground, #667788);
 }
 
-.webcontent-runtime-warning {
+.comet-webcontent-runtime-warning {
   display: flex;
   align-items: center;
   justify-content: center;

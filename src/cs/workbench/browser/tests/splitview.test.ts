@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
-import { Orientation, SplitView } from 'cs/base/browser/ui/splitview/splitview';
 import type { IView } from 'cs/base/browser/ui/splitview/splitview';
-import { Pane, PaneView } from 'cs/base/browser/ui/splitview/paneview';
 
 let cleanupDomEnvironment: (() => void) | null = null;
+let Orientation: typeof import('cs/base/browser/ui/splitview/splitview').Orientation;
+let SplitView: typeof import('cs/base/browser/ui/splitview/splitview').SplitView;
+let Pane: typeof import('cs/base/browser/ui/splitview/paneview').Pane;
+let PaneView: typeof import('cs/base/browser/ui/splitview/paneview').PaneView;
 
 class TestView implements IView {
   readonly element = document.createElement('div');
@@ -85,9 +87,11 @@ function dispatchDrag(
   );
 }
 
-before(() => {
+before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
+  ({ Orientation, SplitView } = await import('cs/base/browser/ui/splitview/splitview'));
+  ({ Pane, PaneView } = await import('cs/base/browser/ui/splitview/paneview'));
 });
 
 after(() => {

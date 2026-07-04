@@ -60,12 +60,12 @@
   min-height: var(--editor-draft-toolbar-item-size);
 }
 
-.comet-editor-draft-toolbar-btn.comet-actionbar-action.is-icon {
+.comet-editor-draft-toolbar-btn.comet-actionbar-action.comet-is-icon {
   width: var(--editor-draft-toolbar-item-size);
   height: var(--editor-draft-toolbar-item-size);
 }
 
-.comet-editor-draft-toolbar-btn.comet-actionbar-action .comet-lx-icon {
+.comet-editor-draft-toolbar-btn.comet-actionbar-action .lx-icon {
   width: var(--editor-draft-toolbar-icon-size);
   height: var(--editor-draft-toolbar-icon-size);
   font-size: var(--editor-draft-toolbar-icon-size);
@@ -84,14 +84,14 @@
   pointer-events: none;
 }
 
-.comet-editor-draft-toolbar-btn-icon .comet-lx-icon {
+.comet-editor-draft-toolbar-btn-icon .lx-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
 }
 
-.comet-editor-draft-toolbar-btn-icon .comet-lx-icon svg {
+.comet-editor-draft-toolbar-btn-icon .lx-icon svg {
   width: 14px;
   height: 14px;
   pointer-events: none;
@@ -125,11 +125,11 @@
   padding: 0 6px;
 }
 
-.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text {
+.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text {
   font-size: 12px;
 }
 
-.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.is-text .comet-actionbar-content {
+.comet-editor-draft-toolbar-split-primary.comet-actionbar-action.comet-is-text .comet-actionbar-content {
   display: inline-block;
   max-width: 4.5em;
   overflow: hidden;
@@ -143,7 +143,7 @@
   max-width: 16px;
 }
 
-.comet-editor-draft-toolbar-split-dropdown.comet-actionbar-action .comet-lx-icon {
+.comet-editor-draft-toolbar-split-dropdown.comet-actionbar-action .lx-icon {
   width: 12px;
   height: 12px;
 }
@@ -155,7 +155,7 @@
   height: 100%;
 }
 
-.comet-pm-editor-scrollable > .comet-pm-editor-host.scrollable-content {
+.comet-pm-editor-scrollable > .comet-pm-editor-host.comet-scrollable-content {
   display: flex;
   flex-direction: column;
   align-items: stretch;

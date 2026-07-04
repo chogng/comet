@@ -10,6 +10,7 @@ import {
 } from 'cs/base/browser/ui/dropdown/dropdown';
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import { $ } from 'cs/base/browser/dom';
 
 import type { WritingEditorToolbarState } from 'cs/editor/browser/text/commands';
 import { createEditorDraftToolbarStyleModel } from 'cs/editor/browser/text/editorDraftToolbarStyleModel';
@@ -50,20 +51,7 @@ type OverflowCandidate = {
   groupIndex: number;
   itemIndex: number;
   menuItem: WritingEditorToolbarMenuItemConfig;
-};
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-const hoverService = getHoverService();
+};const hoverService = getHoverService();
 const DRAFT_TOOLBAR_OVERFLOW_MENU_DATA = 'draft-toolbar-overflow';
 const DRAFT_TOOLBAR_SPLIT_MENU_DATA = 'draft-toolbar-split';
 
@@ -73,12 +61,9 @@ function createGroupItemKey(groupIndex: number, itemIndex: number) {
 
 export class DraftEditorToolbar {
   private props: DraftEditorToolbarProps;
-  private readonly element = createElement(
-    'div',
-    'editor-mode-toolbar comet-editor-draft-toolbar',
-  );
-  private readonly contentElement = createElement('div', 'comet-editor-draft-toolbar-content');
-  private readonly trailingElement = createElement('div', 'comet-editor-draft-toolbar-trailing');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.editor-mode-toolbar.comet-editor-draft-toolbar');
+  private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-draft-toolbar-content');
+  private readonly trailingElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-draft-toolbar-trailing');
   private toolbarViews: Array<{ dispose: () => void }> = [];
   private adaptiveOverflowCount = 0;
   private overflowCandidateCount = 0;
@@ -268,7 +253,7 @@ export class DraftEditorToolbar {
       return;
     }
 
-    const maxOverflowCount = this.overflowCandidateCount;
+const maxOverflowCount = this.overflowCandidateCount;
     let nextOverflowCount = Math.min(this.adaptiveOverflowCount, maxOverflowCount);
     if (nextOverflowCount !== this.adaptiveOverflowCount) {
       this.adaptiveOverflowCount = nextOverflowCount;
@@ -316,7 +301,7 @@ export class DraftEditorToolbar {
       return true;
     }
 
-    const trailingMarginLeft = this.trailingElement.childElementCount > 0
+const trailingMarginLeft = this.trailingElement.childElementCount > 0
       ? Number.parseFloat(getComputedStyle(this.trailingElement).marginLeft || '0') || 0
       : 0;
     const contentWidth = this.contentElement.scrollWidth;
@@ -443,7 +428,7 @@ export class DraftEditorToolbar {
   }
 
   private createToolbarSplitButton(splitButtonConfig: WritingEditorToolbarSplitButtonConfig) {
-    const primaryContent = createElement('span', 'comet-editor-draft-toolbar-btn-icon');
+    const primaryContent = $<HTMLElementTagNameMap['span']>('span.comet-editor-draft-toolbar-btn-icon');
     const usesCustomPrimaryContent = !splitButtonConfig.buttonIcon;
     const primaryMode =
       splitButtonConfig.buttonMode
@@ -454,7 +439,7 @@ export class DraftEditorToolbar {
     }
 
     if (primaryMode !== 'text' && !splitButtonConfig.buttonIcon) {
-      const glyph = createElement('span', 'comet-editor-draft-toolbar-btn-glyph');
+      const glyph = $<HTMLElementTagNameMap['span']>('span.comet-editor-draft-toolbar-btn-glyph');
       glyph.textContent = splitButtonConfig.buttonGlyph ?? splitButtonConfig.buttonLabel;
       primaryContent.append(glyph);
     }
@@ -496,13 +481,13 @@ export class DraftEditorToolbar {
   }
 
   private createToolbarButton(buttonConfig: WritingEditorToolbarButtonConfig) {
-    const iconSlot = createElement('span', 'comet-editor-draft-toolbar-btn-icon');
+    const iconSlot = $<HTMLElementTagNameMap['span']>('span.comet-editor-draft-toolbar-btn-icon');
     const usesCustomContent = !buttonConfig.icon;
 
     if (buttonConfig.icon) {
       iconSlot.append(createLxIcon(buttonConfig.icon));
     } else if (buttonConfig.glyph) {
-      const glyph = createElement('span', 'comet-editor-draft-toolbar-btn-glyph');
+      const glyph = $<HTMLElementTagNameMap['span']>('span.comet-editor-draft-toolbar-btn-glyph');
       glyph.textContent = buttonConfig.glyph;
       iconSlot.append(glyph);
     }

@@ -76,7 +76,7 @@ test('simple tree typeahead focuses the matching node and click selects it', () 
       '[data-simple-tree-node-id="beta"]',
     );
     assert(betaNode instanceof HTMLElement);
-    assert.equal(betaNode.classList.contains('is-focused'), true);
+    assert.equal(betaNode.classList.contains('comet-is-focused'), true);
 
     betaNode.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 
@@ -174,7 +174,7 @@ test('simple tree arrow navigation expands and collapses parents', () => {
       '[data-simple-tree-node-id="leaf"]',
     );
     assert(focusedLeafNode instanceof HTMLElement);
-    assert.equal(focusedLeafNode.classList.contains('is-focused'), true);
+    assert.equal(focusedLeafNode.classList.contains('comet-is-focused'), true);
 
     tree.getElement().dispatchEvent(new window.KeyboardEvent('keydown', {
       bubbles: true,
@@ -185,7 +185,7 @@ test('simple tree arrow navigation expands and collapses parents', () => {
       '[data-simple-tree-node-id="folder"]',
     );
     assert(refocusedFolderNode instanceof HTMLElement);
-    assert.equal(refocusedFolderNode.classList.contains('is-focused'), true);
+    assert.equal(refocusedFolderNode.classList.contains('comet-is-focused'), true);
 
     tree.getElement().dispatchEvent(new window.KeyboardEvent('keydown', {
       bubbles: true,

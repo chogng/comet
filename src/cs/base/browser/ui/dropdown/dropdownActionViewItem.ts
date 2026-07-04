@@ -467,10 +467,10 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
   protected override updateContainerClassName() {
     this.element.className = DOM.composeClassName([
       'comet-actionbar-item',
-      'is-action',
-      this.item.disabled ? 'is-disabled' : '',
-      this.item.active || this.isOpen ? 'is-active' : '',
-      this.item.checked ? 'is-checked' : '',
+      'comet-is-action',
+      this.item.disabled ? 'comet-is-disabled' : '',
+      this.item.active || this.isOpen ? 'comet-is-active' : '',
+      this.item.checked ? 'comet-is-checked' : '',
       this.item.className,
     ]);
   }
@@ -530,7 +530,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
       alignment: resolvedAlignment,
       position: this.options.overlayPosition ?? 'below',
       offset: this.options.offset,
-      render: (context) => this.options.renderOverlay?.(context) ?? DOM.createElement('div'),
+      render: (context) => this.options.renderOverlay?.(context) ?? DOM.$('div'),
       onHide: () => {
         this.updateOpenState(false);
       },
@@ -566,10 +566,10 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
   private readonly primaryItem: ActionViewItem;
   protected readonly dropdownMenuActionViewItem: DropdownMenuActionViewItem;
-  private readonly separator = DOM.createElement('div', 'comet-action-dropdown-item-separator');
+  private readonly separator = DOM.$('div.comet-action-dropdown-item-separator');
 
   constructor(options: ActionWithDropdownActionViewItemOptions) {
-    super(DOM.createElement('div', 'comet-actionbar-item is-action comet-action-dropdown-item'));
+    super(DOM.$('div.comet-actionbar-item.comet-is-action.comet-action-dropdown-item'));
     const hoverService = options.primary.hoverService ?? options.dropdown.hoverService;
     this.primaryItem = new ActionViewItem(options.primary, hoverService);
     this.dropdownMenuActionViewItem = new DropdownMenuActionViewItem({
@@ -582,7 +582,7 @@ export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
     if (options.className) {
       this.element.classList.add(...options.className.split(/\s+/).filter(Boolean));
     }
-    this.separator.append(DOM.createElement('div'));
+    this.separator.append(DOM.$('div'));
     this.primaryItem.render(this.element);
     this.element.append(this.separator);
     this.dropdownMenuActionViewItem.render(this.element);

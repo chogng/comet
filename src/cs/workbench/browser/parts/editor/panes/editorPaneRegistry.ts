@@ -170,7 +170,7 @@ function isPdfWorkspaceTab(
 
 const draftEditorPaneDescriptor = createEditorPaneDescriptor({
   paneId: 'draft',
-  contentClassNames: ['is-mode-draft'] as const,
+  contentClassNames: ['comet-is-mode-draft'] as const,
   acceptsInput: isDraftWorkspaceTab,
   createPaneKey: (tab) => `draft:${tab.id}`,
   createPaneProps: createDraftPaneProps,
@@ -179,7 +179,7 @@ const draftEditorPaneDescriptor = createEditorPaneDescriptor({
 
 const browserEditorPaneDescriptor = createEditorPaneDescriptor({
   paneId: 'browser',
-  contentClassNames: ['is-mode-browser'] as const,
+  contentClassNames: ['comet-is-mode-browser'] as const,
   acceptsInput: isBrowserWorkspaceTab,
   // Browser tabs share one native web-content surface, so the pane itself
   // should stay mounted while only the active target changes.
@@ -190,7 +190,7 @@ const browserEditorPaneDescriptor = createEditorPaneDescriptor({
 
 const pdfEditorPaneDescriptor = createEditorPaneDescriptor({
   paneId: 'pdf',
-  contentClassNames: ['is-mode-pdf'] as const,
+  contentClassNames: ['comet-is-mode-pdf'] as const,
   acceptsInput: isPdfWorkspaceTab,
   createPaneKey: (tab) => `pdf:${tab.id}`,
   createPaneProps: createPdfPaneProps,

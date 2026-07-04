@@ -7,6 +7,7 @@ import {
 	createSessionHeaderView,
 	type SessionHeaderView,
 } from 'cs/sessions/browser/parts/sessions/sessionHeader';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
@@ -15,20 +16,9 @@ export type SessionViewProps = {
 	headerTrailingActionsElement?: HTMLElement | null;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
-
 export class SessionView {
-	private readonly element = createElement('section', 'comet-session-view');
-	private readonly contentElement = createElement('div', 'comet-session-view-content');
+	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-session-view');
+	private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-session-view-content');
 	private readonly headerView: SessionHeaderView;
 	private readonly chatView: SessionChatView;
 	private disposed = false;

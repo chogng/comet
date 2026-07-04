@@ -7,6 +7,7 @@ import { getWindowChromeLayout } from 'cs/platform/window/common/window';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
+import { $ } from 'cs/base/browser/dom';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
@@ -16,42 +17,13 @@ export type ChatViewPaneProps = ChatWidgetProps & {
 	readonly headerTrailingActionsElement?: HTMLElement | null;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-	tagName: K,
-	className?: string,
-) {
-	const element = document.createElement(tagName);
-	if (className) {
-		element.className = className;
-	}
-	return element;
-}
-
 export class ChatViewPane {
-	private readonly element = createElement(
-		'section',
-		'agentbar',
-	);
-	private readonly headerElement = createElement(
-		'div',
-		'comet-agentbar-header',
-	);
-	private readonly headerActionsContainerElement = createElement(
-		'div',
-		'comet-agentbar-header-actions',
-	);
-	private readonly headerLeadingActionsElement = createElement(
-		'div',
-		'comet-agentbar-header-leading',
-	);
-	private readonly headerTrailingActionsElement = createElement(
-		'div',
-		'comet-agentbar-header-trailing',
-	);
-	private readonly leadingWindowControlsSpacer = createElement(
-		'div',
-		'comet-agentbar-header-window-controls-spacer',
-	);
+	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-agentbar');
+	private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header');
+	private readonly headerActionsContainerElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-actions');
+	private readonly headerLeadingActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-leading');
+	private readonly headerTrailingActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing');
+	private readonly leadingWindowControlsSpacer = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-window-controls-spacer');
 	private readonly chatWidget: ChatWidget;
 
 	constructor(props: ChatViewPaneProps) {

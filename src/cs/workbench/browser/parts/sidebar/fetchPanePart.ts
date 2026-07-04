@@ -4,6 +4,7 @@ import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecy
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import { FetchTreeView } from 'cs/workbench/browser/parts/sidebar/fetchTreeView';
+import { $ } from 'cs/base/browser/dom';
 
 export type SidebarArticle = {
   title: string;
@@ -145,17 +146,6 @@ type CreateFetchPanePropsParams = {
   state: FetchPaneState;
   actions: FetchPaneActions;
 };
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
 
 function addDisposableListener(
   target: EventTarget,
@@ -309,8 +299,8 @@ function createArticleCardLabels(labels: FetchPaneProps['labels']) {
 
 export class FetchPaneContentView extends Disposable {
   private props: FetchPaneProps;
-  private readonly element = createElement('div', 'comet-fetch-pane-content');
-  private readonly contentElement = createElement('div', 'comet-fetch-pane-content-body');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-fetch-pane-content');
+  private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-fetch-pane-content-body');
   private readonly scrollableElement: DomScrollableElement;
   private readonly renderDisposables = new DisposableStore();
   private fetchTreeView: FetchTreeView | null = null;
@@ -410,7 +400,7 @@ export class FetchPaneContentView extends Disposable {
       this.fetchTreeView = null;
     }
 
-    const empty = createElement('div', 'comet-fetch-pane-empty-state');
+const empty = $<HTMLElementTagNameMap['div']>('div.comet-fetch-pane-empty-state');
     if (this.props.hasData) {
       empty.textContent = this.props.labels.emptyFiltered;
       this.contentElement.replaceChildren(empty);
@@ -418,10 +408,7 @@ export class FetchPaneContentView extends Disposable {
       return;
     }
 
-    const inputLink = createElement(
-      'button',
-      'comet-fetch-pane-empty-state-action',
-    );
+const inputLink = $<HTMLElementTagNameMap['button']>('button.comet-fetch-pane-empty-state-action');
     inputLink.type = 'button';
     inputLink.textContent = this.props.labels.emptyAllInputLinkAction;
     this.renderDisposables.add(

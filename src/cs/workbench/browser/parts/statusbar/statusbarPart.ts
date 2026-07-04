@@ -28,14 +28,14 @@ export class StatusbarPart {
     this.container.classList.add('comet-statusbar-part');
 
     this.statusbarElement = document.createElement('footer');
-    this.statusbarElement.className = 'comet-editor-statusbar is-pane-mode-empty';
+    this.statusbarElement.className = 'comet-editor-statusbar comet-is-pane-mode-empty';
     this.statusbarElement.setAttribute('role', 'status');
     this.statusbarElement.setAttribute('aria-label', '');
 
     this.primaryGroupElement = document.createElement('div');
-    this.primaryGroupElement.className = 'comet-editor-statusbar-group is-primary';
+    this.primaryGroupElement.className = 'comet-editor-statusbar-group comet-is-primary';
     this.secondaryGroupElement = document.createElement('div');
-    this.secondaryGroupElement.className = 'comet-editor-statusbar-group is-secondary';
+    this.secondaryGroupElement.className = 'comet-editor-statusbar-group comet-is-secondary';
 
     this.statusbarElement.append(
       this.primaryGroupElement,
@@ -47,7 +47,7 @@ export class StatusbarPart {
   render(status: EditorStatusState) {
     this.statusbarElement.className = [
       'comet-editor-statusbar',
-      `is-pane-mode-${status.paneMode}`,
+      `comet-is-pane-mode-${status.paneMode}`,
     ].join(' ');
     this.statusbarElement.setAttribute('aria-label', status.ariaLabel);
     renderStatusbarMode(status, {

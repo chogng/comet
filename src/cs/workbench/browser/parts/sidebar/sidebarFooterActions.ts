@@ -1,6 +1,7 @@
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import { $ } from 'cs/base/browser/dom';
 
 import 'cs/workbench/browser/parts/sidebar/media/sidebarFooterActions.css';
 
@@ -22,34 +23,11 @@ export type SidebarFooterActionsProps = {
   onOpenSettings?: () => void;
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 export class SidebarFooterActionsView {
-  private readonly hostElement = createElement(
-    'div',
-    'comet-sidebar-footer-actions-host',
-  );
-  private readonly accountElement = createElement(
-    'div',
-    'comet-sidebar-footer-account',
-  );
-  private readonly avatarElement = createElement(
-    'div',
-    'comet-sidebar-footer-avatar',
-  );
-  private readonly accountLabelElement = createElement(
-    'span',
-    'comet-sidebar-footer-account-label',
-  );
+  private readonly hostElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-footer-actions-host');
+  private readonly accountElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-footer-account');
+  private readonly avatarElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-footer-avatar');
+  private readonly accountLabelElement = $<HTMLElementTagNameMap['span']>('span.comet-sidebar-footer-account-label');
   private readonly actionBarView = createActionBarView({
     className: 'comet-sidebar-footer-actions',
     ariaRole: 'group',
@@ -83,15 +61,15 @@ export class SidebarFooterActionsView {
           content: createLxIcon('more-2'),
           menuClassName: 'comet-sidebar-footer-more-menu-overlay',
           minWidth: 160,
-          menuData: 'sidebar-footer-more',
+          menuData: 'comet-sidebar-footer-more',
           menu: [
             {
-              id: 'sidebar-footer-more-layout',
+              id: 'comet-sidebar-footer-more-layout',
               label: MORE_LAYOUT_LABEL,
               icon: 'layout',
               submenu: [
                 {
-                  id: 'sidebar-footer-more-layout-agent',
+                  id: 'comet-sidebar-footer-more-layout-agent',
                   label: MORE_LAYOUT_AGENT_LABEL,
                   checked: props.activeLayoutMode === 'agent',
                   onClick: () => {
@@ -99,7 +77,7 @@ export class SidebarFooterActionsView {
                   },
                 },
                 {
-                  id: 'sidebar-footer-more-layout-flow',
+                  id: 'comet-sidebar-footer-more-layout-flow',
                   label: MORE_LAYOUT_FLOW_LABEL,
                   checked: props.activeLayoutMode === 'flow',
                   onClick: () => {

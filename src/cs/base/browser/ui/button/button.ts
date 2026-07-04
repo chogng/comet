@@ -6,6 +6,7 @@ import type {
   IHoverDelegate,
 } from 'cs/base/browser/ui/hover/hover';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
+import { $ } from 'cs/base/browser/dom';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
@@ -34,17 +35,6 @@ export interface ButtonProps {
   onClick?: (event: MouseEvent) => void;
   onFocus?: (event: FocusEvent) => void;
   onBlur?: (event: FocusEvent) => void;
-}
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
 }
 
 function isPresent(value: ButtonContent) {
@@ -91,7 +81,7 @@ function createSpinnerIcon() {
 }
 
 function createContentWrapper(className: string, content: ButtonContent) {
-  const wrapper = createElement('span', className);
+  const wrapper = $<HTMLElementTagNameMap['span']>('span', { class: className });
   appendButtonContent(wrapper, content);
   return wrapper;
 }
@@ -118,7 +108,7 @@ function addDisposableListener<K extends keyof HTMLElementEventMap>(
 
 export class ButtonView extends Disposable {
   private props: ButtonProps;
-  private readonly element = createElement('button');
+  private readonly element = $<HTMLElementTagNameMap['button']>('button');
   private readonly hoverController: HoverHandle;
   private disposed = false;
 
@@ -234,7 +224,7 @@ export class ButtonView extends Disposable {
       this.element.removeAttribute('aria-label');
     }
 
-    const nextChildren: Node[] = [];
+const nextChildren: Node[] = [];
     if (isLoading) {
       nextChildren.push(createSpinnerIcon());
     }

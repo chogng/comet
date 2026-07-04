@@ -14,6 +14,7 @@ import { createWritingEditorKeymapBindings } from 'cs/editor/browser/text/editor
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 import { collectWritingEditorDerivedLabels, createWritingEditorDocumentModel, findWritingEditorNodeByBlockId, getWritingEditorNodeText, getWritingEditorTextUnitKind, isWritingEditorPlainTextEditableNode, normalizeWritingEditorDocument, syncWritingEditorDerivedLabels } from 'cs/editor/common/writingEditorDocument';
 import type { WritingEditorDocument, WritingEditorStableSelectionTarget, WritingEditorTextUnitKind } from 'cs/editor/common/writingEditorDocument';
+import { $ } from 'cs/base/browser/dom';
 
 import {
   createWritingEditorDocumentIdentityPlugin,
@@ -129,17 +130,6 @@ const EMPTY_TOOLBAR_STATE: WritingEditorToolbarState = {
   availableFigureIds: [],
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
 function createWritingEditorState(document: WritingEditorDocument, placeholder: string) {
   const listItemType = writingEditorSchema.nodes.list_item;
 
@@ -213,7 +203,7 @@ function createSelectionFromStableTarget(
     return null;
   }
 
-  const offsets = textModel.getOffsetsForRange(target.range);
+const offsets = textModel.getOffsetsForRange(target.range);
   const contentStart = textUnitPosition.pos + 1;
   const contentEnd = contentStart + textUnitPosition.nodeSize;
   const from = Math.min(Math.max(contentStart + offsets.startOffset, contentStart), contentEnd);
@@ -298,9 +288,9 @@ function areSurfaceLabelsEqual(
 
 export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
   private props: WritingEditorSurfaceProps;
-  private readonly element = createElement('div', 'comet-pm-editor-surface');
-  private readonly hostWrapperElement = createElement('div', 'comet-pm-editor-host');
-  private readonly editorRootElement = createElement('div', 'comet-pm-editor-root');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-pm-editor-surface');
+  private readonly hostWrapperElement = $<HTMLElementTagNameMap['div']>('div.comet-pm-editor-host');
+  private readonly editorRootElement = $<HTMLElementTagNameMap['div']>('div.comet-pm-editor-root');
   private readonly scrollableElement: DomScrollableElement;
   private readonly toolbar: DraftEditorToolbar;
   private readonly disposeDraftStyleServiceSubscription: () => void;
@@ -353,7 +343,7 @@ export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
       return;
     }
 
-    const currentDocumentKey = createNormalizedDocumentKey(
+const currentDocumentKey = createNormalizedDocumentKey(
       this.view.state.doc.toJSON() as WritingEditorDocument,
     );
     const nextDocumentKey = createNormalizedDocumentKey(props.document);
@@ -445,30 +435,30 @@ export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
       return null;
     }
 
-    const { state } = this.view;
+const { state } = this.view;
     if (state.selection.ranges.length !== 1) {
       return null;
     }
 
-    const fromUnit = resolveSelectionTextUnit(state.selection.$from);
+const fromUnit = resolveSelectionTextUnit(state.selection.$from);
     const toUnit = resolveSelectionTextUnit(state.selection.$to);
     if (!fromUnit || !toUnit || fromUnit.blockId !== toUnit.blockId) {
       return null;
     }
 
-    const documentValue = state.doc.toJSON() as WritingEditorDocument;
+const documentValue = state.doc.toJSON() as WritingEditorDocument;
     const documentModel = createWritingEditorDocumentModel(documentValue);
     const textModel = documentModel.getTextModel(fromUnit.blockId);
     if (!textModel) {
       return null;
     }
 
-    const targetNode = findWritingEditorNodeByBlockId(documentValue, fromUnit.blockId);
+const targetNode = findWritingEditorNodeByBlockId(documentValue, fromUnit.blockId);
     if (!targetNode) {
       return null;
     }
 
-    const derivedLabels = collectWritingEditorDerivedLabels(state.doc);
+const derivedLabels = collectWritingEditorDerivedLabels(state.doc);
 
     const selectionStartOffset = getWritingEditorNodeText(
       fromUnit.node,
@@ -675,7 +665,7 @@ export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
       return;
     }
 
-    const shouldRestoreFocus =
+const shouldRestoreFocus =
       this.view.hasFocus() || this.inputSession.shouldKeepFocus();
     syncWritingEditorDerivedLabels(this.view.dom, nextState.doc);
     if (emitDocumentChange) {
@@ -804,7 +794,7 @@ export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
         return;
       }
 
-      const nextDocument =
+const nextDocument =
         this.inputSession.getPendingComposedDocument() ??
         (this.view.state.doc.toJSON() as WritingEditorDocument);
       const nextDocumentKey = createNormalizedDocumentKey(nextDocument);

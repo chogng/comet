@@ -8,7 +8,7 @@
   overflow: hidden;
 }
 
-.panel.comet-settings-card {
+.comet-panel.comet-settings-card {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -68,7 +68,7 @@
   padding: 0;
   pointer-events: none;
 }
-/* 字体14才能等于curosor�?2，好奇�?/
+/* 字体14才能等于curosor�?2，好奇�?/
 .comet-settings-navigation-item {
   display: flex;
   align-items: center;

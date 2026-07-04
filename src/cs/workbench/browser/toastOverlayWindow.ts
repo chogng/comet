@@ -17,25 +17,12 @@ import {
 import { detectInitialLocale, getLocaleMessages } from 'language/i18n';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import 'cs/base/browser/ui/toast/toast.css';
+import { $ } from 'cs/base/browser/dom';
 
 const fallbackToastState: NativeToastState = {
   items: [],
 };
 
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
-}
 function addDisposableListener(
   target: EventTarget,
   type: string,
@@ -86,12 +73,10 @@ function getToastIconText(type: NativeToastType) {
       return 'i';
   }
 }
+
 export class ToastOverlayWindowView extends Disposable {
-  private readonly element = createElement('main', 'comet-native-toast-overlay-page');
-  private readonly stackElement = createElement(
-    'div',
-    'comet-native-toast-overlay-stack comet-native-toast-overlay-stack-empty',
-  );
+  private readonly element = $<HTMLElementTagNameMap['main']>('main.comet-native-toast-overlay-page');
+  private readonly stackElement = $<HTMLElementTagNameMap['div']>('div.comet-native-toast-overlay-stack.comet-native-toast-overlay-stack-empty');
   private readonly ui = getLocaleMessages(detectInitialLocale());
   private readonly toastApi: INativeHostService['toast'];
   private readonly renderDisposables = new DisposableStore();
@@ -185,7 +170,7 @@ export class ToastOverlayWindowView extends Disposable {
       return;
     }
 
-    const toastItems = Array.from(
+const toastItems = Array.from(
       this.stackElement.querySelectorAll<HTMLElement>('.comet-native-toast-item'),
     );
     if (toastItems.length === 0) {
@@ -231,21 +216,10 @@ export class ToastOverlayWindowView extends Disposable {
 
     this.stackElement.replaceChildren(
       ...this.toastState.items.map((item) => {
-        const section = createElement(
-          'section',
-          `comet-toast-item toast-${item.type} comet-native-toast-item`,
-        );
-        const icon = createElement(
-          'div',
-          'toast-icon',
-          getToastIconText(item.type),
-        );
-        const content = createElement('div', 'toast-content', item.message);
-        const close = createElement(
-          'button',
-          'comet-toast-close comet-native-toast-close',
-          'x',
-        );
+        const section = $<HTMLElementTagNameMap['section']>('section', { class: `comet-toast-item toast-${item.type} comet-native-toast-item` });
+        const icon = $<HTMLElementTagNameMap['div']>('div.toast-icon', undefined, getToastIconText(item.type));
+        const content = $<HTMLElementTagNameMap['div']>('div.toast-content', undefined, item.message);
+        const close = $<HTMLElementTagNameMap['button']>('button.comet-toast-close.comet-native-toast-close', undefined, 'x');
         close.type = 'button';
         close.setAttribute('aria-label', this.ui.toastClose);
         this.renderDisposables.add(addDisposableListener(close, 'click', () => {

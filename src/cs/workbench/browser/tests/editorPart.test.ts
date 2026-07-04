@@ -378,7 +378,7 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
     const panel = document.body.querySelector('.comet-editor-browser-library-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = panel.querySelector(
-      `.comet-editor-browser-library-item.is-favorite[title="${favoriteUrl}"]`,
+      `.comet-editor-browser-library-item.comet-is-favorite[title="${favoriteUrl}"]`,
     );
     assert(favoriteItem instanceof HTMLButtonElement);
     favoriteItem.dispatchEvent(new MouseEvent('contextmenu', {

@@ -11,6 +11,7 @@ import {
   toDisposable,
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
+import { $ } from 'cs/base/browser/dom';
 
 export type ModalContent =
   | string
@@ -34,21 +35,6 @@ export interface ModalProps {
   panelClassName?: string;
   ariaLabel?: string;
   hoverService?: IHoverDelegate;
-}
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (textContent !== undefined) {
-    element.textContent = textContent;
-  }
-  return element;
 }
 
 function appendContent(target: HTMLElement, content: ModalContent) {
@@ -166,17 +152,14 @@ function unlockBodyScroll() {
 
 export class ModalView extends Disposable {
   private props: ModalProps;
-  private readonly element = createElement('div', 'comet-modal-backdrop');
-  private readonly panelElement = createElement('section', 'comet-modal-panel');
-  private readonly headerElement = createElement('header', 'comet-modal-header');
-  private readonly titleElement = createElement('h2', 'comet-modal-title');
-  private readonly titleSpacerElement = createElement('span', 'comet-modal-title-spacer');
-  private readonly closeButton = createElement(
-    'button',
-    'comet-modal-close-btn comet-btn-base comet-btn-ghost comet-btn-mode-icon comet-btn-md',
-  ) as HTMLButtonElement;
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-modal-backdrop');
+  private readonly panelElement = $<HTMLElementTagNameMap['section']>('section.comet-modal-panel');
+  private readonly headerElement = $<HTMLElementTagNameMap['header']>('header.comet-modal-header');
+  private readonly titleElement = $<HTMLElementTagNameMap['h2']>('h2.comet-modal-title');
+  private readonly titleSpacerElement = $<HTMLElementTagNameMap['span']>('span.comet-modal-title-spacer');
+  private readonly closeButton = $<HTMLElementTagNameMap['button']>('button.comet-modal-close-btn.comet-btn-base.comet-btn-ghost.comet-btn-mode-icon.comet-btn-md') as HTMLButtonElement;
   private readonly closeHover: HoverHandle;
-  private readonly bodyElement = createElement('div', 'comet-modal-body');
+  private readonly bodyElement = $<HTMLElementTagNameMap['div']>('div.comet-modal-body');
   private readonly openListeners = new MutableDisposable<DisposableLike>();
   private isAttached = false;
   private readonly titleId = `comet-modal-title-${Math.random().toString(36).slice(2, 10)}`;

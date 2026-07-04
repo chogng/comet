@@ -1080,14 +1080,14 @@ test('TabsTitleControl reorders tabs by drag and drop', () => {
 
   const dataTransfer = createDataTransferStub();
   dispatchDragEvent(draftButton, 'dragstart', { dataTransfer });
-  assert.equal(draftTab?.classList.contains('is-dragging'), true);
+  assert.equal(draftTab?.classList.contains('comet-is-dragging'), true);
 
   const dragOverEvent = dispatchDragEvent(browserTab, 'dragover', {
     clientX: 190,
     dataTransfer,
   });
   assert.equal(dragOverEvent.defaultPrevented, true);
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), true);
 
   dispatchDragEvent(browserTab, 'drop', {
     clientX: 190,
@@ -1095,8 +1095,8 @@ test('TabsTitleControl reorders tabs by drag and drop', () => {
   });
 
   assert.deepEqual(reorderCalls, [['draft-a', 2]]);
-  assert.equal(draftTab?.classList.contains('is-dragging'), false);
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), false);
+  assert.equal(draftTab?.classList.contains('comet-is-dragging'), false);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), false);
 
   control.dispose();
 });
@@ -1305,7 +1305,7 @@ test('TabsTitleControl clears hovered and focused source tab state on drag start
 
   assert.equal(draftTab.dataset.hovered, undefined);
   assert.notEqual(document.activeElement, draftButton);
-  assert.equal(draftTab.classList.contains('is-dragging'), true);
+  assert.equal(draftTab.classList.contains('comet-is-dragging'), true);
 
   dispatchDragEvent(draftTab, 'dragend', { dataTransfer });
   control.dispose();
@@ -1388,7 +1388,7 @@ test('TabsTitleControl activates the dragged tab on drag start', () => {
   assert(updatedDraftButton instanceof HTMLButtonElement);
   assert.deepEqual(activatedTabIds, ['draft-a']);
   assert.equal(updatedDraftButton.getAttribute('aria-selected'), 'true');
-  assert.equal(draftTab.classList.contains('is-active'), true);
+  assert.equal(draftTab.classList.contains('comet-is-active'), true);
 
   dispatchDragEvent(draftTab, 'dragend', { dataTransfer });
   control.dispose();
@@ -1491,18 +1491,18 @@ test('TabsTitleControl keeps one stable insertion indicator between adjacent tab
     clientX: 120,
     dataTransfer,
   });
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), true);
   assert.equal(getDropIndicatorLeft(rootElement), '121px');
 
   dispatchDragEvent(browserTab, 'dragover', {
     clientX: 122,
     dataTransfer,
   });
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), true);
   assert.equal(getDropIndicatorLeft(rootElement), '121px');
 
   dispatchDragEvent(pdfTab, 'dragend', { dataTransfer });
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), false);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), false);
 
   control.dispose();
 });
@@ -1587,14 +1587,14 @@ test('TabsTitleControl keeps the insertion indicator visible when host drag even
     clientX: 120,
     dataTransfer,
   });
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), true);
   assert.equal(getDropIndicatorLeft(rootElement), '121px');
 
   dispatchDragEvent(rootElement, 'dragover', {
     clientX: 122,
     dataTransfer,
   });
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), true);
   assert.equal(getDropIndicatorLeft(rootElement), '121px');
 
   dispatchDragEvent(pdfTab, 'dragend', { dataTransfer });
@@ -1752,7 +1752,7 @@ test('TabsTitleControl keeps the first drop indicator fully visible at the leadi
     dataTransfer,
   });
 
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), true);
   assert.equal(getDropIndicatorLeft(rootElement), '0px');
 
   dispatchDragEvent(pdfTab, 'dragend', { dataTransfer });
@@ -1857,7 +1857,7 @@ test('TabsTitleControl supports dropping a tab after the last tab from container
     dataTransfer,
   });
   assert.equal(dragOverEvent.defaultPrevented, true);
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), true);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), true);
   assert.equal(getDropIndicatorLeft(rootElement), '364px');
 
   dispatchDragEvent(container, 'drop', {
@@ -1866,7 +1866,7 @@ test('TabsTitleControl supports dropping a tab after the last tab from container
   });
 
   assert.deepEqual(reorderCalls, [['draft-a', 3]]);
-  assert.equal(rootElement.classList.contains('is-drop-indicator-visible'), false);
+  assert.equal(rootElement.classList.contains('comet-is-drop-indicator-visible'), false);
 
   control.dispose();
 });
@@ -1934,7 +1934,7 @@ test('TabsTitleControl renders unsave for dirty closable tabs and close for clea
   const container = getTabsContainer(rootElement);
 
   const getCloseActionIcon = () =>
-    container.children[0]?.querySelector('.comet-editor-tab-close-btn.actionbar-action .lx-icon');
+    container.children[0]?.querySelector('.comet-editor-tab-close-btn.comet-actionbar-action .lx-icon');
 
   assert.equal(getCloseActionIcon()?.classList.contains('lx-icon-unsave'), true);
   assert.equal(getCloseActionIcon()?.classList.contains('lx-icon-close'), false);
@@ -2067,9 +2067,9 @@ test('TabsTitleControl reveals the active tab when the strip overflows', async (
   await waitForAnimationFrame();
 
   assert.equal(scrollLeft, 176);
-  assert.equal(container.classList.contains('is-overflowing'), true);
-  assert.equal(container.classList.contains('is-scroll-end'), true);
-  assert.equal(secondTab.classList.contains('is-dirty'), true);
+  assert.equal(container.classList.contains('comet-is-overflowing'), true);
+  assert.equal(container.classList.contains('comet-is-scroll-end'), true);
+  assert.equal(secondTab.classList.contains('comet-is-dirty'), true);
 
   control.dispose();
 });

@@ -6,20 +6,8 @@ import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import type {
   EditorModeToolbarContribution,
   EditorModeToolbarContributionContext,
-} from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-const EDITOR_PDF_TOOLBAR_MORE_MENU_DATA = 'editor-pdf-toolbar-more';
+} from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';const EDITOR_PDF_TOOLBAR_MORE_MENU_DATA = 'editor-pdf-toolbar-more';
+import { $ } from 'cs/base/browser/dom';
 const PDF_PAGINATION_LABEL = 'Pagination';
 const PDF_HIGHLIGHT_LABEL = 'Highlight';
 const PDF_TRANSLATE_LABEL = 'Translate';
@@ -31,13 +19,10 @@ implements EditorModeToolbarContribution {
   readonly mode = 'pdf' as const;
 
   private context: EditorModeToolbarContributionContext;
-  private readonly element = createElement(
-    'div',
-    'comet-editor-mode-toolbar comet-editor-pdf-toolbar',
-  );
-  private readonly rowElement = createElement('div', 'comet-editor-pdf-toolbar-row');
-  private readonly leadingHost = createElement('div', 'comet-editor-pdf-toolbar-leading');
-  private readonly trailingHost = createElement('div', 'comet-editor-pdf-toolbar-trailing');
+  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-editor-mode-toolbar.comet-editor-pdf-toolbar');
+  private readonly rowElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-pdf-toolbar-row');
+  private readonly leadingHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-pdf-toolbar-leading');
+  private readonly trailingHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-pdf-toolbar-trailing');
   private readonly leadingActionsView = createActionBarView({
     className: 'comet-editor-pdf-toolbar-actions',
     ariaRole: 'group',

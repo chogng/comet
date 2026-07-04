@@ -115,7 +115,7 @@ function createDefaultActionViewItem(
   item: ActionBarActionItem,
   hoverService?: IHoverDelegate,
 ): ActionView {
-  // Plain actionbar items are rendered with the default action view implementation.
+  // Plain comet-actionbar items are rendered with the default action view implementation.
   const options: ActionViewItemOptions = {
     hoverService: item.hoverService ?? hoverService,
   };
@@ -189,7 +189,7 @@ export class ActionBarView extends Disposable {
     this.clearRenderedItems();
     this.element.className = DOM.composeClassName([
       'comet-actionbar',
-      this.props.orientation === 'vertical' ? 'is-vertical' : 'is-horizontal',
+      this.props.orientation === 'vertical' ? 'comet-is-vertical' : 'comet-is-horizontal',
       this.props.className,
     ]);
     const role = this.props.ariaRole ?? 'toolbar';
@@ -260,7 +260,7 @@ export class ActionBarView extends Disposable {
       const itemElement = document.createElement('div');
       itemElement.className = DOM.composeClassName([
         'comet-actionbar-item',
-        'is-separator',
+        'comet-is-separator',
         item.className,
       ]);
       if (item.id) {

@@ -10,25 +10,9 @@ import {
   type IView,
 } from 'cs/base/browser/ui/splitview/splitview';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import { $ } from 'cs/base/browser/dom';
 
-import 'cs/base/browser/ui/splitview/paneview.css';
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-  textContent?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  if (typeof textContent === 'string') {
-    element.textContent = textContent;
-  }
-  return element;
-}
-
-function appendClassNames(
+import 'cs/base/browser/ui/splitview/paneview.css';function appendClassNames(
   element: HTMLElement,
   ...classNames: Array<string | undefined>
 ) {
@@ -37,7 +21,7 @@ function appendClassNames(
       continue;
     }
 
-    const tokens = className.split(/\s+/).filter(Boolean);
+const tokens = className.split(/\s+/).filter(Boolean);
     if (tokens.length === 0) {
       continue;
     }
@@ -83,14 +67,14 @@ type PaneChangeEvent = {
 export class Pane implements IView {
   static readonly HEADER_SIZE = 34;
 
-  readonly element = createElement('section', 'comet-pane');
-  protected readonly headerElement = createElement('div', 'comet-pane-header');
-  protected readonly headerButtonElement = createElement('button', 'comet-pane-header-toggle');
-  protected readonly headerContentElement = createElement('span', 'comet-pane-header-content');
+  readonly element = $<HTMLElementTagNameMap['section']>('section.comet-pane');
+  protected readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-pane-header');
+  protected readonly headerButtonElement = $<HTMLElementTagNameMap['button']>('button.comet-pane-header-toggle');
+  protected readonly headerContentElement = $<HTMLElementTagNameMap['span']>('span.comet-pane-header-content');
   protected readonly chevronElement = createLxIcon('chevron-down', 'comet-pane-header-chevron');
   protected readonly titleElement: HTMLSpanElement;
-  protected readonly headerActionsElement = createElement('div', 'comet-pane-header-actions');
-  protected readonly bodyElement = createElement('div', 'comet-pane-body');
+  protected readonly headerActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-pane-header-actions');
+  protected readonly bodyElement = $<HTMLElementTagNameMap['div']>('div.comet-pane-body');
   private readonly onDidChangeEmitter = new EventEmitter<PaneChangeEvent>();
   private readonly disposables = new DisposableStore();
   private expandedValue: boolean;
@@ -108,7 +92,7 @@ export class Pane implements IView {
     this.maximumBodySizeValue =
       options.maximumBodySize ?? Number.POSITIVE_INFINITY;
     this.headerSizeValue = options.headerSize ?? Pane.HEADER_SIZE;
-    this.titleElement = createElement('span', 'comet-pane-header-title', options.title);
+    this.titleElement = $<HTMLElementTagNameMap['span']>('span.comet-pane-header-title', undefined, options.title);
     this.element.style.setProperty('--comet-pane-header-size', `${this.headerSizeValue}px`);
     appendClassNames(
       this.element,
@@ -253,7 +237,7 @@ export type PaneViewOptions = {
 
 export class PaneView {
   private static readonly RESIZE_ANIMATION_DURATION_MS = 540;
-  readonly element = createElement('div', 'comet-pane-view');
+  readonly element = $<HTMLElementTagNameMap['div']>('div.comet-pane-view');
   private readonly splitView: SplitView;
   private readonly items: PaneItem[] = [];
   private readonly disposables = new DisposableStore();
