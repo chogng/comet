@@ -1,0 +1,78 @@
+import {
+	createSessionChatView,
+	type SessionChatView,
+	type SessionChatViewProps,
+} from 'cs/sessions/browser/parts/sessions/chatView';
+import {
+	createSessionHeaderView,
+	type SessionHeaderView,
+} from 'cs/sessions/browser/parts/sessions/sessionHeader';
+
+import 'cs/sessions/browser/parts/media/sessionView.css';
+
+export type SessionViewProps = {
+	chatProps: SessionChatViewProps;
+	topbarTrailingActionsElement?: HTMLElement | null;
+};
+
+function createElement<K extends keyof HTMLElementTagNameMap>(
+	tagName: K,
+	className?: string,
+) {
+	const element = document.createElement(tagName);
+	if (className) {
+		element.className = className;
+	}
+	return element;
+}
+
+export class SessionView {
+	private readonly element = createElement('section', 'session-view');
+	private readonly contentElement = createElement('div', 'session-view-content');
+	private readonly headerView: SessionHeaderView;
+	private readonly chatView: SessionChatView;
+	private disposed = false;
+
+	constructor(props: SessionViewProps) {
+		this.headerView = createSessionHeaderView({
+			trailingActionsElement: props.topbarTrailingActionsElement ?? null,
+		});
+		this.chatView = createSessionChatView(props.chatProps);
+		this.contentElement.append(this.chatView.getElement());
+		this.element.append(this.headerView.getElement(), this.contentElement);
+	}
+
+	getElement() {
+		return this.element;
+	}
+
+	setProps(props: SessionViewProps) {
+		if (this.disposed) {
+			return;
+		}
+
+		this.headerView.setProps({
+			trailingActionsElement: props.topbarTrailingActionsElement ?? null,
+		});
+		this.chatView.setProps(props.chatProps);
+	}
+
+	focus() {
+		this.chatView.focus();
+	}
+
+	dispose() {
+		if (this.disposed) {
+			return;
+		}
+
+		this.disposed = true;
+		this.headerView.dispose();
+		this.chatView.dispose();
+		this.element.replaceChildren();
+	}
+}
+
+export function createSessionView(props: SessionViewProps) {
+	return new SessionView(props);
+}

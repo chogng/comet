@@ -1,0 +1,54 @@
+.sessions-part,
+.session-view {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	background: var(--vscode-agentBar-background, #fdfdfc);
+	color: var(--vscode-workbench-foreground, #1a2530);
+}
+
+.session-header {
+	flex: 0 0 36px;
+	min-height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	padding: 0 8px;
+	border-bottom: 1px solid var(--vscode-workbench-panelTitleBorder, #e5ebf1);
+	-webkit-app-region: drag;
+	user-select: none;
+}
+
+.session-header[hidden] {
+	display: none;
+}
+
+.session-header-trailing {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	height: 100%;
+	-webkit-app-region: no-drag;
+}
+
+.session-view-content,
+.session-chat-view {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	overflow: hidden;
+}
+
+.session-chat-view > .agentbar-content {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}

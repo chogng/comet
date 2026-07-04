@@ -1,0 +1,42 @@
+.session-sidebar-part {
+	--sidebar-footer-height: 54px;
+	--sidebar-floating-inset: 12px;
+	--sidebar-surface-bg: #FFFFFF;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	width: calc(100% - var(--sidebar-floating-inset) - var(--sidebar-floating-inset));
+	height: calc(100% - var(--sidebar-floating-inset) - var(--sidebar-floating-inset));
+	margin: var(--sidebar-floating-inset);
+	overflow: hidden;
+	border: 1px solid var(--vscode-sideBar-border, #e6e6e6);
+	border-radius: 8px;
+	background: var(--sidebar-surface-bg);
+	box-shadow:
+		0 8px 18px rgba(15, 23, 42, 0.1),
+		0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.app-window.is-mica-enabled .session-sidebar-part {
+	--sidebar-surface-bg: rgba(248, 250, 253, 0.72);
+	--sidebar-surface-bg: color-mix(
+		in srgb,
+		#FFFFFF 72%,
+		transparent
+	);
+}
+
+.session-sidebar-root {
+	min-width: 0;
+	min-height: 0;
+	width: 100%;
+	height: 100%;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.session-sidebar-part .sidebar-footer {
+	border-top: 1px solid var(--vscode-sideBar-border, rgba(15, 23, 42, 0.08));
+}
