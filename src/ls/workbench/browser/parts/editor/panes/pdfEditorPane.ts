@@ -29,7 +29,7 @@ import type { EditorPartLabels } from 'ls/workbench/browser/parts/editor/editorP
 import type { EditorOpenHandler } from 'ls/workbench/services/editor/common/editorOpenTypes';
 import { EditorPane } from 'ls/workbench/browser/parts/editor/panes/editorPane';
 import type { INativeHostService } from 'ls/platform/native/common/native';
-import { toFileUrl } from 'ls/workbench/common/fileUrl';
+import { URI } from 'ls/base/common/uri';
 
 export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
   reader: PdfReaderViewState;
@@ -262,16 +262,15 @@ export class PdfEditorPane extends EditorPane<
 
   private readonly handleOpenPdfFile = async () => {
     try {
-      const filePath = await this.props.nativeHost.invoke('pick_pdf_file');
-      const fileUrl = toFileUrl(filePath ?? '');
-      if (!fileUrl) {
+      const resource = await this.props.nativeHost.invoke('pick_pdf_file');
+      if (!resource) {
         return;
       }
 
       await this.props.onOpenEditor?.({
         kind: 'pdf',
         disposition: 'reveal-or-open',
-        url: fileUrl,
+        url: URI.revive(resource).toString(),
       });
     } catch (error) {
       console.error('Failed to open PDF file.', error);

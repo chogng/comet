@@ -1,4 +1,5 @@
 import { getEditorContentTabTitle } from 'ls/workbench/browser/parts/editor/editorUrlPresentation';
+import { URI } from 'ls/base/common/uri';
 
 export type EditorTabViewMode = 'draft';
 
@@ -286,10 +287,16 @@ export function toEditorTabInput(input: EditorTabInput): EditorTabInput {
   return createEditorBrowserTabInput(input.url, input);
 }
 
+export function getEditorContentTabInputResourceKey(
+  input: Pick<EditorContentTabInput, 'kind' | 'url'>,
+) {
+  return `${input.kind}:${URI.parse(input.url.trim(), true).toString()}`;
+}
+
 export function getEditorTabInputResourceKey(input: EditorTabInput) {
   if (isEditorDraftTabInput(input)) {
     return `draft:${input.id}`;
   }
 
-  return `${input.kind}:${input.url.trim()}`;
+  return getEditorContentTabInputResourceKey(input);
 }

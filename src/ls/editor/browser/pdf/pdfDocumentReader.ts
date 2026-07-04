@@ -31,6 +31,7 @@ import type {
   PdfTextChar,
 } from 'ls/editor/browser/pdf/pdfReviewerTypes';
 import type { INativeHostService } from 'ls/platform/native/common/native';
+import { URI } from 'ls/base/common/uri';
 import { init as initPdfium } from 'ls/editor/browser/pdf/vendor/pdfium/index.js';
 import type { WrappedPdfiumModule } from 'ls/editor/browser/pdf/vendor/pdfium/index.js';
 
@@ -849,7 +850,9 @@ export class PdfDocumentReader {
       return new Uint8Array(await response.arrayBuffer());
     }
 
-    const result = await this.props.nativeHost.invoke('read_pdf_file', { url });
+    const result = await this.props.nativeHost.invoke('read_pdf_file', {
+      resource: URI.parse(url, true).toJSON(),
+    });
     return new Uint8Array(result.data);
   }
 

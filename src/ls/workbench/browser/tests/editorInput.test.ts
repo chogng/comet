@@ -15,7 +15,6 @@ import {
   getEditorContentDisplayUrl,
   getEditorContentTabTitle,
 } from 'ls/workbench/browser/parts/editor/editorUrlPresentation';
-import { toFileUrl } from 'ls/workbench/common/fileUrl';
 
 test('toEditorTabInput strips draft-only payload from workspace tabs', () => {
   const draftTab: EditorWorkspaceDraftTab = {
@@ -71,6 +70,16 @@ test('getEditorTabInputResourceKey uses stable kind-aware resource keys', () => 
     }),
     'pdf:https://example.com/paper.pdf',
   );
+
+  assert.equal(
+    getEditorTabInputResourceKey({
+      id: 'browser-a',
+      kind: 'browser',
+      title: 'Paper',
+      url: 'https://EXAMPLE.com/paper folder?q=alpha beta',
+    }),
+    'browser:https://example.com/paper%20folder?q%3Dalpha%20beta',
+  );
 });
 
 test('getEditorContentTabTitle treats about:blank as an empty browser tab title', () => {
@@ -80,17 +89,6 @@ test('getEditorContentTabTitle treats about:blank as an empty browser tab title'
 test('getEditorContentDisplayUrl hides about:blank from url displays', () => {
   assert.equal(getEditorContentDisplayUrl(EMPTY_BROWSER_TAB_URL), '');
   assert.equal(getEditorContentDisplayUrl(' https://example.com/paper '), 'https://example.com/paper');
-});
-
-test('toFileUrl encodes path segments without turning file characters into URL syntax', () => {
-  assert.equal(
-    toFileUrl('/Users/lance/Papers/a #1?.pdf'),
-    'file:///Users/lance/Papers/a%20%231%3F.pdf',
-  );
-  assert.equal(
-    toFileUrl('C:\\Users\\lance\\Papers\\a #1?.pdf'),
-    'file:///C:/Users/lance/Papers/a%20%231%3F.pdf',
-  );
 });
 
 test('isEmptyBrowserTabInput matches only browser about:blank tabs', () => {

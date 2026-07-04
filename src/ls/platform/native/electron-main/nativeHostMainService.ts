@@ -1,7 +1,6 @@
 import { shell } from 'electron';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 
 import type {
   PartsSplash,
@@ -15,6 +14,7 @@ import type {
 import { appError } from 'ls/base/common/errors';
 import type { Event } from 'ls/base/common/event';
 import { toDisposable } from 'ls/base/common/lifecycle';
+import { URI, isUriComponents } from 'ls/base/common/uri';
 import type { IServerChannel } from 'ls/base/parts/ipc/common/ipc';
 import { pickPdfFileDialog } from 'ls/platform/dialogs/electron-main/dialogMainService';
 import {
@@ -24,57 +24,50 @@ import {
 import { getWindowState } from 'ls/platform/window/electron-main/window';
 import type { IThemeMainService } from 'ls/platform/theme/electron-main/themeMainService';
 
-function resolvePdfFilePath(payload: ReadPdfFilePayload = {}) {
-  const rawPath = payload.path?.trim();
-  if (rawPath) {
-    return rawPath;
+function reviveFileResource(resource: unknown, missingMessage: string) {
+  if (!isUriComponents(resource)) {
+    throw appError('UNKNOWN_ERROR', { message: missingMessage });
   }
 
-  const rawUrl = payload.url?.trim();
-  if (!rawUrl) {
-    throw appError('UNKNOWN_ERROR', { message: 'PDF path is required.' });
+  const fileResource = URI.from(resource, true);
+  if (fileResource.scheme !== 'file') {
+    throw appError('URL_PROTOCOL_UNSUPPORTED', { url: fileResource.toString() });
   }
 
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    throw appError('UNKNOWN_ERROR', { message: 'PDF URL is invalid.' });
-  }
+  return fileResource;
+}
 
-  if (parsedUrl.protocol !== 'file:') {
-    throw appError('URL_PROTOCOL_UNSUPPORTED', { url: rawUrl });
-  }
-
-  return fileURLToPath(parsedUrl);
+function resolvePdfFileResource(payload: ReadPdfFilePayload | undefined) {
+  return reviveFileResource(payload?.resource, 'PDF resource is required.');
 }
 
 export class NativeHostMainService {
   constructor(private readonly themeMainService: IThemeMainService) {}
 
   async pickPdfFile(parentWindow: BrowserWindow | null = getMainWindow()) {
-    return pickPdfFileDialog(parentWindow);
+    const filePath = await pickPdfFileDialog(parentWindow);
+    return filePath ? URI.file(filePath).toJSON() : null;
   }
 
-  async readPdfFile(payload: ReadPdfFilePayload = {}) {
-    const filePath = resolvePdfFilePath(payload);
+  async readPdfFile(payload: ReadPdfFilePayload | undefined) {
+    const resource = resolvePdfFileResource(payload);
+    const filePath = resource.fsPath;
     if (!/\.pdf$/i.test(filePath)) {
       throw appError('UNKNOWN_ERROR', { message: 'Only PDF files can be previewed.' });
     }
 
     const buffer = await readFile(filePath);
     return {
-      filePath,
+      resource: resource.toJSON(),
       data: new Uint8Array(buffer),
     };
   }
 
-  async openPath(payload: OpenPathPayload = {}) {
-    const targetPath = payload.path?.trim();
-    if (!targetPath) {
-      throw appError('UNKNOWN_ERROR', { message: 'Path is required.' });
-    }
-
+  async openPath(payload: OpenPathPayload | undefined) {
+    const targetPath = reviveFileResource(
+      payload?.resource,
+      'Resource is required.',
+    ).fsPath;
     const openError = await shell.openPath(targetPath);
     if (openError) {
       shell.showItemInFolder(targetPath);

@@ -35,6 +35,27 @@ export const enum Platform {
 
 export type PlatformName = 'Web' | 'Windows' | 'Mac' | 'Linux';
 
+type RuntimeGlobal = typeof globalThis & {
+  navigator?: {
+    platform?: unknown;
+  };
+  window?: {
+    electronAPI?: {
+      invoke?: unknown;
+      windowControls?: {
+        perform?: unknown;
+      };
+      webContent?: {
+        navigate?: unknown;
+      };
+    };
+  };
+  importScripts?: unknown;
+  origin?: unknown;
+};
+
+const runtimeGlobal = globalThis as RuntimeGlobal;
+
 export function PlatformToString(platform: Platform): PlatformName {
   switch (platform) {
     case Platform.Mac:
@@ -49,11 +70,11 @@ export function PlatformToString(platform: Platform): PlatformName {
 }
 
 function readNavigatorPlatform() {
-  if (typeof navigator === 'undefined') {
+  if (!runtimeGlobal.navigator) {
     return '';
   }
 
-  return String(navigator.platform ?? '').toLowerCase();
+  return String(runtimeGlobal.navigator.platform ?? '').toLowerCase();
 }
 
 function isMacintoshPlatform(platform: string) {
@@ -72,11 +93,11 @@ function isLinuxPlatform(platform: string) {
 
 const navigatorPlatform = readNavigatorPlatform();
 const desktopRuntime =
-  typeof window !== 'undefined' &&
-  typeof window.electronAPI?.invoke === 'function';
+  typeof runtimeGlobal.window !== 'undefined' &&
+  typeof runtimeGlobal.window.electronAPI?.invoke === 'function';
 const webWorkerRuntime =
-  typeof window === 'undefined' &&
-  typeof (globalThis as { importScripts?: unknown }).importScripts === 'function';
+  typeof runtimeGlobal.window === 'undefined' &&
+  typeof runtimeGlobal.importScripts === 'function';
 const runtimeMode: RuntimeMode = desktopRuntime ? 'desktop' : 'web';
 const runtimePlatform: RuntimePlatform = !desktopRuntime
   ? 'web'
@@ -106,15 +127,15 @@ export function hasDesktopRuntime() {
 
 export function hasWindowControlsRuntime() {
   return (
-    typeof window !== 'undefined' &&
-    typeof window.electronAPI?.windowControls?.perform === 'function'
+    typeof runtimeGlobal.window !== 'undefined' &&
+    typeof runtimeGlobal.window.electronAPI?.windowControls?.perform === 'function'
   );
 }
 
 export function hasWebContentRuntime() {
   return (
-    typeof window !== 'undefined' &&
-    typeof window.electronAPI?.webContent?.navigate === 'function'
+    typeof runtimeGlobal.window !== 'undefined' &&
+    typeof runtimeGlobal.window.electronAPI?.webContent?.navigate === 'function'
   );
 }
 
@@ -135,7 +156,7 @@ export const isMacintosh = runtimePlatform === 'macos';
 export const isLinux = runtimePlatform === 'linux';
 export const isNative = desktopRuntime;
 export const isWeb = runtimeMode === 'web';
-export const webWorkerOrigin = webWorkerRuntime && typeof globalThis.origin === 'string' ? globalThis.origin : undefined;
+export const webWorkerOrigin = webWorkerRuntime && typeof runtimeGlobal.origin === 'string' ? runtimeGlobal.origin : undefined;
 export const platform = platformValue;
 export const language: string = LANGUAGE_DEFAULT;
 export const locale: string = LANGUAGE_DEFAULT;

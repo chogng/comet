@@ -13,7 +13,7 @@ import type { LibraryModel, LibraryModelContext } from 'ls/workbench/browser/lib
 
 import { setWorkbenchBrowserTabKeepAliveLimit } from 'ls/workbench/browser/webContentRetentionState';
 import { WebContentNavigationModel } from 'ls/workbench/browser/webContentNavigationModel';
-import { toFileUrl } from 'ls/workbench/common/fileUrl';
+import { URI } from 'ls/base/common/uri';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchContentClassName,
@@ -1655,7 +1655,7 @@ class WorkbenchHost {
     const handleLibraryDocumentOpen = (document: LibraryDocumentSummary) => {
       const localFilePath = String(document.latestFilePath ?? '').trim();
       if (localFilePath && looksLikePdfResource(localFilePath)) {
-        handleCreatePdfTab(toFileUrl(localFilePath));
+        handleCreatePdfTab(URI.file(localFilePath).toString());
         return;
       }
 

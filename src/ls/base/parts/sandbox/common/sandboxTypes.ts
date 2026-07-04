@@ -1,4 +1,5 @@
 import type { EditorDraftStyleSettings } from 'ls/base/common/editorDraftStyle';
+import type { UriComponents } from 'ls/base/common/uri';
 
 export type Locale = 'zh' | 'en';
 export type AppTheme = 'light' | 'dark' | 'system';
@@ -312,7 +313,7 @@ export interface RagConnectionTestResult {
 }
 
 export interface OpenPathPayload {
-  path?: string;
+  resource: UriComponents;
 }
 
 export interface PickUserSettingsFilePayload {
@@ -320,12 +321,11 @@ export interface PickUserSettingsFilePayload {
 }
 
 export interface ReadPdfFilePayload {
-  url?: string;
-  path?: string;
+  resource: UriComponents;
 }
 
 export interface ReadPdfFileResult {
-  filePath: string;
+  resource: UriComponents;
   data: Uint8Array;
 }
 
@@ -593,7 +593,7 @@ export interface AppCommandResultMap {
   test_rag_connection: RagConnectionTestResult;
   pick_download_directory: string | null;
   pick_user_settings_file: string | null;
-  pick_pdf_file: string | null;
+  pick_pdf_file: UriComponents | null;
   read_pdf_file: ReadPdfFileResult;
   open_path: boolean;
   web_content_download_pdf: PdfDownloadResult;

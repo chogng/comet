@@ -10,6 +10,7 @@ import {
   createEditorBrowserTabInput,
   createEditorDraftTabInput,
   createEditorPdfTabInput,
+  getEditorContentTabInputResourceKey,
   getEditorPaneMode,
   isEditorBrowserTabInput,
   isEditorDraftTabInput,
@@ -1015,13 +1016,19 @@ export class EditorModel {
     }
 
     const reuseExisting = options.reuseExisting ?? true;
+    const resourceKey = getEditorContentTabInputResourceKey({
+      kind: 'browser',
+      url: normalizedUrl,
+    });
 
     this.updateTargetGroupState(target, (group) => {
       // Mirror upstream open-editor behavior: the same web content resource re-activates its tab
       // instead of creating duplicate entries in the target group strip.
       const existingTab = reuseExisting
         ? group.tabs.find(
-            (tab) => isEditorBrowserTabInput(tab) && tab.url === normalizedUrl,
+            (tab) =>
+              isEditorBrowserTabInput(tab) &&
+              getEditorContentTabInputResourceKey(tab) === resourceKey,
           )
         : null;
       if (reuseExisting && existingTab) {
@@ -1055,13 +1062,19 @@ export class EditorModel {
     const normalizedUrl = url.trim() || EMPTY_PDF_TAB_URL;
 
     const reuseExisting = options.reuseExisting ?? true;
+    const resourceKey = getEditorContentTabInputResourceKey({
+      kind: 'pdf',
+      url: normalizedUrl,
+    });
 
     this.updateTargetGroupState(target, (group) => {
       // Keep PDF tabs aligned with web tabs: one resource maps to one tab/input entry
       // inside the target group.
       const existingTab = reuseExisting
         ? group.tabs.find(
-            (tab) => isEditorPdfTabInput(tab) && tab.url === normalizedUrl,
+            (tab) =>
+              isEditorPdfTabInput(tab) &&
+              getEditorContentTabInputResourceKey(tab) === resourceKey,
           )
         : null;
       if (reuseExisting && existingTab) {
