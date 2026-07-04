@@ -2,11 +2,9 @@
  *  Copyright (c) Comet Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
-import type {
-	AssistantChatMessage,
-	AssistantMessageLink,
-} from 'cs/workbench/browser/assistantModel';
+import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
 import { localize } from 'cs/nls';
+import { parseLinkedText } from 'cs/base/common/linkedText';
 import { $ } from 'cs/base/browser/dom';
 
 export type ChatListRendererOptions = {
@@ -78,41 +76,35 @@ export class ChatListRenderer {
 		const content = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-answer');
 
 		if (message.content.trim()) {
-			const text = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-message-text');
-			text.textContent = message.content;
-			content.append(text);
-		}
-
-		if (message.links?.length) {
-			content.append(this.renderMessageLinks(message.links));
+			content.append(this.renderLinkedText(message.content));
 		}
 
 		return content;
 	}
 
-	private renderMessageLinks(links: readonly AssistantMessageLink[]) {
-		const list = $<HTMLElementTagNameMap['ul']>('ul.comet-agentbar-message-link-list');
-		for (const link of links) {
-			const item = $<HTMLElementTagNameMap['li']>('li.comet-agentbar-message-link-item');
-			const anchor = $<HTMLElementTagNameMap['a']>('a.comet-agentbar-message-link');
-			anchor.href = link.href;
-			anchor.textContent = link.label;
-			anchor.addEventListener('click', event => {
-				event.preventDefault();
-				this.options.onRequestOpenLink(link.href);
-			});
-			item.append(anchor);
-
-			if (link.description) {
-				const description = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-message-link-description');
-				description.textContent = link.description;
-				item.append(description);
+	private renderLinkedText(text: string) {
+		const paragraph = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-message-text');
+		const linkedText = parseLinkedText(text);
+		for (const node of linkedText.nodes) {
+			if (typeof node === 'string') {
+				paragraph.append(document.createTextNode(node));
+				continue;
 			}
 
-			list.append(item);
+			const anchor = $<HTMLElementTagNameMap['a']>('a.comet-agentbar-message-link');
+			anchor.href = node.href;
+			anchor.textContent = node.label;
+			if (node.title) {
+				anchor.title = node.title;
+			}
+			anchor.addEventListener('click', event => {
+				event.preventDefault();
+				this.options.onRequestOpenLink(node.href);
+			});
+			paragraph.append(anchor);
 		}
 
-		return list;
+		return paragraph;
 	}
 
 	private renderEvidence(result: AssistantResult) {

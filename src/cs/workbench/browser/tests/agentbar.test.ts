@@ -24,11 +24,9 @@ function createProps(): ChatWidgetProps {
     articleQuickSources: [],
     isArticleSourceFetching: false,
     onFetchArticleSource: () => {},
-    onDownloadArticlePdf: async () => {},
     showArticleBatchActions: false,
     onDownloadAllArticles: () => {},
     onExportArticleSummaries: () => {},
-    onOpenArticleDetails: () => {},
     availableArticleCount: 1,
     conversations: [
       {
@@ -686,58 +684,37 @@ test('composer article batch actions call download and export handlers', async (
   }
 });
 
-test('agent chat renders fetched article cards with PDF download comet-hover-action', async () => {
-  let downloadedSourceUrl = '';
+test('agent chat renders fetched article linked text and emits open link requests', async () => {
   let openedSourceUrl = '';
   const agentBar = createChatWidget({
     ...createProps(),
     messages: [
       {
         id: 'article-1',
-        role: 'article',
-        sourceLabel: 'Science',
-        article: {
-          title: 'Example article',
-          articleType: 'Research Article',
-          doi: '10.1126/example',
-          authors: ['Ada Lovelace'],
-          abstractText: 'Abstract',
-          descriptionText: 'Description',
-          publishedAt: '2026-07-03',
-          sourceUrl: 'https://www.science.org/doi/example',
-          fetchedAt: '2026-07-04T00:00:00.000Z',
-          sourceId: 'science',
-          journalTitle: 'Science',
-        },
+        role: 'assistant',
+        content: 'Science\n- [Example article](https://www.science.org/doi/example) - Science | 2026-07-03 | Research Article',
+        includeInAgentHistory: false,
       },
     ],
-    onDownloadArticlePdf: async (article) => {
-      downloadedSourceUrl = article.sourceUrl;
-    },
-    onOpenArticleDetails: (article) => {
-      openedSourceUrl = article.sourceUrl;
-    },
+  });
+  agentBar.onDidRequestOpenLink(request => {
+    openedSourceUrl = request.href;
   });
   const element = agentBar.getElement();
   document.body.append(element);
 
   try {
-    const card = element.querySelector('.comet-agentbar-article-card');
-    assert(card instanceof HTMLElement);
+    const text = element.querySelector('.comet-agentbar-message-text');
+    assert(text instanceof HTMLElement);
     assert.equal(
-      card.querySelector('.comet-agentbar-article-title')?.textContent,
-      'Example article',
+      text.textContent,
+      'Science\n- Example article - Science | 2026-07-03 | Research Article',
     );
 
-    const downloadButton = card.querySelector('.comet-agentbar-article-download-btn');
-    assert(downloadButton instanceof HTMLButtonElement);
-    downloadButton.click();
-    await delay(0);
-    assert.equal(downloadedSourceUrl, 'https://www.science.org/doi/example');
-
-    const title = card.querySelector('.comet-agentbar-article-title');
-    assert(title instanceof HTMLElement);
-    title.click();
+    const link = text.querySelector('.comet-agentbar-message-link');
+    assert(link instanceof HTMLElement);
+    assert.equal(link.textContent, 'Example article');
+    link.click();
     assert.equal(openedSourceUrl, 'https://www.science.org/doi/example');
   } finally {
     agentBar.dispose();

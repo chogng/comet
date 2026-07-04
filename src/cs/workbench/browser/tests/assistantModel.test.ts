@@ -415,20 +415,15 @@ test('assistant inserts fetched article links without sending them as agent text
   const snapshot = assistantModel.getSnapshot();
   const articlesMessage = snapshot.messages[0];
   assert.equal(articlesMessage?.role, 'assistant');
-  assert.equal(articlesMessage?.content, 'Science');
+  assert.equal(
+    articlesMessage?.content,
+    [
+      'Science',
+      '- [Fetched article](https://www.science.org/doi/example) - Science | 2026-07-03 | Research Article',
+      '- [Second fetched article](https://www.science.org/doi/example-2) - Science | 2026-07-04 | Research Article',
+    ].join('\n'),
+  );
   assert.equal(articlesMessage?.includeInAgentHistory, false);
-  assert.deepEqual(articlesMessage?.links, [
-    {
-      label: 'Fetched article',
-      href: 'https://www.science.org/doi/example',
-      description: 'Science | 2026-07-03 | Research Article',
-    },
-    {
-      label: 'Second fetched article',
-      href: 'https://www.science.org/doi/example-2',
-      description: 'Science | 2026-07-04 | Research Article',
-    },
-  ]);
   assert.equal(snapshot.messages[1]?.role, 'user');
   assert.deepEqual((capture.payloads[0] as { messages: unknown[] }).messages, [
     {

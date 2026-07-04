@@ -46,16 +46,9 @@ export type AssistantPatchProposal = MainAgentPatchProposal & {
   applyError: string | null;
 };
 
-export type AssistantMessageLink = {
-  label: string;
-  href: string;
-  description: string;
-};
-
 type AssistantTextMessageBase = {
   id: string;
   content: string;
-  links?: AssistantMessageLink[];
   includeInAgentHistory?: boolean;
 };
 
@@ -168,16 +161,28 @@ function isAgentTextMessage(
   );
 }
 
-function createArticleMessageLink(article: Article): AssistantMessageLink {
-  return {
-    label: article.title,
-    href: article.sourceUrl,
-    description: [
-      article.journalTitle,
-      article.publishedAt,
-      article.articleType,
-    ].filter(Boolean).join(' | '),
-  };
+function createLinkedTextLabel(label: string): string {
+  return label.replace(/\]/g, ')');
+}
+
+function createArticleMessageLine(article: Article): string {
+  const description = [
+    article.journalTitle,
+    article.publishedAt,
+    article.articleType,
+  ].filter(Boolean).join(' | ');
+  const linkedTitle = `[${createLinkedTextLabel(article.title)}](${article.sourceUrl})`;
+  return description ? `- ${linkedTitle} - ${description}` : `- ${linkedTitle}`;
+}
+
+function createArticleMessageContent(
+  sourceLabel: string,
+  articles: readonly Article[],
+): string {
+  return [
+    sourceLabel,
+    ...articles.map(createArticleMessageLine),
+  ].join('\n');
 }
 
 function createConversationId() {
@@ -380,8 +385,6 @@ export class AssistantModel {
       return;
     }
 
-    const links = articles.map(createArticleMessageLink);
-
     this.updateActiveConversation((conversation) => {
       const isFirstMessage = conversation.messages.length === 0;
       const articleTitle = articles[0].title.trim().slice(0, 18);
@@ -403,8 +406,7 @@ export class AssistantModel {
           {
             id: createMessageId(),
             role: "assistant",
-            content: sourceLabel,
-            links,
+            content: createArticleMessageContent(sourceLabel, articles),
             includeInAgentHistory: false,
           },
         ],

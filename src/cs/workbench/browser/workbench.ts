@@ -3,7 +3,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createAssistantModel } from 'cs/workbench/browser/assistantModel';
-import type { AssistantModel, AssistantModelContext } from 'cs/workbench/browser/assistantModel';
+import type {
+  AssistantChatMessage,
+  AssistantModel,
+  AssistantModelContext,
+} from 'cs/workbench/browser/assistantModel';
 import { createBatchFetchController } from 'cs/workbench/browser/batchFetchModel';
 import type { BatchFetchController, BatchFetchControllerContext } from 'cs/workbench/browser/batchFetchModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
@@ -55,6 +59,7 @@ import {
   createSessionChatViewProps,
   type SessionChatViewProps,
 } from 'cs/sessions/browser/parts/sessions/chatView';
+import type { ChatOpenLinkRequest } from 'cs/workbench/contrib/chat/browser/chat';
 import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import { createSessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
 import { createSessionWorkbenchLayoutView } from 'cs/sessions/browser/workbenchLayout';
@@ -113,6 +118,7 @@ import type { WebContentSurfaceSnapshot } from 'cs/workbench/browser/webContentS
 import { getLocaleMessages } from 'language/i18n';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
+import { parseLinkedText } from 'cs/base/common/linkedText';
 import type { AppStartupLayout, LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
@@ -655,6 +661,44 @@ function resolveCurrentPdfDownloadArticle(
   };
 }
 
+function collectChatArticleBatch(
+  messages: readonly AssistantChatMessage[],
+  articles: readonly Article[],
+): Article[] {
+  const articlesByUrl = new Map(
+    articles.map((article) => [normalizeUrl(article.sourceUrl), article] as const),
+  );
+  const result: Article[] = [];
+  const seenUrls = new Set<string>();
+
+  for (const message of messages) {
+    if (message.role !== 'assistant' || message.includeInAgentHistory !== false) {
+      continue;
+    }
+
+    for (const node of parseLinkedText(message.content).nodes) {
+      if (typeof node === 'string') {
+        continue;
+      }
+
+      const normalizedUrl = normalizeUrl(node.href);
+      if (!normalizedUrl || seenUrls.has(normalizedUrl)) {
+        continue;
+      }
+
+      const article = articlesByUrl.get(normalizedUrl);
+      if (!article) {
+        continue;
+      }
+
+      seenUrls.add(normalizedUrl);
+      result.push(article);
+    }
+  }
+
+  return result;
+}
+
 class WorkbenchHost {
   private readonly rootElement: HTMLElement;
   private readonly containerElement: HTMLDivElement;
@@ -692,6 +736,7 @@ class WorkbenchHost {
   private editorPartController: EditorPartModel | null = null;
   private readonly globalDisposables: Array<() => void> = [];
   private webContentStateDisposable: (() => void) | null = null;
+  private handleWorkbenchContentOpenLinkRequest!: (request: ChatOpenLinkRequest) => void;
   private servicesSubscribed = false;
   private isDisposed = false;
   private isRendering = false;
@@ -1186,6 +1231,10 @@ class WorkbenchHost {
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
+      const openLinkSubscription = this.workbenchContentPartViews.onDidRequestOpenLink(
+        request => this.handleWorkbenchContentOpenLinkRequest(request),
+      );
+      this.globalDisposables.push(() => openLinkSubscription.dispose());
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1257,6 +1306,10 @@ class WorkbenchHost {
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
+      const openLinkSubscription = this.workbenchContentPartViews.onDidRequestOpenLink(
+        request => this.handleWorkbenchContentOpenLinkRequest(request),
+      );
+      this.globalDisposables.push(() => openLinkSubscription.dispose());
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1601,6 +1654,13 @@ class WorkbenchHost {
         setWebUrl: setWorkbenchWebUrl,
         setFetchSeedUrl: setWorkbenchFetchSeedUrl,
       });
+    this.handleWorkbenchContentOpenLinkRequest = ({ href }) => {
+      if (isEditorCollapsed) {
+        setEditorCollapsed(false, expandedEditorSize);
+      }
+      editorPartControllerInstance.openBrowserPane();
+      navigateToAddressBarUrl(href, true);
+    };
 
     const documentActionsControllerInstance =
       getWorkbenchDocumentActionsController({
@@ -1814,12 +1874,10 @@ class WorkbenchHost {
       onFetchSuccess: handleBatchFetchSuccess,
     });
     const { isBatchLoading } = batchFetchControllerInstance.getSnapshot();
-    const chatArticleBatch: Article[] = [];
-    for (const message of assistantMessages) {
-      if (message.role === 'article') {
-        chatArticleBatch.push(message.article);
-      }
-    }
+    const chatArticleBatch = collectChatArticleBatch(
+      assistantMessages,
+      filteredArticles,
+    );
     const handleFetchLatestBatch =
       batchFetchControllerInstance.handleFetchLatestBatch;
     const articleQuickSources = getConfigBatchSourceSeed();
@@ -2046,12 +2104,10 @@ class WorkbenchHost {
         onAsk: () => void handleAssistantAsk(),
         onApplyPatch: handleAssistantApplyPatch,
         onFetchArticleSource: (source) => void handleFetchArticleSource(source),
-        onDownloadArticlePdf: handleSharedPdfDownload,
         onDownloadAllArticles: () =>
           documentActionsControllerInstance.handleDownloadAllArticles(chatArticleBatch),
         onExportArticleSummaries: () =>
           documentActionsControllerInstance.handleExportArticleSummaries(chatArticleBatch),
-        onOpenArticleDetails: handleOpenArticleDetails,
         onCreateConversation: handleAssistantCreateConversation,
         onActivateConversation: handleAssistantActivateConversation,
         onCloseConversation: handleAssistantCloseConversation,

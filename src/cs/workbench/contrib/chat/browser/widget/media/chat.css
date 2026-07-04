@@ -434,25 +434,6 @@
   white-space: pre-wrap;
 }
 
-.comet-agentbar-message-link-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  white-space: normal;
-}
-
-.comet-agentbar-message-text + .comet-agentbar-message-link-list {
-  margin-top: 8px;
-}
-
-.comet-agentbar-message-link-item {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
 .comet-agentbar-message-link {
   color: #0a5fbf;
   text-decoration: none;
@@ -462,13 +443,6 @@
 .comet-agentbar-message-link:hover {
   color: #084c9a;
   text-decoration: underline;
-}
-
-.comet-agentbar-message-link-description {
-  color: #5e7186;
-  font-size: 12px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
 }
 
 .comet-agentbar-evidence {
