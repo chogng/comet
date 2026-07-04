@@ -54,7 +54,7 @@ function readStoredZipEntry(buffer: Buffer, entryName: string) {
 	return null;
 }
 
-test('article docx export numbers summaries with fetch order', async () => {
+test('article docx export numbers summaries with export order', async () => {
 	const directory = await mkdtemp(path.join(tmpdir(), 'comet-docx-test-'));
 	const filePath = path.join(directory, 'articles.docx');
 
@@ -71,8 +71,8 @@ test('article docx export numbers summaries with fetch order', async () => {
 		const documentXml = readStoredZipEntry(await readFile(filePath), 'word/document.xml');
 
 		assert(documentXml);
-		assert.match(documentXml, /<w:t>7\. First article<\/w:t>/);
-		assert.match(documentXml, /<w:t>8\. Second article<\/w:t>/);
+		assert.match(documentXml, /<w:t>1\. First article<\/w:t>/);
+		assert.match(documentXml, /<w:t>2\. Second article<\/w:t>/);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

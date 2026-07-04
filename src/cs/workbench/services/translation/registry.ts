@@ -28,6 +28,12 @@ export const translationProviders: ReadonlyArray<TranslationProviderDefinition> 
     apiStyle: 'openai-compatible',
     defaultBaseUrl: 'https://api.openai.com/v1',
   },
+  {
+    id: 'custom',
+    label: 'Custom',
+    apiStyle: 'openai-compatible',
+    defaultBaseUrl: '',
+  },
 ];
 
 export const translationProviderIds: TranslationProviderId[] = translationProviders.map((provider) => provider.id);

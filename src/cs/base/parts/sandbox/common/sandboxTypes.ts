@@ -68,7 +68,7 @@ export interface LlmSettings {
   providers: Record<LlmProviderId, LlmProviderSettings>;
 }
 
-export type TranslationProviderId = 'deepl' | 'glm' | 'openai-compatible';
+export type TranslationProviderId = 'deepl' | 'glm' | 'openai-compatible' | 'custom';
 
 export interface TranslationProviderSettings {
   apiKey: string;
@@ -292,6 +292,18 @@ export interface TranslationConnectionTestResult {
   provider: TranslationProviderId;
   baseUrl: string;
   responsePreview: string;
+}
+
+export interface ListTranslationModelsPayload {
+  provider?: TranslationProviderId;
+  apiKey?: string;
+  baseUrl?: string;
+}
+
+export interface TranslationModelsResult {
+  provider: TranslationProviderId;
+  baseUrl: string;
+  models: string[];
 }
 
 export interface TestRagConnectionPayload {
@@ -562,6 +574,7 @@ export interface AppCommandPayloadMap {
   save_settings: SaveSettingsPayload;
   test_llm_connection: TestLlmConnectionPayload;
   test_translation_connection: TestTranslationConnectionPayload;
+  list_translation_models: ListTranslationModelsPayload;
   test_rag_connection: TestRagConnectionPayload;
   pick_download_directory: undefined;
   pick_user_settings_file: PickUserSettingsFilePayload;
@@ -591,6 +604,7 @@ export interface AppCommandResultMap {
   save_settings: AppSettings;
   test_llm_connection: LlmConnectionTestResult;
   test_translation_connection: TranslationConnectionTestResult;
+  list_translation_models: TranslationModelsResult;
   test_rag_connection: RagConnectionTestResult;
   pick_download_directory: string | null;
   pick_user_settings_file: string | null;

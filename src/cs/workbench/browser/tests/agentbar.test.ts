@@ -27,6 +27,8 @@ function createProps(): ChatWidgetProps {
     showArticleBatchActions: false,
     onDownloadAllArticles: () => {},
     onExportArticleSummaries: () => {},
+    isArticleSelected: () => false,
+    onToggleArticleSelected: () => {},
     availableArticleCount: 1,
     conversations: [
       {
@@ -703,6 +705,7 @@ test('composer input toolbar hosts article batch actions', async () => {
 
 test('agent chat renders fetched article linked text and emits open link requests', async () => {
   let openedSourceUrl = '';
+  let toggledSourceUrl = '';
   const agentBar = createChatWidget({
     ...createProps(),
     messages: [
@@ -713,6 +716,10 @@ test('agent chat renders fetched article linked text and emits open link request
         includeInAgentHistory: false,
       },
     ],
+    isArticleSelected: href => href === 'https://www.science.org/doi/example',
+    onToggleArticleSelected: href => {
+      toggledSourceUrl = href;
+    },
   });
   agentBar.onDidRequestOpenLink(request => {
     openedSourceUrl = request.href;
@@ -731,6 +738,11 @@ test('agent chat renders fetched article linked text and emits open link request
     const link = markdown.querySelector('a[data-href]');
     assert(link instanceof HTMLElement);
     assert.equal(link.textContent, 'Example article');
+    const checkbox = markdown.querySelector('.comet-agentbar-article-checkbox');
+    assert(checkbox instanceof HTMLInputElement);
+    assert.equal(checkbox.checked, true);
+    checkbox.click();
+    assert.equal(toggledSourceUrl, 'https://www.science.org/doi/example');
     link.click();
     assert.equal(openedSourceUrl, 'https://www.science.org/doi/example');
   } finally {

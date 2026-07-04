@@ -88,6 +88,7 @@ export type SettingsModelSnapshot = {
   llmProviders: Record<LlmProviderId, LlmProviderSettings>;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
+  customTranslationModels: string[];
   configPath: string;
   defaultConfigPath: string;
   isSettingsLoading: boolean;
@@ -96,6 +97,7 @@ export type SettingsModelSnapshot = {
   isTestingRagConnection: boolean;
   isTestingLlmConnection: boolean;
   isTestingTranslationConnection: boolean;
+  isLoadingTranslationModels: boolean;
 };
 
 type SettingsModelContext = {
@@ -178,10 +180,12 @@ function areSettingsModelSnapshotsEqual(
     previous.isTestingRagConnection === next.isTestingRagConnection &&
     previous.isTestingLlmConnection === next.isTestingLlmConnection &&
     previous.isTestingTranslationConnection === next.isTestingTranslationConnection &&
+    previous.isLoadingTranslationModels === next.isLoadingTranslationModels &&
     areJsonEqual(previous.workbenchColorCustomizations, next.workbenchColorCustomizations) &&
     areJsonEqual(previous.ragProviders, next.ragProviders) &&
     areJsonEqual(previous.llmProviders, next.llmProviders) &&
-    areJsonEqual(previous.translationProviders, next.translationProviders)
+    areJsonEqual(previous.translationProviders, next.translationProviders) &&
+    areJsonEqual(previous.customTranslationModels, next.customTranslationModels)
   );
 }
 
@@ -225,6 +229,7 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     llmProviders: defaultLlmSettings.providers,
     activeTranslationProvider: defaultTranslationSettings.activeProvider,
     translationProviders: defaultTranslationSettings.providers,
+    customTranslationModels: [],
     configPath: '',
     defaultConfigPath: '',
     isSettingsLoading: false,
@@ -233,6 +238,7 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     isTestingRagConnection: false,
     isTestingLlmConnection: false,
     isTestingTranslationConnection: false,
+    isLoadingTranslationModels: false,
   };
 }
 
@@ -927,6 +933,7 @@ export class SettingsModel {
   readonly setTranslationProviderApiKey = (provider: TranslationProviderId, apiKey: string) => {
     this.updateSnapshot((snapshot) => ({
       ...snapshot,
+      customTranslationModels: provider === 'custom' ? [] : snapshot.customTranslationModels,
       translationProviders: {
         ...snapshot.translationProviders,
         [provider]: {
@@ -940,6 +947,7 @@ export class SettingsModel {
   readonly setTranslationProviderBaseUrl = (provider: TranslationProviderId, baseUrl: string) => {
     this.updateSnapshot((snapshot) => ({
       ...snapshot,
+      customTranslationModels: provider === 'custom' ? [] : snapshot.customTranslationModels,
       translationProviders: {
         ...snapshot.translationProviders,
         [provider]: {
@@ -1393,43 +1401,52 @@ export class SettingsModel {
   }
 
   private applyResolvedSettingsState(resolved: ResolvedSettingsState) {
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      pdfDownloadDir: resolved.pdfDownloadDir,
-      knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
-      pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
-      browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
-      batchLimit: resolved.batchLimit,
-      journalSourceOverrides: resolved.journalSourceOverrides,
-      systemNotificationsEnabled: resolved.systemNotificationsEnabled,
-      warningNotificationsEnabled: resolved.warningNotificationsEnabled,
-      menuBarIconEnabled: resolved.menuBarIconEnabled,
-      completionNotificationsEnabled: resolved.completionNotificationsEnabled,
-      statusbarVisible: resolved.statusbarVisible,
-      startupLayout: resolved.startupLayout,
-      useMica: resolved.useMica,
-      theme: resolved.theme,
-      workbenchColorCustomizations: resolved.workbenchColorCustomizations,
-      editorDraftStyle: cloneSettingValue(
-        resolved.editorDraftStyle,
-        cloneEditorDraftStyleSettings,
-      ),
-      knowledgeBaseEnabled: resolved.knowledgeBase.enabled,
-      autoIndexDownloadedPdf: resolved.knowledgeBase.autoIndexDownloadedPdf,
-      libraryStorageMode: resolved.knowledgeBase.libraryStorageMode,
-      libraryDirectory: resolved.knowledgeBase.libraryDirectory ?? '',
-      maxConcurrentIndexJobs: resolved.knowledgeBase.maxConcurrentIndexJobs,
-      activeRagProvider: resolved.rag.activeProvider,
-      ragProviders: cloneRagSettings(resolved.rag).providers,
-      retrievalCandidateCount: resolved.rag.retrievalCandidateCount,
-      retrievalTopK: resolved.rag.retrievalTopK,
-      activeLlmProvider: resolved.llm.activeProvider,
-      llmProviders: cloneLlmSettings(resolved.llm).providers,
-      activeTranslationProvider: resolved.translation.activeProvider,
-      translationProviders: cloneTranslationSettings(resolved.translation).providers,
-      configPath: resolved.configPath,
-      defaultConfigPath: resolved.defaultConfigPath,
-    }));
+    const nextTranslationProviders = cloneTranslationSettings(resolved.translation).providers;
+
+    this.updateSnapshot((snapshot) => {
+      const keepCustomTranslationModels =
+        snapshot.translationProviders.custom.apiKey === nextTranslationProviders.custom.apiKey &&
+        snapshot.translationProviders.custom.baseUrl === nextTranslationProviders.custom.baseUrl;
+
+      return {
+        ...snapshot,
+        pdfDownloadDir: resolved.pdfDownloadDir,
+        knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
+        pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
+        browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
+        batchLimit: resolved.batchLimit,
+        journalSourceOverrides: resolved.journalSourceOverrides,
+        systemNotificationsEnabled: resolved.systemNotificationsEnabled,
+        warningNotificationsEnabled: resolved.warningNotificationsEnabled,
+        menuBarIconEnabled: resolved.menuBarIconEnabled,
+        completionNotificationsEnabled: resolved.completionNotificationsEnabled,
+        statusbarVisible: resolved.statusbarVisible,
+        startupLayout: resolved.startupLayout,
+        useMica: resolved.useMica,
+        theme: resolved.theme,
+        workbenchColorCustomizations: resolved.workbenchColorCustomizations,
+        editorDraftStyle: cloneSettingValue(
+          resolved.editorDraftStyle,
+          cloneEditorDraftStyleSettings,
+        ),
+        knowledgeBaseEnabled: resolved.knowledgeBase.enabled,
+        autoIndexDownloadedPdf: resolved.knowledgeBase.autoIndexDownloadedPdf,
+        libraryStorageMode: resolved.knowledgeBase.libraryStorageMode,
+        libraryDirectory: resolved.knowledgeBase.libraryDirectory ?? '',
+        maxConcurrentIndexJobs: resolved.knowledgeBase.maxConcurrentIndexJobs,
+        activeRagProvider: resolved.rag.activeProvider,
+        ragProviders: cloneRagSettings(resolved.rag).providers,
+        retrievalCandidateCount: resolved.rag.retrievalCandidateCount,
+        retrievalTopK: resolved.rag.retrievalTopK,
+        activeLlmProvider: resolved.llm.activeProvider,
+        llmProviders: cloneLlmSettings(resolved.llm).providers,
+        activeTranslationProvider: resolved.translation.activeProvider,
+        translationProviders: nextTranslationProviders,
+        customTranslationModels: keepCustomTranslationModels ? snapshot.customTranslationModels : [],
+        configPath: resolved.configPath,
+        defaultConfigPath: resolved.defaultConfigPath,
+      };
+    });
   }
 
   async testLlmConnection({
@@ -1502,6 +1519,47 @@ export class SettingsModel {
       this.updateSnapshot((snapshot) => ({
         ...snapshot,
         isTestingRagConnection: false,
+      }));
+    }
+  }
+
+  async listCustomTranslationModels({
+    invokeDesktop,
+  }: SettingsModelContext) {
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      isLoadingTranslationModels: true,
+    }));
+
+    const providerSettings = this.snapshot.translationProviders.custom;
+
+    try {
+      const result = await invokeDesktop('list_translation_models', {
+        provider: 'custom',
+        apiKey: providerSettings.apiKey,
+        baseUrl: providerSettings.baseUrl,
+      });
+
+      this.updateSnapshot((snapshot) => {
+        const currentProviderSettings = snapshot.translationProviders.custom;
+        if (
+          currentProviderSettings.apiKey !== providerSettings.apiKey ||
+          currentProviderSettings.baseUrl !== providerSettings.baseUrl
+        ) {
+          return snapshot;
+        }
+
+        return {
+          ...snapshot,
+          customTranslationModels: result.models,
+        };
+      });
+
+      return result;
+    } finally {
+      this.updateSnapshot((snapshot) => ({
+        ...snapshot,
+        isLoadingTranslationModels: false,
       }));
     }
   }

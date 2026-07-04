@@ -638,6 +638,32 @@ export class SettingsController {
     }
   };
 
+  readonly handleFetchTranslationModels = async () => {
+    const { desktopRuntime, ui } = this.context;
+    if (!desktopRuntime) {
+      toast.info(ui.toastDesktopLlmTestOnly);
+      return;
+    }
+
+    try {
+      const result = await this.settingsModel.listCustomTranslationModels(
+        this.getSettingsModelContext(),
+      );
+      toast.success(
+        formatLocalized(ui.toastTranslationModelsLoaded, {
+          count: String(result.models.length),
+        }),
+      );
+    } catch (testError) {
+      const localizedError = localizeSettingsError(ui, testError);
+      toast.error(
+        formatLocalized(ui.toastTranslationModelsFailed, {
+          error: localizedError,
+        }),
+      );
+    }
+  };
+
   private getSettingsModelContext(): SettingsModelContext {
     return {
       desktopRuntime: this.context.desktopRuntime,

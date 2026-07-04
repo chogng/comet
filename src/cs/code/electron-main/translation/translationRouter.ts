@@ -131,6 +131,20 @@ function applyTranslatedValue(
   }
 }
 
+function resolveDedicatedTranslationModel(
+  activeProvider: TranslationSettings['activeProvider'],
+  providerSettings: TranslationSettings['providers'][TranslationSettings['activeProvider']],
+) {
+  switch (activeProvider) {
+    case 'openai-compatible':
+      return cleanText(providerSettings.model) || openAICompatibleTranslationModel;
+    case 'custom':
+      return cleanText(providerSettings.model);
+    default:
+      return 'translate-to-zh-hans';
+  }
+}
+
 function shouldUseGlmTranslation(
   llmSettings: LlmSettings,
   translationSettings: TranslationSettings,
@@ -185,10 +199,7 @@ function resolveTranslationCacheIdentity(
     return {
       provider: `translation:${activeProvider}`,
       baseUrl: providerSettings.baseUrl,
-      model:
-        activeProvider === 'openai-compatible'
-          ? cleanText(providerSettings.model) || openAICompatibleTranslationModel
-          : 'translate-to-zh-hans',
+      model: resolveDedicatedTranslationModel(activeProvider, providerSettings),
       mode: 'dedicated' as const,
     };
   }

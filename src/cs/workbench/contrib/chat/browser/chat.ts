@@ -45,6 +45,8 @@ export type ChatWidgetProps = {
 	readonly showArticleBatchActions: boolean;
 	readonly onDownloadAllArticles: () => void | Promise<void>;
 	readonly onExportArticleSummaries: () => void | Promise<void>;
+	readonly isArticleSelected: (href: string) => boolean;
+	readonly onToggleArticleSelected: (href: string) => void;
 	readonly availableArticleCount: number;
 	readonly conversations: AssistantConversation[];
 	readonly activeConversationId: string;

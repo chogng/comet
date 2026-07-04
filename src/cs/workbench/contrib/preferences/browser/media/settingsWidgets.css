@@ -709,6 +709,32 @@
   min-width: 140px;
 }
 
+.comet-settings-translation-model-action-row-control {
+  width: min(100%, 300px);
+  min-width: 260px;
+}
+
+.comet-settings-translation-model-action-row-control > .comet-settings-translation-model-action-control {
+  width: 100%;
+}
+
+.comet-settings-translation-model-action-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.comet-settings-translation-model-action-control > .comet-settings-inputbox.comet-inputbox {
+  flex: 1 1 140px;
+  width: auto;
+  min-width: 0;
+}
+
+.comet-settings-translation-model-action-control > .comet-settings-btn {
+  flex: 0 0 auto;
+}
+
 .comet-settings-translation-model-value {
   margin: 0;
   color: var(--vscode-settings-panelForeground, #203040);

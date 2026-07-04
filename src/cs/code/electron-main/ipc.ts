@@ -16,6 +16,7 @@ import type {
   FetchLatestArticlesPayload,
   IndexDownloadedPdfPayload,
   LibraryDocumentStatusPayload,
+  ListTranslationModelsPayload,
   ListLibraryDocumentsPayload,
   NativeToastOptions,
   UpsertLibraryDocumentMetadataPayload,
@@ -83,7 +84,7 @@ import {
 import { testLlmConnection } from 'cs/code/electron-main/llm/llm';
 import { runMainAgentTurn } from 'cs/code/electron-main/agent/agent';
 import { answerQuestionFromArticles, testRagConnection } from 'cs/code/electron-main/rag/rag';
-import { testTranslationConnection } from 'cs/code/electron-main/translation/translation';
+import { listTranslationModels, testTranslationConnection } from 'cs/code/electron-main/translation/translation';
 import { resolveSystemNotificationPayloadFromToast } from 'cs/code/electron-main/notificationRouting';
 import {
   applyMainWindowBackgroundMaterial,
@@ -203,6 +204,10 @@ async function invokeCommand<TCommand extends AppCommand>(
     case 'test_translation_connection':
       return testTranslationConnection(
         payload as TestTranslationConnectionPayload,
+      ) as Promise<AppCommandResultMap[TCommand]>;
+    case 'list_translation_models':
+      return listTranslationModels(
+        payload as ListTranslationModelsPayload,
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'test_rag_connection':
       return testRagConnection(

@@ -28,6 +28,7 @@ type CreateSessionChatViewPropsParams = {
 		articleQuickSources: BatchSource[];
 		isArticleSourceFetching: boolean;
 		showArticleBatchActions: boolean;
+		isArticleSelected: (href: string) => boolean;
 	};
 	actions: {
 		onQuestionChange: (value: string) => void;
@@ -36,6 +37,7 @@ type CreateSessionChatViewPropsParams = {
 		onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
 		onDownloadAllArticles: () => void | Promise<void>;
 		onExportArticleSummaries: () => void | Promise<void>;
+		onToggleArticleSelected: (href: string) => void;
 		onCreateConversation: () => void;
 		onActivateConversation: (conversationId: string) => void;
 		onCloseConversation: (conversationId: string) => void;
@@ -65,6 +67,7 @@ export function createSessionChatViewProps({
 		articleQuickSources,
 		isArticleSourceFetching,
 		showArticleBatchActions,
+		isArticleSelected,
 	},
 	actions: {
 		onQuestionChange,
@@ -73,6 +76,7 @@ export function createSessionChatViewProps({
 		onFetchArticleSource,
 		onDownloadAllArticles,
 		onExportArticleSummaries,
+		onToggleArticleSelected,
 		onCreateConversation,
 		onActivateConversation,
 		onCloseConversation,
@@ -98,6 +102,8 @@ export function createSessionChatViewProps({
 		showArticleBatchActions,
 		onDownloadAllArticles,
 		onExportArticleSummaries,
+		isArticleSelected,
+		onToggleArticleSelected,
 		availableArticleCount,
 		conversations,
 		activeConversationId,

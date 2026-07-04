@@ -103,7 +103,10 @@ function pageBreakXml() {
 
 type JournalArticleGroup = {
   journalTitle: string;
-  articles: Article[];
+  articles: Array<{
+    article: Article;
+    exportOrder: number;
+  }>;
 };
 
 function resolveJournalTitle(article: Article, locale: SupportedLocale) {
@@ -130,19 +133,23 @@ function groupArticlesByJournal(articles: Article[], locale: SupportedLocale): J
   const groups: JournalArticleGroup[] = [];
   const groupIndexByTitle = new Map<string, number>();
 
-  for (const article of articles) {
+  articles.forEach((article, index) => {
     const journalTitle = resolveJournalTitle(article, locale);
     const normalizedKey = journalTitle.toLowerCase();
     const existingIndex = groupIndexByTitle.get(normalizedKey);
+    const groupArticle = {
+      article,
+      exportOrder: index + 1,
+    };
 
     if (existingIndex === undefined) {
-      groups.push({ journalTitle, articles: [article] });
+      groups.push({ journalTitle, articles: [groupArticle] });
       groupIndexByTitle.set(normalizedKey, groups.length - 1);
-      continue;
+      return;
     }
 
-    groups[existingIndex].articles.push(article);
-  }
+    groups[existingIndex].articles.push(groupArticle);
+  });
 
   return groups;
 }
@@ -169,7 +176,12 @@ async function translateDocxArticlesToChinese(
   }
 }
 
-function articleParagraphsXml(article: Article, indexInJournal: number, locale: SupportedLocale) {
+function articleParagraphsXml(
+  article: Article,
+  indexInJournal: number,
+  exportOrder: number,
+  locale: SupportedLocale,
+) {
   const copy = resolveDocxExportCopy(locale);
   const title = cleanText(article.title) || copy.untitled;
   const descriptionLines = normalizeLines(article.descriptionText);
@@ -182,7 +194,7 @@ function articleParagraphsXml(article: Article, indexInJournal: number, locale: 
         : [copy.unknown];
 
   const paragraphs = [
-    paragraphXml(`${article.fetchOrder}. ${title}`, {
+    paragraphXml(`${exportOrder}. ${title}`, {
       fontSize: docxConfig.article.titleFontSize,
       color: docxConfig.article.bodyColor,
       fontAscii: docxConfig.article.fontAscii,
@@ -227,8 +239,8 @@ function buildDocumentXml(articles: Article[], locale: SupportedLocale) {
       }),
     );
 
-    group.articles.forEach((article, articleIndex) => {
-      bodyParts.push(articleParagraphsXml(article, articleIndex, locale));
+    group.articles.forEach(({ article, exportOrder }, articleIndex) => {
+      bodyParts.push(articleParagraphsXml(article, articleIndex, exportOrder, locale));
     });
 
     if (groupIndex < journalGroups.length - 1) {

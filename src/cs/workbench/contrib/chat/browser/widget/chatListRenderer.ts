@@ -5,13 +5,15 @@
 import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
 import { localize } from 'cs/nls';
 import { MarkdownString } from 'cs/base/common/htmlContent';
-import type { DisposableStore } from 'cs/base/common/lifecycle';
+import { toDisposable, type DisposableStore } from 'cs/base/common/lifecycle';
 import { ChatContentMarkdownRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer';
 import { $ } from 'cs/base/browser/dom';
 
 export type ChatListRendererOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
 	readonly onRequestOpenLink: (href: string) => void;
+	readonly isArticleSelected: (href: string) => boolean;
+	readonly onToggleArticleSelected: (href: string) => void;
 };
 
 type AssistantMessage = Extract<AssistantChatMessage, { role: 'assistant' }>;
@@ -90,10 +92,50 @@ export class ChatListRenderer {
 					},
 				},
 			));
+			if (message.includeInAgentHistory === false) {
+				this.renderArticleSelectionControls(rendered.element, disposables);
+			}
 			content.append(rendered.element);
 		}
 
 		return content;
+	}
+
+	private renderArticleSelectionControls(
+		root: HTMLElement,
+		disposables: DisposableStore,
+	) {
+		for (const item of Array.from(root.querySelectorAll('li'))) {
+			const link = item.querySelector('a[data-href]');
+			const href = link?.getAttribute('data-href') ?? '';
+			if (!href) {
+				continue;
+			}
+
+			const checkbox = $<HTMLElementTagNameMap['input']>('input.comet-agentbar-article-checkbox');
+			checkbox.type = 'checkbox';
+			checkbox.checked = this.options.isArticleSelected(href);
+			checkbox.setAttribute(
+				'aria-label',
+				localize(
+					'agentbarArticleExportCheckbox',
+					"Include Article in Export",
+				),
+			);
+
+			const content = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-article-choice-content');
+			content.append(...Array.from(item.childNodes));
+			item.classList.add('comet-agentbar-article-choice');
+			item.append(checkbox, content);
+
+			const onChange = () => {
+				this.options.onToggleArticleSelected(href);
+			};
+			checkbox.addEventListener('change', onChange);
+			disposables.add(toDisposable(() => {
+				checkbox.removeEventListener('change', onChange);
+			}));
+		}
 	}
 
 	private renderEvidence(result: AssistantResult) {

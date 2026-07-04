@@ -207,8 +207,9 @@ function serializeConfigValue(value: unknown) {
           defaultTranslationProviderSettings[providerId as keyof typeof defaultTranslationProviderSettings];
         const hasApiKey = Boolean(cleanText(provider.apiKey));
         const hasCustomBaseUrl = cleanText(provider.baseUrl) !== defaultProvider.baseUrl;
+        const hasCustomModel = cleanText(provider.model) !== defaultProvider.model;
 
-        if (!hasApiKey && !hasCustomBaseUrl) {
+        if (!hasApiKey && !hasCustomBaseUrl && !hasCustomModel) {
           return [];
         }
 
@@ -217,6 +218,7 @@ function serializeConfigValue(value: unknown) {
           {
             apiKey: provider.apiKey,
             baseUrl: provider.baseUrl,
+            model: provider.model,
           },
         ]];
       }),
@@ -478,6 +480,7 @@ function normalizeTranslationSettings(payload: unknown): StoredAppSettings['tran
         'openai-compatible',
         providersPayload['openai-compatible'],
       ),
+      custom: normalizeTranslationProviderSettings('custom', providersPayload.custom),
     },
   };
 }

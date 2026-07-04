@@ -1,6 +1,8 @@
 import type {
+  ListTranslationModelsPayload,
   TestTranslationConnectionPayload,
   TranslationConnectionTestResult,
+  TranslationModelsResult,
   TranslationProviderId,
   TranslationSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -8,6 +10,10 @@ import { appError, isAppError } from 'cs/base/common/errors';
 import { cleanText } from 'cs/base/common/strings';
 import { defaultTranslationProviderId } from 'cs/workbench/services/translation/config';
 import { isTranslationProviderId } from 'cs/workbench/services/translation/registry';
+import {
+  extractResponseContent,
+  requestOpenAiCompatibleChatCompletion,
+} from 'cs/code/electron-main/llm/llm';
 
 // Dedicated translation API implementations live here.
 // This module should stay focused on provider-specific behavior such as:
@@ -23,6 +29,12 @@ type ResolvedTranslationRequest = {
   apiKey: string;
   baseUrl: string;
   model: string;
+};
+
+type ResolvedTranslationEndpoint = {
+  provider: TranslationProviderId;
+  apiKey: string;
+  baseUrl: string;
 };
 
 type DeepLTranslationResponse = {
@@ -46,6 +58,12 @@ type OpenAICompatibleResponsesPayload = {
   }>;
   max_output_tokens: number;
   temperature: number;
+};
+
+type OpenAICompatibleModelsResponse = {
+  data?: Array<{
+    id?: string;
+  }>;
 };
 
 function normalizeProvider(value: unknown): TranslationProviderId {
@@ -87,6 +105,30 @@ function normalizeApiKey(value: unknown): string {
   return apiKey;
 }
 
+function normalizeModel(value: unknown): string {
+  const model = cleanText(value);
+  if (!model) {
+    throw appError('LLM_MODEL_MISSING');
+  }
+
+  return model;
+}
+
+function resolveOpenAICompatibleTranslationEndpoint(
+  payload: ListTranslationModelsPayload = {},
+): ResolvedTranslationEndpoint {
+  const provider = normalizeProvider(payload.provider ?? defaultTranslationProviderId);
+  if (provider !== 'custom' && provider !== 'openai-compatible') {
+    throw appError('LLM_PROVIDER_UNSUPPORTED', { provider });
+  }
+
+  return {
+    provider,
+    apiKey: normalizeApiKey(payload.apiKey),
+    baseUrl: normalizeBaseUrl(payload.baseUrl),
+  };
+}
+
 function resolveTranslationRequest(payload: TestTranslationConnectionPayload = {}): ResolvedTranslationRequest {
   const provider = normalizeProvider(payload.provider ?? defaultTranslationProviderId);
   return {
@@ -96,6 +138,8 @@ function resolveTranslationRequest(payload: TestTranslationConnectionPayload = {
     model:
       provider === 'openai-compatible'
         ? cleanText(payload.model) || openAICompatibleTranslationModel
+        : provider === 'custom'
+          ? normalizeModel(payload.model)
         : 'translate-to-zh-hans',
   };
 }
@@ -108,6 +152,7 @@ function resolveTranslationRequestFromSettings(settings: TranslationSettings): R
     provider,
     apiKey: providerSettings.apiKey,
     baseUrl: providerSettings.baseUrl,
+    model: providerSettings.model,
   });
 }
 
@@ -162,6 +207,71 @@ async function requestDeepLTranslations(
     }
 
     return resolvedTexts;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw appError('LLM_CONNECTION_FAILED', {
+        provider: request.provider,
+        status: 'TIMEOUT',
+        statusText: `Connection timed out after ${timeoutMs}ms`,
+      });
+    }
+
+    if (isAppError(error)) {
+      throw error;
+    }
+
+    throw appError('LLM_CONNECTION_FAILED', {
+      provider: request.provider,
+      status: 'NETWORK_ERROR',
+      statusText: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function requestOpenAICompatibleModels(
+  request: ResolvedTranslationEndpoint,
+  timeoutMs: number,
+): Promise<string[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${request.baseUrl}/models`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${request.apiKey}`,
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = cleanText(await response.text());
+      throw appError('LLM_CONNECTION_FAILED', {
+        provider: request.provider,
+        status: response.status,
+        statusText: response.statusText || errorText || 'Request failed',
+      });
+    }
+
+    const payloadJson = (await response.json()) as OpenAICompatibleModelsResponse;
+    const models = Array.isArray(payloadJson.data)
+      ? payloadJson.data
+          .map((item) => (typeof item?.id === 'string' ? cleanText(item.id) : ''))
+          .filter(Boolean)
+      : [];
+    const uniqueModels = Array.from(new Set(models));
+
+    if (uniqueModels.length === 0) {
+      throw appError('LLM_CONNECTION_FAILED', {
+        provider: request.provider,
+        status: 'INVALID_RESPONSE',
+        statusText: 'Expected OpenAI-compatible models response',
+      });
+    }
+
+    return uniqueModels;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw appError('LLM_CONNECTION_FAILED', {
@@ -256,6 +366,44 @@ function extractResponsesTextContent(payload: unknown): string {
   );
 }
 
+function normalizeOpenAICompatibleTranslations(
+  responseText: string,
+  texts: string[],
+  provider: TranslationProviderId,
+) {
+  let parsed: OpenAICompatibleTranslationResponse;
+  try {
+    parsed = parseJsonText<OpenAICompatibleTranslationResponse>(responseText);
+  } catch (error) {
+    throw appError('LLM_CONNECTION_FAILED', {
+      provider,
+      status: 'INVALID_RESPONSE',
+      statusText: error instanceof Error ? error.message : 'Translation JSON parse failed',
+    });
+  }
+
+  const translations = Array.isArray(parsed.translations) ? parsed.translations : [];
+  const translatedByIndex = new Map<number, string>();
+  translations.forEach((item) => {
+    const index = Number(item?.index);
+    const text = cleanText(item?.text);
+    if (Number.isInteger(index) && text) {
+      translatedByIndex.set(index, text);
+    }
+  });
+
+  const missingIndex = texts.findIndex((_, index) => !translatedByIndex.has(index));
+  if (missingIndex !== -1) {
+    throw appError('LLM_CONNECTION_FAILED', {
+      provider,
+      status: 'INVALID_RESPONSE',
+      statusText: `Missing translation for item ${missingIndex}`,
+    });
+  }
+
+  return texts.map((_, index) => translatedByIndex.get(index) || texts[index]);
+}
+
 async function requestOpenAICompatibleResponse(
   request: ResolvedTranslationRequest,
   payload: OpenAICompatibleResponsesPayload,
@@ -334,37 +482,41 @@ async function requestOpenAICompatibleTranslations(
     timeoutMs,
   );
   const responseText = extractResponsesTextContent(responseJson);
-  let parsed: OpenAICompatibleTranslationResponse;
-  try {
-    parsed = parseJsonText<OpenAICompatibleTranslationResponse>(responseText);
-  } catch (error) {
-    throw appError('LLM_CONNECTION_FAILED', {
-      provider: request.provider,
-      status: 'INVALID_RESPONSE',
-      statusText: error instanceof Error ? error.message : 'Translation JSON parse failed',
-    });
-  }
+  return normalizeOpenAICompatibleTranslations(responseText, texts, request.provider);
+}
 
-  const translations = Array.isArray(parsed.translations) ? parsed.translations : [];
-  const translatedByIndex = new Map<number, string>();
-  translations.forEach((item) => {
-    const index = Number(item?.index);
-    const text = cleanText(item?.text);
-    if (Number.isInteger(index) && text) {
-      translatedByIndex.set(index, text);
-    }
-  });
-
-  const missingIndex = texts.findIndex((_, index) => !translatedByIndex.has(index));
-  if (missingIndex !== -1) {
-    throw appError('LLM_CONNECTION_FAILED', {
-      provider: request.provider,
-      status: 'INVALID_RESPONSE',
-      statusText: `Missing translation for item ${missingIndex}`,
-    });
-  }
-
-  return texts.map((_, index) => translatedByIndex.get(index) || texts[index]);
+async function requestCustomOpenAICompatibleTranslations(
+  request: ResolvedTranslationRequest,
+  texts: string[],
+  timeoutMs: number,
+): Promise<string[]> {
+  const responseJson = await requestOpenAiCompatibleChatCompletion(
+    {
+      provider: 'custom',
+      apiKey: request.apiKey,
+      baseUrl: request.baseUrl,
+      model: request.model,
+    },
+    {
+      model: request.model,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a precise scientific translator. Translate each input text into concise, fluent Simplified Chinese. Preserve meaning, terminology, numbers, and line breaks. Return JSON only.',
+        },
+        {
+          role: 'user',
+          content: createOpenAICompatibleTranslationMessage(texts),
+        },
+      ],
+      max_tokens: 4000,
+      temperature: 0,
+    },
+    timeoutMs,
+  );
+  const responseText = extractResponseContent(responseJson);
+  return normalizeOpenAICompatibleTranslations(responseText, texts, request.provider);
 }
 
 export function hasUsableTranslationSettings(settings: TranslationSettings): boolean {
@@ -387,6 +539,8 @@ export async function translateTextsWithDedicatedApi(
       return requestDeepLTranslations(request, texts, translationTimeoutMs);
     case 'openai-compatible':
       return requestOpenAICompatibleTranslations(request, texts, translationTimeoutMs);
+    case 'custom':
+      return requestCustomOpenAICompatibleTranslations(request, texts, translationTimeoutMs);
     default:
       throw appError('LLM_PROVIDER_UNSUPPORTED', { provider: request.provider });
   }
@@ -399,11 +553,26 @@ export async function testTranslationConnection(
   const [translated] =
     request.provider === 'openai-compatible'
       ? await requestOpenAICompatibleTranslations(request, ['connection test'], translationTimeoutMs)
+      : request.provider === 'custom'
+        ? await requestCustomOpenAICompatibleTranslations(request, ['connection test'], translationTimeoutMs)
       : await requestDeepLTranslations(request, ['connection test'], translationTimeoutMs);
 
   return {
     provider: request.provider,
     baseUrl: request.baseUrl,
     responsePreview: translated || 'Connected',
+  };
+}
+
+export async function listTranslationModels(
+  payload: ListTranslationModelsPayload = {},
+): Promise<TranslationModelsResult> {
+  const request = resolveOpenAICompatibleTranslationEndpoint(payload);
+  const models = await requestOpenAICompatibleModels(request, translationTimeoutMs);
+
+  return {
+    provider: request.provider,
+    baseUrl: request.baseUrl,
+    models,
   };
 }

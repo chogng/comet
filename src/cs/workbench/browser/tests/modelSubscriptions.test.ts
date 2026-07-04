@@ -27,6 +27,7 @@ import {
   setWorkbenchArticles,
   setWorkbenchFetchSeedUrl,
   setWorkbenchSelectedArticleKeysInOrder,
+  setWorkbenchSelectedChatArticleUrlsInOrder,
   setWorkbenchSelectionModePhase,
   setWorkbenchWebUrl,
   subscribeWorkbenchSession,
@@ -240,6 +241,9 @@ afterEach(() => {
   setWorkbenchSelectionModePhase(originalWorkbenchSession.selectionModePhase);
   setWorkbenchSelectedArticleKeysInOrder(
     originalWorkbenchSession.selectedArticleKeysInOrder,
+  );
+  setWorkbenchSelectedChatArticleUrlsInOrder(
+    originalWorkbenchSession.selectedChatArticleUrlsInOrder,
   );
   restoreWorkbenchLayoutState();
   restoreWorkbenchPartDomSnapshot();

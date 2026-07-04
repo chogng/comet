@@ -48,8 +48,8 @@ export type SettingsPartLabels = {
   resetDefault: string; settingsHintPath: string; settingsConfigPath: string; currentDir: string; systemDownloads: string; settingsLlmTitle: string; settingsLlmProvider: string;
   settingsLlmProviderHint: string; settingsLlmProviderGlm: string; settingsLlmProviderKimi: string; settingsLlmProviderDeepSeek: string; settingsLlmProviderGemini: string; settingsLlmApiKey: string;
   settingsLlmApiKeyPlaceholder: string; settingsLlmModel: string; settingsLlmSearchPlaceholder: string; settingsLlmNoResults: string; settingsLlmMaxContext: string; settingsLlmMaxContextHint: string; settingsLlmTestConnection: string; settingsLlmShowApiKey: string; settingsLlmHideApiKey: string;
-  settingsTranslationTitle: string; settingsTranslationProvider: string; settingsTranslationProviderHint: string; settingsTranslationProviderDeepL: string; settingsTranslationProviderGlm: string; settingsTranslationProviderOpenAICompatible: string; settingsTranslationProviderOpenAICompatibleHint: string; settingsTranslationBaseUrl: string;
-  settingsTranslationApiKey: string; settingsTranslationApiKeyPlaceholder: string; settingsTranslationTestConnection: string; settingsTranslationShowApiKey: string;
+  settingsTranslationTitle: string; settingsTranslationProvider: string; settingsTranslationProviderHint: string; settingsTranslationProviderDeepL: string; settingsTranslationProviderGlm: string; settingsTranslationProviderOpenAICompatible: string; settingsTranslationProviderCustom: string; settingsTranslationProviderOpenAICompatibleHint: string; settingsTranslationBaseUrl: string;
+  settingsTranslationApiKey: string; settingsTranslationApiKeyPlaceholder: string; settingsTranslationFetchModels: string; settingsTranslationTestConnection: string; settingsTranslationShowApiKey: string;
   settingsTranslationHideApiKey: string;
 };
 
@@ -74,10 +74,10 @@ export type SettingsPartProps = {
   onPdfFileNameUseSelectionOrderChange: (checked: boolean) => void; onChoosePdfDownloadDir: () => void; activeLlmProvider: LlmProviderId; onActiveLlmProviderChange: (provider: LlmProviderId) => void;
   llmProviders: Record<LlmProviderId, LlmProviderSettings>; onLlmProviderApiKeyChange: (provider: LlmProviderId, apiKey: string) => void; onLlmProviderModelChange: (provider: LlmProviderId, model: string) => void; onLlmProviderSelectedModelOption: (provider: LlmProviderId, optionValue: string) => void; onLlmProviderReasoningEffortChange: (provider: LlmProviderId, reasoningEffort: import('cs/workbench/services/llm/types').LlmReasoningEffort | undefined) => void; onLlmProviderModelEnabledChange: (provider: LlmProviderId, optionValue: string, enabled: boolean) => void; onLlmProviderUseMaxContextWindowChange: (provider: LlmProviderId, useMaxContextWindow: boolean) => void;
   activeTranslationProvider: TranslationProviderId; onActiveTranslationProviderChange: (provider: TranslationProviderId) => void; translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
-  onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void; onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void; onTranslationProviderModelChange: (provider: TranslationProviderId, model: string) => void; onTestLlmConnection: () => void; onTestTranslationConnection: () => void;
+  customTranslationModels: string[]; onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void; onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void; onTranslationProviderModelChange: (provider: TranslationProviderId, model: string) => void; onTestLlmConnection: () => void; onFetchTranslationModels: () => void; onTestTranslationConnection: () => void;
   onEditorDraftFontFamilyChange: (value: string) => void; onEditorDraftFontSizeChange: (value: string) => void; onEditorDraftLineHeightChange: (value: string) => void; onEditorDraftParagraphSpacingBeforeChange: (value: string) => void; onEditorDraftParagraphSpacingAfterChange: (value: string) => void; onEditorDraftColorChange: (value: string) => void; onResetEditorDraftStyle: () => void;
   onChooseConfigPath: () => void; onResetConfigPath: () => void; onResetKnowledgeBaseSettings: () => void; desktopRuntime: boolean; configPath: string; defaultConfigPath: string; isSettingsSaving: boolean; isTestingRagConnection: boolean; isTestingLlmConnection: boolean;
-  isTestingTranslationConnection: boolean; onResetDownloadDir: () => void;
+  isTestingTranslationConnection: boolean; isLoadingTranslationModels: boolean; onResetDownloadDir: () => void;
 };
 
 export type SettingsPartState = {
@@ -87,9 +87,9 @@ export type SettingsPartState = {
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
   knowledgeBaseEnabled: boolean; autoIndexDownloadedPdf: boolean; knowledgeBasePdfDownloadDir: string; libraryStorageMode: LibraryStorageMode; libraryDirectory: string; maxConcurrentIndexJobs: number; activeRagProvider: RagProviderId;
   ragProviders: Record<RagProviderId, RagProviderSettings>; retrievalCandidateCount: number; retrievalTopK: number; pdfDownloadDir: string; pdfFileNameUseSelectionOrder: boolean;
-  activeLlmProvider: LlmProviderId; llmProviders: Record<LlmProviderId, LlmProviderSettings>; activeTranslationProvider: TranslationProviderId; translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
+  activeLlmProvider: LlmProviderId; llmProviders: Record<LlmProviderId, LlmProviderSettings>; activeTranslationProvider: TranslationProviderId; translationProviders: Record<TranslationProviderId, TranslationProviderSettings>; customTranslationModels: string[];
   supportedSources: BatchSource[]; journalSourceOverrides: JournalSourceOverride[]; desktopRuntime: boolean; configPath: string; defaultConfigPath: string; isLibraryLoading: boolean; libraryDocumentCount: number; libraryFileCount: number; libraryQueuedJobCount: number; libraryDocuments: LibraryDocumentSummary[];
-  libraryDbFile: string; defaultManagedDirectory: string; ragCacheDir: string; isSettingsSaving: boolean; isTestingRagConnection: boolean; isTestingLlmConnection: boolean; isTestingTranslationConnection: boolean;
+  libraryDbFile: string; defaultManagedDirectory: string; ragCacheDir: string; isSettingsSaving: boolean; isTestingRagConnection: boolean; isTestingLlmConnection: boolean; isTestingTranslationConnection: boolean; isLoadingTranslationModels: boolean;
 };
 
 export type SettingsPartActions = {
@@ -104,5 +104,5 @@ export type SettingsPartActions = {
   onChoosePdfDownloadDir: () => void; onActiveLlmProviderChange: (provider: LlmProviderId) => void; onLlmProviderApiKeyChange: (provider: LlmProviderId, apiKey: string) => void; onLlmProviderModelChange: (provider: LlmProviderId, model: string) => void; onLlmProviderSelectedModelOption: (provider: LlmProviderId, optionValue: string) => void; onLlmProviderReasoningEffortChange: (provider: LlmProviderId, reasoningEffort: import('cs/workbench/services/llm/types').LlmReasoningEffort | undefined) => void; onLlmProviderModelEnabledChange: (provider: LlmProviderId, optionValue: string, enabled: boolean) => void; onLlmProviderUseMaxContextWindowChange: (provider: LlmProviderId, useMaxContextWindow: boolean) => void;
   onActiveTranslationProviderChange: (provider: TranslationProviderId) => void; onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void; onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void; onTranslationProviderModelChange: (provider: TranslationProviderId, model: string) => void; onTestRagConnection: () => void;
   onEditorDraftFontFamilyChange: (value: string) => void; onEditorDraftFontSizeChange: (value: string) => void; onEditorDraftLineHeightChange: (value: string) => void; onEditorDraftParagraphSpacingBeforeChange: (value: string) => void; onEditorDraftParagraphSpacingAfterChange: (value: string) => void; onEditorDraftColorChange: (value: string) => void; onResetEditorDraftStyle: () => void;
-  onTestLlmConnection: () => void; onTestTranslationConnection: () => void; onChooseConfigPath: () => void; onResetConfigPath: () => void; onResetKnowledgeBaseSettings: () => void; onResetDownloadDir: () => void;
+  onTestLlmConnection: () => void; onFetchTranslationModels: () => void; onTestTranslationConnection: () => void; onChooseConfigPath: () => void; onResetConfigPath: () => void; onResetKnowledgeBaseSettings: () => void; onResetDownloadDir: () => void;
 };

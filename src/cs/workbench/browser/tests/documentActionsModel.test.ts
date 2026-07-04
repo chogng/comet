@@ -200,6 +200,35 @@ test('DocumentActionsController prefixes PDF titles by fetch order outside selec
   assert.equal(payloads[0]?.articleTitle, '2. Second article');
 });
 
+test('DocumentActionsController numbers batch PDF titles by batch order', async () => {
+  const payloads: WebContentPdfDownloadPayload[] = [];
+  const invokeDesktop = createSuccessfulDownloadInvoke(payloads);
+  const controller = createDocumentActionsController(createDocumentActionsContext({
+    invokeDesktop,
+    pdfFileNameUseSelectionOrder: false,
+    isSelectionModeEnabled: false,
+  }));
+
+  await controller.handleDownloadAllArticles([
+    createArticle({
+      title: 'Checked first',
+      sourceUrl: 'https://example.com/articles/checked-first',
+      fetchOrder: 7,
+    }),
+    createArticle({
+      title: 'Checked second',
+      sourceUrl: 'https://example.com/articles/checked-second',
+      fetchOrder: 8,
+    }),
+  ]);
+
+  controller.dispose();
+  assert.deepEqual(
+    payloads.map((payload) => payload.articleTitle),
+    ['1. Checked first', '2. Checked second'],
+  );
+});
+
 test('DocumentActionsController uses selected order for PDF titles when enabled in selection mode', async () => {
   const payloads: WebContentPdfDownloadPayload[] = [];
   const invokeDesktop = createSuccessfulDownloadInvoke(payloads);

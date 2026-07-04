@@ -53,6 +53,8 @@ export class ChatWidget {
 			onRequestOpenLink: href => {
 				this.onDidRequestOpenLinkEmitter.fire({ href });
 			},
+			isArticleSelected: href => this.props.isArticleSelected(href),
+			onToggleArticleSelected: href => this.props.onToggleArticleSelected(href),
 		});
 		this.inputPart = new ChatInputPart(this.createInputPartProps());
 		this.render();

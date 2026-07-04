@@ -11,6 +11,7 @@ import {
 } from 'cs/workbench/contrib/preferences/browser/section';
 import {
   buildSettingsInput as buildInput,
+  buildSettingsButton as buildButton,
   buildSettingsSelect as buildSelect,
   createSettingsElement as el,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
@@ -24,9 +25,11 @@ export type TranslationWidgetProps = {
   labels: SettingsPartLabels;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
+  customTranslationModels: string[];
   llmProviders: Record<'glm', LlmProviderSettings>;
   isSettingsSaving: boolean;
   isTestingTranslationConnection: boolean;
+  isLoadingTranslationModels: boolean;
   showApiKey: boolean;
   onToggleShowApiKey: () => void;
   onActiveTranslationProviderChange: (provider: TranslationProviderId) => void;
@@ -34,6 +37,7 @@ export type TranslationWidgetProps = {
   onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void;
   onTranslationProviderModelChange: (provider: TranslationProviderId, model: string) => void;
   onGlmModelChange: (optionValue: string) => void;
+  onFetchTranslationModels: () => void;
   onTestTranslationConnection: () => void;
 };
 
@@ -80,6 +84,7 @@ export class TranslationWidget {
     const providerSelect = buildSelect([
         { value: 'glm', label: this.props.labels.settingsTranslationProviderGlm },
         { value: 'openai-compatible', label: this.props.labels.settingsTranslationProviderOpenAICompatible },
+        { value: 'custom', label: this.props.labels.settingsTranslationProviderCustom },
         { value: 'deepl', label: this.props.labels.settingsTranslationProviderDeepL },
       ],
       this.props.activeTranslationProvider,
@@ -99,6 +104,7 @@ export class TranslationWidget {
       section.list.append(this.renderGlmModelRow());
       this.renderApiKeyField();
       section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
+      section.list.append(this.renderTestConnectionRow());
       return section.element;
     }
 
@@ -106,8 +112,13 @@ export class TranslationWidget {
       section.list.append(...this.renderOpenAICompatibleRows());
     }
 
+    if (this.props.activeTranslationProvider === 'custom') {
+      section.list.append(...this.renderCustomRows());
+    }
+
     this.renderApiKeyField();
     section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
+    section.list.append(this.renderTestConnectionRow());
     return section.element;
   }
 
@@ -116,7 +127,7 @@ export class TranslationWidget {
     this.apiKeyWidget.setProps({
       title: this.props.labels.settingsLlmApiKey,
       value: this.props.translationProviders[provider].apiKey,
-      placeholder: 'Paste the API key',
+      placeholder: this.props.labels.settingsTranslationApiKeyPlaceholder,
       show: this.props.showApiKey,
       focusKey: `settings.translation.${provider}.apiKey`,
       toggleKey: `settings.translation.${provider}.apiKey.toggle`,
@@ -147,6 +158,58 @@ export class TranslationWidget {
         controlClassName: 'comet-settings-translation-base-url-control',
       }),
       this.renderOpenAICompatibleModelRow(),
+    ];
+  }
+
+  private renderCustomRows() {
+    const provider = this.props.translationProviders.custom;
+    const baseUrlInput = buildInput({
+      value: provider.baseUrl,
+      className: 'comet-settings-input-control comet-settings-translation-base-url-input',
+      focusKey: 'settings.translation.custom.baseUrl',
+      onInput: (value) => this.props.onTranslationProviderBaseUrlChange('custom', value),
+    }).element;
+    const modelInput = buildInput({
+      value: provider.model,
+      className: 'comet-settings-input-control comet-settings-translation-model-input',
+      focusKey: 'settings.translation.custom.model',
+      onInput: (value) => this.props.onTranslationProviderModelChange('custom', value),
+    });
+    const modelOptionsId = 'settings-translation-custom-model-options';
+    modelInput.inputElement.setAttribute('list', modelOptionsId);
+    const modelControl = el('div', 'comet-settings-translation-model-action-control');
+    modelControl.append(modelInput.element);
+    if (this.props.customTranslationModels.length > 0) {
+      const modelOptions = el('datalist');
+      modelOptions.id = modelOptionsId;
+      this.props.customTranslationModels.forEach((model) => {
+        const option = el('option');
+        option.value = model;
+        modelOptions.append(option);
+      });
+      modelControl.append(modelOptions);
+    }
+    modelControl.append(buildButton({
+      label: this.props.labels.settingsTranslationFetchModels,
+      focusKey: 'settings.translation.custom.fetchModels',
+      title: this.props.labels.settingsTranslationFetchModels,
+      disabled: this.props.isSettingsSaving || this.props.isLoadingTranslationModels,
+      onClick: this.props.onFetchTranslationModels,
+    }));
+
+    return [
+      createSettingsRow({
+        title: this.props.labels.settingsTranslationBaseUrl,
+        control: baseUrlInput,
+        itemClassName: 'comet-settings-translation-base-url-item',
+        controlClassName: 'comet-settings-translation-base-url-control',
+      }),
+      createSettingsRow({
+        title: this.props.labels.settingsLlmModel,
+        control: modelControl,
+        itemClassName: 'comet-settings-translation-model-item',
+        controlClassName: 'comet-settings-translation-model-control comet-settings-translation-model-action-row-control',
+      }),
     ];
   }
 
@@ -189,6 +252,26 @@ export class TranslationWidget {
       titleClassName: 'comet-settings-block-list-item-title-empty',
       contentClassName: 'comet-settings-translation-api-key-content',
       controlClassName: 'comet-settings-translation-api-key-row-control',
+    });
+  }
+
+  private renderTestConnectionRow() {
+    const rowContent = el('div', 'comet-settings-translation-test-control');
+    rowContent.append(buildButton({
+      label: this.props.labels.settingsTranslationTestConnection,
+      focusKey: 'settings.translation.test',
+      title: this.props.labels.settingsTranslationTestConnection,
+      disabled: this.props.isSettingsSaving || this.props.isTestingTranslationConnection,
+      onClick: this.props.onTestTranslationConnection,
+    }));
+
+    return createSettingsRow({
+      title: '',
+      control: rowContent,
+      itemClassName: 'comet-settings-translation-test-item',
+      titleClassName: 'comet-settings-block-list-item-title-empty',
+      contentClassName: 'comet-settings-translation-test-content',
+      controlClassName: 'comet-settings-translation-test-row-control',
     });
   }
 

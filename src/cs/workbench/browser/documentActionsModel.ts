@@ -302,8 +302,11 @@ export class DocumentActionsController {
   };
 
   readonly handleDownloadAllArticles = async (articles: readonly Article[]) => {
-    for (const article of articles) {
-      await this.handleSharedPdfDownload(article);
+    for (const [index, article] of articles.entries()) {
+      await this.handleSharedPdfDownload({
+        ...article,
+        fetchOrder: index + 1,
+      });
     }
   };
 

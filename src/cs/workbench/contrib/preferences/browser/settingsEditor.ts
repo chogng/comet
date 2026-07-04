@@ -65,8 +65,8 @@ export function createSettingsPartLabels({ ui }: CreateSettingsPartLabelsParams)
     resetDefault: ui.resetDefault, settingsHintPath: ui.settingsHintPath, settingsConfigPath: ui.settingsConfigPath, currentDir: ui.currentDir, systemDownloads: ui.systemDownloads, settingsLlmTitle: ui.settingsLlmTitle, settingsLlmProvider: ui.settingsLlmProvider,
     settingsLlmProviderHint: ui.settingsLlmProviderHint, settingsLlmProviderGlm: ui.settingsLlmProviderGlm, settingsLlmProviderKimi: ui.settingsLlmProviderKimi, settingsLlmProviderDeepSeek: ui.settingsLlmProviderDeepSeek, settingsLlmProviderGemini: ui.settingsLlmProviderGemini, settingsLlmApiKey: ui.settingsLlmApiKey,
     settingsLlmApiKeyPlaceholder: ui.settingsLlmApiKeyPlaceholder, settingsLlmModel: ui.settingsLlmModel, settingsLlmSearchPlaceholder: ui.settingsLlmSearchPlaceholder, settingsLlmNoResults: ui.settingsLlmNoResults, settingsLlmMaxContext: ui.settingsLlmMaxContext, settingsLlmMaxContextHint: ui.settingsLlmMaxContextHint, settingsLlmTestConnection: ui.settingsLlmTestConnection, settingsLlmShowApiKey: ui.settingsLlmShowApiKey, settingsLlmHideApiKey: ui.settingsLlmHideApiKey,
-    settingsTranslationTitle: ui.settingsTranslationTitle, settingsTranslationProvider: ui.settingsTranslationProvider, settingsTranslationProviderHint: ui.settingsTranslationProviderHint, settingsTranslationProviderDeepL: ui.settingsTranslationProviderDeepL, settingsTranslationProviderGlm: ui.settingsTranslationProviderGlm, settingsTranslationProviderOpenAICompatible: ui.settingsTranslationProviderOpenAICompatible, settingsTranslationProviderOpenAICompatibleHint: ui.settingsTranslationProviderOpenAICompatibleHint, settingsTranslationBaseUrl: ui.settingsTranslationBaseUrl,
-    settingsTranslationApiKey: ui.settingsTranslationApiKey, settingsTranslationApiKeyPlaceholder: ui.settingsTranslationApiKeyPlaceholder, settingsTranslationTestConnection: ui.settingsTranslationTestConnection, settingsTranslationShowApiKey: ui.settingsTranslationShowApiKey,
+    settingsTranslationTitle: ui.settingsTranslationTitle, settingsTranslationProvider: ui.settingsTranslationProvider, settingsTranslationProviderHint: ui.settingsTranslationProviderHint, settingsTranslationProviderDeepL: ui.settingsTranslationProviderDeepL, settingsTranslationProviderGlm: ui.settingsTranslationProviderGlm, settingsTranslationProviderOpenAICompatible: ui.settingsTranslationProviderOpenAICompatible, settingsTranslationProviderCustom: ui.settingsTranslationProviderCustom, settingsTranslationProviderOpenAICompatibleHint: ui.settingsTranslationProviderOpenAICompatibleHint, settingsTranslationBaseUrl: ui.settingsTranslationBaseUrl,
+    settingsTranslationApiKey: ui.settingsTranslationApiKey, settingsTranslationApiKeyPlaceholder: ui.settingsTranslationApiKeyPlaceholder, settingsTranslationFetchModels: ui.settingsTranslationFetchModels, settingsTranslationTestConnection: ui.settingsTranslationTestConnection, settingsTranslationShowApiKey: ui.settingsTranslationShowApiKey,
     settingsTranslationHideApiKey: ui.settingsTranslationHideApiKey,
   };
 }
@@ -144,9 +144,11 @@ export class SettingsPartView {
       labels: this.props.labels,
       activeTranslationProvider: this.props.activeTranslationProvider,
       translationProviders: this.props.translationProviders,
+      customTranslationModels: this.props.customTranslationModels,
       llmProviders: this.props.llmProviders,
       isSettingsSaving: this.props.isSettingsSaving,
       isTestingTranslationConnection: this.props.isTestingTranslationConnection,
+      isLoadingTranslationModels: this.props.isLoadingTranslationModels,
       showApiKey: this.showTranslationApiKey,
       onToggleShowApiKey: () => { this.showTranslationApiKey = !this.showTranslationApiKey; this.updateTranslationWidget(); },
       onActiveTranslationProviderChange: (provider) => this.props.onActiveTranslationProviderChange(provider),
@@ -154,6 +156,7 @@ export class SettingsPartView {
       onTranslationProviderBaseUrlChange: (provider, baseUrl) => this.props.onTranslationProviderBaseUrlChange(provider, baseUrl),
       onTranslationProviderModelChange: (provider, model) => this.props.onTranslationProviderModelChange(provider, model),
       onGlmModelChange: (optionValue) => this.props.onLlmProviderSelectedModelOption('glm', optionValue),
+      onFetchTranslationModels: () => this.props.onFetchTranslationModels(),
       onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
     });
     this.container.append(this.topbar, this.contentScrollable.getDomNode());
@@ -321,9 +324,11 @@ export class SettingsPartView {
       labels: this.props.labels,
       activeTranslationProvider: this.props.activeTranslationProvider,
       translationProviders: this.props.translationProviders,
+      customTranslationModels: this.props.customTranslationModels,
       llmProviders: this.props.llmProviders,
       isSettingsSaving: this.props.isSettingsSaving,
       isTestingTranslationConnection: this.props.isTestingTranslationConnection,
+      isLoadingTranslationModels: this.props.isLoadingTranslationModels,
       showApiKey: this.showTranslationApiKey,
       onToggleShowApiKey: () => { this.showTranslationApiKey = !this.showTranslationApiKey; this.updateTranslationWidget(); },
       onActiveTranslationProviderChange: (provider) => this.props.onActiveTranslationProviderChange(provider),
@@ -331,6 +336,7 @@ export class SettingsPartView {
       onTranslationProviderBaseUrlChange: (provider, baseUrl) => this.props.onTranslationProviderBaseUrlChange(provider, baseUrl),
       onTranslationProviderModelChange: (provider, model) => this.props.onTranslationProviderModelChange(provider, model),
       onGlmModelChange: (optionValue) => this.props.onLlmProviderSelectedModelOption('glm', optionValue),
+      onFetchTranslationModels: () => this.props.onFetchTranslationModels(),
       onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
     });
   }

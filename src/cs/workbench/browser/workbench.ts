@@ -96,6 +96,7 @@ import {
   setWorkbenchArticles,
   setWorkbenchFetchSeedUrl,
   setWorkbenchSelectedArticleKeysInOrder,
+  setWorkbenchSelectedChatArticleUrlsInOrder,
   setWorkbenchSelectionModePhase,
   setWorkbenchWebUrl,
   subscribeWorkbenchSession,
@@ -706,6 +707,48 @@ function collectChatArticleBatch(
   }
 
   return result;
+}
+
+function collectSelectedChatArticleBatch(
+  articles: readonly Article[],
+  selectedChatArticleUrlsInOrder: readonly string[],
+): Article[] {
+  const articlesByUrl = new Map(
+    articles.map((article) => [normalizeUrl(article.sourceUrl), article] as const),
+  );
+
+  return selectedChatArticleUrlsInOrder
+    .map((sourceUrl) => articlesByUrl.get(sourceUrl))
+    .filter((article): article is Article => Boolean(article));
+}
+
+function appendSelectedChatArticleUrls(
+  previousUrls: string[],
+  articles: readonly Article[],
+) {
+  const nextUrls = [...previousUrls];
+  for (const article of articles) {
+    const sourceUrl = normalizeUrl(article.sourceUrl);
+    if (sourceUrl && !nextUrls.includes(sourceUrl)) {
+      nextUrls.push(sourceUrl);
+    }
+  }
+
+  return areStringArraysEqual(previousUrls, nextUrls) ? previousUrls : nextUrls;
+}
+
+function toggleSelectedChatArticleUrl(
+  previousUrls: string[],
+  href: string,
+) {
+  const sourceUrl = normalizeUrl(href);
+  if (!sourceUrl) {
+    return previousUrls;
+  }
+
+  return previousUrls.includes(sourceUrl)
+    ? previousUrls.filter((selectedUrl) => selectedUrl !== sourceUrl)
+    : [...previousUrls, sourceUrl];
 }
 
 class WorkbenchHost {
@@ -1387,6 +1430,7 @@ class WorkbenchHost {
       articles,
       selectionModePhase,
       selectedArticleKeysInOrder,
+      selectedChatArticleUrlsInOrder,
     } = getWorkbenchSessionSnapshot();
     const { activePage } = getWorkbenchStateSnapshot();
     const {
@@ -1455,6 +1499,7 @@ class WorkbenchHost {
       llmProviders,
       activeTranslationProvider,
       translationProviders,
+      customTranslationModels,
       configPath,
       defaultConfigPath,
       isSettingsLoading,
@@ -1462,6 +1507,7 @@ class WorkbenchHost {
       isTestingRagConnection,
       isTestingLlmConnection,
       isTestingTranslationConnection,
+      isLoadingTranslationModels,
       journalSourceOverrides,
     } = settingsSnapshot;
     setWorkbenchBrowserTabKeepAliveLimit(browserTabKeepAliveLimit);
@@ -1902,6 +1948,11 @@ class WorkbenchHost {
       assistantMessages,
       filteredArticles,
     );
+    const selectedChatArticleBatch = collectSelectedChatArticleBatch(
+      chatArticleBatch,
+      selectedChatArticleUrlsInOrder,
+    );
+    const selectedChatArticleUrlSet = new Set(selectedChatArticleUrlsInOrder);
     const handleFetchLatestBatch =
       batchFetchControllerInstance.handleFetchLatestBatch;
     const articleQuickSources = getConfigBatchSourceSeed();
@@ -1917,6 +1968,9 @@ class WorkbenchHost {
         return;
       }
 
+      setWorkbenchSelectedChatArticleUrlsInOrder((previousUrls) =>
+        appendSelectedChatArticleUrls(previousUrls, result.articles),
+      );
       assistantModelInstance.handleInsertArticles(
         result.articles,
         getBatchSourceDisplayLabel(source),
@@ -2134,6 +2188,10 @@ class WorkbenchHost {
         isArticleSourceFetching: isBatchLoading,
         showArticleBatchActions:
           chatArticleBatch.length > 0 && !isBatchLoading,
+        isArticleSelected: (href) => {
+          const sourceUrl = normalizeUrl(href);
+          return Boolean(sourceUrl && selectedChatArticleUrlSet.has(sourceUrl));
+        },
       },
       actions: {
         onQuestionChange: setAssistantQuestion,
@@ -2141,9 +2199,14 @@ class WorkbenchHost {
         onApplyPatch: handleAssistantApplyPatch,
         onFetchArticleSource: (source) => void handleFetchArticleSource(source),
         onDownloadAllArticles: () =>
-          documentActionsControllerInstance.handleDownloadAllArticles(chatArticleBatch),
+          documentActionsControllerInstance.handleDownloadAllArticles(selectedChatArticleBatch),
         onExportArticleSummaries: () =>
-          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries(chatArticleBatch),
+          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries(selectedChatArticleBatch),
+        onToggleArticleSelected: (href) => {
+          setWorkbenchSelectedChatArticleUrlsInOrder((previousUrls) =>
+            toggleSelectedChatArticleUrl(previousUrls, href),
+          );
+        },
         onCreateConversation: handleAssistantCreateConversation,
         onActivateConversation: handleAssistantActivateConversation,
         onCloseConversation: handleAssistantCloseConversation,
@@ -2266,6 +2329,7 @@ class WorkbenchHost {
         llmProviders,
         activeTranslationProvider,
         translationProviders,
+        customTranslationModels,
         desktopRuntime,
         configPath,
         defaultConfigPath,
@@ -2281,6 +2345,7 @@ class WorkbenchHost {
         isTestingRagConnection,
         isTestingLlmConnection,
         isTestingTranslationConnection,
+        isLoadingTranslationModels,
       },
       actions: {
         onNavigateBack: toggleWorkbenchSettings,
@@ -2388,6 +2453,8 @@ class WorkbenchHost {
           void settingsControllerInstance.handleTestRagConnection(),
         onTestLlmConnection: () =>
           void settingsControllerInstance.handleTestLlmConnection(),
+        onFetchTranslationModels: () =>
+          void settingsControllerInstance.handleFetchTranslationModels(),
         onTestTranslationConnection: () =>
           void settingsControllerInstance.handleTestTranslationConnection(),
         onChooseConfigPath: () =>

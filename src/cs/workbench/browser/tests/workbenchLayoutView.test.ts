@@ -474,6 +474,8 @@ function createWorkbenchLayoutViewProps() {
       showArticleBatchActions: false,
       onDownloadAllArticles: () => {},
       onExportArticleSummaries: () => {},
+      isArticleSelected: () => false,
+      onToggleArticleSelected: () => {},
       availableArticleCount: 0,
       conversations: [
         {

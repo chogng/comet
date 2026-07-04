@@ -14,6 +14,8 @@ import { $ } from 'cs/base/browser/dom';
 export type ChatListWidgetOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
 	readonly onRequestOpenLink: (href: string) => void;
+	readonly isArticleSelected: (href: string) => boolean;
+	readonly onToggleArticleSelected: (href: string) => void;
 };
 
 export class ChatListWidget {
@@ -30,6 +32,8 @@ export class ChatListWidget {
 		this.renderer = new ChatListRenderer({
 			onApplyPatch: options.onApplyPatch,
 			onRequestOpenLink: options.onRequestOpenLink,
+			isArticleSelected: options.isArticleSelected,
+			onToggleArticleSelected: options.onToggleArticleSelected,
 		});
 		this.scrollableElement = new DomScrollableElement(this.contentElement, {
 			className: 'comet-agentbar-thread-scrollable',

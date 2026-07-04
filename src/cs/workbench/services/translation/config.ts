@@ -23,6 +23,11 @@ export const defaultTranslationProviderSettings: Record<TranslationProviderId, T
     baseUrl: getTranslationProviderDefinition('openai-compatible').defaultBaseUrl,
     model: 'gpt-5.4-mini',
   },
+  custom: {
+    apiKey: '',
+    baseUrl: getTranslationProviderDefinition('custom').defaultBaseUrl,
+    model: '',
+  },
 };
 
 function cloneProviderSettings(settings: TranslationProviderSettings): TranslationProviderSettings {
@@ -40,6 +45,7 @@ export function createDefaultTranslationSettings(): TranslationSettings {
       deepl: cloneProviderSettings(defaultTranslationProviderSettings.deepl),
       glm: cloneProviderSettings(defaultTranslationProviderSettings.glm),
       'openai-compatible': cloneProviderSettings(defaultTranslationProviderSettings['openai-compatible']),
+      custom: cloneProviderSettings(defaultTranslationProviderSettings.custom),
     },
   };
 }
@@ -53,6 +59,7 @@ export function cloneTranslationSettings(settings: TranslationSettings): Transla
       'openai-compatible': cloneProviderSettings(
         settings.providers['openai-compatible'] ?? defaultTranslationProviderSettings['openai-compatible'],
       ),
+      custom: cloneProviderSettings(settings.providers.custom ?? defaultTranslationProviderSettings.custom),
     },
   };
 }

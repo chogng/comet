@@ -7,6 +7,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createConfigurationMainService } from 'cs/platform/configuration/electron-main/configurationService';
 import { getDefaultBatchSources } from 'cs/platform/configuration/common/defaultBatchSources';
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
+import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
 
 async function withConfigurationService(
   run: (
@@ -336,5 +337,34 @@ test('configuration service saves user settings into a changed config path', asy
       movedUserSettings['literature.editorDraftStyle'].defaultBodyStyle.fontFamilyValue,
       '"Moved Sans", sans-serif',
     );
+  });
+});
+
+test('configuration service saves custom translation provider settings', async () => {
+  await withConfigurationService(async (service, { configFile }) => {
+    const translation = createDefaultTranslationSettings();
+    translation.activeProvider = 'custom';
+    translation.providers.custom = {
+      apiKey: 'custom-key',
+      baseUrl: 'https://custom.example/v1',
+      model: 'custom-model',
+    };
+
+    await service.saveSettings({ translation });
+
+    const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
+    const settings = await service.loadSettings();
+
+    assert.equal(savedConfig.translation.activeProvider, 'custom');
+    assert.deepEqual(savedConfig.translation.providers.custom, {
+      apiKey: 'custom-key',
+      baseUrl: 'https://custom.example/v1',
+      model: 'custom-model',
+    });
+    assert.deepEqual(settings.translation.providers.custom, {
+      apiKey: 'custom-key',
+      baseUrl: 'https://custom.example/v1',
+      model: 'custom-model',
+    });
   });
 });
