@@ -20,7 +20,7 @@ import { EventEmitter } from 'cs/base/common/event';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
-import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/chatListWidget';
+import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/widget/chatListWidget';
 import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
 import { $ } from 'cs/base/browser/dom';
 

@@ -3,12 +3,14 @@ import test, { after, before } from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { IView } from 'cs/base/browser/ui/splitview/splitview';
+import type { Orientation as SplitViewOrientation } from 'cs/base/browser/ui/splitview/splitview';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let Orientation: typeof import('cs/base/browser/ui/splitview/splitview').Orientation;
 let SplitView: typeof import('cs/base/browser/ui/splitview/splitview').SplitView;
 let Pane: typeof import('cs/base/browser/ui/splitview/paneview').Pane;
 let PaneView: typeof import('cs/base/browser/ui/splitview/paneview').PaneView;
+const verticalOrientation = 0 as SplitViewOrientation;
+const horizontalOrientation = 1 as SplitViewOrientation;
 
 class TestView implements IView {
   readonly element = document.createElement('div');
@@ -90,7 +92,7 @@ function dispatchDrag(
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ Orientation, SplitView } = await import('cs/base/browser/ui/splitview/splitview'));
+  ({ SplitView } = await import('cs/base/browser/ui/splitview/splitview'));
   ({ Pane, PaneView } = await import('cs/base/browser/ui/splitview/paneview'));
 });
 
@@ -100,7 +102,7 @@ after(() => {
 });
 
 test('splitview comet-sash drag resizes adjacent views', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
   const trailingView = new TestView(160, 360);
@@ -136,7 +138,7 @@ test('splitview comet-sash drag resizes adjacent views', () => {
 });
 
 test('splitview restores cached size after a hidden view becomes visible again', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
 
@@ -164,7 +166,7 @@ test('splitview restores cached size after a hidden view becomes visible again',
 });
 
 test('splitview collapses a snap-enabled view after dragging past its minimum', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420, true);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
   let snappedItemIndex: number | null = null;
@@ -214,7 +216,7 @@ test('splitview collapses a snap-enabled view after dragging past its minimum', 
 });
 
 test('splitview re-expands a snapped view only after crossing the reopen hysteresis', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420, true);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
   const snapEvents: boolean[] = [];
@@ -263,7 +265,7 @@ test('splitview re-expands a snapped view only after crossing the reopen hystere
 
 test('comet-paneview bottom comet-pane header remains clickable without reserved comet-sash space', () => {
   const paneView = new PaneView({
-    orientation: Orientation.HORIZONTAL,
+    orientation: horizontalOrientation,
     reserveSashSpace: false,
   });
   const topPane = new Pane({
@@ -304,7 +306,7 @@ test('comet-paneview bottom comet-pane header remains clickable without reserved
 });
 
 test('splitview disables snapped edge comet-sash when start snapping is turned off', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420, true);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
 
@@ -334,7 +336,7 @@ test('splitview disables snapped edge comet-sash when start snapping is turned o
 });
 
 test('splitview separator is visible only when there is a visible view after the left view', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
 
@@ -366,7 +368,7 @@ test('splitview separator is visible only when there is a visible view after the
 });
 
 test('splitview keeps a single separator between non-adjacent visible views', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420);
   const centerView = new TestView(220, Number.POSITIVE_INFINITY);
   const trailingView = new TestView(120, 520);
@@ -407,7 +409,7 @@ test('splitview keeps a single separator between non-adjacent visible views', ()
 });
 
 test('splitview comet-sash change does not crash when layout side effects clear drag state', () => {
-  const splitView = new SplitView(Orientation.VERTICAL, 10);
+  const splitView = new SplitView(verticalOrientation, 10);
   const leadingView = new TestView(120, 420);
   let shouldRemoveViewOnLayout = false;
   const centerView = new ReentrantLayoutView(220, Number.POSITIVE_INFINITY, () => {

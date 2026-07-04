@@ -525,7 +525,7 @@ const button = $<HTMLElementTagNameMap['button']>('button.comet-hover-action') a
     );
 
     this.element.style.left = `${Math.round(left)}px`;
-    this.element.style.top = `${Math.round(comet-is-top)}px`;
+    this.element.style.top = `${Math.round(top)}px`;
     this.pointer.style.left = `${Math.round(pointerLeft - 3)}px`;
     this.card.classList.toggle('comet-is-right-aligned', isRightAligned);
     this.element.style.setProperty(

@@ -7,7 +7,7 @@ import { getWindowChromeLayout } from 'cs/platform/window/common/window';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
 import type { Event } from 'cs/base/common/event';
 import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
-import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
+import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
 import { $ } from 'cs/base/browser/dom';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();

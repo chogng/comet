@@ -8,7 +8,7 @@ import type { RagAnswerResult } from 'cs/base/parts/sandbox/common/sandboxTypes'
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createChatWidget: typeof import('cs/workbench/contrib/chat/browser/chatWidget').createChatWidget;
+let createChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').createChatWidget;
 let createChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').createChatViewPane;
 
 function createProps(): ChatWidgetProps {
@@ -77,7 +77,7 @@ function createResult(overrides: Partial<RagAnswerResult> = {}): RagAnswerResult
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ createChatWidget } = await import('cs/workbench/contrib/chat/browser/chatWidget'));
+  ({ createChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
   ({ createChatViewPane } = await import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane'));
 });
 
@@ -691,22 +691,9 @@ test('agent chat renders fetched article linked text and emits open link request
     messages: [
       {
         id: 'article-1',
-        role: 'article',
-        sourceLabel: 'Science',
-        article: {
-          title: 'Example article',
-          articleType: 'Research Article',
-          doi: '10.1126/example',
-          authors: ['Ada Lovelace'],
-          abstractText: 'Abstract',
-          descriptionText: 'Description',
-          publishedAt: '2026-07-03',
-          sourceUrl: 'https://www.science.org/doi/example',
-          fetchedAt: '2026-07-04T00:00:00.000Z',
-          fetchOrder: 1,
-          sourceId: 'science',
-          journalTitle: 'Science',
-        },
+        role: 'assistant',
+        content: 'Science\n- [Example article](https://www.science.org/doi/example) - Science | 2026-07-03 | Research Article',
+        includeInAgentHistory: false,
       },
     ],
   });
@@ -717,14 +704,14 @@ test('agent chat renders fetched article linked text and emits open link request
   document.body.append(element);
 
   try {
-    const text = element.querySelector('.comet-agentbar-message-text');
-    assert(text instanceof HTMLElement);
+    const markdown = element.querySelector('.comet-agentbar-answer > .rendered-markdown');
+    assert(markdown instanceof HTMLElement);
     assert.equal(
-      text.textContent,
-      'Science\n- Example article - Science | 2026-07-03 | Research Article',
+      markdown.textContent?.replace(/\s+/g, ' ').trim(),
+      'Science Example article - Science | 2026-07-03 | Research Article',
     );
 
-    const link = text.querySelector('.comet-agentbar-message-link');
+    const link = markdown.querySelector('a[data-href]');
     assert(link instanceof HTMLElement);
     assert.equal(link.textContent, 'Example article');
     link.click();

@@ -4,7 +4,9 @@
 
 import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
 import { localize } from 'cs/nls';
-import { parseLinkedText } from 'cs/base/common/linkedText';
+import { MarkdownString } from 'cs/base/common/htmlContent';
+import type { DisposableStore } from 'cs/base/common/lifecycle';
+import { ChatContentMarkdownRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer';
 import { $ } from 'cs/base/browser/dom';
 
 export type ChatListRendererOptions = {
@@ -16,14 +18,16 @@ type AssistantMessage = Extract<AssistantChatMessage, { role: 'assistant' }>;
 type AssistantResult = NonNullable<AssistantMessage['result']>;
 
 export class ChatListRenderer {
+	private readonly markdownRenderer = new ChatContentMarkdownRenderer();
+
 	constructor(private readonly options: ChatListRendererOptions) {}
 
-	renderElement(message: AssistantChatMessage) {
+	renderElement(message: AssistantChatMessage, disposables: DisposableStore) {
 		if (message.role === 'user') {
 			return this.renderUserMessage(message);
 		}
 
-		return this.renderAssistantMessage(message);
+		return this.renderAssistantMessage(message, disposables);
 	}
 
 	private renderUserMessage(
@@ -38,6 +42,7 @@ export class ChatListRenderer {
 
 	private renderAssistantMessage(
 		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
+		disposables: DisposableStore,
 	) {
 		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-assistant');
 		const body = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message-body');
@@ -54,7 +59,7 @@ export class ChatListRenderer {
 			body.append(header);
 		}
 
-		body.append(this.renderMessageContent(message));
+		body.append(this.renderMessageContent(message, disposables));
 
 		const result = message.result ?? null;
 		if (result && result.evidence.length > 0) {
@@ -72,39 +77,23 @@ export class ChatListRenderer {
 
 	private renderMessageContent(
 		message: AssistantMessage,
+		disposables: DisposableStore,
 	) {
 		const content = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-answer');
 
 		if (message.content.trim()) {
-			content.append(this.renderLinkedText(message.content));
+			const rendered = disposables.add(this.markdownRenderer.render(
+				new MarkdownString(message.content),
+				{
+					actionHandler: link => {
+						this.options.onRequestOpenLink(link);
+					},
+				},
+			));
+			content.append(rendered.element);
 		}
 
 		return content;
-	}
-
-	private renderLinkedText(text: string) {
-		const paragraph = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-message-text');
-		const linkedText = parseLinkedText(text);
-		for (const node of linkedText.nodes) {
-			if (typeof node === 'string') {
-				paragraph.append(document.createTextNode(node));
-				continue;
-			}
-
-			const anchor = $<HTMLElementTagNameMap['a']>('a.comet-agentbar-message-link');
-			anchor.href = node.href;
-			anchor.textContent = node.label;
-			if (node.title) {
-				anchor.title = node.title;
-			}
-			anchor.addEventListener('click', event => {
-				event.preventDefault();
-				this.options.onRequestOpenLink(node.href);
-			});
-			paragraph.append(anchor);
-		}
-
-		return paragraph;
 	}
 
 	private renderEvidence(result: AssistantResult) {

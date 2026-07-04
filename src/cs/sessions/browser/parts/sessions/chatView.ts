@@ -2,7 +2,7 @@ import type { AssistantModelSnapshot } from 'cs/workbench/browser/assistantModel
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import type { Event } from 'cs/base/common/event';
 import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
-import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
+import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import { $ } from 'cs/base/browser/dom';
 

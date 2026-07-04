@@ -8,7 +8,7 @@ import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElem
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { localize } from 'cs/nls';
-import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/chatListRenderer';
+import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatListRenderer';
 import { $ } from 'cs/base/browser/dom';
 
 export type ChatListWidgetOptions = {
@@ -23,6 +23,7 @@ export class ChatListWidget {
 	private readonly scrollDownButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-thread-scroll-down');
 	private readonly renderer: ChatListRenderer;
 	private readonly disposables = new DisposableStore();
+	private readonly renderDisposables = this.disposables.add(new DisposableStore());
 	private messages: readonly AssistantChatMessage[] = [];
 
 	constructor(options: ChatListWidgetOptions) {
@@ -73,8 +74,9 @@ export class ChatListWidget {
 			this.messages.length === 0 ||
 			this.isScrolledToBottom();
 		this.messages = messages;
+		this.renderDisposables.clear();
 		this.contentElement.replaceChildren(
-			...messages.map((message) => this.renderer.renderElement(message)),
+			...messages.map(message => this.renderer.renderElement(message, this.renderDisposables)),
 		);
 		this.updateEmptyState();
 		this.scrollableElement.scanDomNode();

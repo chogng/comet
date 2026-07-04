@@ -24,6 +24,43 @@ export function pickFirstNonEmpty(values: unknown[]) {
   return '';
 }
 
+export function escape(html: string): string {
+	return html.replace(/[<>&]/g, match => {
+		switch (match) {
+			case '<':
+				return '&lt;';
+			case '>':
+				return '&gt;';
+			case '&':
+				return '&amp;';
+			default:
+				return match;
+		}
+	});
+}
+
+export function ltrim(haystack: string, needle: string): string {
+	if (!haystack || !needle) {
+		return haystack;
+	}
+
+	const needleLength = needle.length;
+	let offset = 0;
+	if (needleLength === 1) {
+		const ch = needle.charCodeAt(0);
+		while (offset < haystack.length && haystack.charCodeAt(offset) === ch) {
+			offset++;
+		}
+		return haystack.substring(offset);
+	}
+
+	while (haystack.startsWith(needle, offset)) {
+		offset += needleLength;
+	}
+
+	return haystack.substring(offset);
+}
+
 export function rtrim(haystack: string, needle: string): string {
 	if (!haystack || !needle) {
 		return haystack;
