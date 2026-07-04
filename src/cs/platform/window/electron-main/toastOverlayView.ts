@@ -16,6 +16,7 @@ import {
 import { cleanText } from 'cs/base/common/strings';
 import {
   resolvePreloadScriptPath,
+  resolveWorkbenchRendererUrl,
   resolveWorkbenchRendererFilePath,
 } from 'cs/platform/window/electron-main/windowPaths';
 
@@ -103,14 +104,11 @@ function resetNativeToastOverlay(view?: WebContentsView | null) {
 function resolveRendererTarget() {
   const devUrl = process.env.ELECTRON_RENDERER_URL;
   if (devUrl) {
-    const url = new URL(devUrl);
-    url.pathname = '/src/cs/code/electron-sandbox/workbench/workbench.html';
-    url.search = '';
-    url.searchParams.set(nativeToastQueryKey, nativeToastQueryValue);
-
     return {
       type: 'url' as const,
-      target: url.toString(),
+      target: resolveWorkbenchRendererUrl(devUrl, {
+        [nativeToastQueryKey]: nativeToastQueryValue,
+      }),
     };
   }
 

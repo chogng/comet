@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const workbenchRendererPathname = '/src/cs/code/electron-sandbox/workbench/workbench.html';
+const workbenchRendererDevPathname = '/src/cs/code/electron-browser/workbench-dev.html';
 const windowModuleFilePath = fileURLToPath(import.meta.url);
 const distElectronMarker = `${path.sep}dist-electron${path.sep}`;
 const distElectronMarkerIndex = windowModuleFilePath.lastIndexOf(distElectronMarker);
@@ -23,8 +23,7 @@ function resolveDistRendererWorkbenchDir() {
     'src',
     'cs',
     'code',
-    'electron-sandbox',
-    'workbench',
+    'electron-browser',
   );
 }
 
@@ -43,7 +42,7 @@ export function resolveWorkbenchRendererUrl(
   query: Record<string, string | undefined> = {},
 ) {
   const url = new URL(devServerUrl);
-  url.pathname = workbenchRendererPathname;
+  url.pathname = workbenchRendererDevPathname;
   url.search = '';
 
   for (const [key, value] of Object.entries(query)) {

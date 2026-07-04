@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+		<title>Comet Studio</title>
+		<script>
+			const callbackStoragePrefix = 'vscode-web.url-callbacks';
+
+			function readRequiredParam(params, key) {
+				const value = params.get(key);
+				if (!value) {
+					throw new Error(`Missing ${key}`);
+				}
+
+				return value;
+			}
+
+			const url = new URL(window.location.href);
+			const params = url.searchParams;
+			const id = readRequiredParam(params, 'vscode-reqid');
+			const scheme = readRequiredParam(params, 'vscode-scheme');
+			const authority = readRequiredParam(params, 'vscode-authority');
+			const path = params.get('vscode-path');
+			const query = params.get('vscode-query');
+			const fragment = params.get('vscode-fragment');
+
+			params.delete('vscode-reqid');
+			params.delete('vscode-scheme');
+			params.delete('vscode-authority');
+			params.delete('vscode-path');
+			params.delete('vscode-query');
+			params.delete('vscode-fragment');
+
+			const uri = { scheme, authority };
+			if (path) {
+				uri.path = path;
+			}
+
+			if (query) {
+				const originalParams = new URLSearchParams(query);
+				originalParams.forEach((value, key) => params.set(key, value));
+			}
+
+			const resultQuery = params.toString();
+			if (resultQuery) {
+				uri.query = resultQuery;
+			}
+
+			if (fragment) {
+				uri.fragment = fragment;
+			}
+
+			localStorage.setItem(`${callbackStoragePrefix}[${id}]`, JSON.stringify(uri));
+		</script>
+		<style>
+			html {
+				height: 100%;
+			}
+
+			body {
+				box-sizing: border-box;
+				min-height: 100%;
+				margin: 0;
+				padding: 24px;
+				display: grid;
+				align-content: center;
+				justify-content: center;
+				gap: 12px;
+				color: #1c2733;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+				background: #f6f8fb;
+			}
+
+			.branding {
+				font-size: 20px;
+				font-weight: 600;
+			}
+
+			.message {
+				color: #506070;
+				font-size: 14px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="branding">Comet Studio</div>
+		<div class="message">You can close this page now.</div>
+	</body>
+</html>

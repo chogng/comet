@@ -18,8 +18,7 @@ const builtWorkbenchEntry = path.join(
   'src',
   'cs',
   'code',
-  'electron-sandbox',
-  'workbench',
+  'electron-browser',
   'workbench.html',
 );
 const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'cs-electron-pdf-smoke-'));
