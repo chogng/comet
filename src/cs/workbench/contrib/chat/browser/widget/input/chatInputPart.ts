@@ -19,6 +19,10 @@ import {
 	ChatInputModelPickerActionViewItem,
 	type ChatInputModelPickerProps,
 } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem';
+import {
+	renderChatInputToolbar,
+	type ChatInputToolbarActionItem,
+} from 'cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar';
 
 export type ChatInputPartProps = Pick<
 	ChatWidgetProps,
@@ -38,11 +42,9 @@ export type ChatInputPartProps = Pick<
 	| 'articleQuickSources'
 	| 'isArticleSourceFetching'
 	| 'onFetchArticleSource'
-	| 'showArticleBatchActions'
-	| 'onDownloadAllArticles'
-	| 'onExportArticleSummaries'
 > & {
 	readonly isEmpty: boolean;
+	readonly inputToolbarActions: readonly ChatInputToolbarActionItem[];
 };
 
 function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerProps {
@@ -167,10 +169,16 @@ export class ChatInputPart {
 		this.renderDisposables.add(actionsView);
 		toolbar.append(actionsView.getElement());
 		composer.replaceChildren(textarea, toolbar);
-		this.element.replaceChildren(
-			composer,
-			this.renderQuickActions(),
+		const content: HTMLElement[] = [];
+		const inputToolbar = renderChatInputToolbar(
+			this.props.inputToolbarActions,
+			this.renderDisposables,
 		);
+		if (inputToolbar) {
+			content.push(inputToolbar);
+		}
+		content.push(composer, this.renderQuickActions());
+		this.element.replaceChildren(...content);
 
 		if (this.isArticleMenuOpen) {
 			this.renderDisposables.add(addDisposableListener(document, EventType.MOUSE_DOWN, event => {
@@ -217,28 +225,6 @@ export class ChatInputPart {
 				this.isArticleMenuOpen,
 			),
 		];
-		if (this.props.showArticleBatchActions) {
-			quickActionButtons.push(
-				this.createQuickActionButton(
-					localize('chatQuickActionDownloadAllArticles', "下载全部"),
-					lxIconSemanticMap.fetch.batchDownload,
-					() => {
-						void this.props.onDownloadAllArticles();
-					},
-					false,
-					this.props.isArticleSourceFetching,
-				),
-				this.createQuickActionButton(
-					localize('chatQuickActionExportArticleSummaries', "翻译并导出摘要"),
-					'translate',
-					() => {
-						void this.props.onExportArticleSummaries();
-					},
-					false,
-					this.props.isArticleSourceFetching,
-				),
-			);
-		}
 		row.append(...quickActionButtons);
 		wrapper.append(row);
 

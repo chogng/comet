@@ -22,6 +22,10 @@ import { localize } from 'cs/nls';
 import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/widget/chatListWidget';
 import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
+import {
+	createChatInputToolbarActionItem,
+	type ChatInputToolbarActionItem,
+} from 'cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar';
 import { $ } from 'cs/base/browser/dom';
 
 import 'cs/workbench/browser/parts/agentbar/media/agentbar.css';
@@ -134,9 +138,7 @@ export class ChatWidget {
 			articleQuickSources: this.props.articleQuickSources,
 			isArticleSourceFetching: this.props.isArticleSourceFetching,
 			onFetchArticleSource: this.props.onFetchArticleSource,
-			showArticleBatchActions: this.props.showArticleBatchActions,
-			onDownloadAllArticles: this.props.onDownloadAllArticles,
-			onExportArticleSummaries: this.props.onExportArticleSummaries,
+			inputToolbarActions: this.createInputToolbarActions(),
 			llmModelOptions: this.props.llmModelOptions,
 			activeLlmModelOptionValue: this.props.activeLlmModelOptionValue,
 			onToggleAutoModelRouting: this.props.onToggleAutoModelRouting,
@@ -145,6 +147,27 @@ export class ChatWidget {
 			onOpenModelSettings: this.props.onOpenModelSettings,
 			isEmpty: this.props.messages.length === 0,
 		};
+	}
+
+	private createInputToolbarActions(): ChatInputToolbarActionItem[] {
+		if (!this.props.showArticleBatchActions) {
+			return [];
+		}
+
+		return [
+			createChatInputToolbarActionItem({
+				label: localize('chatQuickActionDownloadAllArticles', "下载全部"),
+				icon: lxIconSemanticMap.fetch.batchDownload,
+				disabled: this.props.isArticleSourceFetching,
+				onClick: this.props.onDownloadAllArticles,
+			}),
+			createChatInputToolbarActionItem({
+				label: localize('chatQuickActionExportArticleSummaries', "翻译并导出摘要"),
+				icon: 'translate',
+				disabled: this.props.isArticleSourceFetching,
+				onClick: this.props.onExportArticleSummaries,
+			}),
+		];
 	}
 
 	private createHeaderActionItem(

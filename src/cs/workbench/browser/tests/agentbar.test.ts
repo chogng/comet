@@ -644,7 +644,7 @@ test('composer article quick comet-hover-action opens source menu and runs selec
   }
 });
 
-test('composer article batch actions call download and export handlers', async () => {
+test('composer input toolbar hosts article batch actions', async () => {
   let downloadAllCount = 0;
   let exportSummariesCount = 0;
   const agentBar = createChatWidget({
@@ -666,11 +666,24 @@ test('composer article batch actions call download and export handlers', async (
     );
     assert.deepEqual(
       quickButtons.map((button) => button.textContent?.trim()),
-      ['Write', 'Learn', 'Code', 'Article', '下载全部', '翻译并导出摘要'],
+      ['Write', 'Learn', 'Code', 'Article'],
+    );
+    const inputToolbar = element.querySelector('.comet-chat-composer-input-toolbar');
+    const composer = element.querySelector('.comet-chat-composer');
+    assert(inputToolbar instanceof HTMLElement);
+    assert(composer instanceof HTMLElement);
+    assert.equal(inputToolbar.nextElementSibling, composer);
+
+    const inputToolbarButtons = Array.from(
+      inputToolbar.querySelectorAll('.comet-chat-composer-input-toolbar-action'),
+    );
+    assert.deepEqual(
+      inputToolbarButtons.map((button) => button.textContent?.trim()),
+      ['下载全部', '翻译并导出摘要'],
     );
 
-    const downloadAllButton = quickButtons[4];
-    const exportSummariesButton = quickButtons[5];
+    const downloadAllButton = inputToolbarButtons[0];
+    const exportSummariesButton = inputToolbarButtons[1];
     assert(downloadAllButton instanceof HTMLButtonElement);
     assert(exportSummariesButton instanceof HTMLButtonElement);
     downloadAllButton.click();
