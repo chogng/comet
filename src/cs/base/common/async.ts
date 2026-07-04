@@ -15,6 +15,14 @@ import {
 import { extUri as defaultExtUri, type IExtUri } from './resources.js';
 import { URI } from './uri.js';
 
+/**
+ * 提供通用异步基础能力：
+ * - 取消、超时、延迟执行
+ * - 顺序执行、限流、节流队列
+ * - 按 URI 隔离的资源队列
+ * - idle 调度与 lazy promise 状态读取
+ */
+
 export type Thenable<T> = PromiseLike<T>;
 
 export function isThenable<T>(obj: unknown): obj is Promise<T> {
