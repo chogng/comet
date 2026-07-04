@@ -81,6 +81,7 @@ test('DocumentActionsController opens article details in a browser tab', async (
     createBrowserTab: (url) => {
       openedUrls.push(url);
     },
+    onExportArticleSummaries: () => {},
     activeDraftExport: null,
   });
 
@@ -90,4 +91,35 @@ test('DocumentActionsController opens article details in a browser tab', async (
 
   controller.dispose();
   assert.deepEqual(openedUrls, ['https://www.nature.com/articles/example']);
+});
+
+test('DocumentActionsController delegates article summary export', async () => {
+  const article = createArticle({
+    sourceUrl: 'https://www.nature.com/articles/export',
+  });
+  const delegatedArticles: Array<readonly Article[]> = [];
+  const controller = createDocumentActionsController({
+    desktopRuntime: true,
+    invokeDesktop: createInvokeDesktop(),
+    nativeHost: createNativeHostService(),
+    locale: 'en',
+    ui: locales.en,
+    knowledgeBaseEnabled: false,
+    pdfDownloadDir: '',
+    knowledgeBasePdfDownloadDir: '',
+    pdfFileNameUseSelectionOrder: false,
+    isSelectionModeEnabled: false,
+    selectedArticleOrderLookup: new Map(),
+    exportableArticles: [article],
+    createBrowserTab: () => {},
+    onExportArticleSummaries: (articles) => {
+      delegatedArticles.push(articles);
+    },
+    activeDraftExport: null,
+  });
+
+  await controller.handleExportDocx();
+
+  controller.dispose();
+  assert.deepEqual(delegatedArticles, [[article]]);
 });

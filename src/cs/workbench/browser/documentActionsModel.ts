@@ -1,7 +1,6 @@
 import { toast } from 'cs/base/browser/ui/toast/toast';
 import { EventEmitter } from 'cs/base/common/event';
 import type {
-  DocumentTranslationProgress,
   LibraryDocumentSummary,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
@@ -30,11 +29,6 @@ import {
 import { syncLibraryMetadataFromArticle } from 'cs/workbench/services/knowledgeBase/libraryMetadataService';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
-import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
-import {
-  getStatusbarStateSnapshot,
-  setStatusbarState,
-} from 'cs/workbench/browser/parts/statusbar/statusbarModel';
 
 export type DocumentActionsControllerContext = {
   desktopRuntime: boolean;
@@ -50,6 +44,7 @@ export type DocumentActionsControllerContext = {
   selectedArticleOrderLookup: ReadonlyMap<string, number>;
   exportableArticles: Article[];
   createBrowserTab: (url: string) => void;
+  onExportArticleSummaries: (articles: readonly Article[]) => void | Promise<void>;
   activeDraftExport: {
     title: string;
     document: WritingEditorDocument;
@@ -291,56 +286,6 @@ export class DocumentActionsController {
     }
   };
 
-  readonly handleExportArticleSummaries = async (articles: readonly Article[]) => {
-    const {
-      desktopRuntime,
-      invokeDesktop,
-      locale,
-      ui,
-      pdfDownloadDir,
-    } = this.context;
-
-    if (!desktopRuntime) {
-      return;
-    }
-
-    const exportArticles = [...articles];
-    if (!canExportArticlesDocx(exportArticles.length)) {
-      toast.info(ui.toastNoExportableArticles);
-      return;
-    }
-
-    const restoreTranslationStatus = this.beginTranslationStatusbarProgress();
-    try {
-      const result = await invokeDesktop('export_articles_docx', {
-        articles: exportArticles,
-        preferredDirectory: resolvePreferredDirectory(pdfDownloadDir),
-        locale,
-      });
-
-      if (!result) {
-        return;
-      }
-
-      toast.success(
-        formatLocalized(ui.toastDocxExported, {
-          count: result.articleCount,
-          filePath: result.filePath,
-        }),
-      );
-    } catch (exportError) {
-      const localizedError = localizeDesktopInvokeError(
-        ui,
-        parseDesktopInvokeError(exportError),
-      );
-      toast.error(
-        formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
-      );
-    } finally {
-      restoreTranslationStatus();
-    }
-  };
-
   readonly handleExportDocx = async () => {
     const {
       desktopRuntime,
@@ -350,6 +295,7 @@ export class DocumentActionsController {
       pdfDownloadDir,
       exportableArticles,
       activeDraftExport,
+      onExportArticleSummaries,
     } = this.context;
 
     if (!desktopRuntime) {
@@ -388,55 +334,8 @@ export class DocumentActionsController {
       return;
     }
 
-    await this.handleExportArticleSummaries(exportableArticles);
+    await onExportArticleSummaries(exportableArticles);
   };
-
-  private beginTranslationStatusbarProgress() {
-    const previousStatus = getStatusbarStateSnapshot();
-    const unsubscribe = this.context.nativeHost.document?.onTranslationProgress((progress) => {
-      this.renderTranslationStatusbarProgress(previousStatus, progress);
-    });
-
-    return () => {
-      unsubscribe?.();
-      setStatusbarState(previousStatus);
-    };
-  }
-
-  private renderTranslationStatusbarProgress(
-    previousStatus: EditorStatusState,
-    progress: DocumentTranslationProgress,
-  ) {
-    const { ui } = this.context;
-    const total = Math.max(0, progress.total);
-    const current = Math.max(0, Math.min(progress.current, total));
-    const summary =
-      progress.phase === 'failed'
-        ? ui.statusTranslationFailed
-        : progress.phase === 'completed' && total === 0
-          ? ui.statusTranslationCached
-          : progress.phase === 'completed'
-            ? ui.statusTranslationCompleted
-            : total > 0
-              ? formatLocalized(ui.statusTranslationProgress, { current, total })
-              : ui.statusTranslationStarting;
-    const providerDetail = [progress.provider, progress.model].filter(Boolean).join(' / ');
-
-    setStatusbarState({
-      ...previousStatus,
-      summary,
-      leftItems: [
-        ...previousStatus.leftItems.filter((item) => item.id !== 'document.translation.progress'),
-        {
-          id: 'document.translation.progress',
-          label: 'Translate',
-          value: providerDetail || summary,
-          tone: progress.phase === 'failed' ? 'error' : 'accent',
-          title: progress.message || providerDetail || summary,
-        },
-      ],
-    });
-  }
 
   private emitChange() {
     this.onDidChangeEmitter.fire();

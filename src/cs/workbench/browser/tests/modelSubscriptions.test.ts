@@ -355,6 +355,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
     createBrowserTab: () => {},
+    onExportArticleSummaries: () => {},
     activeDraftExport: null,
   });
   const snapshotValues: boolean[] = [];
@@ -376,6 +377,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
     createBrowserTab: () => {},
+    onExportArticleSummaries: () => {},
     activeDraftExport: {
       title: 'Draft',
       document: {
@@ -400,6 +402,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
     createBrowserTab: () => {},
+    onExportArticleSummaries: () => {},
     activeDraftExport: null,
   });
 

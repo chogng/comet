@@ -12,6 +12,11 @@ import { createBatchFetchController } from 'cs/workbench/browser/batchFetchModel
 import type { BatchFetchController, BatchFetchControllerContext } from 'cs/workbench/browser/batchFetchModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
 import type { DocumentActionsController, DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
+import { createArticleSummaryTranslationExportController } from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
+import type {
+  ArticleSummaryTranslationExportController,
+  ArticleSummaryTranslationExportControllerContext,
+} from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
 import type { LibraryModel, LibraryModelContext } from 'cs/workbench/browser/libraryModel';
 
@@ -158,6 +163,8 @@ export type WorkbenchServicesSyncParams = {
   editorPartContext: EditorPartControllerContext;
   assistantModel: AssistantModel;
   assistantContext: AssistantModelContext;
+  articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
+  articleSummaryTranslationExportContext: ArticleSummaryTranslationExportControllerContext;
   documentActionsController: DocumentActionsController;
   documentActionsContext: DocumentActionsControllerContext;
   batchFetchController: BatchFetchController;
@@ -186,6 +193,7 @@ let libraryModel: LibraryModel | null = null;
 let webContentNavigationModel: WebContentNavigationModel | null = null;
 let editorPartController: EditorPartModel | null = null;
 let assistantModel: AssistantModel | null = null;
+let articleSummaryTranslationExportController: ArticleSummaryTranslationExportController | null = null;
 let documentActionsController: DocumentActionsController | null = null;
 let batchFetchController: BatchFetchController | null = null;
 let activeWorkbenchHost: WorkbenchHost | null = null;
@@ -1661,6 +1669,15 @@ class WorkbenchHost {
       editorPartControllerInstance.openBrowserPane();
       navigateToAddressBarUrl(href, true);
     };
+    const articleSummaryTranslationExportControllerInstance =
+      getWorkbenchArticleSummaryTranslationExportController({
+        desktopRuntime,
+        invokeDesktop,
+        nativeHost,
+        locale,
+        ui,
+        pdfDownloadDir,
+      });
 
     const documentActionsControllerInstance =
       getWorkbenchDocumentActionsController({
@@ -1677,6 +1694,8 @@ class WorkbenchHost {
         selectedArticleOrderLookup,
         exportableArticles,
         createBrowserTab: handleCreateBrowserTab,
+        onExportArticleSummaries:
+          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
         activeDraftExport,
         onLibraryDocumentUpserted:
           libraryModelInstance.upsertDocumentSummary,
@@ -1984,6 +2003,16 @@ class WorkbenchHost {
         getActiveDraftStableSelectionTarget: () =>
           this.workbenchContentPartViews?.getActiveDraftStableSelectionTarget() ?? null,
       },
+      articleSummaryTranslationExportController:
+        articleSummaryTranslationExportControllerInstance,
+      articleSummaryTranslationExportContext: {
+        desktopRuntime,
+        invokeDesktop,
+        nativeHost,
+        locale,
+        ui,
+        pdfDownloadDir,
+      },
       documentActionsController: documentActionsControllerInstance,
       documentActionsContext: {
         desktopRuntime,
@@ -1999,6 +2028,8 @@ class WorkbenchHost {
         selectedArticleOrderLookup,
         exportableArticles,
         createBrowserTab: handleCreateBrowserTab,
+        onExportArticleSummaries:
+          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
         activeDraftExport,
         onLibraryUpdated: refreshLibrary,
       },
@@ -2107,7 +2138,7 @@ class WorkbenchHost {
         onDownloadAllArticles: () =>
           documentActionsControllerInstance.handleDownloadAllArticles(chatArticleBatch),
         onExportArticleSummaries: () =>
-          documentActionsControllerInstance.handleExportArticleSummaries(chatArticleBatch),
+          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries(chatArticleBatch),
         onCreateConversation: handleAssistantCreateConversation,
         onActivateConversation: handleAssistantActivateConversation,
         onCloseConversation: handleAssistantCloseConversation,
@@ -2496,6 +2527,8 @@ export function disposeWorkbenchServices() {
   editorPartController?.dispose();
   editorPartController = null;
 
+  articleSummaryTranslationExportController = null;
+
   documentActionsController?.dispose();
   documentActionsController = null;
 
@@ -2541,6 +2574,14 @@ export function getWorkbenchAssistantModel(context: AssistantModelContext) {
   return assistantModel;
 }
 
+export function getWorkbenchArticleSummaryTranslationExportController(
+  context: ArticleSummaryTranslationExportControllerContext,
+) {
+  articleSummaryTranslationExportController ??=
+    createArticleSummaryTranslationExportController(context);
+  return articleSummaryTranslationExportController;
+}
+
 export function getWorkbenchDocumentActionsController(
   context: DocumentActionsControllerContext,
 ) {
@@ -2567,6 +2608,9 @@ export function syncWorkbenchServicesContext({
   editorPartContext,
   assistantModel: assistantModelInstance,
   assistantContext,
+  articleSummaryTranslationExportController:
+    articleSummaryTranslationExportControllerInstance,
+  articleSummaryTranslationExportContext,
   documentActionsController: documentActionsControllerInstance,
   documentActionsContext,
   batchFetchController: batchFetchControllerInstance,
@@ -2576,6 +2620,9 @@ export function syncWorkbenchServicesContext({
   libraryModelInstance.setContext(libraryContext);
   editorPartControllerInstance.setContext(editorPartContext);
   assistantModelInstance.setContext(assistantContext);
+  articleSummaryTranslationExportControllerInstance.setContext(
+    articleSummaryTranslationExportContext,
+  );
   documentActionsControllerInstance.setContext(documentActionsContext);
   batchFetchControllerInstance.setContext(batchFetchContext);
 }
