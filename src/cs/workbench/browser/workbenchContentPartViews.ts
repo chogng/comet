@@ -39,8 +39,8 @@ export type WorkbenchContentPartViewsProps = {
   editorPartProps: EditorPartProps;
   settingsContentElement?: HTMLElement | null;
   sidebarFooterActionsElement: HTMLElement;
-  editorTopbarAuxiliaryActionsElement?: HTMLElement | null;
-  agentTopbarTrailingActionsElement?: HTMLElement | null;
+  editorHeaderActionsElement?: HTMLElement | null;
+  agentHeaderTrailingActionsElement?: HTMLElement | null;
 };
 
 export type WorkbenchContentPartViewsLayoutState = {
@@ -55,15 +55,15 @@ export class WorkbenchContentPartViews {
   private agentBarView: ChatViewPane | null = null;
   private editorView: ReturnType<typeof createEditorPartView> | null = null;
   private retiredEditorView: ReturnType<typeof createEditorPartView> | null = null;
-  private readonly agentTopbarTrailingActionsHost = createElement(
+  private readonly agentHeaderTrailingActionsHost = createElement(
     'div',
     'agentbar-topbar-trailing-actions-host',
   );
-  private readonly agentTopbarPrimaryTrailingActionsHost = createElement(
+  private readonly agentHeaderPrimaryTrailingActionsHost = createElement(
     'div',
     'agentbar-topbar-trailing-primary',
   );
-  private readonly agentTopbarSecondaryTrailingActionsHost = createElement(
+  private readonly agentHeaderSecondaryTrailingActionsHost = createElement(
     'div',
     'agentbar-topbar-trailing-secondary',
   );
@@ -75,9 +75,9 @@ export class WorkbenchContentPartViews {
       isEditorCollapsed: false,
       onToggleEditorCollapse: () => {},
     };
-    this.agentTopbarTrailingActionsHost.append(
-      this.agentTopbarPrimaryTrailingActionsHost,
-      this.agentTopbarSecondaryTrailingActionsHost,
+    this.agentHeaderTrailingActionsHost.append(
+      this.agentHeaderPrimaryTrailingActionsHost,
+      this.agentHeaderSecondaryTrailingActionsHost,
     );
     this.render();
   }
@@ -197,19 +197,19 @@ export class WorkbenchContentPartViews {
       return;
     }
 
-    const topbarAuxiliaryActionsElement =
+    const headerActionsElement =
       !this.props.isAgentSidebarVisible && this.layoutState.isEditorCollapsed
-        ? (this.props.editorTopbarAuxiliaryActionsElement ?? null)
+        ? (this.props.editorHeaderActionsElement ?? null)
         : null;
 
     const nextProps: EditorPartProps = {
       ...this.props.editorPartProps,
-      showTopbarActions: !this.layoutState.isEditorCollapsed,
-      showTopbarToolbar: !this.layoutState.isEditorCollapsed,
+      showHeaderActions: !this.layoutState.isEditorCollapsed,
+      showHeaderToolbar: !this.layoutState.isEditorCollapsed,
       isEditorCollapsed: this.layoutState.isEditorCollapsed,
       onToggleEditorCollapse: this.layoutState.onToggleEditorCollapse,
-      topbarAuxiliaryActionsElements: topbarAuxiliaryActionsElement
-        ? [topbarAuxiliaryActionsElement]
+      headerAuxiliaryActionsElements: headerActionsElement
+        ? [headerActionsElement]
         : [],
       hasLeadingWindowControlsInset:
         !this.props.isPrimarySidebarVisible && !this.props.isAgentSidebarVisible,
@@ -241,8 +241,8 @@ export class WorkbenchContentPartViews {
     const nextProps: ChatViewPaneProps = {
       ...this.props.agentBarProps,
       isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
-      topbarActionsElement: null,
-      topbarTrailingActionsElement: this.resolveAgentTopbarTrailingActionsElement(),
+      headerActionsElement: null,
+      headerTrailingActionsElement: this.resolveAgentHeaderTrailingActionsElement(),
     };
 
     if (!this.agentBarView) {
@@ -253,41 +253,41 @@ export class WorkbenchContentPartViews {
     this.agentBarView.setProps(nextProps);
   }
 
-  private resolveAgentTopbarTrailingActionsElement(): HTMLElement | null {
+  private resolveAgentHeaderTrailingActionsElement(): HTMLElement | null {
     const agentActionsElement =
-      this.props.agentTopbarTrailingActionsElement ?? null;
-    const editorAuxiliaryActionsElement =
+      this.props.agentHeaderTrailingActionsElement ?? null;
+    const editorHeaderActionsElement =
       this.layoutState.isEditorCollapsed
-        ? (this.props.editorTopbarAuxiliaryActionsElement ?? null)
+        ? (this.props.editorHeaderActionsElement ?? null)
         : null;
 
-    if (!agentActionsElement && !editorAuxiliaryActionsElement) {
-      this.syncTopbarSlot(this.agentTopbarPrimaryTrailingActionsHost, null);
-      this.syncTopbarSlot(this.agentTopbarSecondaryTrailingActionsHost, null);
+    if (!agentActionsElement && !editorHeaderActionsElement) {
+      this.syncHeaderSlot(this.agentHeaderPrimaryTrailingActionsHost, null);
+      this.syncHeaderSlot(this.agentHeaderSecondaryTrailingActionsHost, null);
       return null;
     }
 
     if (!agentActionsElement) {
-      this.syncTopbarSlot(this.agentTopbarPrimaryTrailingActionsHost, null);
-      this.syncTopbarSlot(this.agentTopbarSecondaryTrailingActionsHost, null);
-      return editorAuxiliaryActionsElement;
+      this.syncHeaderSlot(this.agentHeaderPrimaryTrailingActionsHost, null);
+      this.syncHeaderSlot(this.agentHeaderSecondaryTrailingActionsHost, null);
+      return editorHeaderActionsElement;
     }
 
-    if (!editorAuxiliaryActionsElement || agentActionsElement === editorAuxiliaryActionsElement) {
-      this.syncTopbarSlot(this.agentTopbarPrimaryTrailingActionsHost, null);
-      this.syncTopbarSlot(this.agentTopbarSecondaryTrailingActionsHost, null);
+    if (!editorHeaderActionsElement || agentActionsElement === editorHeaderActionsElement) {
+      this.syncHeaderSlot(this.agentHeaderPrimaryTrailingActionsHost, null);
+      this.syncHeaderSlot(this.agentHeaderSecondaryTrailingActionsHost, null);
       return agentActionsElement;
     }
 
-    this.syncTopbarSlot(
-      this.agentTopbarPrimaryTrailingActionsHost,
+    this.syncHeaderSlot(
+      this.agentHeaderPrimaryTrailingActionsHost,
       agentActionsElement,
     );
-    this.syncTopbarSlot(
-      this.agentTopbarSecondaryTrailingActionsHost,
-      editorAuxiliaryActionsElement,
+    this.syncHeaderSlot(
+      this.agentHeaderSecondaryTrailingActionsHost,
+      editorHeaderActionsElement,
     );
-    return this.agentTopbarTrailingActionsHost;
+    return this.agentHeaderTrailingActionsHost;
   }
 
   private handleEditorStatusChange = (status: EditorStatusState) => {
@@ -305,7 +305,7 @@ export class WorkbenchContentPartViews {
     });
   }
 
-  private syncTopbarSlot(slotElement: HTMLElement, element: HTMLElement | null) {
+  private syncHeaderSlot(slotElement: HTMLElement, element: HTMLElement | null) {
     const currentElement = slotElement.firstElementChild;
     if (element) {
       if (currentElement !== element) {

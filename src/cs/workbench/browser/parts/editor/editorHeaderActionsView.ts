@@ -9,19 +9,19 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
-const EDITOR_TOPBAR_ADD_MENU_DATA = 'editor-topbar-add';
+const EDITOR_HEADER_ADD_MENU_DATA = 'editor-topbar-add';
 const ADD_MENU_SEARCH_PLACEHOLDER = 'Search add actions';
 const ADD_MENU_SEARCH_ARIA_LABEL = 'Search add actions';
 const ADD_MENU_EMPTY_LABEL = 'No matching actions';
 
-export type EditorTopbarActionsViewProps = {
+export type EditorHeaderActionsViewProps = {
   isEditorCollapsed: boolean;
   isAgentSidebarVisible?: boolean;
   showAgentSidebarToggle?: boolean;
   agentSidebarToggleLabel?: string;
   labels: Pick<
     EditorPartLabels,
-    | 'topbarAddAction'
+    | 'headerAddAction'
     | 'createDraft'
     | 'createBrowser'
     | 'createFile'
@@ -33,14 +33,14 @@ export type EditorTopbarActionsViewProps = {
   onToggleAgentSidebar?: () => void;
 };
 
-export class EditorTopbarActionsView {
-  private props: EditorTopbarActionsViewProps;
+export class EditorHeaderActionsView {
+  private props: EditorHeaderActionsViewProps;
   private readonly actionsView = createActionBarView({
     className: 'topbar-actions',
     ariaRole: 'group',
   });
 
-  constructor(props: EditorTopbarActionsViewProps) {
+  constructor(props: EditorHeaderActionsViewProps) {
     this.props = props;
     this.render();
   }
@@ -49,7 +49,7 @@ export class EditorTopbarActionsView {
     return this.actionsView.getElement();
   }
 
-  setProps(props: EditorTopbarActionsViewProps) {
+  setProps(props: EditorHeaderActionsViewProps) {
     this.props = props;
     this.render();
   }
@@ -113,12 +113,12 @@ export class EditorTopbarActionsView {
   private render() {
     const actionItems: ActionBarItem[] = [
       createDropdownMenuActionViewItem({
-        label: this.props.labels.topbarAddAction,
-        title: this.props.labels.topbarAddAction,
+        label: this.props.labels.headerAddAction,
+        title: this.props.labels.headerAddAction,
         content: createLxIcon('add'),
         buttonClassName: 'editor-topbar-add-btn',
         overlayAlignment: 'end',
-        menuData: EDITOR_TOPBAR_ADD_MENU_DATA,
+        menuData: EDITOR_HEADER_ADD_MENU_DATA,
         menu: this.createAddMenuItems(''),
         menuHeader: createFilterMenuHeader({
           placeholder: ADD_MENU_SEARCH_PLACEHOLDER,
@@ -164,6 +164,6 @@ export class EditorTopbarActionsView {
   }
 }
 
-export function createEditorTopbarActionsView(props: EditorTopbarActionsViewProps) {
-  return new EditorTopbarActionsView(props);
+export function createEditorHeaderActionsView(props: EditorHeaderActionsViewProps) {
+  return new EditorHeaderActionsView(props);
 }

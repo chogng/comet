@@ -12,8 +12,8 @@ const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 export type ChatViewPaneProps = ChatWidgetProps & {
 	readonly isPrimarySidebarVisible?: boolean;
-	readonly topbarActionsElement?: HTMLElement | null;
-	readonly topbarTrailingActionsElement?: HTMLElement | null;
+	readonly headerActionsElement?: HTMLElement | null;
+	readonly headerTrailingActionsElement?: HTMLElement | null;
 };
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -32,19 +32,19 @@ export class ChatViewPane {
 		'section',
 		'agentbar',
 	);
-	private readonly topbarElement = createElement(
+	private readonly headerElement = createElement(
 		'div',
 		'agentbar-topbar',
 	);
-	private readonly topbarActionsElement = createElement(
+	private readonly headerActionsContainerElement = createElement(
 		'div',
 		'agentbar-topbar-actions',
 	);
-	private readonly topbarLeadingActionsElement = createElement(
+	private readonly headerLeadingActionsElement = createElement(
 		'div',
 		'agentbar-topbar-leading',
 	);
-	private readonly topbarTrailingActionsElement = createElement(
+	private readonly headerTrailingActionsElement = createElement(
 		'div',
 		'agentbar-topbar-trailing',
 	);
@@ -65,28 +65,28 @@ export class ChatViewPane {
 				'--window-controls-width',
 				`${WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx}px`,
 			);
-			this.topbarElement.append(this.leadingWindowControlsSpacer);
+			this.headerElement.append(this.leadingWindowControlsSpacer);
 		}
-		this.topbarActionsElement.append(
-			this.topbarLeadingActionsElement,
-			this.topbarTrailingActionsElement,
+		this.headerActionsContainerElement.append(
+			this.headerLeadingActionsElement,
+			this.headerTrailingActionsElement,
 		);
-		this.topbarElement.append(this.topbarActionsElement);
-		this.element.append(this.topbarElement, this.chatWidget.getElement());
-		this.renderTopbar(props);
+		this.headerElement.append(this.headerActionsContainerElement);
+		this.element.append(this.headerElement, this.chatWidget.getElement());
+		this.renderHeader(props);
 	}
 
 	getElement() {
 		return this.element;
 	}
 
-	getTopbarElement() {
-		return this.topbarElement;
+	getHeaderElement() {
+		return this.headerElement;
 	}
 
 	setProps(props: ChatViewPaneProps) {
 		this.chatWidget.setProps(props);
-		this.renderTopbar(props);
+		this.renderHeader(props);
 	}
 
 	dispose() {
@@ -95,30 +95,30 @@ export class ChatViewPane {
 		this.element.replaceChildren();
 	}
 
-	private renderTopbar(props: ChatViewPaneProps) {
-		this.syncTopbarSlot(
-			this.topbarLeadingActionsElement,
-			props.topbarActionsElement ?? null,
+	private renderHeader(props: ChatViewPaneProps) {
+		this.syncHeaderSlot(
+			this.headerLeadingActionsElement,
+			props.headerActionsElement ?? null,
 		);
-		this.syncTopbarSlot(
-			this.topbarTrailingActionsElement,
-			props.topbarTrailingActionsElement ?? null,
+		this.syncHeaderSlot(
+			this.headerTrailingActionsElement,
+			props.headerTrailingActionsElement ?? null,
 		);
 	}
 
-	private syncTopbarSlot(
+	private syncHeaderSlot(
 		slotElement: HTMLElement,
-		topbarActionsElement: HTMLElement | null,
+		headerActionsElement: HTMLElement | null,
 	) {
-		const currentTopbarActionsElement = slotElement.firstElementChild;
-		if (topbarActionsElement) {
-			if (currentTopbarActionsElement !== topbarActionsElement) {
-				slotElement.replaceChildren(topbarActionsElement);
+		const currentHeaderActionsElement = slotElement.firstElementChild;
+		if (headerActionsElement) {
+			if (currentHeaderActionsElement !== headerActionsElement) {
+				slotElement.replaceChildren(headerActionsElement);
 			}
 			return;
 		}
 
-		if (currentTopbarActionsElement) {
+		if (currentHeaderActionsElement) {
 			slotElement.replaceChildren();
 		}
 	}

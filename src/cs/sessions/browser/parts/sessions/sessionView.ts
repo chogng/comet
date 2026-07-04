@@ -12,7 +12,7 @@ import 'cs/sessions/browser/parts/media/sessionView.css';
 
 export type SessionViewProps = {
 	chatProps: SessionChatViewProps;
-	topbarTrailingActionsElement?: HTMLElement | null;
+	headerTrailingActionsElement?: HTMLElement | null;
 };
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -35,7 +35,7 @@ export class SessionView {
 
 	constructor(props: SessionViewProps) {
 		this.headerView = createSessionHeaderView({
-			trailingActionsElement: props.topbarTrailingActionsElement ?? null,
+			trailingActionsElement: props.headerTrailingActionsElement ?? null,
 		});
 		this.chatView = createSessionChatView(props.chatProps);
 		this.contentElement.append(this.chatView.getElement());
@@ -52,7 +52,7 @@ export class SessionView {
 		}
 
 		this.headerView.setProps({
-			trailingActionsElement: props.topbarTrailingActionsElement ?? null,
+			trailingActionsElement: props.headerTrailingActionsElement ?? null,
 		});
 		this.chatView.setProps(props.chatProps);
 	}

@@ -24,7 +24,7 @@ import 'cs/workbench/browser/parts/editor/media/editorBrowserLibraryPanel.css';
 import 'cs/workbench/browser/parts/editor/media/tabsTitleControl.css';
 
 export type EditorPartLabels = {
-  topbarAddAction: string;
+  headerAddAction: string;
   createDraft: string;
   createBrowser: string;
   createFile: string;
@@ -127,15 +127,15 @@ export type EditorPartBaseProps = {
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
-  showTopbarActions?: boolean;
-  showTopbarToolbar?: boolean;
+  showHeaderActions?: boolean;
+  showHeaderToolbar?: boolean;
   isEditorCollapsed?: boolean;
   onToggleEditorCollapse?: () => void;
   isAgentSidebarVisible?: boolean;
   showAgentSidebarToggle?: boolean;
   agentSidebarToggleLabel?: string;
   onToggleAgentSidebar?: () => void;
-  topbarAuxiliaryActionsElements?: readonly HTMLElement[];
+  headerAuxiliaryActionsElements?: readonly HTMLElement[];
   hasLeadingWindowControlsInset?: boolean;
   onStatusChange?: (status: EditorStatusState) => void;
 };
@@ -158,8 +158,8 @@ export class EditorPartView {
     return this.element;
   }
 
-  getTopbarElement() {
-    return this.groupView.getTopbarElement();
+  getHeaderElement() {
+    return this.groupView.getHeaderElement();
   }
 
   executeActiveDraftCommand(commandId: DraftEditorCommandId) {

@@ -63,7 +63,7 @@ import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPa
 import { ToastOverlayWindowView } from 'cs/workbench/browser/toastOverlayWindow';
 import { createWorkbenchContentPartViews } from 'cs/workbench/browser/workbenchContentPartViews';
 import { showWorkbenchTextInputModal } from 'cs/workbench/browser/workbenchEditorModals';
-import { createEditorTopbarActionsView } from 'cs/workbench/browser/parts/editor/editorTopbarActionsView';
+import { createEditorHeaderActionsView } from 'cs/workbench/browser/parts/editor/editorHeaderActionsView';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
 import { registerToastBridge } from 'cs/base/browser/ui/toast/toast';
@@ -674,13 +674,13 @@ class WorkbenchHost {
   private retiredWorkbenchContentPartViews:
     | ReturnType<typeof createSessionWorkbenchContentPartViews>
     | null = null;
-  private readonly auxiliaryEditorTopbarActionsView = createEditorTopbarActionsView({
+  private readonly editorHeaderActionsView = createEditorHeaderActionsView({
     isEditorCollapsed: true,
     isAgentSidebarVisible: false,
     showAgentSidebarToggle: false,
     agentSidebarToggleLabel: '',
     labels: {
-      topbarAddAction: '',
+      headerAddAction: '',
       createDraft: '',
       createBrowser: '',
       createFile: '',
@@ -788,7 +788,7 @@ class WorkbenchHost {
     this.workbenchContentPartViews?.dispose();
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
-    this.auxiliaryEditorTopbarActionsView.dispose();
+    this.editorHeaderActionsView.dispose();
     this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
     this.settingsView = null;
@@ -1167,7 +1167,7 @@ class WorkbenchHost {
     sidebarFooterActionsProps: ReturnType<
       typeof createSidebarFooterTitlebarActionsProps
     >;
-    editorTopbarAuxiliaryActionsElement?: HTMLElement | null;
+    editorHeaderActionsElement?: HTMLElement | null;
     editorPartProps: EditorPartProps;
   }) {
     this.retiredWorkbenchContentPartViews = null;
@@ -1184,8 +1184,8 @@ class WorkbenchHost {
       sessionChatProps: props.sessionChatProps,
       editorPartProps: props.editorPartProps,
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-      sessionTopbarTrailingActionsElement:
-        props.editorTopbarAuxiliaryActionsElement,
+      editorHeaderActionsElement:
+        props.editorHeaderActionsElement,
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
@@ -1256,7 +1256,7 @@ class WorkbenchHost {
       editorPartProps: props.editorPartProps,
       settingsContentElement: this.settingsView.getElement(),
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-      sessionTopbarTrailingActionsElement: null,
+      editorHeaderActionsElement: null,
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
@@ -1619,6 +1619,7 @@ class WorkbenchHost {
         isSelectionModeEnabled: selectionModePhase !== 'off',
         selectedArticleOrderLookup,
         exportableArticles,
+        createBrowserTab: handleCreateBrowserTab,
         activeDraftExport,
         onLibraryDocumentUpserted:
           libraryModelInstance.upsertDocumentSummary,
@@ -1781,12 +1782,12 @@ class WorkbenchHost {
       nativeHost,
       ...editorBrowserToolbarActions,
     };
-    this.auxiliaryEditorTopbarActionsView.setProps({
+    this.editorHeaderActionsView.setProps({
       isEditorCollapsed,
       isAgentSidebarVisible: false,
       showAgentSidebarToggle: false,
       labels: {
-        topbarAddAction: contentAwareEditorPartProps.labels.topbarAddAction,
+        headerAddAction: contentAwareEditorPartProps.labels.headerAddAction,
         createDraft: contentAwareEditorPartProps.labels.createDraft,
         createBrowser: contentAwareEditorPartProps.labels.createBrowser,
         createFile: contentAwareEditorPartProps.labels.createFile,
@@ -1936,6 +1937,7 @@ class WorkbenchHost {
         isSelectionModeEnabled: selectionModePhase !== 'off',
         selectedArticleOrderLookup,
         exportableArticles,
+        createBrowserTab: handleCreateBrowserTab,
         activeDraftExport,
         onLibraryUpdated: refreshLibrary,
       },
@@ -2330,8 +2332,8 @@ class WorkbenchHost {
           onApplyLayoutFlow: handleApplyLayoutFlow,
           onOpenSettings: toggleWorkbenchSettings,
         }),
-        editorTopbarAuxiliaryActionsElement:
-          this.auxiliaryEditorTopbarActionsView.getElement(),
+        editorHeaderActionsElement:
+          this.editorHeaderActionsView.getElement(),
         editorPartProps: {
           ...contentAwareEditorPartProps,
           isAgentSidebarVisible: false,

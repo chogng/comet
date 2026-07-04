@@ -134,7 +134,7 @@ export function createEditorPartProps({
 }: CreateEditorPartPropsParams): EditorPartBaseProps {
   return {
     labels: {
-      topbarAddAction: ui.editorTopbarAddAction,
+      headerAddAction: ui.editorTopbarAddAction,
       createDraft: ui.editorCreateDraft,
       createBrowser: ui.editorCreateBrowser,
       createFile: ui.editorCreateFile,
@@ -251,8 +251,8 @@ export function createEditorPartProps({
     onDraftDocumentChange,
     onSetEditorViewState,
     onDeleteEditorViewState,
-    showTopbarActions: true,
-    showTopbarToolbar: true,
+    showHeaderActions: true,
+    showHeaderToolbar: true,
     isEditorCollapsed: false,
     onToggleEditorCollapse: () => {},
   };

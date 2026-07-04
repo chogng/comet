@@ -37,7 +37,7 @@ import {
   resolveActiveBrowserMetadata,
 } from 'cs/workbench/browser/parts/editor/editorModeToolbarModel';
 import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
-import { createEditorTopbarActionsView } from 'cs/workbench/browser/parts/editor/editorTopbarActionsView';
+import { createEditorHeaderActionsView } from 'cs/workbench/browser/parts/editor/editorHeaderActionsView';
 import { createEditorGroupModel } from 'cs/workbench/browser/parts/editor/editorGroupModel';
 import type { EditorGroupModel } from 'cs/workbench/browser/parts/editor/editorGroupModel';
 import {
@@ -106,15 +106,15 @@ export type EditorGroupViewProps = {
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
-  showTopbarActions?: boolean;
-  showTopbarToolbar?: boolean;
+  showHeaderActions?: boolean;
+  showHeaderToolbar?: boolean;
   isEditorCollapsed?: boolean;
   onToggleEditorCollapse?: () => void;
   isAgentSidebarVisible?: boolean;
   showAgentSidebarToggle?: boolean;
   agentSidebarToggleLabel?: string;
   onToggleAgentSidebar?: () => void;
-  topbarAuxiliaryActionsElements?: readonly HTMLElement[];
+  headerAuxiliaryActionsElements?: readonly HTMLElement[];
   hasLeadingWindowControlsInset?: boolean;
   onStatusChange?: (status: EditorStatusState) => void;
 };
@@ -485,13 +485,13 @@ export class EditorGroupView {
   private readonly toolbarElement = createElement('div', 'editor-toolbar');
   private readonly tabsElement = createElement('div', 'editor-topbar-tabs');
   private readonly actionsElement = createElement('div', 'editor-topbar-actions');
-  private readonly topbarActionsView = createEditorTopbarActionsView({
+  private readonly headerActionsView = createEditorHeaderActionsView({
     isEditorCollapsed: false,
     isAgentSidebarVisible: false,
     showAgentSidebarToggle: false,
     agentSidebarToggleLabel: '',
     labels: {
-      topbarAddAction: '',
+      headerAddAction: '',
       createDraft: '',
       createBrowser: '',
       createFile: '',
@@ -564,7 +564,7 @@ export class EditorGroupView {
     return this.element;
   }
 
-  getTopbarElement() {
+  getHeaderElement() {
     this.element.classList.add('has-external-topbar');
     return this.headerElement;
   }
@@ -609,7 +609,7 @@ export class EditorGroupView {
   dispose() {
     this.browserLibraryPanel.dispose();
     this.titleAreaControl.dispose();
-    this.topbarActionsView.dispose();
+    this.headerActionsView.dispose();
     this.modeToolbarHost.dispose();
     this.saveActivePaneViewState();
     this.disposeAllPaneInstances();
@@ -666,13 +666,13 @@ export class EditorGroupView {
       'has-leading-window-controls-inset',
       Boolean(this.props.hasLeadingWindowControlsInset),
     );
-    this.topbarActionsView.setProps({
+    this.headerActionsView.setProps({
       isEditorCollapsed: Boolean(this.props.isEditorCollapsed),
       isAgentSidebarVisible: Boolean(this.props.isAgentSidebarVisible),
       showAgentSidebarToggle: Boolean(this.props.showAgentSidebarToggle),
       agentSidebarToggleLabel: this.props.agentSidebarToggleLabel ?? '',
       labels: {
-        topbarAddAction: this.props.labels.topbarAddAction,
+        headerAddAction: this.props.labels.headerAddAction,
         createDraft: this.props.labels.createDraft,
         createBrowser: this.props.labels.createBrowser,
         createFile: this.props.labels.createFile,
@@ -700,9 +700,9 @@ export class EditorGroupView {
       onPdfNoteSelection: this.handlePdfNoteSelection,
     }));
     this.syncToolbarMode(group.activeTab);
-    this.syncTopbarActions(
-      this.props.showTopbarActions ? this.topbarActionsView.getElement() : null,
-      this.props.topbarAuxiliaryActionsElements ?? [],
+    this.syncHeaderActions(
+      this.props.showHeaderActions ? this.headerActionsView.getElement() : null,
+      this.props.headerAuxiliaryActionsElements ?? [],
     );
 
     this.contentElement.className = 'editor-content';
@@ -849,35 +849,35 @@ export class EditorGroupView {
     this.focusPrimaryInput();
   }
 
-  private syncTopbarActions(
-    topbarActionsElement: HTMLElement | null,
-    topbarAuxiliaryActionsElements: readonly HTMLElement[],
+  private syncHeaderActions(
+    headerActionsElement: HTMLElement | null,
+    headerAuxiliaryActionsElements: readonly HTMLElement[],
   ) {
-    const nextTopbarActionsElements: HTMLElement[] = [];
-    for (const element of topbarAuxiliaryActionsElements) {
-      if (!element || nextTopbarActionsElements.includes(element)) {
+    const nextHeaderActionsElements: HTMLElement[] = [];
+    for (const element of headerAuxiliaryActionsElements) {
+      if (!element || nextHeaderActionsElements.includes(element)) {
         continue;
       }
-      nextTopbarActionsElements.push(element);
+      nextHeaderActionsElements.push(element);
     }
     if (
-      topbarActionsElement &&
-      !nextTopbarActionsElements.includes(topbarActionsElement)
+      headerActionsElement &&
+      !nextHeaderActionsElements.includes(headerActionsElement)
     ) {
-      nextTopbarActionsElements.push(topbarActionsElement);
+      nextHeaderActionsElements.push(headerActionsElement);
     }
 
-    const currentTopbarActionsElements = Array.from(this.actionsElement.children);
+    const currentHeaderActionsElements = Array.from(this.actionsElement.children);
     const hasSameOrder =
-      currentTopbarActionsElements.length === nextTopbarActionsElements.length &&
-      currentTopbarActionsElements.every(
-        (element, index) => element === nextTopbarActionsElements[index],
+      currentHeaderActionsElements.length === nextHeaderActionsElements.length &&
+      currentHeaderActionsElements.every(
+        (element, index) => element === nextHeaderActionsElements[index],
       );
     if (hasSameOrder) {
       return;
     }
 
-    this.actionsElement.replaceChildren(...nextTopbarActionsElements);
+    this.actionsElement.replaceChildren(...nextHeaderActionsElements);
   }
 
   private syncTopbarToolbar(topbarToolbarElement: HTMLElement | null) {
@@ -906,7 +906,7 @@ export class EditorGroupView {
   }
 
   private resolveToolbarElement() {
-    if (!this.props.showTopbarToolbar) {
+    if (!this.props.showHeaderToolbar) {
       return null;
     }
 

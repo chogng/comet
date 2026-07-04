@@ -228,10 +228,10 @@ function createTopbarActionsElement() {
   return host;
 }
 
-test('agent bar topbar mounts the provided leading actions element', () => {
+test('agent bar header mounts the provided leading actions element', () => {
   let toggleCount = 0;
-  const topbarActionsElement = createTopbarActionsElement();
-  topbarActionsElement
+  const headerActionsElement = createTopbarActionsElement();
+  headerActionsElement
     .querySelector('.titlebar-primary-sidebar-toggle-btn')
     ?.addEventListener('click', () => {
       toggleCount += 1;
@@ -239,7 +239,7 @@ test('agent bar topbar mounts the provided leading actions element', () => {
   const agentBar = createChatViewPane({
     ...createProps(),
     isPrimarySidebarVisible: false,
-    topbarActionsElement,
+    headerActionsElement,
   });
   const element = agentBar.getElement();
   document.body.append(element);

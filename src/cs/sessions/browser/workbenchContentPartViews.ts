@@ -32,7 +32,7 @@ export type SessionWorkbenchContentPartViewsProps = {
 	settingsNavigationElement?: HTMLElement | null;
 	settingsContentElement?: HTMLElement | null;
 	sidebarFooterActionsElement: HTMLElement;
-	sessionTopbarTrailingActionsElement?: HTMLElement | null;
+	editorHeaderActionsElement?: HTMLElement | null;
 };
 
 export class SessionWorkbenchContentPartViews {
@@ -154,8 +154,10 @@ export class SessionWorkbenchContentPartViews {
 
 		const nextProps = {
 			chatProps: this.props.sessionChatProps,
-			topbarTrailingActionsElement:
-				this.props.sessionTopbarTrailingActionsElement ?? null,
+			headerTrailingActionsElement:
+				this.props.isEditorVisible
+					? null
+					: (this.props.editorHeaderActionsElement ?? null),
 		};
 
 		if (!this.sessionsView) {
@@ -174,11 +176,14 @@ export class SessionWorkbenchContentPartViews {
 
 		const nextProps: EditorPartProps = {
 			...this.props.editorPartProps,
-			showTopbarActions: true,
-			showTopbarToolbar: true,
+			showHeaderActions: false,
+			showHeaderToolbar: true,
 			isEditorCollapsed: false,
 			isAgentSidebarVisible: false,
 			showAgentSidebarToggle: false,
+			headerAuxiliaryActionsElements: this.props.editorHeaderActionsElement
+				? [this.props.editorHeaderActionsElement]
+				: [],
 			hasLeadingWindowControlsInset: !this.props.isPrimarySidebarVisible,
 			onStatusChange: this.handleEditorStatusChange,
 		};

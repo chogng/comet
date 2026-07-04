@@ -19,7 +19,7 @@ let editorPaneDescriptors: typeof import('cs/workbench/browser/parts/editor/pane
 let TextSelection: typeof import('prosemirror-state').TextSelection;
 
 const labels = {
-  topbarAddAction: 'Add',
+  headerAddAction: 'Add',
   createDraft: 'Draft',
   createBrowser: 'Browser',
   createFile: 'File',

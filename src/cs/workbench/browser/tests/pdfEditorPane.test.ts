@@ -21,7 +21,7 @@ type TestViewPartProps = {
 };
 
 const labels = {
-  topbarAddAction: 'Add',
+  headerAddAction: 'Add',
   createDraft: 'Draft',
   createBrowser: 'Browser',
   createFile: 'File',

@@ -14,6 +14,7 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 let cleanupDomEnvironment: (() => void) | null = null;
 let createWorkbenchLayoutView: typeof import('cs/workbench/browser/workbench').createWorkbenchLayoutView;
 let createWorkbenchContentPartViews: typeof import('cs/workbench/browser/workbenchContentPartViews').createWorkbenchContentPartViews;
+let createSessionWorkbenchContentPartViews: typeof import('cs/sessions/browser/workbenchContentPartViews').createSessionWorkbenchContentPartViews;
 let getWorkbenchLayoutStateSnapshot: typeof import('cs/workbench/browser/layout').getWorkbenchLayoutStateSnapshot;
 let setPrimarySidebarVisible: typeof import('cs/workbench/browser/layout').setPrimarySidebarVisible;
 let setAgentSidebarVisible: typeof import('cs/workbench/browser/layout').setAgentSidebarVisible;
@@ -36,8 +37,8 @@ type RawWorkbenchLayoutViewProps = {
   sidebarProps: any;
   agentBarProps: any;
   sidebarFooterActionsElement: HTMLElement;
-  editorTopbarAuxiliaryActionsElement: HTMLElement;
-  agentTopbarTrailingActionsElement?: HTMLElement | null;
+  editorHeaderActionsElement: HTMLElement;
+  agentHeaderTrailingActionsElement?: HTMLElement | null;
   editorPartProps: any;
   partViews: ReturnType<typeof createWorkbenchContentPartViews> | null;
 };
@@ -78,9 +79,9 @@ function materializeWorkbenchLayoutViewProps(
     agentBarProps: props.agentBarProps,
     editorPartProps: props.editorPartProps,
     sidebarFooterActionsElement: props.sidebarFooterActionsElement,
-    editorTopbarAuxiliaryActionsElement: props.editorTopbarAuxiliaryActionsElement,
-    agentTopbarTrailingActionsElement:
-      props.agentTopbarTrailingActionsElement ?? null,
+    editorHeaderActionsElement: props.editorHeaderActionsElement,
+    agentHeaderTrailingActionsElement:
+      props.agentHeaderTrailingActionsElement ?? null,
   });
 
   nextPartViews.setProps({
@@ -93,9 +94,9 @@ function materializeWorkbenchLayoutViewProps(
     agentBarProps: props.agentBarProps,
     editorPartProps: props.editorPartProps,
     sidebarFooterActionsElement: props.sidebarFooterActionsElement,
-    editorTopbarAuxiliaryActionsElement: props.editorTopbarAuxiliaryActionsElement,
-    agentTopbarTrailingActionsElement:
-      props.agentTopbarTrailingActionsElement ?? null,
+    editorHeaderActionsElement: props.editorHeaderActionsElement,
+    agentHeaderTrailingActionsElement:
+      props.agentHeaderTrailingActionsElement ?? null,
   });
 
   props.partViews = nextPartViews;
@@ -312,15 +313,15 @@ function createNativeHostService(): INativeHostService {
 }
 
 function createWorkbenchLayoutViewProps() {
-  const auxiliaryEditorTopbarActionsElement = document.createElement('div');
-  auxiliaryEditorTopbarActionsElement.className = 'topbar-actions actionbar is-horizontal';
+  const editorHeaderActionsElement = document.createElement('div');
+  editorHeaderActionsElement.className = 'topbar-actions actionbar is-horizontal';
   const actionsContainer = document.createElement('div');
   actionsContainer.className = 'actionbar-actions-container';
   const toggleButton = document.createElement('button');
   toggleButton.className = 'actionbar-action editor-topbar-toggle-editor-btn';
   toggleButton.setAttribute('aria-label', 'Expand editor');
   actionsContainer.append(toggleButton);
-  auxiliaryEditorTopbarActionsElement.append(actionsContainer);
+  editorHeaderActionsElement.append(actionsContainer);
   const sidebarLabels = {
     untitled: 'Untitled',
     unknown: 'Unknown',
@@ -500,10 +501,10 @@ function createWorkbenchLayoutViewProps() {
       settingsLabel: 'Settings',
     }),
     partViews: null,
-    editorTopbarAuxiliaryActionsElement: auxiliaryEditorTopbarActionsElement,
+    editorHeaderActionsElement,
     editorPartProps: {
       labels: {
-        topbarAddAction: 'Add',
+        headerAddAction: 'Add',
         createDraft: 'Draft',
         createBrowser: 'Browser',
         createFile: 'Read',
@@ -641,6 +642,7 @@ before(async () => {
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({ createWorkbenchLayoutView } = await import('cs/workbench/browser/workbench'));
   ({ createWorkbenchContentPartViews } = await import('cs/workbench/browser/workbenchContentPartViews'));
+  ({ createSessionWorkbenchContentPartViews } = await import('cs/sessions/browser/workbenchContentPartViews'));
   ({
     getWorkbenchLayoutStateSnapshot,
     setPrimarySidebarVisible,
@@ -778,6 +780,70 @@ test('WorkbenchLayoutView collapses editor and keeps expand action out of the si
     );
   } finally {
     view.dispose();
+  }
+});
+
+test('SessionWorkbenchContentPartViews keeps editor actions in session header only when editor is collapsed', () => {
+  const props = createWorkbenchLayoutViewProps();
+  const partViews = createSessionWorkbenchContentPartViews({
+    mode: 'content',
+    isPrimarySidebarVisible: false,
+    isEditorVisible: true,
+    sidebarProps: props.sidebarProps,
+    sessionChatProps: props.agentBarProps,
+    editorPartProps: props.editorPartProps,
+    sidebarFooterActionsElement: props.sidebarFooterActionsElement,
+    editorHeaderActionsElement: props.editorHeaderActionsElement,
+  });
+  const host = document.createElement('div');
+
+  const syncHost = () => {
+    const elements = [
+      partViews.getSessionsElement(),
+      partViews.getEditorElement(),
+    ].filter((element): element is HTMLElement => element instanceof HTMLElement);
+    host.replaceChildren(...elements);
+  };
+
+  try {
+    syncHost();
+
+    const expandedHeader = host.querySelector('.session-header');
+    assert(expandedHeader instanceof HTMLElement);
+    assert.equal(expandedHeader.hidden, true);
+    assert.equal(
+      host.querySelector('.session-header .editor-topbar-toggle-editor-btn'),
+      null,
+    );
+    assert.equal(
+      host.querySelectorAll('.editor-topbar .editor-topbar-toggle-editor-btn')
+        .length,
+      1,
+    );
+
+    partViews.setProps({
+      mode: 'content',
+      isPrimarySidebarVisible: false,
+      isEditorVisible: false,
+      sidebarProps: props.sidebarProps,
+      sessionChatProps: props.agentBarProps,
+      editorPartProps: props.editorPartProps,
+      sidebarFooterActionsElement: props.sidebarFooterActionsElement,
+      editorHeaderActionsElement: props.editorHeaderActionsElement,
+    });
+    syncHost();
+
+    const collapsedHeader = host.querySelector('.session-header');
+    assert(collapsedHeader instanceof HTMLElement);
+    assert.equal(collapsedHeader.hidden, false);
+    const headerToggle = host.querySelector(
+      '.session-header .editor-topbar-toggle-editor-btn',
+    );
+    assert(headerToggle instanceof HTMLButtonElement);
+    assert.equal(headerToggle.getAttribute('aria-label'), 'Expand editor');
+    assert.equal(host.querySelector('.editor-topbar'), null);
+  } finally {
+    partViews.dispose();
   }
 });
 

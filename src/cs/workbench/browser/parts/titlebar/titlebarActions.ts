@@ -1,6 +1,6 @@
 import type { LocaleMessages } from 'language/locales';
 import type { EditorPartLabels, EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { EditorTopbarActionsViewProps } from 'cs/workbench/browser/parts/editor/editorTopbarActionsView';
+import type { EditorHeaderActionsViewProps } from 'cs/workbench/browser/parts/editor/editorHeaderActionsView';
 import type { SidebarFooterActionsProps, SidebarFooterLayoutMode } from 'cs/workbench/browser/parts/sidebar/sidebarFooterActions';
 import type { TitlebarLeadingActionsProps } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
@@ -69,7 +69,7 @@ export function createEditorTitlebarActionsProps(params: {
   onOpenEditor: EditorOpenHandler;
   onToggleEditorCollapse: () => void;
   onToggleAgentSidebar: () => void;
-}): EditorTopbarActionsViewProps {
+}): EditorHeaderActionsViewProps {
   const {
     ui,
     editorPartProps,
@@ -89,7 +89,7 @@ export function createEditorTitlebarActionsProps(params: {
       isAgentSidebarVisible,
     ),
     labels: {
-      topbarAddAction: editorPartProps.labels.topbarAddAction,
+      headerAddAction: editorPartProps.labels.headerAddAction,
       createDraft: editorPartProps.labels.createDraft,
       createBrowser: editorPartProps.labels.createBrowser,
       createFile: editorPartProps.labels.createFile,
