@@ -24,8 +24,9 @@ import {
   type LlmServiceTier,
 } from 'ls/workbench/services/llm/registry';
 import type { LlmProviderId } from 'ls/base/parts/sandbox/common/sandboxTypes';
+import { AgentChatThreadWidget } from 'ls/workbench/contrib/chat/browser/chatListWidget';
 import 'ls/workbench/browser/parts/agentbar/media/agentbar.css';
-import 'ls/workbench/contrib/agentChat/browser/media/agentChatWidget.css';
+import 'ls/workbench/contrib/chat/browser/media/chat.css';
 
 type AgentModelDropdownOption = DropdownOption & {
   providerId?: LlmProviderId;
@@ -90,6 +91,7 @@ const AGENTBAR_TOPBAR_HISTORY_MENU_DATA = 'agentbar-topbar-history';
 export class AgentChatWidget {
   private props: AgentChatWidgetProps;
   private readonly element = createElement('div', 'agentbar-content');
+  private readonly threadWidget: AgentChatThreadWidget;
   private readonly renderDisposables = new Set<() => void>();
   private modelDropdownActionViewItem: DropdownMenuActionViewItem | null = null;
   private transientActiveLlmModelOptionValue: string | null = null;
@@ -97,6 +99,11 @@ export class AgentChatWidget {
 
   constructor(props: AgentChatWidgetProps) {
     this.props = props;
+    this.threadWidget = new AgentChatThreadWidget({
+      onApplyPatch: (messageId) => {
+        this.props.onApplyPatch(messageId);
+      },
+    });
     this.render();
   }
 
@@ -113,6 +120,7 @@ export class AgentChatWidget {
 
   dispose() {
     this.disposeRenderDisposables();
+    this.threadWidget.dispose();
     this.element.replaceChildren();
   }
 
@@ -165,149 +173,9 @@ export class AgentChatWidget {
       error.textContent = this.props.errorMessage;
       shell.append(error);
     }
-    shell.append(this.renderThread(), this.renderComposer(canSend));
+    this.threadWidget.setMessages(this.props.messages);
+    shell.append(this.threadWidget.getElement(), this.renderComposer(canSend));
     return shell;
-  }
-
-  private renderThread() {
-    const thread = createElement(
-      'div',
-      [
-        'agentbar-thread',
-        this.props.messages.length === 0 ? 'is-empty' : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
-    );
-    for (const message of this.props.messages) {
-      if (message.role === 'user') {
-        const item = createElement(
-          'div',
-          'agentbar-message agentbar-message-user',
-        );
-        const text = createElement('p', 'agentbar-message-text');
-        text.textContent = message.content;
-        item.append(text);
-        thread.append(item);
-        continue;
-      }
-
-      const item = createElement(
-        'div',
-        'agentbar-message agentbar-message-assistant',
-      );
-      const body = createElement('div', 'agentbar-message-body');
-      const header = createElement('div', 'agentbar-result-header');
-      const strong = document.createElement('strong');
-      strong.textContent = localize('assistantSidebarAnswerTitle', "Answer");
-      const pill = createElement(
-        'span',
-        `agentbar-mode-pill ${message.result.rerankApplied ? 'is-enabled' : 'is-disabled'}`,
-      );
-      pill.textContent = message.result.rerankApplied
-        ? localize('assistantSidebarRerankOn', "Rerank on")
-        : localize('assistantSidebarRerankOff', "Rerank fallback");
-      header.append(strong, pill);
-      const answer = createElement('p', 'agentbar-answer');
-      answer.textContent = message.content;
-      body.append(header, answer);
-
-      if (message.result.evidence.length > 0) {
-        const evidence = createElement('div', 'agentbar-evidence');
-        const title = document.createElement('strong');
-        title.textContent = localize('assistantSidebarEvidenceTitle', "Evidence");
-        const list = createElement('ul', 'agentbar-evidence-list');
-        for (const evidenceItem of message.result.evidence) {
-          const li = createElement('li', 'agentbar-evidence-item');
-          const titleNode = createElement('strong', 'agentbar-evidence-title');
-          titleNode.textContent = `[${evidenceItem.rank}] ${evidenceItem.title}`;
-          const meta = createElement('p', 'agentbar-evidence-meta');
-          meta.textContent = [evidenceItem.journalTitle, evidenceItem.publishedAt]
-            .filter(Boolean)
-            .join(' | ');
-          const text = createElement('p', 'agentbar-evidence-text');
-          text.textContent = evidenceItem.excerpt;
-          li.append(titleNode, meta, text);
-          list.append(li);
-        }
-        evidence.append(title, list);
-        body.append(evidence);
-      }
-
-      const patchProposal = this.renderPatchProposal(message);
-      if (patchProposal) {
-        body.append(patchProposal);
-      }
-
-      item.append(body);
-      thread.append(item);
-    }
-    return thread;
-  }
-
-  private renderPatchProposal(
-    message: Extract<AssistantChatMessage, { role: 'assistant' }>,
-  ) {
-    const patchProposal = message.patchProposal ?? null;
-    if (!patchProposal) {
-      return null;
-    }
-
-    const card = createElement('div', 'agentbar-patch-card');
-    const header = createElement('div', 'agentbar-patch-header');
-    const label = createElement('strong', 'agentbar-patch-label');
-    label.textContent = patchProposal.patch.label;
-    header.append(label);
-
-    if (patchProposal.isApplied) {
-      const status = createElement('span', 'agentbar-mode-pill is-enabled');
-      status.textContent = localize('assistantSidebarPatchApplied', "Applied");
-      header.append(status);
-    } else if (patchProposal.requiresCustomExecutor) {
-      const status = createElement('span', 'agentbar-mode-pill is-disabled');
-      status.textContent = localize(
-        'assistantSidebarPatchRequiresExecutor',
-        "Custom executor required",
-      );
-      header.append(status);
-    }
-
-    card.append(header);
-
-    if (patchProposal.patch.summary) {
-      const summary = createElement('p', 'agentbar-patch-summary');
-      summary.textContent = patchProposal.patch.summary;
-      card.append(summary);
-    }
-
-    const errorText = patchProposal.validationError || patchProposal.applyError;
-    if (errorText) {
-      const error = createElement('p', 'agentbar-patch-error');
-      error.textContent = errorText;
-      card.append(error);
-    }
-
-    if (
-      patchProposal.accepted &&
-      !patchProposal.requiresCustomExecutor &&
-      !patchProposal.validationError &&
-      !patchProposal.isApplied
-    ) {
-      const footer = createElement('div', 'agentbar-patch-footer');
-      const applyButton = createElement(
-        'button',
-        'agentbar-patch-btn btn-base btn-secondary btn-sm',
-      );
-      applyButton.type = 'button';
-      applyButton.textContent = localize('assistantSidebarPatchApply', "Apply patch");
-      applyButton.addEventListener('click', () =>
-        this.props.onApplyPatch(message.id),
-      );
-      footer.append(applyButton);
-      card.append(footer);
-    }
-
-    return card;
   }
 
   private createModelDropdownActionViewItem() {

@@ -1,13 +1,13 @@
 import type { AssistantModelSnapshot } from 'ls/workbench/browser/assistantModel';
 import type { DropdownOption } from 'ls/base/browser/ui/dropdown/dropdown';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'ls/workbench/browser/layout';
-import { AgentChatWidget } from 'ls/workbench/contrib/agentChat/browser/agentChatWidget';
-import type { AgentChatWidgetProps } from 'ls/workbench/contrib/agentChat/browser/agentChatWidget';
+import { AgentChatWidget } from 'ls/workbench/contrib/chat/browser/chatWidget';
+import type { AgentChatWidgetProps } from 'ls/workbench/contrib/chat/browser/chatWidget';
 import { getWindowChromeLayout } from 'ls/platform/window/common/window';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
-export type { AgentChatWidgetProps } from 'ls/workbench/contrib/agentChat/browser/agentChatWidget';
+export type { AgentChatWidgetProps } from 'ls/workbench/contrib/chat/browser/chatWidget';
 export type AgentBarPartProps = AgentChatWidgetProps & {
   isPrimarySidebarVisible?: boolean;
   topbarActionsElement?: HTMLElement | null;

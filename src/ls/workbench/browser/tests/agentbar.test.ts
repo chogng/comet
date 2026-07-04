@@ -4,10 +4,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'ls/editor/browser/text/tests/domTestUtils';
 import { HorizontalScrollbar } from 'ls/base/browser/ui/scrollbar/horizontalScrollbar';
-import type { AgentChatWidgetProps } from 'ls/workbench/contrib/agentChat/browser/agentChatWidget';
+import type { RagAnswerResult } from 'ls/base/parts/sandbox/common/sandboxTypes';
+import type { AgentChatWidgetProps } from 'ls/workbench/contrib/chat/browser/chatWidget';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createAgentChatWidget: typeof import('ls/workbench/contrib/agentChat/browser/agentChatWidget').createAgentChatWidget;
+let createAgentChatWidget: typeof import('ls/workbench/contrib/chat/browser/chatWidget').createAgentChatWidget;
 let createAgentBarPartView: typeof import('ls/workbench/browser/parts/agentbar/agentbarPart').createAgentBarPartView;
 
 function createProps(): AgentChatWidgetProps {
@@ -53,10 +54,24 @@ function createProps(): AgentChatWidgetProps {
   };
 }
 
+function createResult(overrides: Partial<RagAnswerResult> = {}): RagAnswerResult {
+  return {
+    answer: 'Answer',
+    evidence: [],
+    provider: 'moark',
+    llmProvider: 'glm',
+    llmModel: 'test-model',
+    embeddingModel: 'test-embedding',
+    rerankerModel: 'test-reranker',
+    rerankApplied: false,
+    ...overrides,
+  };
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ createAgentChatWidget } = await import('ls/workbench/contrib/agentChat/browser/agentChatWidget'));
+  ({ createAgentChatWidget } = await import('ls/workbench/contrib/chat/browser/chatWidget'));
   ({ createAgentBarPartView } = await import('ls/workbench/browser/parts/agentbar/agentbarPart'));
 });
 
@@ -93,6 +108,100 @@ test('agent bar action buttons expose labels and shared hover', async () => {
     const overlayContent = document.querySelector('.ls-hover-content');
     assert(overlayContent instanceof HTMLElement);
     assert.equal(overlayContent.textContent, 'History');
+  } finally {
+    agentBar.dispose();
+  }
+});
+
+test('agent chat thread uses the shared scrollable transcript container', () => {
+  const agentBar = createAgentChatWidget({
+    ...createProps(),
+    messages: [
+      { id: 'user-1', role: 'user', content: 'Explain this result' },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'The result is evidence-backed.',
+        result: createResult(),
+      },
+    ],
+  });
+  const element = agentBar.getElement();
+  document.body.append(element);
+
+  try {
+    const threadWidget = element.querySelector('.agentbar-thread-widget');
+    assert(threadWidget instanceof HTMLElement);
+    const scrollableRoot = threadWidget.querySelector(
+      '.scrollable-element-root.agentbar-thread-scrollable',
+    );
+    assert(scrollableRoot instanceof HTMLElement);
+    const thread = scrollableRoot.querySelector('.agentbar-thread.scrollable-content');
+    assert(thread instanceof HTMLElement);
+    assert.equal(thread.querySelectorAll('.agentbar-message').length, 2);
+  } finally {
+    agentBar.dispose();
+  }
+});
+
+test('agent chat thread follows new content only when scrolled to the bottom', () => {
+  const firstMessages: AgentChatWidgetProps['messages'] = [
+    { id: 'user-1', role: 'user', content: 'First question' },
+  ];
+  const secondMessages: AgentChatWidgetProps['messages'] = [
+    ...firstMessages,
+    {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'First answer',
+      result: createResult(),
+    },
+  ];
+  const agentBar = createAgentChatWidget({
+    ...createProps(),
+    messages: firstMessages,
+  });
+  const element = agentBar.getElement();
+  document.body.append(element);
+
+  try {
+    const thread = element.querySelector('.agentbar-thread');
+    assert(thread instanceof HTMLElement);
+    Object.defineProperty(thread, 'clientHeight', {
+      configurable: true,
+      value: 100,
+    });
+    Object.defineProperty(thread, 'scrollHeight', {
+      configurable: true,
+      get: () => thread.childElementCount > firstMessages.length ? 420 : 300,
+    });
+    Object.defineProperty(thread, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 200,
+    });
+
+    agentBar.setProps({
+      ...createProps(),
+      messages: secondMessages,
+    });
+
+    assert.equal(thread.scrollTop, 320);
+
+    thread.scrollTop = 20;
+    agentBar.setProps({
+      ...createProps(),
+      messages: [
+        ...secondMessages,
+        { id: 'user-2', role: 'user', content: 'Second question' },
+      ],
+    });
+
+    assert.equal(thread.scrollTop, 20);
+    assert.equal(
+      element.querySelector('.agentbar-thread-widget')?.classList.contains('show-scroll-down'),
+      true,
+    );
   } finally {
     agentBar.dispose();
   }
