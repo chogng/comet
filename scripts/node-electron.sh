@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	realpath() { [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"; }
+	ROOT=$(dirname "$(dirname "$(realpath "$0")")")
+else
+	ROOT=$(dirname "$(dirname "$(readlink -f "$0")")")
+fi
+
+pushd "$ROOT" > /dev/null
+ELECTRON=$(node -p "require('electron')")
+popd > /dev/null
+
+export ELECTRON_RUN_AS_NODE=1
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	currentLimit=$(ulimit -n)
+	if [[ "$currentLimit" =~ ^[0-9]+$ && "$currentLimit" -lt 4096 ]]; then
+		ulimit -n 4096
+	fi
+fi
+
+exec "$ELECTRON" "$@"

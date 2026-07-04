@@ -1,4 +1,4 @@
-import { pathExists, resolveProjectPath, run } from './build-utics.ts';
+import { pathExists, resolveProjectPath, run } from './util.ts';
 
 const cargoManifestPath = resolveProjectPath('Cargo.toml');
 
@@ -7,4 +7,3 @@ if (!pathExists(cargoManifestPath)) {
 } else {
   await run('cargo', ['build', '--release']);
 }
-

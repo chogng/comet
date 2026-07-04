@@ -4,8 +4,8 @@ import { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createNpmRunArgs, npmCommand, resolveNpmExecPath } from '../../build/npm/install.ts';
-import { resolveViteBinPath } from '../../build/vite/paths.ts';
+import { createNpmRunArgs, npmCommand, resolveNpmExecPath } from '../npm/install.ts';
+import { resolveViteBinPath } from '../vite/paths.ts';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 

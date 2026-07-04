@@ -1,4 +1,4 @@
-import { resolveProjectPath, pathExists, run } from './build-utics.ts';
+import { resolveProjectPath, pathExists, run } from './util.ts';
 
 const legacyBuildScript = resolveProjectPath('scripts', 'build-py-worker.mjs');
 const workerManifestPaths = [
@@ -17,4 +17,3 @@ if (pathExists(legacyBuildScript)) {
 } else {
   console.log('[build:py-worker] no Python worker manifest found; skipping Python worker build');
 }
-
