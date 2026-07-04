@@ -691,9 +691,22 @@ test('agent chat renders fetched article linked text and emits open link request
     messages: [
       {
         id: 'article-1',
-        role: 'assistant',
-        content: 'Science\n- [Example article](https://www.science.org/doi/example) - Science | 2026-07-03 | Research Article',
-        includeInAgentHistory: false,
+        role: 'article',
+        sourceLabel: 'Science',
+        article: {
+          title: 'Example article',
+          articleType: 'Research Article',
+          doi: '10.1126/example',
+          authors: ['Ada Lovelace'],
+          abstractText: 'Abstract',
+          descriptionText: 'Description',
+          publishedAt: '2026-07-03',
+          sourceUrl: 'https://www.science.org/doi/example',
+          fetchedAt: '2026-07-04T00:00:00.000Z',
+          fetchOrder: 1,
+          sourceId: 'science',
+          journalTitle: 'Science',
+        },
       },
     ],
   });

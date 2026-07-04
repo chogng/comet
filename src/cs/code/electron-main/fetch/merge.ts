@@ -61,5 +61,6 @@ export function buildArticleFromCandidate(candidate: CandidateArticleSnapshot): 
     publishedAt: cleanText(candidate.publishedAt) || cleanText(candidate.dateHint) || null,
     sourceUrl: candidate.url,
     fetchedAt: new Date().toISOString(),
+    fetchOrder: 1,
   };
 }

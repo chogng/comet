@@ -58,6 +58,7 @@ function createArticle(overrides: Partial<Article> = {}): Article {
     publishedAt: null,
     sourceUrl: 'https://example.com/article',
     fetchedAt: '2026-07-04T00:00:00.000Z',
+    fetchOrder: 1,
     ...overrides,
   };
 }

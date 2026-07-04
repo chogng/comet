@@ -16,7 +16,6 @@ import type { SupportedLocale } from 'cs/code/electron-main/document/docxCopy';
 import { buildDocxBuffer as buildDocxArchiveBuffer, escapeXml, normalizeDocxPath } from 'cs/code/electron-main/document/docxPackage';
 
 import { cleanText } from 'cs/base/common/strings';
-import { showSaveDialog } from 'cs/platform/dialogs/electron-main/dialogMainService';
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
 import { translateArticlesToChinese } from 'cs/code/electron-main/translation/articleTranslation';
 
@@ -183,7 +182,7 @@ function articleParagraphsXml(article: Article, indexInJournal: number, locale: 
         : [copy.unknown];
 
   const paragraphs = [
-    paragraphXml(`${indexInJournal + 1}. ${title}`, {
+    paragraphXml(`${article.fetchOrder}. ${title}`, {
       fontSize: docxConfig.article.titleFontSize,
       color: docxConfig.article.bodyColor,
       fontAscii: docxConfig.article.fontAscii,
@@ -336,6 +335,7 @@ export async function exportArticlesDocx(
     typeof payload.preferredDirectory === 'string' ? payload.preferredDirectory.trim() : '';
   const locale = resolveSupportedLocale(payload.locale);
   const dialogCopy = resolveDocxExportDialogCopy(locale);
+  const { showSaveDialog } = await import('cs/platform/dialogs/electron-main/dialogMainService');
   const result = await showSaveDialog(
     {
       title: dialogCopy.title,

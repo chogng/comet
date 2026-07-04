@@ -98,6 +98,7 @@ test('sidebar renders library and fetch as switcher tabs', () => {
       publishedAt: '2026-07-01',
       sourceUrl: 'https://www.nature.com/articles/example',
       fetchedAt: '2026-07-03T00:00:00.000Z',
+      fetchOrder: 1,
       journalTitle: 'Research Articles',
     },
   ];

@@ -25,6 +25,7 @@ export interface Article {
   publishedAt: string | null;
   sourceUrl: string;
   fetchedAt: string;
+  fetchOrder: number;
   sourceId?: string | null;
   journalTitle?: string | null;
   archiveHtmlPath?: string | null;

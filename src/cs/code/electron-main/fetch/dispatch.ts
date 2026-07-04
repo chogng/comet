@@ -1468,5 +1468,8 @@ export async function fetchLatestArticles(
     failedSourceCount: failedSources.length,
     historySave: 'skipped',
   });
+  fetched.forEach((article, index) => {
+    article.fetchOrder = index + 1;
+  });
   return fetched;
 }

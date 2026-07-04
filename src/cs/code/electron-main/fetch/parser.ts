@@ -37,5 +37,6 @@ export function buildArticleFromHtml(sourceUrl: string, html: string): Article {
     publishedAt,
     sourceUrl,
     fetchedAt: new Date().toISOString(),
+    fetchOrder: 1,
   };
 }
