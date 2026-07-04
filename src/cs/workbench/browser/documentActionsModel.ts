@@ -49,6 +49,7 @@ export type DocumentActionsControllerContext = {
   isSelectionModeEnabled: boolean;
   selectedArticleOrderLookup: ReadonlyMap<string, number>;
   exportableArticles: Article[];
+  createBrowserTab: (url: string) => void;
   activeDraftExport: {
     title: string;
     document: WritingEditorDocument;
@@ -98,10 +99,6 @@ function isScienceValidationWindowClosedCancel(
     String(error.details?.statusText ?? '') ===
       'Science validation window was closed before verification completed.'
   );
-}
-
-function openArticleSourceUrl(sourceUrl: string) {
-  window.open(sourceUrl, '_blank', 'noopener,noreferrer');
 }
 
 function showAppToast(
@@ -285,7 +282,7 @@ export class DocumentActionsController {
       return;
     }
 
-    openArticleSourceUrl(article.sourceUrl);
+    this.context.createBrowserTab(article.sourceUrl);
   };
 
   readonly handleExportDocx = async () => {

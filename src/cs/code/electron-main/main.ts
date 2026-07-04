@@ -16,11 +16,13 @@ import { createMainWindow, getMainWindow } from 'cs/platform/windows/electron-ma
 import { setMenuBarIconEnabled } from 'cs/platform/window/electron-main/trayIcon';
 import { ThemeMainService } from 'cs/platform/theme/electron-main/themeMainServiceImpl';
 import { createNativeHostMainService } from 'cs/platform/native/electron-main/nativeHostMainService';
+import { registerWindowOpenPolicy } from 'cs/platform/window/electron-main/windowOpenPolicy';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
 configureEnvironmentMainPaths(environmentMainPaths);
 registerAppLifecycleHandlers({ createMainWindow });
+registerWindowOpenPolicy(app);
 
 app.whenReady().then(async () => {
   await prepareEnvironmentMain(environmentMainPaths);

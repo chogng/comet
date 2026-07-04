@@ -16,6 +16,7 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'splitview.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'gridview.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'articleFetch.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'documentActionsModel.test.ts'),
   path.join(
     rootDir,
     'src',
