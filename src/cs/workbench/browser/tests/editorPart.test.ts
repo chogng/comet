@@ -317,6 +317,29 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
   controller.dispose();
 });
 
+test('EditorPartController opens a browser URL in a new tab', async () => {
+  const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
+  const controller = new EditorPartController({
+    ui: en,
+    browserUrl: '',
+    webUrl: '',
+    viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
+  });
+  const url = 'https://example.com/chat-link';
+
+  controller.openBrowserUrlInNewTab(url);
+
+  const browserTab = controller
+    .getSnapshot()
+    .tabs
+    .find((tab) => tab.kind === 'browser' && tab.url === url);
+  assert(browserTab);
+  assert.equal(controller.getSnapshot().activeTab?.id, browserTab.id);
+
+  controller.dispose();
+});
+
 test('EditorPartView favorite context menu opens a fresh browser tab instead of navigating the current tab', async () => {
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const { createEditorPartView } = await import(

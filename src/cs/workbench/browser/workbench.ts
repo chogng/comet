@@ -1664,11 +1664,15 @@ class WorkbenchHost {
         setFetchSeedUrl: setWorkbenchFetchSeedUrl,
       });
     this.handleWorkbenchContentOpenLinkRequest = ({ href }) => {
+      const browserLinkUrl = normalizeUrl(href);
+      if (!browserLinkUrl) {
+        return;
+      }
+
       if (isEditorCollapsed) {
         setEditorCollapsed(false, expandedEditorSize);
       }
-      editorPartControllerInstance.openBrowserPane();
-      navigateToAddressBarUrl(href, true);
+      editorPartControllerInstance.openBrowserUrlInNewTab(browserLinkUrl);
     };
     const articleSummaryTranslationExportControllerInstance =
       getWorkbenchArticleSummaryTranslationExportController({
