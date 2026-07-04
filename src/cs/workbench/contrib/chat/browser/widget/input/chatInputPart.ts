@@ -17,7 +17,7 @@ import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import {
 	ChatInputModelPickerActionViewItem,
 	type ChatInputModelPickerProps,
-} from 'cs/workbench/contrib/chat/browser/input/chatInputPickerActionItem';
+} from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem';
 
 export type ChatInputPartProps = Pick<
 	ChatWidgetProps,
@@ -97,13 +97,13 @@ export class ChatInputPart {
 	private render() {
 		this.renderDisposables.clear();
 		this.element.className = [
-			'agentbar-composer',
+			'chat-composer',
 			this.props.isEmpty ? 'is-empty-state' : '',
 		]
 			.filter(Boolean)
 			.join(' ');
 
-		const textarea = createElement('textarea', 'agentbar-input');
+		const textarea = createElement('textarea', 'chat-composer-input');
 		textarea.rows = 2;
 		textarea.value = this.props.question;
 		textarea.placeholder = localize(
@@ -128,19 +128,19 @@ export class ChatInputPart {
 			}
 		}));
 
-		const toolbar = createElement('div', 'agentbar-composer-toolbar');
+		const toolbar = createElement('div', 'chat-composer-toolbar');
 		this.renderDisposables.add(this.modelPicker.render(toolbar));
 		const sendLabel = this.props.isAsking
 			? localize('assistantSidebarSendBusy', "Asking...")
 			: localize('assistantSidebarSend', "Send");
 		const actionsView = createActionBarView({
-			className: 'agentbar-composer-actions',
+			className: 'chat-composer-actions',
 			ariaRole: 'group',
 			items: [
 				this.createComposerActionItem(
 					localize('assistantSidebarImage', "Image"),
 					'image-filled',
-					'agentbar-composer-tool-action',
+					'chat-composer-tool-action',
 				),
 				{
 					label: sendLabel,
@@ -150,7 +150,7 @@ export class ChatInputPart {
 							? lxIconSemanticMap.assistant.busy
 							: 'voice-circle-filled',
 					),
-					buttonClassName: 'agentbar-composer-send-action',
+					buttonClassName: 'chat-composer-send-action',
 					onClick: () => this.props.onAsk(),
 				},
 			],
@@ -167,7 +167,7 @@ export class ChatInputPart {
 	private createComposerActionItem(
 		label: string,
 		icon: LxIconName,
-		buttonClassName = 'agentbar-composer-tool-action',
+		buttonClassName = 'chat-composer-tool-action',
 	): ActionBarActionItem {
 		return {
 			label,

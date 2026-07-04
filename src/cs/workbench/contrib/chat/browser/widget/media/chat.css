@@ -145,46 +145,51 @@
   width: 100%;
 }
 
-.agentbar-composer {
+.chat-composer {
   position: relative;
   margin-top: auto;
   padding: 0;
-  border: 1px solid var(--vscode-agentBar-composerBorder, #F8F8F8);
+  border: 1px solid var(--vscode-chatInput-composerBorder, #d6e0e8);
   border-radius: 10px;
-  background: var(--vscode-agentBar-composerBackground, #FCFCFC);
+  background: var(--vscode-chatInput-composerBackground, #FCFCFC);
   box-shadow: none;
   overflow: hidden;
 }
 
-.agentbar-composer.is-empty-state {
+.chat-composer.is-empty-state {
   margin-top: 0;
   width: min(100%, 840px);
 }
 
-.agentbar-composer .agentbar-input {
+.chat-composer-input {
+  width: 100%;
   min-height: 56px;
+  resize: none;
   padding: 6px 8px 4px;
   border: 0;
   background: transparent;
+  color: var(--vscode-input-foreground, #1a2530);
   box-shadow: none;
+  font: inherit;
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.agentbar-composer-toolbar {
+.chat-composer-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 4px;
-  border-top: 1px solid var(--vscode-agentBar-composerToolbarBorder, #F8F8F8);
-  background: var(--vscode-agentBar-composerToolbarBackground, #FCFCFC);
+  border-top: 1px solid var(--vscode-chatInput-composerToolbarBorder, #F8F8F8);
+  background: var(--vscode-chatInput-composerToolbarBackground, #FCFCFC);
 }
 
-.agentbar-model-switch {
+.chat-model-switch {
   flex: 0 0 auto;
 }
 
-.agentbar-model-switch .actionbar-action.agentbar-model-switch-btn {
+.chat-model-switch .actionbar-action.chat-model-switch-btn {
   min-height: 26px;
   min-width: 88px;
   padding: 0 8px;
@@ -194,23 +199,23 @@
   color: #304357;
 }
 
-.agentbar-model-switch .actionbar-action.agentbar-model-switch-btn .actionbar-content {
+.chat-model-switch .actionbar-action.chat-model-switch-btn .actionbar-content {
   line-height: normal;
 }
 
-.agentbar-model-switch .actionbar-action.agentbar-model-switch-btn .lx-icon {
+.chat-model-switch .actionbar-action.chat-model-switch-btn .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.agentbar-model-switch .actionbar-action.agentbar-model-switch-btn:hover:not(:disabled),
-.agentbar-model-switch .actionbar-action.agentbar-model-switch-btn[aria-expanded='true'] {
+.chat-model-switch .actionbar-action.chat-model-switch-btn:hover:not(:disabled),
+.chat-model-switch .actionbar-action.chat-model-switch-btn[aria-expanded='true'] {
   background: #f3f7fb;
   border-color: #dde7f0;
 }
 
-.agentbar-model-switch-trigger {
+.chat-model-switch-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -218,12 +223,12 @@
   width: 100%;
 }
 
-.agentbar-model-switch-icon,
-.agentbar-model-switch-chevron {
+.chat-model-switch-icon,
+.chat-model-switch-chevron {
   flex-shrink: 0;
 }
 
-.agentbar-model-switch-label {
+.chat-model-switch-label {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 180px;
@@ -235,53 +240,53 @@
   text-align: left;
 }
 
-.agentbar-model-switch-chevron {
+.chat-model-switch-chevron {
   opacity: 0.7;
 }
 
-.actionbar-context-view.agentbar-model-menu .cs-context-view-content,
-.actionbar-context-view.agentbar-model-menu .cs-menu {
+.actionbar-context-view.chat-model-menu .cs-context-view-content,
+.actionbar-context-view.chat-model-menu .cs-menu {
   width: 236px;
   min-width: 236px;
   max-width: 236px;
 }
 
-.agentbar-composer-actions.actionbar {
+.chat-composer-actions.actionbar {
   flex: 0 0 auto;
   margin-left: auto;
 }
 
-.agentbar-composer-actions .actionbar-action {
+.chat-composer-actions .actionbar-action {
   min-height: 28px;
 }
 
-.agentbar-composer-actions .actionbar-action.is-icon {
+.chat-composer-actions .actionbar-action.is-icon {
   width: 28px;
   height: 28px;
 }
 
-.agentbar-composer-actions .actionbar-action .lx-icon {
+.chat-composer-actions .actionbar-action .lx-icon {
   width: 18px;
   height: 18px;
   font-size: 18px;
 }
 
-.agentbar-composer-send-action.actionbar-action {
+.chat-composer-send-action.actionbar-action {
   width: 28px;
   height: 28px;
 }
 
-.agentbar-composer-send-action.actionbar-action .lx-icon {
+.chat-composer-send-action.actionbar-action .lx-icon {
   width: 22px;
   height: 22px;
   font-size: 22px;
 }
 
-.agentbar-composer-send-action.actionbar-action:hover:not(:disabled) {
+.chat-composer-send-action.actionbar-action:hover:not(:disabled) {
   background: transparent;
 }
 
-.agentbar-composer .agentbar-input:focus {
+.chat-composer-input:focus {
   outline: none;
   box-shadow: none;
 }
@@ -411,3 +416,4 @@
   color: #66798f;
   border: 1px solid #dbe3ea;
 }
+

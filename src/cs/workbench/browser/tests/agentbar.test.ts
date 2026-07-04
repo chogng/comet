@@ -450,7 +450,7 @@ test('composer toolbar uses actionbar icon controls', () => {
   try {
     const toolButtons = Array.from(
       element.querySelectorAll(
-        '.agentbar-composer-actions .agentbar-composer-tool-action',
+        '.chat-composer-actions .chat-composer-tool-action',
       ),
     );
     assert.equal(toolButtons.length, 1);
@@ -460,7 +460,7 @@ test('composer toolbar uses actionbar icon controls', () => {
     );
 
     const sendButton = element.querySelector(
-      '.agentbar-composer-actions .agentbar-composer-send-action',
+      '.chat-composer-actions .chat-composer-send-action',
     );
     assert(sendButton instanceof HTMLButtonElement);
     assert.equal(sendButton.getAttribute('aria-label'), 'Send');
@@ -469,21 +469,21 @@ test('composer toolbar uses actionbar icon controls', () => {
     sendButton.click();
     assert.equal(askCount, 1);
 
-    const dropdownButton = element.querySelector('.agentbar-model-switch-btn');
+    const dropdownButton = element.querySelector('.chat-model-switch-btn');
     assert(dropdownButton instanceof HTMLButtonElement);
     assert.equal(
-      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      dropdownButton.querySelector('.chat-model-switch-label')?.textContent,
       'GLM-4.7-Flash',
     );
     assert.equal(
-      dropdownButton.querySelector('.agentbar-model-switch-icon'),
+      dropdownButton.querySelector('.chat-model-switch-icon'),
       null,
     );
     dropdownButton.click();
 
-    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'agentbar-model-menu');
+    assert.equal(menu.getAttribute('data-menu'), 'chat-model-menu');
 
     const autoMode = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
       (node) =>
@@ -499,11 +499,11 @@ test('composer toolbar uses actionbar icon controls', () => {
     assert.equal(autoModelRoutingToggleCount, 1);
     assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
     assert.equal(
-      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      dropdownButton.querySelector('.chat-model-switch-label')?.textContent,
       'Auto',
     );
 
-    const autoMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const autoMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(autoMenu instanceof HTMLElement);
     assert.deepEqual(
       Array.from(autoMenu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'))
@@ -520,11 +520,11 @@ test('composer toolbar uses actionbar icon controls', () => {
     autoToggle.click();
     assert.equal(autoModelRoutingToggleCount, 2);
 
-    const switchMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const switchMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(switchMenu instanceof HTMLElement);
     assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
     assert.equal(
-      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      dropdownButton.querySelector('.chat-model-switch-label')?.textContent,
       'GLM-4.7-Flash',
     );
 
@@ -540,7 +540,7 @@ test('composer toolbar uses actionbar icon controls', () => {
     assert.equal(maxContextWindowToggleCount, 1);
     assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
 
-    const modelMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const modelMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(modelMenu instanceof HTMLElement);
     const option = Array.from(modelMenu.querySelectorAll('.dropdown-menu-item')).find(
       (node) => node.textContent?.includes('GPT-5.4'),
@@ -559,7 +559,7 @@ test('composer toolbar uses actionbar icon controls', () => {
     assert.equal(selectedModelValue, 'openai:gpt-5.4:medium');
 
     dropdownButton.click();
-    const runtimeMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const runtimeMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(runtimeMenu instanceof HTMLElement);
     const runtimeOption = Array.from(runtimeMenu.querySelectorAll('.dropdown-menu-item')).find(
       (node) => node.textContent?.includes('GPT-5.4'),
@@ -577,7 +577,7 @@ test('composer toolbar uses actionbar icon controls', () => {
     assert.equal(selectedModelValue, 'openai:gpt-5.4:medium:priority');
 
     dropdownButton.click();
-    const reopenedMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const reopenedMenu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(reopenedMenu instanceof HTMLElement);
     const addModels = Array.from(
       reopenedMenu.querySelectorAll('.dropdown-menu-item'),
@@ -597,17 +597,17 @@ test('agent bar model trigger and menu collapse to Auto while automatic routing 
   document.body.append(element);
 
   try {
-    const dropdownButton = element.querySelector('.agentbar-model-switch-btn');
+    const dropdownButton = element.querySelector('.chat-model-switch-btn');
     assert(dropdownButton instanceof HTMLButtonElement);
     assert.equal(
-      dropdownButton.querySelector('.agentbar-model-switch-label')?.textContent,
+      dropdownButton.querySelector('.chat-model-switch-label')?.textContent,
       'Auto',
     );
 
     dropdownButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(menu instanceof HTMLElement);
 
     const menuItemLabels = Array.from(
@@ -641,14 +641,14 @@ test('agent bar model menu supports search filtering', async () => {
   document.body.append(element);
 
   try {
-    const dropdownButton = element.querySelector('.agentbar-model-switch-btn');
+    const dropdownButton = element.querySelector('.chat-model-switch-btn');
     assert(dropdownButton instanceof HTMLButtonElement);
     dropdownButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="agentbar-model-menu"]');
+    const menu = document.body.querySelector('.actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
     assert(menu instanceof HTMLElement);
-    const searchInput = menu.querySelector('.cs-menu-header .agentbar-model-menu-search-input .input');
+    const searchInput = menu.querySelector('.cs-menu-header .chat-model-menu-search-input .input');
     assert(searchInput instanceof HTMLInputElement);
 
     searchInput.value = 'gpt';

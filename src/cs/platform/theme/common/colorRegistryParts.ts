@@ -185,22 +185,22 @@ export const agentBarInputForeground = registerColor('agentBar.inputForeground',
   light: '#1f2d3a',
 });
 
-export const agentBarComposerBorder = registerColor('agentBar.composerBorder', {
+export const chatInputComposerBorder = registerColor('chatInput.composerBorder', {
   dark: '#2a3340',
-  light: '#F8F8F8',
+  light: '#d6e0e8',
 });
 
-export const agentBarComposerBackground = registerColor('agentBar.composerBackground', {
+export const chatInputComposerBackground = registerColor('chatInput.composerBackground', {
   dark: '#20262e',
   light: '#FCFCFC',
 });
 
-export const agentBarComposerToolbarBorder = registerColor('agentBar.composerToolbarBorder', {
+export const chatInputComposerToolbarBorder = registerColor('chatInput.composerToolbarBorder', {
   dark: '#2a3340',
   light: '#F8F8F8',
 });
 
-export const agentBarComposerToolbarBackground = registerColor('agentBar.composerToolbarBackground', {
+export const chatInputComposerToolbarBackground = registerColor('chatInput.composerToolbarBackground', {
   dark: '#20262e',
   light: '#FCFCFC',
 });

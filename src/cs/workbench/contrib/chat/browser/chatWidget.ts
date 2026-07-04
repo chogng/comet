@@ -20,10 +20,10 @@ import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/chatListWidget';
-import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/input/chatInputPart';
+import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
 
 import 'cs/workbench/browser/parts/agentbar/media/agentbar.css';
-import 'cs/workbench/contrib/chat/browser/media/chat.css';
+import 'cs/workbench/contrib/chat/browser/widget/media/chat.css';
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
 	tagName: K,

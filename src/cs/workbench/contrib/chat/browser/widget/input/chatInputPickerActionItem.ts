@@ -98,18 +98,18 @@ export class ChatInputModelPickerActionViewItem {
 			label: currentLabel,
 			title: currentLabel,
 			mode: 'custom',
-			buttonClassName: 'agentbar-model-switch-btn',
-			className: 'agentbar-model-switch',
+			buttonClassName: 'chat-model-switch-btn',
+			className: 'chat-model-switch',
 			disabled: this.props.llmModelOptions.length === 0,
 			minWidth: 236,
-			menuClassName: 'agentbar-model-menu',
-			menuData: 'agentbar-model-menu',
+			menuClassName: 'chat-model-menu',
+			menuData: 'chat-model-menu',
 			content: () => this.renderModelDropdownTrigger(currentOption),
 			menu: this.createModelMenuItems(''),
 			menuHeader: createFilterMenuHeader({
-				inputClassName: 'agentbar-model-menu-search-input',
-				placeholder: localize('agentbarModelSearch', "Search models"),
-				ariaLabel: localize('agentbarModelSearch', "Search models"),
+				inputClassName: 'chat-model-menu-search-input',
+				placeholder: localize('chatModelSearch', "Search models"),
+				ariaLabel: localize('chatModelSearch', "Search models"),
 				getMenuItems: query => this.createModelMenuItems(query),
 			}),
 		};
@@ -132,10 +132,10 @@ export class ChatInputModelPickerActionViewItem {
 	}
 
 	private renderModelDropdownTrigger(currentOption: DropdownOption | null) {
-		const trigger = createElement('span', 'agentbar-model-switch-trigger');
-		const label = createElement('span', 'agentbar-model-switch-label');
+		const trigger = createElement('span', 'chat-model-switch-trigger');
+		const label = createElement('span', 'chat-model-switch-label');
 		label.textContent = this.getModelDropdownTriggerLabel(currentOption);
-		const chevron = createLxIcon('chevron-down', 'agentbar-model-switch-chevron');
+		const chevron = createLxIcon('chevron-down', 'chat-model-switch-chevron');
 
 		trigger.append(label, chevron);
 		return trigger;
@@ -143,12 +143,12 @@ export class ChatInputModelPickerActionViewItem {
 
 	private getModelDropdownTriggerLabel(currentOption: DropdownOption | null) {
 		if (this.getActiveLlmModelOptionValue() === 'auto') {
-			return localize('agentbarModelAuto', "Auto");
+			return localize('chatModelAuto', "Auto");
 		}
 
 		return currentOption?.label
 			|| this.props.activeLlmModelLabel
-			|| localize('agentbarModelSelect', "Select model");
+			|| localize('chatModelSelect', "Select model");
 	}
 
 	private createModelMenuItems(keyword: string): readonly ActionBarMenuItem[] {
@@ -174,28 +174,28 @@ export class ChatInputModelPickerActionViewItem {
 				.filter(Boolean)
 				.some(value => matchesKeyword(value)),
 		);
-		const autoLabel = localize('agentbarModelAuto', "Auto");
+		const autoLabel = localize('chatModelAuto', "Auto");
 		const autoTitle = localize(
-			'agentbarModelAutoTitle',
+			'chatModelAutoTitle',
 			"Automatically route to a suitable model for the question.",
 		);
 		const autoDescription = localize(
-			'agentbarModelAutoDescription',
+			'chatModelAutoDescription',
 			"Balanced quality and speed, recommended for most tasks",
 		);
-		const maxModeLabel = localize('agentbarModelMaxMode', "Max mode");
+		const maxModeLabel = localize('chatModelMaxMode', "Max mode");
 		const maxModeTitle = localize(
-			'agentbarModelMaxModeTitle',
+			'chatModelMaxModeTitle',
 			"Use the 1M context window when available.",
 		);
-		const addModelsLabel = localize('agentbarModelAdd', "Add models");
+		const addModelsLabel = localize('chatModelAdd', "Add models");
 		const addModelsTitle = localize(
-			'agentbarModelAddTitle',
+			'chatModelAddTitle',
 			"Open Settings to manage enabled models.",
 		);
-		const multipleModelsLabel = localize('agentbarModelMultiple', "Use multiple models");
-		const unavailableTitle = localize('agentbarModelUnavailable', "Not available yet.");
-		const emptyLabel = localize('agentbarModelSearchEmpty', "No matching models");
+		const multipleModelsLabel = localize('chatModelMultiple', "Use multiple models");
+		const unavailableTitle = localize('chatModelUnavailable', "Not available yet.");
+		const emptyLabel = localize('chatModelSearchEmpty', "No matching models");
 
 		const autoItem: ActionBarMenuItem = {
 			label: autoLabel,
@@ -244,7 +244,7 @@ export class ChatInputModelPickerActionViewItem {
 			return autoItems.length > 0
 				? autoItems
 				: [{
-					id: 'agentbar-model-empty',
+					id: 'chat-model-empty',
 					label: emptyLabel,
 					disabled: true,
 				}];
@@ -280,7 +280,7 @@ export class ChatInputModelPickerActionViewItem {
 
 		return [
 			{
-				id: 'agentbar-model-empty',
+				id: 'chat-model-empty',
 				label: emptyLabel,
 				disabled: true,
 			},
@@ -425,7 +425,7 @@ export class ChatInputModelPickerActionViewItem {
 		const activeRuntime = this.getActiveRuntimeParams(group);
 		const submenu: ActionBarMenuItem[] = [
 			{
-				label: localize('agentbarModelUse', "Use model"),
+				label: localize('chatModelUse', "Use model"),
 				checked: this.getActiveModelGroupKey() === group.key,
 				onClick: () => {
 					this.props.onSelectLlmModel(this.resolvePreferredModelOptionValue(group));
@@ -437,7 +437,7 @@ export class ChatInputModelPickerActionViewItem {
 		for (const effort of reasoningEfforts) {
 			submenu.push({
 				label: localize(
-					'agentbarModelReasoning',
+					'chatModelReasoning',
 					"Reasoning: {0}",
 					this.formatReasoningEffortLabel(effort),
 				),
@@ -459,8 +459,8 @@ export class ChatInputModelPickerActionViewItem {
 			for (const serviceTier of [undefined, 'priority' as const]) {
 				submenu.push({
 					label: serviceTier === 'priority'
-						? localize('agentbarModelFastOn', "Fast: On")
-						: localize('agentbarModelFastOff', "Fast: Off"),
+						? localize('chatModelFastOn', "Fast: On")
+						: localize('chatModelFastOff', "Fast: Off"),
 					checked:
 						this.getActiveModelGroupKey() === group.key &&
 						(activeRuntime.serviceTier ?? undefined) === serviceTier,
@@ -557,19 +557,20 @@ export class ChatInputModelPickerActionViewItem {
 	private formatReasoningEffortLabel(reasoningEffort: LlmReasoningEffort) {
 		switch (reasoningEffort) {
 			case 'none':
-				return localize('agentbarReasoningNone', "None");
+				return localize('chatReasoningNone', "None");
 			case 'low':
-				return localize('agentbarReasoningLow', "Low");
+				return localize('chatReasoningLow', "Low");
 			case 'medium':
-				return localize('agentbarReasoningMedium', "Medium");
+				return localize('chatReasoningMedium', "Medium");
 			case 'high':
-				return localize('agentbarReasoningHigh', "High");
+				return localize('chatReasoningHigh', "High");
 			case 'xhigh':
-				return localize('agentbarReasoningXhigh', "Xhigh");
+				return localize('chatReasoningXhigh', "Xhigh");
 			case 'higher':
-				return localize('agentbarReasoningHigher', "Higher");
+				return localize('chatReasoningHigher', "Higher");
 			case 'highest':
-				return localize('agentbarReasoningHighest', "Highest");
+				return localize('chatReasoningHighest', "Highest");
 		}
 	}
 }
+
