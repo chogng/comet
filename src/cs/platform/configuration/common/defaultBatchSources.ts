@@ -1,7 +1,7 @@
 import type { BatchSource } from 'cs/base/parts/sandbox/common/sandboxTypes';
 
 export const batchLimitMin = 1;
-export const batchLimitMax = 100;
+export const batchLimitMax = 1000;
 export const defaultBatchLimit = 50;
 
 // Immutable baseline list so callers can safely clone/reset source config.
