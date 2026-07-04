@@ -1,5 +1,11 @@
 import type { HoverPosition } from './hoverWidget';
 
+
+/**
+ * 底层协议
+ */
+
+
 export {
 	createHoverController,
 	normalizeHoverInput,
@@ -12,10 +18,7 @@ export {
 } from './hoverWidget';
 
 export type {
-	DelayedHoverInput,
 	HoverBinding,
-	HoverInputFactory,
-	HoverLifecycleOptions,
 	IHoverDelegate,
 } from './hoverDelegate';
 

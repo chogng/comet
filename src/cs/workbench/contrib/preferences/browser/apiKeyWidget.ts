@@ -1,10 +1,12 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import {
   buildSettingsInput as buildInput,
   createSettingsElement as el,
   setSettingsFocusKey as setFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
+
+const hoverService = getHoverService();
 
 export type ApiKeyWidgetProps = {
   title: string;
@@ -75,7 +77,7 @@ export class ApiKeyWidget {
     this.element.classList.toggle('settings-api-key-empty', shouldHideToggle);
     if (!shouldHideToggle) {
       this.toggle.replaceChildren(createLxIcon(props.show ? 'hidden' : 'show'));
-      applyHover(this.toggle, props.show ? props.toggleLabelHide : props.toggleLabelShow);
+      hoverService.applyHover(this.toggle, props.show ? props.toggleLabelHide : props.toggleLabelShow);
       this.toggle.ariaLabel = props.show ? props.toggleLabelHide : props.toggleLabelShow;
     }
   }

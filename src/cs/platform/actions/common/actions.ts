@@ -24,6 +24,7 @@ import {
   KeybindingsRegistry,
   type IKeybindingRule,
 } from 'cs/platform/keybinding/common/keybindingsRegistry';
+import type { ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import {
   isICommandActionToggleInfo,
   type ICommandAction,
@@ -347,16 +348,6 @@ export interface ICommandPaletteOptions extends IAction2CommonOptions {
 
 export type IAction2Options = ICommandPaletteOptions | IBaseAction2Options;
 
-export interface ServicesAccessor {
-  get<T>(id: unknown): T;
-}
-
-const defaultServicesAccessor: ServicesAccessor = {
-  get(id: unknown): never {
-    throw new Error(`No service accessor is configured for '${String(id)}'.`);
-  },
-};
-
 export abstract class Action2 {
   constructor(readonly desc: Readonly<IAction2Options>) {}
 
@@ -373,8 +364,8 @@ export function registerAction2(ctor: { new (): Action2 }): IDisposable {
   }
 
   disposables.push(
-    commandsRegistry.registerCommand(command.id, (...args) =>
-      action.run(defaultServicesAccessor, ...args),
+    commandsRegistry.registerCommand(command.id, (accessor, ...args) =>
+      action.run(accessor, ...args),
     ),
   );
 

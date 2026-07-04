@@ -3,11 +3,10 @@ import test, { after, before } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
-import type { HoverInput } from 'cs/base/browser/ui/hover/hover';
+import type { HoverInput, IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createHoverController: typeof import('cs/base/browser/ui/hover/hoverWidget').createHoverController;
-let HoverDelegate: typeof import('cs/base/browser/ui/hover/hoverDelegate').HoverDelegate;
 let createButtonView: typeof import('cs/base/browser/ui/button/button').createButtonView;
 let InputBox: typeof import('cs/base/browser/ui/inputbox/inputBox').InputBox;
 let createDropdownView: typeof import('cs/base/browser/ui/dropdown/dropdown').createDropdownView;
@@ -42,7 +41,6 @@ before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({ createHoverController } = await import('cs/base/browser/ui/hover/hoverWidget'));
-  ({ HoverDelegate } = await import('cs/base/browser/ui/hover/hoverDelegate'));
   ({ createButtonView } = await import('cs/base/browser/ui/button/button'));
   ({ InputBox } = await import('cs/base/browser/ui/inputbox/inputBox'));
   ({ createDropdownView } = await import('cs/base/browser/ui/dropdown/dropdown'));
@@ -116,14 +114,13 @@ test('button view uses shared hover content instead of native title tooltips', a
 test('button view can use an injected hover service delegate', async () => {
   let delegateCreateCalls = 0;
   let lastHoverTarget: HTMLElement | null = null;
-  class CountingHoverDelegate extends HoverDelegate {
-    override createHover(target: HTMLElement, input: HoverInput) {
+  const hoverService: IHoverDelegate = {
+    createHover(target: HTMLElement, input: HoverInput) {
       delegateCreateCalls += 1;
       lastHoverTarget = target;
       return createHoverController(target, input);
-    }
-  }
-  const hoverService = new CountingHoverDelegate();
+    },
+  };
   const buttonView = createButtonView({
     mode: 'icon',
     content: document.createTextNode('H'),
@@ -148,79 +145,6 @@ test('button view can use an injected hover service delegate', async () => {
     assert.equal(overlayContent.textContent, 'Injected hover');
   } finally {
     buttonView.dispose();
-  }
-});
-
-test('hover service can show and hide instant hovers', async () => {
-  const target = document.createElement('button');
-  document.body.append(target);
-  const hoverService = new HoverDelegate();
-  const hover = hoverService.showInstantHover(target, {
-    content: 'Instant service hover',
-    delay: 0,
-  });
-
-  try {
-    assert(hover);
-    await delay(0);
-
-    const overlayContent = document.querySelector('.cs-hover-content');
-    assert(overlayContent instanceof HTMLElement);
-    assert.equal(overlayContent.textContent, 'Instant service hover');
-
-    hoverService.hideHover();
-    assert.equal(document.querySelector('.cs-hover-card'), null);
-  } finally {
-    hover?.dispose();
-  }
-});
-
-test('hover service cancels pending delayed hovers when the pointer leaves', async () => {
-  const target = document.createElement('button');
-  document.body.append(target);
-  const hoverService = new HoverDelegate();
-  const binding = hoverService.setupDelayedHover(target, {
-    content: 'Cancelled service hover',
-    delay: 40,
-  });
-
-  try {
-    target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-    await delay(80);
-
-    assert.equal(document.querySelector('.cs-hover-card'), null);
-  } finally {
-    binding.dispose();
-    hoverService.hideHover();
-  }
-});
-
-test('hover service can anchor delayed hovers at the mouse position', async () => {
-  const target = document.createElement('button');
-  document.body.append(target);
-  const hoverService = new HoverDelegate();
-  const binding = hoverService.setupDelayedHoverAtMouse(target, {
-    content: 'Mouse anchored hover',
-    delay: 0,
-  });
-
-  try {
-    target.dispatchEvent(
-      new MouseEvent('mouseenter', {
-        bubbles: true,
-        clientX: 75,
-        clientY: 45,
-      }),
-    );
-    await delay(0);
-
-    const overlayContent = document.querySelector('.cs-hover-content');
-    assert(overlayContent instanceof HTMLElement);
-    assert.equal(overlayContent.textContent, 'Mouse anchored hover');
-  } finally {
-    binding.dispose();
-    hoverService.hideHover();
   }
 });
 

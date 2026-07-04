@@ -5,14 +5,25 @@ import {
   CommandRegistryImpl,
   CommandServiceImpl,
 } from 'cs/platform/commands/common/commands';
+import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
+import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
+
+function createCommandService(registry: CommandRegistryImpl) {
+  const instantiationService = new InstantiationService(
+    new ServiceCollection(),
+    true,
+  );
+
+  return new CommandServiceImpl(registry, () => instantiationService);
+}
 
 test('CommandService executes registered commands by id', () => {
   const registry = new CommandRegistryImpl();
-  const service = new CommandServiceImpl(registry);
+  const service = createCommandService(registry);
 
   registry.registerCommand(
     'test.add',
-    (left: number, right: number) => left + right,
+    (_accessor, left: number, right: number) => left + right,
   );
 
   assert.equal(service.executeCommand('test.add', 2, 3), 5);
@@ -20,7 +31,7 @@ test('CommandService executes registered commands by id', () => {
 
 test('CommandRegistry unregisters commands through the disposable', () => {
   const registry = new CommandRegistryImpl();
-  const service = new CommandServiceImpl(registry);
+  const service = createCommandService(registry);
   const registration = registry.registerCommand('test.noop', () => true);
 
   assert.equal(service.executeCommand('test.noop'), true);

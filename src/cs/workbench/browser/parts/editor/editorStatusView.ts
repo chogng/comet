@@ -1,8 +1,10 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type {
   EditorStatusItem,
   EditorStatusState,
 } from 'cs/workbench/browser/parts/editor/editorStatus';
+
+const hoverService = getHoverService();
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
@@ -25,7 +27,7 @@ function renderStatusItem(item: EditorStatusItem) {
   const label = createElement('span', 'editor-statusbar-item-label');
   label.textContent = item.label;
   const value = createElement('span', 'editor-statusbar-item-value');
-  applyHover(value, item.value);
+  hoverService.applyHover(value, item.value);
   value.textContent = item.value;
   element.append(label, value);
   return element;
@@ -55,7 +57,7 @@ export class EditorStatusView {
     }
     if (status.summary) {
       const summary = createElement('span', 'editor-statusbar-summary');
-      applyHover(summary, status.summary);
+      hoverService.applyHover(summary, status.summary);
       summary.textContent = status.summary;
       primary.append(summary);
     }

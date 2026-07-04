@@ -1820,6 +1820,12 @@ class WorkbenchHost {
       batchFetchControllerInstance.handleFetchLatestBatch;
     const articleQuickSources = getConfigBatchSourceSeed();
     const handleFetchArticleSource = async (source: BatchSource) => {
+      if (isEditorCollapsed) {
+        setEditorCollapsed(false, expandedEditorSize);
+      }
+      editorPartControllerInstance.openBrowserPane();
+      navigateToAddressBarUrl(source.url, false);
+
       const result = await batchFetchControllerInstance.handleFetchSource(source);
       if (!result.ok) {
         return;

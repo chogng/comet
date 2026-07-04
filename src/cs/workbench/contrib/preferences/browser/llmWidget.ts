@@ -1,6 +1,6 @@
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createSwitchView } from 'cs/base/browser/ui/switch/switch';
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -22,6 +22,8 @@ import {
   type LlmModelOption,
   type LlmModelDefinition,
 } from 'cs/workbench/services/llm/registry';
+
+const hoverService = getHoverService();
 
 function normalizeModelLabel(value: string) {
   return value.replace(/[\u2010-\u2015\u2212]/g, '-');
@@ -479,7 +481,7 @@ export class LlmWidget {
       item.dataset.modelEntryKey = this.getModelEntryKey(nextEntry);
 
       nameButton.disabled = !isEnabled;
-      applyHover(nameButton, nextEntry.model.description || displayLabel);
+      hoverService.applyHover(nameButton, nextEntry.model.description || displayLabel);
       name.textContent = displayLabel;
       titleRow.replaceChildren(name);
 

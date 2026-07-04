@@ -1,15 +1,17 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import { createStatusbarItemElement } from 'cs/workbench/browser/parts/statusbar/statusbarItem';
 import { renderStatusbarMode } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
 import 'cs/workbench/browser/parts/statusbar/media/statusbar.css';
+
+const hoverService = getHoverService();
 
 function createTextElement(className: string, text: string, title?: string) {
   const element = document.createElement('span');
   element.className = className;
   element.textContent = text;
   if (title) {
-    applyHover(element, title);
+    hoverService.applyHover(element, title);
   }
 
   return element;

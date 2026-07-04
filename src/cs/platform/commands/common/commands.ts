@@ -1,12 +1,16 @@
 import type { DisposableLike } from 'cs/base/common/lifecycle';
 import { toDisposable } from 'cs/base/common/lifecycle';
+import type {
+  IInstantiationService,
+  ServicesAccessor,
+} from 'cs/platform/instantiation/common/instantiation';
 
 export type CommandId = string;
 
 export type CommandHandler<
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
-> = (...args: TArgs) => TResult;
+> = (accessor: ServicesAccessor, ...args: TArgs) => TResult;
 
 export type CommandDefinition<
   TArgs extends unknown[] = unknown[],
@@ -79,8 +83,37 @@ export interface CommandService {
   ): TResult | undefined;
 }
 
+type CommandInvocationService = Pick<IInstantiationService, 'invokeFunction'>;
+
+let activeCommandInvocationService: CommandInvocationService | null = null;
+
+function getActiveCommandInvocationService(): CommandInvocationService {
+  if (!activeCommandInvocationService) {
+    throw new Error('Command service instantiation service is not configured.');
+  }
+
+  return activeCommandInvocationService;
+}
+
+export function setCommandServiceInstantiationService(
+  invocationService: CommandInvocationService,
+): DisposableLike {
+  activeCommandInvocationService = invocationService;
+
+  return toDisposable(() => {
+    if (activeCommandInvocationService === invocationService) {
+      activeCommandInvocationService = null;
+    }
+  });
+}
+
+type CommandInvocationServiceProvider = () => CommandInvocationService;
+
 export class CommandServiceImpl implements CommandService {
-  constructor(private readonly registry: CommandRegistry) {}
+  constructor(
+    private readonly registry: CommandRegistry,
+    private readonly getInvocationService: CommandInvocationServiceProvider,
+  ) {}
 
   executeCommand<TResult = unknown>(
     commandId: CommandId,
@@ -91,11 +124,15 @@ export class CommandServiceImpl implements CommandService {
       return undefined;
     }
 
-    return command.handler(...args) as TResult;
+    return this.getInvocationService().invokeFunction(
+      command.handler,
+      ...args,
+    ) as TResult;
   }
 }
 
 export const commandsRegistry: CommandRegistry = new CommandRegistryImpl();
 export const commandService: CommandService = new CommandServiceImpl(
   commandsRegistry,
+  getActiveCommandInvocationService,
 );

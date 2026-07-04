@@ -1,9 +1,11 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { SelectBox } from 'cs/base/browser/ui/selectbox/selectBox';
 import { createSwitchView } from 'cs/base/browser/ui/switch/switch';
+
+const hoverService = getHoverService();
 
 type SettingsSelectOption = {
   value: string;
@@ -134,7 +136,7 @@ export function buildSettingsButton(config: {
   } else {
     button.textContent = config.label;
   }
-  applyHover(button, config.title ?? config.label);
+  hoverService.applyHover(button, config.title ?? config.label);
   button.ariaLabel = config.title ?? config.label;
   button.disabled = Boolean(config.disabled);
   button.addEventListener('click', () => config.onClick());

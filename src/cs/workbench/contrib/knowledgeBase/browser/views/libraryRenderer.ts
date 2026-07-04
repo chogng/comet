@@ -1,6 +1,6 @@
 import type { LibraryDocumentsResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { SimpleTreeRenderContext } from 'cs/base/browser/ui/tree/simpleTree';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
@@ -11,6 +11,8 @@ import { LibraryDataSource } from 'cs/workbench/contrib/knowledgeBase/browser/vi
 import { LibraryDelegate } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDelegate';
 import type { LibraryDragAndDrop } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDragAndDrop';
 import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
+
+const hoverService = getHoverService();
 
 export type LibraryRendererLabels = LibraryTreeLabels & {
   unknown: string;
@@ -136,11 +138,11 @@ export class LibraryRenderer {
 
     const titleElement = createElement('span', 'library-tree-document-title');
     titleElement.textContent = title;
-    applyHover(titleElement, title);
+    hoverService.applyHover(titleElement, title);
 
     const metaElement = createElement('span', 'library-tree-document-meta');
     metaElement.textContent = authors;
-    applyHover(metaElement, authors);
+    hoverService.applyHover(metaElement, authors);
 
     const statusElement = createElement(
       'span',

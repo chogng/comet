@@ -1,7 +1,7 @@
 import type { ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DataTree } from 'cs/base/browser/ui/tree/dataTree';
@@ -44,6 +44,7 @@ const VIEW_DETAILS_LABEL = 'View details';
 const DOWNLOADED_PDF_LABEL = 'PDF downloaded';
 const MORE_ACTIONS_LABEL = 'More actions';
 const ARTICLE_TREE_MORE_MENU_DATA = 'sidebar-article-tree-more';
+const hoverService = getHoverService();
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
@@ -231,7 +232,7 @@ export class FetchTreeView extends Disposable {
 
     const label = createElement('span', 'fetch-tree-folder-label');
     label.textContent = node.name;
-    applyHover(label, node.name);
+    hoverService.applyHover(label, node.name);
 
     const count = createElement('span', 'fetch-tree-folder-count');
     count.textContent = String(node.articles.length);
@@ -294,11 +295,11 @@ export class FetchTreeView extends Disposable {
     const main = createElement('div', 'fetch-tree-article-main');
     const titleElement = createElement('span', 'fetch-tree-article-title');
     titleElement.textContent = title;
-    applyHover(titleElement, title);
+    hoverService.applyHover(titleElement, title);
 
     const metaElement = createElement('span', 'fetch-tree-article-meta');
     metaElement.textContent = metaText;
-    applyHover(metaElement, metaText);
+    hoverService.applyHover(metaElement, metaText);
     main.append(titleElement, metaElement);
 
     const actionBar = this.getArticleActionBar(node.id);

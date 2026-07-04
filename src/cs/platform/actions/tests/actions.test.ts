@@ -8,8 +8,25 @@ import {
   getMenuActions,
   registerAction2,
 } from 'cs/platform/actions/common/actions';
-import { commandService } from 'cs/platform/commands/common/commands';
+import {
+  commandService,
+  setCommandServiceInstantiationService,
+} from 'cs/platform/commands/common/commands';
+import {
+  createDecorator,
+  type ServicesAccessor,
+} from 'cs/platform/instantiation/common/instantiation';
+import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
+import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import { KeybindingsRegistry } from 'cs/platform/keybinding/common/keybindingsRegistry';
+
+interface TestActionService {
+  readonly _serviceBrand: undefined;
+  readonly value: string;
+}
+
+const ITestActionService =
+  createDecorator<TestActionService>('testActionService');
 
 test('registerAction2 wires command palette menu and keybinding', () => {
   class SampleAction extends Action2 {
@@ -24,22 +41,44 @@ test('registerAction2 wires command palette menu and keybinding', () => {
       });
     }
 
-    run(): string {
-      return 'ran';
+    run(accessor: ServicesAccessor): string {
+      return accessor.get(ITestActionService).value;
     }
   }
 
-  const disposable = registerAction2(SampleAction);
-
-  assert.equal(commandService.executeCommand('test.sampleAction'), 'ran');
-  assert.equal(MenuRegistry.getCommand('test.sampleAction')?.id, 'test.sampleAction');
-  assert.equal(
-    KeybindingsRegistry.getDefaultKeybindings().some(
-      (rule) => rule.id === 'test.sampleAction',
-    ),
+  const serviceCollection = new ServiceCollection();
+  serviceCollection.set(ITestActionService, {
+    _serviceBrand: undefined,
+    value: 'ran',
+  });
+  const instantiationService = new InstantiationService(
+    serviceCollection,
     true,
   );
-  assert.equal(getMenuActions(MenuId.CommandPalette)[0][1][0].id, 'test.sampleAction');
+  const commandServiceInstantiationService = setCommandServiceInstantiationService(
+    instantiationService,
+  );
+  const disposable = registerAction2(SampleAction);
 
-  disposable.dispose();
+  try {
+    assert.equal(commandService.executeCommand('test.sampleAction'), 'ran');
+    assert.equal(
+      MenuRegistry.getCommand('test.sampleAction')?.id,
+      'test.sampleAction',
+    );
+    assert.equal(
+      KeybindingsRegistry.getDefaultKeybindings().some(
+        (rule) => rule.id === 'test.sampleAction',
+      ),
+      true,
+    );
+    assert.equal(
+      getMenuActions(MenuId.CommandPalette)[0][1][0].id,
+      'test.sampleAction',
+    );
+  } finally {
+    disposable.dispose();
+    commandServiceInstantiationService.dispose();
+    instantiationService.dispose();
+  }
 });

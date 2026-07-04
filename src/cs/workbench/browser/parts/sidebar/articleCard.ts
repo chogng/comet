@@ -1,6 +1,6 @@
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -37,6 +37,7 @@ const ARCHIVE_BADGE_TITLES = {
   txt: 'Extracted text available',
   pdf: 'Archived PDF available',
 } as const;
+const hoverService = getHoverService();
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
@@ -203,7 +204,7 @@ export class ArticleCard extends Disposable {
     }
 
     this.titleElement.textContent = title;
-    applyHover(this.titleElement, title);
+    hoverService.applyHover(this.titleElement, title);
     this.metaElement.textContent = metaText;
     this.renderArchiveBadges();
 

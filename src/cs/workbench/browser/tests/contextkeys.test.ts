@@ -76,11 +76,17 @@ test('workbench layout service commands apply agent and flow layouts', async () 
     );
     const {
       createWorkbenchLayoutService,
+      IWorkbenchLayoutService,
     } = await import('cs/workbench/services/layout/browser/layoutService');
     const {
-      WorkbenchLayoutActions,
       WorkbenchLayoutCommandId,
     } = await import('cs/workbench/browser/actions/layoutActions');
+    const {
+      disposeWorkbenchInstantiationService,
+      registerWorkbenchService,
+    } = await import(
+      'cs/workbench/services/instantiation/browser/workbenchInstantiationService'
+    );
     const {
       getWorkbenchLayoutStateSnapshot,
       setAgentSidebarVisible,
@@ -89,8 +95,7 @@ test('workbench layout service commands apply agent and flow layouts', async () 
     } = await import('cs/workbench/browser/layout');
 
     const layoutService = createWorkbenchLayoutService();
-    const layoutActions = new WorkbenchLayoutActions(layoutService);
-    const replacedLayoutActions = new WorkbenchLayoutActions(layoutService);
+    registerWorkbenchService(IWorkbenchLayoutService, layoutService);
 
     try {
       setPrimarySidebarVisible(false);
@@ -112,8 +117,7 @@ test('workbench layout service commands apply agent and flow layouts', async () 
       assert.equal(layoutState.isAgentSidebarVisible, false);
       assert.equal(layoutState.isEditorCollapsed, false);
     } finally {
-      replacedLayoutActions.dispose();
-      layoutActions.dispose();
+      disposeWorkbenchInstantiationService();
       layoutService.dispose();
     }
   } finally {

@@ -1,9 +1,6 @@
-import { DisposableStore } from 'cs/base/common/lifecycle';
-import type { IDisposable } from 'cs/base/common/lifecycle';
-import { commandsRegistry } from 'cs/platform/commands/common/commands';
-import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
+import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
+import type { ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { IWorkbenchLayoutService } from 'cs/workbench/services/layout/browser/layoutService';
-import { registerWorkbenchContribution } from 'cs/workbench/common/contributions';
 
 export const WorkbenchLayoutCommandId = {
   applyAgentLayout: 'workbench.action.applyAgentLayout',
@@ -14,67 +11,73 @@ export const WorkbenchLayoutCommandId = {
   toggleEditorCollapsed: 'workbench.action.toggleEditorCollapsed',
 } as const;
 
-let activeWorkbenchLayoutActions: WorkbenchLayoutActions | null = null;
-
-export class WorkbenchLayoutActions implements IDisposable {
-  private readonly disposables = new DisposableStore();
-
-  constructor(
-    @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
-  ) {
-    activeWorkbenchLayoutActions?.dispose();
-    activeWorkbenchLayoutActions = this;
-
-    this.disposables.add(
-      commandsRegistry.registerCommand(
-        WorkbenchLayoutCommandId.applyAgentLayout,
-        () => {
-          this.layoutService.applyLayoutMode('agent');
-        },
-      ),
-    );
-    this.disposables.add(
-      commandsRegistry.registerCommand(
-        WorkbenchLayoutCommandId.applyFlowLayout,
-        () => {
-          this.layoutService.applyLayoutMode('flow');
-        },
-      ),
-    );
-    this.disposables.add(
-      commandsRegistry.registerCommand(
-        WorkbenchLayoutCommandId.togglePrimarySidebarVisibility,
-        () => {
-          this.layoutService.togglePrimarySidebarVisibility();
-        },
-      ),
-    );
-    this.disposables.add(
-      commandsRegistry.registerCommand(
-        WorkbenchLayoutCommandId.toggleAgentSidebarVisibility,
-        () => {
-          this.layoutService.toggleAgentSidebarVisibility();
-        },
-      ),
-    );
-    this.disposables.add(
-      commandsRegistry.registerCommand(
-        WorkbenchLayoutCommandId.toggleEditorCollapsed,
-        (expandedEditorSize?: number) => {
-          this.layoutService.toggleEditorCollapsed(expandedEditorSize);
-        },
-      ),
-    );
+class ApplyAgentLayoutAction extends Action2 {
+  constructor() {
+    super({
+      id: WorkbenchLayoutCommandId.applyAgentLayout,
+      title: 'Apply Agent Layout',
+    });
   }
 
-  dispose() {
-    this.disposables.dispose();
-    if (activeWorkbenchLayoutActions === this) {
-      activeWorkbenchLayoutActions = null;
-    }
+  run(accessor: ServicesAccessor): void {
+    accessor.get(IWorkbenchLayoutService).applyLayoutMode('agent');
   }
 }
 
-registerWorkbenchContribution(() =>
-  getWorkbenchInstantiationService().createInstance(WorkbenchLayoutActions),
-);
+class ApplyFlowLayoutAction extends Action2 {
+  constructor() {
+    super({
+      id: WorkbenchLayoutCommandId.applyFlowLayout,
+      title: 'Apply Flow Layout',
+    });
+  }
+
+  run(accessor: ServicesAccessor): void {
+    accessor.get(IWorkbenchLayoutService).applyLayoutMode('flow');
+  }
+}
+
+class TogglePrimarySidebarVisibilityAction extends Action2 {
+  constructor() {
+    super({
+      id: WorkbenchLayoutCommandId.togglePrimarySidebarVisibility,
+      title: 'Toggle Primary Sidebar Visibility',
+    });
+  }
+
+  run(accessor: ServicesAccessor): void {
+    accessor.get(IWorkbenchLayoutService).togglePrimarySidebarVisibility();
+  }
+}
+
+class ToggleAgentSidebarVisibilityAction extends Action2 {
+  constructor() {
+    super({
+      id: WorkbenchLayoutCommandId.toggleAgentSidebarVisibility,
+      title: 'Toggle Agent Sidebar Visibility',
+    });
+  }
+
+  run(accessor: ServicesAccessor): void {
+    accessor.get(IWorkbenchLayoutService).toggleAgentSidebarVisibility();
+  }
+}
+
+class ToggleEditorCollapsedAction extends Action2 {
+  constructor() {
+    super({
+      id: WorkbenchLayoutCommandId.toggleEditorCollapsed,
+      title: 'Toggle Editor Collapsed',
+    });
+  }
+
+  run(accessor: ServicesAccessor, expandedEditorSize?: number): void {
+    accessor.get(IWorkbenchLayoutService).toggleEditorCollapsed(expandedEditorSize);
+  }
+}
+
+registerAction2(ApplyAgentLayoutAction);
+registerAction2(ApplyFlowLayoutAction);
+registerAction2(TogglePrimarySidebarVisibilityAction);
+registerAction2(ToggleAgentSidebarVisibilityAction);
+registerAction2(ToggleEditorCollapsedAction);

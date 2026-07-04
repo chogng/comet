@@ -1,5 +1,6 @@
 import type { IDisposable } from 'cs/base/common/lifecycle';
 import { DisposableStore } from 'cs/base/common/lifecycle';
+import { setCommandServiceInstantiationService } from 'cs/platform/commands/common/commands';
 import type { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import type {
@@ -12,7 +13,17 @@ import { ServiceCollection } from 'cs/platform/instantiation/common/serviceColle
 let serviceCollection = new ServiceCollection();
 let disposables = new DisposableStore();
 let instantiationService = new InstantiationService(serviceCollection, true);
+let commandServiceInstantiationService = setCommandServiceInstantiationService(
+  instantiationService,
+);
 let disposed = false;
+
+function connectCommandServiceInstantiationService() {
+  commandServiceInstantiationService.dispose();
+  commandServiceInstantiationService = setCommandServiceInstantiationService(
+    instantiationService,
+  );
+}
 
 function ensureActiveServiceCollection() {
   if (!disposed) {
@@ -22,6 +33,7 @@ function ensureActiveServiceCollection() {
   serviceCollection = new ServiceCollection();
   disposables = new DisposableStore();
   instantiationService = new InstantiationService(serviceCollection, true);
+  connectCommandServiceInstantiationService();
   disposed = false;
 }
 
@@ -63,6 +75,7 @@ export function disposeWorkbenchInstantiationService(): void {
   }
 
   disposed = true;
+  commandServiceInstantiationService.dispose();
   disposables.dispose();
   instantiationService.dispose();
 }
