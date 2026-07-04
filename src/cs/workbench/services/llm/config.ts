@@ -13,7 +13,10 @@ import {
 export const defaultLlmProviderId: LlmProviderId = 'glm';
 
 const defaultEnabledLlmModelOptions: Record<LlmProviderId, string[]> = {
-  glm: [serializeLlmModelOptionValue('glm', 'glm-4.7-flash')],
+  glm: [
+    serializeLlmModelOptionValue('glm', 'glm-4.7-flash'),
+    serializeLlmModelOptionValue('glm', 'glm-4.6v-flash'),
+  ],
   kimi: [serializeLlmModelOptionValue('kimi', 'kimi-k2.5')],
   deepseek: [serializeLlmModelOptionValue('deepseek', 'deepseek-chat')],
   anthropic: [],

@@ -18,6 +18,14 @@ const glm: ReadonlyArray<LlmModelDefinition> = [
   },
   {
     ...glmDefaults,
+    id: 'glm-4.6v-flash',
+    label: 'GLM-4.6V-Flash',
+    description: 'Fast GLM-4.6V Flash model.',
+    latency_tier: 'fast',
+    recommendedTasks: ['chat'],
+  },
+  {
+    ...glmDefaults,
     id: 'glm-4.6',
     label: 'GLM-4.6',
     description: 'Balanced GLM model for chat and stronger reasoning.',
