@@ -15,7 +15,7 @@ import type {
   ActionBarMenuItem,
   ActionBarRenderable,
 } from 'cs/base/browser/ui/actionbar/actionbar';
-import type { HoverService } from 'cs/base/browser/ui/hover/hover';
+import type { HoverInput, IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
 import { createPlatformContextMenuService } from 'cs/platform/contextview/browser/contextMenuService';
 
 export type DropdownMenuActionAlignment = 'start' | 'end';
@@ -58,7 +58,7 @@ export type DropdownMenuActionViewItemOptions = {
   className?: string;
   buttonClassName?: string;
   buttonAttributes?: Record<string, string | null | undefined | false>;
-  hover?: import('cs/base/browser/ui/hover/hover').HoverInput;
+  hover?: HoverInput;
   menu?: readonly ActionBarMenuItem[];
   menuHeader?: DropdownMenuHeader;
   renderOverlay?: (context: DropdownMenuActionOverlayContext) => HTMLElement;
@@ -66,7 +66,7 @@ export type DropdownMenuActionViewItemOptions = {
   menuClassName?: string;
   menuData?: string;
   minWidth?: number;
-  hoverService?: HoverService;
+  hoverService?: IHoverDelegate;
   contextMenuService?: ContextMenuService;
   overlayAlignment?: DropdownMenuActionAlignment;
   overlayAlignmentPolicy?: DropdownMenuActionAlignmentPolicy;

@@ -467,6 +467,11 @@ function createWorkbenchLayoutViewProps() {
       errorMessage: null,
       onAsk: () => {},
       onApplyPatch: () => {},
+      articleQuickSources: [],
+      isArticleSourceFetching: false,
+      onFetchArticleSource: () => {},
+      onDownloadArticlePdf: async () => {},
+      onOpenArticleDetails: () => {},
       availableArticleCount: 0,
       conversations: [
         {

@@ -1,6 +1,6 @@
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import type { Locale } from 'language/i18n';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';

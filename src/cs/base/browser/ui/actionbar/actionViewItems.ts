@@ -1,10 +1,12 @@
 import * as DOM from 'cs/base/browser/dom';
 import {
   bindHover,
-  getHoverService,
-  type HoverBinding,
-  type HoverInput,
-  type HoverService,
+  getBaseLayerHoverDelegate,
+} from 'cs/base/browser/ui/hover/hoverDelegate';
+import type {
+  HoverBinding,
+  HoverInput,
+  IHoverDelegate,
 } from 'cs/base/browser/ui/hover/hover';
 import { Disposable } from 'cs/base/common/lifecycle';
 import type {
@@ -17,7 +19,7 @@ import type {
 // from item.hover -> item.title -> item.label, and aria-label still comes from label.
 
 export type BaseActionViewItemOptions = {
-  hoverService?: HoverService;
+  hoverService?: IHoverDelegate;
 };
 
 export type ActionViewItemOptions = BaseActionViewItemOptions;
@@ -75,13 +77,13 @@ export abstract class BaseActionViewItem
 }
 
 function resolveHoverService(
-  optionsOrHoverService: ActionViewItemOptions | HoverService,
-): HoverService {
-  if (isHoverService(optionsOrHoverService)) {
+  optionsOrHoverService: ActionViewItemOptions | IHoverDelegate,
+): IHoverDelegate {
+  if (isHoverDelegate(optionsOrHoverService)) {
     return optionsOrHoverService;
   }
 
-  return optionsOrHoverService.hoverService ?? getHoverService();
+  return optionsOrHoverService.hoverService ?? getBaseLayerHoverDelegate();
 }
 
 function resolveRenderable(renderable: ActionViewRenderable): Node {
@@ -132,10 +134,10 @@ export class ActionViewItem extends BaseActionViewItem {
   protected readonly hoverBinding: HoverBinding;
 
   constructor(item: ActionBarActionItem, options?: ActionViewItemOptions);
-  constructor(item: ActionBarActionItem, hoverService?: HoverService);
+  constructor(item: ActionBarActionItem, hoverService?: IHoverDelegate);
   constructor(
     item: ActionBarActionItem,
-    optionsOrHoverService: ActionViewItemOptions | HoverService = getHoverService(),
+    optionsOrHoverService: ActionViewItemOptions | IHoverDelegate = getBaseLayerHoverDelegate(),
   ) {
     const hoverService = resolveHoverService(optionsOrHoverService);
 
@@ -231,8 +233,8 @@ export class ActionViewItem extends BaseActionViewItem {
   }
 }
 
-function isHoverService(
-  value: ActionViewItemOptions | HoverService,
-): value is HoverService {
-  return typeof (value as HoverService).createHover === 'function';
+function isHoverDelegate(
+  value: ActionViewItemOptions | IHoverDelegate,
+): value is IHoverDelegate {
+  return typeof (value as IHoverDelegate).createHover === 'function';
 }

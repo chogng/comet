@@ -1,4 +1,4 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';

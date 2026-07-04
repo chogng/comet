@@ -1,4 +1,4 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import { createStatusbarItemElement } from 'cs/workbench/browser/parts/statusbar/statusbarItem';
 import { renderStatusbarMode } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';

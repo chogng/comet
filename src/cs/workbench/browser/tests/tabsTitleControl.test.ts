@@ -14,7 +14,7 @@ import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorP
 import type {
   WorkbenchContextMenuDelegate,
   WorkbenchContextMenuService,
-} from 'cs/workbench/services/contextmenu/electron-sandbox/contextmenuService';
+} from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let TabsTitleControl: typeof import('cs/workbench/browser/parts/editor/tabsTitleControl').TabsTitleControl;

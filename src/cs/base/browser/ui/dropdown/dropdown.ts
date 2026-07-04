@@ -1,10 +1,10 @@
 import 'cs/base/browser/ui/dropdown/dropdown.css';
 import { createContextViewController } from 'cs/base/browser/ui/contextview/contextview';
-import {
-  getHoverService,
-  type HoverHandle,
-  type HoverInput,
-  type HoverService,
+import { getBaseLayerHoverDelegate } from 'cs/base/browser/ui/hover/hoverDelegate';
+import type {
+  HoverHandle,
+  HoverInput,
+  IHoverDelegate,
 } from 'cs/base/browser/ui/hover/hover';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -73,7 +73,7 @@ export type DropdownProps = {
   className?: string;
   title?: string;
   hover?: HoverInput;
-  hoverService?: HoverService;
+  hoverService?: IHoverDelegate;
   menuPresenter?: DropdownMenuPresenter;
   menuAlign?: DropdownMenuAlign;
   onChange?: (event: { target: { value: string } }) => void;
@@ -369,7 +369,7 @@ export class DropdownView extends Disposable {
   constructor(props: DropdownProps) {
     super();
     this.props = this.normalizeProps(props);
-    const hoverService = this.props.hoverService ?? getHoverService();
+    const hoverService = this.props.hoverService ?? getBaseLayerHoverDelegate();
     this.hoverController = hoverService.createHover(this.element, null);
     this._register(this.hoverController);
     this._register(this.defaultMenuPresenter);

@@ -1,4 +1,4 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import type {
   EditorStatusItem,
   EditorStatusState,

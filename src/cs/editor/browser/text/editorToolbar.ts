@@ -8,7 +8,7 @@ import {
   createDomDropdownMenuPresenter,
   createDropdownView,
 } from 'cs/base/browser/ui/dropdown/dropdown';
-import { getHoverService } from 'cs/base/browser/ui/hover/hover';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 
 import type { WritingEditorToolbarState } from 'cs/editor/browser/text/commands';

@@ -9,12 +9,17 @@ import type {
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { LocaleMessages } from 'language/locales';
-import { fetchLatestArticlesBatch } from 'cs/workbench/services/article/articleFetch';
+import {
+  fetchLatestArticlesBatch,
+  resolveBatchFetchSources,
+  resolveBatchFetchSourceTable,
+} from 'cs/workbench/services/article/articleFetch';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { INITIAL_BATCH_FETCH_MACHINE_STATE, reduceBatchFetchMachineState } from 'cs/workbench/services/article/batchFetchState';
 import type { BatchFetchMachineEvent, BatchFetchMachineState } from 'cs/workbench/services/article/batchFetchState';
 import { resolveBatchFetchStatusbarStatus } from 'cs/workbench/browser/parts/statusbar/statusbarFetchStatus';
 import type { BatchFetchStatusbarStatus } from 'cs/workbench/browser/parts/statusbar/statusbarFetchStatus';
+import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 
 import {
   formatLocalized,
@@ -38,6 +43,10 @@ export type BatchFetchControllerSnapshot = BatchFetchMachineState &
   BatchFetchStatusbarStatus & {
     isBatchLoading: boolean;
   };
+
+export type BatchFetchControllerResult =
+  | { ok: true; articles: Article[] }
+  | { ok: false };
 
 function createBatchFetchSnapshot(
   machineState: BatchFetchMachineState,
@@ -106,15 +115,9 @@ export class BatchFetchController {
 
   readonly handleFetchLatestBatch = async () => {
     const {
-      desktopRuntime,
       addressBarUrl,
       journalSourceOverrides,
-      batchStartDate,
-      batchEndDate,
-      invokeDesktop,
-      ui,
       onBeforeFetch,
-      onFetchSuccess,
     } = this.context;
 
     this.requestId += 1;
@@ -123,18 +126,53 @@ export class BatchFetchController {
     this.dispatch({ type: 'FETCH_STARTED', requestId });
     onBeforeFetch();
 
+    const sourceTable = resolveBatchFetchSourceTable(journalSourceOverrides);
+    const batchSources = resolveBatchFetchSources(addressBarUrl, sourceTable);
+
+    return this.handleFetchRequest(requestId, batchSources, sourceTable);
+  };
+
+  readonly handleFetchSource = async (
+    source: BatchSource,
+  ): Promise<BatchFetchControllerResult> => {
+    const { journalSourceOverrides, onBeforeFetch } = this.context;
+
+    this.requestId += 1;
+    const requestId = this.requestId;
+
+    this.dispatch({ type: 'FETCH_STARTED', requestId });
+    onBeforeFetch();
+
+    const sourceTable = resolveBatchFetchSourceTable(journalSourceOverrides);
+    return this.handleFetchRequest(requestId, [source], sourceTable);
+  };
+
+  private async handleFetchRequest(
+    requestId: number,
+    batchSources: ReadonlyArray<BatchSource>,
+    sourceTable: ReadonlyArray<BatchSource>,
+  ): Promise<BatchFetchControllerResult> {
+    const {
+      desktopRuntime,
+      batchStartDate,
+      batchEndDate,
+      invokeDesktop,
+      ui,
+      onFetchSuccess,
+    } = this.context;
+
     try {
       const result = await fetchLatestArticlesBatch({
         desktopRuntime,
-        addressBarUrl,
-        journalSourceOverrides,
+        batchSources,
+        sourceTable,
         startDate: batchStartDate || null,
         endDate: batchEndDate || null,
         invokeDesktop,
       });
 
       if (this.disposed) {
-        return;
+        return { ok: false };
       }
 
       if (!result.ok) {
@@ -145,7 +183,7 @@ export class BatchFetchController {
             requestId,
             errorMessage: 'desktop_unsupported',
           });
-          return;
+          return { ok: false };
         }
 
         if (result.reason === 'empty_page_url') {
@@ -155,7 +193,7 @@ export class BatchFetchController {
             requestId,
             errorMessage: 'empty_page_url',
           });
-          return;
+          return { ok: false };
         }
 
         if (result.reason === 'invalid_date_range') {
@@ -165,7 +203,7 @@ export class BatchFetchController {
             requestId,
             errorMessage: 'invalid_date_range',
           });
-          return;
+          return { ok: false };
         }
 
         const localizedError = result.error
@@ -181,7 +219,7 @@ export class BatchFetchController {
           requestId,
           errorMessage: localizedError,
         });
-        return;
+        return { ok: false };
       }
 
       onFetchSuccess(result.articles);
@@ -191,9 +229,10 @@ export class BatchFetchController {
         }),
       );
       this.dispatch({ type: 'FETCH_SUCCEEDED', requestId });
+      return { ok: true, articles: result.articles };
     } catch (error) {
       if (this.disposed) {
-        return;
+        return { ok: false };
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -207,8 +246,9 @@ export class BatchFetchController {
         requestId,
         errorMessage: errorMessage || ui.errorUnknown,
       });
+      return { ok: false };
     }
-  };
+  }
 
   private connectFetchStatus() {
     this.fetchStatusListener.clear();

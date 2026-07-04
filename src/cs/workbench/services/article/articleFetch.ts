@@ -38,8 +38,8 @@ export type FetchLatestArticlesBatchResult =
 
 type FetchLatestArticlesBatchParams = {
   desktopRuntime: boolean;
-  addressBarUrl?: string | null;
-  journalSourceOverrides?: JournalSourceOverride[];
+  batchSources: ReadonlyArray<BatchSource>;
+  sourceTable: ReadonlyArray<BatchSource>;
   limit?: number;
   startDate?: string | null;
   endDate?: string | null;
@@ -147,7 +147,7 @@ function createBatchSourceFromJournalOverride(
   };
 }
 
-function resolveSourceTable(
+export function resolveBatchFetchSourceTable(
   journalSourceOverrides?: readonly JournalSourceOverride[],
 ): BatchSource[] {
   return [
@@ -158,8 +158,8 @@ function resolveSourceTable(
 
 export async function fetchLatestArticlesBatch({
   desktopRuntime,
-  addressBarUrl,
-  journalSourceOverrides,
+  batchSources,
+  sourceTable,
   limit: _limit,
   startDate,
   endDate,
@@ -170,9 +170,7 @@ export async function fetchLatestArticlesBatch({
     return { ok: false, reason: 'desktop_unsupported' };
   }
 
-  const sourceTable = resolveSourceTable(journalSourceOverrides);
-  const selectedSources = resolveBatchFetchSources(addressBarUrl, sourceTable);
-  const { sources } = prepareBatchSourcesForFetch(selectedSources, sourceTable);
+  const { sources } = prepareBatchSourcesForFetch(batchSources, sourceTable);
   if (sources.length === 0) {
     return { ok: false, reason: 'empty_page_url' };
   }

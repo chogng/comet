@@ -1,4 +1,4 @@
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import {
   buildSettingsInput as buildInput,

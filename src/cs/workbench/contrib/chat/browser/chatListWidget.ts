@@ -9,9 +9,12 @@ import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { localize } from 'cs/nls';
 import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/chatListRenderer';
+import type { Article } from 'cs/workbench/services/article/articleFetch';
 
 export type ChatListWidgetOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
+	readonly onDownloadArticlePdf: (article: Article) => Promise<void>;
+	readonly onOpenArticleDetails: (article: Article) => void | Promise<void>;
 };
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -37,6 +40,8 @@ export class ChatListWidget {
 	constructor(options: ChatListWidgetOptions) {
 		this.renderer = new ChatListRenderer({
 			onApplyPatch: options.onApplyPatch,
+			onDownloadArticlePdf: options.onDownloadArticlePdf,
+			onOpenArticleDetails: options.onOpenArticleDetails,
 		});
 		this.scrollableElement = new DomScrollableElement(this.contentElement, {
 			className: 'agentbar-thread-scrollable',

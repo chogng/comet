@@ -58,6 +58,12 @@ export type AssistantChatMessage =
       content: string;
       result: RagAnswerResult;
       patchProposal?: AssistantPatchProposal | null;
+    }
+  | {
+      id: string;
+      role: "article";
+      article: Article;
+      sourceLabel: string;
     };
 
 export type AssistantConversation = {
@@ -86,7 +92,7 @@ export type AssistantModelSnapshot = AssistantModelState & {
 };
 
 function toAgentMessage(
-  message: AssistantChatMessage,
+  message: Extract<AssistantChatMessage, { role: "user" | "assistant" }>,
 ): AgentMessagePayload {
   return {
     role: message.role,
@@ -148,6 +154,12 @@ function canApplyAssistantPatch(
 
 function createMessageId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isAgentTextMessage(
+  message: AssistantChatMessage,
+): message is Extract<AssistantChatMessage, { role: "user" | "assistant" }> {
+  return message.role === "user" || message.role === "assistant";
 }
 
 function createConversationId() {
@@ -342,6 +354,44 @@ export class AssistantModel {
     });
   };
 
+  readonly handleInsertArticles = (
+    articles: readonly Article[],
+    sourceLabel: string,
+  ) => {
+    if (articles.length === 0) {
+      return;
+    }
+
+    this.updateActiveConversation((conversation) => {
+      const isFirstMessage = conversation.messages.length === 0;
+      const articleTitle = articles[0].title.trim().slice(0, 18);
+      const sourceTitle = sourceLabel.trim().slice(0, 18);
+
+      return {
+        ...conversation,
+        title: isFirstMessage
+          ? articleTitle ||
+            sourceTitle ||
+            createDefaultConversationTitle(
+              this.context.ui,
+              conversation.autoTitleIndex ?? 0,
+            )
+          : conversation.title,
+        autoTitleIndex: isFirstMessage ? null : conversation.autoTitleIndex,
+        messages: [
+          ...conversation.messages,
+          ...articles.map(article => ({
+            id: createMessageId(),
+            role: "article" as const,
+            article,
+            sourceLabel,
+          })),
+        ],
+        errorMessage: null,
+      };
+    });
+  };
+
   readonly handleApplyPatch = (messageId: string) => {
     const activeConversation = this.snapshot.activeConversation;
     if (!activeConversation) {
@@ -508,9 +558,9 @@ export class AssistantModel {
       const activeDraftStableSelectionTarget =
         context.getActiveDraftStableSelectionTarget?.() ?? null;
       const nextResult = await context.invokeDesktop("run_main_agent_turn", {
-        messages: [...activeConversation.messages, userMessage].map((message) =>
-          toAgentMessage(message),
-        ),
+        messages: [...activeConversation.messages, userMessage]
+          .filter(isAgentTextMessage)
+          .map((message) => toAgentMessage(message)),
         writingContext: fallbackWritingContext.trim() || null,
         draftBody: draftBody.trim() || null,
         editorSelection: activeDraftStableSelectionTarget,

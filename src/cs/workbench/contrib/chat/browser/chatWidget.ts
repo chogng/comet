@@ -52,6 +52,10 @@ export class ChatWidget {
 			onApplyPatch: messageId => {
 				this.props.onApplyPatch(messageId);
 			},
+			onDownloadArticlePdf: article =>
+				this.props.onDownloadArticlePdf(article),
+			onOpenArticleDetails: article =>
+				this.props.onOpenArticleDetails(article),
 		});
 		this.inputPart = new ChatInputPart(this.createInputPartProps());
 		this.render();
@@ -137,6 +141,9 @@ export class ChatWidget {
 			onQuestionChange: this.props.onQuestionChange,
 			isAsking: this.props.isAsking,
 			onAsk: this.props.onAsk,
+			articleQuickSources: this.props.articleQuickSources,
+			isArticleSourceFetching: this.props.isArticleSourceFetching,
+			onFetchArticleSource: this.props.onFetchArticleSource,
 			llmModelOptions: this.props.llmModelOptions,
 			activeLlmModelOptionValue: this.props.activeLlmModelOptionValue,
 			onToggleAutoModelRouting: this.props.onToggleAutoModelRouting,

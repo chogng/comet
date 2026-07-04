@@ -1,4 +1,4 @@
-import { getHoverService } from 'cs/base/browser/ui/hover/hover';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { LocaleMessages } from 'language/locales';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createModalView } from 'cs/base/browser/ui/modal/modal';

@@ -1,6 +1,6 @@
 import type { LibraryDocumentsResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import type { SimpleTreeRenderContext } from 'cs/base/browser/ui/tree/simpleTree';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
@@ -10,7 +10,7 @@ import type { LibraryTreeLabels, LibraryTreeFolderNode, LibraryTreeNode } from '
 import { LibraryDataSource } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDataSource';
 import { LibraryDelegate } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDelegate';
 import type { LibraryDragAndDrop } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDragAndDrop';
-import { createContextMenuService } from 'cs/workbench/services/contextmenu/electron-sandbox/contextmenuService';
+import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 
 export type LibraryRendererLabels = LibraryTreeLabels & {
   unknown: string;

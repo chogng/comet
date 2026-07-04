@@ -3,10 +3,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
+import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { localize } from 'cs/nls';
+import type { Article } from 'cs/workbench/services/article/articleFetch';
 
 export type ChatListRendererOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
+	readonly onDownloadArticlePdf: (article: Article) => Promise<void>;
+	readonly onOpenArticleDetails: (article: Article) => void | Promise<void>;
 };
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -28,6 +33,10 @@ export class ChatListRenderer {
 			return this.renderUserMessage(message);
 		}
 
+		if (message.role === 'article') {
+			return this.renderArticleMessage(message);
+		}
+
 		return this.renderAssistantMessage(message);
 	}
 
@@ -41,6 +50,54 @@ export class ChatListRenderer {
 		const text = createElement('p', 'agentbar-message-text');
 		text.textContent = message.content;
 		item.append(text);
+		return item;
+	}
+
+	private renderArticleMessage(
+		message: Extract<AssistantChatMessage, { role: 'article' }>,
+	) {
+		const item = createElement(
+			'div',
+			'agentbar-message agentbar-message-article',
+		);
+		const body = createElement('div', 'agentbar-message-body');
+		const card = createElement('article', 'agentbar-article-card');
+		const header = createElement('div', 'agentbar-article-card-header');
+		const source = createElement('span', 'agentbar-article-source');
+		source.textContent = message.sourceLabel;
+		const downloadButton = createElement(
+			'button',
+			'agentbar-article-download-btn btn-base btn-secondary btn-sm',
+		);
+		downloadButton.type = 'button';
+		downloadButton.append(
+			createLxIcon(lxIconSemanticMap.articleCard.download),
+			document.createTextNode(
+				localize('agentbarArticleDownloadPdf', "Download PDF"),
+			),
+		);
+		downloadButton.addEventListener('click', event => {
+			event.stopPropagation();
+			void this.options.onDownloadArticlePdf(message.article);
+		});
+		header.append(source, downloadButton);
+
+		const title = createElement('h3', 'agentbar-article-title');
+		title.textContent = message.article.title;
+		title.addEventListener('click', () => {
+			void this.options.onOpenArticleDetails(message.article);
+		});
+
+		const meta = createElement('p', 'agentbar-article-meta');
+		meta.textContent = [
+			message.article.journalTitle,
+			message.article.publishedAt,
+			message.article.articleType,
+		].filter(Boolean).join(' | ');
+
+		card.append(header, title, meta);
+		body.append(card);
+		item.append(body);
 		return item;
 	}
 

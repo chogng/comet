@@ -2,6 +2,8 @@ import type { AssistantModelSnapshot } from 'cs/workbench/browser/assistantModel
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/chatWidget';
+import type { Article } from 'cs/workbench/services/article/articleFetch';
+import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
@@ -22,11 +24,16 @@ type CreateSessionChatViewPropsParams = {
 		activeLlmModelLabel: string;
 		isMaxContextWindowEnabled: boolean;
 		activeLlmModelSupportsMaxContextWindow: boolean;
+		articleQuickSources: BatchSource[];
+		isArticleSourceFetching: boolean;
 	};
 	actions: {
 		onQuestionChange: (value: string) => void;
 		onAsk: () => void;
 		onApplyPatch: (messageId: string) => void;
+		onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
+		onDownloadArticlePdf: (article: Article) => Promise<void>;
+		onOpenArticleDetails: (article: Article) => void | Promise<void>;
 		onCreateConversation: () => void;
 		onActivateConversation: (conversationId: string) => void;
 		onCloseConversation: (conversationId: string) => void;
@@ -64,11 +71,16 @@ export function createSessionChatViewProps({
 		activeLlmModelLabel,
 		isMaxContextWindowEnabled,
 		activeLlmModelSupportsMaxContextWindow,
+		articleQuickSources,
+		isArticleSourceFetching,
 	},
 	actions: {
 		onQuestionChange,
 		onAsk,
 		onApplyPatch,
+		onFetchArticleSource,
+		onDownloadArticlePdf,
+		onOpenArticleDetails,
 		onCreateConversation,
 		onActivateConversation,
 		onCloseConversation,
@@ -88,6 +100,11 @@ export function createSessionChatViewProps({
 		errorMessage,
 		onAsk,
 		onApplyPatch,
+		articleQuickSources,
+		isArticleSourceFetching,
+		onFetchArticleSource,
+		onDownloadArticlePdf,
+		onOpenArticleDetails,
 		availableArticleCount,
 		conversations,
 		activeConversationId,

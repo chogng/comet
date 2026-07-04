@@ -1,6 +1,6 @@
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createSwitchView } from 'cs/base/browser/ui/switch/switch';
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';

@@ -1,4 +1,4 @@
-import 'cs/base/browser/ui/hover/hover.css';
+import 'cs/base/browser/ui/hover/hoverWidget.css';
 import {
   Disposable,
   DisposableStore,
@@ -36,6 +36,13 @@ export type HoverHandle = DisposableLike & {
   hide: () => void;
   update: (input: HoverInput) => void;
 };
+
+export const enum HoverPosition {
+  LEFT,
+  RIGHT,
+  BELOW,
+  ABOVE,
+}
 
 const DEFAULT_PLAIN_HOVER_DELAY_MS = 600;
 const DEFAULT_ACTION_HOVER_DELAY_MS = 350;
@@ -328,13 +335,26 @@ class HoverWidget {
     return this.pointerInside;
   }
 
-  show(target: HTMLElement, options: HoverOptions, owner: HoverController) {
+  focus() {
+    this.card.tabIndex = -1;
+    const focusTarget = this.card.querySelector<HTMLElement>(
+      'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? this.card;
+    focusTarget.focus();
+  }
+
+  show(
+    target: HTMLElement,
+    anchor: HTMLElement,
+    options: HoverOptions,
+    owner: HoverController,
+  ) {
     this.owner = owner;
     this.target = target;
     this.pointerInside = false;
     this.render(options);
     this.mount();
-    this.layout(target, options);
+    this.layout(anchor, options);
   }
 
   hide() {
@@ -591,6 +611,7 @@ class HoverController extends Disposable implements HoverHandle {
   constructor(
     private readonly target: HTMLElement,
     input: HoverInput,
+    private readonly anchor: HTMLElement = target,
   ) {
     super();
     hoverInteractionPolicy.installGlobalListeners();
@@ -620,7 +641,7 @@ class HoverController extends Disposable implements HoverHandle {
     }
 
     activeController = this;
-    sharedHoverWidget.show(this.target, this.options, this);
+    sharedHoverWidget.show(this.target, this.anchor, this.options, this);
   };
 
   hide = () => {
@@ -645,7 +666,7 @@ class HoverController extends Disposable implements HoverHandle {
     }
 
     if (activeController === this) {
-      sharedHoverWidget.show(this.target, this.options, this);
+      sharedHoverWidget.show(this.target, this.anchor, this.options, this);
     }
   };
 
@@ -783,6 +804,19 @@ class HoverController extends Disposable implements HoverHandle {
 export function createHoverController(
   target: HTMLElement,
   input: HoverInput,
+  anchor?: HTMLElement,
 ): HoverHandle {
-  return new HoverController(target, input);
+  return new HoverController(target, input, anchor);
+}
+
+export function hideActiveHover(): void {
+  activeController?.hide();
+}
+
+export function focusActiveHover(): void {
+  if (!activeController) {
+    return;
+  }
+
+  sharedHoverWidget.focus();
 }

@@ -1,7 +1,7 @@
 import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon, createLxLoadingIcon } from 'cs/base/browser/ui/lxicons/lxicons';
-import { createContextMenuService } from 'cs/workbench/services/contextmenu/electron-sandbox/contextmenuService';
+import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
 const EDITOR_BROWSER_LIBRARY_STORAGE_KEY = 'cs.editor.browser.library.v1';

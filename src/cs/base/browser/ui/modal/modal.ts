@@ -1,8 +1,8 @@
 import 'cs/base/browser/ui/button/button.css';
-import {
-  getHoverService,
-  type HoverHandle,
-  type HoverService,
+import { getBaseLayerHoverDelegate } from 'cs/base/browser/ui/hover/hoverDelegate';
+import type {
+  HoverHandle,
+  IHoverDelegate,
 } from 'cs/base/browser/ui/hover/hover';
 import 'cs/base/browser/ui/modal/modal.css';
 import {
@@ -33,7 +33,7 @@ export interface ModalProps {
   className?: string;
   panelClassName?: string;
   ariaLabel?: string;
-  hoverService?: HoverService;
+  hoverService?: IHoverDelegate;
 }
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -192,7 +192,7 @@ export class ModalView extends Disposable {
       panelClassName: '',
       ...props,
     };
-    const hoverService = this.props.hoverService ?? getHoverService();
+    const hoverService = this.props.hoverService ?? getBaseLayerHoverDelegate();
     this.closeHover = hoverService.createHover(this.closeButton, null);
     this._register(this.closeHover);
     this._register(this.openListeners);

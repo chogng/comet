@@ -21,6 +21,11 @@ function createProps(): ChatWidgetProps {
     errorMessage: null,
     onAsk: () => {},
     onApplyPatch: () => {},
+    articleQuickSources: [],
+    isArticleSourceFetching: false,
+    onFetchArticleSource: () => {},
+    onDownloadArticlePdf: async () => {},
+    onOpenArticleDetails: () => {},
     availableArticleCount: 1,
     conversations: [
       {
@@ -586,6 +591,111 @@ test('composer toolbar uses actionbar icon controls', () => {
     addModels.click();
 
     assert.equal(openedModelSettings, 1);
+  } finally {
+    agentBar.dispose();
+  }
+});
+
+test('composer article quick action opens source menu and runs selected source', async () => {
+  let selectedSourceUrl = '';
+  const agentBar = createChatWidget({
+    ...createProps(),
+    articleQuickSources: [
+      {
+        id: 'science',
+        url: 'https://www.science.org/toc/science/current',
+        journalTitle: 'Science',
+        preferredExtractorId: 'science-current-news-in-depth-research-articles',
+      },
+    ],
+    onFetchArticleSource: (source) => {
+      selectedSourceUrl = source.url;
+    },
+  });
+  const element = agentBar.getElement();
+  document.body.append(element);
+
+  try {
+    const quickButtons = Array.from(
+      element.querySelectorAll('.chat-composer-quick-action'),
+    );
+    assert.deepEqual(
+      quickButtons.map((button) => button.textContent?.trim()),
+      ['Write', 'Learn', 'Code', 'Article'],
+    );
+
+    const articleButton = quickButtons[3];
+    assert(articleButton instanceof HTMLButtonElement);
+    articleButton.click();
+    await delay(0);
+
+    const menu = element.querySelector('.chat-composer-article-menu');
+    assert(menu instanceof HTMLElement);
+    const sourceButton = menu.querySelector('.chat-composer-article-source');
+    assert(sourceButton instanceof HTMLButtonElement);
+    assert.equal(sourceButton.textContent, 'Science');
+    sourceButton.click();
+
+    assert.equal(selectedSourceUrl, 'https://www.science.org/toc/science/current');
+    assert.equal(element.querySelector('.chat-composer-article-menu'), null);
+  } finally {
+    agentBar.dispose();
+  }
+});
+
+test('agent chat renders fetched article cards with PDF download action', async () => {
+  let downloadedSourceUrl = '';
+  let openedSourceUrl = '';
+  const agentBar = createChatWidget({
+    ...createProps(),
+    messages: [
+      {
+        id: 'article-1',
+        role: 'article',
+        sourceLabel: 'Science',
+        article: {
+          title: 'Example article',
+          articleType: 'Research Article',
+          doi: '10.1126/example',
+          authors: ['Ada Lovelace'],
+          abstractText: 'Abstract',
+          descriptionText: 'Description',
+          publishedAt: '2026-07-03',
+          sourceUrl: 'https://www.science.org/doi/example',
+          fetchedAt: '2026-07-04T00:00:00.000Z',
+          sourceId: 'science',
+          journalTitle: 'Science',
+        },
+      },
+    ],
+    onDownloadArticlePdf: async (article) => {
+      downloadedSourceUrl = article.sourceUrl;
+    },
+    onOpenArticleDetails: (article) => {
+      openedSourceUrl = article.sourceUrl;
+    },
+  });
+  const element = agentBar.getElement();
+  document.body.append(element);
+
+  try {
+    const card = element.querySelector('.agentbar-article-card');
+    assert(card instanceof HTMLElement);
+    assert.equal(
+      card.querySelector('.agentbar-article-title')?.textContent,
+      'Example article',
+    );
+
+    const downloadButton = card.querySelector('.agentbar-article-download-btn');
+    assert(downloadButton instanceof HTMLButtonElement);
+    downloadButton.click();
+    await delay(0);
+    assert.equal(downloadedSourceUrl, 'https://www.science.org/doi/example');
+
+    const title = card.querySelector('.agentbar-article-title');
+    assert(title instanceof HTMLElement);
+    title.click();
+    assert.equal(openedSourceUrl, 'https://www.science.org/doi/example');
   } finally {
     agentBar.dispose();
   }

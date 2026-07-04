@@ -115,6 +115,7 @@ import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
+import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import { normalizeBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
 import {
@@ -528,6 +529,11 @@ function canUseNativeToastOverlay(nativeHostService: INativeHostService) {
   }
 
   return typeof nativeHostService.toast?.show === 'function';
+}
+
+function getBatchSourceDisplayLabel(source: Pick<BatchSource, 'journalTitle' | 'url'>) {
+  const journalTitle = source.journalTitle.trim();
+  return journalTitle || source.url;
 }
 
 function registerNativeToastBridge(nativeHostService: INativeHostService) {
@@ -1812,6 +1818,18 @@ class WorkbenchHost {
     const { isBatchLoading } = batchFetchControllerInstance.getSnapshot();
     const handleFetchLatestBatch =
       batchFetchControllerInstance.handleFetchLatestBatch;
+    const articleQuickSources = getConfigBatchSourceSeed();
+    const handleFetchArticleSource = async (source: BatchSource) => {
+      const result = await batchFetchControllerInstance.handleFetchSource(source);
+      if (!result.ok) {
+        return;
+      }
+
+      assistantModelInstance.handleInsertArticles(
+        result.articles,
+        getBatchSourceDisplayLabel(source),
+      );
+    };
 
     const handleToggleSelectionMode = () => {
       const previousPhase = getWorkbenchSessionSnapshot().selectionModePhase;
@@ -2007,11 +2025,16 @@ class WorkbenchHost {
           ].useMaxContextWindow ?? false,
         activeLlmModelSupportsMaxContextWindow:
           doesAgentChatModelSupportMaxContextWindow(currentLlmSettings),
+        articleQuickSources,
+        isArticleSourceFetching: isBatchLoading,
       },
       actions: {
         onQuestionChange: setAssistantQuestion,
         onAsk: () => void handleAssistantAsk(),
         onApplyPatch: handleAssistantApplyPatch,
+        onFetchArticleSource: (source) => void handleFetchArticleSource(source),
+        onDownloadArticlePdf: handleSharedPdfDownload,
+        onOpenArticleDetails: handleOpenArticleDetails,
         onCreateConversation: handleAssistantCreateConversation,
         onActivateConversation: handleAssistantActivateConversation,
         onCloseConversation: handleAssistantCloseConversation,

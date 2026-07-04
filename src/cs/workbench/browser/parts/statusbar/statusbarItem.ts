@@ -1,4 +1,4 @@
-import { getHoverService } from 'cs/base/browser/ui/hover/hover';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { EditorStatusItem } from 'cs/workbench/browser/parts/editor/editorStatus';
 import {
   canRunStatusbarCommand,

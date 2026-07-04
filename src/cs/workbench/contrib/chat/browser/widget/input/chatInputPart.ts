@@ -14,6 +14,7 @@ import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import {
 	ChatInputModelPickerActionViewItem,
 	type ChatInputModelPickerProps,
@@ -34,6 +35,9 @@ export type ChatInputPartProps = Pick<
 	| 'onSelectLlmModel'
 	| 'onToggleMaxContextWindow'
 	| 'onOpenModelSettings'
+	| 'articleQuickSources'
+	| 'isArticleSourceFetching'
+	| 'onFetchArticleSource'
 > & {
 	readonly isEmpty: boolean;
 };
@@ -63,11 +67,17 @@ function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerPro
 	};
 }
 
+function getArticleSourceLabel(source: BatchSource) {
+	const journalTitle = source.journalTitle.trim();
+	return journalTitle || source.url;
+}
+
 export class ChatInputPart {
 	private props: ChatInputPartProps;
 	private readonly element = createElement('div');
 	private readonly renderDisposables = new DisposableStore();
 	private readonly modelPicker: ChatInputModelPickerActionViewItem;
+	private isArticleMenuOpen = false;
 
 	constructor(props: ChatInputPartProps) {
 		this.props = props;
@@ -97,11 +107,21 @@ export class ChatInputPart {
 	private render() {
 		this.renderDisposables.clear();
 		this.element.className = [
-			'chat-composer',
+			'chat-composer-host',
 			this.props.isEmpty ? 'is-empty-state' : '',
 		]
 			.filter(Boolean)
 			.join(' ');
+
+		const composer = createElement(
+			'div',
+			[
+				'chat-composer',
+				this.props.isEmpty ? 'is-empty-state' : '',
+			]
+				.filter(Boolean)
+				.join(' '),
+		);
 
 		const textarea = createElement('textarea', 'chat-composer-input');
 		textarea.rows = 2;
@@ -157,7 +177,24 @@ export class ChatInputPart {
 		});
 		this.renderDisposables.add(actionsView);
 		toolbar.append(actionsView.getElement());
-		this.element.replaceChildren(textarea, toolbar);
+		composer.replaceChildren(textarea, toolbar);
+		this.element.replaceChildren(
+			composer,
+			this.renderQuickActions(),
+		);
+
+		if (this.isArticleMenuOpen) {
+			this.renderDisposables.add(addDisposableListener(document, EventType.MOUSE_DOWN, event => {
+				if (event.target instanceof Node && !this.element.contains(event.target)) {
+					this.closeArticleMenu();
+				}
+			}));
+			this.renderDisposables.add(addDisposableListener(document, EventType.KEY_DOWN, event => {
+				if (event.key === 'Escape') {
+					this.closeArticleMenu();
+				}
+			}));
+		}
 	}
 
 	private canSend() {
@@ -175,5 +212,113 @@ export class ChatInputPart {
 			content: createLxIcon(icon),
 			buttonClassName,
 		};
+	}
+
+	private renderQuickActions() {
+		const wrapper = createElement('div', 'chat-composer-quick-actions-shell');
+		const row = createElement('div', 'chat-composer-quick-actions');
+		row.append(
+			this.createQuickActionButton(localize('chatQuickActionWrite', "Write"), 'write'),
+			this.createQuickActionButton(localize('chatQuickActionLearn', "Learn"), 'book'),
+			this.createQuickActionButton(localize('chatQuickActionCode', "Code"), 'code'),
+			this.createQuickActionButton(
+				localize('chatQuickActionArticle', "Article"),
+				'file-text',
+				() => this.toggleArticleMenu(),
+				this.isArticleMenuOpen,
+			),
+		);
+		wrapper.append(row);
+
+		if (this.isArticleMenuOpen) {
+			wrapper.append(this.renderArticleMenu());
+		}
+
+		return wrapper;
+	}
+
+	private createQuickActionButton(
+		label: string,
+		icon: LxIconName,
+		onClick?: () => void,
+		expanded = false,
+	) {
+		const button = createElement(
+			'button',
+			'chat-composer-quick-action btn-base btn-secondary btn-sm',
+		);
+		button.type = 'button';
+		button.setAttribute('aria-label', label);
+		if (expanded) {
+			button.setAttribute('aria-expanded', 'true');
+		}
+		button.append(createLxIcon(icon), document.createTextNode(label));
+		if (onClick) {
+			this.renderDisposables.add(
+				addDisposableListener(button, EventType.CLICK, onClick),
+			);
+		}
+		return button;
+	}
+
+	private renderArticleMenu() {
+		const menu = createElement('div', 'chat-composer-article-menu');
+		const header = createElement('div', 'chat-composer-article-menu-header');
+		const title = createElement('span', 'chat-composer-article-menu-title');
+		title.append(
+			createLxIcon('file-text'),
+			document.createTextNode(localize('chatArticleMenuTitle', "Article")),
+		);
+		const closeButton = createElement(
+			'button',
+			'chat-composer-article-menu-close btn-base btn-ghost btn-mode-icon btn-sm',
+		);
+		closeButton.type = 'button';
+		closeButton.setAttribute(
+			'aria-label',
+			localize('chatArticleMenuClose', "Close Article Sources"),
+		);
+		closeButton.append(createLxIcon('close'));
+		this.renderDisposables.add(
+			addDisposableListener(closeButton, EventType.CLICK, () => {
+				this.closeArticleMenu();
+			}),
+		);
+		header.append(title, closeButton);
+
+		const list = createElement('div', 'chat-composer-article-source-list');
+		for (const source of this.props.articleQuickSources) {
+			const sourceButton = createElement('button', 'chat-composer-article-source');
+			const sourceLabel = getArticleSourceLabel(source);
+			sourceButton.type = 'button';
+			sourceButton.disabled = this.props.isArticleSourceFetching;
+			sourceButton.textContent = sourceLabel;
+			sourceButton.title = source.url;
+			this.renderDisposables.add(
+				addDisposableListener(sourceButton, EventType.CLICK, () => {
+					this.isArticleMenuOpen = false;
+					this.render();
+					void this.props.onFetchArticleSource(source);
+				}),
+			);
+			list.append(sourceButton);
+		}
+
+		menu.append(header, list);
+		return menu;
+	}
+
+	private toggleArticleMenu() {
+		this.isArticleMenuOpen = !this.isArticleMenuOpen;
+		this.render();
+	}
+
+	private closeArticleMenu() {
+		if (!this.isArticleMenuOpen) {
+			return;
+		}
+
+		this.isArticleMenuOpen = false;
+		this.render();
 	}
 }

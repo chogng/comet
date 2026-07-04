@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { Notification, app, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
@@ -30,8 +35,8 @@ import type {
 } from 'cs/platform/browserView/common/browserView';
 import type { StorageService } from 'cs/platform/storage/common/storage';
 import {
-  getWebContentState,
-  clearWebContentHistory,
+	getWebContentState,
+	clearWebContentHistory,
   disposeWebContentTarget,
   executeWebContentTargetScript,
   getWebContentSelection,
@@ -87,9 +92,10 @@ import {
 } from 'cs/platform/windows/electron-main/windows';
 import { setMenuBarIconEnabled } from 'cs/platform/window/electron-main/trayIcon';
 import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
+import { registerContextMenuListener } from 'cs/base/parts/contextmenu/electron-main/contextmenu';
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import {
-  NativeHostMainChannel,
+	NativeHostMainChannel,
 } from 'cs/platform/native/electron-main/nativeHostMainService';
 import type { NativeHostMainService } from 'cs/platform/native/electron-main/nativeHostMainService';
 import type { IThemeMainService } from 'cs/platform/theme/electron-main/themeMainService';
@@ -332,6 +338,7 @@ export function registerAppIpc(
   themeMainService: IThemeMainService,
 ) {
   electronMainChannelServer.register();
+  registerContextMenuListener();
   try {
     electronMainChannelServer.registerChannel(
       'nativeHost',

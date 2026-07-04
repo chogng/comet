@@ -1,7 +1,9 @@
 import { createActionBarView, type ActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import {
   getHoverService,
-  type HoverHandle,
+} from 'cs/platform/hover/browser/hoverService';
+import type {
+  HoverHandle,
 } from 'cs/base/browser/ui/hover/hover';
 import { createLxIcon, type LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { HorizontalScrollbar } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
@@ -23,7 +25,7 @@ import {
 import {
   createContextMenuService,
   type WorkbenchContextMenuService,
-} from 'cs/workbench/services/contextmenu/electron-sandbox/contextmenuService';
+} from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 
 type TabView = {
   element: HTMLDivElement;

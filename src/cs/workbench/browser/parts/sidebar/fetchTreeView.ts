@@ -1,7 +1,7 @@
 import type { ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import { applyHover } from 'cs/base/browser/ui/hover/hover';
+import { applyHover } from 'cs/base/browser/ui/hover/hoverDelegate';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DataTree } from 'cs/base/browser/ui/tree/dataTree';

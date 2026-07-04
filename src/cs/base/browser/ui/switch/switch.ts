@@ -1,7 +1,7 @@
 import 'cs/base/browser/ui/switch/switch.css';
-import {
-  getHoverService,
-  type HoverHandle,
+import { getBaseLayerHoverDelegate } from 'cs/base/browser/ui/hover/hoverDelegate';
+import type {
+  HoverHandle,
 } from 'cs/base/browser/ui/hover/hover';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 
@@ -113,7 +113,7 @@ export class SwitchView extends Disposable {
   constructor(props: SwitchProps = {}) {
     super();
     this.props = props;
-    this.hoverController = getHoverService().createHover(this.element, null);
+    this.hoverController = getBaseLayerHoverDelegate().createHover(this.element, null);
     this._register(this.hoverController);
     this.inputElement.type = 'checkbox';
     this._register(addDisposableListener(this.inputElement, 'change', this.handleChange));

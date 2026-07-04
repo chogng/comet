@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after, before } from 'node:test';
+import { JSDOM } from 'jsdom';
 
 import type {
   AgentMessagePayload,
@@ -24,10 +25,37 @@ import type {
 } from 'cs/workbench/browser/assistantModel';
 import { locales } from 'language/locales';
 
+let domEnvironment: JSDOM | null = null;
+
 type InvokeCapture = {
   commands: string[];
   payloads: unknown[];
 };
+
+before(() => {
+  domEnvironment = new JSDOM('<!doctype html><html><body></body></html>');
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: domEnvironment.window,
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: domEnvironment.window.document,
+  });
+  Object.defineProperty(globalThis, 'HTMLElement', {
+    configurable: true,
+    value: domEnvironment.window.HTMLElement,
+  });
+  Object.defineProperty(globalThis, 'Event', {
+    configurable: true,
+    value: domEnvironment.window.Event,
+  });
+});
+
+after(() => {
+  domEnvironment?.window.close();
+  domEnvironment = null;
+});
 
 function createInvokeDesktop(capture?: InvokeCapture): ElectronInvoke {
   return (async (command: string, args?: Record<string, unknown>) => {
@@ -337,9 +365,63 @@ test('assistant asks through run_main_agent_turn and stores the returned answer'
   });
   assert.equal(snapshot.messages.length, 2);
   assert.equal(snapshot.messages[0]?.role, 'user');
-  assert.equal(snapshot.messages[1]?.role, 'assistant');
-  assert.equal(snapshot.messages[1]?.content, 'ok');
+  const assistantMessage = snapshot.messages[1];
+  assert(assistantMessage?.role === 'assistant');
+  assert.equal(assistantMessage.content, 'ok');
   assert.equal(snapshot.result?.llmModel, 'test-model');
+});
+
+test('assistant inserts all fetched article cards without sending them as agent text turns', async () => {
+  const capture: InvokeCapture = {
+    commands: [],
+    payloads: [],
+  };
+  const assistantModel = createAssistantModel(createAssistantContext('en', capture));
+
+  assistantModel.handleInsertArticles(
+    [
+      {
+        title: 'Fetched article',
+        articleType: 'Research Article',
+        doi: '10.1126/example',
+        authors: ['Ada Lovelace'],
+        abstractText: 'Abstract',
+        descriptionText: 'Description',
+        publishedAt: '2026-07-03',
+        sourceUrl: 'https://www.science.org/doi/example',
+        fetchedAt: '2026-07-04T00:00:00.000Z',
+        sourceId: 'science',
+        journalTitle: 'Science',
+      },
+      {
+        title: 'Second fetched article',
+        articleType: 'Research Article',
+        doi: '10.1126/example-2',
+        authors: ['Grace Hopper'],
+        abstractText: 'Second abstract',
+        descriptionText: 'Second description',
+        publishedAt: '2026-07-04',
+        sourceUrl: 'https://www.science.org/doi/example-2',
+        fetchedAt: '2026-07-04T00:00:01.000Z',
+        sourceId: 'science',
+        journalTitle: 'Science',
+      },
+    ],
+    'Science',
+  );
+  assistantModel.setQuestion('Summarize the article.');
+  await assistantModel.handleAsk();
+
+  const snapshot = assistantModel.getSnapshot();
+  assert.equal(snapshot.messages[0]?.role, 'article');
+  assert.equal(snapshot.messages[1]?.role, 'article');
+  assert.equal(snapshot.messages[2]?.role, 'user');
+  assert.deepEqual((capture.payloads[0] as { messages: unknown[] }).messages, [
+    {
+      role: 'user',
+      parts: [{ type: 'text', text: 'Summarize the article.' }],
+    },
+  ]);
 });
 
 test('assistant applies a pending text patch to the current draft locally', async () => {

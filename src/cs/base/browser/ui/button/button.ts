@@ -1,9 +1,9 @@
 import 'cs/base/browser/ui/button/button.css';
-import {
-  getHoverService,
-  type HoverHandle,
-  type HoverInput,
-  type HoverService,
+import { getBaseLayerHoverDelegate } from 'cs/base/browser/ui/hover/hoverDelegate';
+import type {
+  HoverHandle,
+  HoverInput,
+  IHoverDelegate,
 } from 'cs/base/browser/ui/hover/hover';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 
@@ -30,7 +30,7 @@ export interface ButtonProps {
   hover?: HoverInput;
   ariaLabel?: string;
   type?: 'button' | 'submit' | 'reset';
-  hoverService?: HoverService;
+  hoverService?: IHoverDelegate;
   onClick?: (event: MouseEvent) => void;
   onFocus?: (event: FocusEvent) => void;
   onBlur?: (event: FocusEvent) => void;
@@ -125,7 +125,7 @@ export class ButtonView extends Disposable {
   constructor(props: ButtonProps = {}) {
     super();
     this.props = props;
-    const hoverService = props.hoverService ?? getHoverService();
+    const hoverService = props.hoverService ?? getBaseLayerHoverDelegate();
     this.hoverController = hoverService.createHover(this.element, null);
     this._register(this.hoverController);
     this._register(addDisposableListener(this.element, 'click', this.handleClick));

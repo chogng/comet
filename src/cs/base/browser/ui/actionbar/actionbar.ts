@@ -8,7 +8,7 @@ import {
   type ActionViewItemOptions,
 } from 'cs/base/browser/ui/actionbar/actionViewItems';
 import { createActionWithDropdownActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import type { HoverInput, HoverService } from 'cs/base/browser/ui/hover/hover';
+import type { HoverInput, IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 
 export type ActionBarOrientation = 'horizontal' | 'vertical';
@@ -42,7 +42,7 @@ export type ActionBarActionItem = BaseAction & {
   buttonClassName?: string;
   buttonAttributes?: Record<string, string | null | undefined | false>;
   onClick?: (event: MouseEvent) => void;
-  hoverService?: HoverService;
+  hoverService?: IHoverDelegate;
 };
 
 export type ActionBarSeparatorItem = {
@@ -83,7 +83,7 @@ export type ActionBarProps = {
   orientation?: ActionBarOrientation;
   ariaLabel?: string;
   ariaRole?: string;
-  hoverService?: HoverService;
+  hoverService?: IHoverDelegate;
 };
 
 function isActionItem(item: ActionBarItem): item is ActionBarActionItem {
@@ -113,7 +113,7 @@ function isViewItem(item: ActionBarItem): item is ActionView {
 
 function createDefaultActionViewItem(
   item: ActionBarActionItem,
-  hoverService?: HoverService,
+  hoverService?: IHoverDelegate,
 ): ActionView {
   // Plain actionbar items are rendered with the default action view implementation.
   const options: ActionViewItemOptions = {
