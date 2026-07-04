@@ -21,7 +21,7 @@ import 'cs/workbench/browser/actions/layoutActions';
 //#region --- workbench services
 
 import { INativeHostService } from 'cs/platform/native/common/native';
-import { nativeHostService } from 'cs/platform/native/electron-sandbox/nativeHostServiceProxy';
+import { nativeHostService } from 'cs/workbench/services/host/electron-browser/nativeHostService';
 import {
   registerWorkbenchService,
 } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';

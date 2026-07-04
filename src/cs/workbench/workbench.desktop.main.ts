@@ -14,7 +14,7 @@ import 'cs/workbench/workbench.common.main';
 
 import { ElectronIPCMainProcessService } from 'cs/platform/ipc/electron-browser/mainProcessService';
 import { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
-import { nativeHostService } from 'cs/platform/native/electron-sandbox/nativeHostServiceProxy';
+import { nativeHostService } from 'cs/workbench/services/host/electron-browser/nativeHostService';
 import {
   registerWorkbenchDisposable,
   registerWorkbenchService,
