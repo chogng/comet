@@ -16,8 +16,7 @@
   width: calc(100% - 12px - var(--sidebar-floating-right-gap));
   height: calc(100% - 24px);
   margin: 12px var(--sidebar-floating-right-gap) 12px 12px;
-  border: 1px solid var(--vscode-sideBar-border, rgba(15, 23, 42, 0.1));
-  border-right-color: transparent;
+  border: 1px solid var(--vscode-sideBar-border, #e6e6e6);
   border-radius: 8px;
   background: var(--sidebar-surface-bg);
   box-shadow:

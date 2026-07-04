@@ -12,7 +12,7 @@ export const sideBarSecondaryForeground = registerColor('sideBar.secondaryForegr
 
 export const sideBarBorder = registerColor('sideBar.border', {
   dark: '#33404d',
-  light: '#e5e5e5',
+  light: '#e6e6e6',
 });
 
 export const sideBarCardBackground = registerColor('sideBar.cardBackground', {
