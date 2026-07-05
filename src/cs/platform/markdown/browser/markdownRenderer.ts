@@ -9,13 +9,11 @@ import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 /**
- * Renders markdown to HTML elements.
+ * Renders markdown to HTML.
  * 
- * This interface is intended to be used by clients that want to render markdown content to HTML elements. 
- * It provides a method to render markdown strings with optional rendering options and an output element.
+ * Be used by clients that want to render markdown to HTML. 
  * 
- * If you want to render markdown content in a standard way, 
- * prefer using the {@linkcode IMarkdownRendererService} service instead of implementing this interface directly.
+ * Using the {@linkcode IMarkdownRendererService} service instead of implementing this interface directly.
  */
 
 
@@ -27,8 +25,7 @@ export interface IMarkdownRenderer {
 	): IRenderedMarkdown;
 }
 
-export const IMarkdownRendererService =
-	createDecorator<IMarkdownRendererService>('markdownRendererService');
+export const IMarkdownRendererService = createDecorator<IMarkdownRendererService>('markdownRendererService');
 
 export interface IMarkdownRendererService extends IMarkdownRenderer {
 	readonly _serviceBrand: undefined;
