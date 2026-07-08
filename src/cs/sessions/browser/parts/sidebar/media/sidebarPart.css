@@ -1,6 +1,6 @@
 .comet-session-sidebar-part {
 	--sidebar-footer-height: 54px;
-	--sidebar-floating-inset: 12px;
+	--sidebar-floating-inset: 8px;
 	--sidebar-surface-bg: #FFFFFF;
 	display: flex;
 	flex-direction: column;
