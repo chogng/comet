@@ -559,9 +559,10 @@
 }
 
 .comet-agentbar-answer > .rendered-markdown li.comet-agentbar-article-choice > .comet-agentbar-article-checkbox {
-  width: 14px;
-  height: 14px;
-  margin: 3px 0 0;
+	width: 14px;
+	height: 14px;
+	margin: 3px 0 0;
+	font-size: 12px;
 }
 
 .comet-agentbar-article-choice-content {
@@ -730,4 +731,3 @@
   color: #66798f;
   border: 1px solid #dbe3ea;
 }
-

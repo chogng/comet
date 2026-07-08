@@ -5,9 +5,10 @@
 import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
 import { localize } from 'cs/nls';
 import { MarkdownString } from 'cs/base/common/htmlContent';
-import { toDisposable, type DisposableStore } from 'cs/base/common/lifecycle';
+import type { DisposableStore } from 'cs/base/common/lifecycle';
 import { ChatContentMarkdownRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer';
 import { $ } from 'cs/base/browser/dom';
+import { Checkbox } from 'cs/base/browser/ui/toggle/toggle';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 
 export type ChatListRendererOptions = {
@@ -110,28 +111,22 @@ export class ChatListRenderer {
 				continue;
 			}
 
-			const checkbox = $<HTMLElementTagNameMap['input']>('input.comet-agentbar-article-checkbox');
-			checkbox.type = 'checkbox';
-			checkbox.checked = this.options.isArticleSelected(href);
-			checkbox.setAttribute(
-				'aria-label',
+			const checkbox = disposables.add(new Checkbox(
 				localize(
 					'agentbarArticleExportCheckbox',
 					"Include Article in Export",
 				),
-			);
+				this.options.isArticleSelected(href),
+			));
+			checkbox.domNode.classList.add('comet-agentbar-article-checkbox');
 
 			const content = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-article-choice-content');
 			content.append(...Array.from(item.childNodes));
 			item.classList.add('comet-agentbar-article-choice');
-			item.append(checkbox, content);
+			item.append(checkbox.domNode, content);
 
-			const onChange = () => {
+			disposables.add(checkbox.onChange(() => {
 				this.options.onToggleArticleSelected(href);
-			};
-			checkbox.addEventListener('change', onChange);
-			disposables.add(toDisposable(() => {
-				checkbox.removeEventListener('change', onChange);
 			}));
 		}
 	}

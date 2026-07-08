@@ -1,0 +1,66 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.monaco-custom-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 1px;
+	box-sizing: border-box;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	color: inherit;
+	cursor: pointer;
+	line-height: 1;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.monaco-custom-toggle:hover {
+	background-color: var(--vscode-inputOption-hoverBackground);
+}
+
+.monaco-custom-toggle.disabled {
+	opacity: 0.4;
+	cursor: default;
+	pointer-events: none;
+}
+
+.hc-black .monaco-custom-toggle:hover,
+.hc-light .monaco-custom-toggle:hover {
+	border: 1px dashed var(--vscode-focusBorder);
+}
+
+.hc-black .monaco-custom-toggle,
+.hc-light .monaco-custom-toggle,
+.hc-black .monaco-custom-toggle:hover,
+.hc-light .monaco-custom-toggle:hover {
+	background: none;
+}
+
+.monaco-custom-toggle.monaco-checkbox {
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 1px solid var(--vscode-settings-checkboxBorder);
+	border-radius: 3px;
+	background: var(--vscode-settings-checkboxBackground);
+	color: transparent;
+	font-size: 14px;
+	opacity: 1;
+}
+
+.monaco-custom-toggle.monaco-checkbox.checked {
+	border-color: var(--vscode-settings-checkboxCheckedBorder);
+	background: var(--vscode-settings-checkboxCheckedBackground);
+	color: var(--vscode-settings-checkboxCheckmark);
+}
+
+.monaco-custom-toggle.monaco-checkbox:focus-visible {
+	outline: 2px solid var(--vscode-settings-checkboxFocusBorder);
+	outline-offset: 2px;
+}

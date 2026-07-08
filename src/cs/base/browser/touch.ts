@@ -30,6 +30,8 @@ type TouchSnapshot = {
 	readonly time: number;
 };
 
+const ignoredTargets = new Set<HTMLElement>();
+
 export class Gesture extends Disposable {
 	static addTarget(element: HTMLElement): IDisposable {
 		if (!Gesture.isTouchDevice()) {
@@ -37,6 +39,19 @@ export class Gesture extends Disposable {
 		}
 
 		return new GestureTarget(element);
+	}
+
+	static ignoreTarget(element: HTMLElement): IDisposable {
+		if (!Gesture.isTouchDevice()) {
+			return Disposable.None;
+		}
+
+		ignoredTargets.add(element);
+		return {
+			dispose: () => {
+				ignoredTargets.delete(element);
+			},
+		};
 	}
 
 	static isTouchDevice(): boolean {
@@ -61,6 +76,9 @@ class GestureTarget extends Disposable {
 	private onTouchStart(event: TouchEvent): void {
 		const touch = event.changedTouches.item(0);
 		if (!touch) {
+			return;
+		}
+		if (shouldIgnoreTarget(touch.target)) {
 			return;
 		}
 
@@ -128,4 +146,18 @@ class GestureTarget extends Disposable {
 		event.tapCount = type === EventType.Tap ? 1 : 0;
 		this.element.dispatchEvent(event);
 	}
+}
+
+function shouldIgnoreTarget(target: EventTarget | null): boolean {
+	if (!(target instanceof Node)) {
+		return false;
+	}
+
+	for (const ignoredTarget of ignoredTargets) {
+		if (ignoredTarget.contains(target)) {
+			return true;
+		}
+	}
+
+	return false;
 }
