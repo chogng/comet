@@ -24,11 +24,13 @@ import {
   resolvePreferredDirectory,
 } from 'cs/workbench/services/document/documentActionService';
 import {
-  type DesktopInvokeErrorData,
-  formatLocalized,
-  localizeDesktopInvokeError,
-  parseDesktopInvokeError,
-} from 'cs/workbench/services/desktop/desktopError';
+  parseAppErrorData,
+  type AppErrorData,
+} from 'cs/base/common/errors';
+import {
+  formatLocaleMessage,
+  localizeAppError,
+} from 'cs/workbench/common/errorMessages';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import {
   getStatusbarStateSnapshot,
@@ -90,7 +92,7 @@ function detailString(details: Record<string, unknown> | undefined, key: string)
   return typeof value === 'string' && value.trim() ? value.trim() : '';
 }
 
-function isDocxTranslationFailure(error: DesktopInvokeErrorData) {
+function isDocxTranslationFailure(error: AppErrorData) {
   return error.code === 'DOCX_TRANSLATION_FAILED';
 }
 
@@ -182,7 +184,7 @@ export class ArticleSummaryTranslationExportController {
             locale,
           });
         } catch (exportError) {
-          const parsedError = parseDesktopInvokeError(exportError);
+          const parsedError = parseAppErrorData(exportError);
           targetFilePath = detailString(parsedError.details, 'filePath') || targetFilePath;
 
           if (source.token.isCancellationRequested) {
@@ -217,9 +219,9 @@ export class ArticleSummaryTranslationExportController {
             return;
           }
 
-          const localizedError = localizeDesktopInvokeError(ui, parsedError);
+          const localizedError = localizeAppError(ui, parsedError);
           toast.error(
-            formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
+            formatLocaleMessage(ui.toastDocxExportFailed, { error: localizedError }),
           );
           return;
         }
@@ -229,7 +231,7 @@ export class ArticleSummaryTranslationExportController {
         }
 
         toast.success(
-          formatLocalized(ui.toastDocxExported, {
+          formatLocaleMessage(ui.toastDocxExported, {
             count: result.articleCount,
             filePath: result.filePath,
           }),
@@ -264,14 +266,14 @@ export class ArticleSummaryTranslationExportController {
   }
 
   private async promptTranslationFailure(
-    error: DesktopInvokeErrorData,
+    error: AppErrorData,
     token: CancellationToken,
   ): Promise<ArticleSummaryTranslationFailureChoice> {
     const { ui } = this.context;
     const confirmation = await showWorkbenchSaveConfirmModal({
       title: ui.translationFailureDialogTitle,
-      message: formatLocalized(ui.translationFailureDialogMessage, {
-        error: localizeDesktopInvokeError(ui, error),
+      message: formatLocaleMessage(ui.translationFailureDialogMessage, {
+        error: localizeAppError(ui, error),
       }),
       saveLabel: ui.translationFailureDialogRetry,
       discardLabel: ui.translationFailureDialogExportOriginal,
@@ -348,7 +350,7 @@ export class ArticleSummaryTranslationExportController {
           : progress.phase === 'completed'
             ? ui.statusTranslationCompleted
             : total > 0
-              ? formatLocalized(ui.statusTranslationProgress, { current, total })
+              ? formatLocaleMessage(ui.statusTranslationProgress, { current, total })
               : ui.statusTranslationStarting;
     const providerDetail = [progress.provider, progress.model].filter(Boolean).join(' / ');
 

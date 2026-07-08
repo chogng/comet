@@ -35,9 +35,17 @@ const CHAT_HEADER_MORE_MENU_DATA = 'agentbar-header-more';
 const CHAT_HEADER_HISTORY_MENU_DATA = 'agentbar-header-history';
 const CHAT_ARTICLE_SUMMARY_EXPORT_MENU_DATA = 'agentbar-article-summary-export';
 
+function isArticleBatchMessage(message: ChatWidgetProps['messages'][number]) {
+	return message.role === 'assistant' && message.includeInAgentHistory === false;
+}
+
+function isArticleBatchConversation(messages: ChatWidgetProps['messages']) {
+	return messages.length > 0 && messages.every(isArticleBatchMessage);
+}
+
 export class ChatWidget {
 	private props: ChatWidgetProps;
-	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-content');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view-content.comet-agentbar-content');
 	private readonly disposables = new DisposableStore();
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
@@ -109,8 +117,10 @@ export class ChatWidget {
 
 	private renderShell() {
 		const shell = $<HTMLElementTagNameMap['div']>('div', { class: [
+				'comet-session-chat-view-body',
 				'comet-agentbar-shell',
 				this.props.messages.length === 0 ? 'comet-is-empty-state' : '',
+				isArticleBatchConversation(this.props.messages) ? 'comet-is-article-batch-state' : '',
 			]
 				.filter(Boolean)
 				.join(' ') });

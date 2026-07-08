@@ -1,3 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { ErrorNoTelemetry } from '../common/errors.js';
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -12,14 +19,6 @@ function toErrorMessage(error: unknown, verbose = false): string {
   }
 
   return String(error);
-}
-
-class ErrorNoTelemetry extends Error {
-  static fromError(error: Error) {
-    const nextError = new ErrorNoTelemetry(error.message);
-    nextError.stack = error.stack;
-    return nextError;
-  }
 }
 
 function mark(name: string) {

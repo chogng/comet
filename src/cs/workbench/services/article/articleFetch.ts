@@ -14,8 +14,8 @@ import {
   sanitizeBatchSources,
 } from 'cs/workbench/services/config/configSchema';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
-import { parseDesktopInvokeError } from 'cs/workbench/services/desktop/desktopError';
-import type { DesktopInvokeErrorData } from 'cs/workbench/services/desktop/desktopError';
+import { parseAppErrorData } from 'cs/base/common/errors';
+import type { AppErrorData } from 'cs/base/common/errors';
 
 export type Article = DesktopArticle;
 
@@ -33,7 +33,7 @@ export type FetchLatestArticlesBatchResult =
   | {
       ok: false;
       reason: 'desktop_unsupported' | 'empty_page_url' | 'invalid_date_range' | 'fetch_failed';
-      error?: DesktopInvokeErrorData;
+      error?: AppErrorData;
     };
 
 type FetchLatestArticlesBatchParams = {
@@ -190,6 +190,6 @@ export async function fetchLatestArticlesBatch({
     });
     return { ok: true, articles };
   } catch (error) {
-    return { ok: false, reason: 'fetch_failed', error: parseDesktopInvokeError(error) };
+    return { ok: false, reason: 'fetch_failed', error: parseAppErrorData(error) };
   }
 }

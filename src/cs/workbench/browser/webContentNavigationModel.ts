@@ -2,7 +2,7 @@ import { toast } from 'cs/base/browser/ui/toast/toast';
 import { EventEmitter } from 'cs/base/common/event';
 import type { LocaleMessages } from 'language/locales';
 import type { INativeHostService } from 'cs/platform/native/common/native';
-import { formatLocalized } from 'cs/workbench/services/desktop/desktopError';
+import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';
 import { EMPTY_WEB_CONTENT_STATE, resolveWebContentNavigation, resolveWebContentRefreshMode, resolveWebContentStateUrlUpdate } from 'cs/workbench/services/webContent/webContentNavigationService';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 
@@ -295,7 +295,7 @@ export class WebContentNavigationModel {
         });
 
       if (showToast) {
-        toast.success(formatLocalized(ui.toastNavigatingTo, { url: webContentNavigation.normalizedUrl }));
+        toast.success(formatLocaleMessage(ui.toastNavigatingTo, { url: webContentNavigation.normalizedUrl }));
       }
     }
 

@@ -3,8 +3,8 @@ import test, { after, before } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
-import { HorizontalScrollbar } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
-import { renderMarkdown, type IRenderedMarkdown, type MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
+import type { HorizontalScrollbar as HorizontalScrollbarType } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
+import type { IRenderedMarkdown, MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
 import type { IMarkdownString } from 'cs/base/common/htmlContent';
 import type { RagAnswerResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
@@ -13,6 +13,8 @@ import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/mark
 let cleanupDomEnvironment: (() => void) | null = null;
 let createChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').createChatWidget;
 let createChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').createChatViewPane;
+let HorizontalScrollbar: typeof HorizontalScrollbarType;
+let renderMarkdown: typeof import('cs/base/browser/markdownRenderer').renderMarkdown;
 
 function createMarkdownRendererService(
   onOpenLink: (href: string) => void = () => {},
@@ -106,6 +108,8 @@ function createResult(overrides: Partial<RagAnswerResult> = {}): RagAnswerResult
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
+  ({ HorizontalScrollbar } = await import('cs/base/browser/ui/scrollbar/horizontalScrollbar'));
+  ({ renderMarkdown } = await import('cs/base/browser/markdownRenderer'));
   ({ createChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
   ({ createChatViewPane } = await import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane'));
 });
@@ -176,6 +180,41 @@ test('agent chat thread uses the shared scrollable transcript container', () => 
     assert.equal(thread.querySelectorAll('.comet-agentbar-message').length, 2);
   } finally {
     agentBar.dispose();
+  }
+});
+
+test('session chat view uses compact layout for fetched article batches only', () => {
+  const articleMessage: ChatWidgetProps['messages'][number] = {
+    id: 'article-1',
+    role: 'assistant',
+    content: 'Science\n- [Example article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
+    includeInAgentHistory: false,
+  };
+  const chatWidget = createChatWidget({
+    ...createProps(),
+    messages: [articleMessage],
+  });
+  const element = chatWidget.getElement();
+  document.body.append(element);
+
+  try {
+    const articleBody = element.querySelector('.comet-session-chat-view-body');
+    assert(articleBody instanceof HTMLElement);
+    assert.equal(articleBody.classList.contains('comet-is-article-batch-state'), true);
+
+    chatWidget.setProps({
+      ...createProps(),
+      messages: [
+        articleMessage,
+        { id: 'user-1', role: 'user', content: 'Summarize this.' },
+      ],
+    });
+
+    const conversationBody = element.querySelector('.comet-session-chat-view-body');
+    assert(conversationBody instanceof HTMLElement);
+    assert.equal(conversationBody.classList.contains('comet-is-article-batch-state'), false);
+  } finally {
+    chatWidget.dispose();
   }
 });
 
@@ -814,7 +853,7 @@ test('agent chat renders fetched article linked text and opens links through mar
       {
         id: 'article-1',
         role: 'assistant',
-        content: 'Science\n- [Example article](https://www.science.org/doi/example) - Science | 2026-07-03 | Research Article',
+        content: 'Science\n- [Example article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
         includeInAgentHistory: false,
       },
     ],
@@ -831,7 +870,7 @@ test('agent chat renders fetched article linked text and opens links through mar
     assert(markdown instanceof HTMLElement);
     assert.equal(
       markdown.textContent?.replace(/\s+/g, ' ').trim(),
-      'Science Example article - Science | 2026-07-03 | Research Article',
+      'Science Example article - 2026-07-03 | Research Article',
     );
 
     const link = markdown.querySelector('a[data-href]');

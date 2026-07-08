@@ -13,10 +13,12 @@ import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import {
-  formatLocalized,
-  localizeDesktopInvokeError,
-  parseDesktopInvokeError,
-} from 'cs/workbench/services/desktop/desktopError';
+  parseAppErrorData,
+} from 'cs/base/common/errors';
+import {
+  formatLocaleMessage,
+  localizeAppError,
+} from 'cs/workbench/common/errorMessages';
 import {
   markPdfDownloadCancelled,
   markPdfDownloadFailed,
@@ -131,7 +133,7 @@ function resolveSciencePdfQueueMessage(ui: LocaleMessages) {
 }
 
 function isScienceValidationWindowClosedCancel(
-  error: ReturnType<typeof parseDesktopInvokeError>,
+  error: ReturnType<typeof parseAppErrorData>,
 ) {
   return (
     error.code === 'PDF_DOWNLOAD_FAILED' &&
@@ -142,7 +144,7 @@ function isScienceValidationWindowClosedCancel(
 }
 
 function isDesktopCancellation(
-  error: ReturnType<typeof parseDesktopInvokeError>,
+  error: ReturnType<typeof parseAppErrorData>,
 ) {
   return error.message === 'Canceled' || error.details?.message === 'Canceled';
 }
@@ -329,7 +331,7 @@ export class DocumentActionsController {
       showAppToast(
         nativeHost,
         'success',
-        formatLocalized(ui.toastPdfDownloaded, {
+        formatLocaleMessage(ui.toastPdfDownloaded, {
           filePath: result.filePath,
           sourceUrl: result.sourceUrl,
         }),
@@ -340,18 +342,18 @@ export class DocumentActionsController {
         return;
       }
 
-      const parsedError = parseDesktopInvokeError(downloadError);
+      const parsedError = parseAppErrorData(downloadError);
       if (isScienceValidationWindowClosedCancel(parsedError) || isDesktopCancellation(parsedError)) {
         markPdfDownloadCancelled(preparedPdfDownload.normalizedSourceUrl);
         return;
       }
 
-      const localizedError = localizeDesktopInvokeError(ui, parsedError);
+      const localizedError = localizeAppError(ui, parsedError);
       markPdfDownloadFailed(preparedPdfDownload.normalizedSourceUrl, localizedError);
       showAppToast(
         nativeHost,
         'error',
-        formatLocalized(ui.toastPdfDownloadFailed, { error: localizedError }),
+        formatLocaleMessage(ui.toastPdfDownloadFailed, { error: localizedError }),
       );
     } finally {
       if (preparedPdfDownload.isSciencePdfDownload) {
@@ -462,18 +464,18 @@ export class DocumentActionsController {
         }
 
         toast.success(
-          formatLocalized(ui.toastEditorDocxExported, {
+          formatLocaleMessage(ui.toastEditorDocxExported, {
             title: result.title,
             filePath: result.filePath,
           }),
         );
       } catch (exportError) {
-        const localizedError = localizeDesktopInvokeError(
+        const localizedError = localizeAppError(
           ui,
-          parseDesktopInvokeError(exportError),
+          parseAppErrorData(exportError),
         );
         toast.error(
-          formatLocalized(ui.toastDocxExportFailed, { error: localizedError }),
+          formatLocaleMessage(ui.toastDocxExportFailed, { error: localizedError }),
         );
       }
       return;

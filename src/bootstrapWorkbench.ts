@@ -90,8 +90,8 @@ const workbenchDependencyModules = [
     load: () => import('cs/base/browser/ui/toast/toast'),
   },
   {
-    label: 'cs/workbench/services/desktop/desktopError',
-    load: () => import('cs/workbench/services/desktop/desktopError'),
+    label: 'cs/workbench/common/errorMessages',
+    load: () => import('cs/workbench/common/errorMessages'),
   },
   {
     label: 'cs/workbench/browser/assistantModel',

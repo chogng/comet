@@ -20,10 +20,10 @@ import type {
 } from "cs/editor/common/writingEditorDocument";
 import type { LocaleMessages } from "language/locales";
 import {
-  formatLocalized,
-  localizeDesktopInvokeError,
-  parseDesktopInvokeError,
-} from "cs/workbench/services/desktop/desktopError";
+  formatChatAnswerFailedMessage,
+  formatChatPatchApplyFailedMessage,
+  localizeChatError,
+} from "cs/workbench/common/chatErrorMessages";
 
 export type AssistantModelContext = {
   desktopRuntime: boolean;
@@ -167,7 +167,6 @@ function createLinkedTextLabel(label: string): string {
 
 function createArticleMessageLine(article: Article): string {
   const description = [
-    article.journalTitle,
     article.publishedAt,
     article.articleType,
   ].filter(Boolean).join(' | ');
@@ -449,9 +448,7 @@ export class AssistantModel {
               },
       );
       toast.error(
-        formatLocalized(this.context.ui.toastAssistantPatchApplyFailed, {
-          error: unavailableMessage,
-        }),
+        formatChatPatchApplyFailedMessage(this.context.ui, unavailableMessage),
       );
       return;
     }
@@ -476,9 +473,7 @@ export class AssistantModel {
               },
       );
       toast.error(
-        formatLocalized(this.context.ui.toastAssistantPatchApplyFailed, {
-          error: applyError,
-        }),
+        formatChatPatchApplyFailedMessage(this.context.ui, applyError),
       );
       return;
     }
@@ -500,9 +495,7 @@ export class AssistantModel {
               },
       );
       toast.error(
-        formatLocalized(this.context.ui.toastAssistantPatchApplyFailed, {
-          error: applyResult.message,
-        }),
+        formatChatPatchApplyFailedMessage(this.context.ui, applyResult.message),
       );
       return;
     }
@@ -625,10 +618,7 @@ export class AssistantModel {
         ],
       }));
     } catch (askError) {
-      const localizedError = localizeDesktopInvokeError(
-        context.ui,
-        parseDesktopInvokeError(askError)
-      );
+      const localizedError = localizeChatError(context.ui, askError);
 
       this.updateConversationById(activeConversation.id, (conversation) => ({
         ...conversation,
@@ -636,9 +626,7 @@ export class AssistantModel {
         question: normalizedQuestion,
       }));
       toast.error(
-        formatLocalized(context.ui.toastRagAnswerFailed, {
-          error: localizedError,
-        })
+        formatChatAnswerFailedMessage(context.ui, localizedError)
       );
     } finally {
       this.updateConversationById(activeConversation.id, (conversation) => ({

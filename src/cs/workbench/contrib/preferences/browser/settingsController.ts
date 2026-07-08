@@ -18,10 +18,12 @@ import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyle
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import {
-  formatLocalized,
-  localizeDesktopInvokeError,
-  parseDesktopInvokeError,
-} from 'cs/workbench/services/desktop/desktopError';
+  parseAppErrorData,
+} from 'cs/base/common/errors';
+import {
+  formatLocaleMessage,
+  localizeAppError,
+} from 'cs/workbench/common/errorMessages';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import type { SettingsModelSnapshot } from 'cs/workbench/services/settings/settingsModel';
 
@@ -43,7 +45,7 @@ const immediateAutoSaveDelayMs = 0;
 const debouncedAutoSaveDelayMs = 650;
 
 function localizeSettingsError(ui: LocaleMessages, error: unknown) {
-  return localizeDesktopInvokeError(ui, parseDesktopInvokeError(error));
+  return localizeAppError(ui, parseAppErrorData(error));
 }
 
 export class SettingsController {
@@ -145,7 +147,7 @@ export class SettingsController {
     } catch (pickError) {
       const localizedError = localizeSettingsError(this.context.ui, pickError);
       toast.error(
-        formatLocalized(this.context.ui.toastChangeConfigLocationFailed, {
+        formatLocaleMessage(this.context.ui.toastChangeConfigLocationFailed, {
           error: localizedError,
         }),
       );
@@ -549,7 +551,7 @@ export class SettingsController {
     } catch (saveError) {
       const localizedError = localizeSettingsError(ui, saveError);
       toast.error(
-        formatLocalized(ui.toastSaveSettingsFailed, {
+        formatLocaleMessage(ui.toastSaveSettingsFailed, {
           error: localizedError,
         }),
       );
@@ -569,7 +571,7 @@ export class SettingsController {
         this.getSettingsModelContext(),
       );
       toast.success(
-        formatLocalized(ui.toastLlmConnectionSucceeded, {
+        formatLocaleMessage(ui.toastLlmConnectionSucceeded, {
           provider: result.provider,
           model: result.model,
         }),
@@ -577,7 +579,7 @@ export class SettingsController {
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
       toast.error(
-        formatLocalized(ui.toastLlmConnectionFailed, {
+        formatLocaleMessage(ui.toastLlmConnectionFailed, {
           error: localizedError,
         }),
       );
@@ -596,7 +598,7 @@ export class SettingsController {
         this.getSettingsModelContext(),
       );
       toast.success(
-        formatLocalized(ui.toastRagConnectionSucceeded, {
+        formatLocaleMessage(ui.toastRagConnectionSucceeded, {
           provider: result.provider,
           embeddingModel: result.embeddingModel,
           rerankerModel: result.rerankerModel,
@@ -605,7 +607,7 @@ export class SettingsController {
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
       toast.error(
-        formatLocalized(ui.toastRagConnectionFailed, {
+        formatLocaleMessage(ui.toastRagConnectionFailed, {
           error: localizedError,
         }),
       );
@@ -624,14 +626,14 @@ export class SettingsController {
         this.getSettingsModelContext(),
       );
       toast.success(
-        formatLocalized(ui.toastTranslationConnectionSucceeded, {
+        formatLocaleMessage(ui.toastTranslationConnectionSucceeded, {
           provider: result.provider,
         }),
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
       toast.error(
-        formatLocalized(ui.toastTranslationConnectionFailed, {
+        formatLocaleMessage(ui.toastTranslationConnectionFailed, {
           error: localizedError,
         }),
       );
@@ -651,14 +653,14 @@ export class SettingsController {
       );
       this.scheduleImmediateAutoSave();
       toast.success(
-        formatLocalized(ui.toastTranslationModelsLoaded, {
+        formatLocaleMessage(ui.toastTranslationModelsLoaded, {
           count: String(result.models.length),
         }),
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
       toast.error(
-        formatLocalized(ui.toastTranslationModelsFailed, {
+        formatLocaleMessage(ui.toastTranslationModelsFailed, {
           error: localizedError,
         }),
       );
@@ -698,7 +700,7 @@ export class SettingsController {
       const { ui } = this.context;
       const localizedError = localizeSettingsError(ui, loadError);
       toast.error(
-        formatLocalized(ui.toastLoadSettingsFailed, { error: localizedError }),
+        formatLocaleMessage(ui.toastLoadSettingsFailed, { error: localizedError }),
       );
     }
   };

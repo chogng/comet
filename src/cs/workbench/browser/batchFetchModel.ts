@@ -22,9 +22,9 @@ import type { BatchFetchStatusbarStatus } from 'cs/workbench/browser/parts/statu
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 
 import {
-  formatLocalized,
-  localizeDesktopInvokeError,
-} from 'cs/workbench/services/desktop/desktopError';
+  formatLocaleMessage,
+  localizeAppError,
+} from 'cs/workbench/common/errorMessages';
 
 export type BatchFetchControllerContext = {
   desktopRuntime: boolean;
@@ -207,10 +207,10 @@ export class BatchFetchController {
         }
 
         const localizedError = result.error
-          ? localizeDesktopInvokeError(ui, result.error)
+          ? localizeAppError(ui, result.error)
           : ui.errorUnknown;
         toast.error(
-          formatLocalized(ui.toastBatchFetchFailed, {
+          formatLocaleMessage(ui.toastBatchFetchFailed, {
             error: localizedError,
           }),
         );
@@ -224,7 +224,7 @@ export class BatchFetchController {
 
       onFetchSuccess(result.articles);
       toast.success(
-        formatLocalized(ui.toastBatchFetchSucceeded, {
+        formatLocaleMessage(ui.toastBatchFetchSucceeded, {
           count: result.articles.length,
         }),
       );
@@ -237,7 +237,7 @@ export class BatchFetchController {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error(
-        formatLocalized(ui.toastBatchFetchFailed, {
+        formatLocaleMessage(ui.toastBatchFetchFailed, {
           error: errorMessage || ui.errorUnknown,
         }),
       );

@@ -24,11 +24,19 @@
   align-items: center;
 }
 
+.comet-session-chat-view-body.comet-is-article-batch-state {
+  justify-content: flex-start;
+}
+
 .comet-agentbar-thread-widget {
   flex: 1;
   min-height: 0;
   position: relative;
   width: 100%;
+}
+
+.comet-session-chat-view-body.comet-is-article-batch-state > .comet-session-chat-view-thread {
+  flex: 0 1 auto;
 }
 
 .comet-agentbar-thread-widget.comet-is-empty {
@@ -151,6 +159,10 @@
   margin-top: auto;
   display: grid;
   gap: 8px;
+}
+
+.comet-session-chat-view-body.comet-is-article-batch-state > .comet-chat-composer-host {
+  margin-top: 0;
 }
 
 .comet-chat-composer-host.comet-is-empty-state {

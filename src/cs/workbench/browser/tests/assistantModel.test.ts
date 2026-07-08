@@ -17,22 +17,20 @@ import type {
   WritingEditorDocument,
   WritingEditorStableSelectionTarget,
 } from 'cs/editor/common/writingEditorDocument';
-import {
-  createAssistantModel,
-} from 'cs/workbench/browser/assistantModel';
 import type {
   AssistantModelContext,
 } from 'cs/workbench/browser/assistantModel';
 import { locales } from 'language/locales';
 
 let domEnvironment: JSDOM | null = null;
+let createAssistantModel: typeof import('cs/workbench/browser/assistantModel').createAssistantModel;
 
 type InvokeCapture = {
   commands: string[];
   payloads: unknown[];
 };
 
-before(() => {
+before(async () => {
   domEnvironment = new JSDOM('<!doctype html><html><body></body></html>');
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -50,6 +48,7 @@ before(() => {
     configurable: true,
     value: domEnvironment.window.Event,
   });
+  ({ createAssistantModel } = await import('cs/workbench/browser/assistantModel'));
 });
 
 after(() => {
@@ -421,8 +420,8 @@ test('assistant inserts fetched article links without sending them as agent text
     articlesMessage?.content,
     [
       'Science',
-      '- [Fetched article](https://www.science.org/doi/example) - Science | 2026-07-03 | Research Article',
-      '- [Second fetched article](https://www.science.org/doi/example-2) - Science | 2026-07-04 | Research Article',
+      '- [Fetched article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
+      '- [Second fetched article](https://www.science.org/doi/example-2) - 2026-07-04 | Research Article',
     ].join('\n'),
   );
   assert.equal(articlesMessage?.includeInAgentHistory, false);

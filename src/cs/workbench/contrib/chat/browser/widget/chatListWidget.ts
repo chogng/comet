@@ -20,7 +20,7 @@ export type ChatListWidgetOptions = {
 };
 
 export class ChatListWidget {
-	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-thread-widget');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view-thread.comet-agentbar-thread-widget');
 	private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-thread');
 	private readonly scrollableElement: DomScrollableElement;
 	private readonly scrollDownButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-thread-scroll-down');
