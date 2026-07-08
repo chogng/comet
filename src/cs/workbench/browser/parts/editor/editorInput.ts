@@ -1,5 +1,6 @@
 import { getEditorContentTabTitle } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
 import { URI } from 'cs/base/common/uri';
+import { normalizeUrl } from 'cs/workbench/common/url';
 
 export type EditorTabViewMode = 'draft';
 
@@ -161,7 +162,7 @@ function createEditorContentTabInput<K extends EditorContentTabInput['kind']>(
   url: string,
   initial?: Partial<Pick<Extract<EditorContentTabInput, { kind: K }>, 'id' | 'title'>>,
 ): Extract<EditorContentTabInput, { kind: K }> {
-  const normalizedUrl = url.trim();
+  const normalizedUrl = normalizeUrl(url);
   const derivedTitle = getEditorContentTabTitle(normalizedUrl);
   const normalizedInitialTitle = initial?.title?.trim() ?? '';
   const resolvedTitle =
@@ -290,7 +291,7 @@ export function toEditorTabInput(input: EditorTabInput): EditorTabInput {
 export function getEditorContentTabInputResourceKey(
   input: Pick<EditorContentTabInput, 'kind' | 'url'>,
 ) {
-  return `${input.kind}:${URI.parse(input.url.trim(), true).toString()}`;
+  return `${input.kind}:${URI.parse(normalizeUrl(input.url), true).toString()}`;
 }
 
 export function getEditorTabInputResourceKey(input: EditorTabInput) {

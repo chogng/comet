@@ -234,6 +234,95 @@ function normalizeTabResidencies(
   });
 }
 
+function getPreferredDuplicateTabId(
+  tabs: EditorWorkspaceTab[],
+  tabIds: readonly string[],
+  activeTabId: string | null,
+  mruTabIds: readonly string[],
+) {
+  if (activeTabId && tabIds.includes(activeTabId)) {
+    return activeTabId;
+  }
+
+  const mruTabId = mruTabIds.find((tabId) => tabIds.includes(tabId));
+  if (mruTabId) {
+    return mruTabId;
+  }
+
+  return tabIds.find((tabId) => tabs.some((tab) => tab.id === tabId)) ?? null;
+}
+
+function dedupeContentTabs(
+  state: EditorEditorGroupState,
+): EditorEditorGroupState {
+  const duplicateIdsByResourceKey = new Map<string, string[]>();
+  for (const tab of state.tabs) {
+    if (!isEditorBrowserTabInput(tab) && !isEditorPdfTabInput(tab)) {
+      continue;
+    }
+
+    const resourceKey = getEditorContentTabInputResourceKey(tab);
+    const duplicateIds = duplicateIdsByResourceKey.get(resourceKey);
+    if (duplicateIds) {
+      duplicateIds.push(tab.id);
+      continue;
+    }
+
+    duplicateIdsByResourceKey.set(resourceKey, [tab.id]);
+  }
+
+  const retainedIds = new Set<string>();
+  const replacedIdByDuplicateId = new Map<string, string>();
+  for (const duplicateIds of duplicateIdsByResourceKey.values()) {
+    if (duplicateIds.length === 1) {
+      retainedIds.add(duplicateIds[0]!);
+      continue;
+    }
+
+    const retainedId = getPreferredDuplicateTabId(
+      state.tabs,
+      duplicateIds,
+      state.activeTabId,
+      state.mruTabIds,
+    );
+    if (!retainedId) {
+      continue;
+    }
+
+    retainedIds.add(retainedId);
+    for (const duplicateId of duplicateIds) {
+      if (duplicateId !== retainedId) {
+        replacedIdByDuplicateId.set(duplicateId, retainedId);
+      }
+    }
+  }
+
+  if (replacedIdByDuplicateId.size === 0) {
+    return state;
+  }
+
+  const nextTabs = state.tabs.filter((tab) => {
+    if (!isEditorBrowserTabInput(tab) && !isEditorPdfTabInput(tab)) {
+      return true;
+    }
+
+    return retainedIds.has(tab.id);
+  });
+
+  return {
+    ...state,
+    tabs: nextTabs,
+    activeTabId: state.activeTabId
+      ? replacedIdByDuplicateId.get(state.activeTabId) ?? state.activeTabId
+      : null,
+    mruTabIds: toUniqueIds(
+      state.mruTabIds.map((tabId) =>
+        replacedIdByDuplicateId.get(tabId) ?? tabId,
+      ),
+    ),
+  };
+}
+
 function ensureResidentTabs(
   tabs: EditorWorkspaceTab[],
 ): EditorWorkspaceTab[] {
@@ -630,7 +719,7 @@ function readStoredWorkspaceState(
 
     return {
       workspaceState: normalizeWorkspaceState({
-        groups,
+        groups: groups.map((group) => dedupeContentTabs(group)),
         activeGroupId,
         viewStateEntries,
       }),

@@ -129,6 +129,40 @@ test('editor open service creates a non-reused browser tab for browser new-tab r
   }
 });
 
+test('editor open service reveals an existing browser tab for normalized article URLs', () => {
+  const restoreWindow = installMockWindow(createLocalStorage());
+
+  try {
+    const model = createEditorModel();
+    const service = createEditorOpenService(model);
+
+    service.open({
+      kind: 'browser',
+      disposition: 'reveal-or-open',
+      url: 'www.nature.com/articles/example',
+    });
+    const firstArticleTab = model.getSnapshot().activeTab;
+    const result = service.open({
+      kind: 'browser',
+      disposition: 'reveal-or-open',
+      url: 'https://www.nature.com/articles/example',
+    });
+
+    const matchingBrowserTabs = model.getSnapshot().tabs.filter(
+      (tab) =>
+        tab.kind === 'browser' &&
+        tab.url === 'https://www.nature.com/articles/example',
+    );
+    assert.equal(result.handled, true);
+    assert.equal(result.activeTabId, firstArticleTab?.id ?? null);
+    assert.equal(matchingBrowserTabs.length, 1);
+
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
 test('editor open service creates a non-reused pdf tab for pdf new-tab requests', () => {
   const restoreWindow = installMockWindow(createLocalStorage());
 

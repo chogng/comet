@@ -251,6 +251,54 @@ test('editor model restores legacy flat workspace payloads into a default group'
   }
 });
 
+test('editor model dedupes restored browser tabs for the same normalized article URL', () => {
+  const localStorage = createLocalStorage({
+    'cs.writingWorkspace.state': JSON.stringify({
+      groups: [
+        {
+          groupId: 'editor-group-a',
+          inputs: [
+            {
+              id: 'browser-a',
+              kind: 'browser',
+              title: 'Article',
+              url: 'www.nature.com/articles/example',
+            },
+            {
+              id: 'browser-b',
+              kind: 'browser',
+              title: 'Article',
+              url: 'https://www.nature.com/articles/example',
+            },
+          ],
+          activeTabId: 'browser-b',
+          mruTabIds: ['browser-b', 'browser-a'],
+        },
+      ],
+      activeGroupId: 'editor-group-a',
+      viewStateEntries: [],
+    }),
+  });
+  const restoreWindow = installMockWindow(localStorage);
+
+  try {
+    const model = createEditorModel();
+    const snapshot = model.getSnapshot();
+    const articleTabs = snapshot.tabs.filter(
+      (tab) =>
+        tab.kind === 'browser' &&
+        tab.url === 'https://www.nature.com/articles/example',
+    );
+
+    assert.equal(articleTabs.length, 1);
+    assert.equal(articleTabs[0]?.id, 'browser-b');
+    assert.equal(snapshot.activeTab?.id, 'browser-b');
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
 test('editor model can create and activate explicit editor groups', () => {
   const model = createEditorModel({
     groups: [
