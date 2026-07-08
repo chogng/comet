@@ -11,6 +11,7 @@
   },
   "include": [
     "src/cs/code/electron-main/**/*.ts",
+    "src/cs/platform/windows/electron-main/**/*.ts",
     "src/cs/base/parts/sandbox/electron-browser/preload.ts"
   ],
   "exclude": ["dist-electron", "node_modules"]
