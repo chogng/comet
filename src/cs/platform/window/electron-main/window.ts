@@ -6,6 +6,50 @@
 import type { BrowserWindow } from 'electron';
 
 import type { WindowState } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { DEFAULT_EMPTY_WINDOW_SIZE, DEFAULT_WORKSPACE_WINDOW_SIZE } from 'cs/platform/window/common/window';
+
+export enum WindowMode {
+	Normal = 0,
+	Maximized,
+	Fullscreen,
+}
+
+export interface IWindowState {
+	width?: number;
+	height?: number;
+	x?: number;
+	y?: number;
+	mode?: WindowMode;
+	zoomLevel?: number;
+	readonly display?: number;
+}
+
+export function defaultWindowState(mode = WindowMode.Normal, hasWorkspace = false): IWindowState {
+	const size = hasWorkspace ? DEFAULT_WORKSPACE_WINDOW_SIZE : DEFAULT_EMPTY_WINDOW_SIZE;
+	return {
+		width: size.width,
+		height: size.height,
+		mode,
+	};
+}
+
+export function serializeBrowserWindowState(window: BrowserWindow): IWindowState {
+	const bounds = window.getBounds();
+	let mode = WindowMode.Normal;
+	if (window.isFullScreen()) {
+		mode = WindowMode.Fullscreen;
+	} else if (window.isMaximized()) {
+		mode = WindowMode.Maximized;
+	}
+
+	return {
+		x: bounds.x,
+		y: bounds.y,
+		width: bounds.width,
+		height: bounds.height,
+		mode,
+	};
+}
 
 export function resolveWindowBackgroundMaterial(useMica: boolean) {
 	if (process.platform !== 'win32') {

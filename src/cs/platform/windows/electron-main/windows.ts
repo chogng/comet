@@ -7,12 +7,15 @@ import { BrowserWindow } from 'electron';
 import type { BrowserWindowConstructorOptions, WebContents } from 'electron';
 
 import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { WindowMinimumSize } from 'cs/platform/window/common/window';
 import {
 	applyWindowBackgroundMaterial,
+	type IWindowState,
 	resolveFramelessTitleBarStyle,
 	resolveMainWindowBackgroundColor,
 	resolveTitleBarOverlay,
 	resolveWindowBackgroundMaterial,
+	WindowMode,
 } from 'cs/platform/window/electron-main/window';
 import { disposeToastOverlay } from 'cs/platform/window/electron-main/toastOverlayView';
 import { setTrayMainWindow } from 'cs/platform/window/electron-main/trayIcon';
@@ -30,6 +33,44 @@ let currentUseMica = true;
 let currentBackgroundColor = '#ffffff';
 const AUX_WINDOW_LOG_ENABLED = isCompatFetchEnvEnabled('LS_FETCH_TIMING', 'READER_FETCH_TIMING');
 const RENDERER_DEBUG_LOG_ENABLED = process.env.LS_RENDERER_DEBUG === '1';
+
+interface IDefaultBrowserWindowOptions {
+	readonly useMica: boolean;
+	readonly backgroundColor: string;
+}
+
+interface ICreateMainWindowOptions extends IDefaultBrowserWindowOptions {
+	readonly windowState: IWindowState;
+}
+
+export function defaultBrowserWindowOptions(
+	windowState: IWindowState,
+	options: IDefaultBrowserWindowOptions,
+): BrowserWindowConstructorOptions {
+	return {
+		x: windowState.x,
+		y: windowState.y,
+		width: windowState.width,
+		height: windowState.height,
+		minWidth: WindowMinimumSize.WIDTH,
+		minHeight: WindowMinimumSize.HEIGHT,
+		title: 'Comet Studio',
+		show: windowState.mode !== WindowMode.Maximized && windowState.mode !== WindowMode.Fullscreen,
+		frame: process.platform !== 'darwin' ? false : undefined,
+		titleBarStyle: resolveFramelessTitleBarStyle(),
+		titleBarOverlay: resolveTitleBarOverlay(),
+		...(process.platform === 'darwin' ? { trafficLightPosition: { x: 13, y: 11 } } : {}),
+		backgroundColor: resolveMainWindowBackgroundColor(options.useMica, options.backgroundColor),
+		backgroundMaterial: resolveWindowBackgroundMaterial(options.useMica),
+		autoHideMenuBar: true,
+		webPreferences: {
+			preload: resolvePreloadScriptPath(),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+		},
+	};
+}
 
 function logAuxiliaryWindow(stage: string, details: Record<string, unknown>) {
 	if (!AUX_WINDOW_LOG_ENABLED) {
@@ -314,33 +355,29 @@ export function resolveWindowFromWebContents(contents?: WebContents | null) {
 	return (contents ? BrowserWindow.fromWebContents(contents) : null) ?? getMainWindow();
 }
 
-export function createMainWindow(options: { useMica?: boolean; backgroundColor?: string } = {}) {
-	const useMica = options.useMica ?? true;
-	const backgroundColor = options.backgroundColor ?? currentBackgroundColor;
+function applyMainWindowState(window: BrowserWindow, windowState: IWindowState): void {
+	if (windowState.mode === WindowMode.Maximized) {
+		window.maximize();
+	} else if (windowState.mode === WindowMode.Fullscreen) {
+		window.setFullScreen(true);
+	}
+
+	if (!window.isVisible()) {
+		window.show();
+	}
+}
+
+export function createMainWindow(options: ICreateMainWindowOptions) {
+	const { useMica, backgroundColor, windowState } = options;
 	currentBackgroundColor = backgroundColor;
-	mainWindow = new BrowserWindow({
-		width: 1400,
-		height: 900,
-		minWidth: 1080,
-		minHeight: 680,
-		title: 'Comet Studio',
-		frame: process.platform !== 'darwin' ? false : undefined,
-		titleBarStyle: resolveFramelessTitleBarStyle(),
-		titleBarOverlay: resolveTitleBarOverlay(),
-		...(process.platform === 'darwin' ? { trafficLightPosition: { x: 13, y: 11 } } : {}),
-		backgroundColor: resolveMainWindowBackgroundColor(useMica, backgroundColor),
-		backgroundMaterial: resolveWindowBackgroundMaterial(useMica),
-		autoHideMenuBar: true,
-		webPreferences: {
-			preload: resolvePreloadScriptPath(),
-			contextIsolation: true,
-			nodeIntegration: false,
-			sandbox: false,
-		},
-	});
+	mainWindow = new BrowserWindow(defaultBrowserWindowOptions(windowState, {
+		useMica,
+		backgroundColor,
+	}));
 
 	const window = mainWindow;
 	applyMainWindowBackgroundMaterial(useMica, backgroundColor, window);
+	applyMainWindowState(window, windowState);
 	wireRendererDiagnostics(window);
 	ensureWebContentView(window);
 	setTrayMainWindow(window);
