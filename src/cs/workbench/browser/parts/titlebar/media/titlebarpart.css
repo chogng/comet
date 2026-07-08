@@ -297,21 +297,11 @@
   min-height: 0;
   display: grid;
   grid-template-rows: 1fr;
+  position: relative;
   padding: 0;
   overflow: hidden;
   background-color: var(--workbench-chrome-bg-transparent);
   transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.comet-app-shell.comet-app-shell-settings {
-  grid-template-rows: minmax(0, 1fr);
-  background-color: var(--workbench-chrome-bg);
-}
-
-.comet-app-shell.comet-app-shell-settings .comet-workbench-content-layout,
-.comet-app-shell.comet-app-shell-settings .comet-content-grid,
-.comet-app-shell.comet-app-shell-settings .comet-workbench-content-slot-editor {
-  background: var(--workbench-chrome-bg);
 }
 
 @media (max-width: 980px) {

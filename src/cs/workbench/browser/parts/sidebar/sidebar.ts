@@ -17,7 +17,6 @@ import 'cs/workbench/browser/parts/sidebar/media/sidebar.css';
 export type SidebarLabels = FetchPaneSidebarLabels;
 
 export type SidebarProps = {
-  mode?: 'content' | 'settings';
   labels: SidebarLabels;
   accountLabel?: string;
   moreLabel?: string;
@@ -33,7 +32,6 @@ export type SidebarProps = {
   onDocumentRename?: (document: LibraryDocumentSummary) => void;
   onDocumentEditSourceUrl?: (document: LibraryDocumentSummary) => void;
   onDocumentDelete?: (document: LibraryDocumentSummary) => void;
-  settingsNavigationElement?: HTMLElement | null;
   footerActionsElement?: HTMLElement | null;
 };type SidebarContentTab = 'library' | 'fetch';
 
@@ -162,19 +160,6 @@ export class Sidebar {
   }
 
   private syncModeContent() {
-    if (this.props.mode === 'settings') {
-      this.switcherElement.hidden = true;
-      const settingsNavigationElement = this.props.settingsNavigationElement ?? null;
-      if (settingsNavigationElement) {
-        if (this.contentElement.firstElementChild !== settingsNavigationElement) {
-          this.contentElement.replaceChildren(settingsNavigationElement);
-        }
-      } else if (this.contentElement.firstElementChild) {
-        this.contentElement.replaceChildren();
-      }
-      return;
-    }
-
     this.switcherElement.hidden = false;
     if (this.contentElement.firstElementChild !== this.contentHostElement) {
       this.contentElement.replaceChildren(this.contentHostElement);
@@ -205,10 +190,6 @@ export class Sidebar {
   }
 
   private syncTabs() {
-    if (this.props.mode === 'settings') {
-      return;
-    }
-
     if (this.contentElement.firstElementChild !== this.contentHostElement) {
       return;
     }

@@ -1,0 +1,4 @@
+[      63ms] Error: Desktop renderer was loaded without the Electron preload bridge. Launch the desktop workbench through scripts/code.sh, scripts/code.bat, or npm run dev:desktop instead of opening the Vite renderer URL in a browser.
+    at assertDesktopIpcBridge (http://127.0.0.1:1420/src/cs/code/electron-browser/workbench.ts?t=1783524020339:4:11)
+    at main (http://127.0.0.1:1420/src/cs/code/electron-browser/workbench.ts?t=1783524020339:22:3)
+    at http://127.0.0.1:1420/src/cs/code/electron-browser/workbench.ts?t=1783524020339:34:6

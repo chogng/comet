@@ -1,15 +1,18 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type {
   ContextKey,
   ContextKeyService,
 } from 'cs/platform/contextkey/common/contextkey';
-import {
-  contextKeyService,
-  RawContextKey,
-} from 'cs/platform/contextkey/common/contextkey';
+import { contextKeyService } from 'cs/platform/contextkey/common/contextkey';
 import {
   registerWorkbenchContribution,
   type Disposable,
 } from 'cs/workbench/common/contributions';
+import { WorkbenchContextKeys } from 'cs/workbench/common/contextkeys';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchPartDomSnapshot,
@@ -17,51 +20,6 @@ import {
   subscribeWorkbenchPartDom,
 } from 'cs/workbench/browser/layout';
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
-import type { WorkbenchPage } from 'cs/workbench/browser/workbench';
-import {
-  getWorkbenchStateSnapshot,
-  subscribeWorkbenchState,
-} from 'cs/workbench/browser/workbench';
-
-export const WorkbenchContextKeys = {
-  activePage: new RawContextKey<WorkbenchPage>(
-    'workbench.activePage',
-    'content',
-  ),
-  contentVisible: new RawContextKey<boolean>(
-    'workbench.contentVisible',
-    true,
-  ),
-  settingsVisible: new RawContextKey<boolean>(
-    'workbench.settingsVisible',
-    false,
-  ),
-  primarySidebarVisible: new RawContextKey<boolean>(
-    'workbench.primarySidebarVisible',
-    true,
-  ),
-  agentSidebarVisible: new RawContextKey<boolean>(
-    'workbench.agentSidebarVisible',
-    false,
-  ),
-  editorCollapsed: new RawContextKey<boolean>(
-    'workbench.editorCollapsed',
-    false,
-  ),
-  hasContainer: new RawContextKey<boolean>('workbench.hasContainer', false),
-  hasSidebar: new RawContextKey<boolean>('workbench.hasSidebar', false),
-  hasAgentSidebar: new RawContextKey<boolean>(
-    'workbench.hasAgentSidebar',
-    false,
-  ),
-  hasStatusbar: new RawContextKey<boolean>('workbench.hasStatusbar', false),
-  hasSettings: new RawContextKey<boolean>('workbench.hasSettings', false),
-  hasEditor: new RawContextKey<boolean>('workbench.hasEditor', false),
-  hasWebContentViewHost: new RawContextKey<boolean>(
-    'workbench.hasWebContentViewHost',
-    false,
-  ),
-} as const;
 
 export type WorkbenchBoundContextKeys = {
   readonly [K in keyof typeof WorkbenchContextKeys]: ContextKey<
@@ -73,8 +31,6 @@ export function bindWorkbenchContextKeys(
   service: ContextKeyService = contextKeyService,
 ): WorkbenchBoundContextKeys {
   return {
-    activePage: WorkbenchContextKeys.activePage.bindTo(service),
-    contentVisible: WorkbenchContextKeys.contentVisible.bindTo(service),
     settingsVisible: WorkbenchContextKeys.settingsVisible.bindTo(service),
     primarySidebarVisible:
       WorkbenchContextKeys.primarySidebarVisible.bindTo(service),
@@ -95,13 +51,10 @@ export function bindWorkbenchContextKeys(
 export function syncWorkbenchContextKeys(
   keys: WorkbenchBoundContextKeys,
 ) {
-  const workbenchState = getWorkbenchStateSnapshot();
   const layoutState = getWorkbenchLayoutStateSnapshot();
   const partDom = getWorkbenchPartDomSnapshot();
 
-  keys.activePage.set(workbenchState.activePage);
-  keys.contentVisible.set(workbenchState.activePage === 'content');
-  keys.settingsVisible.set(workbenchState.activePage === 'settings');
+  keys.settingsVisible.set(Boolean(partDom[WORKBENCH_PART_IDS.settings]));
   keys.primarySidebarVisible.set(layoutState.isPrimarySidebarVisible);
   keys.agentSidebarVisible.set(layoutState.isAgentSidebarVisible);
   keys.editorCollapsed.set(layoutState.isEditorCollapsed);
@@ -124,7 +77,6 @@ export function createWorkbenchContextKeysContribution(
     syncWorkbenchContextKeys(keys);
   };
 
-  const unsubscribeWorkbenchState = subscribeWorkbenchState(sync);
   const unsubscribeWorkbenchLayoutState = subscribeWorkbenchLayoutState(sync);
   const unsubscribeWorkbenchPartDom = subscribeWorkbenchPartDom(sync);
 
@@ -132,7 +84,6 @@ export function createWorkbenchContextKeysContribution(
 
   return {
     dispose: () => {
-      unsubscribeWorkbenchState.dispose();
       unsubscribeWorkbenchLayoutState.dispose();
       unsubscribeWorkbenchPartDom.dispose();
     },

@@ -29,14 +29,11 @@ import {
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 export type SessionWorkbenchContentPartViewsProps = {
-	mode?: 'content' | 'settings';
 	isPrimarySidebarVisible: boolean;
 	isEditorVisible: boolean;
 	sidebarProps: SessionSidebarProps;
 	sessionChatProps: SessionChatViewProps;
 	editorPartProps: EditorPartProps;
-	settingsNavigationElement?: HTMLElement | null;
-	settingsContentElement?: HTMLElement | null;
 	sidebarFooterActionsElement: HTMLElement;
 	editorHeaderActionsElement?: HTMLElement | null;
 };
@@ -71,10 +68,6 @@ export class SessionWorkbenchContentPartViews {
 	}
 
 	getSessionsElement() {
-		if (this.props.mode === 'settings') {
-			return this.props.settingsContentElement ?? null;
-		}
-
 		return this.sessionsView?.getElement() ?? null;
 	}
 
@@ -90,11 +83,9 @@ export class SessionWorkbenchContentPartViews {
 			case SESSION_PART_IDS.sidebar:
 				return this.sidebarView;
 			case SESSION_PART_IDS.sessions:
-				return this.props.mode === 'settings' ? null : this.sessionsView;
+				return this.sessionsView;
 			case SESSION_PART_IDS.editor:
-				return this.props.mode === 'settings' || !this.props.isEditorVisible
-					? null
-					: this.editorView;
+				return this.props.isEditorVisible ? this.editorView : null;
 		}
 
 		return null;
@@ -155,11 +146,6 @@ export class SessionWorkbenchContentPartViews {
 
 		const nextProps: SessionSidebarProps = {
 			...this.props.sidebarProps,
-			mode: this.props.mode === 'settings' ? 'settings' : 'content',
-			settingsNavigationElement:
-				this.props.mode === 'settings'
-					? (this.props.settingsNavigationElement ?? null)
-					: null,
 			footerActionsElement: this.props.sidebarFooterActionsElement,
 		};
 
@@ -172,11 +158,6 @@ export class SessionWorkbenchContentPartViews {
 	}
 
 	private renderSessions() {
-		if (this.props.mode === 'settings') {
-			this.disposeSessionsView();
-			return;
-		}
-
 		const nextProps = {
 			chatProps: this.props.sessionChatProps,
 			headerTrailingActionsElement:
@@ -197,7 +178,7 @@ export class SessionWorkbenchContentPartViews {
 	}
 
 	private renderEditor() {
-		if (this.props.mode === 'settings' || !this.props.isEditorVisible) {
+		if (!this.props.isEditorVisible) {
 			this.retireEditorView();
 			return;
 		}

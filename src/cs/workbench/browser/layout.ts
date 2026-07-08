@@ -10,7 +10,6 @@ import {
   toDisposable,
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
-import type { WorkbenchPage } from 'cs/workbench/browser/workbench';
 import {
   WORKBENCH_PART_IDS,
   type WorkbenchPartId,
@@ -69,10 +68,6 @@ export type WorkbenchLayoutEvent =
       collapsed: boolean;
       expandedEditorSize?: number;
     };
-
-type WorkbenchShellLayoutParams = {
-  activePage: WorkbenchPage;
-};
 
 export const WORKBENCH_CONTENT_LAYOUT_BREAKPOINT = 980;
 export const WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE = false;
@@ -504,10 +499,8 @@ export function createWorkbenchPartRef(
   return nextCallback;
 }
 
-export function getWorkbenchShellClassName({
-  activePage,
-}: WorkbenchShellLayoutParams) {
-  return `comet-app-shell ${activePage === 'settings' ? 'comet-app-shell-settings' : ''}`.trim();
+export function getWorkbenchShellClassName() {
+  return 'comet-app-shell';
 }
 
 function addDisposableListener(
@@ -542,7 +535,6 @@ export type SessionWorkbenchLayoutPartViews = {
 };
 
 export type SessionWorkbenchLayoutViewProps = {
-	mode?: 'content' | 'settings';
 	isPrimarySidebarVisible: boolean;
 	isLayoutEdgeSnappingEnabled: boolean;
 	primarySidebarSize: number;
@@ -976,7 +968,6 @@ export class SessionWorkbenchLayoutView {
 		const isEditorVisible = !this.props.isEditorCollapsed;
 		this.mainElement.className = [
 			'comet-session-workbench-content-grid',
-			this.props.mode === 'settings' ? 'comet-is-settings' : '',
 			this.props.isPrimarySidebarVisible ? 'comet-is-primary-sidebar-visible' : '',
 			isEditorVisible ? 'comet-is-editor-visible' : '',
 		]

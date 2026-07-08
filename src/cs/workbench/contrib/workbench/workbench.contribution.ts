@@ -7,8 +7,6 @@ import {
 } from 'cs/workbench/browser/layout';
 import {
   disposeWorkbenchServices,
-  getWorkbenchStateSnapshot,
-  subscribeWorkbenchState,
 } from 'cs/workbench/browser/workbench';
 import { disposeWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import {
@@ -32,7 +30,6 @@ export function createWorkbenchContainerStateContribution(): Disposable {
       return;
     }
 
-    delete container.dataset.workbenchPage;
     delete container.dataset.primarySidebarVisible;
     delete container.dataset.agentSidebarVisible;
     delete container.dataset.workbenchParts;
@@ -55,7 +52,6 @@ export function createWorkbenchContainerStateContribution(): Disposable {
       .map(([partId]) => partId)
       .join(' ');
 
-    lastContainer.dataset.workbenchPage = getWorkbenchStateSnapshot().activePage;
     lastContainer.dataset.primarySidebarVisible = String(
       getWorkbenchLayoutStateSnapshot().isPrimarySidebarVisible,
     );
@@ -65,7 +61,6 @@ export function createWorkbenchContainerStateContribution(): Disposable {
     lastContainer.dataset.workbenchParts = registeredPartIds;
   };
 
-  const unsubscribeWorkbenchState = subscribeWorkbenchState(syncContainerState);
   const unsubscribeWorkbenchLayoutState =
     subscribeWorkbenchLayoutState(syncContainerState);
   const unsubscribeWorkbenchPartDom = subscribeWorkbenchPartDom(syncContainerState);
@@ -74,7 +69,6 @@ export function createWorkbenchContainerStateContribution(): Disposable {
 
   return {
     dispose: () => {
-      unsubscribeWorkbenchState();
       unsubscribeWorkbenchLayoutState();
       unsubscribeWorkbenchPartDom();
       clearContainerState(lastContainer);

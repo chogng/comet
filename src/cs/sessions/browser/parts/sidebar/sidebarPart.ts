@@ -20,7 +20,6 @@ import 'cs/sessions/browser/parts/sidebar/media/sidebarPart.css';
 export type SessionSidebarLabels = FetchPaneSidebarLabels;
 
 export type SessionSidebarProps = {
-	mode?: 'content' | 'settings';
 	labels: SessionSidebarLabels;
 	accountLabel?: string;
 	moreLabel?: string;
@@ -36,7 +35,6 @@ export type SessionSidebarProps = {
 	onDocumentRename?: (document: LibraryDocumentSummary) => void;
 	onDocumentEditSourceUrl?: (document: LibraryDocumentSummary) => void;
 	onDocumentDelete?: (document: LibraryDocumentSummary) => void;
-	settingsNavigationElement?: HTMLElement | null;
 	footerActionsElement?: HTMLElement | null;
 };
 
@@ -166,19 +164,6 @@ export class SessionSidebar {
 	}
 
 	private syncModeContent() {
-		if (this.props.mode === 'settings') {
-			this.switcherElement.hidden = true;
-			const settingsNavigationElement = this.props.settingsNavigationElement ?? null;
-			if (settingsNavigationElement) {
-				if (this.contentElement.firstElementChild !== settingsNavigationElement) {
-					this.contentElement.replaceChildren(settingsNavigationElement);
-				}
-			} else if (this.contentElement.firstElementChild) {
-				this.contentElement.replaceChildren();
-			}
-			return;
-		}
-
 		this.switcherElement.hidden = false;
 		if (this.contentElement.firstElementChild !== this.contentHostElement) {
 			this.contentElement.replaceChildren(this.contentHostElement);
@@ -209,10 +194,6 @@ export class SessionSidebar {
 	}
 
 	private syncTabs() {
-		if (this.props.mode === 'settings') {
-			return;
-		}
-
 		if (this.contentElement.firstElementChild !== this.contentHostElement) {
 			return;
 		}

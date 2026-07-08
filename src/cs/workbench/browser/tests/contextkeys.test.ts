@@ -1,10 +1,15 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { ContextKeyServiceImpl } from 'cs/platform/contextkey/common/contextkey';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
-test('workbench context keys sync page, layout, and part DOM state', async () => {
+test('workbench context keys sync layout and part DOM state', async () => {
   const dom = installDomTestEnvironment();
   try {
     const {
@@ -18,11 +23,7 @@ test('workbench context keys sync page, layout, and part DOM state', async () =>
       setPrimarySidebarVisible,
       WORKBENCH_PART_IDS,
     } = await import('cs/workbench/browser/layout');
-    const { setWorkbenchActivePage } = await import(
-      'cs/workbench/browser/workbench'
-    );
     const resetWorkbenchContextKeyTestState = () => {
-      setWorkbenchActivePage('content');
       setPrimarySidebarVisible(true);
       setAgentSidebarVisible(false);
       setEditorCollapsed(false);
@@ -37,18 +38,13 @@ test('workbench context keys sync page, layout, and part DOM state', async () =>
     const keys = bindWorkbenchContextKeys(service);
     const fakeContainer = {} as HTMLElement;
 
-    setWorkbenchActivePage('settings');
     setPrimarySidebarVisible(false);
     setAgentSidebarVisible(true);
     setEditorCollapsed(true);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, fakeContainer);
+    registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, fakeContainer);
     syncWorkbenchContextKeys(keys);
 
-    assert.equal(
-      service.getContextKeyValue('workbench.activePage'),
-      'settings',
-    );
-    assert.equal(service.getContextKeyValue('workbench.contentVisible'), false);
     assert.equal(service.getContextKeyValue('workbench.settingsVisible'), true);
     assert.equal(
       service.getContextKeyValue('workbench.primarySidebarVisible'),
@@ -60,6 +56,7 @@ test('workbench context keys sync page, layout, and part DOM state', async () =>
     );
     assert.equal(service.getContextKeyValue('workbench.editorCollapsed'), true);
     assert.equal(service.getContextKeyValue('workbench.hasContainer'), true);
+    assert.equal(service.getContextKeyValue('workbench.hasSettings'), true);
     assert.equal(service.getContextKeyValue('workbench.hasEditor'), false);
 
     resetWorkbenchContextKeyTestState();
@@ -79,7 +76,11 @@ test('workbench layout service commands apply agent and flow layouts', async () 
       IWorkbenchLayoutService,
     } = await import('cs/workbench/services/layout/browser/layoutService');
     const {
-      WorkbenchLayoutCommandId,
+      ApplyAgentLayoutAction,
+      ApplyFlowLayoutAction,
+      ToggleAgentSidebarVisibilityAction,
+      ToggleEditorCollapsedAction,
+      ToggleSidebarVisibilityAction,
     } = await import('cs/workbench/browser/actions/layoutActions');
     const {
       disposeWorkbenchInstantiationService,
@@ -102,7 +103,7 @@ test('workbench layout service commands apply agent and flow layouts', async () 
       setAgentSidebarVisible(false);
       setEditorCollapsed(true);
 
-      commandService.executeCommand(WorkbenchLayoutCommandId.applyAgentLayout);
+      commandService.executeCommand(ApplyAgentLayoutAction.ID);
 
       let layoutState = getWorkbenchLayoutStateSnapshot();
       assert.equal(layoutState.isPrimarySidebarVisible, true);
@@ -110,11 +111,28 @@ test('workbench layout service commands apply agent and flow layouts', async () 
       assert.equal(layoutState.isEditorCollapsed, true);
 
       setEditorCollapsed(true);
-      commandService.executeCommand(WorkbenchLayoutCommandId.applyFlowLayout);
+      commandService.executeCommand(ApplyFlowLayoutAction.ID);
 
       layoutState = getWorkbenchLayoutStateSnapshot();
       assert.equal(layoutState.isPrimarySidebarVisible, true);
       assert.equal(layoutState.isAgentSidebarVisible, false);
+      assert.equal(layoutState.isEditorCollapsed, false);
+
+      commandService.executeCommand(
+        ToggleSidebarVisibilityAction.ID,
+      );
+      layoutState = getWorkbenchLayoutStateSnapshot();
+      assert.equal(layoutState.isPrimarySidebarVisible, false);
+
+      commandService.executeCommand(
+        ToggleAgentSidebarVisibilityAction.ID,
+      );
+      layoutState = getWorkbenchLayoutStateSnapshot();
+      assert.equal(layoutState.isAgentSidebarVisible, true);
+      assert.equal(layoutState.isEditorCollapsed, true);
+
+      commandService.executeCommand(ToggleEditorCollapsedAction.ID);
+      layoutState = getWorkbenchLayoutStateSnapshot();
       assert.equal(layoutState.isEditorCollapsed, false);
     } finally {
       disposeWorkbenchInstantiationService();

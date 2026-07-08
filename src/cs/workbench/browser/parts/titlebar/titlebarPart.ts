@@ -11,8 +11,6 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { isMacintosh, isWeb } from 'cs/base/common/platform';
 import 'cs/workbench/browser/parts/titlebar/media/titlebarpart.css';
 
-export type TitlebarPartPage = 'content' | 'settings';
-
 export type TitlebarLeadingActionsProps = {
   menuLabel?: string;
   isPrimarySidebarVisible?: boolean;
@@ -26,7 +24,6 @@ export type TitlebarPartSyncParams = {
   electronRuntime: boolean;
   useMica: boolean;
   statusbarVisible: boolean;
-  activePage: TitlebarPartPage;
   leadingActions: TitlebarLeadingActionsProps;
   primarySidebarVisible: boolean;
   primarySidebarSize: number;
@@ -87,7 +84,7 @@ export class TitlebarPart {
   }
 
   sync(params: TitlebarPartSyncParams) {
-    const { electronRuntime, useMica, statusbarVisible, activePage } = params;
+    const { electronRuntime, useMica, statusbarVisible } = params;
     const isStatusbarVisible =
       resolveWorkbenchStatusbarVisibility(statusbarVisible);
     const hasNativeWindowControlsOverlay =
@@ -125,7 +122,7 @@ export class TitlebarPart {
         '--workbench-leading-window-controls-width',
       );
     }
-    this.shellElement.className = getWorkbenchShellClassName({ activePage });
+    this.shellElement.className = getWorkbenchShellClassName();
     this.syncTitlebar(params);
     this.syncStatusbarVisibility(isStatusbarVisible);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, this.titlebarElement);

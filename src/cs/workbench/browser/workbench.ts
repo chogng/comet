@@ -32,10 +32,14 @@ import {
   setEditorCollapsed,
   setPrimarySidebarVisible,
   subscribeWorkbenchLayoutState,
-  toggleEditorCollapsed,
-  togglePrimarySidebarVisibility,
   WORKBENCH_PART_IDS,
 } from 'cs/workbench/browser/layout';
+import {
+  ApplyAgentLayoutAction,
+  ApplyFlowLayoutAction,
+  ToggleEditorCollapsedAction,
+  ToggleSidebarVisibilityAction,
+} from 'cs/workbench/browser/actions/layoutActions';
 import { createSettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import type { SettingsController, SettingsControllerContext } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { createEditorPartController } from 'cs/workbench/browser/parts/editor/editorPart';
@@ -48,7 +52,6 @@ import {
   createSidebarFooterTitlebarLabels,
   createSidebarFooterTitlebarActionsProps,
   createTitlebarLeadingActionsProps,
-  resolveTitlebarSettingsLabel,
 } from 'cs/workbench/browser/parts/titlebar/titlebarActions';
 import { createTitlebarPart } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
 import type { TitlebarPart } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
@@ -77,7 +80,6 @@ import type { ToastHost } from 'cs/base/browser/ui/toast/toastHost';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import { IWorkbenchLayoutService } from 'cs/workbench/services/layout/browser/layoutService';
 import {
   createNotificationsPart,
   type NotificationsPart,
@@ -139,19 +141,13 @@ import { isEditorContentTabInput } from 'cs/workbench/browser/parts/editor/edito
 import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writingEditorDocument';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
-import { EventEmitter } from 'cs/base/common/event';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
-
-export type WorkbenchPage = 'content' | 'settings';
-
-export type WorkbenchStateSnapshot = {
-  activePage: WorkbenchPage;
-};
 
 export type WorkbenchServicesSyncParams = {
   settingsController: SettingsController;
@@ -170,23 +166,8 @@ export type WorkbenchServicesSyncParams = {
   batchFetchContext: BatchFetchControllerContext;
 };
 
-type WorkbenchEvent =
-  | {
-      type: 'SET_ACTIVE_PAGE';
-      page: WorkbenchPage;
-    }
-  | {
-      type: 'TOGGLE_SETTINGS';
-    };
-
 type DesktopInvokeArgs = Record<string, unknown> | undefined;
 
-const DEFAULT_WORKBENCH_STATE: WorkbenchStateSnapshot = {
-  activePage: 'content',
-};
-
-let workbenchState = DEFAULT_WORKBENCH_STATE;
-const onDidChangeWorkbenchStateEmitter = new EventEmitter<void>();
 let settingsController: SettingsController | null = null;
 let libraryModel: LibraryModel | null = null;
 let webContentNavigationModel: WebContentNavigationModel | null = null;
@@ -394,29 +375,6 @@ function registerNativeToastBridge(nativeHostService: INativeHostService) {
   });
 }
 
-function reduceWorkbenchState(
-  state: WorkbenchStateSnapshot,
-  event: WorkbenchEvent,
-): WorkbenchStateSnapshot {
-  switch (event.type) {
-    case 'SET_ACTIVE_PAGE':
-      if (state.activePage === event.page) {
-        return state;
-      }
-      return {
-        ...state,
-        activePage: event.page,
-      };
-    case 'TOGGLE_SETTINGS':
-      return {
-        ...state,
-        activePage: state.activePage === 'settings' ? 'content' : 'settings',
-      };
-    default:
-      return state;
-  }
-}
-
 function isContentTab(tab: EditorWorkspaceTab) {
   return isEditorContentTabInput(tab);
 }
@@ -589,6 +547,8 @@ class WorkbenchHost {
   private readonly containerElement: HTMLDivElement;
   private readonly shellElement: HTMLDivElement;
   private readonly pageMount: HTMLDivElement;
+  private readonly settingsOverlayElement: HTMLDivElement;
+  private readonly settingsOverlayBodyElement: HTMLDivElement;
   private readonly toastMount: HTMLDivElement;
   private readonly notificationsMount: HTMLDivElement;
   private readonly statusbarElement: HTMLElement;
@@ -614,7 +574,7 @@ class WorkbenchHost {
       collapseEditor: '',
     },
     onOpenEditor: (_request: EditorOpenRequest) => {},
-    onToggleEditorCollapse: toggleEditorCollapsed,
+    onToggleEditorCollapse: () => {},
   });
   private readonly sidebarFooterActionsView = new SidebarFooterActionsView();
   private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
@@ -626,6 +586,7 @@ class WorkbenchHost {
   private isRendering = false;
   private renderPending = false;
   private webContentRuntime = false;
+  private settingsOverlayVisible = false;
   private previousBrowserUrl = '';
   private previousActiveContentTabId: string | null = null;
   private previousContentTargetId: string | null = null;
@@ -643,20 +604,26 @@ class WorkbenchHost {
 
   constructor(
     rootElement: HTMLElement,
-    @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
     @INotificationService private readonly notificationService: NotificationService,
     @INativeHostService private readonly nativeHostService: INativeHostService,
     @IOpenerService private readonly openerService: IOpenerService,
     @IDialogService private readonly dialogService: IDialogService,
+    @IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
   ) {
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
     this.shellElement = document.createElement('div');
     this.pageMount = document.createElement('div');
+    this.settingsOverlayElement = document.createElement('div');
+    this.settingsOverlayBodyElement = document.createElement('div');
     this.toastMount = document.createElement('div');
     this.notificationsMount = document.createElement('div');
     this.statusbarElement = document.createElement('section');
+    this.settingsOverlayElement.className = 'comet-settings-overlay';
+    this.settingsOverlayElement.hidden = true;
+    this.settingsOverlayBodyElement.className = 'comet-settings-body';
+    this.settingsOverlayElement.append(this.settingsOverlayBodyElement);
     registerNativeToastBridge(this.nativeHostService);
     this.titlebarPart = createTitlebarPart(
       this.containerElement,
@@ -670,6 +637,7 @@ class WorkbenchHost {
     this.containerElement.append(this.titlebarPart.getElement(), this.shellElement);
     this.shellElement.append(
       this.pageMount,
+      this.settingsOverlayElement,
       this.toastMount,
       this.notificationsMount,
     );
@@ -685,7 +653,6 @@ class WorkbenchHost {
     this.globalDisposables.push(
       localeService.subscribe(this.requestRender),
       subscribeWorkbenchSession(this.requestRender),
-      subscribeWorkbenchState(this.requestRender),
       subscribeWorkbenchLayoutState(this.requestRender),
       subscribeWindowState(this.requestRender),
       subscribeWorkbenchContentState(this.requestRender),
@@ -822,6 +789,47 @@ class WorkbenchHost {
   private readonly handleEditorPartChange = (
     _reason: EditorPartChangeReason,
   ) => {
+    this.requestRender();
+  };
+
+  private readonly togglePrimarySidebarVisibility = () => {
+    this.commandService.executeCommand(
+      ToggleSidebarVisibilityAction.ID,
+    );
+  };
+
+  private readonly toggleEditorCollapsed = () => {
+    this.commandService.executeCommand(
+      ToggleEditorCollapsedAction.ID,
+    );
+  };
+
+  private readonly applyAgentLayout = () => {
+    this.commandService.executeCommand(ApplyAgentLayoutAction.ID);
+  };
+
+  private readonly applyFlowLayout = () => {
+    this.commandService.executeCommand(ApplyFlowLayoutAction.ID);
+  };
+
+  private readonly showSettingsPage = () => {
+    if (this.settingsOverlayVisible) {
+      return;
+    }
+    this.settingsOverlayVisible = true;
+    this.requestRender();
+  };
+
+  private readonly toggleSettingsPage = () => {
+    this.settingsOverlayVisible = !this.settingsOverlayVisible;
+    this.requestRender();
+  };
+
+  private readonly closeSettingsOverlay = () => {
+    if (!this.settingsOverlayVisible) {
+      return;
+    }
+    this.settingsOverlayVisible = false;
     this.requestRender();
   };
 
@@ -1102,13 +1110,10 @@ class WorkbenchHost {
     editorPartProps: EditorPartProps;
   }) {
     this.retiredWorkbenchContentPartViews = null;
-    this.settingsView?.dispose();
-    this.settingsView = null;
     this.sidebarFooterActionsView.setProps(
       props.sidebarFooterActionsProps,
     );
     const partViewProps = {
-      mode: 'content' as const,
       isPrimarySidebarVisible: props.isPrimarySidebarVisible,
       isEditorVisible: !props.isEditorCollapsed,
       sidebarProps: props.sidebarProps,
@@ -1128,7 +1133,6 @@ class WorkbenchHost {
     }
     if (!this.workbenchLayoutView) {
       this.workbenchLayoutView = createSessionWorkbenchLayoutView({
-        mode: 'content',
         isPrimarySidebarVisible: props.isPrimarySidebarVisible,
         isLayoutEdgeSnappingEnabled: props.isLayoutEdgeSnappingEnabled,
         primarySidebarSize: props.primarySidebarSize,
@@ -1138,7 +1142,6 @@ class WorkbenchHost {
       });
     } else {
       this.workbenchLayoutView.setProps({
-        mode: 'content',
         isPrimarySidebarVisible: props.isPrimarySidebarVisible,
         isLayoutEdgeSnappingEnabled: props.isLayoutEdgeSnappingEnabled,
         primarySidebarSize: props.primarySidebarSize,
@@ -1156,77 +1159,37 @@ class WorkbenchHost {
     this.workbenchLayoutView.layout();
   }
 
-  private renderSettingsPage(
+  private renderSettingsOverlay(
     props: {
       settingsPartProps: ReturnType<typeof createSettingsPartProps>;
-      isLayoutEdgeSnappingEnabled: boolean;
-      primarySidebarSize: number;
-      expandedEditorSize: number;
-      sidebarProps: SidebarProps;
-      sessionChatProps: SessionChatViewProps;
-      editorPartProps: EditorPartProps;
-      sidebarFooterActionsProps: ReturnType<
-        typeof createSidebarFooterTitlebarActionsProps
-      >;
     },
   ) {
-    this.retiredWorkbenchContentPartViews = null;
-    setWorkbenchEditorCommandHandlers(null);
+    if (!this.settingsOverlayVisible) {
+      this.settingsView?.dispose();
+      this.settingsView = null;
+      this.settingsOverlayBodyElement.replaceChildren();
+      this.settingsOverlayElement.hidden = true;
+      return;
+    }
+
     if (!this.settingsView) {
       this.settingsView = createSettingsPartView(props.settingsPartProps);
     } else {
       this.settingsView.setProps(props.settingsPartProps);
     }
-    this.sidebarFooterActionsView.setProps(
-      props.sidebarFooterActionsProps,
-    );
-    const partViewProps = {
-      mode: 'settings' as const,
-      isPrimarySidebarVisible: true,
-      isEditorVisible: false,
-      sidebarProps: props.sidebarProps,
-      settingsNavigationElement: this.settingsView.getNavigationElement(),
-      sessionChatProps: props.sessionChatProps,
-      editorPartProps: props.editorPartProps,
-      settingsContentElement: this.settingsView.getElement(),
-      sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-      editorHeaderActionsElement: null,
-    };
-    if (!this.workbenchContentPartViews) {
-      this.workbenchContentPartViews = this.instantiationService.createInstance(
-        SessionWorkbenchContentPartViews,
-        partViewProps,
+    this.settingsOverlayElement.hidden = false;
+    const navigationElement = this.settingsView.getNavigationElement();
+    const settingsElement = this.settingsView.getElement();
+    if (
+      this.settingsOverlayBodyElement.children[0] !== navigationElement ||
+      this.settingsOverlayBodyElement.children[1] !== settingsElement ||
+      this.settingsOverlayBodyElement.childElementCount !== 2
+    ) {
+      this.settingsOverlayBodyElement.replaceChildren(
+        navigationElement,
+        settingsElement,
       );
-    } else {
-      this.workbenchContentPartViews.setProps(partViewProps);
     }
-    if (!this.workbenchLayoutView) {
-      this.workbenchLayoutView = createSessionWorkbenchLayoutView({
-        mode: 'settings',
-        isPrimarySidebarVisible: true,
-        isLayoutEdgeSnappingEnabled: props.isLayoutEdgeSnappingEnabled,
-        primarySidebarSize: props.primarySidebarSize,
-        isEditorCollapsed: true,
-        expandedEditorSize: props.expandedEditorSize,
-        partViews: this.workbenchContentPartViews,
-      });
-    } else {
-      this.workbenchLayoutView.setProps({
-        mode: 'settings',
-        isPrimarySidebarVisible: true,
-        isLayoutEdgeSnappingEnabled: props.isLayoutEdgeSnappingEnabled,
-        primarySidebarSize: props.primarySidebarSize,
-        isEditorCollapsed: true,
-        expandedEditorSize: props.expandedEditorSize,
-        partViews: this.workbenchContentPartViews,
-      });
-    }
-
-    const workbenchContentElement = this.workbenchLayoutView.getElement();
-    if (this.pageMount.firstChild !== workbenchContentElement) {
-      this.pageMount.replaceChildren(workbenchContentElement);
-    }
-    this.workbenchLayoutView.layout();
   }
 
   private applyStartupLayoutPreferenceIfNeeded(params: {
@@ -1267,7 +1230,6 @@ class WorkbenchHost {
       selectedArticleKeysInOrder,
       selectedChatArticleUrlsInOrder,
     } = getWorkbenchSessionSnapshot();
-    const { activePage } = getWorkbenchStateSnapshot();
     const {
       isPrimarySidebarVisible,
       isAgentSidebarVisible,
@@ -1755,6 +1717,7 @@ class WorkbenchHost {
       ...baseEditorPartProps,
       nativeHost,
       ...editorBrowserToolbarActions,
+      onToggleEditorCollapse: this.toggleEditorCollapsed,
     };
     this.editorHeaderActionsView.setProps({
       isEditorCollapsed,
@@ -1769,7 +1732,7 @@ class WorkbenchHost {
         collapseEditor: contentAwareEditorPartProps.labels.collapseEditor,
       },
       onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
-      onToggleEditorCollapse: toggleEditorCollapsed,
+      onToggleEditorCollapse: this.toggleEditorCollapsed,
     });
 
     const handleBatchFetchStart = () => {};
@@ -2123,14 +2086,14 @@ class WorkbenchHost {
           settingsControllerInstance.setActiveLlmProvider(
             selectedOption?.providerId ?? activeLlmProvider,
           );
-          setWorkbenchActivePage('settings');
+          this.showSettingsPage();
         },
       },
     });
     const titlebarLeadingActionsProps = createTitlebarLeadingActionsProps({
       ui,
       isPrimarySidebarVisible,
-      onTogglePrimarySidebar: togglePrimarySidebarVisibility,
+      onTogglePrimarySidebar: this.togglePrimarySidebarVisibility,
       onFocusAddressBar: focusWorkbenchWebUrlInput,
     });
     const settingsPartProps = createSettingsPartProps({
@@ -2216,7 +2179,7 @@ class WorkbenchHost {
         isLoadingTranslationModels,
       },
       actions: {
-        onNavigateBack: toggleWorkbenchSettings,
+        onNavigateBack: this.closeSettingsOverlay,
         onBatchLimitChange: (value) =>
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
         onJournalSourceTitleChange:
@@ -2336,66 +2299,37 @@ class WorkbenchHost {
 
     syncWorkbenchWindowTitle({
       appName: ui.appName,
-      activePage,
-      settingsTitle: resolveTitlebarSettingsLabel(ui),
       activeEditorTab,
       browserPageTitle,
     });
 
-    const handleApplyLayoutAgent = () => {
-      this.layoutService.applyLayoutMode('agent');
-    };
-    const handleApplyLayoutFlow = () => {
-      this.layoutService.applyLayoutMode('flow');
-    };
-
-    if (activePage === 'content') {
-      this.renderWorkbenchContentPage({
-        isPrimarySidebarVisible,
-        isLayoutEdgeSnappingEnabled: isWindowFullscreen,
-        primarySidebarSize,
+    this.renderWorkbenchContentPage({
+      isPrimarySidebarVisible,
+      isLayoutEdgeSnappingEnabled: isWindowFullscreen,
+      primarySidebarSize,
+      isEditorCollapsed,
+      expandedEditorSize,
+      fetchPaneProps,
+      sidebarProps,
+      sessionChatProps,
+      sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
+        ui,
+        isSettingsActive: this.settingsOverlayVisible,
+        isAgentSidebarVisible,
         isEditorCollapsed,
-        expandedEditorSize,
-        fetchPaneProps,
-        sidebarProps,
-        sessionChatProps,
-        sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
-          ui,
-          isSettingsActive: false,
-          isAgentSidebarVisible,
-          isEditorCollapsed,
-          onApplyLayoutAgent: handleApplyLayoutAgent,
-          onApplyLayoutFlow: handleApplyLayoutFlow,
-          onOpenSettings: toggleWorkbenchSettings,
-        }),
-        editorHeaderActionsElement:
-          this.editorHeaderActionsView.getElement(),
-        editorPartProps: {
-          ...contentAwareEditorPartProps,
-          isAgentSidebarVisible: false,
-          showAgentSidebarToggle: false,
-        },
-      });
-    } else {
-      this.renderSettingsPage({
-        settingsPartProps,
-        isLayoutEdgeSnappingEnabled: isWindowFullscreen,
-        primarySidebarSize,
-        expandedEditorSize,
-        sidebarProps,
-        sessionChatProps,
-        editorPartProps: contentAwareEditorPartProps,
-        sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
-          ui,
-          isSettingsActive: true,
-          isAgentSidebarVisible: false,
-          isEditorCollapsed: false,
-          onApplyLayoutAgent: handleApplyLayoutAgent,
-          onApplyLayoutFlow: handleApplyLayoutFlow,
-          onOpenSettings: toggleWorkbenchSettings,
-        }),
-      });
-    }
+        onApplyLayoutAgent: this.applyAgentLayout,
+        onApplyLayoutFlow: this.applyFlowLayout,
+        onOpenSettings: this.toggleSettingsPage,
+      }),
+      editorHeaderActionsElement:
+        this.editorHeaderActionsView.getElement(),
+      editorPartProps: {
+        ...contentAwareEditorPartProps,
+        isAgentSidebarVisible: false,
+        showAgentSidebarToggle: false,
+      },
+    });
+    this.renderSettingsOverlay({ settingsPartProps });
 
     const sessionsPartView = this.workbenchContentPartViews?.getPart(
       SESSION_PART_IDS.sessions,
@@ -2408,13 +2342,10 @@ class WorkbenchHost {
       electronRuntime,
       useMica,
       statusbarVisible,
-      activePage,
       leadingActions: titlebarLeadingActionsProps,
-      primarySidebarVisible: activePage === 'content'
-        ? isPrimarySidebarVisible
-        : true,
+      primarySidebarVisible: isPrimarySidebarVisible,
       primarySidebarSize,
-      editorVisible: activePage === 'content' && !isEditorCollapsed,
+      editorVisible: !isEditorCollapsed,
       editorSize: expandedEditorSize,
       sessionsHeaderElement: sessionsPartView?.getHeaderElement() ?? null,
       editorHeaderElement: editorPartView?.getHeaderElement() ?? null,
@@ -2439,37 +2370,6 @@ class WorkbenchHost {
 
     this.toastHost.render(ui.toastClose);
   }
-}
-
-export function subscribeWorkbenchState(listener: () => void) {
-  return onDidChangeWorkbenchStateEmitter.event(listener);
-}
-
-export function getWorkbenchStateSnapshot() {
-  return workbenchState;
-}
-
-export function dispatchWorkbenchEvent(event: WorkbenchEvent) {
-  const nextState = reduceWorkbenchState(workbenchState, event);
-  if (Object.is(nextState, workbenchState)) {
-    return;
-  }
-
-  workbenchState = nextState;
-  onDidChangeWorkbenchStateEmitter.fire();
-}
-
-export function setWorkbenchActivePage(page: WorkbenchPage) {
-  dispatchWorkbenchEvent({
-    type: 'SET_ACTIVE_PAGE',
-    page,
-  });
-}
-
-export function toggleWorkbenchSettings() {
-  dispatchWorkbenchEvent({
-    type: 'TOGGLE_SETTINGS',
-  });
 }
 
 export function disposeWorkbenchServices() {

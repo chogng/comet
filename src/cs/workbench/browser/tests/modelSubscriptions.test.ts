@@ -699,32 +699,6 @@ test('workbenchPartDom subscriptions stop after disposal', () => {
   assert.equal(getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.editor], null);
 });
 
-test('workbenchState subscriptions stop after disposal', async () => {
-  const {
-    getWorkbenchStateSnapshot,
-    setWorkbenchActivePage,
-    subscribeWorkbenchState,
-  } = await import('cs/workbench/browser/workbench');
-  const originalWorkbenchState = getWorkbenchStateSnapshot();
-  let notificationCount = 0;
-  const nextPage = originalWorkbenchState.activePage === 'content' ? 'settings' : 'content';
-
-  try {
-    const disposeListener = subscribeWorkbenchState(() => {
-      notificationCount += 1;
-    });
-
-    setWorkbenchActivePage(nextPage);
-    disposeListener();
-    setWorkbenchActivePage(originalWorkbenchState.activePage);
-
-    assert.equal(notificationCount, 1);
-    assert.equal(getWorkbenchStateSnapshot().activePage, originalWorkbenchState.activePage);
-  } finally {
-    setWorkbenchActivePage(originalWorkbenchState.activePage);
-  }
-});
-
 test('resolveWorkbenchStatusbarVisibility returns the toggle state directly', async () => {
   const { resolveWorkbenchStatusbarVisibility } = await import(
     'cs/workbench/browser/parts/titlebar/titlebarPart'
@@ -754,7 +728,6 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       electronRuntime: false,
       useMica: false,
       statusbarVisible: true,
-      activePage: 'content',
       primarySidebarVisible: true,
       primarySidebarSize: 260,
       editorVisible: true,
