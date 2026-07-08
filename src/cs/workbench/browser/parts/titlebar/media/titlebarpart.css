@@ -64,6 +64,8 @@
 
 .comet-titlebar-leading-actions,
 .comet-header-actions {
+  --cs-actionbar-hover-background: var(--vscode-toolbar-hoverBackground);
+  --cs-actionbar-active-background: var(--vscode-toolbar-activeBackground);
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -154,7 +156,7 @@
 .comet-titlebar .comet-editor-header-add-btn.comet-actionbar-action:hover,
 .comet-titlebar .comet-editor-header-agent-btn.comet-actionbar-action:hover,
 .comet-titlebar .comet-editor-header-toggle-editor-btn.comet-actionbar-action:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--cs-actionbar-hover-background);
 }
 
 .comet-titlebar .comet-titlebar-menu-btn.comet-actionbar-action:active,
@@ -163,7 +165,7 @@
 .comet-titlebar .comet-editor-header-add-btn.comet-actionbar-action:active,
 .comet-titlebar .comet-editor-header-agent-btn.comet-actionbar-action:active,
 .comet-titlebar .comet-editor-header-toggle-editor-btn.comet-actionbar-action:active {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--cs-actionbar-active-background);
 }
 
 .comet-titlebar-main-menu {

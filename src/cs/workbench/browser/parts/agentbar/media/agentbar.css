@@ -1,6 +1,6 @@
 .comet-agentbar {
   --agentbar-header-height: 36px;
-  --sidebar-surface-bg: #FDFDFC;
+  --sidebar-surface-bg: #fdfdfc;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -8,7 +8,7 @@
   min-height: 0;
   border: 0;
   border-radius: 0;
-  background: #FDFDFC;
+  background: #fdfdfc;
   gap: 0;
 }
 

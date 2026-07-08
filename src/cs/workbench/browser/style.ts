@@ -18,11 +18,9 @@ function getOrCreateStyleElement() {
 export function applyWorkbenchBrowserStyles() {
   const styleElement = getOrCreateStyleElement();
   const toolbarHoverBackground =
-    themeService.getColor('sideBar.actionHoverBackground') ??
-    'rgba(0, 0, 0, 0.05)';
+    themeService.getColor('toolbar.hoverBackground')!;
   const toolbarActiveBackground =
-    themeService.getColor('sideBar.actionActiveBackground') ??
-    'rgba(0, 0, 0, 0.1)';
+    themeService.getColor('toolbar.activeBackground')!;
 
   styleElement.textContent = `
 .comet-actionbar-split {

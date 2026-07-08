@@ -267,9 +267,9 @@
   --cs-actionbar-radius: 6px;
   --cs-actionbar-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
   --cs-actionbar-hover-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
-  --cs-actionbar-hover-background: var(--vscode-sideBar-actionHoverBackground, rgba(0, 0, 0, 0.05));
+  --cs-actionbar-hover-background: var(--vscode-toolbar-hoverBackground);
   --cs-actionbar-active-foreground: var(--vscode-sideBar-foreground, #1f2d3a);
-  --cs-actionbar-active-background: var(--vscode-sideBar-actionActiveBackground, rgba(0, 0, 0, 0.1));
+  --cs-actionbar-active-background: var(--vscode-toolbar-activeBackground);
   --cs-actionbar-focus-outline: transparent;
   padding: 0;
 }

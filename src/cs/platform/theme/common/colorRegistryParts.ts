@@ -35,16 +35,6 @@ export const sideBarCodeForeground = registerColor('sideBar.codeForeground', {
   light: '#223140',
 });
 
-export const sideBarActionHoverBackground = registerColor('sideBar.actionHoverBackground', {
-  dark: 'rgba(255, 255, 255, 0.08)',
-  light: 'rgba(0, 0, 0, 0.05)',
-});
-
-export const sideBarActionActiveBackground = registerColor('sideBar.actionActiveBackground', {
-  dark: 'rgba(255, 255, 255, 0.14)',
-  light: 'rgba(0, 0, 0, 0.1)',
-});
-
 export const sideBarStatusInfoBackground = registerColor('sideBar.statusInfoBackground', {
   dark: '#22344a',
   light: '#eef4ff',
@@ -167,7 +157,7 @@ export const sideBarLinkHoverForeground = registerColor('sideBar.linkHoverForegr
 
 export const agentBarBackground = registerColor('agentBar.background', {
   dark: '#18222c',
-  light: '#f8f8f8',
+  light: '#fdfdfc',
 });
 
 export const agentBarInputBorder = registerColor('agentBar.inputBorder', {
@@ -287,12 +277,12 @@ export const agentBarItemMetaForeground = registerColor('agentBar.itemMetaForegr
 
 export const editorPanelGradientFrom = registerColor('editor.panelGradientFrom', {
   dark: '#18222c',
-  light: '#ffffff',
+  light: '#fdfdfc',
 });
 
 export const editorPanelGradientTo = registerColor('editor.panelGradientTo', {
   dark: '#1c2630',
-  light: '#fbfcfe',
+  light: '#fdfdfc',
 });
 
 export const editorPanelAccent = registerColor('editor.panelAccent', {
@@ -302,7 +292,7 @@ export const editorPanelAccent = registerColor('editor.panelAccent', {
 
 export const editorSourcePaneBackground = registerColor('editor.sourcePaneBackground', {
   dark: '#18222c',
-  light: '#f8f8f8',
+  light: '#fdfdfc',
 });
 
 export const editorSourceHeaderBorder = registerColor('editor.sourceHeaderBorder', {
@@ -577,7 +567,7 @@ export const editorTabKindPdfBackground = registerColor('editor.tabKindPdfBackgr
 
 export const editorWebContentBackground = registerColor('editor.webContentBackground', {
   dark: '#18222c',
-  light: '#f8f8f8',
+  light: '#fdfdfc',
 });
 
 export const editorWebContentForeground = registerColor('editor.webContentForeground', {

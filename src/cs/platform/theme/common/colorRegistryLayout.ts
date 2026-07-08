@@ -30,9 +30,19 @@ export const scrollbarSliderActiveBackground = registerColor('scrollbarSlider.ac
   light: 'rgba(72, 72, 72, 0.76)',
 });
 
+export const toolbarHoverBackground = registerColor('toolbar.hoverBackground', {
+  dark: '#5a5d5e50',
+  light: '#b8b8b850',
+});
+
+export const toolbarActiveBackground = registerColor('toolbar.activeBackground', {
+  dark: '#6b6e6f50',
+  light: '#a6a6a650',
+});
+
 export const workbenchChromeBackground = registerColor('workbench.chromeBackground', {
   dark: '#18222c',
-  light: '#ffffff',
+  light: '#fdfdfc',
 });
 
 export const workbenchChromeBackgroundTransparent = registerColor('workbench.chromeBackgroundTransparent', {
@@ -62,7 +72,7 @@ export const workbenchButtonForeground = registerColor('workbench.buttonForegrou
 
 export const workbenchPanelBackground = registerColor('workbench.panelBackground', {
   dark: '#18222c',
-  light: '#ffffff',
+  light: '#fdfdfc',
 });
 
 export const workbenchPanelBorder = registerColor('workbench.panelBorder', {
