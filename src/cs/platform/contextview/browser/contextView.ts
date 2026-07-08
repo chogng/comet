@@ -2,6 +2,7 @@ import type {
   ContextMenuDelegate as BaseContextMenuDelegate,
   ContextMenuService as BaseContextMenuService,
 } from 'cs/base/browser/contextmenu';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import type {
   AnchorAlignment,
   AnchorAxisAlignment,
@@ -34,11 +35,15 @@ export interface ContextViewDelegate {
   minWidth?: number;
 }
 
+export const IContextViewService =
+  createDecorator<IContextViewService>('contextViewService');
+
 export interface ContextViewDisposable {
   dispose: () => void;
 }
 
-export interface ContextViewService {
+export interface IContextViewService {
+  readonly _serviceBrand: undefined;
   showContextView: (delegate: ContextViewDelegate) => ContextViewDisposable;
   hideContextView: (data?: unknown) => void;
   getContextViewElement: () => HTMLElement;

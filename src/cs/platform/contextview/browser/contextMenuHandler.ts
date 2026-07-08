@@ -10,7 +10,7 @@ import {
 import { Menu, type MenuOptions } from 'cs/base/browser/ui/menu/menu';
 import type {
   ContextMenuDelegate,
-  ContextViewService,
+  IContextViewService,
 } from 'cs/platform/contextview/browser/contextView';
 
 function composeClassName(parts: Array<string | undefined | null | false>) {
@@ -78,7 +78,7 @@ function resolveMenuPlacement(
 export class ContextMenuHandler {
   private focusToReturn: HTMLElement | null = null;
 
-  constructor(private readonly contextViewService: ContextViewService) {}
+  constructor(private readonly contextViewService: IContextViewService) {}
 
   showContextMenu(delegate: ContextMenuDelegate) {
     const options = [...delegate.getActions()];

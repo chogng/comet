@@ -18,6 +18,7 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import { EditorGroupView } from 'cs/workbench/browser/parts/editor/editorGroupView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
 import 'cs/workbench/browser/parts/editor/media/editorBrowserLibraryPanel.css';
@@ -65,6 +66,8 @@ export type EditorPartLabels = {
   closeOthers?: string;
   closeAll?: string;
   rename?: string;
+  editorModalConfirm: string;
+  editorModalCancel: string;
   renameFavoriteTitle?: string;
   renameFavoriteLabel?: string;
   newFavoriteFolderTitle?: string;
@@ -102,6 +105,7 @@ export type EditorPartBaseProps = {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
+  dialogService: IDialogService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];

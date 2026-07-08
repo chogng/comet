@@ -10,7 +10,6 @@ import {
 	type SessionSidebarProps,
 } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import {
-	createSessionsPartView,
 	SessionsPartView,
 } from 'cs/sessions/browser/parts/sessions/sessionsPart';
 import {
@@ -23,6 +22,7 @@ import {
 	setStatusbarCommandHandlers,
 	updateStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarActions';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 export type SessionWorkbenchContentPartViewsProps = {
 	mode?: 'content' | 'settings';
@@ -45,7 +45,10 @@ export class SessionWorkbenchContentPartViews {
 	private retiredEditorView: SessionEditorPartView | null = null;
 	private disposed = false;
 
-	constructor(props: SessionWorkbenchContentPartViewsProps) {
+	constructor(
+		props: SessionWorkbenchContentPartViewsProps,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		this.props = props;
 		this.render();
 	}
@@ -161,7 +164,10 @@ export class SessionWorkbenchContentPartViews {
 		};
 
 		if (!this.sessionsView) {
-			this.sessionsView = createSessionsPartView(nextProps);
+			this.sessionsView = this.instantiationService.createInstance(
+				SessionsPartView,
+				nextProps,
+			);
 			return;
 		}
 
@@ -228,10 +234,4 @@ export class SessionWorkbenchContentPartViews {
 			},
 		});
 	}
-}
-
-export function createSessionWorkbenchContentPartViews(
-	props: SessionWorkbenchContentPartViewsProps,
-) {
-	return new SessionWorkbenchContentPartViews(props);
 }

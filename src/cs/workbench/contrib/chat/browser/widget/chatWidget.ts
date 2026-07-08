@@ -18,6 +18,7 @@ import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/widget/chatListWidget';
 import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
@@ -51,7 +52,10 @@ export class ChatWidget {
 	private readonly inputPart: ChatInputPart;
 	private readonly renderDisposables = this.disposables.add(new DisposableStore());
 
-	constructor(props: ChatWidgetProps) {
+	constructor(
+		props: ChatWidgetProps,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		this.props = props;
 		this.listWidget = new ChatListWidget({
 			markdownRendererService: props.markdownRendererService,
@@ -61,7 +65,10 @@ export class ChatWidget {
 			isArticleSelected: href => this.props.isArticleSelected(href),
 			onToggleArticleSelected: href => this.props.onToggleArticleSelected(href),
 		});
-		this.inputPart = new ChatInputPart(this.createInputPartProps());
+		this.inputPart = instantiationService.createInstance(
+			ChatInputPart,
+			this.createInputPartProps(),
+		);
 		this.render();
 	}
 
@@ -305,8 +312,4 @@ export class ChatWidget {
 			}),
 		});
 	}
-}
-
-export function createChatWidget(props: ChatWidgetProps) {
-	return new ChatWidget(props);
 }

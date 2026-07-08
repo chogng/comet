@@ -2,23 +2,21 @@ import type {
   EditorWorkspaceDraftTab,
   WritingEditorDocument,
 } from 'cs/workbench/browser/parts/editor/editorModel';
-import { getLocaleMessages } from 'language/i18n';
 import { isDraftEditorCommandEnabled } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
 import { ProseMirrorEditor } from 'cs/editor/browser/text/editor';
-import { localeService } from 'cs/workbench/services/localization/browser/localeService';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createDraftEditorCommandAction } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
 import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
 import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
 import type { WritingEditorSurfaceViewState } from 'cs/editor/browser/text/editor';
-
-import { showWorkbenchTextInputModal } from 'cs/workbench/browser/workbenchEditorModals';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 
 export type DraftEditorPaneProps = {
   labels: EditorPartLabels;
   draftTab: EditorWorkspaceDraftTab;
+  dialogService: IDialogService;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onStatusChange?: (status: DraftEditorStatusState) => void;
 };
@@ -115,12 +113,13 @@ export class DraftEditorPane extends EditorPane<
       figureRefPrompt: this.props.labels.figureRefPrompt,
     },
     prompt: (message: string, defaultValue: string) =>
-      showWorkbenchTextInputModal({
+      this.props.dialogService.input({
         title: this.props.labels.draftMode,
-        label: message,
-        defaultValue,
-        ui: getLocaleMessages(localeService.getLocale()),
-      }),
+        message,
+        value: defaultValue,
+        primaryButton: this.props.labels.editorModalConfirm,
+        cancelButton: this.props.labels.editorModalCancel,
+      }).then(result => result.value ?? null),
   });
 
   private readonly handleInsertCitation = createDraftEditorCommandAction(

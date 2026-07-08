@@ -22,6 +22,7 @@ let getStatusbarStateSnapshot: typeof import('cs/workbench/browser/parts/statusb
 let setStatusbarState: typeof import('cs/workbench/browser/parts/statusbar/statusbarModel').setStatusbarState;
 let registerToastBridge: typeof import('cs/base/browser/ui/toast/toast').registerToastBridge;
 let locales: typeof import('language/locales').locales;
+let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 test.before(async () => {
   const domEnvironment = installDomTestEnvironment();
@@ -30,6 +31,7 @@ test.before(async () => {
   ({ getStatusbarStateSnapshot, setStatusbarState } = await import('cs/workbench/browser/parts/statusbar/statusbarModel'));
   ({ registerToastBridge } = await import('cs/base/browser/ui/toast/toast'));
   ({ locales } = await import('language/locales'));
+  ({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
 });
 
 test.after(() => {
@@ -87,7 +89,7 @@ function createDesktopInvokeError(
 async function waitForModalButton(label: string) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const buttons = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('.comet-workbench-editor-modal-actions button'),
+      document.querySelectorAll<HTMLButtonElement>('.comet-dialog-buttons button'),
     );
     const button = buttons.find(item => item.textContent === label);
     if (button) {
@@ -98,6 +100,10 @@ async function waitForModalButton(label: string) {
   }
 
   assert.fail(`Expected modal button "${label}" to be rendered.`);
+}
+
+function createDialogService() {
+  return new BrowserDialogService();
 }
 
 test('ArticleSummaryTranslationExportController exports summaries and restores translation progress', async () => {
@@ -150,6 +156,7 @@ test('ArticleSummaryTranslationExportController exports summaries and restores t
         };
       },
     }, invoke),
+    dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
     pdfDownloadDir: '/tmp',
@@ -188,6 +195,7 @@ test('ArticleSummaryTranslationExportController exports original summaries direc
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
     pdfDownloadDir: '/tmp',
@@ -240,6 +248,7 @@ test('ArticleSummaryTranslationExportController exports original summaries after
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
     pdfDownloadDir: '/tmp',
@@ -268,7 +277,7 @@ test('ArticleSummaryTranslationExportController exports original summaries after
     translateSummaries: false,
     locale: 'en',
   });
-  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 0);
+  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
 });
 
 test('ArticleSummaryTranslationExportController retries translation after translation failure confirmation', async () => {
@@ -305,6 +314,7 @@ test('ArticleSummaryTranslationExportController retries translation after transl
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
     pdfDownloadDir: '/tmp',
@@ -325,7 +335,7 @@ test('ArticleSummaryTranslationExportController retries translation after transl
     translateSummaries: true,
     locale: 'en',
   });
-  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 0);
+  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
 });
 
 test('ArticleSummaryTranslationExportController cancels while translation failure confirmation is open', async () => {
@@ -357,6 +367,7 @@ test('ArticleSummaryTranslationExportController cancels while translation failur
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
     pdfDownloadDir: '/tmp',
@@ -370,7 +381,7 @@ test('ArticleSummaryTranslationExportController cancels while translation failur
   const exportArgs = invoked.find(entry => entry.command === 'export_articles_docx')?.args;
   const cancelArgs = invoked.find(entry => entry.command === 'cancel_document_task')?.args;
   assert.deepEqual(cancelArgs, { taskId: exportArgs?.taskId });
-  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 0);
+  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
   assert.equal(controller.getSnapshot().translationExportProgress, null);
 });
 
@@ -405,6 +416,7 @@ test('ArticleSummaryTranslationExportController cancels an active export task', 
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
     pdfDownloadDir: '/tmp',

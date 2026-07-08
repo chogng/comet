@@ -1,10 +1,10 @@
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import {
-	createSessionView,
-	type SessionView,
+	SessionView,
 	type SessionViewProps,
 } from 'cs/sessions/browser/parts/sessions/sessionView';
 import { $ } from 'cs/base/browser/dom';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
@@ -17,8 +17,11 @@ export class SessionsPartView {
 	private readonly sessionView: SessionView;
 	private disposed = false;
 
-	constructor(props: SessionsPartViewProps) {
-		this.sessionView = createSessionView(props);
+	constructor(
+		props: SessionsPartViewProps,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		this.sessionView = instantiationService.createInstance(SessionView, props);
 		this.element.append(this.sessionView.getElement());
 	}
 
@@ -47,8 +50,4 @@ export class SessionsPartView {
 		this.sessionView.dispose();
 		this.element.replaceChildren();
 	}
-}
-
-export function createSessionsPartView(props: SessionsPartViewProps) {
-	return new SessionsPartView(props);
 }

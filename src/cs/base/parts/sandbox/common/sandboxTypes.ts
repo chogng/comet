@@ -342,6 +342,52 @@ export interface PickUserSettingsFilePayload {
   defaultPath?: string;
 }
 
+export type NativeOpenDialogProperty =
+  | 'openFile'
+  | 'openDirectory'
+  | 'multiSelections'
+  | 'showHiddenFiles'
+  | 'createDirectory'
+  | 'promptToCreate'
+  | 'noResolveAliases'
+  | 'treatPackageAsDirectory'
+  | 'dontAddToRecent';
+
+export interface NativeFileDialogFilter {
+  name: string;
+  extensions: string[];
+}
+
+export interface NativeOpenDialogOptions {
+  title?: string;
+  defaultPath?: string;
+  buttonLabel?: string;
+  filters?: NativeFileDialogFilter[];
+  properties?: NativeOpenDialogProperty[];
+}
+
+export interface NativeOpenDialogResult {
+  canceled: boolean;
+  filePaths: string[];
+  bookmarks?: string[];
+}
+
+export interface NativeSaveDialogOptions {
+  title?: string;
+  defaultPath?: string;
+  buttonLabel?: string;
+  filters?: NativeFileDialogFilter[];
+  nameFieldLabel?: string;
+  showsTagField?: boolean;
+  properties?: Array<'showHiddenFiles' | 'createDirectory' | 'showOverwriteConfirmation' | 'dontAddToRecent'>;
+}
+
+export interface NativeSaveDialogResult {
+  canceled: boolean;
+  filePath?: string;
+  bookmark?: string;
+}
+
 export interface ReadPdfFilePayload {
   resource: UriComponents;
 }
@@ -588,6 +634,8 @@ export interface AppCommandPayloadMap {
   pick_download_directory: undefined;
   pick_user_settings_file: PickUserSettingsFilePayload;
   pick_pdf_file: undefined;
+  show_open_dialog: NativeOpenDialogOptions;
+  show_save_dialog: NativeSaveDialogOptions;
   read_pdf_file: ReadPdfFilePayload;
   open_path: OpenPathPayload;
   web_content_download_pdf: WebContentPdfDownloadPayload;
@@ -619,6 +667,8 @@ export interface AppCommandResultMap {
   pick_download_directory: string | null;
   pick_user_settings_file: string | null;
   pick_pdf_file: UriComponents | null;
+  show_open_dialog: NativeOpenDialogResult;
+  show_save_dialog: NativeSaveDialogResult;
   read_pdf_file: ReadPdfFileResult;
   open_path: boolean;
   web_content_download_pdf: PdfDownloadResult;

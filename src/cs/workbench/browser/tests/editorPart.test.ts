@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { after, beforeEach } from 'node:test';
+import test, { after, before, beforeEach } from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
@@ -13,6 +13,7 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import type { INativeHostService } from 'cs/platform/native/common/native';
 
 const domEnvironment = installDomTestEnvironment();
+let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 const defaultViewPartProps: ViewPartProps = {
   browserUrl: '',
@@ -38,9 +39,17 @@ function createNativeHostService(): INativeHostService {
   };
 }
 
+function createDialogService() {
+  return new BrowserDialogService();
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   document.body.replaceChildren();
+});
+
+before(async () => {
+  ({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
 });
 
 function waitForNextTask() {
@@ -85,6 +94,7 @@ test('EditorPartController creates a new browser tab as an empty about:blank tab
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -110,6 +120,7 @@ test('EditorPartController keeps browser tab creation empty even without an avai
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -135,6 +146,7 @@ test('EditorPartController opens the browser pane as an empty about:blank tab', 
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -160,6 +172,7 @@ test('EditorPartController reuses an existing empty draft tab for explicit draft
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
@@ -185,6 +198,7 @@ test('EditorPartController creates a new draft tab when the reusable draft is di
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
@@ -211,6 +225,7 @@ test('EditorPartController reuses an existing empty browser tab for explicit bro
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -240,6 +255,7 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -253,7 +269,7 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
   assert(pdfTab);
   assert.equal(pdfTab.url, EMPTY_PDF_TAB_URL);
   assert.equal(controller.getSnapshot().activeTab?.id, pdfTab.id);
-  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 0);
+  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
 
   controller.dispose();
 });
@@ -266,6 +282,7 @@ test('EditorPartController keeps browser pane active as about:blank when closing
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   controller.createBrowserTab('https://example.com/article');
@@ -295,6 +312,7 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   controller.createBrowserTab('https://example.com/article');
@@ -325,6 +343,7 @@ test('EditorPartController opens a browser URL in a new tab', async () => {
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
   const url = 'https://example.com/chat-link';
 
@@ -360,6 +379,7 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
       webContentRuntime: true,
     },
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   controller.createBrowserTab(favoriteUrl);
@@ -448,6 +468,7 @@ test('EditorPartController serializes close requests while unsaved confirm is op
     webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
   });
 
   const activeDraftTab = controller
@@ -460,11 +481,11 @@ test('EditorPartController serializes close requests while unsaved confirm is op
   const secondClose = controller.onCloseTab(activeDraftTab.id);
 
   await Promise.resolve();
-  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 1);
+  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 1);
 
   const discardButton = Array.from(
     document.querySelectorAll<HTMLButtonElement>(
-      '.comet-workbench-editor-modal-actions button',
+      '.comet-dialog-buttons button',
     ),
   ).find(
     (button) => button.textContent?.trim() === en.editorUnsavedChangesDiscard,
@@ -478,7 +499,7 @@ test('EditorPartController serializes close requests while unsaved confirm is op
   ]);
   assert.equal(didCloseFirst, true);
   assert.equal(didCloseSecond, false);
-  assert.equal(document.querySelectorAll('.comet-workbench-editor-modal-panel').length, 0);
+  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
 
   controller.dispose();
 });

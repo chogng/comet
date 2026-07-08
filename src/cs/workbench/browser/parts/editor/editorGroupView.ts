@@ -61,6 +61,7 @@ import type {
   EditorOpenRequest,
 } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
@@ -68,6 +69,7 @@ export type EditorGroupViewProps = {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
+  dialogService: IDialogService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];
@@ -924,6 +926,7 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
       labels: this.props.labels,
       viewPartProps: this.props.viewPartProps,
       nativeHost: this.props.nativeHost,
+      dialogService: this.props.dialogService,
       onOpenEditor: this.props.onOpenEditor,
       onDraftDocumentChange: this.props.onDraftDocumentChange,
       onDraftStatusChange: this.handleDraftStatusChange,

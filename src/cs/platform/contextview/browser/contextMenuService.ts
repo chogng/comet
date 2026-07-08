@@ -5,7 +5,7 @@ import type {
   ContextMenuListenerDisposable,
   ContextMenuService,
 } from 'cs/platform/contextview/browser/contextView';
-import { createContextViewService } from 'cs/platform/contextview/browser/contextViewService';
+import { PlatformContextViewService } from 'cs/platform/contextview/browser/contextViewService';
 
 class ListenerEmitter {
   private readonly listeners = new Set<ContextMenuListener>();
@@ -31,7 +31,7 @@ class ListenerEmitter {
 }
 
 class PlatformContextMenuService implements ContextMenuService {
-  private readonly contextViewService = createContextViewService();
+  private readonly contextViewService = new PlatformContextViewService();
   private readonly contextMenuHandler = new ContextMenuHandler(this.contextViewService);
   private readonly didShowEmitter = new ListenerEmitter();
   private readonly didHideEmitter = new ListenerEmitter();

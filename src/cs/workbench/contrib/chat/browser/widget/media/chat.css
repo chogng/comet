@@ -434,13 +434,8 @@
 }
 
 .comet-chat-composer-article-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  z-index: 20;
-  width: min(100%, 760px);
+  width: min(calc(100vw - 16px), 760px);
   max-height: 340px;
-  transform: translateX(-50%);
   display: grid;
   gap: 6px;
   padding: 10px 12px;

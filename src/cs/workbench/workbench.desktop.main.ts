@@ -27,6 +27,8 @@ import 'cs/workbench/contrib/splash/browser/partsSplash';
 //#endregion
 
 //#region --- workbench (desktop services)
+import 'cs/workbench/services/dialogs/electron-browser/fileDialogService';
+
 const ipc = nativeHostService.ipc;
 if (!ipc) {
   throw new Error('Desktop IPC bridge is unavailable.');

@@ -11,22 +11,19 @@ import type {
   EditorOpenHandler,
   EditorOpenRequest,
 } from 'cs/workbench/services/editor/common/editorOpenTypes';
-
-import {
-  showWorkbenchSaveConfirmModal,
-  showWorkbenchTextInputModal,
-} from 'cs/workbench/browser/workbenchEditorModals';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import type { EditorPartBaseProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorViewStateKey } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
 import type { SerializedEditorViewStateEntry } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { createEditorBrowserToolbarTitlebarLabels } from 'cs/workbench/browser/parts/titlebar/titlebarActions';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 
 export type EditorPartState = {
   ui: LocaleMessages;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
+  dialogService: IDialogService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];
@@ -61,6 +58,7 @@ export type EditorPartControllerContext = {
   ui: LocaleMessages;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
+  dialogService: IDialogService;
   browserUrl: string;
   webUrl: string;
 };
@@ -110,6 +108,7 @@ export function createEditorPartProps({
     ui,
     viewPartProps,
     nativeHost,
+    dialogService,
     groupId,
     tabs,
     dirtyDraftTabIds,
@@ -172,6 +171,8 @@ export function createEditorPartProps({
       closeOthers: ui.editorTabContextCloseOthers,
       closeAll: ui.editorTabContextCloseAll,
       rename: ui.editorTabContextRename,
+      editorModalConfirm: ui.editorModalConfirm,
+      editorModalCancel: ui.editorModalCancel,
       renameFavoriteTitle: ui.editorFavoriteRenameTitle,
       renameFavoriteLabel: ui.editorFavoriteRenameLabel,
       newFavoriteFolderTitle: ui.editorFavoriteNewFolderTitle,
@@ -233,6 +234,7 @@ export function createEditorPartProps({
     },
     viewPartProps,
     nativeHost,
+    dialogService,
     groupId,
     tabs,
     dirtyDraftTabIds,
@@ -264,7 +266,7 @@ function createEditorPartControllerSnapshot(
   actions: EditorPartActions,
 ): EditorPartControllerSnapshot {
   const editorSnapshot = editorModel.getSnapshot();
-  const { ui, viewPartProps, nativeHost } = context;
+  const { ui, viewPartProps, nativeHost, dialogService } = context;
   const {
     groupId,
     tabs,
@@ -290,6 +292,7 @@ function createEditorPartControllerSnapshot(
         ui,
         viewPartProps,
         nativeHost,
+        dialogService,
         groupId,
         tabs,
         dirtyDraftTabIds,
@@ -309,6 +312,7 @@ function areEditorPartControllerContextsEqual(
   return (
     previous.ui === next.ui &&
     previous.nativeHost === next.nativeHost &&
+    previous.dialogService === next.dialogService &&
     previous.browserUrl === next.browserUrl &&
     previous.webUrl === next.webUrl &&
     previous.viewPartProps.browserUrl === next.viewPartProps.browserUrl &&
@@ -566,12 +570,13 @@ export class EditorPartController {
 
     const { ui } = this.context;
     const nextTitle =
-      (await showWorkbenchTextInputModal({
+      (await this.context.dialogService.input({
         title: ui.editorTabRenameTitle,
-        label: ui.editorTabRenameLabel,
-        defaultValue: targetTab.title.trim(),
-        ui,
-      })) ?? '';
+        message: ui.editorTabRenameLabel,
+        value: targetTab.title.trim(),
+        primaryButton: ui.editorModalConfirm,
+        cancelButton: ui.editorModalCancel,
+      })).value ?? '';
     if (!nextTitle) {
       return;
     }
@@ -587,12 +592,13 @@ export class EditorPartController {
   }) => {
     const { ui } = this.context;
     const nextTitle =
-      (await showWorkbenchTextInputModal({
+      (await this.context.dialogService.input({
         title: ui.editorFavoriteRenameTitle,
-        label: ui.editorFavoriteRenameLabel,
-        defaultValue: title.trim(),
-        ui,
-      })) ?? '';
+        message: ui.editorFavoriteRenameLabel,
+        value: title.trim(),
+        primaryButton: ui.editorModalConfirm,
+        cancelButton: ui.editorModalCancel,
+      })).value ?? '';
     return nextTitle.trim() || null;
   };
 
@@ -604,13 +610,14 @@ export class EditorPartController {
   }) => {
     const { ui } = this.context;
     const nextFolderName =
-      (await showWorkbenchTextInputModal({
+      (await this.context.dialogService.input({
         title: ui.editorFavoriteNewFolderTitle,
-        label: ui.editorFavoriteNewFolderLabel,
-        defaultValue: '',
+        message: ui.editorFavoriteNewFolderLabel,
+        value: '',
         placeholder: title.trim(),
-        ui,
-      })) ?? '';
+        primaryButton: ui.editorModalConfirm,
+        cancelButton: ui.editorModalCancel,
+      })).value ?? '';
     return nextFolderName.trim() || null;
   };
 
@@ -633,7 +640,7 @@ export class EditorPartController {
       );
     const firstDirtyTitle =
       dirtyTabs[0]?.title.trim() || ui.editorDraftMode;
-    const confirmation = await showWorkbenchSaveConfirmModal({
+    const confirmation = await this.context.dialogService.prompt<'save' | 'discard'>({
       title: ui.editorUnsavedChangesTitle,
       message:
         dirtyDraftTabIds.length === 1
@@ -642,13 +649,21 @@ export class EditorPartController {
               '{count}',
               String(dirtyDraftTabIds.length),
             ),
-      saveLabel: ui.editorUnsavedChangesSave,
-      discardLabel: ui.editorUnsavedChangesDiscard,
-      cancelLabel: ui.editorModalCancel,
-      closeLabel: ui.toastClose,
+      buttons: [
+        {
+          label: ui.editorUnsavedChangesSave,
+          result: 'save',
+          primary: true,
+        },
+        {
+          label: ui.editorUnsavedChangesDiscard,
+          result: 'discard',
+        },
+      ],
+      cancelButton: ui.editorModalCancel,
     });
 
-    switch (confirmation) {
+    switch (confirmation.result) {
       case 'save':
         for (const dirtyTabId of dirtyDraftTabIds) {
           this.editorModel.saveDraftTab(dirtyTabId);
@@ -656,7 +671,6 @@ export class EditorPartController {
         return true;
       case 'discard':
         return true;
-      case 'cancel':
       default:
         return false;
     }

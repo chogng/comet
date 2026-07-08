@@ -13,6 +13,10 @@ import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
+import {
+	IContextViewService,
+	type ContextViewDisposable,
+} from 'cs/platform/contextview/browser/contextView';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import {
@@ -71,9 +75,16 @@ export class ChatInputPart {
 	private readonly element = $<HTMLElementTagNameMap['div']>('div');
 	private readonly renderDisposables = new DisposableStore();
 	private readonly modelPicker: ChatInputModelPickerActionViewItem;
+	private articleMenuContextView: ContextViewDisposable | null = null;
+	private articleMenuAnchor: HTMLElement | null = null;
+	private isReplacingArticleMenuContextView = false;
 	private isArticleMenuOpen = false;
+	private disposed = false;
 
-	constructor(props: ChatInputPartProps) {
+	constructor(
+		props: ChatInputPartProps,
+		@IContextViewService private readonly contextViewService: IContextViewService,
+	) {
 		this.props = props;
 		this.modelPicker = new ChatInputModelPickerActionViewItem(getModelPickerProps(props));
 		this.render();
@@ -84,6 +95,10 @@ export class ChatInputPart {
 	}
 
 	setProps(props: ChatInputPartProps) {
+		if (this.disposed) {
+			return;
+		}
+
 		this.props = props;
 		this.modelPicker.setProps(getModelPickerProps(props));
 		this.render();
@@ -94,12 +109,23 @@ export class ChatInputPart {
 	}
 
 	dispose() {
+		if (this.disposed) {
+			return;
+		}
+
+		this.disposed = true;
 		this.renderDisposables.dispose();
+		this.closeArticleMenuContextView();
 		this.element.replaceChildren();
 	}
 
 	private render() {
+		if (this.disposed) {
+			return;
+		}
+
 		this.renderDisposables.clear();
+		this.articleMenuAnchor = null;
 		this.element.className = [
 			'comet-chat-composer-host',
 			this.props.isEmpty ? 'comet-is-empty-state' : '',
@@ -179,19 +205,7 @@ export class ChatInputPart {
 		}
 		content.push(composer, this.renderQuickActions());
 		this.element.replaceChildren(...content);
-
-		if (this.isArticleMenuOpen) {
-			this.renderDisposables.add(addDisposableListener(document, EventType.MOUSE_DOWN, event => {
-				if (event.target instanceof Node && !this.element.contains(event.target)) {
-					this.closeArticleMenu();
-				}
-			}));
-			this.renderDisposables.add(addDisposableListener(document, EventType.KEY_DOWN, event => {
-				if (event.key === 'Escape') {
-					this.closeArticleMenu();
-				}
-			}));
-		}
+		this.syncArticleMenuContextView();
 	}
 
 	private canSend() {
@@ -225,12 +239,9 @@ export class ChatInputPart {
 				this.isArticleMenuOpen,
 			),
 		];
+		this.articleMenuAnchor = wrapper;
 		row.append(...quickActionButtons);
 		wrapper.append(row);
-
-		if (this.isArticleMenuOpen) {
-			wrapper.append(this.renderArticleMenu());
-		}
 
 		return wrapper;
 	}
@@ -300,6 +311,59 @@ export class ChatInputPart {
 
 		menu.append(header, list);
 		return menu;
+	}
+
+	private syncArticleMenuContextView() {
+		if (!this.isArticleMenuOpen) {
+			this.closeArticleMenuContextView();
+			return;
+		}
+
+		const anchor = this.articleMenuAnchor;
+		if (!anchor) {
+			return;
+		}
+
+		if (this.articleMenuContextView) {
+			this.isReplacingArticleMenuContextView = true;
+			try {
+				this.closeArticleMenuContextView();
+			} finally {
+				this.isReplacingArticleMenuContextView = false;
+			}
+		}
+		this.articleMenuContextView = this.contextViewService.showContextView({
+			getAnchor: () => anchor,
+			className: 'comet-chat-composer-article-context-view',
+			render: container => {
+				container.append(this.renderArticleMenu());
+			},
+			alignment: 'center',
+			position: 'below',
+			offset: 8,
+			onHide: this.handleArticleMenuHide,
+		});
+	}
+
+	private readonly handleArticleMenuHide = () => {
+		this.articleMenuContextView = null;
+		if (this.disposed) {
+			return;
+		}
+		if (this.isReplacingArticleMenuContextView) {
+			return;
+		}
+		if (!this.isArticleMenuOpen) {
+			return;
+		}
+
+		this.isArticleMenuOpen = false;
+		this.render();
+	};
+
+	private closeArticleMenuContextView() {
+		this.articleMenuContextView?.dispose();
+		this.articleMenuContextView = null;
 	}
 
 	private toggleArticleMenu() {

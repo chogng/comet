@@ -1,6 +1,5 @@
 import {
-	createSessionChatView,
-	type SessionChatView,
+	SessionChatView,
 	type SessionChatViewProps,
 } from 'cs/sessions/browser/parts/sessions/chatView';
 import {
@@ -8,6 +7,7 @@ import {
 	type SessionHeaderView,
 } from 'cs/sessions/browser/parts/sessions/sessionHeader';
 import { $ } from 'cs/base/browser/dom';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
@@ -23,11 +23,17 @@ export class SessionView {
 	private readonly chatView: SessionChatView;
 	private disposed = false;
 
-	constructor(props: SessionViewProps) {
+	constructor(
+		props: SessionViewProps,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		this.headerView = createSessionHeaderView({
 			trailingActionsElement: props.headerTrailingActionsElement ?? null,
 		});
-		this.chatView = createSessionChatView(props.chatProps);
+		this.chatView = instantiationService.createInstance(
+			SessionChatView,
+			props.chatProps,
+		);
 		this.contentElement.append(this.chatView.getElement());
 		this.element.append(this.headerView.getElement(), this.contentElement);
 	}
@@ -61,8 +67,4 @@ export class SessionView {
 		this.chatView.dispose();
 		this.element.replaceChildren();
 	}
-}
-
-export function createSessionView(props: SessionViewProps) {
-	return new SessionView(props);
 }

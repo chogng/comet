@@ -17,6 +17,7 @@ let EditorGroupView: typeof import('cs/workbench/browser/parts/editor/editorGrou
 let resolveEditorPane: typeof import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').resolveEditorPane;
 let editorPaneDescriptors: typeof import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').editorPaneDescriptors;
 let TextSelection: typeof import('prosemirror-state').TextSelection;
+let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 const labels = {
   headerAddAction: 'Add',
@@ -57,6 +58,8 @@ const labels = {
   pdfMode: 'PDF',
   newTab: 'New Tab',
   close: 'Close',
+  editorModalConfirm: 'OK',
+  editorModalCancel: 'Cancel',
   expandEditor: 'Expand editor',
   collapseEditor: 'Collapse editor',
   renameFavoriteTitle: 'Rename Favorite',
@@ -156,6 +159,10 @@ function createNativeHostService(): INativeHostService {
   };
 }
 
+function createDialogService() {
+  return new BrowserDialogService();
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
@@ -164,6 +171,7 @@ before(async () => {
     'cs/workbench/browser/parts/editor/panes/editorPaneRegistry'
   ));
   ({ TextSelection } = await import('prosemirror-state'));
+  ({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
 });
 
 after(() => {
@@ -192,6 +200,7 @@ function createProps(
     labels,
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
     groupId: DEFAULT_EDITOR_GROUP_ID,
     tabs,
     dirtyDraftTabIds: [],
@@ -226,6 +235,7 @@ function createResolverContext() {
     labels,
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
     onDraftDocumentChange: () => {},
     onDraftStatusChange: () => {},
     onPdfReaderStatusChange: () => {},

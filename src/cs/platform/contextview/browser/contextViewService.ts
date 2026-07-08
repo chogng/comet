@@ -1,11 +1,14 @@
 import { createContextViewController } from 'cs/base/browser/ui/contextview/contextview';
+import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import type {
   ContextViewDelegate,
   ContextViewDisposable,
-  ContextViewService,
 } from 'cs/platform/contextview/browser/contextView';
+import { IContextViewService } from 'cs/platform/contextview/browser/contextView';
 
-class PlatformContextViewService implements ContextViewService {
+export class PlatformContextViewService implements IContextViewService {
+  declare readonly _serviceBrand: undefined;
+
   private readonly contextView = createContextViewController();
   private currentDelegate: ContextViewDelegate | null = null;
   private currentRenderDisposable: ContextViewDisposable | (() => void) | null = null;
@@ -87,6 +90,8 @@ class PlatformContextViewService implements ContextViewService {
   };
 }
 
-export function createContextViewService(): ContextViewService {
-  return new PlatformContextViewService();
-}
+registerSingleton(
+  IContextViewService,
+  PlatformContextViewService,
+  InstantiationType.Delayed,
+);

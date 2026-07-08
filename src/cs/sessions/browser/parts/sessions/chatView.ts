@@ -5,6 +5,7 @@ import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget'
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import { $ } from 'cs/base/browser/dom';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
 
@@ -136,8 +137,11 @@ export class SessionChatView {
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view');
 	private readonly widget: ChatWidget;
 
-	constructor(props: SessionChatViewProps) {
-		this.widget = new ChatWidget(props);
+	constructor(
+		props: SessionChatViewProps,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		this.widget = instantiationService.createInstance(ChatWidget, props);
 		this.element.append(this.widget.getElement());
 	}
 
@@ -157,8 +161,4 @@ export class SessionChatView {
 		this.widget.dispose();
 		this.element.replaceChildren();
 	}
-}
-
-export function createSessionChatView(props: SessionChatViewProps) {
-	return new SessionChatView(props);
 }

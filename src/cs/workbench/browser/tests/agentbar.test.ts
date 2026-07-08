@@ -11,8 +11,9 @@ import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').createChatWidget;
-let createChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').createChatViewPane;
+let ChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').ChatWidget;
+let ChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').ChatViewPane;
+let getWorkbenchInstantiationService: typeof import('cs/workbench/services/instantiation/browser/workbenchInstantiationService').getWorkbenchInstantiationService;
 let HorizontalScrollbar: typeof HorizontalScrollbarType;
 let renderMarkdown: typeof import('cs/base/browser/markdownRenderer').renderMarkdown;
 
@@ -105,13 +106,25 @@ function createResult(overrides: Partial<RagAnswerResult> = {}): RagAnswerResult
   };
 }
 
+function createChatWidget(props: ChatWidgetProps) {
+  return getWorkbenchInstantiationService().createInstance(ChatWidget, props);
+}
+
+function createChatViewPane(
+  props: import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').ChatViewPaneProps,
+) {
+  return getWorkbenchInstantiationService().createInstance(ChatViewPane, props);
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
+  await import('cs/platform/contextview/browser/contextViewService');
+  ({ getWorkbenchInstantiationService } = await import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'));
   ({ HorizontalScrollbar } = await import('cs/base/browser/ui/scrollbar/horizontalScrollbar'));
   ({ renderMarkdown } = await import('cs/base/browser/markdownRenderer'));
-  ({ createChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
-  ({ createChatViewPane } = await import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane'));
+  ({ ChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
+  ({ ChatViewPane } = await import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane'));
 });
 
 after(() => {
@@ -698,7 +711,9 @@ test('composer article quick comet-hover-action opens source menu and runs selec
     articleButton.click();
     await delay(0);
 
-    const menu = element.querySelector('.comet-chat-composer-article-menu');
+    const contextView = document.body.querySelector('.comet-chat-composer-article-context-view');
+    assert(contextView instanceof HTMLElement);
+    const menu = contextView.querySelector('.comet-chat-composer-article-menu');
     assert(menu instanceof HTMLElement);
     const sourceButton = menu.querySelector('.comet-chat-composer-article-source');
     assert(sourceButton instanceof HTMLButtonElement);
@@ -706,10 +721,37 @@ test('composer article quick comet-hover-action opens source menu and runs selec
     sourceButton.click();
 
     assert.equal(selectedSourceUrl, 'https://www.science.org/toc/science/current');
-    assert.equal(element.querySelector('.comet-chat-composer-article-menu'), null);
+    assert.equal(document.body.querySelector('.comet-chat-composer-article-menu'), null);
   } finally {
     agentBar.dispose();
   }
+});
+
+test('composer article quick menu is disposed with the chat widget', async () => {
+  const agentBar = createChatWidget({
+    ...createProps(),
+    articleQuickSources: [
+      {
+        id: 'science',
+        url: 'https://www.science.org/toc/science/current',
+        journalTitle: 'Science',
+        preferredExtractorId: 'science-current-news-in-depth-research-articles',
+      },
+    ],
+  });
+  const element = agentBar.getElement();
+  document.body.append(element);
+
+  const articleButton = Array.from(
+    element.querySelectorAll('.comet-chat-composer-quick-action'),
+  )[3];
+  assert(articleButton instanceof HTMLButtonElement);
+  articleButton.click();
+  await delay(0);
+
+  assert(document.body.querySelector('.comet-chat-composer-article-menu') instanceof HTMLElement);
+  agentBar.dispose();
+  assert.equal(document.body.querySelector('.comet-chat-composer-article-menu'), null);
 });
 
 test('composer input toolbar hosts article batch actions', async () => {

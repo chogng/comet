@@ -63,11 +63,10 @@ import {
   type SessionChatViewProps,
 } from 'cs/sessions/browser/parts/sessions/chatView';
 import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
-import { createSessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
+import { SessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
 import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 
 import { ToastOverlayWindowView } from 'cs/workbench/browser/toastOverlayWindow';
-import { showWorkbenchTextInputModal } from 'cs/workbench/browser/workbenchEditorModals';
 import { createEditorHeaderActionsView } from 'cs/workbench/browser/parts/editor/editorHeaderActionsView';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
@@ -76,6 +75,7 @@ import { createToastHost } from 'cs/base/browser/ui/toast/toastHost';
 import type { ToastHost } from 'cs/base/browser/ui/toast/toastHost';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { IWorkbenchLayoutService } from 'cs/workbench/services/layout/browser/layoutService';
 import {
   createNotificationsPart,
@@ -142,6 +142,7 @@ import { EventEmitter } from 'cs/base/common/event';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
+import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
@@ -595,9 +596,9 @@ class WorkbenchHost {
   private readonly toastHost: ToastHost;
   private readonly notificationsPart: NotificationsPart | null;
   private workbenchLayoutView: ReturnType<typeof createSessionWorkbenchLayoutView> | null = null;
-  private workbenchContentPartViews: ReturnType<typeof createSessionWorkbenchContentPartViews> | null = null;
+  private workbenchContentPartViews: SessionWorkbenchContentPartViews | null = null;
   private retiredWorkbenchContentPartViews:
-    | ReturnType<typeof createSessionWorkbenchContentPartViews>
+    | SessionWorkbenchContentPartViews
     | null = null;
   private readonly editorHeaderActionsView = createEditorHeaderActionsView({
     isEditorCollapsed: true,
@@ -647,6 +648,8 @@ class WorkbenchHost {
     @INativeHostService private readonly nativeHostService: INativeHostService,
     @IMarkdownRendererService private readonly markdownRendererService: IMarkdownRendererService,
     @IOpenerService private readonly openerService: IOpenerService,
+    @IDialogService private readonly dialogService: IDialogService,
+    @IInstantiationService private readonly instantiationService: IInstantiationService,
   ) {
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
@@ -1117,7 +1120,10 @@ class WorkbenchHost {
         props.editorHeaderActionsElement,
     };
     if (!this.workbenchContentPartViews) {
-      this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
+      this.workbenchContentPartViews = this.instantiationService.createInstance(
+        SessionWorkbenchContentPartViews,
+        partViewProps,
+      );
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1188,7 +1194,10 @@ class WorkbenchHost {
       editorHeaderActionsElement: null,
     };
     if (!this.workbenchContentPartViews) {
-      this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
+      this.workbenchContentPartViews = this.instantiationService.createInstance(
+        SessionWorkbenchContentPartViews,
+        partViewProps,
+      );
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1426,6 +1435,7 @@ class WorkbenchHost {
       ui,
       viewPartProps,
       nativeHost,
+      dialogService: this.dialogService,
       browserUrl,
       webUrl,
     });
@@ -1555,12 +1565,13 @@ class WorkbenchHost {
     });
     const articleSummaryTranslationExportControllerInstance =
       getWorkbenchArticleSummaryTranslationExportController({
-        desktopRuntime,
-        invokeDesktop,
-        nativeHost,
-        locale,
-        ui,
-        pdfDownloadDir,
+      desktopRuntime,
+      invokeDesktop,
+      nativeHost,
+      dialogService: this.dialogService,
+      locale,
+      ui,
+      pdfDownloadDir,
       });
 
     const documentActionsControllerInstance =
@@ -1632,13 +1643,14 @@ class WorkbenchHost {
       document: LibraryDocumentSummary,
     ) => {
       const nextTitle =
-        (await showWorkbenchTextInputModal({
+        (await this.dialogService.input({
           title: ui.libraryContextRenameTitle,
-          label: ui.libraryContextRenameLabel,
-          defaultValue: document.title?.trim() || '',
+          message: ui.libraryContextRenameLabel,
+          value: document.title?.trim() || '',
           placeholder: ui.libraryContextRenamePlaceholder,
-          ui,
-        })) ?? '';
+          primaryButton: ui.editorModalConfirm,
+          cancelButton: ui.editorModalCancel,
+        })).value ?? '';
       if (!nextTitle) {
         return;
       }
@@ -1658,13 +1670,14 @@ class WorkbenchHost {
       document: LibraryDocumentSummary,
     ) => {
       const nextSourceUrl =
-        (await showWorkbenchTextInputModal({
+        (await this.dialogService.input({
           title: ui.libraryContextEditSourceUrlTitle,
-          label: ui.libraryContextEditSourceUrlLabel,
-          defaultValue: document.sourceUrl?.trim() || '',
+          message: ui.libraryContextEditSourceUrlLabel,
+          value: document.sourceUrl?.trim() || '',
           placeholder: 'https://',
-          ui,
-        })) ?? '';
+          primaryButton: ui.editorModalConfirm,
+          cancelButton: ui.editorModalCancel,
+        })).value ?? '';
       if (!nextSourceUrl) {
         return;
       }
@@ -1683,13 +1696,15 @@ class WorkbenchHost {
     const handleLibraryDocumentDelete = async (
       document: LibraryDocumentSummary,
     ) => {
-      const confirmed = window.confirm(
-        ui.libraryContextDeleteConfirm.replace(
+      const confirmation = await this.dialogService.confirm({
+        message: ui.libraryContextDeleteConfirm.replace(
           '{title}',
           document.title?.trim() || ui.untitled,
         ),
-      );
-      if (!confirmed) {
+        primaryButton: ui.editorModalConfirm,
+        cancelButton: ui.editorModalCancel,
+      });
+      if (!confirmation.confirmed) {
         return;
       }
 
@@ -1876,6 +1891,7 @@ class WorkbenchHost {
         ui,
         viewPartProps,
         nativeHost,
+        dialogService: this.dialogService,
         browserUrl,
         webUrl,
       },
@@ -1907,6 +1923,7 @@ class WorkbenchHost {
         desktopRuntime,
         invokeDesktop,
         nativeHost,
+        dialogService: this.dialogService,
         locale,
         ui,
         pdfDownloadDir,

@@ -28,7 +28,9 @@ import {
 import 'cs/workbench/services/commands/common/commandService';
 import 'cs/workbench/services/configuration/browser/configurationService';
 import 'cs/workbench/services/environment/browser/environmentService';
+import 'cs/workbench/services/dialogs/browser/dialogService';
 import 'cs/workbench/services/host/browser/host';
+import 'cs/platform/contextview/browser/contextViewService';
 import 'cs/platform/hover/browser/hoverService';
 import 'cs/editor/browser/services/openerService';
 import 'cs/workbench/services/keybinding/browser/keybindingService';

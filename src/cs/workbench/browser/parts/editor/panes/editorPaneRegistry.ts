@@ -16,6 +16,7 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { PdfReaderRuntimeStatus } from 'cs/editor/browser/pdf/pdfDocumentReader';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import { ContentEditorPane } from 'cs/workbench/browser/parts/editor/panes/contentEditorPane';
 import type { ContentEditorPaneProps } from 'cs/workbench/browser/parts/editor/panes/contentEditorPane';
@@ -34,6 +35,7 @@ export type EditorPaneResolverContext = {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
+  dialogService: IDialogService;
   onOpenEditor?: EditorOpenHandler;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onDraftStatusChange: (tabId: string, status: DraftEditorStatusState) => void;
@@ -118,6 +120,7 @@ function createDraftPaneProps(
   return {
     labels: context.labels,
     draftTab: tab,
+    dialogService: context.dialogService,
     onDraftDocumentChange: context.onDraftDocumentChange,
     onStatusChange: (status: DraftEditorStatusState) =>
       context.onDraftStatusChange(tab.id, status),

@@ -18,7 +18,7 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
-import { showWorkbenchSaveConfirmModal } from 'cs/workbench/browser/workbenchEditorModals';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import {
   canExportArticlesDocx,
   resolvePreferredDirectory,
@@ -42,6 +42,7 @@ export type ArticleSummaryTranslationExportControllerContext = {
   desktopRuntime: boolean;
   invokeDesktop: ElectronInvoke;
   nativeHost: INativeHostService;
+  dialogService: IDialogService;
   locale: Locale;
   ui: LocaleMessages;
   pdfDownloadDir: string;
@@ -269,24 +270,32 @@ export class ArticleSummaryTranslationExportController {
     error: AppErrorData,
     token: CancellationToken,
   ): Promise<ArticleSummaryTranslationFailureChoice> {
-    const { ui } = this.context;
-    const confirmation = await showWorkbenchSaveConfirmModal({
+    const { dialogService, ui } = this.context;
+    const confirmation = await dialogService.prompt<'retry' | 'exportOriginal'>({
       title: ui.translationFailureDialogTitle,
       message: formatLocaleMessage(ui.translationFailureDialogMessage, {
         error: localizeAppError(ui, error),
       }),
-      saveLabel: ui.translationFailureDialogRetry,
-      discardLabel: ui.translationFailureDialogExportOriginal,
-      cancelLabel: ui.editorModalCancel,
-      closeLabel: ui.toastClose,
+      buttons: [
+        {
+          label: ui.translationFailureDialogRetry,
+          result: 'retry',
+          primary: true,
+        },
+        {
+          label: ui.translationFailureDialogExportOriginal,
+          result: 'exportOriginal',
+        },
+      ],
+      cancelButton: ui.editorModalCancel,
       cancellationToken: token,
     });
 
-    if (confirmation === 'save') {
+    if (confirmation.result === 'retry') {
       return 'retry';
     }
 
-    if (confirmation === 'discard') {
+    if (confirmation.result === 'exportOriginal') {
       return 'exportOriginal';
     }
 

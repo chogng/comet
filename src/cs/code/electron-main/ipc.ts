@@ -20,6 +20,8 @@ import type {
   ListTranslationModelsPayload,
   ListLibraryDocumentsPayload,
   NativeToastOptions,
+  NativeOpenDialogOptions,
+  NativeSaveDialogOptions,
   UpsertLibraryDocumentMetadataPayload,
   WebContentPdfDownloadPayload,
   WebContentHtmlArchivePayload,
@@ -81,6 +83,8 @@ import { appError, serializeAppError } from 'cs/base/common/errors';
 import {
   pickDirectoryDialog,
   pickUserSettingsFileDialog,
+  showOpenDialog,
+  showSaveDialog,
 } from 'cs/platform/dialogs/electron-main/dialogMainService';
 import { testLlmConnection } from 'cs/code/electron-main/llm/llm';
 import { runMainAgentTurn } from 'cs/code/electron-main/agent/agent';
@@ -264,6 +268,16 @@ async function invokeCommand<TCommand extends AppCommand>(
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'pick_pdf_file':
       return nativeHostMainService.pickPdfFile(
+        getMainWindow(),
+      ) as Promise<AppCommandResultMap[TCommand]>;
+    case 'show_open_dialog':
+      return showOpenDialog(
+        payload as NativeOpenDialogOptions,
+        getMainWindow(),
+      ) as Promise<AppCommandResultMap[TCommand]>;
+    case 'show_save_dialog':
+      return showSaveDialog(
+        payload as NativeSaveDialogOptions,
         getMainWindow(),
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'read_pdf_file':

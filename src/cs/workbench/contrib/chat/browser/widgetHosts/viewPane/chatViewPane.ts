@@ -8,6 +8,7 @@ import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/b
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
 import { $ } from 'cs/base/browser/dom';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
@@ -26,12 +27,15 @@ export class ChatViewPane {
 	private readonly leadingWindowControlsSpacer = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-window-controls-spacer');
 	private readonly chatWidget: ChatWidget;
 
-	constructor(props: ChatViewPaneProps) {
+	constructor(
+		props: ChatViewPaneProps,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		registerWorkbenchPartDomNode(
 			WORKBENCH_PART_IDS.agentSidebar,
 			this.element,
 		);
-		this.chatWidget = new ChatWidget(props);
+		this.chatWidget = instantiationService.createInstance(ChatWidget, props);
 		if (WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0) {
 			this.leadingWindowControlsSpacer.style.setProperty(
 				'--window-controls-width',
@@ -94,8 +98,4 @@ export class ChatViewPane {
 			slotElement.replaceChildren();
 		}
 	}
-}
-
-export function createChatViewPane(props: ChatViewPaneProps) {
-	return new ChatViewPane(props);
 }

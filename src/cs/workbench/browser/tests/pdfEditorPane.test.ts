@@ -9,6 +9,7 @@ import { DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/browser/editorGroupIdentit
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let EditorGroupView: typeof import('cs/workbench/browser/parts/editor/editorGroupView').EditorGroupView;
+let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 type TestViewPartProps = {
   browserUrl: string;
@@ -59,6 +60,8 @@ const labels = {
   sourceMode: 'Source',
   pdfMode: 'PDF',
   close: 'Close',
+  editorModalConfirm: 'OK',
+  editorModalCancel: 'Cancel',
   expandEditor: 'Expand editor',
   collapseEditor: 'Collapse editor',
   renameFavoriteTitle: 'Rename Favorite',
@@ -130,10 +133,15 @@ function createNativeHostService(): INativeHostService {
   };
 }
 
+function createDialogService() {
+  return new BrowserDialogService();
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({ EditorGroupView } = await import('cs/workbench/browser/parts/editor/editorGroupView'));
+  ({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
 });
 
 after(() => {
@@ -160,6 +168,7 @@ function createProps(
       ...viewPartProps,
     },
     nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
     groupId: DEFAULT_EDITOR_GROUP_ID,
     tabs,
     dirtyDraftTabIds: [],

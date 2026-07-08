@@ -1,0 +1,185 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.comet-dialog-modal-block {
+	position: fixed;
+	inset: 0;
+	z-index: 2575;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+
+.comet-dialog-modal-block.is-dimmed {
+	background: var(--comet-dialog-backdrop, rgba(15, 23, 42, 0.45));
+}
+
+.comet-dialog-box {
+	width: min(760px, calc(100vw - 40px));
+	max-height: calc(100vh - 40px);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--comet-dialog-border, #e6e6e6);
+	border-radius: 12px;
+	background: var(--comet-dialog-background, #ffffff);
+	box-shadow: var(--comet-dialog-shadow, 0 18px 46px rgba(15, 23, 42, 0.24));
+	color: var(--comet-dialog-foreground, #1f2937);
+}
+
+.comet-dialog-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 52px;
+	padding: 14px 18px;
+	border-bottom: 1px solid var(--comet-dialog-headerBorder, #ececec);
+}
+
+.comet-dialog-title {
+	margin: 0;
+	font-size: 16px;
+	line-height: 22px;
+	font-weight: 600;
+	color: var(--comet-dialog-titleForeground, #111827);
+}
+
+.comet-dialog-close {
+	width: 32px;
+	height: 32px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--comet-dialog-closeForeground, #475569);
+	cursor: pointer;
+}
+
+.comet-dialog-close:hover {
+	background: var(--comet-dialog-closeHoverBackground, rgba(15, 23, 42, 0.08));
+}
+
+.comet-dialog-message-row {
+	display: flex;
+	gap: 14px;
+	min-height: 0;
+	padding: 28px 24px 0;
+	overflow: auto;
+}
+
+.comet-dialog-type {
+	width: 24px;
+	height: 24px;
+	flex: 0 0 auto;
+	border-radius: 999px;
+	margin-top: 1px;
+}
+
+.comet-dialog-type-none {
+	display: none;
+}
+
+.comet-dialog-type-info,
+.comet-dialog-type-question {
+	background: var(--comet-dialog-infoIconForeground, #2563eb);
+}
+
+.comet-dialog-type-warning {
+	background: var(--comet-dialog-warningIconForeground, #d97706);
+}
+
+.comet-dialog-type-error {
+	background: var(--comet-dialog-errorIconForeground, #dc2626);
+}
+
+.comet-dialog-message-container {
+	min-width: 0;
+	flex: 1;
+	font-size: 14px;
+	line-height: 22px;
+}
+
+.comet-dialog-message {
+	font-size: 15px;
+	font-weight: 500;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.comet-dialog-detail {
+	margin-top: 8px;
+	color: var(--comet-dialog-detailForeground, #64748b);
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.comet-dialog-inputs {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 18px;
+}
+
+.comet-dialog-input-row {
+	display: flex;
+}
+
+.comet-dialog-input-row .comet-inputbox {
+	flex: 1;
+}
+
+.comet-dialog-custom-body {
+	margin-top: 18px;
+}
+
+.comet-dialog-checkbox-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 18px;
+	user-select: none;
+}
+
+.comet-dialog-checkbox {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+}
+
+.comet-dialog-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 22px 24px 24px;
+	white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+	.comet-dialog-modal-block {
+		padding: 10px;
+	}
+
+	.comet-dialog-box {
+		width: calc(100vw - 20px);
+		max-height: calc(100vh - 20px);
+	}
+
+	.comet-dialog-toolbar {
+		padding: 12px 14px;
+	}
+
+	.comet-dialog-message-row {
+		padding: 22px 16px 0;
+	}
+
+	.comet-dialog-buttons {
+		padding: 18px 16px 18px;
+	}
+}
