@@ -15,6 +15,7 @@ import type {
 	LlmServiceTier,
 } from 'cs/workbench/services/llm/registry';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
+import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 
 export type ChatModelDropdownOption = DropdownOption & {
 	readonly providerId?: LlmProviderId;
@@ -24,11 +25,8 @@ export type ChatModelDropdownOption = DropdownOption & {
 	readonly serviceTier?: LlmServiceTier;
 };
 
-export type ChatOpenLinkRequest = {
-	readonly href: string;
-};
-
 export type ChatWidgetProps = {
+	readonly markdownRendererService: IMarkdownRendererService;
 	readonly isKnowledgeBaseModeEnabled: boolean;
 	readonly activeLlmModelLabel: string;
 	readonly isMaxContextWindowEnabled: boolean;

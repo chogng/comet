@@ -2,8 +2,6 @@ import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editor
 import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
 import type { SessionChatViewProps } from 'cs/sessions/browser/parts/sessions/chatView';
-import { EventEmitter } from 'cs/base/common/event';
-import { DisposableStore } from 'cs/base/common/lifecycle';
 import {
 	createSessionSidebarPartView,
 	SessionSidebarPartView,
@@ -43,9 +41,6 @@ export class SessionWorkbenchContentPartViews {
 	private sessionsView: SessionsPartView | null = null;
 	private editorView: SessionEditorPartView | null = null;
 	private retiredEditorView: SessionEditorPartView | null = null;
-	private readonly onDidRequestOpenLinkEmitter = new EventEmitter<{ readonly href: string }>();
-	readonly onDidRequestOpenLink = this.onDidRequestOpenLinkEmitter.event;
-	private readonly sessionsViewDisposables = new DisposableStore();
 	private disposed = false;
 
 	constructor(props: SessionWorkbenchContentPartViewsProps) {
@@ -115,8 +110,6 @@ export class SessionWorkbenchContentPartViews {
 		this.retiredEditorView?.dispose();
 		this.sidebarView = null;
 		this.editorView = null;
-		this.sessionsViewDisposables.dispose();
-		this.onDidRequestOpenLinkEmitter.dispose();
 	}
 
 	private render() {
@@ -167,11 +160,6 @@ export class SessionWorkbenchContentPartViews {
 
 		if (!this.sessionsView) {
 			this.sessionsView = createSessionsPartView(nextProps);
-			this.sessionsView.onDidRequestOpenLink(
-				request => this.onDidRequestOpenLinkEmitter.fire(request),
-				undefined,
-				this.sessionsViewDisposables,
-			);
 			return;
 		}
 
@@ -224,7 +212,6 @@ export class SessionWorkbenchContentPartViews {
 	};
 
 	private disposeSessionsView() {
-		this.sessionsViewDisposables.clear();
 		this.sessionsView?.dispose();
 		this.sessionsView = null;
 	}

@@ -4,8 +4,6 @@ import {
 	type SessionView,
 	type SessionViewProps,
 } from 'cs/sessions/browser/parts/sessions/sessionView';
-import type { Event } from 'cs/base/common/event';
-import type { ChatOpenLinkRequest } from 'cs/workbench/contrib/chat/browser/chat';
 import { $ } from 'cs/base/browser/dom';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
@@ -17,12 +15,10 @@ export class SessionsPartView {
 
 	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-sessions-part');
 	private readonly sessionView: SessionView;
-	readonly onDidRequestOpenLink: Event<ChatOpenLinkRequest>;
 	private disposed = false;
 
 	constructor(props: SessionsPartViewProps) {
 		this.sessionView = createSessionView(props);
-		this.onDidRequestOpenLink = this.sessionView.onDidRequestOpenLink;
 		this.element.append(this.sessionView.getElement());
 	}
 

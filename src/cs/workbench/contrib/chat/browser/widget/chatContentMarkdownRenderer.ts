@@ -8,10 +8,10 @@ import type {
 	IRenderedMarkdown,
 	MarkdownRenderOptions,
 } from 'cs/base/browser/markdownRenderer';
-import { renderMarkdown } from 'cs/base/browser/markdownRenderer';
 import type { IMarkdownString } from 'cs/base/common/htmlContent';
 import type { MarkedExtension } from 'cs/base/common/marked/marked';
 import { Schemas } from 'cs/base/common/network';
+import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 
 const remoteImageDisallowed = () => false;
 
@@ -119,6 +119,8 @@ export function getChatMarkdownRenderOptions(
 }
 
 export class ChatContentMarkdownRenderer {
+	constructor(private readonly markdownRendererService: IMarkdownRendererService) {}
+
 	render(
 		markdown: IMarkdownString,
 		options?: MarkdownRenderOptions,
@@ -129,7 +131,7 @@ export class ChatContentMarkdownRenderer {
 			return plainTextResult;
 		}
 
-		const result = renderMarkdown(
+		const result = this.markdownRendererService.render(
 			markdown,
 			getChatMarkdownRenderOptions(options),
 			outElement,

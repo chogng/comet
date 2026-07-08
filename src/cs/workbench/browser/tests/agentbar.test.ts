@@ -4,15 +4,40 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { HorizontalScrollbar } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
+import { renderMarkdown, type IRenderedMarkdown, type MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
+import type { IMarkdownString } from 'cs/base/common/htmlContent';
 import type { RagAnswerResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').createChatWidget;
 let createChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').createChatViewPane;
 
+function createMarkdownRendererService(
+  onOpenLink: (href: string) => void = () => {},
+): IMarkdownRendererService {
+  return {
+    _serviceBrand: undefined,
+    render(
+      markdown: IMarkdownString,
+      options?: MarkdownRenderOptions,
+      outElement?: HTMLElement,
+    ): IRenderedMarkdown {
+      const resolvedOptions = { ...options };
+      if (!resolvedOptions.actionHandler) {
+        resolvedOptions.actionHandler = href => onOpenLink(href);
+      }
+      const rendered = renderMarkdown(markdown, resolvedOptions, outElement);
+      rendered.element.classList.add('rendered-markdown');
+      return rendered;
+    },
+  };
+}
+
 function createProps(): ChatWidgetProps {
   return {
+    markdownRendererService: createMarkdownRendererService(),
     isKnowledgeBaseModeEnabled: true,
     messages: [],
     question: '',
@@ -777,11 +802,14 @@ test('composer input toolbar renders inline article batch progress', async () =>
   }
 });
 
-test('agent chat renders fetched article linked text and emits open link requests', async () => {
+test('agent chat renders fetched article linked text and opens links through markdown renderer service', async () => {
   let openedSourceUrl = '';
   let toggledSourceUrl = '';
   const agentBar = createChatWidget({
     ...createProps(),
+    markdownRendererService: createMarkdownRendererService(href => {
+      openedSourceUrl = href;
+    }),
     messages: [
       {
         id: 'article-1',
@@ -794,9 +822,6 @@ test('agent chat renders fetched article linked text and emits open link request
     onToggleArticleSelected: href => {
       toggledSourceUrl = href;
     },
-  });
-  agentBar.onDidRequestOpenLink(request => {
-    openedSourceUrl = request.href;
   });
   const element = agentBar.getElement();
   document.body.append(element);

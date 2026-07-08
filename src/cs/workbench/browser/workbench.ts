@@ -23,6 +23,7 @@ import type { LibraryModel, LibraryModelContext } from 'cs/workbench/browser/lib
 import { setWorkbenchBrowserTabKeepAliveLimit } from 'cs/workbench/browser/webContentRetentionState';
 import { WebContentNavigationModel } from 'cs/workbench/browser/webContentNavigationModel';
 import { URI } from 'cs/base/common/uri';
+import { Schemas } from 'cs/base/common/network';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchContentClassName,
@@ -64,7 +65,6 @@ import {
   createSessionChatViewProps,
   type SessionChatViewProps,
 } from 'cs/sessions/browser/parts/sessions/chatView';
-import type { ChatOpenLinkRequest } from 'cs/workbench/contrib/chat/browser/chat';
 import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import { createSessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
 import { createSessionWorkbenchLayoutView } from 'cs/sessions/browser/workbenchLayout';
@@ -145,6 +145,8 @@ import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writin
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 import { EventEmitter } from 'cs/base/common/event';
 import { INativeHostService } from 'cs/platform/native/common/native';
+import { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
+import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
@@ -788,7 +790,6 @@ class WorkbenchHost {
   private editorPartController: EditorPartModel | null = null;
   private readonly globalDisposables: Array<() => void> = [];
   private webContentStateDisposable: (() => void) | null = null;
-  private handleWorkbenchContentOpenLinkRequest!: (request: ChatOpenLinkRequest) => void;
   private servicesSubscribed = false;
   private isDisposed = false;
   private isRendering = false;
@@ -814,6 +815,8 @@ class WorkbenchHost {
     @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
     @INotificationService private readonly notificationService: NotificationService,
     @INativeHostService private readonly nativeHostService: INativeHostService,
+    @IMarkdownRendererService private readonly markdownRendererService: IMarkdownRendererService,
+    @IOpenerService private readonly openerService: IOpenerService,
   ) {
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
@@ -1285,10 +1288,6 @@ class WorkbenchHost {
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
-      const openLinkSubscription = this.workbenchContentPartViews.onDidRequestOpenLink(
-        request => this.handleWorkbenchContentOpenLinkRequest(request),
-      );
-      this.globalDisposables.push(() => openLinkSubscription.dispose());
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1360,10 +1359,6 @@ class WorkbenchHost {
     };
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = createSessionWorkbenchContentPartViews(partViewProps);
-      const openLinkSubscription = this.workbenchContentPartViews.onDidRequestOpenLink(
-        request => this.handleWorkbenchContentOpenLinkRequest(request),
-      );
-      this.globalDisposables.push(() => openLinkSubscription.dispose());
     } else {
       this.workbenchContentPartViews.setProps(partViewProps);
     }
@@ -1710,17 +1705,24 @@ class WorkbenchHost {
         setWebUrl: setWorkbenchWebUrl,
         setFetchSeedUrl: setWorkbenchFetchSeedUrl,
       });
-    this.handleWorkbenchContentOpenLinkRequest = ({ href }) => {
-      const browserLinkUrl = normalizeUrl(href);
-      if (!browserLinkUrl) {
-        return;
-      }
+    this.openerService.setDefaultExternalOpener({
+      openExternal: async (href, { sourceUri }) => {
+        if (sourceUri.scheme !== Schemas.http && sourceUri.scheme !== Schemas.https) {
+          return false;
+        }
 
-      if (isEditorCollapsed) {
-        setEditorCollapsed(false, expandedEditorSize);
-      }
-      editorPartControllerInstance.openBrowserUrlInNewTab(browserLinkUrl);
-    };
+        const browserLinkUrl = normalizeUrl(href);
+        if (!browserLinkUrl) {
+          return false;
+        }
+
+        if (isEditorCollapsed) {
+          setEditorCollapsed(false, expandedEditorSize);
+        }
+        editorPartControllerInstance.openBrowserUrlInNewTab(browserLinkUrl);
+        return true;
+      },
+    });
     const articleSummaryTranslationExportControllerInstance =
       getWorkbenchArticleSummaryTranslationExportController({
         desktopRuntime,
@@ -2169,6 +2171,7 @@ class WorkbenchHost {
     const articleSummaryTranslationExportSnapshot =
       articleSummaryTranslationExportControllerInstance.getSnapshot();
     const sessionChatProps = createSessionChatViewProps({
+      markdownRendererService: this.markdownRendererService,
       state: {
         isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
         question: assistantQuestion,

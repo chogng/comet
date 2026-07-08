@@ -30,6 +30,7 @@ import 'cs/workbench/services/configuration/browser/configurationService';
 import 'cs/workbench/services/environment/browser/environmentService';
 import 'cs/workbench/services/host/browser/host';
 import 'cs/platform/hover/browser/hoverService';
+import 'cs/editor/browser/services/openerService';
 import 'cs/workbench/services/keybinding/browser/keybindingService';
 import 'cs/workbench/services/language/common/languageService';
 import 'cs/workbench/services/layout/browser/layoutService';

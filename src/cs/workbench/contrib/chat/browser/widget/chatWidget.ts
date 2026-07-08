@@ -16,10 +16,9 @@ import { createFilterMenuHeader } from 'cs/base/browser/ui/dropdown/dropdownSear
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
-import { EventEmitter } from 'cs/base/common/event';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
-import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatListWidget } from 'cs/workbench/contrib/chat/browser/widget/chatListWidget';
 import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPart';
 import {
@@ -40,8 +39,6 @@ export class ChatWidget {
 	private props: ChatWidgetProps;
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-content');
 	private readonly disposables = new DisposableStore();
-	private readonly onDidRequestOpenLinkEmitter = this.disposables.add(new EventEmitter<ChatOpenLinkRequest>());
-	readonly onDidRequestOpenLink = this.onDidRequestOpenLinkEmitter.event;
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
 	private readonly renderDisposables = this.disposables.add(new DisposableStore());
@@ -49,11 +46,9 @@ export class ChatWidget {
 	constructor(props: ChatWidgetProps) {
 		this.props = props;
 		this.listWidget = new ChatListWidget({
+			markdownRendererService: props.markdownRendererService,
 			onApplyPatch: messageId => {
 				this.props.onApplyPatch(messageId);
-			},
-			onRequestOpenLink: href => {
-				this.onDidRequestOpenLinkEmitter.fire({ href });
 			},
 			isArticleSelected: href => this.props.isArticleSelected(href),
 			onToggleArticleSelected: href => this.props.onToggleArticleSelected(href),

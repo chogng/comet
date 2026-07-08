@@ -8,10 +8,11 @@ import { MarkdownString } from 'cs/base/common/htmlContent';
 import { toDisposable, type DisposableStore } from 'cs/base/common/lifecycle';
 import { ChatContentMarkdownRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer';
 import { $ } from 'cs/base/browser/dom';
+import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 
 export type ChatListRendererOptions = {
+	readonly markdownRendererService: IMarkdownRendererService;
 	readonly onApplyPatch: (messageId: string) => void;
-	readonly onRequestOpenLink: (href: string) => void;
 	readonly isArticleSelected: (href: string) => boolean;
 	readonly onToggleArticleSelected: (href: string) => void;
 };
@@ -20,9 +21,11 @@ type AssistantMessage = Extract<AssistantChatMessage, { role: 'assistant' }>;
 type AssistantResult = NonNullable<AssistantMessage['result']>;
 
 export class ChatListRenderer {
-	private readonly markdownRenderer = new ChatContentMarkdownRenderer();
+	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 
-	constructor(private readonly options: ChatListRendererOptions) {}
+	constructor(private readonly options: ChatListRendererOptions) {
+		this.markdownRenderer = new ChatContentMarkdownRenderer(options.markdownRendererService);
+	}
 
 	renderElement(message: AssistantChatMessage, disposables: DisposableStore) {
 		if (message.role === 'user') {
@@ -86,11 +89,6 @@ export class ChatListRenderer {
 		if (message.content.trim()) {
 			const rendered = disposables.add(this.markdownRenderer.render(
 				new MarkdownString(message.content),
-				{
-					actionHandler: link => {
-						this.options.onRequestOpenLink(link);
-					},
-				},
 			));
 			if (message.includeInAgentHistory === false) {
 				this.renderArticleSelectionControls(rendered.element, disposables);

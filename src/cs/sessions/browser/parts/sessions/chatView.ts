@@ -1,7 +1,6 @@
 import type { AssistantModelSnapshot } from 'cs/workbench/browser/assistantModel';
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
-import type { Event } from 'cs/base/common/event';
-import type { ChatOpenLinkRequest, ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import { $ } from 'cs/base/browser/dom';
@@ -12,6 +11,7 @@ import 'cs/sessions/browser/parts/media/sessionView.css';
 export type SessionChatViewProps = ChatWidgetProps;
 
 type CreateSessionChatViewPropsParams = {
+	markdownRendererService: ChatWidgetProps['markdownRendererService'];
 	state: {
 		isKnowledgeBaseModeEnabled: boolean;
 		question: string;
@@ -53,6 +53,7 @@ type CreateSessionChatViewPropsParams = {
 };
 
 export function createSessionChatViewProps({
+	markdownRendererService,
 	state: {
 		isKnowledgeBaseModeEnabled,
 		question,
@@ -93,6 +94,7 @@ export function createSessionChatViewProps({
 	},
 }: CreateSessionChatViewPropsParams): SessionChatViewProps {
 	return {
+		markdownRendererService,
 		isKnowledgeBaseModeEnabled,
 		question,
 		messages,
@@ -133,11 +135,9 @@ export function createSessionChatViewProps({
 export class SessionChatView {
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view');
 	private readonly widget: ChatWidget;
-	readonly onDidRequestOpenLink: Event<ChatOpenLinkRequest>;
 
 	constructor(props: SessionChatViewProps) {
 		this.widget = new ChatWidget(props);
-		this.onDidRequestOpenLink = this.widget.onDidRequestOpenLink;
 		this.element.append(this.widget.getElement());
 	}
 
