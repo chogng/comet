@@ -4,8 +4,8 @@
   --comet-inputbox-border: 1px solid transparent;
   --comet-inputbox-background: transparent;
   --comet-inputbox-background-hover: #e6e6e6;
-  --comet-inputbox-foreground: var(--vscode-input-foreground, #1a2530);
-  --comet-inputbox-placeholder-foreground: var(--vscode-input-placeholderForeground, #94a3b8);
+  --comet-inputbox-foreground: var(--comet-input-foreground, #1a2530);
+  --comet-inputbox-placeholder-foreground: var(--comet-input-placeholderForeground, #94a3b8);
   --comet-inputbox-padding-y: 4px;
   --comet-inputbox-padding-x: 8px;
   --comet-inputbox-font-size: 12px;

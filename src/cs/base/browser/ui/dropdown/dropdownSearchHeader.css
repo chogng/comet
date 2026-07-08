@@ -2,5 +2,5 @@
   --comet-inputbox-height: 26px;
   --comet-inputbox-border-radius: 7px;
   --comet-inputbox-background-hover: transparent;
-  --comet-inputbox-foreground: var(--vscode-agentBar-inputForeground, #1f2d3a);
+  --comet-inputbox-foreground: var(--comet-agentBar-inputForeground, #1f2d3a);
 }

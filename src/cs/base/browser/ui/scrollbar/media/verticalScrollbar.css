@@ -73,7 +73,7 @@
   border: 2px solid transparent;
   border-radius: 999px;
   background:
-    var(--vscode-scrollbarSlider-background, rgba(110, 110, 110, 0.42))
+    var(--comet-scrollbarSlider-background, rgba(110, 110, 110, 0.42))
     padding-box;
   background-clip: padding-box;
   contain: strict;
@@ -89,13 +89,13 @@
 
 .comet-scrollable-element-root .comet-overlay-scrollbar-slider:hover {
   background:
-    var(--vscode-scrollbarSlider-hoverBackground, rgba(92, 92, 92, 0.58))
+    var(--comet-scrollbarSlider-hoverBackground, rgba(92, 92, 92, 0.58))
     padding-box;
 }
 
 .comet-scrollable-element-root .comet-overlay-scrollbar-slider:active {
   background:
-    var(--vscode-scrollbarSlider-activeBackground, rgba(72, 72, 72, 0.76))
+    var(--comet-scrollbarSlider-activeBackground, rgba(72, 72, 72, 0.76))
     padding-box;
 }
 
@@ -107,7 +107,7 @@
   height: 3px;
   pointer-events: none;
   opacity: 0;
-  box-shadow: var(--vscode-scrollbar-shadow, rgba(0, 0, 0, 0.18)) 0 6px 6px -6px inset;
+  box-shadow: var(--comet-scrollbar-shadow, rgba(0, 0, 0, 0.18)) 0 6px 6px -6px inset;
   transition: opacity 120ms linear;
 }
 

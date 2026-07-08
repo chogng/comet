@@ -48,7 +48,7 @@
 	width: 16px;
 	height: 16px;
 	padding: 0;
-	border: 1px solid var(--vscode-settings-checkboxBorder);
+	border: 1px solid var(--comet-settings-checkboxBorder);
 	border-radius: 3px;
 	background: transparent;
 	color: transparent;
@@ -62,16 +62,16 @@
 .comet-custom-toggle.comet-checkbox > .comet-checkbox-check {
 	width: 12px;
 	height: 12px;
-	color: var(--vscode-settings-checkboxCheckedBorder);
+	color: var(--comet-settings-checkboxCheckedBorder);
 	font-size: 12px;
 	opacity: 0;
 	pointer-events: none;
 }
 
 .comet-custom-toggle.comet-checkbox.checked {
-	border-color: var(--vscode-settings-checkboxCheckedBorder);
+	border-color: var(--comet-settings-checkboxCheckedBorder);
 	background: transparent;
-	color: var(--vscode-settings-checkboxCheckedBorder);
+	color: var(--comet-settings-checkboxCheckedBorder);
 }
 
 .comet-custom-toggle.comet-checkbox.checked > .comet-checkbox-check {
@@ -79,6 +79,6 @@
 }
 
 .comet-custom-toggle.comet-checkbox:focus-visible {
-	outline: 2px solid var(--vscode-settings-checkboxFocusBorder);
+	outline: 2px solid var(--comet-settings-checkboxFocusBorder);
 	outline-offset: 2px;
 }

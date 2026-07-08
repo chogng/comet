@@ -15,11 +15,11 @@
 }
 
 .comet-simple-tree-node.comet-is-selected {
-  background: var(--vscode-tree-activeSelectionBackground, #e8f1fc);
+  background: var(--comet-tree-activeSelectionBackground, #e8f1fc);
 }
 
 .comet-simple-tree-node.comet-is-focused {
-  outline: 1px solid var(--vscode-tree-focusOutline, #8cb4ea);
+  outline: 1px solid var(--comet-tree-focusOutline, #8cb4ea);
   outline-offset: -1px;
 }
 
@@ -28,5 +28,5 @@
 }
 
 .comet-simple-tree-node.comet-has-error {
-  box-shadow: inset 0 0 0 1px var(--vscode-tree-errorOutline, rgba(204, 88, 88, 0.22));
+  box-shadow: inset 0 0 0 1px var(--comet-tree-errorOutline, rgba(204, 88, 88, 0.22));
 }

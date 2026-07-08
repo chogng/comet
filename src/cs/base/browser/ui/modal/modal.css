@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 1600;
-  background: var(--vscode-modal-backdrop, rgba(15, 23, 42, 0.45));
+  background: var(--comet-modal-backdrop, rgba(15, 23, 42, 0.45));
   display: grid;
   place-items: center;
   padding: 20px;
@@ -12,9 +12,9 @@
   width: min(760px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
   border-radius: 12px;
-  border: 1px solid var(--vscode-modal-border, #d5dfeb);
-  background: var(--vscode-modal-background, #ffffff);
-  box-shadow: var(--vscode-modal-shadow, 0 18px 46px rgba(15, 23, 42, 0.24));
+  border: 1px solid var(--comet-modal-border, #d5dfeb);
+  background: var(--comet-modal-background, #ffffff);
+  box-shadow: var(--comet-modal-shadow, 0 18px 46px rgba(15, 23, 42, 0.24));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -26,8 +26,8 @@
   justify-content: space-between;
   gap: 10px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--vscode-modal-headerBorder, #e4ecf4);
-  background: var(--vscode-modal-headerBackground, #f8fbff);
+  border-bottom: 1px solid var(--comet-modal-headerBorder, #e4ecf4);
+  background: var(--comet-modal-headerBackground, #f8fbff);
 }
 
 .comet-modal-title {
@@ -35,7 +35,7 @@
   font-size: 16px;
   line-height: 1.4;
   font-weight: 600;
-  color: var(--vscode-modal-titleForeground, #1c2a38);
+  color: var(--comet-modal-titleForeground, #1c2a38);
 }
 
 .comet-modal-title-spacer {

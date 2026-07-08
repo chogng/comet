@@ -3,7 +3,7 @@
   display: flex;
   min-height: 0;
   height: 100%;
-  background: var(--vscode-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
+  background: var(--comet-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
 .comet-pdf-annotation-surface {
@@ -12,7 +12,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--vscode-editor-webContentBackground, #fff);
+  background: var(--comet-editor-webContentBackground, #fff);
 }
 
 .comet-pdf-reader-view {
@@ -22,7 +22,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--vscode-editor-webContentBackground, #fff);
+  background: var(--comet-editor-webContentBackground, #fff);
 }
 
 .comet-pdf-reader-view[hidden] {
@@ -52,9 +52,9 @@
   transform: translateX(-50%);
   padding: 4px 8px;
   max-width: min(560px, calc(100% - 32px));
-  border: 1px solid var(--vscode-editor-sourceHeaderBorder, #e1e1e1);
+  border: 1px solid var(--comet-editor-sourceHeaderBorder, #e1e1e1);
   border-radius: 5px;
-  background: var(--vscode-sideBar-background, #f8f8f8);
+  background: var(--comet-sideBar-background, #f8f8f8);
   color: var(--vscode-descriptionForeground, #64748b);
   font-size: 12px;
   line-height: 1.4;
@@ -199,9 +199,9 @@
   width: min(320px, calc(100% - 36px));
   padding: 12px;
   box-sizing: border-box;
-  border: 1px solid var(--vscode-editor-sourceHeaderBorder, #d9e1ec);
+  border: 1px solid var(--comet-editor-sourceHeaderBorder, #d9e1ec);
   border-radius: 8px;
-  background: var(--vscode-sideBar-background, #fff);
+  background: var(--comet-sideBar-background, #fff);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
   color: var(--vscode-foreground, #1f2937);
 }
@@ -251,8 +251,8 @@
   padding: 8px;
   border: 1px solid var(--vscode-input-border, #cbd5e1);
   border-radius: 6px;
-  background: var(--vscode-input-background, #fff);
-  color: var(--vscode-input-foreground, #1f2937);
+  background: var(--comet-input-background, #fff);
+  color: var(--comet-input-foreground, #1f2937);
   font: inherit;
   font-size: 13px;
   line-height: 1.45;
@@ -264,10 +264,10 @@
   appearance: none;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--vscode-button-secondaryBorder, #cbd5e1);
+  border: 1px solid var(--comet-button-secondaryBorder, #cbd5e1);
   border-radius: 6px;
-  background: var(--vscode-button-secondaryBackground, #fff);
-  color: var(--vscode-button-secondaryForeground, #1f2937);
+  background: var(--comet-button-secondaryBackground, #fff);
+  color: var(--comet-button-secondaryForeground, #1f2937);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -301,10 +301,10 @@
   appearance: none;
   height: 32px;
   padding: 0 12px;
-  border: 1px solid var(--vscode-button-secondaryBorder, #cfdae7);
+  border: 1px solid var(--comet-button-secondaryBorder, #cfdae7);
   border-radius: 6px;
-  background: var(--vscode-button-secondaryBackground, #fff);
-  color: var(--vscode-button-secondaryForeground, #1a2530);
+  background: var(--comet-button-secondaryBackground, #fff);
+  color: var(--comet-button-secondaryForeground, #1a2530);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -313,8 +313,8 @@
 }
 
 .comet-pdf-annotation-open-btn:hover {
-  background: var(--vscode-button-secondaryHoverBackground, #f8fafc);
-  border-color: var(--vscode-button-secondaryHoverBorder, #b8c7d9);
+  background: var(--comet-button-secondaryHoverBackground, #f8fafc);
+  border-color: var(--comet-button-secondaryHoverBorder, #b8c7d9);
 }
 
 @media (max-width: 760px) {

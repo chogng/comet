@@ -82,7 +82,7 @@
   padding: 0 8px 0 6px;
   border: 0;
   background: transparent;
-  color: var(--vscode-editor-tabForeground, #58697b);
+  color: var(--comet-editor-tabForeground, #58697b);
   cursor: pointer;
   font: inherit;
   border-radius: inherit;
@@ -118,7 +118,7 @@
   height: 20px;
   border: none;
   background: transparent;
-  color: var(--vscode-editor-tabForeground, #58697b);
+  color: var(--comet-editor-tabForeground, #58697b);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -140,7 +140,7 @@
 
 .comet-editor-tab.comet-is-dragging .comet-editor-tab-close-btn.comet-actionbar-action {
   background: transparent;
-  color: var(--vscode-editor-tabForeground, #58697b);
+  color: var(--comet-editor-tabForeground, #58697b);
 }
 
 .comet-editor-tab-drag-preview {
@@ -160,15 +160,15 @@
 
 .comet-editor-tab[data-hovered='true'] .comet-editor-tab-main,
 .comet-editor-tab.comet-is-active .comet-editor-tab-main {
-  color: var(--vscode-editor-tabActiveForeground, #1d2f41);
+  color: var(--comet-editor-tabActiveForeground, #1d2f41);
 }
 
 .comet-editor-tab[data-hovered='true'] .comet-editor-tab-main {
-  background: var(--vscode-editor-tabHoverBackground, #eaeaea);
+  background: var(--comet-editor-tabHoverBackground, #eaeaea);
 }
 
 .comet-editor-tab.comet-is-active .comet-editor-tab-main {
-  background: var(--vscode-editor-tabActiveBackground, #eaeaea);
+  background: var(--comet-editor-tabActiveBackground, #eaeaea);
 }
 
 .comet-editor-tab.comet-is-closable[data-hovered='true'] .comet-editor-tab-actions.comet-actionbar,
@@ -199,8 +199,8 @@
 
 .comet-editor-tab.comet-is-closable[data-hovered='true'] .comet-editor-tab-close-btn.comet-actionbar-action,
 .comet-editor-tab.comet-is-closable:focus-within .comet-editor-tab-close-btn.comet-actionbar-action {
-  background: var(--vscode-editor-tabCloseHoverBackground, #e9e9e9);
-  color: var(--vscode-editor-tabCloseHoverForeground, #1f2d3a);
+  background: var(--comet-editor-tabCloseHoverBackground, #e9e9e9);
+  color: var(--comet-editor-tabCloseHoverForeground, #1f2d3a);
 }
 
 .comet-editor-tab-dirty-close-icon {
@@ -240,7 +240,7 @@
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  color: var(--vscode-editor-tabKindForeground, #4d6276);
+  color: var(--comet-editor-tabKindForeground, #4d6276);
 }
 
 .comet-editor-tab-icon .lx-icon {
@@ -258,15 +258,15 @@
 }
 
 .comet-editor-tab[data-pane-mode='draft'] .comet-editor-tab-icon {
-  color: var(--vscode-editor-tabKindDraftForeground, #35536f);
+  color: var(--comet-editor-tabKindDraftForeground, #35536f);
 }
 
 .comet-editor-tab[data-pane-mode='browser'] .comet-editor-tab-icon {
-  color: var(--vscode-editor-tabKindWebForeground, #5f572f);
+  color: var(--comet-editor-tabKindWebForeground, #5f572f);
 }
 
 .comet-editor-tab[data-pane-mode='pdf'] .comet-editor-tab-icon {
-  color: var(--vscode-editor-tabKindPdfForeground, #6f3f35);
+  color: var(--comet-editor-tabKindPdfForeground, #6f3f35);
 }
 
 .comet-editor-tab-label-text {

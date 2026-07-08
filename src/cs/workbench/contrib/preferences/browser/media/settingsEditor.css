@@ -1,5 +1,5 @@
 .comet-settings-page {
-  --settings-page-content-background: var(--vscode-settings-contentBackground, #fff);
+  --settings-page-content-background: var(--comet-settings-contentBackground, #fff);
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -41,7 +41,7 @@
   min-height: 0;
   overflow: auto;
   padding: 0 8px;
-  background: var(--vscode-settings-navigationBackground, transparent);
+  background: var(--comet-settings-navigationBackground, transparent);
 }
 
 .comet-settings-navigation-nav {
@@ -79,7 +79,7 @@
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--vscode-settings-navigationItemForeground, #304357);
+  color: var(--comet-settings-navigationItemForeground, #304357);
   font: inherit;
   font-size: 14px;
   text-align: left;
@@ -102,12 +102,12 @@
 }
 
 .comet-settings-navigation-item:hover {
-  background: var(--vscode-settings-navigationItemHoverBackground, #ececec);
+  background: var(--comet-settings-navigationItemHoverBackground, #ececec);
 }
 
 .comet-settings-navigation-item.active {
-  background: var(--vscode-settings-navigationItemActiveBackground, #ececec);
-  color: var(--vscode-settings-navigationItemActiveForeground, #1f1f1f);
+  background: var(--comet-settings-navigationItemActiveBackground, #ececec);
+  color: var(--comet-settings-navigationItemActiveForeground, #1f1f1f);
   box-shadow: none;
 }
 
@@ -161,7 +161,7 @@
 .comet-settings-section-title {
   font-size: 15px;
   font-weight: 700;
-  color: var(--vscode-settings-sectionTitleForeground, #203040);
+  color: var(--comet-settings-sectionTitleForeground, #203040);
 }
 
 .comet-settings-page-title {
@@ -193,6 +193,6 @@
   }
 
   .comet-settings-navigation {
-    border-bottom: 1px solid var(--vscode-settings-navigationBorder, #e6edf5);
+    border-bottom: 1px solid var(--comet-settings-navigationBorder, #e6edf5);
   }
 }

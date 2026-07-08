@@ -86,7 +86,7 @@
 
 .comet-agentbar-placeholder p {
   margin: 0;
-  color: var(--vscode-sideBar-secondaryForeground, #415366);
+  color: var(--comet-sideBar-secondaryForeground, #415366);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -99,7 +99,7 @@
 .comet-agentbar-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--vscode-sideBar-secondaryForeground, #415366);
+  color: var(--comet-sideBar-secondaryForeground, #415366);
 }
 
 .comet-agentbar-input {
@@ -107,9 +107,9 @@
   min-height: 96px;
   resize: none;
   border-radius: 8px;
-  border: 1px solid var(--vscode-agentBar-inputBorder, #d6e0e8);
-  background: var(--vscode-agentBar-inputBackground, #f9fbfd);
-  color: var(--vscode-agentBar-inputForeground, #1f2d3a);
+  border: 1px solid var(--comet-agentBar-inputBorder, #d3d3d3);
+  background: var(--comet-agentBar-inputBackground, #f9fbfd);
+  color: var(--comet-agentBar-inputForeground, #1f2d3a);
   padding: 10px 12px;
   font: inherit;
   font-size: 13px;

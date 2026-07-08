@@ -42,7 +42,7 @@ export const buttonSecondaryForeground = registerColor('button.secondaryForegrou
 
 export const buttonSecondaryBorder = registerColor('button.secondaryBorder', {
   dark: '#344150',
-  light: '#cfdae7',
+  light: '#d3d3d3',
 });
 
 export const buttonSecondaryShadow = registerColor('button.secondaryShadow', {
@@ -57,7 +57,7 @@ export const buttonSecondaryHoverBackground = registerColor('button.secondaryHov
 
 export const buttonSecondaryHoverBorder = registerColor('button.secondaryHoverBorder', {
   dark: '#425468',
-  light: '#b8c7d9',
+  light: '#c6c6c6',
 });
 
 export const buttonSecondaryActiveBackground = registerColor('button.secondaryActiveBackground', {

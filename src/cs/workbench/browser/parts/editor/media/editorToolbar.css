@@ -52,7 +52,7 @@
   height: var(--editor-browser-toolbar-action-size);
   border: none;
   background: transparent;
-  color: var(--vscode-sideBar-foreground, #1f2d3a);
+  color: var(--comet-sideBar-foreground, #1f2d3a);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -68,12 +68,12 @@
 .comet-editor-browser-toolbar-address-input.comet-inputbox {
   --comet-inputbox-height: 26px;
   --comet-inputbox-border-radius: 7px;
-  --comet-inputbox-foreground: var(--vscode-agentBar-inputForeground, #1f2d3a);
+  --comet-inputbox-foreground: var(--comet-agentBar-inputForeground, #1f2d3a);
   width: 100%;
 }
 
 .comet-editor-pdf-toolbar {
-  color: var(--vscode-editor-sourceSubheadingForeground, #698099);
+  color: var(--comet-editor-sourceSubheadingForeground, #698099);
   position: relative;
   overflow: visible;
 }
@@ -116,7 +116,7 @@
   height: var(--editor-pdf-toolbar-action-size);
   border: none;
   background: transparent;
-  color: var(--vscode-sideBar-foreground, #1f2d3a);
+  color: var(--comet-sideBar-foreground, #1f2d3a);
   display: inline-flex;
   align-items: center;
   justify-content: center;

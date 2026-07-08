@@ -279,7 +279,7 @@ type RegisteredColor = {
 const colorRegistry = new Map<ColorIdentifier, RegisteredColor>();
 
 export function asCssVariableName(colorId: ColorIdentifier) {
-  return `--vscode-${colorId.replace(/\./g, '-')}`;
+  return `--comet-${colorId.replace(/\./g, '-')}`;
 }
 
 export function registerColor(

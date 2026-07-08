@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 :root {
-  --workbench-chrome-bg: var(--vscode-workbench-chromeBackground, #ffffff);
-  --workbench-chrome-bg-transparent: var(--vscode-workbench-chromeBackgroundTransparent, rgba(255, 255, 255, 0));
+  --workbench-chrome-bg: var(--comet-workbench-chromeBackground, #ffffff);
+  --workbench-chrome-bg-transparent: var(--comet-workbench-chromeBackgroundTransparent, rgba(255, 255, 255, 0));
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
   line-height: 1.4;
-  color: var(--vscode-workbench-foreground, #1a2530);
+  color: var(--comet-workbench-foreground, #1a2530);
   background: transparent;
 }
 
@@ -36,10 +36,10 @@ input {
 }
 
 button {
-  border: 1px solid var(--vscode-workbench-buttonBorder, #c4cfda);
+  border: 1px solid var(--comet-workbench-buttonBorder, #c4cfda);
   border-radius: 2px;
-  background: var(--vscode-workbench-buttonBackground, #f6f9fc);
-  color: var(--vscode-workbench-buttonForeground, #1f2d3a);
+  background: var(--comet-workbench-buttonBackground, #f6f9fc);
+  color: var(--comet-workbench-buttonForeground, #1f2d3a);
   padding: 8px 12px;
   cursor: pointer;
 }

@@ -4,7 +4,7 @@
   min-height: 0;
   overflow: hidden;
   padding: 0;
-  background: var(--vscode-editor-webContentBackground, #fff);
+  background: var(--comet-editor-webContentBackground, #fff);
   display: flex;
   flex-direction: column;
   border-radius: inherit;
@@ -16,7 +16,7 @@
   width: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--vscode-editor-webContentBackground, #fff);
+  background: var(--comet-editor-webContentBackground, #fff);
   display: flex;
   flex-direction: column;
   border-radius: inherit;
@@ -29,7 +29,7 @@
   height: 100%;
   overflow: auto;
   border: none;
-  background: var(--vscode-editor-webContentBackground, #fff);
+  background: var(--comet-editor-webContentBackground, #fff);
   border-radius: inherit;
 }
 
@@ -44,7 +44,7 @@
 .comet-empty-state {
   flex: 1;
   padding: 16px;
-  color: var(--vscode-editor-webContentForeground, #667788);
+  color: var(--comet-editor-webContentForeground, #667788);
 }
 
 .comet-webcontent-runtime-warning {
@@ -62,7 +62,7 @@
   display: none;
   border-radius: inherit;
   overflow: hidden;
-  background: var(--vscode-editor-webContentBackground, #fff);
+  background: var(--comet-editor-webContentBackground, #fff);
 }
 
 .comet-webcontent-overlay.visible {

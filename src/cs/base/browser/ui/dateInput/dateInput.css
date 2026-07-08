@@ -21,7 +21,7 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--vscode-settings-panelForeground, #203040);
+  color: var(--comet-settings-panelForeground, #203040);
   transform: translateY(-50%);
   cursor: pointer;
 }
@@ -37,13 +37,13 @@
 .comet-date-input-popover {
   width: 280px;
   padding: 12px;
-  border: 1px solid var(--vscode-settings-separator, #d7e1ec);
+  border: 1px solid var(--comet-settings-separator, #d7e1ec);
   border-radius: 12px;
-  background: var(--vscode-settings-panelBackground, #f6f6f6);
+  background: var(--comet-settings-panelBackground, #f6f6f6);
   box-shadow:
     0 18px 36px rgba(15, 23, 42, 0.14),
     0 2px 8px rgba(15, 23, 42, 0.06);
-  color: var(--vscode-settings-panelForeground, #203040);
+  color: var(--comet-settings-panelForeground, #203040);
   display: grid;
   gap: 10px;
 }
@@ -59,7 +59,7 @@
   text-align: center;
   font-size: 13px;
   font-weight: 700;
-  color: var(--vscode-settings-panelForeground, #203040);
+  color: var(--comet-settings-panelForeground, #203040);
 }
 
 .comet-date-input-month-nav {
@@ -67,7 +67,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--vscode-settings-mutedForeground, #64748b);
+  color: var(--comet-settings-mutedForeground, #64748b);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -77,7 +77,7 @@
 
 .comet-date-input-month-nav:hover {
   background: var(--vscode-settings-controlHoverBackground, #e6e6e6);
-  color: var(--vscode-settings-panelForeground, #203040);
+  color: var(--comet-settings-panelForeground, #203040);
 }
 
 .comet-date-input-weekdays,
@@ -91,7 +91,7 @@
   text-align: center;
   font-size: 11px;
   font-weight: 700;
-  color: var(--vscode-settings-mutedForeground, #64748b);
+  color: var(--comet-settings-mutedForeground, #64748b);
   padding: 3px 0;
 }
 
@@ -100,7 +100,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--vscode-settings-panelForeground, #203040);
+  color: var(--comet-settings-panelForeground, #203040);
   padding: 0;
   font-size: 12px;
   font-weight: 500;
@@ -123,12 +123,12 @@
 }
 
 .comet-date-input-day.comet-is-outside {
-  color: var(--vscode-settings-mutedForeground, #94a3b8);
+  color: var(--comet-settings-mutedForeground, #94a3b8);
 }
 
 .comet-date-input-day.comet-is-today {
   font-weight: 700;
-  color: var(--vscode-settings-linkForeground, #0a5fbf);
+  color: var(--comet-settings-linkForeground, #0a5fbf);
 }
 
 .comet-date-input-day.comet-is-selected {
@@ -147,7 +147,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--vscode-settings-linkForeground, #0a5fbf);
+  color: var(--comet-settings-linkForeground, #0a5fbf);
   padding: 4px 6px;
   font: inherit;
   font-size: 12px;

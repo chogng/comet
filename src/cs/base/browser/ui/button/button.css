@@ -87,68 +87,68 @@
 
 /* Variants */
 .comet-btn-primary {
-  background: var(--vscode-button-primaryBackground, #0a5fbf);
-  color: var(--vscode-button-primaryForeground, #ffffff);
-  border-color: var(--vscode-button-primaryBorder, #0955ac);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--vscode-button-primaryBackground, #0a5fbf) 18%, transparent);
+  background: var(--comet-button-primaryBackground, #0a5fbf);
+  color: var(--comet-button-primaryForeground, #ffffff);
+  border-color: var(--comet-button-primaryBorder, #0955ac);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--comet-button-primaryBackground, #0a5fbf) 18%, transparent);
 }
 
 .comet-btn-primary:hover:not(:disabled) {
-  background: var(--vscode-button-primaryHoverBackground, #0d6ed8);
-  border-color: var(--vscode-button-primaryHoverBorder, #0c67ca);
+  background: var(--comet-button-primaryHoverBackground, #0d6ed8);
+  border-color: var(--comet-button-primaryHoverBorder, #0c67ca);
 }
 
 .comet-btn-primary:active:not(:disabled) {
-  background: var(--vscode-button-primaryActiveBackground, #084c9a);
+  background: var(--comet-button-primaryActiveBackground, #084c9a);
   transform: translateY(1px);
 }
 
 .comet-btn-secondary {
-  background: var(--vscode-button-secondaryBackground, #ffffff);
-  color: var(--vscode-button-secondaryForeground, #1a2530);
-  border-color: var(--vscode-button-secondaryBorder, #cfdae7);
-  box-shadow: var(--vscode-button-secondaryShadow, 0 1px 2px rgba(0, 0, 0, 0.04));
+  background: var(--comet-button-secondaryBackground, #ffffff);
+  color: var(--comet-button-secondaryForeground, #1a2530);
+  border-color: var(--comet-button-secondaryBorder, #d3d3d3);
+  box-shadow: var(--comet-button-secondaryShadow, 0 1px 2px rgba(0, 0, 0, 0.04));
 }
 
 .comet-btn-secondary:hover:not(:disabled) {
-  background: var(--vscode-button-secondaryHoverBackground, #f8fafc);
-  border-color: var(--vscode-button-secondaryHoverBorder, #b8c7d9);
+  background: var(--comet-button-secondaryHoverBackground, #f8fafc);
+  border-color: var(--comet-button-secondaryHoverBorder, #c6c6c6);
 }
 
 .comet-btn-secondary:active:not(:disabled) {
-  background: var(--vscode-button-secondaryActiveBackground, #edf2f7);
+  background: var(--comet-button-secondaryActiveBackground, #edf2f7);
 }
 
 .comet-btn-outline {
   background: transparent;
-  color: var(--vscode-button-outlineForeground, #0a5fbf);
-  border-color: var(--vscode-button-outlineBorder, #0a5fbf);
+  color: var(--comet-button-outlineForeground, #0a5fbf);
+  border-color: var(--comet-button-outlineBorder, #0a5fbf);
 }
 
 .comet-btn-outline:hover:not(:disabled) {
-  background: var(--vscode-button-outlineHoverBackground, rgba(10, 95, 191, 0.05));
+  background: var(--comet-button-outlineHoverBackground, rgba(10, 95, 191, 0.05));
 }
 
 .comet-btn-ghost {
   background: transparent;
-  color: var(--vscode-button-ghostForeground, #425468);
+  color: var(--comet-button-ghostForeground, #425468);
   border-color: transparent;
 }
 
 .comet-btn-ghost:hover:not(:disabled) {
-  background: var(--vscode-button-ghostHoverBackground, rgba(0, 0, 0, 0.04));
-  color: var(--vscode-button-ghostHoverForeground, #1a2530);
+  background: var(--comet-button-ghostHoverBackground, rgba(0, 0, 0, 0.04));
+  color: var(--comet-button-ghostHoverForeground, #1a2530);
 }
 
 .comet-btn-danger {
-  background: var(--vscode-button-dangerBackground, #fee2e2);
-  color: var(--vscode-button-dangerForeground, #ef4444);
-  border-color: var(--vscode-button-dangerBorder, #fecaca);
+  background: var(--comet-button-dangerBackground, #fee2e2);
+  color: var(--comet-button-dangerForeground, #ef4444);
+  border-color: var(--comet-button-dangerBorder, #fecaca);
 }
 
 .comet-btn-danger:hover:not(:disabled) {
-  background: var(--vscode-button-dangerHoverBackground, #fecaca);
-  color: var(--vscode-button-dangerHoverForeground, #dc2626);
+  background: var(--comet-button-dangerHoverBackground, #fecaca);
+  color: var(--comet-button-dangerHoverForeground, #dc2626);
 }
 
 /* Loading State */

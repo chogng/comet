@@ -35,7 +35,7 @@
 .comet-horizontal-scrollbar-host.comet-is-scrollbar-dragging .comet-horizontal-scrollbar-track {
   opacity: 1;
   pointer-events: auto;
-  background: var(--vscode-scrollbar-shadow);
+  background: var(--comet-scrollbar-shadow);
 }
 
 .comet-horizontal-scrollbar-thumb {
@@ -45,17 +45,17 @@
   height: 100%;
   min-width: 24px;
   border-radius: 999px;
-  background: var(--vscode-scrollbarSlider-background);
+  background: var(--comet-scrollbarSlider-background);
   cursor: grab;
   touch-action: none;
   transition: background-color 120ms ease;
 }
 
 .comet-horizontal-scrollbar-thumb:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground);
+  background: var(--comet-scrollbarSlider-hoverBackground);
 }
 
 .comet-horizontal-scrollbar-host.comet-is-scrollbar-dragging .comet-horizontal-scrollbar-thumb {
-  background: var(--vscode-scrollbarSlider-activeBackground);
+  background: var(--comet-scrollbarSlider-activeBackground);
   cursor: grabbing;
 }

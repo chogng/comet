@@ -43,9 +43,9 @@
   --cs-actionbar-radius: 6px;
   --cs-actionbar-foreground: #1f2d3a;
   --cs-actionbar-hover-foreground: #1f2d3a;
-  --cs-actionbar-hover-background: var(--vscode-toolbar-hoverBackground);
+  --cs-actionbar-hover-background: var(--comet-toolbar-hoverBackground);
   --cs-actionbar-active-foreground: #0a5fbf;
-  --cs-actionbar-active-background: var(--vscode-toolbar-activeBackground);
+  --cs-actionbar-active-background: var(--comet-toolbar-activeBackground);
   --cs-actionbar-focus-outline: #0a5fbf;
   flex: 0 0 auto;
   min-width: 0;

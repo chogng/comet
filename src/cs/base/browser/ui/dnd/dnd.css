@@ -12,9 +12,9 @@
 	z-index: 1000;
 
 	/* Default styles */
-	background-color: var(--vscode-list-activeSelectionBackground);
+	background-color: var(--comet-list-activeSelectionBackground);
 	color: var(--vscode-list-activeSelectionForeground);
-	outline: 1px solid var(--vscode-list-focusOutline);
+	outline: 1px solid var(--comet-list-focusOutline);
 	outline-offset: -1px;
 
 	/*

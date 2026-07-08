@@ -64,8 +64,8 @@
 
 .comet-titlebar-leading-actions,
 .comet-header-actions {
-  --cs-actionbar-hover-background: var(--vscode-toolbar-hoverBackground);
-  --cs-actionbar-active-background: var(--vscode-toolbar-activeBackground);
+  --cs-actionbar-hover-background: var(--comet-toolbar-hoverBackground);
+  --cs-actionbar-active-background: var(--comet-toolbar-activeBackground);
   display: inline-flex;
   align-items: center;
   min-width: 0;

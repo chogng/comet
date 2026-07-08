@@ -174,9 +174,9 @@
   position: relative;
   width: 100%;
   padding: 0;
-  border: 1px solid var(--vscode-chatInput-composerBorder, #d6e0e8);
+  border: 1px solid var(--comet-chatInput-composerBorder, #d3d3d3);
   border-radius: 10px;
-  background: var(--vscode-chatInput-composerBackground, #FCFCFC);
+  background: var(--comet-chatInput-composerBackground, #FCFCFC);
   box-shadow: none;
   overflow: hidden;
 }
@@ -188,7 +188,7 @@
   padding: 6px 8px 4px;
   border: 0;
   background: transparent;
-  color: var(--vscode-input-foreground, #1a2530);
+  color: var(--comet-input-foreground, #1a2530);
   box-shadow: none;
   font: inherit;
   font-size: 12px;
@@ -201,8 +201,8 @@
   justify-content: space-between;
   gap: 8px;
   padding: 4px;
-  border-top: 1px solid var(--vscode-chatInput-composerToolbarBorder, #F8F8F8);
-  background: var(--vscode-chatInput-composerToolbarBackground, #FCFCFC);
+  border-top: 1px solid var(--comet-chatInput-composerToolbarBorder, #F8F8F8);
+  background: var(--comet-chatInput-composerToolbarBackground, #FCFCFC);
 }
 
 .comet-chat-model-switch {

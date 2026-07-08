@@ -72,7 +72,7 @@
 .comet-sash.comet-active.comet-horizontal::before {
   height: var(--comet-sash-hover-size);
   top: calc(50% - (var(--comet-sash-hover-size) / 2));
-  background: var(--vscode-sash-hoverBorder, rgba(46, 109, 179, 0.28));
+  background: var(--comet-sash-hoverBorder, rgba(46, 109, 179, 0.28));
 }
 
 .comet-sash.comet-hover.comet-vertical::before,

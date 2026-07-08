@@ -55,7 +55,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--vscode-dropdown-iconForeground, var(--vscode-select-foreground, #64748b));
+  color: var(--comet-dropdown-iconForeground, var(--vscode-select-foreground, #64748b));
   transform: translateY(-50%);
   pointer-events: none;
   opacity: 0.72;

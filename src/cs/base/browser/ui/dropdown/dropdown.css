@@ -1,12 +1,12 @@
 .comet-dropdown-wrapper {
   --dropdown-height: 40px;
   --dropdown-radius: 8px;
-  --dropdown-border: var(--vscode-dropdown-border, #cfdae7);
-  --dropdown-border-hover: var(--vscode-dropdown-borderHover, #b8c7d9);
-  --dropdown-border-focus: var(--vscode-dropdown-borderFocus, #0a5fbf);
-  --dropdown-bg: var(--vscode-dropdown-background, #ffffff);
-  --dropdown-bg-hover: var(--vscode-dropdown-backgroundHover, rgba(0, 0, 0, 0.04));
-  --dropdown-bg-focus: var(--vscode-dropdown-backgroundFocus, #ffffff);
+  --dropdown-border: var(--comet-dropdown-border, #cfdae7);
+  --dropdown-border-hover: var(--comet-dropdown-borderHover, #b8c7d9);
+  --dropdown-border-focus: var(--comet-dropdown-borderFocus, #0a5fbf);
+  --dropdown-bg: var(--comet-dropdown-background, #ffffff);
+  --dropdown-bg-hover: var(--comet-dropdown-backgroundHover, rgba(0, 0, 0, 0.04));
+  --dropdown-bg-focus: var(--comet-dropdown-backgroundFocus, #ffffff);
 
   position: relative;
   display: flex;
@@ -33,7 +33,7 @@
 
 .comet-dropdown-disabled {
   opacity: 0.65;
-  background-color: var(--vscode-dropdown-backgroundDisabled, #f8fafc);
+  background-color: var(--comet-dropdown-backgroundDisabled, #f8fafc);
   cursor: not-allowed;
 }
 
@@ -61,13 +61,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--vscode-dropdown-iconForeground, #64748b);
+  color: var(--comet-dropdown-iconForeground, #64748b);
   pointer-events: none;
   z-index: 1;
 }
 
 .comet-dropdown-wrapper.comet-dropdown-disabled .comet-dropdown-icon-wrapper {
-  color: var(--vscode-dropdown-iconDisabledForeground, #94a3b8);
+  color: var(--comet-dropdown-iconDisabledForeground, #94a3b8);
 }
 
 .comet-dropdown-chevron {
