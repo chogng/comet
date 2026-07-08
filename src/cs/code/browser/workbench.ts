@@ -1,33 +1,27 @@
-import {
-	diagnoseWorkbenchDependencyImports,
-	isNativeWorkbenchAuxiliaryWindow,
-	installWorkbenchBootstrapErrorHandlers,
-	renderWorkbenchBootstrapError,
-	updateWorkbenchBootstrapStatus,
-} from 'app/bootstrapWorkbench';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-async function bootstrapWorkbench() {
-	installWorkbenchBootstrapErrorHandlers('web');
-
-	try {
-		await import('cs/workbench/workbench.web.main');
-
-		const { startWorkbenchContributions, stopWorkbenchContributions } =
-			await import('cs/workbench/common/contributions');
-		if (!isNativeWorkbenchAuxiliaryWindow()) {
-			startWorkbenchContributions();
-			window.addEventListener('beforeunload', stopWorkbenchContributions, {
-				once: true,
-			});
-		}
-
-		await diagnoseWorkbenchDependencyImports('web');
-		const { renderWorkbench } = await import('cs/workbench/browser/workbench');
-		renderWorkbench();
-	} catch (error) {
-		updateWorkbenchBootstrapStatus('web', 'startup failed', error);
-		renderWorkbenchBootstrapError('web', error);
-	}
+function isNativeWorkbenchAuxiliaryWindow() {
+	const query = new URLSearchParams(window.location.search);
+	return query.has('nativeOverlay');
 }
 
-void bootstrapWorkbench();
+async function main() {
+	await import('cs/workbench/workbench.web.main');
+
+	const { startWorkbenchContributions, stopWorkbenchContributions } =
+		await import('cs/workbench/common/contributions');
+	if (!isNativeWorkbenchAuxiliaryWindow()) {
+		startWorkbenchContributions();
+		window.addEventListener('beforeunload', stopWorkbenchContributions, {
+			once: true,
+		});
+	}
+
+	const { renderWorkbench } = await import('cs/workbench/browser/workbench');
+	renderWorkbench();
+}
+
+void main();

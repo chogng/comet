@@ -240,7 +240,6 @@ function wireRendererDiagnostics(window: BrowserWindow) {
 						editorPanel: describe('.panel.web-panel'),
 						webFrameContainer: describe('.web-frame-container'),
 						settingsRoot: describe('.settings-root'),
-						bootstrapStatus: describe('.bootstrap-status'),
 					};
 				})()`,
 				true,
