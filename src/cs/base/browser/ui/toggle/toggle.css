@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-.monaco-custom-toggle {
+.comet-custom-toggle {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -20,47 +20,65 @@
 	-webkit-user-select: none;
 }
 
-.monaco-custom-toggle:hover {
+.comet-custom-toggle:hover {
 	background-color: var(--vscode-inputOption-hoverBackground);
 }
 
-.monaco-custom-toggle.disabled {
+.comet-custom-toggle.disabled {
 	opacity: 0.4;
 	cursor: default;
 	pointer-events: none;
 }
 
-.hc-black .monaco-custom-toggle:hover,
-.hc-light .monaco-custom-toggle:hover {
+.hc-black .comet-custom-toggle:hover,
+.hc-light .comet-custom-toggle:hover {
 	border: 1px dashed var(--vscode-focusBorder);
 }
 
-.hc-black .monaco-custom-toggle,
-.hc-light .monaco-custom-toggle,
-.hc-black .monaco-custom-toggle:hover,
-.hc-light .monaco-custom-toggle:hover {
+.hc-black .comet-custom-toggle,
+.hc-light .comet-custom-toggle,
+.hc-black .comet-custom-toggle:hover,
+.hc-light .comet-custom-toggle:hover {
 	background: none;
 }
 
-.monaco-custom-toggle.monaco-checkbox {
+.comet-custom-toggle.comet-checkbox {
+	position: relative;
+	flex: 0 0 auto;
 	width: 16px;
 	height: 16px;
 	padding: 0;
 	border: 1px solid var(--vscode-settings-checkboxBorder);
 	border-radius: 3px;
-	background: var(--vscode-settings-checkboxBackground);
+	background: transparent;
 	color: transparent;
-	font-size: 14px;
 	opacity: 1;
 }
 
-.monaco-custom-toggle.monaco-checkbox.checked {
-	border-color: var(--vscode-settings-checkboxCheckedBorder);
-	background: var(--vscode-settings-checkboxCheckedBackground);
-	color: var(--vscode-settings-checkboxCheckmark);
+.comet-custom-toggle.comet-checkbox:hover {
+	background: transparent;
 }
 
-.monaco-custom-toggle.monaco-checkbox:focus-visible {
+.comet-custom-toggle.comet-checkbox > .comet-checkbox-check {
+	width: 12px;
+	height: 12px;
+	color: var(--vscode-settings-checkboxCheckedBorder);
+	font-size: 12px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.comet-custom-toggle.comet-checkbox.checked {
+	border-color: var(--vscode-settings-checkboxCheckedBorder);
+	background: transparent;
+	color: var(--vscode-settings-checkboxCheckedBorder);
+}
+
+.comet-custom-toggle.comet-checkbox.checked > .comet-checkbox-check {
+	opacity: 1;
+}
+
+.comet-custom-toggle.comet-checkbox:focus-visible {
 	outline: 2px solid var(--vscode-settings-checkboxFocusBorder);
 	outline-offset: 2px;
 }

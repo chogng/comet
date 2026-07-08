@@ -268,10 +268,6 @@ export function isMonacoEditor(e: HTMLElement): boolean {
 	return isListElementDescendantOfClass(e, 'monaco-editor');
 }
 
-export function isMonacoCustomToggle(e: HTMLElement): boolean {
-	return isListElementDescendantOfClass(e, 'monaco-custom-toggle');
-}
-
 export function isActionItem(e: HTMLElement): boolean {
 	return isListElementDescendantOfClass(e, 'action-item');
 }

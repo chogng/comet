@@ -7,6 +7,7 @@ import 'cs/base/browser/ui/toggle/toggle.css';
 import { $, isActiveElement } from 'cs/base/browser/dom';
 import { getBaseLayerHoverDelegate } from 'cs/base/browser/ui/hover/hoverDelegate';
 import type { HoverHandle, HoverInput } from 'cs/base/browser/ui/hover/hover';
+import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { Widget } from 'cs/base/browser/ui/widget';
 import { Emitter, type Event } from 'cs/base/common/event';
 import { KeyCode } from 'cs/base/common/keyCodes';
@@ -38,7 +39,7 @@ export class Toggle extends Widget {
 
 		this.checkedValue = options.isChecked;
 		this.icon = options.icon;
-		this.domNode = $('div.monaco-custom-toggle');
+		this.domNode = $('div.comet-custom-toggle');
 		if (options.className) {
 			this.domNode.classList.add(...options.className.split(' '));
 		}
@@ -141,9 +142,8 @@ export class Toggle extends Widget {
 }
 
 export class Checkbox extends Disposable {
-	static readonly className = 'monaco-checkbox';
+	static readonly className = 'comet-checkbox';
 
-	private static readonly checkedIcon: ThemeIcon = { id: 'check' };
 	private readonly toggle: Toggle;
 
 	readonly domNode: HTMLElement;
@@ -155,14 +155,11 @@ export class Checkbox extends Disposable {
 		this.toggle = this._register(new Toggle({
 			title,
 			isChecked,
-			icon: isChecked ? Checkbox.checkedIcon : undefined,
 			className: Checkbox.className,
 		}));
 		this.domNode = this.toggle.domNode;
+		this.domNode.append(createLxIcon('check', 'comet-checkbox-check'));
 		this.onChange = this.toggle.onChange;
-		this._register(this.toggle.onChange(() => {
-			this.applyIcon();
-		}));
 	}
 
 	get enabled() {
@@ -175,7 +172,6 @@ export class Checkbox extends Disposable {
 
 	set checked(newChecked: boolean) {
 		this.toggle.checked = newChecked;
-		this.applyIcon();
 	}
 
 	focus() {
@@ -196,9 +192,5 @@ export class Checkbox extends Disposable {
 
 	setTitle(title: string) {
 		this.toggle.setTitle(title);
-	}
-
-	private applyIcon() {
-		this.toggle.setIcon(this.checked ? Checkbox.checkedIcon : undefined);
 	}
 }
