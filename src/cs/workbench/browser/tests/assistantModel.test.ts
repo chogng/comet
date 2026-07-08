@@ -434,6 +434,40 @@ test('assistant inserts fetched article links without sending them as agent text
   ]);
 });
 
+test('assistant inserts empty article fetch result as markdown without sending it as agent text turn', async () => {
+  const capture: InvokeCapture = {
+    commands: [],
+    payloads: [],
+  };
+  const assistantModel = createAssistantModel(createAssistantContext('en', capture));
+
+  assistantModel.handleInsertArticleFetchEmptyResult(
+    'Nature Photonics',
+    'No articles matched the selected date range.',
+  );
+  assistantModel.setQuestion('What did we fetch?');
+  await assistantModel.handleAsk();
+
+  const snapshot = assistantModel.getSnapshot();
+  const emptyMessage = snapshot.messages[0];
+  assert.equal(emptyMessage?.role, 'assistant');
+  assert.equal(
+    emptyMessage?.content,
+    [
+      '> No articles matched the selected date range.',
+      '> Nature Photonics',
+    ].join('\n'),
+  );
+  assert.equal(emptyMessage?.includeInAgentHistory, false);
+  assert.equal(snapshot.messages[1]?.role, 'user');
+  assert.deepEqual((capture.payloads[0] as { messages: unknown[] }).messages, [
+    {
+      role: 'user',
+      parts: [{ type: 'text', text: 'What did we fetch?' }],
+    },
+  ]);
+});
+
 test('assistant applies a pending text patch to the current draft locally', async () => {
   let currentDocument: WritingEditorDocument = {
     type: 'doc',

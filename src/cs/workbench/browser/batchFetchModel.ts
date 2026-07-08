@@ -42,11 +42,18 @@ export type BatchFetchControllerContext = {
 export type BatchFetchControllerSnapshot = BatchFetchMachineState &
   BatchFetchStatusbarStatus & {
     isBatchLoading: boolean;
+    emptyMessage: string;
   };
 
 export type BatchFetchControllerResult =
   | { ok: true; articles: Article[] }
+  | { ok: false; reason: 'empty'; message: string }
   | { ok: false };
+
+const emptyFetchErrorCodes = new Set([
+  'BATCH_NO_MATCH_IN_DATE_RANGE',
+  'BATCH_NO_VALID_ARTICLES',
+]);
 
 function createBatchFetchSnapshot(
   machineState: BatchFetchMachineState,
@@ -54,6 +61,7 @@ function createBatchFetchSnapshot(
   return {
     ...machineState,
     isBatchLoading: machineState.phase === 'loading',
+    emptyMessage: machineState.phase === 'empty' ? machineState.lastErrorMessage ?? '' : '',
     ...resolveBatchFetchStatusbarStatus(machineState.fetchStatus),
   };
 }
@@ -209,6 +217,22 @@ export class BatchFetchController {
         const localizedError = result.error
           ? localizeAppError(ui, result.error)
           : ui.errorUnknown;
+        if (
+          result.error?.code &&
+          emptyFetchErrorCodes.has(result.error.code)
+        ) {
+          this.dispatch({
+            type: 'FETCH_EMPTY',
+            requestId,
+            message: localizedError,
+          });
+          return {
+            ok: false,
+            reason: 'empty',
+            message: localizedError,
+          };
+        }
+
         toast.error(
           formatLocaleMessage(ui.toastBatchFetchFailed, {
             error: localizedError,

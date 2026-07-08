@@ -1798,6 +1798,12 @@ class WorkbenchHost {
 
       const result = await batchFetchControllerInstance.handleFetchSource(source);
       if (!result.ok) {
+        if ('reason' in result && result.reason === 'empty') {
+          assistantModelInstance.handleInsertArticleFetchEmptyResult(
+            getBatchSourceDisplayLabel(source),
+            result.message,
+          );
+        }
         return;
       }
 

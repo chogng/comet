@@ -9,6 +9,7 @@ import type {
   ElectronAPI,
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import { appError } from 'cs/base/common/errors';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
@@ -115,6 +116,12 @@ function withElectronApi<T>(electronAPI: ElectronAPI | undefined, run: () => T):
 function createInvokeDesktop(): ElectronInvoke {
   return (async (command: string) => {
     throw new Error(`Unexpected desktop command in model subscriptions test: ${command}`);
+  }) as ElectronInvoke;
+}
+
+function createRejectingInvokeDesktop(error: unknown): ElectronInvoke {
+  return (async () => {
+    throw error;
   }) as ElectronInvoke;
 }
 
@@ -342,6 +349,44 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
     assert.equal(removed, true);
     assert.equal(fetchStatusListener, undefined);
   });
+});
+
+test('BatchFetchController reports date range no-match as empty result', async () => {
+  let successCount = 0;
+  const controller = createBatchFetchController({
+    desktopRuntime: true,
+    addressBarUrl: '',
+    journalSourceOverrides: [],
+    batchStartDate: '2026-07-01',
+    batchEndDate: '2026-07-08',
+    invokeDesktop: createRejectingInvokeDesktop(
+      appError('BATCH_NO_MATCH_IN_DATE_RANGE', {
+        startDate: '2026-07-01',
+        endDate: '2026-07-08',
+      }),
+    ),
+    nativeHost: createNativeHostService(),
+    ui: locales.en,
+    onBeforeFetch: () => {},
+    onFetchSuccess: () => {
+      successCount += 1;
+    },
+  });
+
+  const result = await controller.handleFetchSource({
+    id: 'source-1',
+    url: 'https://example.com/articles',
+    journalTitle: 'Example',
+  });
+  const snapshot = controller.getSnapshot();
+
+  assert.equal(result.ok, false);
+  assert.equal('reason' in result ? result.reason : '', 'empty');
+  assert.equal(successCount, 0);
+  assert.equal(snapshot.phase, 'empty');
+  assert.equal(snapshot.emptyMessage, locales.en.errorBatchNoMatchInDateRange);
+  assert.equal(snapshot.lastErrorMessage, locales.en.errorBatchNoMatchInDateRange);
+  assert.equal(snapshot.isBatchLoading, false);
 });
 
 test('DocumentActionsController subscriptions stop after disposal', () => {

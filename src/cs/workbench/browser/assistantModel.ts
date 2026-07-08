@@ -184,6 +184,17 @@ function createArticleMessageContent(
   ].join('\n');
 }
 
+function createArticleFetchEmptyMessageContent(
+  sourceLabel: string,
+  message: string,
+): string {
+  const normalizedSourceLabel = sourceLabel.trim();
+  return [
+    `> ${message}`,
+    normalizedSourceLabel ? `> ${normalizedSourceLabel}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 function createConversationId() {
   return `conversation-${Date.now().toString(36)}-${Math.random()
     .toString(36)
@@ -406,6 +417,38 @@ export class AssistantModel {
             id: createMessageId(),
             role: "assistant",
             content: createArticleMessageContent(sourceLabel, articles),
+            includeInAgentHistory: false,
+          },
+        ],
+        errorMessage: null,
+      };
+    });
+  };
+
+  readonly handleInsertArticleFetchEmptyResult = (
+    sourceLabel: string,
+    message: string,
+  ) => {
+    this.updateActiveConversation((conversation) => {
+      const isFirstMessage = conversation.messages.length === 0;
+      const sourceTitle = sourceLabel.trim().slice(0, 18);
+
+      return {
+        ...conversation,
+        title: isFirstMessage
+          ? sourceTitle ||
+            createDefaultConversationTitle(
+              this.context.ui,
+              conversation.autoTitleIndex ?? 0,
+            )
+          : conversation.title,
+        autoTitleIndex: isFirstMessage ? null : conversation.autoTitleIndex,
+        messages: [
+          ...conversation.messages,
+          {
+            id: createMessageId(),
+            role: "assistant",
+            content: createArticleFetchEmptyMessageContent(sourceLabel, message),
             includeInAgentHistory: false,
           },
         ],
