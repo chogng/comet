@@ -140,7 +140,6 @@ import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writin
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 import { EventEmitter } from 'cs/base/common/event';
 import { INativeHostService } from 'cs/platform/native/common/native';
-import { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
@@ -646,7 +645,6 @@ class WorkbenchHost {
     @IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
     @INotificationService private readonly notificationService: NotificationService,
     @INativeHostService private readonly nativeHostService: INativeHostService,
-    @IMarkdownRendererService private readonly markdownRendererService: IMarkdownRendererService,
     @IOpenerService private readonly openerService: IOpenerService,
     @IDialogService private readonly dialogService: IDialogService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -2024,7 +2022,6 @@ class WorkbenchHost {
     const articleSummaryTranslationExportSnapshot =
       articleSummaryTranslationExportControllerInstance.getSnapshot();
     const sessionChatProps = createSessionChatViewProps({
-      markdownRendererService: this.markdownRendererService,
       state: {
         isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
         question: assistantQuestion,

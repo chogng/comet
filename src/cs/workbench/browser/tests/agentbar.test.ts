@@ -14,6 +14,8 @@ let cleanupDomEnvironment: (() => void) | null = null;
 let ChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').ChatWidget;
 let ChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').ChatViewPane;
 let getWorkbenchInstantiationService: typeof import('cs/workbench/services/instantiation/browser/workbenchInstantiationService').getWorkbenchInstantiationService;
+let registerWorkbenchService: typeof import('cs/workbench/services/instantiation/browser/workbenchInstantiationService').registerWorkbenchService;
+let IMarkdownRendererServiceId: typeof import('cs/platform/markdown/browser/markdownRenderer').IMarkdownRendererService;
 let HorizontalScrollbar: typeof HorizontalScrollbarType;
 let renderMarkdown: typeof import('cs/base/browser/markdownRenderer').renderMarkdown;
 
@@ -40,7 +42,6 @@ function createMarkdownRendererService(
 
 function createProps(): ChatWidgetProps {
   return {
-    markdownRendererService: createMarkdownRendererService(),
     isKnowledgeBaseModeEnabled: true,
     messages: [],
     question: '',
@@ -106,7 +107,11 @@ function createResult(overrides: Partial<RagAnswerResult> = {}): RagAnswerResult
   };
 }
 
-function createChatWidget(props: ChatWidgetProps) {
+function createChatWidget(
+  props: ChatWidgetProps,
+  markdownRendererService: IMarkdownRendererService = createMarkdownRendererService(),
+) {
+  registerWorkbenchService(IMarkdownRendererServiceId, markdownRendererService);
   return getWorkbenchInstantiationService().createInstance(ChatWidget, props);
 }
 
@@ -120,7 +125,8 @@ before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   await import('cs/platform/contextview/browser/contextViewService');
-  ({ getWorkbenchInstantiationService } = await import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'));
+  ({ IMarkdownRendererService: IMarkdownRendererServiceId } = await import('cs/platform/markdown/browser/markdownRenderer'));
+  ({ getWorkbenchInstantiationService, registerWorkbenchService } = await import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'));
   ({ HorizontalScrollbar } = await import('cs/base/browser/ui/scrollbar/horizontalScrollbar'));
   ({ renderMarkdown } = await import('cs/base/browser/markdownRenderer'));
   ({ ChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
@@ -361,12 +367,12 @@ test('agent bar more comet-hover-action uses dropdown comet-hover-action view it
     moreButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-more');
     assert.equal(moreButton.getAttribute('aria-expanded'), 'true');
 
-    const newChatItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const newChatItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('New chat'),
     );
     assert(newChatItem instanceof HTMLElement);
@@ -423,19 +429,19 @@ test('agent bar history comet-hover-action supports search and empty states', as
     historyButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-history');
     assert.equal(historyButton.getAttribute('aria-expanded'), 'true');
-    const searchInput = menu.querySelector('.cs-menu-header .comet-agentbar-history-search-input .comet-input');
+    const searchInput = menu.querySelector('.comet-menu-header .comet-agentbar-history-search-input .comet-input');
     assert(searchInput instanceof HTMLInputElement);
-    assert.equal(menu.firstElementChild?.classList.contains('cs-menu-header'), true);
+    assert.equal(menu.firstElementChild?.classList.contains('comet-menu-header'), true);
 
     searchInput.value = 'conversation 2';
     searchInput.dispatchEvent(new window.Event('input', { bubbles: true }));
     await delay(0);
 
-    const historyItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const historyItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Conversation 2'),
     );
     assert(historyItem instanceof HTMLElement);
@@ -447,16 +453,16 @@ test('agent bar history comet-hover-action supports search and empty states', as
 
     historyButton.click();
     await delay(0);
-    const reopenedMenu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu');
+    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu');
     assert(reopenedMenu instanceof HTMLElement);
     const reopenedSearchInput = reopenedMenu.querySelector(
-      '.cs-menu-header .comet-agentbar-history-search-input .comet-input',
+      '.comet-menu-header .comet-agentbar-history-search-input .comet-input',
     );
     assert(reopenedSearchInput instanceof HTMLInputElement);
     reopenedSearchInput.value = 'not-found';
     reopenedSearchInput.dispatchEvent(new window.Event('input', { bubbles: true }));
     await delay(0);
-    const emptyState = Array.from(reopenedMenu.querySelectorAll('.dropdown-menu-item')).find(
+    const emptyState = Array.from(reopenedMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('no matching agents'),
     );
     assert(emptyState instanceof HTMLElement);
@@ -485,10 +491,10 @@ test('agent bar history comet-hover-action shows no matching agents when there i
     historyButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu');
+    const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-history');
-    const emptyState = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const emptyState = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('no matching agents'),
     );
     assert(emptyState instanceof HTMLElement);
@@ -568,20 +574,20 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
     );
     dropdownButton.click();
 
-    const menu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'chat-model-menu');
 
-    const autoMode = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const autoMode = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) =>
-        node.querySelector('.dropdown-menu-item-content')?.textContent?.trim()
+        node.querySelector('.comet-dropdown-menu-item-content')?.textContent?.trim()
         === 'Auto',
     );
     assert(autoMode instanceof HTMLElement);
     assert.equal(autoMode.classList.contains('selected'), false);
     assert.equal(autoMode.querySelector('.lx-icon'), null);
-    assert(autoMode.querySelector('.dropdown-menu-item-switch') instanceof HTMLElement);
-    assert.equal(autoMode.querySelector('.dropdown-menu-item-description'), null);
+    assert(autoMode.querySelector('.comet-dropdown-menu-item-switch') instanceof HTMLElement);
+    assert.equal(autoMode.querySelector('.comet-dropdown-menu-item-description'), null);
     autoMode.click();
     assert.equal(autoModelRoutingToggleCount, 1);
     assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
@@ -590,24 +596,24 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
       'Auto',
     );
 
-    const autoMenu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const autoMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(autoMenu instanceof HTMLElement);
     assert.deepEqual(
-      Array.from(autoMenu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'))
+      Array.from(autoMenu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'))
         .map((node) => node.textContent?.trim()),
       ['Auto'],
     );
 
-    const autoToggle = Array.from(autoMenu.querySelectorAll('.dropdown-menu-item')).find(
+    const autoToggle = Array.from(autoMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) =>
-        node.querySelector('.dropdown-menu-item-content')?.textContent?.trim()
+        node.querySelector('.comet-dropdown-menu-item-content')?.textContent?.trim()
         === 'Auto',
     );
     assert(autoToggle instanceof HTMLElement);
     autoToggle.click();
     assert.equal(autoModelRoutingToggleCount, 2);
 
-    const switchMenu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const switchMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(switchMenu instanceof HTMLElement);
     assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
     assert.equal(
@@ -615,29 +621,29 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
       'GLM-4.7-Flash',
     );
 
-    const maxMode = Array.from(switchMenu.querySelectorAll('.dropdown-menu-item')).find(
+    const maxMode = Array.from(switchMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) =>
-        node.querySelector('.dropdown-menu-item-content')?.textContent?.trim()
+        node.querySelector('.comet-dropdown-menu-item-content')?.textContent?.trim()
         === 'Max mode',
     );
     assert(maxMode instanceof HTMLElement);
     assert.equal(maxMode.querySelector('.lx-icon'), null);
-    assert(maxMode.querySelector('.dropdown-menu-item-switch') instanceof HTMLElement);
+    assert(maxMode.querySelector('.comet-dropdown-menu-item-switch') instanceof HTMLElement);
     maxMode.click();
     assert.equal(maxContextWindowToggleCount, 1);
     assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
 
-    const modelMenu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const modelMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(modelMenu instanceof HTMLElement);
-    const option = Array.from(modelMenu.querySelectorAll('.dropdown-menu-item')).find(
+    const option = Array.from(modelMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('GPT-5.4'),
     );
     assert(option instanceof HTMLElement);
     option.click();
 
-    const submenu = document.body.querySelector('.comet-actionbar-context-view .cs-menu-submenu');
+    const submenu = document.body.querySelector('.comet-menu-submenu');
     assert(submenu instanceof HTMLElement);
-    const useModel = Array.from(submenu.querySelectorAll('.dropdown-menu-item')).find(
+    const useModel = Array.from(submenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Use model'),
     );
     assert(useModel instanceof HTMLElement);
@@ -646,16 +652,16 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
     assert.equal(selectedModelValue, 'openai:gpt-5.4:medium');
 
     dropdownButton.click();
-    const runtimeMenu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const runtimeMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(runtimeMenu instanceof HTMLElement);
-    const runtimeOption = Array.from(runtimeMenu.querySelectorAll('.dropdown-menu-item')).find(
+    const runtimeOption = Array.from(runtimeMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('GPT-5.4'),
     );
     assert(runtimeOption instanceof HTMLElement);
     runtimeOption.click();
-    const runtimeSubmenu = document.body.querySelector('.comet-actionbar-context-view .cs-menu-submenu');
+    const runtimeSubmenu = document.body.querySelector('.comet-menu-submenu');
     assert(runtimeSubmenu instanceof HTMLElement);
-    const fastOn = Array.from(runtimeSubmenu.querySelectorAll('.dropdown-menu-item')).find(
+    const fastOn = Array.from(runtimeSubmenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Fast: On'),
     );
     assert(fastOn instanceof HTMLElement);
@@ -664,10 +670,10 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
     assert.equal(selectedModelValue, 'openai:gpt-5.4:medium:priority');
 
     dropdownButton.click();
-    const reopenedMenu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(reopenedMenu instanceof HTMLElement);
     const addModels = Array.from(
-      reopenedMenu.querySelectorAll('.dropdown-menu-item'),
+      reopenedMenu.querySelectorAll('.comet-dropdown-menu-item'),
     ).find((node) => node.textContent?.includes('Add models'));
     assert(addModels instanceof HTMLElement);
     addModels.click();
@@ -803,10 +809,10 @@ test('composer input toolbar hosts article batch actions', async () => {
     await delay(0);
 
     assert.equal(downloadAllCount, 1);
-    const menu = document.body.querySelector('.dropdown-menu[data-menu="agentbar-article-summary-export"]');
+    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="agentbar-article-summary-export"]');
     assert(menu instanceof HTMLElement);
     assert.equal(exportSummariesButton.getAttribute('aria-expanded'), 'true');
-    const originalExportItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const originalExportItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('直接导出摘要'),
     );
     assert(originalExportItem instanceof HTMLElement);
@@ -815,9 +821,9 @@ test('composer input toolbar hosts article batch actions', async () => {
 
     exportSummariesButton.click();
     await delay(0);
-    const reopenedMenu = document.body.querySelector('.dropdown-menu[data-menu="agentbar-article-summary-export"]');
+    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="agentbar-article-summary-export"]');
     assert(reopenedMenu instanceof HTMLElement);
-    const translatedExportItem = Array.from(reopenedMenu.querySelectorAll('.dropdown-menu-item')).find(
+    const translatedExportItem = Array.from(reopenedMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('翻译并导出摘要'),
     );
     assert(translatedExportItem instanceof HTMLElement);
@@ -886,24 +892,26 @@ test('composer input toolbar renders inline article batch progress', async () =>
 test('agent chat renders fetched article linked text and opens links through markdown renderer service', async () => {
   let openedSourceUrl = '';
   let toggledSourceUrl = '';
-  const agentBar = createChatWidget({
-    ...createProps(),
-    markdownRendererService: createMarkdownRendererService(href => {
+  const agentBar = createChatWidget(
+    {
+      ...createProps(),
+      messages: [
+        {
+          id: 'article-1',
+          role: 'assistant',
+          content: 'Science\n- [Example article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
+          includeInAgentHistory: false,
+        },
+      ],
+      isArticleSelected: href => href === 'https://www.science.org/doi/example',
+      onToggleArticleSelected: href => {
+        toggledSourceUrl = href;
+      },
+    },
+    createMarkdownRendererService(href => {
       openedSourceUrl = href;
     }),
-    messages: [
-      {
-        id: 'article-1',
-        role: 'assistant',
-        content: 'Science\n- [Example article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
-        includeInAgentHistory: false,
-      },
-    ],
-    isArticleSelected: href => href === 'https://www.science.org/doi/example',
-    onToggleArticleSelected: href => {
-      toggledSourceUrl = href;
-    },
-  });
+  );
   const element = agentBar.getElement();
   document.body.append(element);
 
@@ -919,8 +927,9 @@ test('agent chat renders fetched article linked text and opens links through mar
     assert(link instanceof HTMLElement);
     assert.equal(link.textContent, 'Example article');
     const checkbox = markdown.querySelector('.comet-agentbar-article-checkbox');
-    assert(checkbox instanceof HTMLInputElement);
-    assert.equal(checkbox.checked, true);
+    assert(checkbox instanceof HTMLElement);
+    assert.equal(checkbox.getAttribute('role'), 'checkbox');
+    assert.equal(checkbox.getAttribute('aria-checked'), 'true');
     checkbox.click();
     assert.equal(toggledSourceUrl, 'https://www.science.org/doi/example');
     link.click();
@@ -946,21 +955,21 @@ test('agent bar model trigger and menu collapse to Auto while automatic routing 
     dropdownButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(menu instanceof HTMLElement);
 
     const menuItemLabels = Array.from(
-      menu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'),
+      menu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'),
     ).map((node) => node.textContent?.trim());
     assert.deepEqual(menuItemLabels, ['Auto']);
 
-    const autoDescription = menu.querySelector('.dropdown-menu-item-description');
+    const autoDescription = menu.querySelector('.comet-dropdown-menu-item-description');
     assert(autoDescription instanceof HTMLElement);
     assert.equal(
       autoDescription.textContent,
       'Balanced quality and speed, recommended for most tasks',
     );
-    assert(menu.querySelector('.dropdown-menu-item-switch.checked') instanceof HTMLElement);
+    assert(menu.querySelector('.comet-dropdown-menu-item-switch.checked') instanceof HTMLElement);
   } finally {
     agentBar.dispose();
   }
@@ -985,9 +994,9 @@ test('agent bar model menu supports search filtering', async () => {
     dropdownButton.click();
     await delay(0);
 
-    const menu = document.body.querySelector('.comet-actionbar-context-view .dropdown-menu[data-menu="chat-model-menu"]');
+    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(menu instanceof HTMLElement);
-    const searchInput = menu.querySelector('.cs-menu-header .comet-chat-model-menu-search-input .comet-input');
+    const searchInput = menu.querySelector('.comet-menu-header .comet-chat-model-menu-search-input .comet-input');
     assert(searchInput instanceof HTMLInputElement);
 
     searchInput.value = 'gpt';
@@ -995,7 +1004,7 @@ test('agent bar model menu supports search filtering', async () => {
     await delay(0);
 
     const menuItemLabels = Array.from(
-      menu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'),
+      menu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'),
     ).map((node) => node.textContent?.trim());
     assert.deepEqual(menuItemLabels, ['GPT-5.4']);
   } finally {

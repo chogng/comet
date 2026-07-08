@@ -27,7 +27,7 @@ import 'cs/editor/browser/pdf/tests/pdfiumLiteParsedDocument.test';
 import 'cs/workbench/services/pdf/tests/featureFlags.test';
 import 'cs/workbench/services/settings/tests/settingValue.test';
 import 'cs/workbench/browser/tests/assistantModel.test';
-import 'cs/workbench/browser/tests/comet-agentbar.test';
+import 'cs/workbench/browser/tests/agentbar.test';
 import 'cs/workbench/browser/tests/gridview.test';
 import 'cs/workbench/browser/tests/modelSubscriptions.test';
 import 'cs/workbench/browser/tests/splitview.test';

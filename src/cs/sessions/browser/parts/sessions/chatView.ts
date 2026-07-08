@@ -12,7 +12,6 @@ import 'cs/sessions/browser/parts/media/sessionView.css';
 export type SessionChatViewProps = ChatWidgetProps;
 
 type CreateSessionChatViewPropsParams = {
-	markdownRendererService: ChatWidgetProps['markdownRendererService'];
 	state: {
 		isKnowledgeBaseModeEnabled: boolean;
 		question: string;
@@ -54,7 +53,6 @@ type CreateSessionChatViewPropsParams = {
 };
 
 export function createSessionChatViewProps({
-	markdownRendererService,
 	state: {
 		isKnowledgeBaseModeEnabled,
 		question,
@@ -95,7 +93,6 @@ export function createSessionChatViewProps({
 	},
 }: CreateSessionChatViewPropsParams): SessionChatViewProps {
 	return {
-		markdownRendererService,
 		isKnowledgeBaseModeEnabled,
 		question,
 		messages,

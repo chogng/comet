@@ -8,12 +8,11 @@ import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElem
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { localize } from 'cs/nls';
+import { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatListRenderer';
 import { $ } from 'cs/base/browser/dom';
-import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 
 export type ChatListWidgetOptions = {
-	readonly markdownRendererService: IMarkdownRendererService;
 	readonly onApplyPatch: (messageId: string) => void;
 	readonly isArticleSelected: (href: string) => boolean;
 	readonly onToggleArticleSelected: (href: string) => void;
@@ -29,9 +28,12 @@ export class ChatListWidget {
 	private readonly renderDisposables = this.disposables.add(new DisposableStore());
 	private messages: readonly AssistantChatMessage[] = [];
 
-	constructor(options: ChatListWidgetOptions) {
+	constructor(
+		options: ChatListWidgetOptions,
+		@IMarkdownRendererService markdownRendererService: IMarkdownRendererService,
+	) {
 		this.renderer = new ChatListRenderer({
-			markdownRendererService: options.markdownRendererService,
+			markdownRendererService,
 			onApplyPatch: options.onApplyPatch,
 			isArticleSelected: options.isArticleSelected,
 			onToggleArticleSelected: options.onToggleArticleSelected,

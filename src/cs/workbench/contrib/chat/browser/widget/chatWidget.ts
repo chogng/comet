@@ -57,8 +57,7 @@ export class ChatWidget {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		this.props = props;
-		this.listWidget = new ChatListWidget({
-			markdownRendererService: props.markdownRendererService,
+		this.listWidget = instantiationService.createInstance(ChatListWidget, {
 			onApplyPatch: messageId => {
 				this.props.onApplyPatch(messageId);
 			},
