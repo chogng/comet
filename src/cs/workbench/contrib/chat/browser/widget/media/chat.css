@@ -170,15 +170,13 @@
 }
 
 .comet-chat-composer-host.comet-is-empty-state {
-  --comet-chat-composer-max-width: 840px;
+  --comet-chat-composer-max-width: 680px;
   margin-top: 0;
 }
 
 .comet-chat-composer {
   position: relative;
   width: 100%;
-  max-width: var(--comet-chat-composer-max-width);
-  margin-inline: auto;
   padding: 0;
   border: 1px solid var(--comet-chatInput-composerBorder, #ececec);
   border-radius: 10px;
@@ -418,8 +416,6 @@
 .comet-chat-composer-quick-actions-shell {
   position: relative;
   width: 100%;
-  max-width: var(--comet-chat-composer-max-width);
-  margin-inline: auto;
 }
 
 .comet-chat-composer-quick-actions {
