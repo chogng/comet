@@ -4,9 +4,11 @@ import {
   WORKBENCH_PART_IDS,
 } from 'cs/workbench/browser/layout';
 import { getWindowChromeLayout } from 'cs/platform/window/common/window';
+import { $, append, prepend } from 'cs/base/browser/dom';
 import { createActionBarView, type ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import { isMacintosh, isWeb } from 'cs/base/common/platform';
 import 'cs/workbench/browser/parts/titlebar/media/titlebarpart.css';
 
 export type TitlebarPartPage = 'content' | 'settings';
@@ -34,12 +36,21 @@ export function resolveWorkbenchStatusbarVisibility(statusbarVisible: boolean) {
   return statusbarVisible;
 }
 
+function shouldRenderTitlebarMenuAction() {
+  return !isMacintosh || isWeb;
+}
+
 export class TitlebarPart {
-  private readonly titlebarElement = document.createElement('section');
-  private readonly titlebarContainerElement = document.createElement('div');
-  private readonly dragRegionElement = document.createElement('div');
-  private readonly leftElement = document.createElement('div');
-  private readonly leadingActionsHostElement = document.createElement('div');
+  private readonly titlebarElement = $<HTMLElementTagNameMap['section']>('section.comet-titlebar');
+  private readonly titlebarContainerElement = append(
+    this.titlebarElement,
+    $<HTMLElementTagNameMap['div']>('div.comet-titlebar-container'),
+  );
+  private readonly leftElement = append(
+    this.titlebarContainerElement,
+    $<HTMLElementTagNameMap['div']>('div.comet-titlebar-left'),
+  );
+  private readonly leadingActionsHostElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-leading-actions-host');
   private readonly leadingActionBarView = createActionBarView({
     className: 'comet-titlebar-leading-actions',
     ariaRole: 'group',
@@ -50,17 +61,11 @@ export class TitlebarPart {
     private readonly shellElement: HTMLElement,
     private readonly statusbarElement: HTMLElement,
   ) {
-    this.titlebarElement.className = 'comet-titlebar';
-    this.titlebarContainerElement.className = 'comet-titlebar-container';
-    this.dragRegionElement.className = 'comet-titlebar-drag-region';
-    this.leftElement.className = 'comet-titlebar-left';
-    this.leadingActionsHostElement.className = 'comet-titlebar-leading-actions-host';
-    this.leadingActionsHostElement.append(this.leadingActionBarView.getElement());
-    this.titlebarContainerElement.append(
-      this.dragRegionElement,
-      this.leftElement,
+    prepend(
+      this.titlebarContainerElement,
+      $<HTMLElementTagNameMap['div']>('div.comet-titlebar-drag-region'),
     );
-    this.titlebarElement.append(this.titlebarContainerElement);
+    append(this.leadingActionsHostElement, this.leadingActionBarView.getElement());
   }
 
   getElement() {
@@ -148,7 +153,7 @@ export class TitlebarPart {
 
   private createLeadingActionItems(props: TitlebarLeadingActionsProps) {
     const headerItems: ActionBarItem[] = [];
-    if (props.menuLabel) {
+    if (shouldRenderTitlebarMenuAction() && props.menuLabel) {
       headerItems.push(createDropdownMenuActionViewItem({
         label: props.menuLabel,
         title: props.menuLabel,
@@ -192,8 +197,7 @@ export class TitlebarPart {
   }
 
   private createEmptyMenuElement() {
-    const element = document.createElement('div');
-    element.className = 'comet-titlebar-main-menu';
+    const element = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-main-menu');
     element.setAttribute('role', 'menu');
     return element;
   }
