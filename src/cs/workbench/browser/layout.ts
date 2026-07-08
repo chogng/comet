@@ -74,32 +74,6 @@ type WorkbenchShellLayoutParams = {
   activePage: WorkbenchPage;
 };
 
-type WorkbenchContentLayoutParams = {
-  isPrimarySidebarVisible: boolean;
-  isAgentSidebarVisible: boolean;
-  isEditorCollapsed: boolean;
-};
-
-export type WorkbenchContentLayoutControllerState = {
-  isPrimarySidebarVisible: boolean;
-  isAgentSidebarVisible: boolean;
-  isLayoutEdgeSnappingEnabled: boolean;
-  primarySidebarSize: number;
-  agentSidebarSize: number;
-  isEditorCollapsed: boolean;
-  expandedEditorSize: number;
-};
-
-type SplitViewSizeSnapshot = {
-  primarySidebarSize: number;
-  editorSize: number;
-  agentSidebarSize: number;
-};
-
-const PRIMARY_SIDEBAR_INDEX = 0;
-const EDITOR_INDEX = 1;
-const AGENT_SIDEBAR_INDEX = 2;
-
 export const WORKBENCH_CONTENT_LAYOUT_BREAKPOINT = 980;
 export const WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE = false;
 
@@ -149,51 +123,6 @@ type LayoutLimits = {
   agentSidebar: LayoutAxisLimits;
 };
 
-type LayoutLeafId =
-  | 'primarySidebar'
-  | 'editor'
-  | 'agentSidebar';
-
-type LayoutLeafNode = {
-  type: 'leaf';
-  id: LayoutLeafId;
-  size: number;
-  visible: boolean;
-  flex?: boolean;
-};
-
-type LayoutBranchNode = {
-  type: 'branch';
-  orientation: Orientation;
-  size: number;
-  children: LayoutNode[];
-};
-
-type LayoutNode =
-  | LayoutBranchNode
-  | LayoutLeafNode;
-
-type LayoutTreeParams = {
-  orientation: Orientation;
-  isPrimarySidebarVisible: boolean;
-  isEditorVisible: boolean;
-  isAgentSidebarVisible: boolean;
-  primarySidebarSize: number;
-  agentSidebarSize: number;
-  editorSize: number;
-};
-
-type LayoutFlexState = {
-  agentSidebarFlex: boolean;
-  editorFlex: boolean;
-};
-
-const CANONICAL_LEAF_ORDER: readonly LayoutLeafId[] = [
-  'primarySidebar',
-  'editor',
-  'agentSidebar',
-];
-
 const DEFAULT_WORKBENCH_LAYOUT_STATE: WorkbenchLayoutStateSnapshot = {
   isPrimarySidebarVisible: true,
   isAgentSidebarVisible: true,
@@ -223,7 +152,6 @@ const workbenchPartRefCallbacks = new Map<
   WorkbenchPartId,
   WorkbenchPartRefCallback
 >();
-let activeContentLayoutOrientation: Orientation | null = null;
 
 function getLayoutLimits(
   orientation: Orientation,
@@ -257,158 +185,6 @@ function getLayoutLimits(
   };
 }
 
-function mapLayoutNode(
-  node: LayoutNode,
-  visit: (node: LayoutNode) => LayoutNode | null,
-): LayoutNode | null {
-  const nextNode =
-    node.type === 'branch'
-      ? {
-          type: 'branch' as const,
-          orientation: node.orientation,
-          size: node.size,
-          children: node.children
-            .map(child => mapLayoutNode(child, visit))
-            .filter((child): child is LayoutNode => Boolean(child)),
-        }
-      : { ...node };
-
-  return visit(nextNode);
-}
-
-function getLayoutTreeRootSize(params: LayoutTreeParams) {
-  return (
-    (params.isPrimarySidebarVisible ? params.primarySidebarSize : 0) +
-    (params.isEditorVisible ? params.editorSize : 0) +
-    (params.isAgentSidebarVisible ? params.agentSidebarSize : 0)
-  );
-}
-
-function resolveFlexState(params: {
-  isAgentSidebarVisible: boolean;
-  isEditorVisible: boolean;
-}): LayoutFlexState {
-  const editorFlex = params.isEditorVisible;
-  const agentSidebarFlex =
-    params.isAgentSidebarVisible && !params.isEditorVisible;
-  return {
-    agentSidebarFlex,
-    editorFlex,
-  };
-}
-
-function createCanonicalLayoutTree(params: LayoutTreeParams): LayoutBranchNode {
-  const flexState = resolveFlexState({
-    isAgentSidebarVisible: params.isAgentSidebarVisible,
-    isEditorVisible: params.isEditorVisible,
-  });
-
-  return {
-    type: 'branch',
-    orientation: params.orientation,
-    size: getLayoutTreeRootSize(params),
-    children: [
-      {
-        type: 'leaf',
-        id: 'primarySidebar',
-        size: params.primarySidebarSize,
-        visible: params.isPrimarySidebarVisible,
-      },
-      {
-        type: 'leaf',
-        id: 'editor',
-        size: params.editorSize,
-        visible: params.isEditorVisible,
-        flex: flexState.editorFlex,
-      },
-      {
-        type: 'leaf',
-        id: 'agentSidebar',
-        size: params.agentSidebarSize,
-        visible: params.isAgentSidebarVisible,
-        flex: flexState.agentSidebarFlex,
-      },
-    ],
-  };
-}
-
-function isCanonicalLayoutTree(tree: LayoutNode): tree is LayoutBranchNode {
-  if (tree.type !== 'branch' || tree.children.length !== CANONICAL_LEAF_ORDER.length) {
-    return false;
-  }
-
-  return tree.children.every(
-    (child, index) =>
-      child.type === 'leaf' && child.id === CANONICAL_LEAF_ORDER[index],
-  );
-}
-
-function isLayoutTreeEqual(left: LayoutNode, right: LayoutNode): boolean {
-  if (left.type !== right.type) {
-    return false;
-  }
-
-  if (left.type === 'leaf' && right.type === 'leaf') {
-    return (
-      left.id === right.id &&
-      left.size === right.size &&
-      left.visible === right.visible &&
-      left.flex === right.flex
-    );
-  }
-
-  if (left.type === 'branch' && right.type === 'branch') {
-    if (
-      left.orientation !== right.orientation ||
-      left.size !== right.size ||
-      left.children.length !== right.children.length
-    ) {
-      return false;
-    }
-
-    for (let index = 0; index < left.children.length; index += 1) {
-      const leftChild = left.children[index];
-      const rightChild = right.children[index];
-      if (!leftChild || !rightChild || !isLayoutTreeEqual(leftChild, rightChild)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  return false;
-}
-
-function updateLeaf(
-  tree: LayoutNode,
-  targetId: LayoutLeafId,
-  patch: Partial<Omit<LayoutLeafNode, 'type' | 'id'>>,
-): LayoutNode {
-  return mapLayoutNode(tree, node => {
-    if (node.type === 'leaf' && node.id === targetId) {
-      return {
-        ...node,
-        ...patch,
-      };
-    }
-    return node;
-  }) as LayoutNode;
-}
-
-function reconcileLayoutTree(
-  tree: LayoutNode | null,
-  params: LayoutTreeParams,
-): LayoutNode {
-  const nextTree = createCanonicalLayoutTree(params);
-
-  if (!tree || !isCanonicalLayoutTree(tree)) {
-    return nextTree;
-  }
-
-  return isLayoutTreeEqual(tree, nextTree) ? tree : nextTree;
-}
-
 function clampSidebarSize(target: 'sidebar' | 'agentSidebar', size: number) {
   const limits = resolveActiveClampLimits();
   const axisLimits =
@@ -428,10 +204,6 @@ function clampExpandedEditorSize(size: number) {
 }
 
 function resolveActiveClampLimits() {
-  if (activeContentLayoutOrientation !== null) {
-    return getLayoutLimits(activeContentLayoutOrientation);
-  }
-
   if (typeof window === 'undefined') {
     return getLayoutLimits(Orientation.VERTICAL);
   }
@@ -738,21 +510,6 @@ export function getWorkbenchShellClassName({
   return `comet-app-shell ${activePage === 'settings' ? 'comet-app-shell-settings' : ''}`.trim();
 }
 
-export function getWorkbenchContentClassName({
-  isPrimarySidebarVisible,
-  isAgentSidebarVisible,
-  isEditorCollapsed,
-}: WorkbenchContentLayoutParams) {
-  return [
-    'comet-content-grid',
-    isPrimarySidebarVisible ? 'comet-is-primary-sidebar-visible' : '',
-    isAgentSidebarVisible ? 'comet-is-agent-sidebar-visible' : '',
-    isEditorCollapsed ? 'comet-is-editor-collapsed' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
 function addDisposableListener(
   target: EventTarget,
   type: string,
@@ -778,504 +535,463 @@ function syncElementContent(host: HTMLElement, content: HTMLElement | null) {
   }
 }
 
-function getRootSplitSize(
-  state: WorkbenchContentLayoutControllerState,
-  sizes: SplitViewSizeSnapshot,
+export type SessionWorkbenchLayoutPartViews = {
+	getSidebarElement(): HTMLElement | null;
+	getSessionsElement(): HTMLElement | null;
+	getEditorElement(): HTMLElement | null;
+};
+
+export type SessionWorkbenchLayoutViewProps = {
+	mode?: 'content' | 'settings';
+	isPrimarySidebarVisible: boolean;
+	isLayoutEdgeSnappingEnabled: boolean;
+	primarySidebarSize: number;
+	isEditorCollapsed: boolean;
+	expandedEditorSize: number;
+	partViews: SessionWorkbenchLayoutPartViews;
+};
+
+type SessionLayoutLimits = {
+	sidebar: LayoutAxisLimits;
+	sessions: LayoutAxisLimits;
+	editor: LayoutAxisLimits;
+};
+
+const SESSION_SIDEBAR_INDEX = 0;
+const SESSION_EDITOR_INDEX = 2;
+
+const SESSION_SPLITVIEW_LIMITS = {
+	sidebar: {
+		minimum: 220,
+		maximum: Number.POSITIVE_INFINITY,
+	},
+	sessions: {
+		minimum: 320,
+		maximum: Number.POSITIVE_INFINITY,
+	},
+	editor: {
+		minimum: 320,
+		maximum: Number.POSITIVE_INFINITY,
+	},
+} as const;
+
+const MOBILE_SESSION_SPLITVIEW_LIMITS = {
+	sidebar: {
+		minimum: 160,
+		maximum: Number.POSITIVE_INFINITY,
+	},
+	sessions: {
+		minimum: 220,
+		maximum: Number.POSITIVE_INFINITY,
+	},
+	editor: {
+		minimum: 220,
+		maximum: Number.POSITIVE_INFINITY,
+	},
+} as const;
+
+function getSessionLayoutLimits(orientation: Orientation): SessionLayoutLimits {
+	return orientation === Orientation.HORIZONTAL
+		? MOBILE_SESSION_SPLITVIEW_LIMITS
+		: SESSION_SPLITVIEW_LIMITS;
+}
+
+class SessionWorkbenchLayoutSlotView implements IGridView {
+	readonly element: HTMLElement;
+	readonly snap: boolean;
+	private minimumWidthValue = 0;
+	private maximumWidthValue = Number.POSITIVE_INFINITY;
+	private minimumHeightValue = 0;
+	private maximumHeightValue = Number.POSITIVE_INFINITY;
+
+	constructor(className: string, snap = false) {
+		this.snap = snap;
+		this.element = document.createElement('div');
+		this.element.className = `comet-session-workbench-slot ${className}`.trim();
+	}
+
+	get minimumWidth() {
+		return this.minimumWidthValue;
+	}
+
+	get maximumWidth() {
+		return this.maximumWidthValue;
+	}
+
+	get minimumHeight() {
+		return this.minimumHeightValue;
+	}
+
+	get maximumHeight() {
+		return this.maximumHeightValue;
+	}
+
+	setConstraints(
+		orientation: Orientation,
+		constraints: LayoutAxisLimits,
+	) {
+		if (orientation === Orientation.VERTICAL) {
+			this.minimumWidthValue = constraints.minimum;
+			this.maximumWidthValue = constraints.maximum;
+			this.minimumHeightValue = 0;
+			this.maximumHeightValue = Number.POSITIVE_INFINITY;
+			return;
+		}
+
+		this.minimumWidthValue = 0;
+		this.maximumWidthValue = Number.POSITIVE_INFINITY;
+		this.minimumHeightValue = constraints.minimum;
+		this.maximumHeightValue = constraints.maximum;
+	}
+
+	setContent(content: HTMLElement | null) {
+		syncElementContent(this.element, content);
+	}
+
+	layout() {
+		// The slotted part roots stretch with CSS.
+	}
+}
+
+class SessionWorkbenchLayoutController {
+	private gridView: GridView | null = null;
+	private rootGrid: GridBranchView | null = null;
+	private gridOrientation: Orientation | null = null;
+	private splitConstraints = getSessionLayoutLimits(Orientation.VERTICAL);
+	private disposed = false;
+	private readonly gridDisposables = new DisposableStore();
+	private readonly resizeObserver = new MutableDisposable<DisposableLike>();
+	private readonly layoutAnimationFrame = new MutableDisposable<DisposableLike>();
+
+	constructor(
+		private readonly options: {
+			container: HTMLElement;
+			contentHost: HTMLElement;
+			sidebarSlot: SessionWorkbenchLayoutSlotView;
+			sessionsSlot: SessionWorkbenchLayoutSlotView;
+			editorSlot: SessionWorkbenchLayoutSlotView;
+			getState: () => {
+				isPrimarySidebarVisible: boolean;
+				isLayoutEdgeSnappingEnabled: boolean;
+				primarySidebarSize: number;
+				isEditorVisible: boolean;
+				editorSize: number;
+			};
+			onPrimarySidebarVisibilityChange: (visible: boolean) => void;
+			onPartSizesChange: (sizes: {
+				primarySidebarSize: number;
+				editorSize: number;
+			}) => void;
+		},
+	) {
+		this.installResizeObserver();
+	}
+
+	sync() {
+		const state = this.options.getState();
+		const orientation = this.resolveSplitOrientation();
+		this.syncSplitSlotConstraints(orientation);
+		this.ensureGridView(state, orientation);
+		if (!this.gridView) {
+			return;
+		}
+
+		this.gridView.edgeSnapping = state.isLayoutEdgeSnappingEnabled;
+		this.gridView.setViewVisible([SESSION_SIDEBAR_INDEX], state.isPrimarySidebarVisible);
+		this.gridView.setViewVisible([SESSION_EDITOR_INDEX], state.isEditorVisible);
+		this.gridView.setViewSize([SESSION_SIDEBAR_INDEX], state.primarySidebarSize);
+		if (state.isEditorVisible) {
+			this.gridView.setViewSize([SESSION_EDITOR_INDEX], state.editorSize);
+		}
+		this.scheduleGridViewLayout();
+	}
+
+	layout() {
+		if (this.disposed) {
+			return;
+		}
+
+		this.handleContainerResize();
+	}
+
+	dispose() {
+		if (this.disposed) {
+			return;
+		}
+
+		this.disposed = true;
+		this.resizeObserver.dispose();
+		this.layoutAnimationFrame.dispose();
+		this.disposeGridView();
+	}
+
+	private ensureGridView(
+		state: ReturnType<typeof this.options.getState>,
+		orientation: Orientation,
+	) {
+		if (
+			this.gridView &&
+			this.rootGrid &&
+			this.gridOrientation === orientation &&
+			this.options.contentHost.firstChild === this.gridView.element
+		) {
+			return;
+		}
+
+		this.disposeGridView();
+		const rootGrid = new GridBranchView(
+			orientation,
+			undefined,
+			WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE,
+			[
+				{
+					view: this.options.sidebarSlot,
+					size: state.primarySidebarSize,
+					visible: state.isPrimarySidebarVisible,
+				},
+				{
+					view: this.options.sessionsSlot,
+					size: this.resolveInitialSessionsSize(),
+					visible: true,
+					flex: true,
+				},
+				{
+					view: this.options.editorSlot,
+					size: state.editorSize,
+					visible: state.isEditorVisible,
+				},
+			],
+		);
+		const gridView = new GridView(rootGrid);
+		gridView.edgeSnapping = state.isLayoutEdgeSnappingEnabled;
+		this.gridDisposables.add(gridView.onDidSashSnap(this.handleGridSashSnap));
+		this.gridDisposables.add(gridView.onDidSashEnd(this.handleGridSashEnd));
+		this.rootGrid = rootGrid;
+		this.gridView = gridView;
+		this.gridOrientation = orientation;
+		this.options.contentHost.replaceChildren(gridView.element);
+	}
+
+	private disposeGridView() {
+		this.gridDisposables.clear();
+		this.gridView?.dispose();
+		this.gridView = null;
+		this.rootGrid = null;
+		this.gridOrientation = null;
+	}
+
+	private resolveInitialSessionsSize() {
+		const width =
+			this.options.contentHost.clientWidth ||
+			this.options.container.clientWidth ||
+			window.innerWidth;
+		return Math.max(SESSION_SPLITVIEW_LIMITS.sessions.minimum, width);
+	}
+
+	private readonly handleGridSashSnap = (event: GridSashSnapEvent) => {
+		if (event.location.length !== 1) {
+			return;
+		}
+
+		if (event.itemIndex === SESSION_SIDEBAR_INDEX) {
+			this.options.onPrimarySidebarVisibilityChange(event.visible);
+		}
+	};
+
+	private readonly handleGridSashEnd = (location: readonly number[]) => {
+		if (location.length === 0 || !this.gridView) {
+			return;
+		}
+
+		this.options.onPartSizesChange({
+			primarySidebarSize: this.gridView.getViewSize([SESSION_SIDEBAR_INDEX]),
+			editorSize: this.gridView.getViewSize([SESSION_EDITOR_INDEX]),
+		});
+	};
+
+	private installResizeObserver() {
+		if (typeof ResizeObserver === 'undefined') {
+			this.resizeObserver.value = addDisposableListener(
+				window,
+				'resize',
+				this.handleWindowResize,
+			);
+			return;
+		}
+
+		const resizeObserver = new ResizeObserver(() => {
+			this.handleContainerResize();
+		});
+		resizeObserver.observe(this.options.container);
+		this.resizeObserver.value = toDisposable(() => {
+			resizeObserver.disconnect();
+		});
+	}
+
+	private readonly handleWindowResize = () => {
+		this.handleContainerResize();
+	};
+
+	private handleContainerResize() {
+		const state = this.options.getState();
+		const orientation = this.resolveSplitOrientation();
+		this.syncSplitSlotConstraints(orientation);
+		this.ensureGridView(state, orientation);
+		this.scheduleGridViewLayout();
+	}
+
+	private scheduleGridViewLayout() {
+		if (this.disposed) {
+			return;
+		}
+
+		this.layoutAnimationFrame.clear();
+
+		let animationFrameHandle = 0;
+		const animationFrameDisposable = toDisposable(() => {
+			window.cancelAnimationFrame(animationFrameHandle);
+		});
+		this.layoutAnimationFrame.value = animationFrameDisposable;
+		animationFrameHandle = window.requestAnimationFrame(() => {
+			if (this.layoutAnimationFrame.value === animationFrameDisposable) {
+				this.layoutAnimationFrame.clearAndLeak();
+			}
+			if (!this.gridView) {
+				return;
+			}
+
+			const state = this.options.getState();
+			const nextOrientation = this.resolveSplitOrientation();
+			this.syncSplitSlotConstraints(nextOrientation);
+			if (nextOrientation !== this.gridOrientation) {
+				this.ensureGridView(state, nextOrientation);
+			}
+			this.gridView.layout(
+				this.options.contentHost.clientWidth,
+				this.options.contentHost.clientHeight,
+			);
+		});
+	}
+
+	private resolveSplitOrientation() {
+		const containerWidth =
+			this.options.contentHost.clientWidth ||
+			this.options.container.clientWidth ||
+			window.innerWidth;
+		return resolveOrientationFromWidth(containerWidth);
+	}
+
+	private syncSplitSlotConstraints(orientation: Orientation) {
+		this.splitConstraints = getSessionLayoutLimits(orientation);
+		this.options.sidebarSlot.setConstraints(
+			orientation,
+			this.splitConstraints.sidebar,
+		);
+		this.options.sessionsSlot.setConstraints(
+			orientation,
+			this.splitConstraints.sessions,
+		);
+		this.options.editorSlot.setConstraints(
+			orientation,
+			this.splitConstraints.editor,
+		);
+	}
+}
+
+export class SessionWorkbenchLayoutView {
+	private props: SessionWorkbenchLayoutViewProps;
+	private readonly element = document.createElement('section');
+	private readonly mainElement = document.createElement('main');
+	private readonly sidebarSlot = new SessionWorkbenchLayoutSlotView(
+		'comet-session-workbench-slot-sidebar',
+		true,
+	);
+	private readonly sessionsSlot = new SessionWorkbenchLayoutSlotView(
+		'comet-session-workbench-slot-sessions',
+	);
+	private readonly editorSlot = new SessionWorkbenchLayoutSlotView(
+		'comet-session-workbench-slot-editor',
+	);
+	private readonly layoutController: SessionWorkbenchLayoutController;
+	private disposed = false;
+
+	constructor(props: SessionWorkbenchLayoutViewProps) {
+		this.props = props;
+		this.element.className = 'comet-session-workbench-layout';
+		this.element.append(this.mainElement);
+		this.layoutController = new SessionWorkbenchLayoutController({
+			container: this.element,
+			contentHost: this.mainElement,
+			sidebarSlot: this.sidebarSlot,
+			sessionsSlot: this.sessionsSlot,
+			editorSlot: this.editorSlot,
+			getState: () => ({
+				isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
+				isLayoutEdgeSnappingEnabled: this.props.isLayoutEdgeSnappingEnabled,
+				primarySidebarSize: this.props.primarySidebarSize,
+				isEditorVisible: !this.props.isEditorCollapsed,
+				editorSize: this.props.expandedEditorSize,
+			}),
+			onPrimarySidebarVisibilityChange: setPrimarySidebarVisible,
+			onPartSizesChange: sizes => {
+				setWorkbenchSidebarSizes({
+					primarySidebarSize: sizes.primarySidebarSize,
+				});
+				if (!this.props.isEditorCollapsed) {
+					setEditorCollapsed(false, sizes.editorSize);
+				}
+			},
+		});
+		this.render();
+	}
+
+	getElement() {
+		return this.element;
+	}
+
+	setProps(props: SessionWorkbenchLayoutViewProps) {
+		if (this.disposed) {
+			return;
+		}
+
+		this.props = props;
+		this.render();
+	}
+
+	layout() {
+		this.layoutController.layout();
+	}
+
+	dispose() {
+		if (this.disposed) {
+			return;
+		}
+
+		this.disposed = true;
+		this.layoutController.dispose();
+		this.element.replaceChildren();
+	}
+
+	private render() {
+		const isEditorVisible = !this.props.isEditorCollapsed;
+		this.mainElement.className = [
+			'comet-session-workbench-content-grid',
+			this.props.mode === 'settings' ? 'comet-is-settings' : '',
+			this.props.isPrimarySidebarVisible ? 'comet-is-primary-sidebar-visible' : '',
+			isEditorVisible ? 'comet-is-editor-visible' : '',
+		]
+			.filter(Boolean)
+			.join(' ');
+
+		this.sidebarSlot.setContent(this.props.partViews.getSidebarElement());
+		this.sessionsSlot.setContent(this.props.partViews.getSessionsElement());
+		this.editorSlot.setContent(this.props.partViews.getEditorElement());
+		this.layoutController.sync();
+	}
+}
+
+export function createSessionWorkbenchLayoutView(
+	props: SessionWorkbenchLayoutViewProps,
 ) {
-  return (
-    (state.isPrimarySidebarVisible ? sizes.primarySidebarSize : 0) +
-    sizes.editorSize +
-    (state.isAgentSidebarVisible ? sizes.agentSidebarSize : 0)
-  );
-}
-
-export class WorkbenchLayoutSlotView implements IGridView {
-  readonly element: HTMLElement;
-  readonly snap: boolean;
-  private minimumWidthValue = 0;
-  private maximumWidthValue = Number.POSITIVE_INFINITY;
-  private minimumHeightValue = 0;
-  private maximumHeightValue = Number.POSITIVE_INFINITY;
-
-  constructor(className: string, snap = false) {
-    this.snap = snap;
-    this.element = document.createElement('div');
-    this.element.className = `comet-workbench-content-slot ${className}`.trim();
-  }
-
-  get minimumWidth() {
-    return this.minimumWidthValue;
-  }
-
-  get maximumWidth() {
-    return this.maximumWidthValue;
-  }
-
-  get minimumHeight() {
-    return this.minimumHeightValue;
-  }
-
-  get maximumHeight() {
-    return this.maximumHeightValue;
-  }
-
-  setConstraints(
-    orientation: Orientation,
-    constraints: LayoutAxisLimits,
-  ) {
-    if (orientation === Orientation.VERTICAL) {
-      this.minimumWidthValue = constraints.minimum;
-      this.maximumWidthValue = constraints.maximum;
-      this.minimumHeightValue = 0;
-      this.maximumHeightValue = Number.POSITIVE_INFINITY;
-      return;
-    }
-
-    this.minimumWidthValue = 0;
-    this.maximumWidthValue = Number.POSITIVE_INFINITY;
-    this.minimumHeightValue = constraints.minimum;
-    this.maximumHeightValue = constraints.maximum;
-  }
-
-  setContent(content: HTMLElement | null) {
-    syncElementContent(this.element, content);
-  }
-
-  layout() {
-    // The slotted part roots stretch with CSS, so no per-frame DOM work is needed here.
-  }
-}
-
-export class WorkbenchContentLayoutController {
-  private layoutTree: LayoutNode | null = null;
-  private gridView: GridView | null = null;
-  private rootGrid: GridBranchView | null = null;
-  private gridOrientation: Orientation | null = null;
-  private gridPrimarySidebarVisibleState: boolean | null = null;
-  private gridEditorCollapsedState: boolean | null = null;
-  private gridFlexStateKey: string | null = null;
-  private nextSyncCachedSizesOverride: SplitViewSizeSnapshot | null = null;
-  private reapplySidebarSizesAfterNextLayout = false;
-  private splitConstraints = getLayoutLimits(Orientation.VERTICAL);
-  private disposed = false;
-  private readonly gridDisposables = new DisposableStore();
-  private readonly resizeObserver = new MutableDisposable<DisposableLike>();
-  private readonly layoutAnimationFrame = new MutableDisposable<DisposableLike>();
-
-  constructor(
-    private readonly options: {
-      container: HTMLElement;
-      contentHost: HTMLElement;
-      primarySidebarSlot: WorkbenchLayoutSlotView;
-      editorSlot: WorkbenchLayoutSlotView;
-      agentSidebarSlot: WorkbenchLayoutSlotView;
-      getState: () => WorkbenchContentLayoutControllerState;
-      onPrimarySidebarVisibilityChange: (visible: boolean) => void;
-      onAgentSidebarVisibilityChange: (visible: boolean) => void;
-      onSidebarSizesChange: (sizes: {
-        primarySidebarSize: number;
-        agentSidebarSize: number;
-      }) => void;
-    },
-  ) {
-    this.installResizeObserver();
-  }
-
-  sync() {
-    const state = this.options.getState();
-    const orientation = this.resolveSplitOrientation();
-    const cachedSizes = this.resolveSyncCachedSizes(state);
-    this.syncSplitSlotConstraints(orientation);
-    this.syncLayoutTree(state, orientation, cachedSizes);
-    this.ensureGridView(state, orientation, cachedSizes);
-    if (!this.gridView) {
-      this.nextSyncCachedSizesOverride = null;
-      this.reapplySidebarSizesAfterNextLayout = false;
-      return;
-    }
-
-    this.gridView.edgeSnapping = state.isLayoutEdgeSnappingEnabled;
-    this.gridView.setViewVisible([PRIMARY_SIDEBAR_INDEX], state.isPrimarySidebarVisible);
-    this.gridView.setViewVisible([EDITOR_INDEX], !state.isEditorCollapsed);
-    this.gridView.setViewVisible([AGENT_SIDEBAR_INDEX], state.isAgentSidebarVisible);
-    this.applySidebarSizesToGridView(state);
-    this.scheduleGridViewLayout();
-    this.nextSyncCachedSizesOverride = null;
-  }
-
-  layout() {
-    if (this.disposed) {
-      return;
-    }
-
-    this.handleContainerResize();
-  }
-
-  dispose() {
-    if (this.disposed) {
-      return;
-    }
-
-    this.disposed = true;
-    activeContentLayoutOrientation = null;
-    this.resizeObserver.dispose();
-    this.layoutAnimationFrame.dispose();
-    this.disposeGridView();
-  }
-
-  getEditorViewSize() {
-    return this.gridView?.getViewSize([EDITOR_INDEX]) ?? null;
-  }
-
-  setNextSyncCachedSizesOverride(cachedSizes: SplitViewSizeSnapshot | null) {
-    this.nextSyncCachedSizesOverride = cachedSizes;
-    this.reapplySidebarSizesAfterNextLayout = Boolean(cachedSizes);
-  }
-
-  private resolveSyncCachedSizes(state: WorkbenchContentLayoutControllerState) {
-    return this.nextSyncCachedSizesOverride ?? this.captureGridSizes(state);
-  }
-
-  private computeFlexState(
-    state: Pick<
-      WorkbenchContentLayoutControllerState,
-      'isAgentSidebarVisible' | 'isEditorCollapsed'
-    >,
-  ) {
-    return resolveFlexState({
-      isAgentSidebarVisible: state.isAgentSidebarVisible,
-      isEditorVisible: !state.isEditorCollapsed,
-    });
-  }
-
-  private resolveGridFlexStateKey(state: WorkbenchContentLayoutControllerState) {
-    const flexState = this.computeFlexState(state);
-    return `${flexState.agentSidebarFlex ? 1 : 0}:${flexState.editorFlex ? 1 : 0}`;
-  }
-
-  private ensureGridView(
-    state: WorkbenchContentLayoutControllerState,
-    orientation: Orientation,
-    cachedSizes: SplitViewSizeSnapshot,
-  ) {
-    const flexStateKey = this.resolveGridFlexStateKey(state);
-    if (
-      this.gridView &&
-      this.rootGrid &&
-      this.gridOrientation === orientation &&
-      this.gridPrimarySidebarVisibleState === state.isPrimarySidebarVisible &&
-      this.gridEditorCollapsedState === state.isEditorCollapsed &&
-      this.gridFlexStateKey === flexStateKey &&
-      this.options.contentHost.firstChild === this.gridView.element
-    ) {
-      return;
-    }
-
-    this.disposeGridView();
-    this.syncLayoutTree(state, orientation, cachedSizes);
-    const layoutTree = this.layoutTree;
-    if (!layoutTree) {
-      return;
-    }
-
-    const rootGrid = this.buildBranchFromTree(layoutTree);
-    const gridView = new GridView(rootGrid);
-    gridView.edgeSnapping = state.isLayoutEdgeSnappingEnabled;
-
-    this.gridDisposables.add(gridView.onDidSashSnap(this.handleGridSashSnap));
-    this.gridDisposables.add(gridView.onDidSashEnd(this.handleGridSashEnd));
-    this.rootGrid = rootGrid;
-    this.gridView = gridView;
-    this.gridOrientation = orientation;
-    this.gridPrimarySidebarVisibleState = state.isPrimarySidebarVisible;
-    this.gridEditorCollapsedState = state.isEditorCollapsed;
-    this.gridFlexStateKey = flexStateKey;
-    this.options.contentHost.replaceChildren(gridView.element);
-  }
-
-  private disposeGridView() {
-    this.gridDisposables.clear();
-    this.gridView?.dispose();
-    this.gridView = null;
-    this.layoutTree = null;
-    this.rootGrid = null;
-    this.gridOrientation = null;
-    this.gridPrimarySidebarVisibleState = null;
-    this.gridEditorCollapsedState = null;
-    this.gridFlexStateKey = null;
-  }
-
-  private readonly handleGridSashSnap = (event: GridSashSnapEvent) => {
-    if (event.location.length !== 1) {
-      return;
-    }
-
-    switch (event.itemIndex) {
-      case PRIMARY_SIDEBAR_INDEX:
-        this.options.onPrimarySidebarVisibilityChange(event.visible);
-        break;
-      case AGENT_SIDEBAR_INDEX:
-        this.options.onAgentSidebarVisibilityChange(event.visible);
-        break;
-    }
-  };
-
-  private readonly handleGridSashEnd = (location: readonly number[]) => {
-    if (location.length === 0 || !this.gridView) {
-      return;
-    }
-
-    this.syncLayoutTreeFromGrid(this.options.getState());
-    this.options.onSidebarSizesChange({
-      primarySidebarSize: this.gridView.getViewSize([PRIMARY_SIDEBAR_INDEX]),
-      agentSidebarSize: this.gridView.getViewSize([AGENT_SIDEBAR_INDEX]),
-    });
-  };
-
-  private installResizeObserver() {
-    if (typeof ResizeObserver === 'undefined') {
-      this.resizeObserver.value = addDisposableListener(window, 'resize', this.handleWindowResize);
-      return;
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      this.handleContainerResize();
-    });
-    resizeObserver.observe(this.options.container);
-    this.resizeObserver.value = toDisposable(() => {
-      resizeObserver.disconnect();
-    });
-  }
-
-  private readonly handleWindowResize = () => {
-    this.handleContainerResize();
-  };
-
-  private handleContainerResize() {
-    const state = this.options.getState();
-    const orientation = this.resolveSplitOrientation();
-    const cachedSizes = this.captureGridSizes(state);
-    this.syncSplitSlotConstraints(orientation);
-    this.ensureGridView(state, orientation, cachedSizes);
-    this.scheduleGridViewLayout();
-  }
-
-  private scheduleGridViewLayout() {
-    if (this.disposed) {
-      return;
-    }
-
-    this.layoutAnimationFrame.clear();
-
-    let animationFrameHandle = 0;
-    const animationFrameDisposable = toDisposable(() => {
-      window.cancelAnimationFrame(animationFrameHandle);
-    });
-    this.layoutAnimationFrame.value = animationFrameDisposable;
-    animationFrameHandle = window.requestAnimationFrame(() => {
-      if (this.layoutAnimationFrame.value === animationFrameDisposable) {
-        this.layoutAnimationFrame.clearAndLeak();
-      }
-      if (!this.gridView) {
-        return;
-      }
-
-      const state = this.options.getState();
-      const nextOrientation = this.resolveSplitOrientation();
-      this.syncSplitSlotConstraints(nextOrientation);
-      if (nextOrientation !== this.gridOrientation) {
-        this.ensureGridView(state, nextOrientation, this.captureGridSizes(state));
-        this.applySidebarSizesToGridView(state);
-      }
-
-      this.gridView.layout(
-        this.options.contentHost.clientWidth,
-        this.options.contentHost.clientHeight,
-      );
-      if (this.reapplySidebarSizesAfterNextLayout) {
-        this.applySidebarSizesToGridView(this.options.getState());
-        this.reapplySidebarSizesAfterNextLayout = false;
-      }
-    });
-  }
-
-  private resolveSplitOrientation() {
-    const containerWidth =
-      this.options.contentHost.clientWidth ||
-      this.options.container.clientWidth ||
-      window.innerWidth;
-    const orientation = resolveOrientationFromWidth(containerWidth);
-    activeContentLayoutOrientation = orientation;
-    return orientation;
-  }
-
-  private syncSplitSlotConstraints(orientation: Orientation) {
-    this.splitConstraints = getLayoutLimits(orientation);
-
-    this.options.primarySidebarSlot.setConstraints(
-      orientation,
-      this.splitConstraints.primarySidebar,
-    );
-    this.options.editorSlot.setConstraints(orientation, this.splitConstraints.editor);
-    this.options.agentSidebarSlot.setConstraints(
-      orientation,
-      this.splitConstraints.agentSidebar,
-    );
-  }
-
-  private applySidebarSizesToGridView(state: WorkbenchContentLayoutControllerState) {
-    if (!this.gridView) {
-      return;
-    }
-
-    this.gridView.setViewSize([PRIMARY_SIDEBAR_INDEX], state.primarySidebarSize);
-    if (!state.isEditorCollapsed) {
-      this.gridView.setViewSize([AGENT_SIDEBAR_INDEX], state.agentSidebarSize);
-    }
-  }
-
-  private captureGridSizes(state: WorkbenchContentLayoutControllerState): SplitViewSizeSnapshot {
-    if (!this.gridView) {
-      return {
-        primarySidebarSize: state.primarySidebarSize,
-        editorSize: state.expandedEditorSize,
-        agentSidebarSize: state.agentSidebarSize,
-      };
-    }
-
-    this.layoutGridViewForMeasurement();
-
-    return {
-      primarySidebarSize: this.gridView.getViewSize([PRIMARY_SIDEBAR_INDEX]),
-      agentSidebarSize: this.gridView.getViewSize([AGENT_SIDEBAR_INDEX]),
-      editorSize: state.isEditorCollapsed
-        ? state.expandedEditorSize
-        : this.gridView.getViewSize([EDITOR_INDEX]),
-    };
-  }
-
-  private layoutGridViewForMeasurement() {
-    if (!this.gridView || !this.rootGrid) {
-      return;
-    }
-
-    if (this.rootGrid.width > 0 && this.rootGrid.height > 0) {
-      return;
-    }
-
-    const width = this.options.contentHost.clientWidth;
-    const height = this.options.contentHost.clientHeight;
-    if (width <= 0 || height <= 0) {
-      return;
-    }
-
-    this.gridView.layout(width, height);
-  }
-
-  private buildBranchFromTree(node: LayoutNode): GridBranchView {
-    if (node.type !== 'branch') {
-      throw new Error('Root workbench content layout node must be a branch.');
-    }
-
-    return new GridBranchView(
-      node.orientation,
-      undefined,
-      WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE,
-      node.children.map((child) => ({
-        view:
-          child.type === 'branch'
-            ? this.buildBranchFromTree(child)
-            : this.getSlotView(child.id),
-        size: child.size,
-        visible: this.isNodeVisible(child),
-        flex: child.type === 'leaf' ? child.flex === true : false,
-      })),
-    );
-  }
-
-  private getSlotView(id: LayoutLeafId) {
-    switch (id) {
-      case 'primarySidebar':
-        return this.options.primarySidebarSlot;
-      case 'editor':
-        return this.options.editorSlot;
-      case 'agentSidebar':
-        return this.options.agentSidebarSlot;
-    }
-  }
-
-  private isNodeVisible(node: LayoutNode): boolean {
-    return node.type === 'leaf'
-      ? node.visible
-      : node.children.some((child) => this.isNodeVisible(child));
-  }
-
-  private syncLayoutTree(
-    state: WorkbenchContentLayoutControllerState,
-    orientation: Orientation,
-    cachedSizes: SplitViewSizeSnapshot,
-  ) {
-    let nextTree = reconcileLayoutTree(this.layoutTree, {
-      orientation,
-      isPrimarySidebarVisible: state.isPrimarySidebarVisible,
-      isEditorVisible: !state.isEditorCollapsed,
-      isAgentSidebarVisible: state.isAgentSidebarVisible,
-      primarySidebarSize: state.primarySidebarSize,
-      agentSidebarSize: state.agentSidebarSize,
-      editorSize: state.isEditorCollapsed ? state.expandedEditorSize : cachedSizes.editorSize,
-    });
-
-    nextTree = this.updateTreeBranchSizes(state, nextTree, {
-      primarySidebarSize: state.primarySidebarSize,
-      editorSize: state.isEditorCollapsed ? 0 : cachedSizes.editorSize,
-      agentSidebarSize: state.agentSidebarSize,
-    });
-
-    this.layoutTree = nextTree;
-  }
-
-  private syncLayoutTreeFromGrid(state: WorkbenchContentLayoutControllerState) {
-    if (!this.layoutTree || !this.gridView) {
-      return;
-    }
-
-    const flexState = this.computeFlexState(state);
-    let nextTree = updateLeaf(this.layoutTree, 'primarySidebar', {
-      size: this.gridView.getViewSize([PRIMARY_SIDEBAR_INDEX]),
-      visible: state.isPrimarySidebarVisible,
-    });
-    nextTree = updateLeaf(nextTree, 'editor', {
-      size: state.isEditorCollapsed
-        ? state.expandedEditorSize
-        : this.gridView.getViewSize([EDITOR_INDEX]),
-      visible: !state.isEditorCollapsed,
-      flex: flexState.editorFlex,
-    });
-    nextTree = updateLeaf(nextTree, 'agentSidebar', {
-      size: this.gridView.getViewSize([AGENT_SIDEBAR_INDEX]),
-      visible: state.isAgentSidebarVisible,
-      flex: flexState.agentSidebarFlex,
-    });
-
-    this.layoutTree = this.updateTreeBranchSizes(state, nextTree, {
-      primarySidebarSize: this.gridView.getViewSize([PRIMARY_SIDEBAR_INDEX]),
-      editorSize: state.isEditorCollapsed ? 0 : this.gridView.getViewSize([EDITOR_INDEX]),
-      agentSidebarSize: this.gridView.getViewSize([AGENT_SIDEBAR_INDEX]),
-    });
-  }
-
-  private updateTreeBranchSizes(
-    state: WorkbenchContentLayoutControllerState,
-    tree: LayoutNode,
-    sizes: SplitViewSizeSnapshot,
-  ) {
-    if (tree.type !== 'branch') {
-      return tree;
-    }
-
-    return {
-      ...tree,
-      size: getRootSplitSize(state, sizes),
-    };
-  }
+	return new SessionWorkbenchLayoutView(props);
 }

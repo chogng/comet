@@ -26,13 +26,10 @@ import { URI } from 'cs/base/common/uri';
 import { Schemas } from 'cs/base/common/network';
 import {
   getWorkbenchLayoutStateSnapshot,
-  getWorkbenchContentClassName,
   registerWorkbenchPartDomNode,
-  WorkbenchContentLayoutController,
-  WorkbenchLayoutSlotView,
+  createSessionWorkbenchLayoutView,
   setAgentSidebarVisible,
   setEditorCollapsed,
-  setWorkbenchSidebarSizes,
   setPrimarySidebarVisible,
   subscribeWorkbenchLayoutState,
   toggleEditorCollapsed,
@@ -67,11 +64,9 @@ import {
 } from 'cs/sessions/browser/parts/sessions/chatView';
 import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import { createSessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
-import { createSessionWorkbenchLayoutView } from 'cs/sessions/browser/workbenchLayout';
 import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 
 import { ToastOverlayWindowView } from 'cs/workbench/browser/toastOverlayWindow';
-import { createWorkbenchContentPartViews } from 'cs/workbench/browser/workbenchContentPartViews';
 import { showWorkbenchTextInputModal } from 'cs/workbench/browser/workbenchEditorModals';
 import { createEditorHeaderActionsView } from 'cs/workbench/browser/parts/editor/editorHeaderActionsView';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -251,171 +246,6 @@ function resolveRuntimeState(nativeHost: INativeHostService) {
     webContentRuntime,
     desktopRuntime: electronRuntime,
   };
-}
-
-export type WorkbenchLayoutViewProps = {
-  mode?: 'content' | 'settings';
-  isPrimarySidebarVisible: boolean;
-  isAgentSidebarVisible: boolean;
-  isLayoutEdgeSnappingEnabled: boolean;
-  primarySidebarSize: number;
-  agentSidebarSize: number;
-  isEditorCollapsed: boolean;
-  expandedEditorSize: number;
-  partViews: ReturnType<typeof createWorkbenchContentPartViews>;
-};
-
-function createWorkbenchLayoutElement<K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  className?: string,
-) {
-  const element = document.createElement(tagName);
-  if (className) {
-    element.className = className;
-  }
-  return element;
-}
-
-export class WorkbenchLayoutView {
-  private props: WorkbenchLayoutViewProps;
-  private lastContentEditorSize: number | null = null;
-  private readonly element = createWorkbenchLayoutElement('section', 'comet-workbench-content-layout');
-  private readonly mainElement = createWorkbenchLayoutElement('main');
-  private readonly primarySidebarSlot = new WorkbenchLayoutSlotView(
-    'comet-workbench-content-slot-leading-group comet-workbench-leading-pane comet-workbench-leading-pane-primary',
-    true,
-  );
-  private readonly editorSlot = new WorkbenchLayoutSlotView('comet-workbench-content-slot-editor');
-  private readonly agentBarSlot = new WorkbenchLayoutSlotView(
-    'comet-workbench-content-slot-agent',
-  );
-  private readonly layoutController: WorkbenchContentLayoutController;
-  private disposed = false;
-
-  get gridView() {
-    return (this.layoutController as unknown as { gridView: unknown }).gridView;
-  }
-
-  get layoutAnimationFrame() {
-    return (this.layoutController as unknown as { layoutAnimationFrame: unknown }).layoutAnimationFrame;
-  }
-
-  get resizeObserver() {
-    return (this.layoutController as unknown as { resizeObserver: unknown }).resizeObserver;
-  }
-
-  get handleWindowResize() {
-    return (this.layoutController as unknown as {
-      handleWindowResize: EventListenerOrEventListenerObject;
-    }).handleWindowResize;
-  }
-
-  constructor(props: WorkbenchLayoutViewProps) {
-    this.props = props;
-    this.element.append(this.mainElement);
-    this.layoutController = new WorkbenchContentLayoutController({
-      container: this.element,
-      contentHost: this.mainElement,
-      primarySidebarSlot: this.primarySidebarSlot,
-      editorSlot: this.editorSlot,
-      agentSidebarSlot: this.agentBarSlot,
-      getState: () => ({
-        isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
-        isAgentSidebarVisible: this.props.isAgentSidebarVisible,
-        isLayoutEdgeSnappingEnabled: this.props.isLayoutEdgeSnappingEnabled,
-        primarySidebarSize: this.props.primarySidebarSize,
-        agentSidebarSize: this.props.agentSidebarSize,
-        isEditorCollapsed: this.props.isEditorCollapsed,
-        expandedEditorSize: this.props.expandedEditorSize,
-      }),
-      onPrimarySidebarVisibilityChange: setPrimarySidebarVisible,
-      onAgentSidebarVisibilityChange: setAgentSidebarVisible,
-      onSidebarSizesChange: setWorkbenchSidebarSizes,
-    });
-    this.render();
-  }
-
-  getElement() {
-    return this.element;
-  }
-
-  setProps(props: WorkbenchLayoutViewProps) {
-    if (this.disposed) {
-      return;
-    }
-
-    const previousMode = this.resolveMode(this.props.mode);
-    const nextMode = this.resolveMode(props.mode);
-    if (previousMode === 'content' && nextMode === 'settings') {
-      const editorSize = this.layoutController.getEditorViewSize();
-      if (
-        typeof editorSize === 'number' &&
-        Number.isFinite(editorSize) &&
-        editorSize > 0
-      ) {
-        this.lastContentEditorSize = editorSize;
-      }
-    }
-    if (previousMode === 'settings' && nextMode === 'content') {
-      this.layoutController.setNextSyncCachedSizesOverride({
-        primarySidebarSize: props.primarySidebarSize,
-        editorSize: this.lastContentEditorSize ?? props.expandedEditorSize,
-        agentSidebarSize: props.agentSidebarSize,
-      });
-    }
-
-    this.props = props;
-    this.render();
-  }
-
-  layout() {
-    this.layoutController.layout();
-  }
-
-  dispose() {
-    if (this.disposed) {
-      return;
-    }
-
-    this.disposed = true;
-    this.layoutController.dispose();
-    this.element.replaceChildren();
-  }
-
-  private readonly handleToggleEditorCollapse = () => {
-    const editorViewSize = this.layoutController.getEditorViewSize();
-    if (!this.props.isEditorCollapsed && typeof editorViewSize === 'number') {
-      toggleEditorCollapsed(editorViewSize);
-      return;
-    }
-
-    toggleEditorCollapsed();
-  };
-
-  private resolveMode(mode: WorkbenchLayoutViewProps['mode']) {
-    return mode === 'settings' ? 'settings' : 'content';
-  }
-
-  private render() {
-    this.mainElement.className = getWorkbenchContentClassName({
-      isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
-      isAgentSidebarVisible: this.props.isAgentSidebarVisible,
-      isEditorCollapsed: this.props.isEditorCollapsed,
-    });
-
-    this.props.partViews.setLayoutState({
-      isEditorCollapsed: this.props.isEditorCollapsed,
-      onToggleEditorCollapse: this.handleToggleEditorCollapse,
-    });
-    this.primarySidebarSlot.setContent(this.props.partViews.getPrimarySidebarElement());
-    this.editorSlot.setContent(this.props.partViews.getEditorElement());
-    this.agentBarSlot.setContent(this.props.partViews.getAgentSidebarElement());
-    this.layoutController.sync();
-  }
-}
-
-export function createWorkbenchLayoutView(props: WorkbenchLayoutViewProps) {
-  return new WorkbenchLayoutView(props);
 }
 
 function createAgentChatLlmSettings(

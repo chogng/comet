@@ -22,9 +22,7 @@
 
 .comet-titlebar {
   --workbench-titlebar-height: 36px;
-  --workbench-titlebar-border: var(--comet-separator-border);
-  --workbench-titlebar-button-hover-background: var(--vscode-titleBar-fieldHoverBackground);
-  --workbench-titlebar-button-active-background: var(--vscode-titleBar-fieldFocusBackground);
+  --comet-titlebar-border: var(--comet-separator-border);
   width: 100%;
   min-width: 0;
   min-height: var(--workbench-titlebar-height);
@@ -32,8 +30,8 @@
   display: flex;
   flex-direction: row;
   overflow: hidden;
-  color: var(--vscode-titleBar-buttonForeground);
-  border-bottom: 1px solid var(--workbench-titlebar-border);
+  color: inherit;
+  border-bottom: 1px solid var(--comet-titlebar-border);
 }
 
 .comet-titlebar > .comet-titlebar-container {
@@ -99,7 +97,7 @@
 
 .comet-app-window.comet-has-leading-window-controls .comet-titlebar .comet-titlebar-leading-actions-host {
   padding-inline-start: calc(
-    var(--workbench-leading-window-controls-width, 0px) + 6px
+    var(--workbench-leading-window-controls-width, 0px) + 12px
   );
 }
 
@@ -117,7 +115,7 @@
   height: 24px;
   border: none;
   background: transparent;
-  color: var(--vscode-sideBar-foreground);
+  color: inherit;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -146,7 +144,7 @@
 .comet-titlebar .comet-editor-header-add-btn.comet-actionbar-action,
 .comet-titlebar .comet-editor-header-agent-btn.comet-actionbar-action,
 .comet-titlebar .comet-editor-header-toggle-editor-btn.comet-actionbar-action {
-  color: var(--vscode-titleBar-buttonForeground);
+  color: inherit;
   border-radius: 6px;
 }
 
@@ -156,7 +154,7 @@
 .comet-titlebar .comet-editor-header-add-btn.comet-actionbar-action:hover,
 .comet-titlebar .comet-editor-header-agent-btn.comet-actionbar-action:hover,
 .comet-titlebar .comet-editor-header-toggle-editor-btn.comet-actionbar-action:hover {
-  background: var(--workbench-titlebar-button-hover-background);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .comet-titlebar .comet-titlebar-menu-btn.comet-actionbar-action:active,
@@ -165,26 +163,26 @@
 .comet-titlebar .comet-editor-header-add-btn.comet-actionbar-action:active,
 .comet-titlebar .comet-editor-header-agent-btn.comet-actionbar-action:active,
 .comet-titlebar .comet-editor-header-toggle-editor-btn.comet-actionbar-action:active {
-  background: var(--workbench-titlebar-button-active-background);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .comet-titlebar-main-menu {
   width: 180px;
   min-height: 72px;
-  background: var(--vscode-menu-background);
+  background: var(--workbench-chrome-bg);
   border: 1px solid var(--comet-separator-border);
   border-radius: 6px;
 }
 
 .comet-titlebar input,
 .comet-titlebar textarea {
-  color: var(--vscode-titleBar-fieldForeground);
-  background: var(--vscode-titleBar-fieldBackground);
+  color: inherit;
+  background: var(--workbench-chrome-bg);
 }
 
 .comet-titlebar input::placeholder,
 .comet-titlebar textarea::placeholder {
-  color: var(--vscode-titleBar-placeholderForeground);
+  color: rgba(26, 37, 48, 0.55);
 }
 
 .comet-titlebar > .comet-titlebar-container > .comet-titlebar-drag-region {
@@ -248,13 +246,13 @@
 
 .comet-app-shell.comet-app-shell-settings {
   grid-template-rows: minmax(0, 1fr);
-  background-color: var(--vscode-settings-contentBackground, #ffffff);
+  background-color: var(--workbench-chrome-bg);
 }
 
 .comet-app-shell.comet-app-shell-settings .comet-workbench-content-layout,
 .comet-app-shell.comet-app-shell-settings .comet-content-grid,
 .comet-app-shell.comet-app-shell-settings .comet-workbench-content-slot-editor {
-  background: var(--vscode-settings-contentBackground, #ffffff);
+  background: var(--workbench-chrome-bg);
 }
 
 @media (max-width: 980px) {

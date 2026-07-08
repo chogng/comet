@@ -156,11 +156,9 @@ registerSingleton(
 
 export {
   WORKBENCH_PART_IDS,
-  getWorkbenchContentClassName,
   getWorkbenchShellClassName,
 } from 'cs/workbench/browser/layout';
 export type {
-  WorkbenchContentLayoutControllerState,
   WorkbenchLayoutMode,
   WorkbenchLayoutStateSnapshot,
   WorkbenchPartId,

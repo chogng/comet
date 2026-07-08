@@ -1,3 +1,5 @@
+import './media/style.css';
+
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
