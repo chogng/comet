@@ -42,7 +42,7 @@ export const buttonSecondaryForeground = registerColor('button.secondaryForegrou
 
 export const buttonSecondaryBorder = registerColor('button.secondaryBorder', {
   dark: '#344150',
-  light: '#d3d3d3',
+  light: '#e6e6e6',
 });
 
 export const buttonSecondaryShadow = registerColor('button.secondaryShadow', {
@@ -57,27 +57,12 @@ export const buttonSecondaryHoverBackground = registerColor('button.secondaryHov
 
 export const buttonSecondaryHoverBorder = registerColor('button.secondaryHoverBorder', {
   dark: '#425468',
-  light: '#c6c6c6',
+  light: '#d8d8d8',
 });
 
 export const buttonSecondaryActiveBackground = registerColor('button.secondaryActiveBackground', {
   dark: '#2a3642',
   light: '#edf2f7',
-});
-
-export const buttonOutlineForeground = registerColor('button.outlineForeground', {
-  dark: '#8cb9ff',
-  light: '#0a5fbf',
-});
-
-export const buttonOutlineBorder = registerColor('button.outlineBorder', {
-  dark: '#5aa9ff',
-  light: '#0a5fbf',
-});
-
-export const buttonOutlineHoverBackground = registerColor('button.outlineHoverBackground', {
-  dark: 'rgba(90, 169, 255, 0.12)',
-  light: 'rgba(10, 95, 191, 0.05)',
 });
 
 export const buttonGhostForeground = registerColor('button.ghostForeground', {
@@ -93,31 +78,6 @@ export const buttonGhostHoverBackground = registerColor('button.ghostHoverBackgr
 export const buttonGhostHoverForeground = registerColor('button.ghostHoverForeground', {
   dark: '#edf3f9',
   light: '#1a2530',
-});
-
-export const buttonDangerBackground = registerColor('button.dangerBackground', {
-  dark: '#4a2327',
-  light: '#fee2e2',
-});
-
-export const buttonDangerForeground = registerColor('button.dangerForeground', {
-  dark: '#ff9d9d',
-  light: '#ef4444',
-});
-
-export const buttonDangerBorder = registerColor('button.dangerBorder', {
-  dark: '#6b3036',
-  light: '#fecaca',
-});
-
-export const buttonDangerHoverBackground = registerColor('button.dangerHoverBackground', {
-  dark: '#5c2b31',
-  light: '#fecaca',
-});
-
-export const buttonDangerHoverForeground = registerColor('button.dangerHoverForeground', {
-  dark: '#ffb4b4',
-  light: '#dc2626',
 });
 
 export const dropdownBorder = registerColor('dropdown.border', {

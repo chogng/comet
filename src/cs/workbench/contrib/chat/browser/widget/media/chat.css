@@ -174,7 +174,7 @@
   position: relative;
   width: 100%;
   padding: 0;
-  border: 1px solid var(--comet-chatInput-composerBorder, #d3d3d3);
+  border: 1px solid var(--comet-chatInput-composerBorder, #e6e6e6);
   border-radius: 10px;
   background: var(--comet-chatInput-composerBackground, #FCFCFC);
   box-shadow: none;

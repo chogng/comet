@@ -8,7 +8,7 @@ import type {
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import { $ } from 'cs/base/browser/dom';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 export type ButtonMode = 'text' | 'icon';
 export type ButtonContentMode = 'with' | 'without';

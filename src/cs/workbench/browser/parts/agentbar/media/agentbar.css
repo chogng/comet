@@ -107,7 +107,7 @@
   min-height: 96px;
   resize: none;
   border-radius: 8px;
-  border: 1px solid var(--comet-agentBar-inputBorder, #d3d3d3);
+  border: 1px solid var(--comet-agentBar-inputBorder, #e6e6e6);
   background: var(--comet-agentBar-inputBackground, #f9fbfd);
   color: var(--comet-agentBar-inputForeground, #1f2d3a);
   padding: 10px 12px;

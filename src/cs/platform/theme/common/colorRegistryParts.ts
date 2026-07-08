@@ -162,7 +162,7 @@ export const agentBarBackground = registerColor('agentBar.background', {
 
 export const agentBarInputBorder = registerColor('agentBar.inputBorder', {
   dark: '#3a4652',
-  light: '#d3d3d3',
+  light: '#e6e6e6',
 });
 
 export const agentBarInputBackground = registerColor('agentBar.inputBackground', {
@@ -177,7 +177,7 @@ export const agentBarInputForeground = registerColor('agentBar.inputForeground',
 
 export const chatInputComposerBorder = registerColor('chatInput.composerBorder', {
   dark: '#2a3340',
-  light: '#d3d3d3',
+  light: '#e6e6e6',
 });
 
 export const chatInputComposerBackground = registerColor('chatInput.composerBackground', {
