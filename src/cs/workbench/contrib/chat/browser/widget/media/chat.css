@@ -154,9 +154,13 @@
 }
 
 .comet-chat-composer-host {
+  --comet-chat-composer-max-width: 960px;
   position: relative;
   width: 100%;
+  max-width: var(--comet-chat-composer-max-width);
   margin-top: auto;
+  margin-inline: auto;
+  align-self: center;
   display: grid;
   gap: 8px;
 }
@@ -166,19 +170,25 @@
 }
 
 .comet-chat-composer-host.comet-is-empty-state {
+  --comet-chat-composer-max-width: 840px;
   margin-top: 0;
-  width: min(100%, 840px);
 }
 
 .comet-chat-composer {
   position: relative;
   width: 100%;
+  max-width: var(--comet-chat-composer-max-width);
+  margin-inline: auto;
   padding: 0;
-  border: 1px solid var(--comet-chatInput-composerBorder, #e6e6e6);
+  border: 1px solid var(--comet-chatInput-composerBorder, #ececec);
   border-radius: 10px;
   background: var(--comet-chatInput-composerBackground, #FCFCFC);
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(24, 36, 48, 0.08);
   overflow: hidden;
+}
+
+.comet-chat-composer:hover {
+  border-color: #d8d8d8;
 }
 
 .comet-chat-composer-input {
@@ -408,6 +418,8 @@
 .comet-chat-composer-quick-actions-shell {
   position: relative;
   width: 100%;
+  max-width: var(--comet-chat-composer-max-width);
+  margin-inline: auto;
 }
 
 .comet-chat-composer-quick-actions {

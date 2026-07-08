@@ -63,6 +63,7 @@ import {
   type SessionChatViewProps,
 } from 'cs/sessions/browser/parts/sessions/chatView';
 import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
+import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { SessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
 import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 
@@ -2396,12 +2397,27 @@ class WorkbenchHost {
       });
     }
 
+    const sessionsPartView = this.workbenchContentPartViews?.getPart(
+      SESSION_PART_IDS.sessions,
+    ) ?? null;
+    const editorPartView = this.workbenchContentPartViews?.getPart(
+      SESSION_PART_IDS.editor,
+    ) ?? null;
+
     this.titlebarPart.sync({
       electronRuntime,
       useMica,
       statusbarVisible,
       activePage,
       leadingActions: titlebarLeadingActionsProps,
+      primarySidebarVisible: activePage === 'content'
+        ? isPrimarySidebarVisible
+        : true,
+      primarySidebarSize,
+      editorVisible: activePage === 'content' && !isEditorCollapsed,
+      editorSize: expandedEditorSize,
+      sessionsHeaderElement: sessionsPartView?.getHeaderElement() ?? null,
+      editorHeaderElement: editorPartView?.getHeaderElement() ?? null,
     });
 
     this.syncPostRenderState({

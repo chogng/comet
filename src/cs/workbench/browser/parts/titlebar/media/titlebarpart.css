@@ -37,6 +37,8 @@
 .comet-titlebar > .comet-titlebar-container {
   --editor-header-height: var(--workbench-titlebar-height);
   --agentbar-header-height: var(--workbench-titlebar-height);
+  --comet-titlebar-primary-sidebar-width: 0px;
+  --comet-titlebar-editor-width: 0px;
   box-sizing: border-box;
   position: relative;
   min-width: 0;
@@ -45,12 +47,19 @@
   flex-shrink: 1;
   flex-grow: 1;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) var(--comet-titlebar-editor-width);
   align-items: center;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: drag;
+}
+
+.comet-titlebar > .comet-titlebar-container.comet-has-primary-sidebar-slot {
+  grid-template-columns:
+    var(--comet-titlebar-primary-sidebar-width)
+    minmax(0, 1fr)
+    var(--comet-titlebar-editor-width);
 }
 
 .comet-titlebar-leading-actions-host,
@@ -105,6 +114,21 @@
 
 .comet-titlebar .comet-editor-header {
   padding: 0 6px;
+}
+
+.comet-titlebar .comet-session-header {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  flex: 1 1 auto;
+  padding: 0 6px;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.comet-titlebar .comet-session-header[hidden] {
+  display: flex;
+  visibility: hidden;
 }
 
 .comet-titlebar-menu-btn.comet-actionbar-action,
@@ -201,7 +225,7 @@
   content: '';
   width: var(--workbench-window-controls-width);
   height: 100%;
-  grid-column: 3;
+  grid-column: 4;
   -webkit-app-region: no-drag;
 }
 
@@ -216,15 +240,48 @@
   align-items: center;
   justify-content: flex-start;
   overflow: hidden;
+  -webkit-app-region: drag;
 }
 
 .comet-titlebar > .comet-titlebar-container > .comet-titlebar-left[hidden] {
-  display: none;
+  visibility: hidden;
 }
 
 .comet-titlebar > .comet-titlebar-container > .comet-titlebar-left > * {
   min-width: 0;
   width: auto;
+  height: 100%;
+}
+
+.comet-titlebar > .comet-titlebar-container > .comet-titlebar-sessions,
+.comet-titlebar > .comet-titlebar-container > .comet-titlebar-editor {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+.comet-titlebar > .comet-titlebar-container > .comet-titlebar-sessions {
+  grid-column: 2;
+}
+
+.comet-titlebar > .comet-titlebar-container > .comet-titlebar-editor {
+  grid-column: 3;
+}
+
+.comet-titlebar > .comet-titlebar-container > .comet-titlebar-editor[hidden] {
+  display: none;
+}
+
+.comet-titlebar > .comet-titlebar-container > .comet-titlebar-sessions > *,
+.comet-titlebar > .comet-titlebar-container > .comet-titlebar-editor > * {
+  min-width: 0;
+  width: 100%;
   height: 100%;
 }
 

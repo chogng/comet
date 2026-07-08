@@ -28,6 +28,12 @@ export type TitlebarPartSyncParams = {
   statusbarVisible: boolean;
   activePage: TitlebarPartPage;
   leadingActions: TitlebarLeadingActionsProps;
+  primarySidebarVisible: boolean;
+  primarySidebarSize: number;
+  editorVisible: boolean;
+  editorSize: number;
+  sessionsHeaderElement?: HTMLElement | null;
+  editorHeaderElement?: HTMLElement | null;
 };
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
@@ -49,6 +55,14 @@ export class TitlebarPart {
   private readonly leftElement = append(
     this.titlebarContainerElement,
     $<HTMLElementTagNameMap['div']>('div.comet-titlebar-left'),
+  );
+  private readonly sessionsElement = append(
+    this.titlebarContainerElement,
+    $<HTMLElementTagNameMap['div']>('div.comet-titlebar-sessions'),
+  );
+  private readonly editorElement = append(
+    this.titlebarContainerElement,
+    $<HTMLElementTagNameMap['div']>('div.comet-titlebar-editor'),
   );
   private readonly leadingActionsHostElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-leading-actions-host');
   private readonly leadingActionBarView = createActionBarView({
@@ -119,6 +133,8 @@ export class TitlebarPart {
 
   dispose() {
     this.leftElement.replaceChildren();
+    this.sessionsElement.replaceChildren();
+    this.editorElement.replaceChildren();
     this.leadingActionBarView.dispose();
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, null);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.statusbar, null);
@@ -126,9 +142,57 @@ export class TitlebarPart {
 
   private syncTitlebar(params: TitlebarPartSyncParams) {
     this.syncLeadingActions(params.leadingActions);
+    this.syncContentLayout(params);
+    this.syncHeaderSlot(
+      this.sessionsElement,
+      params.sessionsHeaderElement ?? null,
+    );
+    this.syncHeaderSlot(
+      this.editorElement,
+      params.editorVisible ? (params.editorHeaderElement ?? null) : null,
+    );
 
     this.titlebarContainerElement.classList.remove('comet-has-center');
     this.leftElement.hidden = !this.leadingActionsHostElement.isConnected;
+    this.editorElement.hidden = !params.editorVisible;
+  }
+
+  private syncContentLayout(params: TitlebarPartSyncParams) {
+    this.titlebarContainerElement.classList.toggle(
+      'comet-has-primary-sidebar-slot',
+      params.primarySidebarVisible,
+    );
+    this.titlebarContainerElement.classList.toggle(
+      'comet-has-editor-slot',
+      params.editorVisible,
+    );
+    this.titlebarContainerElement.style.setProperty(
+      '--comet-titlebar-primary-sidebar-width',
+      `${params.primarySidebarVisible ? params.primarySidebarSize : 0}px`,
+    );
+    this.titlebarContainerElement.style.setProperty(
+      '--comet-titlebar-editor-width',
+      `${params.editorVisible ? params.editorSize : 0}px`,
+    );
+  }
+
+  private syncHeaderSlot(
+    slotElement: HTMLElement,
+    headerElement: HTMLElement | null,
+  ) {
+    if (headerElement) {
+      if (
+        slotElement.firstElementChild !== headerElement ||
+        slotElement.childNodes.length !== 1
+      ) {
+        slotElement.replaceChildren(headerElement);
+      }
+      return;
+    }
+
+    if (slotElement.childNodes.length > 0) {
+      slotElement.replaceChildren();
+    }
   }
 
   private syncLeadingActions(props: TitlebarLeadingActionsProps) {

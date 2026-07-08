@@ -29,6 +29,10 @@ export class SessionsPartView {
 		return this.element;
 	}
 
+	getHeaderElement() {
+		return this.sessionView.getHeaderElement();
+	}
+
 	setProps(props: SessionsPartViewProps) {
 		if (this.disposed) {
 			return;

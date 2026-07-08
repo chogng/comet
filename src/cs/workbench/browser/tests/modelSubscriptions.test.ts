@@ -741,6 +741,8 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
   const container = document.createElement('div');
   const shell = document.createElement('div');
   const statusbar = document.createElement('section');
+  const sessionsHeader = document.createElement('header');
+  const editorHeader = document.createElement('header');
   let toggleCount = 0;
   let focusAddressBarCount = 0;
 
@@ -753,6 +755,12 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       useMica: false,
       statusbarVisible: true,
       activePage: 'content',
+      primarySidebarVisible: true,
+      primarySidebarSize: 260,
+      editorVisible: true,
+      editorSize: 420,
+      sessionsHeaderElement: sessionsHeader,
+      editorHeaderElement: editorHeader,
       leadingActions: {
         menuLabel: 'Menu',
         isPrimarySidebarVisible: true,
@@ -795,12 +803,12 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     assert.equal(toggleCount, 1);
     assert.equal(focusAddressBarCount, 1);
     assert.equal(
-      titlebarPart.getElement().querySelector('.comet-titlebar-center'),
-      null,
+      titlebarPart.getElement().querySelector('.comet-titlebar-sessions')?.firstElementChild,
+      sessionsHeader,
     );
     assert.equal(
-      titlebarPart.getElement().querySelector('.comet-titlebar-right'),
-      null,
+      titlebarPart.getElement().querySelector('.comet-titlebar-editor')?.firstElementChild,
+      editorHeader,
     );
     assert.equal(
       getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.titlebar],

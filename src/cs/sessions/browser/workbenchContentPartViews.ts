@@ -10,6 +10,10 @@ import {
 	type SessionSidebarProps,
 } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import {
+	SESSION_PART_IDS,
+	type SessionPartId,
+} from 'cs/sessions/browser/parts/parts';
+import {
 	SessionsPartView,
 } from 'cs/sessions/browser/parts/sessions/sessionsPart';
 import {
@@ -76,6 +80,24 @@ export class SessionWorkbenchContentPartViews {
 
 	getEditorElement() {
 		return this.editorView?.getElement() ?? null;
+	}
+
+	getPart(partId: typeof SESSION_PART_IDS.sidebar): SessionSidebarPartView | null;
+	getPart(partId: typeof SESSION_PART_IDS.sessions): SessionsPartView | null;
+	getPart(partId: typeof SESSION_PART_IDS.editor): SessionEditorPartView | null;
+	getPart(partId: SessionPartId) {
+		switch (partId) {
+			case SESSION_PART_IDS.sidebar:
+				return this.sidebarView;
+			case SESSION_PART_IDS.sessions:
+				return this.props.mode === 'settings' ? null : this.sessionsView;
+			case SESSION_PART_IDS.editor:
+				return this.props.mode === 'settings' || !this.props.isEditorVisible
+					? null
+					: this.editorView;
+		}
+
+		return null;
 	}
 
 	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
