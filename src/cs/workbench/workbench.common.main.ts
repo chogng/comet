@@ -50,7 +50,6 @@ import 'cs/workbench/services/lifecycle/browser/lifecycleService';
 import 'cs/workbench/services/localization/browser/localeService';
 import 'cs/workbench/services/notification/common/notificationService';
 import 'cs/workbench/services/quickInput/browser/quickInputService';
-import 'cs/workbench/services/storage/browser/storageService';
 import 'cs/workbench/services/views/browser/viewsService';
 import 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 
