@@ -3,15 +3,19 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 
-import { LibrarySettingsSection } from 'cs/workbench/contrib/preferences/browser/libraryWidget';
-import type { LibrarySettingsSectionProps } from 'cs/workbench/contrib/preferences/browser/libraryWidget';
+import {
+  renderLibrarySettingsSection,
+  type LibrarySettingsSectionProps,
+} from 'cs/workbench/contrib/preferences/browser/libraryWidget';
 import {
   LlmApiKeySettingsSection,
   LlmModelSettingsSection,
   type LlmSettingsSectionProps,
 } from 'cs/workbench/contrib/preferences/browser/llmWidget';
-import { RagSettingsSection } from 'cs/workbench/contrib/preferences/browser/ragWidget';
-import type { RagSettingsSectionProps } from 'cs/workbench/contrib/preferences/browser/ragWidget';
+import {
+  renderRagSettingsSection,
+  type RagSettingsSectionProps,
+} from 'cs/workbench/contrib/preferences/browser/ragWidget';
 import type { SettingsPageId } from 'cs/workbench/contrib/preferences/common/settings';
 import { SettingsTree } from 'cs/workbench/contrib/preferences/browser/settingsTree';
 import type { SettingsSectionRenderers } from 'cs/workbench/contrib/preferences/browser/settingsTree';
@@ -115,8 +119,6 @@ export class SettingsPartView {
   private readonly pageTitle = el('h2', 'comet-settings-page-title');
   private readonly loadingHint = buildHint('');
   private readonly noResultsHint = buildHint('', 'comet-settings-hint comet-settings-no-results');
-  private readonly librarySection: LibrarySettingsSection;
-  private readonly ragSection: RagSettingsSection;
   private readonly llmModelSection: LlmModelSettingsSection;
   private readonly llmApiKeySection: LlmApiKeySettingsSection;
   private readonly translationSection: TranslationSettingsSection;
@@ -149,8 +151,6 @@ export class SettingsPartView {
       onDidSelectPage: this.handleDidSelectPage,
     });
     this.initializeSearch();
-    this.librarySection = new LibrarySettingsSection(this.getLibrarySectionProps());
-    this.ragSection = new RagSettingsSection(this.getRagSectionProps());
     const llmSectionProps = this.getLlmSectionProps();
     this.llmModelSection = new LlmModelSettingsSection(llmSectionProps);
     this.llmApiKeySection = new LlmApiKeySettingsSection(llmSectionProps);
@@ -275,7 +275,8 @@ export class SettingsPartView {
       showApiKey: this.showRagApiKey,
       onToggleShowApiKey: () => {
         this.showRagApiKey = !this.showRagApiKey;
-        this.updateRagSection();
+        this.settingsTree.updateSection('knowledgeBaseRag', this.props);
+        this.renderActivePage();
       },
       onRagProviderApiKeyChange: (provider, apiKey) => this.props.onRagProviderApiKeyChange(provider, apiKey),
       onRagProviderBaseUrlChange: (provider, baseUrl) => this.props.onRagProviderBaseUrlChange(provider, baseUrl),
@@ -336,14 +337,6 @@ export class SettingsPartView {
     };
   }
 
-  private updateLibrarySection() {
-    this.librarySection.setProps(this.getLibrarySectionProps());
-  }
-
-  private updateRagSection() {
-    this.ragSection.setProps(this.getRagSectionProps());
-  }
-
   private updateLlmModelSection() {
     this.llmModelSection.setProps(this.getLlmSectionProps());
   }
@@ -378,14 +371,8 @@ export class SettingsPartView {
       },
       batchOptions: renderBatchOptionsSection,
       supportedSources: renderSupportedSourcesSection,
-      knowledgeBaseLibrary: () => {
-        this.updateLibrarySection();
-        return this.librarySection.getElement();
-      },
-      knowledgeBaseRag: () => {
-        this.updateRagSection();
-        return this.ragSection.getElement();
-      },
+      knowledgeBaseLibrary: () => renderLibrarySettingsSection(this.getLibrarySectionProps()),
+      knowledgeBaseRag: () => renderRagSettingsSection(this.getRagSectionProps()),
       downloadDirectory: renderDownloadDirectorySection,
     };
   }

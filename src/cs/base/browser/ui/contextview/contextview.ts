@@ -80,6 +80,7 @@ type LayoutResult = {
 
 const VIEWPORT_MARGIN_PX = 8;
 const DEFAULT_OFFSET_PX = 0;
+export const DEFAULT_CONTEXT_VIEW_Z_INDEX = 1000;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -333,7 +334,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
     if (options.className) {
       this.content.classList.add(...options.className.split(/\s+/).filter(Boolean));
     }
-    this.element.style.zIndex = `${1000 + (options.layer ?? 0)}`;
+    this.element.style.zIndex = `${DEFAULT_CONTEXT_VIEW_Z_INDEX + (options.layer ?? 0)}`;
     this.content.replaceChildren(options.render());
     this.mount();
     this.layout(false);

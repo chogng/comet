@@ -15,6 +15,7 @@ type SelectBoxCustomOptions = {
   getOptions: () => readonly ISelectOptionItem[];
   getSelectedIndex: () => number;
   onSelectIndex: (index: number) => void;
+  contextViewLayer?: number;
 };
 
 function isContextViewHandle(value: unknown): value is ContextViewHandle {
@@ -49,6 +50,7 @@ export class SelectBoxCustom extends Disposable {
   private readonly getOptions: () => readonly ISelectOptionItem[];
   private readonly getSelectedIndex: () => number;
   private readonly onSelectIndex: (index: number) => void;
+  private readonly contextViewLayer: number | undefined;
   private readonly contextView: ContextViewHandle;
   private readonly ownsContextView: boolean;
   private menu: Menu | null = null;
@@ -62,6 +64,7 @@ export class SelectBoxCustom extends Disposable {
     this.getOptions = options.getOptions;
     this.getSelectedIndex = options.getSelectedIndex;
     this.onSelectIndex = options.onSelectIndex;
+    this.contextViewLayer = options.contextViewLayer;
 
     if (isContextViewHandle(options.contextViewProvider)) {
       this.contextView = options.contextViewProvider;
@@ -207,6 +210,7 @@ export class SelectBoxCustom extends Disposable {
       onHide: this.handleMenuHide,
       alignment: 'start',
       offset: 4,
+      layer: this.contextViewLayer,
       // Keep the popup on the same width contract as the trigger. Together with
       // the root-menu 100% sizing in selectBoxCustom.css, the popup and trigger
       // share the same content floor instead of drifting apart.

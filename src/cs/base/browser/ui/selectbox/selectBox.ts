@@ -9,6 +9,7 @@ export interface ISelectBoxOptions {
   ariaLabel?: string;
   ariaDescription?: string;
   className?: string;
+  contextViewLayer?: number;
 }
 
 export interface ISelectOptionItem {
@@ -105,6 +106,7 @@ export class SelectBox extends Disposable {
           getOptions: () => this.options,
           getSelectedIndex: () => this.selected,
           onSelectIndex: (index) => this.commitCustomSelection(index),
+          contextViewLayer: selectBoxOptions.contextViewLayer,
         })
       : null;
 

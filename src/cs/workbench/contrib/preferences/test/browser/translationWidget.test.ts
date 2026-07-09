@@ -6,20 +6,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { TranslationWidgetProps } from 'cs/workbench/contrib/preferences/browser/translationWidget';
+import type { TranslationSettingsSectionProps } from 'cs/workbench/contrib/preferences/browser/translationWidget';
 import { createDefaultLlmSettings } from 'cs/workbench/services/llm/config';
 import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { locales } from 'language/locales';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let TranslationWidget: typeof import('cs/workbench/contrib/preferences/browser/translationWidget').TranslationWidget;
+let TranslationSettingsSection: typeof import('cs/workbench/contrib/preferences/browser/translationWidget').TranslationSettingsSection;
 let createSettingsPartLabels: typeof import('cs/workbench/contrib/preferences/browser/settingsEditor').createSettingsPartLabels;
 
 test.before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ TranslationWidget } = await import('cs/workbench/contrib/preferences/browser/translationWidget'));
+  ({ TranslationSettingsSection } = await import('cs/workbench/contrib/preferences/browser/translationWidget'));
   ({ createSettingsPartLabels } = await import('cs/workbench/contrib/preferences/browser/settingsEditor'));
 });
 
@@ -29,8 +29,8 @@ test.after(() => {
 });
 
 function createTranslationWidgetProps(
-  overrides: Partial<TranslationWidgetProps> = {},
-): TranslationWidgetProps {
+  overrides: Partial<TranslationSettingsSectionProps> = {},
+): TranslationSettingsSectionProps {
   return {
     labels: createSettingsPartLabels({ ui: locales.en }),
     activeTranslationProvider: 'custom',
@@ -54,7 +54,7 @@ function createTranslationWidgetProps(
   };
 }
 
-test('TranslationWidget renders fetched custom models as select options', () => {
+test('TranslationSettingsSection renders fetched custom models as select options', () => {
   const translationProviders = createDefaultTranslationSettings().providers;
   translationProviders.custom = {
     ...translationProviders.custom,
@@ -66,7 +66,7 @@ test('TranslationWidget renders fetched custom models as select options', () => 
     ],
   };
 
-  const widget = new TranslationWidget(createTranslationWidgetProps({
+  const widget = new TranslationSettingsSection(createTranslationWidgetProps({
     translationProviders,
   }));
 

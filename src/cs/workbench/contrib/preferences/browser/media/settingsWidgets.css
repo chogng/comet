@@ -56,8 +56,7 @@
   align-content: start;
 }
 
-.comet-settings-block-section .comet-number-stepper,
-.comet-settings-field .comet-number-stepper {
+.comet-number-stepper.comet-settings-number-stepper {
   --comet-number-stepper-height: 24px;
   --comet-number-stepper-border: 1px solid #d3d3d3;
   --comet-number-stepper-border-radius: 8px;
@@ -334,7 +333,7 @@
   width: 120px;
 }
 
-.comet-number-stepper.comet-settings-limit-input {
+.comet-settings-number-stepper.comet-settings-limit-input {
   min-width: 0;
   width: 100%;
 }

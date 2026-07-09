@@ -18,6 +18,7 @@ export type DateInputOptions = {
   className?: string;
   inputClassName?: string;
   focusKey?: string;
+  contextViewLayer?: number;
   onInput?: (value: string) => void;
 };
 
@@ -292,6 +293,7 @@ export class DateInput extends Disposable {
       render: () => this.renderPopover(),
       alignment: 'end',
       offset: 4,
+      layer: this.options.contextViewLayer,
       onHide: () => {
         this.pendingFocusValue = null;
       },
@@ -330,6 +332,7 @@ export class DateInput extends Disposable {
       render: () => this.renderPopover(),
       alignment: 'end',
       offset: 4,
+      layer: this.options.contextViewLayer,
       onHide: () => {
         this.pendingFocusValue = null;
       },

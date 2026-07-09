@@ -5,12 +5,12 @@ import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
-import { ApiKeyWidget } from 'cs/workbench/contrib/preferences/browser/apiKeyWidget';
 import {
   createSettingsSection,
   createSettingsRow,
 } from 'cs/workbench/contrib/preferences/browser/section';
 import {
+  buildSettingsSecretInput as buildSecretInput,
   createSettingsElement as el,
   setSettingsFocusKey as setFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
@@ -515,25 +515,9 @@ export class LlmApiKeySettingsSection {
     listClassName: 'comet-settings-llm-api-list',
   });
   private readonly apiKeyControl = el('div', 'comet-settings-llm-api-key-control');
-  private readonly apiKeyWidget = new ApiKeyWidget({
-    title: '',
-    subtitle: '',
-    value: '',
-    placeholder: '',
-    show: false,
-    focusKey: 'settings.llm.apiKey',
-    toggleKey: 'settings.llm.apiKey.toggle',
-    toggleLabelShow: '',
-    toggleLabelHide: '',
-    onToggle: () => this.props.onToggleShowApiKey(),
-    onInput: (value) =>
-      this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
-    className: 'comet-settings-field comet-settings-llm-api-field comet-settings-llm-api-panel',
-  });
 
   constructor(props: LlmSettingsSectionProps) {
     this.props = props;
-    this.apiKeyControl.append(this.apiKeyWidget.getElement());
     this.element.append(this.apiKeySection.element);
     this.setProps(props);
   }
@@ -545,7 +529,7 @@ export class LlmApiKeySettingsSection {
   setProps(props: LlmSettingsSectionProps) {
     this.props = props;
     const provider = this.props.llmProviders[this.props.activeLlmProvider];
-    this.apiKeyWidget.setProps({
+    this.apiKeyControl.replaceChildren(buildSecretInput({
       title: this.props.labels.settingsLlmApiKey,
       subtitle: getLlmProviderLabel(this.props.labels, this.props.activeLlmProvider),
       value: provider.apiKey,
@@ -559,7 +543,7 @@ export class LlmApiKeySettingsSection {
       onInput: (value) =>
         this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
       className: 'comet-settings-field comet-settings-llm-api-field',
-    });
+    }));
     this.apiKeySection.list.replaceChildren(
       createSettingsRow({
         title: '',

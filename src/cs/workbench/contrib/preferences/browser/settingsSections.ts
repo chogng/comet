@@ -16,6 +16,7 @@ import {
   buildSettingsSelect as buildSelect,
   buildSettingsSwitch as buildSwitch,
   createSettingsElement as el,
+  settingsPopupContextViewLayer,
   setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import type {
@@ -219,7 +220,7 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
   const wrap = el('div', 'comet-settings-limit-input-wrap');
   const batchLimitInput = new NumberStepper({
     value: props.batchLimit,
-    className: 'comet-settings-limit-input',
+    className: 'comet-settings-number-stepper comet-settings-limit-input',
     min: String(batchLimitMin),
     max: String(batchLimitMax),
     inputMode: 'numeric',
@@ -247,6 +248,7 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
     className: 'comet-settings-date-input',
     inputClassName: 'comet-settings-inputbox comet-settings-input-control comet-settings-date-input-field',
     focusKey: 'settings.batch.startDate',
+    contextViewLayer: settingsPopupContextViewLayer,
     onInput: props.onFetchStartDateChange,
   }).getElement();
   const endDateInput = createDateInput({
@@ -259,6 +261,7 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
     className: 'comet-settings-date-input',
     inputClassName: 'comet-settings-inputbox comet-settings-input-control comet-settings-date-input-field',
     focusKey: 'settings.batch.endDate',
+    contextViewLayer: settingsPopupContextViewLayer,
     onInput: props.onFetchEndDateChange,
   }).getElement();
   batchOptions.list.append(
@@ -371,7 +374,7 @@ export function renderLayoutSection(props: SettingsPartProps) {
   setSelectHostDisabled(startupLayoutSelect, props.isSettingsSaving);
   const browserTabKeepAliveLimitInput = new NumberStepper({
     value: props.browserTabKeepAliveLimit,
-    className: 'comet-settings-limit-input',
+    className: 'comet-settings-number-stepper comet-settings-limit-input',
     min: String(minBrowserTabKeepAliveLimit),
     max: String(maxBrowserTabKeepAliveLimit),
     inputMode: 'numeric',
@@ -619,7 +622,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   setSelectHostDisabled(fontSizeSelect, isDisabled);
   const lineHeightInput = new NumberStepper({
     value: defaultBodyStyle.lineHeight,
-    className: 'comet-settings-text-editor-line-height-input',
+    className: 'comet-settings-number-stepper comet-settings-text-editor-line-height-input',
     min: '0.5',
     max: '4',
     inputMode: 'decimal',
@@ -632,7 +635,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   setSettingsFocusKey(lineHeightInput.inputElement, 'settings.textEditor.lineHeight');
   const paragraphSpacingBeforeInput = new NumberStepper({
     value: defaultBodyStyle.paragraphSpacingBeforePt,
-    className: 'comet-settings-text-editor-spacing-input',
+    className: 'comet-settings-number-stepper comet-settings-text-editor-spacing-input',
     min: '0',
     max: '200',
     inputMode: 'decimal',
@@ -645,7 +648,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
   setSettingsFocusKey(paragraphSpacingBeforeInput.inputElement, 'settings.textEditor.paragraphSpacingBefore');
   const paragraphSpacingAfterInput = new NumberStepper({
     value: defaultBodyStyle.paragraphSpacingAfterPt,
-    className: 'comet-settings-text-editor-spacing-input',
+    className: 'comet-settings-number-stepper comet-settings-text-editor-spacing-input',
     min: '0',
     max: '200',
     inputMode: 'decimal',

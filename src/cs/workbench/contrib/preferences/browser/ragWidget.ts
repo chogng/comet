@@ -5,7 +5,6 @@ import {
   numberStepperIncrementAriaLabel,
 } from 'cs/base/browser/ui/numberStepper/numberStepper';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
-import { ApiKeyWidget } from 'cs/workbench/contrib/preferences/browser/apiKeyWidget';
 import {
   createSettingsSection,
   createSettingsRow,
@@ -13,6 +12,7 @@ import {
 import {
   buildSettingsHint as buildHint,
   buildSettingsInput as buildInput,
+  buildSettingsSecretInput as buildSecretInput,
   createSettingsElement as el,
   setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
@@ -38,134 +38,103 @@ export type RagSettingsSectionProps = {
   onTestRagConnection: () => void;
 };
 
-export class RagSettingsSection {
-  private props: RagSettingsSectionProps;
-  private readonly element = el('div', 'comet-settings-field');
-  private readonly apiKeyWidget = new ApiKeyWidget({
-    title: '',
-    subtitle: '',
-    value: '',
-    placeholder: '',
-    show: false,
-    focusKey: 'settings.rag.apiKey',
-    toggleKey: 'settings.rag.apiKey.toggle',
-    toggleLabelShow: '',
-    toggleLabelHide: '',
-    onToggle: () => this.props.onToggleShowApiKey(),
-    onInput: (value) => this.props.onRagProviderApiKeyChange(this.props.activeRagProvider, value),
+function renderRagNumberField(props: RagSettingsSectionProps, label: string, value: number, focusKey: string, min: string, max: string, onInput: (value: string) => void) {
+  const wrap = el('div', 'comet-settings-limit-input-wrap');
+  const stepper = new NumberStepper({
+    value,
+    className: 'comet-settings-number-stepper comet-settings-limit-input',
+    min,
+    max,
+    inputMode: 'numeric',
+    step: '1',
+    decrementAriaLabel: numberStepperDecrementAriaLabel,
+    incrementAriaLabel: numberStepperIncrementAriaLabel,
+    onDidChange: onInput,
+    disabled: props.isSettingsSaving,
   });
+  setSettingsFocusKey(stepper.inputElement, focusKey);
+  wrap.append(stepper.element);
+  return createSettingsRow({
+    title: label,
+    control: wrap,
+    itemClassName: 'comet-settings-rag-number-item',
+    controlClassName: 'comet-settings-rag-number-control',
+  });
+}
 
-  constructor(props: RagSettingsSectionProps) {
-    this.props = props;
-    this.setProps(props);
-  }
-
-  getElement() {
-    return this.element;
-  }
-
-  setProps(props: RagSettingsSectionProps) {
-    this.props = props;
-    this.element.replaceChildren(this.render());
-  }
-
-  private renderNumberField(label: string, value: number, focusKey: string, min: string, max: string, onInput: (value: string) => void) {
-    const wrap = el('div', 'comet-settings-limit-input-wrap');
-    const stepper = new NumberStepper({
-      value,
-      className: 'comet-settings-limit-input',
-      min,
-      max,
-      inputMode: 'numeric',
-      step: '1',
-      decrementAriaLabel: numberStepperDecrementAriaLabel,
-      incrementAriaLabel: numberStepperIncrementAriaLabel,
-      onDidChange: onInput,
-      disabled: this.props.isSettingsSaving,
-    });
-    setSettingsFocusKey(stepper.inputElement, focusKey);
-    wrap.append(stepper.element);
-    return createSettingsRow({
-      title: label,
-      control: wrap,
-      itemClassName: 'comet-settings-rag-number-item',
-      controlClassName: 'comet-settings-rag-number-control',
-    });
-  }
-
-  private renderTextField(label: string, value: string, focusKey: string, onInput: (value: string) => void, className = 'comet-settings-field') {
-    return createSettingsRow({
-      title: label,
-      control: buildInput({
+function renderRagTextField(label: string, value: string, focusKey: string, onInput: (value: string) => void, className = 'comet-settings-field') {
+  return createSettingsRow({
+    title: label,
+    control: buildInput({
       value,
       className: 'comet-settings-input-control comet-settings-rag-text-input',
       focusKey,
       onInput,
-      }).element,
-      itemClassName: className.includes('comet-settings-llm-span-2')
-        ? 'comet-settings-rag-text-item comet-settings-rag-wide-item'
-        : 'comet-settings-rag-text-item',
-      controlClassName: 'comet-settings-rag-text-control',
-    });
-  }
+    }).element,
+    itemClassName: className.includes('comet-settings-llm-span-2')
+      ? 'comet-settings-rag-text-item comet-settings-rag-wide-item'
+      : 'comet-settings-rag-text-item',
+    controlClassName: 'comet-settings-rag-text-control',
+  });
+}
 
-  private render() {
-    const section = createSettingsSection({
-      title: this.props.labels.settingsRagTitle,
-      description: this.props.labels.settingsRagHint,
-      sectionClassName: 'comet-settings-rag-section',
-      panelClassName: 'comet-settings-rag-panel',
-      listClassName: 'comet-settings-rag-list',
-    });
-    const provider = this.props.ragProviders[this.props.activeRagProvider];
-    const providerControl = el('div', 'comet-settings-rag-provider-control-stack');
-    providerControl.append(
-      buildInput({
-        value: this.props.labels.settingsRagProviderMoark,
-        className: 'comet-settings-input-control comet-settings-rag-text-input',
-        focusKey: 'settings.rag.provider',
-        readOnly: true,
-      }).element,
-      buildHint(this.props.labels.settingsRagProviderHint),
-    );
-    section.list.append(
-      createSettingsRow({
-        title: this.props.labels.settingsRagProvider,
-        control: providerControl,
-        itemClassName: 'comet-settings-rag-provider-item',
-        controlClassName: 'comet-settings-rag-provider-row-control',
-      }),
-      this.renderNumberField(this.props.labels.settingsRagCandidateCount, this.props.retrievalCandidateCount, 'settings.rag.candidates', '3', '20', this.props.onRetrievalCandidateCountChange),
-      this.renderNumberField(this.props.labels.settingsRagTopK, this.props.retrievalTopK, 'settings.rag.topK', '1', String(this.props.retrievalCandidateCount), this.props.onRetrievalTopKChange),
-      this.renderTextField(this.props.labels.settingsRagBaseUrl, provider.baseUrl, 'settings.rag.baseUrl', (value) => this.props.onRagProviderBaseUrlChange(this.props.activeRagProvider, value), 'comet-settings-field comet-settings-llm-span-2'),
-      this.renderTextField(this.props.labels.settingsRagEmbeddingModel, provider.embeddingModel, 'settings.rag.embeddingModel', (value) => this.props.onRagProviderEmbeddingModelChange(this.props.activeRagProvider, value)),
-      this.renderTextField(this.props.labels.settingsRagRerankerModel, provider.rerankerModel, 'settings.rag.rerankerModel', (value) => this.props.onRagProviderRerankerModelChange(this.props.activeRagProvider, value)),
-      this.renderTextField(this.props.labels.settingsRagEmbeddingPath, provider.embeddingPath, 'settings.rag.embeddingPath', (value) => this.props.onRagProviderEmbeddingPathChange(this.props.activeRagProvider, value)),
-      this.renderTextField(this.props.labels.settingsRagRerankPath, provider.rerankPath, 'settings.rag.rerankPath', (value) => this.props.onRagProviderRerankPathChange(this.props.activeRagProvider, value)),
-    );
-    this.apiKeyWidget.setProps({
-      title: this.props.labels.settingsLlmApiKey,
-      subtitle: this.props.labels.settingsRagProviderMoark,
-      value: provider.apiKey,
-      placeholder: this.props.labels.settingsRagApiKeyPlaceholder,
-      show: this.props.showApiKey,
-      focusKey: 'settings.rag.apiKey',
-      toggleKey: 'settings.rag.apiKey.toggle',
-      toggleLabelShow: this.props.labels.settingsRagShowApiKey,
-      toggleLabelHide: this.props.labels.settingsRagHideApiKey,
-      onToggle: () => this.props.onToggleShowApiKey(),
-      onInput: (value) => this.props.onRagProviderApiKeyChange(this.props.activeRagProvider, value),
-    });
-    const apiKeyControl = el('div', 'comet-settings-rag-api-key-control');
-    apiKeyControl.append(this.apiKeyWidget.getElement());
-    section.list.append(createSettingsRow({
-      title: '',
-      control: apiKeyControl,
-      itemClassName: 'comet-settings-rag-api-key-item',
-      titleClassName: 'comet-settings-block-list-item-title-empty',
-      contentClassName: 'comet-settings-rag-api-key-content',
-      controlClassName: 'comet-settings-rag-api-key-row-control',
-    }));
-    return section.element;
-  }
+export function renderRagSettingsSection(props: RagSettingsSectionProps) {
+  const section = createSettingsSection({
+    title: props.labels.settingsRagTitle,
+    description: props.labels.settingsRagHint,
+    sectionClassName: 'comet-settings-rag-section',
+    panelClassName: 'comet-settings-rag-panel',
+    listClassName: 'comet-settings-rag-list',
+  });
+  const provider = props.ragProviders[props.activeRagProvider];
+  const providerControl = el('div', 'comet-settings-rag-provider-control-stack');
+  providerControl.append(
+    buildInput({
+      value: props.labels.settingsRagProviderMoark,
+      className: 'comet-settings-input-control comet-settings-rag-text-input',
+      focusKey: 'settings.rag.provider',
+      readOnly: true,
+    }).element,
+    buildHint(props.labels.settingsRagProviderHint),
+  );
+  section.list.append(
+    createSettingsRow({
+      title: props.labels.settingsRagProvider,
+      control: providerControl,
+      itemClassName: 'comet-settings-rag-provider-item',
+      controlClassName: 'comet-settings-rag-provider-row-control',
+    }),
+    renderRagNumberField(props, props.labels.settingsRagCandidateCount, props.retrievalCandidateCount, 'settings.rag.candidates', '3', '20', props.onRetrievalCandidateCountChange),
+    renderRagNumberField(props, props.labels.settingsRagTopK, props.retrievalTopK, 'settings.rag.topK', '1', String(props.retrievalCandidateCount), props.onRetrievalTopKChange),
+    renderRagTextField(props.labels.settingsRagBaseUrl, provider.baseUrl, 'settings.rag.baseUrl', value => props.onRagProviderBaseUrlChange(props.activeRagProvider, value), 'comet-settings-field comet-settings-llm-span-2'),
+    renderRagTextField(props.labels.settingsRagEmbeddingModel, provider.embeddingModel, 'settings.rag.embeddingModel', value => props.onRagProviderEmbeddingModelChange(props.activeRagProvider, value)),
+    renderRagTextField(props.labels.settingsRagRerankerModel, provider.rerankerModel, 'settings.rag.rerankerModel', value => props.onRagProviderRerankerModelChange(props.activeRagProvider, value)),
+    renderRagTextField(props.labels.settingsRagEmbeddingPath, provider.embeddingPath, 'settings.rag.embeddingPath', value => props.onRagProviderEmbeddingPathChange(props.activeRagProvider, value)),
+    renderRagTextField(props.labels.settingsRagRerankPath, provider.rerankPath, 'settings.rag.rerankPath', value => props.onRagProviderRerankPathChange(props.activeRagProvider, value)),
+  );
+
+  const apiKeyInput = buildSecretInput({
+    title: props.labels.settingsLlmApiKey,
+    subtitle: props.labels.settingsRagProviderMoark,
+    value: provider.apiKey,
+    placeholder: props.labels.settingsRagApiKeyPlaceholder,
+    show: props.showApiKey,
+    focusKey: 'settings.rag.apiKey',
+    toggleKey: 'settings.rag.apiKey.toggle',
+    toggleLabelShow: props.labels.settingsRagShowApiKey,
+    toggleLabelHide: props.labels.settingsRagHideApiKey,
+    onToggle: props.onToggleShowApiKey,
+    onInput: value => props.onRagProviderApiKeyChange(props.activeRagProvider, value),
+  });
+  const apiKeyControl = el('div', 'comet-settings-rag-api-key-control');
+  apiKeyControl.append(apiKeyInput);
+  section.list.append(createSettingsRow({
+    title: '',
+    control: apiKeyControl,
+    itemClassName: 'comet-settings-rag-api-key-item',
+    titleClassName: 'comet-settings-block-list-item-title-empty',
+    contentClassName: 'comet-settings-rag-api-key-content',
+    controlClassName: 'comet-settings-rag-api-key-row-control',
+  }));
+  return section.element;
 }

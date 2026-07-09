@@ -262,6 +262,36 @@ test('selectbox custom drawn mode keeps the popup overlay matched to the trigger
   }
 });
 
+test('selectbox custom drawn mode applies the configured contextview layer', () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const selectBox = new SelectBox(
+    [
+      { text: 'Agent', value: 'agent' },
+      { text: 'Flow', value: 'flow' },
+    ],
+    0,
+    undefined,
+    {},
+    { useCustomDrawn: true, contextViewLayer: 1600 },
+  );
+
+  try {
+    selectBox.render(container);
+    selectBox.domNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const contextView = document.body.querySelector('.comet-context-view');
+    if (!(contextView instanceof HTMLElement)) {
+      throw new Error('Expected selectbox context view.');
+    }
+
+    assert.equal(contextView.style.zIndex, '2600');
+  } finally {
+    selectBox.dispose();
+    document.body.replaceChildren();
+  }
+});
+
 test('selectbox custom drawn mode keeps contextview open on internal scroll', () => {
   const container = document.createElement('div');
   document.body.append(container);

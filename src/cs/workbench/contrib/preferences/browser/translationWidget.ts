@@ -4,7 +4,6 @@ import type {
   TranslationProviderSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
-import { ApiKeyWidget } from 'cs/workbench/contrib/preferences/browser/apiKeyWidget';
 import {
   createSettingsSection,
   createSettingsRow,
@@ -12,6 +11,7 @@ import {
 import {
   buildSettingsInput as buildInput,
   buildSettingsButton as buildButton,
+  buildSettingsSecretInput as buildSecretInput,
   buildSettingsSelect as buildSelect,
   createSettingsElement as el,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
@@ -53,19 +53,6 @@ function createCustomTranslationModelOptions(models: readonly string[]) {
 export class TranslationSettingsSection {
   private props: TranslationSettingsSectionProps;
   private readonly element = el('div', 'comet-settings-field');
-  private readonly apiKeyWidget = new ApiKeyWidget({
-    title: '',
-    subtitle: '',
-    value: '',
-    placeholder: '',
-    show: false,
-    focusKey: 'settings.translation.apiKey',
-    toggleKey: 'settings.translation.apiKey.toggle',
-    toggleLabelShow: '',
-    toggleLabelHide: '',
-    onToggle: () => this.props.onToggleShowApiKey(),
-    onInput: (value) => this.props.onTranslationProviderApiKeyChange(this.props.activeTranslationProvider, value),
-  });
 
   constructor(props: TranslationSettingsSectionProps) {
     this.props = props;
@@ -109,8 +96,7 @@ export class TranslationSettingsSection {
     );
     if (this.props.activeTranslationProvider === 'glm') {
       section.list.append(this.renderGlmModelRow());
-      this.renderApiKeyField();
-      section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
+      section.list.append(this.renderApiKeyRow(this.renderApiKeyField()));
       section.list.append(this.renderTestConnectionRow());
       return section.element;
     }
@@ -123,15 +109,14 @@ export class TranslationSettingsSection {
       section.list.append(...this.renderCustomRows());
     }
 
-    this.renderApiKeyField();
-    section.list.append(this.renderApiKeyRow(this.apiKeyWidget.getElement()));
+    section.list.append(this.renderApiKeyRow(this.renderApiKeyField()));
     section.list.append(this.renderTestConnectionRow());
     return section.element;
   }
 
   private renderApiKeyField() {
     const provider = this.props.activeTranslationProvider;
-    this.apiKeyWidget.setProps({
+    return buildSecretInput({
       title: this.props.labels.settingsLlmApiKey,
       value: this.props.translationProviders[provider].apiKey,
       placeholder: this.props.labels.settingsTranslationApiKeyPlaceholder,

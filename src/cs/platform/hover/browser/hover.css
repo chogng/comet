@@ -75,6 +75,38 @@
 	text-align: left;
 }
 
+.comet-hover-content p,
+.comet-hover-content ul,
+.comet-hover-content ol {
+	margin: 8px 0;
+}
+
+.comet-hover-content p:first-child,
+.comet-hover-content ul:first-child,
+.comet-hover-content ol:first-child {
+	margin-top: 0;
+}
+
+.comet-hover-content p:last-child,
+.comet-hover-content ul:last-child,
+.comet-hover-content ol:last-child {
+	margin-bottom: 0;
+}
+
+.comet-hover-content ul,
+.comet-hover-content ol {
+	padding-left: 20px;
+}
+
+.comet-hover-content li > p {
+	margin-bottom: 0;
+}
+
+.comet-hover-content li > ul,
+.comet-hover-content li > ol {
+	margin-top: 0;
+}
+
 .comet-hover-subtitle {
 	margin-top: 4px;
 	color: #5e6b78;
