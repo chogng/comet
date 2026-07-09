@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-	ContextMenuAction,
 	ContextMenuDelegate,
 	ContextMenuService as BaseContextMenuService,
 } from 'cs/base/browser/contextmenu';
@@ -22,6 +21,12 @@ import {
 	type IPopupOptions,
 } from 'cs/base/parts/contextmenu/common/contextmenu';
 import { popup } from 'cs/base/parts/contextmenu/electron-browser/contextmenu';
+import {
+	ActionRunner,
+	SubmenuAction,
+	type IAction,
+	type IActionRunner,
+} from 'cs/base/common/actions';
 
 export type WorkbenchContextMenuDelegate = ContextMenuDelegate;
 export type WorkbenchContextMenuService = BaseContextMenuService & {
@@ -41,12 +46,12 @@ function getElectronIpc(): ElectronIpcApi {
 }
 
 function createNativeMenuItems(
-	actions: readonly ContextMenuAction[],
-	onSelect: (value: string) => void,
+	actions: readonly IAction[],
+	onSelect: (action: IAction) => void,
 ): IContextMenuItem[] {
 	return actions.map(action => {
-		const hasSubmenu = Array.isArray(action.submenu) && action.submenu.length > 0;
-		const submenu = hasSubmenu ? action.submenu : undefined;
+		const submenu = action instanceof SubmenuAction ? action.actions : undefined;
+		const hasSubmenu = Boolean(submenu && submenu.length > 0);
 		const item: IContextMenuItem = {
 			label: action.label,
 			type: hasSubmenu
@@ -55,12 +60,12 @@ function createNativeMenuItems(
 					? 'checkbox'
 					: undefined,
 			checked: action.checked,
-			enabled: action.disabled !== true,
+			enabled: action.enabled,
 			visible: true,
 			submenu: submenu ? createNativeMenuItems(submenu, onSelect) : undefined,
 			click: hasSubmenu
 				? undefined
-				: () => onSelect(action.value),
+				: () => onSelect(action),
 		};
 
 		return item;
@@ -69,7 +74,7 @@ function createNativeMenuItems(
 
 function resolvePopupOptions(
 	delegate: ContextMenuDelegate,
-	actions: readonly ContextMenuAction[],
+	actions: readonly IAction[],
 ): IPopupOptions {
 	const anchor = delegate.getAnchor();
 	let x: number;
@@ -137,6 +142,26 @@ function resolvePopupOptions(
 	};
 }
 
+function resolveActionRunner(delegate: ContextMenuDelegate): {
+	actionRunner: IActionRunner;
+	dispose: () => void;
+} {
+	if (delegate.actionRunner) {
+		return {
+			actionRunner: delegate.actionRunner,
+			dispose: () => {},
+		};
+	}
+
+	const actionRunner = new ActionRunner();
+	return {
+		actionRunner,
+		dispose: () => {
+			actionRunner.dispose();
+		},
+	};
+}
+
 class NativeWorkbenchContextMenuService implements WorkbenchContextMenuService {
 	declare readonly _serviceBrand: undefined;
 
@@ -162,11 +187,12 @@ class NativeWorkbenchContextMenuService implements WorkbenchContextMenuService {
 			shouldRestoreFocusOnHide && DOM.isHTMLElement(document.activeElement)
 				? document.activeElement
 				: null;
+		const { actionRunner, dispose } = resolveActionRunner(delegate);
 
 		let contextMenuId = -1;
 		contextMenuId = popup(
-			createNativeMenuItems(actions, value => {
-				delegate.onSelect?.(value);
+			createNativeMenuItems(actions, action => {
+				void actionRunner.run(action, delegate.getActionsContext?.());
 			}),
 			resolvePopupOptions(delegate, actions),
 			didCancel => {
@@ -179,6 +205,7 @@ class NativeWorkbenchContextMenuService implements WorkbenchContextMenuService {
 					delegate.onHide?.(didCancel);
 					DOM.ModifierKeyEmitter.getInstance().resetKeyStatus();
 				} finally {
+					dispose();
 					if (shouldRestoreFocusOnHide) {
 						focusToRestore?.focus();
 					}

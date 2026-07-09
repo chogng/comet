@@ -22,7 +22,6 @@ import type { LibraryModel, LibraryModelContext } from 'cs/workbench/browser/lib
 
 import { setWorkbenchBrowserTabKeepAliveLimit } from 'cs/workbench/browser/webContentRetentionState';
 import { WebContentNavigationModel } from 'cs/workbench/browser/webContentNavigationModel';
-import { URI } from 'cs/base/common/uri';
 import { Schemas } from 'cs/base/common/network';
 import {
   getWorkbenchLayoutStateSnapshot,
@@ -113,7 +112,6 @@ import {
   subscribeWorkbenchContentState,
 } from 'cs/workbench/browser/workbenchContentState';
 import {
-  resolveContentSourceUrl,
   shouldSyncActiveContentTabFromBrowserUrl,
   shouldSyncActiveContentTabMetadataFromWebContentState,
 } from 'cs/workbench/browser/webContentSurfaceState';
@@ -193,21 +191,6 @@ const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
 const AGENT_CHAT_AUTO_MODEL_OPTION_VALUE = 'auto';
 function getArticleSelectionKey(article: Pick<Article, 'sourceUrl' | 'fetchedAt'>) {
   return `${article.sourceUrl}::${article.fetchedAt}`;
-}
-
-function looksLikePdfResource(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  return (
-    normalized.endsWith('.pdf') ||
-    normalized.includes('.pdf?') ||
-    normalized.includes('/pdf') ||
-    normalized.includes('format=pdf') ||
-    normalized.includes('download=pdf')
-  );
 }
 
 function buildSelectedArticleOrderLookup(
@@ -424,42 +407,6 @@ function formatStableSelectionWritingContext(
     '[draftFallback]',
     fallbackDraftBody.trim() || '(empty draft)',
   ].join('\n');
-}
-
-function resolveCurrentPdfDownloadArticle(
-  articles: ReadonlyArray<Article>,
-  sourceUrl: string,
-): Pick<
-  Article,
-  | 'title'
-  | 'sourceUrl'
-  | 'fetchedAt'
-  | 'journalTitle'
-  | 'doi'
-  | 'authors'
-  | 'publishedAt'
-  | 'sourceId'
-> & { fetchOrder: number | null } | null {
-  const normalizedSourceUrl = normalizeUrl(sourceUrl);
-  if (!normalizedSourceUrl) {
-    return null;
-  }
-
-  const matchedArticle = articles.find(
-    (article) => normalizeUrl(article.sourceUrl) === normalizedSourceUrl,
-  );
-
-  return {
-    title: matchedArticle?.title ?? '',
-    sourceUrl: normalizedSourceUrl,
-    fetchedAt: matchedArticle?.fetchedAt ?? new Date().toISOString(),
-    journalTitle: matchedArticle?.journalTitle ?? null,
-    doi: matchedArticle?.doi ?? null,
-    authors: matchedArticle?.authors ?? [],
-    publishedAt: matchedArticle?.publishedAt ?? null,
-    sourceId: matchedArticle?.sourceId ?? null,
-    fetchOrder: matchedArticle?.fetchOrder ?? null,
-  };
 }
 
 function collectChatArticleBatch(
@@ -1562,124 +1509,6 @@ class WorkbenchHost {
     const handleOpenArticleDetails =
       documentActionsControllerInstance.handleOpenArticleDetails;
 
-    const handleSidebarPdfDownload = () => {
-      const sourceUrl = resolveContentSourceUrl(
-        webContentSurfaceSnapshot,
-        browserUrl,
-        webUrl,
-      );
-      if (!sourceUrl) {
-        return;
-      }
-
-      const downloadArticle = resolveCurrentPdfDownloadArticle(
-        filteredArticles,
-        sourceUrl,
-      );
-      if (!downloadArticle) {
-        return;
-      }
-
-      void handleSharedPdfDownload(downloadArticle);
-    };
-
-    const handleLibraryDocumentOpen = (document: LibraryDocumentSummary) => {
-      const localFilePath = String(document.latestFilePath ?? '').trim();
-      if (localFilePath && looksLikePdfResource(localFilePath)) {
-        handleCreatePdfTab(URI.file(localFilePath).toString());
-        return;
-      }
-
-      const sourceUrl = String(document.sourceUrl ?? '').trim();
-      if (sourceUrl) {
-        if (looksLikePdfResource(sourceUrl)) {
-          handleCreatePdfTab(sourceUrl);
-          return;
-        }
-        handleCreateBrowserTab(sourceUrl);
-      }
-    };
-
-    const handleLibraryDocumentRename = async (
-      document: LibraryDocumentSummary,
-    ) => {
-      const nextTitle =
-        (await this.dialogService.input({
-          title: ui.libraryContextRenameTitle,
-          message: ui.libraryContextRenameLabel,
-          value: document.title?.trim() || '',
-          placeholder: ui.libraryContextRenamePlaceholder,
-          primaryButton: ui.editorModalConfirm,
-          cancelButton: ui.editorModalCancel,
-        })).value ?? '';
-      if (!nextTitle) {
-        return;
-      }
-
-      const updatedDocument = await invokeDesktop<LibraryDocumentSummary>(
-        'upsert_library_document_metadata',
-        {
-          documentId: document.documentId,
-          articleTitle: nextTitle,
-        },
-      );
-      libraryModelInstance.upsertDocumentSummary(updatedDocument);
-      void refreshLibrary();
-    };
-
-    const handleLibraryDocumentEditSourceUrl = async (
-      document: LibraryDocumentSummary,
-    ) => {
-      const nextSourceUrl =
-        (await this.dialogService.input({
-          title: ui.libraryContextEditSourceUrlTitle,
-          message: ui.libraryContextEditSourceUrlLabel,
-          value: document.sourceUrl?.trim() || '',
-          placeholder: 'https://',
-          primaryButton: ui.editorModalConfirm,
-          cancelButton: ui.editorModalCancel,
-        })).value ?? '';
-      if (!nextSourceUrl) {
-        return;
-      }
-
-      const updatedDocument = await invokeDesktop<LibraryDocumentSummary>(
-        'upsert_library_document_metadata',
-        {
-          documentId: document.documentId,
-          sourceUrl: nextSourceUrl,
-        },
-      );
-      libraryModelInstance.upsertDocumentSummary(updatedDocument);
-      void refreshLibrary();
-    };
-
-    const handleLibraryDocumentDelete = async (
-      document: LibraryDocumentSummary,
-    ) => {
-      const confirmation = await this.dialogService.confirm({
-        message: ui.libraryContextDeleteConfirm.replace(
-          '{title}',
-          document.title?.trim() || ui.untitled,
-        ),
-        primaryButton: ui.editorModalConfirm,
-        cancelButton: ui.editorModalCancel,
-      });
-      if (!confirmation.confirmed) {
-        return;
-      }
-
-      const deleted = await invokeDesktop<boolean>('delete_library_document', {
-        documentId: document.documentId,
-      });
-      if (!deleted) {
-        return;
-      }
-
-      libraryModelInstance.removeDocumentSummary(document.documentId);
-      void refreshLibrary();
-    };
-
     const baseEditorPartProps = editorPartProps;
     const focusWorkbenchWebUrlInput = () => {
       editorPartControllerInstance.openBrowserPane();
@@ -1966,20 +1795,6 @@ class WorkbenchHost {
       labels: fetchPaneProps.labels,
       ...createSidebarFooterTitlebarLabels(ui),
       fetchPaneProps,
-      librarySnapshot,
-      isLibraryLoading,
-      onRefreshLibrary: () => void refreshLibrary(),
-      onDownloadPdf: handleSidebarPdfDownload,
-      onDocumentOpen: handleLibraryDocumentOpen,
-      onDocumentRename: (document: LibraryDocumentSummary) => {
-        void handleLibraryDocumentRename(document);
-      },
-      onDocumentEditSourceUrl: (document: LibraryDocumentSummary) => {
-        void handleLibraryDocumentEditSourceUrl(document);
-      },
-      onDocumentDelete: (document: LibraryDocumentSummary) => {
-        void handleLibraryDocumentDelete(document);
-      },
     };
 
     const documentActionsSnapshot = documentActionsControllerInstance.getSnapshot();

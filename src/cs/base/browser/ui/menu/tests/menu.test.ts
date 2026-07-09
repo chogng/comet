@@ -3,9 +3,29 @@ import test, { after, before } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import {
+  SubmenuAction,
+  toAction,
+  type IAction,
+} from 'cs/base/common/actions';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let Menu: typeof import('cs/base/browser/ui/menu/menu').Menu;
+
+function menuAction(options: {
+  id: string;
+  label: string;
+  enabled?: boolean;
+  checked?: boolean;
+}): IAction {
+  return toAction({
+    id: options.id,
+    label: options.label,
+    enabled: options.enabled,
+    checked: options.checked,
+    run: () => {},
+  });
+}
 
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
@@ -21,7 +41,7 @@ after(() => {
 test('menu renders requested placement class', () => {
   const menu = new Menu({
     items: [
-      { value: 'alpha', label: 'Alpha' },
+      menuAction({ id: 'alpha', label: 'Alpha' }),
     ],
     placement: 'top',
   });
@@ -40,9 +60,9 @@ test('menu renders requested placement class', () => {
 test('menu uses roving item focus for keyboard navigation', () => {
   const menu = new Menu({
     items: [
-      { value: 'alpha', label: 'Alpha', disabled: true },
-      { value: 'beta', label: 'Beta' },
-      { value: 'gamma', label: 'Gamma' },
+      menuAction({ id: 'alpha', label: 'Alpha', enabled: false }),
+      menuAction({ id: 'beta', label: 'Beta' }),
+      menuAction({ id: 'gamma', label: 'Gamma' }),
     ],
   });
   document.body.append(menu.getElement());
@@ -72,7 +92,7 @@ test('menu uses roving item focus for keyboard navigation', () => {
 test('menu applies and clears the data-menu attribute from options', () => {
   const menu = new Menu({
     items: [
-      { value: 'alpha', label: 'Alpha' },
+      menuAction({ id: 'alpha', label: 'Alpha' }),
     ],
     dataMenu: 'editor-tab-context',
   });
@@ -83,7 +103,7 @@ test('menu applies and clears the data-menu attribute from options', () => {
 
     menu.setOptions({
       items: [
-        { value: 'alpha', label: 'Alpha' },
+        menuAction({ id: 'alpha', label: 'Alpha' }),
       ],
     });
 
@@ -98,7 +118,7 @@ test('menu header can update menu items and request hide', () => {
   let cancelCount = 0;
   const menu = new Menu({
     items: [
-      { value: 'alpha', label: 'Alpha' },
+      menuAction({ id: 'alpha', label: 'Alpha' }),
     ],
     header: {
       className: 'menu-header-test',
@@ -107,7 +127,7 @@ test('menu header can update menu items and request hide', () => {
         input.className = 'menu-header-input';
         input.addEventListener('input', () => {
           updateItems([
-            { value: 'beta', label: 'Beta' },
+            menuAction({ id: 'beta', label: 'Beta' }),
           ]);
         });
         input.addEventListener('keydown', (event) => {
@@ -149,14 +169,10 @@ test('menu opens submenu with ArrowRight and selects submenu action', () => {
   const selections: string[] = [];
   const menu = new Menu({
     items: [
-      {
-        value: 'parent',
-        label: 'Parent',
-        submenu: [
-          { value: 'child', label: 'Child' },
-        ],
-      },
-      { value: 'other', label: 'Other' },
+      new SubmenuAction('parent', 'Parent', [
+        menuAction({ id: 'child', label: 'Child' }),
+      ]),
+      menuAction({ id: 'other', label: 'Other' }),
     ],
     onSelect: (event) => {
       selections.push(event.value);
@@ -194,13 +210,9 @@ test('menu closes only submenu on first Escape and root menu on second Escape', 
   let cancelCount = 0;
   const menu = new Menu({
     items: [
-      {
-        value: 'parent',
-        label: 'Parent',
-        submenu: [
-          { value: 'child', label: 'Child' },
-        ],
-      },
+      new SubmenuAction('parent', 'Parent', [
+        menuAction({ id: 'child', label: 'Child' }),
+      ]),
     ],
     onCancel: () => {
       cancelCount += 1;
@@ -234,13 +246,9 @@ test('menu closes only submenu on first Escape and root menu on second Escape', 
 test('menu keeps pointer submenu while hovered and closes it after leaving', async () => {
   const menu = new Menu({
     items: [
-      {
-        value: 'parent',
-        label: 'Parent',
-        submenu: [
-          { value: 'child', label: 'Child' },
-        ],
-      },
+      new SubmenuAction('parent', 'Parent', [
+        menuAction({ id: 'child', label: 'Child' }),
+      ]),
     ],
   });
   document.body.append(menu.getElement());

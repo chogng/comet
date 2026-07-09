@@ -4,6 +4,7 @@ import { createLxIcon, createLxLoadingIcon } from 'cs/base/browser/ui/lxicons/lx
 import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import { $ } from 'cs/base/browser/dom';
+import { toAction } from 'cs/base/common/actions';
 
 const EDITOR_BROWSER_LIBRARY_STORAGE_KEY = 'cs.editor.browser.library.v1';
 const MAX_RECENT_BROWSER_LIBRARY_ENTRIES = 25;
@@ -1832,53 +1833,49 @@ const folderGroup = $<HTMLElementTagNameMap['div']>('div.comet-editor-browser-li
     this.contextMenuService.showContextMenu({
       getAnchor: () => createMouseContextMenuAnchor(event),
       getActions: () => [
-        {
-          value: 'open',
+        toAction({
+          id: 'open',
           label: String(this.context.labels.contextOpen ?? 'Open'),
-        },
-        {
-          value: 'open-in-new-tab',
+          run: () => {
+            this.handleLibraryItemClick(itemState.url);
+          },
+        }),
+        toAction({
+          id: 'open-in-new-tab',
           label: String(this.context.labels.contextOpenInNewTab ?? 'Open in New Tab'),
-          disabled: !this.context.onOpenEditor,
-        },
-        {
-          value: 'new-folder',
+          enabled: Boolean(this.context.onOpenEditor),
+          run: () => {
+            this.handleFavoriteItemOpenInNewTab(itemState.url);
+          },
+        }),
+        toAction({
+          id: 'new-folder',
           label: String(this.context.labels.contextNewFolder ?? 'New Folder'),
-          disabled: !this.context.onRequestCreateFavoriteFolder,
-        },
-        {
-          value: 'rename',
+          enabled: Boolean(this.context.onRequestCreateFavoriteFolder),
+          run: () => {
+            void this.handleFavoriteItemCreateFolder(itemState);
+          },
+        }),
+        toAction({
+          id: 'rename',
           label: String(this.context.labels.contextRename ?? 'Rename'),
-          disabled: !this.context.onRequestRenameFavorite,
-        },
-        {
-          value: 'remove-favorite',
+          enabled: Boolean(this.context.onRequestRenameFavorite),
+          run: () => {
+            void this.handleFavoriteItemRename(itemState);
+          },
+        }),
+        toAction({
+          id: 'remove-favorite',
           label: String(
             this.context.labels.contextRemoveFavorite ?? 'Remove Favorite',
           ),
-        },
+          run: () => {
+            this.handleFavoriteItemRemove(itemState.url);
+          },
+        }),
       ],
       getMenuData: () => 'editor-browser-library-favorite-item',
       alignment: 'start',
-      onSelect: (value) => {
-        switch (value) {
-          case 'open':
-            this.handleLibraryItemClick(itemState.url);
-            break;
-          case 'open-in-new-tab':
-            this.handleFavoriteItemOpenInNewTab(itemState.url);
-            break;
-          case 'new-folder':
-            void this.handleFavoriteItemCreateFolder(itemState);
-            break;
-          case 'rename':
-            void this.handleFavoriteItemRename(itemState);
-            break;
-          case 'remove-favorite':
-            this.handleFavoriteItemRemove(itemState.url);
-            break;
-        }
-      },
     });
   }
 

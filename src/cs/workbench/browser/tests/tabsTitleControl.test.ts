@@ -2380,7 +2380,7 @@ test('TabsTitleControl disconnects resize observers on dispose', () => {
   }
 });
 
-test('TabsTitleControl opens a context menu with close, close others, close all, and rename actions', () => {
+test('TabsTitleControl opens a context menu with close, close others, close all, and rename actions', async () => {
   const closedTabIds: string[] = [];
   const closeOtherTabIds: string[] = [];
   const renamedTabIds: string[] = [];
@@ -2453,7 +2453,7 @@ test('TabsTitleControl opens a context menu with close, close others, close all,
   const delegate = contextMenuSpy.delegates[0];
 
   assert.deepEqual(
-    delegate.getActions().map((action) => action.value),
+    delegate.getActions().map((action) => action.id),
     ['close', 'close-others', 'close-all', 'rename'],
   );
   assert.deepEqual(
@@ -2468,10 +2468,11 @@ test('TabsTitleControl opens a context menu with close, close others, close all,
   });
   assert.equal(delegate.getMenuData?.(), 'editor-tab-context');
 
-  delegate.onSelect?.('close');
-  delegate.onSelect?.('close-others');
-  delegate.onSelect?.('close-all');
-  delegate.onSelect?.('rename');
+  const actions = delegate.getActions();
+  await actions[0]?.run();
+  await actions[1]?.run();
+  await actions[2]?.run();
+  await actions[3]?.run();
 
   assert.deepEqual(closedTabIds, ['browser-a']);
   assert.deepEqual(closeOtherTabIds, ['browser-a']);

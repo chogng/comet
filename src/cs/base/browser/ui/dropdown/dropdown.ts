@@ -255,12 +255,14 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
   private createMenu(request: DropdownMenuRequest) {
     const menu = new Menu({
       items: request.options.map((option) => ({
-        value: option.value,
+        id: option.value,
         label: option.label,
-        title: option.title,
+        tooltip: option.title ?? option.label,
+        class: undefined,
+        enabled: !option.disabled,
         icon: option.icon,
-        disabled: option.disabled,
         checked: request.value === option.value,
+        run: () => {},
       })),
       className: 'comet-dropdown-menu-portal',
       role: 'listbox',

@@ -1,14 +1,22 @@
 import type {
-  ContextMenuAction,
   ContextMenuDelegate,
-  ContextMenuHeader,
 } from 'cs/base/browser/contextmenu';
 import {
   LayoutAnchorPosition,
   layout,
   type ILayoutAnchor,
 } from 'cs/base/common/layout';
-import { Menu, type MenuOptions } from 'cs/base/browser/ui/menu/menu';
+import {
+  Menu,
+  type MenuAction,
+  type MenuHeaderOptions,
+  type MenuOptions,
+} from 'cs/base/browser/ui/menu/menu';
+import {
+  ActionRunner,
+  type IAction,
+  type IActionRunner,
+} from 'cs/base/common/actions';
 import type { IContextViewService } from 'cs/platform/contextview/browser/contextView';
 
 function composeClassName(parts: Array<string | undefined | null | false>) {
@@ -95,6 +103,7 @@ export class ContextMenuHandler {
       shouldRestoreFocusOnHide && document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
+    const actionRunner = delegate.actionRunner ?? new ActionRunner();
     let menu: Menu | null = null;
 
     this.contextViewService.showContextView({
@@ -111,10 +120,13 @@ export class ContextMenuHandler {
       offset: resolveContextMenuOffset(delegate),
       minWidth: delegate.minWidth,
       render: (container) => {
-        menu = this.renderMenu(options, delegate, header);
+        menu = this.renderMenu(options, delegate, header, actionRunner);
         container.append(menu.getElement());
         return () => {
           menu?.dispose();
+          if (!delegate.actionRunner) {
+            actionRunner.dispose();
+          }
           menu = null;
         };
       },
@@ -152,48 +164,40 @@ export class ContextMenuHandler {
   };
 
   private renderMenu(
-    options: readonly ContextMenuAction[],
+    options: readonly IAction[],
     delegate: ContextMenuDelegate,
-    header?: ContextMenuHeader,
+    header: MenuHeaderOptions | undefined,
+    actionRunner: IActionRunner,
   ) {
     const dataMenu = delegate.getMenuData?.();
-    const menuHeader = header
-      ? {
-          className: header.className,
-          autoFocusOnShow: header.autoFocusOnShow,
-          render: ({ updateItems, hide }: { updateItems: (items: readonly ContextMenuAction[]) => void; hide: () => void }) =>
-            header.render({
-              updateActions: updateItems,
-              hide,
-            }),
-        }
-      : undefined;
     let menu: Menu;
     const resolveCurrentPlacement = (): 'top' | 'bottom' =>
       menu.getElement().classList.contains('dropdown-menu-top')
         ? 'top'
         : 'bottom';
     const createMenuOptions = (
-      items: readonly ContextMenuAction[],
+      items: readonly IAction[],
       placement: 'top' | 'bottom',
     ): MenuOptions => ({
       items,
       dataMenu,
       role: 'menu',
       placement,
-      header: menuHeader,
-      onSelect: ({ value, item }) => {
-        delegate.onSelect?.(value);
-        if (item.keepOpenOnClick) {
-          menu.setOptions(createMenuOptions(
-            delegate.getActions(),
-            resolveCurrentPlacement(),
-          ));
+      header,
+      onSelect: ({ action }) => {
+        const runResult = actionRunner.run(action, delegate.getActionsContext?.());
+        if ((action as MenuAction).keepOpenOnClick) {
+          void Promise.resolve(runResult).then(() => {
+            menu.setOptions(createMenuOptions(
+              delegate.getActions(),
+              resolveCurrentPlacement(),
+            ));
+          });
           return;
         }
         this.contextViewService.hideContextView({
           didCancel: false,
-          value,
+          value: action.id,
         });
       },
       onCancel: () => {

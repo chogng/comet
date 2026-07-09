@@ -7,6 +7,7 @@ import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { resolveLibraryDocumentStatusLabel } from 'cs/workbench/contrib/knowledgeBase/common/libraryTreeModel';
 import type { LibraryTreeLabels, LibraryTreeFolderNode, LibraryTreeNode } from 'cs/workbench/contrib/knowledgeBase/common/libraryTreeModel';
 import { $ } from 'cs/base/browser/dom';
+import { toAction, type IAction } from 'cs/base/common/actions';
 
 import { LibraryDataSource } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDataSource';
 import { LibraryDelegate } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryDelegate';
@@ -145,54 +146,47 @@ const button = $<HTMLElementTagNameMap['button']>('button.comet-library-tree-row
     event: MouseEvent,
     document: LibraryDocumentsResult['items'][number],
   ) {
-    const actions = new Map<string, () => void>();
-    const options: Array<{
-      value: string;
-      label: string;
-    }> = [];
+    const actions: IAction[] = [];
 
     if (this.props.onDocumentRename) {
-      options.push({
-        value: 'rename',
+      actions.push(toAction({
+        id: 'rename',
         label: this.props.labels.contextRename,
-      });
-      actions.set('rename', () => {
-        this.props.onDocumentRename?.(document);
-      });
+        run: () => {
+          this.props.onDocumentRename?.(document);
+        },
+      }));
     }
 
     if (this.props.onDocumentEditSourceUrl) {
-      options.push({
-        value: 'edit-source-url',
+      actions.push(toAction({
+        id: 'edit-source-url',
         label: this.props.labels.contextEditSourceUrl,
-      });
-      actions.set('edit-source-url', () => {
-        this.props.onDocumentEditSourceUrl?.(document);
-      });
+        run: () => {
+          this.props.onDocumentEditSourceUrl?.(document);
+        },
+      }));
     }
 
     if (this.props.onDocumentDelete) {
-      options.push({
-        value: 'delete',
+      actions.push(toAction({
+        id: 'delete',
         label: this.props.labels.contextDelete,
-      });
-      actions.set('delete', () => {
-        this.props.onDocumentDelete?.(document);
-      });
+        run: () => {
+          this.props.onDocumentDelete?.(document);
+        },
+      }));
     }
 
-    if (options.length === 0) {
+    if (actions.length === 0) {
       return;
     }
 
     this.contextMenuService.showContextMenu({
       getAnchor: () => createMouseContextMenuAnchor(event),
-      getActions: () => options,
+      getActions: () => actions,
       getMenuData: () => 'knowledge-library-document',
       alignment: 'start',
-      onSelect: (value) => {
-        actions.get(value)?.();
-      },
     });
   }
 }

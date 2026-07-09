@@ -285,11 +285,13 @@ export class SelectBoxCustom extends Disposable {
     const selectedIndex = this.getSelectedIndex();
     const options = this.getOptions();
     return options.map((option, index) => ({
-      value: String(index),
+      id: String(index),
       label: option.text,
-      title: option.title ?? option.text,
+      tooltip: option.title ?? option.text,
+      class: undefined,
+      enabled: !option.isDisabled,
       checked: index === selectedIndex,
-      disabled: option.isDisabled,
+      run: () => {},
     }));
   }
 

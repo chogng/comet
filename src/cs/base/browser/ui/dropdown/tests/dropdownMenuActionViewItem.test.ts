@@ -522,9 +522,9 @@ test('DropdownMenuActionViewItem forwards menu header and supports dynamic menu 
     assert.equal(header.autoFocusOnShow, true);
     assert.equal(header.className, 'history-header');
 
-    let updatedActions: readonly import('cs/base/browser/contextmenu').ContextMenuAction[] = [];
+    let updatedActions: readonly import('cs/base/common/actions').IAction[] = [];
     const headerNode = header.render({
-      updateActions: (actions) => {
+      updateItems: (actions) => {
         updatedActions = actions;
       },
       hide: () => {},
@@ -533,7 +533,7 @@ test('DropdownMenuActionViewItem forwards menu header and supports dynamic menu 
     assert.equal(updatedActions.length, 1);
     assert.equal(updatedActions[0]?.label, 'Beta');
 
-    delegate.onSelect?.(updatedActions[0]!.value);
+    await delegate.actionRunner?.run(updatedActions[0]!);
     assert.equal(selected, 'beta');
   } finally {
     item.dispose();

@@ -1,8 +1,11 @@
 import type { IMouseEvent } from 'cs/base/browser/mouseEvent';
 import { getMouseClientCoordinates } from 'cs/base/browser/mouseEvent';
-import type { BaseAction } from 'cs/base/common/actions';
-import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
+import type {
+  IAction,
+  IActionRunner,
+} from 'cs/base/common/actions';
 import type { ContextViewAnchor } from 'cs/base/browser/ui/contextview/contextview';
+import type { MenuHeaderOptions } from 'cs/base/browser/ui/menu/menu';
 
 export type ContextMenuAnchor = ContextViewAnchor;
 
@@ -23,36 +26,13 @@ export function createMouseContextMenuAnchor(
   };
 }
 
-// This is the current repo-level menu action contract shared by platform,
-// workbench, and native menu bridges. It is intentionally smaller than the
-// upstream IAction-based system and can be expanded later if the action stack
-// is introduced.
-export interface ContextMenuAction extends BaseAction {
-  value: string;
-  icon?: LxIconName;
-  description?: string;
-  checkedDisplay?: 'check' | 'switch';
-  keepOpenOnClick?: boolean;
-  submenu?: readonly ContextMenuAction[];
-}
-
-export interface ContextMenuHeaderContext {
-  updateActions: (actions: readonly ContextMenuAction[]) => void;
-  hide: () => void;
-}
-
-export interface ContextMenuHeader {
-  className?: string;
-  autoFocusOnShow?: boolean;
-  render: (context: ContextMenuHeaderContext) => HTMLElement;
-}
-
 export interface ContextMenuDelegate {
   getAnchor: () => ContextMenuAnchor;
-  getActions: () => readonly ContextMenuAction[];
-  getMenuHeader?: () => ContextMenuHeader | undefined;
-  onSelect?: (value: string) => void;
+  getActions: () => readonly IAction[];
+  getMenuHeader?: () => MenuHeaderOptions | undefined;
   onHide?: (didCancel: boolean) => void;
+  actionRunner?: IActionRunner;
+  getActionsContext?: () => unknown;
   autoFocusOnShow?: boolean;
   restoreFocusOnHide?: boolean;
   getMenuClassName?: () => string;

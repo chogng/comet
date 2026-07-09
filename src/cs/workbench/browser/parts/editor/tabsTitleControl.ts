@@ -7,10 +7,8 @@ import type {
 } from 'cs/base/browser/ui/hover/hover';
 import { createLxIcon, type LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { HorizontalScrollbar } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
-import {
-  createMouseContextMenuAnchor,
-  type ContextMenuAction,
-} from 'cs/base/browser/contextmenu';
+import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
+import { toAction, type IAction } from 'cs/base/common/actions';
 import {
   DisposableStore,
   MutableDisposable,
@@ -688,34 +686,47 @@ const targetElement = event.currentTarget;
       return;
     }
 
-const actions: ContextMenuAction[] = [
+    const tabId = tab.targetTabId;
+    const actions: IAction[] = [
       ...(tab.state.isClosable
         ? [
-            {
-              value: 'close' as const,
+            toAction({
+              id: 'close',
               label: this.props.labels.close,
-            },
+              run: () => {
+                void this.props.onCloseTab(tabId);
+              },
+            }),
             this.props.onCloseOtherTabs
-              ? {
-                  value: 'close-others' as const,
+              ? toAction({
+                  id: 'close-others',
                   label: this.props.labels.closeOthers ?? 'Close Others',
-                }
+                  run: () => {
+                    void this.props.onCloseOtherTabs?.(tabId);
+                  },
+                })
               : null,
             this.props.onCloseAllTabs
-              ? {
-                  value: 'close-all' as const,
+              ? toAction({
+                  id: 'close-all',
                   label: this.props.labels.closeAll ?? 'Close All',
-                }
+                  run: () => {
+                    void this.props.onCloseAllTabs?.();
+                  },
+                })
               : null,
           ]
         : []),
       this.props.onRenameTab
-        ? {
-            value: 'rename',
+        ? toAction({
+            id: 'rename',
             label: this.props.labels.rename ?? 'Rename',
-          }
+            run: () => {
+              void this.props.onRenameTab?.(tabId);
+            },
+          })
         : null,
-    ].filter((action): action is ContextMenuAction => Boolean(action));
+    ].filter((action): action is IAction => Boolean(action));
     if (actions.length === 0) {
       return;
     }
@@ -725,22 +736,6 @@ const actions: ContextMenuAction[] = [
       getActions: () => actions,
       getMenuData: () => 'editor-tab-context',
       alignment: 'start',
-      onSelect: (value) => {
-        switch (value) {
-          case 'close':
-            void this.props.onCloseTab(tab.targetTabId!);
-            break;
-          case 'close-others':
-            void this.props.onCloseOtherTabs?.(tab.targetTabId!);
-            break;
-          case 'close-all':
-            void this.props.onCloseAllTabs?.();
-            break;
-          case 'rename':
-            void this.props.onRenameTab?.(tab.targetTabId!);
-            break;
-        }
-      },
     });
   }
 

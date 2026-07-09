@@ -1,11 +1,6 @@
-import type {
-	LibraryDocumentSummary,
-	LibraryDocumentsResult,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
-import { LibraryView } from 'cs/workbench/contrib/knowledgeBase/browser/views/libraryView';
 import {
 	FetchPaneContentView,
 	type FetchPaneProps,
@@ -25,20 +20,10 @@ export type SessionSidebarProps = {
 	moreLabel?: string;
 	settingsLabel?: string;
 	fetchPaneProps: FetchPaneProps;
-	librarySnapshot: LibraryDocumentsResult;
-	isLibraryLoading: boolean;
-	onRefreshLibrary?: () => void;
-	onDownloadPdf?: () => void;
-	onDocumentDragStart?: (documentId: string) => void;
-	onDocumentSelect?: (document: LibraryDocumentSummary | null) => void;
-	onDocumentOpen?: (document: LibraryDocumentSummary) => void;
-	onDocumentRename?: (document: LibraryDocumentSummary) => void;
-	onDocumentEditSourceUrl?: (document: LibraryDocumentSummary) => void;
-	onDocumentDelete?: (document: LibraryDocumentSummary) => void;
 	footerActionsElement?: HTMLElement | null;
 };
 
-type SessionSidebarContentTab = 'library' | 'fetch';
+type SessionSidebarContentTab = 'home' | 'fetch';
 
 let panelIdPool = 0;
 
@@ -49,33 +34,34 @@ export class SessionSidebar {
 	private readonly footerElement = $<HTMLElementTagNameMap['footer']>('footer.comet-sidebar-footer');
 	private readonly switcherElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-switcher');
 	private readonly tabListElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-list');
-	private readonly libraryTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
+	private readonly homeTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
 	private readonly fetchTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
 	private readonly tabActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-actions');
 	private readonly contentHostElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-content-host');
-	private readonly librarySection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-library-panel');
+	private readonly homeSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-home-panel');
+	private readonly homeNavElement = $<HTMLElementTagNameMap['nav']>('nav.comet-sidebar-home-nav');
+	private readonly recentsElement = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-recents');
 	private readonly fetchSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-fetch-panel');
-	private readonly libraryView: LibraryView;
 	private readonly fetchContentView: FetchPaneContentView;
-	private activeTab: SessionSidebarContentTab = 'library';
+	private activeTab: SessionSidebarContentTab = 'home';
 	private disposed = false;
 
 	constructor(props: SessionSidebarProps) {
 		this.props = props;
 		this.tabListElement.setAttribute('role', 'tablist');
-		this.tabListElement.setAttribute('aria-label', props.labels.libraryTitle);
-		this.libraryTabButton.type = 'button';
+		this.tabListElement.setAttribute('aria-label', props.labels.homeTitle);
+		this.homeTabButton.type = 'button';
 		this.fetchTabButton.type = 'button';
-		this.libraryTabButton.setAttribute('role', 'tab');
+		this.homeTabButton.setAttribute('role', 'tab');
 		this.fetchTabButton.setAttribute('role', 'tab');
-		this.libraryTabButton.classList.add('comet-sidebar-library-tab');
+		this.homeTabButton.classList.add('comet-sidebar-home-tab');
 		this.fetchTabButton.classList.add('comet-sidebar-fetch-tab');
-		this.librarySection.id = `session-sidebar-library-panel-${panelIdPool}`;
+		this.homeSection.id = `session-sidebar-home-panel-${panelIdPool}`;
 		this.fetchSection.id = `session-sidebar-fetch-panel-${panelIdPool}`;
 		panelIdPool += 1;
-		this.libraryTabButton.setAttribute('aria-controls', this.librarySection.id);
+		this.homeTabButton.setAttribute('aria-controls', this.homeSection.id);
 		this.fetchTabButton.setAttribute('aria-controls', this.fetchSection.id);
-		this.libraryTabButton.addEventListener('click', () => this.setActiveTab('library'));
+		this.homeTabButton.addEventListener('click', () => this.setActiveTab('home'));
 		this.fetchTabButton.addEventListener('click', () => this.setActiveTab('fetch'));
 		this.tabListElement.addEventListener('keydown', event => {
 			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
@@ -83,25 +69,15 @@ export class SessionSidebar {
 			}
 
 			event.preventDefault();
-			this.setActiveTab(this.activeTab === 'library' ? 'fetch' : 'library');
-		});
-		this.libraryView = new LibraryView({
-			labels: props.labels,
-			librarySnapshot: props.librarySnapshot,
-			onDocumentDragStart: props.onDocumentDragStart,
-			onDocumentSelect: props.onDocumentSelect,
-			onDocumentOpen: props.onDocumentOpen,
-			onDocumentRename: props.onDocumentRename,
-			onDocumentEditSourceUrl: props.onDocumentEditSourceUrl,
-			onDocumentDelete: props.onDocumentDelete,
+			this.setActiveTab(this.activeTab === 'home' ? 'fetch' : 'home');
 		});
 		this.fetchContentView = new FetchPaneContentView({
 			...props.fetchPaneProps,
 			labels: props.labels,
 		});
-		this.librarySection.append(this.libraryView.getElement());
+		this.homeSection.append(this.homeNavElement, this.recentsElement);
 		this.fetchSection.append(this.fetchContentView.getElement());
-		this.tabListElement.append(this.libraryTabButton, this.fetchTabButton);
+		this.tabListElement.append(this.homeTabButton, this.fetchTabButton);
 		this.switcherElement.append(this.tabListElement, this.tabActionsElement);
 		this.contentElement.append(this.contentHostElement);
 		this.element.append(
@@ -122,16 +98,6 @@ export class SessionSidebar {
 		}
 
 		this.props = props;
-		this.libraryView.setProps({
-			labels: props.labels,
-			librarySnapshot: props.librarySnapshot,
-			onDocumentDragStart: props.onDocumentDragStart,
-			onDocumentSelect: props.onDocumentSelect,
-			onDocumentOpen: props.onDocumentOpen,
-			onDocumentRename: props.onDocumentRename,
-			onDocumentEditSourceUrl: props.onDocumentEditSourceUrl,
-			onDocumentDelete: props.onDocumentDelete,
-		});
 		this.fetchContentView.setProps({
 			...props.fetchPaneProps,
 			labels: props.labels,
@@ -145,19 +111,20 @@ export class SessionSidebar {
 		}
 
 		this.disposed = true;
-		this.libraryView.dispose();
 		this.fetchContentView.dispose();
 		this.element.replaceChildren();
 	}
 
 	private render() {
 		const { labels } = this.props;
-		this.libraryTabButton.textContent = labels.libraryTitle;
+		this.homeTabButton.textContent = labels.homeTitle;
 		this.fetchTabButton.textContent = labels.fetchTitle;
 		this.tabListElement.setAttribute(
 			'aria-label',
-			`${labels.libraryTitle} / ${labels.fetchTitle}`,
+			`${labels.homeTitle} / ${labels.fetchTitle}`,
 		);
+		this.renderHomeNav();
+		this.renderRecents();
 		this.syncModeContent();
 		this.syncFooterActions(this.props.footerActionsElement ?? null);
 		this.syncTabs();
@@ -198,34 +165,65 @@ export class SessionSidebar {
 			return;
 		}
 
-const activePanel =
-			this.activeTab === 'library' ? this.librarySection : this.fetchSection;
+		const activePanel =
+			this.activeTab === 'home' ? this.homeSection : this.fetchSection;
 		if (this.contentHostElement.firstElementChild !== activePanel) {
 			this.contentHostElement.replaceChildren(activePanel);
 		}
 
-const isLibraryActive = this.activeTab === 'library';
+		const isHomeActive = this.activeTab === 'home';
 		const { labels } = this.props;
 		this.renderTabButton(
-			this.libraryTabButton,
-			labels.libraryTitle,
-			isLibraryActive ? 'projects-filled' : 'projects',
+			this.homeTabButton,
+			labels.homeTitle,
+			isHomeActive ? 'projects-filled' : 'projects',
 		);
 		this.renderTabButton(
 			this.fetchTabButton,
 			labels.fetchTitle,
-			isLibraryActive ? 'customize' : 'customize-filled',
+			isHomeActive ? 'customize' : 'customize-filled',
 		);
-		this.libraryTabButton.classList.toggle('comet-is-active', isLibraryActive);
-		this.fetchTabButton.classList.toggle('comet-is-active', !isLibraryActive);
-		this.libraryTabButton.setAttribute('aria-selected', String(isLibraryActive));
-		this.fetchTabButton.setAttribute('aria-selected', String(!isLibraryActive));
-		this.libraryTabButton.tabIndex = isLibraryActive ? 0 : -1;
-		this.fetchTabButton.tabIndex = isLibraryActive ? -1 : 0;
+		this.homeTabButton.classList.toggle('comet-is-active', isHomeActive);
+		this.fetchTabButton.classList.toggle('comet-is-active', !isHomeActive);
+		this.homeTabButton.setAttribute('aria-selected', String(isHomeActive));
+		this.fetchTabButton.setAttribute('aria-selected', String(!isHomeActive));
+		this.homeTabButton.tabIndex = isHomeActive ? 0 : -1;
+		this.fetchTabButton.tabIndex = isHomeActive ? -1 : 0;
 
 		if (this.tabActionsElement.firstElementChild) {
 			this.tabActionsElement.replaceChildren();
 		}
+	}
+
+	private renderHomeNav() {
+		const { labels } = this.props;
+		const homeNavItems: { label: string; iconName: LxIconName }[] = [
+			{ label: labels.homeNavNewChat, iconName: 'add' },
+			{ label: labels.homeNavProjects, iconName: 'projects' },
+			{ label: labels.homeNavArtifacts, iconName: 'archive' },
+			{ label: labels.homeNavCustomize, iconName: 'customize' },
+		];
+		this.homeNavElement.setAttribute('aria-label', labels.homeTitle);
+		this.homeNavElement.replaceChildren(
+			...homeNavItems.map(({ label, iconName }) => {
+				const button = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-home-nav-item');
+				button.type = 'button';
+				button.title = label;
+				const labelElement = $<HTMLElementTagNameMap['span']>('span.comet-sidebar-home-nav-label');
+				labelElement.textContent = label;
+				button.replaceChildren(createLxIcon(iconName, 'comet-sidebar-home-nav-icon'), labelElement);
+				return button;
+			}),
+		);
+	}
+
+	private renderRecents() {
+		const { labels } = this.props;
+		const titleElement = $<HTMLElementTagNameMap['h2']>('h2.comet-sidebar-recents-title');
+		titleElement.textContent = labels.recentsTitle;
+		const bodyElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-recents-body');
+		this.recentsElement.setAttribute('aria-label', labels.recentsTitle);
+		this.recentsElement.replaceChildren(titleElement, bodyElement);
 	}
 
 	private renderTabButton(

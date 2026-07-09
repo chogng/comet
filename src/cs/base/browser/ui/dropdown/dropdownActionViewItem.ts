@@ -1,8 +1,5 @@
 import * as DOM from 'cs/base/browser/dom';
-import type {
-  ContextMenuAction,
-  ContextMenuService,
-} from 'cs/base/browser/contextmenu';
+import type { ContextMenuService } from 'cs/base/browser/contextmenu';
 import {
   ActionViewItem,
   BaseActionViewItem,
@@ -17,6 +14,12 @@ import type {
 } from 'cs/base/browser/ui/actionbar/actionbar';
 import type { HoverInput, IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
 import { createPlatformContextMenuService } from 'cs/platform/contextview/browser/contextMenuService';
+import {
+  ActionRunner,
+  SubmenuAction,
+  type IAction,
+} from 'cs/base/common/actions';
+import type { MenuAction } from 'cs/base/browser/ui/menu/menu';
 
 export type DropdownMenuActionAlignment = 'start' | 'end';
 export type DropdownMenuActionPosition = 'auto' | 'above' | 'below';
@@ -184,53 +187,15 @@ function resolveDropdownAlignment(
   });
 }
 
-function createContextMenuValue(
+function createMenuActionId(
   action: Pick<ActionBarMenuItem, 'id'>,
   fallbackValue: string,
 ) {
   return action.id ?? fallbackValue;
 }
 
-function toContextMenuActions(
-  menuItems: readonly ActionBarMenuItem[],
-  valueToMenuItem: Map<string, ActionBarMenuItem>,
-  parentKey = 'comet-dropdown-menu-action-option',
-): ContextMenuAction[] {
-  return menuItems.map((menuItem, index) => {
-    const value = createContextMenuValue(
-      menuItem,
-      `${parentKey}-${index}`,
-    );
-    valueToMenuItem.set(value, menuItem);
-
-    return {
-      value,
-      label: menuItem.label,
-      title: menuItem.title,
-      icon: menuItem.icon,
-      description: menuItem.description,
-      disabled: menuItem.disabled,
-      checked: menuItem.checked,
-      checkedDisplay: menuItem.checkedDisplay,
-      keepOpenOnClick: menuItem.keepOpenOnClick,
-      run: menuItem.run,
-      submenu: menuItem.submenu
-        ? toContextMenuActions(
-            menuItem.submenu,
-            valueToMenuItem,
-            `${parentKey}-${index}`,
-          )
-        : undefined,
-    };
-  });
-}
-
-function runContextMenuAction(
-  valueToMenuItem: ReadonlyMap<string, ActionBarMenuItem>,
-  value: string,
-) {
-  const menuItem = valueToMenuItem.get(value) ?? null;
-  if (!menuItem || menuItem.disabled) {
+function runMenuItem(menuItem: ActionBarMenuItem) {
+  if (menuItem.disabled) {
     return;
   }
 
@@ -240,6 +205,53 @@ function runContextMenuAction(
   }
 
   menuItem.run?.();
+}
+
+function applyMenuActionMetadata(
+  action: IAction,
+  menuItem: ActionBarMenuItem,
+): MenuAction {
+  return Object.assign(action, {
+    icon: menuItem.icon,
+    description: menuItem.description,
+    checkedDisplay: menuItem.checkedDisplay,
+    keepOpenOnClick: menuItem.keepOpenOnClick,
+  });
+}
+
+function toMenuActions(
+  menuItems: readonly ActionBarMenuItem[],
+  parentKey = 'comet-dropdown-menu-action-option',
+): IAction[] {
+  return menuItems.map((menuItem, index) => {
+    const id = createMenuActionId(
+      menuItem,
+      `${parentKey}-${index}`,
+    );
+
+    if (menuItem.submenu) {
+      return applyMenuActionMetadata(
+        new SubmenuAction(
+          id,
+          menuItem.label,
+          toMenuActions(menuItem.submenu, `${parentKey}-${index}`),
+        ),
+        menuItem,
+      );
+    }
+
+    return applyMenuActionMetadata({
+      id,
+      label: menuItem.label,
+      tooltip: menuItem.title ?? menuItem.label,
+      class: undefined,
+      enabled: !menuItem.disabled,
+      checked: menuItem.checked,
+      run: () => {
+        runMenuItem(menuItem);
+      },
+    }, menuItem);
+  });
 }
 
 class DomDropdownActionOverlayPresenter {
@@ -334,14 +346,22 @@ class ContextMenuDropdownActionPresenter {
       options,
       anchor,
     );
-    let valueToMenuItem = new Map<string, ActionBarMenuItem>();
-    let menuActions = toContextMenuActions(options.menu ?? [], valueToMenuItem);
+    let menuActions = toMenuActions(options.menu ?? []);
     const menuHeader = options.menuHeader;
     const menuData = options.menuData?.trim();
     const openedFromKeyboard = source === 'keyboard';
     if (menuActions.length === 0 && !menuHeader) {
       return;
     }
+    const getCurrentOptions = this.getOptions;
+    const actionRunner = new class extends ActionRunner {
+      protected override async runAction(action: IAction, context?: unknown): Promise<void> {
+        await super.runAction(action, context);
+        if ((action as MenuAction).keepOpenOnClick) {
+          menuActions = toMenuActions(getCurrentOptions().menu ?? []);
+        }
+      }
+    }();
 
     this.getOrCreateContextMenuService().showContextMenu({
       getAnchor: () => anchor,
@@ -350,16 +370,12 @@ class ContextMenuDropdownActionPresenter {
         ? () => ({
             className: menuHeader.className,
             autoFocusOnShow: menuHeader.autoFocusOnShow,
-            render: ({ updateActions, hide }) =>
+            render: ({ updateItems, hide }) =>
               menuHeader.render({
                 hide,
                 updateMenu: (nextMenuItems) => {
-                  valueToMenuItem = new Map<string, ActionBarMenuItem>();
-                  menuActions = toContextMenuActions(
-                    nextMenuItems,
-                    valueToMenuItem,
-                  );
-                  updateActions(menuActions);
+                  menuActions = toMenuActions(nextMenuItems);
+                  updateItems(menuActions);
                 },
               }),
           })
@@ -373,17 +389,10 @@ class ContextMenuDropdownActionPresenter {
       minWidth: options.minWidth,
       autoFocusOnShow: openedFromKeyboard,
       restoreFocusOnHide: openedFromKeyboard,
-      onHide: this.onHide,
-      onSelect: (value: string) => {
-        const selectedMenuItem = valueToMenuItem.get(value) ?? null;
-        runContextMenuAction(valueToMenuItem, value);
-        if (selectedMenuItem?.keepOpenOnClick) {
-          valueToMenuItem = new Map<string, ActionBarMenuItem>();
-          menuActions = toContextMenuActions(
-            this.getOptions().menu ?? [],
-            valueToMenuItem,
-          );
-        }
+      actionRunner,
+      onHide: () => {
+        actionRunner.dispose();
+        this.onHide();
       },
     });
   };

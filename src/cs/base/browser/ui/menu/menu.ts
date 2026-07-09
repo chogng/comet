@@ -1,8 +1,10 @@
 import 'cs/base/browser/ui/menu/menu.css';
 import { $ } from 'cs/base/browser/dom';
 
-import type { ContextMenuAction } from 'cs/base/browser/contextmenu';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
+import type { IAction } from 'cs/base/common/actions';
+import { SubmenuAction } from 'cs/base/common/actions';
 import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 
 export type MenuSelectionSource = 'keyboard' | 'pointer';
@@ -10,12 +12,19 @@ export type MenuSelectionSource = 'keyboard' | 'pointer';
 export type MenuSelectEvent = {
   value: string;
   index: number;
-  item: ContextMenuAction;
+  action: IAction;
   source: MenuSelectionSource;
 };
 
+export type MenuAction = IAction & {
+  icon?: LxIconName;
+  description?: string;
+  checkedDisplay?: 'check' | 'switch';
+  keepOpenOnClick?: boolean;
+};
+
 export interface MenuOptions {
-  items: readonly ContextMenuAction[];
+  items: readonly IAction[];
   className?: string;
   itemClassName?: string;
   dataMenu?: string;
@@ -23,7 +32,7 @@ export interface MenuOptions {
   variant?: 'root' | 'submenu';
   role?: string;
   itemRole?: 'menuitem' | 'option';
-  itemId?: (index: number, item: ContextMenuAction) => string;
+  itemId?: (index: number, item: IAction) => string;
   activeIndex?: number;
   header?: MenuHeaderOptions;
   onSelect?: (event: MenuSelectEvent) => void;
@@ -31,7 +40,7 @@ export interface MenuOptions {
 }
 
 export interface MenuHeaderContext {
-  updateItems: (items: readonly ContextMenuAction[]) => void;
+  updateItems: (items: readonly IAction[]) => void;
   hide: () => void;
 }
 
@@ -94,10 +103,17 @@ function createSwitchSlot(isSelected: boolean) {
   return slot;
 }
 
-function hasSubmenu(item: ContextMenuAction | undefined): item is ContextMenuAction & {
-  submenu: readonly ContextMenuAction[];
-} {
-  return Boolean(item?.submenu && item.submenu.length > 0);
+function asMenuAction(action: IAction): MenuAction {
+  return action as MenuAction;
+}
+
+function getSubmenuActions(action: IAction | undefined): readonly IAction[] | undefined {
+  return action instanceof SubmenuAction ? action.actions : undefined;
+}
+
+function hasSubmenu(action: IAction | undefined): action is IAction {
+  const actions = getSubmenuActions(action);
+  return Boolean(actions && actions.length > 0);
 }
 
 function createSubmenuIndicator() {
@@ -107,32 +123,38 @@ function createSubmenuIndicator() {
   return slot;
 }
 
-function createTrailingSlot(item: ContextMenuAction, isSelected: boolean) {
+function createTrailingSlot(action: IAction, isSelected: boolean) {
+  const menuAction = asMenuAction(action);
   const trailing = $<HTMLElementTagNameMap['span']>('span.comet-dropdown-menu-item-trailing');
   trailing.append(
-    item.checkedDisplay === 'switch'
+    menuAction.checkedDisplay === 'switch'
       ? createSwitchSlot(isSelected)
       : createCheckSlot(isSelected),
   );
-  if (hasSubmenu(item)) {
+  if (hasSubmenu(action)) {
     trailing.append(createSubmenuIndicator());
   }
   return trailing;
 }
 
-function createMenuItemContent(item: ContextMenuAction) {
+function createMenuItemContent(action: IAction) {
+  const menuAction = asMenuAction(action);
   const content = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-option-content');
   const textWrap = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-text');
-  const label = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-content', undefined, item.label);
+  const label = $<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-content', undefined, action.label);
   textWrap.append(label);
-  if (item.description) {
-    textWrap.append($<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-description', undefined, item.description));
+  if (menuAction.description) {
+    textWrap.append($<HTMLElementTagNameMap['div']>('div.comet-dropdown-menu-item-description', undefined, menuAction.description));
   }
-  if (item.icon) {
-    content.append(createLxIcon(item.icon, 'comet-dropdown-option-icon'));
+  if (menuAction.icon) {
+    content.append(createLxIcon(menuAction.icon, 'comet-dropdown-option-icon'));
   }
   content.append(textWrap);
   return content;
+}
+
+function isActionEnabled(action: IAction | undefined) {
+  return Boolean(action?.enabled);
 }
 
 function resolvePlacement(options: MenuOptions) {
@@ -423,20 +445,22 @@ const selectedIndex = this.findSelectedEnabledIndex();
       ?? (this.options.role === 'listbox' ? 'option' : 'menuitem');
     for (let index = 0; index < this.options.items.length; index += 1) {
       const item = this.options.items[index];
+      const menuAction = asMenuAction(item);
       const selected = Boolean(item.checked);
+      const enabled = isActionEnabled(item);
       const node = $<HTMLElementTagNameMap['div']>('div', { class: composeClassName([
           'comet-dropdown-menu-item',
           this.options.itemClassName,
           hasSubmenu(item) ? 'comet-has-submenu' : '',
-          item.checkedDisplay === 'switch' && item.description ? 'comet-has-description-switch' : '',
+          menuAction.checkedDisplay === 'switch' && menuAction.description ? 'comet-has-description-switch' : '',
           selected ? 'selected' : '',
-          item.disabled ? 'disabled' : '',
+          enabled ? '' : 'disabled',
         ]) });
       node.tabIndex = -1;
       node.dataset.index = String(index);
       node.setAttribute('role', itemRole);
-      node.setAttribute('aria-disabled', item.disabled ? 'true' : 'false');
-      if (item.checkedDisplay === 'switch') {
+      node.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+      if (menuAction.checkedDisplay === 'switch') {
         node.setAttribute('role', 'menuitemcheckbox');
         node.setAttribute('aria-checked', selected ? 'true' : 'false');
       } else {
@@ -464,7 +488,7 @@ const itemId = this.options.itemId?.(index, item) ?? '';
       node.append(createMenuItemContent(item), createTrailingSlot(item, selected));
       this.renderDisposables.add(
         addDisposableListener(node, 'mouseenter', () => {
-          if (item.disabled) {
+          if (!enabled) {
             this.closeSubmenu();
             return;
           }
@@ -501,7 +525,7 @@ const itemId = this.options.itemId?.(index, item) ?? '';
     if (
       configuredIndex < 0 ||
       configuredIndex >= this.options.items.length ||
-      this.options.items[configuredIndex]?.disabled
+      !isActionEnabled(this.options.items[configuredIndex])
     ) {
       return -1;
     }
@@ -574,7 +598,7 @@ const itemId = this.options.itemId?.(index, item) ?? '';
   }
 
   private findSelectedEnabledIndex() {
-    return this.options.items.findIndex((item) => item.checked && !item.disabled);
+    return this.options.items.findIndex((item) => item.checked && isActionEnabled(item));
   }
 
   private focusByIndex(index: number) {
@@ -612,7 +636,7 @@ const itemId = this.options.itemId?.(index, item) ?? '';
         break;
       }
 
-      if (!this.options.items[candidate]?.disabled) {
+      if (isActionEnabled(this.options.items[candidate])) {
         return candidate;
       }
     }
@@ -622,14 +646,14 @@ const itemId = this.options.itemId?.(index, item) ?? '';
 
   private selectByIndex(index: number, source: MenuSelectionSource) {
     const item = this.options.items[index];
-    if (!item || item.disabled) {
+    if (!item || !isActionEnabled(item)) {
       return;
     }
 
     this.options.onSelect?.({
-      value: item.value,
+      value: item.id,
       index,
-      item,
+      action: item,
       source,
     });
   }
@@ -764,7 +788,7 @@ const itemId = this.options.itemId?.(index, item) ?? '';
   private openSubmenu(index: number, source: MenuSelectionSource) {
     const item = this.options.items[index];
     const parentElement = this.itemElements[index];
-    if (!item || !parentElement || item.disabled || !hasSubmenu(item)) {
+    if (!item || !parentElement || !isActionEnabled(item) || !hasSubmenu(item)) {
       return;
     }
 
@@ -779,7 +803,7 @@ const itemId = this.options.itemId?.(index, item) ?? '';
     this.closeSubmenu();
 
     const submenu = new Menu({
-      items: item.submenu,
+      items: getSubmenuActions(item) ?? [],
       variant: 'submenu',
       role: 'menu',
       onSelect: (nextEvent) => {

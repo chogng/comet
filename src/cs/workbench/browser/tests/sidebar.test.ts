@@ -14,6 +14,12 @@ function delay(ms = 0) {
 
 function createProps(): SidebarProps {
   const labels = {
+    homeTitle: 'Home',
+    homeNavNewChat: 'New chat',
+    homeNavProjects: 'Projects',
+    homeNavArtifacts: 'Artifacts',
+    homeNavCustomize: 'Customize',
+    recentsTitle: 'Recents',
     libraryTitle: 'Library',
     fetchTitle: 'Fetch',
     selectionModeEnterMulti: 'Select multiple',
@@ -47,16 +53,6 @@ function createProps(): SidebarProps {
   return {
     labels,
     fetchPaneProps,
-    librarySnapshot: {
-      items: [],
-      totalCount: 0,
-      fileCount: 0,
-      queuedJobCount: 0,
-      libraryDbFile: '',
-      defaultManagedDirectory: '',
-      ragCacheDir: '',
-    },
-    isLibraryLoading: false,
   };
 }
 
@@ -85,7 +81,7 @@ test('sidebar renders without a topbar', () => {
   }
 });
 
-test('sidebar renders library and fetch as switcher tabs', () => {
+test('sidebar renders home and fetch as switcher tabs', () => {
   const props = createProps();
   props.fetchPaneProps.articles = [
     {
@@ -107,28 +103,34 @@ test('sidebar renders library and fetch as switcher tabs', () => {
   document.body.append(element);
 
   try {
-    const libraryTab = element.querySelector('.comet-sidebar-library-tab');
+    const homeTab = element.querySelector('.comet-sidebar-home-tab');
     const fetchTab = element.querySelector('.comet-sidebar-fetch-tab');
-    assert(libraryTab instanceof HTMLButtonElement);
+    assert(homeTab instanceof HTMLButtonElement);
     assert(fetchTab instanceof HTMLButtonElement);
-    assert.equal(libraryTab.textContent, 'Library');
+    assert.equal(homeTab.textContent, 'Home');
     assert.equal(fetchTab.textContent, 'Fetch');
-    assert(libraryTab.querySelector('.lx-icon-projects-filled') instanceof HTMLElement);
+    assert(homeTab.querySelector('.lx-icon-projects-filled') instanceof HTMLElement);
     assert(fetchTab.querySelector('.lx-icon-customize') instanceof HTMLElement);
-    assert.equal(libraryTab.getAttribute('aria-selected'), 'true');
+    assert.equal(homeTab.getAttribute('aria-selected'), 'true');
     assert.equal(fetchTab.getAttribute('aria-selected'), 'false');
-    assert(element.querySelector('.comet-sidebar-library-panel') instanceof HTMLElement);
+    assert(element.querySelector('.comet-sidebar-home-panel') instanceof HTMLElement);
+    assert.deepEqual(
+      Array.from(element.querySelectorAll('.comet-sidebar-home-nav-item')).map(item => item.textContent),
+      ['New chat', 'Projects', 'Artifacts', 'Customize'],
+    );
+    assert.equal(element.querySelector('.comet-sidebar-recents-title')?.textContent, 'Recents');
+    assert.equal(element.querySelector('.comet-library-tree'), null);
     assert.equal(element.querySelector('.comet-sidebar-fetch-panel'), null);
     assert.equal(element.querySelector('.comet-sidebar-tab-actions .comet-fetch-pane-actionbar'), null);
 
     fetchTab.click();
 
-    assert.equal(libraryTab.getAttribute('aria-selected'), 'false');
+    assert.equal(homeTab.getAttribute('aria-selected'), 'false');
     assert.equal(fetchTab.getAttribute('aria-selected'), 'true');
-    assert(libraryTab.querySelector('.lx-icon-projects') instanceof HTMLElement);
+    assert(homeTab.querySelector('.lx-icon-projects') instanceof HTMLElement);
     assert(fetchTab.querySelector('.lx-icon-customize-filled') instanceof HTMLElement);
     assert(element.querySelector('.comet-sidebar-fetch-panel') instanceof HTMLElement);
-    assert.equal(element.querySelector('.comet-sidebar-library-panel'), null);
+    assert.equal(element.querySelector('.comet-sidebar-home-panel'), null);
     assert.equal(element.querySelector('.comet-sidebar-tab-actions .comet-fetch-pane-actionbar'), null);
     assert(
       element.querySelector('.comet-fetch-tree-folder-row .comet-fetch-pane-actionbar') instanceof HTMLElement,

@@ -46,6 +46,12 @@ export type SidebarLabels = {
   endDate: string;
   fetchLatestBusy: string;
   fetchLatest: string;
+  homeTitle: string;
+  homeNavNewChat: string;
+  homeNavProjects: string;
+  homeNavArtifacts: string;
+  homeNavCustomize: string;
+  recentsTitle: string;
   fetchTitle: string;
   selectionModeEnterMulti: string;
   selectionModeSelectAll: string;
@@ -185,6 +191,12 @@ export function createSidebarPartLabels({
     endDate: ui.endDate,
     fetchLatestBusy: ui.fetchLatestBusy,
     fetchLatest: ui.fetchLatest,
+    homeTitle: ui.sidebarHomeTitle,
+    homeNavNewChat: ui.sidebarHomeNavNewChat,
+    homeNavProjects: ui.sidebarHomeNavProjects,
+    homeNavArtifacts: ui.sidebarHomeNavArtifacts,
+    homeNavCustomize: ui.sidebarHomeNavCustomize,
+    recentsTitle: ui.sidebarRecentsTitle,
     fetchTitle: ui.sidebarFetchTitle,
     refresh: ui.titlebarRefresh,
     selectionModeEnterMulti: ui.sidebarSelectionModeEnterMulti,
