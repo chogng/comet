@@ -18,6 +18,9 @@ import { detectInitialLocale, getLocaleMessages } from 'language/i18n';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import 'cs/base/browser/ui/toast/toast.css';
 import { $ } from 'cs/base/browser/dom';
+import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
+import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 
 const fallbackToastState: NativeToastState = {
   items: [],
@@ -61,16 +64,15 @@ function normalizeToastState(
   };
 }
 
-function getToastIconText(type: NativeToastType) {
+function getToastIconName(type: NativeToastType): LxIconName {
   switch (type) {
     case 'success':
-      return 'OK';
+      return 'check';
     case 'error':
-      return '!';
     case 'warning':
-      return '!';
+      return 'warning';
     default:
-      return 'i';
+      return 'info';
   }
 }
 
@@ -216,16 +218,29 @@ const toastItems = Array.from(
 
     this.stackElement.replaceChildren(
       ...this.toastState.items.map((item) => {
-        const section = $<HTMLElementTagNameMap['section']>('section', { class: `comet-toast-item toast-${item.type} comet-native-toast-item` });
-        const icon = $<HTMLElementTagNameMap['div']>('div.toast-icon', undefined, getToastIconText(item.type));
-        const content = $<HTMLElementTagNameMap['div']>('div.toast-content', undefined, item.message);
-        const close = $<HTMLElementTagNameMap['button']>('button.comet-toast-close.comet-native-toast-close', undefined, 'x');
-        close.type = 'button';
-        close.setAttribute('aria-label', this.ui.toastClose);
-        this.renderDisposables.add(addDisposableListener(close, 'click', () => {
-          this.toastApi?.dismiss(item.id);
-        }));
-        section.append(icon, content, close);
+        const section = $<HTMLElementTagNameMap['section']>('section', { class: `comet-toast-item comet-toast-${item.type} comet-native-toast-item` });
+        const icon = $<HTMLElementTagNameMap['div']>('div.comet-toast-icon');
+        icon.append(createLxIcon(getToastIconName(item.type)));
+        const content = $<HTMLElementTagNameMap['div']>('div.comet-toast-content', undefined, item.message);
+        const closeActionBar = createActionBarView({
+          className: 'comet-toast-actions',
+          ariaLabel: this.ui.toastClose,
+          items: [
+            {
+              id: 'close',
+              label: this.ui.toastClose,
+              hover: this.ui.toastClose,
+              content: createLxIcon('close'),
+              mode: 'icon',
+              buttonClassName: 'comet-toast-close comet-native-toast-close',
+              onClick: () => {
+                this.toastApi?.dismiss(item.id);
+              },
+            },
+          ],
+        });
+        this.renderDisposables.add(closeActionBar);
+        section.append(icon, content, closeActionBar.getElement());
         return section;
       }),
     );

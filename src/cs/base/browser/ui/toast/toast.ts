@@ -7,6 +7,9 @@ import {
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
 import { $ } from 'cs/base/browser/dom';
+import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
+import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 
 export type ToastType = 'info' | 'success' | 'error' | 'warning';
 
@@ -28,7 +31,7 @@ export type ToastBridge = {
   dismiss?: (id: number) => void;
 };
 
-interface ToastItem extends ToastOptions {
+interface ToastItem extends ResolvedToastOptions {
   id: number;
   isExiting?: boolean;
 }
@@ -54,18 +57,6 @@ function createToastOptions(options: ToastOptions | string): ResolvedToastOption
     type: typeof options === 'string' ? 'info' : options.type || 'info',
     duration: typeof options === 'string' ? 3000 : options.duration || 3000,
   };
-}
-
-function addDisposableListener<K extends keyof HTMLElementEventMap>(
-  target: HTMLElement,
-  type: K,
-  listener: (event: HTMLElementEventMap[K]) => void,
-  options?: boolean | AddEventListenerOptions,
-) {
-  target.addEventListener(type, listener, options);
-  return toDisposable(() => {
-    target.removeEventListener(type, listener, options);
-  });
 }
 
 function createTimeoutDisposable(callback: () => void, delay: number): DisposableLike {
@@ -108,16 +99,15 @@ export function registerToastBridge(bridge: ToastBridge | null) {
   toastBridge = bridge;
 }
 
-function getToastIconText(type: ToastType) {
+function getToastIconName(type: ToastType): LxIconName {
   switch (type) {
     case 'success':
-      return 'OK';
+      return 'check';
     case 'error':
-      return '!';
     case 'warning':
-      return '!';
+      return 'warning';
     default:
-      return 'i';
+      return 'info';
   }
 }
 
@@ -180,15 +170,28 @@ const id = ++toastId;
 
 function renderToastItem(item: ToastItem, closeLabel: string) {
   const toastElement = $<HTMLElementTagNameMap['div']>('div', { class: `comet-toast-item comet-toast-${item.type}${item.isExiting ? ' exit' : ''}` });
-  const icon = $<HTMLElementTagNameMap['div']>('div.comet-toast-icon', undefined, getToastIconText(item.type || 'info'));
+  const icon = $<HTMLElementTagNameMap['div']>('div.comet-toast-icon');
+  icon.append(createLxIcon(getToastIconName(item.type)));
   const content = $<HTMLElementTagNameMap['div']>('div.comet-toast-content', undefined, item.message);
-  const closeButton = $<HTMLElementTagNameMap['button']>('button.comet-toast-close.comet-btn-base.comet-btn-ghost.comet-btn-mode-icon.comet-btn-sm', undefined, 'x');
-  closeButton.type = 'button';
-  closeButton.setAttribute('aria-label', closeLabel);
-  toastElement.append(icon, content, closeButton);
+  const closeActionBar = createActionBarView({
+    className: 'comet-toast-actions',
+    ariaLabel: closeLabel,
+    items: [
+      {
+        id: 'close',
+        label: closeLabel,
+        hover: closeLabel,
+        content: createLxIcon('close'),
+        mode: 'icon',
+        buttonClassName: 'comet-toast-close',
+        onClick: () => dismissToast(item.id),
+      },
+    ],
+  });
+  toastElement.append(icon, content, closeActionBar.getElement());
   return {
     element: toastElement,
-    closeButton,
+    closeActionBar,
   };
 }
 
@@ -237,9 +240,7 @@ export class ToastContainerView extends Disposable {
 
     const nodes = currentToasts.map((item) => {
       const rendered = renderToastItem(item, this.closeLabel);
-      this.renderDisposables.add(
-        addDisposableListener(rendered.closeButton, 'click', () => dismissToast(item.id)),
-      );
+      this.renderDisposables.add(rendered.closeActionBar);
       return rendered.element;
     });
 

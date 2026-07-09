@@ -85,6 +85,8 @@ test('toast container renders toasts and close button dismisses them', async () 
     const closeButton = container.getElement().querySelector('.comet-toast-close');
     assert(closeButton instanceof HTMLButtonElement);
     assert.equal(closeButton.getAttribute('aria-label'), 'Dismiss');
+    assert(container.getElement().querySelector('.comet-actionbar .comet-toast-close') instanceof HTMLButtonElement);
+    assert(toastItem.querySelector('.comet-toast-icon .lx-icon') instanceof HTMLElement);
 
     closeButton.click();
     await waitForCondition(() => container.getElement().querySelector('.comet-toast-item') === null);

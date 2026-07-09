@@ -121,7 +121,7 @@ import { getLocaleMessages } from 'language/i18n';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import { parseLinkedText } from 'cs/base/common/linkedText';
-import type { AppStartupLayout, LibraryDocumentSummary, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
@@ -1374,7 +1374,6 @@ class WorkbenchHost {
       activeTab: activeEditorTab,
       draftBody,
       createBrowserTab: handleCreateBrowserTab,
-      createPdfTab: handleCreatePdfTab,
       webContentSurfaceSnapshot,
       updateActiveContentTabUrl,
       updateActiveBrowserTabPageTitle,
@@ -1383,7 +1382,6 @@ class WorkbenchHost {
     } = {
       ...editorPartSnapshot,
       createBrowserTab: editorPartControllerInstance.createBrowserTab,
-      createPdfTab: editorPartControllerInstance.createPdfTab,
       updateActiveContentTabUrl:
         editorPartControllerInstance.updateActiveContentTabUrl,
       updateActiveBrowserTabPageTitle:

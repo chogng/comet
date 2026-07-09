@@ -191,6 +191,8 @@ test('toast overlay window dismisses toast items through the native api', async 
 
       const closeButton = view.getElement().querySelector('.comet-native-toast-close');
       assert(closeButton instanceof HTMLButtonElement);
+      assert(view.getElement().querySelector('.comet-actionbar .comet-native-toast-close') instanceof HTMLButtonElement);
+      assert(view.getElement().querySelector('.comet-toast-icon .lx-icon') instanceof HTMLElement);
 
       closeButton.click();
 
