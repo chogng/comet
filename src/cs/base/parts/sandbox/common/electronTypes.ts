@@ -58,6 +58,7 @@ export interface ElectronWebContentApi {
     script: string,
     timeoutMs?: number,
   ) => Promise<T | null>;
+  captureScreenshot: (targetId?: string | null) => Promise<string | null>;
   getSelection: (targetId?: string | null) => Promise<WebContentSelectionSnapshot | null>;
   onStateChange: (listener: (state: WebContentState) => void) => () => void;
 }

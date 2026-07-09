@@ -11,11 +11,11 @@ import type {
   WindowControlAction,
   WindowState,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError } from 'cs/base/common/errors';
 import type { Event } from 'cs/base/common/event';
 import { toDisposable } from 'cs/base/common/lifecycle';
 import { URI, isUriComponents } from 'cs/base/common/uri';
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
+import { NativeErrorCode, nativeError } from 'cs/platform/native/common/nativeErrors';
 import { pickPdfFileDialog } from 'cs/platform/dialogs/electron-main/dialogMainService';
 import {
   getMainWindow,
@@ -26,12 +26,12 @@ import type { IThemeMainService } from 'cs/platform/theme/electron-main/themeMai
 
 function reviveFileResource(resource: unknown, missingMessage: string) {
   if (!isUriComponents(resource)) {
-    throw appError('UNKNOWN_ERROR', { message: missingMessage });
+    throw nativeError(NativeErrorCode.UnknownError, { message: missingMessage });
   }
 
   const fileResource = URI.from(resource, true);
   if (fileResource.scheme !== 'file') {
-    throw appError('URL_PROTOCOL_UNSUPPORTED', { url: fileResource.toString() });
+    throw nativeError(NativeErrorCode.UrlProtocolUnsupported, { url: fileResource.toString() });
   }
 
   return fileResource;
@@ -53,7 +53,7 @@ export class NativeHostMainService {
     const resource = resolvePdfFileResource(payload);
     const filePath = resource.fsPath;
     if (!/\.pdf$/i.test(filePath)) {
-      throw appError('UNKNOWN_ERROR', { message: 'Only PDF files can be previewed.' });
+      throw nativeError(NativeErrorCode.UnknownError, { message: 'Only PDF files can be previewed.' });
     }
 
     const buffer = await readFile(filePath);
@@ -194,7 +194,7 @@ export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent>
       case 'get_os_color_scheme':
         return this.service.getOSColorScheme() as Promise<T>;
       default:
-        throw appError('UNKNOWN_COMMAND', { command });
+        throw nativeError(NativeErrorCode.UnknownCommand, { command });
     }
   }
 
@@ -205,7 +205,7 @@ export class NativeHostMainChannel implements IServerChannel<IpcMainInvokeEvent>
       case 'on_did_change_color_scheme':
         return this.service.onDidChangeColorScheme() as Event<T>;
       default:
-        throw appError('UNKNOWN_COMMAND', { command: eventName });
+        throw nativeError(NativeErrorCode.UnknownCommand, { command: eventName });
     }
   }
 }

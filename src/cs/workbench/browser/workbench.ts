@@ -19,7 +19,6 @@ import type {
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
 import type { LibraryModel, LibraryModelContext } from 'cs/workbench/browser/libraryModel';
 
-import { setWorkbenchBrowserTabKeepAliveLimit } from 'cs/workbench/contrib/browserView/browser/browserRetentionState';
 import { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
 import { Schemas } from 'cs/base/common/network';
 import {
@@ -33,6 +32,8 @@ import {
   WORKBENCH_PART_IDS,
 } from 'cs/workbench/browser/layout';
 import {
+  ActivateCodeSidebarEntryAction,
+  ActivateHomeSidebarEntryAction,
   ApplyAgentLayoutAction,
   ApplyFlowLayoutAction,
   ToggleEditorCollapsedAction,
@@ -42,6 +43,8 @@ import { createSettingsController } from 'cs/workbench/contrib/preferences/brows
 import type { SettingsController, SettingsControllerContext } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { createEditorPartController } from 'cs/workbench/browser/parts/editor/editorPart';
 import type { EditorPartChangeReason, EditorPartControllerContext, EditorPartModel } from 'cs/workbench/browser/parts/editor/editorPart';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { createEditorTabInputId } from 'cs/workbench/browser/parts/editor/editorInput';
 
 import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { createEditorBrowserToolbarActions } from 'cs/workbench/browser/parts/editor/editorBrowserToolbarActions';
@@ -73,6 +76,7 @@ import { DisposableStore } from 'cs/base/common/lifecycle';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
 import { NotificationsStatus } from 'cs/workbench/browser/parts/notifications/notificationsStatus';
@@ -87,7 +91,6 @@ import {
   setWorkbenchArticles,
   setWorkbenchFetchSeedUrl,
   setWorkbenchSelectedArticleKeysInOrder,
-  setWorkbenchSelectionModePhase,
   setWorkbenchWebUrl,
   subscribeWorkbenchSession,
 } from 'cs/workbench/browser/session';
@@ -111,10 +114,6 @@ import {
 import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 
 import { getLocaleMessages } from 'language/i18n';
-import {
-  resolveBatchFetchSources,
-  resolveBatchFetchSourceTable,
-} from 'cs/workbench/services/fetch/browser/articleFetch';
 import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -139,6 +138,10 @@ import { INativeHostService } from 'cs/platform/native/common/native';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import {
+  IWorkbenchSidebarEntryService,
+  type WorkbenchSidebarEntry,
+} from 'cs/workbench/services/sidebar/common/sidebarEntryService';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
@@ -319,12 +322,6 @@ function getBatchSourceDisplayLabel(source: Pick<BatchSource, 'journalTitle' | '
   return journalTitle || source.url;
 }
 
-function getBatchSourcesDisplayLabel(
-  sources: ReadonlyArray<Pick<BatchSource, 'journalTitle' | 'url'>>,
-) {
-  return sources.map(getBatchSourceDisplayLabel).join(', ');
-}
-
 function isContentTab(tab: EditorWorkspaceTab) {
   return isEditorContentTabInput(tab);
 }
@@ -418,6 +415,13 @@ class WorkbenchHost {
   private renderPending = false;
   private webContentRuntime = false;
   private settingsOverlayVisible = false;
+  private readonly sidebarEntryConversationIds: Record<
+    WorkbenchSidebarEntry,
+    string | null
+  > = {
+    home: null,
+    code: null,
+  };
   private previousBrowserUrl = '';
   private previousActiveContentTabId: string | null = null;
   private previousContentTargetId: string | null = null;
@@ -441,6 +445,8 @@ class WorkbenchHost {
     @IDialogService private readonly dialogService: IDialogService,
     @IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
     @IChatServiceDecorator private readonly chatService: IChatService,
+    @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
+    @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
   ) {
     this.rootElement = rootElement;
@@ -483,6 +489,7 @@ class WorkbenchHost {
       subscribeWindowState(this.requestRender),
       subscribeWorkbenchContentState(this.requestRender),
       editorDraftStyleService.subscribe(this.requestRender),
+      this.sidebarEntryService.onDidChangeActiveEntry(this.requestRender),
     );
 
     this.requestRender();
@@ -651,6 +658,14 @@ class WorkbenchHost {
     this.commandService.executeCommand(ApplyFlowLayoutAction.ID);
   };
 
+  private readonly activateSidebarEntry = (entry: WorkbenchSidebarEntry) => {
+    const commandId =
+      entry === 'home'
+        ? ActivateHomeSidebarEntryAction.ID
+        : ActivateCodeSidebarEntryAction.ID;
+    this.commandService.executeCommand(commandId);
+  };
+
   private readonly showSettingsPage = () => {
     if (this.settingsOverlayVisible) {
       return;
@@ -671,6 +686,30 @@ class WorkbenchHost {
     this.settingsOverlayVisible = false;
     this.requestRender();
   };
+
+  private syncActiveSidebarEntryConversation() {
+    const conversationId = this.ensureSidebarEntryConversation(
+      this.sidebarEntryService.getActiveEntry(),
+    );
+    this.chatService.activateConversation(conversationId);
+  }
+
+  private ensureSidebarEntryConversation(entry: WorkbenchSidebarEntry) {
+    const conversationId = this.sidebarEntryConversationIds[entry];
+    if (conversationId) {
+      return conversationId;
+    }
+
+    if (entry === 'home') {
+      const homeConversationId = this.chatService.getSnapshot().activeConversationId;
+      this.sidebarEntryConversationIds.home = homeConversationId;
+      return homeConversationId;
+    }
+
+    const codeConversationId = this.chatService.createConversation();
+    this.sidebarEntryConversationIds.code = codeConversationId;
+    return codeConversationId;
+  }
 
   private syncWebContentRuntime(
     webContentNavigationModelInstance: WebContentNavigationModel,
@@ -861,6 +900,14 @@ class WorkbenchHost {
         this.editorPartController?.saveActiveDraft() ?? false,
       canSaveActiveDraft: () =>
         this.editorPartController?.canSaveActiveDraft() ?? false,
+      openEditor: request =>
+        this.editorPartController?.openEditor(request),
+      activateTab: tabId =>
+        this.editorPartController?.onActivateTab(tabId),
+      closeTab: tabId =>
+        this.editorPartController?.onCloseTab(tabId) ?? false,
+      getTabs: () =>
+        this.editorPartController?.getSnapshot().tabs ?? [],
     });
   }
 
@@ -1152,7 +1199,6 @@ class WorkbenchHost {
       isLoadingTranslationModels,
       journalSourceOverrides,
     } = settingsSnapshot;
-    setWorkbenchBrowserTabKeepAliveLimit(browserTabKeepAliveLimit);
     applyWorkbenchTheme(theme, workbenchColorCustomizations);
     applyWorkbenchBrowserStyles();
     const knowledgeBaseModeEnabled = knowledgeBaseEnabled;
@@ -1173,7 +1219,6 @@ class WorkbenchHost {
       batchStartDate,
       batchEndDate,
       filteredArticles,
-      hasData,
     } = {
       batchStartDate: workbenchContentStateSnapshot.batchStartDate,
       batchEndDate: workbenchContentStateSnapshot.batchEndDate,
@@ -1239,6 +1284,8 @@ class WorkbenchHost {
       labels: {
         emptyState: ui.emptyState,
         contentUnavailable: ui.webContentUnavailable,
+        overlayPauseHeading: ui.webContentOverlayPauseHeading,
+        overlayPauseDetail: ui.webContentOverlayPauseDetail,
       },
     };
     const editorPartControllerInstance = getWorkbenchEditorPartController({
@@ -1246,6 +1293,8 @@ class WorkbenchHost {
       viewPartProps,
       nativeHost,
       dialogService: this.dialogService,
+      instantiationService: this.instantiationService,
+      editorResolverService: this.editorResolverService,
       browserUrl,
       webUrl,
     });
@@ -1255,7 +1304,6 @@ class WorkbenchHost {
       tabs: editorTabs,
       activeTab: activeEditorTab,
       draftBody,
-      createBrowserTab: handleCreateBrowserTab,
       webContentSurfaceSnapshot,
       updateActiveContentTabUrl,
       updateActiveBrowserTabPageTitle,
@@ -1263,7 +1311,6 @@ class WorkbenchHost {
       editorPartProps,
     } = {
       ...editorPartSnapshot,
-      createBrowserTab: editorPartControllerInstance.createBrowserTab,
       updateActiveContentTabUrl:
         editorPartControllerInstance.updateActiveContentTabUrl,
       updateActiveBrowserTabPageTitle:
@@ -1286,6 +1333,7 @@ class WorkbenchHost {
       getDraftDocument: editorPartControllerInstance.getDraftDocument,
       setDraftDocument: editorPartControllerInstance.setDraftDocument,
     });
+    this.syncActiveSidebarEntryConversation();
     const assistantSnapshot = chatServiceInstance.getSnapshot();
     const {
       question: assistantQuestion,
@@ -1302,7 +1350,6 @@ class WorkbenchHost {
       getArticleSelectionKey(article),
     );
 
-    const selectedArticleKeys = new Set(selectedArticleKeysInOrder);
     const selectedArticleOrderLookup = buildSelectedArticleOrderLookup(
       selectedArticleKeysInOrder,
     );
@@ -1360,7 +1407,16 @@ class WorkbenchHost {
         if (isEditorCollapsed) {
           setEditorCollapsed(false, expandedEditorSize);
         }
-        editorPartControllerInstance.openBrowserUrlInNewTab(browserLinkUrl);
+        editorPartControllerInstance.openEditor({
+          kind: 'browser',
+          disposition: 'new-tab',
+          resource: BrowserViewUri.forId(createEditorTabInputId('browser')),
+          options: {
+            viewState: {
+              url: browserLinkUrl,
+            },
+          },
+        });
         return true;
       },
     });
@@ -1390,7 +1446,7 @@ class WorkbenchHost {
         isSelectionModeEnabled: selectionModePhase !== 'off',
         selectedArticleOrderLookup,
         exportableArticles,
-        createBrowserTab: handleCreateBrowserTab,
+        onOpenEditor: editorPartControllerInstance.openEditor,
         onExportArticleSummaries:
           articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
         activeDraftExport,
@@ -1398,14 +1454,13 @@ class WorkbenchHost {
           libraryModelInstance.upsertDocumentSummary,
         onLibraryUpdated: refreshLibrary,
       });
-    const handleSharedPdfDownload =
-      documentActionsControllerInstance.handleSharedPdfDownload;
-    const handleOpenArticleDetails =
-      documentActionsControllerInstance.handleOpenArticleDetails;
 
     const baseEditorPartProps = editorPartProps;
     const focusWorkbenchWebUrlInput = () => {
-      editorPartControllerInstance.openBrowserPane();
+      editorPartControllerInstance.openEditor({
+        kind: 'browser',
+        disposition: 'reveal-or-open',
+      });
       this.workbenchContentPartViews?.focusActiveEditorPrimaryInput();
     };
     const editorBrowserToolbarActions = createEditorBrowserToolbarActions({
@@ -1482,27 +1537,15 @@ class WorkbenchHost {
     const chatArticleBatch = chatServiceInstance.collectArticleBatch(filteredArticles);
     const selectedChatArticleBatch =
       chatServiceInstance.collectSelectedArticleBatch(filteredArticles);
-    const handleFetchLatestBatch = async () => {
-      const sourceTable = resolveBatchFetchSourceTable(journalSourceOverrides);
-      const batchSourceLabel = getBatchSourcesDisplayLabel(
-        resolveBatchFetchSources(fetchSeedUrl || webUrl, sourceTable),
-      );
-      const result = await batchFetchControllerInstance.handleFetchLatestBatch();
-      if (!result.ok) {
-        return;
-      }
-
-      chatServiceInstance.insertArticles(
-        result.articles,
-        batchSourceLabel,
-      );
-    };
     const articleQuickSources = getConfigBatchSourceSeed();
     const handleFetchArticleSource = async (source: BatchSource) => {
       if (isEditorCollapsed) {
         setEditorCollapsed(false, expandedEditorSize);
       }
-      editorPartControllerInstance.openBrowserPane();
+      editorPartControllerInstance.openEditor({
+        kind: 'browser',
+        disposition: 'reveal-or-open',
+      });
       navigateToAddressBarUrl(source.url, false);
 
       const result = await batchFetchControllerInstance.handleFetchSource(source);
@@ -1520,39 +1563,6 @@ class WorkbenchHost {
         result.articles,
         getBatchSourceDisplayLabel(source),
       );
-    };
-
-    const handleToggleSelectionMode = () => {
-      const previousPhase = getWorkbenchSessionSnapshot().selectionModePhase;
-      if (previousPhase === 'off') {
-        setWorkbenchSelectedArticleKeysInOrder([]);
-        setWorkbenchSelectionModePhase('multi');
-        return;
-      }
-
-      if (previousPhase === 'multi') {
-        setWorkbenchSelectedArticleKeysInOrder(filteredArticleKeysInOrder);
-        setWorkbenchSelectionModePhase('all');
-        return;
-      }
-
-      setWorkbenchSelectedArticleKeysInOrder([]);
-      setWorkbenchSelectionModePhase('off');
-    };
-
-    const handleToggleArticleSelected = (article: Article) => {
-      if (getWorkbenchSessionSnapshot().selectionModePhase === 'off') {
-        return;
-      }
-
-      const articleKey = getArticleSelectionKey(article);
-      setWorkbenchSelectedArticleKeysInOrder((previousKeys) => {
-        if (previousKeys.includes(articleKey)) {
-          return previousKeys.filter((key) => key !== articleKey);
-        }
-
-        return [...previousKeys, articleKey];
-      });
     };
 
     const activeDraftStableSelectionTarget =
@@ -1582,6 +1592,8 @@ class WorkbenchHost {
         viewPartProps,
         nativeHost,
         dialogService: this.dialogService,
+        instantiationService: this.instantiationService,
+        editorResolverService: this.editorResolverService,
         browserUrl,
         webUrl,
       },
@@ -1633,7 +1645,7 @@ class WorkbenchHost {
         isSelectionModeEnabled: selectionModePhase !== 'off',
         selectedArticleOrderLookup,
         exportableArticles,
-        createBrowserTab: handleCreateBrowserTab,
+        onOpenEditor: editorPartControllerInstance.openEditor,
         onExportArticleSummaries:
           articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
         activeDraftExport,
@@ -1670,12 +1682,15 @@ class WorkbenchHost {
     const sidebarProps: SidebarProps = {
       labels: {
         homeTitle: ui.sidebarHomeTitle,
+        codeTitle: ui.sidebarCodeTitle,
         homeNavNewChat: ui.sidebarHomeNavNewChat,
         homeNavProjects: ui.sidebarHomeNavProjects,
         homeNavArtifacts: ui.sidebarHomeNavArtifacts,
         homeNavCustomize: ui.sidebarHomeNavCustomize,
         recentsTitle: ui.sidebarRecentsTitle,
       },
+      activeEntry: this.sidebarEntryService.getActiveEntry(),
+      onActivateEntry: this.activateSidebarEntry,
       ...createSidebarFooterTitlebarLabels(ui),
     };
 

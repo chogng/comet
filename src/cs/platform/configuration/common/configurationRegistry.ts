@@ -17,6 +17,10 @@ export enum ConfigurationScope {
 export interface ConfigurationPropertySchema extends IJSONSchema {
   readonly scope?: ConfigurationScope;
   readonly restricted?: boolean;
+  readonly tags?: readonly string[];
+  readonly experiment?: {
+    readonly mode: string;
+  };
 }
 
 export interface RegisteredConfigurationPropertySchema
@@ -94,7 +98,14 @@ function createSettingsSchema(
     additionalProperties: false,
     properties: Object.fromEntries(
       [...properties].map(([key, schema]) => {
-        const { key: _key, scope: _scope, restricted: _restricted, ...jsonSchema } = schema;
+        const {
+          key: _key,
+          scope: _scope,
+          restricted: _restricted,
+          tags: _tags,
+          experiment: _experiment,
+          ...jsonSchema
+        } = schema;
         return [key, jsonSchema];
       }),
     ),

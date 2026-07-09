@@ -6,7 +6,8 @@ import type { WebContentPdfDownloadPayload } from 'cs/base/parts/sandbox/common/
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
 import { cleanText } from 'cs/base/common/strings';
 import { normalizeUrl } from 'cs/base/common/url';
-import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { PdfErrorCode, pdfError } from 'cs/platform/download/common/pdfErrors';
 import { fetchHtml } from 'cs/workbench/services/fetch/electron-main/dispatch';
 import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import {
@@ -286,7 +287,7 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
                 }
               : null,
           });
-          throw appError('PDF_DOWNLOAD_FAILED', {
+          throw pdfError(PdfErrorCode.DownloadFailed, {
             status: latestFailure?.status ?? 'NETWORK_ERROR',
             statusText: latestFailure?.statusText ?? 'Unable to download PDF from detected links',
             pageUrl: request.pageUrl,
@@ -306,7 +307,7 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
       logPdfStrategy('generic_pdf_link_not_found', {
         pageUrl: request.pageUrl,
       });
-      throw appError('PDF_LINK_NOT_FOUND', { pageUrl: request.pageUrl });
+      throw pdfError(PdfErrorCode.LinkNotFound, { pageUrl: request.pageUrl });
     }
 
     const resolvedCandidateUrls = buildPdfDownloadCandidates(pdfUrl, request.pageUrl);
@@ -334,7 +335,7 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
             }
           : null,
       });
-      throw appError('PDF_DOWNLOAD_FAILED', {
+      throw pdfError(PdfErrorCode.DownloadFailed, {
         status: latestFailure?.status ?? 'NETWORK_ERROR',
         statusText: latestFailure?.statusText ?? 'Unable to download PDF from detected links',
         pdfUrl,

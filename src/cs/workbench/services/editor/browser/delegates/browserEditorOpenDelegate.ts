@@ -1,7 +1,9 @@
 import {
+  createEditorTabInputId,
   EMPTY_BROWSER_TAB_URL,
   isEditorDraftTabInput,
 } from 'cs/workbench/browser/parts/editor/editorInput';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { isReusableEmptyBrowserTab } from 'cs/workbench/browser/parts/editor/editorTabPolicy';
 import type { EditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
 import {
@@ -9,8 +11,10 @@ import {
   type BrowserEditorCurrentOpenRequest,
   type BrowserEditorNewTabOpenRequest,
   type BrowserEditorRevealOrOpenRequest,
+  type EditorOpenOptions,
 } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import type { EditorOpenDelegate } from 'cs/workbench/services/editor/browser/editorOpenRegistry';
+import type { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
 
 type BrowserEditorOpenRequest =
   | BrowserEditorCurrentOpenRequest
@@ -24,7 +28,36 @@ type BrowserEditorOpenModel = Pick<
 
 export function createBrowserEditorOpenDelegate(
   model: BrowserEditorOpenModel,
+  editorResolverService: IEditorResolverService,
 ): EditorOpenDelegate<BrowserEditorOpenRequest> {
+  const resolveBrowserEditor = (
+    resource: BrowserEditorOpenRequest['resource'],
+    options: EditorOpenOptions | undefined,
+  ) => {
+    const resolvedResource =
+      resource ?? BrowserViewUri.forId(createEditorTabInputId('browser'));
+    const resolved = editorResolverService.resolveEditor({
+      resource: resolvedResource,
+      options,
+    });
+    if (!resolved) {
+      throw new Error(`No editor resolver registered for browser resource: ${resolvedResource.toString()}`);
+    }
+
+    void resolved.editor.resolve();
+
+    const browserResource = resolved.editor.resource;
+    const parsed = browserResource ? BrowserViewUri.parse(browserResource) : undefined;
+    if (!parsed) {
+      throw new Error(`Resolved browser editor returned an invalid resource: ${browserResource?.toString() ?? ''}`);
+    }
+
+    return {
+      id: parsed.id,
+      viewState: resolved.options?.viewState,
+    };
+  };
+
   return {
     canOpen(request): request is BrowserEditorOpenRequest {
       return request.kind === 'browser';
@@ -37,19 +70,27 @@ export function createBrowserEditorOpenDelegate(
             return createUnhandledEditorOpenResult();
           }
 
-          model.updateActiveContentTabUrl(request.url, request.options);
+          const resolved = resolveBrowserEditor(request.resource, request.options);
+          const resolvedUrl = resolved.viewState?.url?.trim();
+          if (!resolvedUrl) {
+            return createUnhandledEditorOpenResult();
+          }
+
+          model.updateActiveContentTabUrl(resolvedUrl, request.options);
           return {
             handled: true,
             activeTabId,
           };
         }
         case 'new-tab': {
-          const normalizedUrl = request.url.trim();
+          const resolved = resolveBrowserEditor(request.resource, request.options);
+          const normalizedUrl = resolved.viewState?.url?.trim() ?? '';
           if (!normalizedUrl) {
             return createUnhandledEditorOpenResult();
           }
 
           model.createBrowserTab(normalizedUrl, {}, {
+            id: resolved.id,
             reuseExisting: false,
           });
           return {
@@ -58,7 +99,7 @@ export function createBrowserEditorOpenDelegate(
           };
         }
         case 'reveal-or-open': {
-          if (request.url === undefined) {
+          if (request.options?.viewState?.url === undefined) {
             const { activeTab, tabs } = model.getSnapshot();
             const existingEmptyBrowserTab = isReusableEmptyBrowserTab(activeTab)
               ? activeTab
@@ -71,19 +112,29 @@ export function createBrowserEditorOpenDelegate(
               };
             }
 
-            model.createBrowserTab(EMPTY_BROWSER_TAB_URL);
+            const resolved = resolveBrowserEditor(undefined, {
+              viewState: {
+                url: EMPTY_BROWSER_TAB_URL,
+              },
+            });
+            model.createBrowserTab(EMPTY_BROWSER_TAB_URL, {}, {
+              id: resolved.id,
+            });
             return {
               handled: true,
               activeTabId: model.getSnapshot().activeTabId,
             };
           }
 
-          const normalizedUrl = request.url.trim();
+          const resolved = resolveBrowserEditor(request.resource, request.options);
+          const normalizedUrl = resolved.viewState?.url?.trim() ?? '';
           if (!normalizedUrl) {
             return createUnhandledEditorOpenResult();
           }
 
-          model.createBrowserTab(normalizedUrl);
+          model.createBrowserTab(normalizedUrl, {}, {
+            id: resolved.id,
+          });
           return {
             handled: true,
             activeTabId: model.getSnapshot().activeTabId,

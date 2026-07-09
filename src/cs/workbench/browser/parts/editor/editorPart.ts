@@ -1,12 +1,18 @@
 import type { LocaleMessages } from 'language/locales';
-import { toEditorTabInput } from 'cs/workbench/browser/parts/editor/editorInput';
+import {
+  createEditorTabInputId,
+  isEditorBrowserTabInput,
+  toEditorTabInput,
+} from 'cs/workbench/browser/parts/editor/editorInput';
 import { createWebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 
 import { createEditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { EditorModelSnapshot, EditorWorkspaceTab, WritingEditorDocument } from 'cs/workbench/browser/parts/editor/editorModel';
 import { createEditorOpenService } from 'cs/workbench/services/editor/browser/editorOpenService';
 import type { EditorOpenService } from 'cs/workbench/services/editor/common/editorOpenService';
+import type { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
 import type {
   EditorOpenHandler,
   EditorOpenRequest,
@@ -18,12 +24,14 @@ import type { SerializedEditorViewStateEntry } from 'cs/workbench/browser/parts/
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { createEditorBrowserToolbarTitlebarLabels } from 'cs/workbench/browser/parts/titlebar/titlebarActions';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 export type EditorPartState = {
   ui: LocaleMessages;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
+  instantiationService: IInstantiationService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];
@@ -59,6 +67,8 @@ export type EditorPartControllerContext = {
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
+  instantiationService: IInstantiationService;
+  editorResolverService: IEditorResolverService;
   browserUrl: string;
   webUrl: string;
 };
@@ -109,6 +119,7 @@ export function createEditorPartProps({
     viewPartProps,
     nativeHost,
     dialogService,
+    instantiationService,
     groupId,
     tabs,
     dirtyDraftTabIds,
@@ -235,6 +246,7 @@ export function createEditorPartProps({
     viewPartProps,
     nativeHost,
     dialogService,
+    instantiationService,
     groupId,
     tabs,
     dirtyDraftTabIds,
@@ -266,7 +278,7 @@ function createEditorPartControllerSnapshot(
   actions: EditorPartActions,
 ): EditorPartControllerSnapshot {
   const editorSnapshot = editorModel.getSnapshot();
-  const { ui, viewPartProps, nativeHost, dialogService } = context;
+  const { ui, viewPartProps, nativeHost, dialogService, instantiationService } = context;
   const {
     groupId,
     tabs,
@@ -293,6 +305,7 @@ function createEditorPartControllerSnapshot(
         viewPartProps,
         nativeHost,
         dialogService,
+        instantiationService,
         groupId,
         tabs,
         dirtyDraftTabIds,
@@ -313,6 +326,7 @@ function areEditorPartControllerContextsEqual(
     previous.ui === next.ui &&
     previous.nativeHost === next.nativeHost &&
     previous.dialogService === next.dialogService &&
+    previous.instantiationService === next.instantiationService &&
     previous.browserUrl === next.browserUrl &&
     previous.webUrl === next.webUrl &&
     previous.viewPartProps.browserUrl === next.viewPartProps.browserUrl &&
@@ -326,7 +340,11 @@ function areEditorPartControllerContextsEqual(
     previous.viewPartProps.webContentRuntime === next.viewPartProps.webContentRuntime &&
     previous.viewPartProps.labels.emptyState === next.viewPartProps.labels.emptyState &&
     previous.viewPartProps.labels.contentUnavailable ===
-      next.viewPartProps.labels.contentUnavailable
+      next.viewPartProps.labels.contentUnavailable &&
+    previous.viewPartProps.labels.overlayPauseHeading ===
+      next.viewPartProps.labels.overlayPauseHeading &&
+    previous.viewPartProps.labels.overlayPauseDetail ===
+      next.viewPartProps.labels.overlayPauseDetail
   );
 }
 
@@ -344,7 +362,10 @@ export class EditorPartController {
 
   constructor(context: EditorPartControllerContext) {
     this.context = context;
-    this.editorOpenService = createEditorOpenService(this.editorModel);
+    this.editorOpenService = createEditorOpenService(
+      this.editorModel,
+      this.context.editorResolverService,
+    );
     this.actions = {
       onActivateTab: this.onActivateTab,
       onReorderTab: this.onReorderTab,
@@ -394,7 +415,7 @@ export class EditorPartController {
   };
 
   readonly openEditor = (request: EditorOpenRequest) => {
-    if (request.kind !== 'pdf' || request.url?.trim()) {
+    if (request.kind !== 'pdf' || request.options?.viewState?.url?.trim()) {
       return this.editorOpenService.open(request);
     }
 
@@ -410,55 +431,6 @@ export class EditorPartController {
     });
   };
 
-  readonly createDraftTab = () => {
-    this.openEditor({
-      kind: 'draft',
-      disposition: 'reveal-or-open',
-    });
-  };
-
-  readonly createBrowserTab = (url: string) => {
-    if (!url.trim()) {
-      return;
-    }
-
-    this.openEditor({
-      kind: 'browser',
-      disposition: 'reveal-or-open',
-      url,
-    });
-  };
-
-  readonly openBrowserUrlInNewTab = (url: string) => {
-    if (!url.trim()) {
-      return;
-    }
-
-    this.openEditor({
-      kind: 'browser',
-      disposition: 'new-tab',
-      url,
-    });
-  };
-
-  readonly openBrowserPane = () => {
-    this.openEditor({
-      kind: 'browser',
-      disposition: 'reveal-or-open',
-    });
-  };
-  readonly createPdfTab = (url: string) => {
-    if (!url.trim()) {
-      return;
-    }
-
-    void this.openEditor({
-      kind: 'pdf',
-      disposition: 'reveal-or-open',
-      url,
-    });
-  };
-
   readonly canSaveActiveDraft = () => this.editorModel.canSaveActiveDraft();
 
   readonly saveActiveDraft = () => this.editorModel.saveActiveDraft();
@@ -469,11 +441,21 @@ export class EditorPartController {
       isLoading?: boolean;
     } = {},
   ) => {
+    const { activeTab } = this.editorModel.getSnapshot();
     this.openEditor({
       kind: 'browser',
       disposition: 'current',
-      url,
-      options,
+      resource: BrowserViewUri.forId(
+        isEditorBrowserTabInput(activeTab)
+          ? activeTab.id
+          : createEditorTabInputId('browser'),
+      ),
+      options: {
+        viewState: {
+          url,
+        },
+        ...options,
+      },
     });
   };
 
@@ -524,7 +506,10 @@ export class EditorPartController {
       const shouldKeepBrowserPane = this.shouldKeepBrowserPaneAfterClosingTab(tabId);
       this.editorModel.closeTab(tabId);
       if (shouldKeepBrowserPane) {
-        this.openBrowserPane();
+        this.openEditor({
+          kind: 'browser',
+          disposition: 'reveal-or-open',
+        });
       }
       return true;
     });
@@ -752,7 +737,7 @@ export class EditorPartController {
   private readonly resolveOpenEditorRequest = async (
     request: EditorOpenRequest,
   ): Promise<EditorOpenRequest | null> => {
-    if (request.kind !== 'pdf' || request.url?.trim()) {
+    if (request.kind !== 'pdf' || request.options?.viewState?.url?.trim()) {
       return request;
     }
 

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { parseAppErrorData } from 'cs/base/common/errors';
+import { parseAppErrorData } from 'cs/base/parts/sandbox/common/appError';
 import type { LocaleMessages } from 'language/locales';
 import { formatLocaleMessage, localizeAppError } from 'cs/workbench/common/errorMessages';
 

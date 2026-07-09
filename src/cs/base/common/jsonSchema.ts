@@ -81,6 +81,7 @@ export interface IJSONSchema {
 	deprecationMessage?: string;
 	markdownDeprecationMessage?: string;
 	enumDescriptions?: string[];
+	enumItemLabels?: string[];
 	markdownEnumDescriptions?: string[];
 	markdownDescription?: string;
 	doNotSuggest?: boolean;
@@ -327,4 +328,3 @@ function traverseNodes(root: IJSONSchema, visit: (schema: IJSONSchema) => boolea
 		next = toWalk.pop();
 	}
 }
-

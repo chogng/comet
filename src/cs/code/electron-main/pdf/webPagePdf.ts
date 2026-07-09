@@ -3,7 +3,8 @@ import { promises as fs } from 'node:fs';
 
 import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
-import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { PdfErrorCode, pdfError } from 'cs/platform/download/common/pdfErrors';
 import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import { buildPdfFileName } from 'cs/platform/download/common/pdfFileName';
 import {
@@ -163,7 +164,7 @@ export async function printWebPageToPdf({
       currentWebContentUrl: cleanText(getWebContentState().url),
       message: error instanceof Error ? error.message : String(error),
     });
-    throw appError('PDF_DOWNLOAD_FAILED', {
+    throw pdfError(PdfErrorCode.DownloadFailed, {
       status: 'PRINT_TO_PDF_FAILED',
       statusText: error instanceof Error ? error.message : String(error),
       pageUrl,

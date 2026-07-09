@@ -39,6 +39,59 @@
 
 .comet-browser-frame-placeholder {
   pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.comet-webcontent-pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--comet-editor-foreground, #1f2933);
+  background-color: color-mix(in srgb, var(--comet-editor-webContentBackground, #fff) 15%, transparent);
+  border-radius: inherit;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms ease-in;
+}
+
+.comet-browser-frame-placeholder[data-webcontent-paused='true'] + .comet-webcontent-pause-overlay {
+  opacity: 1;
+  visibility: visible;
+}
+
+.comet-browser-frame-placeholder[data-webcontent-pause-message='true'] + .comet-webcontent-pause-overlay {
+  background-color: color-mix(in srgb, var(--comet-editor-webContentBackground, #fff) 60%, transparent);
+}
+
+.comet-webcontent-pause-message {
+  display: none;
+  max-width: 80%;
+  padding: 20px 40px;
+  text-align: center;
+  background: var(--comet-editor-webContentBackground, #fff);
+  border: 1px solid var(--comet-widget-border, rgba(102, 119, 136, 0.35));
+  border-radius: 4px;
+  box-shadow: var(--comet-shadow-lg, 0 8px 24px rgba(15, 23, 42, 0.18));
+}
+
+.comet-browser-frame-placeholder[data-webcontent-pause-message='true'] + .comet-webcontent-pause-overlay .comet-webcontent-pause-message {
+  display: block;
+}
+
+.comet-webcontent-pause-heading {
+  margin-bottom: 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.comet-webcontent-pause-detail {
+  font-size: 14px;
+  color: var(--comet-descriptionForeground, #667788);
 }
 
 .comet-empty-state {

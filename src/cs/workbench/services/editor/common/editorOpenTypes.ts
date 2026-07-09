@@ -1,3 +1,5 @@
+import { URI } from 'cs/base/common/uri';
+
 export type EditorOpenDisposition =
   | 'current'
   | 'new-tab'
@@ -13,11 +15,25 @@ export type DraftEditorOpenRequest = {
   disposition: 'new-tab' | 'reveal-or-open';
 };
 
+export type EditorOpenUrlViewState = {
+  url?: string;
+};
+
+export type EditorOpenOptions = {
+  viewState?: EditorOpenUrlViewState;
+};
+
+export type EditorOpenOptionsWithUrl = EditorOpenOptions & {
+  viewState: EditorOpenUrlViewState & {
+    url: string;
+  };
+};
+
 export type BrowserEditorCurrentOpenRequest = {
   kind: 'browser';
   disposition: 'current';
-  url: string;
-  options?: {
+  resource: URI;
+  options: EditorOpenOptionsWithUrl & {
     isLoading?: boolean;
   };
 };
@@ -25,19 +41,22 @@ export type BrowserEditorCurrentOpenRequest = {
 export type BrowserEditorNewTabOpenRequest = {
   kind: 'browser';
   disposition: 'new-tab';
-  url: string;
+  resource: URI;
+  options: EditorOpenOptionsWithUrl;
 };
 
 export type BrowserEditorRevealOrOpenRequest = {
   kind: 'browser';
   disposition: 'reveal-or-open';
-  url?: string;
+  resource?: URI;
+  options?: EditorOpenOptions;
 };
 
 export type PdfEditorOpenRequest = {
   kind: 'pdf';
   disposition: 'new-tab' | 'reveal-or-open';
-  url?: string;
+  resource?: URI;
+  options?: EditorOpenOptions;
 };
 
 export type EditorOpenRequest =

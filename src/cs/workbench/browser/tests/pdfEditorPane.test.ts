@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
+import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import type { Annotation } from 'cs/editor/common/annotation';
 import { readStoredPdfAnnotations } from 'cs/editor/browser/pdf/pdfAnnotationPersistence';
 import { createPdfSelection } from 'cs/editor/browser/pdf/pdfSelection';
@@ -18,6 +20,8 @@ type TestViewPartProps = {
   labels: {
     emptyState: string;
     contentUnavailable: string;
+    overlayPauseHeading: string;
+    overlayPauseDetail: string;
   };
 };
 
@@ -136,6 +140,10 @@ function createDialogService() {
   return new BrowserDialogService();
 }
 
+function createTestInstantiationService() {
+  return new InstantiationService(new ServiceCollection());
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
@@ -163,11 +171,14 @@ function createProps(
       labels: {
         emptyState: 'Empty',
         contentUnavailable: 'Unavailable',
+        overlayPauseHeading: 'Paused',
+        overlayPauseDetail: 'Dismiss',
       },
       ...viewPartProps,
     },
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
     groupId: DEFAULT_EDITOR_GROUP_ID,
     tabs,
     dirtyDraftTabIds: [],

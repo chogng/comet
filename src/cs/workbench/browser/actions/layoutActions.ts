@@ -11,6 +11,7 @@ import type { ServicesAccessor } from 'cs/platform/instantiation/common/instanti
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import { WorkbenchContextKeys } from 'cs/workbench/common/contextkeys';
 import { IWorkbenchLayoutService } from 'cs/workbench/services/layout/browser/layoutService';
+import { IWorkbenchSidebarEntryService } from 'cs/workbench/services/sidebar/common/sidebarEntryService';
 
 export class ApplyAgentLayoutAction extends Action2 {
   static readonly ID = 'workbench.action.applyAgentLayout';
@@ -47,6 +48,44 @@ export class ApplyFlowLayoutAction extends Action2 {
     const layoutService = accessor.get(IWorkbenchLayoutService);
 
     layoutService.applyLayoutMode('flow');
+  }
+}
+
+export class ActivateHomeSidebarEntryAction extends Action2 {
+  static readonly ID = 'workbench.action.activateHomeSidebarEntry';
+
+  constructor() {
+    super({
+      id: ActivateHomeSidebarEntryAction.ID,
+      title: localize2('activateHomeSidebarEntry', "Open Home"),
+      category: Categories.View,
+      f1: true,
+    });
+  }
+
+  run(accessor: ServicesAccessor): void {
+    const sidebarEntryService = accessor.get(IWorkbenchSidebarEntryService);
+
+    sidebarEntryService.activateEntry('home');
+  }
+}
+
+export class ActivateCodeSidebarEntryAction extends Action2 {
+  static readonly ID = 'workbench.action.activateCodeSidebarEntry';
+
+  constructor() {
+    super({
+      id: ActivateCodeSidebarEntryAction.ID,
+      title: localize2('activateCodeSidebarEntry', "Open Code"),
+      category: Categories.View,
+      f1: true,
+    });
+  }
+
+  run(accessor: ServicesAccessor): void {
+    const sidebarEntryService = accessor.get(IWorkbenchSidebarEntryService);
+
+    sidebarEntryService.activateEntry('code');
   }
 }
 
@@ -140,6 +179,8 @@ export class ToggleEditorCollapsedAction extends Action2 {
 
 registerAction2(ApplyAgentLayoutAction);
 registerAction2(ApplyFlowLayoutAction);
+registerAction2(ActivateHomeSidebarEntryAction);
+registerAction2(ActivateCodeSidebarEntryAction);
 registerAction2(ToggleSidebarVisibilityAction);
 registerAction2(ToggleAgentSidebarVisibilityAction);
 registerAction2(ToggleEditorCollapsedAction);

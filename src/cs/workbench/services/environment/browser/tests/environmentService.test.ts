@@ -59,6 +59,7 @@ function createWebContentApi(): ElectronWebContentApi {
 		goBack: () => {},
 		goForward: () => {},
 		getSelection: async () => null,
+		captureScreenshot: async () => null,
 		onStateChange: () => () => {},
 	};
 }

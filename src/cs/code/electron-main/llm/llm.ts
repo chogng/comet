@@ -3,7 +3,8 @@ import type {
   LlmProviderId,
   TestLlmConnectionPayload as TestPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError, CancellationError, isAppError } from 'cs/base/common/errors';
+import { CancellationError } from 'cs/base/common/errors';
+import { LlmErrorCode, isLlmError, llmError } from 'cs/workbench/services/llm/llmErrors';
 import { cleanText } from 'cs/base/common/strings';
 import { defaultLlmProviderId } from 'cs/workbench/services/llm/config';
 import { isLlmProviderId } from 'cs/workbench/services/llm/registry';
@@ -115,7 +116,7 @@ export type ResolvedLlmRequest = OpenAiCompatibleRequestContext & {
 
 function normalizeProvider(value: unknown): LlmProviderId {
   if (!isLlmProviderId(value)) {
-    throw appError('LLM_PROVIDER_UNSUPPORTED', {
+    throw llmError(LlmErrorCode.ProviderUnsupported, {
       provider: typeof value === 'string' ? value : '',
     });
   }
@@ -126,18 +127,18 @@ function normalizeProvider(value: unknown): LlmProviderId {
 function normalizeBaseUrl(value: unknown): string {
   const baseUrl = cleanText(value);
   if (!baseUrl) {
-    throw appError('LLM_BASE_URL_INVALID', { value: '' });
+    throw llmError(LlmErrorCode.BaseUrlInvalid, { value: '' });
   }
 
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(baseUrl);
   } catch {
-    throw appError('LLM_BASE_URL_INVALID', { value: baseUrl });
+    throw llmError(LlmErrorCode.BaseUrlInvalid, { value: baseUrl });
   }
 
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    throw appError('LLM_BASE_URL_INVALID', { value: baseUrl });
+    throw llmError(LlmErrorCode.BaseUrlInvalid, { value: baseUrl });
   }
 
   return parsedUrl.toString().replace(/\/+$/, '');
@@ -146,7 +147,7 @@ function normalizeBaseUrl(value: unknown): string {
 function normalizeApiKey(value: unknown): string {
   const apiKey = cleanText(value);
   if (!apiKey) {
-    throw appError('LLM_API_KEY_MISSING');
+    throw llmError(LlmErrorCode.ApiKeyMissing);
   }
 
   return apiKey;
@@ -155,7 +156,7 @@ function normalizeApiKey(value: unknown): string {
 function normalizeModel(value: unknown): string {
   const model = cleanText(value);
   if (!model) {
-    throw appError('LLM_MODEL_MISSING');
+    throw llmError(LlmErrorCode.ModelMissing);
   }
 
   return model;
@@ -252,7 +253,7 @@ export async function requestOpenAiCompatibleResponse<
 
     if (!response.ok) {
       const errorText = cleanText(await response.text());
-      throw appError('LLM_CONNECTION_FAILED', {
+      throw llmError(LlmErrorCode.ConnectionFailed, {
         provider: request.provider,
         status: response.status,
         statusText: extractProviderErrorText(errorText) || response.statusText || 'Request failed',
@@ -266,18 +267,18 @@ export async function requestOpenAiCompatibleResponse<
         throw new CancellationError();
       }
 
-      throw appError('LLM_CONNECTION_FAILED', {
+      throw llmError(LlmErrorCode.ConnectionFailed, {
         provider: request.provider,
         status: 'TIMEOUT',
         statusText: `Connection timed out after ${timeoutMs}ms`,
       });
     }
 
-    if (isAppError(error)) {
+    if (isLlmError(error)) {
       throw error;
     }
 
-    throw appError('LLM_CONNECTION_FAILED', {
+    throw llmError(LlmErrorCode.ConnectionFailed, {
       provider: request.provider,
       status: 'NETWORK_ERROR',
       statusText: error instanceof Error ? error.message : String(error),

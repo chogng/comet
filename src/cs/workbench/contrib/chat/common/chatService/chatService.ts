@@ -87,9 +87,10 @@ export interface IChatService {
 	getSnapshot(): ChatServiceSnapshot;
 	setContext(context: ChatServiceContext): void;
 	setQuestion(value: string): void;
-	createConversation(): void;
+	createConversation(): string;
 	activateConversation(conversationId: string): void;
 	closeConversation(conversationId: string): void;
+	insertContextMessage(title: string, content: string): void;
 	insertArticles(articles: readonly Article[], sourceLabel: string): void;
 	insertArticleFetchEmptyResult(sourceLabel: string, message: string): void;
 	applyPatch(messageId: string): void;

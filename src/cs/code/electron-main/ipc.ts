@@ -37,6 +37,7 @@ import type {
 } from 'cs/platform/browserView/common/browserView';
 import type { StorageService } from 'cs/platform/storage/common/storage';
 import {
+  captureWebContentScreenshot,
 	getWebContentState,
 	clearWebContentHistory,
   disposeWebContentTarget,
@@ -70,7 +71,8 @@ import type { WebContentExtractionSnapshot, WebContentSnapshot } from 'cs/workbe
 
 import { resolveBatchWebContentExtractions, resolveBatchWebContentSnapshots, resolveWebContentSnapshotHtml } from 'cs/workbench/services/fetch/electron-main/webContentChannel';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
-import { appError, serializeAppError } from 'cs/base/common/errors';
+import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
+import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import {
   pickDirectoryDialog,
   pickUserSettingsFileDialog,
@@ -337,7 +339,7 @@ async function invokeCommand<TCommand extends AppCommand>(
       {
         const mainWindow = getMainWindow();
         if (!mainWindow) {
-          throw appError('MAIN_WINDOW_UNAVAILABLE');
+          throw appCommandError(AppCommandErrorCode.MainWindowUnavailable);
         }
         const exportPayload = payload as AppCommandPayloadMap['export_articles_docx'];
         const taskAbortController = startDocumentTaskAbortController(exportPayload);
@@ -362,7 +364,7 @@ async function invokeCommand<TCommand extends AppCommand>(
       {
         const mainWindow = getMainWindow();
         if (!mainWindow) {
-          throw appError('MAIN_WINDOW_UNAVAILABLE');
+          throw appCommandError(AppCommandErrorCode.MainWindowUnavailable);
         }
         return exportEditorDocx(
           payload as AppCommandPayloadMap['export_editor_docx'],
@@ -371,7 +373,7 @@ async function invokeCommand<TCommand extends AppCommand>(
         ) as Promise<AppCommandResultMap[TCommand]>;
       }
     default:
-      throw appError('UNKNOWN_COMMAND', { command });
+      throw appCommandError(AppCommandErrorCode.UnknownCommand, { command });
   }
 }
 
@@ -413,7 +415,7 @@ export function registerAppIpc(
       ) as T;
     },
     listen() {
-      throw appError('UNKNOWN_COMMAND', {
+      throw appCommandError(AppCommandErrorCode.UnknownCommand, {
         command: 'app channel events are exposed through nativeHostService today',
       });
     },
@@ -475,6 +477,10 @@ export function registerAppIpc(
 
   ipcMain.handle('app:web-content-get-selection', async (_event, payload?: { targetId?: string | null }) => {
     return await getWebContentSelection(payload?.targetId);
+  });
+
+  ipcMain.handle('app:web-content-capture-screenshot', async (_event, payload?: { targetId?: string | null }) => {
+    return await captureWebContentScreenshot(payload?.targetId);
   });
 
   ipcMain.on('app:web-content-activate', (_event, payload?: { targetId?: string | null }) => {

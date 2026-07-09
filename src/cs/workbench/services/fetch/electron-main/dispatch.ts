@@ -45,7 +45,12 @@ import { fetchListing } from 'cs/workbench/services/fetch/electron-main/fetchLis
 import { findListingCandidateExtractor, normalizeListingCandidateSeeds } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
 import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
 
-import { appError, isAppError } from 'cs/base/common/errors';
+import {
+  FetchErrorCode,
+  fetchError,
+  getFetchErrorCode,
+  getFetchErrorDetails,
+} from 'cs/workbench/services/fetch/common/fetchErrors';
 import type {
   CandidateCollectionResult,
   FetchLatestArticlesOptions,
@@ -174,15 +179,13 @@ function isAbortError(error: unknown) {
 }
 
 function isTimeoutRequestError(error: unknown) {
-  if (!isAppError(error)) return false;
-  if (error.code !== 'HTTP_REQUEST_FAILED') return false;
-  return cleanText((error.details as { status?: unknown } | undefined)?.status) === 'TIMEOUT';
+  if (getFetchErrorCode(error) !== FetchErrorCode.HttpRequestFailed) return false;
+  return cleanText(getFetchErrorDetails(error)?.status) === 'TIMEOUT';
 }
 
 function isAbortedRequestError(error: unknown) {
-  if (!isAppError(error)) return false;
-  if (error.code !== 'HTTP_REQUEST_FAILED') return false;
-  return cleanText((error.details as { status?: unknown } | undefined)?.status) === 'ABORTED';
+  if (getFetchErrorCode(error) !== FetchErrorCode.HttpRequestFailed) return false;
+  return cleanText(getFetchErrorDetails(error)?.status) === 'ABORTED';
 }
 
 function describeError(error: unknown) {
@@ -282,8 +285,7 @@ async function requestHtmlWithPreferredTransport({
 }
 
 function toErrorStatusCode(error: unknown) {
-  if (!isAppError(error)) return '';
-  return cleanText((error.details as { status?: unknown } | undefined)?.status);
+  return cleanText(getFetchErrorDetails(error)?.status);
 }
 
 function canAttemptRenderedFallback({
@@ -378,8 +380,8 @@ async function fetchRenderedHtml(url: string, options: FetchHtmlOptions = {}) {
     });
     return rendered.html;
   } catch (error) {
-    if (isAppError(error)) {
-      const details = error.details as { status?: unknown; statusText?: unknown } | undefined;
+    if (getFetchErrorCode(error) === FetchErrorCode.HttpRequestFailed) {
+      const details = getFetchErrorDetails(error);
       const status = cleanText(details?.status);
       if (status === 'ABORTED') {
         timingLog(traceId, `${stage}:aborted`, {
@@ -401,7 +403,7 @@ async function fetchRenderedHtml(url: string, options: FetchHtmlOptions = {}) {
           timeoutMs,
           transport: 'browser-render',
           url: shortenForLog(url),
-          message: cleanText(details?.statusText) || error.message,
+          message: cleanText(details?.statusText) || describeError(error),
         });
       }
 
@@ -415,7 +417,7 @@ async function fetchRenderedHtml(url: string, options: FetchHtmlOptions = {}) {
       url: shortenForLog(url),
       message: error instanceof Error ? error.message : String(error),
     });
-    throw appError('HTTP_REQUEST_FAILED', {
+    throw fetchError(FetchErrorCode.HttpRequestFailed, {
       status: 'NETWORK_ERROR',
       statusText: error instanceof Error ? error.message : String(error),
       url,
@@ -819,7 +821,7 @@ async function fetchCandidateHtmlWithRetry(
 
   while (attempt <= maxAttempts) {
     if (signal?.aborted) {
-      throw appError('HTTP_REQUEST_FAILED', {
+      throw fetchError(FetchErrorCode.HttpRequestFailed, {
         status: 'ABORTED',
         statusText: 'Request aborted',
         url: candidateUrl,
@@ -866,7 +868,7 @@ async function fetchCandidateHtmlWithRetry(
     }
   }
 
-  throw appError('HTTP_REQUEST_FAILED', {
+  throw fetchError(FetchErrorCode.HttpRequestFailed, {
     status: 'RETRY_EXHAUSTED',
     statusText: 'Candidate fetch retries exhausted',
     url: candidateUrl,
@@ -1024,7 +1026,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
         url: shortenForLog(url),
         responseHeaders,
       });
-      throw appError('HTTP_REQUEST_FAILED', {
+      throw fetchError(FetchErrorCode.HttpRequestFailed, {
         status: response.status,
         statusText: response.statusText,
         url,
@@ -1043,7 +1045,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
     });
     return html;
   } catch (error) {
-    if (isAppError(error)) {
+    if (getFetchErrorCode(error)) {
       throw error;
     }
 
@@ -1054,7 +1056,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
           timeoutMs,
           url: shortenForLog(url),
         });
-        throw appError('HTTP_REQUEST_FAILED', {
+        throw fetchError(FetchErrorCode.HttpRequestFailed, {
           status: 'ABORTED',
           statusText: 'Request aborted',
           url,
@@ -1066,7 +1068,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
         timeoutMs,
         url: shortenForLog(url),
       });
-      throw appError('HTTP_REQUEST_FAILED', {
+      throw fetchError(FetchErrorCode.HttpRequestFailed, {
         status: 'TIMEOUT',
         statusText: `Request timed out after ${timeoutMs}ms`,
         url,
@@ -1079,7 +1081,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
       url: shortenForLog(url),
       message: error instanceof Error ? error.message : String(error),
     });
-    throw appError('HTTP_REQUEST_FAILED', {
+    throw fetchError(FetchErrorCode.HttpRequestFailed, {
       status: 'NETWORK_ERROR',
       statusText: error instanceof Error ? error.message : String(error),
       url,
@@ -1341,7 +1343,7 @@ export async function fetchLatestArticles(
   const totalStartedAt = Date.now();
   const pageSources = normalizePageSources(payload);
   if (pageSources.length === 0) {
-    throw appError('BATCH_PAGE_URLS_EMPTY');
+    throw fetchError(FetchErrorCode.BatchPageUrlsEmpty);
   }
 
   const configuredUserLimit = await resolveConfiguredUserBatchLimit(storage);
@@ -1420,12 +1422,12 @@ export async function fetchLatestArticles(
         sourceUrl: shortenForLog(source.pageUrl),
         message: error instanceof Error ? error.message : String(error),
       });
-      if (isAppError(error)) {
+      if (getFetchErrorCode(error)) {
         failedSources.push({
           sourceId: source.sourceId,
           pageUrl: source.pageUrl,
-          code: error.code,
-          details: error.details,
+          code: getFetchErrorCode(error),
+          details: getFetchErrorDetails(error),
         });
       } else {
         failedSources.push({
@@ -1446,17 +1448,17 @@ export async function fetchLatestArticles(
       dateEnd: dateRange.end,
     });
     if (failedSources.length > 0) {
-      throw appError('BATCH_SOURCE_FETCH_FAILED', { failedSources });
+      throw fetchError(FetchErrorCode.BatchSourceFetchFailed, { failedSources });
     }
 
     if (dateRange.start || dateRange.end) {
-      throw appError('BATCH_NO_MATCH_IN_DATE_RANGE', {
+      throw fetchError(FetchErrorCode.BatchNoMatchInDateRange, {
         startDate: dateRange.start,
         endDate: dateRange.end,
       });
     }
 
-    throw appError('BATCH_NO_VALID_ARTICLES');
+    throw fetchError(FetchErrorCode.BatchNoValidArticles);
   }
 
   timingLog(traceId, 'batch:done', {

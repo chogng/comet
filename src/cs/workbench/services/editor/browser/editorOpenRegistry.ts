@@ -5,14 +5,14 @@ import {
   type EditorOpenResult,
 } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
-export type EditorOpenDelegate<
+export interface EditorOpenDelegate<
   TRequest extends EditorOpenRequest = EditorOpenRequest,
-> = {
-  canOpen: (request: EditorOpenRequest) => request is TRequest;
-  open: (request: TRequest) => EditorOpenResult;
-};
+> {
+  canOpen(request: EditorOpenRequest): request is TRequest;
+  open(request: TRequest): EditorOpenResult;
+}
 
-export type AnyEditorOpenDelegate = EditorOpenDelegate<any>;
+export type AnyEditorOpenDelegate = EditorOpenDelegate<EditorOpenRequest>;
 
 export function createEditorOpenRegistry(
   delegates: readonly AnyEditorOpenDelegate[],

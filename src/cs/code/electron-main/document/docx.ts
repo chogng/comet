@@ -10,7 +10,9 @@ import type {
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { StorageService } from 'cs/platform/storage/common/storage';
 import { defaultDocxExportConfig } from 'cs/code/electron-main/document/docxConfig';
-import { appError, CancellationError, isAppError, isCancellationError } from 'cs/base/common/errors';
+import { CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { AppError } from 'cs/base/parts/sandbox/common/appError';
+import { DocumentErrorCode, documentError } from 'cs/code/electron-main/document/documentErrors';
 import { resolveDocxExportCopy, resolveDocxExportDialogCopy, resolveSupportedLocale } from 'cs/code/electron-main/document/docxCopy';
 import type { SupportedLocale } from 'cs/code/electron-main/document/docxCopy';
 import { buildDocxBuffer as buildDocxArchiveBuffer, escapeXml, normalizeDocxPath } from 'cs/code/electron-main/document/docxPackage';
@@ -163,7 +165,7 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 function resolveTranslationFailureMessage(error: unknown) {
-  if (isAppError(error)) {
+  if (error instanceof AppError) {
     const statusText = error.details?.statusText;
     if (typeof statusText === 'string' && statusText.trim()) {
       return statusText.trim();
@@ -190,14 +192,14 @@ function createDocxTranslationFailedError(error: unknown, filePath: string) {
     message: resolveTranslationFailureMessage(error),
   };
 
-  if (isAppError(error)) {
+  if (error instanceof AppError) {
     details.translationCode = error.code;
     if (error.details) {
       details.translationDetails = error.details;
     }
   }
 
-  return appError('DOCX_TRANSLATION_FAILED', details);
+  return documentError(DocumentErrorCode.DocxTranslationFailed, details);
 }
 
 function articleParagraphsXml(
@@ -367,7 +369,7 @@ export async function exportArticlesDocx(
 ): Promise<DocxExportResult | null> {
   const articles = Array.isArray(payload.articles) ? payload.articles : [];
   if (articles.length === 0) {
-    throw appError('DOCX_EXPORT_NO_ARTICLES');
+    throw documentError(DocumentErrorCode.DocxExportNoArticles);
   }
 
   const preferredDirectory =
@@ -443,7 +445,7 @@ export async function exportArticlesToDocxFile({
   signal?: AbortSignal;
 }): Promise<DocxExportResult> {
   if (articles.length === 0) {
-    throw appError('DOCX_EXPORT_NO_ARTICLES');
+    throw documentError(DocumentErrorCode.DocxExportNoArticles);
   }
 
   const outputPath = normalizeDocxPath(filePath);
@@ -458,7 +460,7 @@ export async function exportArticlesToDocxFile({
       throw error;
     }
 
-    throw appError('DOCX_EXPORT_FAILED', {
+    throw documentError(DocumentErrorCode.DocxExportFailed, {
       filePath: outputPath,
       message: error instanceof Error ? error.message : String(error),
     });

@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type {
   Article as DesktopArticle,
   JournalSourceOverride,
@@ -14,8 +19,12 @@ import {
   sanitizeBatchSources,
 } from 'cs/workbench/services/config/configSchema';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
-import { parseAppErrorData } from 'cs/base/common/errors';
-import type { AppErrorData } from 'cs/base/common/errors';
+import {
+  FetchErrorCode,
+  fetchError,
+  parseFetchErrorData,
+  type FetchErrorData,
+} from 'cs/workbench/services/fetch/common/fetchErrors';
 
 export type Article = DesktopArticle;
 
@@ -30,10 +39,10 @@ type BatchFetchSource = {
 
 export type FetchLatestArticlesBatchResult =
   | { ok: true; articles: Article[] }
+  | { ok: false; reason: 'desktop_unsupported' }
   | {
       ok: false;
-      reason: 'desktop_unsupported' | 'empty_page_url' | 'invalid_date_range' | 'fetch_failed';
-      error?: AppErrorData;
+      error: FetchErrorData;
     };
 
 type FetchLatestArticlesBatchParams = {
@@ -172,13 +181,13 @@ export async function fetchLatestArticlesBatch({
 
   const { sources } = prepareBatchSourcesForFetch(batchSources, sourceTable);
   if (sources.length === 0) {
-    return { ok: false, reason: 'empty_page_url' };
+    return { ok: false, error: parseFetchErrorData(fetchError(FetchErrorCode.BatchPageUrlsEmpty)) };
   }
 
   const rangeStart = startDate ?? '';
   const rangeEnd = endDate ?? '';
   if (!isDateRangeValid(rangeStart, rangeEnd)) {
-    return { ok: false, reason: 'invalid_date_range' };
+    return { ok: false, error: parseFetchErrorData(fetchError(FetchErrorCode.DateRangeInvalid, { start: rangeStart, end: rangeEnd })) };
   }
 
   try {
@@ -190,6 +199,6 @@ export async function fetchLatestArticlesBatch({
     });
     return { ok: true, articles };
   } catch (error) {
-    return { ok: false, reason: 'fetch_failed', error: parseAppErrorData(error) };
+    return { ok: false, error: parseFetchErrorData(error) };
   }
 }

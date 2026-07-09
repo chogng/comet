@@ -4,16 +4,36 @@ import test, { after, before, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import en from 'language/locales/en.json';
-import { EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { createEditorTabInputId, EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { Schemas } from 'cs/base/common/network';
+import type { URI } from 'cs/base/common/uri';
+import { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import { EditorResolverService } from 'cs/workbench/services/editor/browser/editorResolverService';
+import { RegisteredEditorPriority } from 'cs/workbench/services/editor/common/editorResolverService';
 import type {
   EditorPartBaseProps,
   EditorPartProps,
 } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
+import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 
 const domEnvironment = installDomTestEnvironment();
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
+
+class TestBrowserEditorInput extends EditorInput {
+  constructor(
+    readonly resource: URI,
+  ) {
+    super();
+  }
+
+  get typeId(): string {
+    return 'workbench.editorinputs.browser';
+  }
+}
 
 const defaultViewPartProps: ViewPartProps = {
   browserUrl: '',
@@ -22,6 +42,8 @@ const defaultViewPartProps: ViewPartProps = {
   labels: {
     emptyState: 'Empty',
     contentUnavailable: 'Unavailable',
+    overlayPauseHeading: 'Paused',
+    overlayPauseDetail: 'Dismiss',
   },
 };
 
@@ -40,6 +62,33 @@ function createNativeHostService(): INativeHostService {
 
 function createDialogService() {
   return new BrowserDialogService();
+}
+
+function createTestInstantiationService() {
+  return new InstantiationService(new ServiceCollection());
+}
+
+function createBrowserEditorResolverService() {
+  const editorResolverService = new EditorResolverService();
+  editorResolverService.registerEditor(
+    `${Schemas.vscodeBrowser}:/**`,
+    {
+      id: 'workbench.editor.browser',
+      label: 'Browser',
+      priority: RegisteredEditorPriority.exclusive,
+    },
+    {
+      canSupportResource: resource => resource.scheme === Schemas.vscodeBrowser,
+      singlePerResource: true,
+    },
+    {
+      createEditorInput: ({ resource, options }) => ({
+        editor: new TestBrowserEditorInput(resource),
+        options,
+      }),
+    },
+  );
+  return editorResolverService;
 }
 
 beforeEach(() => {
@@ -94,6 +143,8 @@ test('EditorPartController creates a new browser tab as an empty about:blank tab
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -120,6 +171,8 @@ test('EditorPartController keeps browser tab creation empty even without an avai
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -146,6 +199,8 @@ test('EditorPartController opens the browser pane as an empty about:blank tab', 
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -172,6 +227,8 @@ test('EditorPartController reuses an existing empty draft tab for explicit draft
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
@@ -198,6 +255,8 @@ test('EditorPartController creates a new draft tab when the reusable draft is di
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
@@ -225,6 +284,8 @@ test('EditorPartController reuses an existing empty browser tab for explicit bro
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -255,6 +316,8 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -282,9 +345,19 @@ test('EditorPartController keeps browser pane active as about:blank when closing
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
-  controller.createBrowserTab('https://example.com/article');
+  controller.openEditor({
+    kind: 'browser',
+    disposition: 'reveal-or-open',
+    options: {
+      viewState: {
+        url: 'https://example.com/article',
+      },
+    },
+  });
   const browserTab = controller
     .getSnapshot()
     .tabs.find((tab) => tab.kind === 'browser' && tab.url === 'https://example.com/article');
@@ -312,16 +385,32 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
-  controller.createBrowserTab('https://example.com/article');
+  controller.openEditor({
+    kind: 'browser',
+    disposition: 'reveal-or-open',
+    options: {
+      viewState: {
+        url: 'https://example.com/article',
+      },
+    },
+  });
+  const newTabResource = BrowserViewUri.forId(createEditorTabInputId('browser'));
   controller
     .getSnapshot()
     .editorPartProps
     .onOpenEditor({
       kind: 'browser',
       disposition: 'new-tab',
-      url: 'https://example.com/article',
+      resource: newTabResource,
+      options: {
+        viewState: {
+          url: 'https://example.com/article',
+        },
+      },
     });
 
   const browserTabs = controller
@@ -330,6 +419,7 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
     .filter((tab) => tab.kind === 'browser' && tab.url === 'https://example.com/article');
   assert.equal(browserTabs.length, 2);
   assert.equal(controller.getSnapshot().activeTab?.id, browserTabs[1]?.id);
+  assert.equal(browserTabs[1]?.id, BrowserViewUri.getId(newTabResource));
 
   controller.dispose();
 });
@@ -343,10 +433,22 @@ test('EditorPartController opens a browser URL in a new tab', async () => {
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
   const url = 'https://example.com/chat-link';
+  const resource = BrowserViewUri.forId(createEditorTabInputId('browser'));
 
-  controller.openBrowserUrlInNewTab(url);
+  controller.openEditor({
+    kind: 'browser',
+    disposition: 'new-tab',
+    resource,
+    options: {
+      viewState: {
+        url,
+      },
+    },
+  });
 
   const browserTab = controller
     .getSnapshot()
@@ -354,6 +456,7 @@ test('EditorPartController opens a browser URL in a new tab', async () => {
     .find((tab) => tab.kind === 'browser' && tab.url === url);
   assert(browserTab);
   assert.equal(controller.getSnapshot().activeTab?.id, browserTab.id);
+  assert.equal(browserTab.id, BrowserViewUri.getId(resource));
 
   controller.dispose();
 });
@@ -379,9 +482,19 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
     },
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
-  controller.createBrowserTab(favoriteUrl);
+  controller.openEditor({
+    kind: 'browser',
+    disposition: 'reveal-or-open',
+    options: {
+      viewState: {
+        url: favoriteUrl,
+      },
+    },
+  });
   const view = createEditorPartView(withBrowserToolbarActions(
     controller.getSnapshot().editorPartProps,
     {
@@ -468,6 +581,8 @@ test('EditorPartController serializes close requests while unsaved confirm is op
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
   });
 
   const activeDraftTab = controller

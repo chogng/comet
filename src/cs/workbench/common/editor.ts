@@ -32,7 +32,13 @@ export const enum EditorInputCapabilities {
 
 export type IEditorOptions = {
 	readonly override?: string;
-	readonly viewState?: unknown;
+	readonly pinned?: boolean;
+	readonly viewState?: {
+		readonly url?: string;
+		readonly title?: string;
+		readonly favicon?: string;
+		readonly isDefaultLinkOpen?: boolean;
+	};
 };
 
 export interface IUntypedEditorInput {

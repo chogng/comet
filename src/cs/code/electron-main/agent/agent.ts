@@ -34,7 +34,7 @@ import type {
   RetrieveEvidenceInput,
   RetrieveEvidenceResult,
 } from 'cs/agent/common/editorTools';
-import { appError } from 'cs/base/common/errors';
+import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import { cleanText } from 'cs/base/common/strings';
 import { createOpenAiCompatibleAgentAdapter } from 'cs/code/electron-main/agent/openaiCompatibleAdapter';
 import {
@@ -45,6 +45,7 @@ import type {
 } from 'cs/editor/common/writingEditorDocument';
 import { resolveLlmRequestFromPayload } from 'cs/code/electron-main/llm/llm';
 import { answerQuestionFromArticles } from 'cs/code/electron-main/rag/rag';
+import { RagErrorCode, ragError } from 'cs/workbench/services/rag/ragErrors';
 import { resolveLlmRoute } from 'cs/workbench/services/llm/routing';
 
 const defaultMainAgentSystemPrompt = [
@@ -405,7 +406,7 @@ function normalizeMainAgentMessages(
   }
 
   if (normalizedMessages.length === 0) {
-    throw appError('UNKNOWN_ERROR', {
+    throw appCommandError(AppCommandErrorCode.UnknownError, {
       message: 'Main agent turn requires at least one normalized message or question.',
     });
   }
@@ -580,7 +581,7 @@ function createRetrieveEvidenceTool(
       const question = cleanText(normalizedInput.question);
 
       if (!question) {
-        throw appError('RAG_QUERY_EMPTY');
+        throw ragError(RagErrorCode.QueryEmpty);
       }
 
       const articles = resolveToolArticles(

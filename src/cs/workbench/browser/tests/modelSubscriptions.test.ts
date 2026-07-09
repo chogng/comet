@@ -9,7 +9,7 @@ import type {
   ElectronAPI,
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import { appError } from 'cs/base/common/errors';
+import { FetchErrorCode, fetchError } from 'cs/workbench/services/fetch/common/fetchErrors';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
@@ -357,7 +357,7 @@ test('BatchFetchController reports date range no-match as empty result', async (
     batchStartDate: '2026-07-01',
     batchEndDate: '2026-07-08',
     invokeDesktop: createRejectingInvokeDesktop(
-      appError('BATCH_NO_MATCH_IN_DATE_RANGE', {
+      fetchError(FetchErrorCode.BatchNoMatchInDateRange, {
         startDate: '2026-07-01',
         endDate: '2026-07-08',
       }),
@@ -401,7 +401,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     isSelectionModeEnabled: false,
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
-    createBrowserTab: () => {},
+    onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
     activeDraftExport: null,
   });
@@ -423,7 +423,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     isSelectionModeEnabled: false,
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
-    createBrowserTab: () => {},
+    onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
     activeDraftExport: {
       title: 'Draft',
@@ -448,7 +448,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     isSelectionModeEnabled: false,
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
-    createBrowserTab: () => {},
+    onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
     activeDraftExport: null,
   });

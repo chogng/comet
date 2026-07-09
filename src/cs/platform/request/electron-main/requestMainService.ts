@@ -1,4 +1,4 @@
-import { appError, isAppError } from 'cs/base/common/errors';
+import { RequestErrorCode, isRequestError, requestError } from 'cs/platform/request/common/requestErrors';
 
 type BrowserRequestSession = {
   fetch: (url: string, init: RequestInit) => Promise<Response>;
@@ -283,7 +283,7 @@ export async function renderHtmlWithBrowserWindow({
 }: BrowserHtmlRenderOptions): Promise<{ html: string; finalUrl: string; partition: string }> {
   const renderer = await resolveBrowserHtmlRenderer(partition);
   if (!renderer) {
-    throw appError('HTTP_REQUEST_FAILED', {
+    throw requestError(RequestErrorCode.HttpRequestFailed, {
       status: 'RENDER_UNAVAILABLE',
       statusText: 'Browser renderer unavailable',
       url,
@@ -294,7 +294,7 @@ export async function renderHtmlWithBrowserWindow({
     const { window } = renderer;
     if (window.isDestroyed() || window.webContents.isDestroyed()) {
       browserRendererPromises.delete(partition);
-      throw appError('HTTP_REQUEST_FAILED', {
+      throw requestError(RequestErrorCode.HttpRequestFailed, {
         status: 'RENDER_UNAVAILABLE',
         statusText: 'Browser renderer destroyed',
         url,
@@ -378,7 +378,7 @@ export async function renderHtmlWithBrowserWindow({
       );
       const normalizedHtml = typeof html === 'string' ? html : '';
       if (!normalizedHtml.trim()) {
-        throw appError('HTTP_REQUEST_FAILED', {
+        throw requestError(RequestErrorCode.HttpRequestFailed, {
           status: 'EMPTY_RENDERED_HTML',
           statusText: 'Rendered page returned empty HTML',
           url,
@@ -391,12 +391,12 @@ export async function renderHtmlWithBrowserWindow({
         partition,
       };
     } catch (error) {
-      if (isAppError(error)) {
+      if (isRequestError(error)) {
         throw error;
       }
 
       if (abortedByExternalSignal) {
-        throw appError('HTTP_REQUEST_FAILED', {
+        throw requestError(RequestErrorCode.HttpRequestFailed, {
           status: 'ABORTED',
           statusText: 'Request aborted',
           url,
@@ -404,14 +404,14 @@ export async function renderHtmlWithBrowserWindow({
       }
 
       if (timedOut) {
-        throw appError('HTTP_REQUEST_FAILED', {
+        throw requestError(RequestErrorCode.HttpRequestFailed, {
           status: 'TIMEOUT',
           statusText: `Rendered request timed out after ${timeoutMs}ms`,
           url,
         });
       }
 
-      throw appError('HTTP_REQUEST_FAILED', {
+      throw requestError(RequestErrorCode.HttpRequestFailed, {
         status: 'NETWORK_ERROR',
         statusText: error instanceof Error ? error.message : String(error),
         url,

@@ -7,7 +7,8 @@ import type {
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
 import type { StorageService, TranslationCacheRecord } from 'cs/platform/storage/common/storage';
-import { CancellationError, isAppError, isCancellationError } from 'cs/base/common/errors';
+import { CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { AppError } from 'cs/base/parts/sandbox/common/appError';
 import { getLlmTranslationCacheIdentity, translateTextsWithLlm } from 'cs/code/electron-main/llm/llmTranslation';
 import type { TranslationBatchItem } from 'cs/code/electron-main/llm/llmTranslation';
 
@@ -139,7 +140,7 @@ function applyTranslatedValue(
 }
 
 function resolveTranslationFailureMessage(error: unknown) {
-  if (isAppError(error)) {
+  if (error instanceof AppError) {
     const statusText = error.details?.statusText;
     if (typeof statusText === 'string' && statusText) {
       return statusText;

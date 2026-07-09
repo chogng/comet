@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isAppError } from 'cs/base/common/errors';
 import { testLlmConnection } from 'cs/code/electron-main/llm/llm';
+import { LlmErrorCode, isLlmError } from 'cs/workbench/services/llm/llmErrors';
 
 test('LLM connection test surfaces provider error response text', async () => {
   const originalFetch = globalThis.fetch;
@@ -33,8 +33,8 @@ test('LLM connection test surfaces provider error response text', async () => {
           model: 'glm-5.2',
         }),
       error => {
-        assert.ok(isAppError(error));
-        assert.equal(error.code, 'LLM_CONNECTION_FAILED');
+        assert.ok(isLlmError(error));
+        assert.equal(error.code, LlmErrorCode.ConnectionFailed);
         assert.equal(error.details?.status, 429);
         assert.equal(error.details?.statusText, '余额不足或无可用资源包,请充值。');
         return true;

@@ -25,7 +25,7 @@ import {
 import {
   parseAppErrorData,
   type AppErrorData,
-} from 'cs/base/common/errors';
+} from 'cs/base/parts/sandbox/common/appError';
 import {
   formatLocaleMessage,
   localizeAppError,

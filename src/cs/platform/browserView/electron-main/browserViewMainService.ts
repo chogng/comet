@@ -13,7 +13,7 @@ import type {
   WebContentSelectionSnapshot,
   WebContentState,
 } from 'cs/platform/browserView/common/browserView';
-import { appError } from 'cs/base/common/errors';
+import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/common/browserViewErrors';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
 import {
   defaultBrowserTabKeepAliveLimit,
@@ -1373,7 +1373,7 @@ function isValidWebContentBounds(bounds: WebContentBounds | null): bounds is Web
 
 function getWebContentOwnerWindow() {
   if (!webContentWindow || webContentWindow.isDestroyed()) {
-    throw appError('PREVIEW_NOT_READY', {
+    throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
       message: 'Desktop web content window is unavailable.',
     });
   }
@@ -2002,6 +2002,21 @@ export function getWebContentState(targetId?: string | null): WebContentState {
   return buildWebContentState(normalizedTargetId);
 }
 
+export async function captureWebContentScreenshot(targetId?: string | null) {
+  const normalizedTargetId = normalizeWebContentTargetId(targetId);
+  const entry = webContentTargets.get(normalizedTargetId);
+  if (!entry || entry.view.webContents.isDestroyed()) {
+    return null;
+  }
+
+  const image = await entry.view.webContents.capturePage();
+  if (image.isEmpty()) {
+    return null;
+  }
+
+  return `data:image/jpeg;base64,${image.toJPEG(80).toString('base64')}`;
+}
+
 export async function getWebContentDocumentSnapshot(
   options: WebContentDocumentSnapshotOptions = {},
 ): Promise<WebContentDocumentSnapshot | null> {
@@ -2257,7 +2272,7 @@ export async function navigateWebContentTarget(
         : 'Timed out while waiting for web content navigation to settle on a destination.',
     );
   } catch (error) {
-    throw appError('PREVIEW_NOT_READY', {
+    throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
       message: describeWebContentError(error),
       targetUrl: url,
       currentUrl: getWebContentState(normalizedTargetId).url,
@@ -2289,7 +2304,7 @@ export async function navigateWebContentForPrint(url: string, timeoutMs = 12000)
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
-  throw appError('PREVIEW_NOT_READY', {
+  throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
     message: 'Timed out while waiting for web content main content to become printable.',
     targetUrl: url,
     currentUrl: getWebContentState().url,
@@ -2399,7 +2414,7 @@ export async function printCurrentWebContentToPdf() {
       },
     });
   } catch (error) {
-    throw appError('PREVIEW_NOT_READY', {
+    throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
       message: describeWebContentError(error),
       currentUrl: getWebContentState().url,
     });

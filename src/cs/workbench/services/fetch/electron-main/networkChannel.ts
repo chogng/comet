@@ -1,5 +1,5 @@
-import { appError } from 'cs/base/common/errors';
 import { elapsedMs, shortenForLog, timingLog } from 'cs/platform/fetch/node/fetchTiming';
+import { FetchErrorCode, fetchError } from 'cs/workbench/services/fetch/common/fetchErrors';
 import {
   getScienceChallengeSignal,
   isScienceChallengeHtml,
@@ -169,7 +169,7 @@ export async function resolveNetworkAttemptResult(
           stage: renderStage,
         });
         if (isScienceChallengeHtml(renderedHtml)) {
-          throw appError('HTTP_REQUEST_FAILED', {
+          throw fetchError(FetchErrorCode.HttpRequestFailed, {
             status: 'SCIENCE_VALIDATION_REQUIRED',
             statusText: 'Complete the Science verification window to continue fetching.',
             url: pageUrl,

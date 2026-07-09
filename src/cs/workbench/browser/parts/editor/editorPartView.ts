@@ -19,6 +19,7 @@ import { EditorGroupView } from 'cs/workbench/browser/parts/editor/editorGroupVi
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
 import 'cs/workbench/browser/parts/editor/media/editorBrowserLibraryPanel.css';
@@ -106,6 +107,7 @@ export type EditorPartBaseProps = {
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
+  instantiationService: IInstantiationService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];

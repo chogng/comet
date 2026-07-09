@@ -3,7 +3,7 @@ import type {
   RagProviderId,
   TestRagConnectionPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError, isAppError } from 'cs/base/common/errors';
+import { RagErrorCode, isRagError, ragError } from 'cs/workbench/services/rag/ragErrors';
 import { cleanText } from 'cs/base/common/strings';
 import { defaultRagProviderId } from 'cs/workbench/services/rag/config';
 import { isRagProviderId } from 'cs/workbench/services/rag/registry';
@@ -27,7 +27,7 @@ type MoarkRerankResult = {
 
 function normalizeProvider(value: unknown): RagProviderId {
   if (!isRagProviderId(value)) {
-    throw appError('RAG_PROVIDER_UNSUPPORTED', {
+    throw ragError(RagErrorCode.ProviderUnsupported, {
       provider: typeof value === 'string' ? value : '',
     });
   }
@@ -38,18 +38,18 @@ function normalizeProvider(value: unknown): RagProviderId {
 function normalizeBaseUrl(value: unknown): string {
   const baseUrl = cleanText(value);
   if (!baseUrl) {
-    throw appError('RAG_BASE_URL_INVALID', { value: '' });
+    throw ragError(RagErrorCode.BaseUrlInvalid, { value: '' });
   }
 
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(baseUrl);
   } catch {
-    throw appError('RAG_BASE_URL_INVALID', { value: baseUrl });
+    throw ragError(RagErrorCode.BaseUrlInvalid, { value: baseUrl });
   }
 
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    throw appError('RAG_BASE_URL_INVALID', { value: baseUrl });
+    throw ragError(RagErrorCode.BaseUrlInvalid, { value: baseUrl });
   }
 
   return parsedUrl.toString().replace(/\/+$/, '');
@@ -58,7 +58,7 @@ function normalizeBaseUrl(value: unknown): string {
 function normalizeApiKey(value: unknown): string {
   const apiKey = cleanText(value);
   if (!apiKey) {
-    throw appError('RAG_API_KEY_MISSING');
+    throw ragError(RagErrorCode.ApiKeyMissing);
   }
 
   return apiKey;
@@ -67,7 +67,7 @@ function normalizeApiKey(value: unknown): string {
 function normalizeEmbeddingModel(value: unknown): string {
   const embeddingModel = cleanText(value);
   if (!embeddingModel) {
-    throw appError('RAG_EMBEDDING_MODEL_MISSING');
+    throw ragError(RagErrorCode.EmbeddingModelMissing);
   }
 
   return embeddingModel;
@@ -76,7 +76,7 @@ function normalizeEmbeddingModel(value: unknown): string {
 function normalizeRerankerModel(value: unknown): string {
   const rerankerModel = cleanText(value);
   if (!rerankerModel) {
-    throw appError('RAG_RERANKER_MODEL_MISSING');
+    throw ragError(RagErrorCode.RerankerModelMissing);
   }
 
   return rerankerModel;
@@ -127,7 +127,7 @@ async function requestJson(
 
     if (!response.ok) {
       const errorText = cleanText(await response.text());
-      throw appError('RAG_CONNECTION_FAILED', {
+      throw ragError(RagErrorCode.ConnectionFailed, {
         provider: request.provider,
         status: response.status,
         statusText: response.statusText || errorText || 'Request failed',
@@ -137,18 +137,18 @@ async function requestJson(
     return (await response.json()) as unknown;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw appError('RAG_CONNECTION_FAILED', {
+      throw ragError(RagErrorCode.ConnectionFailed, {
         provider: request.provider,
         status: 'TIMEOUT',
         statusText: `Connection timed out after ${timeoutMs}ms`,
       });
     }
 
-    if (isAppError(error)) {
+    if (isRagError(error)) {
       throw error;
     }
 
-    throw appError('RAG_CONNECTION_FAILED', {
+    throw ragError(RagErrorCode.ConnectionFailed, {
       provider: request.provider,
       status: 'NETWORK_ERROR',
       statusText: error instanceof Error ? error.message : String(error),
@@ -160,7 +160,7 @@ async function requestJson(
 
 function parseEmbeddingResponse(payload: unknown): number[][] {
   if (!payload || typeof payload !== 'object') {
-    throw appError('RAG_CONNECTION_FAILED', {
+    throw ragError(RagErrorCode.ConnectionFailed, {
       status: 'INVALID_RESPONSE',
       statusText: 'Embedding response payload is not an object.',
     });
@@ -168,7 +168,7 @@ function parseEmbeddingResponse(payload: unknown): number[][] {
 
   const data = (payload as { data?: Array<{ embedding?: unknown }> }).data;
   if (!Array.isArray(data) || data.length === 0) {
-    throw appError('RAG_CONNECTION_FAILED', {
+    throw ragError(RagErrorCode.ConnectionFailed, {
       status: 'INVALID_RESPONSE',
       statusText: 'Embedding response data is empty.',
     });
@@ -176,7 +176,7 @@ function parseEmbeddingResponse(payload: unknown): number[][] {
 
   return data.map((item) => {
     if (!Array.isArray(item?.embedding)) {
-      throw appError('RAG_CONNECTION_FAILED', {
+      throw ragError(RagErrorCode.ConnectionFailed, {
         status: 'INVALID_RESPONSE',
         statusText: 'Embedding vector is missing.',
       });
@@ -300,7 +300,7 @@ export async function requestMoarkRerank(
     throw lastError;
   }
 
-  throw appError('RAG_CONNECTION_FAILED', {
+  throw ragError(RagErrorCode.ConnectionFailed, {
     provider: request.provider,
     status: 'INVALID_RESPONSE',
     statusText: 'Rerank response did not return any results.',

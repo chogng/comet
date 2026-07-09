@@ -312,17 +312,20 @@ export class ChatService implements IChatService {
 
   readonly createConversation = () => {
     const context = this.getContext();
+    let nextConversationId = '';
     this.updateState((state) => {
       const nextConversation = createConversation(
         context.ui,
         state.conversations.length,
       );
+      nextConversationId = nextConversation.id;
       return {
         ...state,
         conversations: [...state.conversations, nextConversation],
         activeConversationId: nextConversation.id,
       };
     });
+    return nextConversationId;
   };
 
   readonly activateConversation = (conversationId: string) => {
@@ -370,6 +373,45 @@ export class ChatService implements IChatService {
         ...state,
         conversations: nextConversations,
         activeConversationId: nextActiveConversationId,
+      };
+    });
+  };
+
+  readonly insertContextMessage = (
+    title: string,
+    content: string,
+  ) => {
+    const context = this.getContext();
+    const normalizedTitle = title.trim();
+    const normalizedContent = content.trim();
+    if (!normalizedContent) {
+      return;
+    }
+
+    this.updateActiveConversation((conversation) => {
+      const isFirstMessage = conversation.messages.length === 0;
+      const firstContentLine = normalizedContent.split(/\r?\n/, 1)[0] ?? '';
+      const titleContent = normalizedTitle || firstContentLine;
+
+      return {
+        ...conversation,
+        title: isFirstMessage
+          ? titleContent.slice(0, 18) ||
+            createDefaultConversationTitle(
+              context.ui,
+              conversation.autoTitleIndex ?? 0,
+            )
+          : conversation.title,
+        autoTitleIndex: isFirstMessage ? null : conversation.autoTitleIndex,
+        messages: [
+          ...conversation.messages,
+          {
+            id: createMessageId(),
+            role: "user",
+            content: normalizedContent,
+          },
+        ],
+        errorMessage: null,
       };
     });
   };

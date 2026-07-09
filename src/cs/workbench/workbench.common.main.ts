@@ -30,7 +30,12 @@ import 'cs/workbench/services/commands/common/commandService';
 import 'cs/workbench/services/configuration/browser/configurationService';
 import 'cs/workbench/services/environment/browser/environmentService';
 import 'cs/workbench/services/dialogs/browser/dialogService';
+import 'cs/workbench/services/editor/browser/editorResolverService';
 import 'cs/workbench/services/host/browser/host';
+import {
+  contextKeyService,
+  IContextKeyService,
+} from 'cs/platform/contextkey/common/contextkey';
 import 'cs/platform/contextview/browser/contextViewService';
 import 'cs/platform/hover/browser/hoverService';
 import 'cs/editor/browser/services/openerService';
@@ -45,6 +50,7 @@ import 'cs/workbench/services/views/browser/viewsService';
 import 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 
 registerWorkbenchService(INativeHostService, nativeHostService);
+registerWorkbenchService(IContextKeyService, contextKeyService);
 
 //#endregion
 

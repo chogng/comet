@@ -63,3 +63,82 @@ button:disabled {
   font-weight: 600;
   color: var(--vscode-workbench-comet-panelTitleForeground, #203040);
 }
+
+.comet-workbench-command-palette-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(560px, 72vw);
+  max-width: 100%;
+}
+
+.comet-workbench-command-palette-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--comet-workbench-inputBorder, #c8d3df);
+  border-radius: 4px;
+  background: var(--comet-workbench-inputBackground, #ffffff);
+  color: var(--comet-workbench-inputForeground, #17212b);
+  outline: none;
+}
+
+.comet-workbench-command-palette-input:focus {
+  border-color: var(--comet-workbench-focusBorder, #4d8bd6);
+  box-shadow: 0 0 0 2px var(--comet-workbench-focusShadow, rgba(77, 139, 214, 0.18));
+}
+
+.comet-workbench-command-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: min(420px, 54vh);
+  overflow: auto;
+}
+
+.comet-workbench-command-palette-item {
+  justify-content: stretch;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.comet-workbench-command-palette-item:hover,
+.comet-workbench-command-palette-item.is-selected {
+  background: var(--comet-workbench-listHoverBackground, #eef4fb);
+}
+
+.comet-workbench-command-palette-text {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.comet-workbench-command-palette-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comet-workbench-command-palette-shortcut {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--comet-workbench-descriptionForeground, #657180);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comet-workbench-command-palette-empty {
+  padding: 18px 10px;
+  color: var(--comet-workbench-descriptionForeground, #657180);
+  text-align: center;
+}

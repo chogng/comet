@@ -4,13 +4,15 @@ import { createDraftEditorOpenDelegate } from 'cs/workbench/services/editor/brow
 import { createBrowserEditorOpenDelegate } from 'cs/workbench/services/editor/browser/delegates/browserEditorOpenDelegate';
 import { createPdfEditorOpenDelegate } from 'cs/workbench/services/editor/browser/delegates/pdfEditorOpenDelegate';
 import { createEditorOpenRegistry } from 'cs/workbench/services/editor/browser/editorOpenRegistry';
+import type { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
 
 export function createEditorOpenService(
   model: EditorModel,
+  editorResolverService: IEditorResolverService,
 ): EditorOpenService {
   return createEditorOpenRegistry([
     createDraftEditorOpenDelegate(model),
-    createBrowserEditorOpenDelegate(model),
+    createBrowserEditorOpenDelegate(model, editorResolverService),
     createPdfEditorOpenDelegate(model),
   ]);
 }

@@ -18,7 +18,7 @@ import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import {
   parseAppErrorData,
-} from 'cs/base/common/errors';
+} from 'cs/base/parts/sandbox/common/appError';
 import {
   formatLocaleMessage,
   localizeAppError,

@@ -266,11 +266,17 @@ export class PdfEditorPane extends EditorPane<
       if (!resource) {
         return;
       }
+      const uri = URI.revive(resource);
 
       await this.props.onOpenEditor?.({
         kind: 'pdf',
         disposition: 'reveal-or-open',
-        url: URI.revive(resource).toString(),
+        resource: uri,
+        options: {
+          viewState: {
+            url: uri.toString(),
+          },
+        },
       });
     } catch (error) {
       console.error('Failed to open PDF file.', error);

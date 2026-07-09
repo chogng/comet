@@ -1,7 +1,8 @@
 import type { BrowserWindow } from 'electron';
 
 import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { PdfErrorCode, pdfError } from 'cs/platform/download/common/pdfErrors';
 import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import { clearWorkbenchSharedSessionOrigins } from 'cs/platform/native/electron-main/sharedWebSession';
 import { persistDownloadedPdf, toPdfDownloadFailure, toPdfDownloadFailureFromError, tryBrowserSessionDownloadCandidates, tryPdfDownloadWithFetcherPolling, tryDownloadPdfCandidates, waitForPdfDownloadFromSession } from 'cs/platform/download/electron-main/pdfDownload';
@@ -112,7 +113,7 @@ function throwScienceDownloadFailure(
 ): never {
   const prioritizedFailure =
     findScienceValidationRequiredFailure(failures) ?? failures[failures.length - 1] ?? null;
-  throw appError('PDF_DOWNLOAD_FAILED', {
+  throw pdfError(PdfErrorCode.DownloadFailed, {
     status: prioritizedFailure?.status ?? 'NETWORK_ERROR',
     statusText:
       prioritizedFailure?.statusText ?? 'Unable to download Science PDF from shared-session window',
@@ -336,7 +337,7 @@ async function tryValidatedSciencePageDownload(
       if (validatedWindowFetchAttempt.failures.length > 0) {
         const latestFailure =
           validatedWindowFetchAttempt.failures[validatedWindowFetchAttempt.failures.length - 1];
-        throw appError('PDF_DOWNLOAD_FAILED', {
+        throw pdfError(PdfErrorCode.DownloadFailed, {
           status: latestFailure?.status ?? 'DOWNLOAD_NOT_TRIGGERED',
           statusText:
             latestFailure?.statusText ??

@@ -25,7 +25,7 @@ import {
   parseSerializedAppError,
   serializeAppError,
   type AppErrorCode,
-} from 'cs/base/common/errors';
+} from 'cs/base/parts/sandbox/common/appError';
 import type { DisposableLike } from 'cs/base/common/lifecycle';
 
 const APP_IPC_CHANNEL_PREFIX = 'app:';
@@ -437,6 +437,11 @@ const electronAPI: ElectronAPI = {
         targetId: targetId ?? null,
         script,
         timeoutMs,
+      });
+    },
+    captureScreenshot(targetId?: string | null) {
+      return invokeIpc<string | null>('app:web-content-capture-screenshot', {
+        targetId: targetId ?? null,
       });
     },
     getSelection(targetId?: string | null) {

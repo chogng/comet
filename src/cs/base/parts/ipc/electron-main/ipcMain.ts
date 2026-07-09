@@ -10,7 +10,7 @@ import {
 	type WebContents,
 } from 'electron';
 
-import { serializeAppError } from 'cs/base/common/errors';
+import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
 import { EventEmitter, type Event } from 'cs/base/common/event';
 import { toDisposable } from 'cs/base/common/lifecycle';
 import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';

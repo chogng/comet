@@ -1,5 +1,5 @@
 import type { StorageService } from 'cs/platform/storage/common/storage';
-import { appError } from 'cs/base/common/errors';
+import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import { createConfigurationMainService } from 'cs/platform/configuration/electron-main/configurationService';
 import { createHistoryStore } from 'cs/platform/storage/electron-main/historyStore';
 import { createLibraryStore } from 'cs/platform/storage/electron-main/libraryStore';
@@ -87,7 +87,7 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
     async upsertLibraryDocumentMetadata(payload) {
       const settings = await configurationService.loadSettings();
       if (!settings.knowledgeBase.enabled) {
-        throw appError('UNKNOWN_ERROR', {
+        throw appCommandError(AppCommandErrorCode.UnknownError, {
           message: 'Knowledge base mode is disabled.',
         });
       }
@@ -97,7 +97,7 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
     async deleteLibraryDocument(payload) {
       const settings = await configurationService.loadSettings();
       if (!settings.knowledgeBase.enabled) {
-        throw appError('UNKNOWN_ERROR', {
+        throw appCommandError(AppCommandErrorCode.UnknownError, {
           message: 'Knowledge base mode is disabled.',
         });
       }
@@ -107,7 +107,7 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
     async registerLibraryDocument(payload) {
       const settings = await configurationService.loadSettings();
       if (!settings.knowledgeBase.enabled) {
-        throw appError('UNKNOWN_ERROR', {
+        throw appCommandError(AppCommandErrorCode.UnknownError, {
           message: 'Knowledge base mode is disabled.',
         });
       }

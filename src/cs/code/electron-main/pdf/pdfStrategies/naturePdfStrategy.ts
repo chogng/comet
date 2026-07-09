@@ -1,4 +1,5 @@
-import { appError, CancellationError } from 'cs/base/common/errors';
+import { CancellationError } from 'cs/base/common/errors';
+import { PdfErrorCode, pdfError } from 'cs/platform/download/common/pdfErrors';
 import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import { persistDownloadedPdf, tryBrowserSessionDownloadCandidates, tryDownloadPdfCandidates } from 'cs/platform/download/electron-main/pdfDownload';
 import type { PdfDownloadAttemptFailure } from 'cs/platform/download/electron-main/pdfDownload';
@@ -100,7 +101,7 @@ async function downloadNatureResearchPdfWithFallbacks(request: PdfDownloadContex
     failures: summarizeNatureFailures(failures),
   });
 
-  throw appError('PDF_DOWNLOAD_FAILED', {
+  throw pdfError(PdfErrorCode.DownloadFailed, {
     status: latestFailure?.status ?? 'PDF_LINK_NOT_FOUND',
     statusText:
       latestFailure?.statusText ?? 'Unable to download Nature PDF from known candidate URLs',

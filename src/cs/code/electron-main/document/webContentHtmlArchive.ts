@@ -7,10 +7,10 @@ import type {
   WebContentHtmlArchivePayload,
   WebContentHtmlArchiveResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError } from 'cs/base/common/errors';
 import { cleanText } from 'cs/base/common/strings';
 import { normalizeUrl } from 'cs/base/common/url';
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
+import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/common/browserViewErrors';
 import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import type { StorageService } from 'cs/platform/storage/common/storage';
@@ -163,7 +163,7 @@ export async function archiveWebContentHtml(
     pageUrl: sourceUrl,
   });
   if (!snapshotHtml) {
-    throw appError('PREVIEW_NOT_READY');
+    throw browserViewError(BrowserViewErrorCode.PreviewNotReady);
   }
 
   const fallbackTitle = cleanText(payload.pageTitle);

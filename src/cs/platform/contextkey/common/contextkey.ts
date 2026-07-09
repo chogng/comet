@@ -1,5 +1,6 @@
 import { EventEmitter } from 'cs/base/common/event';
 import type { DisposableLike } from 'cs/base/common/lifecycle';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export type ContextKeyValue = boolean | number | string | null | undefined;
 
@@ -31,6 +32,13 @@ export interface ContextKeyService {
   ): void;
   contextMatchesRules(expression: ContextKeyExpression | undefined): boolean;
 }
+
+export interface IContextKeyService extends ContextKeyService {
+  readonly _serviceBrand: undefined;
+}
+
+export const IContextKeyService =
+  createDecorator<IContextKeyService>('contextKeyService');
 
 export class RawContextKey<T extends ContextKeyValue = ContextKeyValue> {
   constructor(
@@ -122,7 +130,9 @@ class BoundContextKey<T extends ContextKeyValue> implements ContextKey<T> {
   }
 }
 
-export class ContextKeyServiceImpl implements ContextKeyService {
+export class ContextKeyServiceImpl implements IContextKeyService {
+  declare readonly _serviceBrand: undefined;
+
   private readonly values = new Map<string, ContextKeyValue>();
   private readonly onDidChangeContextEmitter =
     new EventEmitter<ContextKeyChangeEvent>();
@@ -197,5 +207,5 @@ export function evaluateContextKeyExpression(
   }
 }
 
-export const contextKeyService: ContextKeyService =
+export const contextKeyService: IContextKeyService =
   new ContextKeyServiceImpl();

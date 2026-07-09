@@ -1,6 +1,5 @@
 import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import type {
-  BrandedService,
   ServiceIdentifier,
 } from 'cs/platform/instantiation/common/instantiation';
 
@@ -11,20 +10,20 @@ export const enum InstantiationType {
   Delayed = 1,
 }
 
-export function registerSingleton<T, Services extends BrandedService[]>(
+export function registerSingleton<T>(
   id: ServiceIdentifier<T>,
-  ctor: new (...services: Services) => T,
+  ctor: new (...services: any[]) => T,
   supportsDelayedInstantiation: InstantiationType,
 ): void;
 export function registerSingleton<T>(
   id: ServiceIdentifier<T>,
-  descriptor: SyncDescriptor<T>,
+  descriptor: SyncDescriptor<any>,
 ): void;
-export function registerSingleton<T, Services extends BrandedService[]>(
+export function registerSingleton<T>(
   id: ServiceIdentifier<T>,
   ctorOrDescriptor:
-    | (new (...services: Services) => T)
-    | SyncDescriptor<T>,
+    | (new (...services: any[]) => T)
+    | SyncDescriptor<any>,
   supportsDelayedInstantiation: boolean | InstantiationType = false,
 ): void {
   const descriptor =

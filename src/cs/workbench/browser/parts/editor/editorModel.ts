@@ -10,7 +10,7 @@ import {
   createEditorBrowserTabInput,
   createEditorDraftTabInput,
   createEditorPdfTabInput,
-  getEditorContentTabInputResourceKey,
+  getEditorContentTabInputOpenKey,
   getEditorPaneMode,
   isEditorBrowserTabInput,
   isEditorDraftTabInput,
@@ -103,6 +103,7 @@ export type EditorGroupTarget = {
 };
 
 export type CreateContentTabOptions = {
+  id?: string;
   reuseExisting?: boolean;
 };
 
@@ -255,25 +256,25 @@ function getPreferredDuplicateTabId(
 function dedupeContentTabs(
   state: EditorEditorGroupState,
 ): EditorEditorGroupState {
-  const duplicateIdsByResourceKey = new Map<string, string[]>();
+  const duplicateIdsByOpenKey = new Map<string, string[]>();
   for (const tab of state.tabs) {
     if (!isEditorBrowserTabInput(tab) && !isEditorPdfTabInput(tab)) {
       continue;
     }
 
-    const resourceKey = getEditorContentTabInputResourceKey(tab);
-    const duplicateIds = duplicateIdsByResourceKey.get(resourceKey);
+    const openKey = getEditorContentTabInputOpenKey(tab);
+    const duplicateIds = duplicateIdsByOpenKey.get(openKey);
     if (duplicateIds) {
       duplicateIds.push(tab.id);
       continue;
     }
 
-    duplicateIdsByResourceKey.set(resourceKey, [tab.id]);
+    duplicateIdsByOpenKey.set(openKey, [tab.id]);
   }
 
   const retainedIds = new Set<string>();
   const replacedIdByDuplicateId = new Map<string, string>();
-  for (const duplicateIds of duplicateIdsByResourceKey.values()) {
+  for (const duplicateIds of duplicateIdsByOpenKey.values()) {
     if (duplicateIds.length === 1) {
       retainedIds.add(duplicateIds[0]!);
       continue;
@@ -1105,19 +1106,17 @@ export class EditorModel {
     }
 
     const reuseExisting = options.reuseExisting ?? true;
-    const resourceKey = getEditorContentTabInputResourceKey({
+    const openKey = getEditorContentTabInputOpenKey({
       kind: 'browser',
       url: normalizedUrl,
     });
 
     this.updateTargetGroupState(target, (group) => {
-      // Mirror upstream open-editor behavior: the same web content resource re-activates its tab
-      // instead of creating duplicate entries in the target group strip.
       const existingTab = reuseExisting
         ? group.tabs.find(
             (tab) =>
               isEditorBrowserTabInput(tab) &&
-              getEditorContentTabInputResourceKey(tab) === resourceKey,
+              getEditorContentTabInputOpenKey(tab) === openKey,
           )
         : null;
       if (reuseExisting && existingTab) {
@@ -1132,6 +1131,7 @@ export class EditorModel {
         (tab) => isEditorBrowserTabInput(tab) && tab.residency === 'resident',
       );
       const nextTab = createBrowserTab(normalizedUrl, {
+        id: options.id,
         residency: hasResidentBrowser ? 'dynamic' : 'resident',
       });
       return {
@@ -1151,19 +1151,17 @@ export class EditorModel {
     const normalizedUrl = url.trim() || EMPTY_PDF_TAB_URL;
 
     const reuseExisting = options.reuseExisting ?? true;
-    const resourceKey = getEditorContentTabInputResourceKey({
+    const openKey = getEditorContentTabInputOpenKey({
       kind: 'pdf',
       url: normalizedUrl,
     });
 
     this.updateTargetGroupState(target, (group) => {
-      // Keep PDF tabs aligned with web tabs: one resource maps to one tab/input entry
-      // inside the target group.
       const existingTab = reuseExisting
         ? group.tabs.find(
             (tab) =>
               isEditorPdfTabInput(tab) &&
-              getEditorContentTabInputResourceKey(tab) === resourceKey,
+              getEditorContentTabInputOpenKey(tab) === openKey,
           )
         : null;
       if (reuseExisting && existingTab) {
@@ -1178,6 +1176,7 @@ export class EditorModel {
         (tab) => isEditorPdfTabInput(tab) && tab.residency === 'resident',
       );
       const nextTab = createPdfTab(normalizedUrl, {
+        id: options.id,
         residency: hasResidentPdf ? 'dynamic' : 'resident',
       });
       return {

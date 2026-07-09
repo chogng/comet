@@ -3,14 +3,25 @@ import test, { after, before } from 'node:test';
 import type {
   ElectronAPI,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import { Event as BaseEvent } from 'cs/base/common/event';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
+import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
+import { BrowserViewStorageScope } from 'cs/platform/browserView/common/browserView';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/browser/editorGroupIdentity';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import {
+  BrowserViewSharingState,
+  IBrowserViewWorkbenchService,
+  type IBrowserEditorViewState,
+  type IBrowserViewModel,
+} from 'cs/workbench/contrib/browserView/common/browserView';
 import {
   WEB_CONTENT_VIEW_STATE_CAPTURE_SCRIPT_MARKER,
   WEB_CONTENT_VIEW_STATE_RESTORE_SCRIPT_MARKER,
-} from 'cs/workbench/browser/parts/editor/panes/contentEditorViewState';
+} from 'cs/workbench/contrib/browserView/electron-browser/browserEditorViewState';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let EditorGroupView: typeof import('cs/workbench/browser/parts/editor/editorGroupView').EditorGroupView;
@@ -124,6 +135,8 @@ const defaultViewPartProps = {
   labels: {
     emptyState: 'Empty',
     contentUnavailable: 'Unavailable',
+    overlayPauseHeading: 'Paused',
+    overlayPauseDetail: 'Dismiss',
   },
 };
 
@@ -160,9 +173,139 @@ function createDialogService() {
   return new BrowserDialogService();
 }
 
+function createBrowserViewModel(id: string, url: string): IBrowserViewModel {
+  return ({
+    id,
+    owner: { mainWindowId: (window as typeof window & { vscodeWindowId: number }).vscodeWindowId },
+    url,
+    title: '',
+    favicon: undefined,
+    screenshot: undefined,
+    loading: false,
+    focused: false,
+    visible: false,
+    canGoBack: false,
+    canGoForward: false,
+    isDevToolsOpen: false,
+    error: undefined,
+    certificateError: undefined,
+    storageScope: BrowserViewStorageScope.Global,
+    history: undefined,
+    permissions: undefined,
+    sharingState: BrowserViewSharingState.Unavailable,
+    isRemoteSession: false,
+    zoomFactor: 1,
+    canZoomIn: false,
+    canZoomOut: false,
+    isElementSelectionActive: false,
+    isAreaSelectionActive: false,
+    device: undefined,
+    onDidChangeSharingState: BaseEvent.None,
+    onDidChangeZoom: BaseEvent.None,
+    onWillNavigate: BaseEvent.None,
+    onDidNavigate: BaseEvent.None,
+    onDidChangeLoadingState: BaseEvent.None,
+    onDidChangeFocus: BaseEvent.None,
+    onDidChangeDevToolsState: BaseEvent.None,
+    onDidKeyCommand: BaseEvent.None,
+    onDidChangeTitle: BaseEvent.None,
+    onDidChangeFavicon: BaseEvent.None,
+    onDidFindInPage: BaseEvent.None,
+    onDidChangeVisibility: BaseEvent.None,
+    onDidClose: BaseEvent.None,
+    onWillDispose: BaseEvent.None,
+    onDidSelectElement: BaseEvent.None,
+    onDidChangeElementSelectionActive: BaseEvent.None,
+    onDidPickArea: BaseEvent.None,
+    onDidChangeAreaSelectionActive: BaseEvent.None,
+    onDidChangeDevice: BaseEvent.None,
+    onDidChangeRemoteStatus: BaseEvent.None,
+    onDidRequestPermission: BaseEvent.None,
+    layout: async () => {},
+    setVisible: async () => {},
+    loadURL: async () => {},
+    goBack: async () => {},
+    goForward: async () => {},
+    reload: async () => {},
+    toggleDevTools: async () => {},
+    captureScreenshot: async () => {
+      throw new Error('Unexpected screenshot capture in editorGroupView test.');
+    },
+    focus: async () => {},
+    findInPage: async () => {},
+    stopFindInPage: async () => {},
+    getSelectedText: async () => '',
+    clearStorage: async () => {},
+    setSharedWithAgent: async () => false,
+    trustCertificate: async () => {},
+    untrustCertificate: async () => {},
+    deleteHistory: async () => {},
+    setPermissions: async () => {},
+    selectDevice: async () => {},
+    zoomIn: async () => {},
+    zoomOut: async () => {},
+    resetZoom: async () => {},
+    getConsoleLogs: async () => '',
+    toggleElementSelection: async () => {},
+    toggleAreaSelection: async () => {},
+    setDevice: async () => {},
+    dispose: () => {},
+  } as unknown) as IBrowserViewModel;
+}
+
+function createBrowserViewWorkbenchService(): IBrowserViewWorkbenchService {
+  const inputs = new Map<string, {
+    id: string;
+    url: string | undefined;
+    title: string | undefined;
+    model: IBrowserViewModel;
+    resource: ReturnType<typeof BrowserViewUri.forId>;
+    resolve: () => Promise<IBrowserViewModel>;
+  }>();
+
+  return {
+    _serviceBrand: undefined,
+    onDidChangeBrowserViews: BaseEvent.None,
+    onDidChangeSharingAvailable: BaseEvent.None,
+    isSharingAvailable: false,
+    getKnownBrowserViews: () => inputs as never,
+    getContextualBrowserViews: () => inputs as never,
+    registerContextualFilter: () => ({ dispose() {} }),
+    registerOpenHandler: () => ({ dispose() {} }),
+    getPreferredGroup: async preferredGroup => preferredGroup,
+    getOrCreateLazy: (id: string, initialState: IBrowserEditorViewState = {}) => {
+      let input = inputs.get(id);
+      if (!input) {
+        const model = createBrowserViewModel(id, initialState.url ?? '');
+        input = {
+          id,
+          url: initialState.url,
+          title: initialState.title,
+          model,
+          resource: BrowserViewUri.forId(id),
+          resolve: async () => model,
+        };
+        inputs.set(id, input);
+      }
+      return input as never;
+    },
+    clearGlobalStorage: async () => {},
+    clearWorkspaceStorage: async () => {},
+    willUseRemoteProxy: () => false,
+    setRemoteProxyInfo: () => {},
+  };
+}
+
+function createTestInstantiationService() {
+  return new InstantiationService(new ServiceCollection(
+    [IBrowserViewWorkbenchService, createBrowserViewWorkbenchService()],
+  ));
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
+  await import('cs/workbench/contrib/browserView/electron-browser/browserView.contribution');
   ({ EditorGroupView } = await import('cs/workbench/browser/parts/editor/editorGroupView'));
   ({ resolveEditorPane, editorPaneDescriptors } = await import(
     'cs/workbench/browser/parts/editor/panes/editorPaneRegistry'
@@ -198,6 +341,7 @@ function createProps(
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
     groupId: DEFAULT_EDITOR_GROUP_ID,
     tabs,
     dirtyDraftTabIds: [],
@@ -233,6 +377,7 @@ function createResolverContext() {
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
     onDraftDocumentChange: () => {},
     onDraftStatusChange: () => {},
     onPdfReaderStatusChange: () => {},
@@ -681,6 +826,9 @@ test('EditorGroupView captures and restores browser pane view state through the 
         async getSelection() {
           return null;
         },
+        async captureScreenshot() {
+          return null;
+        },
         onStateChange() {
           return () => {};
         },
@@ -696,6 +844,8 @@ test('EditorGroupView captures and restores browser pane view state through the 
           labels: {
             emptyState: 'Empty',
             contentUnavailable: 'Unavailable',
+            overlayPauseHeading: 'Paused',
+            overlayPauseDetail: 'Dismiss',
           },
         },
       });
@@ -725,6 +875,8 @@ test('EditorGroupView captures and restores browser pane view state through the 
             labels: {
               emptyState: 'Empty',
               contentUnavailable: 'Unavailable',
+              overlayPauseHeading: 'Paused',
+              overlayPauseDetail: 'Dismiss',
             },
           },
         });
@@ -869,6 +1021,9 @@ test('EditorGroupView reuses the browser pane when switching between browser tab
         async getSelection() {
           return null;
         },
+        async captureScreenshot() {
+          return null;
+        },
         onStateChange() {
           return () => {};
         },
@@ -902,6 +1057,8 @@ test('EditorGroupView reuses the browser pane when switching between browser tab
           labels: {
             emptyState: 'Empty',
             contentUnavailable: 'Unavailable',
+            overlayPauseHeading: 'Paused',
+            overlayPauseDetail: 'Dismiss',
           },
         },
       });
@@ -940,6 +1097,8 @@ test('EditorGroupView reuses the browser pane when switching between browser tab
             labels: {
               emptyState: 'Empty',
               contentUnavailable: 'Unavailable',
+              overlayPauseHeading: 'Paused',
+              overlayPauseDetail: 'Dismiss',
             },
           },
         });
@@ -1073,6 +1232,9 @@ test('EditorGroupView tracks pending browser view-state capture by tab id', asyn
         async getSelection() {
           return null;
         },
+        async captureScreenshot() {
+          return null;
+        },
         onStateChange() {
           return () => {};
         },
@@ -1092,6 +1254,8 @@ test('EditorGroupView tracks pending browser view-state capture by tab id', asyn
           labels: {
             emptyState: 'Empty',
             contentUnavailable: 'Unavailable',
+            overlayPauseHeading: 'Paused',
+            overlayPauseDetail: 'Dismiss',
           },
         },
       });

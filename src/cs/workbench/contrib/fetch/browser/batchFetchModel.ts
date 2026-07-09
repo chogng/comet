@@ -20,6 +20,7 @@ import { resolveBatchFetchStatusbarStatus } from 'cs/workbench/contrib/fetch/bro
 import type { BatchFetchStatusbarStatus } from 'cs/workbench/contrib/fetch/browser/batchFetchStatusbarStatus';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
+import { FetchErrorCode } from 'cs/workbench/services/fetch/common/fetchErrors';
 
 import {
   formatLocaleMessage,
@@ -51,9 +52,9 @@ export type BatchFetchControllerResult =
   | { ok: false; reason: 'empty'; message: string }
   | { ok: false };
 
-const emptyFetchErrorCodes = new Set([
-  'BATCH_NO_MATCH_IN_DATE_RANGE',
-  'BATCH_NO_VALID_ARTICLES',
+const emptyFetchErrorCodes = new Set<string>([
+  FetchErrorCode.BatchNoMatchInDateRange,
+  FetchErrorCode.BatchNoValidArticles,
 ]);
 
 function createBatchFetchSnapshot(
@@ -186,7 +187,7 @@ export class BatchFetchController {
       }
 
       if (!result.ok) {
-        if (result.reason === 'desktop_unsupported') {
+        if ('reason' in result) {
           notificationService.info(ui.toastDesktopBatchFetchOnly);
           this.dispatch({
             type: 'FETCH_FAILED',
@@ -196,31 +197,29 @@ export class BatchFetchController {
           return { ok: false };
         }
 
-        if (result.reason === 'empty_page_url') {
+        if (result.error.code === FetchErrorCode.BatchPageUrlsEmpty) {
           notificationService.error(ui.toastEnterPageUrl);
           this.dispatch({
             type: 'FETCH_FAILED',
             requestId,
-            errorMessage: 'empty_page_url',
+            errorMessage: result.error.code,
           });
           return { ok: false };
         }
 
-        if (result.reason === 'invalid_date_range') {
+        if (result.error.code === FetchErrorCode.DateRangeInvalid) {
           notificationService.error(ui.toastDateRangeInvalid);
           this.dispatch({
             type: 'FETCH_FAILED',
             requestId,
-            errorMessage: 'invalid_date_range',
+            errorMessage: result.error.code,
           });
           return { ok: false };
         }
 
-        const localizedError = result.error
-          ? localizeAppError(ui, result.error)
-          : ui.errorUnknown;
+        const localizedError = localizeAppError(ui, result.error);
         if (
-          result.error?.code &&
+          result.error.code &&
           emptyFetchErrorCodes.has(result.error.code)
         ) {
           this.dispatch({

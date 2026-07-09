@@ -1,6 +1,8 @@
 import { getEditorContentTabTitle } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
+import { getComparisonKey } from 'cs/base/common/resources';
 import { URI } from 'cs/base/common/uri';
 import { normalizeUrl } from 'cs/workbench/common/url';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 
 export type EditorTabViewMode = 'draft';
 
@@ -289,9 +291,29 @@ export function toEditorTabInput(input: EditorTabInput): EditorTabInput {
 }
 
 export function getEditorContentTabInputResourceKey(
-  input: Pick<EditorContentTabInput, 'kind' | 'url'>,
+	input: Pick<EditorContentTabInput, 'id' | 'kind' | 'url'>,
 ) {
-  return `${input.kind}:${URI.parse(normalizeUrl(input.url), true).toString()}`;
+	if (input.kind === 'browser') {
+		return getComparisonKey(getEditorContentTabInputResource(input));
+	}
+
+	return `${input.kind}:${getComparisonKey(getEditorContentTabInputResource(input))}`;
+}
+
+export function getEditorContentTabInputResource(
+	input: Pick<EditorContentTabInput, 'id' | 'kind' | 'url'>,
+) {
+	if (input.kind === 'browser') {
+		return BrowserViewUri.forId(input.id);
+	}
+
+	return URI.parse(normalizeUrl(input.url), true);
+}
+
+export function getEditorContentTabInputOpenKey(
+	input: Pick<EditorContentTabInput, 'kind' | 'url'>,
+) {
+	return `${input.kind}:${getComparisonKey(URI.parse(normalizeUrl(input.url), true))}`;
 }
 
 export function getEditorTabInputResourceKey(input: EditorTabInput) {

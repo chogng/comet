@@ -16,6 +16,8 @@ const props = {
   labels: {
     emptyState: 'Empty',
     contentUnavailable: 'Unavailable',
+    overlayPauseHeading: 'Paused',
+    overlayPauseDetail: 'Dismiss',
   },
 };
 

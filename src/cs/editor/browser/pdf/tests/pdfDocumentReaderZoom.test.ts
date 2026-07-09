@@ -46,6 +46,8 @@ function createReader() {
       labels: {
         emptyState: 'Empty',
         contentUnavailable: 'Unavailable',
+        overlayPauseHeading: 'Paused',
+        overlayPauseDetail: 'Resume to continue.',
       },
     },
     nativeHost: createNativeHostService(),

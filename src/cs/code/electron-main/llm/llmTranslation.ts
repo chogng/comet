@@ -1,5 +1,5 @@
 import type { LlmProviderId, LlmSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError } from 'cs/base/common/errors';
+import { LlmErrorCode, llmError } from 'cs/workbench/services/llm/llmErrors';
 import { cleanText } from 'cs/base/common/strings';
 import { parseLlmModelOptionValue } from 'cs/workbench/services/llm/registry';
 import {
@@ -58,7 +58,7 @@ function normalizeTranslationBatch(
   try {
     parsed = parseJsonText<TranslationBatchResponse>(responseText);
   } catch (error) {
-    throw appError('LLM_CONNECTION_FAILED', {
+    throw llmError(LlmErrorCode.ConnectionFailed, {
       provider,
       status: 'INVALID_RESPONSE',
       statusText: error instanceof Error ? error.message : 'Translation JSON parse failed',
@@ -78,7 +78,7 @@ function normalizeTranslationBatch(
 
   const missingItem = batch.find((item) => !translatedByIndex.has(item.index));
   if (missingItem) {
-    throw appError('LLM_CONNECTION_FAILED', {
+    throw llmError(LlmErrorCode.ConnectionFailed, {
       provider,
       status: 'INVALID_RESPONSE',
       statusText: `Missing translation for item ${missingItem.index}`,

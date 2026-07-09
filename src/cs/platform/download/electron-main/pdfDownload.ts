@@ -4,7 +4,8 @@ import type { DownloadItem, WebContents } from 'electron';
 
 import { buildPdfFileName } from 'cs/platform/download/common/pdfFileName';
 import { cleanText } from 'cs/base/common/strings';
-import { appError, CancellationError, isAppError, isCancellationError } from 'cs/base/common/errors';
+import { CancellationError, isCancellationError } from 'cs/base/common/errors';
+import { PdfErrorCode, isPdfError, pdfError } from 'cs/platform/download/common/pdfErrors';
 import {
   WORKBENCH_SHARED_WEB_PARTITION,
   resolveWorkbenchSharedSession,
@@ -196,7 +197,7 @@ export async function assertDownloadedFileIsPdf({
     // Ignore cleanup failures and surface the original validation failure.
   }
 
-  throw appError('PDF_DOWNLOAD_FAILED', {
+  throw pdfError(PdfErrorCode.DownloadFailed, {
     status: 'NOT_PDF_RESPONSE',
     statusText: mimeType
       ? `Unexpected downloaded content-type: ${mimeType}`
@@ -303,7 +304,7 @@ export async function waitForPdfDownloadFromSession({
         void (async () => {
           if (state !== 'completed') {
             rejectOnce(
-              appError('PDF_DOWNLOAD_FAILED', {
+              pdfError(PdfErrorCode.DownloadFailed, {
                 status: `DOWNLOAD_${String(state).toUpperCase()}`,
                 statusText: `${origin} download ${state}`,
                 downloadUrl,
@@ -607,7 +608,7 @@ export function toPdfDownloadFailure(url: string, status: string | number, statu
 }
 
 export function toPdfDownloadFailureFromError(url: string, error: unknown): PdfDownloadAttemptFailure {
-  if (isAppError(error)) {
+  if (isPdfError(error)) {
     const details = error.details ?? {};
     return {
       url,

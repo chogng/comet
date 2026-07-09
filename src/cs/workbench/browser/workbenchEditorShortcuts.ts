@@ -5,8 +5,6 @@ import {
   getWorkbenchEditorCommandDefinitions,
 } from 'cs/workbench/browser/editorCommands';
 
-import { showWorkbenchEditorCommandPalette } from 'cs/workbench/browser/workbenchEditorPalette';
-
 function isFormControlEventTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -61,16 +59,6 @@ export function handleWorkbenchEditorShortcut(event: KeyboardEvent) {
 
   if (isEditableEventTarget(event.target)) {
     return false;
-  }
-
-  if (hasPrimaryModifier(event) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'p') {
-    const handled = showWorkbenchEditorCommandPalette();
-    if (!handled) {
-      return false;
-    }
-
-    event.preventDefault();
-    return true;
   }
 
   const matchingDefinition = getWorkbenchEditorCommandDefinitions().find((definition) =>

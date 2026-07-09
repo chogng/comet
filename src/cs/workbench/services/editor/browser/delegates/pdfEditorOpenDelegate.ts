@@ -19,7 +19,7 @@ export function createPdfEditorOpenDelegate(
       return request.kind === 'pdf';
     },
     open(request) {
-      const normalizedUrl = request.url?.trim() ?? '';
+      const normalizedUrl = request.options?.viewState?.url?.trim() ?? '';
       if (!normalizedUrl) {
         if (request.disposition === 'reveal-or-open') {
           const { activeTab, tabs } = model.getSnapshot();

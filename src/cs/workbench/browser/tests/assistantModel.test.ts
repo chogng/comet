@@ -486,6 +486,39 @@ test('assistant inserts empty article fetch result as markdown without sending i
   ]);
 });
 
+test('assistant inserts context messages into agent text history', async () => {
+  const capture: InvokeCapture = {
+    commands: [],
+    payloads: [],
+  };
+  const assistantModel = createChatService(createAssistantContext('en', capture));
+
+  assistantModel.insertContextMessage(
+    'Browser Console Logs',
+    'Attached Console Logs from Integrated Browser\n\n```text\nhello\n```',
+  );
+  assistantModel.setQuestion('Explain the log.');
+  await assistantModel.ask();
+
+  const snapshot = assistantModel.getSnapshot();
+  assert.equal(snapshot.messages[0]?.role, 'user');
+  assert.equal(
+    snapshot.messages[0]?.content,
+    'Attached Console Logs from Integrated Browser\n\n```text\nhello\n```',
+  );
+  assert.equal(snapshot.messages[1]?.role, 'user');
+  assert.deepEqual((capture.payloads[0] as { messages: unknown[] }).messages, [
+    {
+      role: 'user',
+      parts: [{ type: 'text', text: 'Attached Console Logs from Integrated Browser\n\n```text\nhello\n```' }],
+    },
+    {
+      role: 'user',
+      parts: [{ type: 'text', text: 'Explain the log.' }],
+    },
+  ]);
+});
+
 test('assistant applies a pending text patch to the current draft locally', async () => {
   let currentDocument: WritingEditorDocument = {
     type: 'doc',

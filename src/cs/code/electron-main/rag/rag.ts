@@ -8,7 +8,7 @@ import type {
   TestRagConnectionPayload,
   LlmSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError } from 'cs/base/common/errors';
+import { RagErrorCode, ragError } from 'cs/workbench/services/rag/ragErrors';
 import { cleanText } from 'cs/base/common/strings';
 import { resolveLlmRoute } from 'cs/workbench/services/llm/routing';
 import { resolveRagRoute } from 'cs/workbench/services/rag/routing';
@@ -40,7 +40,7 @@ type RetrievalCandidate = {
 function normalizeQuestion(value: unknown): string {
   const question = cleanText(value);
   if (!question) {
-    throw appError('RAG_QUERY_EMPTY');
+    throw ragError(RagErrorCode.QueryEmpty);
   }
 
   return question;

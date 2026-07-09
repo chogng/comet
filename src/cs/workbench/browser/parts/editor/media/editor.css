@@ -112,7 +112,6 @@
 }
 
 .comet-editor-draft-pane,
-.comet-editor-source-pane,
 .comet-editor-pdf-pane {
   min-height: 0;
   height: 100%;
@@ -122,12 +121,6 @@
   display: flex;
   flex-direction: column;
   -webkit-app-region: no-drag;
-}
-
-.comet-editor-source-pane {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  background: var(--comet-editor-sourcePaneBackground, rgba(248, 250, 253, 0.72));
 }
 
 .comet-editor-pdf-pane {
@@ -160,12 +153,6 @@
   font-size: 12px;
 }
 
-.comet-editor-source-body {
-  display: flex;
-  min-height: 0;
-  overflow: hidden;
-}
-
 .comet-editor-pdf-body {
   display: flex;
   min-height: 0;
@@ -176,13 +163,6 @@
 .comet-editor-pdf-body > .comet-pdf-document-reader {
   flex: 1;
   min-width: 0;
-}
-
-.comet-editor-source-body > .comet-browser-frame-container {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  border-radius: 0;
 }
 
 .comet-editor-mode-pill {

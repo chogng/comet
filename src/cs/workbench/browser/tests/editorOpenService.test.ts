@@ -2,8 +2,26 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createEditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
-import { EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { createEditorTabInputId, EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { createEditorOpenService } from 'cs/workbench/services/editor/browser/editorOpenService';
+import { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import { EditorResolverService } from 'cs/workbench/services/editor/browser/editorResolverService';
+import { RegisteredEditorPriority } from 'cs/workbench/services/editor/common/editorResolverService';
+import { Schemas } from 'cs/base/common/network';
+import type { URI } from 'cs/base/common/uri';
+
+class TestBrowserEditorInput extends EditorInput {
+  constructor(
+    readonly resource: URI,
+  ) {
+    super();
+  }
+
+  get typeId(): string {
+    return 'workbench.editorinputs.browser';
+  }
+}
 
 type MockStorage = {
   getItem(key: string): string | null;
@@ -46,12 +64,45 @@ function installMockWindow(localStorage: MockStorage) {
   };
 }
 
+function createBrowserEditorResolverService(resolvedResources: string[] = []) {
+  const editorResolverService = new EditorResolverService();
+  editorResolverService.registerEditor(
+    `${Schemas.vscodeBrowser}:/**`,
+    {
+      id: 'workbench.editor.browser',
+      label: 'Browser',
+      priority: RegisteredEditorPriority.exclusive,
+    },
+    {
+      canSupportResource: resource => resource.scheme === Schemas.vscodeBrowser,
+      singlePerResource: true,
+    },
+    {
+      createEditorInput: ({ resource, options }) => {
+        resolvedResources.push(resource.toString());
+        return {
+          editor: new TestBrowserEditorInput(resource),
+          options,
+        };
+      },
+    },
+  );
+  return editorResolverService;
+}
+
+function createTestEditorOpenService(
+  model: ReturnType<typeof createEditorModel>,
+  resolvedResources?: string[],
+) {
+  return createEditorOpenService(model, createBrowserEditorResolverService(resolvedResources));
+}
+
 test('editor open service reuses the existing empty draft for reveal-or-open draft requests', () => {
   const restoreWindow = installMockWindow(createLocalStorage());
 
   try {
     const model = createEditorModel();
-    const service = createEditorOpenService(model);
+    const service = createTestEditorOpenService(model);
 
     const initialDraftTabId = model.getSnapshot().activeTab?.id ?? null;
     const result = service.open({
@@ -77,7 +128,7 @@ test('editor open service creates a fresh draft tab for new-tab draft requests',
 
   try {
     const model = createEditorModel();
-    const service = createEditorOpenService(model);
+    const service = createTestEditorOpenService(model);
     const initialDraftTabId = model.getSnapshot().activeTab?.id ?? null;
 
     const result = service.open({
@@ -103,17 +154,27 @@ test('editor open service creates a non-reused browser tab for browser new-tab r
 
   try {
     const model = createEditorModel();
-    const service = createEditorOpenService(model);
+    const service = createTestEditorOpenService(model);
 
     service.open({
       kind: 'browser',
       disposition: 'reveal-or-open',
-      url: 'https://example.com/article',
+      options: {
+        viewState: {
+          url: 'https://example.com/article',
+        },
+      },
     });
+    const newTabResource = BrowserViewUri.forId(createEditorTabInputId('browser'));
     const result = service.open({
       kind: 'browser',
       disposition: 'new-tab',
-      url: 'https://example.com/article',
+      resource: newTabResource,
+      options: {
+        viewState: {
+          url: 'https://example.com/article',
+        },
+      },
     });
 
     const matchingBrowserTabs = model.getSnapshot().tabs.filter(
@@ -122,6 +183,38 @@ test('editor open service creates a non-reused browser tab for browser new-tab r
     assert.equal(result.handled, true);
     assert.equal(matchingBrowserTabs.length, 2);
     assert.equal(result.activeTabId, matchingBrowserTabs[1]?.id ?? null);
+    assert.equal(matchingBrowserTabs[1]?.id, BrowserViewUri.getId(newTabResource));
+
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
+test('editor open service resolves browser resources through the editor resolver', () => {
+  const restoreWindow = installMockWindow(createLocalStorage());
+
+  try {
+    const model = createEditorModel();
+    const resolvedResources: string[] = [];
+    const service = createTestEditorOpenService(model, resolvedResources);
+    const resource = BrowserViewUri.forId('browser-resolved-a');
+
+    const result = service.open({
+      kind: 'browser',
+      disposition: 'new-tab',
+      resource,
+      options: {
+        viewState: {
+          url: 'https://example.com/resolved',
+        },
+      },
+    });
+
+    assert.deepEqual(resolvedResources, ['vscode-browser:/browser-resolved-a']);
+    assert.equal(result.handled, true);
+    assert.equal(result.activeTabId, 'browser-resolved-a');
+    assert.equal(model.getSnapshot().activeTab?.id, 'browser-resolved-a');
 
     model.dispose();
   } finally {
@@ -134,18 +227,26 @@ test('editor open service reveals an existing browser tab for normalized article
 
   try {
     const model = createEditorModel();
-    const service = createEditorOpenService(model);
+    const service = createTestEditorOpenService(model);
 
     service.open({
       kind: 'browser',
       disposition: 'reveal-or-open',
-      url: 'www.nature.com/articles/example',
+      options: {
+        viewState: {
+          url: 'www.nature.com/articles/example',
+        },
+      },
     });
     const firstArticleTab = model.getSnapshot().activeTab;
     const result = service.open({
       kind: 'browser',
       disposition: 'reveal-or-open',
-      url: 'https://www.nature.com/articles/example',
+      options: {
+        viewState: {
+          url: 'https://www.nature.com/articles/example',
+        },
+      },
     });
 
     const matchingBrowserTabs = model.getSnapshot().tabs.filter(
@@ -168,17 +269,25 @@ test('editor open service creates a non-reused pdf tab for pdf new-tab requests'
 
   try {
     const model = createEditorModel();
-    const service = createEditorOpenService(model);
+    const service = createTestEditorOpenService(model);
 
     service.open({
       kind: 'pdf',
       disposition: 'reveal-or-open',
-      url: 'https://example.com/article.pdf',
+      options: {
+        viewState: {
+          url: 'https://example.com/article.pdf',
+        },
+      },
     });
     const result = service.open({
       kind: 'pdf',
       disposition: 'new-tab',
-      url: 'https://example.com/article.pdf',
+      options: {
+        viewState: {
+          url: 'https://example.com/article.pdf',
+        },
+      },
     });
 
     const matchingPdfTabs = model.getSnapshot().tabs.filter(
@@ -199,7 +308,7 @@ test('editor open service reuses the existing empty pdf for reveal-or-open pdf r
 
   try {
     const model = createEditorModel();
-    const service = createEditorOpenService(model);
+    const service = createTestEditorOpenService(model);
 
     const firstResult = service.open({
       kind: 'pdf',
@@ -232,7 +341,7 @@ test('editor open service creates a fresh empty pdf tab for new-tab pdf requests
 
   try {
     const model = createEditorModel();
-    const service = createEditorOpenService(model);
+    const service = createTestEditorOpenService(model);
 
     service.open({
       kind: 'pdf',

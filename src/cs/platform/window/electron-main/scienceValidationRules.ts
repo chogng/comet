@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isAppError } from 'cs/base/common/errors';
+import { RequestErrorCode, isRequestError } from 'cs/platform/request/common/requestErrors';
 import {
   isScienceHostUrl as isSharedScienceHostUrl,
   isScienceSeriesCurrentTocUrl,
@@ -100,7 +100,7 @@ export function isScienceSeriesListingPageUrl(value: string) {
 }
 
 export function getScienceChallengeSignal(error: unknown) {
-  if (!isAppError(error) || error.code !== 'HTTP_REQUEST_FAILED') {
+  if (!isRequestError(error) || error.code !== RequestErrorCode.HttpRequestFailed) {
     return null;
   }
 

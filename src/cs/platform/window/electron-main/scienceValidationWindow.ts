@@ -5,7 +5,7 @@ import {
   getWebContentState,
 } from 'cs/platform/browserView/electron-main/browserViewMainService';
 import { createAuxiliaryWindow } from 'cs/platform/windows/electron-main/windows';
-import { appError, isAppError } from 'cs/base/common/errors';
+import { RequestErrorCode, isRequestError, requestError } from 'cs/platform/request/common/requestErrors';
 import { cleanText } from 'cs/base/common/strings';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
 import {
@@ -184,7 +184,7 @@ type ScienceValidationScriptOptions = {
 };
 
 function isScienceValidationClosedError(error: unknown) {
-  if (!isAppError(error) || error.code !== 'HTTP_REQUEST_FAILED') {
+  if (!isRequestError(error) || error.code !== RequestErrorCode.HttpRequestFailed) {
     return false;
   }
 
@@ -381,7 +381,7 @@ async function readScienceValidationHtml(
 }
 
 function toScienceValidationClosedError(pageUrl: string) {
-  return appError('HTTP_REQUEST_FAILED', {
+  return requestError(RequestErrorCode.HttpRequestFailed, {
     status: 'SCIENCE_VALIDATION_REQUIRED',
     statusText: SCIENCE_VALIDATION_WINDOW_CLOSED_STATUS_TEXT,
     url: pageUrl,
@@ -486,7 +486,7 @@ async function waitForScienceValidationBoot(
       if (!isMainFrame) return;
 
       rejectOnce(
-        appError('HTTP_REQUEST_FAILED', {
+        requestError(RequestErrorCode.HttpRequestFailed, {
           status: 'NETWORK_ERROR',
           statusText: `Science validation page failed to load (${errorCode}: ${errorDescription})`,
           url: validatedURL || pageUrl,
@@ -534,7 +534,7 @@ async function waitForScienceValidationBoot(
 
 export async function ensureScienceValidationWindow(pageUrl: string): Promise<ScienceValidationResult> {
   if (!isScienceSeriesListingPageUrl(pageUrl)) {
-    throw appError('HTTP_REQUEST_FAILED', {
+    throw requestError(RequestErrorCode.HttpRequestFailed, {
       status: 'SCIENCE_VALIDATION_UNSUPPORTED',
       statusText: 'Science validation window is only available for Science TOC pages.',
       url: pageUrl,
@@ -565,7 +565,7 @@ export async function ensureScienceValidationWindow(pageUrl: string): Promise<Sc
 
       while (Date.now() - startedAt < SCIENCE_VALIDATION_TIMEOUT_MS) {
         if (windowClosed || window.isDestroyed() || window.webContents.isDestroyed()) {
-          throw appError('HTTP_REQUEST_FAILED', {
+          throw requestError(RequestErrorCode.HttpRequestFailed, {
             status: 'SCIENCE_VALIDATION_REQUIRED',
             statusText: 'Science validation window was closed before verification completed.',
             url: pageUrl,
@@ -622,7 +622,7 @@ export async function ensureScienceValidationWindow(pageUrl: string): Promise<Sc
         }
       }
 
-      throw appError('HTTP_REQUEST_FAILED', {
+      throw requestError(RequestErrorCode.HttpRequestFailed, {
         status: 'SCIENCE_VALIDATION_REQUIRED',
         statusText: 'Complete the Science verification window to continue fetching.',
         url: pageUrl,
@@ -644,7 +644,7 @@ export async function ensureScienceValidationWindow(pageUrl: string): Promise<Sc
 
 export async function ensureSciencePageValidationWindow(pageUrl: string): Promise<ScienceValidationResult> {
   if (!isScienceHostUrl(pageUrl)) {
-    throw appError('HTTP_REQUEST_FAILED', {
+    throw requestError(RequestErrorCode.HttpRequestFailed, {
       status: 'SCIENCE_VALIDATION_UNSUPPORTED',
       statusText: 'Science validation window is only available for Science pages.',
       url: pageUrl,
@@ -678,7 +678,7 @@ export async function ensureSciencePageValidationWindow(pageUrl: string): Promis
 
       while (Date.now() - startedAt < SCIENCE_VALIDATION_TIMEOUT_MS) {
         if (windowClosed || window.isDestroyed() || window.webContents.isDestroyed()) {
-          throw appError('HTTP_REQUEST_FAILED', {
+          throw requestError(RequestErrorCode.HttpRequestFailed, {
             status: 'SCIENCE_VALIDATION_REQUIRED',
             statusText: 'Science validation window was closed before verification completed.',
             url: pageUrl,
@@ -722,7 +722,7 @@ export async function ensureSciencePageValidationWindow(pageUrl: string): Promis
         return result;
       }
 
-      throw appError('HTTP_REQUEST_FAILED', {
+      throw requestError(RequestErrorCode.HttpRequestFailed, {
         status: 'SCIENCE_VALIDATION_REQUIRED',
         statusText: 'Complete the Science verification window to continue downloading.',
         url: pageUrl,
@@ -747,7 +747,7 @@ export async function withValidatedSciencePageWindow<T>(
   handler: (window: BrowserWindow, validation: ScienceValidationResult) => Promise<T>,
 ): Promise<T> {
   if (!isScienceHostUrl(pageUrl)) {
-    throw appError('HTTP_REQUEST_FAILED', {
+    throw requestError(RequestErrorCode.HttpRequestFailed, {
       status: 'SCIENCE_VALIDATION_UNSUPPORTED',
       statusText: 'Science validation window is only available for Science pages.',
       url: pageUrl,
@@ -929,7 +929,7 @@ export async function withValidatedSciencePageWindow<T>(
       pageUrl,
       currentUrl: typeof window.webContents.getURL === 'function' ? cleanText(window.webContents.getURL()) : '',
     });
-    throw appError('HTTP_REQUEST_FAILED', {
+    throw requestError(RequestErrorCode.HttpRequestFailed, {
       status: 'SCIENCE_VALIDATION_REQUIRED',
       statusText: `${pendingStatusText} Keep the Science window open, finish verification, then retry.`,
       url: pageUrl,

@@ -10,8 +10,10 @@ import type {
   WebContentPdfDownloadPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import type { DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
+import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
@@ -67,7 +69,7 @@ function createDocumentActionsContext(
     isSelectionModeEnabled: false,
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
-    createBrowserTab: () => {},
+    onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
     activeDraftExport: null,
     ...overrides,
@@ -91,7 +93,7 @@ function createArticle(overrides: Partial<Article> = {}): Article {
 }
 
 test('DocumentActionsController opens article details in a browser tab', async () => {
-  const openedUrls: string[] = [];
+  const openRequests: EditorOpenRequest[] = [];
   const controller = createDocumentActionsController({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
@@ -105,8 +107,8 @@ test('DocumentActionsController opens article details in a browser tab', async (
     isSelectionModeEnabled: false,
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [],
-    createBrowserTab: (url) => {
-      openedUrls.push(url);
+    onOpenEditor: (request) => {
+      openRequests.push(request);
     },
     onExportArticleSummaries: () => {},
     activeDraftExport: null,
@@ -117,7 +119,13 @@ test('DocumentActionsController opens article details in a browser tab', async (
   }));
 
   controller.dispose();
-  assert.deepEqual(openedUrls, ['https://www.nature.com/articles/example']);
+  assert.equal(openRequests.length, 1);
+  const [request] = openRequests;
+  assert.equal(request?.kind, 'browser');
+  assert.equal(request.disposition, 'reveal-or-open');
+  assert.equal(request.options?.viewState?.url, 'https://www.nature.com/articles/example');
+  assert.ok(request.resource);
+  assert.ok(BrowserViewUri.getId(request.resource));
 });
 
 test('DocumentActionsController delegates article summary export', async () => {
@@ -141,7 +149,7 @@ test('DocumentActionsController delegates article summary export', async () => {
     isSelectionModeEnabled: false,
     selectedArticleOrderLookup: new Map(),
     exportableArticles: [article],
-    createBrowserTab: () => {},
+    onOpenEditor: () => {},
     onExportArticleSummaries: (articles, translateSummaries) => {
       delegatedExports.push({ articles, translateSummaries });
     },

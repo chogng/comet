@@ -12,7 +12,7 @@ import type { LocaleMessages } from 'language/locales';
 import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 import {
   parseAppErrorData,
-} from 'cs/base/common/errors';
+} from 'cs/base/parts/sandbox/common/appError';
 import {
   formatLocaleMessage,
   localizeAppError,
@@ -33,6 +33,9 @@ import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocume
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { createEditorTabInputId } from 'cs/workbench/browser/parts/editor/editorInput';
 
 export type DocumentActionsControllerContext = {
   desktopRuntime: boolean;
@@ -47,7 +50,7 @@ export type DocumentActionsControllerContext = {
   isSelectionModeEnabled: boolean;
   selectedArticleOrderLookup: ReadonlyMap<string, number>;
   exportableArticles: Article[];
-  createBrowserTab: (url: string) => void;
+  onOpenEditor: EditorOpenHandler;
   onExportArticleSummaries: (articles: readonly Article[], translateSummaries: boolean) => void | Promise<void>;
   activeDraftExport: {
     title: string;
@@ -336,7 +339,16 @@ export class DocumentActionsController {
       return;
     }
 
-    this.context.createBrowserTab(article.sourceUrl);
+    this.context.onOpenEditor({
+      kind: 'browser',
+      disposition: 'reveal-or-open',
+      resource: BrowserViewUri.forId(createEditorTabInputId('browser')),
+      options: {
+        viewState: {
+          url: article.sourceUrl,
+        },
+      },
+    });
   };
 
   readonly handleDownloadAllArticles = async (articles: readonly Article[]) => {

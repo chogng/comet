@@ -62,6 +62,7 @@ import type {
 } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
@@ -70,6 +71,7 @@ export type EditorGroupViewProps = {
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
+  instantiationService: IInstantiationService;
   groupId: string;
   tabs: EditorWorkspaceTab[];
   dirtyDraftTabIds: readonly string[];
@@ -681,7 +683,7 @@ export class EditorGroupView {
         if (
           request.kind === 'browser' &&
           request.disposition === 'reveal-or-open' &&
-          !request.url
+          !request.options?.viewState?.url
         ) {
           this.requestBrowserPrimaryInputFocus();
         }
@@ -767,7 +769,7 @@ const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
       return;
     }
 
-const panelHost = this.contentElement.querySelector('.comet-browser-frame-container');
+const panelHost = this.contentElement.querySelector('.browser-root');
     this.browserLibraryPanel.mountTo(panelHost instanceof HTMLElement ? panelHost : null);
   }
 
@@ -830,7 +832,7 @@ const panelHost = this.contentElement.querySelector('.comet-browser-frame-contai
     if (
       request.kind === 'browser' &&
       request.disposition === 'reveal-or-open' &&
-      !request.url
+      !request.options?.viewState?.url
     ) {
       this.requestBrowserPrimaryInputFocus();
     }
@@ -932,6 +934,7 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
       viewPartProps: this.props.viewPartProps,
       nativeHost: this.props.nativeHost,
       dialogService: this.props.dialogService,
+      instantiationService: this.props.instantiationService,
       onOpenEditor: this.props.onOpenEditor,
       onDraftDocumentChange: this.props.onDraftDocumentChange,
       onDraftStatusChange: this.handleDraftStatusChange,

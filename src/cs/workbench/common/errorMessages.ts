@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AppErrorData } from 'cs/base/common/errors';
+import type { AppErrorData } from 'cs/base/parts/sandbox/common/appError';
 import type { LocaleMessages } from 'language/locales';
 
 export function formatLocaleMessage(template: string, values: Record<string, string | number>): string {

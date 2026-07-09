@@ -3,12 +3,14 @@ import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { $ } from 'cs/base/browser/dom';
+import type { WorkbenchSidebarEntry } from 'cs/workbench/services/sidebar/common/sidebarEntryService';
 
 import 'cs/workbench/browser/parts/sidebar/media/sidebar.css';
 import 'cs/sessions/browser/parts/sidebar/media/sidebarPart.css';
 
 export type SessionSidebarLabels = {
 	homeTitle: string;
+	codeTitle: string;
 	homeNavNewChat: string;
 	homeNavProjects: string;
 	homeNavArtifacts: string;
@@ -18,11 +20,13 @@ export type SessionSidebarLabels = {
 
 export type SessionSidebarProps = {
 	labels: SessionSidebarLabels;
+	activeEntry: WorkbenchSidebarEntry;
 	accountLabel?: string;
 	moreLabel?: string;
 	settingsLabel?: string;
 	titlebarActionsElement?: HTMLElement | null;
 	footerActionsElement?: HTMLElement | null;
+	onActivateEntry: (entry: WorkbenchSidebarEntry) => void;
 };
 
 export type SessionSidebarViewProps = SessionSidebarProps & {
@@ -44,12 +48,14 @@ export class SessionSidebar {
 	private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-header');
 	private readonly tabListElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-list');
 	private readonly homeTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
+	private readonly codeTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
 	private readonly tabActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-actions');
 
 	//#endregion
 
 	private readonly contentHostElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-content-host');
 	private readonly homeSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-home-panel');
+	private readonly codeSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-code-panel');
 	private readonly homeNavElement = $<HTMLElementTagNameMap['nav']>('nav.comet-sidebar-home-nav');
 	private readonly recentsElement = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-recents');
 	private disposed = false;
@@ -61,11 +67,19 @@ export class SessionSidebar {
 		this.homeTabButton.type = 'button';
 		this.homeTabButton.setAttribute('role', 'tab');
 		this.homeTabButton.classList.add('comet-sidebar-home-tab');
+		this.homeTabButton.addEventListener('click', this.handleHomeTabClick);
+		this.codeTabButton.type = 'button';
+		this.codeTabButton.setAttribute('role', 'tab');
+		this.codeTabButton.classList.add('comet-sidebar-code-tab');
+		this.codeTabButton.addEventListener('click', this.handleCodeTabClick);
 		this.homeSection.id = `session-sidebar-home-panel-${panelIdPool}`;
 		panelIdPool += 1;
+		this.codeSection.id = `session-sidebar-code-panel-${panelIdPool}`;
+		panelIdPool += 1;
 		this.homeTabButton.setAttribute('aria-controls', this.homeSection.id);
+		this.codeTabButton.setAttribute('aria-controls', this.codeSection.id);
 		this.homeSection.append(this.homeNavElement, this.recentsElement);
-		this.tabListElement.append(this.homeTabButton);
+		this.tabListElement.append(this.homeTabButton, this.codeTabButton);
 		this.titlebarElement.append(this.titlebarActionsElement);
 		this.headerElement.append(this.tabListElement, this.tabActionsElement);
 		this.contentElement.append(
@@ -76,6 +90,14 @@ export class SessionSidebar {
 		this.element.append(this.contentElement);
 		this.render();
 	}
+
+	private readonly handleHomeTabClick = () => {
+		this.props.onActivateEntry('home');
+	};
+
+	private readonly handleCodeTabClick = () => {
+		this.props.onActivateEntry('code');
+	};
 
 	getElement() {
 		return this.element;
@@ -111,6 +133,7 @@ export class SessionSidebar {
 		this.footerElement.hidden = isCollapsed;
 		this.homeTabButton.textContent = labels.homeTitle;
 		this.tabListElement.setAttribute('aria-label', labels.homeTitle);
+		this.codeSection.setAttribute('aria-label', labels.codeTitle);
 		this.renderHomeNav();
 		this.renderRecents();
 		this.syncModeContent();
@@ -160,8 +183,12 @@ export class SessionSidebar {
 			return;
 		}
 
-		if (this.contentHostElement.firstElementChild !== this.homeSection) {
-			this.contentHostElement.replaceChildren(this.homeSection);
+		const activeSection =
+			this.props.activeEntry === 'home'
+				? this.homeSection
+				: this.codeSection;
+		if (this.contentHostElement.firstElementChild !== activeSection) {
+			this.contentHostElement.replaceChildren(activeSection);
 		}
 
 		const { labels } = this.props;
@@ -170,13 +197,23 @@ export class SessionSidebar {
 			labels.homeTitle,
 			'projects-filled',
 		);
-		this.homeTabButton.classList.add('comet-is-active');
-		this.homeTabButton.setAttribute('aria-selected', 'true');
-		this.homeTabButton.tabIndex = 0;
+		this.renderTabButton(
+			this.codeTabButton,
+			labels.codeTitle,
+			'code',
+		);
+		this.syncTabButtonState(this.homeTabButton, this.props.activeEntry === 'home');
+		this.syncTabButtonState(this.codeTabButton, this.props.activeEntry === 'code');
 
 		if (this.tabActionsElement.firstElementChild) {
 			this.tabActionsElement.replaceChildren();
 		}
+	}
+
+	private syncTabButtonState(button: HTMLButtonElement, isActive: boolean) {
+		button.classList.toggle('comet-is-active', isActive);
+		button.setAttribute('aria-selected', String(isActive));
+		button.tabIndex = isActive ? 0 : -1;
 	}
 
 	private renderHomeNav() {

@@ -1,5 +1,4 @@
 import type {
-  EditorWorkspaceBrowserTab,
   EditorWorkspaceDraftTab,
   EditorWorkspacePdfTab,
   EditorWorkspaceTab,
@@ -18,8 +17,7 @@ import type { PdfReaderRuntimeStatus } from 'cs/editor/browser/pdf/pdfDocumentRe
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
-import { ContentEditorPane } from 'cs/workbench/browser/parts/editor/panes/contentEditorPane';
-import type { ContentEditorPaneProps } from 'cs/workbench/browser/parts/editor/panes/contentEditorPane';
+import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { DraftEditorPane } from 'cs/workbench/browser/parts/editor/panes/draftEditorPane';
 import type {
   AnyEditorPane,
@@ -30,12 +28,14 @@ import type {
 import type { DraftEditorPaneProps } from 'cs/workbench/browser/parts/editor/panes/draftEditorPane';
 import { PdfEditorPane } from 'cs/workbench/browser/parts/editor/panes/pdfEditorPane';
 import type { PdfEditorPaneProps } from 'cs/workbench/browser/parts/editor/panes/pdfEditorPane';
+import { toDisposable } from 'cs/base/common/lifecycle';
 
 export type EditorPaneResolverContext = {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
+  instantiationService: IInstantiationService;
   onOpenEditor?: EditorOpenHandler;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onDraftStatusChange: (tabId: string, status: DraftEditorStatusState) => void;
@@ -77,17 +77,17 @@ type EditorPaneDescriptorOptions<
   acceptsInput: (input: EditorWorkspaceTab) => input is TInput;
   createPaneKey: (input: TInput) => string;
   createPaneProps: (input: TInput, context: EditorPaneResolverContext) => TProps;
-  createPane: (props: TProps) => TPane;
+  createPane: (props: TProps, context: EditorPaneResolverContext) => TPane;
 };
 
 type AnyEditorPaneRegistryDescriptor = EditorPaneRegistryDescriptor<
   any,
   any,
-  AnyEditorPane,
+  any,
   EditorPaneId
 >;
 
-function createEditorPaneDescriptor<
+export function createEditorPaneDescriptor<
   TInput extends EditorWorkspaceTab,
   TProps,
   TPane extends EditorPane<TProps, any>,
@@ -104,7 +104,7 @@ function createEditorPaneDescriptor<
         paneId: options.paneId,
         paneKey: options.createPaneKey(input),
         contentClassNames: options.contentClassNames,
-        createPane: () => options.createPane(paneProps),
+        createPane: () => options.createPane(paneProps, context),
         updatePane: (pane) => {
           pane.setProps(paneProps);
         },
@@ -124,18 +124,6 @@ function createDraftPaneProps(
     onDraftDocumentChange: context.onDraftDocumentChange,
     onStatusChange: (status: DraftEditorStatusState) =>
       context.onDraftStatusChange(tab.id, status),
-  };
-}
-
-function createContentPaneProps(
-  tab: EditorWorkspaceBrowserTab | EditorWorkspacePdfTab,
-  context: EditorPaneResolverContext,
-): ContentEditorPaneProps {
-  return {
-    labels: context.labels,
-    contentTab: tab,
-    viewPartProps: context.viewPartProps,
-    nativeHost: context.nativeHost,
   };
 }
 
@@ -159,12 +147,6 @@ function isDraftWorkspaceTab(
   return getEditorPaneMode(input) === 'draft';
 }
 
-function isBrowserWorkspaceTab(
-  input: EditorWorkspaceTab,
-): input is EditorWorkspaceBrowserTab {
-  return getEditorPaneMode(input) === 'browser';
-}
-
 function isPdfWorkspaceTab(
   input: EditorWorkspaceTab,
 ): input is EditorWorkspacePdfTab {
@@ -180,17 +162,6 @@ const draftEditorPaneDescriptor = createEditorPaneDescriptor({
   createPane: (props) => new DraftEditorPane(props),
 });
 
-const browserEditorPaneDescriptor = createEditorPaneDescriptor({
-  paneId: 'browser',
-  contentClassNames: ['comet-is-mode-browser'] as const,
-  acceptsInput: isBrowserWorkspaceTab,
-  // Browser tabs share one native web-content surface, so the pane itself
-  // should stay mounted while only the active target changes.
-  createPaneKey: () => 'browser',
-  createPaneProps: createContentPaneProps,
-  createPane: (props) => new ContentEditorPane(props),
-});
-
 const pdfEditorPaneDescriptor = createEditorPaneDescriptor({
   paneId: 'pdf',
   contentClassNames: ['comet-is-mode-pdf'] as const,
@@ -200,11 +171,22 @@ const pdfEditorPaneDescriptor = createEditorPaneDescriptor({
   createPane: (props) => new PdfEditorPane(props),
 });
 
-export const editorPaneDescriptors = [
+export const editorPaneDescriptors: AnyEditorPaneRegistryDescriptor[] = [
   draftEditorPaneDescriptor,
-  browserEditorPaneDescriptor,
   pdfEditorPaneDescriptor,
-] as const;
+];
+
+export function registerEditorPaneDescriptor(
+  descriptor: AnyEditorPaneRegistryDescriptor,
+) {
+  editorPaneDescriptors.push(descriptor);
+  return toDisposable(() => {
+    const index = editorPaneDescriptors.indexOf(descriptor);
+    if (index >= 0) {
+      editorPaneDescriptors.splice(index, 1);
+    }
+  });
+}
 
 export function resolveEditorPane(
   activeTab: EditorWorkspaceTab,

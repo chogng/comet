@@ -6,7 +6,7 @@ import type {
   EditorDocxExportResult,
   ExportEditorDocxPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { appError } from 'cs/base/common/errors';
+import { DocumentErrorCode, documentError } from 'cs/code/electron-main/document/documentErrors';
 import { normalizeWritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import { buildEditorDocxBuffer, buildEditorDocxFileName } from 'cs/code/electron-main/document/editorDocxSerializer';
 import { normalizeDocxPath } from 'cs/code/electron-main/document/docxPackage';
@@ -80,7 +80,7 @@ export async function exportEditorDocumentToDocxFile({
       locale,
     }));
   } catch (error) {
-    throw appError('DOCX_EXPORT_FAILED', {
+    throw documentError(DocumentErrorCode.DocxExportFailed, {
       filePath: outputPath,
       message: error instanceof Error ? error.message : String(error),
     });

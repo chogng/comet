@@ -1,4 +1,4 @@
-import { appError } from 'cs/base/common/errors';
+import { ValidationErrorCode, validationError } from 'cs/base/common/validationErrors';
 
 const TRAILING_URL_PUNCTUATION_RE =
   /[\u3001\uFF0C\u3002\uFF1B\uFF1A\uFF01\uFF1F,.;:!?]+$/u;
@@ -57,13 +57,13 @@ export function sanitizeUrlInput(input: string) {
 export function normalizeUrl(input: unknown) {
   const trimmed = sanitizeUrlInput(String(input ?? ''));
   if (!trimmed) {
-    throw appError('URL_EMPTY');
+    throw validationError(ValidationErrorCode.UrlEmpty);
   }
 
   const value = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   const url = new URL(value);
   if (!/^https?:$/i.test(url.protocol)) {
-    throw appError('URL_PROTOCOL_UNSUPPORTED', { protocol: url.protocol });
+    throw validationError(ValidationErrorCode.UrlProtocolUnsupported, { protocol: url.protocol });
   }
 
   return url.toString();

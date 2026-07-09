@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import type { EditorWorkspaceDraftTab } from 'cs/workbench/browser/parts/editor/editorModel';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import {
   EMPTY_BROWSER_TAB_URL,
   EMPTY_PDF_TAB_URL,
+  getEditorContentTabInputResource,
+  getEditorContentTabInputOpenKey,
   getEditorTabInputResourceKey,
   isEmptyBrowserTabInput,
   isEmptyPdfTabInput,
@@ -78,8 +81,36 @@ test('getEditorTabInputResourceKey uses stable kind-aware resource keys', () => 
       title: 'Paper',
       url: 'https://EXAMPLE.com/paper folder?q=alpha beta',
     }),
+    'vscode-browser:/browser-a',
+  );
+
+  assert.equal(
+    getEditorContentTabInputOpenKey({
+      kind: 'browser',
+      url: 'https://EXAMPLE.com/paper folder?q=alpha beta',
+    }),
     'browser:https://example.com/paper%20folder?q%3Dalpha%20beta',
   );
+});
+
+test('getEditorContentTabInputResource maps browser tabs to vscode-browser resources', () => {
+  const resource = getEditorContentTabInputResource({
+    id: 'browser-a',
+    kind: 'browser',
+    url: 'https://example.com/paper',
+  });
+
+  assert.equal(BrowserViewUri.getId(resource), 'browser-a');
+});
+
+test('getEditorContentTabInputResource maps pdf tabs to URL resources', () => {
+  const resource = getEditorContentTabInputResource({
+    id: 'pdf-a',
+    kind: 'pdf',
+    url: ' https://example.com/paper.pdf ',
+  });
+
+  assert.equal(resource.toString(), 'https://example.com/paper.pdf');
 });
 
 test('getEditorContentTabTitle treats about:blank as an empty browser tab title', () => {

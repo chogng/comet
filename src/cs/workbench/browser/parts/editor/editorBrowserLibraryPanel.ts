@@ -5,6 +5,8 @@ import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import { $ } from 'cs/base/browser/dom';
 import { toAction } from 'cs/base/common/actions';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { createEditorTabInputId } from 'cs/workbench/browser/parts/editor/editorInput';
 
 const EDITOR_BROWSER_LIBRARY_STORAGE_KEY = 'cs.editor.browser.library.v1';
 const MAX_RECENT_BROWSER_LIBRARY_ENTRIES = 25;
@@ -1302,7 +1304,12 @@ const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(
     void this.context.onOpenEditor({
       kind: 'browser',
       disposition: 'new-tab',
-      url,
+      resource: BrowserViewUri.forId(createEditorTabInputId('browser')),
+      options: {
+        viewState: {
+          url,
+        },
+      },
     });
     this.setOpen(false);
   };

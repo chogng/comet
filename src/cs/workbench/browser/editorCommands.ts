@@ -6,7 +6,9 @@ import {
   getDraftEditorShortcutLabel,
 } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writingEditorDocument';
+import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
 export type WorkbenchEditorCommandId = DraftEditorCommandId | 'saveDraft';
 
@@ -16,6 +18,10 @@ export type WorkbenchEditorCommandHandlers = {
   getActiveDraftStableSelectionTarget: () => WritingEditorStableSelectionTarget | null;
   saveActiveDraft: () => boolean;
   canSaveActiveDraft: () => boolean;
+  openEditor: EditorOpenHandler;
+  activateTab: (tabId: string) => void;
+  closeTab: (tabId: string) => Promise<boolean> | boolean;
+  getTabs: () => readonly EditorWorkspaceTab[];
 };
 
 export type WorkbenchEditorCommandDefinition = {

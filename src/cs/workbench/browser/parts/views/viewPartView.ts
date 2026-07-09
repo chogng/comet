@@ -9,6 +9,8 @@ import { $ } from 'cs/base/browser/dom';
 export type ViewPartLabels = {
   emptyState: string;
   contentUnavailable: string;
+  overlayPauseHeading: string;
+  overlayPauseDetail: string;
 };
 
 export type ViewPartProps = {
@@ -26,13 +28,23 @@ export class ViewPartView {
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-browser-frame-container');
   private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-native-webcontentview-host');
   private readonly webContentHost = $<HTMLElementTagNameMap['div']>('div.comet-browser-frame.comet-browser-frame-placeholder');
+  private readonly pauseOverlayElement = $<HTMLElementTagNameMap['div']>('div.comet-webcontent-pause-overlay');
+  private readonly pauseMessageElement = $<HTMLElementTagNameMap['div']>('div.comet-webcontent-pause-message');
+  private readonly pauseHeadingElement = $<HTMLElementTagNameMap['div']>('div.comet-webcontent-pause-heading');
+  private readonly pauseDetailElement = $<HTMLElementTagNameMap['div']>('div.comet-webcontent-pause-detail');
   private readonly overlayElement = $<HTMLElementTagNameMap['div']>('div.comet-webcontent-overlay');
   private isWebContentHostRegistered = false;
 
   constructor(props: ViewPartProps) {
     this.props = props;
     this.webContentHost.setAttribute('aria-hidden', 'true');
-    this.contentElement.append(this.webContentHost, this.overlayElement);
+    this.pauseMessageElement.append(this.pauseHeadingElement, this.pauseDetailElement);
+    this.pauseOverlayElement.append(this.pauseMessageElement);
+    this.contentElement.append(
+      this.webContentHost,
+      this.pauseOverlayElement,
+      this.overlayElement,
+    );
     this.element.append(this.contentElement);
     this.render();
   }
@@ -61,6 +73,8 @@ export class ViewPartView {
     if (this.webContentHost.dataset.webcontentActive !== nextWebContentActive) {
       this.webContentHost.dataset.webcontentActive = nextWebContentActive;
     }
+    this.pauseHeadingElement.textContent = this.props.labels.overlayPauseHeading;
+    this.pauseDetailElement.textContent = this.props.labels.overlayPauseDetail;
     this.overlayElement.replaceChildren();
 
     if (!this.props.browserUrl) {

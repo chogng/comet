@@ -1,4 +1,4 @@
-import { appError } from 'cs/base/common/errors';
+import { ValidationErrorCode, validationError } from 'cs/base/common/validationErrors';
 import { cleanText } from 'cs/base/common/strings';
 
 export interface DateRange {
@@ -167,13 +167,13 @@ export function parseDateRange(startDate: unknown, endDate: unknown): DateRange 
   const end = normalizedEnd ? parseDateString(normalizedEnd) : null;
 
   if (normalizedStart && !start) {
-    throw appError('DATE_START_INVALID', { value: normalizedStart });
+    throw validationError(ValidationErrorCode.DateStartInvalid, { value: normalizedStart });
   }
   if (normalizedEnd && !end) {
-    throw appError('DATE_END_INVALID', { value: normalizedEnd });
+    throw validationError(ValidationErrorCode.DateEndInvalid, { value: normalizedEnd });
   }
   if (start && end && start > end) {
-    throw appError('DATE_RANGE_INVALID', { start, end });
+    throw validationError(ValidationErrorCode.DateRangeInvalid, { start, end });
   }
 
   return { start, end };
