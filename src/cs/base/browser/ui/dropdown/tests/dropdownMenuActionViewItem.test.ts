@@ -100,8 +100,8 @@ test('DropdownMenuActionViewItem renders and opens a menu overlay', async () => 
     item.render(host);
     const button = host.querySelector('button');
     assert(button instanceof HTMLButtonElement);
-    const actionItem = host.querySelector('.comet-actionbar-item');
-    assert(actionItem instanceof HTMLElement);
+    const actionItem = host;
+    assert.equal(actionItem.classList.contains('comet-actionbar-item'), true);
 
     button.click();
     await delay(0);
@@ -154,8 +154,8 @@ test('DropdownMenuActionViewItem can render a custom overlay', async () => {
     item.render(host);
     const trigger = host.querySelector('button');
     assert(trigger instanceof HTMLButtonElement);
-    const actionItem = host.querySelector('.comet-actionbar-item');
-    assert(actionItem instanceof HTMLElement);
+    const actionItem = host;
+    assert.equal(actionItem.classList.contains('comet-actionbar-item'), true);
 
     trigger.click();
     await delay(0);

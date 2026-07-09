@@ -128,10 +128,11 @@ function applyButtonAttributes(
 }
 
 export class ActionViewItem extends BaseActionViewItem {
-  protected readonly button = DOM.$<HTMLButtonElement>('button.comet-actionbar-action');
+  protected readonly button: HTMLButtonElement;
   protected readonly content = DOM.$<HTMLSpanElement>('span.comet-actionbar-content');
   protected item: ActionBarActionItem;
   protected readonly hoverBinding: HoverBinding;
+  protected itemElement: HTMLElement | null = null;
 
   constructor(item: ActionBarActionItem, options?: ActionViewItemOptions);
   constructor(item: ActionBarActionItem, hoverService?: IHoverDelegate);
@@ -141,11 +142,12 @@ export class ActionViewItem extends BaseActionViewItem {
   ) {
     const hoverService = resolveHoverService(optionsOrHoverService);
 
-    super(DOM.$('div.comet-actionbar-item.comet-is-action'));
+    const button = DOM.$<HTMLButtonElement>('button.comet-actionbar-action');
+    super(button);
+    this.button = button;
     this.item = item;
     this.button.type = 'button';
     this.button.append(this.content);
-    this.element.append(this.button);
     this.hoverBinding = bindHover(this.button, null, hoverService);
     this._register(this.hoverBinding);
     this._register(DOM.addDisposableListener(this.button, 'click', this.handleButtonClick));
@@ -163,6 +165,7 @@ export class ActionViewItem extends BaseActionViewItem {
     }
 
     super.render(container);
+    this.itemElement = container ?? this.button.parentElement;
     this.updateContainerClassName();
     this.updateButtonState();
     this.updateAccessibility();
@@ -196,7 +199,11 @@ export class ActionViewItem extends BaseActionViewItem {
   };
 
   protected updateContainerClassName() {
-    this.element.className = DOM.composeClassName([
+    if (!this.itemElement) {
+      return;
+    }
+
+    this.itemElement.className = DOM.composeClassName([
       'comet-actionbar-item',
       'comet-is-action',
       this.item.disabled ? 'comet-is-disabled' : '',

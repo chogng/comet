@@ -57,6 +57,10 @@ test('comet-actionbar renders actions and separators without relying on button b
 
     const buttons = element.querySelectorAll('.comet-actionbar-action');
     assert.equal(buttons.length, 2);
+    assert.equal(
+      element.querySelectorAll('.comet-actionbar-actions-container > .comet-actionbar-item').length,
+      3,
+    );
     assert(element.querySelector('.comet-actionbar-separator') instanceof HTMLElement);
 
     const refreshButton = buttons[0] as HTMLButtonElement;
@@ -317,6 +321,10 @@ test('comet-actionbar can render a split action item with primary and dropdown c
   try {
     const buttons = element.querySelectorAll('.comet-actionbar-action');
     assert.equal(buttons.length, 2);
+    const splitItem = element.querySelector(
+      '.comet-actionbar-actions-container > .comet-actionbar-item.comet-actionbar-split > .comet-action-dropdown-item',
+    );
+    assert(splitItem instanceof HTMLElement);
 
     const primaryButton = buttons[0] as HTMLButtonElement;
     const dropdownButton = buttons[1] as HTMLButtonElement;

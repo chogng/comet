@@ -128,6 +128,21 @@ type RenderedItem = {
   dispose: () => void;
 };
 
+function createActionBarItemElement(
+  className?: string,
+  id?: string,
+) {
+  const itemElement = document.createElement('div');
+  itemElement.className = DOM.composeClassName([
+    'comet-actionbar-item',
+    className,
+  ]);
+  if (id) {
+    itemElement.dataset.actionbarItemId = id;
+  }
+  return itemElement;
+}
+
 export class ActionBarView extends Disposable {
   private props: ActionBarProps;
   private readonly element = document.createElement('div');
@@ -219,21 +234,24 @@ export class ActionBarView extends Disposable {
 
   private renderItem(item: ActionBarItem) {
     if (isViewItem(item)) {
-      item.render();
-      const element = item.getElement();
+      const itemElement = createActionBarItemElement();
+      item.render(itemElement);
       this.renderedItems.push({
-        button: item.getFocusableElement?.() ?? element,
+        button: item.getFocusableElement?.() ?? item.getElement(),
         dispose: () => {
           item.dispose();
         },
       });
-      return element;
+      return itemElement;
     }
 
     if (!isActionItem(item)) {
       if (isSplitItem(item)) {
+        const itemElement = createActionBarItemElement(
+          DOM.composeClassName(['comet-is-action', item.className]),
+          item.id,
+        );
         const viewItem = createActionWithDropdownActionViewItem({
-          className: item.className,
           primary: {
             ...item.primary,
             hoverService: item.primary.hoverService ?? this.props.hoverService,
@@ -243,29 +261,20 @@ export class ActionBarView extends Disposable {
             hoverService: item.dropdown.hoverService ?? this.props.hoverService,
           },
         });
-        viewItem.render();
-        const element = viewItem.getElement();
-        if (item.id) {
-          element.dataset.actionbarItemId = item.id;
-        }
+        viewItem.render(itemElement);
         this.renderedItems.push({
-          button: viewItem.getFocusableElement?.() ?? element,
+          button: viewItem.getFocusableElement?.() ?? viewItem.getElement(),
           dispose: () => {
             viewItem.dispose();
           },
         });
-        return element;
+        return itemElement;
       }
 
-      const itemElement = document.createElement('div');
-      itemElement.className = DOM.composeClassName([
-        'comet-actionbar-item',
-        'comet-is-separator',
-        item.className,
-      ]);
-      if (item.id) {
-        itemElement.dataset.actionbarItemId = item.id;
-      }
+      const itemElement = createActionBarItemElement(
+        DOM.composeClassName(['comet-is-separator', item.className]),
+        item.id,
+      );
       const separator = document.createElement('div');
       separator.className = 'comet-actionbar-separator';
       separator.setAttribute('aria-hidden', 'true');
@@ -273,19 +282,16 @@ export class ActionBarView extends Disposable {
       return itemElement;
     }
 
+    const itemElement = createActionBarItemElement(undefined, item.id);
     const viewItem = createDefaultActionViewItem(item, item.hoverService ?? this.props.hoverService);
-    viewItem.render();
-    const element = viewItem.getElement();
-    if (item.id) {
-      element.dataset.actionbarItemId = item.id;
-    }
+    viewItem.render(itemElement);
     this.renderedItems.push({
-      button: viewItem.getFocusableElement?.() ?? element,
+      button: viewItem.getFocusableElement?.() ?? viewItem.getElement(),
       dispose: () => {
         viewItem.dispose();
       },
     });
-    return element;
+    return itemElement;
   }
 
   private getFocusableButtons() {

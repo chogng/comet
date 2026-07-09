@@ -474,7 +474,11 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
   }
 
   protected override updateContainerClassName() {
-    this.element.className = DOM.composeClassName([
+    if (!this.itemElement) {
+      return;
+    }
+
+    this.itemElement.className = DOM.composeClassName([
       'comet-actionbar-item',
       'comet-is-action',
       this.item.disabled ? 'comet-is-disabled' : '',
@@ -575,10 +579,12 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
   private readonly primaryItem: ActionViewItem;
   protected readonly dropdownMenuActionViewItem: DropdownMenuActionViewItem;
+  private readonly primaryItemElement = DOM.$('div.comet-actionbar-item');
+  private readonly dropdownItemElement = DOM.$('div.comet-actionbar-item');
   private readonly separator = DOM.$('div.comet-action-dropdown-item-separator');
 
   constructor(options: ActionWithDropdownActionViewItemOptions) {
-    super(DOM.$('div.comet-actionbar-item.comet-is-action.comet-action-dropdown-item'));
+    super(DOM.$('div.comet-action-dropdown-item'));
     const hoverService = options.primary.hoverService ?? options.dropdown.hoverService;
     this.primaryItem = new ActionViewItem(options.primary, hoverService);
     this.dropdownMenuActionViewItem = new DropdownMenuActionViewItem({
@@ -592,9 +598,9 @@ export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
       this.element.classList.add(...options.className.split(/\s+/).filter(Boolean));
     }
     this.separator.append(DOM.$('div'));
-    this.primaryItem.render(this.element);
-    this.element.append(this.separator);
-    this.dropdownMenuActionViewItem.render(this.element);
+    this.primaryItem.render(this.primaryItemElement);
+    this.element.append(this.primaryItemElement, this.separator, this.dropdownItemElement);
+    this.dropdownMenuActionViewItem.render(this.dropdownItemElement);
     this._register(DOM.addDisposableListener(this.element, 'keydown', this.handleKeyDown));
   }
 
@@ -604,8 +610,8 @@ export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
     }
 
     super.render(container);
-    this.primaryItem.render(this.element);
-    this.dropdownMenuActionViewItem.render(this.element);
+    this.primaryItem.render(this.primaryItemElement);
+    this.dropdownMenuActionViewItem.render(this.dropdownItemElement);
   }
 
   override dispose() {
