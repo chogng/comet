@@ -3,6 +3,7 @@ import 'base/browser/tests/dom.test';
 import 'cs/code/electron-main/document/tests/editorDocxSerializer.test';
 import 'cs/base/common/tests/anchoredLayout.test';
 import 'cs/base/browser/ui/dropdown/tests/dropdown.test';
+import 'cs/base/browser/ui/contextview/tests/contextview.test';
 import 'cs/base/browser/ui/menu/tests/menu.test';
 import 'cs/base/browser/ui/selectbox/tests/selectBox.test';
 import 'cs/base/browser/ui/hover/tests/hover.test';

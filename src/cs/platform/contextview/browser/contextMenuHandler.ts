@@ -3,9 +3,9 @@ import type {
   ContextMenuHeader,
 } from 'cs/base/browser/contextmenu';
 import {
-  resolveAnchoredVerticalPlacement,
-  resolveAnchoredVerticalPlacementWithFallback,
-  type AnchoredRect,
+  LayoutAnchorPosition,
+  layout,
+  type ILayoutAnchor,
 } from 'cs/base/common/layout';
 import { Menu, type MenuOptions } from 'cs/base/browser/ui/menu/menu';
 import type {
@@ -34,7 +34,7 @@ function resolveContextMenuOffset(delegate: ContextMenuDelegate) {
     : 0;
 }
 
-function resolveAnchorRect(delegate: ContextMenuDelegate): AnchoredRect {
+function resolveAnchorRect(delegate: ContextMenuDelegate) {
   const anchor = delegate.getAnchor();
   if (anchor instanceof HTMLElement) {
     const rect = anchor.getBoundingClientRect();
@@ -54,25 +54,29 @@ function resolveAnchorRect(delegate: ContextMenuDelegate): AnchoredRect {
   };
 }
 
+function resolveVerticalAnchor(
+  delegate: ContextMenuDelegate,
+  offset: number,
+): ILayoutAnchor {
+  const anchorRect = resolveAnchorRect(delegate);
+  return {
+    offset: anchorRect.y - offset,
+    size: anchorRect.height + offset * 2,
+    position: delegate.position === 'above'
+      ? LayoutAnchorPosition.After
+      : LayoutAnchorPosition.Before,
+  };
+}
+
 function resolveMenuPlacement(
   delegate: ContextMenuDelegate,
   menuHeight: number,
 ): 'top' | 'bottom' {
   const viewportHeight =
     window.innerHeight || document.documentElement.clientHeight || 0;
-  const placement = resolveAnchoredVerticalPlacement({
-    anchorRect: resolveAnchorRect(delegate),
-    overlayHeight: menuHeight,
-    viewportHeight,
-    viewportMargin: 8,
-    offset: resolveContextMenuOffset(delegate),
-    preference: delegate.position ?? 'auto',
-  });
-  const resolvedPlacement = resolveAnchoredVerticalPlacementWithFallback({
-    preference: delegate.position ?? 'auto',
-    placement,
-  });
-  return resolvedPlacement === 'above' ? 'top' : 'bottom';
+  const anchor = resolveVerticalAnchor(delegate, resolveContextMenuOffset(delegate));
+  const result = layout(viewportHeight, menuHeight, anchor);
+  return result.position + menuHeight <= anchor.offset ? 'top' : 'bottom';
 }
 
 export class ContextMenuHandler {
@@ -102,8 +106,8 @@ export class ContextMenuHandler {
         delegate.getMenuClassName?.(),
       ]),
       anchorAlignment: delegate.anchorAlignment
-        ?? (delegate.alignment === 'start' ? 'left' : 'right'),
-      anchorPosition: delegate.position === 'above' ? 'above' : 'below',
+        ?? (delegate.alignment === 'end' ? 'right' : 'left'),
+      position: delegate.position ?? 'auto',
       anchorAxisAlignment: delegate.anchorAxisAlignment ?? 'vertical',
       offset: resolveContextMenuOffset(delegate),
       minWidth: delegate.minWidth,

@@ -17,8 +17,8 @@ import {
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
 import {
-  resolveAnchoredVerticalPlacement,
-  resolveAnchoredVerticalPlacementWithFallback,
+  LayoutAnchorPosition,
+  layout,
 } from 'cs/base/common/layout';
 import { $ } from 'cs/base/browser/dom';
 
@@ -292,31 +292,19 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
     const menuHeight = menu.offsetHeight;
     const viewportHeight =
       window.innerHeight || document.documentElement.clientHeight || 0;
-    const placement = resolveAnchoredVerticalPlacement({
-      anchorRect: {
-        x: triggerRect.x,
-        y: triggerRect.y,
-        width: triggerRect.width,
-        height: triggerRect.height,
-      },
-      overlayHeight: menuHeight,
-      viewportHeight,
-      viewportMargin: viewportPadding,
-      offset: menuOffset,
-      preference: 'auto',
-    });
-    const resolvedPlacement = resolveAnchoredVerticalPlacementWithFallback({
-      preference: 'auto',
-      placement,
-    });
-    const shouldOpenUpwards = resolvedPlacement === 'above';
+    const verticalAnchor = {
+      offset: triggerRect.y - menuOffset,
+      size: triggerRect.height + menuOffset * 2,
+      position: LayoutAnchorPosition.Before,
+    };
+    const placement = layout(viewportHeight, menuHeight, verticalAnchor);
+    const shouldOpenUpwards = placement.position + menuHeight <= verticalAnchor.offset;
     const availableSpace = shouldOpenUpwards
-      ? placement.spaceAbove
-      : placement.spaceBelow;
-
+      ? verticalAnchor.offset - viewportPadding
+      : viewportHeight - verticalAnchor.offset - verticalAnchor.size - viewportPadding;
     menu.classList.toggle('comet-dropdown-menu-top', shouldOpenUpwards);
     menu.classList.toggle('comet-dropdown-menu-bottom', !shouldOpenUpwards);
-    menu.style.maxHeight = `${Math.max(availableSpace - menuOffset, 120)}px`;
+    menu.style.maxHeight = `${Math.max(availableSpace, 120)}px`;
     menu.style.position = 'static';
     menu.style.left = 'auto';
     menu.style.top = 'auto';

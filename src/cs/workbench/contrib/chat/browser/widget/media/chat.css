@@ -444,14 +444,17 @@
 
 .comet-chat-composer-article-menu {
   width: min(calc(100vw - 16px), 760px);
-  max-height: 340px;
+  box-sizing: border-box;
+  max-height: min(340px, var(--comet-context-view-available-height, 340px));
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 6px;
   padding: 10px 12px;
   border: 1px solid #dce4ec;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 12px 32px rgba(25, 35, 45, 0.16);
+  overflow: hidden;
 }
 
 .comet-chat-composer-article-menu-header {
@@ -484,18 +487,22 @@
 
 .comet-chat-composer-article-source-list {
   display: grid;
-  max-height: 280px;
+  min-height: 0;
+  max-height: none;
 }
 
 .comet-chat-composer-article-source-scrollable {
-  height: auto;
-  max-height: 280px;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
 }
 
 .comet-chat-composer-article-source-scrollable > .comet-chat-composer-article-source-list.comet-scrollable-content {
   position: relative;
   inset: auto;
-  max-height: 280px;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
 }
 
 .comet-chat-composer-article-source {

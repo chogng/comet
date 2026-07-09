@@ -5,11 +5,11 @@ import {
   getDomNodeZoomLevel,
 } from 'cs/base/browser/dom';
 import {
-  resolveAnchoredHorizontalLeft,
-  resolveAnchoredOverlayAxisPosition,
-  resolveAnchoredVerticalPlacement,
-  resolveAnchoredVerticalPlacementWithFallback,
-  resolveAnchoredVerticalTop,
+  AnchorAlignment as LayoutAnchorAlignment,
+  AnchorAxisAlignment as LayoutAnchorAxisAlignment,
+  AnchorPosition as LayoutAnchorPosition,
+  layout2d,
+  type IRect,
 } from 'cs/base/common/layout';
 import {
   Disposable,
@@ -70,20 +70,14 @@ type LayoutResult = {
   left: number;
   top: number;
   placement: 'above' | 'below';
+  alignment: AnchorAlignment;
 };
 
 const VIEWPORT_MARGIN_PX = 8;
-const DEFAULT_OFFSET_PX = 0;function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
+const DEFAULT_OFFSET_PX = 0;
 
-function rangesIntersect(
-  firstStart: number,
-  firstEnd: number,
-  secondStart: number,
-  secondEnd: number,
-) {
-  return firstStart < secondEnd && secondStart < firstEnd;
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function resolveAnchorAlignment(
@@ -106,6 +100,32 @@ function resolveAnchorPositionPreference(
   return options.position ?? 'auto';
 }
 
+function toLayoutAnchorAlignment(anchorAlignment: AnchorAlignment) {
+  return anchorAlignment === 'left'
+    ? LayoutAnchorAlignment.LEFT
+    : LayoutAnchorAlignment.RIGHT;
+}
+
+function toLayoutAnchorPosition(position: ContextViewPosition) {
+  return position === 'above'
+    ? LayoutAnchorPosition.ABOVE
+    : LayoutAnchorPosition.BELOW;
+}
+
+function toLayoutAnchorAxisAlignment(anchorAxisAlignment: AnchorAxisAlignment) {
+  return anchorAxisAlignment === 'horizontal'
+    ? LayoutAnchorAxisAlignment.HORIZONTAL
+    : LayoutAnchorAxisAlignment.VERTICAL;
+}
+
+function fromLayoutAnchorAlignment(anchorAlignment: LayoutAnchorAlignment) {
+  return anchorAlignment === LayoutAnchorAlignment.LEFT ? 'left' : 'right';
+}
+
+function fromLayoutAnchorPosition(anchorPosition: LayoutAnchorPosition) {
+  return anchorPosition === LayoutAnchorPosition.BELOW ? 'below' : 'above';
+}
+
 function resolveViewportAnchorRect(anchor: ContextViewAnchor): ViewportRect {
   if (!(anchor instanceof HTMLElement)) {
     return {
@@ -116,7 +136,7 @@ function resolveViewportAnchorRect(anchor: ContextViewAnchor): ViewportRect {
     };
   }
 
-const pagePosition = getDomNodePagePosition(anchor);
+  const pagePosition = getDomNodePagePosition(anchor);
   const zoom = getDomNodeZoomLevel(anchor);
 
   return {
@@ -134,67 +154,61 @@ function resolveViewportSize(): ViewportSize {
   };
 }
 
-function resolveRenderedVerticalPlacement(options: {
+function resolveAvailableHeight(options: {
   anchorRect: ViewportRect;
-  overlayHeight: number;
-  top: number;
-  fallbackPlacement: 'above' | 'below';
+  viewportSize: ViewportSize;
+  requestedPosition: ContextViewPosition;
+  offset: number;
 }) {
   const {
     anchorRect,
-    overlayHeight,
-    top,
-    fallbackPlacement,
+    viewportSize,
+    requestedPosition,
+    offset,
   } = options;
+  const spaceAbove = anchorRect.top - VIEWPORT_MARGIN_PX - offset;
+  const spaceBelow =
+    viewportSize.height - (anchorRect.top + anchorRect.height) - VIEWPORT_MARGIN_PX - offset;
 
-  const overlayBottom = top + overlayHeight;
-  const anchorBottom = anchorRect.top + anchorRect.height;
-
-  if (overlayBottom <= anchorRect.top) {
-    return 'above' as const;
+  if (requestedPosition === 'above') {
+    return Math.max(0, spaceAbove);
   }
 
-  if (top >= anchorBottom) {
-    return 'below' as const;
+  if (requestedPosition === 'below') {
+    return Math.max(0, spaceBelow);
   }
 
-  if (top < anchorRect.top) {
-    return 'above' as const;
-  }
-
-  if (overlayBottom > anchorBottom) {
-    return 'below' as const;
-  }
-
-  return fallbackPlacement;
+  return Math.max(0, Math.max(spaceAbove, spaceBelow));
 }
 
-function resolveSeparatedPlacement(options: {
+function resolveOffsetAnchorRect(anchorRect: ViewportRect, offset: number): IRect {
+  return {
+    top: anchorRect.top - offset,
+    left: anchorRect.left,
+    width: anchorRect.width,
+    height: anchorRect.height + offset * 2,
+  };
+}
+
+function resolveCenteredLeft(options: {
   anchorRect: ViewportRect;
-  overlayHeight: number;
-  top: number;
+  overlayWidth: number;
+  viewportWidth: number;
 }) {
   const {
     anchorRect,
-    overlayHeight,
-    top,
+    overlayWidth,
+    viewportWidth,
   } = options;
 
-  const overlayBottom = top + overlayHeight;
-  const anchorBottom = anchorRect.top + anchorRect.height;
-
-  if (overlayBottom <= anchorRect.top) {
-    return 'above' as const;
-  }
-
-  if (top >= anchorBottom) {
-    return 'below' as const;
-  }
-
-  return null;
+  return clamp(
+    anchorRect.left + (anchorRect.width - overlayWidth) / 2,
+    0,
+    Math.max(0, viewportWidth - overlayWidth),
+  );
 }
 
-function resolveVerticalAxisLayout(options: {
+function resolveContextViewLayout(options: {
   anchorRect: ViewportRect;
   overlaySize: {
     width: number;
@@ -203,6 +217,7 @@ function resolveVerticalAxisLayout(options: {
   viewportSize: ViewportSize;
   requestedPosition: ContextViewPosition;
   anchorAlignment: AnchorAlignment;
+  anchorAxisAlignment: AnchorAxisAlignment;
   hasExplicitAnchorAlignment: boolean;
   alignment?: ContextViewAlignment;
   offset: number;
@@ -213,160 +228,44 @@ function resolveVerticalAxisLayout(options: {
     viewportSize,
     requestedPosition,
     anchorAlignment,
+    anchorAxisAlignment,
     hasExplicitAnchorAlignment,
     alignment,
     offset,
   } = options;
-
-  const anchoredRect = {
-    x: anchorRect.left,
-    y: anchorRect.top,
-    width: anchorRect.width,
-    height: anchorRect.height,
+  const viewport = {
+    top: 0,
+    left: 0,
+    width: viewportSize.width,
+    height: viewportSize.height,
   };
-  const placementInfo = resolveAnchoredVerticalPlacement({
-    anchorRect: anchoredRect,
-    overlayHeight: overlaySize.height,
-    viewportHeight: viewportSize.height,
-    viewportMargin: VIEWPORT_MARGIN_PX,
-    offset,
-    preference: requestedPosition,
-  });
-  const resolvedPlacement = resolveAnchoredVerticalPlacementWithFallback({
-    preference: requestedPosition,
-    placement: placementInfo,
-  });
-  const top = resolveAnchoredVerticalTop({
-    anchorRect: anchoredRect,
-    overlayHeight: overlaySize.height,
-    viewportHeight: viewportSize.height,
-    viewportMargin: VIEWPORT_MARGIN_PX,
-    offset,
-    placement: resolvedPlacement,
-  });
+  const layoutResult = layout2d(
+    viewport,
+    overlaySize,
+    resolveOffsetAnchorRect(anchorRect, offset),
+    {
+      anchorAlignment: toLayoutAnchorAlignment(anchorAlignment),
+      anchorPosition: toLayoutAnchorPosition(requestedPosition),
+      anchorAxisAlignment: toLayoutAnchorAxisAlignment(anchorAxisAlignment),
+    },
+  );
   const usesCenteredAlignment =
-    !alignment || alignment !== 'center'
-      ? false
-      : !hasExplicitAnchorAlignment;
-  let left: number;
-
-  if (usesCenteredAlignment) {
-    left = resolveAnchoredHorizontalLeft({
-      anchorRect: anchoredRect,
+    anchorAxisAlignment === 'vertical'
+    && alignment === 'center'
+    && !hasExplicitAnchorAlignment;
+  const left = usesCenteredAlignment
+    ? resolveCenteredLeft({
+      anchorRect,
       overlayWidth: overlaySize.width,
       viewportWidth: viewportSize.width,
-      viewportMargin: VIEWPORT_MARGIN_PX,
-      alignment: 'center',
-    });
-  } else {
-    const overlapsAnchorVertically = rangesIntersect(
-      top,
-      top + overlaySize.height,
-      anchorRect.top,
-      anchorRect.top + anchorRect.height,
-    );
-    left = resolveAnchoredOverlayAxisPosition(
-      viewportSize.width,
-      overlaySize.width,
-      {
-        offset: anchorRect.left,
-        size: anchorRect.width,
-        position: anchorAlignment === 'left' ? 'before' : 'after',
-        mode: overlapsAnchorVertically ? 'avoid' : 'align',
-      },
-    );
-  }
+    })
+    : layoutResult.left;
 
   return {
     left,
-    top,
-    placement: resolveRenderedVerticalPlacement({
-      anchorRect,
-      overlayHeight: overlaySize.height,
-      top,
-      fallbackPlacement: resolvedPlacement,
-    }),
-  } as LayoutResult;
-}
-
-function resolveHorizontalAxisLayout(options: {
-  anchorRect: ViewportRect;
-  overlaySize: {
-    width: number;
-    height: number;
-  };
-  viewportSize: ViewportSize;
-  preferredPlacement: 'above' | 'below';
-  anchorAlignment: AnchorAlignment;
-  offset: number;
-}) {
-  const {
-    anchorRect,
-    overlaySize,
-    viewportSize,
-    preferredPlacement,
-    anchorAlignment,
-    offset,
-  } = options;
-
-  const left = resolveAnchoredOverlayAxisPosition(
-    viewportSize.width,
-    overlaySize.width,
-    {
-      offset: anchorRect.left,
-      size: anchorRect.width,
-      position: anchorAlignment === 'left' ? 'before' : 'after',
-    },
-  );
-  const overlapsAnchorHorizontally = rangesIntersect(
-    left,
-    left + overlaySize.width,
-    anchorRect.left,
-    anchorRect.left + anchorRect.width,
-  );
-  let top = resolveAnchoredOverlayAxisPosition(
-    viewportSize.height,
-    overlaySize.height,
-    {
-      offset: anchorRect.top,
-      size: anchorRect.height,
-      position: preferredPlacement === 'below' ? 'before' : 'after',
-      mode: overlapsAnchorHorizontally ? 'avoid' : 'align',
-    },
-  );
-
-  if (offset > 0) {
-    const separatedPlacement = resolveSeparatedPlacement({
-      anchorRect,
-      overlayHeight: overlaySize.height,
-      top,
-    });
-    if (separatedPlacement) {
-      top = resolveAnchoredVerticalTop({
-        anchorRect: {
-          x: anchorRect.left,
-          y: anchorRect.top,
-          width: anchorRect.width,
-          height: anchorRect.height,
-        },
-        overlayHeight: overlaySize.height,
-        viewportHeight: viewportSize.height,
-        viewportMargin: VIEWPORT_MARGIN_PX,
-        offset,
-        placement: separatedPlacement,
-      });
-    }
-  }
-
-  return {
-    left,
-    top,
-    placement: resolveRenderedVerticalPlacement({
-      anchorRect,
-      overlayHeight: overlaySize.height,
-      top,
-      fallbackPlacement: preferredPlacement,
-    }),
+    top: layoutResult.top,
+    placement: fromLayoutAnchorPosition(layoutResult.anchorPosition),
+    alignment: fromLayoutAnchorAlignment(layoutResult.anchorAlignment),
   } as LayoutResult;
 }
 
@@ -441,7 +340,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
       return;
     }
 
-const onHide = this.options?.onHide;
+    const onHide = this.options?.onHide;
     this.visible = false;
     this.options = null;
     this.unmount();
@@ -493,7 +392,7 @@ const onHide = this.options?.onHide;
       return;
     }
 
-const {
+    const {
       anchor,
       offset = DEFAULT_OFFSET_PX,
       matchAnchorWidth = false,
@@ -504,8 +403,6 @@ const {
     const anchorAlignment = resolveAnchorAlignment(this.options);
     const requestedPosition = resolveAnchorPositionPreference(this.options);
     const anchorAxisAlignment = this.options.anchorAxisAlignment ?? 'vertical';
-    const preferredPlacement =
-      requestedPosition === 'above' ? 'above' : 'below';
 
     this.element.style.left = `${VIEWPORT_MARGIN_PX}px`;
     this.element.style.top = `${VIEWPORT_MARGIN_PX}px`;
@@ -513,48 +410,40 @@ const {
       minWidth ?? 0,
       matchAnchorWidth ? anchorRect.width : 0,
     )}px`;
+    this.content.style.setProperty(
+      '--comet-context-view-available-height',
+      `${Math.floor(resolveAvailableHeight({
+        anchorRect,
+        viewportSize,
+        requestedPosition,
+        offset,
+      }))}px`,
+    );
 
     const overlayRect = this.content.getBoundingClientRect();
     const overlaySize = {
       width: overlayRect.width,
       height: overlayRect.height,
     };
-    const resolvedLayout =
-      anchorAxisAlignment === 'vertical'
-        ? resolveVerticalAxisLayout({
-          anchorRect,
-          overlaySize,
-          viewportSize,
-          requestedPosition,
-          anchorAlignment,
-          hasExplicitAnchorAlignment: Boolean(this.options.anchorAlignment),
-          alignment: this.options.alignment,
-          offset,
-        })
-        : resolveHorizontalAxisLayout({
-          anchorRect,
-          overlaySize,
-          viewportSize,
-          preferredPlacement,
-          anchorAlignment,
-          offset,
-        });
-    const left = clamp(
-      resolvedLayout.left,
-      VIEWPORT_MARGIN_PX,
-      Math.max(
-        VIEWPORT_MARGIN_PX,
-        viewportSize.width - overlaySize.width - VIEWPORT_MARGIN_PX,
-      ),
-    );
+    const resolvedLayout = resolveContextViewLayout({
+      anchorRect,
+      overlaySize,
+      viewportSize,
+      requestedPosition,
+      anchorAlignment,
+      anchorAxisAlignment,
+      hasExplicitAnchorAlignment: Boolean(this.options.anchorAlignment),
+      alignment: this.options.alignment,
+      offset,
+    });
 
     this.element.classList.remove('top', 'bottom', 'left', 'right');
     this.element.classList.add(
       resolvedLayout.placement === 'below' ? 'bottom' : 'top',
     );
-    this.element.classList.add(anchorAlignment === 'left' ? 'left' : 'right');
+    this.element.classList.add(resolvedLayout.alignment);
 
-    this.element.style.left = `${Math.round(left)}px`;
+    this.element.style.left = `${Math.round(resolvedLayout.left)}px`;
     this.element.style.top = `${Math.round(resolvedLayout.top)}px`;
   }
 
@@ -570,7 +459,7 @@ const {
       return;
     }
 
-const targetNode = event.target;
+    const targetNode = event.target;
     if (!(targetNode instanceof Node)) {
       this.hide();
       return;
@@ -596,7 +485,12 @@ const targetNode = event.target;
     }
   };
 
-  private readonly handleDocumentScroll = () => {
+  private readonly handleDocumentScroll = (event: Event) => {
+    const targetNode = event.target;
+    if (targetNode instanceof Node && this.element.contains(targetNode)) {
+      return;
+    }
+
     this.hide();
   };
 

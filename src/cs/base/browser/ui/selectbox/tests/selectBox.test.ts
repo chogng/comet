@@ -261,3 +261,37 @@ test('selectbox custom drawn mode keeps the popup overlay matched to the trigger
     document.body.replaceChildren();
   }
 });
+
+test('selectbox custom drawn mode keeps contextview open on internal scroll', () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const selectBox = new SelectBox(
+    [
+      { text: 'Chinese', value: 'zh-CN' },
+      { text: 'English', value: 'en-US' },
+    ],
+    0,
+    undefined,
+    {},
+    { useCustomDrawn: true },
+  );
+
+  try {
+    selectBox.render(container);
+    selectBox.domNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const menu = document.body.querySelector('.comet-menu[role="listbox"]');
+    if (!(menu instanceof HTMLElement)) {
+      throw new Error('Expected custom drawn selectbox menu.');
+    }
+
+    menu.dispatchEvent(new Event('scroll'));
+    assert.equal(document.body.querySelector('.comet-menu[role="listbox"]'), menu);
+
+    document.body.dispatchEvent(new Event('scroll'));
+    assert.equal(document.body.querySelector('.comet-menu[role="listbox"]'), null);
+  } finally {
+    selectBox.dispose();
+    document.body.replaceChildren();
+  }
+});

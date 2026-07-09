@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { Range } from 'cs/base/common/range';
 
 export interface IAnchor {
@@ -34,35 +39,6 @@ interface ISize {
 
 export interface IRect extends IPosition, ISize {}
 
-export type AnchoredAlignment = 'start' | 'end' | 'center';
-export type AnchoredPlacement = 'above' | 'below';
-export type AnchoredPlacementPreference = 'auto' | AnchoredPlacement;
-
-export type AnchoredRect = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export type AnchoredVerticalPlacementResult = {
-  placement: AnchoredPlacement;
-  canFitAbove: boolean;
-  canFitBelow: boolean;
-  spaceAbove: number;
-  spaceBelow: number;
-};
-
-export type AnchoredOverlayAxisMode = 'align' | 'avoid';
-export type AnchoredOverlayAxisPosition = 'before' | 'after';
-
-export type AnchoredOverlayAxisAnchor = {
-  offset: number;
-  size: number;
-  mode?: AnchoredOverlayAxisMode;
-  position: AnchoredOverlayAxisPosition;
-};
-
 export const enum LayoutAnchorPosition {
   Before,
   After,
@@ -83,178 +59,6 @@ export interface ILayoutAnchor {
 export interface ILayoutResult {
   position: number;
   result: 'ok' | 'flipped' | 'overlap';
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function resolveAnchoredOverlayAxisBoundaries(anchor: AnchoredOverlayAxisAnchor) {
-  const mode = anchor.mode ?? 'avoid';
-  return {
-    afterBoundary: mode === 'align' ? anchor.offset : anchor.offset + anchor.size,
-    beforeBoundary: mode === 'align' ? anchor.offset + anchor.size : anchor.offset,
-  };
-}
-
-export function resolveAnchoredOverlayAxisPosition(
-  viewportSize: number,
-  overlaySize: number,
-  anchor: AnchoredOverlayAxisAnchor,
-) {
-  const {
-    afterBoundary,
-    beforeBoundary,
-  } = resolveAnchoredOverlayAxisBoundaries(anchor);
-
-  if (anchor.position === 'before') {
-    if (overlaySize <= viewportSize - afterBoundary) {
-      return afterBoundary;
-    }
-
-    if (overlaySize <= beforeBoundary) {
-      return beforeBoundary - overlaySize;
-    }
-
-    return Math.max(viewportSize - overlaySize, 0);
-  }
-
-  if (overlaySize <= beforeBoundary) {
-    return beforeBoundary - overlaySize;
-  }
-
-  if (overlaySize <= viewportSize - afterBoundary) {
-    return afterBoundary;
-  }
-
-  return 0;
-}
-
-export function resolveAnchoredHorizontalLeft(options: {
-  anchorRect: AnchoredRect;
-  overlayWidth: number;
-  viewportWidth: number;
-  viewportMargin: number;
-  alignment?: AnchoredAlignment;
-}) {
-  const {
-    anchorRect,
-    overlayWidth,
-    viewportWidth,
-    viewportMargin,
-    alignment = 'start',
-  } = options;
-
-  const preferredLeft =
-    alignment === 'center'
-      ? anchorRect.x + (anchorRect.width - overlayWidth) / 2
-      : alignment === 'end'
-        ? anchorRect.x + anchorRect.width - overlayWidth
-        : anchorRect.x;
-
-  return clamp(
-    preferredLeft,
-    viewportMargin,
-    Math.max(viewportMargin, viewportWidth - overlayWidth - viewportMargin),
-  );
-}
-
-export function resolveAnchoredVerticalPlacement(options: {
-  anchorRect: AnchoredRect;
-  overlayHeight: number;
-  viewportHeight: number;
-  viewportMargin: number;
-  offset: number;
-  preference?: AnchoredPlacementPreference;
-}): AnchoredVerticalPlacementResult {
-  const {
-    anchorRect,
-    overlayHeight,
-    viewportHeight,
-    viewportMargin,
-    offset,
-    preference = 'auto',
-  } = options;
-
-  const spaceBelow =
-    viewportHeight - anchorRect.y - anchorRect.height - viewportMargin;
-  const spaceAbove = anchorRect.y - viewportMargin;
-  const canFitBelow = spaceBelow >= overlayHeight + offset;
-  const canFitAbove = spaceAbove >= overlayHeight + offset;
-
-  const placement =
-    preference === 'above'
-      ? 'above'
-      : preference === 'below'
-        ? 'below'
-        : canFitBelow || !canFitAbove
-          ? 'below'
-          : 'above';
-
-  return {
-    placement,
-    canFitAbove,
-    canFitBelow,
-    spaceAbove,
-    spaceBelow,
-  };
-}
-
-export function resolveAnchoredVerticalPlacementWithFallback(options: {
-  preference?: AnchoredPlacementPreference;
-  placement: Pick<
-    AnchoredVerticalPlacementResult,
-    'placement' | 'canFitAbove' | 'canFitBelow'
-  >;
-}) {
-  const {
-    preference = 'auto',
-    placement,
-  } = options;
-
-  if (preference === 'above') {
-    return placement.canFitAbove || !placement.canFitBelow ? 'above' : 'below';
-  }
-
-  if (preference === 'below') {
-    return placement.canFitBelow || !placement.canFitAbove ? 'below' : 'above';
-  }
-
-  return placement.placement;
-}
-
-export function resolveAnchoredVerticalTop(options: {
-  anchorRect: AnchoredRect;
-  overlayHeight: number;
-  viewportHeight: number;
-  viewportMargin: number;
-  offset: number;
-  placement: AnchoredPlacement;
-}) {
-  const {
-    anchorRect,
-    overlayHeight,
-    viewportHeight,
-    viewportMargin,
-    offset,
-    placement,
-  } = options;
-
-  const nextTop =
-    placement === 'above'
-      ? anchorRect.y - overlayHeight - offset
-      : anchorRect.y + anchorRect.height + offset;
-
-  const maxTop = Math.max(
-    viewportMargin,
-    viewportHeight - overlayHeight - viewportMargin,
-  );
-
-  return clamp(
-    nextTop,
-    viewportMargin,
-    maxTop,
-  );
 }
 
 export function layout(
