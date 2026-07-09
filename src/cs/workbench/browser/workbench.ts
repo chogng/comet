@@ -1391,17 +1391,9 @@ class WorkbenchHost {
       messages: assistantMessages,
       isAsking: isAssistantAsking,
       errorMessage: assistantErrorMessage,
-      conversations: assistantConversations,
-      activeConversationId: activeAssistantConversationId,
     } = assistantSnapshot;
     const setAssistantQuestion = assistantModelInstance.setQuestion;
     const handleAssistantAsk = assistantModelInstance.handleAsk;
-    const handleAssistantCreateConversation =
-      assistantModelInstance.handleCreateConversation;
-    const handleAssistantActivateConversation =
-      assistantModelInstance.handleActivateConversation;
-    const handleAssistantCloseConversation =
-      assistantModelInstance.handleCloseConversation;
     const handleAssistantApplyPatch =
       assistantModelInstance.handleApplyPatch;
 
@@ -1808,8 +1800,6 @@ class WorkbenchHost {
         isAsking: isAssistantAsking,
         errorMessage: assistantErrorMessage,
         availableArticleCount: filteredArticles.length,
-        conversations: assistantConversations,
-        activeConversationId: activeAssistantConversationId,
         llmModelOptions: agentLlmModelOptions,
         activeLlmModelOptionValue,
         activeLlmModelLabel: createAgentChatModelDisplayLabel(currentLlmSettings),
@@ -1854,9 +1844,6 @@ class WorkbenchHost {
             toggleSelectedChatArticleUrl(previousUrls, href),
           );
         },
-        onCreateConversation: handleAssistantCreateConversation,
-        onActivateConversation: handleAssistantActivateConversation,
-        onCloseConversation: handleAssistantCloseConversation,
         onCloseSession: handleCloseSession,
         onToggleAutoModelRouting: (options) => {
           activeAgentChatModelOptionValue = activeAgentChatModelOptionValue

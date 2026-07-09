@@ -123,31 +123,3 @@
 .comet-agentbar-context-input {
   min-height: 120px;
 }
-
-.comet-agentbar-tabs-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 4px 4px;
-}
-
-.comet-agentbar-tabs-header > .comet-sidebar-action-bar {
-  flex: 0 0 auto;
-  padding: 0;
-  border-bottom: none;
-}
-
-.comet-agentbar-tabs-header > .comet-sidebar-action-bar .comet-actionbar-action {
-  min-height: 26px;
-}
-
-.comet-agentbar-tabs-header > .comet-sidebar-action-bar .comet-actionbar-action.comet-is-icon {
-  width: 26px;
-  height: 26px;
-}
-
-.comet-agentbar-tabs-header > .comet-sidebar-action-bar .comet-actionbar-action .lx-icon {
-  width: 16px;
-  height: 16px;
-  font-size: 16px;
-}

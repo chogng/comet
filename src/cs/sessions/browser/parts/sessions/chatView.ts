@@ -19,8 +19,6 @@ type CreateSessionChatViewPropsParams = {
 		isAsking: boolean;
 		errorMessage: string | null;
 		availableArticleCount: number;
-		conversations: AssistantModelSnapshot['conversations'];
-		activeConversationId: AssistantModelSnapshot['activeConversationId'];
 		llmModelOptions: DropdownOption[];
 		activeLlmModelOptionValue: string;
 		activeLlmModelLabel: string;
@@ -41,9 +39,6 @@ type CreateSessionChatViewPropsParams = {
 		onDownloadAllArticles: () => void | Promise<void>;
 		onExportArticleSummaries: (translateSummaries: boolean) => void | Promise<void>;
 		onToggleArticleSelected: (href: string) => void;
-		onCreateConversation: () => void;
-		onActivateConversation: (conversationId: string) => void;
-		onCloseConversation: (conversationId: string) => void;
 		onCloseSession: () => void;
 		onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
 		onSelectLlmModel: (value: string) => void;
@@ -60,8 +55,6 @@ export function createSessionChatViewProps({
 		isAsking,
 		errorMessage,
 		availableArticleCount,
-		conversations,
-		activeConversationId,
 		llmModelOptions,
 		activeLlmModelOptionValue,
 		activeLlmModelLabel,
@@ -82,9 +75,6 @@ export function createSessionChatViewProps({
 		onDownloadAllArticles,
 		onExportArticleSummaries,
 		onToggleArticleSelected,
-		onCreateConversation,
-		onActivateConversation,
-		onCloseConversation,
 		onCloseSession,
 		onToggleAutoModelRouting,
 		onSelectLlmModel,
@@ -112,16 +102,11 @@ export function createSessionChatViewProps({
 		isArticleSelected,
 		onToggleArticleSelected,
 		availableArticleCount,
-		conversations,
-		activeConversationId,
 		llmModelOptions,
 		activeLlmModelOptionValue,
 		activeLlmModelLabel,
 		isMaxContextWindowEnabled,
 		activeLlmModelSupportsMaxContextWindow,
-		onCreateConversation,
-		onActivateConversation,
-		onCloseConversation,
 		onCloseAgentBar: onCloseSession,
 		onToggleAutoModelRouting,
 		onSelectLlmModel,

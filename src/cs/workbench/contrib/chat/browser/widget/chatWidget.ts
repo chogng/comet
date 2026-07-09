@@ -4,17 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-	createActionBarView,
-	type ActionBarActionItem,
-	type ActionBarItem,
-	type ActionBarMenuItem,
-} from 'cs/base/browser/ui/actionbar/actionbar';
-import {
 	createDropdownMenuActionViewItem,
 } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import { createFilterMenuHeader } from 'cs/base/browser/ui/dropdown/dropdownSearchHeader';
-import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
-import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
@@ -32,8 +23,6 @@ import { $ } from 'cs/base/browser/dom';
 import 'cs/workbench/browser/parts/agentbar/media/agentbar.css';
 import 'cs/workbench/contrib/chat/browser/widget/media/chat.css';
 
-const CHAT_HEADER_MORE_MENU_DATA = 'agentbar-header-more';
-const CHAT_HEADER_HISTORY_MENU_DATA = 'agentbar-header-history';
 const CHAT_ARTICLE_SUMMARY_EXPORT_MENU_DATA = 'agentbar-article-summary-export';
 
 function isArticleBatchMessage(message: ChatWidgetProps['messages'][number]) {
@@ -50,7 +39,6 @@ export class ChatWidget {
 	private readonly disposables = new DisposableStore();
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
-	private readonly renderDisposables = this.disposables.add(new DisposableStore());
 
 	constructor(
 		props: ChatWidgetProps,
@@ -92,33 +80,7 @@ export class ChatWidget {
 	}
 
 	private render() {
-		this.renderDisposables.clear();
-		this.element.replaceChildren(
-			this.renderHeader(),
-			this.renderShell(),
-		);
-	}
-
-	private renderHeader() {
-		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-tabs-header');
-		const headerItems: ActionBarItem[] = [
-			this.createHeaderActionItem(
-				localize('assistantSidebarNewConversation', "New chat"),
-				lxIconSemanticMap.assistant.newConversation,
-				this.props.onCreateConversation,
-			),
-			this.createHeaderHistoryActionItem(),
-			this.createHeaderMoreActionItem(),
-		];
-
-		const actionsView = createActionBarView({
-			className: 'comet-sidebar-action-bar',
-			ariaRole: 'group',
-			items: headerItems,
-		});
-		this.renderDisposables.add(actionsView);
-		header.append(actionsView.getElement());
-		return header;
+		this.element.replaceChildren(this.renderShell());
 	}
 
 	private renderShell() {
@@ -219,96 +181,4 @@ export class ChatWidget {
 		];
 	}
 
-	private createHeaderActionItem(
-		label: string,
-		icon: LxIconName,
-		onClick?: () => void,
-		isActive = false,
-		isToggle = false,
-		triggerId?: string,
-	): ActionBarActionItem {
-		return {
-			label,
-			content: createLxIcon(icon),
-			buttonClassName: 'comet-sidebar-action-btn',
-			checked: isToggle ? isActive : undefined,
-			active: isActive,
-			buttonAttributes: triggerId
-				? {
-					'data-agentbar-trigger': triggerId,
-				}
-				: undefined,
-			onClick: onClick ? () => onClick() : undefined,
-		};
-	}
-
-	private createHistoryMenuItems(keyword: string): ActionBarMenuItem[] {
-		const normalizedKeyword = keyword.trim().toLowerCase();
-		const matchedConversations = this.props.conversations.filter(conversation =>
-			conversation.title.toLowerCase().includes(normalizedKeyword),
-		);
-
-		if (matchedConversations.length === 0) {
-			return [
-				{
-					id: 'agentbar-history-empty',
-					label: localize('agentbarHistoryEmpty', "no matching agents"),
-					disabled: true,
-				},
-			];
-		}
-
-		return matchedConversations.map((conversation, index) => ({
-			id: `agentbar-history-${conversation.id}-${index}`,
-			label: conversation.title,
-			title: localize(
-				'agentbarHistoryConversationTitle',
-				"{0} ({1} messages)",
-				conversation.title,
-				conversation.messages.length,
-			),
-			checked: conversation.id === this.props.activeConversationId,
-			onClick: () => {
-				this.props.onActivateConversation(conversation.id);
-			},
-		}));
-	}
-
-	private createHeaderMoreActionItem(): ActionBarItem {
-		return createDropdownMenuActionViewItem({
-			label: localize('assistantSidebarMore', "More"),
-			title: localize('assistantSidebarMore', "More"),
-			content: createLxIcon(lxIconSemanticMap.assistant.more),
-			buttonClassName: 'comet-sidebar-action-btn',
-			overlayAlignment: 'start',
-			menuData: CHAT_HEADER_MORE_MENU_DATA,
-			menu: [
-				{
-					label: localize('assistantSidebarNewConversation', "New chat"),
-					onClick: () => {
-						this.props.onCreateConversation();
-					},
-				},
-			],
-		});
-	}
-
-	private createHeaderHistoryActionItem(): ActionBarItem {
-		return createDropdownMenuActionViewItem({
-			label: localize('assistantSidebarHistory', "History"),
-			title: localize('assistantSidebarHistory', "History"),
-			content: createLxIcon(lxIconSemanticMap.assistant.history),
-			buttonClassName: 'comet-sidebar-action-btn',
-			overlayAlignment: 'end',
-			menuData: CHAT_HEADER_HISTORY_MENU_DATA,
-			menu: this.createHistoryMenuItems(''),
-			menuHeader: createFilterMenuHeader({
-				className: 'comet-agentbar-history-menu-header',
-				inputClassName: 'comet-agentbar-history-search-input',
-				placeholder: localize('agentbarHistorySearch', "Search history"),
-				ariaLabel: localize('agentbarHistorySearch', "Search history"),
-				getMenuItems: query => this.createHistoryMenuItems(query),
-			}),
-		});
-	}
 }

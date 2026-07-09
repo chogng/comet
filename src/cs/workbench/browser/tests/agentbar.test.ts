@@ -61,19 +61,6 @@ function createProps(): ChatWidgetProps {
     isArticleSelected: () => false,
     onToggleArticleSelected: () => {},
     availableArticleCount: 1,
-    conversations: [
-      {
-        id: 'conversation-1',
-        title: 'Conversation 1',
-        autoTitleIndex: null,
-        question: '',
-        result: null,
-        messages: [],
-        isAsking: false,
-        errorMessage: null,
-      },
-    ],
-    activeConversationId: 'conversation-1',
     llmModelOptions: [
       { value: 'auto', label: 'Auto' },
       { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
@@ -82,9 +69,6 @@ function createProps(): ChatWidgetProps {
     activeLlmModelLabel: 'GLM-4.7-Flash',
     isMaxContextWindowEnabled: false,
     activeLlmModelSupportsMaxContextWindow: false,
-    onCreateConversation: () => {},
-    onActivateConversation: () => {},
-    onCloseConversation: () => {},
     onCloseAgentBar: () => {},
     onToggleAutoModelRouting: () => {},
     onSelectLlmModel: () => {},
@@ -138,34 +122,17 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('agent bar comet-hover-action buttons expose labels and shared hover', async () => {
+test('chat widget does not render agentbar tabs header actions', () => {
   const agentBar = createChatWidget(createProps());
   const element = agentBar.getElement();
   document.body.append(element);
 
   try {
-    const actionButtons = Array.from(
-      element.querySelectorAll('.comet-sidebar-action-bar .comet-sidebar-action-btn'),
+    assert.equal(element.querySelector('.comet-agentbar-tabs-header'), null);
+    assert.equal(
+      element.querySelector('.comet-sidebar-action-bar .comet-sidebar-action-btn'),
+      null,
     );
-    assert.equal(actionButtons.length, 3);
-    assert.deepEqual(
-      actionButtons.map((button) => button.getAttribute('aria-label')),
-      ['New chat', 'History', 'More'],
-    );
-
-    const historyButton = actionButtons[1];
-    assert(historyButton instanceof HTMLButtonElement);
-    assert.equal(historyButton.getAttribute('aria-haspopup'), 'menu');
-
-    document.dispatchEvent(
-      new window.KeyboardEvent('keydown', { bubbles: true, key: 'Tab' }),
-    );
-    historyButton.dispatchEvent(new Event('focus', { bubbles: true }));
-    await delay(0);
-
-    const overlayContent = document.querySelector('.comet-hover-content');
-    assert(overlayContent instanceof HTMLElement);
-    assert.equal(overlayContent.textContent, 'History');
   } finally {
     agentBar.dispose();
   }
@@ -341,164 +308,6 @@ test('agent bar header mounts the provided leading comet-hover-actions element',
 
     toggleButton.click();
     assert.equal(toggleCount, 1);
-  } finally {
-    agentBar.dispose();
-  }
-});
-
-test('agent bar more comet-hover-action uses dropdown comet-hover-action view item', async () => {
-  let createConversationCount = 0;
-  const agentBar = createChatWidget({
-    ...createProps(),
-    onCreateConversation: () => {
-      createConversationCount += 1;
-    },
-  });
-  const element = agentBar.getElement();
-  document.body.append(element);
-
-  try {
-    const actionButtons = Array.from(
-      element.querySelectorAll('.comet-sidebar-action-bar .comet-sidebar-action-btn'),
-    );
-    const moreButton = actionButtons[2];
-    assert(moreButton instanceof HTMLButtonElement);
-
-    moreButton.click();
-    await delay(0);
-
-    const menu = document.body.querySelector('.comet-dropdown-menu');
-    assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-more');
-    assert.equal(moreButton.getAttribute('aria-expanded'), 'true');
-
-    const newChatItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('New chat'),
-    );
-    assert(newChatItem instanceof HTMLElement);
-    newChatItem.click();
-    await delay(0);
-
-    assert.equal(createConversationCount, 1);
-    assert.equal(moreButton.getAttribute('aria-expanded'), 'false');
-  } finally {
-    agentBar.dispose();
-  }
-});
-
-test('agent bar history comet-hover-action supports search and empty states', async () => {
-  let activatedConversationId = '';
-  const agentBar = createChatWidget({
-    ...createProps(),
-    conversations: [
-      {
-        id: 'conversation-1',
-        title: 'Conversation 1',
-        autoTitleIndex: null,
-        question: '',
-        result: null,
-        messages: [],
-        isAsking: false,
-        errorMessage: null,
-      },
-      {
-        id: 'conversation-2',
-        title: 'Conversation 2',
-        autoTitleIndex: null,
-        question: '',
-        result: null,
-        messages: [{ id: 'm1', role: 'user', content: 'hello' }],
-        isAsking: false,
-        errorMessage: null,
-      },
-    ],
-    onActivateConversation: (conversationId) => {
-      activatedConversationId = conversationId;
-    },
-  });
-  const element = agentBar.getElement();
-  document.body.append(element);
-
-  try {
-    const actionButtons = Array.from(
-      element.querySelectorAll('.comet-sidebar-action-bar .comet-sidebar-action-btn'),
-    );
-    const historyButton = actionButtons[1];
-    assert(historyButton instanceof HTMLButtonElement);
-
-    historyButton.click();
-    await delay(0);
-
-    const menu = document.body.querySelector('.comet-dropdown-menu');
-    assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-history');
-    assert.equal(historyButton.getAttribute('aria-expanded'), 'true');
-    const searchInput = menu.querySelector('.comet-menu-header .comet-agentbar-history-search-input .comet-input');
-    assert(searchInput instanceof HTMLInputElement);
-    assert.equal(menu.firstElementChild?.classList.contains('comet-menu-header'), true);
-
-    searchInput.value = 'conversation 2';
-    searchInput.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await delay(0);
-
-    const historyItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('Conversation 2'),
-    );
-    assert(historyItem instanceof HTMLElement);
-    historyItem.click();
-    await delay(0);
-
-    assert.equal(activatedConversationId, 'conversation-2');
-    assert.equal(historyButton.getAttribute('aria-expanded'), 'false');
-
-    historyButton.click();
-    await delay(0);
-    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu');
-    assert(reopenedMenu instanceof HTMLElement);
-    const reopenedSearchInput = reopenedMenu.querySelector(
-      '.comet-menu-header .comet-agentbar-history-search-input .comet-input',
-    );
-    assert(reopenedSearchInput instanceof HTMLInputElement);
-    reopenedSearchInput.value = 'not-found';
-    reopenedSearchInput.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await delay(0);
-    const emptyState = Array.from(reopenedMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('no matching agents'),
-    );
-    assert(emptyState instanceof HTMLElement);
-    assert.equal(emptyState.textContent?.trim(), 'no matching agents');
-  } finally {
-    agentBar.dispose();
-  }
-});
-
-test('agent bar history comet-hover-action shows no matching agents when there is no history', async () => {
-  const agentBar = createChatWidget({
-    ...createProps(),
-    conversations: [],
-    activeConversationId: '',
-  });
-  const element = agentBar.getElement();
-  document.body.append(element);
-
-  try {
-    const actionButtons = Array.from(
-      element.querySelectorAll('.comet-sidebar-action-bar .comet-sidebar-action-btn'),
-    );
-    const historyButton = actionButtons[1];
-    assert(historyButton instanceof HTMLButtonElement);
-
-    historyButton.click();
-    await delay(0);
-
-    const menu = document.body.querySelector('.comet-dropdown-menu');
-    assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'agentbar-header-history');
-    const emptyState = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('no matching agents'),
-    );
-    assert(emptyState instanceof HTMLElement);
-    assert.equal(emptyState.textContent?.trim(), 'no matching agents');
   } finally {
     agentBar.dispose();
   }

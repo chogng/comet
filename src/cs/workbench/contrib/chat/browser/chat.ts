@@ -7,7 +7,6 @@ import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import type { LlmProviderId } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
 	AssistantChatMessage,
-	AssistantConversation,
 } from 'cs/workbench/browser/assistantModel';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import type {
@@ -47,13 +46,8 @@ export type ChatWidgetProps = {
 	readonly isArticleSelected: (href: string) => boolean;
 	readonly onToggleArticleSelected: (href: string) => void;
 	readonly availableArticleCount: number;
-	readonly conversations: AssistantConversation[];
-	readonly activeConversationId: string;
 	readonly llmModelOptions: ChatModelDropdownOption[];
 	readonly activeLlmModelOptionValue: string;
-	readonly onCreateConversation: () => void;
-	readonly onActivateConversation: (conversationId: string) => void;
-	readonly onCloseConversation: (conversationId: string) => void;
 	readonly onCloseAgentBar: () => void;
 	readonly onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
 	readonly onSelectLlmModel: (value: string) => void;
