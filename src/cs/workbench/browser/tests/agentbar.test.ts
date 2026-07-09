@@ -721,7 +721,15 @@ test('composer article quick comet-hover-action opens source menu and runs selec
     assert(contextView instanceof HTMLElement);
     const menu = contextView.querySelector('.comet-chat-composer-article-menu');
     assert(menu instanceof HTMLElement);
-    const sourceButton = menu.querySelector('.comet-chat-composer-article-source');
+    const scrollableRoot = menu.querySelector(
+      '.comet-scrollable-element-root.comet-chat-composer-article-source-scrollable',
+    );
+    assert(scrollableRoot instanceof HTMLElement);
+    const list = scrollableRoot.querySelector(
+      '.comet-chat-composer-article-source-list.comet-scrollable-content',
+    );
+    assert(list instanceof HTMLElement);
+    const sourceButton = list.querySelector('.comet-chat-composer-article-source');
     assert(sourceButton instanceof HTMLButtonElement);
     assert.equal(sourceButton.textContent, 'Science');
     sourceButton.click();

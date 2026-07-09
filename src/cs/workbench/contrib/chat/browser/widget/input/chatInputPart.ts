@@ -11,6 +11,8 @@ import {
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
+import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
+import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import {
@@ -309,7 +311,16 @@ export class ChatInputPart {
 			list.append(sourceButton);
 		}
 
-		menu.append(header, list);
+		const scrollableList = new DomScrollableElement(list, {
+			className: 'comet-chat-composer-article-source-scrollable',
+			horizontal: ScrollbarVisibility.Hidden,
+			vertical: ScrollbarVisibility.Auto,
+			verticalScrollbarSize: 10,
+		});
+		this.renderDisposables.add(scrollableList);
+
+		menu.append(header, scrollableList.getDomNode());
+		scrollableList.scanDomNode();
 		return menu;
 	}
 

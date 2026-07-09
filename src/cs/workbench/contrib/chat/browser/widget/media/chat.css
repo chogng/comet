@@ -485,7 +485,17 @@
 .comet-chat-composer-article-source-list {
   display: grid;
   max-height: 280px;
-  overflow: auto;
+}
+
+.comet-chat-composer-article-source-scrollable {
+  height: auto;
+  max-height: 280px;
+}
+
+.comet-chat-composer-article-source-scrollable > .comet-chat-composer-article-source-list.comet-scrollable-content {
+  position: relative;
+  inset: auto;
+  max-height: 280px;
 }
 
 .comet-chat-composer-article-source {
