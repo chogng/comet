@@ -1,12 +1,12 @@
 import { parseDateHintFromText } from 'cs/base/common/date';
 import { cleanText } from 'cs/base/common/strings';
+import { extractListingCardCandidates } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/listing-card-dom';
 import {
   createNatureListingCandidateExtractor,
   evaluateNatureListingPaginationStop,
   findNatureListingNextPageUrl,
   isNatureListingPage,
 } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/nature-listing-shared';
-import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
 import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingPaginationContext } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
 
 const NATURE_OPINION_LISTING_PAGE_PATH = '/opinion';
@@ -41,67 +41,15 @@ function parseNatureOpinionTrackLabel(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function extractNatureOpinionLink({
+function resolveNatureOpinionCardOrder({
   $,
   root,
+  index,
 }: Pick<ListingCandidateExtractorContext, '$'> & {
   root: Parameters<ListingCandidateExtractorContext['$']>[0];
+  index: number;
 }) {
-  return $(root).find(NATURE_OPINION_LINK_SELECTOR).first();
-}
-
-function extractNatureOpinionHref({
-  $,
-  root,
-}: Pick<ListingCandidateExtractorContext, '$'> & {
-  root: Parameters<ListingCandidateExtractorContext['$']>[0];
-}) {
-  return cleanText(extractNatureOpinionLink({ $, root }).attr('href'));
-}
-
-function extractNatureOpinionTitle({
-  $,
-  root,
-}: Pick<ListingCandidateExtractorContext, '$'> & {
-  root: Parameters<ListingCandidateExtractorContext['$']>[0];
-}) {
-  return cleanText($(root).find(NATURE_OPINION_TITLE_SELECTOR).first().text());
-}
-
-function extractNatureOpinionDescription({
-  $,
-  root,
-}: Pick<ListingCandidateExtractorContext, '$'> & {
-  root: Parameters<ListingCandidateExtractorContext['$']>[0];
-}) {
-  return cleanText($(root).find(NATURE_OPINION_DESCRIPTION_SELECTOR).first().text());
-}
-
-function extractNatureOpinionFooterText({
-  $,
-  root,
-}: Pick<ListingCandidateExtractorContext, '$'> & {
-  root: Parameters<ListingCandidateExtractorContext['$']>[0];
-}) {
-  return cleanText($(root).find(NATURE_OPINION_FOOTER_SELECTOR).first().text());
-}
-
-function extractNatureOpinionArticleType({
-  $,
-  root,
-}: Pick<ListingCandidateExtractorContext, '$'> & {
-  root: Parameters<ListingCandidateExtractorContext['$']>[0];
-}) {
-  return cleanText($(root).find(NATURE_OPINION_ARTICLE_TYPE_SELECTOR).first().text());
-}
-
-function extractNatureOpinionCardOrder({
-  $,
-  root,
-}: Pick<ListingCandidateExtractorContext, '$'> & {
-  root: Parameters<ListingCandidateExtractorContext['$']>[0];
-}) {
-  const link = extractNatureOpinionLink({ $, root });
+  const link = $(root).find(NATURE_OPINION_LINK_SELECTOR).first();
   const candidateValues = [
     link.attr('data-track-label'),
     link.closest('[data-track-label]').first().attr('data-track-label'),
@@ -113,139 +61,68 @@ function extractNatureOpinionCardOrder({
     if (parsed !== null) return parsed;
   }
 
-  return null;
-}
-
-function extractNatureOpinionDateHint({
-  $,
-  root,
-}: Pick<ListingCandidateExtractorContext, '$'> & {
-  root: Parameters<ListingCandidateExtractorContext['$']>[0];
-}) {
-  const scopedRoot = $(root).find(NATURE_OPINION_FOOTER_SELECTOR).first();
-  const fallbackRoot = scopedRoot.length > 0 ? scopedRoot : $(root);
-
-  const candidateNodes = fallbackRoot.find(NATURE_OPINION_DATE_SELECTOR).toArray();
-  for (const node of candidateNodes) {
-    const element = $(node);
-    const candidateValues = [
-      element.attr('datetime'),
-      element.attr('content'),
-      element.attr('aria-label'),
-      element.attr('title'),
-      element.text(),
-    ];
-    for (const value of candidateValues) {
-      const parsed = parseNatureOpinionDateValue(value);
-      if (parsed) return parsed;
-    }
-  }
-
-  const fallbackValues = [
-    fallbackRoot.attr('datetime'),
-    fallbackRoot.attr('content'),
-    fallbackRoot.attr('aria-label'),
-    fallbackRoot.attr('title'),
-    fallbackRoot.text(),
-  ];
-  for (const value of fallbackValues) {
-    const parsed = parseNatureOpinionDateValue(value);
-    if (parsed) return parsed;
-  }
-
-  return null;
+  return index;
 }
 
 function extractNatureOpinionArticleCards(
   context: ListingCandidateExtractorContext,
 ): ListingCandidateExtraction | null {
-  const { $, pageUrl } = context;
-  const roots = $(NATURE_OPINION_CARD_SELECTOR).toArray();
-  if (roots.length === 0) return null;
-
-  let describedCardCount = 0;
-  let footerCardCount = 0;
-  let typedCardCount = 0;
-
-  const articleTypeCounts: Record<string, number> = {};
-  const sampleCards: Array<Record<string, unknown>> = [];
-  const seen = new Set<string>();
-
-  const candidates = roots
-    .map((root, index) => {
-      const href = extractNatureOpinionHref({ $, root });
-      const title = extractNatureOpinionTitle({ $, root });
-      if (!href || !title) return null;
-
-      const description = extractNatureOpinionDescription({ $, root });
-      const footerText = extractNatureOpinionFooterText({ $, root });
-      const articleType = extractNatureOpinionArticleType({ $, root });
-
-      if (description) describedCardCount += 1;
-      if (footerText) footerCardCount += 1;
-      if (articleType) {
-        typedCardCount += 1;
-        articleTypeCounts[articleType] = (articleTypeCounts[articleType] ?? 0) + 1;
-      }
-
-      let normalized = '';
-      try {
-        normalized = new URL(href, pageUrl).toString();
-      } catch {
-        return null;
-      }
-
-      if (seen.has(normalized)) return null;
-      seen.add(normalized);
-
-      const order = extractNatureOpinionCardOrder({ $, root }) ?? index;
-      const dateHint = extractNatureOpinionDateHint({ $, root });
-
-      if (sampleCards.length < NATURE_OPINION_SAMPLE_CARD_LIMIT) {
-        sampleCards.push({
-          href: normalized,
-          title,
-          order,
-          articleType: articleType || null,
-          footerText: footerText || null,
-          dateHint,
-        });
-      }
-
-      return normalizeListingCandidateSeed({
-        href,
-        order,
-        dateHint,
-        articleType: articleType || null,
-        title,
-        descriptionText: description || null,
-        publishedAt: dateHint,
-        scoreBoost: 140,
-      });
-    })
-    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
-
-  if (candidates.length === 0) return null;
-
-  return {
-    candidates,
-    diagnostics: {
-      layoutSelector: NATURE_OPINION_CARD_SELECTOR,
-      linkSelector: NATURE_OPINION_LINK_SELECTOR,
-      titleSelector: NATURE_OPINION_TITLE_SELECTOR,
-      descriptionSelector: NATURE_OPINION_DESCRIPTION_SELECTOR,
-      footerSelector: NATURE_OPINION_FOOTER_SELECTOR,
-      articleTypeSelector: NATURE_OPINION_ARTICLE_TYPE_SELECTOR,
-      cardCount: roots.length,
-      candidateCount: candidates.length,
-      describedCardCount,
-      footerCardCount,
-      typedCardCount,
-      datedCandidateCount: candidates.filter((candidate) => Boolean(candidate.dateHint)).length,
-      articleTypeCounts,
-      sampleCards,
+  return extractListingCardCandidates(context, {
+    cardSelectors: [NATURE_OPINION_CARD_SELECTOR],
+    linkSelector: NATURE_OPINION_LINK_SELECTOR,
+    titleSelector: NATURE_OPINION_TITLE_SELECTOR,
+    descriptionSelector: NATURE_OPINION_DESCRIPTION_SELECTOR,
+    articleTypeSelector: NATURE_OPINION_ARTICLE_TYPE_SELECTOR,
+    extraTextSelectors: [
+      {
+        key: 'footerText',
+        selector: NATURE_OPINION_FOOTER_SELECTOR,
+        countDiagnosticKey: 'footerCardCount',
+      },
+    ],
+    date: {
+      selector: NATURE_OPINION_DATE_SELECTOR,
+      parseValue: parseNatureOpinionDateValue,
+      valueAttributes: ['datetime', 'content', 'aria-label', 'title'],
+      rootValueAttributes: ['datetime', 'content', 'aria-label', 'title'],
+      includeRootText: true,
+      scopeSelector: NATURE_OPINION_FOOTER_SELECTOR,
     },
-  };
+    scoreBoost: 140,
+    resolveOrder: ({ $, root, index }) => resolveNatureOpinionCardOrder({ $, root, index }),
+    buildDiagnostics: ({ selected, candidates, extraTextCounts }) => {
+      const articleTypeCounts = candidates.reduce<Record<string, number>>((accumulator, candidate) => {
+        if (candidate.articleType) {
+          accumulator[candidate.articleType] = (accumulator[candidate.articleType] ?? 0) + 1;
+        }
+        return accumulator;
+      }, {});
+
+      return {
+        layoutSelector: NATURE_OPINION_CARD_SELECTOR,
+        linkSelector: NATURE_OPINION_LINK_SELECTOR,
+        titleSelector: NATURE_OPINION_TITLE_SELECTOR,
+        descriptionSelector: NATURE_OPINION_DESCRIPTION_SELECTOR,
+        footerSelector: NATURE_OPINION_FOOTER_SELECTOR,
+        articleTypeSelector: NATURE_OPINION_ARTICLE_TYPE_SELECTOR,
+        cardCount: selected.roots.length,
+        candidateCount: candidates.length,
+        describedCardCount: candidates.filter(candidate => Boolean(candidate.descriptionText)).length,
+        footerCardCount: extraTextCounts.footerCardCount ?? 0,
+        typedCardCount: candidates.filter(candidate => Boolean(candidate.articleType)).length,
+        datedCandidateCount: candidates.filter((candidate) => Boolean(candidate.dateHint)).length,
+        articleTypeCounts,
+        sampleCards: candidates.slice(0, NATURE_OPINION_SAMPLE_CARD_LIMIT).map(candidate => ({
+          href: candidate.normalizedUrl,
+          title: candidate.title,
+          order: candidate.order,
+          articleType: candidate.articleType,
+          footerText: candidate.extraText.footerText || null,
+          dateHint: candidate.dateHint,
+        })),
+      };
+    },
+  });
 }
 
 function findNatureOpinionNextPageUrl(context: ListingPaginationContext) {

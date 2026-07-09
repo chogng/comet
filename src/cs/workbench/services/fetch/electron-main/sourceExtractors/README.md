@@ -51,6 +51,12 @@
 
 也就是说，extractor 负责“更准确地指出该先试哪些链接”，而不是重写整条抓取链路。
 
+## 通用 DOM helper 与 DevTools
+
+对于 card-like 列表页，优先把可复用的 DOM 到 `ListingCandidateSeed` 映射放在 `listing-card-dom.ts`。站点 extractor 只提供 card/link/title/date/type 等 selector，以及少量站点特有的排序或解析规则。
+
+DevTools、BrowserView 或 hidden window 只应该提供渲染后的 HTML/DOM snapshot。候选识别仍然回到 `sourceExtractors/`，避免维护一份 browser-side 抽取脚本和一份 electron-main 抽取逻辑。
+
 ## 什么时候值得写专用 Extractor
 
 通常满足下面条件，才值得新增专用 extractor：
