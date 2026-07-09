@@ -64,7 +64,7 @@ test('sidebar renders home without fetch tab', () => {
     assert(homeTab instanceof HTMLButtonElement);
     assert.equal(fetchTab, null);
     assert.equal(homeTab.textContent, 'Home');
-    assert(homeTab.querySelector('.lx-icon-projects-filled') instanceof HTMLElement);
+    assert(homeTab.querySelector('.lx-icon-home') instanceof HTMLElement);
     assert.equal(homeTab.getAttribute('aria-selected'), 'true');
     assert(element.querySelector('.comet-sidebar-home-panel') instanceof HTMLElement);
     assert.deepEqual(

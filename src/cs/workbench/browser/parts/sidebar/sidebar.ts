@@ -126,7 +126,7 @@ export class Sidebar {
     this.renderTabButton(
       this.homeTabButton,
       labels.homeTitle,
-      'projects-filled',
+      'home',
     );
     this.homeTabButton.classList.add('comet-is-active');
     this.homeTabButton.setAttribute('aria-selected', 'true');

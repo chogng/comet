@@ -195,7 +195,7 @@ export class SessionSidebar {
 		this.renderTabButton(
 			this.homeTabButton,
 			labels.homeTitle,
-			'projects-filled',
+			'home',
 		);
 		this.renderTabButton(
 			this.codeTabButton,
