@@ -192,6 +192,12 @@
   opacity: 0.9;
 }
 
+.comet-menu .comet-dropdown-menu-item-check .lx-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+
 .comet-menu .comet-dropdown-menu-item-check.placeholder {
   opacity: 0;
 }

@@ -50,9 +50,10 @@ export interface MenuHeaderOptions {
   render: (context: MenuHeaderContext) => HTMLElement;
 }
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
 const SUBMENU_OFFSET_PX = 4;
-const VIEWPORT_MARGIN_PX = 8;function composeClassName(parts: Array<string | undefined | null | false>) {
+const VIEWPORT_MARGIN_PX = 8;
+
+function composeClassName(parts: Array<string | undefined | null | false>) {
   return parts.filter(Boolean).join(' ');
 }
 
@@ -60,32 +61,12 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function createCheckIcon() {
-  const icon = document.createElementNS(SVG_NS, 'svg');
-  icon.setAttribute('viewBox', '0 0 16 16');
-  icon.setAttribute('width', '12');
-  icon.setAttribute('height', '12');
-  icon.setAttribute('aria-hidden', 'true');
-  icon.classList.add('comet-dropdown-menu-item-check');
-
-  const path = document.createElementNS(SVG_NS, 'path');
-  path.setAttribute('d', 'M3.5 8.2l2.4 2.4 6-6');
-  path.setAttribute('fill', 'none');
-  path.setAttribute('stroke', 'currentColor');
-  path.setAttribute('stroke-width', '1.8');
-  path.setAttribute('stroke-linecap', 'round');
-  path.setAttribute('stroke-linejoin', 'round');
-  icon.append(path);
-
-  return icon;
-}
-
 function createCheckSlot(isSelected: boolean) {
   const slot = $<HTMLElementTagNameMap['span']>('span.comet-dropdown-menu-item-check');
   slot.setAttribute('aria-hidden', 'true');
 
   if (isSelected) {
-    slot.append(createCheckIcon());
+    slot.append(createLxIcon('check'));
   } else {
     slot.classList.add('placeholder');
   }

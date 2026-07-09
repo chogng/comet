@@ -313,7 +313,7 @@ test('sidebar footer layout submenu marks the active layout', async () => {
     assert(flowItem instanceof HTMLElement);
     assert.equal(agentItem.classList.contains('selected'), true);
     assert.equal(
-      agentItem.querySelector('.dropdown-menu-item-check svg') instanceof SVGElement,
+      agentItem.querySelector('.dropdown-menu-item-check .lx-icon-check') instanceof HTMLElement,
       true,
     );
     assert.equal(flowItem.classList.contains('selected'), false);
