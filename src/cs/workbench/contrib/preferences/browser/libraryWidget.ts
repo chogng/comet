@@ -2,6 +2,7 @@ import type {
   LibraryDocumentSummary,
   LibraryStorageMode,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import {
   NumberStepper,
   numberStepperDecrementAriaLabel,
@@ -31,6 +32,7 @@ function resolveLibraryDocumentStatusLabel(labels: SettingsPartLabels, document:
 
 export type LibrarySettingsSectionProps = {
   labels: SettingsPartLabels;
+  contextViewProvider: ContextViewProvider;
   knowledgeBaseEnabled: boolean;
   autoIndexDownloadedPdf: boolean;
   knowledgeBasePdfDownloadDir: string;
@@ -191,7 +193,7 @@ function renderLibraryStorageSection(props: LibrarySettingsSectionProps, effecti
       control: buildSelect([
         { value: 'linked-original', label: props.labels.settingsLibraryStorageModeLinkedOriginal },
         { value: 'managed-copy', label: props.labels.settingsLibraryStorageModeManagedCopy },
-      ], props.libraryStorageMode, 'settings.library.storage', value => props.onLibraryStorageModeChange(value as LibraryStorageMode), 'comet-settings-llm-provider'),
+      ], props.libraryStorageMode, 'settings.library.storage', value => props.onLibraryStorageModeChange(value as LibraryStorageMode), props.contextViewProvider, 'comet-settings-llm-provider'),
     }),
   );
 

@@ -17,6 +17,7 @@ import {
   type RagSettingsSectionProps,
 } from 'cs/workbench/contrib/preferences/browser/ragWidget';
 import type { SettingsPageId } from 'cs/workbench/contrib/preferences/common/settings';
+import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import { SettingsTree } from 'cs/workbench/contrib/preferences/browser/settingsTree';
 import type { SettingsSectionRenderers } from 'cs/workbench/contrib/preferences/browser/settingsTree';
 import { SettingsTreeModel } from 'cs/workbench/contrib/preferences/browser/settingsTreeModel';
@@ -133,7 +134,10 @@ export class SettingsPartView {
   private activePageId: SettingsPageId = 'general';
   private searchQuery = '';
 
-  constructor(props: SettingsPartProps) {
+  constructor(
+    props: SettingsPartProps,
+    private readonly contextViewProvider: ContextViewProvider,
+  ) {
     this.props = props;
     this.settingsTreeModel = new SettingsTreeModel(this.props.labels, this.searchQuery);
     this.tocTreeModel = new TOCTreeModel(this.props.labels, this.settingsTreeModel);
@@ -236,6 +240,7 @@ export class SettingsPartView {
   private getLibrarySectionProps(): LibrarySettingsSectionProps {
     return {
       labels: this.props.labels,
+      contextViewProvider: this.contextViewProvider,
       knowledgeBaseEnabled: this.props.knowledgeBaseEnabled,
       autoIndexDownloadedPdf: this.props.autoIndexDownloadedPdf,
       knowledgeBasePdfDownloadDir: this.props.knowledgeBasePdfDownloadDir,
@@ -316,6 +321,7 @@ export class SettingsPartView {
   private getTranslationSectionProps(): TranslationSettingsSectionProps {
     return {
       labels: this.props.labels,
+      contextViewProvider: this.contextViewProvider,
       activeTranslationProvider: this.props.activeTranslationProvider,
       translationProviders: this.props.translationProviders,
       llmProviders: this.props.llmProviders,
@@ -351,12 +357,12 @@ export class SettingsPartView {
 
   private createSectionRenderers(): SettingsSectionRenderers {
     return {
-      locale: renderLocaleSection,
-      layout: renderLayoutSection,
+      locale: (props) => renderLocaleSection(props, this.contextViewProvider),
+      layout: (props) => renderLayoutSection(props, this.contextViewProvider),
       notifications: renderNotificationsSection,
-      appearance: renderAppearanceSection,
+      appearance: (props) => renderAppearanceSection(props, this.contextViewProvider),
       configPath: renderConfigPathSection,
-      textEditor: renderTextEditorSection,
+      textEditor: (props) => renderTextEditorSection(props, this.contextViewProvider),
       llmModel: () => {
         this.updateLlmModelSection();
         return this.llmModelSection.getElement();
@@ -492,8 +498,11 @@ export class SettingsPartView {
 
 }
 
-export function createSettingsPartView(props: SettingsPartProps) {
-  return new SettingsPartView(props);
+export function createSettingsPartView(
+  props: SettingsPartProps,
+  contextViewProvider: ContextViewProvider,
+) {
+  return new SettingsPartView(props, contextViewProvider);
 }
 
 export default SettingsPartView;

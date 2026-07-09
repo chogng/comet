@@ -1,6 +1,7 @@
 import type { Locale } from 'language/i18n';
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'cs/base/common/editorDraftStyle';
 import { createDateInput } from 'cs/base/browser/ui/dateInput/dateInput';
+import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import {
   NumberStepper,
   numberStepperDecrementAriaLabel,
@@ -187,7 +188,7 @@ function toColorPickerValue(colorValue: string) {
     ?? '#000000';
 }
 
-export function renderLocaleSection(props: SettingsPartProps) {
+export function renderLocaleSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
   const language = createSettingsSection({
     sectionClassName: 'comet-settings-language-section',
     panelClassName: 'comet-settings-language-panel',
@@ -198,6 +199,7 @@ export function renderLocaleSection(props: SettingsPartProps) {
     props.locale,
     'settings.locale',
     (value) => requestSetDisplayLanguage(value as Locale),
+    contextViewProvider,
     'comet-settings-language-toggle',
   );
   language.list.append(
@@ -355,7 +357,7 @@ export function renderSupportedSourcesSection(props: SettingsPartProps) {
   return supportedSources.element;
 }
 
-export function renderLayoutSection(props: SettingsPartProps) {
+export function renderLayoutSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
   const layout = createSettingsSection({
     title: props.labels.settingsLayoutTitle,
     sectionClassName: 'comet-settings-layout-section',
@@ -369,6 +371,7 @@ export function renderLayoutSection(props: SettingsPartProps) {
     (value) => {
       props.onStartupLayoutChange(value === 'agent' ? 'agent' : 'flow');
     },
+    contextViewProvider,
     'comet-settings-layout-startup-layout-select',
   );
   setSelectHostDisabled(startupLayoutSelect, props.isSettingsSaving);
@@ -411,7 +414,7 @@ export function renderLayoutSection(props: SettingsPartProps) {
   return layout.element;
 }
 
-export function renderAppearanceSection(props: SettingsPartProps) {
+export function renderAppearanceSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
   const field = el('div', 'comet-settings-appearance-settings');
   const themeSelect = buildSelect(
     createThemeOptions(props),
@@ -424,6 +427,7 @@ export function renderAppearanceSection(props: SettingsPartProps) {
           : 'light';
       props.onThemeChange(nextTheme);
     },
+    contextViewProvider,
     'comet-settings-appearance-theme-select',
   );
   setSelectHostDisabled(themeSelect, props.isSettingsSaving);
@@ -587,7 +591,7 @@ export function renderConfigPathSection(props: SettingsPartProps) {
   return configPath.element;
 }
 
-export function renderTextEditorSection(props: SettingsPartProps) {
+export function renderTextEditorSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
   const defaultBodyStyle = props.editorDraftStyle.value.defaultBodyStyle;
   const isDisabled = props.isSettingsSaving;
   const textEditorPanel = createSettingsSection({
@@ -606,6 +610,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     defaultBodyStyle.fontFamilyValue,
     'settings.textEditor.fontFamily',
     props.onEditorDraftFontFamilyChange,
+    contextViewProvider,
     'comet-settings-text-editor-select',
   );
   setSelectHostDisabled(fontFamilySelect, isDisabled);
@@ -617,6 +622,7 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     defaultBodyStyle.fontSizeValue,
     'settings.textEditor.fontSize',
     props.onEditorDraftFontSizeChange,
+    contextViewProvider,
     'comet-settings-text-editor-select',
   );
   setSelectHostDisabled(fontSizeSelect, isDisabled);

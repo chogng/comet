@@ -138,6 +138,7 @@ import { INativeHostService } from 'cs/platform/native/common/native';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import { IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import {
   IWorkbenchSidebarEntryService,
   type WorkbenchSidebarEntry,
@@ -438,6 +439,7 @@ class WorkbenchHost {
     @IOpenerService private readonly openerService: IOpenerService,
     @IDialogService private readonly dialogService: IDialogService,
     @IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
+    @IContextViewService private readonly contextViewService: IContextViewService,
     @IChatServiceDecorator private readonly chatService: IChatService,
     @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
     @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
@@ -1065,7 +1067,7 @@ class WorkbenchHost {
     }
 
     if (!this.settingsView) {
-      this.settingsView = createSettingsPartView(props.settingsPartProps);
+      this.settingsView = createSettingsPartView(props.settingsPartProps, this.contextViewService);
     } else {
       this.settingsView.setProps(props.settingsPartProps);
     }

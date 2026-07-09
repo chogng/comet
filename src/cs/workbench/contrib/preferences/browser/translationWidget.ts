@@ -3,6 +3,7 @@ import type {
   TranslationProviderId,
   TranslationProviderSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 import {
   createSettingsSection,
@@ -23,6 +24,7 @@ import {
 
 export type TranslationSettingsSectionProps = {
   labels: SettingsPartLabels;
+  contextViewProvider: ContextViewProvider;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
   llmProviders: Record<'glm', LlmProviderSettings>;
@@ -84,6 +86,7 @@ export class TranslationSettingsSection {
       this.props.activeTranslationProvider,
       'settings.translation.provider',
       (value) => this.props.onActiveTranslationProviderChange(value as TranslationProviderId),
+      this.props.contextViewProvider,
       'comet-settings-llm-provider',
     );
     section.list.append(
@@ -168,6 +171,7 @@ export class TranslationSettingsSection {
         provider.model,
         'settings.translation.custom.model',
         (value) => this.props.onTranslationProviderModelChange('custom', value),
+        this.props.contextViewProvider,
         'comet-settings-translation-model-input',
       ));
     } else {
@@ -224,6 +228,7 @@ export class TranslationSettingsSection {
         selectedValue,
         'settings.translation.glm.model',
         (value) => this.props.onGlmModelChange(value),
+        this.props.contextViewProvider,
         'comet-settings-llm-provider',
       ),
       itemClassName: 'comet-settings-translation-model-item',
@@ -286,6 +291,7 @@ export class TranslationSettingsSection {
         selectedValue,
         'settings.translation.openai.model',
         (value) => this.props.onTranslationProviderModelChange('openai-compatible', value),
+        this.props.contextViewProvider,
         'comet-settings-llm-provider',
       ),
       itemClassName: 'comet-settings-translation-model-item',

@@ -16,6 +16,10 @@ import {
 } from 'cs/base/common/editorDraftStyle';
 import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
 import { cleanText } from 'cs/base/common/strings';
+import type {
+  IProviderApiKeySecretStorage,
+  ProviderApiKeyScope,
+} from 'cs/platform/secrets/common/secret';
 import {
   batchLimitMax,
   batchLimitMin,
@@ -59,6 +63,7 @@ const maxConcurrentIndexJobs = 4;
 
 type ConfigurationMainServiceOptions = {
   defaultLocale?: 'zh' | 'en';
+  providerApiKeySecretStorage: IProviderApiKeySecretStorage;
 };
 
 type UserSettings = {
@@ -171,29 +176,32 @@ async function writeUserSettingsEditorDraftStyle(
 }
 
 function serializeConfigValue(value: unknown) {
-  if (!value || typeof value !== 'object' || !('llm' in value) || !('translation' in value)) {
+  if (!value || typeof value !== 'object') {
     return value;
   }
 
-  const settings = value as StoredAppSettings;
+  const payload = value as Partial<StoredAppSettings>;
+  if (!payload.llm || !payload.translation) {
+    return removeProviderApiKeysFromPayload(payload);
+  }
+
+  const settings = removeProviderApiKeysFromPayload(payload) as StoredAppSettings;
   const serializedProviders = Object.fromEntries(
     Object.entries(settings.llm.providers).flatMap(([providerId, provider]) => {
       const defaultProvider = defaultLlmProviderSettings[providerId as keyof typeof defaultLlmProviderSettings];
-      const hasApiKey = Boolean(cleanText(provider.apiKey));
       const hasSelectedModelOption =
         provider.selectedModelOption !== defaultProvider.selectedModelOption;
       const hasEnabledModelOptions =
         JSON.stringify(provider.enabledModelOptions ?? []) !==
         JSON.stringify(defaultProvider.enabledModelOptions ?? []);
 
-      if (!hasApiKey && !hasSelectedModelOption && !hasEnabledModelOptions) {
+      if (!hasSelectedModelOption && !hasEnabledModelOptions) {
         return [];
       }
 
       return [[
         providerId,
         {
-          apiKey: provider.apiKey,
           selectedModelOption: provider.selectedModelOption,
           enabledModelOptions: provider.enabledModelOptions,
         },
@@ -205,20 +213,18 @@ function serializeConfigValue(value: unknown) {
       .flatMap(([providerId, provider]) => {
         const defaultProvider =
           defaultTranslationProviderSettings[providerId as keyof typeof defaultTranslationProviderSettings];
-        const hasApiKey = Boolean(cleanText(provider.apiKey));
         const hasCustomBaseUrl = cleanText(provider.baseUrl) !== defaultProvider.baseUrl;
         const hasCustomModel = cleanText(provider.model) !== defaultProvider.model;
         const hasModels =
           JSON.stringify(provider.models) !== JSON.stringify(defaultProvider.models);
 
-        if (!hasApiKey && !hasCustomBaseUrl && !hasCustomModel && !hasModels) {
+        if (!hasCustomBaseUrl && !hasCustomModel && !hasModels) {
           return [];
         }
 
         return [[
           providerId,
           {
-            apiKey: provider.apiKey,
             baseUrl: provider.baseUrl,
             model: provider.model,
             models: provider.models,
@@ -238,6 +244,177 @@ function serializeConfigValue(value: unknown) {
       providers: serializedTranslationProviders,
     },
   };
+}
+
+function getProviderApiKey(payload: unknown): string {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return '';
+  }
+
+  return cleanText((payload as { apiKey?: unknown }).apiKey);
+}
+
+function hasProviderApiKeyProperty(payload: unknown): boolean {
+  return Boolean(payload && typeof payload === 'object' && !Array.isArray(payload) && 'apiKey' in payload);
+}
+
+function removeProviderApiKeyProperty<T>(payload: T): T {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return payload;
+  }
+
+  const { apiKey: _apiKey, ...rest } = payload as T & { apiKey?: unknown };
+  return rest as T;
+}
+
+function removeProviderApiKeysFromProviders<T extends Record<string, unknown>>(providers: T): T {
+  return Object.fromEntries(
+    Object.entries(providers).map(([providerId, provider]) => [
+      providerId,
+      removeProviderApiKeyProperty(provider),
+    ]),
+  ) as T;
+}
+
+function removeProviderApiKeysFromPayload(
+  payload: Partial<StoredAppSettings>,
+): Partial<StoredAppSettings> {
+  return {
+    ...payload,
+    ...(payload.llm
+      ? {
+          llm: {
+            ...payload.llm,
+            providers: removeProviderApiKeysFromProviders(payload.llm.providers ?? {}),
+          },
+        }
+      : {}),
+    ...(payload.translation
+      ? {
+          translation: {
+            ...payload.translation,
+            providers: removeProviderApiKeysFromProviders(payload.translation.providers ?? {}),
+          },
+        }
+      : {}),
+    ...(payload.rag
+      ? {
+          rag: {
+            ...payload.rag,
+            providers: removeProviderApiKeysFromProviders(payload.rag.providers ?? {}),
+          },
+        }
+      : {}),
+  };
+}
+
+async function persistProviderApiKey(
+  providerApiKeySecretStorage: IProviderApiKeySecretStorage,
+  scope: ProviderApiKeyScope,
+  providerId: string,
+  apiKey: string,
+): Promise<void> {
+  await providerApiKeySecretStorage.setApiKey({ scope, providerId }, apiKey);
+}
+
+async function persistProviderApiKeys(
+  providerApiKeySecretStorage: IProviderApiKeySecretStorage,
+  settings: StoredAppSettings,
+): Promise<void> {
+  await Promise.all([
+    ...Object.entries(settings.llm.providers).map(([providerId, provider]) =>
+      persistProviderApiKey(providerApiKeySecretStorage, 'llm', providerId, provider.apiKey)),
+    ...Object.entries(settings.translation.providers).map(([providerId, provider]) =>
+      persistProviderApiKey(providerApiKeySecretStorage, 'translation', providerId, provider.apiKey)),
+    ...Object.entries(settings.rag.providers).map(([providerId, provider]) =>
+      persistProviderApiKey(providerApiKeySecretStorage, 'rag', providerId, provider.apiKey)),
+  ]);
+}
+
+async function mergeProviderApiKeys(
+  providerApiKeySecretStorage: IProviderApiKeySecretStorage,
+  settings: StoredAppSettings,
+): Promise<StoredAppSettings> {
+  const llmEntries = await Promise.all(
+    Object.entries(settings.llm.providers).map(async ([providerId, provider]) => [
+      providerId,
+      {
+        ...provider,
+        apiKey: await providerApiKeySecretStorage.getApiKey({ scope: 'llm', providerId }),
+      },
+    ] as const),
+  );
+  const translationEntries = await Promise.all(
+    Object.entries(settings.translation.providers).map(async ([providerId, provider]) => [
+      providerId,
+      {
+        ...provider,
+        apiKey: await providerApiKeySecretStorage.getApiKey({ scope: 'translation', providerId }),
+      },
+    ] as const),
+  );
+  const ragEntries = await Promise.all(
+    Object.entries(settings.rag.providers).map(async ([providerId, provider]) => [
+      providerId,
+      {
+        ...provider,
+        apiKey: await providerApiKeySecretStorage.getApiKey({ scope: 'rag', providerId }),
+      },
+    ] as const),
+  );
+
+  return {
+    ...settings,
+    llm: {
+      ...settings.llm,
+      providers: Object.fromEntries(llmEntries) as StoredAppSettings['llm']['providers'],
+    },
+    translation: {
+      ...settings.translation,
+      providers: Object.fromEntries(translationEntries) as StoredAppSettings['translation']['providers'],
+    },
+    rag: {
+      ...settings.rag,
+      providers: Object.fromEntries(ragEntries) as StoredAppSettings['rag']['providers'],
+    },
+  };
+}
+
+async function migrateProviderApiKeys(
+  providerApiKeySecretStorage: IProviderApiKeySecretStorage,
+  payload: Partial<StoredAppSettings>,
+): Promise<boolean> {
+  let migrated = false;
+
+  for (const [providerId, provider] of Object.entries(payload.llm?.providers ?? {})) {
+    if (hasProviderApiKeyProperty(provider)) {
+      migrated = true;
+      const apiKey = getProviderApiKey(provider);
+      if (apiKey) {
+        await persistProviderApiKey(providerApiKeySecretStorage, 'llm', providerId, apiKey);
+      }
+    }
+  }
+  for (const [providerId, provider] of Object.entries(payload.translation?.providers ?? {})) {
+    if (hasProviderApiKeyProperty(provider)) {
+      migrated = true;
+      const apiKey = getProviderApiKey(provider);
+      if (apiKey) {
+        await persistProviderApiKey(providerApiKeySecretStorage, 'translation', providerId, apiKey);
+      }
+    }
+  }
+  for (const [providerId, provider] of Object.entries(payload.rag?.providers ?? {})) {
+    if (hasProviderApiKeyProperty(provider)) {
+      migrated = true;
+      const apiKey = getProviderApiKey(provider);
+      if (apiKey) {
+        await persistProviderApiKey(providerApiKeySecretStorage, 'rag', providerId, apiKey);
+      }
+    }
+  }
+
+  return migrated;
 }
 
 function normalizeLocale(value: unknown, defaultLocale: 'zh' | 'en'): 'zh' | 'en' {
@@ -634,14 +811,22 @@ function attachConfigPath(
 export function createConfigurationMainService(
   configFile: string,
   userSettingsFile: string,
-  options: ConfigurationMainServiceOptions = {},
+  options: ConfigurationMainServiceOptions,
 ): AppSettingsConfigurationService {
   const defaultLocale = options.defaultLocale === 'zh' ? 'zh' : fallbackLocale;
+  const { providerApiKeySecretStorage } = options;
 
   async function readSettings() {
     const payload = await readJson<Partial<StoredAppSettings>>(configFile, {});
+    const migratedProviderApiKeys = await migrateProviderApiKeys(
+      providerApiKeySecretStorage,
+      payload,
+    );
     const resolvedUserSettingsFile = resolveUserSettingsFilePath(payload, userSettingsFile);
     const { editorDraftStyle: _legacyEditorDraftStyle, ...configPayload } = payload;
+    if (migratedProviderApiKeys) {
+      await writeJson(configFile, removeProviderApiKeysFromPayload(configPayload));
+    }
     await ensureUserSettingsFile(resolvedUserSettingsFile, payload);
     const userSettings = await readJson<Partial<UserSettings>>(resolvedUserSettingsFile, {});
     const userEditorDraftStyle = resolveUserEditorDraftStyle(userSettings);
@@ -654,7 +839,11 @@ export function createConfigurationMainService(
       defaultLocale,
       userSettingsFile,
     );
-    return attachConfigPath(normalized, resolvedUserSettingsFile, userSettingsFile);
+    const withProviderApiKeys = await mergeProviderApiKeys(
+      providerApiKeySecretStorage,
+      normalized,
+    );
+    return attachConfigPath(withProviderApiKeys, resolvedUserSettingsFile, userSettingsFile);
   }
 
   return {
@@ -674,6 +863,7 @@ export function createConfigurationMainService(
         defaultLocale,
         userSettingsFile,
       );
+      await persistProviderApiKeys(providerApiKeySecretStorage, saved);
       const targetUserSettingsFile =
         resolveUserSettingsFilePath(saved, userSettingsFile);
       const { editorDraftStyle, ...savedConfig } = saved;

@@ -51,6 +51,29 @@ export type ContextViewOptions = {
   layer?: number;
 };
 
+export type ContextViewRenderResult =
+  | void
+  | (() => void)
+  | DisposableLike;
+
+export type ContextViewDelegate = Omit<ContextViewOptions, 'anchor' | 'render'> & {
+  getAnchor: () => ContextViewAnchor;
+  render: (container: HTMLElement) => ContextViewRenderResult;
+};
+
+export type ContextViewDisposable = {
+  dispose: () => void;
+};
+
+export type ContextViewProvider = {
+  showContextView: (delegate: ContextViewDelegate) => ContextViewDisposable;
+  hideContextView: (data?: unknown) => void;
+  getContextViewElement: () => HTMLElement;
+  layout: () => void;
+  isVisible: () => boolean;
+  dispose: () => void;
+};
+
 export type ContextViewHandle = {
   show: (options: ContextViewOptions) => void;
   hide: (data?: unknown) => void;
@@ -305,11 +328,13 @@ function addDisposableListener(
   });
 }
 
-export class ContextViewController extends Disposable implements ContextViewHandle {
+export class ContextViewController extends Disposable implements ContextViewHandle, ContextViewProvider {
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-context-view');
   private readonly content = $<HTMLElementTagNameMap['div']>('div.comet-context-view-content');
   private readonly mountedListeners = new MutableDisposable<DisposableLike>();
   private options: ContextViewOptions | null = null;
+  private currentDelegate: ContextViewDelegate | null = null;
+  private currentRenderDisposable: ContextViewRenderResult = undefined;
   private visible = false;
   private disposed = false;
   private suppressHide = false;
@@ -342,6 +367,37 @@ export class ContextViewController extends Disposable implements ContextViewHand
     this.scheduleRelayout(false);
   }
 
+  showContextView(delegate: ContextViewDelegate): ContextViewDisposable {
+    this.hideContextView();
+    this.currentDelegate = delegate;
+
+    const container = document.createElement('div');
+    this.currentRenderDisposable = delegate.render(container);
+    this.show({
+      ...delegate,
+      anchor: delegate.getAnchor(),
+      render: () => container,
+      onHide: this.handleProviderHide,
+    });
+
+    return {
+      dispose: () => {
+        if (this.currentDelegate === delegate) {
+          this.hideContextView();
+        }
+      },
+    };
+  }
+
+  hideContextView = (data?: unknown) => {
+    if (!this.visible) {
+      this.cleanupCurrentView();
+      return;
+    }
+
+    this.hide(data);
+  };
+
   hide = (data?: unknown) => {
     if (!this.visible) {
       this.options = null;
@@ -359,6 +415,8 @@ export class ContextViewController extends Disposable implements ContextViewHand
 
   getViewElement = () => this.element;
 
+  getContextViewElement = () => this.element;
+
   dispose() {
     if (this.disposed) {
       return;
@@ -368,8 +426,26 @@ export class ContextViewController extends Disposable implements ContextViewHand
     this.options = null;
     this.visible = false;
     this.unmount();
+    this.cleanupCurrentView();
     super.dispose();
   }
+
+  private cleanupCurrentView() {
+    const renderDisposable = this.currentRenderDisposable;
+    this.currentRenderDisposable = undefined;
+    if (typeof renderDisposable === 'function') {
+      renderDisposable();
+    } else {
+      renderDisposable?.dispose();
+    }
+    this.currentDelegate = null;
+  }
+
+  private readonly handleProviderHide = (data?: unknown) => {
+    const delegate = this.currentDelegate;
+    this.cleanupCurrentView();
+    delegate?.onHide?.(data);
+  };
 
   private mount() {
     if (!this.visible) {

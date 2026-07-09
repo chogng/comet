@@ -1,5 +1,5 @@
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
-import { DEFAULT_CONTEXT_VIEW_Z_INDEX } from 'cs/base/browser/ui/contextview/contextview';
+import { DEFAULT_CONTEXT_VIEW_Z_INDEX, type ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -146,6 +146,7 @@ export function buildSettingsSelect(
   value: string,
   focusKey: string,
   onChange: (value: string) => void,
+  contextViewProvider: ContextViewProvider,
   className: string,
 ) {
   const selectBox = new SelectBox(
@@ -156,7 +157,7 @@ export function buildSettingsSelect(
       isDisabled: option.isDisabled,
     })),
     Math.max(0, options.findIndex((option) => option.value === value)),
-    undefined,
+    contextViewProvider,
     {},
     {
       useCustomDrawn: true,

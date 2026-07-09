@@ -1,56 +1,23 @@
 import type { ContextMenuService as BaseContextMenuService } from 'cs/base/browser/contextmenu';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import type {
-  AnchorAlignment,
-  AnchorAxisAlignment,
-  AnchorPosition,
-  ContextViewAnchor,
-  ContextViewAlignment,
-  ContextViewPosition,
+  ContextViewDelegate,
+  ContextViewDisposable,
+  ContextViewProvider,
+  ContextViewRenderResult,
 } from 'cs/base/browser/ui/contextview/contextview';
 
-export type ContextViewRenderResult =
-  | void
-  | (() => void)
-  | {
-    dispose: () => void;
-  };
-
-export interface ContextViewDelegate {
-  canRelayout?: boolean;
-  getAnchor: () => ContextViewAnchor;
-  render: (container: HTMLElement) => ContextViewRenderResult;
-  focus?: () => void;
-  layout?: () => void;
-  onDOMEvent?: (event: Event, activeElement: HTMLElement | null) => void;
-  onHide?: (data?: unknown) => void;
-  className?: string;
-  anchorAlignment?: AnchorAlignment;
-  anchorPosition?: AnchorPosition;
-  anchorAxisAlignment?: AnchorAxisAlignment;
-  alignment?: ContextViewAlignment;
-  position?: ContextViewPosition;
-  offset?: number;
-  matchAnchorWidth?: boolean;
-  minWidth?: number;
-  layer?: number;
-}
+export type {
+  ContextViewDelegate,
+  ContextViewDisposable,
+  ContextViewRenderResult,
+};
 
 export const IContextViewService =
   createDecorator<IContextViewService>('contextViewService');
 
-export interface ContextViewDisposable {
-  dispose: () => void;
-}
-
-export interface IContextViewService {
+export interface IContextViewService extends ContextViewProvider {
   readonly _serviceBrand: undefined;
-  showContextView: (delegate: ContextViewDelegate) => ContextViewDisposable;
-  hideContextView: (data?: unknown) => void;
-  getContextViewElement: () => HTMLElement;
-  layout: () => void;
-  isVisible: () => boolean;
-  dispose: () => void;
 }
 
 export type ContextMenuListener = () => void;
