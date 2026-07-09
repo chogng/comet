@@ -2,6 +2,10 @@ import type { IStorageService } from 'cs/platform/storage/common/storage';
 import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
 import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import { createConfigurationMainService } from 'cs/platform/configuration/electron-main/configurationService';
+import {
+  BaseSecretStorageService,
+  ProviderApiKeySecretStorage,
+} from 'cs/platform/secrets/common/secret';
 import { createHistoryStore, type HistoryStore } from 'cs/platform/storage/electron-main/historyStore';
 import { createLibraryStore, type LibraryStore } from 'cs/platform/storage/electron-main/libraryStore';
 import { createTranslationCacheStore, type TranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
@@ -33,9 +37,12 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
   const storageMainService = createStorageMainService({
     stateDbFile: paths.stateDbFile,
   });
+  const secretStorageService = new BaseSecretStorageService(storageMainService);
+  const providerApiKeySecretStorage = new ProviderApiKeySecretStorage(secretStorageService);
   const historyStore = createHistoryStore(paths.historyFile);
   const configurationService = createConfigurationMainService(paths.configFile, paths.userSettingsFile, {
     defaultLocale: options.defaultLocale,
+    providerApiKeySecretStorage,
   });
   const translationCacheStore = createTranslationCacheStore(paths.translationCacheFile);
   const libraryStore = createLibraryStore({
@@ -60,6 +67,7 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
         storageMainService.close(),
         Promise.resolve(libraryStore.dispose()),
       ]);
+      secretStorageService.dispose();
     },
 
     get: storageMainService.get.bind(storageMainService),

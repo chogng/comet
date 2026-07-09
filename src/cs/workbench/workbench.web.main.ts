@@ -3,6 +3,7 @@ import 'cs/workbench/workbench.common.main';
 //#endregion
 
 //#region --- workbench web services
+import 'cs/workbench/services/secrets/browser/secretStorageService';
 import 'cs/workbench/services/storage/browser/storageService';
 //#endregion
 // Web entry intentionally excludes desktop-only sandbox/window registrations.

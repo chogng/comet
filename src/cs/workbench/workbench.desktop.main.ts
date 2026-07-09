@@ -28,6 +28,7 @@ import 'cs/workbench/contrib/splash/browser/partsSplash';
 
 //#region --- workbench (desktop services)
 import 'cs/workbench/services/dialogs/electron-browser/fileDialogService';
+import 'cs/workbench/services/secrets/electron-browser/secretStorageService';
 import 'cs/workbench/services/storage/electron-browser/storageService';
 
 const ipc = nativeHostService.ipc;

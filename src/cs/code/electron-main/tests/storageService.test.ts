@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { createStorageService } from 'cs/code/electron-main/storageService';
 import { StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
+import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
 
 async function withStoragePaths<T>(run: (tempDir: string) => Promise<T>) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'cs-storage-service-'));
@@ -53,6 +54,35 @@ test('createStorageService wires application state storage to state.vscdb', asyn
       restored.get('workspace.lastScopeWrite', StorageScope.APPLICATION),
       'application',
     );
+
+    await restored.close();
+  });
+});
+
+test('createStorageService stores provider api keys outside config json', async () => {
+  await withStoragePaths(async (tempDir) => {
+    const paths = createPaths(tempDir);
+    const storage = createStorageService(paths);
+    await storage.init();
+    const translation = createDefaultTranslationSettings();
+    translation.activeProvider = 'custom';
+    translation.providers.custom = {
+      apiKey: 'custom-key',
+      baseUrl: 'https://custom.example/v1',
+      model: 'custom-model',
+      models: ['custom-model'],
+    };
+
+    await storage.saveSettings({ translation });
+    await storage.close();
+
+    const savedConfig = JSON.parse(await readFile(paths.configFile, 'utf8'));
+    assert.equal(savedConfig.translation.providers.custom.apiKey, undefined);
+
+    const restored = createStorageService(paths);
+    await restored.init();
+    const restoredSettings = await restored.loadSettings();
+    assert.equal(restoredSettings.translation.providers.custom.apiKey, 'custom-key');
 
     await restored.close();
   });

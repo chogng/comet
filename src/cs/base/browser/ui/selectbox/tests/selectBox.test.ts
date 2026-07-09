@@ -262,16 +262,53 @@ test('selectbox custom drawn mode keeps the popup overlay matched to the trigger
   }
 });
 
-test('selectbox custom drawn mode applies the configured contextview layer', () => {
+test('selectbox custom drawn mode uses the provided contextview provider', () => {
   const container = document.createElement('div');
   document.body.append(container);
+  let showCount = 0;
+  let actualLayer: number | undefined;
+  let activeView: { dispose: () => void } | null = null;
+  const contextViewProvider = {
+    showContextView(delegate: {
+      render: (container: HTMLElement) => void;
+      onHide?: () => void;
+      layer?: number;
+    }) {
+      showCount += 1;
+      actualLayer = delegate.layer;
+      const viewElement = document.createElement('div');
+      delegate.render(viewElement);
+      document.body.append(viewElement);
+      activeView = {
+        dispose: () => {
+          viewElement.remove();
+          activeView = null;
+          delegate.onHide?.();
+        },
+      };
+      return activeView;
+    },
+    hideContextView() {
+      activeView?.dispose();
+    },
+    getContextViewElement() {
+      return document.body;
+    },
+    layout() {},
+    isVisible() {
+      return activeView !== null;
+    },
+    dispose() {
+      activeView?.dispose();
+    },
+  };
   const selectBox = new SelectBox(
     [
       { text: 'Agent', value: 'agent' },
       { text: 'Flow', value: 'flow' },
     ],
     0,
-    undefined,
+    contextViewProvider,
     {},
     { useCustomDrawn: true, contextViewLayer: 1600 },
   );
@@ -280,12 +317,9 @@ test('selectbox custom drawn mode applies the configured contextview layer', () 
     selectBox.render(container);
     selectBox.domNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const contextView = document.body.querySelector('.comet-context-view');
-    if (!(contextView instanceof HTMLElement)) {
-      throw new Error('Expected selectbox context view.');
-    }
-
-    assert.equal(contextView.style.zIndex, '2600');
+    assert.equal(showCount, 1);
+    assert.equal(actualLayer, 1600);
+    assert.equal(document.body.querySelector('.comet-menu[role="listbox"]') instanceof HTMLElement, true);
   } finally {
     selectBox.dispose();
     document.body.replaceChildren();

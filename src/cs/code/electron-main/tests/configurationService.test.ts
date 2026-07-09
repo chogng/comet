@@ -5,6 +5,11 @@ import path from 'node:path';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 
 import { createConfigurationMainService } from 'cs/platform/configuration/electron-main/configurationService';
+import {
+  BaseSecretStorageService,
+  ProviderApiKeySecretStorage,
+} from 'cs/platform/secrets/common/secret';
+import { createStorageMainService } from 'cs/platform/storage/electron-main/storageMainService';
 import { getDefaultBatchSources } from 'cs/platform/configuration/common/defaultBatchSources';
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
@@ -16,16 +21,24 @@ async function withConfigurationService(
   ) => Promise<void>,
 ) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'literature-config-'));
+  const storageMainService = createStorageMainService({
+    stateDbFile: path.join(tempDir, 'state.vscdb'),
+  });
+  const secretStorageService = new BaseSecretStorageService(storageMainService);
   try {
     const configFile = path.join(tempDir, 'config', 'config.json');
     const userSettingsFile = path.join(tempDir, 'User', 'settings.json');
     await mkdir(path.dirname(userSettingsFile), { recursive: true });
+    await storageMainService.init();
     const service = createConfigurationMainService(configFile, userSettingsFile, {
       defaultLocale: 'en',
+      providerApiKeySecretStorage: new ProviderApiKeySecretStorage(secretStorageService),
     });
 
     await run(service, { configFile, userSettingsFile });
   } finally {
+    secretStorageService.dispose();
+    await storageMainService.close();
     await rm(tempDir, { recursive: true, force: true });
   }
 }
@@ -358,7 +371,6 @@ test('configuration service saves custom translation provider settings', async (
 
     assert.equal(savedConfig.translation.activeProvider, 'custom');
     assert.deepEqual(savedConfig.translation.providers.custom, {
-      apiKey: 'custom-key',
       baseUrl: 'https://custom.example/v1',
       model: 'custom-model',
       models: ['custom-model', 'custom-large'],
@@ -368,6 +380,40 @@ test('configuration service saves custom translation provider settings', async (
       baseUrl: 'https://custom.example/v1',
       model: 'custom-model',
       models: ['custom-model', 'custom-large'],
+    });
+  });
+});
+
+test('configuration service migrates provider api keys out of config json', async () => {
+  await withConfigurationService(async (service, { configFile }) => {
+    await mkdir(path.dirname(configFile), { recursive: true });
+    await writeFile(
+      configFile,
+      JSON.stringify({
+        translation: {
+          activeProvider: 'custom',
+          providers: {
+            custom: {
+              apiKey: 'legacy-custom-key',
+              baseUrl: 'https://custom.example/v1',
+              model: 'custom-model',
+              models: ['custom-model'],
+            },
+          },
+        },
+      }),
+      'utf8',
+    );
+
+    const settings = await service.loadSettings();
+    const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
+
+    assert.equal(settings.translation.providers.custom.apiKey, 'legacy-custom-key');
+    assert.equal(savedConfig.translation.providers.custom.apiKey, undefined);
+    assert.deepEqual(savedConfig.translation.providers.custom, {
+      baseUrl: 'https://custom.example/v1',
+      model: 'custom-model',
+      models: ['custom-model'],
     });
   });
 });

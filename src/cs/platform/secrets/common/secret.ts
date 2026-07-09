@@ -5,6 +5,7 @@
 
 import { EventEmitter, type Event } from 'cs/base/common/event';
 import { Disposable } from 'cs/base/common/lifecycle';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import {
 	StorageScope,
 	StorageTarget,
@@ -28,6 +29,9 @@ export interface ISecretStorageService {
 	keys(): Promise<string[]>;
 }
 
+export const ISecretStorageService =
+	createDecorator<ISecretStorageService>('secretStorageService');
+
 export interface IProviderApiKeySecretStorage {
 	getApiKey(ref: ProviderApiKeyRef): Promise<string>;
 	setApiKey(ref: ProviderApiKeyRef, apiKey: string): Promise<void>;
@@ -47,9 +51,9 @@ export function providerApiKeySecretKey(ref: ProviderApiKeyRef): string {
 	return `providerApiKey.${ref.scope}.${ref.providerId}`;
 }
 
-export class StorageSecretStorageService extends Disposable implements ISecretStorageService {
-	private readonly didChangeSecretEmitter = this._register(new EventEmitter<string>());
-	readonly onDidChangeSecret = this.didChangeSecretEmitter.event;
+export class BaseSecretStorageService extends Disposable implements ISecretStorageService {
+	protected readonly onDidChangeSecretEmitter = this._register(new EventEmitter<string>());
+	readonly onDidChangeSecret = this.onDidChangeSecretEmitter.event;
 
 	constructor(private readonly storageService: SecretStorageBackingService) {
 		super();
@@ -67,13 +71,13 @@ export class StorageSecretStorageService extends Disposable implements ISecretSt
 			StorageTarget.MACHINE,
 		);
 		await this.storageService.flush();
-		this.didChangeSecretEmitter.fire(key);
+		this.onDidChangeSecretEmitter.fire(key);
 	}
 
 	async delete(key: string): Promise<void> {
 		this.storageService.remove(secretStorageKey(key), StorageScope.APPLICATION);
 		await this.storageService.flush();
-		this.didChangeSecretEmitter.fire(key);
+		this.onDidChangeSecretEmitter.fire(key);
 	}
 
 	async keys(): Promise<string[]> {
