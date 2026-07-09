@@ -3,4 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export const TAB_ACTIVE_FOREGROUND = 'tab.activeForeground';
+export function isLocalhostAuthority(authority: string): boolean {
+	const host = authority.split(':', 1)[0]?.toLowerCase();
+	return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+}

@@ -181,6 +181,72 @@ export class DisposableStore implements DisposableLike {
   }
 }
 
+export class DisposableMap<K, V extends DisposableLike = DisposableLike>
+  implements DisposableLike
+{
+  private readonly store: Map<K, V>;
+  private disposed = false;
+
+  constructor(store: Map<K, V> = new Map<K, V>()) {
+    this.store = store;
+  }
+
+  get size(): number {
+    return this.store.size;
+  }
+
+  has(key: K): boolean {
+    return this.store.has(key);
+  }
+
+  get(key: K): V | undefined {
+    return this.store.get(key);
+  }
+
+  values(): IterableIterator<V> {
+    return this.store.values();
+  }
+
+  set(key: K, value: V, skipDisposeOnOverwrite = false): void {
+    if (this.disposed) {
+      value.dispose();
+      return;
+    }
+
+    if (!skipDisposeOnOverwrite) {
+      this.store.get(key)?.dispose();
+    }
+
+    this.store.set(key, value);
+  }
+
+  deleteAndDispose(key: K): void {
+    this.store.get(key)?.dispose();
+    this.store.delete(key);
+  }
+
+  deleteAndLeak(key: K): V | undefined {
+    const value = this.store.get(key);
+    this.store.delete(key);
+    return value;
+  }
+
+  clearAndDisposeAll(): void {
+    const values = Array.from(this.store.values());
+    this.store.clear();
+    disposeAll(values);
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+    this.clearAndDisposeAll();
+  }
+}
+
 export class MutableDisposable<T extends DisposableValue = DisposableLike>
   implements DisposableLike
 {

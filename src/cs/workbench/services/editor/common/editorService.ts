@@ -3,4 +3,4 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export const TAB_ACTIVE_FOREGROUND = 'tab.activeForeground';
+export type PreferredGroup = number | 'active' | 'side' | 'auxiliary' | 'modal';

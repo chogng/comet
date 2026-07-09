@@ -6,6 +6,7 @@ import type {
 } from 'cs/base/parts/storage/common/storage';
 import {
   StorageScope,
+  type StorageChangeEvent,
   StorageTarget,
   WillSaveStateReason,
   type IStorageValueChangeEvent,
@@ -14,8 +15,30 @@ import {
 
 export abstract class AbstractStorageService extends Disposable {
   private readonly didChangeValueEmitter = this._register(new EventEmitter<IStorageValueChangeEvent>());
-  readonly onDidChangeValue: Event<IStorageValueChangeEvent> =
-    this.didChangeValueEmitter.event;
+  onDidChangeValue: StorageChangeEvent = ((
+    listenerOrScope: ((event: IStorageValueChangeEvent) => unknown) | StorageScope,
+    thisArgsOrKey?: unknown,
+    disposablesOrStore?: DisposableStore,
+  ) => {
+    if (typeof listenerOrScope === 'function') {
+      return this.didChangeValueEmitter.event(
+        listenerOrScope,
+        thisArgsOrKey,
+        disposablesOrStore,
+      );
+    }
+
+    const scope = listenerOrScope;
+    const key = String(thisArgsOrKey ?? '');
+    const store = disposablesOrStore;
+    const event: Event<IStorageValueChangeEvent> = (listener, thisArgs, disposables) =>
+      this.didChangeValueEmitter.event(change => {
+        if (change.scope === scope && change.key === key) {
+          listener.call(thisArgs, change);
+        }
+      }, undefined, disposables ?? store);
+    return event;
+  }) as StorageChangeEvent;
 
   private readonly willSaveStateEmitter = this._register(new EventEmitter<IWillSaveStateEvent>());
   readonly onWillSaveState = this.willSaveStateEmitter.event;

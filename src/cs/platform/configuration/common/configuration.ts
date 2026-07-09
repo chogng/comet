@@ -3,6 +3,7 @@ import type {
   StoredAppSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { Event } from 'cs/base/common/event';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export interface ConfigurationOverrides {
   readonly overrideIdentifier?: string | null;
@@ -116,6 +117,10 @@ export interface ConfigurationService {
     memory?: string[];
   };
 }
+
+export const IConfigurationService =
+  createDecorator<ConfigurationService>('configurationService');
+export type IConfigurationService = ConfigurationService;
 
 export interface AppConfigurationService extends ConfigurationService {
   loadSettings(): Promise<AppSettings>;

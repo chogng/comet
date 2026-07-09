@@ -3,15 +3,16 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { ColorIdentifier } from 'cs/platform/theme/common/colorRegistry';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
-export interface ILogService {
-	readonly _serviceBrand: undefined;
-	trace(message: string, ...args: unknown[]): void;
-	debug(message: string, ...args: unknown[]): void;
-	info(message: string, ...args: unknown[]): void;
-	warn(message: string, ...args: unknown[]): void;
-	error(message: string | Error, ...args: unknown[]): void;
+export const IThemeService = createDecorator<IThemeService>('themeService');
+
+export interface IColorTheme {
+	getColor(color: ColorIdentifier | string): { toString(): string } | undefined;
 }
 
-export const ILogService = createDecorator<ILogService>('logService');
+export interface IThemeService {
+	readonly _serviceBrand: undefined;
+	getColorTheme(): IColorTheme;
+}

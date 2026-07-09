@@ -14,7 +14,9 @@ import type {
 import type { IStorage } from 'cs/base/parts/storage/common/storage';
 import type { StorageValue } from 'cs/base/parts/storage/common/storage';
 import type { Event } from 'cs/base/common/event';
+import type { DisposableStore } from 'cs/base/common/lifecycle';
 import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export const IS_NEW_KEY = '__$__isNewStorageMarker';
 export const TARGET_KEY = '__$__targetStorageMarker';
@@ -35,6 +37,12 @@ export interface IStorageValueChangeEvent {
   readonly external?: boolean;
 }
 
+export type StorageChangeEvent = Event<IStorageValueChangeEvent> & ((
+  scope: StorageScope,
+  key: string,
+  disposable: DisposableStore,
+) => Event<IStorageValueChangeEvent>);
+
 export enum StorageScope {
   APPLICATION_SHARED = -2,
   APPLICATION = -1,
@@ -53,8 +61,8 @@ export interface TranslationCacheRecord {
 }
 
 export interface StorageService extends AppSettingsConfigurationService {
-  readonly applicationStorage: IStorage;
-  readonly onDidChangeValue: Event<IStorageValueChangeEvent>;
+ readonly applicationStorage: IStorage;
+  readonly onDidChangeValue: StorageChangeEvent;
   readonly onWillSaveState: Event<IWillSaveStateEvent>;
   init(): Promise<void>;
   close(): Promise<void>;
@@ -114,3 +122,6 @@ export interface StorageService extends AppSettingsConfigurationService {
     payload: ReindexLibraryDocumentPayload,
   ): Promise<ReindexLibraryDocumentResult>;
 }
+
+export const IStorageService = createDecorator<StorageService>('storageService');
+export type IStorageService = StorageService;

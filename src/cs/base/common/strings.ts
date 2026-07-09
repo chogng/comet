@@ -4,6 +4,16 @@ export function cleanText(value: unknown) {
     .trim();
 }
 
+export const Ellipsis = '\u2026';
+
+export function truncate(value: string, maxLength: number, suffix = Ellipsis): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength)}${suffix}`;
+}
+
 export function cleanNullable(value: unknown) {
   const normalized = cleanText(value);
   return normalized ? normalized : null;
