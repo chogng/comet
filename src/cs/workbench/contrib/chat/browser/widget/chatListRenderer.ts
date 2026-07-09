@@ -2,7 +2,7 @@
  *  Copyright (c) Comet Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
+import type { ChatMessage } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { localize } from 'cs/nls';
 import { MarkdownString } from 'cs/base/common/htmlContent';
 import type { DisposableStore } from 'cs/base/common/lifecycle';
@@ -18,7 +18,7 @@ export type ChatListRendererOptions = {
 	readonly onToggleArticleSelected: (href: string) => void;
 };
 
-type AssistantMessage = Extract<AssistantChatMessage, { role: 'assistant' }>;
+type AssistantMessage = Extract<ChatMessage, { role: 'assistant' }>;
 type AssistantResult = NonNullable<AssistantMessage['result']>;
 
 export class ChatListRenderer {
@@ -28,7 +28,7 @@ export class ChatListRenderer {
 		this.markdownRenderer = new ChatContentMarkdownRenderer(options.markdownRendererService);
 	}
 
-	renderElement(message: AssistantChatMessage, disposables: DisposableStore) {
+	renderElement(message: ChatMessage, disposables: DisposableStore) {
 		if (message.role === 'user') {
 			return this.renderUserMessage(message);
 		}
@@ -37,7 +37,7 @@ export class ChatListRenderer {
 	}
 
 	private renderUserMessage(
-		message: Extract<AssistantChatMessage, { role: 'user' }>,
+		message: Extract<ChatMessage, { role: 'user' }>,
 	) {
 		const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-user');
 		const text = $<HTMLElementTagNameMap['p']>('p.comet-chat-message-text');
@@ -47,7 +47,7 @@ export class ChatListRenderer {
 	}
 
 	private renderAssistantMessage(
-		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
+		message: Extract<ChatMessage, { role: 'assistant' }>,
 		disposables: DisposableStore,
 	) {
 		const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-assistant');

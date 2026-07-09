@@ -18,13 +18,13 @@ import type {
   WritingEditorStableSelectionTarget,
 } from 'cs/editor/common/writingEditorDocument';
 import type {
-  AssistantModelContext,
-} from 'cs/workbench/browser/assistantModel';
+  ChatServiceContext,
+} from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { ChatService } from 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { locales } from 'language/locales';
 
 let domEnvironment: JSDOM | null = null;
-let createAssistantModel: typeof import('cs/workbench/browser/assistantModel').createAssistantModel;
 
 type InvokeCapture = {
   commands: string[];
@@ -49,7 +49,6 @@ before(async () => {
     configurable: true,
     value: domEnvironment.window.Event,
   });
-  ({ createAssistantModel } = await import('cs/workbench/browser/assistantModel'));
 });
 
 after(() => {
@@ -100,7 +99,7 @@ function createInvokeDesktop(capture?: InvokeCapture): ElectronInvoke {
 function createAssistantContext(
   locale: 'zh' | 'en',
   capture?: InvokeCapture,
-  overrides: Partial<AssistantModelContext> = {},
+  overrides: Partial<ChatServiceContext> = {},
 ) {
   const document: WritingEditorDocument = {
     type: 'doc',
@@ -132,10 +131,9 @@ function createAssistantContext(
     isPlainTextEditable: true,
   };
 
-  const context: AssistantModelContext = {
+  const context: ChatServiceContext = {
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(capture),
-    notificationService: new NoOpNotificationService(),
     ui: locales[locale],
     isKnowledgeBaseModeEnabled: false,
     articles: [] as Article[],
@@ -206,30 +204,36 @@ function createAssistantContext(
   };
 }
 
+function createChatService(context: ChatServiceContext) {
+  const chatService = new ChatService(new NoOpNotificationService());
+  chatService.setContext(context);
+  return chatService;
+}
+
 test('new conversations use the active locale title', () => {
-  const assistantModel = createAssistantModel(createAssistantContext('en'));
+  const assistantModel = createChatService(createAssistantContext('en'));
 
   const initialSnapshot = assistantModel.getSnapshot();
   assert.equal(initialSnapshot.conversations[0]?.title, 'New chat');
 
-  assistantModel.handleCreateConversation();
+  assistantModel.createConversation();
 
   const nextSnapshot = assistantModel.getSnapshot();
   assert.equal(nextSnapshot.conversations[1]?.title, 'New chat');
 });
 
 test('locale switches update only auto-generated conversation titles', async () => {
-  const assistantModel = createAssistantModel(createAssistantContext('zh'));
+  const assistantModel = createChatService(createAssistantContext('zh'));
 
-  assistantModel.handleCreateConversation();
-  assistantModel.handleCreateConversation();
+  assistantModel.createConversation();
+  assistantModel.createConversation();
 
-  assistantModel.handleActivateConversation(
+  assistantModel.activateConversation(
     assistantModel.getSnapshot().conversations[1]!.id,
   );
   assistantModel.setQuestion('A custom title from the first question');
 
-  await assistantModel.handleAsk();
+  await assistantModel.ask();
   assert.equal(assistantModel.getSnapshot().conversations[1]?.title, 'A custom title fro');
 
   assistantModel.setContext(createAssistantContext('en'));
@@ -245,10 +249,10 @@ test('assistant asks through run_main_agent_turn and stores the returned answer'
     commands: [],
     payloads: [],
   };
-  const assistantModel = createAssistantModel(createAssistantContext('en', capture));
+  const assistantModel = createChatService(createAssistantContext('en', capture));
 
   assistantModel.setQuestion('What changed in the draft?');
-  await assistantModel.handleAsk();
+  await assistantModel.ask();
 
   const snapshot = assistantModel.getSnapshot();
   assert.deepEqual(capture.commands, ['run_main_agent_turn']);
@@ -377,43 +381,55 @@ test('assistant inserts fetched article links without sending them as agent text
     commands: [],
     payloads: [],
   };
-  const assistantModel = createAssistantModel(createAssistantContext('en', capture));
+  const assistantModel = createChatService(createAssistantContext('en', capture));
+  const articles: Article[] = [
+    {
+      title: 'Fetched article',
+      articleType: 'Research Article',
+      doi: '10.1126/example',
+      authors: ['Ada Lovelace'],
+      abstractText: 'Abstract',
+      descriptionText: 'Description',
+      publishedAt: '2026-07-03',
+      sourceUrl: 'https://www.science.org/doi/example',
+      fetchedAt: '2026-07-04T00:00:00.000Z',
+      fetchOrder: 1,
+      sourceId: 'science',
+      journalTitle: 'Science',
+    },
+    {
+      title: 'Second fetched article',
+      articleType: 'Research Article',
+      doi: '10.1126/example-2',
+      authors: ['Grace Hopper'],
+      abstractText: 'Second abstract',
+      descriptionText: 'Second description',
+      publishedAt: '2026-07-04',
+      sourceUrl: 'https://www.science.org/doi/example-2',
+      fetchedAt: '2026-07-04T00:00:01.000Z',
+      fetchOrder: 2,
+      sourceId: 'science',
+      journalTitle: 'Science',
+    },
+  ];
 
-  assistantModel.handleInsertArticles(
-    [
-      {
-        title: 'Fetched article',
-        articleType: 'Research Article',
-        doi: '10.1126/example',
-        authors: ['Ada Lovelace'],
-        abstractText: 'Abstract',
-        descriptionText: 'Description',
-        publishedAt: '2026-07-03',
-        sourceUrl: 'https://www.science.org/doi/example',
-        fetchedAt: '2026-07-04T00:00:00.000Z',
-        fetchOrder: 1,
-        sourceId: 'science',
-        journalTitle: 'Science',
-      },
-      {
-        title: 'Second fetched article',
-        articleType: 'Research Article',
-        doi: '10.1126/example-2',
-        authors: ['Grace Hopper'],
-        abstractText: 'Second abstract',
-        descriptionText: 'Second description',
-        publishedAt: '2026-07-04',
-        sourceUrl: 'https://www.science.org/doi/example-2',
-        fetchedAt: '2026-07-04T00:00:01.000Z',
-        fetchOrder: 2,
-        sourceId: 'science',
-        journalTitle: 'Science',
-      },
-    ],
+  assistantModel.insertArticles(
+    articles,
     'Science',
   );
+  assert.deepEqual(assistantModel.collectArticleBatch(articles), articles);
+  assert.deepEqual(assistantModel.collectSelectedArticleBatch(articles), articles);
+  assert.equal(
+    assistantModel.isArticleSelected('https://www.science.org/doi/example'),
+    true,
+  );
+  assistantModel.toggleArticleSelected('https://www.science.org/doi/example');
+  assert.deepEqual(assistantModel.collectSelectedArticleBatch(articles), [
+    articles[1],
+  ]);
+  assistantModel.toggleArticleSelected('https://www.science.org/doi/example');
   assistantModel.setQuestion('Summarize the article.');
-  await assistantModel.handleAsk();
+  await assistantModel.ask();
 
   const snapshot = assistantModel.getSnapshot();
   const articlesMessage = snapshot.messages[0];
@@ -441,14 +457,14 @@ test('assistant inserts empty article fetch result as markdown without sending i
     commands: [],
     payloads: [],
   };
-  const assistantModel = createAssistantModel(createAssistantContext('en', capture));
+  const assistantModel = createChatService(createAssistantContext('en', capture));
 
-  assistantModel.handleInsertArticleFetchEmptyResult(
+  assistantModel.insertArticleFetchEmptyResult(
     'Nature Photonics',
     'No articles matched the selected date range.',
   );
   assistantModel.setQuestion('What did we fetch?');
-  await assistantModel.handleAsk();
+  await assistantModel.ask();
 
   const snapshot = assistantModel.getSnapshot();
   const emptyMessage = snapshot.messages[0];
@@ -485,7 +501,7 @@ test('assistant applies a pending text patch to the current draft locally', asyn
     ],
   };
   const appliedDocuments: WritingEditorDocument[] = [];
-  const assistantModel = createAssistantModel(
+  const assistantModel = createChatService(
     createAssistantContext('en', undefined, {
       invokeDesktop: (async (command: string) => {
         if (command !== 'run_main_agent_turn') {
@@ -543,13 +559,13 @@ test('assistant applies a pending text patch to the current draft locally', asyn
   );
 
   assistantModel.setQuestion('Revise the draft sentence.');
-  await assistantModel.handleAsk();
+  await assistantModel.ask();
 
   const beforeApply = assistantModel.getSnapshot().messages[1];
   assert.equal(beforeApply?.role, 'assistant');
   assert.equal(beforeApply?.patchProposal?.isApplied, false);
 
-  assistantModel.handleApplyPatch(beforeApply!.id);
+  assistantModel.applyPatch(beforeApply!.id);
 
   const afterApply = assistantModel.getSnapshot().messages[1];
   assert.equal(afterApply?.role, 'assistant');
@@ -563,15 +579,15 @@ test('assistant applies a pending text patch to the current draft locally', asyn
 });
 
 test('assistant subscriptions stop after disposal', () => {
-  const assistantModel = createAssistantModel(createAssistantContext('en'));
+  const assistantModel = createChatService(createAssistantContext('en'));
   let notificationCount = 0;
   const disposeListener = assistantModel.subscribe(() => {
     notificationCount += 1;
   });
 
-  assistantModel.handleCreateConversation();
+  assistantModel.createConversation();
   disposeListener();
-  assistantModel.handleCreateConversation();
+  assistantModel.createConversation();
 
   assert.equal(notificationCount, 1);
 });

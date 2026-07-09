@@ -1,4 +1,4 @@
-import type { AssistantModelSnapshot } from 'cs/workbench/browser/assistantModel';
+import type { ChatServiceSnapshot } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
@@ -15,7 +15,7 @@ type CreateSessionChatViewPropsParams = {
 	state: {
 		isKnowledgeBaseModeEnabled: boolean;
 		question: string;
-		messages: AssistantModelSnapshot['messages'];
+		messages: ChatServiceSnapshot['messages'];
 		isAsking: boolean;
 		errorMessage: string | null;
 		availableArticleCount: number;

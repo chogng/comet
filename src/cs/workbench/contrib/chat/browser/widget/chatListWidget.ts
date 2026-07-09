@@ -2,7 +2,7 @@
  *  Copyright (c) Comet Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AssistantChatMessage } from 'cs/workbench/browser/assistantModel';
+import type { ChatMessage } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
@@ -26,7 +26,7 @@ export class ChatListWidget {
 	private readonly renderer: ChatListRenderer;
 	private readonly disposables = new DisposableStore();
 	private readonly renderDisposables = this.disposables.add(new DisposableStore());
-	private messages: readonly AssistantChatMessage[] = [];
+	private messages: readonly ChatMessage[] = [];
 
 	constructor(
 		options: ChatListWidgetOptions,
@@ -76,7 +76,7 @@ export class ChatListWidget {
 		return this.element;
 	}
 
-	setMessages(messages: readonly AssistantChatMessage[]) {
+	setMessages(messages: readonly ChatMessage[]) {
 		const shouldScrollToEnd =
 			this.messages.length === 0 ||
 			this.isScrolledToBottom();

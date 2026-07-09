@@ -6,8 +6,8 @@
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import type { LlmProviderId } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
-	AssistantChatMessage,
-} from 'cs/workbench/browser/assistantModel';
+	ChatMessage,
+} from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import type {
 	LlmReasoningEffort,
@@ -28,7 +28,7 @@ export type ChatWidgetProps = {
 	readonly activeLlmModelLabel: string;
 	readonly isMaxContextWindowEnabled: boolean;
 	readonly activeLlmModelSupportsMaxContextWindow: boolean;
-	readonly messages: AssistantChatMessage[];
+	readonly messages: ChatMessage[];
 	readonly question: string;
 	readonly onQuestionChange: (value: string) => void;
 	readonly isAsking: boolean;

@@ -2,12 +2,11 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
-import { createAssistantModel } from 'cs/workbench/browser/assistantModel';
 import type {
-  AssistantChatMessage,
-  AssistantModel,
-  AssistantModelContext,
-} from 'cs/workbench/browser/assistantModel';
+  ChatServiceContext,
+  IChatService,
+} from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { IChatService as IChatServiceDecorator } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { createBatchFetchController } from 'cs/workbench/browser/batchFetchModel';
 import type { BatchFetchController, BatchFetchControllerContext } from 'cs/workbench/browser/batchFetchModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
@@ -89,7 +88,6 @@ import {
   setWorkbenchArticles,
   setWorkbenchFetchSeedUrl,
   setWorkbenchSelectedArticleKeysInOrder,
-  setWorkbenchSelectedChatArticleUrlsInOrder,
   setWorkbenchSelectionModePhase,
   setWorkbenchWebUrl,
   subscribeWorkbenchSession,
@@ -120,7 +118,6 @@ import {
 } from 'cs/workbench/services/article/articleFetch';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
-import { parseLinkedText } from 'cs/base/common/linkedText';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
@@ -154,8 +151,8 @@ export type WorkbenchServicesSyncParams = {
   libraryContext: LibraryModelContext;
   editorPartController: EditorPartModel;
   editorPartContext: EditorPartControllerContext;
-  assistantModel: AssistantModel;
-  assistantContext: AssistantModelContext;
+  chatService: IChatService;
+  chatContext: ChatServiceContext;
   articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
   articleSummaryTranslationExportContext: ArticleSummaryTranslationExportControllerContext;
   documentActionsController: DocumentActionsController;
@@ -170,7 +167,6 @@ let settingsController: SettingsController | null = null;
 let libraryModel: LibraryModel | null = null;
 let webContentNavigationModel: WebContentNavigationModel | null = null;
 let editorPartController: EditorPartModel | null = null;
-let assistantModel: AssistantModel | null = null;
 let articleSummaryTranslationExportController: ArticleSummaryTranslationExportController | null = null;
 let documentActionsController: DocumentActionsController | null = null;
 let batchFetchController: BatchFetchController | null = null;
@@ -381,86 +377,6 @@ function formatStableSelectionWritingContext(
   ].join('\n');
 }
 
-function collectChatArticleBatch(
-  messages: readonly AssistantChatMessage[],
-  articles: readonly Article[],
-): Article[] {
-  const articlesByUrl = new Map(
-    articles.map((article) => [normalizeUrl(article.sourceUrl), article] as const),
-  );
-  const result: Article[] = [];
-  const seenUrls = new Set<string>();
-
-  for (const message of messages) {
-    if (message.role !== 'assistant' || message.includeInAgentHistory !== false) {
-      continue;
-    }
-
-    for (const node of parseLinkedText(message.content).nodes) {
-      if (typeof node === 'string') {
-        continue;
-      }
-
-      const normalizedUrl = normalizeUrl(node.href);
-      if (!normalizedUrl || seenUrls.has(normalizedUrl)) {
-        continue;
-      }
-
-      const article = articlesByUrl.get(normalizedUrl);
-      if (!article) {
-        continue;
-      }
-
-      seenUrls.add(normalizedUrl);
-      result.push(article);
-    }
-  }
-
-  return result;
-}
-
-function collectSelectedChatArticleBatch(
-  articles: readonly Article[],
-  selectedChatArticleUrlsInOrder: readonly string[],
-): Article[] {
-  const articlesByUrl = new Map(
-    articles.map((article) => [normalizeUrl(article.sourceUrl), article] as const),
-  );
-
-  return selectedChatArticleUrlsInOrder
-    .map((sourceUrl) => articlesByUrl.get(sourceUrl))
-    .filter((article): article is Article => Boolean(article));
-}
-
-function appendSelectedChatArticleUrls(
-  previousUrls: string[],
-  articles: readonly Article[],
-) {
-  const nextUrls = [...previousUrls];
-  for (const article of articles) {
-    const sourceUrl = normalizeUrl(article.sourceUrl);
-    if (sourceUrl && !nextUrls.includes(sourceUrl)) {
-      nextUrls.push(sourceUrl);
-    }
-  }
-
-  return areStringArraysEqual(previousUrls, nextUrls) ? previousUrls : nextUrls;
-}
-
-function toggleSelectedChatArticleUrl(
-  previousUrls: string[],
-  href: string,
-) {
-  const sourceUrl = normalizeUrl(href);
-  if (!sourceUrl) {
-    return previousUrls;
-  }
-
-  return previousUrls.includes(sourceUrl)
-    ? previousUrls.filter((selectedUrl) => selectedUrl !== sourceUrl)
-    : [...previousUrls, sourceUrl];
-}
-
 class WorkbenchHost {
   private readonly rootElement: HTMLElement;
   private readonly containerElement: HTMLDivElement;
@@ -525,6 +441,7 @@ class WorkbenchHost {
     @IOpenerService private readonly openerService: IOpenerService,
     @IDialogService private readonly dialogService: IDialogService,
     @IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
+    @IChatServiceDecorator private readonly chatService: IChatService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
   ) {
     this.rootElement = rootElement;
@@ -687,7 +604,7 @@ class WorkbenchHost {
     libraryModel: LibraryModel;
     webContentNavigationModel: WebContentNavigationModel;
     editorPartController: EditorPartModel;
-    assistantModel: AssistantModel;
+    chatService: IChatService;
     articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
     documentActionsController: DocumentActionsController;
     batchFetchController: BatchFetchController;
@@ -702,7 +619,7 @@ class WorkbenchHost {
       services.libraryModel.subscribe(this.requestRender),
       services.webContentNavigationModel.subscribe(this.requestRender),
       services.editorPartController.subscribe(this.handleEditorPartChange),
-      services.assistantModel.subscribe(this.requestRender),
+      services.chatService.subscribe(this.requestRender),
       services.articleSummaryTranslationExportController.subscribe(this.requestRender),
       services.documentActionsController.subscribe(this.requestRender),
       services.batchFetchController.subscribe(this.requestRender),
@@ -1159,7 +1076,6 @@ class WorkbenchHost {
       articles,
       selectionModePhase,
       selectedArticleKeysInOrder,
-      selectedChatArticleUrlsInOrder,
     } = getWorkbenchSessionSnapshot();
     const {
       isPrimarySidebarVisible,
@@ -1358,10 +1274,10 @@ class WorkbenchHost {
         editorPartControllerInstance.updateActiveBrowserTabFaviconUrl,
     };
 
-    const assistantModelInstance = getWorkbenchAssistantModel({
+    const chatServiceInstance = this.chatService;
+    chatServiceInstance.setContext({
       desktopRuntime,
       invokeDesktop,
-      notificationService: this.notificationService,
       ui,
       isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
       articles: filteredArticles,
@@ -1372,17 +1288,17 @@ class WorkbenchHost {
       getDraftDocument: editorPartControllerInstance.getDraftDocument,
       setDraftDocument: editorPartControllerInstance.setDraftDocument,
     });
-    const assistantSnapshot = assistantModelInstance.getSnapshot();
+    const assistantSnapshot = chatServiceInstance.getSnapshot();
     const {
       question: assistantQuestion,
       messages: assistantMessages,
       isAsking: isAssistantAsking,
       errorMessage: assistantErrorMessage,
     } = assistantSnapshot;
-    const setAssistantQuestion = assistantModelInstance.setQuestion;
-    const handleAssistantAsk = assistantModelInstance.handleAsk;
+    const setAssistantQuestion = chatServiceInstance.setQuestion;
+    const handleAssistantAsk = chatServiceInstance.ask;
     const handleAssistantApplyPatch =
-      assistantModelInstance.handleApplyPatch;
+      chatServiceInstance.applyPatch;
 
     const filteredArticleKeysInOrder = filteredArticles.map((article) =>
       getArticleSelectionKey(article),
@@ -1565,15 +1481,9 @@ class WorkbenchHost {
       onFetchSuccess: handleBatchFetchSuccess,
     });
     const { isBatchLoading } = batchFetchControllerInstance.getSnapshot();
-    const chatArticleBatch = collectChatArticleBatch(
-      assistantMessages,
-      filteredArticles,
-    );
-    const selectedChatArticleBatch = collectSelectedChatArticleBatch(
-      chatArticleBatch,
-      selectedChatArticleUrlsInOrder,
-    );
-    const selectedChatArticleUrlSet = new Set(selectedChatArticleUrlsInOrder);
+    const chatArticleBatch = chatServiceInstance.collectArticleBatch(filteredArticles);
+    const selectedChatArticleBatch =
+      chatServiceInstance.collectSelectedArticleBatch(filteredArticles);
     const handleFetchLatestBatch = async () => {
       const sourceTable = resolveBatchFetchSourceTable(journalSourceOverrides);
       const batchSourceLabel = getBatchSourcesDisplayLabel(
@@ -1584,10 +1494,7 @@ class WorkbenchHost {
         return;
       }
 
-      setWorkbenchSelectedChatArticleUrlsInOrder((previousUrls) =>
-        appendSelectedChatArticleUrls(previousUrls, result.articles),
-      );
-      assistantModelInstance.handleInsertArticles(
+      chatServiceInstance.insertArticles(
         result.articles,
         batchSourceLabel,
       );
@@ -1603,7 +1510,7 @@ class WorkbenchHost {
       const result = await batchFetchControllerInstance.handleFetchSource(source);
       if (!result.ok) {
         if ('reason' in result && result.reason === 'empty') {
-          assistantModelInstance.handleInsertArticleFetchEmptyResult(
+          chatServiceInstance.insertArticleFetchEmptyResult(
             getBatchSourceDisplayLabel(source),
             result.message,
           );
@@ -1611,10 +1518,7 @@ class WorkbenchHost {
         return;
       }
 
-      setWorkbenchSelectedChatArticleUrlsInOrder((previousUrls) =>
-        appendSelectedChatArticleUrls(previousUrls, result.articles),
-      );
-      assistantModelInstance.handleInsertArticles(
+      chatServiceInstance.insertArticles(
         result.articles,
         getBatchSourceDisplayLabel(source),
       );
@@ -1683,11 +1587,10 @@ class WorkbenchHost {
         browserUrl,
         webUrl,
       },
-      assistantModel: assistantModelInstance,
-      assistantContext: {
+      chatService: chatServiceInstance,
+      chatContext: {
         desktopRuntime,
         invokeDesktop,
-        notificationService: this.notificationService,
         ui,
         isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
         articles: filteredArticles,
@@ -1759,7 +1662,7 @@ class WorkbenchHost {
       libraryModel: libraryModelInstance,
       webContentNavigationModel: webContentNavigationModelInstance,
       editorPartController: editorPartControllerInstance,
-      assistantModel: assistantModelInstance,
+      chatService: chatServiceInstance,
       articleSummaryTranslationExportController:
         articleSummaryTranslationExportControllerInstance,
       documentActionsController: documentActionsControllerInstance,
@@ -1830,10 +1733,7 @@ class WorkbenchHost {
         downloadAllProgress: documentActionsSnapshot.downloadAllProgress,
         translationExportProgress:
           articleSummaryTranslationExportSnapshot.translationExportProgress,
-        isArticleSelected: (href) => {
-          const sourceUrl = normalizeUrl(href);
-          return Boolean(sourceUrl && selectedChatArticleUrlSet.has(sourceUrl));
-        },
+        isArticleSelected: chatServiceInstance.isArticleSelected,
       },
       actions: {
         onQuestionChange: setAssistantQuestion,
@@ -1847,11 +1747,7 @@ class WorkbenchHost {
             selectedChatArticleBatch,
             translateSummaries,
           ),
-        onToggleArticleSelected: (href) => {
-          setWorkbenchSelectedChatArticleUrlsInOrder((previousUrls) =>
-            toggleSelectedChatArticleUrl(previousUrls, href),
-          );
-        },
+        onToggleArticleSelected: chatServiceInstance.toggleArticleSelected,
         onToggleAutoModelRouting: (options) => {
           activeAgentChatModelOptionValue = activeAgentChatModelOptionValue
             ? null
@@ -2187,7 +2083,6 @@ export function disposeWorkbenchServices() {
   batchFetchController = null;
 
   webContentNavigationModel = null;
-  assistantModel = null;
 }
 
 export function getWorkbenchSettingsController(
@@ -2226,11 +2121,6 @@ export function getWorkbenchEditorPartController(
   return editorPartController;
 }
 
-export function getWorkbenchAssistantModel(context: AssistantModelContext) {
-  assistantModel ??= createAssistantModel(context);
-  return assistantModel;
-}
-
 export function getWorkbenchArticleSummaryTranslationExportController(
   context: ArticleSummaryTranslationExportControllerContext,
 ) {
@@ -2263,8 +2153,8 @@ export function syncWorkbenchServicesContext({
   libraryContext,
   editorPartController: editorPartControllerInstance,
   editorPartContext,
-  assistantModel: assistantModelInstance,
-  assistantContext,
+  chatService: chatServiceInstance,
+  chatContext,
   articleSummaryTranslationExportController:
     articleSummaryTranslationExportControllerInstance,
   articleSummaryTranslationExportContext,
@@ -2276,7 +2166,7 @@ export function syncWorkbenchServicesContext({
   settingsControllerInstance.setContext(settingsContext);
   libraryModelInstance.setContext(libraryContext);
   editorPartControllerInstance.setContext(editorPartContext);
-  assistantModelInstance.setContext(assistantContext);
+  chatServiceInstance.setContext(chatContext);
   articleSummaryTranslationExportControllerInstance.setContext(
     articleSummaryTranslationExportContext,
   );

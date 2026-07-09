@@ -40,6 +40,7 @@ import 'cs/workbench/services/lifecycle/browser/lifecycleService';
 import 'cs/workbench/services/localization/browser/localeService';
 import 'cs/workbench/services/notification/common/notificationService';
 import 'cs/workbench/services/views/browser/viewsService';
+import 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 
 registerWorkbenchService(INativeHostService, nativeHostService);
 

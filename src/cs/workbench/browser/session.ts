@@ -9,7 +9,6 @@ export type WorkbenchSessionSnapshot = {
   articles: Article[];
   selectionModePhase: SelectionModePhase;
   selectedArticleKeysInOrder: string[];
-  selectedChatArticleUrlsInOrder: string[];
 };
 
 const DEFAULT_WORKBENCH_SESSION: WorkbenchSessionSnapshot = {
@@ -18,7 +17,6 @@ const DEFAULT_WORKBENCH_SESSION: WorkbenchSessionSnapshot = {
   articles: [],
   selectionModePhase: "off",
   selectedArticleKeysInOrder: [],
-  selectedChatArticleUrlsInOrder: [],
 };
 
 let workbenchSessionState = DEFAULT_WORKBENCH_SESSION;
@@ -107,27 +105,6 @@ export function setWorkbenchSelectedArticleKeysInOrder(
       : {
           ...current,
           selectedArticleKeysInOrder: nextSelectedArticleKeysInOrder,
-        };
-  });
-}
-
-export function setWorkbenchSelectedChatArticleUrlsInOrder(
-  selectedChatArticleUrlsInOrder: string[] | ((current: string[]) => string[]),
-) {
-  updateWorkbenchSessionState((current) => {
-    const nextSelectedChatArticleUrlsInOrder =
-      typeof selectedChatArticleUrlsInOrder === "function"
-        ? selectedChatArticleUrlsInOrder(current.selectedChatArticleUrlsInOrder)
-        : selectedChatArticleUrlsInOrder;
-
-    return Object.is(
-      current.selectedChatArticleUrlsInOrder,
-      nextSelectedChatArticleUrlsInOrder,
-    )
-      ? current
-      : {
-          ...current,
-          selectedChatArticleUrlsInOrder: nextSelectedChatArticleUrlsInOrder,
         };
   });
 }
