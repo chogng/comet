@@ -1,4 +1,3 @@
-import { toast } from 'cs/base/browser/ui/toast/toast';
 import { EventEmitter } from 'cs/base/common/event';
 import { MutableDisposable } from 'cs/base/common/lifecycle';
 import type {
@@ -20,6 +19,7 @@ import type { BatchFetchMachineEvent, BatchFetchMachineState } from 'cs/workbenc
 import { resolveBatchFetchStatusbarStatus } from 'cs/workbench/browser/parts/statusbar/statusbarFetchStatus';
 import type { BatchFetchStatusbarStatus } from 'cs/workbench/browser/parts/statusbar/statusbarFetchStatus';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
+import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 import {
   formatLocaleMessage,
@@ -34,6 +34,7 @@ export type BatchFetchControllerContext = {
   batchEndDate: string;
   invokeDesktop: ElectronInvoke;
   nativeHost: INativeHostService;
+  notificationService: INotificationService;
   ui: LocaleMessages;
   onBeforeFetch: () => void;
   onFetchSuccess: (articles: Article[]) => void;
@@ -165,6 +166,7 @@ export class BatchFetchController {
       batchStartDate,
       batchEndDate,
       invokeDesktop,
+      notificationService,
       ui,
       onFetchSuccess,
     } = this.context;
@@ -185,7 +187,7 @@ export class BatchFetchController {
 
       if (!result.ok) {
         if (result.reason === 'desktop_unsupported') {
-          toast.info(ui.toastDesktopBatchFetchOnly);
+          notificationService.info(ui.toastDesktopBatchFetchOnly);
           this.dispatch({
             type: 'FETCH_FAILED',
             requestId,
@@ -195,7 +197,7 @@ export class BatchFetchController {
         }
 
         if (result.reason === 'empty_page_url') {
-          toast.error(ui.toastEnterPageUrl);
+          notificationService.error(ui.toastEnterPageUrl);
           this.dispatch({
             type: 'FETCH_FAILED',
             requestId,
@@ -205,7 +207,7 @@ export class BatchFetchController {
         }
 
         if (result.reason === 'invalid_date_range') {
-          toast.error(ui.toastDateRangeInvalid);
+          notificationService.error(ui.toastDateRangeInvalid);
           this.dispatch({
             type: 'FETCH_FAILED',
             requestId,
@@ -233,7 +235,7 @@ export class BatchFetchController {
           };
         }
 
-        toast.error(
+        notificationService.error(
           formatLocaleMessage(ui.toastBatchFetchFailed, {
             error: localizedError,
           }),
@@ -247,7 +249,7 @@ export class BatchFetchController {
       }
 
       onFetchSuccess(result.articles);
-      toast.success(
+      notificationService.info(
         formatLocaleMessage(ui.toastBatchFetchSucceeded, {
           count: result.articles.length,
         }),
@@ -260,7 +262,7 @@ export class BatchFetchController {
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(
+      notificationService.error(
         formatLocaleMessage(ui.toastBatchFetchFailed, {
           error: errorMessage || ui.errorUnknown,
         }),

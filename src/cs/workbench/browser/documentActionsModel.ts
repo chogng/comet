@@ -1,4 +1,3 @@
-import { toast } from 'cs/base/browser/ui/toast/toast';
 import { EventEmitter } from 'cs/base/common/event';
 import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import type { CancellationToken } from 'cs/base/common/cancellation';
@@ -8,7 +7,6 @@ import type {
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
@@ -34,11 +32,12 @@ import { syncLibraryMetadataFromArticle } from 'cs/workbench/services/knowledgeB
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
+import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 export type DocumentActionsControllerContext = {
   desktopRuntime: boolean;
   invokeDesktop: ElectronInvoke;
-  nativeHost: INativeHostService;
+  notificationService: INotificationService;
   locale: Locale;
   ui: LocaleMessages;
   knowledgeBaseEnabled: boolean;
@@ -149,32 +148,6 @@ function isDesktopCancellation(
   return error.message === 'Canceled' || error.details?.message === 'Canceled';
 }
 
-function showAppToast(
-  nativeHost: INativeHostService,
-  type: 'info' | 'success' | 'error' | 'warning',
-  message: string,
-) {
-  const toastApi = nativeHost.toast;
-  if (toastApi) {
-    toastApi.show({ type, message });
-    return;
-  }
-
-  switch (type) {
-    case 'success':
-      toast.success(message);
-      return;
-    case 'error':
-      toast.error(message);
-      return;
-    case 'warning':
-      toast.info(message);
-      return;
-    default:
-      toast.info(message);
-  }
-}
-
 let documentBatchTaskCounter = 0;
 
 function createDocumentBatchTaskId() {
@@ -244,7 +217,7 @@ export class DocumentActionsController {
     const {
       desktopRuntime,
       invokeDesktop,
-      nativeHost,
+      notificationService,
       ui,
       knowledgeBaseEnabled,
       pdfDownloadDir,
@@ -261,7 +234,7 @@ export class DocumentActionsController {
       if (options.token?.isCancellationRequested) {
         return;
       }
-      showAppToast(nativeHost, 'error', ui.toastEnterArticleUrl);
+      notificationService.error(ui.toastEnterArticleUrl);
       return;
     }
 
@@ -269,7 +242,7 @@ export class DocumentActionsController {
       if (options.token?.isCancellationRequested) {
         return;
       }
-      showAppToast(nativeHost, 'info', ui.toastDesktopPdfDownloadOnly);
+      notificationService.info(ui.toastDesktopPdfDownloadOnly);
       return;
     }
 
@@ -295,7 +268,7 @@ export class DocumentActionsController {
     markPdfDownloadStarted(preparedPdfDownload.normalizedSourceUrl);
 
     if (preparedPdfDownload.isSciencePdfDownload && this.sciencePdfDownloadCount > 0) {
-      showAppToast(nativeHost, 'info', resolveSciencePdfQueueMessage(ui));
+      notificationService.info(resolveSciencePdfQueueMessage(ui));
     }
 
     if (preparedPdfDownload.isSciencePdfDownload) {
@@ -328,9 +301,7 @@ export class DocumentActionsController {
       }
       markPdfDownloadSucceeded(preparedPdfDownload.normalizedSourceUrl, result);
       void onLibraryUpdated?.();
-      showAppToast(
-        nativeHost,
-        'success',
+      notificationService.info(
         formatLocaleMessage(ui.toastPdfDownloaded, {
           filePath: result.filePath,
           sourceUrl: result.sourceUrl,
@@ -350,9 +321,7 @@ export class DocumentActionsController {
 
       const localizedError = localizeAppError(ui, parsedError);
       markPdfDownloadFailed(preparedPdfDownload.normalizedSourceUrl, localizedError);
-      showAppToast(
-        nativeHost,
-        'error',
+      notificationService.error(
         formatLocaleMessage(ui.toastPdfDownloadFailed, { error: localizedError }),
       );
     } finally {
@@ -463,7 +432,7 @@ export class DocumentActionsController {
           return;
         }
 
-        toast.success(
+        this.context.notificationService.info(
           formatLocaleMessage(ui.toastEditorDocxExported, {
             title: result.title,
             filePath: result.filePath,
@@ -474,7 +443,7 @@ export class DocumentActionsController {
           ui,
           parseAppErrorData(exportError),
         );
-        toast.error(
+        this.context.notificationService.error(
           formatLocaleMessage(ui.toastDocxExportFailed, { error: localizedError }),
         );
       }

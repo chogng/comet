@@ -1,4 +1,3 @@
-import { toast } from "cs/base/browser/ui/toast/toast";
 import { EventEmitter } from "cs/base/common/event";
 import type {
   AgentMessagePayload,
@@ -24,6 +23,7 @@ import {
   formatChatPatchApplyFailedMessage,
   localizeChatError,
 } from "cs/workbench/common/chatErrorMessages";
+import type { INotificationService } from "cs/platform/notification/common/notification";
 
 export type AssistantModelContext = {
   desktopRuntime: boolean;
@@ -34,6 +34,7 @@ export type AssistantModelContext = {
   llmSettings: LlmSettings;
   ragSettings: RagSettings;
   fallbackWritingContext?: string;
+  notificationService: INotificationService;
   getFallbackWritingContext?: () => string;
   getDraftBody?: () => string;
   getDraftDocument?: () => WritingEditorDocument | null;
@@ -490,7 +491,7 @@ export class AssistantModel {
                 },
               },
       );
-      toast.error(
+      this.context.notificationService.error(
         formatChatPatchApplyFailedMessage(this.context.ui, unavailableMessage),
       );
       return;
@@ -515,7 +516,7 @@ export class AssistantModel {
                 },
               },
       );
-      toast.error(
+      this.context.notificationService.error(
         formatChatPatchApplyFailedMessage(this.context.ui, applyError),
       );
       return;
@@ -537,7 +538,7 @@ export class AssistantModel {
                 },
               },
       );
-      toast.error(
+      this.context.notificationService.error(
         formatChatPatchApplyFailedMessage(this.context.ui, applyResult.message),
       );
       return;
@@ -559,7 +560,7 @@ export class AssistantModel {
               },
             },
     );
-    toast.success(this.context.ui.toastAssistantPatchApplied);
+    this.context.notificationService.info(this.context.ui.toastAssistantPatchApplied);
   };
 
   readonly handleAsk = async () => {
@@ -579,7 +580,7 @@ export class AssistantModel {
 
     const context = this.context;
     if (!context.desktopRuntime) {
-      toast.info(context.ui.toastDesktopLlmTestOnly);
+      context.notificationService.info(context.ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -668,7 +669,7 @@ export class AssistantModel {
         errorMessage: localizedError,
         question: normalizedQuestion,
       }));
-      toast.error(
+      context.notificationService.error(
         formatChatAnswerFailedMessage(context.ui, localizedError)
       );
     } finally {

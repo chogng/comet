@@ -8,9 +8,6 @@ import type {
   AppCommandResultMap,
   DocumentTranslationProgress,
   FetchStatus,
-  NativeToastLayout,
-  NativeToastOptions,
-  NativeToastState,
   WindowControlAction,
   WindowState,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -488,28 +485,6 @@ const electronAPI: ElectronAPI = {
         model: '',
         message: null,
       });
-    },
-  },
-  toast: {
-    show(options: NativeToastOptions) {
-      sendIpc('app:native-toast-show', options);
-    },
-    dismiss(id: number) {
-      sendIpc('app:native-toast-dismiss', id);
-    },
-    getState() {
-      return invokeIpc<NativeToastState>('app:native-toast-get-state');
-    },
-    onStateChange(listener: (state: NativeToastState) => void) {
-      return subscribeIpc<NativeToastState>('app:native-toast-state', listener, {
-        items: [],
-      });
-    },
-    reportLayout(layout: NativeToastLayout) {
-      sendIpc('app:native-toast-layout', layout);
-    },
-    setHovering(hovering: boolean) {
-      sendIpc('app:native-toast-hover', hovering);
     },
   },
 };

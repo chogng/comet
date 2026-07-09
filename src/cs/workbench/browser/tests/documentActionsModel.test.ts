@@ -10,7 +10,7 @@ import type {
   WebContentPdfDownloadPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
-import type { INativeHostService } from 'cs/platform/native/common/native';
+import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import type { DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 
@@ -50,34 +50,6 @@ function createSuccessfulDownloadInvoke(
   }) as ElectronInvoke;
 }
 
-function createNoopToastApi(): NonNullable<INativeHostService['toast']> {
-  return {
-    show: () => {},
-    dismiss: () => {},
-    getState: async () => ({ items: [] }),
-    onStateChange: () => () => {},
-    reportLayout: () => {},
-    setHovering: () => {},
-  };
-}
-
-function createNativeHostService(
-  overrides: Partial<INativeHostService> = {},
-): INativeHostService {
-  return {
-    _serviceBrand: undefined,
-    canInvoke: () => true,
-    invoke: createInvokeDesktop(),
-    ipc: undefined,
-    windowControls: undefined,
-    webContent: undefined,
-    fetch: undefined,
-    document: undefined,
-    toast: undefined,
-    ...overrides,
-  };
-}
-
 function createDocumentActionsContext(
   overrides: Partial<DocumentActionsControllerContext> = {},
 ): DocumentActionsControllerContext {
@@ -85,10 +57,7 @@ function createDocumentActionsContext(
   return {
     desktopRuntime: true,
     invokeDesktop,
-    nativeHost: createNativeHostService({
-      invoke: invokeDesktop,
-      toast: createNoopToastApi(),
-    }),
+    notificationService: new NoOpNotificationService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -126,7 +95,7 @@ test('DocumentActionsController opens article details in a browser tab', async (
   const controller = createDocumentActionsController({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
-    nativeHost: createNativeHostService(),
+    notificationService: new NoOpNotificationService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -162,7 +131,7 @@ test('DocumentActionsController delegates article summary export', async () => {
   const controller = createDocumentActionsController({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
-    nativeHost: createNativeHostService(),
+    notificationService: new NoOpNotificationService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,

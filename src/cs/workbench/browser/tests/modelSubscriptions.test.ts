@@ -11,6 +11,7 @@ import type {
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import { appError } from 'cs/base/common/errors';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
 import { WebContentNavigationModel } from 'cs/workbench/browser/webContentNavigationModel';
@@ -326,6 +327,7 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
       batchEndDate: '',
       invokeDesktop: createInvokeDesktop(),
       nativeHost,
+      notificationService: new NoOpNotificationService(),
       ui: locales.en,
       onBeforeFetch: () => {},
       onFetchSuccess: () => {},
@@ -366,6 +368,7 @@ test('BatchFetchController reports date range no-match as empty result', async (
       }),
     ),
     nativeHost: createNativeHostService(),
+    notificationService: new NoOpNotificationService(),
     ui: locales.en,
     onBeforeFetch: () => {},
     onFetchSuccess: () => {
@@ -393,7 +396,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
   const controller = createDocumentActionsController({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
-    nativeHost: createNativeHostService(),
+    notificationService: new NoOpNotificationService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -415,7 +418,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
   controller.setContext({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
-    nativeHost: createNativeHostService(),
+    notificationService: new NoOpNotificationService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -440,7 +443,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
   controller.setContext({
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(),
-    nativeHost: createNativeHostService(),
+    notificationService: new NoOpNotificationService(),
     locale: 'en',
     ui: locales.en,
     knowledgeBaseEnabled: false,
@@ -506,7 +509,10 @@ test('WebContentNavigationModel subscriptions stop after listener disposal', asy
   });
 
   await withElectronApi(createElectronApi({}), async () => {
-    const model = new WebContentNavigationModel(nativeHost);
+    const model = new WebContentNavigationModel(
+      nativeHost,
+      new NoOpNotificationService(),
+    );
     const browserUrls: string[] = [];
     let webUrl = '';
     let fetchSeedUrl = '';
@@ -565,7 +571,10 @@ test('WebContentNavigationModel does not activate a default web content target f
   });
 
   await withElectronApi(createElectronApi({}), async () => {
-    const model = new WebContentNavigationModel(nativeHost);
+    const model = new WebContentNavigationModel(
+      nativeHost,
+      new NoOpNotificationService(),
+    );
 
     await model.activateTarget(null, {
       setWebUrl: () => {

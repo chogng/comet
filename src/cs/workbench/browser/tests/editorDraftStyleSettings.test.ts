@@ -7,6 +7,7 @@ import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { createSettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import { locales } from 'language/locales';
@@ -57,6 +58,7 @@ test('SettingsController syncs editorDraftStyleService through load and autosave
   const controller = createSettingsController({
     desktopRuntime: true,
     invokeDesktop,
+    notificationService: new NoOpNotificationService(),
     ui: locales.en,
     locale: 'en',
   });
@@ -174,6 +176,7 @@ test('SettingsController editorDraft style handlers update service snapshot and 
   const controller = createSettingsController({
     desktopRuntime: true,
     invokeDesktop,
+    notificationService: new NoOpNotificationService(),
     ui: locales.en,
     locale: 'en',
   });
@@ -311,6 +314,7 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
   const controller = createSettingsController({
     desktopRuntime: true,
     invokeDesktop,
+    notificationService: new NoOpNotificationService(),
     ui: locales.en,
     locale: 'en',
   });

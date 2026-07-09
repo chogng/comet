@@ -4,9 +4,6 @@ import type {
   AppCommandResultMap,
   DocumentTranslationProgress,
   FetchStatus,
-  NativeToastLayout,
-  NativeToastOptions,
-  NativeToastState,
   WindowControlAction,
   WindowState,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -73,15 +70,6 @@ export interface ElectronDocumentApi {
   onTranslationProgress: (listener: (progress: DocumentTranslationProgress) => void) => () => void;
 }
 
-export interface ElectronToastApi {
-  show: (options: NativeToastOptions) => void;
-  dismiss: (id: number) => void;
-  getState: () => Promise<NativeToastState>;
-  onStateChange: (listener: (state: NativeToastState) => void) => () => void;
-  reportLayout: (layout: NativeToastLayout) => void;
-  setHovering: (hovering: boolean) => void;
-}
-
 export interface ElectronIpcApi {
   call: <T = unknown>(
     channelName: string,
@@ -107,5 +95,4 @@ export interface ElectronAPI {
   webContent?: ElectronWebContentApi;
   fetch?: ElectronFetchApi;
   document?: ElectronDocumentApi;
-  toast?: ElectronToastApi;
 }

@@ -13,6 +13,10 @@ import type {
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import {
+  NoOpNotificationService,
+  type NotificationMessage,
+} from 'cs/platform/notification/common/notification';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 
@@ -20,7 +24,6 @@ let cleanupDomEnvironment: (() => void) | null = null;
 let createArticleSummaryTranslationExportController: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').createArticleSummaryTranslationExportController;
 let getStatusbarStateSnapshot: typeof import('cs/workbench/browser/parts/statusbar/statusbarModel').getStatusbarStateSnapshot;
 let setStatusbarState: typeof import('cs/workbench/browser/parts/statusbar/statusbarModel').setStatusbarState;
-let registerToastBridge: typeof import('cs/base/browser/ui/toast/toast').registerToastBridge;
 let locales: typeof import('language/locales').locales;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
@@ -29,13 +32,11 @@ test.before(async () => {
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({ createArticleSummaryTranslationExportController } = await import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport'));
   ({ getStatusbarStateSnapshot, setStatusbarState } = await import('cs/workbench/browser/parts/statusbar/statusbarModel'));
-  ({ registerToastBridge } = await import('cs/base/browser/ui/toast/toast'));
   ({ locales } = await import('language/locales'));
   ({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
 });
 
 test.after(() => {
-  registerToastBridge(null);
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
 });
@@ -106,6 +107,35 @@ function createDialogService() {
   return new BrowserDialogService();
 }
 
+type CapturedNotification = {
+  severity: 'info' | 'warning' | 'error';
+  message: NotificationMessage;
+};
+
+class CapturingNotificationService extends NoOpNotificationService {
+  constructor(private readonly notifications: CapturedNotification[]) {
+    super();
+  }
+
+  override info(message: NotificationMessage | NotificationMessage[]): void {
+    for (const item of Array.isArray(message) ? message : [message]) {
+      this.notifications.push({ severity: 'info', message: item });
+    }
+  }
+
+  override warn(message: NotificationMessage | NotificationMessage[]): void {
+    for (const item of Array.isArray(message) ? message : [message]) {
+      this.notifications.push({ severity: 'warning', message: item });
+    }
+  }
+
+  override error(message: NotificationMessage | NotificationMessage[]): void {
+    for (const item of Array.isArray(message) ? message : [message]) {
+      this.notifications.push({ severity: 'error', message: item });
+    }
+  }
+}
+
 test('ArticleSummaryTranslationExportController exports summaries and restores translation progress', async () => {
   const previousStatus: EditorStatusState = {
     ariaLabel: 'Status',
@@ -116,15 +146,8 @@ test('ArticleSummaryTranslationExportController exports summaries and restores t
   };
   setStatusbarState(previousStatus);
 
-  const shownToasts: Array<{ message: string; type?: string }> = [];
-  registerToastBridge({
-    canHandle: () => true,
-    show: (options) => {
-      shownToasts.push(options);
-      return shownToasts.length;
-    },
-  });
-
+  const notifications: CapturedNotification[] = [];
+  const notificationService = new CapturingNotificationService(notifications);
   let progressListener: ((progress: DocumentTranslationProgress) => void) | null = null;
   let unsubscribed = false;
   const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
@@ -156,6 +179,7 @@ test('ArticleSummaryTranslationExportController exports summaries and restores t
         };
       },
     }, invoke),
+    notificationService,
     dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
@@ -177,7 +201,7 @@ test('ArticleSummaryTranslationExportController exports summaries and restores t
     translateSummaries: true,
     locale: 'en',
   });
-  assert.equal(shownToasts.at(-1)?.type, 'success');
+  assert.equal(notifications.at(-1)?.severity, 'info');
 });
 
 test('ArticleSummaryTranslationExportController exports original summaries directly', async () => {
@@ -195,6 +219,7 @@ test('ArticleSummaryTranslationExportController exports original summaries direc
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    notificationService: new NoOpNotificationService(),
     dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
@@ -248,6 +273,7 @@ test('ArticleSummaryTranslationExportController exports original summaries after
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    notificationService: new NoOpNotificationService(),
     dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
@@ -314,6 +340,7 @@ test('ArticleSummaryTranslationExportController retries translation after transl
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    notificationService: new NoOpNotificationService(),
     dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
@@ -367,6 +394,7 @@ test('ArticleSummaryTranslationExportController cancels while translation failur
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    notificationService: new NoOpNotificationService(),
     dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,
@@ -416,6 +444,7 @@ test('ArticleSummaryTranslationExportController cancels an active export task', 
     nativeHost: createNativeHostService({
       onTranslationProgress: () => () => {},
     }, invoke),
+    notificationService: new NoOpNotificationService(),
     dialogService: createDialogService(),
     locale: 'en',
     ui: locales.en,

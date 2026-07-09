@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Notification, app, ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 import type {
@@ -19,7 +19,6 @@ import type {
   LibraryDocumentStatusPayload,
   ListTranslationModelsPayload,
   ListLibraryDocumentsPayload,
-  NativeToastOptions,
   NativeOpenDialogOptions,
   NativeSaveDialogOptions,
   UpsertLibraryDocumentMetadataPayload,
@@ -61,13 +60,6 @@ import {
   clearWorkbenchSharedSessionCookies,
 } from 'cs/platform/native/electron-main/sharedWebSession';
 import {
-  dismissToast,
-  getToastState,
-  reportToastLayout,
-  setToastHovering,
-  showToast,
-} from 'cs/platform/window/electron-main/toastOverlayView';
-import {
   fetchArticle,
   fetchLatestArticles,
 } from 'cs/code/electron-main/fetch/dispatch';
@@ -90,11 +82,9 @@ import { testLlmConnection } from 'cs/code/electron-main/llm/llm';
 import { runMainAgentTurn } from 'cs/code/electron-main/agent/agent';
 import { answerQuestionFromArticles, testRagConnection } from 'cs/code/electron-main/rag/rag';
 import { listTranslationModels, testTranslationConnection } from 'cs/code/electron-main/translation/translation';
-import { resolveSystemNotificationPayloadFromToast } from 'cs/code/electron-main/notificationRouting';
 import {
   applyMainWindowBackgroundMaterial,
   getMainWindow,
-  resolveWindowFromWebContents,
 } from 'cs/platform/windows/electron-main/windows';
 import { setMenuBarIconEnabled } from 'cs/platform/window/electron-main/trayIcon';
 import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
@@ -153,18 +143,6 @@ function cancelDocumentTask(payload: CancelDocumentTaskPayload | undefined) {
   abortController.abort();
   documentTaskAbortControllers.delete(taskId);
   return true;
-}
-
-function showSystemNotificationFromToast(options: NativeToastOptions, settings: AppSettings) {
-  const payload = resolveSystemNotificationPayloadFromToast(options, settings);
-  if (!payload || !Notification.isSupported()) {
-    return;
-  }
-
-  new Notification({
-    title: payload.title,
-    body: payload.body,
-  }).show();
 }
 
 async function loadSettingsWithCache(storage: StorageService) {
@@ -511,33 +489,6 @@ export function registerAppIpc(
 
   ipcMain.handle('app:web-content-get-selection', async (_event, payload?: { targetId?: string | null }) => {
     return await getWebContentSelection(payload?.targetId);
-  });
-
-  ipcMain.on('app:native-toast-show', (event, options: NativeToastOptions) => {
-    showToast(resolveWindowFromWebContents(event.sender), options);
-    void loadSettingsWithCache(storage)
-      .then((settings) => {
-        showSystemNotificationFromToast(options, settings);
-      })
-      .catch((error) => {
-        console.error('Failed to resolve settings for system notification.', error);
-      });
-  });
-
-  ipcMain.on('app:native-toast-dismiss', (_event, id: number) => {
-    dismissToast(id);
-  });
-
-  ipcMain.handle('app:native-toast-get-state', () => {
-    return getToastState();
-  });
-
-  ipcMain.on('app:native-toast-layout', (event, layout) => {
-    reportToastLayout(event.sender.id, layout);
-  });
-
-  ipcMain.on('app:native-toast-hover', (_event, hovering: boolean) => {
-    setToastHovering(hovering);
   });
 
   ipcMain.on('app:web-content-activate', (_event, payload?: { targetId?: string | null }) => {

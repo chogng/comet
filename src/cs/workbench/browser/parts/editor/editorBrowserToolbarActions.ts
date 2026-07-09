@@ -1,4 +1,3 @@
-import { toast } from 'cs/base/browser/ui/toast/toast';
 import type {
   LibraryDocumentSummary,
   WebContentHtmlArchiveResult,
@@ -12,6 +11,7 @@ import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/ed
 import type { WebContentNavigationModel } from 'cs/workbench/browser/webContentNavigationModel';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { syncLibraryMetadataFromArticle } from 'cs/workbench/services/knowledgeBase/libraryMetadataService';
+import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 type EditorBrowserToolbarActionHandlers = EditorPartBrowserToolbarActions;
 
@@ -21,6 +21,7 @@ type CreateEditorBrowserToolbarActionsParams = {
   electronRuntime: boolean;
   webContentRuntime: boolean;
   invokeDesktop: ElectronInvoke;
+  notificationService: INotificationService;
   knowledgeBaseEnabled: boolean;
   setWebUrl: (value: string) => void;
   ui: LocaleMessages;
@@ -68,6 +69,7 @@ export function createEditorBrowserToolbarActions(
     electronRuntime,
     webContentRuntime,
     invokeDesktop,
+    notificationService,
     knowledgeBaseEnabled,
     setWebUrl,
     ui,
@@ -127,7 +129,7 @@ export function createEditorBrowserToolbarActions(
           }
         }
 
-        toast.success(
+        notificationService.info(
           (result.pdfPath
             ? ui.toastHtmlArchiveSavedWithPdf
             : ui.toastHtmlArchiveSavedWithoutPdf)
@@ -137,7 +139,7 @@ export function createEditorBrowserToolbarActions(
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error ?? 'Unknown archive error');
-        toast.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
+        notificationService.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
       }
     },
     onToolbarExportDocx: () => {
@@ -158,11 +160,11 @@ export function createEditorBrowserToolbarActions(
 
       try {
         await copyTextToClipboard(currentUrl);
-        toast.success(ui.toastCurrentUrlCopied);
+        notificationService.info(ui.toastCurrentUrlCopied);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error ?? 'Unknown clipboard error');
-        toast.error(ui.toastCurrentUrlCopyFailed.replace('{error}', message));
+        notificationService.error(ui.toastCurrentUrlCopyFailed.replace('{error}', message));
       }
     },
     onToolbarClearBrowsingHistory: () => {
@@ -172,12 +174,12 @@ export function createEditorBrowserToolbarActions(
           ui,
         });
         if (webContentRuntime) {
-          toast.success(ui.toastBrowsingHistoryCleared);
+          notificationService.info(ui.toastBrowsingHistoryCleared);
         }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error ?? 'Unknown history error');
-        toast.error(ui.toastBrowsingHistoryClearFailed.replace('{error}', message));
+        notificationService.error(ui.toastBrowsingHistoryClearFailed.replace('{error}', message));
       }
     },
     onToolbarClearCookies: async () => {
@@ -186,11 +188,11 @@ export function createEditorBrowserToolbarActions(
         if (!cleared) {
           throw new Error(ui.toastWebContentRuntimeUnavailable);
         }
-        toast.success(ui.toastCookiesCleared);
+        notificationService.info(ui.toastCookiesCleared);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error ?? 'Unknown cookie error');
-        toast.error(ui.toastCookiesClearFailed.replace('{error}', message));
+        notificationService.error(ui.toastCookiesClearFailed.replace('{error}', message));
       }
     },
     onToolbarClearCache: async () => {
@@ -199,11 +201,11 @@ export function createEditorBrowserToolbarActions(
         if (!cleared) {
           throw new Error(ui.toastWebContentRuntimeUnavailable);
         }
-        toast.success(ui.toastCacheCleared);
+        notificationService.info(ui.toastCacheCleared);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error ?? 'Unknown cache error');
-        toast.error(ui.toastCacheClearFailed.replace('{error}', message));
+        notificationService.error(ui.toastCacheClearFailed.replace('{error}', message));
       }
     },
     onToolbarAddressChange: setWebUrl,

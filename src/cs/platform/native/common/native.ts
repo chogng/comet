@@ -3,7 +3,6 @@ import type {
   ElectronDocumentApi,
   ElectronInvoke,
   ElectronIpcApi,
-  ElectronToastApi,
   ElectronWebContentApi,
   ElectronWindowControls,
 } from 'cs/base/parts/sandbox/common/electronTypes';
@@ -21,5 +20,4 @@ export interface INativeHostService {
   readonly webContent: ElectronWebContentApi | undefined;
   readonly fetch: ElectronFetchApi | undefined;
   readonly document: ElectronDocumentApi | undefined;
-  readonly toast: ElectronToastApi | undefined;
 }

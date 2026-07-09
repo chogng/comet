@@ -597,29 +597,6 @@ export interface RunMainAgentTurnResult {
   toolTrace: MainAgentToolTrace[];
 }
 
-export type NativeToastType = 'info' | 'success' | 'error' | 'warning';
-
-export interface NativeToastOptions {
-  message: string;
-  type?: NativeToastType;
-  duration?: number;
-}
-
-export interface NativeToastItem {
-  id: number;
-  message: string;
-  type: NativeToastType;
-}
-
-export interface NativeToastState {
-  items: NativeToastItem[];
-}
-
-export interface NativeToastLayout {
-  width: number;
-  height: number;
-}
-
 export interface AppCommandPayloadMap {
   fetch_article: FetchArticlePayload;
   fetch_latest_articles: FetchLatestArticlesPayload;

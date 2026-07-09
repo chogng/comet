@@ -68,13 +68,9 @@ import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/pa
 import { SessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
 import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 
-import { ToastOverlayWindowView } from 'cs/workbench/browser/toastOverlayWindow';
 import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
-import { registerToastBridge } from 'cs/base/browser/ui/toast/toast';
-import { createToastHost } from 'cs/base/browser/ui/toast/toastHost';
-import type { ToastHost } from 'cs/base/browser/ui/toast/toastHost';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
@@ -118,6 +114,10 @@ import {
 import type { WebContentSurfaceSnapshot } from 'cs/workbench/browser/webContentSurfaceState';
 
 import { getLocaleMessages } from 'language/i18n';
+import {
+  resolveBatchFetchSources,
+  resolveBatchFetchSourceTable,
+} from 'cs/workbench/services/article/articleFetch';
 import type { Article } from 'cs/workbench/services/article/articleFetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import { parseLinkedText } from 'cs/base/common/linkedText';
@@ -175,7 +175,6 @@ let articleSummaryTranslationExportController: ArticleSummaryTranslationExportCo
 let documentActionsController: DocumentActionsController | null = null;
 let batchFetchController: BatchFetchController | null = null;
 let activeWorkbenchHost: WorkbenchHost | null = null;
-let activeOverlayView: ToastOverlayWindowView | null = null;
 let activeAgentChatModelOptionValue: string | null = null;
 
 const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
@@ -320,42 +319,15 @@ function doesAgentChatModelSupportMaxContextWindow(
   return model ? hasLlmMaxContextWindow(model) : false;
 }
 
-function detectNativeOverlayKind() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  return new URLSearchParams(window.location.search).get('nativeOverlay');
-}
-
-function canUseNativeToastOverlay(nativeHostService: INativeHostService) {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  if (detectNativeOverlayKind() === 'toast') {
-    return false;
-  }
-
-  return typeof nativeHostService.toast?.show === 'function';
-}
-
 function getBatchSourceDisplayLabel(source: Pick<BatchSource, 'journalTitle' | 'url'>) {
   const journalTitle = source.journalTitle.trim();
   return journalTitle || source.url;
 }
 
-function registerNativeToastBridge(nativeHostService: INativeHostService) {
-  registerToastBridge({
-    canHandle: () => canUseNativeToastOverlay(nativeHostService),
-    show: options => {
-      nativeHostService.toast?.show(options);
-      return -1;
-    },
-    dismiss: id => {
-      nativeHostService.toast?.dismiss(id);
-    },
-  });
+function getBatchSourcesDisplayLabel(
+  sources: ReadonlyArray<Pick<BatchSource, 'journalTitle' | 'url'>>,
+) {
+  return sources.map(getBatchSourceDisplayLabel).join(', ');
 }
 
 function isContentTab(tab: EditorWorkspaceTab) {
@@ -496,10 +468,8 @@ class WorkbenchHost {
   private readonly pageMount: HTMLDivElement;
   private readonly settingsOverlayElement: HTMLDivElement;
   private readonly settingsOverlayBodyElement: HTMLDivElement;
-  private readonly toastMount: HTMLDivElement;
   private readonly statusbarElement: HTMLElement;
   private readonly titlebarPart: TitlebarPart;
-  private readonly toastHost: ToastHost;
   private readonly notificationsDisposables = new DisposableStore();
   private workbenchLayoutView: ReturnType<typeof createSessionWorkbenchLayoutView> | null = null;
   private workbenchContentPartViews: SessionWorkbenchContentPartViews | null = null;
@@ -563,26 +533,22 @@ class WorkbenchHost {
     this.pageMount = document.createElement('div');
     this.settingsOverlayElement = document.createElement('div');
     this.settingsOverlayBodyElement = document.createElement('div');
-    this.toastMount = document.createElement('div');
     this.statusbarElement = document.createElement('section');
     this.settingsOverlayElement.className = 'comet-settings-overlay';
     this.settingsOverlayElement.hidden = true;
     this.settingsOverlayBodyElement.className = 'comet-settings-body';
     this.settingsOverlayElement.append(this.settingsOverlayBodyElement);
-    registerNativeToastBridge(this.nativeHostService);
     this.titlebarPart = createTitlebarPart(
       this.containerElement,
       this.shellElement,
       this.statusbarElement,
     );
-    this.toastHost = createToastHost(this.toastMount);
 
     this.rootElement.replaceChildren(this.containerElement);
     this.containerElement.append(this.titlebarPart.getElement(), this.shellElement);
     this.shellElement.append(
       this.pageMount,
       this.settingsOverlayElement,
-      this.toastMount,
     );
     this.createNotificationsHandlers();
 
@@ -633,9 +599,7 @@ class WorkbenchHost {
     this.settingsView?.dispose();
     this.settingsView = null;
     this.editorPartController = null;
-    this.toastHost.dispose();
     this.notificationsDisposables.dispose();
-    registerToastBridge(null);
     this.rootElement.replaceChildren();
   }
 
@@ -1219,6 +1183,7 @@ class WorkbenchHost {
     const settingsControllerInstance = getWorkbenchSettingsController({
       desktopRuntime,
       invokeDesktop,
+      notificationService: this.notificationService,
       ui,
       locale,
     });
@@ -1341,7 +1306,10 @@ class WorkbenchHost {
       retrievalTopK,
     };
 
-    const webContentNavigationModelInstance = getWorkbenchWebContentNavigationModel(nativeHost);
+    const webContentNavigationModelInstance = getWorkbenchWebContentNavigationModel(
+      nativeHost,
+      this.notificationService,
+    );
     this.syncWebContentRuntime(webContentNavigationModelInstance, webContentRuntime);
     const { browserUrl, webContentState } =
       webContentNavigationModelInstance.getSnapshot();
@@ -1393,6 +1361,7 @@ class WorkbenchHost {
     const assistantModelInstance = getWorkbenchAssistantModel({
       desktopRuntime,
       invokeDesktop,
+      notificationService: this.notificationService,
       ui,
       isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
       articles: filteredArticles,
@@ -1486,6 +1455,7 @@ class WorkbenchHost {
       desktopRuntime,
       invokeDesktop,
       nativeHost,
+      notificationService: this.notificationService,
       dialogService: this.dialogService,
       locale,
       ui,
@@ -1496,7 +1466,7 @@ class WorkbenchHost {
       getWorkbenchDocumentActionsController({
         desktopRuntime,
         invokeDesktop,
-        nativeHost,
+        notificationService: this.notificationService,
         locale,
         ui,
         knowledgeBaseEnabled,
@@ -1530,6 +1500,7 @@ class WorkbenchHost {
       electronRuntime,
       webContentRuntime,
       invokeDesktop,
+      notificationService: this.notificationService,
       knowledgeBaseEnabled,
       setWebUrl: setWorkbenchWebUrl,
       ui,
@@ -1588,6 +1559,7 @@ class WorkbenchHost {
       batchEndDate,
       invokeDesktop,
       nativeHost,
+      notificationService: this.notificationService,
       ui,
       onBeforeFetch: handleBatchFetchStart,
       onFetchSuccess: handleBatchFetchSuccess,
@@ -1602,8 +1574,24 @@ class WorkbenchHost {
       selectedChatArticleUrlsInOrder,
     );
     const selectedChatArticleUrlSet = new Set(selectedChatArticleUrlsInOrder);
-    const handleFetchLatestBatch =
-      batchFetchControllerInstance.handleFetchLatestBatch;
+    const handleFetchLatestBatch = async () => {
+      const sourceTable = resolveBatchFetchSourceTable(journalSourceOverrides);
+      const batchSourceLabel = getBatchSourcesDisplayLabel(
+        resolveBatchFetchSources(fetchSeedUrl || webUrl, sourceTable),
+      );
+      const result = await batchFetchControllerInstance.handleFetchLatestBatch();
+      if (!result.ok) {
+        return;
+      }
+
+      setWorkbenchSelectedChatArticleUrlsInOrder((previousUrls) =>
+        appendSelectedChatArticleUrls(previousUrls, result.articles),
+      );
+      assistantModelInstance.handleInsertArticles(
+        result.articles,
+        batchSourceLabel,
+      );
+    };
     const articleQuickSources = getConfigBatchSourceSeed();
     const handleFetchArticleSource = async (source: BatchSource) => {
       if (isEditorCollapsed) {
@@ -1677,6 +1665,7 @@ class WorkbenchHost {
       settingsContext: {
         desktopRuntime,
         invokeDesktop,
+        notificationService: this.notificationService,
         ui,
         locale,
       },
@@ -1698,6 +1687,7 @@ class WorkbenchHost {
       assistantContext: {
         desktopRuntime,
         invokeDesktop,
+        notificationService: this.notificationService,
         ui,
         isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
         articles: filteredArticles,
@@ -1722,6 +1712,7 @@ class WorkbenchHost {
         desktopRuntime,
         invokeDesktop,
         nativeHost,
+        notificationService: this.notificationService,
         dialogService: this.dialogService,
         locale,
         ui,
@@ -1731,7 +1722,7 @@ class WorkbenchHost {
       documentActionsContext: {
         desktopRuntime,
         invokeDesktop,
-        nativeHost,
+        notificationService: this.notificationService,
         locale,
         ui,
         knowledgeBaseEnabled,
@@ -1756,6 +1747,7 @@ class WorkbenchHost {
         batchEndDate,
         invokeDesktop,
         nativeHost,
+        notificationService: this.notificationService,
         ui,
         onBeforeFetch: handleBatchFetchStart,
         onFetchSuccess: handleBatchFetchSuccess,
@@ -2172,7 +2164,6 @@ class WorkbenchHost {
       updateActiveBrowserTabFaviconUrl,
     });
 
-    this.toastHost.render(ui.toastClose);
   }
 }
 
@@ -2217,8 +2208,14 @@ export function getWorkbenchLibraryModel(context: LibraryModelContext) {
   return libraryModel;
 }
 
-export function getWorkbenchWebContentNavigationModel(nativeHost: INativeHostService) {
-  webContentNavigationModel ??= new WebContentNavigationModel(nativeHost);
+export function getWorkbenchWebContentNavigationModel(
+  nativeHost: INativeHostService,
+  notificationService: INotificationService,
+) {
+  webContentNavigationModel ??= new WebContentNavigationModel(
+    nativeHost,
+    notificationService,
+  );
   return webContentNavigationModel;
 }
 
@@ -2300,18 +2297,6 @@ export function renderWorkbench() {
 
   activeWorkbenchHost?.dispose();
   activeWorkbenchHost = null;
-  activeOverlayView?.dispose();
-  activeOverlayView = null;
-
-  const nativeOverlayKind = detectNativeOverlayKind();
-
-  if (nativeOverlayKind === 'toast') {
-    activeOverlayView = getWorkbenchInstantiationService().createInstance(
-      ToastOverlayWindowView,
-    );
-    rootElement.replaceChildren(activeOverlayView.getElement());
-    return;
-  }
 
   activeWorkbenchHost = getWorkbenchInstantiationService().createInstance(
     WorkbenchHost,

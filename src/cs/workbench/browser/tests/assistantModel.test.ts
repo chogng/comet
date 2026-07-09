@@ -20,6 +20,7 @@ import type {
 import type {
   AssistantModelContext,
 } from 'cs/workbench/browser/assistantModel';
+import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { locales } from 'language/locales';
 
 let domEnvironment: JSDOM | null = null;
@@ -134,6 +135,7 @@ function createAssistantContext(
   const context: AssistantModelContext = {
     desktopRuntime: true,
     invokeDesktop: createInvokeDesktop(capture),
+    notificationService: new NoOpNotificationService(),
     ui: locales[locale],
     isKnowledgeBaseModeEnabled: false,
     articles: [] as Article[],

@@ -1,4 +1,3 @@
-import { toast } from 'cs/base/browser/ui/toast/toast';
 import type {
   AppStartupLayout,
   AppTheme,
@@ -26,10 +25,12 @@ import {
 } from 'cs/workbench/common/errorMessages';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import type { SettingsModelSnapshot } from 'cs/workbench/services/settings/settingsModel';
+import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 export type SettingsControllerContext = {
   desktopRuntime: boolean;
   invokeDesktop: ElectronInvoke;
+  notificationService: INotificationService;
   ui: LocaleMessages;
   locale: Locale;
 };
@@ -146,7 +147,7 @@ export class SettingsController {
       }
     } catch (pickError) {
       const localizedError = localizeSettingsError(this.context.ui, pickError);
-      toast.error(
+      this.context.notificationService.error(
         formatLocaleMessage(this.context.ui.toastChangeConfigLocationFailed, {
           error: localizedError,
         }),
@@ -546,11 +547,11 @@ export class SettingsController {
         ...this.getSettingsModelContext(),
         locale,
       });
-      toast.success(ui.toastSettingsSaved);
+      this.context.notificationService.info(ui.toastSettingsSaved);
       return true;
     } catch (saveError) {
       const localizedError = localizeSettingsError(ui, saveError);
-      toast.error(
+      this.context.notificationService.error(
         formatLocaleMessage(ui.toastSaveSettingsFailed, {
           error: localizedError,
         }),
@@ -562,7 +563,7 @@ export class SettingsController {
   readonly handleTestLlmConnection = async () => {
     const { desktopRuntime, ui } = this.context;
     if (!desktopRuntime) {
-      toast.info(ui.toastDesktopLlmTestOnly);
+      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -570,7 +571,7 @@ export class SettingsController {
       const result = await this.settingsModel.testLlmConnection(
         this.getSettingsModelContext(),
       );
-      toast.success(
+      this.context.notificationService.info(
         formatLocaleMessage(ui.toastLlmConnectionSucceeded, {
           provider: result.provider,
           model: result.model,
@@ -578,7 +579,7 @@ export class SettingsController {
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      toast.error(
+      this.context.notificationService.error(
         formatLocaleMessage(ui.toastLlmConnectionFailed, {
           error: localizedError,
         }),
@@ -589,7 +590,7 @@ export class SettingsController {
   readonly handleTestRagConnection = async () => {
     const { desktopRuntime, ui } = this.context;
     if (!desktopRuntime) {
-      toast.info(ui.toastDesktopLlmTestOnly);
+      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -597,7 +598,7 @@ export class SettingsController {
       const result = await this.settingsModel.testRagConnection(
         this.getSettingsModelContext(),
       );
-      toast.success(
+      this.context.notificationService.info(
         formatLocaleMessage(ui.toastRagConnectionSucceeded, {
           provider: result.provider,
           embeddingModel: result.embeddingModel,
@@ -606,7 +607,7 @@ export class SettingsController {
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      toast.error(
+      this.context.notificationService.error(
         formatLocaleMessage(ui.toastRagConnectionFailed, {
           error: localizedError,
         }),
@@ -617,7 +618,7 @@ export class SettingsController {
   readonly handleTestTranslationConnection = async () => {
     const { desktopRuntime, ui } = this.context;
     if (!desktopRuntime) {
-      toast.info(ui.toastDesktopLlmTestOnly);
+      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -625,14 +626,14 @@ export class SettingsController {
       const result = await this.settingsModel.testTranslationConnection(
         this.getSettingsModelContext(),
       );
-      toast.success(
+      this.context.notificationService.info(
         formatLocaleMessage(ui.toastTranslationConnectionSucceeded, {
           provider: result.provider,
         }),
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      toast.error(
+      this.context.notificationService.error(
         formatLocaleMessage(ui.toastTranslationConnectionFailed, {
           error: localizedError,
         }),
@@ -643,7 +644,7 @@ export class SettingsController {
   readonly handleFetchTranslationModels = async () => {
     const { desktopRuntime, ui } = this.context;
     if (!desktopRuntime) {
-      toast.info(ui.toastDesktopLlmTestOnly);
+      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -652,14 +653,14 @@ export class SettingsController {
         this.getSettingsModelContext(),
       );
       this.scheduleImmediateAutoSave();
-      toast.success(
+      this.context.notificationService.info(
         formatLocaleMessage(ui.toastTranslationModelsLoaded, {
           count: String(result.models.length),
         }),
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      toast.error(
+      this.context.notificationService.error(
         formatLocaleMessage(ui.toastTranslationModelsFailed, {
           error: localizedError,
         }),
@@ -699,7 +700,7 @@ export class SettingsController {
 
       const { ui } = this.context;
       const localizedError = localizeSettingsError(ui, loadError);
-      toast.error(
+      this.context.notificationService.error(
         formatLocaleMessage(ui.toastLoadSettingsFailed, { error: localizedError }),
       );
     }

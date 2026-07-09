@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { toast } from 'cs/base/browser/ui/toast/toast';
 import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { EventEmitter } from 'cs/base/common/event';
@@ -37,11 +36,13 @@ import {
   setStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
+import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 export type ArticleSummaryTranslationExportControllerContext = {
   desktopRuntime: boolean;
   invokeDesktop: ElectronInvoke;
   nativeHost: INativeHostService;
+  notificationService: INotificationService;
   dialogService: IDialogService;
   locale: Locale;
   ui: LocaleMessages;
@@ -140,6 +141,7 @@ export class ArticleSummaryTranslationExportController {
       locale,
       ui,
       pdfDownloadDir,
+      notificationService,
     } = this.context;
 
     if (!desktopRuntime) {
@@ -148,7 +150,7 @@ export class ArticleSummaryTranslationExportController {
 
     const exportArticles = [...articles];
     if (!canExportArticlesDocx(exportArticles.length)) {
-      toast.info(ui.toastNoExportableArticles);
+      notificationService.info(ui.toastNoExportableArticles);
       return;
     }
 
@@ -221,7 +223,7 @@ export class ArticleSummaryTranslationExportController {
           }
 
           const localizedError = localizeAppError(ui, parsedError);
-          toast.error(
+          notificationService.error(
             formatLocaleMessage(ui.toastDocxExportFailed, { error: localizedError }),
           );
           return;
@@ -231,7 +233,7 @@ export class ArticleSummaryTranslationExportController {
           return;
         }
 
-        toast.success(
+        notificationService.info(
           formatLocaleMessage(ui.toastDocxExported, {
             count: result.articleCount,
             filePath: result.filePath,

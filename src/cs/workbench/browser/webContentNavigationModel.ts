@@ -1,10 +1,10 @@
-import { toast } from 'cs/base/browser/ui/toast/toast';
 import { EventEmitter } from 'cs/base/common/event';
 import type { LocaleMessages } from 'language/locales';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';
 import { EMPTY_WEB_CONTENT_STATE, resolveWebContentNavigation, resolveWebContentRefreshMode, resolveWebContentStateUrlUpdate } from 'cs/workbench/services/webContent/webContentNavigationService';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
+import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 type StringSetter = (value: string) => void;
 type StringStateSetter = (value: string | ((current: string) => string)) => void;
@@ -92,7 +92,10 @@ export class WebContentNavigationModel {
   private readonly onDidChangeEmitter = new EventEmitter<void>();
   private activeTargetId: string | null = null;
 
-  constructor(private readonly nativeHost: INativeHostService) {}
+  constructor(
+    private readonly nativeHost: INativeHostService,
+    private readonly notificationService: INotificationService,
+  ) {}
 
   private emitChange() {
     this.onDidChangeEmitter.fire();
@@ -273,7 +276,7 @@ export class WebContentNavigationModel {
     );
 
     if (webContentNavigation.kind === 'invalid-url') {
-      toast.error(ui.toastEnterArticleUrl);
+      this.notificationService.error(ui.toastEnterArticleUrl);
       return false;
     }
 
@@ -282,7 +285,7 @@ export class WebContentNavigationModel {
     setFetchSeedUrl(webContentNavigation.normalizedUrl);
 
     if (webContentNavigation.kind === 'content-runtime-unavailable') {
-      toast.error(ui.toastWebContentRuntimeUnavailable);
+      this.notificationService.error(ui.toastWebContentRuntimeUnavailable);
       return false;
     }
 
@@ -291,11 +294,11 @@ export class WebContentNavigationModel {
       void webContent
         .navigate(webContentNavigation.normalizedUrl, this.activeTargetId, 'browser')
         .catch(() => {
-          toast.error(ui.toastWebContentRuntimeUnavailable);
+          this.notificationService.error(ui.toastWebContentRuntimeUnavailable);
         });
 
       if (showToast) {
-        toast.success(formatLocaleMessage(ui.toastNavigatingTo, { url: webContentNavigation.normalizedUrl }));
+        this.notificationService.info(formatLocaleMessage(ui.toastNavigatingTo, { url: webContentNavigation.normalizedUrl }));
       }
     }
 
@@ -313,7 +316,7 @@ export class WebContentNavigationModel {
     );
 
     if (webContentRefreshMode === 'content-runtime-unavailable') {
-      toast.error(ui.toastWebContentRuntimeUnavailable);
+      this.notificationService.error(ui.toastWebContentRuntimeUnavailable);
       return;
     }
 
@@ -334,7 +337,7 @@ export class WebContentNavigationModel {
     );
 
     if (webContentRefreshMode === 'content-runtime-unavailable') {
-      toast.error(ui.toastWebContentRuntimeUnavailable);
+      this.notificationService.error(ui.toastWebContentRuntimeUnavailable);
       return;
     }
 
@@ -347,7 +350,7 @@ export class WebContentNavigationModel {
   handleWebContentBack({ webContentRuntime, ui }: WebContentNavigationButtonParams): void {
     const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
-      toast.info(ui.toastWebContentBackUnsupported);
+      this.notificationService.info(ui.toastWebContentBackUnsupported);
       return;
     }
 
@@ -357,7 +360,7 @@ export class WebContentNavigationModel {
   handleWebContentForward({ webContentRuntime, ui }: WebContentNavigationButtonParams): void {
     const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
-      toast.info(ui.toastWebContentForwardUnsupported);
+      this.notificationService.info(ui.toastWebContentForwardUnsupported);
       return;
     }
 
@@ -367,7 +370,7 @@ export class WebContentNavigationModel {
   handleWebContentClearHistory({ webContentRuntime, ui }: WebContentNavigationButtonParams): void {
     const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
-      toast.error(ui.toastWebContentRuntimeUnavailable);
+      this.notificationService.error(ui.toastWebContentRuntimeUnavailable);
       return;
     }
 
