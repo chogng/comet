@@ -274,8 +274,43 @@ test('hover with comet-hover-actions stays open when the pointer moves into the 
     assert(overlay instanceof HTMLElement);
 
     target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-    overlay.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    overlay.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     await delay(0);
+
+    assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
+  } finally {
+    hover.dispose();
+  }
+});
+
+test('hover with comet-hover-actions waits long enough for the pointer to enter the overlay', async () => {
+  const target = document.createElement('button');
+  document.body.append(target);
+
+  const hover = createHoverController(target, {
+    content: 'Action hover',
+    delay: 0,
+    actions: [
+      {
+        label: 'Run',
+        run: () => {},
+      },
+    ],
+  });
+
+  try {
+    target.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    await delay(0);
+
+    const overlay = document.querySelector('.comet-hover-card');
+    assert(overlay instanceof HTMLElement);
+
+    target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+    await delay(150);
+    assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
+
+    overlay.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    await delay(80);
 
     assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
   } finally {

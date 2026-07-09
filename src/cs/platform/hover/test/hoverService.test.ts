@@ -90,3 +90,39 @@ test('hover service can anchor delayed hovers at the mouse position', async () =
 		hoverService.hideHover();
 	}
 });
+
+test('hover service waits long enough for the pointer to enter an action hover', async () => {
+	const target = document.createElement('button');
+	document.body.append(target);
+	const hoverService = new HoverService();
+	const hover = hoverService.showInstantHover(target, {
+		content: 'Action service hover',
+		delay: 0,
+		actions: [
+			{
+				label: 'Run',
+				run: () => {},
+			},
+		],
+	});
+
+	try {
+		assert(hover);
+		await delay(0);
+
+		const overlay = document.querySelector('.comet-hover-card');
+		assert(overlay instanceof HTMLElement);
+
+		target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+		await delay(150);
+		assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
+
+		overlay.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+		await delay(80);
+
+		assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
+	} finally {
+		hover?.dispose();
+		hoverService.hideHover();
+	}
+});

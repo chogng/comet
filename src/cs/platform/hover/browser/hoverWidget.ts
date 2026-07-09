@@ -5,6 +5,7 @@
 
 import 'cs/platform/hover/browser/hover.css';
 import { $, addDisposableListener } from 'cs/base/browser/dom';
+import { Widget } from 'cs/base/browser/ui/widget';
 import {
 	normalizeHoverInput,
 	type HoverAction,
@@ -22,7 +23,7 @@ import {
 } from 'cs/base/common/lifecycle';
 
 const PLAIN_HOVER_HIDE_DELAY_MS = 120;
-const ACTION_HOVER_HIDE_DELAY_MS = 90;
+const ACTION_HOVER_HIDE_DELAY_MS = 200;
 const HOVER_REENTRY_COOLDOWN_MS = 300;
 const POINTER_OFFSET_PX = 10;
 const POINTER_SAFE_MARGIN_PX = 18;
@@ -223,6 +224,46 @@ export function normalizeWorkbenchHoverInput(input: HoverInput): HoverOptions | 
 	return normalizeHoverInput(input);
 }
 
+class CompositeMouseTracker extends Widget {
+	private isMouseIn = true;
+	private suppressNextMouseOut = false;
+	private readonly mouseTimer = this._register(new MutableDisposable<DisposableLike>());
+
+	constructor(
+		elements: readonly HTMLElement[],
+		private readonly onMouseOut: () => void,
+		private readonly eventDebounceDelay: number,
+	) {
+		super();
+
+		for (const element of elements) {
+			this.onmouseover(element, this.handleMouseOver);
+			this.onmouseleave(element, this.handleMouseLeave);
+		}
+	}
+
+	suppressPendingMouseOut() {
+		if (!this.isMouseIn) {
+			this.suppressNextMouseOut = true;
+		}
+	}
+
+	private readonly handleMouseOver = () => {
+		this.isMouseIn = true;
+		this.suppressNextMouseOut = false;
+		this.mouseTimer.clear();
+	};
+
+	private readonly handleMouseLeave = () => {
+		this.isMouseIn = false;
+		this.mouseTimer.value = createTimeoutDisposable(() => {
+			if (!this.isMouseIn && !this.suppressNextMouseOut) {
+				this.onMouseOut();
+			}
+		}, this.eventDebounceDelay);
+	};
+}
+
 class WorkbenchHoverWidget {
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-hover-overlay');
 	private readonly pointer = $<HTMLElementTagNameMap['div']>('div.comet-hover-pointer');
@@ -243,6 +284,10 @@ class WorkbenchHoverWidget {
 
 	isPointerInside() {
 		return this.pointerInside;
+	}
+
+	getHoverElement() {
+		return this.card;
 	}
 
 	focus() {
@@ -449,6 +494,7 @@ class WorkbenchHoverController extends Disposable implements HoverHandle {
 	private disposed = false;
 	private readonly showTimer = new MutableDisposable<DisposableLike>();
 	private readonly hideTimer = new MutableDisposable<DisposableLike>();
+	private readonly mouseTracker = new MutableDisposable<CompositeMouseTracker>();
 
 	constructor(
 		private readonly target: HTMLElement,
@@ -461,6 +507,7 @@ class WorkbenchHoverController extends Disposable implements HoverHandle {
 		this.options = normalizeWorkbenchHoverInput(input);
 		this._register(this.showTimer);
 		this._register(this.hideTimer);
+		this._register(this.mouseTracker);
 		this._register(addDisposableListener(this.target, 'mouseenter', this.handleMouseEnter));
 		this._register(addDisposableListener(this.target, 'mouseleave', this.handleMouseLeave));
 		this._register(addDisposableListener(this.target, 'pointerdown', this.handlePointerDown, true));
@@ -481,12 +528,15 @@ class WorkbenchHoverController extends Disposable implements HoverHandle {
 		}
 
 		activeController = this;
+		this.mouseTracker.value?.suppressPendingMouseOut();
 		sharedHoverWidget.show(this.target, this.anchor, this.options, this);
+		this.updateMouseTracker();
 	};
 
 	hide = () => {
 		this.clearShowTimer();
 		this.clearHideTimer();
+		this.mouseTracker.clear();
 
 		if (activeController !== this) {
 			return;
@@ -506,7 +556,9 @@ class WorkbenchHoverController extends Disposable implements HoverHandle {
 		}
 
 		if (activeController === this) {
+			this.mouseTracker.value?.suppressPendingMouseOut();
 			sharedHoverWidget.show(this.target, this.anchor, this.options, this);
+			this.updateMouseTracker();
 		}
 	};
 
@@ -528,6 +580,9 @@ class WorkbenchHoverController extends Disposable implements HoverHandle {
 	}
 
 	handleOverlayLeave() {
+		if (!this.shouldHideOnHover()) {
+			return;
+		}
 		this.scheduleHide(this.shouldHideOnHover() ? 0 : this.getHideDelay());
 	}
 
@@ -545,6 +600,23 @@ class WorkbenchHoverController extends Disposable implements HoverHandle {
 
 	private shouldHideOnHover() {
 		return Boolean(this.options?.hideOnHover) && !this.hasActions();
+	}
+
+	private updateMouseTracker() {
+		this.mouseTracker.clear();
+		if (this.shouldHideOnHover()) {
+			return;
+		}
+
+		this.mouseTracker.value = new CompositeMouseTracker(
+			[this.target, sharedHoverWidget.getHoverElement()],
+			() => {
+				if (activeController === this) {
+					this.hide();
+				}
+			},
+			this.getHideDelay(),
+		);
 	}
 
 	private scheduleShow(delay = this.options?.delay ?? 0) {
@@ -596,6 +668,10 @@ const remainingCooldown = Math.max(0, HOVER_REENTRY_COOLDOWN_MS - (Date.now() - 
 	private readonly handleMouseLeave = () => {
 		this.clearShowTimer();
 		if (activeController !== this) {
+			return;
+		}
+
+		if (!this.shouldHideOnHover()) {
 			return;
 		}
 
