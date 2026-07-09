@@ -1,5 +1,5 @@
 import { appError, CancellationError } from 'cs/base/common/errors';
-import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import { persistDownloadedPdf, tryBrowserSessionDownloadCandidates, tryDownloadPdfCandidates } from 'cs/platform/download/electron-main/pdfDownload';
 import type { PdfDownloadAttemptFailure } from 'cs/platform/download/electron-main/pdfDownload';
 

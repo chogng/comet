@@ -7,8 +7,8 @@ import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
 import { cleanText } from 'cs/base/common/strings';
 import { normalizeUrl } from 'cs/base/common/url';
 import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
-import { fetchHtml } from 'cs/code/electron-main/fetch/dispatch';
-import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { fetchHtml } from 'cs/workbench/services/fetch/electron-main/dispatch';
+import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import {
   buildNatureResearchPdfDownloadCandidates,
   extractNatureResearchPdfDownloadCandidatesFromHtml,

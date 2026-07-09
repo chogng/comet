@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   prepareBatchSourcesForFetch,
   resolveBatchFetchSources,
-} from 'cs/workbench/services/article/articleFetch';
+} from 'cs/workbench/services/fetch/browser/articleFetch';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 
 test('current URL source metadata can be overridden from settings JSON', () => {

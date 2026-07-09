@@ -6,7 +6,7 @@
 import { BrowserWindow } from 'electron';
 import type { BrowserWindowConstructorOptions, WebContents } from 'electron';
 
-import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import { WindowMinimumSize } from 'cs/platform/window/common/window';
 import {
 	applyWindowBackgroundMaterial,

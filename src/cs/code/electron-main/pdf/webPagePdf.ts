@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
 import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
-import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import { buildPdfFileName } from 'cs/platform/download/common/pdfFileName';
 import {
   getWebContentState,

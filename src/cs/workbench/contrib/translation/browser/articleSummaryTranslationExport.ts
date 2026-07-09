@@ -16,7 +16,7 @@ import type {
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
+import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import {
   canExportArticlesDocx,

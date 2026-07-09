@@ -12,7 +12,7 @@ import type {
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import type { DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
+import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createDocumentActionsController: typeof import('cs/workbench/browser/documentActionsModel').createDocumentActionsController;

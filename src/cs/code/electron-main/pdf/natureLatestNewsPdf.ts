@@ -4,8 +4,8 @@ import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxType
 import { CancellationError } from 'cs/base/common/errors';
 import { cleanText } from 'cs/base/common/strings';
 import { isNatureMainSiteUrl } from 'cs/base/common/url';
-import { fetchHtml } from 'cs/code/electron-main/fetch/dispatch';
-import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { fetchHtml } from 'cs/workbench/services/fetch/electron-main/dispatch';
+import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import type { PdfDownloadContext } from 'cs/code/electron-main/pdf/pdfStrategies/pdfStrategyTypes';
 import { printWebPageToPdf } from 'cs/code/electron-main/pdf/webPagePdf';
 

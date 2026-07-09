@@ -10,7 +10,6 @@ import type {
   AppCommand,
   AppCommandPayloadMap,
   AppCommandResultMap,
-  AppSettings,
   CancelDocumentTaskPayload,
   DeleteLibraryDocumentPayload,
   FetchArticlePayload,
@@ -62,14 +61,14 @@ import {
 import {
   fetchArticle,
   fetchLatestArticles,
-} from 'cs/code/electron-main/fetch/dispatch';
+} from 'cs/workbench/services/fetch/electron-main/dispatch';
 import { exportArticlesDocx } from 'cs/code/electron-main/document/docx';
 import { exportEditorDocx } from 'cs/code/electron-main/document/editorDocx';
 import { archiveWebContentHtml } from 'cs/code/electron-main/document/webContentHtmlArchive';
-import { normalizeFetchStrategy, shouldPrepareWebContentArtifacts } from 'cs/code/electron-main/fetch/fetchStrategy';
-import type { WebContentExtractionSnapshot, WebContentSnapshot } from 'cs/code/electron-main/fetch/fetchStrategy';
+import { normalizeFetchStrategy, shouldPrepareWebContentArtifacts } from 'cs/workbench/services/fetch/electron-main/fetchStrategy';
+import type { WebContentExtractionSnapshot, WebContentSnapshot } from 'cs/workbench/services/fetch/electron-main/fetchStrategy';
 
-import { resolveBatchWebContentExtractions, resolveBatchWebContentSnapshots, resolveWebContentSnapshotHtml } from 'cs/code/electron-main/fetch/webContentChannel';
+import { resolveBatchWebContentExtractions, resolveBatchWebContentSnapshots, resolveWebContentSnapshotHtml } from 'cs/workbench/services/fetch/electron-main/webContentChannel';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import { appError, serializeAppError } from 'cs/base/common/errors';
 import {
@@ -104,7 +103,6 @@ type AppInvokeResponse<T> =
 const documentTaskAbortControllers = new Map<string, AbortController>();
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
-let cachedSettings: AppSettings | null = null;
 
 function getDocumentTaskId(payload: { taskId?: string } | undefined) {
   return typeof payload?.taskId === 'string' ? payload.taskId.trim() : '';
@@ -143,16 +141,6 @@ function cancelDocumentTask(payload: CancelDocumentTaskPayload | undefined) {
   abortController.abort();
   documentTaskAbortControllers.delete(taskId);
   return true;
-}
-
-async function loadSettingsWithCache(storage: StorageService) {
-  if (cachedSettings) {
-    return cachedSettings;
-  }
-
-  const loaded = await storage.loadSettings();
-  cachedSettings = loaded;
-  return loaded;
 }
 
 async function invokeCommand<TCommand extends AppCommand>(
@@ -198,13 +186,11 @@ async function invokeCommand<TCommand extends AppCommand>(
       return clearWorkbenchSharedSessionCookies() as Promise<AppCommandResultMap[TCommand]>;
     case 'load_settings': {
       const loaded = await storage.loadSettings();
-      cachedSettings = loaded;
       return loaded as AppCommandResultMap[TCommand];
     }
     case 'save_settings':
       {
         const saved = await storage.saveSettings((payload as SaveSettingsPayload)?.settings ?? {});
-        cachedSettings = saved;
         themeMainService.updateSettings(saved);
         setMenuBarIconEnabled(saved.menuBarIconEnabled);
         if (micaMaterialTimeout) {

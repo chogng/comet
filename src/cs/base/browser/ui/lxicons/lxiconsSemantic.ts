@@ -24,14 +24,6 @@ export const lxIconSemanticMap = {
     send: 'enter',
     busy: 'sync',
   },
-  articleCard: {
-    download: 'download',
-    downloaded: 'check',
-    details: 'chevron-down',
-  },
-  sidebar: {
-    selectionMode: 'select-all',
-  },
   fetch: {
     batchDownload: 'batch-download',
   },

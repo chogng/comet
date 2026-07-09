@@ -1,4 +1,4 @@
-import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 
 export const SCIENCE_VALIDATION_TIMEOUT_MS = 3 * 60 * 1000;
 export const SCIENCE_VALIDATION_POLL_MS = 600;

@@ -1,25 +1,26 @@
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
-import {
-	FetchPaneContentView,
-	type FetchPaneProps,
-	type SidebarLabels as FetchPaneSidebarLabels,
-} from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { $ } from 'cs/base/browser/dom';
 
 import 'cs/workbench/browser/parts/sidebar/media/sidebar.css';
 import 'cs/sessions/browser/parts/sidebar/media/sidebarPart.css';
 
-export type SessionSidebarLabels = FetchPaneSidebarLabels;
+export type SessionSidebarLabels = {
+	homeTitle: string;
+	homeNavNewChat: string;
+	homeNavProjects: string;
+	homeNavArtifacts: string;
+	homeNavCustomize: string;
+	recentsTitle: string;
+};
 
 export type SessionSidebarProps = {
 	labels: SessionSidebarLabels;
 	accountLabel?: string;
 	moreLabel?: string;
 	settingsLabel?: string;
-	fetchPaneProps: FetchPaneProps;
 	titlebarActionsElement?: HTMLElement | null;
 	footerActionsElement?: HTMLElement | null;
 };
@@ -27,8 +28,6 @@ export type SessionSidebarProps = {
 export type SessionSidebarViewProps = SessionSidebarProps & {
 	isCollapsed: boolean;
 };
-
-type SessionSidebarContentTab = 'home' | 'fetch';
 
 let panelIdPool = 0;
 
@@ -45,7 +44,6 @@ export class SessionSidebar {
 	private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-header');
 	private readonly tabListElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-list');
 	private readonly homeTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
-	private readonly fetchTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
 	private readonly tabActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-actions');
 
 	//#endregion
@@ -54,9 +52,6 @@ export class SessionSidebar {
 	private readonly homeSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-home-panel');
 	private readonly homeNavElement = $<HTMLElementTagNameMap['nav']>('nav.comet-sidebar-home-nav');
 	private readonly recentsElement = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-recents');
-	private readonly fetchSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-fetch-panel');
-	private readonly fetchContentView: FetchPaneContentView;
-	private activeTab: SessionSidebarContentTab = 'home';
 	private disposed = false;
 
 	constructor(props: SessionSidebarViewProps) {
@@ -64,33 +59,13 @@ export class SessionSidebar {
 		this.tabListElement.setAttribute('role', 'tablist');
 		this.tabListElement.setAttribute('aria-label', props.labels.homeTitle);
 		this.homeTabButton.type = 'button';
-		this.fetchTabButton.type = 'button';
 		this.homeTabButton.setAttribute('role', 'tab');
-		this.fetchTabButton.setAttribute('role', 'tab');
 		this.homeTabButton.classList.add('comet-sidebar-home-tab');
-		this.fetchTabButton.classList.add('comet-sidebar-fetch-tab');
 		this.homeSection.id = `session-sidebar-home-panel-${panelIdPool}`;
-		this.fetchSection.id = `session-sidebar-fetch-panel-${panelIdPool}`;
 		panelIdPool += 1;
 		this.homeTabButton.setAttribute('aria-controls', this.homeSection.id);
-		this.fetchTabButton.setAttribute('aria-controls', this.fetchSection.id);
-		this.homeTabButton.addEventListener('click', () => this.setActiveTab('home'));
-		this.fetchTabButton.addEventListener('click', () => this.setActiveTab('fetch'));
-		this.tabListElement.addEventListener('keydown', event => {
-			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-				return;
-			}
-
-			event.preventDefault();
-			this.setActiveTab(this.activeTab === 'home' ? 'fetch' : 'home');
-		});
-		this.fetchContentView = new FetchPaneContentView({
-			...props.fetchPaneProps,
-			labels: props.labels,
-		});
 		this.homeSection.append(this.homeNavElement, this.recentsElement);
-		this.fetchSection.append(this.fetchContentView.getElement());
-		this.tabListElement.append(this.homeTabButton, this.fetchTabButton);
+		this.tabListElement.append(this.homeTabButton);
 		this.titlebarElement.append(this.titlebarActionsElement);
 		this.headerElement.append(this.tabListElement, this.tabActionsElement);
 		this.contentElement.append(
@@ -116,10 +91,6 @@ export class SessionSidebar {
 		}
 
 		this.props = props;
-		this.fetchContentView.setProps({
-			...props.fetchPaneProps,
-			labels: props.labels,
-		});
 		this.render();
 	}
 
@@ -129,8 +100,6 @@ export class SessionSidebar {
 		}
 
 		this.disposed = true;
-		this.fetchContentView.dispose();
-		this.titlebarElement.replaceChildren();
 		this.element.replaceChildren();
 	}
 
@@ -141,11 +110,7 @@ export class SessionSidebar {
 		this.contentElement.hidden = isCollapsed;
 		this.footerElement.hidden = isCollapsed;
 		this.homeTabButton.textContent = labels.homeTitle;
-		this.fetchTabButton.textContent = labels.fetchTitle;
-		this.tabListElement.setAttribute(
-			'aria-label',
-			`${labels.homeTitle} / ${labels.fetchTitle}`,
-		);
+		this.tabListElement.setAttribute('aria-label', labels.homeTitle);
 		this.renderHomeNav();
 		this.renderRecents();
 		this.syncModeContent();
@@ -190,44 +155,24 @@ export class SessionSidebar {
 
 	//#endregion
 
-	private setActiveTab(tab: SessionSidebarContentTab) {
-		if (this.disposed || this.activeTab === tab) {
-			return;
-		}
-
-		this.activeTab = tab;
-		this.syncTabs();
-	}
-
 	private syncTabs() {
 		if (!this.contentHostElement.isConnected) {
 			return;
 		}
 
-		const activePanel =
-			this.activeTab === 'home' ? this.homeSection : this.fetchSection;
-		if (this.contentHostElement.firstElementChild !== activePanel) {
-			this.contentHostElement.replaceChildren(activePanel);
+		if (this.contentHostElement.firstElementChild !== this.homeSection) {
+			this.contentHostElement.replaceChildren(this.homeSection);
 		}
 
-		const isHomeActive = this.activeTab === 'home';
 		const { labels } = this.props;
 		this.renderTabButton(
 			this.homeTabButton,
 			labels.homeTitle,
-			isHomeActive ? 'projects-filled' : 'projects',
+			'projects-filled',
 		);
-		this.renderTabButton(
-			this.fetchTabButton,
-			labels.fetchTitle,
-			isHomeActive ? 'customize' : 'customize-filled',
-		);
-		this.homeTabButton.classList.toggle('comet-is-active', isHomeActive);
-		this.fetchTabButton.classList.toggle('comet-is-active', !isHomeActive);
-		this.homeTabButton.setAttribute('aria-selected', String(isHomeActive));
-		this.fetchTabButton.setAttribute('aria-selected', String(!isHomeActive));
-		this.homeTabButton.tabIndex = isHomeActive ? 0 : -1;
-		this.fetchTabButton.tabIndex = isHomeActive ? -1 : 0;
+		this.homeTabButton.classList.add('comet-is-active');
+		this.homeTabButton.setAttribute('aria-selected', 'true');
+		this.homeTabButton.tabIndex = 0;
 
 		if (this.tabActionsElement.firstElementChild) {
 			this.tabActionsElement.replaceChildren();

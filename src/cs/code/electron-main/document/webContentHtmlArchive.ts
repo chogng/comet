@@ -11,10 +11,10 @@ import { appError } from 'cs/base/common/errors';
 import { cleanText } from 'cs/base/common/strings';
 import { normalizeUrl } from 'cs/base/common/url';
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
-import { buildArticleFromHtml } from 'cs/code/electron-main/fetch/parser';
+import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import type { StorageService } from 'cs/platform/storage/common/storage';
-import { resolveWebContentSnapshotHtml } from 'cs/code/electron-main/fetch/webContentChannel';
+import { resolveWebContentSnapshotHtml } from 'cs/workbench/services/fetch/electron-main/webContentChannel';
 
 function resolveSourceHostLabel(sourceUrl: string) {
   try {

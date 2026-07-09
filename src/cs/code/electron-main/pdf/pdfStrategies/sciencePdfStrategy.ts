@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron';
 
 import type { PdfDownloadResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { appError, CancellationError, isCancellationError } from 'cs/base/common/errors';
-import { isCompatFetchEnvEnabled } from 'cs/code/electron-main/fetchTiming';
+import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import { clearWorkbenchSharedSessionOrigins } from 'cs/platform/native/electron-main/sharedWebSession';
 import { persistDownloadedPdf, toPdfDownloadFailure, toPdfDownloadFailureFromError, tryBrowserSessionDownloadCandidates, tryPdfDownloadWithFetcherPolling, tryDownloadPdfCandidates, waitForPdfDownloadFromSession } from 'cs/platform/download/electron-main/pdfDownload';
 import type { BrowserSessionDownloadResult, PdfDownloadAttemptFailure } from 'cs/platform/download/electron-main/pdfDownload';

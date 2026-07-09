@@ -4,7 +4,7 @@ import type {
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
+import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 
 export async function syncLibraryMetadataFromArticle({
   enabled,

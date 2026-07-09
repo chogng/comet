@@ -1,5 +1,5 @@
 import { EventEmitter } from "cs/base/common/event";
-import type { Article } from "cs/workbench/services/article/articleFetch";
+import type { Article } from "cs/workbench/services/fetch/browser/articleFetch";
 
 export type SelectionModePhase = "off" | "multi" | "all";
 

@@ -7,8 +7,8 @@ import type {
   IChatService,
 } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { IChatService as IChatServiceDecorator } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { createBatchFetchController } from 'cs/workbench/browser/batchFetchModel';
-import type { BatchFetchController, BatchFetchControllerContext } from 'cs/workbench/browser/batchFetchModel';
+import { createBatchFetchController } from 'cs/workbench/contrib/fetch/browser/batchFetchModel';
+import type { BatchFetchController, BatchFetchControllerContext } from 'cs/workbench/contrib/fetch/browser/batchFetchModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
 import type { DocumentActionsController, DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
 import { createArticleSummaryTranslationExportController } from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
@@ -65,7 +65,6 @@ import {
 } from 'cs/sessions/browser/parts/sessions/chatView';
 import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import { SessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
-import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 
 import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -115,8 +114,8 @@ import { getLocaleMessages } from 'language/i18n';
 import {
   resolveBatchFetchSources,
   resolveBatchFetchSourceTable,
-} from 'cs/workbench/services/article/articleFetch';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
+} from 'cs/workbench/services/fetch/browser/articleFetch';
+import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
@@ -940,7 +939,6 @@ class WorkbenchHost {
     primarySidebarSize: number;
     isEditorCollapsed: boolean;
     expandedEditorSize: number;
-    fetchPaneProps: ReturnType<typeof createFetchPaneProps>;
     sidebarProps: SidebarProps;
     sessionChatProps: SessionChatViewProps;
     sidebarFooterActionsProps: ReturnType<
@@ -1669,35 +1667,16 @@ class WorkbenchHost {
       batchFetchController: batchFetchControllerInstance,
     });
 
-    const fetchPaneProps = createFetchPaneProps({
-      state: {
-        ui,
-        locale,
-        articles: filteredArticles,
-        hasData,
-        fetchStartDate: batchStartDate,
-        fetchEndDate: batchEndDate,
-        isFetchLoading: isBatchLoading,
-        isSelectionModeEnabled: selectionModePhase !== 'off',
-        selectionModePhase,
-        selectedArticleKeys,
-      },
-      actions: {
-        onFocusWebUrlInput: focusWorkbenchWebUrlInput,
-        onFetchStartDateChange: setBatchStartDate,
-        onFetchEndDateChange: setBatchEndDate,
-        onFetch: () => void handleFetchLatestBatch(),
-        onDownloadPdf: handleSharedPdfDownload,
-        onOpenArticleDetails: handleOpenArticleDetails,
-        onToggleSelectionMode: handleToggleSelectionMode,
-        onToggleArticleSelected: handleToggleArticleSelected,
-      },
-    });
-
     const sidebarProps: SidebarProps = {
-      labels: fetchPaneProps.labels,
+      labels: {
+        homeTitle: ui.sidebarHomeTitle,
+        homeNavNewChat: ui.sidebarHomeNavNewChat,
+        homeNavProjects: ui.sidebarHomeNavProjects,
+        homeNavArtifacts: ui.sidebarHomeNavArtifacts,
+        homeNavCustomize: ui.sidebarHomeNavCustomize,
+        recentsTitle: ui.sidebarRecentsTitle,
+      },
       ...createSidebarFooterTitlebarLabels(ui),
-      fetchPaneProps,
     };
 
     const documentActionsSnapshot = documentActionsControllerInstance.getSnapshot();
@@ -2014,7 +1993,6 @@ class WorkbenchHost {
       primarySidebarSize,
       isEditorCollapsed,
       expandedEditorSize,
-      fetchPaneProps,
       sidebarProps,
       sessionChatProps,
       sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({

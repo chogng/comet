@@ -3,8 +3,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { BrowserWindow, session, WebContentsView } from 'electron';
-import { normalizeListingCandidateSeed } from 'cs/code/electron-main/fetch/sourceExtractors/types';
-import type { ListingCandidateExtraction, ListingCandidateSeed } from 'cs/code/electron-main/fetch/sourceExtractors/types';
+import { normalizeListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
+import type { ListingCandidateExtraction, ListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
 
 import type {
   WebContentBounds,

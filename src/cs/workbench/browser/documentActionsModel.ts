@@ -9,7 +9,7 @@ import type {
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
+import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 import {
   parseAppErrorData,
 } from 'cs/base/common/errors';

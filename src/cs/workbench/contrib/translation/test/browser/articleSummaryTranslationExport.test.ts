@@ -18,7 +18,7 @@ import {
   type NotificationMessage,
 } from 'cs/platform/notification/common/notification';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
-import type { Article } from 'cs/workbench/services/article/articleFetch';
+import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createArticleSummaryTranslationExportController: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').createArticleSummaryTranslationExportController;

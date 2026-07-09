@@ -51,7 +51,7 @@ import {
   setStatusbarState,
   subscribeStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
-import { createBatchFetchController } from 'cs/workbench/browser/batchFetchModel';
+import { createBatchFetchController } from 'cs/workbench/contrib/fetch/browser/batchFetchModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import {

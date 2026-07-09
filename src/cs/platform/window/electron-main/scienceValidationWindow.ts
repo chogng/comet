@@ -22,8 +22,8 @@ import {
   SCIENCE_VALIDATION_TIMEOUT_MS,
   SCIENCE_VALIDATION_USER_AGENT,
 } from 'cs/platform/window/electron-main/scienceValidationShared';
-import { buildScienceValidationStateSignature, extractTitleFromHtml, isScienceChallengeHtml, isScienceHostUrl, isScienceSeriesListingPageUrl, isScienceValidationReadyState, isScienceValidationStableReadyState, matchesScienceComparableUrl, matchesScienceNavigationComparableUrl, summarizeScienceValidationHtml } from 'cs/code/electron-main/fetch/scienceValidationRules';
-import type { ScienceValidationResult, ScienceValidationWindowState } from 'cs/code/electron-main/fetch/scienceValidationRules';
+import { buildScienceValidationStateSignature, extractTitleFromHtml, isScienceChallengeHtml, isScienceHostUrl, isScienceSeriesListingPageUrl, isScienceValidationReadyState, isScienceValidationStableReadyState, matchesScienceComparableUrl, matchesScienceNavigationComparableUrl, summarizeScienceValidationHtml } from 'cs/platform/window/electron-main/scienceValidationRules';
+import type { ScienceValidationResult, ScienceValidationWindowState } from 'cs/platform/window/electron-main/scienceValidationRules';
 
 // This module owns the auxiliary validation window lifecycle.
 // Site-specific readiness/challenge decisions live in code/electron-main/fetch.
@@ -34,7 +34,7 @@ export {
   isScienceSeriesListingPageUrl,
   shouldAllowScienceWebContentWhileLoading,
   shouldUseScienceValidationRenderFallback,
-} from 'cs/code/electron-main/fetch/scienceValidationRules';
+} from 'cs/platform/window/electron-main/scienceValidationRules';
 
 function logScienceValidation(stage: string, details: Record<string, unknown>) {
   if (!SCIENCE_VALIDATION_LOG_ENABLED) return;
