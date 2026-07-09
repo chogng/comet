@@ -1,5 +1,6 @@
 import type {
   ContextMenuAction,
+  ContextMenuDelegate,
   ContextMenuHeader,
 } from 'cs/base/browser/contextmenu';
 import {
@@ -8,10 +9,7 @@ import {
   type ILayoutAnchor,
 } from 'cs/base/common/layout';
 import { Menu, type MenuOptions } from 'cs/base/browser/ui/menu/menu';
-import type {
-  ContextMenuDelegate,
-  IContextViewService,
-} from 'cs/platform/contextview/browser/contextView';
+import type { IContextViewService } from 'cs/platform/contextview/browser/contextView';
 
 function composeClassName(parts: Array<string | undefined | null | false>) {
   return parts.filter(Boolean).join(' ');
@@ -97,6 +95,7 @@ export class ContextMenuHandler {
       shouldRestoreFocusOnHide && document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
+    let menu: Menu | null = null;
 
     this.contextViewService.showContextView({
       getAnchor: delegate.getAnchor,
@@ -112,23 +111,24 @@ export class ContextMenuHandler {
       offset: resolveContextMenuOffset(delegate),
       minWidth: delegate.minWidth,
       render: (container) => {
-        const menu = this.renderMenu(options, delegate, header);
+        menu = this.renderMenu(options, delegate, header);
         container.append(menu.getElement());
-        queueMicrotask(() => {
-          if (header?.autoFocusOnShow) {
-            return;
-          }
-          if (shouldAutoFocusOnShow) {
-            menu.focusSelectedOrFirstEnabled();
-            return;
-          }
-          // For pointer-triggered menus, keep focus inside the menu surface
-          // without forcing item-level focus rings.
-          menu.getElement().focus();
-        });
         return () => {
-          menu.dispose();
+          menu?.dispose();
+          menu = null;
         };
+      },
+      focus: () => {
+        if (!menu || header?.autoFocusOnShow) {
+          return;
+        }
+
+        if (shouldAutoFocusOnShow) {
+          menu.focusSelectedOrFirstEnabled();
+          return;
+        }
+
+        menu.getElement().focus();
       },
       onHide: (data) => {
         const payload = data as ContextMenuHidePayload | undefined;
@@ -177,12 +177,12 @@ export class ContextMenuHandler {
       items: readonly ContextMenuAction[],
       placement: 'top' | 'bottom',
     ): MenuOptions => ({
-        items,
-        dataMenu,
-        role: 'menu',
-        placement,
-        header: menuHeader,
-        onSelect: ({ value, item }) => {
+      items,
+      dataMenu,
+      role: 'menu',
+      placement,
+      header: menuHeader,
+      onSelect: ({ value, item }) => {
         delegate.onSelect?.(value);
         if (item.keepOpenOnClick) {
           menu.setOptions(createMenuOptions(

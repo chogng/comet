@@ -1,6 +1,6 @@
 import { ContextMenuHandler } from 'cs/platform/contextview/browser/contextMenuHandler';
+import type { ContextMenuDelegate } from 'cs/base/browser/contextmenu';
 import type {
-  ContextMenuDelegate,
   ContextMenuListener,
   ContextMenuListenerDisposable,
   ContextMenuService,

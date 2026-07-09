@@ -23,9 +23,13 @@ export class PlatformContextViewService implements IContextViewService {
     this.currentRenderDisposable = renderDisposable ?? null;
 
     this.contextView.show({
+      canRelayout: delegate.canRelayout,
       anchor: delegate.getAnchor(),
       className: delegate.className,
       render: () => container,
+      focus: delegate.focus,
+      layout: delegate.layout,
+      onDOMEvent: delegate.onDOMEvent,
       onHide: this.handleHide,
       anchorAlignment: delegate.anchorAlignment,
       anchorPosition: delegate.anchorPosition,
@@ -35,6 +39,7 @@ export class PlatformContextViewService implements IContextViewService {
       offset: delegate.offset,
       matchAnchorWidth: delegate.matchAnchorWidth,
       minWidth: delegate.minWidth,
+      layer: delegate.layer,
     });
 
     return {
@@ -58,10 +63,6 @@ export class PlatformContextViewService implements IContextViewService {
   getContextViewElement = () => this.contextView.getViewElement();
 
   layout = () => {
-    if (this.currentDelegate?.canRelayout === false) {
-      return;
-    }
-
     this.contextView.layout();
   };
 

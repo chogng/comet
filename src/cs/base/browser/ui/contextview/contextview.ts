@@ -32,8 +32,12 @@ export type ContextViewAnchor = HTMLElement | {
 };
 
 export type ContextViewOptions = {
+  canRelayout?: boolean;
   anchor: ContextViewAnchor;
   render: () => Node;
+  focus?: () => void;
+  layout?: () => void;
+  onDOMEvent?: (event: Event, activeElement: HTMLElement | null) => void;
   className?: string;
   onHide?: (data?: unknown) => void;
   anchorAlignment?: AnchorAlignment;
@@ -44,6 +48,7 @@ export type ContextViewOptions = {
   offset?: number;
   matchAnchorWidth?: boolean;
   minWidth?: number;
+  layer?: number;
 };
 
 export type ContextViewHandle = {
@@ -328,10 +333,12 @@ export class ContextViewController extends Disposable implements ContextViewHand
     if (options.className) {
       this.content.classList.add(...options.className.split(/\s+/).filter(Boolean));
     }
+    this.element.style.zIndex = `${1000 + (options.layer ?? 0)}`;
     this.content.replaceChildren(options.render());
     this.mount();
-    this.layout();
-    this.scheduleRelayout();
+    this.layout(false);
+    options.focus?.();
+    this.scheduleRelayout(false);
   }
 
   hide = (data?: unknown) => {
@@ -387,10 +394,17 @@ export class ContextViewController extends Disposable implements ContextViewHand
     this.pendingRelayout = false;
   }
 
-  layout() {
+  layout(allowHide = true) {
     if (!this.options) {
       return;
     }
+
+    if (allowHide && this.options.canRelayout === false) {
+      this.hide();
+      return;
+    }
+
+    this.options.layout?.();
 
     const {
       anchor,
@@ -459,6 +473,10 @@ export class ContextViewController extends Disposable implements ContextViewHand
       return;
     }
 
+    if (this.delegateDOMEvent(event)) {
+      return;
+    }
+
     const targetNode = event.target;
     if (!(targetNode instanceof Node)) {
       this.hide();
@@ -480,12 +498,20 @@ export class ContextViewController extends Disposable implements ContextViewHand
   };
 
   private readonly handleDocumentKeyDown = (event: KeyboardEvent) => {
+    if (this.delegateDOMEvent(event)) {
+      return;
+    }
+
     if (event.key === 'Escape') {
       this.hide();
     }
   };
 
   private readonly handleDocumentScroll = (event: Event) => {
+    if (this.delegateDOMEvent(event)) {
+      return;
+    }
+
     const targetNode = event.target;
     if (targetNode instanceof Node && this.element.contains(targetNode)) {
       return;
@@ -495,10 +521,22 @@ export class ContextViewController extends Disposable implements ContextViewHand
   };
 
   private readonly handleWindowResize = () => {
-    this.hide();
+    this.layout();
   };
 
-  private scheduleRelayout() {
+  private delegateDOMEvent(event: Event) {
+    if (!this.options?.onDOMEvent) {
+      return false;
+    }
+
+    const activeElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    this.options.onDOMEvent(event, activeElement);
+    return true;
+  }
+
+  private scheduleRelayout(allowHide = true) {
     if (this.pendingRelayout || !this.visible) {
       return;
     }
@@ -509,7 +547,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
       if (!this.visible || this.disposed) {
         return;
       }
-      this.layout();
+      this.layout(allowHide);
     });
   }
 }

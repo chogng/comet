@@ -53,3 +53,84 @@ test('contextview exposes available height for explicit below placement', () => 
 		document.body.replaceChildren();
 	}
 });
+
+test('contextview runs delegate layout focus dom event and layer hooks', () => {
+	const contextView = createContextViewController();
+	const order: string[] = [];
+	const domEvents: string[] = [];
+	const activeElementClassNames: Array<string | null> = [];
+
+	try {
+		contextView.show({
+			anchor: {
+				x: 24,
+				y: 48,
+				width: 80,
+				height: 20,
+			},
+			layer: 7,
+			render: () => {
+				const button = document.createElement('button');
+				button.className = 'contextview-focus-target';
+				return button;
+			},
+			layout: () => {
+				order.push('layout');
+			},
+			focus: () => {
+				order.push('focus');
+				const button = document.body.querySelector('.contextview-focus-target');
+				if (!(button instanceof HTMLElement)) {
+					throw new Error('Expected focus target.');
+				}
+				button.focus();
+			},
+			onDOMEvent: (event, activeElement) => {
+				domEvents.push(event.type);
+				activeElementClassNames.push(activeElement?.className ?? null);
+			},
+		});
+
+		assert.deepEqual(order, ['layout', 'focus']);
+		assert.equal(contextView.getViewElement().style.zIndex, '1007');
+		assert.equal(
+			document.activeElement instanceof HTMLElement
+				? document.activeElement.className
+				: null,
+			'contextview-focus-target',
+		);
+
+		document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+		assert.equal(contextView.isVisible(), true);
+		assert.deepEqual(domEvents, ['mousedown']);
+		assert.deepEqual(activeElementClassNames, ['contextview-focus-target']);
+	} finally {
+		contextView.dispose();
+		document.body.replaceChildren();
+	}
+});
+
+test('contextview keeps canRelayout false visible for initial layout and hides on relayout', () => {
+	const contextView = createContextViewController();
+
+	try {
+		contextView.show({
+			canRelayout: false,
+			anchor: {
+				x: 24,
+				y: 48,
+				width: 80,
+				height: 20,
+			},
+			render: () => document.createElement('div'),
+		});
+
+		assert.equal(contextView.isVisible(), true);
+
+		contextView.layout();
+		assert.equal(contextView.isVisible(), false);
+	} finally {
+		contextView.dispose();
+		document.body.replaceChildren();
+	}
+});
