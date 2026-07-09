@@ -14,6 +14,7 @@ import 'cs/workbench/contrib/workbench/workbench.contribution';
 //#region --- workbench actions
 
 import 'cs/workbench/browser/actions/layoutActions';
+import 'cs/workbench/browser/actions/commandPaletteActions';
 
 //#endregion
 
@@ -39,6 +40,7 @@ import 'cs/workbench/services/layout/browser/layoutService';
 import 'cs/workbench/services/lifecycle/browser/lifecycleService';
 import 'cs/workbench/services/localization/browser/localeService';
 import 'cs/workbench/services/notification/common/notificationService';
+import 'cs/workbench/services/quickInput/browser/quickInputService';
 import 'cs/workbench/services/views/browser/viewsService';
 import 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 
@@ -50,6 +52,7 @@ registerWorkbenchService(INativeHostService, nativeHostService);
 //#region --- workbench contributions
 
 import 'cs/workbench/contrib/localization/common/localization.contribution';
+import 'cs/workbench/contrib/quickaccess/browser/quickAccess.contribution';
 import 'cs/workbench/contrib/sash/browser/sash.contribution';
 
 //#endregion

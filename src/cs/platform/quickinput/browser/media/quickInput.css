@@ -1,0 +1,129 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.quick-input-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 10000;
+	pointer-events: none;
+}
+
+.quick-input-widget {
+	position: absolute;
+	top: 48px;
+	left: 50%;
+	width: min(720px, calc(100vw - 32px));
+	max-height: min(70vh, 640px);
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--vscode-widget-border, rgba(0, 0, 0, 0.16));
+	border-radius: 8px;
+	background: var(--vscode-quickInput-background, var(--vscode-editor-background, #ffffff));
+	color: var(--vscode-quickInput-foreground, var(--vscode-editor-foreground, #1f2328));
+	box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+	pointer-events: auto;
+}
+
+.quick-input-widget.center {
+	top: 30vh;
+}
+
+.quick-input-title {
+	padding: 10px 12px 0;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--vscode-descriptionForeground, #5f6a72);
+}
+
+.quick-input-header {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--vscode-widget-border, rgba(0, 0, 0, 0.12));
+}
+
+.quick-input-box {
+	width: 100%;
+	height: 34px;
+	box-sizing: border-box;
+	border: 1px solid var(--vscode-input-border, rgba(0, 0, 0, 0.18));
+	border-radius: 6px;
+	padding: 0 10px;
+	background: var(--vscode-input-background, #ffffff);
+	color: var(--vscode-input-foreground, #1f2328);
+	font: inherit;
+	outline: none;
+}
+
+.quick-input-box:focus {
+	border-color: var(--vscode-focusBorder, #0969da);
+}
+
+.quick-input-prompt {
+	margin-top: 8px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground, #5f6a72);
+}
+
+.quick-input-list {
+	overflow: auto;
+	padding: 4px 0;
+}
+
+.quick-input-item,
+.quick-input-separator,
+.quick-input-empty {
+	min-height: 32px;
+	box-sizing: border-box;
+	padding: 6px 12px;
+}
+
+.quick-input-item {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: center;
+	cursor: pointer;
+}
+
+.quick-input-item.active {
+	background: var(--vscode-quickInputList-focusBackground, rgba(9, 105, 218, 0.12));
+	color: var(--vscode-quickInputList-focusForeground, inherit);
+}
+
+.quick-input-item.selected .quick-input-label::before {
+	content: "✓";
+	display: inline-block;
+	width: 16px;
+	color: var(--vscode-focusBorder, #0969da);
+}
+
+.quick-input-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 13px;
+}
+
+.quick-input-description,
+.quick-input-detail,
+.quick-input-empty {
+	color: var(--vscode-descriptionForeground, #5f6a72);
+	font-size: 12px;
+}
+
+.quick-input-detail {
+	grid-column: 1 / -1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.quick-input-separator {
+	color: var(--vscode-descriptionForeground, #5f6a72);
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
