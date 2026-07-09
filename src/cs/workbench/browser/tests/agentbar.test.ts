@@ -312,7 +312,7 @@ test('chat view pane header mounts the provided leading comet-hover-actions elem
   }
 });
 
-test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', () => {
+test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', async () => {
   let askCount = 0;
   let autoModelRoutingToggleCount = 0;
   let selectedModelValue: string | null = null;
@@ -334,6 +334,7 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
     },
     onToggleAutoModelRouting: () => {
       autoModelRoutingToggleCount += 1;
+      return autoModelRoutingToggleCount % 2 === 1 ? 'auto' : 'glm:glm-4.7-flash';
     },
     onSelectLlmModel: (value) => {
       selectedModelValue = value;
@@ -403,6 +404,10 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
       dropdownButton.querySelector('.comet-chat-model-switch-label')?.textContent,
       'Auto',
     );
+    dropdownButton.click();
+    await delay(0);
+    dropdownButton.click();
+    await delay(0);
 
     const autoMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(autoMenu instanceof HTMLElement);
@@ -420,6 +425,10 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
     assert(autoToggle instanceof HTMLElement);
     autoToggle.click();
     assert.equal(autoModelRoutingToggleCount, 2);
+    dropdownButton.click();
+    await delay(0);
+    dropdownButton.click();
+    await delay(0);
 
     const switchMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
     assert(switchMenu instanceof HTMLElement);
