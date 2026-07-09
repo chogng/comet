@@ -474,18 +474,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
   }
 
   protected override updateContainerClassName() {
-    if (!this.itemElement) {
-      return;
-    }
-
-    this.itemElement.className = DOM.composeClassName([
-      'comet-actionbar-item',
-      'comet-is-action',
-      this.item.disabled ? 'comet-is-disabled' : '',
-      this.item.active || this.isOpen ? 'comet-is-active' : '',
-      this.item.checked ? 'comet-is-checked' : '',
-      this.item.className,
-    ]);
+    this.updateContainerState(Boolean(this.item.active || this.isOpen));
   }
 
   show(source: DropdownMenuOpenSource = 'pointer') {

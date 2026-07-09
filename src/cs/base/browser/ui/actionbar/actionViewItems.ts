@@ -133,6 +133,7 @@ export class ActionViewItem extends BaseActionViewItem {
   protected item: ActionBarActionItem;
   protected readonly hoverBinding: HoverBinding;
   protected itemElement: HTMLElement | null = null;
+  private readonly itemClassNames = new Set<string>();
 
   constructor(item: ActionBarActionItem, options?: ActionViewItemOptions);
   constructor(item: ActionBarActionItem, hoverService?: IHoverDelegate);
@@ -199,18 +200,35 @@ export class ActionViewItem extends BaseActionViewItem {
   };
 
   protected updateContainerClassName() {
+    this.updateContainerState(Boolean(this.item.active));
+  }
+
+  protected updateContainerState(isActive: boolean) {
     if (!this.itemElement) {
       return;
     }
 
-    this.itemElement.className = DOM.composeClassName([
-      'comet-actionbar-item',
-      'comet-is-action',
-      this.item.disabled ? 'comet-is-disabled' : '',
-      this.item.active ? 'comet-is-active' : '',
-      this.item.checked ? 'comet-is-checked' : '',
-      this.item.className,
-    ]);
+    this.itemElement.classList.add('comet-actionbar-item', 'comet-is-action');
+    this.itemElement.classList.toggle('comet-is-disabled', Boolean(this.item.disabled));
+    this.itemElement.classList.toggle('comet-is-active', isActive);
+    this.itemElement.classList.toggle('comet-is-checked', Boolean(this.item.checked));
+    this.syncItemClassNames();
+  }
+
+  private syncItemClassNames() {
+    if (!this.itemElement) {
+      return;
+    }
+
+    for (const className of this.itemClassNames) {
+      this.itemElement.classList.remove(className);
+    }
+    this.itemClassNames.clear();
+
+    for (const className of this.item.className?.split(/\s+/).filter(Boolean) ?? []) {
+      this.itemClassNames.add(className);
+      this.itemElement.classList.add(className);
+    }
   }
 
   protected updateButtonState() {

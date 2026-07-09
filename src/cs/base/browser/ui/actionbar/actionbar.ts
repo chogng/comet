@@ -128,15 +128,9 @@ type RenderedItem = {
   dispose: () => void;
 };
 
-function createActionBarItemElement(
-  className?: string,
-  id?: string,
-) {
+function createActionBarItemElement(id?: string) {
   const itemElement = document.createElement('div');
-  itemElement.className = DOM.composeClassName([
-    'comet-actionbar-item',
-    className,
-  ]);
+  itemElement.className = 'comet-actionbar-item';
   if (id) {
     itemElement.dataset.actionbarItemId = id;
   }
@@ -247,10 +241,12 @@ export class ActionBarView extends Disposable {
 
     if (!isActionItem(item)) {
       if (isSplitItem(item)) {
-        const itemElement = createActionBarItemElement(
-          DOM.composeClassName(['comet-is-action', item.className]),
-          item.id,
-        );
+        const itemElement = createActionBarItemElement(item.id);
+        itemElement.className = DOM.composeClassName([
+          'comet-actionbar-item',
+          'comet-is-action',
+          item.className,
+        ]);
         const viewItem = createActionWithDropdownActionViewItem({
           primary: {
             ...item.primary,
@@ -271,10 +267,12 @@ export class ActionBarView extends Disposable {
         return itemElement;
       }
 
-      const itemElement = createActionBarItemElement(
-        DOM.composeClassName(['comet-is-separator', item.className]),
-        item.id,
-      );
+      const itemElement = createActionBarItemElement(item.id);
+      itemElement.className = DOM.composeClassName([
+        'comet-actionbar-item',
+        'comet-is-separator',
+        item.className,
+      ]);
       const separator = document.createElement('div');
       separator.className = 'comet-actionbar-separator';
       separator.setAttribute('aria-hidden', 'true');
@@ -282,7 +280,7 @@ export class ActionBarView extends Disposable {
       return itemElement;
     }
 
-    const itemElement = createActionBarItemElement(undefined, item.id);
+    const itemElement = createActionBarItemElement(item.id);
     const viewItem = createDefaultActionViewItem(item, item.hoverService ?? this.props.hoverService);
     viewItem.render(itemElement);
     this.renderedItems.push({
