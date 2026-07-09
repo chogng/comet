@@ -1,3 +1,4 @@
+import 'cs/workbench/browser/parts/notifications/media/notificationsAlerts.css';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { withSeverityPrefix } from 'cs/platform/notification/common/notification';
 import type {

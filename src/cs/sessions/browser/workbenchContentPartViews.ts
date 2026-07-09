@@ -8,6 +8,7 @@ import {
 	createSessionSidebarPartView,
 	SessionSidebarPartView,
 	type SessionSidebarProps,
+	type SessionSidebarViewProps,
 } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import {
 	SessionsPartView,
@@ -121,14 +122,9 @@ export class SessionWorkbenchContentPartViews {
 	//#region Column titlebar routing
 
 	private renderSidebar() {
-		if (!this.props.isPrimarySidebarVisible) {
-			this.sidebarView?.dispose();
-			this.sidebarView = null;
-			return;
-		}
-
-		const nextProps: SessionSidebarProps = {
+		const nextProps: SessionSidebarViewProps = {
 			...this.props.sidebarProps,
+			isCollapsed: !this.props.isPrimarySidebarVisible,
 			titlebarActionsElement: this.props.leadingTitlebarActionsElement ?? null,
 			footerActionsElement: this.props.sidebarFooterActionsElement,
 		};
@@ -144,10 +140,7 @@ export class SessionWorkbenchContentPartViews {
 	private renderSessions() {
 		const nextProps = {
 			chatProps: this.props.sessionChatProps,
-			titlebarLeadingActionsElement:
-				this.props.isPrimarySidebarVisible
-					? null
-					: (this.props.leadingTitlebarActionsElement ?? null),
+			titlebarLeadingActionsElement: null,
 			titlebarTrailingActionsElement:
 				this.props.isEditorVisible
 					? null
@@ -181,7 +174,7 @@ export class SessionWorkbenchContentPartViews {
 			titlebarAuxiliaryActionsElements: this.props.editorTitlebarActionsElement
 				? [this.props.editorTitlebarActionsElement]
 				: [],
-			hasLeadingTitlebarWindowControlsInset: !this.props.isPrimarySidebarVisible,
+			hasLeadingTitlebarWindowControlsInset: false,
 			onStatusChange: this.handleEditorStatusChange,
 		};
 

@@ -16,6 +16,7 @@
 
 .comet-notifications-status {
   position: absolute;
+  z-index: 2600;
   right: 12px;
   bottom: 12px;
   display: flex;

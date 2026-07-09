@@ -1,14 +1,8 @@
 @import './notificationsList.css';
 
-.comet-notifications-part {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2600;
-}
-
 .comet-notifications-toasts {
   position: absolute;
+  z-index: 2600;
   right: 12px;
   bottom: 12px;
   display: none;
