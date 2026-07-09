@@ -2,6 +2,11 @@ import type {
   LibraryDocumentSummary,
   LibraryStorageMode,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import {
+  NumberStepper,
+  numberStepperDecrementAriaLabel,
+  numberStepperIncrementAriaLabel,
+} from 'cs/base/browser/ui/numberStepper/numberStepper';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 import {
   createSettingsSection,
@@ -14,8 +19,8 @@ import {
   buildSettingsSelect as buildSelect,
   buildSettingsSwitch as buildSwitch,
   createSettingsElement as el,
+  setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
-import { buildSettingsNumberStepperInput as buildNumberStepperInput } from 'cs/workbench/contrib/preferences/browser/settingsNumberStepperInput';
 
 function resolveLibraryDocumentStatusLabel(labels: SettingsPartLabels, document: LibraryDocumentSummary) {
   if (document.latestJobStatus === 'failed' || document.ingestStatus === 'failed') { return labels.settingsLibraryDocumentFailed; }
@@ -188,17 +193,20 @@ export class LibrarySettingsSection {
 
   private renderMaxConcurrentJobsField() {
     const jobsWrap = el('div', 'comet-settings-limit-input-wrap');
-    jobsWrap.append(buildNumberStepperInput({
+    const maxConcurrentJobsInput = new NumberStepper({
       value: this.props.maxConcurrentIndexJobs,
       className: 'comet-settings-limit-input',
-      focusKey: 'settings.library.maxJobs',
       min: '1',
       max: '4',
       inputMode: 'numeric',
       step: '1',
-      onInput: this.props.onMaxConcurrentIndexJobsChange,
+      decrementAriaLabel: numberStepperDecrementAriaLabel,
+      incrementAriaLabel: numberStepperIncrementAriaLabel,
+      onDidChange: this.props.onMaxConcurrentIndexJobsChange,
       disabled: this.props.isSettingsSaving,
-    }).element);
+    });
+    setSettingsFocusKey(maxConcurrentJobsInput.inputElement, 'settings.library.maxJobs');
+    jobsWrap.append(maxConcurrentJobsInput.element);
     return createSettingsRow({
       title: this.props.labels.settingsLibraryMaxConcurrentJobs,
       description: this.props.labels.settingsLibraryMaxConcurrentJobsHint,

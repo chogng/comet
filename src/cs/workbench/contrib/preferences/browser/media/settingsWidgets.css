@@ -56,6 +56,24 @@
   align-content: start;
 }
 
+.comet-settings-block-section .comet-number-stepper,
+.comet-settings-field .comet-number-stepper {
+  --comet-number-stepper-height: 24px;
+  --comet-number-stepper-border: 1px solid #d3d3d3;
+  --comet-number-stepper-border-radius: 8px;
+  --comet-number-stepper-background: transparent;
+  --comet-number-stepper-foreground: var(--comet-settings-inputForeground, #203040);
+  --comet-number-stepper-hoverBackground: var(--comet-settings-selectHoverBackground, #e6e6e6);
+  --comet-number-stepper-focusBorder: #d3d3d3;
+  --comet-number-stepper-font-size: 13px;
+  --comet-number-stepper-input-padding-x: 6px;
+  --comet-number-stepper-button-size: 24px;
+  --comet-number-stepper-separator: 1px solid #d3d3d3;
+  --comet-number-stepper-iconForeground: var(--comet-dropdown-iconForeground, var(--vscode-select-foreground, #64748b));
+  --comet-number-stepper-icon-font-size: 12px;
+  --comet-number-stepper-icon-opacity: 0.72;
+}
+
 .comet-settings-text-editor-field {
   align-content: start;
 }
@@ -71,108 +89,6 @@
   width: 120px;
   min-width: 120px;
   max-width: 120px;
-}
-
-/* ===== Number Stepper (Decrease/Input/Increase) ===== */
-.comet-settings-number-stepper {
-  display: inline-flex;
-  align-items: stretch;
-  min-width: 0;
-  height: 24px;
-  border: 1px solid #d3d3d3;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--comet-settings-inputForeground, #203040);
-  font: inherit;
-  font-size: 13px;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.comet-settings-number-stepper:hover {
-  background: var(--comet-settings-selectHoverBackground, #e6e6e6);
-}
-
-.comet-settings-number-stepper:focus-within {
-  border-color: #d3d3d3;
-}
-
-.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
-  max-width: none;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  --comet-inputbox-border: 0;
-  --comet-inputbox-background: transparent;
-  --comet-inputbox-background-hover: transparent;
-  --comet-inputbox-foreground: var(--comet-settings-inputForeground, #203040);
-  --comet-inputbox-font-size: 13px;
-  --comet-inputbox-padding-x: 6px;
-  --comet-inputbox-text-align: center;
-}
-
-.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input::-webkit-outer-spin-button,
-.comet-settings-number-stepper > .comet-settings-inputbox.comet-inputbox > .comet-inputbox-wrapper > .comet-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.comet-settings-number-stepper-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  flex: 0 0 24px;
-  width: 24px;
-  min-width: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--comet-settings-inputForeground, #203040);
-  font: inherit;
-  line-height: 0;
-  cursor: pointer;
-}
-
-.comet-settings-number-stepper-button-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  line-height: 0;
-  color: var(--comet-dropdown-iconForeground, var(--vscode-select-foreground, #64748b));
-  opacity: 0.72;
-  pointer-events: none;
-}
-
-.comet-settings-number-stepper-button-icon svg path {
-  fill: currentColor;
-  stroke: currentColor;
-}
-
-.comet-settings-number-stepper-button-decrement {
-  border-right: 1px solid #d3d3d3;
-}
-
-.comet-settings-number-stepper-button-increment {
-  border-left: 1px solid #d3d3d3;
-}
-
-.comet-settings-number-stepper-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.comet-settings-number-stepper-button:focus-visible {
-  outline: none;
 }
 
 .comet-settings-text-editor-color-row {
@@ -418,7 +334,7 @@
   width: 120px;
 }
 
-.comet-settings-number-stepper.comet-settings-limit-input {
+.comet-number-stepper.comet-settings-limit-input {
   min-width: 0;
   width: 100%;
 }

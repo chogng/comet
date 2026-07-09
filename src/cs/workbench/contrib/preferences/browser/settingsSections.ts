@@ -2,6 +2,11 @@ import type { Locale } from 'language/i18n';
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'cs/base/common/editorDraftStyle';
 import { createDateInput } from 'cs/base/browser/ui/dateInput/dateInput';
 import {
+  NumberStepper,
+  numberStepperDecrementAriaLabel,
+  numberStepperIncrementAriaLabel,
+} from 'cs/base/browser/ui/numberStepper/numberStepper';
+import {
   createSettingsSection,
   createSettingsRow,
 } from 'cs/workbench/contrib/preferences/browser/section';
@@ -11,8 +16,8 @@ import {
   buildSettingsSelect as buildSelect,
   buildSettingsSwitch as buildSwitch,
   createSettingsElement as el,
+  setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
-import { buildSettingsNumberStepperInput as buildNumberStepperInput } from 'cs/workbench/contrib/preferences/browser/settingsNumberStepperInput';
 import type {
   SettingsDropdownOption,
   SettingsPartProps,
@@ -212,17 +217,20 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
     listClassName: 'comet-settings-batch-options-list',
   });
   const wrap = el('div', 'comet-settings-limit-input-wrap');
-  wrap.append(buildNumberStepperInput({
+  const batchLimitInput = new NumberStepper({
     value: props.batchLimit,
     className: 'comet-settings-limit-input',
-    focusKey: 'settings.batch.limit',
     min: String(batchLimitMin),
     max: String(batchLimitMax),
     inputMode: 'numeric',
     step: '1',
-    onInput: props.onBatchLimitChange,
+    decrementAriaLabel: numberStepperDecrementAriaLabel,
+    incrementAriaLabel: numberStepperIncrementAriaLabel,
+    onDidChange: props.onBatchLimitChange,
     disabled: props.isSettingsSaving,
-  }).element);
+  });
+  setSettingsFocusKey(batchLimitInput.inputElement, 'settings.batch.limit');
+  wrap.append(batchLimitInput.element);
 
   const dateOptions = createSettingsSection({
     sectionClassName: 'comet-settings-batch-date-section',
@@ -361,17 +369,19 @@ export function renderLayoutSection(props: SettingsPartProps) {
     'comet-settings-layout-startup-layout-select',
   );
   setSelectHostDisabled(startupLayoutSelect, props.isSettingsSaving);
-  const browserTabKeepAliveLimitInput = buildNumberStepperInput({
+  const browserTabKeepAliveLimitInput = new NumberStepper({
     value: props.browserTabKeepAliveLimit,
     className: 'comet-settings-limit-input',
-    focusKey: 'settings.general.layout.browserTabKeepAliveLimit',
     min: String(minBrowserTabKeepAliveLimit),
     max: String(maxBrowserTabKeepAliveLimit),
     inputMode: 'numeric',
     step: '1',
-    onInput: props.onBrowserTabKeepAliveLimitChange,
+    decrementAriaLabel: numberStepperDecrementAriaLabel,
+    incrementAriaLabel: numberStepperIncrementAriaLabel,
+    onDidChange: props.onBrowserTabKeepAliveLimitChange,
     disabled: props.isSettingsSaving,
   });
+  setSettingsFocusKey(browserTabKeepAliveLimitInput.inputElement, 'settings.general.layout.browserTabKeepAliveLimit');
   layout.list.append(
     createSettingsRow({
       title: props.labels.settingsStartupLayout,
@@ -607,39 +617,45 @@ export function renderTextEditorSection(props: SettingsPartProps) {
     'comet-settings-text-editor-select',
   );
   setSelectHostDisabled(fontSizeSelect, isDisabled);
-  const lineHeightInput = buildNumberStepperInput({
+  const lineHeightInput = new NumberStepper({
     value: defaultBodyStyle.lineHeight,
     className: 'comet-settings-text-editor-line-height-input',
-    focusKey: 'settings.textEditor.lineHeight',
     min: '0.5',
     max: '4',
     inputMode: 'decimal',
     step: '0.1',
-    onInput: props.onEditorDraftLineHeightChange,
+    decrementAriaLabel: numberStepperDecrementAriaLabel,
+    incrementAriaLabel: numberStepperIncrementAriaLabel,
+    onDidChange: props.onEditorDraftLineHeightChange,
     disabled: isDisabled,
   });
-  const paragraphSpacingBeforeInput = buildNumberStepperInput({
+  setSettingsFocusKey(lineHeightInput.inputElement, 'settings.textEditor.lineHeight');
+  const paragraphSpacingBeforeInput = new NumberStepper({
     value: defaultBodyStyle.paragraphSpacingBeforePt,
     className: 'comet-settings-text-editor-spacing-input',
-    focusKey: 'settings.textEditor.paragraphSpacingBefore',
     min: '0',
     max: '200',
     inputMode: 'decimal',
     step: '0.5',
-    onInput: props.onEditorDraftParagraphSpacingBeforeChange,
+    decrementAriaLabel: numberStepperDecrementAriaLabel,
+    incrementAriaLabel: numberStepperIncrementAriaLabel,
+    onDidChange: props.onEditorDraftParagraphSpacingBeforeChange,
     disabled: isDisabled,
   });
-  const paragraphSpacingAfterInput = buildNumberStepperInput({
+  setSettingsFocusKey(paragraphSpacingBeforeInput.inputElement, 'settings.textEditor.paragraphSpacingBefore');
+  const paragraphSpacingAfterInput = new NumberStepper({
     value: defaultBodyStyle.paragraphSpacingAfterPt,
     className: 'comet-settings-text-editor-spacing-input',
-    focusKey: 'settings.textEditor.paragraphSpacingAfter',
     min: '0',
     max: '200',
     inputMode: 'decimal',
     step: '0.5',
-    onInput: props.onEditorDraftParagraphSpacingAfterChange,
+    decrementAriaLabel: numberStepperDecrementAriaLabel,
+    incrementAriaLabel: numberStepperIncrementAriaLabel,
+    onDidChange: props.onEditorDraftParagraphSpacingAfterChange,
     disabled: isDisabled,
   });
+  setSettingsFocusKey(paragraphSpacingAfterInput.inputElement, 'settings.textEditor.paragraphSpacingAfter');
   const colorRow = el('div', 'comet-settings-text-editor-color-row');
   const colorPickerInput = buildInput({
     type: 'color',

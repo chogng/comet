@@ -1,4 +1,9 @@
 import type { RagProviderId, RagProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import {
+  NumberStepper,
+  numberStepperDecrementAriaLabel,
+  numberStepperIncrementAriaLabel,
+} from 'cs/base/browser/ui/numberStepper/numberStepper';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 import { ApiKeyWidget } from 'cs/workbench/contrib/preferences/browser/apiKeyWidget';
 import {
@@ -9,8 +14,8 @@ import {
   buildSettingsHint as buildHint,
   buildSettingsInput as buildInput,
   createSettingsElement as el,
+  setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
-import { buildSettingsNumberStepperInput as buildNumberStepperInput } from 'cs/workbench/contrib/preferences/browser/settingsNumberStepperInput';
 
 export type RagSettingsSectionProps = {
   labels: SettingsPartLabels;
@@ -66,17 +71,20 @@ export class RagSettingsSection {
 
   private renderNumberField(label: string, value: number, focusKey: string, min: string, max: string, onInput: (value: string) => void) {
     const wrap = el('div', 'comet-settings-limit-input-wrap');
-    wrap.append(buildNumberStepperInput({
+    const stepper = new NumberStepper({
       value,
       className: 'comet-settings-limit-input',
-      focusKey,
       min,
       max,
       inputMode: 'numeric',
       step: '1',
-      onInput,
+      decrementAriaLabel: numberStepperDecrementAriaLabel,
+      incrementAriaLabel: numberStepperIncrementAriaLabel,
+      onDidChange: onInput,
       disabled: this.props.isSettingsSaving,
-    }).element);
+    });
+    setSettingsFocusKey(stepper.inputElement, focusKey);
+    wrap.append(stepper.element);
     return createSettingsRow({
       title: label,
       control: wrap,
