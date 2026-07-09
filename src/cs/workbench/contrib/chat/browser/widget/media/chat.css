@@ -480,9 +480,24 @@
   font-size: 14px;
 }
 
-.comet-chat-composer-article-menu-close.comet-btn-base.comet-btn-mode-icon {
+.comet-chat-composer-article-menu-actions.comet-actionbar {
+  --cs-actionbar-radius: 6px;
+  --cs-actionbar-foreground: #1a2530;
+  --cs-actionbar-hover-foreground: #1a2530;
+  --cs-actionbar-hover-background: var(--comet-toolbar-hoverBackground);
+  --cs-actionbar-active-foreground: #1a2530;
+  --cs-actionbar-active-background: var(--comet-toolbar-activeBackground);
+}
+
+.comet-chat-composer-article-menu-actions .comet-actionbar-action.comet-chat-composer-article-menu-close {
   width: 28px;
   height: 28px;
+}
+
+.comet-chat-composer-article-menu-actions .comet-actionbar-action.comet-chat-composer-article-menu-close .lx-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
 }
 
 .comet-chat-composer-article-source-list {

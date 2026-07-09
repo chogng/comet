@@ -279,19 +279,20 @@ export class ChatInputPart {
 			createLxIcon('file-text'),
 			document.createTextNode(localize('chatArticleMenuTitle', "Article")),
 		);
-		const closeButton = $<HTMLElementTagNameMap['button']>('button.comet-chat-composer-article-menu-close.comet-btn-base.comet-btn-ghost.comet-btn-mode-icon.comet-btn-sm');
-		closeButton.type = 'button';
-		closeButton.setAttribute(
-			'aria-label',
-			localize('chatArticleMenuClose', "Close Article Sources"),
-		);
-		closeButton.append(createLxIcon('close'));
-		this.renderDisposables.add(
-			addDisposableListener(closeButton, EventType.CLICK, () => {
-				this.closeArticleMenu();
-			}),
-		);
-		header.append(title, closeButton);
+		const closeLabel = localize('chatArticleMenuClose', "Close Article Sources");
+		const closeActionsView = createActionBarView({
+			className: 'comet-chat-composer-article-menu-actions',
+			ariaRole: 'group',
+			items: [{
+				label: closeLabel,
+				title: closeLabel,
+				content: createLxIcon('close'),
+				buttonClassName: 'comet-chat-composer-article-menu-close',
+				onClick: () => this.closeArticleMenu(),
+			}],
+		});
+		this.renderDisposables.add(closeActionsView);
+		header.append(title, closeActionsView.getElement());
 
 		const list = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-source-list');
 		for (const source of this.props.articleQuickSources) {

@@ -538,6 +538,10 @@ test('composer article quick comet-hover-action opens source menu and runs selec
     assert(contextView instanceof HTMLElement);
     const menu = contextView.querySelector('.comet-chat-composer-article-menu');
     assert(menu instanceof HTMLElement);
+    const closeAction = menu.querySelector(
+      '.comet-chat-composer-article-menu-actions.comet-actionbar .comet-actionbar-actions-container > .comet-actionbar-item > .comet-chat-composer-article-menu-close.comet-actionbar-action',
+    );
+    assert(closeAction instanceof HTMLButtonElement);
     const scrollableRoot = menu.querySelector(
       '.comet-scrollable-element-root.comet-chat-composer-article-source-scrollable',
     );
