@@ -75,13 +75,14 @@ import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
 import { registerToastBridge } from 'cs/base/browser/ui/toast/toast';
 import { createToastHost } from 'cs/base/browser/ui/toast/toastHost';
 import type { ToastHost } from 'cs/base/browser/ui/toast/toastHost';
+import { DisposableStore } from 'cs/base/common/lifecycle';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import {
-  createNotificationsPart,
-  type NotificationsPart,
-} from 'cs/workbench/browser/parts/notifications/notificationsPart';
+import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
+import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
+import { NotificationsStatus } from 'cs/workbench/browser/parts/notifications/notificationsStatus';
+import { NotificationsToasts } from 'cs/workbench/browser/parts/notifications/notificationsToasts';
 import { NotificationService } from 'cs/workbench/services/notification/common/notificationService';
 
 import {
@@ -496,11 +497,10 @@ class WorkbenchHost {
   private readonly settingsOverlayElement: HTMLDivElement;
   private readonly settingsOverlayBodyElement: HTMLDivElement;
   private readonly toastMount: HTMLDivElement;
-  private readonly notificationsMount: HTMLDivElement;
   private readonly statusbarElement: HTMLElement;
   private readonly titlebarPart: TitlebarPart;
   private readonly toastHost: ToastHost;
-  private readonly notificationsPart: NotificationsPart | null;
+  private readonly notificationsDisposables = new DisposableStore();
   private workbenchLayoutView: ReturnType<typeof createSessionWorkbenchLayoutView> | null = null;
   private workbenchContentPartViews: SessionWorkbenchContentPartViews | null = null;
   private retiredWorkbenchContentPartViews:
@@ -564,7 +564,6 @@ class WorkbenchHost {
     this.settingsOverlayElement = document.createElement('div');
     this.settingsOverlayBodyElement = document.createElement('div');
     this.toastMount = document.createElement('div');
-    this.notificationsMount = document.createElement('div');
     this.statusbarElement = document.createElement('section');
     this.settingsOverlayElement.className = 'comet-settings-overlay';
     this.settingsOverlayElement.hidden = true;
@@ -577,7 +576,6 @@ class WorkbenchHost {
       this.statusbarElement,
     );
     this.toastHost = createToastHost(this.toastMount);
-    this.notificationsPart = this.createNotificationsPart();
 
     this.rootElement.replaceChildren(this.containerElement);
     this.containerElement.append(this.titlebarPart.getElement(), this.shellElement);
@@ -585,8 +583,8 @@ class WorkbenchHost {
       this.pageMount,
       this.settingsOverlayElement,
       this.toastMount,
-      this.notificationsMount,
     );
+    this.createNotificationsHandlers();
 
     registerWorkbenchPartDomNode(
       WORKBENCH_PART_IDS.container,
@@ -636,13 +634,28 @@ class WorkbenchHost {
     this.settingsView = null;
     this.editorPartController = null;
     this.toastHost.dispose();
-    this.notificationsPart?.dispose();
+    this.notificationsDisposables.dispose();
     registerToastBridge(null);
     this.rootElement.replaceChildren();
   }
 
-  private createNotificationsPart() {
-    return createNotificationsPart(this.notificationsMount, this.notificationService);
+  private createNotificationsHandlers() {
+    const notificationsCenter = this.notificationsDisposables.add(
+      new NotificationsCenter(this.containerElement, this.notificationService.model),
+    );
+    this.notificationsDisposables.add(
+      new NotificationsToasts(this.containerElement, this.notificationService.model),
+    );
+    this.notificationsDisposables.add(
+      new NotificationsStatus(
+        this.containerElement,
+        this.notificationService.model,
+        notificationsCenter,
+      ),
+    );
+    this.notificationsDisposables.add(
+      new NotificationsAlerts(this.containerElement, this.notificationService.model),
+    );
   }
 
   private releaseContentTarget(

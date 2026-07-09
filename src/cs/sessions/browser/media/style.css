@@ -56,11 +56,6 @@
 	cursor: col-resize;
 }
 
-.comet-session-workbench-content-grid.comet-is-primary-sidebar-visible > .comet-grid-view-root > .comet-grid-view-branch.comet-vertical > .comet-split-view.comet-vertical > .comet-sash-container > .comet-split-view-separator.comet-vertical:first-child + .comet-sash.comet-vertical::before {
-	width: 3px;
-	left: calc(50% - 0.5px);
-}
-
 .comet-session-workbench-content-grid > .comet-grid-view-root > .comet-grid-view-branch.comet-vertical > .comet-split-view.comet-vertical > .comet-split-view-container > .comet-split-view-view:first-child > .comet-session-workbench-part-sidebar > .comet-session-sidebar-part {
 	width: calc(100% - var(--sidebar-floating-inset));
 	margin-right: 0;

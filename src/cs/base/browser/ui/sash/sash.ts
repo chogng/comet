@@ -47,7 +47,7 @@ export const enum SashState {
 }
 
 export const DEFAULT_SASH_SIZE = 4;
-export const DEFAULT_SASH_HOVER_SIZE = 4;
+export const DEFAULT_SASH_HOVER_SIZE = 3;
 export const DEFAULT_SASH_HOVER_DELAY = 300;
 
 let globalSashSize = DEFAULT_SASH_SIZE;

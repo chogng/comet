@@ -55,9 +55,9 @@
 
 .comet-sash.comet-vertical::before {
   top: 50%;
-  width: 2px;
+  width: var(--comet-sash-hover-size);
   height: 58px;
-  left: calc(50% - 1px);
+  left: calc(50% - (var(--comet-sash-hover-size) / 2));
   transform: translateY(-50%);
 }
 

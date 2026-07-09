@@ -551,6 +551,8 @@ type SessionLayoutLimits = {
 
 const SESSION_SIDEBAR_INDEX = 0;
 const SESSION_EDITOR_INDEX = 2;
+const SESSION_COLLAPSED_SIDEBAR_VERTICAL_SIZE = 188;
+const SESSION_COLLAPSED_SIDEBAR_HORIZONTAL_SIZE = 48;
 
 const SESSION_SPLITVIEW_LIMITS = {
 	sidebar: {
@@ -586,6 +588,27 @@ function getSessionLayoutLimits(orientation: Orientation): SessionLayoutLimits {
 	return orientation === Orientation.HORIZONTAL
 		? MOBILE_SESSION_SPLITVIEW_LIMITS
 		: SESSION_SPLITVIEW_LIMITS;
+}
+
+function getCollapsedSessionSidebarSize(orientation: Orientation) {
+	return orientation === Orientation.HORIZONTAL
+		? SESSION_COLLAPSED_SIDEBAR_HORIZONTAL_SIZE
+		: SESSION_COLLAPSED_SIDEBAR_VERTICAL_SIZE;
+}
+
+function getSessionSidebarLimits(
+	orientation: Orientation,
+	isPrimarySidebarVisible: boolean,
+): LayoutAxisLimits {
+	if (isPrimarySidebarVisible) {
+		return getSessionLayoutLimits(orientation).sidebar;
+	}
+
+	const collapsedSize = getCollapsedSessionSidebarSize(orientation);
+	return {
+		minimum: collapsedSize,
+		maximum: collapsedSize,
+	};
 }
 
 class SessionWorkbenchLayoutPartView implements IGridView {
@@ -682,16 +705,19 @@ class SessionWorkbenchLayoutController {
 	sync() {
 		const state = this.options.getState();
 		const orientation = this.resolveSplitOrientation();
-		this.syncSplitPartConstraints(orientation);
+		this.syncSplitPartConstraints(orientation, state.isPrimarySidebarVisible);
 		this.ensureGridView(state, orientation);
 		if (!this.gridView) {
 			return;
 		}
 
 		this.gridView.edgeSnapping = state.isLayoutEdgeSnappingEnabled;
-		this.gridView.setViewVisible([SESSION_SIDEBAR_INDEX], state.isPrimarySidebarVisible);
+		this.gridView.setViewVisible([SESSION_SIDEBAR_INDEX], true);
 		this.gridView.setViewVisible([SESSION_EDITOR_INDEX], state.isEditorVisible);
-		this.gridView.setViewSize([SESSION_SIDEBAR_INDEX], state.primarySidebarSize);
+		this.gridView.setViewSize(
+			[SESSION_SIDEBAR_INDEX],
+			this.resolveSidebarSize(state, orientation),
+		);
 		if (state.isEditorVisible) {
 			this.gridView.setViewSize([SESSION_EDITOR_INDEX], state.editorSize);
 		}
@@ -738,8 +764,8 @@ class SessionWorkbenchLayoutController {
 			[
 				{
 					view: this.options.sidebarPartView,
-					size: state.primarySidebarSize,
-					visible: state.isPrimarySidebarVisible,
+					size: this.resolveSidebarSize(state, orientation),
+					visible: true,
 				},
 				{
 					view: this.options.sessionsPartView,
@@ -780,6 +806,15 @@ class SessionWorkbenchLayoutController {
 		return Math.max(SESSION_SPLITVIEW_LIMITS.sessions.minimum, width);
 	}
 
+	private resolveSidebarSize(
+		state: ReturnType<typeof this.options.getState>,
+		orientation: Orientation,
+	) {
+		return state.isPrimarySidebarVisible
+			? state.primarySidebarSize
+			: getCollapsedSessionSidebarSize(orientation);
+	}
+
 	private readonly handleGridSashSnap = (event: GridSashSnapEvent) => {
 		if (event.location.length !== 1) {
 			return;
@@ -795,8 +830,11 @@ class SessionWorkbenchLayoutController {
 			return;
 		}
 
+		const state = this.options.getState();
 		this.options.onPartSizesChange({
-			primarySidebarSize: this.gridView.getViewSize([SESSION_SIDEBAR_INDEX]),
+			primarySidebarSize: state.isPrimarySidebarVisible
+				? this.gridView.getViewSize([SESSION_SIDEBAR_INDEX])
+				: state.primarySidebarSize,
 			editorSize: this.gridView.getViewSize([SESSION_EDITOR_INDEX]),
 		});
 	};
@@ -827,7 +865,7 @@ class SessionWorkbenchLayoutController {
 	private handleContainerResize() {
 		const state = this.options.getState();
 		const orientation = this.resolveSplitOrientation();
-		this.syncSplitPartConstraints(orientation);
+		this.syncSplitPartConstraints(orientation, state.isPrimarySidebarVisible);
 		this.ensureGridView(state, orientation);
 		this.scheduleGridViewLayout();
 	}
@@ -854,7 +892,7 @@ class SessionWorkbenchLayoutController {
 
 			const state = this.options.getState();
 			const nextOrientation = this.resolveSplitOrientation();
-			this.syncSplitPartConstraints(nextOrientation);
+			this.syncSplitPartConstraints(nextOrientation, state.isPrimarySidebarVisible);
 			if (nextOrientation !== this.gridOrientation) {
 				this.ensureGridView(state, nextOrientation);
 			}
@@ -873,11 +911,14 @@ class SessionWorkbenchLayoutController {
 		return resolveOrientationFromWidth(containerWidth);
 	}
 
-	private syncSplitPartConstraints(orientation: Orientation) {
+	private syncSplitPartConstraints(
+		orientation: Orientation,
+		isPrimarySidebarVisible: boolean,
+	) {
 		this.splitConstraints = getSessionLayoutLimits(orientation);
 		this.options.sidebarPartView.setConstraints(
 			orientation,
-			this.splitConstraints.sidebar,
+			getSessionSidebarLimits(orientation, isPrimarySidebarVisible),
 		);
 		this.options.sessionsPartView.setConstraints(
 			orientation,

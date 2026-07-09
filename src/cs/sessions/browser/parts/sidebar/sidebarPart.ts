@@ -24,12 +24,16 @@ export type SessionSidebarProps = {
 	footerActionsElement?: HTMLElement | null;
 };
 
+export type SessionSidebarViewProps = SessionSidebarProps & {
+	isCollapsed: boolean;
+};
+
 type SessionSidebarContentTab = 'home' | 'fetch';
 
 let panelIdPool = 0;
 
 export class SessionSidebar {
-	private props: SessionSidebarProps;
+	private props: SessionSidebarViewProps;
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-sidebar-root.comet-sidebar-root');
 	private readonly titlebarElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-titlebar');
 	private readonly titlebarActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-titlebar-actions');
@@ -55,7 +59,7 @@ export class SessionSidebar {
 	private activeTab: SessionSidebarContentTab = 'home';
 	private disposed = false;
 
-	constructor(props: SessionSidebarProps) {
+	constructor(props: SessionSidebarViewProps) {
 		this.props = props;
 		this.tabListElement.setAttribute('role', 'tablist');
 		this.tabListElement.setAttribute('aria-label', props.labels.homeTitle);
@@ -105,7 +109,7 @@ export class SessionSidebar {
 		return this.element;
 	}
 
-	setProps(props: SessionSidebarProps) {
+	setProps(props: SessionSidebarViewProps) {
 		if (this.disposed) {
 			return;
 		}
@@ -130,6 +134,10 @@ export class SessionSidebar {
 
 	private render() {
 		const { labels } = this.props;
+		const isCollapsed = this.props.isCollapsed;
+		this.element.classList.toggle('comet-is-collapsed', isCollapsed);
+		this.contentElement.hidden = isCollapsed;
+		this.footerElement.hidden = isCollapsed;
 		this.homeTabButton.textContent = labels.homeTitle;
 		this.fetchTabButton.textContent = labels.fetchTitle;
 		this.tabListElement.setAttribute(
@@ -273,17 +281,19 @@ export class SessionSidebarPartView {
 	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-session-sidebar-part');
 	private readonly sidebar: SessionSidebar;
 
-	constructor(props: SessionSidebarProps) {
+	constructor(props: SessionSidebarViewProps) {
 		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.sidebar, this.element);
 		this.sidebar = new SessionSidebar(props);
 		this.element.append(this.sidebar.getElement());
+		this.syncCollapsedState(props);
 	}
 
 	getElement() {
 		return this.element;
 	}
 
-	setProps(props: SessionSidebarProps) {
+	setProps(props: SessionSidebarViewProps) {
+		this.syncCollapsedState(props);
 		this.sidebar.setProps(props);
 	}
 
@@ -292,8 +302,12 @@ export class SessionSidebarPartView {
 		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.sidebar, null);
 		this.element.replaceChildren();
 	}
+
+	private syncCollapsedState(props: SessionSidebarViewProps) {
+		this.element.classList.toggle('comet-is-collapsed', props.isCollapsed);
+	}
 }
 
-export function createSessionSidebarPartView(props: SessionSidebarProps) {
+export function createSessionSidebarPartView(props: SessionSidebarViewProps) {
 	return new SessionSidebarPartView(props);
 }
