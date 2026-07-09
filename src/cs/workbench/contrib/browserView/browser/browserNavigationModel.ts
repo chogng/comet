@@ -1,8 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { EventEmitter } from 'cs/base/common/event';
 import type { LocaleMessages } from 'language/locales';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';
-import { EMPTY_WEB_CONTENT_STATE, resolveWebContentNavigation, resolveWebContentRefreshMode, resolveWebContentStateUrlUpdate } from 'cs/workbench/services/webContent/webContentNavigationService';
+import { EMPTY_WEB_CONTENT_STATE, resolveWebContentNavigation, resolveWebContentRefreshMode, resolveWebContentStateUrlUpdate } from 'cs/workbench/contrib/browserView/common/browserView';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 

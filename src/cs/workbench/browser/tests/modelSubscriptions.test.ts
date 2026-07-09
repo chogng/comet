@@ -14,8 +14,8 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
-import { WebContentNavigationModel } from 'cs/workbench/browser/webContentNavigationModel';
-import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/services/webContent/webContentNavigationService';
+import { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
+import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/contrib/browserView/common/browserView';
 import { localeService } from 'cs/workbench/services/localization/browser/localeService';
 import {
   getWorkbenchContentStateSnapshot,

@@ -1,7 +1,7 @@
 import type { LocaleMessages } from 'language/locales';
 import { toEditorTabInput } from 'cs/workbench/browser/parts/editor/editorInput';
-import { createWebContentSurfaceSnapshot } from 'cs/workbench/browser/webContentSurfaceState';
-import type { WebContentSurfaceSnapshot } from 'cs/workbench/browser/webContentSurfaceState';
+import { createWebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
+import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 
 import { createEditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { EditorModelSnapshot, EditorWorkspaceTab, WritingEditorDocument } from 'cs/workbench/browser/parts/editor/editorModel';

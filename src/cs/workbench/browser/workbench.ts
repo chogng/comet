@@ -19,8 +19,8 @@ import type {
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
 import type { LibraryModel, LibraryModelContext } from 'cs/workbench/browser/libraryModel';
 
-import { setWorkbenchBrowserTabKeepAliveLimit } from 'cs/workbench/browser/webContentRetentionState';
-import { WebContentNavigationModel } from 'cs/workbench/browser/webContentNavigationModel';
+import { setWorkbenchBrowserTabKeepAliveLimit } from 'cs/workbench/contrib/browserView/browser/browserRetentionState';
+import { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
 import { Schemas } from 'cs/base/common/network';
 import {
   getWorkbenchLayoutStateSnapshot,
@@ -107,8 +107,8 @@ import {
 import {
   shouldSyncActiveContentTabFromBrowserUrl,
   shouldSyncActiveContentTabMetadataFromWebContentState,
-} from 'cs/workbench/browser/webContentSurfaceState';
-import type { WebContentSurfaceSnapshot } from 'cs/workbench/browser/webContentSurfaceState';
+} from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
+import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 
 import { getLocaleMessages } from 'language/i18n';
 import {

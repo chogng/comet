@@ -8,7 +8,7 @@ import type {
 import type { LocaleMessages } from 'language/locales';
 import type { EditorPartBrowserToolbarActions } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
-import type { WebContentNavigationModel } from 'cs/workbench/browser/webContentNavigationModel';
+import type { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
 import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 import { syncLibraryMetadataFromArticle } from 'cs/workbench/services/knowledgeBase/libraryMetadataService';
 import type { INotificationService } from 'cs/platform/notification/common/notification';

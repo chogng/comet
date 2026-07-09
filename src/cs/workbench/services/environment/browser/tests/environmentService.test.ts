@@ -10,7 +10,7 @@ import type {
 	ElectronAPI,
 	ElectronWebContentApi,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/services/webContent/webContentNavigationService';
+import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/contrib/browserView/common/browserView';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 type TestWindow = Window & {

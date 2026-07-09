@@ -3,8 +3,8 @@ import test from 'node:test';
 
 import {
   shouldSyncActiveContentTabMetadataFromWebContentState,
-} from 'cs/workbench/browser/webContentSurfaceState';
-import type { WebContentSurfaceSnapshot } from 'cs/workbench/browser/webContentSurfaceState';
+} from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
+import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 
 function createSnapshot(
   value: Partial<WebContentSurfaceSnapshot>,

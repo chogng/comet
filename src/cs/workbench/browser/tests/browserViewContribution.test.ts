@@ -17,8 +17,8 @@ let cleanupDomEnvironment: (() => void) | null = null;
 let WorkbenchBrowserViewContribution: typeof import('cs/workbench/contrib/browserView/electron-browser/browserView.contribution').WorkbenchBrowserViewContribution;
 let registerWorkbenchPartDomNode: typeof import('cs/workbench/browser/layout').registerWorkbenchPartDomNode;
 let WORKBENCH_PART_IDS: typeof import('cs/workbench/browser/layout').WORKBENCH_PART_IDS;
-let resetWorkbenchBrowserTabKeepAliveLimit: typeof import('cs/workbench/browser/webContentRetentionState').resetWorkbenchBrowserTabKeepAliveLimit;
-let setWorkbenchBrowserTabKeepAliveLimit: typeof import('cs/workbench/browser/webContentRetentionState').setWorkbenchBrowserTabKeepAliveLimit;
+let resetWorkbenchBrowserTabKeepAliveLimit: typeof import('cs/workbench/contrib/browserView/browser/browserRetentionState').resetWorkbenchBrowserTabKeepAliveLimit;
+let setWorkbenchBrowserTabKeepAliveLimit: typeof import('cs/workbench/contrib/browserView/browser/browserRetentionState').setWorkbenchBrowserTabKeepAliveLimit;
 
 type SurfaceState = {
   bounds: WebContentBounds | null;
@@ -241,7 +241,7 @@ before(async () => {
   ({
     resetWorkbenchBrowserTabKeepAliveLimit,
     setWorkbenchBrowserTabKeepAliveLimit,
-  } = await import('cs/workbench/browser/webContentRetentionState'));
+  } = await import('cs/workbench/contrib/browserView/browser/browserRetentionState'));
 });
 
 afterEach(() => {

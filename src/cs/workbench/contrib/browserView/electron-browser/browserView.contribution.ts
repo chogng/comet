@@ -6,7 +6,7 @@
 import {
   getWorkbenchBrowserTabKeepAliveLimit,
   subscribeWorkbenchWebContentRetention,
-} from 'cs/workbench/browser/webContentRetentionState';
+} from 'cs/workbench/contrib/browserView/browser/browserRetentionState';
 import {
   getWorkbenchPartDomSnapshot,
   subscribeWorkbenchPartDom,
