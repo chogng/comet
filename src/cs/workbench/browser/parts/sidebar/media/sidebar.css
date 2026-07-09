@@ -163,6 +163,7 @@
 }
 
 .comet-sidebar-titlebar {
+  box-sizing: border-box;
   min-width: 0;
   min-height: var(--workbench-titlebar-height, 36px);
   height: var(--workbench-titlebar-height, 36px);
@@ -170,7 +171,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 8px;
+  padding: 4px 8px;
   background: var(--sidebar-surface-bg);
   user-select: none;
   -webkit-user-select: none;

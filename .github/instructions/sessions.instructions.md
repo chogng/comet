@@ -30,6 +30,35 @@ Entry Points → contrib/* / contrib/providers/* / services/* → browser/ & com
 
 **Key constraint:** `contrib/*` must NOT import from `contrib/providers/*`. Providers are the most permissive contrib layer and may import from non-provider contribs, services, core, and sibling providers.
 
+## Workbench Layout Hierarchy
+
+The Agents window shell is organized as three vertical columns:
+
+```
+shell
+├── sidebar
+├── sessions / auxiliary
+└── editor
+```
+
+Each column owns its own top-level `titlebar` and `content` regions. The titlebar is window chrome: it owns the draggable app region, native window-control inset coordination, and column-level actions. It must not be used for in-content mode switches, browser navigation, or chat/session controls.
+
+```
+column
+├── titlebar   ← window drag/chrome and column-level actions
+└── content
+    ├── header ← content-owned navigation, mode tabs, toolbars, or section controls
+    └── content
+```
+
+Keep `titlebar` and `header` names strict:
+
+- Use `titlebar` for the first row of a column that participates in window chrome or column-level layout, such as `comet-sidebar-titlebar` and `comet-editor-titlebar`.
+- Use `header` only inside a column's content, such as the sidebar Home/Fetch switcher or a content panel header.
+- Put `-webkit-app-region: drag` on titlebar chrome or intentional drag strips. Put `no-drag` only on interactive descendants, not on empty flex slots that cover the drag region.
+- Do not mount one part's header/titlebar into another part to avoid layout work. Pass the owned action element to the target part and let that part place it in its own titlebar/header.
+- When a visual inset changes for one titlebar column, update the adjacent column titlebar inset and native window-control coordinates together so the titlebar rows stay aligned.
+
 ## Core Services
 
 | Service | Interface file | Purpose |

@@ -18,42 +18,55 @@
 	-webkit-app-region: drag;
 }
 
-.comet-session-header {
-	flex: 0 0 36px;
-	min-height: 36px;
+.comet-session-titlebar {
+	box-sizing: border-box;
+	flex: 0 0 var(--workbench-titlebar-height, 36px);
+	min-height: var(--workbench-titlebar-height, 36px);
+	height: var(--workbench-titlebar-height, 36px);
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 0 8px;
+	padding: 4px 8px;
 	border-bottom: 1px solid var(--comet-workbench-panelTitleBorder, #e5ebf1);
 	-webkit-app-region: drag;
 	user-select: none;
 }
 
-.comet-session-header[hidden] {
+.comet-session-titlebar[hidden] {
 	display: none;
 }
 
-.comet-session-header-leading,
-.comet-session-header-trailing {
+.comet-session-titlebar-leading,
+.comet-session-titlebar-trailing {
 	display: inline-flex;
 	align-items: center;
 	min-width: 0;
 	height: 100%;
 }
 
-.comet-session-header-leading > *,
-.comet-session-header-trailing > * {
+.comet-session-titlebar-leading > *,
+.comet-session-titlebar-trailing > * {
 	-webkit-app-region: no-drag;
 }
 
-.comet-session-header-leading {
+.comet-session-titlebar-leading {
 	flex: 1 1 auto;
 }
 
-.comet-session-header-trailing {
+.comet-session-titlebar-trailing {
 	flex: 0 0 auto;
 	margin-left: auto;
+}
+
+.comet-session-header {
+	flex: 0 0 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+}
+
+.comet-session-header[hidden] {
+	display: none;
 }
 
 .comet-session-view-content,

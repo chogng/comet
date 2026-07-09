@@ -144,11 +144,11 @@ export class SessionWorkbenchContentPartViews {
 	private renderSessions() {
 		const nextProps = {
 			chatProps: this.props.sessionChatProps,
-			headerLeadingActionsElement:
+			titlebarLeadingActionsElement:
 				this.props.isPrimarySidebarVisible
 					? null
 					: (this.props.leadingTitlebarActionsElement ?? null),
-			headerTrailingActionsElement:
+			titlebarTrailingActionsElement:
 				this.props.isEditorVisible
 					? null
 					: (this.props.editorTitlebarActionsElement ?? null),

@@ -13,6 +13,13 @@ applyTo: "src/cs/**/*.{css,ts}"
 - Do not rename CSS classes that are passed through typed component, widget, decoration, or theme APIs unless the class is owned and rendered by the Comet call site being changed.
 - When styling crosses a component boundary, prefer styling the Comet-owned container and only reference foreign classes when the upstream component exposes them as a stable contract.
 
+## Naming Semantics
+
+- Use `titlebar` only for a top-level part or column chrome row that participates in window dragging, native window-control insets, or column-level actions.
+- Use `header` for content-owned rows inside a part, such as section headers, mode switchers, tab headers, browser/navigation toolbars, or list headers.
+- Do not name a content header `titlebar` just because it is visually near the top of the window. Do not name a window chrome/titlebar row `header` just because it contains title text or actions.
+- Keep DOM class names, TypeScript property names, and prop names aligned with this distinction. For example, prefer `titlebarActionsElement` for actions rendered into a column titlebar, and `headerActionsElement` only for actions rendered into a content header.
+
 ## Selectors
 
 - Prefer direct child combinators (`>`) when the DOM relationship is expected to be immediate.
@@ -60,4 +67,3 @@ const row = $('div', { className: rowClassName });
 // OK: widget option API.
 const scrollable = new DomScrollableElement(content, { className: 'comet-scrollable' });
 ```
-
