@@ -38,7 +38,7 @@ import {
   resolveActiveBrowserMetadata,
 } from 'cs/workbench/browser/parts/editor/editorModeToolbarModel';
 import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
-import { createEditorHeaderActionsView } from 'cs/workbench/browser/parts/editor/editorHeaderActionsView';
+import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import { createEditorGroupModel } from 'cs/workbench/browser/parts/editor/editorGroupModel';
 import type { EditorGroupModel } from 'cs/workbench/browser/parts/editor/editorGroupModel';
 import {
@@ -109,16 +109,16 @@ export type EditorGroupViewProps = {
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
-  showHeaderActions?: boolean;
-  showHeaderToolbar?: boolean;
+  showTitlebarActions?: boolean;
+  showToolbar?: boolean;
   isEditorCollapsed?: boolean;
   onToggleEditorCollapse?: () => void;
   isAgentSidebarVisible?: boolean;
   showAgentSidebarToggle?: boolean;
   agentSidebarToggleLabel?: string;
   onToggleAgentSidebar?: () => void;
-  headerAuxiliaryActionsElements?: readonly HTMLElement[];
-  hasLeadingWindowControlsInset?: boolean;
+  titlebarAuxiliaryActionsElements?: readonly HTMLElement[];
+  hasLeadingTitlebarWindowControlsInset?: boolean;
   onStatusChange?: (status: EditorStatusState) => void;
 };
 
@@ -473,11 +473,11 @@ export class EditorGroupView {
   private props: EditorGroupViewProps;
   private readonly controller: EditorGroupController;
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-editor-frame');
-  private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-header');
+  private readonly titlebarElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar');
   private readonly toolbarElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-toolbar');
-  private readonly tabsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-header-tabs');
-  private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-header-actions');
-  private readonly headerActionsView = createEditorHeaderActionsView({
+  private readonly tabsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar-tabs');
+  private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar-actions');
+  private readonly titlebarActionsView = createEditorTitlebarActionsView({
     isEditorCollapsed: false,
     isAgentSidebarVisible: false,
     showAgentSidebarToggle: false,
@@ -528,12 +528,12 @@ export class EditorGroupView {
         onPdfNoteSelection: this.handlePdfNoteSelection,
       }),
     );
-    setEditorFrameSlot(this.headerElement, EDITOR_FRAME_SLOTS.header);
+    setEditorFrameSlot(this.titlebarElement, EDITOR_FRAME_SLOTS.titlebar);
     setEditorFrameSlot(this.toolbarElement, EDITOR_FRAME_SLOTS.toolbar);
     setEditorFrameSlot(this.contentElement, EDITOR_FRAME_SLOTS.content);
     if (WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx > 0) {
-      this.headerElement.style.setProperty(
-        '--editor-header-leading-window-controls-width',
+      this.titlebarElement.style.setProperty(
+        '--editor-titlebar-leading-window-controls-width',
         `${WINDOW_CHROME_LAYOUT.leadingWindowControlsWidthPx}px`,
       );
     }
@@ -547,8 +547,8 @@ export class EditorGroupView {
       onOpenEditor: this.openEditorFromEmptyWorkspace,
     });
     this.tabsElement.append(this.titleAreaControl.getElement());
-    this.headerElement.append(this.tabsElement, this.actionsElement);
-    this.element.append(this.headerElement, this.toolbarElement, this.contentElement);
+    this.titlebarElement.append(this.tabsElement, this.actionsElement);
+    this.element.append(this.titlebarElement, this.toolbarElement, this.contentElement);
     this.render();
   }
 
@@ -556,9 +556,9 @@ export class EditorGroupView {
     return this.element;
   }
 
-  getHeaderElement() {
-    this.element.classList.add('comet-has-external-header');
-    return this.headerElement;
+  getTitlebarElement() {
+    this.element.classList.add('comet-has-external-titlebar');
+    return this.titlebarElement;
   }
 
   executeActiveDraftCommand(commandId: DraftEditorCommandId) {
@@ -601,7 +601,7 @@ export class EditorGroupView {
   dispose() {
     this.browserLibraryPanel.dispose();
     this.titleAreaControl.dispose();
-    this.headerActionsView.dispose();
+    this.titlebarActionsView.dispose();
     this.modeToolbarHost.dispose();
     this.saveActivePaneViewState();
     this.disposeAllPaneInstances();
@@ -653,12 +653,12 @@ export class EditorGroupView {
         this.requestBrowserPrimaryInputFocus,
       ),
     );
-    this.headerElement.classList.toggle('comet-has-tabs', group.tabs.length > 0);
-    this.headerElement.classList.toggle(
+    this.titlebarElement.classList.toggle('comet-has-tabs', group.tabs.length > 0);
+    this.titlebarElement.classList.toggle(
       'comet-has-leading-window-controls-inset',
-      Boolean(this.props.hasLeadingWindowControlsInset),
+      Boolean(this.props.hasLeadingTitlebarWindowControlsInset),
     );
-    this.headerActionsView.setProps({
+    this.titlebarActionsView.setProps({
       isEditorCollapsed: Boolean(this.props.isEditorCollapsed),
       isAgentSidebarVisible: Boolean(this.props.isAgentSidebarVisible),
       showAgentSidebarToggle: Boolean(this.props.showAgentSidebarToggle),
@@ -692,9 +692,9 @@ export class EditorGroupView {
       onPdfNoteSelection: this.handlePdfNoteSelection,
     }));
     this.syncToolbarMode(group.activeTab);
-    this.syncHeaderActions(
-      this.props.showHeaderActions ? this.headerActionsView.getElement() : null,
-      this.props.headerAuxiliaryActionsElements ?? [],
+    this.syncTitlebarActions(
+      this.props.showTitlebarActions ? this.titlebarActionsView.getElement() : null,
+      this.props.titlebarAuxiliaryActionsElements ?? [],
     );
 
     this.contentElement.className = 'comet-editor-content';
@@ -702,7 +702,7 @@ export class EditorGroupView {
 
     if (!group.activeTab) {
       this.releaseActivePane();
-      this.syncHeaderToolbar(null);
+      this.syncToolbar(null);
       this.emptyWorkspaceView.setProps({
         labels: this.props.labels,
         onOpenEditor: this.openEditorFromEmptyWorkspace,
@@ -750,7 +750,7 @@ const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
       }
     }
 
-    this.syncHeaderToolbar(this.resolveToolbarElement());
+    this.syncToolbar(this.resolveToolbarElement());
     this.flushBrowserPrimaryInputFocus(group.activeTab);
     this.mountBrowserLibraryPanelForResolvedPane(resolvedPane.paneId);
   }
@@ -841,48 +841,48 @@ const panelHost = this.contentElement.querySelector('.comet-browser-frame-contai
     this.focusPrimaryInput();
   }
 
-  private syncHeaderActions(
-    headerActionsElement: HTMLElement | null,
-    headerAuxiliaryActionsElements: readonly HTMLElement[],
+  private syncTitlebarActions(
+    titlebarActionsElement: HTMLElement | null,
+    titlebarAuxiliaryActionsElements: readonly HTMLElement[],
   ) {
-    const nextHeaderActionsElements: HTMLElement[] = [];
-    for (const element of headerAuxiliaryActionsElements) {
-      if (!element || nextHeaderActionsElements.includes(element)) {
+    const nextTitlebarActionsElements: HTMLElement[] = [];
+    for (const element of titlebarAuxiliaryActionsElements) {
+      if (!element || nextTitlebarActionsElements.includes(element)) {
         continue;
       }
-      nextHeaderActionsElements.push(element);
+      nextTitlebarActionsElements.push(element);
     }
     if (
-      headerActionsElement &&
-      !nextHeaderActionsElements.includes(headerActionsElement)
+      titlebarActionsElement &&
+      !nextTitlebarActionsElements.includes(titlebarActionsElement)
     ) {
-      nextHeaderActionsElements.push(headerActionsElement);
+      nextTitlebarActionsElements.push(titlebarActionsElement);
     }
 
-const currentHeaderActionsElements = Array.from(this.actionsElement.children);
+const currentTitlebarActionsElements = Array.from(this.actionsElement.children);
     const hasSameOrder =
-      currentHeaderActionsElements.length === nextHeaderActionsElements.length &&
-      currentHeaderActionsElements.every(
-        (element, index) => element === nextHeaderActionsElements[index],
+      currentTitlebarActionsElements.length === nextTitlebarActionsElements.length &&
+      currentTitlebarActionsElements.every(
+        (element, index) => element === nextTitlebarActionsElements[index],
       );
     if (hasSameOrder) {
       return;
     }
 
-    this.actionsElement.replaceChildren(...nextHeaderActionsElements);
+    this.actionsElement.replaceChildren(...nextTitlebarActionsElements);
   }
 
-  private syncHeaderToolbar(headerToolbarElement: HTMLElement | null) {
-    const currentHeaderToolbarElement = this.toolbarElement.firstElementChild;
-    if (headerToolbarElement) {
-      if (currentHeaderToolbarElement !== headerToolbarElement) {
-        this.toolbarElement.replaceChildren(headerToolbarElement);
+  private syncToolbar(toolbarContentElement: HTMLElement | null) {
+    const currentToolbarContentElement = this.toolbarElement.firstElementChild;
+    if (toolbarContentElement) {
+      if (currentToolbarContentElement !== toolbarContentElement) {
+        this.toolbarElement.replaceChildren(toolbarContentElement);
       }
       this.toolbarElement.hidden = false;
       return;
     }
 
-    if (currentHeaderToolbarElement) {
+    if (currentToolbarContentElement) {
       this.toolbarElement.replaceChildren();
     }
     this.toolbarElement.hidden = true;
@@ -898,7 +898,7 @@ const currentHeaderActionsElements = Array.from(this.actionsElement.children);
   }
 
   private resolveToolbarElement() {
-    if (!this.props.showHeaderToolbar) {
+    if (!this.props.showToolbar) {
       return null;
     }
 

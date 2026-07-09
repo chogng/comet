@@ -708,15 +708,13 @@ test('resolveWorkbenchStatusbarVisibility returns the toggle state directly', as
   assert.equal(resolveWorkbenchStatusbarVisibility(false), false);
 });
 
-test('TitlebarPart mounts the top app row before the middle shell and statusbar', async () => {
+test('TitlebarPart syncs headless chrome before the shell and statusbar', async () => {
   const { createTitlebarPart } = await import(
     'cs/workbench/browser/parts/titlebar/titlebarPart'
   );
   const container = document.createElement('div');
   const shell = document.createElement('div');
   const statusbar = document.createElement('section');
-  const sessionsHeader = document.createElement('header');
-  const editorHeader = document.createElement('header');
   let toggleCount = 0;
   let focusAddressBarCount = 0;
 
@@ -728,12 +726,6 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       electronRuntime: false,
       useMica: false,
       statusbarVisible: true,
-      primarySidebarVisible: true,
-      primarySidebarSize: 260,
-      editorVisible: true,
-      editorSize: 420,
-      sessionsHeaderElement: sessionsHeader,
-      editorHeaderElement: editorHeader,
       leadingActions: {
         menuLabel: 'Menu',
         isPrimarySidebarVisible: true,
@@ -748,7 +740,6 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
       },
     });
 
-    assert(container.classList.contains('comet-has-titlebar'));
     assert(container.classList.contains('comet-has-statusbar'));
     assert.equal(container.classList.contains('comet-has-leading-window-controls'), false);
     assert.equal(
@@ -758,13 +749,14 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     assert.equal(container.children[0], titlebarPart.getElement());
     assert.equal(container.children[1], shell);
     assert.equal(container.children[2], statusbar);
+    assert.equal(titlebarPart.getElement().classList.contains('comet-titlebar-chrome'), true);
     assert.equal(
-      titlebarPart.getElement().querySelector('.comet-titlebar-left > .comet-titlebar-leading-actions-host') instanceof HTMLElement,
-      true,
+      titlebarPart.getLeadingActionsElement().parentElement,
+      null,
     );
-    const menuButton = titlebarPart.getElement().querySelector('.comet-titlebar-menu-btn');
-    const toggleButton = titlebarPart.getElement().querySelector('.comet-titlebar-primary-sidebar-toggle-btn');
-    const addressBarButton = titlebarPart.getElement().querySelector('.comet-titlebar-address-bar-btn');
+    const menuButton = titlebarPart.getLeadingActionsElement().querySelector('.comet-titlebar-menu-btn');
+    const toggleButton = titlebarPart.getLeadingActionsElement().querySelector('.comet-titlebar-primary-sidebar-toggle-btn');
+    const addressBarButton = titlebarPart.getLeadingActionsElement().querySelector('.comet-titlebar-address-bar-btn');
     assert(menuButton instanceof HTMLButtonElement);
     assert(toggleButton instanceof HTMLButtonElement);
     assert(addressBarButton instanceof HTMLButtonElement);
@@ -775,14 +767,6 @@ test('TitlebarPart mounts the top app row before the middle shell and statusbar'
     addressBarButton.click();
     assert.equal(toggleCount, 1);
     assert.equal(focusAddressBarCount, 1);
-    assert.equal(
-      titlebarPart.getElement().querySelector('.comet-titlebar-sessions')?.firstElementChild,
-      sessionsHeader,
-    );
-    assert.equal(
-      titlebarPart.getElement().querySelector('.comet-titlebar-editor')?.firstElementChild,
-      editorHeader,
-    );
     assert.equal(
       getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.titlebar],
       titlebarPart.getElement(),

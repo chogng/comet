@@ -131,16 +131,16 @@ export type EditorPartBaseProps = {
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
-  showHeaderActions?: boolean;
-  showHeaderToolbar?: boolean;
+  showTitlebarActions?: boolean;
+  showToolbar?: boolean;
   isEditorCollapsed?: boolean;
   onToggleEditorCollapse?: () => void;
   isAgentSidebarVisible?: boolean;
   showAgentSidebarToggle?: boolean;
   agentSidebarToggleLabel?: string;
   onToggleAgentSidebar?: () => void;
-  headerAuxiliaryActionsElements?: readonly HTMLElement[];
-  hasLeadingWindowControlsInset?: boolean;
+  titlebarAuxiliaryActionsElements?: readonly HTMLElement[];
+  hasLeadingTitlebarWindowControlsInset?: boolean;
   onStatusChange?: (status: EditorStatusState) => void;
 };
 
@@ -162,8 +162,8 @@ export class EditorPartView {
     return this.element;
   }
 
-  getHeaderElement() {
-    return this.groupView.getHeaderElement();
+  getTitlebarElement() {
+    return this.groupView.getTitlebarElement();
   }
 
   executeActiveDraftCommand(commandId: DraftEditorCommandId) {

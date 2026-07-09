@@ -59,7 +59,7 @@ export function defaultBrowserWindowOptions(
 		frame: process.platform !== 'darwin' ? false : undefined,
 		titleBarStyle: resolveFramelessTitleBarStyle(),
 		titleBarOverlay: resolveTitleBarOverlay(),
-		...(process.platform === 'darwin' ? { trafficLightPosition: { x: 13, y: 11 } } : {}),
+		...(process.platform === 'darwin' ? { trafficLightPosition: { x: 19, y: 17 } } : {}),
 		backgroundColor: resolveMainWindowBackgroundColor(options.useMica, options.backgroundColor),
 		backgroundMaterial: resolveWindowBackgroundMaterial(options.useMica),
 		autoHideMenuBar: true,

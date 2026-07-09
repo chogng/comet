@@ -253,8 +253,8 @@ export function createEditorPartProps({
     onDraftDocumentChange,
     onSetEditorViewState,
     onDeleteEditorViewState,
-    showHeaderActions: true,
-    showHeaderToolbar: true,
+    showTitlebarActions: true,
+    showToolbar: true,
     isEditorCollapsed: false,
     onToggleEditorCollapse: () => {},
   };

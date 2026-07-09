@@ -33,10 +33,6 @@ export class SessionEditorPartView {
 		return this.element;
 	}
 
-	getHeaderElement() {
-		return this.groupView.getHeaderElement();
-	}
-
 	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
 		return this.groupView.executeActiveDraftCommand(commandId);
 	}

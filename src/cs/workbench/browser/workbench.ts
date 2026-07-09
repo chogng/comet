@@ -65,12 +65,11 @@ import {
   type SessionChatViewProps,
 } from 'cs/sessions/browser/parts/sessions/chatView';
 import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
-import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { SessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
 import { createFetchPaneProps } from 'cs/workbench/browser/parts/sidebar/fetchPanePart';
 
 import { ToastOverlayWindowView } from 'cs/workbench/browser/toastOverlayWindow';
-import { createEditorHeaderActionsView } from 'cs/workbench/browser/parts/editor/editorHeaderActionsView';
+import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
 import { registerToastBridge } from 'cs/base/browser/ui/toast/toast';
@@ -507,7 +506,7 @@ class WorkbenchHost {
   private retiredWorkbenchContentPartViews:
     | SessionWorkbenchContentPartViews
     | null = null;
-  private readonly editorHeaderActionsView = createEditorHeaderActionsView({
+  private readonly editorTitlebarActionsView = createEditorTitlebarActionsView({
     isEditorCollapsed: true,
     isAgentSidebarVisible: false,
     showAgentSidebarToggle: false,
@@ -631,7 +630,7 @@ class WorkbenchHost {
     this.workbenchContentPartViews?.dispose();
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
-    this.editorHeaderActionsView.dispose();
+    this.editorTitlebarActionsView.dispose();
     this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
     this.settingsView = null;
@@ -1053,23 +1052,31 @@ class WorkbenchHost {
     sidebarFooterActionsProps: ReturnType<
       typeof createSidebarFooterTitlebarActionsProps
     >;
-    editorHeaderActionsElement?: HTMLElement | null;
+    editorTitlebarActionsElement?: HTMLElement | null;
     editorPartProps: EditorPartProps;
   }) {
     this.retiredWorkbenchContentPartViews = null;
     this.sidebarFooterActionsView.setProps(
       props.sidebarFooterActionsProps,
     );
+
+    //#region Column titlebar handoff
+
     const partViewProps = {
       isPrimarySidebarVisible: props.isPrimarySidebarVisible,
       isEditorVisible: !props.isEditorCollapsed,
       sidebarProps: props.sidebarProps,
       sessionChatProps: props.sessionChatProps,
       editorPartProps: props.editorPartProps,
+      leadingTitlebarActionsElement:
+        this.titlebarPart.getLeadingActionsElement(),
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-      editorHeaderActionsElement:
-        props.editorHeaderActionsElement,
+      editorTitlebarActionsElement:
+        props.editorTitlebarActionsElement,
     };
+
+    //#endregion
+
     if (!this.workbenchContentPartViews) {
       this.workbenchContentPartViews = this.instantiationService.createInstance(
         SessionWorkbenchContentPartViews,
@@ -1540,7 +1547,7 @@ class WorkbenchHost {
       ...editorBrowserToolbarActions,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     };
-    this.editorHeaderActionsView.setProps({
+    this.editorTitlebarActionsView.setProps({
       isEditorCollapsed,
       isAgentSidebarVisible: false,
       showAgentSidebarToggle: false,
@@ -2120,8 +2127,8 @@ class WorkbenchHost {
         onApplyLayoutFlow: this.applyFlowLayout,
         onOpenSettings: this.toggleSettingsPage,
       }),
-      editorHeaderActionsElement:
-        this.editorHeaderActionsView.getElement(),
+      editorTitlebarActionsElement:
+        this.editorTitlebarActionsView.getElement(),
       editorPartProps: {
         ...contentAwareEditorPartProps,
         isAgentSidebarVisible: false,
@@ -2130,24 +2137,11 @@ class WorkbenchHost {
     });
     this.renderSettingsOverlay({ settingsPartProps });
 
-    const sessionsPartView = this.workbenchContentPartViews?.getPart(
-      SESSION_PART_IDS.sessions,
-    ) ?? null;
-    const editorPartView = this.workbenchContentPartViews?.getPart(
-      SESSION_PART_IDS.editor,
-    ) ?? null;
-
     this.titlebarPart.sync({
       electronRuntime,
       useMica,
       statusbarVisible,
       leadingActions: titlebarLeadingActionsProps,
-      primarySidebarVisible: isPrimarySidebarVisible,
-      primarySidebarSize,
-      editorVisible: !isEditorCollapsed,
-      editorSize: expandedEditorSize,
-      sessionsHeaderElement: sessionsPartView?.getHeaderElement() ?? null,
-      editorHeaderElement: editorPartView?.getHeaderElement() ?? null,
     });
 
     this.syncPostRenderState({

@@ -13,6 +13,7 @@ import 'cs/sessions/browser/parts/media/sessionView.css';
 
 export type SessionViewProps = {
 	chatProps: SessionChatViewProps;
+	headerLeadingActionsElement?: HTMLElement | null;
 	headerTrailingActionsElement?: HTMLElement | null;
 };
 
@@ -28,6 +29,7 @@ export class SessionView {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		this.headerView = createSessionHeaderView({
+			leadingActionsElement: props.headerLeadingActionsElement ?? null,
 			trailingActionsElement: props.headerTrailingActionsElement ?? null,
 		});
 		this.chatView = instantiationService.createInstance(
@@ -42,16 +44,13 @@ export class SessionView {
 		return this.element;
 	}
 
-	getHeaderElement() {
-		return this.headerView.getElement();
-	}
-
 	setProps(props: SessionViewProps) {
 		if (this.disposed) {
 			return;
 		}
 
 		this.headerView.setProps({
+			leadingActionsElement: props.headerLeadingActionsElement ?? null,
 			trailingActionsElement: props.headerTrailingActionsElement ?? null,
 		});
 		this.chatView.setProps(props.chatProps);

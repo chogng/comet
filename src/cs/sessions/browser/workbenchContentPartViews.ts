@@ -10,10 +10,6 @@ import {
 	type SessionSidebarProps,
 } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import {
-	SESSION_PART_IDS,
-	type SessionPartId,
-} from 'cs/sessions/browser/parts/parts';
-import {
 	SessionsPartView,
 } from 'cs/sessions/browser/parts/sessions/sessionsPart';
 import {
@@ -34,8 +30,9 @@ export type SessionWorkbenchContentPartViewsProps = {
 	sidebarProps: SessionSidebarProps;
 	sessionChatProps: SessionChatViewProps;
 	editorPartProps: EditorPartProps;
+	leadingTitlebarActionsElement?: HTMLElement | null;
 	sidebarFooterActionsElement: HTMLElement;
-	editorHeaderActionsElement?: HTMLElement | null;
+	editorTitlebarActionsElement?: HTMLElement | null;
 };
 
 export class SessionWorkbenchContentPartViews {
@@ -73,22 +70,6 @@ export class SessionWorkbenchContentPartViews {
 
 	getEditorElement() {
 		return this.editorView?.getElement() ?? null;
-	}
-
-	getPart(partId: typeof SESSION_PART_IDS.sidebar): SessionSidebarPartView | null;
-	getPart(partId: typeof SESSION_PART_IDS.sessions): SessionsPartView | null;
-	getPart(partId: typeof SESSION_PART_IDS.editor): SessionEditorPartView | null;
-	getPart(partId: SessionPartId) {
-		switch (partId) {
-			case SESSION_PART_IDS.sidebar:
-				return this.sidebarView;
-			case SESSION_PART_IDS.sessions:
-				return this.sessionsView;
-			case SESSION_PART_IDS.editor:
-				return this.props.isEditorVisible ? this.editorView : null;
-		}
-
-		return null;
 	}
 
 	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
@@ -137,6 +118,8 @@ export class SessionWorkbenchContentPartViews {
 		this.renderEditor();
 	}
 
+	//#region Column titlebar routing
+
 	private renderSidebar() {
 		if (!this.props.isPrimarySidebarVisible) {
 			this.sidebarView?.dispose();
@@ -146,6 +129,7 @@ export class SessionWorkbenchContentPartViews {
 
 		const nextProps: SessionSidebarProps = {
 			...this.props.sidebarProps,
+			titlebarActionsElement: this.props.leadingTitlebarActionsElement ?? null,
 			footerActionsElement: this.props.sidebarFooterActionsElement,
 		};
 
@@ -160,10 +144,14 @@ export class SessionWorkbenchContentPartViews {
 	private renderSessions() {
 		const nextProps = {
 			chatProps: this.props.sessionChatProps,
+			headerLeadingActionsElement:
+				this.props.isPrimarySidebarVisible
+					? null
+					: (this.props.leadingTitlebarActionsElement ?? null),
 			headerTrailingActionsElement:
 				this.props.isEditorVisible
 					? null
-					: (this.props.editorHeaderActionsElement ?? null),
+					: (this.props.editorTitlebarActionsElement ?? null),
 		};
 
 		if (!this.sessionsView) {
@@ -185,15 +173,15 @@ export class SessionWorkbenchContentPartViews {
 
 		const nextProps: EditorPartProps = {
 			...this.props.editorPartProps,
-			showHeaderActions: false,
-			showHeaderToolbar: true,
+			showTitlebarActions: false,
+			showToolbar: true,
 			isEditorCollapsed: false,
 			isAgentSidebarVisible: false,
 			showAgentSidebarToggle: false,
-			headerAuxiliaryActionsElements: this.props.editorHeaderActionsElement
-				? [this.props.editorHeaderActionsElement]
+			titlebarAuxiliaryActionsElements: this.props.editorTitlebarActionsElement
+				? [this.props.editorTitlebarActionsElement]
 				: [],
-			hasLeadingWindowControlsInset: !this.props.isPrimarySidebarVisible,
+			hasLeadingTitlebarWindowControlsInset: !this.props.isPrimarySidebarVisible,
 			onStatusChange: this.handleEditorStatusChange,
 		};
 
@@ -205,6 +193,8 @@ export class SessionWorkbenchContentPartViews {
 
 		this.syncStatusbarCommandHandlers();
 	}
+
+	//#endregion
 
 	private retireEditorView() {
 		if (!this.editorView) {

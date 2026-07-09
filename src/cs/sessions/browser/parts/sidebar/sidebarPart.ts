@@ -20,6 +20,7 @@ export type SessionSidebarProps = {
 	moreLabel?: string;
 	settingsLabel?: string;
 	fetchPaneProps: FetchPaneProps;
+	titlebarActionsElement?: HTMLElement | null;
 	footerActionsElement?: HTMLElement | null;
 };
 
@@ -30,13 +31,21 @@ let panelIdPool = 0;
 export class SessionSidebar {
 	private props: SessionSidebarProps;
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-sidebar-root.comet-sidebar-root');
+	private readonly titlebarElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-titlebar');
+	private readonly titlebarActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-titlebar-actions');
 	private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-content');
 	private readonly footerElement = $<HTMLElementTagNameMap['footer']>('footer.comet-sidebar-footer');
-	private readonly switcherElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-switcher');
+
+	//#region Sidebar header
+
+	private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-header');
 	private readonly tabListElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-list');
 	private readonly homeTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
 	private readonly fetchTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
 	private readonly tabActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-actions');
+
+	//#endregion
+
 	private readonly contentHostElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-content-host');
 	private readonly homeSection = $<HTMLElementTagNameMap['section']>('section.comet-sidebar-tab-panel.comet-sidebar-home-panel');
 	private readonly homeNavElement = $<HTMLElementTagNameMap['nav']>('nav.comet-sidebar-home-nav');
@@ -78,12 +87,16 @@ export class SessionSidebar {
 		this.homeSection.append(this.homeNavElement, this.recentsElement);
 		this.fetchSection.append(this.fetchContentView.getElement());
 		this.tabListElement.append(this.homeTabButton, this.fetchTabButton);
-		this.switcherElement.append(this.tabListElement, this.tabActionsElement);
-		this.contentElement.append(this.contentHostElement);
-		this.element.append(
-			this.switcherElement,
-			this.contentElement,
+		this.titlebarElement.append(this.titlebarActionsElement);
+		this.headerElement.append(this.tabListElement, this.tabActionsElement);
+		this.contentElement.append(
+			this.headerElement,
+			this.contentHostElement,
 			this.footerElement,
+		);
+		this.element.append(
+			this.titlebarElement,
+			this.contentElement,
 		);
 		this.render();
 	}
@@ -126,15 +139,13 @@ export class SessionSidebar {
 		this.renderHomeNav();
 		this.renderRecents();
 		this.syncModeContent();
+		this.syncTitlebarActions(this.props.titlebarActionsElement ?? null);
 		this.syncFooterActions(this.props.footerActionsElement ?? null);
 		this.syncTabs();
 	}
 
 	private syncModeContent() {
-		this.switcherElement.hidden = false;
-		if (this.contentElement.firstElementChild !== this.contentHostElement) {
-			this.contentElement.replaceChildren(this.contentHostElement);
-		}
+		this.headerElement.hidden = false;
 	}
 
 	private syncFooterActions(footerActionsElement: HTMLElement | null) {
@@ -151,6 +162,24 @@ export class SessionSidebar {
 		}
 	}
 
+	//#region Sidebar titlebar actions
+
+	private syncTitlebarActions(actionsElement: HTMLElement | null) {
+		const currentActionsElement = this.titlebarActionsElement.firstElementChild;
+		if (actionsElement) {
+			if (currentActionsElement !== actionsElement) {
+				this.titlebarActionsElement.replaceChildren(actionsElement);
+			}
+			return;
+		}
+
+		if (currentActionsElement) {
+			this.titlebarActionsElement.replaceChildren();
+		}
+	}
+
+	//#endregion
+
 	private setActiveTab(tab: SessionSidebarContentTab) {
 		if (this.disposed || this.activeTab === tab) {
 			return;
@@ -161,7 +190,7 @@ export class SessionSidebar {
 	}
 
 	private syncTabs() {
-		if (this.contentElement.firstElementChild !== this.contentHostElement) {
+		if (!this.contentHostElement.isConnected) {
 			return;
 		}
 

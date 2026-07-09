@@ -118,7 +118,9 @@
 }
 
 .comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-footer,
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-header,
 .comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-switcher,
+.comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-titlebar,
 .comet-app-window.comet-is-mica-enabled .comet-panel.comet-sidebar-panel.comet-sidebar-platform-macos .comet-sidebar-tab-panel {
   background: transparent;
 }
@@ -160,8 +162,50 @@
   background: var(--sidebar-surface-bg);
 }
 
+.comet-sidebar-titlebar {
+  min-width: 0;
+  min-height: var(--workbench-titlebar-height, 36px);
+  height: var(--workbench-titlebar-height, 36px);
+  flex: 0 0 var(--workbench-titlebar-height, 36px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--sidebar-surface-bg);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
+}
+
+.comet-app-window.comet-has-leading-window-controls .comet-session-sidebar-part .comet-sidebar-titlebar {
+  padding-inline-start: calc(
+    var(--workbench-leading-window-controls-width, 0px) + 12px
+  );
+}
+
+.comet-sidebar-titlebar[hidden],
+.comet-sidebar-header[hidden],
 .comet-sidebar-switcher[hidden] {
   display: none;
+}
+
+.comet-sidebar-titlebar-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.comet-sidebar-header {
+  min-width: 0;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 5px;
+  background: var(--sidebar-surface-bg);
 }
 
 .comet-sidebar-tab-list {
@@ -175,6 +219,7 @@
   border-radius: 10px;
   background: var(--vscode-sideBar-tabBackground, rgba(0, 0, 0, 0.045));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  -webkit-app-region: no-drag;
 }
 
 .comet-sidebar-tab {
@@ -235,12 +280,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  -webkit-app-region: no-drag;
 }
 
 .comet-sidebar-content {
   min-height: 0;
   flex: 1;
   display: flex;
+  flex-direction: column;
 }
 
 .comet-sidebar-content-host,

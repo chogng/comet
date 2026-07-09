@@ -9,12 +9,12 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
-const EDITOR_HEADER_ADD_MENU_DATA = 'editor-header-add';
+const EDITOR_TITLEBAR_ADD_MENU_DATA = 'editor-titlebar-add';
 const ADD_MENU_SEARCH_PLACEHOLDER = 'Search add actions';
 const ADD_MENU_SEARCH_ARIA_LABEL = 'Search add actions';
 const ADD_MENU_EMPTY_LABEL = 'No matching actions';
 
-export type EditorHeaderActionsViewProps = {
+export type EditorTitlebarActionsViewProps = {
   isEditorCollapsed: boolean;
   isAgentSidebarVisible?: boolean;
   showAgentSidebarToggle?: boolean;
@@ -33,14 +33,14 @@ export type EditorHeaderActionsViewProps = {
   onToggleAgentSidebar?: () => void;
 };
 
-export class EditorHeaderActionsView {
-  private props: EditorHeaderActionsViewProps;
+export class EditorTitlebarActionsView {
+  private props: EditorTitlebarActionsViewProps;
   private readonly actionsView = createActionBarView({
-    className: 'comet-header-actions',
+    className: 'comet-editor-titlebar-actionbar',
     ariaRole: 'group',
   });
 
-  constructor(props: EditorHeaderActionsViewProps) {
+  constructor(props: EditorTitlebarActionsViewProps) {
     this.props = props;
     this.render();
   }
@@ -49,7 +49,7 @@ export class EditorHeaderActionsView {
     return this.actionsView.getElement();
   }
 
-  setProps(props: EditorHeaderActionsViewProps) {
+  setProps(props: EditorTitlebarActionsViewProps) {
     this.props = props;
     this.render();
   }
@@ -116,9 +116,9 @@ export class EditorHeaderActionsView {
         label: this.props.labels.headerAddAction,
         title: this.props.labels.headerAddAction,
         content: createLxIcon('add'),
-        buttonClassName: 'comet-editor-header-add-btn',
+        buttonClassName: 'comet-editor-titlebar-add-btn',
         overlayAlignment: 'end',
-        menuData: EDITOR_HEADER_ADD_MENU_DATA,
+        menuData: EDITOR_TITLEBAR_ADD_MENU_DATA,
         menu: this.createAddMenuItems(''),
         menuHeader: createFilterMenuHeader({
           placeholder: ADD_MENU_SEARCH_PLACEHOLDER,
@@ -132,7 +132,7 @@ export class EditorHeaderActionsView {
         label: this.props.agentSidebarToggleLabel ?? '',
         title: this.props.agentSidebarToggleLabel ?? '',
         mode: 'icon' as const,
-        buttonClassName: 'comet-editor-header-agent-btn',
+        buttonClassName: 'comet-editor-titlebar-agent-btn',
         content: createLxIcon(
           this.props.isAgentSidebarVisible ? 'agent-filled' : 'agent',
         ),
@@ -147,7 +147,7 @@ export class EditorHeaderActionsView {
         ? this.props.labels.expandEditor
         : this.props.labels.collapseEditor,
       mode: 'icon' as const,
-      buttonClassName: 'comet-editor-header-toggle-editor-btn',
+      buttonClassName: 'comet-editor-titlebar-toggle-editor-btn',
       content: createLxIcon(
         this.props.isEditorCollapsed
           ? 'layout-sidebar-right-off'
@@ -157,13 +157,13 @@ export class EditorHeaderActionsView {
     });
 
     this.actionsView.setProps({
-      className: 'comet-header-actions',
+      className: 'comet-editor-titlebar-actionbar',
       ariaRole: 'group',
       items: actionItems,
     });
   }
 }
 
-export function createEditorHeaderActionsView(props: EditorHeaderActionsViewProps) {
-  return new EditorHeaderActionsView(props);
+export function createEditorTitlebarActionsView(props: EditorTitlebarActionsViewProps) {
+  return new EditorTitlebarActionsView(props);
 }

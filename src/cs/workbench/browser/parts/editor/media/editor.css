@@ -7,7 +7,7 @@
 }
 
 .comet-editor-frame {
-  --editor-header-height: 36px;
+  --editor-titlebar-height: 36px;
   --editor-toolbar-height: 36px;
   min-height: 0;
   height: 100%;
@@ -17,7 +17,7 @@
   isolation: isolate;
 }
 
-.comet-editor-frame.comet-has-external-header {
+.comet-editor-frame.comet-has-external-titlebar {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
@@ -25,7 +25,7 @@
   border-radius: 999px;
 }
 
-.comet-editor-header {
+.comet-editor-titlebar {
   position: relative;
   z-index: 2;
   display: flex;
@@ -33,7 +33,7 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
-  min-height: var(--editor-header-height);
+  min-height: var(--editor-titlebar-height);
   box-sizing: border-box;
   padding: 0px 8px;
   background: transparent;
@@ -41,18 +41,18 @@
   -webkit-app-region: drag;
 }
 
-.comet-editor-header.comet-has-leading-window-controls-inset {
-  padding-left: calc(8px + var(--editor-header-leading-window-controls-width, 0px));
+.comet-editor-titlebar.comet-has-leading-window-controls-inset {
+  padding-left: calc(8px + var(--editor-titlebar-leading-window-controls-width, 0px));
 }
 
-.comet-editor-header-tabs {
+.comet-editor-titlebar-tabs {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
 }
 
-.comet-editor-header-actions {
+.comet-editor-titlebar-actions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -60,12 +60,8 @@
   -webkit-app-region: no-drag;
 }
 
-.comet-editor-header-actions .comet-header-actions {
-  margin-left: 0;
-}
-
-.comet-editor-header-actions .comet-header-actions-host {
-  padding-inline-start: 0;
+.comet-editor-titlebar-actions .comet-editor-titlebar-actionbar {
+	margin-left: 0;
 }
 
 .comet-editor-toolbar {
@@ -85,7 +81,7 @@
 }
 
 /* Explicit slot placement keeps the content pane in the 1fr track even when the toolbar is hidden. */
-.comet-editor-frame > [data-editor-frame-slot='header'] {
+.comet-editor-frame > [data-editor-frame-slot='titlebar'] {
   grid-row: 1;
 }
 
@@ -93,7 +89,7 @@
   grid-row: 2;
 }
 
-.comet-editor-frame.comet-has-external-header > [data-editor-frame-slot='toolbar'] {
+.comet-editor-frame.comet-has-external-titlebar > [data-editor-frame-slot='toolbar'] {
   grid-row: 1;
 }
 
@@ -111,7 +107,7 @@
   grid-row: 3;
 }
 
-.comet-editor-frame.comet-has-external-header > [data-editor-frame-slot='content'] {
+.comet-editor-frame.comet-has-external-titlebar > [data-editor-frame-slot='content'] {
   grid-row: 2;
 }
 
