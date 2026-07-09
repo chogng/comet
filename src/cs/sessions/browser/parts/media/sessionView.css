@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 .comet-sessions-part,
 .comet-session-view {
 	display: flex;
@@ -13,20 +18,18 @@
 }
 
 .comet-sessions-part {
-	--session-floating-inset: 6px;
-	padding-block-start: var(--session-floating-inset);
 	-webkit-app-region: drag;
 }
 
 .comet-session-titlebar {
 	box-sizing: border-box;
-	flex: 0 0 var(--workbench-titlebar-height, 36px);
-	min-height: var(--workbench-titlebar-height, 36px);
-	height: var(--workbench-titlebar-height, 36px);
+	flex: 0 0 48px;
+	min-height: 48px;
+	height: 48px;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 4px 8px;
+	padding: 0 8px;
 	border-bottom: 1px solid var(--comet-workbench-panelTitleBorder, #e5ebf1);
 	-webkit-app-region: drag;
 	user-select: none;
