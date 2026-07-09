@@ -43,22 +43,15 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 999px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.comet-notification-severity-info .comet-notification-list-item-icon {
-  background: #1f6feb;
+  color: var(--cs-descriptionForeground, #666);
 }
 
 .comet-notification-severity-warning .comet-notification-list-item-icon {
-  background: #9a6700;
+  color: #9a6700;
 }
 
 .comet-notification-severity-error .comet-notification-list-item-icon {
-  background: #cf222e;
+  color: #cf222e;
 }
 
 .comet-notification-list-item-message {
@@ -68,12 +61,20 @@
 }
 
 .comet-notification-list-item-close {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  line-height: 1;
+  justify-self: end;
+  --cs-actionbar-foreground: var(--cs-descriptionForeground, #666);
+  --cs-actionbar-hover-foreground: var(--cs-foreground, #1f1f1f);
+  --cs-actionbar-hover-background: rgba(0, 0, 0, 0.06);
+  --cs-actionbar-radius: 4px;
+}
+
+.comet-notification-list-item-close .comet-actionbar-action {
+  width: 22px;
+  height: 22px;
+}
+
+.comet-notification-list-item-close .lx-icon {
+  font-size: 14px;
 }
 
 .comet-notification-list-item-source {

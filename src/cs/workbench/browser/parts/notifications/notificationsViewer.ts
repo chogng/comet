@@ -1,5 +1,10 @@
 import { clearNode } from 'cs/base/browser/dom';
+import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import type { IAction } from 'cs/base/common/actions';
+import {
+  createLxIcon,
+  type LxIconName,
+} from 'cs/base/browser/ui/lxicons/lxicons';
 import {
   Severity,
   type NotificationMessage,
@@ -33,6 +38,19 @@ export function getNotificationSeverityLabel(severity: Severity) {
       return 'Info';
     default:
       return 'Notification';
+  }
+}
+
+function getNotificationSeverityIconName(severity: Severity): LxIconName {
+  switch (severity) {
+    case Severity.Error:
+      return 'error';
+    case Severity.Warning:
+      return 'warning';
+    case Severity.Info:
+      return 'info';
+    default:
+      return 'bell';
   }
 }
 
@@ -88,23 +106,29 @@ export function renderNotificationItem(
 
   const icon = document.createElement('span');
   icon.className = 'comet-notification-list-item-icon';
-  icon.textContent = getNotificationSeverityLabel(item.severity).charAt(0);
+  icon.title = getNotificationSeverityLabel(item.severity);
+  icon.append(createLxIcon(getNotificationSeverityIconName(item.severity)));
 
   const message = document.createElement('div');
   message.className = 'comet-notification-list-item-message';
   message.textContent = item.messageText;
 
-  const closeButton = document.createElement('button');
-  closeButton.type = 'button';
-  closeButton.className = 'comet-notification-list-item-close';
-  closeButton.textContent = 'x';
-  closeButton.title = 'Close';
-  closeButton.addEventListener('click', () => {
-    options.onDidClose?.();
-    item.close();
+  const closeActionBar = createActionBarView({
+    ariaLabel: 'Notification actions',
+    className: 'comet-notification-list-item-close',
+    items: [{
+      id: 'close',
+      label: 'Close',
+      title: 'Close',
+      content: createLxIcon('close'),
+      run: () => {
+        options.onDidClose?.();
+        item.close();
+      },
+    }],
   });
 
-  mainRow.append(icon, message, closeButton);
+  mainRow.append(icon, message, closeActionBar.getElement());
   container.append(mainRow);
 
   const sourceLabel = getNotificationSourceLabel(item);

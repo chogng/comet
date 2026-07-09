@@ -129,7 +129,6 @@ function createNativeHostService(): INativeHostService {
     webContent: undefined,
     fetch: undefined,
     document: undefined,
-    toast: undefined,
   };
 }
 

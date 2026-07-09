@@ -70,7 +70,6 @@ function createNativeHostService(
     webContent: undefined,
     fetch: undefined,
     document: documentApi,
-    toast: undefined,
   };
 }
 

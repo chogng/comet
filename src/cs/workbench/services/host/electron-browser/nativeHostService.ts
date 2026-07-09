@@ -51,10 +51,6 @@ class WorkbenchNativeHostService implements INativeHostService {
 	get document() {
 		return this.api?.document;
 	}
-
-	get toast() {
-		return this.api?.toast;
-	}
 }
 
 export const nativeHostService: INativeHostService =

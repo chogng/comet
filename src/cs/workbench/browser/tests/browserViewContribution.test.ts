@@ -207,7 +207,6 @@ function installWebContentApiSpy() {
     webContent,
     fetch: undefined,
     document: undefined,
-    toast: undefined,
   };
 
   return {

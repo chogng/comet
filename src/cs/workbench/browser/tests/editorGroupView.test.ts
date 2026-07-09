@@ -153,9 +153,6 @@ function createNativeHostService(): INativeHostService {
     get document() {
       return window.electronAPI?.document;
     },
-    get toast() {
-      return window.electronAPI?.toast;
-    },
   };
 }
 
