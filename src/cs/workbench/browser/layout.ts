@@ -588,7 +588,7 @@ function getSessionLayoutLimits(orientation: Orientation): SessionLayoutLimits {
 		: SESSION_SPLITVIEW_LIMITS;
 }
 
-class SessionWorkbenchLayoutSlotView implements IGridView {
+class SessionWorkbenchLayoutPartView implements IGridView {
 	readonly element: HTMLElement;
 	readonly snap: boolean;
 	private minimumWidthValue = 0;
@@ -599,7 +599,7 @@ class SessionWorkbenchLayoutSlotView implements IGridView {
 	constructor(className: string, snap = false) {
 		this.snap = snap;
 		this.element = document.createElement('div');
-		this.element.className = `comet-session-workbench-slot ${className}`.trim();
+		this.element.className = `comet-session-workbench-part ${className}`.trim();
 	}
 
 	get minimumWidth() {
@@ -641,7 +641,7 @@ class SessionWorkbenchLayoutSlotView implements IGridView {
 	}
 
 	layout() {
-		// The slotted part roots stretch with CSS.
+		// The part roots stretch with CSS.
 	}
 }
 
@@ -659,9 +659,9 @@ class SessionWorkbenchLayoutController {
 		private readonly options: {
 			container: HTMLElement;
 			contentHost: HTMLElement;
-			sidebarSlot: SessionWorkbenchLayoutSlotView;
-			sessionsSlot: SessionWorkbenchLayoutSlotView;
-			editorSlot: SessionWorkbenchLayoutSlotView;
+			sidebarPartView: SessionWorkbenchLayoutPartView;
+			sessionsPartView: SessionWorkbenchLayoutPartView;
+			editorPartView: SessionWorkbenchLayoutPartView;
 			getState: () => {
 				isPrimarySidebarVisible: boolean;
 				isLayoutEdgeSnappingEnabled: boolean;
@@ -682,7 +682,7 @@ class SessionWorkbenchLayoutController {
 	sync() {
 		const state = this.options.getState();
 		const orientation = this.resolveSplitOrientation();
-		this.syncSplitSlotConstraints(orientation);
+		this.syncSplitPartConstraints(orientation);
 		this.ensureGridView(state, orientation);
 		if (!this.gridView) {
 			return;
@@ -737,18 +737,18 @@ class SessionWorkbenchLayoutController {
 			WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE,
 			[
 				{
-					view: this.options.sidebarSlot,
+					view: this.options.sidebarPartView,
 					size: state.primarySidebarSize,
 					visible: state.isPrimarySidebarVisible,
 				},
 				{
-					view: this.options.sessionsSlot,
+					view: this.options.sessionsPartView,
 					size: this.resolveInitialSessionsSize(),
 					visible: true,
 					flex: true,
 				},
 				{
-					view: this.options.editorSlot,
+					view: this.options.editorPartView,
 					size: state.editorSize,
 					visible: state.isEditorVisible,
 				},
@@ -827,7 +827,7 @@ class SessionWorkbenchLayoutController {
 	private handleContainerResize() {
 		const state = this.options.getState();
 		const orientation = this.resolveSplitOrientation();
-		this.syncSplitSlotConstraints(orientation);
+		this.syncSplitPartConstraints(orientation);
 		this.ensureGridView(state, orientation);
 		this.scheduleGridViewLayout();
 	}
@@ -854,7 +854,7 @@ class SessionWorkbenchLayoutController {
 
 			const state = this.options.getState();
 			const nextOrientation = this.resolveSplitOrientation();
-			this.syncSplitSlotConstraints(nextOrientation);
+			this.syncSplitPartConstraints(nextOrientation);
 			if (nextOrientation !== this.gridOrientation) {
 				this.ensureGridView(state, nextOrientation);
 			}
@@ -873,17 +873,17 @@ class SessionWorkbenchLayoutController {
 		return resolveOrientationFromWidth(containerWidth);
 	}
 
-	private syncSplitSlotConstraints(orientation: Orientation) {
+	private syncSplitPartConstraints(orientation: Orientation) {
 		this.splitConstraints = getSessionLayoutLimits(orientation);
-		this.options.sidebarSlot.setConstraints(
+		this.options.sidebarPartView.setConstraints(
 			orientation,
 			this.splitConstraints.sidebar,
 		);
-		this.options.sessionsSlot.setConstraints(
+		this.options.sessionsPartView.setConstraints(
 			orientation,
 			this.splitConstraints.sessions,
 		);
-		this.options.editorSlot.setConstraints(
+		this.options.editorPartView.setConstraints(
 			orientation,
 			this.splitConstraints.editor,
 		);
@@ -894,15 +894,15 @@ export class SessionWorkbenchLayoutView {
 	private props: SessionWorkbenchLayoutViewProps;
 	private readonly element = document.createElement('section');
 	private readonly mainElement = document.createElement('main');
-	private readonly sidebarSlot = new SessionWorkbenchLayoutSlotView(
-		'comet-session-workbench-slot-sidebar',
+	private readonly sidebarPartView = new SessionWorkbenchLayoutPartView(
+		'comet-session-workbench-part-sidebar',
 		true,
 	);
-	private readonly sessionsSlot = new SessionWorkbenchLayoutSlotView(
-		'comet-session-workbench-slot-sessions',
+	private readonly sessionsPartView = new SessionWorkbenchLayoutPartView(
+		'comet-session-workbench-part-sessions',
 	);
-	private readonly editorSlot = new SessionWorkbenchLayoutSlotView(
-		'comet-session-workbench-slot-editor',
+	private readonly editorPartView = new SessionWorkbenchLayoutPartView(
+		'comet-session-workbench-part-editor',
 	);
 	private readonly layoutController: SessionWorkbenchLayoutController;
 	private disposed = false;
@@ -914,9 +914,9 @@ export class SessionWorkbenchLayoutView {
 		this.layoutController = new SessionWorkbenchLayoutController({
 			container: this.element,
 			contentHost: this.mainElement,
-			sidebarSlot: this.sidebarSlot,
-			sessionsSlot: this.sessionsSlot,
-			editorSlot: this.editorSlot,
+			sidebarPartView: this.sidebarPartView,
+			sessionsPartView: this.sessionsPartView,
+			editorPartView: this.editorPartView,
 			getState: () => ({
 				isPrimarySidebarVisible: this.props.isPrimarySidebarVisible,
 				isLayoutEdgeSnappingEnabled: this.props.isLayoutEdgeSnappingEnabled,
@@ -974,9 +974,9 @@ export class SessionWorkbenchLayoutView {
 			.filter(Boolean)
 			.join(' ');
 
-		this.sidebarSlot.setContent(this.props.partViews.getSidebarElement());
-		this.sessionsSlot.setContent(this.props.partViews.getSessionsElement());
-		this.editorSlot.setContent(this.props.partViews.getEditorElement());
+		this.sidebarPartView.setContent(this.props.partViews.getSidebarElement());
+		this.sessionsPartView.setContent(this.props.partViews.getSessionsElement());
+		this.editorPartView.setContent(this.props.partViews.getEditorElement());
 		this.layoutController.sync();
 	}
 }
