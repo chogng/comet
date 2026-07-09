@@ -1,3 +1,76 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.comet-vertical-scrollbar-host {
+	--comet-vertical-scrollbar-size: 4px;
+	position: relative;
+}
+
+.comet-vertical-scrollbar-strip {
+	overflow-x: hidden;
+	overflow-y: auto;
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.comet-vertical-scrollbar-strip::-webkit-scrollbar {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
+.comet-vertical-scrollbar-track {
+	position: absolute;
+	top: 0;
+	right: calc(-1 * var(--comet-vertical-scrollbar-size));
+	bottom: 0;
+	width: var(--comet-vertical-scrollbar-size);
+	border-radius: 999px;
+	background: transparent;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.comet-vertical-scrollbar-host.comet-is-scrollable:hover .comet-vertical-scrollbar-track,
+.comet-vertical-scrollbar-host.comet-is-scrollable:focus-within .comet-vertical-scrollbar-track,
+.comet-vertical-scrollbar-host.comet-is-scrollable.comet-is-vertical-scrollbar-visible .comet-vertical-scrollbar-track,
+.comet-vertical-scrollbar-host.comet-is-scrollbar-active .comet-vertical-scrollbar-track,
+.comet-vertical-scrollbar-host.comet-is-scrollbar-dragging .comet-vertical-scrollbar-track {
+	opacity: 1;
+	pointer-events: auto;
+	background: var(--comet-scrollbar-shadow);
+}
+
+.comet-scrollable-element-root.comet-vertical-scrollbar-host .comet-vertical-scrollbar-track {
+	right: 0;
+	width: var(--comet-vertical-scrollbar-size, 10px);
+}
+
+.comet-vertical-scrollbar-thumb {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	min-height: 24px;
+	border-radius: 999px;
+	background: var(--comet-scrollbarSlider-background);
+	cursor: grab;
+	touch-action: none;
+	transition: background-color 120ms ease;
+}
+
+.comet-vertical-scrollbar-thumb:hover {
+	background: var(--comet-scrollbarSlider-hoverBackground);
+}
+
+.comet-vertical-scrollbar-host.comet-is-scrollbar-dragging .comet-vertical-scrollbar-thumb {
+	background: var(--comet-scrollbarSlider-activeBackground);
+	cursor: grabbing;
+}
+
 .comet-scrollable-element-root {
   position: relative;
   display: block;

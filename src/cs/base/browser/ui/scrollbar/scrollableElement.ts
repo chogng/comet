@@ -1,7 +1,8 @@
 import { ScrollbarVisibility, resolveScrollableElementOptions } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import type { ScrollableElementChangeOptions, ScrollableElementCreationOptions, ScrollableElementResolvedOptions } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
-import { HorizontalScrollbarState, VerticalScrollbarState } from 'cs/base/browser/ui/scrollbar/scrollbarState';
+import { HorizontalScrollbarState } from 'cs/base/browser/ui/scrollbar/scrollbarState';
 import { ScrollbarVisibilityController } from 'cs/base/browser/ui/scrollbar/scrollbarVisibilityController';
+import { VerticalScrollbar } from 'cs/base/browser/ui/scrollbar/verticalScrollbar';
 import type {
   INewScrollDimensions,
   INewScrollPosition,
@@ -40,16 +41,15 @@ export class AbstractScrollableElement {
   protected readonly domNode: HTMLDivElement;
   private readonly horizontalScrollbar: HTMLDivElement;
   private readonly horizontalSlider: HTMLDivElement;
-  private readonly verticalScrollbar: HTMLDivElement;
-  private readonly verticalSlider: HTMLDivElement;
+  private readonly verticalScrollbarTrack: HTMLDivElement;
+  private readonly verticalScrollbarThumb: HTMLDivElement;
+  private readonly verticalScrollbar: VerticalScrollbar;
   protected options: ScrollableElementResolvedOptions;
   private readonly onScrollEmitter = new EventEmitter<ScrollEvent>();
   private readonly onWillScrollEmitter = new EventEmitter<ScrollEvent>();
   private readonly domDisposables = new DisposableStore();
   private readonly horizontalScrollbarState: HorizontalScrollbarState;
-  private readonly verticalScrollbarState: VerticalScrollbarState;
   private readonly horizontalVisibilityController: ScrollbarVisibilityController;
-  private readonly verticalVisibilityController: ScrollbarVisibilityController;
   private scrollDimensions: IScrollDimensions;
   private scrollPosition: IScrollPosition;
   private readonly scrollbarHideTimeout = new MutableDisposable<DisposableLike>();
@@ -66,13 +66,14 @@ export class AbstractScrollableElement {
     this.domNode.className = 'comet-scrollable-element-root';
     this.horizontalScrollbar = this.createScrollbarElement('horizontal');
     this.horizontalSlider = this.createSliderElement();
-    this.verticalScrollbar = this.createScrollbarElement('vertical');
-    this.verticalSlider = this.createSliderElement();
+    this.verticalScrollbarTrack = this.createVerticalScrollbarTrack();
+    this.verticalScrollbarThumb = this.createVerticalScrollbarThumb();
     this.horizontalScrollbar.append(this.horizontalSlider);
-    this.verticalScrollbar.append(this.verticalSlider);
-    this.domNode.append(this.element, this.horizontalScrollbar, this.verticalScrollbar);
+    this.verticalScrollbarTrack.append(this.verticalScrollbarThumb);
+    this.domNode.append(this.element, this.horizontalScrollbar, this.verticalScrollbarTrack);
 
     this.element.classList.add('comet-scrollable-content');
+    this.element.classList.add('comet-vertical-scrollbar-strip');
     this.element.style.minHeight = this.element.style.minHeight || '0';
     this.element.style.minWidth = this.element.style.minWidth || '0';
 
@@ -100,39 +101,27 @@ export class AbstractScrollableElement {
       scrollSize: this.scrollDimensions.scrollWidth,
       scrollPosition: this.scrollPosition.scrollLeft,
     });
-    this.verticalScrollbarState = new VerticalScrollbarState({
-      arrowSize: 0,
-      scrollbarSize:
-        this.options.vertical === ScrollbarVisibility.Hidden
-          ? 0
-          : this.options.verticalScrollbarSize,
-      oppositeScrollbarSize: 0,
-      visibleSize: this.scrollDimensions.height,
-      scrollSize: this.scrollDimensions.scrollHeight,
-      scrollPosition: this.scrollPosition.scrollTop,
-    });
     this.horizontalVisibilityController = new ScrollbarVisibilityController(
       this.options.horizontal,
       'comet-is-horizontal-scrollbar-visible',
     );
-    this.verticalVisibilityController = new ScrollbarVisibilityController(
-      this.options.vertical,
-      'comet-is-vertical-scrollbar-visible',
+    this.verticalScrollbar = new VerticalScrollbar(
+      this.domNode,
+      this.element,
+      this.verticalScrollbarTrack,
+      this.verticalScrollbarThumb,
+      this.createVerticalScrollbarOptions(),
     );
     this.horizontalVisibilityController.setIsNeeded(this.horizontalScrollbarState.isNeeded());
-    this.verticalVisibilityController.setIsNeeded(this.verticalScrollbarState.isNeeded());
     this.horizontalVisibilityController.setDomNode(this.domNode);
-    this.verticalVisibilityController.setDomNode(this.domNode);
 
     this.applyOptions();
     this.domDisposables.add(this.scrollbarHideTimeout);
+    this.domDisposables.add(this.verticalScrollbar);
     this.domDisposables.add(
       addDisposableListener(this.element, 'scroll', this.handleElementScroll, {
         passive: true,
       }),
-    );
-    this.domDisposables.add(
-      addDisposableListener(this.verticalScrollbar, 'pointerdown', this.handleVerticalScrollbarPointerDown),
     );
     this.domDisposables.add(
       addDisposableListener(this.horizontalScrollbar, 'pointerdown', this.handleHorizontalScrollbarPointerDown),
@@ -210,10 +199,6 @@ export class AbstractScrollableElement {
     return this.horizontalScrollbarState;
   }
 
-  getVerticalScrollbarState() {
-    return this.verticalScrollbarState;
-  }
-
   setScrollDimensions(update: INewScrollDimensions) {
     this.scrollDimensions = {
       width: update.width ?? this.element.clientWidth,
@@ -225,11 +210,8 @@ export class AbstractScrollableElement {
       this.scrollDimensions.width,
       this.scrollDimensions.scrollWidth,
     );
-    this.verticalScrollbarState.setDimensions(
-      this.scrollDimensions.height,
-      this.scrollDimensions.scrollHeight,
-    );
     this.refreshDomState();
+    this.verticalScrollbar.renderNow();
     const event: ScrollEvent = {
       ...this.scrollPosition,
       ...this.scrollDimensions,
@@ -268,14 +250,13 @@ export class AbstractScrollableElement {
   }
 
   delegateVerticalScrollbarPointerDown(_browserEvent: PointerEvent) {
-    this.handleVerticalScrollbarPointerDown(_browserEvent);
+    this.verticalScrollbar.delegatePointerDown(_browserEvent);
   }
 
   dispose() {
     this.clearScrollbarHideTimeout();
     this.domDisposables.dispose();
     this.horizontalVisibilityController.dispose();
-    this.verticalVisibilityController.dispose();
     this.onScrollEmitter.dispose();
     this.onWillScrollEmitter.dispose();
   }
@@ -310,21 +291,6 @@ export class AbstractScrollableElement {
     this.scheduleScrollbarHide();
   };
 
-  private readonly handleVerticalScrollbarPointerDown = (event: PointerEvent) => {
-    if (event.button !== 0 || !this.verticalScrollbarState.isNeeded()) {
-      return;
-    }
-
-    event.preventDefault();
-    this.setScrollbarsVisible(true);
-    const sliderRect = this.verticalSlider.getBoundingClientRect();
-    const isSliderTarget = this.verticalSlider.contains(event.target as Node);
-    const offset = isSliderTarget
-      ? event.clientY - sliderRect.top
-      : this.verticalSlider.offsetHeight / 2;
-    this.startScrollbarDrag(event, 'vertical', offset);
-  };
-
   private readonly handleHorizontalScrollbarPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 || !this.horizontalScrollbarState.isNeeded()) {
       return;
@@ -337,7 +303,7 @@ export class AbstractScrollableElement {
     const offset = isSliderTarget
       ? event.clientX - sliderRect.left
       : this.horizontalSlider.offsetWidth / 2;
-    this.startScrollbarDrag(event, 'horizontal', offset);
+    this.startHorizontalScrollbarDrag(event, offset);
   };
 
   private applyOptions() {
@@ -354,6 +320,10 @@ export class AbstractScrollableElement {
       `${this.options.verticalScrollbarSize}px`,
     );
     this.domNode.style.setProperty(
+      '--comet-vertical-scrollbar-size',
+      `${this.options.verticalScrollbarSize}px`,
+    );
+    this.domNode.style.setProperty(
       '--comet-scrollbar-size-horizontal',
       `${this.options.horizontalScrollbarSize}px`,
     );
@@ -367,14 +337,8 @@ export class AbstractScrollableElement {
         ? 0
         : this.options.verticalScrollbarSize,
     );
-    this.verticalScrollbarState.setScrollbarSize(
-      this.options.vertical === ScrollbarVisibility.Hidden
-        ? 0
-        : this.options.verticalScrollbarSize,
-    );
-    this.verticalScrollbarState.setOppositeScrollbarSize(0);
     this.horizontalVisibilityController.setVisibility(this.options.horizontal);
-    this.verticalVisibilityController.setVisibility(this.options.vertical);
+    this.verticalScrollbar.updateOptions(this.createVerticalScrollbarOptions());
     this.syncScrollbarVisibility();
   }
 
@@ -394,19 +358,14 @@ export class AbstractScrollableElement {
       this.scrollDimensions.scrollWidth,
     );
     this.horizontalScrollbarState.setScrollLeft(this.scrollPosition.scrollLeft);
-    this.verticalScrollbarState.setDimensions(
-      this.scrollDimensions.height,
-      this.scrollDimensions.scrollHeight,
-    );
-    this.verticalScrollbarState.setScrollTop(this.scrollPosition.scrollTop);
     this.refreshDomState();
+    this.verticalScrollbar.renderNow();
   }
 
   private refreshDomState() {
-    const needsVertical = this.verticalScrollbarState.isNeeded();
+    const needsVertical = this.needsVerticalScrollbar();
     const needsHorizontal = this.horizontalScrollbarState.isNeeded();
     this.horizontalVisibilityController.setIsNeeded(needsHorizontal);
-    this.verticalVisibilityController.setIsNeeded(needsVertical);
 
     this.domNode.classList.toggle(
       'comet-is-scrollbar-needed',
@@ -420,11 +379,47 @@ export class AbstractScrollableElement {
     this.syncScrollbarVisibility();
   }
 
+  private needsVerticalScrollbar() {
+    return (
+      this.options.vertical !== ScrollbarVisibility.Hidden
+      && this.element.clientHeight > 0
+      && this.element.scrollHeight > this.element.clientHeight
+    );
+  }
+
   private createScrollbarElement(orientation: 'horizontal' | 'vertical') {
     const scrollbar = document.createElement('div');
     scrollbar.className = `comet-overlay-scrollbar comet-overlay-scrollbar-${orientation}`;
     scrollbar.setAttribute('aria-hidden', 'true');
     return scrollbar;
+  }
+
+  private createVerticalScrollbarTrack() {
+    const track = document.createElement('div');
+    track.className = 'comet-vertical-scrollbar-track';
+    track.setAttribute('aria-hidden', 'true');
+    return track;
+  }
+
+  private createVerticalScrollbarThumb() {
+    const thumb = document.createElement('div');
+    thumb.className = 'comet-vertical-scrollbar-thumb';
+    return thumb;
+  }
+
+  private createVerticalScrollbarOptions() {
+    return {
+      vertical: this.options.vertical,
+      verticalScrollbarSize: this.options.verticalScrollbarSize,
+      handleMouseWheel: this.options.handleMouseWheel,
+      mouseWheelSmoothScroll: this.options.mouseWheelSmoothScroll,
+      flipAxes: this.options.flipAxes,
+      consumeMouseWheelIfScrollbarIsNeeded: this.options.consumeMouseWheelIfScrollbarIsNeeded,
+      alwaysConsumeMouseWheel: this.options.alwaysConsumeMouseWheel,
+      mouseWheelScrollSensitivity: this.options.mouseWheelScrollSensitivity,
+      fastScrollSensitivity: this.options.fastScrollSensitivity,
+      scrollPredominantAxis: this.options.scrollPredominantAxis,
+    };
   }
 
   private createSliderElement() {
@@ -434,33 +429,7 @@ export class AbstractScrollableElement {
   }
 
   private renderScrollbars() {
-    this.renderVerticalScrollbar();
     this.renderHorizontalScrollbar();
-  }
-
-  private renderVerticalScrollbar() {
-    const trackSize = this.element.clientHeight;
-    const scrollSize = this.element.scrollHeight;
-    const scrollbarSize = this.options.vertical === ScrollbarVisibility.Hidden
-      ? 0
-      : this.options.verticalScrollbarSize;
-    this.verticalScrollbar.style.width = `${scrollbarSize}px`;
-
-    if (!trackSize || scrollSize <= trackSize || !scrollbarSize) {
-      this.verticalSlider.style.height = '0';
-      this.verticalSlider.style.transform = 'translateY(0)';
-      return;
-    }
-
-    const sliderSize = Math.max(
-      AbstractScrollableElement.MIN_SLIDER_SIZE,
-      Math.floor((trackSize * trackSize) / scrollSize),
-    );
-    const scrollRange = Math.max(1, scrollSize - trackSize);
-    const sliderRange = Math.max(0, trackSize - sliderSize);
-    const sliderTop = Math.round((this.element.scrollTop / scrollRange) * sliderRange);
-    this.verticalSlider.style.height = `${sliderSize}px`;
-    this.verticalSlider.style.transform = `translateY(${sliderTop}px)`;
   }
 
   private renderHorizontalScrollbar() {
@@ -488,47 +457,26 @@ export class AbstractScrollableElement {
     this.horizontalSlider.style.transform = `translateX(${sliderLeft}px)`;
   }
 
-  private startScrollbarDrag(
+  private startHorizontalScrollbarDrag(
     event: PointerEvent,
-    orientation: 'horizontal' | 'vertical',
     pointerOffsetWithinSlider: number,
   ) {
-    const scrollbar = orientation === 'vertical'
-      ? this.verticalScrollbar
-      : this.horizontalScrollbar;
-    const slider = orientation === 'vertical'
-      ? this.verticalSlider
-      : this.horizontalSlider;
-    const trackSize = orientation === 'vertical'
-      ? scrollbar.clientHeight
-      : scrollbar.clientWidth;
-    const sliderSize = orientation === 'vertical'
-      ? slider.offsetHeight
-      : slider.offsetWidth;
-    const scrollSize = orientation === 'vertical'
-      ? this.element.scrollHeight
-      : this.element.scrollWidth;
-    const visibleSize = orientation === 'vertical'
-      ? this.element.clientHeight
-      : this.element.clientWidth;
-    const scrollbarRect = scrollbar.getBoundingClientRect();
+    const trackSize = this.horizontalScrollbar.clientWidth;
+    const sliderSize = this.horizontalSlider.offsetWidth;
+    const scrollSize = this.element.scrollWidth;
+    const visibleSize = this.element.clientWidth;
+    const scrollbarRect = this.horizontalScrollbar.getBoundingClientRect();
     const scrollRange = Math.max(0, scrollSize - visibleSize);
     const sliderRange = Math.max(1, trackSize - sliderSize);
 
     const updateFromPointer = (pointerEvent: PointerEvent) => {
-      const pointerPosition = orientation === 'vertical'
-        ? pointerEvent.clientY - scrollbarRect.top
-        : pointerEvent.clientX - scrollbarRect.left;
+      const pointerPosition = pointerEvent.clientX - scrollbarRect.left;
       const sliderPosition = Math.min(
         sliderRange,
         Math.max(0, pointerPosition - pointerOffsetWithinSlider),
       );
       const scrollPosition = (sliderPosition / sliderRange) * scrollRange;
-      if (orientation === 'vertical') {
-        this.element.scrollTop = scrollPosition;
-      } else {
-        this.element.scrollLeft = scrollPosition;
-      }
+      this.element.scrollLeft = scrollPosition;
       this.captureState();
     };
 
@@ -556,7 +504,6 @@ export class AbstractScrollableElement {
 
   private setScrollbarsVisible(visible: boolean) {
     this.horizontalVisibilityController.setShouldBeVisible(visible);
-    this.verticalVisibilityController.setShouldBeVisible(visible);
   }
 
   private scheduleScrollbarHide() {
@@ -586,12 +533,6 @@ export class AbstractScrollableElement {
       this.horizontalVisibilityController.setShouldBeVisible(true);
     } else if (!this.isHovered && !this.scrollbarHideTimeout.value) {
       this.horizontalVisibilityController.setShouldBeVisible(false);
-    }
-
-    if (this.options.vertical === ScrollbarVisibility.Visible) {
-      this.verticalVisibilityController.setShouldBeVisible(true);
-    } else if (!this.isHovered && !this.scrollbarHideTimeout.value) {
-      this.verticalVisibilityController.setShouldBeVisible(false);
     }
   }
 }
