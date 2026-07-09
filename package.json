@@ -40,7 +40,7 @@
     "preview:web": "vite preview --config vite.web.config.ts"
   },
   "dependencies": {
-    "@chogng/lxicons": "^1.0.17",
+    "@chogng/lxicons": "^1.0.21",
     "cheerio": "^1.1.2",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-dropcursor": "^1.8.2",
