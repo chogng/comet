@@ -3,7 +3,6 @@ import type { EditorPartLabels, EditorPartProps } from 'cs/workbench/browser/par
 import type { EditorTitlebarActionsViewProps } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import type { SidebarFooterActionsProps, SidebarFooterLayoutMode } from 'cs/workbench/browser/parts/sidebar/sidebarFooterActions';
 import type { TitlebarLeadingActionsProps } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
 export type SidebarFooterTitlebarLabels = Pick<
   SidebarFooterActionsProps,
@@ -66,7 +65,6 @@ export function createEditorTitlebarActionsProps(params: {
   editorPartProps: EditorPartProps;
   isAgentSidebarVisible: boolean;
   showAgentSidebarToggle: boolean;
-  onOpenEditor: EditorOpenHandler;
   onToggleEditorCollapse: () => void;
   onToggleAgentSidebar: () => void;
 }): EditorTitlebarActionsViewProps {
@@ -75,7 +73,6 @@ export function createEditorTitlebarActionsProps(params: {
     editorPartProps,
     isAgentSidebarVisible,
     showAgentSidebarToggle,
-    onOpenEditor,
     onToggleEditorCollapse,
     onToggleAgentSidebar,
   } = params;
@@ -89,14 +86,9 @@ export function createEditorTitlebarActionsProps(params: {
       isAgentSidebarVisible,
     ),
     labels: {
-      headerAddAction: editorPartProps.labels.headerAddAction,
-      createDraft: editorPartProps.labels.createDraft,
-      createBrowser: editorPartProps.labels.createBrowser,
-      createFile: editorPartProps.labels.createFile,
       expandEditor: editorPartProps.labels.expandEditor,
       collapseEditor: editorPartProps.labels.collapseEditor,
     },
-    onOpenEditor,
     onToggleEditorCollapse,
     onToggleAgentSidebar,
   };

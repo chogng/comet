@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let HoverService: typeof import('cs/platform/hover/browser/hoverService').HoverService;
+
+const HOVER_EXIT_ANIMATION_WAIT_MS = 120;
+
+async function waitForHoverToUnmount() {
+	await delay(HOVER_EXIT_ANIMATION_WAIT_MS);
+	assert.equal(document.querySelector('.comet-hover-card'), null);
+}
 
 before(async () => {
 	const domEnvironment = installDomTestEnvironment();
@@ -16,6 +23,11 @@ before(async () => {
 after(() => {
 	cleanupDomEnvironment?.();
 	cleanupDomEnvironment = null;
+});
+
+afterEach(async () => {
+	await delay(HOVER_EXIT_ANIMATION_WAIT_MS);
+	document.body.replaceChildren();
 });
 
 test('hover service can show and hide instant hovers', async () => {
@@ -36,7 +48,10 @@ test('hover service can show and hide instant hovers', async () => {
 		assert.equal(overlayContent.textContent, 'Instant service hover');
 
 		hoverService.hideHover();
-		assert.equal(document.querySelector('.comet-hover-card'), null);
+		const closingOverlay = document.querySelector('.comet-hover-card');
+		assert(closingOverlay instanceof HTMLElement);
+		assert.equal(closingOverlay.classList.contains('comet-is-closing'), true);
+		await waitForHoverToUnmount();
 	} finally {
 		hover?.dispose();
 	}
@@ -56,7 +71,7 @@ test('hover service cancels pending delayed hovers when the pointer leaves', asy
 		target.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
 		await delay(80);
 
-		assert.equal(document.querySelector('.comet-hover-card'), null);
+		await waitForHoverToUnmount();
 	} finally {
 		binding.dispose();
 		hoverService.hideHover();

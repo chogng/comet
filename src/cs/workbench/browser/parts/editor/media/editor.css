@@ -206,13 +206,71 @@
   height: 100%;
 }
 
+.comet-editor-empty-workspace {
+  align-items: center;
+  justify-items: center;
+  padding: 24px;
+  background: var(--vscode-editor-panelBackground, #f8f8f8);
+}
+
+.comet-editor-empty-workspace-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(112px, 148px));
+  gap: 14px;
+}
+
+.comet-editor-empty-workspace-action {
+  min-width: 0;
+  aspect-ratio: 1;
+  border: 1px solid var(--comet-editor-emptyActionBorder, rgba(26, 37, 48, 0.08));
+  border-radius: 8px;
+  background: var(--comet-editor-emptyActionBackground, rgba(255, 255, 255, 0.64));
+  color: var(--comet-editor-emptyActionForeground, rgba(26, 37, 48, 0.72));
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 18px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.comet-editor-empty-workspace-action:hover {
+  background: var(--comet-editor-emptyActionHoverBackground, rgba(255, 255, 255, 0.92));
+  border-color: var(--comet-editor-emptyActionHoverBorder, rgba(26, 37, 48, 0.14));
+  color: var(--comet-editor-emptyActionHoverForeground, #1a2530);
+}
+
+.comet-editor-empty-workspace-action:active {
+  background: var(--comet-editor-emptyActionActiveBackground, rgba(244, 247, 250, 0.96));
+}
+
+.comet-editor-empty-workspace-action-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  opacity: 0.72;
+}
+
+.comet-editor-empty-workspace-action-label {
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+@media (max-width: 560px) {
+  .comet-editor-empty-workspace-actions {
+    grid-template-columns: repeat(2, minmax(104px, 136px));
+  }
+}
+
 .comet-editor-placeholder-scrollable {
   min-height: 0;
   height: 100%;
 }
 
-.comet-editor-placeholder-scroll-content,
-.comet-editor-empty-workspace .comet-editor-placeholder-scroll-content {
+.comet-editor-placeholder-scroll-content {
   display: grid;
   align-content: center;
   justify-items: center;
@@ -223,22 +281,18 @@
 }
 
 .comet-editor-placeholder-title,
-.comet-editor-placeholder-body,
-.comet-editor-empty-workspace-title,
-.comet-editor-empty-workspace-body {
+.comet-editor-placeholder-body {
   margin: 0;
 }
 
-.comet-editor-placeholder-title,
-.comet-editor-empty-workspace-title {
+.comet-editor-placeholder-title {
   color: var(--comet-editor-placeholderTitleForeground, #1d3145);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
 }
 
-.comet-editor-placeholder-body,
-.comet-editor-empty-workspace-body {
+.comet-editor-placeholder-body {
   max-width: 420px;
   color: var(--comet-editor-placeholderBodyForeground, #597086);
   font-size: 12px;

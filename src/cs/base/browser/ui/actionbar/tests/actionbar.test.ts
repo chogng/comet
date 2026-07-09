@@ -115,7 +115,7 @@ test('comet-actionbar keyboard navigation skips disabled items', () => {
   }
 });
 
-test('comet-actionbar actions use shared hover content instead of native title tooltips', async () => {
+test('comet-actionbar actions use shared hover content instead of native title tooltips', () => {
   const actionBarView = createActionBarView({
     items: [
       {
@@ -140,7 +140,6 @@ test('comet-actionbar actions use shared hover content instead of native title t
     assert.equal(button.getAttribute('title'), null);
 
     button.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    await delay(0);
 
     const overlayContent = document.querySelector('.comet-hover-content');
     if (!(overlayContent instanceof HTMLElement)) {

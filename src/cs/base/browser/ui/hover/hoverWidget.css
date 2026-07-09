@@ -19,15 +19,30 @@
 	box-sizing: border-box;
 	background: #fdfefe;
 	border: 1px solid #d1d1d1;
-	border-radius: 8px;
+	border-radius: 10px;
 	color: #24323f;
-	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
 	font-size: 13px;
-	line-height: 19px;
+	line-height: 17px;
 	user-select: text;
 	-webkit-user-select: text;
 	pointer-events: auto;
-	animation: comet-hover-fade-in 100ms linear;
+}
+
+.comet-hover-overlay.comet-is-above .comet-hover-card {
+	transform-origin: center bottom;
+}
+
+.comet-hover-overlay.comet-is-below .comet-hover-card {
+	transform-origin: center top;
+}
+
+.comet-hover-card.comet-is-opening {
+	animation: comet-hover-expand-in 110ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.comet-hover-card.comet-is-closing {
+	animation: comet-hover-collapse-out 90ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .comet-hover-row:not(:first-child):not(:empty) {
@@ -37,9 +52,9 @@
 .comet-hover-contents {
 	display: flex;
 	flex-direction: column;
-	align-items: center;
-	padding: 4px 8px;
-	text-align: center;
+	align-items: flex-start;
+	padding: 7px 10px;
+	text-align: left;
 }
 
 .comet-hover-row.comet-hover-markdown > .comet-hover-contents {
@@ -57,7 +72,7 @@
 	color: inherit;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-	text-align: center;
+	text-align: left;
 }
 
 .comet-hover-subtitle {
@@ -71,7 +86,7 @@
 
 .comet-hover-row.comet-hover-status-bar {
 	display: flex;
-	justify-content: center;
+	justify-content: flex-start;
 	font-size: 12px;
 	line-height: 22px;
 	background: #f3f5f7;
@@ -80,7 +95,7 @@
 .comet-hover-actions {
 	display: flex;
 	flex-wrap: wrap;
-	justify-content: center;
+	justify-content: flex-start;
 	padding: 0 8px;
 }
 
@@ -135,48 +150,33 @@
 	outline: none;
 }
 
-.comet-hover-pointer {
-	position: absolute;
-	z-index: 3001;
-	pointer-events: none;
-}
-
-.comet-hover-overlay:not(.comet-has-pointer) .comet-hover-pointer {
-	display: none;
-}
-
-.comet-hover-pointer::after {
-	content: '';
-	position: absolute;
-	width: 5px;
-	height: 5px;
-	background-color: #fdfefe;
-	border-right: 1px solid #c3ccd6;
-	border-bottom: 1px solid #c3ccd6;
-}
-
-.comet-hover-pointer.comet-is-top {
-	top: -3px;
-}
-
-.comet-hover-pointer.comet-is-bottom {
-	bottom: 3px;
-}
-
-.comet-hover-pointer.comet-is-top::after {
-	transform: rotate(225deg);
-}
-
-.comet-hover-pointer.comet-is-bottom::after {
-	transform: rotate(45deg);
-}
-
-@keyframes comet-hover-fade-in {
+@keyframes comet-hover-expand-in {
 	from {
 		opacity: 0;
+		transform: translateY(2px) scale(0.96);
 	}
 
 	to {
 		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes comet-hover-collapse-out {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+
+	to {
+		opacity: 0;
+		transform: translateY(2px) scale(0.96);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.comet-hover-card.comet-is-opening,
+	.comet-hover-card.comet-is-closing {
+		animation: none;
 	}
 }

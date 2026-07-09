@@ -10,12 +10,19 @@
 
 .comet-settings-overlay {
   --settings-page-content-background: var(--comet-settings-contentBackground, #fff);
-  position: absolute;
+  --settings-page-separator: var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+  --settings-page-topbar-height: 36px;
+  position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 2540;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
-  background: var(--settings-page-content-background);
+  padding: 48px;
+  background: rgba(0, 0, 0, 0.5);
+  overflow: hidden;
 }
 
 .comet-settings-overlay[hidden] {
@@ -23,8 +30,15 @@
 }
 
 .comet-settings-overlay > .comet-settings-body {
-  width: 100%;
-  height: 100%;
+  width: min(960px, 100%);
+  height: min(860px, 100%);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, transparent));
+  border-radius: 8px;
+  background: var(--settings-page-content-background);
+  box-shadow: var(--vscode-shadow-xl);
 }
 
 .comet-panel.comet-settings-card {
@@ -60,39 +74,80 @@
   height: 100%;
   min-height: 0;
   overflow: auto;
-  padding: 0 8px;
+  padding: var(--settings-page-topbar-height) 8px 0;
+  border-inline-end: 1px solid var(--settings-page-separator);
   background: var(--comet-settings-navigationBackground, transparent);
 }
 
-.comet-app-window.comet-has-leading-window-controls .comet-settings-navigation {
-  padding-block-start: var(--workbench-titlebar-height, 40px);
-}
-
-.comet-settings-navigation-nav {
+.comet-settings-toc {
   width: 100%;
   min-width: 0;
 }
 
-.comet-settings-navigation-list {
+.comet-settings-toc-list {
   list-style: none;
-  margin: 0;
+  margin: 12px 0 0;
   padding: 0;
   display: grid;
   gap: 2px;
 }
 
-.comet-settings-navigation-item-entry {
+.comet-settings-navigation-search {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--comet-settings-navigationItemActiveBackground, #ececec);
+  color: var(--comet-settings-navigationItemForeground, #304357);
+}
+
+.comet-settings-navigation-search:focus-within {
+  border-color: var(--vscode-focusBorder, rgba(0, 122, 204, 0.45));
+}
+
+.comet-settings-navigation-search-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.comet-settings-navigation-search-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  margin: 0 0 0 8px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.comet-settings-navigation-search-input::placeholder {
+  color: var(--vscode-input-placeholderForeground, rgba(48, 67, 87, 0.62));
+}
+
+.comet-settings-toc-entry {
   margin: 0;
   padding: 0;
 }
 
-.comet-settings-navigation-spacer {
+.comet-settings-toc-spacer {
   height: 12px;
   margin: 0;
   padding: 0;
   pointer-events: none;
 }
-.comet-settings-navigation-item {
+
+.comet-settings-toc-item {
   display: flex;
   align-items: center;
   width: 100%;
@@ -109,7 +164,7 @@
   cursor: pointer;
 }
 
-.comet-settings-navigation-label {
+.comet-settings-toc-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -117,18 +172,18 @@
   width: 100%;
 }
 
-.comet-settings-navigation-icon {
+.comet-settings-toc-icon {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
   color: currentColor;
 }
 
-.comet-settings-navigation-item:hover {
+.comet-settings-toc-item:hover {
   background: var(--comet-settings-navigationItemHoverBackground, #ececec);
 }
 
-.comet-settings-navigation-item.active {
+.comet-settings-toc-item.active {
   background: var(--comet-settings-navigationItemActiveBackground, #ececec);
   color: var(--comet-settings-navigationItemActiveForeground, #1f1f1f);
   box-shadow: none;
@@ -146,7 +201,7 @@
   gap: 12px;
   align-content: start;
   min-height: 100%;
-  padding: 24px 130px;
+  padding: 24px 56px;
   box-sizing: border-box;
 }
 
@@ -181,6 +236,10 @@
   padding: 6px 0 0 6px;
 }
 
+.comet-settings-hint.comet-settings-no-results {
+  margin-left: 8px;
+}
+
 .comet-settings-section-title {
   font-size: 15px;
   font-weight: 700;
@@ -198,24 +257,29 @@
 }
 
 .comet-settings-page-topbar {
-  height: 36px;
-  min-height: 36px;
+  height: var(--settings-page-topbar-height);
+  min-height: var(--settings-page-topbar-height);
   display: flex;
   align-items: center;
   background: var(--settings-page-content-background);
-  -webkit-app-region: drag;
-}
-
-.comet-settings-page-topbar > * {
-  -webkit-app-region: no-drag;
 }
 
 @media (max-width: 980px) {
+  .comet-settings-overlay {
+    padding: 16px;
+  }
+
+  .comet-settings-overlay > .comet-settings-body {
+    width: 100%;
+    height: 100%;
+  }
+
   .comet-settings-body {
     grid-template-columns: 1fr;
   }
 
   .comet-settings-navigation {
-    border-bottom: 1px solid var(--comet-settings-navigationBorder, #e6edf5);
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--settings-page-separator);
   }
 }

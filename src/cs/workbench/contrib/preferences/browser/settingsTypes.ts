@@ -27,8 +27,8 @@ export type SettingsDropdownOption = {
 // Keep preferences types separate from the editor implementation so field views
 // can depend on stable contracts without importing the editor host module.
 export type SettingsPartLabels = {
-  settingsTitle: string; settingsLoading: string; settingsLanguage: string; languageChinese: string; languageEnglish: string; settingsLanguageHint: string;
-  settingsNavigationBack: string; settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationTextEditor: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
+  settingsTitle: string; settingsLoading: string; settingsSearchPlaceholder: string; settingsSearchNoResults: string; settingsLanguage: string; languageChinese: string; languageEnglish: string; settingsLanguageHint: string;
+  settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationTextEditor: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
   settingsTextEditorDefaultBodyStyle: string; settingsTextEditorFontFamily: string; settingsTextEditorFontSize: string; settingsTextEditorLineHeight: string; settingsTextEditorParagraphSpacingBefore: string; settingsTextEditorParagraphSpacingAfter: string; settingsTextEditorColor: string;
   settingsBatchOptions: string; batchCount: string; startDate: string; endDate: string; clearDate: string; today: string;
   settingsSupportedSources: string; settingsSupportedSourcesHint: string; settingsSupportedSourceUrl: string; settingsSupportedSourceJournalTitle: string; settingsSupportedSourcesShow: string; settingsSupportedSourcesHide: string;
@@ -58,7 +58,6 @@ export type SettingsPartProps = {
   editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   editorDraftFontFamilyOptions: readonly SettingsDropdownOption[];
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
-  onNavigateBack: () => void;
   batchLimit: number; onBatchLimitChange: (value: string) => void;
   supportedSources: BatchSource[]; journalSourceOverrides: JournalSourceOverride[]; showSupportedSources: boolean; onToggleSupportedSources: () => void; onJournalSourceTitleChange: (url: string, journalTitle: string) => void;
   fetchStartDate: string; onFetchStartDateChange: (value: string) => void; fetchEndDate: string; onFetchEndDateChange: (value: string) => void; systemNotificationsEnabled: boolean; onSystemNotificationsEnabledChange: (checked: boolean) => void; warningNotificationsEnabled: boolean; onWarningNotificationsEnabledChange: (checked: boolean) => void; menuBarIconEnabled: boolean; onMenuBarIconEnabledChange: (checked: boolean) => void; completionNotificationsEnabled: boolean; onCompletionNotificationsEnabledChange: (checked: boolean) => void; useMica: boolean; onUseMicaChange: (checked: boolean) => void; statusbarVisible: boolean; onStatusbarVisibleChange: (checked: boolean) => void; startupLayout: AppStartupLayout; onStartupLayoutChange: (value: AppStartupLayout) => void; browserTabKeepAliveLimit: number; onBrowserTabKeepAliveLimitChange: (value: string) => void; theme: AppTheme; onThemeChange: (value: AppTheme) => void; knowledgeBaseEnabled: boolean;
@@ -93,7 +92,6 @@ export type SettingsPartState = {
 };
 
 export type SettingsPartActions = {
-  onNavigateBack: () => void;
   onBatchLimitChange: (value: string) => void;
   onJournalSourceTitleChange: (url: string, journalTitle: string) => void;
   onFetchStartDateChange: (value: string) => void; onFetchEndDateChange: (value: string) => void; onSystemNotificationsEnabledChange: (checked: boolean) => void; onWarningNotificationsEnabledChange: (checked: boolean) => void; onMenuBarIconEnabledChange: (checked: boolean) => void; onCompletionNotificationsEnabledChange: (checked: boolean) => void; onUseMicaChange: (checked: boolean) => void; onStatusbarVisibleChange: (checked: boolean) => void; onStartupLayoutChange: (value: AppStartupLayout) => void; onBrowserTabKeepAliveLimitChange: (value: string) => void; onThemeChange: (value: AppTheme) => void; onKnowledgeBaseEnabledChange: (checked: boolean) => void; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void;

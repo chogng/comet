@@ -25,7 +25,6 @@ export type HoverOptions = {
   delay?: number;
   hideOnHover?: boolean;
   position?: 'auto' | 'above' | 'below';
-  showPointer?: boolean;
   compact?: boolean;
   maxWidth?: number;
   className?: string;
@@ -51,8 +50,9 @@ const DEFAULT_ACTION_HOVER_DELAY_MS = 350;
 const PLAIN_HOVER_HIDE_DELAY_MS = 120;
 const ACTION_HOVER_HIDE_DELAY_MS = 200;
 const HOVER_REENTRY_COOLDOWN_MS = 300;
-const POINTER_OFFSET_PX = 10;
-const POINTER_SAFE_MARGIN_PX = 18;
+const HOVER_ABOVE_OFFSET_PX = 4;
+const HOVER_BELOW_OFFSET_PX = 10;
+const HOVER_EXIT_ANIMATION_MS = 90;
 const VIEWPORT_MARGIN_PX = 8;
 
 type HoverRect = {
@@ -253,7 +253,6 @@ export function normalizeHoverInput(input: HoverInput): HoverOptions | null {
       delay: DEFAULT_PLAIN_HOVER_DELAY_MS,
       hideOnHover: true,
       position: 'auto',
-      showPointer: true,
       compact: false,
       maxWidth: 320,
     };
@@ -276,7 +275,6 @@ export function normalizeHoverInput(input: HoverInput): HoverOptions | null {
         ? false
         : input.hideOnHover ?? typeof input.content === 'string',
     position: input.position ?? 'auto',
-    showPointer: input.showPointer ?? true,
     compact: input.compact ?? false,
     maxWidth: input.maxWidth ?? 320,
   };
@@ -334,7 +332,6 @@ class CompositeMouseTracker extends Widget {
 
 class HoverWidget {
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-hover-overlay');
-  private readonly pointer = $<HTMLElementTagNameMap['div']>('div.comet-hover-pointer');
   private readonly card = $<HTMLElementTagNameMap['div']>('div.comet-hover-card');
   private readonly domDisposables = new DisposableStore();
   private readonly mountDisposables = new DisposableStore();
@@ -343,9 +340,10 @@ class HoverWidget {
   private target: HTMLElement | null = null;
   private pointerInside = false;
   private mounted = false;
+  private closeAnimationHandle: number | undefined;
 
   constructor() {
-    this.element.append(this.pointer, this.card);
+    this.element.append(this.card);
     this.domDisposables.add(
       addDisposableListener(this.card, 'mouseenter', this.handleMouseEnter),
     );
@@ -382,21 +380,49 @@ class HoverWidget {
     this.owner = owner;
     this.target = target;
     this.pointerInside = false;
+    this.clearCloseAnimation();
+    this.card.classList.remove('comet-is-closing');
     this.render(options);
     this.mount();
     this.layout(anchor, options);
+    this.card.classList.add('comet-is-opening');
   }
 
   hide() {
+    if (!this.mounted) {
+      return;
+    }
+
     this.owner = null;
     this.target = null;
     this.pointerInside = false;
     this.renderDisposables.clear();
-    this.unmount();
+    this.card.classList.remove('comet-is-opening');
+    if (this.card.classList.contains('comet-is-closing')) {
+      return;
+    }
+
+    this.card.classList.add('comet-is-closing');
+    this.closeAnimationHandle = window.setTimeout(() => {
+      this.closeAnimationHandle = undefined;
+      this.unmount();
+    }, HOVER_EXIT_ANIMATION_MS);
+  }
+
+  private clearCloseAnimation() {
+    if (this.closeAnimationHandle === undefined) {
+      return;
+    }
+
+    window.clearTimeout(this.closeAnimationHandle);
+    this.closeAnimationHandle = undefined;
   }
 
   private mount() {
     if (this.mounted) {
+      if (!this.element.isConnected) {
+        document.body.append(this.element);
+      }
       return;
     }
 
@@ -422,8 +448,10 @@ class HoverWidget {
     }
 
     this.mounted = false;
+    this.clearCloseAnimation();
     this.element.remove();
     this.mountDisposables.clear();
+    this.card.classList.remove('comet-is-opening', 'comet-is-closing');
   }
 
   private render(options: HoverOptions) {
@@ -522,61 +550,44 @@ const button = $<HTMLElementTagNameMap['button']>('button.comet-hover-action') a
     const viewportHeight =
       window.innerHeight || document.documentElement.clientHeight || 0;
 
-    this.element.classList.toggle('comet-has-pointer', options.showPointer !== false);
     this.element.classList.remove('comet-is-above', 'comet-is-below');
-    this.pointer.classList.remove('comet-is-top', 'comet-is-bottom');
     this.element.style.left = `${VIEWPORT_MARGIN_PX}px`;
     this.element.style.top = `${VIEWPORT_MARGIN_PX}px`;
 
     const hoverRect = this.element.getBoundingClientRect();
     const canFitBelow =
-      targetRect.bottom + hoverRect.height + POINTER_OFFSET_PX + VIEWPORT_MARGIN_PX <=
+      targetRect.bottom + hoverRect.height + HOVER_BELOW_OFFSET_PX + VIEWPORT_MARGIN_PX <=
       viewportHeight;
     const canFitAbove =
-      targetRect.top - hoverRect.height - POINTER_OFFSET_PX - VIEWPORT_MARGIN_PX >= 0;
-    const placement =
-      options.position === 'above'
-        ? 'above'
-        : options.position === 'below'
-          ? 'below'
-          : canFitBelow || !canFitAbove
-            ? 'below'
-            : 'above';
+      targetRect.top - hoverRect.height - HOVER_ABOVE_OFFSET_PX - VIEWPORT_MARGIN_PX >= 0;
+    let placement: 'above' | 'below';
+    if (options.position === 'above' || options.position === 'below') {
+      placement = options.position;
+    } else {
+      placement = canFitAbove || !canFitBelow ? 'above' : 'below';
+    }
 
     this.element.classList.add(placement === 'above' ? 'comet-is-above' : 'comet-is-below');
-    this.pointer.classList.add(placement === 'above' ? 'comet-is-bottom' : 'comet-is-top');
-
     const nextTop =
       placement === 'above'
-        ? targetRect.top - hoverRect.height - POINTER_OFFSET_PX
-        : targetRect.bottom + POINTER_OFFSET_PX;
+        ? targetRect.top - hoverRect.height - HOVER_ABOVE_OFFSET_PX
+        : targetRect.bottom + HOVER_BELOW_OFFSET_PX;
     const top = Math.max(
       VIEWPORT_MARGIN_PX,
       Math.min(nextTop, viewportHeight - hoverRect.height - VIEWPORT_MARGIN_PX),
     );
-    const nextLeft = targetRect.left + targetRect.width / 2 - hoverRect.width / 2;
+    const targetCenterX = targetRect.left + targetRect.width / 2;
+    const nextLeft = targetCenterX - hoverRect.width / 2;
     const left = Math.max(
       VIEWPORT_MARGIN_PX,
       Math.min(nextLeft, viewportWidth - hoverRect.width - VIEWPORT_MARGIN_PX),
     );
     const isRightAligned =
       nextLeft + hoverRect.width >= viewportWidth - VIEWPORT_MARGIN_PX;
-    const pointerLeft = Math.max(
-      POINTER_SAFE_MARGIN_PX,
-      Math.min(
-        targetRect.left + targetRect.width / 2 - left,
-        hoverRect.width - POINTER_SAFE_MARGIN_PX,
-      ),
-    );
 
     this.element.style.left = `${Math.round(left)}px`;
     this.element.style.top = `${Math.round(top)}px`;
-    this.pointer.style.left = `${Math.round(pointerLeft - 3)}px`;
     this.card.classList.toggle('comet-is-right-aligned', isRightAligned);
-    this.element.style.setProperty(
-      '--comet-hover-pointer-left',
-      `${Math.round(pointerLeft)}px`,
-    );
   }
 
   private readonly handleMouseEnter = () => {

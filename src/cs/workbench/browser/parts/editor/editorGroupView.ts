@@ -4,6 +4,10 @@ import {
   getEditorTabInputResourceKey,
   isEditorDraftTabInput,
 } from 'cs/workbench/browser/parts/editor/editorInput';
+import {
+  createDirtyDraftTabIdSet,
+  isReusableEmptyDraftTab,
+} from 'cs/workbench/browser/parts/editor/editorTabPolicy';
 import type {
   EditorWorkspaceTab,
   WritingEditorDocument,
@@ -486,14 +490,9 @@ export class EditorGroupView {
     showAgentSidebarToggle: false,
     agentSidebarToggleLabel: '',
     labels: {
-      headerAddAction: '',
-      createDraft: '',
-      createBrowser: '',
-      createFile: '',
       expandEditor: '',
       collapseEditor: '',
     },
-    onOpenEditor: () => {},
     onToggleEditorCollapse: () => {},
     onToggleAgentSidebar: () => {},
   });
@@ -671,22 +670,8 @@ export class EditorGroupView {
       showAgentSidebarToggle: Boolean(this.props.showAgentSidebarToggle),
       agentSidebarToggleLabel: this.props.agentSidebarToggleLabel ?? '',
       labels: {
-        headerAddAction: this.props.labels.headerAddAction,
-        createDraft: this.props.labels.createDraft,
-        createBrowser: this.props.labels.createBrowser,
-        createFile: this.props.labels.createFile,
         expandEditor: this.props.labels.expandEditor,
         collapseEditor: this.props.labels.collapseEditor,
-      },
-      onOpenEditor: async (request) => {
-        await this.props.onOpenEditor(request);
-        if (
-          request.kind === 'browser' &&
-          request.disposition === 'reveal-or-open' &&
-          !request.options?.viewState?.url
-        ) {
-          this.requestBrowserPrimaryInputFocus();
-        }
       },
       onToggleEditorCollapse: this.props.onToggleEditorCollapse ?? (() => {}),
       onToggleAgentSidebar: this.props.onToggleAgentSidebar,
@@ -698,7 +683,8 @@ export class EditorGroupView {
       onPdfHighlightSelection: this.handlePdfHighlightSelection,
       onPdfNoteSelection: this.handlePdfNoteSelection,
     }));
-    this.syncToolbarMode(group.activeTab);
+    const shouldShowEmptyWorkspace = this.shouldShowEmptyWorkspace(group.activeTab);
+    this.syncToolbarMode(shouldShowEmptyWorkspace ? null : group.activeTab);
     this.syncTitlebarActions(
       this.props.showTitlebarActions ? this.titlebarActionsView.getElement() : null,
       this.props.titlebarAuxiliaryActionsElements ?? [],
@@ -707,7 +693,7 @@ export class EditorGroupView {
     this.contentElement.className = 'comet-editor-content';
     this.contentElement.removeAttribute('data-editor-pane');
 
-    if (!group.activeTab) {
+    if (!group.activeTab || shouldShowEmptyWorkspace) {
       this.releaseActivePane();
       this.syncToolbar(null);
       this.emptyWorkspaceView.setProps({
@@ -838,6 +824,16 @@ const panelHost = this.contentElement.querySelector('.browser-root');
     }
     return result;
   };
+
+  private shouldShowEmptyWorkspace(activeTab: EditorWorkspaceTab | null) {
+    return Boolean(
+      activeTab?.residency === 'resident' &&
+        isReusableEmptyDraftTab(
+          activeTab,
+          createDirtyDraftTabIdSet(this.props.dirtyDraftTabIds),
+        ),
+    );
+  }
 
   private flushBrowserPrimaryInputFocus(activeTab: EditorWorkspaceTab | null) {
     if (!this.shouldFocusBrowserPrimaryInput || !isEmptyBrowserTabInput(activeTab)) {

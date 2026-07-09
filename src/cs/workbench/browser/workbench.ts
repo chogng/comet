@@ -144,7 +144,6 @@ import {
 } from 'cs/workbench/services/sidebar/common/sidebarEntryService';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
-import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
 export type WorkbenchServicesSyncParams = {
   settingsController: SettingsController;
@@ -394,14 +393,9 @@ class WorkbenchHost {
     showAgentSidebarToggle: false,
     agentSidebarToggleLabel: '',
     labels: {
-      headerAddAction: '',
-      createDraft: '',
-      createBrowser: '',
-      createFile: '',
       expandEditor: '',
       collapseEditor: '',
     },
-    onOpenEditor: (_request: EditorOpenRequest) => {},
     onToggleEditorCollapse: () => {},
   });
   private readonly sidebarFooterActionsView = new SidebarFooterActionsView();
@@ -460,6 +454,11 @@ class WorkbenchHost {
     this.settingsOverlayElement.hidden = true;
     this.settingsOverlayBodyElement.className = 'comet-settings-body';
     this.settingsOverlayElement.append(this.settingsOverlayBodyElement);
+    this.settingsOverlayElement.addEventListener('click', event => {
+      if (event.target === this.settingsOverlayElement) {
+        this.closeSettingsOverlay();
+      }
+    });
     this.titlebarPart = createTitlebarPart(
       this.containerElement,
       this.shellElement,
@@ -1010,7 +1009,7 @@ class WorkbenchHost {
       leadingTitlebarActionsElement:
         this.titlebarPart.getLeadingActionsElement(),
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-      editorTitlebarActionsElement:
+      collapsedEditorTitlebarActionsElement:
         props.editorTitlebarActionsElement,
     };
 
@@ -1499,18 +1498,13 @@ class WorkbenchHost {
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     };
     this.editorTitlebarActionsView.setProps({
-      isEditorCollapsed,
+      isEditorCollapsed: true,
       isAgentSidebarVisible: false,
       showAgentSidebarToggle: false,
       labels: {
-        headerAddAction: contentAwareEditorPartProps.labels.headerAddAction,
-        createDraft: contentAwareEditorPartProps.labels.createDraft,
-        createBrowser: contentAwareEditorPartProps.labels.createBrowser,
-        createFile: contentAwareEditorPartProps.labels.createFile,
         expandEditor: contentAwareEditorPartProps.labels.expandEditor,
         collapseEditor: contentAwareEditorPartProps.labels.collapseEditor,
       },
-      onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     });
 
@@ -1878,7 +1872,6 @@ class WorkbenchHost {
         isLoadingTranslationModels,
       },
       actions: {
-        onNavigateBack: this.closeSettingsOverlay,
         onBatchLimitChange: (value) =>
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
         onJournalSourceTitleChange:

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
@@ -10,6 +10,13 @@ let createHoverController: typeof import('cs/base/browser/ui/hover/hoverWidget')
 let createButtonView: typeof import('cs/base/browser/ui/button/button').createButtonView;
 let InputBox: typeof import('cs/base/browser/ui/inputbox/inputBox').InputBox;
 let createDropdownView: typeof import('cs/base/browser/ui/dropdown/dropdown').createDropdownView;
+
+const HOVER_EXIT_ANIMATION_WAIT_MS = 120;
+
+async function waitForHoverToUnmount() {
+  await delay(HOVER_EXIT_ANIMATION_WAIT_MS);
+  assert.equal(document.querySelector('.comet-hover-card'), null);
+}
 
 function dispatchPointerDown(
   target: EventTarget,
@@ -51,6 +58,11 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
+afterEach(async () => {
+  await delay(HOVER_EXIT_ANIMATION_WAIT_MS);
+  document.body.replaceChildren();
+});
+
 test('hover controller renders comet-hover-actions and runs them from the overlay', async () => {
   let actionRuns = 0;
   const target = document.createElement('button');
@@ -79,7 +91,10 @@ test('hover controller renders comet-hover-actions and runs them from the overla
 
   overlayAction.click();
   assert.equal(actionRuns, 1);
-  assert.equal(document.querySelector('.comet-hover-card'), null);
+  const closingOverlay = document.querySelector('.comet-hover-card');
+  assert(closingOverlay instanceof HTMLElement);
+  assert.equal(closingOverlay.classList.contains('comet-is-closing'), true);
+  await waitForHoverToUnmount();
 
   hover.dispose();
 });
@@ -244,8 +259,7 @@ test('string hover input hides when the pointer leaves the target', async () => 
     await delay(40);
     assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
     await delay(120);
-    await delay(0);
-    assert.equal(document.querySelector('.comet-hover-card'), null);
+    await waitForHoverToUnmount();
   } finally {
     hover.dispose();
   }
@@ -533,7 +547,7 @@ test('plain hover applies cooldown before reopening on a nearby target', async (
     assert(document.querySelector('.comet-hover-card') instanceof HTMLElement);
 
     firstTarget.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
-    await delay(140);
+    await delay(250);
     assert.equal(document.querySelector('.comet-hover-card'), null);
 
     secondTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));

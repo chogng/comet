@@ -1,4 +1,5 @@
 import type { LocaleMessages } from 'language/locales';
+import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 
@@ -6,15 +7,14 @@ import { KnowledgeBaseWidget } from 'cs/workbench/contrib/preferences/browser/kn
 import type { KnowledgeBaseWidgetProps } from 'cs/workbench/contrib/preferences/browser/knowledgeBaseWidget';
 
 import { LlmWidget } from 'cs/workbench/contrib/preferences/browser/llmWidget';
-import {
-  createSettingsSectionMap,
-} from 'cs/workbench/contrib/preferences/browser/settingsLayout';
-import type { SettingsPageId, SettingsSectionId } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
-import { createSettingsNavigationView } from 'cs/workbench/contrib/preferences/browser/settingsNavigationView';
-import { renderSettingsPage } from 'cs/workbench/contrib/preferences/browser/settingsPages';
+import type { SettingsPageId } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
+import { SettingsTree } from 'cs/workbench/contrib/preferences/browser/settingsTree';
+import type { SettingsSectionRenderers } from 'cs/workbench/contrib/preferences/browser/settingsTree';
+import { SettingsTreeModel } from 'cs/workbench/contrib/preferences/browser/settingsTreeModel';
 import {
   buildSettingsHint as buildHint,
   createSettingsElement as el,
+  setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import {
   renderAppearanceSection,
@@ -27,7 +27,6 @@ import {
   renderSupportedSourcesSection,
   renderTextEditorSection,
 } from 'cs/workbench/contrib/preferences/browser/settingsSections';
-import { shouldUpdateSettingsSection } from 'cs/workbench/contrib/preferences/browser/settingsSectionUpdates';
 
 import type {
   SettingsPartActions,
@@ -35,6 +34,7 @@ import type {
   SettingsPartProps,
   SettingsPartState,
 } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import { TOCTree, TOCTreeModel } from 'cs/workbench/contrib/preferences/browser/tocTree';
 import { TranslationWidget } from 'cs/workbench/contrib/preferences/browser/translationWidget';
 import { registerWorkbenchPartDomNode, WORKBENCH_PART_IDS } from 'cs/workbench/browser/layout';
 import 'cs/workbench/contrib/preferences/browser/media/settingsEditor.css';
@@ -45,8 +45,8 @@ type CreateSettingsPartPropsParams = { state: SettingsPartState; actions: Settin
 
 export function createSettingsPartLabels({ ui }: CreateSettingsPartLabelsParams): SettingsPartLabels {
   return {
-    settingsTitle: ui.settingsTitle, settingsLoading: ui.settingsLoading, settingsLanguage: ui.settingsLanguage, languageChinese: ui.languageChinese, languageEnglish: ui.languageEnglish, settingsLanguageHint: ui.settingsLanguageHint,
-    settingsNavigationBack: ui.settingsNavigationBack, settingsNavigationGeneral: ui.settingsNavigationGeneral, settingsNavigationAppearance: ui.settingsNavigationAppearance, settingsNavigationTextEditor: ui.settingsNavigationTextEditor, settingsNavigationKnowledgeBase: ui.settingsNavigationKnowledgeBase, settingsNavigationLiterature: ui.settingsNavigationLiterature, settingsTextEditorTitle: ui.settingsTextEditorTitle, settingsTextEditorHint: ui.settingsTextEditorHint,
+    settingsTitle: ui.settingsTitle, settingsLoading: ui.settingsLoading, settingsSearchPlaceholder: ui.settingsSearchPlaceholder, settingsSearchNoResults: ui.settingsSearchNoResults, settingsLanguage: ui.settingsLanguage, languageChinese: ui.languageChinese, languageEnglish: ui.languageEnglish, settingsLanguageHint: ui.settingsLanguageHint,
+    settingsNavigationGeneral: ui.settingsNavigationGeneral, settingsNavigationAppearance: ui.settingsNavigationAppearance, settingsNavigationTextEditor: ui.settingsNavigationTextEditor, settingsNavigationKnowledgeBase: ui.settingsNavigationKnowledgeBase, settingsNavigationLiterature: ui.settingsNavigationLiterature, settingsTextEditorTitle: ui.settingsTextEditorTitle, settingsTextEditorHint: ui.settingsTextEditorHint,
     settingsTextEditorDefaultBodyStyle: ui.settingsTextEditorDefaultBodyStyle, settingsTextEditorFontFamily: ui.settingsTextEditorFontFamily, settingsTextEditorFontSize: ui.settingsTextEditorFontSize, settingsTextEditorLineHeight: ui.settingsTextEditorLineHeight, settingsTextEditorParagraphSpacingBefore: ui.settingsTextEditorParagraphSpacingBefore, settingsTextEditorParagraphSpacingAfter: ui.settingsTextEditorParagraphSpacingAfter, settingsTextEditorColor: ui.settingsTextEditorColor,
     settingsBatchOptions: ui.settingsBatchOptions, batchCount: ui.batchCount, startDate: ui.startDate, endDate: ui.endDate, clearDate: ui.clearDate, today: ui.today,
     settingsSupportedSources: ui.settingsSupportedSources, settingsSupportedSourcesHint: ui.settingsSupportedSourcesHint, settingsSupportedSourceUrl: ui.settingsSupportedSourceUrl, settingsSupportedSourceJournalTitle: ui.settingsSupportedSourceJournalTitle, settingsSupportedSourcesShow: ui.settingsSupportedSourcesShow, settingsSupportedSourcesHide: ui.settingsSupportedSourcesHide,
@@ -89,8 +89,13 @@ type FocusSnapshot = {
 
 export class SettingsPartView {
   private props: SettingsPartProps;
-  private readonly navigationView: ReturnType<typeof createSettingsNavigationView>;
   private readonly container = el('div', 'comet-settings-page');
+  private readonly navigation = el('aside', 'comet-settings-navigation');
+  private readonly search = el('div', 'comet-settings-navigation-search');
+  private readonly searchInput = setSettingsFocusKey(
+    el('input', 'comet-settings-navigation-search-input'),
+    'settings.search',
+  );
   private readonly content = el('div', 'comet-settings-content-body');
   private readonly contentScrollable = new DomScrollableElement(this.content, {
     className: 'comet-settings-content',
@@ -101,27 +106,39 @@ export class SettingsPartView {
   private readonly topbar = el('div', 'comet-settings-page-topbar');
   private readonly pageTitle = el('h2', 'comet-settings-page-title');
   private readonly loadingHint = buildHint('');
-  // Keep section containers stable so updates can replace only local content
-  // without recreating the whole settings page.
-  private readonly sections = createSettingsSectionMap(() => el('section', 'comet-settings-section'));
+  private readonly noResultsHint = buildHint('', 'comet-settings-hint comet-settings-no-results');
   private readonly knowledgeBaseWidget: KnowledgeBaseWidget;
   private readonly llmWidget: LlmWidget;
   private readonly translationWidget: TranslationWidget;
+  private readonly settingsTree: SettingsTree;
+  private readonly settingsTreeModel: SettingsTreeModel;
+  private readonly tocTreeModel: TOCTreeModel;
+  private readonly tocTree: TOCTree;
   private showRagApiKey = false;
   private showLlmApiKey = false;
   private showTranslationApiKey = false;
   private showSupportedSources = false;
   private activePageId: SettingsPageId = 'general';
+  private searchQuery = '';
 
   constructor(props: SettingsPartProps) {
     this.props = props;
-    this.navigationView = createSettingsNavigationView({
-      labels: this.props.labels,
+    this.settingsTreeModel = new SettingsTreeModel(this.props.labels, this.searchQuery);
+    this.tocTreeModel = new TOCTreeModel(this.props.labels, this.settingsTreeModel);
+    this.settingsTree = new SettingsTree(this.settingsTreeModel, {
+      contentElement: this.content,
+      scrollableElement: this.contentScrollable,
+      pageTitleElement: this.pageTitle,
+      loadingHintElement: this.loadingHint,
+      noResultsElement: this.noResultsHint,
+      sectionRenderers: this.createSectionRenderers(),
+    });
+    this.tocTree = new TOCTree(this.tocTreeModel, {
       title: this.props.labels.settingsTitle,
       activePageId: this.activePageId,
       onDidSelectPage: this.handleDidSelectPage,
-      onDidNavigateBack: this.props.onNavigateBack,
     });
+    this.initializeSearch();
     this.knowledgeBaseWidget = new KnowledgeBaseWidget(this.getKnowledgeBaseWidgetProps());
     this.llmWidget = new LlmWidget({
       labels: this.props.labels,
@@ -158,9 +175,9 @@ export class SettingsPartView {
       onFetchTranslationModels: () => this.props.onFetchTranslationModels(),
       onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
     });
+    this.navigation.append(this.search, this.tocTree.getElement());
     this.container.append(this.topbar, this.contentScrollable.getDomNode());
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, this.container);
-    this.initializeSectionContainers();
     this.updateView(undefined, true);
   }
 
@@ -169,7 +186,7 @@ export class SettingsPartView {
   }
 
   getNavigationElement() {
-    return this.navigationView.getElement();
+    return this.navigation;
   }
 
   getContentElement() {
@@ -184,25 +201,25 @@ export class SettingsPartView {
 
   dispose() {
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, null);
-    this.navigationView.dispose();
+    this.tocTree.dispose();
+    this.settingsTree.dispose();
     this.contentScrollable.dispose();
     this.container.replaceChildren();
+    this.navigation.replaceChildren();
   }
 
   private containsManagedElement(node: Node) {
-    const navigationElement = this.navigationView.getElement();
     return (
-      navigationElement.contains(node) ||
+      this.navigation.contains(node) ||
       this.container.contains(node)
     );
   }
 
   private queryManagedFocusTarget(key: string) {
     const selector = `[data-focus-key="${key}"]`;
-    const navigationElement = this.navigationView.getElement();
     return (
       this.contentScrollable.getDomNode().querySelector<HTMLElement>(selector) ??
-      navigationElement.querySelector<HTMLElement>(selector)
+      this.navigation.querySelector<HTMLElement>(selector)
     );
   }
 
@@ -234,10 +251,6 @@ export class SettingsPartView {
     if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) && snapshot.selectionStart !== null) {
       target.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd ?? snapshot.selectionStart);
     }
-  }
-
-  private updateSection(container: HTMLElement, content: Node) {
-    container.replaceChildren(content);
   }
 
   private getKnowledgeBaseWidgetProps(): KnowledgeBaseWidgetProps {
@@ -339,6 +352,32 @@ export class SettingsPartView {
     });
   }
 
+  private createSectionRenderers(): SettingsSectionRenderers {
+    return {
+      locale: renderLocaleSection,
+      layout: renderLayoutSection,
+      notifications: renderNotificationsSection,
+      appearance: renderAppearanceSection,
+      configPath: renderConfigPathSection,
+      textEditor: renderTextEditorSection,
+      llm: () => {
+        this.updateLlmWidget();
+        return this.llmWidget.getElement();
+      },
+      translation: () => {
+        this.updateTranslationWidget();
+        return this.translationWidget.getElement();
+      },
+      batchOptions: renderBatchOptionsSection,
+      supportedSources: renderSupportedSourcesSection,
+      knowledgeBase: () => {
+        this.updateKnowledgeBaseWidget();
+        return this.knowledgeBaseWidget.getElement();
+      },
+      downloadDirectory: renderDownloadDirectorySection,
+    };
+  }
+
   private withRuntimeUiState(props: SettingsPartProps): SettingsPartProps {
     return {
       ...props,
@@ -347,20 +386,37 @@ export class SettingsPartView {
     };
   }
 
-  private initializeSectionContainers() {
-    for (const [id, section] of Object.entries(this.sections) as Array<[SettingsSectionId, HTMLElement]>) {
-      section.dataset.sectionId = id;
-      section.id = `settings-section-${id}`;
+  private initializeSearch() {
+    const searchIcon = createLxIcon('search', 'comet-settings-navigation-search-icon');
+    const placeholder = this.props.labels.settingsSearchPlaceholder;
+    this.searchInput.type = 'search';
+    this.searchInput.value = this.searchQuery;
+    this.searchInput.placeholder = placeholder;
+    this.searchInput.setAttribute('aria-label', placeholder);
+    this.searchInput.autocomplete = 'off';
+    this.searchInput.spellcheck = false;
+    this.searchInput.addEventListener('input', () => {
+      this.handleDidChangeSearchQuery(this.searchInput.value);
+    });
+    this.search.append(searchIcon, this.searchInput);
+  }
+
+  private syncSearch() {
+    const placeholder = this.props.labels.settingsSearchPlaceholder;
+    this.searchInput.placeholder = placeholder;
+    this.searchInput.setAttribute('aria-label', placeholder);
+    if (this.searchInput.value !== this.searchQuery) {
+      this.searchInput.value = this.searchQuery;
     }
   }
 
-  private syncNavigationView() {
-    this.navigationView.setProps({
-      labels: this.props.labels,
+  private syncTOCTree() {
+    this.syncSearch();
+    this.tocTreeModel.update(this.props.labels, this.settingsTreeModel);
+    this.tocTree.update(this.tocTreeModel, {
       title: this.props.labels.settingsTitle,
       activePageId: this.activePageId,
       onDidSelectPage: this.handleDidSelectPage,
-      onDidNavigateBack: this.props.onNavigateBack,
     });
   }
 
@@ -368,78 +424,61 @@ export class SettingsPartView {
     this.focusPage(pageId);
   };
 
-  private focusPage(pageId: SettingsPageId) {
+  private readonly handleDidChangeSearchQuery = (query: string) => {
+    const focusSnapshot = this.captureFocus();
+    this.searchQuery = query;
+    this.refreshTreeModel();
+    this.ensureActiveSearchPage();
+    this.renderActivePage();
+    this.syncTOCTree();
+    this.restoreFocus(focusSnapshot);
+  };
+
+  private refreshTreeModel() {
+    this.settingsTreeModel.update(this.props.labels, this.searchQuery);
+    this.noResultsHint.textContent = this.props.labels.settingsSearchNoResults;
+  }
+
+  private setActivePage(pageId: SettingsPageId) {
     if (this.activePageId === pageId) {
-      return;
+      return false;
     }
     this.activePageId = pageId;
     if (pageId === 'model') {
       this.llmWidget.enterModelPage();
     }
-    this.renderActivePage();
-    this.syncNavigationView();
+    return true;
+  }
+
+  private ensureActiveSearchPage() {
+    if (this.settingsTreeModel.hasVisiblePage(this.activePageId)) {
+      return;
+    }
+    const firstVisiblePageId = this.settingsTreeModel.getFirstVisiblePageId();
+    if (firstVisiblePageId) {
+      this.setActivePage(firstVisiblePageId);
+    }
+  }
+
+  private focusPage(pageId: SettingsPageId) {
+    if (this.setActivePage(pageId)) {
+      this.renderActivePage();
+      this.syncTOCTree();
+    }
   }
 
   private renderActivePage() {
-    const { contentChildren, activeSectionIds } = renderSettingsPage({
-      pageId: this.activePageId,
-      props: this.props,
-      pageTitleElement: this.pageTitle,
-      loadingHintElement: this.loadingHint,
-      sections: this.sections,
-    });
-    this.content.replaceChildren(...contentChildren);
-    this.contentScrollable.scanDomNode();
-    for (const [sectionId, section] of Object.entries(this.sections) as Array<[SettingsSectionId, HTMLElement]>) {
-      section.classList.toggle('active', activeSectionIds.includes(sectionId));
-    }
+    this.settingsTree.renderPage(this.activePageId, this.props);
   }
 
   private updateView(previousProps?: SettingsPartProps, forceAll = false) {
     const focusSnapshot = this.captureFocus();
     this.props = this.withRuntimeUiState(this.props);
+    this.refreshTreeModel();
+    this.ensureActiveSearchPage();
     this.loadingHint.textContent = this.props.labels.settingsLoading;
-    this.syncNavigationView();
-
-    if (forceAll || shouldUpdateSettingsSection('locale', previousProps, this.props)) {
-      this.updateSection(this.sections.locale, renderLocaleSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('layout', previousProps, this.props)) {
-      this.updateSection(this.sections.layout, renderLayoutSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('notifications', previousProps, this.props)) {
-      this.updateSection(this.sections.notifications, renderNotificationsSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('batchOptions', previousProps, this.props)) {
-      this.updateSection(this.sections.batchOptions, renderBatchOptionsSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('supportedSources', previousProps, this.props)) {
-      this.updateSection(this.sections.supportedSources, renderSupportedSourcesSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('appearance', previousProps, this.props)) {
-      this.updateSection(this.sections.appearance, renderAppearanceSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('textEditor', previousProps, this.props)) {
-      this.updateSection(this.sections.textEditor, renderTextEditorSection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('knowledgeBase', previousProps, this.props)) {
-      this.updateKnowledgeBaseWidget();
-      this.updateSection(this.sections.knowledgeBase, this.knowledgeBaseWidget.getElement());
-    }
-    if (forceAll || shouldUpdateSettingsSection('downloadDirectory', previousProps, this.props)) {
-      this.updateSection(this.sections.downloadDirectory, renderDownloadDirectorySection(this.props));
-    }
-    if (forceAll || shouldUpdateSettingsSection('llm', previousProps, this.props)) {
-      this.updateLlmWidget();
-      this.updateSection(this.sections.llm, this.llmWidget.getElement());
-    }
-    if (forceAll || shouldUpdateSettingsSection('translation', previousProps, this.props)) {
-      this.updateTranslationWidget();
-      this.updateSection(this.sections.translation, this.translationWidget.getElement());
-    }
-    if (forceAll || shouldUpdateSettingsSection('configPath', previousProps, this.props)) {
-      this.updateSection(this.sections.configPath, renderConfigPathSection(this.props));
-    }
+    this.syncTOCTree();
+    this.settingsTree.updateSections(this.props, previousProps, forceAll);
 
     this.renderActivePage();
     this.restoreFocus(focusSnapshot);
@@ -448,7 +487,7 @@ export class SettingsPartView {
   private readonly handleToggleSupportedSources = () => {
     this.showSupportedSources = !this.showSupportedSources;
     this.props = this.withRuntimeUiState(this.props);
-    this.updateSection(this.sections.supportedSources, renderSupportedSourcesSection(this.props));
+    this.settingsTree.updateSection('supportedSources', this.props);
     this.renderActivePage();
   };
 
