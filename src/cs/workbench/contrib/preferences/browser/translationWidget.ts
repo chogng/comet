@@ -31,8 +31,6 @@ export type TranslationSettingsSectionProps = {
   isSettingsSaving: boolean;
   isTestingTranslationConnection: boolean;
   isLoadingTranslationModels: boolean;
-  showApiKey: boolean;
-  onToggleShowApiKey: () => void;
   onActiveTranslationProviderChange: (provider: TranslationProviderId) => void;
   onTranslationProviderApiKeyChange: (provider: TranslationProviderId, apiKey: string) => void;
   onTranslationProviderBaseUrlChange: (provider: TranslationProviderId, baseUrl: string) => void;
@@ -120,18 +118,20 @@ export class TranslationSettingsSection {
   private renderApiKeyField() {
     const provider = this.props.activeTranslationProvider;
     return buildSecretInput({
-      title: this.props.labels.settingsLlmApiKey,
-      value: this.props.translationProviders[provider].apiKey,
+      title: this.props.labels.settingsTranslationApiKey,
+      value: '',
       placeholder: this.props.labels.settingsTranslationApiKeyPlaceholder,
-      show: this.props.showApiKey,
+      configured: Boolean(this.props.translationProviders[provider].apiKey),
       focusKey: `settings.translation.${provider}.apiKey`,
-      toggleKey: `settings.translation.${provider}.apiKey.toggle`,
-      toggleLabelShow: this.props.labels.settingsTranslationShowApiKey,
-      toggleLabelHide: this.props.labels.settingsTranslationHideApiKey,
-      onToggle: () => this.props.onToggleShowApiKey(),
-      onInput: (value) => this.props.onTranslationProviderApiKeyChange(provider, value),
+      configuredLabel: this.props.labels.settingsApiKeyConfigured,
+      notConfiguredLabel: this.props.labels.settingsApiKeyNotConfigured,
+      setLabel: this.props.labels.settingsApiKeySet,
+      updateLabel: this.props.labels.settingsApiKeyUpdate,
+      clearLabel: this.props.labels.settingsApiKeyClear,
+      disabled: this.props.isSettingsSaving,
+      onSubmit: (value) => this.props.onTranslationProviderApiKeyChange(provider, value),
+      onClear: () => this.props.onTranslationProviderApiKeyChange(provider, ''),
       className: 'comet-settings-field comet-settings-llm-api-field comet-settings-translation-ai-field comet-settings-llm-span-2',
-      hideToggleWhenEmpty: true,
     });
   }
 

@@ -186,8 +186,9 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsLlmTitle,
       labels.settingsLlmApiKey,
       labels.settingsLlmApiKeyPlaceholder,
-      labels.settingsLlmShowApiKey,
-      labels.settingsLlmHideApiKey,
+      labels.settingsApiKeySet,
+      labels.settingsApiKeyUpdate,
+      labels.settingsApiKeyClear,
     ],
   },
   translation: {

@@ -42,15 +42,15 @@ export type SettingsPartLabels = {
   settingsLibraryMaxConcurrentJobs: string; settingsLibraryMaxConcurrentJobsHint: string; settingsRagTitle: string; settingsRagProvider: string; settingsRagProviderHint: string;
   settingsRagProviderMoark: string; settingsRagApiKey: string; settingsRagApiKeyPlaceholder: string; settingsRagBaseUrl: string; settingsRagEmbeddingModel: string;
   settingsRagRerankerModel: string; settingsRagEmbeddingPath: string; settingsRagRerankPath: string; settingsRagCandidateCount: string; settingsRagTopK: string;
-  settingsRagTestConnection: string; settingsRagShowApiKey: string; settingsRagHideApiKey: string; settingsRagHint: string; settingsBatchHint: string; defaultPdfDir: string;
+  settingsRagTestConnection: string; settingsRagHint: string; settingsBatchHint: string; defaultPdfDir: string;
   settingsLayoutTitle: string; settingsStatusbar: string; settingsStatusbarHint: string; settingsStartupLayout: string; settingsStartupLayoutHint: string; settingsStartupLayoutAgent: string; settingsStartupLayoutFlow: string; settingsBrowserTabKeepAliveLimit: string; settingsBrowserTabKeepAliveLimitHint: string; settingsNotificationsTitle: string; settingsNotificationsHint: string; settingsSystemNotifications: string; settingsSystemNotificationsHint: string; settingsWarningNotifications: string; settingsWarningNotificationsHint: string; settingsMenuBarIcon: string; settingsMenuBarIconHint: string; settingsCompletionNotifications: string; settingsCompletionNotificationsHint: string;
   pdfFileNameUseSelectionOrder: string; pdfFileNameUseSelectionOrderHint: string; downloadDirPlaceholder: string; change: string; open: string; chooseDirectory: string; changeConfigLocation: string;
   resetDefault: string; settingsHintPath: string; settingsConfigPath: string; currentDir: string; systemDownloads: string; settingsLlmTitle: string; settingsLlmProvider: string;
   settingsLlmProviderHint: string; settingsLlmProviderGlm: string; settingsLlmProviderKimi: string; settingsLlmProviderDeepSeek: string; settingsLlmProviderGemini: string; settingsLlmApiKey: string;
-  settingsLlmApiKeyPlaceholder: string; settingsLlmModel: string; settingsLlmSearchPlaceholder: string; settingsLlmNoResults: string; settingsLlmMaxContext: string; settingsLlmMaxContextHint: string; settingsLlmTestConnection: string; settingsLlmShowApiKey: string; settingsLlmHideApiKey: string;
+  settingsApiKeyConfigured: string; settingsApiKeyNotConfigured: string; settingsApiKeySet: string; settingsApiKeyUpdate: string; settingsApiKeyClear: string;
+  settingsLlmApiKeyPlaceholder: string; settingsLlmModel: string; settingsLlmSearchPlaceholder: string; settingsLlmNoResults: string; settingsLlmMaxContext: string; settingsLlmMaxContextHint: string; settingsLlmTestConnection: string;
   settingsTranslationTitle: string; settingsTranslationProvider: string; settingsTranslationProviderHint: string; settingsTranslationProviderDeepL: string; settingsTranslationProviderGlm: string; settingsTranslationProviderOpenAICompatible: string; settingsTranslationProviderCustom: string; settingsTranslationProviderOpenAICompatibleHint: string; settingsTranslationBaseUrl: string;
-  settingsTranslationApiKey: string; settingsTranslationApiKeyPlaceholder: string; settingsTranslationFetchModels: string; settingsTranslationTestConnection: string; settingsTranslationShowApiKey: string;
-  settingsTranslationHideApiKey: string;
+  settingsTranslationApiKey: string; settingsTranslationApiKeyPlaceholder: string; settingsTranslationFetchModels: string; settingsTranslationTestConnection: string;
 };
 
 export type SettingsPartProps = {

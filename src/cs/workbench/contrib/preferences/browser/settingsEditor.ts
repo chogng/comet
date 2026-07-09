@@ -73,14 +73,14 @@ export function createSettingsPartLabels({ ui }: CreateSettingsPartLabelsParams)
     settingsLibraryMaxConcurrentJobs: ui.settingsLibraryMaxConcurrentJobs, settingsLibraryMaxConcurrentJobsHint: ui.settingsLibraryMaxConcurrentJobsHint, settingsRagTitle: ui.settingsRagTitle, settingsRagProvider: ui.settingsRagProvider, settingsRagProviderHint: ui.settingsRagProviderHint,
     settingsRagProviderMoark: ui.settingsRagProviderMoark, settingsRagApiKey: ui.settingsRagApiKey, settingsRagApiKeyPlaceholder: ui.settingsRagApiKeyPlaceholder, settingsRagBaseUrl: ui.settingsRagBaseUrl, settingsRagEmbeddingModel: ui.settingsRagEmbeddingModel,
     settingsRagRerankerModel: ui.settingsRagRerankerModel, settingsRagEmbeddingPath: ui.settingsRagEmbeddingPath, settingsRagRerankPath: ui.settingsRagRerankPath, settingsRagCandidateCount: ui.settingsRagCandidateCount, settingsRagTopK: ui.settingsRagTopK,
-    settingsRagTestConnection: ui.settingsRagTestConnection, settingsRagShowApiKey: ui.settingsRagShowApiKey, settingsRagHideApiKey: ui.settingsRagHideApiKey, settingsRagHint: ui.settingsRagHint, settingsBatchHint: ui.settingsBatchHint, defaultPdfDir: ui.defaultPdfDir, settingsLayoutTitle: ui.settingsLayoutTitle, settingsStatusbar: ui.settingsStatusbar, settingsStatusbarHint: ui.settingsStatusbarHint, settingsStartupLayout: ui.settingsStartupLayout, settingsStartupLayoutHint: ui.settingsStartupLayoutHint, settingsStartupLayoutAgent: ui.settingsStartupLayoutAgent, settingsStartupLayoutFlow: ui.settingsStartupLayoutFlow, settingsBrowserTabKeepAliveLimit: ui.settingsBrowserTabKeepAliveLimit, settingsBrowserTabKeepAliveLimitHint: ui.settingsBrowserTabKeepAliveLimitHint, settingsNotificationsTitle: ui.settingsNotificationsTitle, settingsNotificationsHint: ui.settingsNotificationsHint, settingsSystemNotifications: ui.settingsSystemNotifications, settingsSystemNotificationsHint: ui.settingsSystemNotificationsHint, settingsWarningNotifications: ui.settingsWarningNotifications, settingsWarningNotificationsHint: ui.settingsWarningNotificationsHint, settingsMenuBarIcon: ui.settingsMenuBarIcon, settingsMenuBarIconHint: ui.settingsMenuBarIconHint, settingsCompletionNotifications: ui.settingsCompletionNotifications, settingsCompletionNotificationsHint: ui.settingsCompletionNotificationsHint,
+    settingsRagTestConnection: ui.settingsRagTestConnection, settingsRagHint: ui.settingsRagHint, settingsBatchHint: ui.settingsBatchHint, defaultPdfDir: ui.defaultPdfDir, settingsLayoutTitle: ui.settingsLayoutTitle, settingsStatusbar: ui.settingsStatusbar, settingsStatusbarHint: ui.settingsStatusbarHint, settingsStartupLayout: ui.settingsStartupLayout, settingsStartupLayoutHint: ui.settingsStartupLayoutHint, settingsStartupLayoutAgent: ui.settingsStartupLayoutAgent, settingsStartupLayoutFlow: ui.settingsStartupLayoutFlow, settingsBrowserTabKeepAliveLimit: ui.settingsBrowserTabKeepAliveLimit, settingsBrowserTabKeepAliveLimitHint: ui.settingsBrowserTabKeepAliveLimitHint, settingsNotificationsTitle: ui.settingsNotificationsTitle, settingsNotificationsHint: ui.settingsNotificationsHint, settingsSystemNotifications: ui.settingsSystemNotifications, settingsSystemNotificationsHint: ui.settingsSystemNotificationsHint, settingsWarningNotifications: ui.settingsWarningNotifications, settingsWarningNotificationsHint: ui.settingsWarningNotificationsHint, settingsMenuBarIcon: ui.settingsMenuBarIcon, settingsMenuBarIconHint: ui.settingsMenuBarIconHint, settingsCompletionNotifications: ui.settingsCompletionNotifications, settingsCompletionNotificationsHint: ui.settingsCompletionNotificationsHint,
     pdfFileNameUseSelectionOrder: ui.pdfFileNameUseSelectionOrder, pdfFileNameUseSelectionOrderHint: ui.pdfFileNameUseSelectionOrderHint, downloadDirPlaceholder: ui.downloadDirPlaceholder, change: ui.change, open: ui.open, chooseDirectory: ui.chooseDirectory, changeConfigLocation: ui.changeConfigLocation,
     resetDefault: ui.resetDefault, settingsHintPath: ui.settingsHintPath, settingsConfigPath: ui.settingsConfigPath, currentDir: ui.currentDir, systemDownloads: ui.systemDownloads, settingsLlmTitle: ui.settingsLlmTitle, settingsLlmProvider: ui.settingsLlmProvider,
     settingsLlmProviderHint: ui.settingsLlmProviderHint, settingsLlmProviderGlm: ui.settingsLlmProviderGlm, settingsLlmProviderKimi: ui.settingsLlmProviderKimi, settingsLlmProviderDeepSeek: ui.settingsLlmProviderDeepSeek, settingsLlmProviderGemini: ui.settingsLlmProviderGemini, settingsLlmApiKey: ui.settingsLlmApiKey,
-    settingsLlmApiKeyPlaceholder: ui.settingsLlmApiKeyPlaceholder, settingsLlmModel: ui.settingsLlmModel, settingsLlmSearchPlaceholder: ui.settingsLlmSearchPlaceholder, settingsLlmNoResults: ui.settingsLlmNoResults, settingsLlmMaxContext: ui.settingsLlmMaxContext, settingsLlmMaxContextHint: ui.settingsLlmMaxContextHint, settingsLlmTestConnection: ui.settingsLlmTestConnection, settingsLlmShowApiKey: ui.settingsLlmShowApiKey, settingsLlmHideApiKey: ui.settingsLlmHideApiKey,
+    settingsApiKeyConfigured: ui.settingsApiKeyConfigured, settingsApiKeyNotConfigured: ui.settingsApiKeyNotConfigured, settingsApiKeySet: ui.settingsApiKeySet, settingsApiKeyUpdate: ui.settingsApiKeyUpdate, settingsApiKeyClear: ui.settingsApiKeyClear,
+    settingsLlmApiKeyPlaceholder: ui.settingsLlmApiKeyPlaceholder, settingsLlmModel: ui.settingsLlmModel, settingsLlmSearchPlaceholder: ui.settingsLlmSearchPlaceholder, settingsLlmNoResults: ui.settingsLlmNoResults, settingsLlmMaxContext: ui.settingsLlmMaxContext, settingsLlmMaxContextHint: ui.settingsLlmMaxContextHint, settingsLlmTestConnection: ui.settingsLlmTestConnection,
     settingsTranslationTitle: ui.settingsTranslationTitle, settingsTranslationProvider: ui.settingsTranslationProvider, settingsTranslationProviderHint: ui.settingsTranslationProviderHint, settingsTranslationProviderDeepL: ui.settingsTranslationProviderDeepL, settingsTranslationProviderGlm: ui.settingsTranslationProviderGlm, settingsTranslationProviderOpenAICompatible: ui.settingsTranslationProviderOpenAICompatible, settingsTranslationProviderCustom: ui.settingsTranslationProviderCustom, settingsTranslationProviderOpenAICompatibleHint: ui.settingsTranslationProviderOpenAICompatibleHint, settingsTranslationBaseUrl: ui.settingsTranslationBaseUrl,
-    settingsTranslationApiKey: ui.settingsTranslationApiKey, settingsTranslationApiKeyPlaceholder: ui.settingsTranslationApiKeyPlaceholder, settingsTranslationFetchModels: ui.settingsTranslationFetchModels, settingsTranslationTestConnection: ui.settingsTranslationTestConnection, settingsTranslationShowApiKey: ui.settingsTranslationShowApiKey,
-    settingsTranslationHideApiKey: ui.settingsTranslationHideApiKey,
+    settingsTranslationApiKey: ui.settingsTranslationApiKey, settingsTranslationApiKeyPlaceholder: ui.settingsTranslationApiKeyPlaceholder, settingsTranslationFetchModels: ui.settingsTranslationFetchModels, settingsTranslationTestConnection: ui.settingsTranslationTestConnection,
   };
 }
 
@@ -127,9 +127,6 @@ export class SettingsPartView {
   private readonly settingsTreeModel: SettingsTreeModel;
   private readonly tocTreeModel: TOCTreeModel;
   private readonly tocTree: TOCTree;
-  private showRagApiKey = false;
-  private showLlmApiKey = false;
-  private showTranslationApiKey = false;
   private showSupportedSources = false;
   private activePageId: SettingsPageId = 'general';
   private searchQuery = '';
@@ -277,12 +274,6 @@ export class SettingsPartView {
       retrievalTopK: this.props.retrievalTopK,
       isSettingsSaving: this.props.isSettingsSaving,
       isTestingRagConnection: this.props.isTestingRagConnection,
-      showApiKey: this.showRagApiKey,
-      onToggleShowApiKey: () => {
-        this.showRagApiKey = !this.showRagApiKey;
-        this.settingsTree.updateSection('knowledgeBaseRag', this.props);
-        this.renderActivePage();
-      },
       onRagProviderApiKeyChange: (provider, apiKey) => this.props.onRagProviderApiKeyChange(provider, apiKey),
       onRagProviderBaseUrlChange: (provider, baseUrl) => this.props.onRagProviderBaseUrlChange(provider, baseUrl),
       onRagProviderEmbeddingModelChange: (provider, model) => this.props.onRagProviderEmbeddingModelChange(provider, model),
@@ -302,11 +293,6 @@ export class SettingsPartView {
       llmProviders: this.props.llmProviders,
       isSettingsSaving: this.props.isSettingsSaving,
       isTestingLlmConnection: this.props.isTestingLlmConnection,
-      showApiKey: this.showLlmApiKey,
-      onToggleShowApiKey: () => {
-        this.showLlmApiKey = !this.showLlmApiKey;
-        this.updateLlmApiKeySection();
-      },
       onActiveLlmProviderChange: (provider) => this.props.onActiveLlmProviderChange(provider),
       onLlmProviderApiKeyChange: (provider, apiKey) => this.props.onLlmProviderApiKeyChange(provider, apiKey),
       onLlmProviderModelChange: (provider, model) => this.props.onLlmProviderModelChange(provider, model),
@@ -328,11 +314,6 @@ export class SettingsPartView {
       isSettingsSaving: this.props.isSettingsSaving,
       isTestingTranslationConnection: this.props.isTestingTranslationConnection,
       isLoadingTranslationModels: this.props.isLoadingTranslationModels,
-      showApiKey: this.showTranslationApiKey,
-      onToggleShowApiKey: () => {
-        this.showTranslationApiKey = !this.showTranslationApiKey;
-        this.updateTranslationSection();
-      },
       onActiveTranslationProviderChange: (provider) => this.props.onActiveTranslationProviderChange(provider),
       onTranslationProviderApiKeyChange: (provider, apiKey) => this.props.onTranslationProviderApiKeyChange(provider, apiKey),
       onTranslationProviderBaseUrlChange: (provider, baseUrl) => this.props.onTranslationProviderBaseUrlChange(provider, baseUrl),

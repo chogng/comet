@@ -25,8 +25,6 @@ export type RagSettingsSectionProps = {
   retrievalTopK: number;
   isSettingsSaving: boolean;
   isTestingRagConnection: boolean;
-  showApiKey: boolean;
-  onToggleShowApiKey: () => void;
   onRagProviderApiKeyChange: (provider: RagProviderId, apiKey: string) => void;
   onRagProviderBaseUrlChange: (provider: RagProviderId, baseUrl: string) => void;
   onRagProviderEmbeddingModelChange: (provider: RagProviderId, model: string) => void;
@@ -114,17 +112,20 @@ export function renderRagSettingsSection(props: RagSettingsSectionProps) {
   );
 
   const apiKeyInput = buildSecretInput({
-    title: props.labels.settingsLlmApiKey,
+    title: props.labels.settingsRagApiKey,
     subtitle: props.labels.settingsRagProviderMoark,
-    value: provider.apiKey,
+    value: '',
     placeholder: props.labels.settingsRagApiKeyPlaceholder,
-    show: props.showApiKey,
+    configured: Boolean(provider.apiKey),
     focusKey: 'settings.rag.apiKey',
-    toggleKey: 'settings.rag.apiKey.toggle',
-    toggleLabelShow: props.labels.settingsRagShowApiKey,
-    toggleLabelHide: props.labels.settingsRagHideApiKey,
-    onToggle: props.onToggleShowApiKey,
-    onInput: value => props.onRagProviderApiKeyChange(props.activeRagProvider, value),
+    configuredLabel: props.labels.settingsApiKeyConfigured,
+    notConfiguredLabel: props.labels.settingsApiKeyNotConfigured,
+    setLabel: props.labels.settingsApiKeySet,
+    updateLabel: props.labels.settingsApiKeyUpdate,
+    clearLabel: props.labels.settingsApiKeyClear,
+    disabled: props.isSettingsSaving,
+    onSubmit: value => props.onRagProviderApiKeyChange(props.activeRagProvider, value),
+    onClear: () => props.onRagProviderApiKeyChange(props.activeRagProvider, ''),
   });
   const apiKeyControl = el('div', 'comet-settings-rag-api-key-control');
   apiKeyControl.append(apiKeyInput);

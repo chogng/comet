@@ -85,57 +85,83 @@ export function buildSettingsSecretInput(config: {
   subtitle?: string;
   value: string;
   placeholder: string;
-  show: boolean;
+  configured?: boolean;
   focusKey: string;
-  toggleKey: string;
-  toggleLabelShow: string;
-  toggleLabelHide: string;
-  onToggle: () => void;
-  onInput: (value: string) => void;
+  configuredLabel: string;
+  notConfiguredLabel: string;
+  setLabel: string;
+  updateLabel: string;
+  clearLabel: string;
+  disabled?: boolean;
+  onSubmit: (value: string) => void;
+  onClear?: () => void;
   className?: string;
-  hideToggleWhenEmpty?: boolean;
 }) {
   const element = createSettingsElement(
     'div',
     config.className ?? 'comet-settings-field comet-settings-llm-api-field comet-settings-llm-span-2',
   );
+  const isConfigured = config.configured ?? Boolean(config.value.trim());
   const header = createSettingsElement('div', 'comet-settings-llm-api-header');
   const titleWrap = createSettingsElement('div', 'comet-settings-llm-api-title-wrap');
   const title = createSettingsElement('span', 'comet-settings-llm-api-title');
   const subtitle = createSettingsElement('span', 'comet-settings-llm-api-subtitle');
+  const status = createSettingsElement('span', 'comet-settings-api-key-status');
   const row = createSettingsElement('div', 'comet-settings-input-row comet-settings-llm-api-row');
   const inputWrap = createSettingsElement('div', 'comet-settings-native-input-wrap comet-settings-api-key-input');
+  let pendingValue = config.value;
   const inputBox = buildSettingsInput({
-    type: config.show ? 'text' : 'password',
+    type: 'password',
     value: config.value,
     className: 'comet-settings-input-control',
     focusKey: config.focusKey,
     placeholder: config.placeholder,
-    onInput: config.onInput,
+    disabled: config.disabled,
   });
-  const toggle = setSettingsFocusKey(
-    createSettingsElement('button', 'comet-settings-password-toggle'),
-    config.toggleKey,
-  );
-  const shouldHideToggle = Boolean(config.hideToggleWhenEmpty && !config.value);
+  const actions = createSettingsElement('div', 'comet-settings-api-key-actions');
+  const submitButton = buildSettingsButton({
+    label: isConfigured ? config.updateLabel : config.setLabel,
+    focusKey: `${config.focusKey}.submit`,
+    disabled: config.disabled || !pendingValue.trim(),
+    onClick: () => {
+      const value = pendingValue.trim();
+      if (value) {
+        config.onSubmit(value);
+        inputBox.value = '';
+        pendingValue = '';
+        submitButton.disabled = true;
+      }
+    },
+  });
 
   title.textContent = config.title;
   subtitle.textContent = config.subtitle ?? '';
   subtitle.hidden = !config.subtitle;
-  toggle.type = 'button';
-  toggle.hidden = shouldHideToggle;
-  toggle.style.display = shouldHideToggle ? 'none' : '';
-  element.classList.toggle('comet-settings-api-key-empty', shouldHideToggle);
-  if (!shouldHideToggle) {
-    toggle.replaceChildren(createLxIcon(config.show ? 'hidden' : 'show'));
-    hoverService.applyHover(toggle, config.show ? config.toggleLabelHide : config.toggleLabelShow);
-    toggle.ariaLabel = config.show ? config.toggleLabelHide : config.toggleLabelShow;
+  status.textContent = isConfigured ? config.configuredLabel : config.notConfiguredLabel;
+  element.classList.toggle('comet-settings-api-key-empty', !isConfigured);
+  inputBox.onDidChange((value) => {
+    pendingValue = value;
+    submitButton.disabled = Boolean(config.disabled) || !value.trim();
+  });
+  inputBox.inputElement.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || submitButton.disabled) {
+      return;
+    }
+    event.preventDefault();
+    submitButton.click();
+  });
+  actions.append(submitButton);
+  if (isConfigured && config.onClear) {
+    actions.append(buildSettingsButton({
+      label: config.clearLabel,
+      focusKey: `${config.focusKey}.clear`,
+      disabled: config.disabled,
+      onClick: config.onClear,
+    }));
   }
-  toggle.addEventListener('click', () => config.onToggle());
-  inputBox.element.append(toggle);
   inputWrap.append(inputBox.element);
-  row.append(inputWrap);
-  titleWrap.append(title, subtitle);
+  row.append(inputWrap, actions);
+  titleWrap.append(title, subtitle, status);
   header.append(titleWrap, row);
   element.append(header);
   return element;

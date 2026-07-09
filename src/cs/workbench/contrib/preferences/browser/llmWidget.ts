@@ -35,8 +35,6 @@ export type LlmSettingsSectionProps = {
   llmProviders: Record<LlmProviderId, LlmProviderSettings>;
   isSettingsSaving: boolean;
   isTestingLlmConnection: boolean;
-  showApiKey: boolean;
-  onToggleShowApiKey: () => void;
   onActiveLlmProviderChange: (provider: LlmProviderId) => void;
   onLlmProviderApiKeyChange: (provider: LlmProviderId, apiKey: string) => void;
   onLlmProviderModelChange: (provider: LlmProviderId, model: string) => void;
@@ -532,16 +530,20 @@ export class LlmApiKeySettingsSection {
     this.apiKeyControl.replaceChildren(buildSecretInput({
       title: this.props.labels.settingsLlmApiKey,
       subtitle: getLlmProviderLabel(this.props.labels, this.props.activeLlmProvider),
-      value: provider.apiKey,
+      value: '',
       placeholder: this.props.labels.settingsLlmApiKeyPlaceholder,
-      show: this.props.showApiKey,
+      configured: Boolean(provider.apiKey),
       focusKey: 'settings.llm.apiKey',
-      toggleKey: 'settings.llm.apiKey.toggle',
-      toggleLabelShow: this.props.labels.settingsLlmShowApiKey,
-      toggleLabelHide: this.props.labels.settingsLlmHideApiKey,
-      onToggle: () => this.props.onToggleShowApiKey(),
-      onInput: (value) =>
+      configuredLabel: this.props.labels.settingsApiKeyConfigured,
+      notConfiguredLabel: this.props.labels.settingsApiKeyNotConfigured,
+      setLabel: this.props.labels.settingsApiKeySet,
+      updateLabel: this.props.labels.settingsApiKeyUpdate,
+      clearLabel: this.props.labels.settingsApiKeyClear,
+      disabled: this.props.isSettingsSaving,
+      onSubmit: (value) =>
         this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
+      onClear: () =>
+        this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, ''),
       className: 'comet-settings-field comet-settings-llm-api-field',
     }));
     this.apiKeySection.list.replaceChildren(
