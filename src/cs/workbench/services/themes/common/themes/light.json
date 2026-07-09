@@ -41,6 +41,7 @@
     "agentBar.background": "#fdfdfc",
     "agentBar.inputBackground": "#f9fbfd",
     "agentBar.inputForeground": "#1f2d3a",
+    "chatInput.composerBorder": "#F0F0F0",
     "chatInput.composerBackground": "#FCFCFC",
     "chatInput.composerToolbarBorder": "#F8F8F8",
     "chatInput.composerToolbarBackground": "#FCFCFC",
