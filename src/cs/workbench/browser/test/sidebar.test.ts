@@ -199,30 +199,30 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
     await delay(0);
 
     const menu = document.body.querySelector(
-      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .comet-dropdown-menu',
     );
     assert(menu instanceof HTMLElement);
     assert.equal(menu.getAttribute('data-menu'), 'comet-sidebar-footer-more');
     assert.equal(moreButton.getAttribute('aria-expanded'), 'true');
 
-    const layoutItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const layoutItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Layout'),
     );
     assert(layoutItem instanceof HTMLElement);
-    assert(layoutItem.querySelector('.dropdown-option-icon.lx-icon-layout') instanceof HTMLElement);
+    assert(layoutItem.querySelector('.comet-dropdown-option-icon.lx-icon-layout') instanceof HTMLElement);
     layoutItem.click();
     await delay(0);
     const submenu = document.body.querySelector(
-      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .comet-menu-submenu',
     );
     assert(submenu instanceof HTMLElement);
     const submenuLabels = Array.from(
-      submenu.querySelectorAll('.dropdown-menu-item .dropdown-menu-item-content'),
+      submenu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'),
     ).map((node) => node.textContent?.trim());
     assert.deepEqual(submenuLabels, ['Agent', 'Flow']);
 
     const agentItem = Array.from(
-      submenu.querySelectorAll<HTMLElement>('.dropdown-menu-item'),
+      submenu.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item'),
     ).find((node) => node.textContent?.includes('Agent'));
     assert(agentItem instanceof HTMLElement);
     agentItem.click();
@@ -232,21 +232,21 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
     moreButton.click();
     await delay(0);
     const reopenedMenu = document.body.querySelector(
-      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .comet-dropdown-menu',
     );
     assert(reopenedMenu instanceof HTMLElement);
     const reopenedLayoutItem = Array.from(
-      reopenedMenu.querySelectorAll('.dropdown-menu-item'),
+      reopenedMenu.querySelectorAll('.comet-dropdown-menu-item'),
     ).find((node) => node.textContent?.includes('Layout'));
     assert(reopenedLayoutItem instanceof HTMLElement);
     reopenedLayoutItem.click();
     await delay(0);
     const reopenedSubmenu = document.body.querySelector(
-      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .comet-menu-submenu',
     );
     assert(reopenedSubmenu instanceof HTMLElement);
     const flowItem = Array.from(
-      reopenedSubmenu.querySelectorAll<HTMLElement>('.dropdown-menu-item'),
+      reopenedSubmenu.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item'),
     ).find((node) => node.textContent?.includes('Flow'));
     assert(flowItem instanceof HTMLElement);
     flowItem.click();
@@ -255,7 +255,7 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
 
     assert.equal(
       document.body.querySelector(
-        '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+        '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .comet-dropdown-menu',
       ),
       null,
     );
@@ -289,10 +289,10 @@ test('sidebar footer layout submenu marks the active layout', async () => {
     await delay(0);
 
     const menu = document.body.querySelector(
-      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .dropdown-menu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .comet-dropdown-menu',
     );
     assert(menu instanceof HTMLElement);
-    const layoutItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(
+    const layoutItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('Layout'),
     );
     assert(layoutItem instanceof HTMLElement);
@@ -300,25 +300,25 @@ test('sidebar footer layout submenu marks the active layout', async () => {
     await delay(0);
 
     const submenu = document.body.querySelector(
-      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .cs-menu-submenu',
+      '.comet-actionbar-context-view.comet-sidebar-footer-more-menu-overlay .comet-menu-submenu',
     );
     assert(submenu instanceof HTMLElement);
     const agentItem = Array.from(
-      submenu.querySelectorAll<HTMLElement>('.dropdown-menu-item'),
+      submenu.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item'),
     ).find((node) => node.textContent?.includes('Agent'));
     const flowItem = Array.from(
-      submenu.querySelectorAll<HTMLElement>('.dropdown-menu-item'),
+      submenu.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item'),
     ).find((node) => node.textContent?.includes('Flow'));
     assert(agentItem instanceof HTMLElement);
     assert(flowItem instanceof HTMLElement);
     assert.equal(agentItem.classList.contains('selected'), true);
     assert.equal(
-      agentItem.querySelector('.dropdown-menu-item-check .lx-icon-check') instanceof HTMLElement,
+      agentItem.querySelector('.comet-dropdown-menu-item-check .lx-icon-check') instanceof HTMLElement,
       true,
     );
     assert.equal(flowItem.classList.contains('selected'), false);
     assert.equal(
-      flowItem.querySelector('.dropdown-menu-item-check.placeholder') instanceof HTMLElement,
+      flowItem.querySelector('.comet-dropdown-menu-item-check.placeholder') instanceof HTMLElement,
       true,
     );
   } finally {
