@@ -1,10 +1,13 @@
-import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import type { IDisposable } from 'cs/base/common/lifecycle';
-import type { ConfigurationService } from 'cs/platform/configuration/common/configuration';
+import {
+  IConfigurationService,
+  type ConfigurationService,
+} from 'cs/platform/configuration/common/configuration';
+import { refineServiceDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export const IWorkbenchConfigurationService =
-  createDecorator<IWorkbenchConfigurationService>(
-    'workbenchConfigurationService',
+  refineServiceDecorator<ConfigurationService, IWorkbenchConfigurationService>(
+    IConfigurationService,
   );
 
 export interface IWorkbenchConfigurationService

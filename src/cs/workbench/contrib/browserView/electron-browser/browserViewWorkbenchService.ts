@@ -52,7 +52,7 @@ const browserViewContextMenuCommands = [
 export class BrowserViewWorkbenchService extends Disposable implements IBrowserViewWorkbenchService {
 	declare readonly _serviceBrand: undefined;
 
-	private readonly browserViewService: IBrowserViewService;
+	private browserViewService: IBrowserViewService | undefined;
 	private readonly known = new Map<string, BrowserEditorInput>();
 	private readonly contextualFilters = new Set<IBrowserViewContextualFilter>();
 	private readonly openHandlers = new Set<IBrowserViewOpenHandler>();
@@ -66,7 +66,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	readonly onDidChangeSharingAvailable: Event<boolean> = this._onDidChangeSharingAvailable.event;
 
 	constructor(
-		@IMainProcessService mainProcessService: IMainProcessService,
+		@IMainProcessService private readonly mainProcessService: IMainProcessService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
@@ -75,35 +75,20 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	) {
 		super();
 
-		const channel = mainProcessService.getChannel(ipcBrowserViewChannelName);
-		this.browserViewService = ProxyChannel.toService<IBrowserViewService>(channel);
-
-		this.updateWindowConfiguration();
-		this._register(this.keybindingService.onDidUpdateKeybindings(() => this.updateWindowConfiguration()));
-		this._register(this.configurationService.onDidChangeConfiguration(e => {
-			if (
-				e.affectsConfiguration(BrowserMaxHistoryEntriesSettingId) ||
-				e.affectsConfiguration(BrowserRemoteProxyEnabledSettingId)
-			) {
+		this._register(this.keybindingService.onDidUpdateKeybindings(() => {
+			if (this.browserViewService) {
 				this.updateWindowConfiguration();
 			}
 		}));
-
-		void this.initializeExistingViews();
-		this._register(this.browserViewService.onDidCreateBrowserView(event => {
-			if (event.info.owner.mainWindowId !== this.mainWindowId) {
-				return;
-			}
-
-			const model = this.createModel(event.info.id, event.info.owner, event.info.state);
-			const input = this.getOrCreateLazy(event.info.id, {
-				url: model.url,
-				title: model.title,
-				favicon: model.favicon,
-			}, model);
-
-			if (event.openOptions) {
-				this.shouldOpenEditor(input, event.info.owner, event.openOptions);
+		this._register(this.configurationService.onDidChangeConfiguration(e => {
+			if (
+				this.browserViewService &&
+				(
+					e.affectsConfiguration(BrowserMaxHistoryEntriesSettingId) ||
+					e.affectsConfiguration(BrowserRemoteProxyEnabledSettingId)
+				)
+			) {
+				this.updateWindowConfiguration();
 			}
 		}));
 	}
@@ -118,7 +103,9 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 
 	setRemoteProxyInfo(info: ITunnelProxyInfo | undefined): void {
 		this.remoteProxyInfo = info;
-		this.updateWindowConfiguration();
+		if (this.browserViewService) {
+			this.updateWindowConfiguration();
+		}
 	}
 
 	getKnownBrowserViews(): Map<string, BrowserEditorInput> {
@@ -169,10 +156,11 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	getOrCreateLazy(id: string, initialState: IBrowserEditorViewState = {}, model?: IBrowserViewModel): BrowserEditorInput {
+		const browserViewService = this.getBrowserViewService();
 		let input = this.known.get(id);
 		if (!input) {
 			input = this.instantiationService.createInstance(BrowserEditorInput, { id, ...initialState }, async () => {
-				const state = await this.browserViewService.getOrCreateBrowserView(id, {
+				const state = await browserViewService.getOrCreateBrowserView(id, {
 					owner: this.getDefaultOwner(),
 					sessionOptions: {
 						scope: BrowserViewStorageScope.Global,
@@ -199,7 +187,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	async clearGlobalStorage(): Promise<void> {
-		await this.browserViewService.clearGlobalStorage();
+		await this.getBrowserViewService().clearGlobalStorage();
 	}
 
 	async clearWorkspaceStorage(): Promise<void> {
@@ -216,7 +204,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 
 	private async initializeExistingViews(): Promise<void> {
 		try {
-			const views = await this.browserViewService.getBrowserViews(this.mainWindowId);
+			const views = await this.getBrowserViewService().getBrowserViews(this.mainWindowId);
 			for (const info of views) {
 				this.createModel(info.id, info.owner, info.state);
 			}
@@ -232,7 +220,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		}
 
 		const model = this.instantiationService.createInstance(
-			new SyncDescriptor(BrowserViewModel, [id, owner, state, this.browserViewService]),
+			new SyncDescriptor(BrowserViewModel, [id, owner, state, this.getBrowserViewService()]),
 		);
 		this.getOrCreateLazy(id, {
 			url: state.url,
@@ -243,7 +231,41 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return model;
 	}
 
+	private getBrowserViewService(): IBrowserViewService {
+		if (!this.browserViewService) {
+			const channel = this.mainProcessService.getChannel(ipcBrowserViewChannelName);
+			const browserViewService = ProxyChannel.toService<IBrowserViewService>(channel);
+			this.browserViewService = browserViewService;
+
+			this.updateWindowConfiguration();
+			void this.initializeExistingViews();
+			this._register(browserViewService.onDidCreateBrowserView(event => {
+				if (event.info.owner.mainWindowId !== this.mainWindowId) {
+					return;
+				}
+
+				const model = this.createModel(event.info.id, event.info.owner, event.info.state);
+				const input = this.getOrCreateLazy(event.info.id, {
+					url: model.url,
+					title: model.title,
+					favicon: model.favicon,
+				}, model);
+
+				if (event.openOptions) {
+					this.shouldOpenEditor(input, event.info.owner, event.openOptions);
+				}
+			}));
+		}
+
+		return this.browserViewService;
+	}
+
 	private updateWindowConfiguration(): void {
+		const browserViewService = this.browserViewService;
+		if (!browserViewService) {
+			return;
+		}
+
 		const nextSharingAvailable = false;
 		if (this._isSharingAvailable !== nextSharingAvailable) {
 			this._isSharingAvailable = nextSharingAvailable;
@@ -259,7 +281,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			trustedFileRoots: [],
 			trustAllFiles: true,
 		};
-		void this.browserViewService.updateWindowConfiguration(this.mainWindowId, config);
+		void browserViewService.updateWindowConfiguration(this.mainWindowId, config);
 	}
 
 	private getKeybindings(): { [commandId: string]: string } {

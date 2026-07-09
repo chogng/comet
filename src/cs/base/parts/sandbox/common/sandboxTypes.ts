@@ -33,6 +33,11 @@ export interface Article {
   archivePdfPath?: string | null;
 }
 
+export interface TranslationCacheRecord {
+  key: string;
+  value: string;
+}
+
 export interface BatchSource {
   id: string;
   url: string;
@@ -271,6 +276,18 @@ export interface FetchArticlePayload {
 
 export interface SaveSettingsPayload {
   settings?: Partial<StoredAppSettings>;
+}
+
+export interface SaveFetchedArticlesPayload {
+  items?: Article[];
+}
+
+export interface LoadTranslationCachePayload {
+  keys?: string[];
+}
+
+export interface SaveTranslationCachePayload {
+  entries?: TranslationCacheRecord[];
 }
 
 export interface TestLlmConnectionPayload {
@@ -604,6 +621,9 @@ export interface AppCommandPayloadMap {
   clear_web_cookies: undefined;
   load_settings: undefined;
   save_settings: SaveSettingsPayload;
+  save_fetched_articles: SaveFetchedArticlesPayload;
+  load_translation_cache: LoadTranslationCachePayload;
+  save_translation_cache: SaveTranslationCachePayload;
   test_llm_connection: TestLlmConnectionPayload;
   test_translation_connection: TestTranslationConnectionPayload;
   list_translation_models: ListTranslationModelsPayload;
@@ -637,6 +657,9 @@ export interface AppCommandResultMap {
   clear_web_cookies: boolean;
   load_settings: AppSettings;
   save_settings: AppSettings;
+  save_fetched_articles: void;
+  load_translation_cache: Record<string, string>;
+  save_translation_cache: void;
   test_llm_connection: LlmConnectionTestResult;
   test_translation_connection: TranslationConnectionTestResult;
   list_translation_models: TranslationModelsResult;

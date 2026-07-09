@@ -1,8 +1,13 @@
-import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import {
+  IStorageService,
+  type StorageService,
+} from 'cs/platform/storage/common/storage';
+import { refineServiceDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export const IWorkbenchStorageService =
-  createDecorator<IWorkbenchStorageService>('workbenchStorageService');
+  refineServiceDecorator<StorageService, IWorkbenchStorageService>(
+    IStorageService,
+  );
 
 export interface IWorkbenchStorageService extends StorageService {
   readonly _serviceBrand: undefined;

@@ -10,6 +10,10 @@ import {
   type ColorThemeData,
   type ThemeKind,
 } from 'cs/platform/theme/common/theme';
+import type {
+  IColorTheme,
+  IThemeService as IPlatformThemeService,
+} from 'cs/platform/theme/common/themeService';
 
 export interface IThemeService {
   readonly onDidColorThemeChange: Event<ColorThemeData>;
@@ -23,7 +27,9 @@ const DEFAULT_THEME: ColorThemeData = createColorThemeData({
   kind: 'light',
 });
 
-export class ThemeService implements IThemeService {
+export class ThemeService implements IThemeService, IPlatformThemeService {
+  declare readonly _serviceBrand: undefined;
+
   private theme = DEFAULT_THEME;
   private readonly didColorThemeChangeEmitter = new EventEmitter<ColorThemeData>();
   readonly onDidColorThemeChange = this.didColorThemeChangeEmitter.event;
@@ -67,6 +73,15 @@ export class ThemeService implements IThemeService {
       this.theme.colors?.[colorId] ??
       resolveThemeDefaultColor(registered.defaults, this.theme.kind)
     );
+  }
+
+  getColorTheme(): IColorTheme {
+    return {
+      getColor: colorId => {
+        const color = this.getColor(colorId as ColorIdentifier);
+        return color === null ? undefined : { toString: () => color };
+      },
+    };
   }
 }
 
