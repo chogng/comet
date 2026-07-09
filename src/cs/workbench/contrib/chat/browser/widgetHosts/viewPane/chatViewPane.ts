@@ -10,6 +10,8 @@ import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget'
 import { $ } from 'cs/base/browser/dom';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
+import 'cs/workbench/contrib/chat/browser/widgetHosts/viewPane/media/chatViewPane.css';
+
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 export type ChatViewPaneProps = ChatWidgetProps & {
@@ -19,12 +21,12 @@ export type ChatViewPaneProps = ChatWidgetProps & {
 };
 
 export class ChatViewPane {
-	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-agentbar');
-	private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header');
-	private readonly headerActionsContainerElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-actions');
-	private readonly headerLeadingActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-leading');
-	private readonly headerTrailingActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-trailing');
-	private readonly leadingWindowControlsSpacer = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-header-window-controls-spacer');
+	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-chat-view-pane');
+	private readonly headerElement = $<HTMLElementTagNameMap['div']>('div.comet-chat-header');
+	private readonly headerActionsContainerElement = $<HTMLElementTagNameMap['div']>('div.comet-chat-header-actions');
+	private readonly headerLeadingActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-chat-header-leading');
+	private readonly headerTrailingActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-chat-header-trailing');
+	private readonly leadingWindowControlsSpacer = $<HTMLElementTagNameMap['div']>('div.comet-chat-header-window-controls-spacer');
 	private readonly chatWidget: ChatWidget;
 
 	constructor(

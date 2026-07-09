@@ -44,7 +44,7 @@
 	overflow: hidden;
 }
 
-.comet-session-chat-view > .comet-agentbar-content {
+.comet-session-chat-view > .comet-chat-content {
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 0;

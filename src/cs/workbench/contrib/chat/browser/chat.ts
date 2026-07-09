@@ -48,7 +48,6 @@ export type ChatWidgetProps = {
 	readonly availableArticleCount: number;
 	readonly llmModelOptions: ChatModelDropdownOption[];
 	readonly activeLlmModelOptionValue: string;
-	readonly onCloseAgentBar: () => void;
 	readonly onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
 	readonly onSelectLlmModel: (value: string) => void;
 	readonly onToggleMaxContextWindow: (options?: { suppressRender?: boolean }) => void;

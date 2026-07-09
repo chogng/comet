@@ -1647,8 +1647,6 @@ class WorkbenchHost {
       });
     };
 
-    const handleCloseSession = () => {};
-
     const activeDraftStableSelectionTarget =
       this.workbenchContentPartViews?.getActiveDraftStableSelectionTarget() ?? null;
     const assistantWritingContext = formatStableSelectionWritingContext(
@@ -1844,7 +1842,6 @@ class WorkbenchHost {
             toggleSelectedChatArticleUrl(previousUrls, href),
           );
         },
-        onCloseSession: handleCloseSession,
         onToggleAutoModelRouting: (options) => {
           activeAgentChatModelOptionValue = activeAgentChatModelOptionValue
             ? null

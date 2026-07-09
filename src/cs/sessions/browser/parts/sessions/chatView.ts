@@ -39,7 +39,6 @@ type CreateSessionChatViewPropsParams = {
 		onDownloadAllArticles: () => void | Promise<void>;
 		onExportArticleSummaries: (translateSummaries: boolean) => void | Promise<void>;
 		onToggleArticleSelected: (href: string) => void;
-		onCloseSession: () => void;
 		onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
 		onSelectLlmModel: (value: string) => void;
 		onToggleMaxContextWindow: (options?: { suppressRender?: boolean }) => void;
@@ -75,7 +74,6 @@ export function createSessionChatViewProps({
 		onDownloadAllArticles,
 		onExportArticleSummaries,
 		onToggleArticleSelected,
-		onCloseSession,
 		onToggleAutoModelRouting,
 		onSelectLlmModel,
 		onToggleMaxContextWindow,
@@ -107,7 +105,6 @@ export function createSessionChatViewProps({
 		activeLlmModelLabel,
 		isMaxContextWindowEnabled,
 		activeLlmModelSupportsMaxContextWindow,
-		onCloseAgentBar: onCloseSession,
 		onToggleAutoModelRouting,
 		onSelectLlmModel,
 		onToggleMaxContextWindow,

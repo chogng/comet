@@ -69,7 +69,6 @@ function createProps(): ChatWidgetProps {
     activeLlmModelLabel: 'GLM-4.7-Flash',
     isMaxContextWindowEnabled: false,
     activeLlmModelSupportsMaxContextWindow: false,
-    onCloseAgentBar: () => {},
     onToggleAutoModelRouting: () => {},
     onSelectLlmModel: () => {},
     onToggleMaxContextWindow: () => {},
@@ -122,24 +121,24 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
-test('chat widget does not render agentbar tabs header actions', () => {
-  const agentBar = createChatWidget(createProps());
-  const element = agentBar.getElement();
+test('chat widget does not render chat tabs header actions', () => {
+  const chatSurface = createChatWidget(createProps());
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
-    assert.equal(element.querySelector('.comet-agentbar-tabs-header'), null);
+    assert.equal(element.querySelector('.comet-chat-tabs-header'), null);
     assert.equal(
       element.querySelector('.comet-sidebar-action-bar .comet-sidebar-action-btn'),
       null,
     );
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
-test('agent chat thread uses the shared scrollable transcript container', () => {
-  const agentBar = createChatWidget({
+test('chat thread uses the shared scrollable transcript container', () => {
+  const chatSurface = createChatWidget({
     ...createProps(),
     messages: [
       { id: 'user-1', role: 'user', content: 'Explain this result' },
@@ -151,21 +150,21 @@ test('agent chat thread uses the shared scrollable transcript container', () => 
       },
     ],
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
-    const threadWidget = element.querySelector('.comet-agentbar-thread-widget');
+    const threadWidget = element.querySelector('.comet-chat-thread-widget');
     assert(threadWidget instanceof HTMLElement);
     const scrollableRoot = threadWidget.querySelector(
-      '.comet-scrollable-element-root.comet-agentbar-thread-scrollable',
+      '.comet-scrollable-element-root.comet-chat-thread-scrollable',
     );
     assert(scrollableRoot instanceof HTMLElement);
-    const thread = scrollableRoot.querySelector('.comet-agentbar-thread.comet-scrollable-content');
+    const thread = scrollableRoot.querySelector('.comet-chat-thread.comet-scrollable-content');
     assert(thread instanceof HTMLElement);
-    assert.equal(thread.querySelectorAll('.comet-agentbar-message').length, 2);
+    assert.equal(thread.querySelectorAll('.comet-chat-message').length, 2);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
@@ -204,7 +203,7 @@ test('session chat view uses compact layout for fetched article batches only', (
   }
 });
 
-test('agent chat thread follows new content only when scrolled to the comet-is-bottom', () => {
+test('chat thread follows new content only when scrolled to the comet-is-bottom', () => {
   const firstMessages: ChatWidgetProps['messages'] = [
     { id: 'user-1', role: 'user', content: 'First question' },
   ];
@@ -217,15 +216,15 @@ test('agent chat thread follows new content only when scrolled to the comet-is-b
       result: createResult(),
     },
   ];
-  const agentBar = createChatWidget({
+  const chatSurface = createChatWidget({
     ...createProps(),
     messages: firstMessages,
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
-    const thread = element.querySelector('.comet-agentbar-thread');
+    const thread = element.querySelector('.comet-chat-thread');
     assert(thread instanceof HTMLElement);
     Object.defineProperty(thread, 'clientHeight', {
       configurable: true,
@@ -241,7 +240,7 @@ test('agent chat thread follows new content only when scrolled to the comet-is-b
       value: 200,
     });
 
-    agentBar.setProps({
+    chatSurface.setProps({
       ...createProps(),
       messages: secondMessages,
     });
@@ -249,7 +248,7 @@ test('agent chat thread follows new content only when scrolled to the comet-is-b
     assert.equal(thread.scrollTop, 320);
 
     thread.scrollTop = 20;
-    agentBar.setProps({
+    chatSurface.setProps({
       ...createProps(),
       messages: [
         ...secondMessages,
@@ -259,11 +258,11 @@ test('agent chat thread follows new content only when scrolled to the comet-is-b
 
     assert.equal(thread.scrollTop, 20);
     assert.equal(
-      element.querySelector('.comet-agentbar-thread-widget')?.classList.contains('comet-show-scroll-down'),
+      element.querySelector('.comet-chat-thread-widget')?.classList.contains('comet-show-scroll-down'),
       true,
     );
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
@@ -283,7 +282,7 @@ function createHeaderActionsElement() {
   return host;
 }
 
-test('agent bar header mounts the provided leading comet-hover-actions element', () => {
+test('chat view pane header mounts the provided leading comet-hover-actions element', () => {
   let toggleCount = 0;
   const headerActionsElement = createHeaderActionsElement();
   headerActionsElement
@@ -291,17 +290,17 @@ test('agent bar header mounts the provided leading comet-hover-actions element',
     ?.addEventListener('click', () => {
       toggleCount += 1;
   });
-  const agentBar = createChatViewPane({
+  const chatSurface = createChatViewPane({
     ...createProps(),
     isPrimarySidebarVisible: false,
     headerActionsElement,
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
     const toggleButton = element.querySelector(
-      '.comet-agentbar-header .comet-titlebar-primary-sidebar-toggle-btn',
+      '.comet-chat-header .comet-titlebar-primary-sidebar-toggle-btn',
     );
     assert(toggleButton instanceof HTMLButtonElement);
     assert.equal(toggleButton.getAttribute('aria-label'), 'Header comet-hover-action');
@@ -309,7 +308,7 @@ test('agent bar header mounts the provided leading comet-hover-actions element',
     toggleButton.click();
     assert.equal(toggleCount, 1);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
@@ -319,7 +318,7 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
   let selectedModelValue: string | null = null;
   let maxContextWindowToggleCount = 0;
   let openedModelSettings = 0;
-  const agentBar = createChatWidget({
+  const chatSurface = createChatWidget({
     ...createProps(),
     question: 'Explain this selection',
     activeLlmModelOptionValue: 'glm:glm-4.7-flash',
@@ -346,7 +345,7 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
       openedModelSettings += 1;
     },
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
@@ -489,13 +488,13 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', (
 
     assert.equal(openedModelSettings, 1);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
 test('composer article quick comet-hover-action opens source menu and runs selected source', async () => {
   let selectedSourceUrl = '';
-  const agentBar = createChatWidget({
+  const chatSurface = createChatWidget({
     ...createProps(),
     articleQuickSources: [
       {
@@ -509,7 +508,7 @@ test('composer article quick comet-hover-action opens source menu and runs selec
       selectedSourceUrl = source.url;
     },
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
@@ -546,12 +545,12 @@ test('composer article quick comet-hover-action opens source menu and runs selec
     assert.equal(selectedSourceUrl, 'https://www.science.org/toc/science/current');
     assert.equal(document.body.querySelector('.comet-chat-composer-article-menu'), null);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
 test('composer article quick menu is disposed with the chat widget', async () => {
-  const agentBar = createChatWidget({
+  const chatSurface = createChatWidget({
     ...createProps(),
     articleQuickSources: [
       {
@@ -562,7 +561,7 @@ test('composer article quick menu is disposed with the chat widget', async () =>
       },
     ],
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   const articleButton = Array.from(
@@ -573,14 +572,14 @@ test('composer article quick menu is disposed with the chat widget', async () =>
   await delay(0);
 
   assert(document.body.querySelector('.comet-chat-composer-article-menu') instanceof HTMLElement);
-  agentBar.dispose();
+  chatSurface.dispose();
   assert.equal(document.body.querySelector('.comet-chat-composer-article-menu'), null);
 });
 
 test('composer input toolbar hosts article batch actions', async () => {
   let downloadAllCount = 0;
   const exportSummaryChoices: boolean[] = [];
-  const agentBar = createChatWidget({
+  const chatSurface = createChatWidget({
     ...createProps(),
     showArticleBatchActions: true,
     onDownloadAllArticles: () => {
@@ -590,7 +589,7 @@ test('composer input toolbar hosts article batch actions', async () => {
       exportSummaryChoices.push(translateSummaries);
     },
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
@@ -626,7 +625,7 @@ test('composer input toolbar hosts article batch actions', async () => {
     await delay(0);
 
     assert.equal(downloadAllCount, 1);
-    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="agentbar-article-summary-export"]');
+    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-article-summary-export"]');
     assert(menu instanceof HTMLElement);
     assert.equal(exportSummariesButton.getAttribute('aria-expanded'), 'true');
     const originalExportItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
@@ -638,7 +637,7 @@ test('composer input toolbar hosts article batch actions', async () => {
 
     exportSummariesButton.click();
     await delay(0);
-    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="agentbar-article-summary-export"]');
+    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-article-summary-export"]');
     assert(reopenedMenu instanceof HTMLElement);
     const translatedExportItem = Array.from(reopenedMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
       (node) => node.textContent?.includes('翻译并导出摘要'),
@@ -649,14 +648,14 @@ test('composer input toolbar hosts article batch actions', async () => {
 
     assert.deepEqual(exportSummaryChoices, [false, true]);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
 test('composer input toolbar renders inline article batch progress', async () => {
   let downloadAllCount = 0;
   const exportSummaryChoices: boolean[] = [];
-  const agentBar = createChatWidget({
+  const chatSurface = createChatWidget({
     ...createProps(),
     showArticleBatchActions: true,
     downloadAllProgress: { phase: 'running', current: 1, total: 3 },
@@ -668,7 +667,7 @@ test('composer input toolbar renders inline article batch progress', async () =>
       exportSummaryChoices.push(translateSummaries);
     },
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
@@ -702,14 +701,14 @@ test('composer input toolbar renders inline article batch progress', async () =>
     assert.equal(downloadAllCount, 1);
     assert.deepEqual(exportSummaryChoices, [true]);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
-test('agent chat renders fetched article linked text and opens links through markdown renderer service', async () => {
+test('chat renders fetched article linked text and opens links through markdown renderer service', async () => {
   let openedSourceUrl = '';
   let toggledSourceUrl = '';
-  const agentBar = createChatWidget(
+  const chatSurface = createChatWidget(
     {
       ...createProps(),
       messages: [
@@ -729,11 +728,11 @@ test('agent chat renders fetched article linked text and opens links through mar
       openedSourceUrl = href;
     }),
   );
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
-    const markdown = element.querySelector('.comet-agentbar-answer > .rendered-markdown');
+    const markdown = element.querySelector('.comet-chat-answer > .rendered-markdown');
     assert(markdown instanceof HTMLElement);
     assert.equal(
       markdown.textContent?.replace(/\s+/g, ' ').trim(),
@@ -743,7 +742,7 @@ test('agent chat renders fetched article linked text and opens links through mar
     const link = markdown.querySelector('a[data-href]');
     assert(link instanceof HTMLElement);
     assert.equal(link.textContent, 'Example article');
-    const checkbox = markdown.querySelector('.comet-agentbar-article-checkbox');
+    const checkbox = markdown.querySelector('.comet-chat-article-checkbox');
     assert(checkbox instanceof HTMLElement);
     assert.equal(checkbox.getAttribute('role'), 'checkbox');
     assert.equal(checkbox.getAttribute('aria-checked'), 'true');
@@ -752,13 +751,13 @@ test('agent chat renders fetched article linked text and opens links through mar
     link.click();
     assert.equal(openedSourceUrl, 'https://www.science.org/doi/example');
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
-test('agent bar model trigger and menu collapse to Auto while automatic routing is enabled', async () => {
-  const agentBar = createChatWidget(createProps());
-  const element = agentBar.getElement();
+test('chat view pane model trigger and menu collapse to Auto while automatic routing is enabled', async () => {
+  const chatSurface = createChatWidget(createProps());
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
@@ -788,12 +787,12 @@ test('agent bar model trigger and menu collapse to Auto while automatic routing 
     );
     assert(menu.querySelector('.comet-dropdown-menu-item-switch.checked') instanceof HTMLElement);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 
-test('agent bar model menu supports search filtering', async () => {
-  const agentBar = createChatWidget({
+test('chat view pane model menu supports search filtering', async () => {
+  const chatSurface = createChatWidget({
     ...createProps(),
     activeLlmModelOptionValue: 'glm:glm-4.7-flash',
     llmModelOptions: [
@@ -802,7 +801,7 @@ test('agent bar model menu supports search filtering', async () => {
       { value: 'openai:gpt-5.4:medium', label: 'GPT-5.4 · medium' },
     ],
   });
-  const element = agentBar.getElement();
+  const element = chatSurface.getElement();
   document.body.append(element);
 
   try {
@@ -825,7 +824,7 @@ test('agent bar model menu supports search filtering', async () => {
     ).map((node) => node.textContent?.trim());
     assert.deepEqual(menuItemLabels, ['GPT-5.4']);
   } finally {
-    agentBar.dispose();
+    chatSurface.dispose();
   }
 });
 

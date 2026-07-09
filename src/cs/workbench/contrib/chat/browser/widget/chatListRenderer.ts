@@ -39,8 +39,8 @@ export class ChatListRenderer {
 	private renderUserMessage(
 		message: Extract<AssistantChatMessage, { role: 'user' }>,
 	) {
-		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-user');
-		const text = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-message-text');
+		const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-user');
+		const text = $<HTMLElementTagNameMap['p']>('p.comet-chat-message-text');
 		text.textContent = message.content;
 		item.append(text);
 		return item;
@@ -50,14 +50,14 @@ export class ChatListRenderer {
 		message: Extract<AssistantChatMessage, { role: 'assistant' }>,
 		disposables: DisposableStore,
 	) {
-		const item = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message.comet-agentbar-message-assistant');
-		const body = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-message-body');
+		const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-assistant');
+		const body = $<HTMLElementTagNameMap['div']>('div.comet-chat-message-body');
 
 		if (message.result) {
-			const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-result-header');
+			const header = $<HTMLElementTagNameMap['div']>('div.comet-chat-result-header');
 			const strong = document.createElement('strong');
 			strong.textContent = localize('assistantSidebarAnswerTitle', "Answer");
-			const pill = $<HTMLElementTagNameMap['span']>('span', { class: `comet-agentbar-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}` });
+			const pill = $<HTMLElementTagNameMap['span']>('span', { class: `comet-chat-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}` });
 			pill.textContent = message.result.rerankApplied
 				? localize('assistantSidebarRerankOn', "Rerank on")
 				: localize('assistantSidebarRerankOff', "Rerank fallback");
@@ -85,7 +85,7 @@ export class ChatListRenderer {
 		message: AssistantMessage,
 		disposables: DisposableStore,
 	) {
-		const content = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-answer');
+		const content = $<HTMLElementTagNameMap['div']>('div.comet-chat-answer');
 
 		if (message.content.trim()) {
 			const rendered = disposables.add(this.markdownRenderer.render(
@@ -113,16 +113,16 @@ export class ChatListRenderer {
 
 			const checkbox = disposables.add(new Checkbox(
 				localize(
-					'agentbarArticleExportCheckbox',
+					'chatArticleExportCheckbox',
 					"Include Article in Export",
 				),
 				this.options.isArticleSelected(href),
 			));
-			checkbox.domNode.classList.add('comet-agentbar-article-checkbox');
+			checkbox.domNode.classList.add('comet-chat-article-checkbox');
 
-			const content = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-article-choice-content');
+			const content = $<HTMLElementTagNameMap['span']>('span.comet-chat-article-choice-content');
 			content.append(...Array.from(item.childNodes));
-			item.classList.add('comet-agentbar-article-choice');
+			item.classList.add('comet-chat-article-choice');
 			item.append(checkbox.domNode, content);
 
 			disposables.add(checkbox.onChange(() => {
@@ -132,24 +132,24 @@ export class ChatListRenderer {
 	}
 
 	private renderEvidence(result: AssistantResult) {
-		const evidence = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-evidence');
+		const evidence = $<HTMLElementTagNameMap['div']>('div.comet-chat-evidence');
 		const title = document.createElement('strong');
 		title.textContent = localize('assistantSidebarEvidenceTitle', "Evidence");
-		const list = $<HTMLElementTagNameMap['ul']>('ul.comet-agentbar-evidence-list');
+		const list = $<HTMLElementTagNameMap['ul']>('ul.comet-chat-evidence-list');
 		for (const evidenceItem of result.evidence) {
-			const li = $<HTMLElementTagNameMap['li']>('li.comet-agentbar-evidence-item');
-			const titleNode = $<HTMLElementTagNameMap['strong']>('strong.comet-agentbar-evidence-title');
+			const li = $<HTMLElementTagNameMap['li']>('li.comet-chat-evidence-item');
+			const titleNode = $<HTMLElementTagNameMap['strong']>('strong.comet-chat-evidence-title');
 			titleNode.textContent = localize(
-				'agentbarEvidenceRankTitle',
+				'chatEvidenceRankTitle',
 				"[{0}] {1}",
 				evidenceItem.rank,
 				evidenceItem.title,
 			);
-			const meta = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-evidence-meta');
+			const meta = $<HTMLElementTagNameMap['p']>('p.comet-chat-evidence-meta');
 			meta.textContent = [evidenceItem.journalTitle, evidenceItem.publishedAt]
 				.filter(Boolean)
 				.join(' | ');
-			const text = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-evidence-text');
+			const text = $<HTMLElementTagNameMap['p']>('p.comet-chat-evidence-text');
 			text.textContent = evidenceItem.excerpt;
 			li.append(titleNode, meta, text);
 			list.append(li);
@@ -166,18 +166,18 @@ export class ChatListRenderer {
 			return null;
 		}
 
-		const card = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-card');
-		const header = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-header');
-		const label = $<HTMLElementTagNameMap['strong']>('strong.comet-agentbar-patch-label');
+		const card = $<HTMLElementTagNameMap['div']>('div.comet-chat-patch-card');
+		const header = $<HTMLElementTagNameMap['div']>('div.comet-chat-patch-header');
+		const label = $<HTMLElementTagNameMap['strong']>('strong.comet-chat-patch-label');
 		label.textContent = patchProposal.patch.label;
 		header.append(label);
 
 		if (patchProposal.isApplied) {
-			const status = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-mode-pill.comet-is-enabled');
+			const status = $<HTMLElementTagNameMap['span']>('span.comet-chat-mode-pill.comet-is-enabled');
 			status.textContent = localize('assistantSidebarPatchApplied', "Applied");
 			header.append(status);
 		} else if (patchProposal.requiresCustomExecutor) {
-			const status = $<HTMLElementTagNameMap['span']>('span.comet-agentbar-mode-pill.comet-is-disabled');
+			const status = $<HTMLElementTagNameMap['span']>('span.comet-chat-mode-pill.comet-is-disabled');
 			status.textContent = localize(
 				'assistantSidebarPatchRequiresExecutor',
 				"Custom executor required",
@@ -188,14 +188,14 @@ export class ChatListRenderer {
 		card.append(header);
 
 		if (patchProposal.patch.summary) {
-			const summary = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-patch-summary');
+			const summary = $<HTMLElementTagNameMap['p']>('p.comet-chat-patch-summary');
 			summary.textContent = patchProposal.patch.summary;
 			card.append(summary);
 		}
 
 		const errorText = patchProposal.validationError || patchProposal.applyError;
 		if (errorText) {
-			const error = $<HTMLElementTagNameMap['p']>('p.comet-agentbar-patch-error');
+			const error = $<HTMLElementTagNameMap['p']>('p.comet-chat-patch-error');
 			error.textContent = errorText;
 			card.append(error);
 		}
@@ -206,8 +206,8 @@ export class ChatListRenderer {
 			!patchProposal.validationError &&
 			!patchProposal.isApplied
 		) {
-			const footer = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-patch-footer');
-			const applyButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-patch-btn.comet-btn-base.comet-btn-secondary.comet-btn-sm');
+			const footer = $<HTMLElementTagNameMap['div']>('div.comet-chat-patch-footer');
+			const applyButton = $<HTMLElementTagNameMap['button']>('button.comet-chat-patch-btn.comet-btn-base.comet-btn-secondary.comet-btn-sm');
 			applyButton.type = 'button';
 			applyButton.textContent = localize('assistantSidebarPatchApply', "Apply patch");
 			applyButton.addEventListener('click', () => {

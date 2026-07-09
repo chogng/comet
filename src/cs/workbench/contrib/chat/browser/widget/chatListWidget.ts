@@ -19,10 +19,10 @@ export type ChatListWidgetOptions = {
 };
 
 export class ChatListWidget {
-	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view-thread.comet-agentbar-thread-widget');
-	private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-thread');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view-thread.comet-chat-thread-widget');
+	private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-chat-thread');
 	private readonly scrollableElement: DomScrollableElement;
-	private readonly scrollDownButton = $<HTMLElementTagNameMap['button']>('button.comet-agentbar-thread-scroll-down');
+	private readonly scrollDownButton = $<HTMLElementTagNameMap['button']>('button.comet-chat-thread-scroll-down');
 	private readonly renderer: ChatListRenderer;
 	private readonly disposables = new DisposableStore();
 	private readonly renderDisposables = this.disposables.add(new DisposableStore());
@@ -39,7 +39,7 @@ export class ChatListWidget {
 			onToggleArticleSelected: options.onToggleArticleSelected,
 		});
 		this.scrollableElement = new DomScrollableElement(this.contentElement, {
-			className: 'comet-agentbar-thread-scrollable',
+			className: 'comet-chat-thread-scrollable',
 			horizontal: ScrollbarVisibility.Hidden,
 			vertical: ScrollbarVisibility.Auto,
 			useShadows: true,
@@ -52,7 +52,7 @@ export class ChatListWidget {
 		this.scrollDownButton.type = 'button';
 		this.scrollDownButton.setAttribute(
 			'aria-label',
-			localize('agentbarScrollToBottom', "Scroll to Bottom"),
+			localize('chatScrollToBottom', "Scroll to Bottom"),
 		);
 		this.scrollDownButton.append(createLxIcon('chevron-down'));
 		const handleScrollDownClick = () => {

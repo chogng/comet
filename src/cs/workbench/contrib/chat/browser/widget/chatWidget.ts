@@ -20,10 +20,9 @@ import {
 } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar';
 import { $ } from 'cs/base/browser/dom';
 
-import 'cs/workbench/browser/parts/agentbar/media/agentbar.css';
 import 'cs/workbench/contrib/chat/browser/widget/media/chat.css';
 
-const CHAT_ARTICLE_SUMMARY_EXPORT_MENU_DATA = 'agentbar-article-summary-export';
+const CHAT_ARTICLE_SUMMARY_EXPORT_MENU_DATA = 'chat-article-summary-export';
 
 function isArticleBatchMessage(message: ChatWidgetProps['messages'][number]) {
 	return message.role === 'assistant' && message.includeInAgentHistory === false;
@@ -35,7 +34,7 @@ function isArticleBatchConversation(messages: ChatWidgetProps['messages']) {
 
 export class ChatWidget {
 	private props: ChatWidgetProps;
-	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view-content.comet-agentbar-content');
+	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-chat-view-content.comet-chat-content');
 	private readonly disposables = new DisposableStore();
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
@@ -86,14 +85,14 @@ export class ChatWidget {
 	private renderShell() {
 		const shell = $<HTMLElementTagNameMap['div']>('div', { class: [
 				'comet-session-chat-view-body',
-				'comet-agentbar-shell',
+				'comet-chat-shell',
 				this.props.messages.length === 0 ? 'comet-is-empty-state' : '',
 				isArticleBatchConversation(this.props.messages) ? 'comet-is-article-batch-state' : '',
 			]
 				.filter(Boolean)
 				.join(' ') });
 		if (this.props.errorMessage) {
-			const error = $<HTMLElementTagNameMap['div']>('div.comet-agentbar-error');
+			const error = $<HTMLElementTagNameMap['div']>('div.comet-chat-error');
 			error.textContent = this.props.errorMessage;
 			shell.append(error);
 		}
@@ -161,7 +160,7 @@ export class ChatWidget {
 					menuData: CHAT_ARTICLE_SUMMARY_EXPORT_MENU_DATA,
 					menu: [
 						{
-							id: 'agentbar-article-summary-export-original',
+							id: 'chat-article-summary-export-original',
 							label: localize('chatQuickActionExportOriginalArticleSummaries', "直接导出摘要"),
 							icon: 'export',
 							onClick: () => {
@@ -169,7 +168,7 @@ export class ChatWidget {
 							},
 						},
 						{
-							id: 'agentbar-article-summary-export-translated',
+							id: 'chat-article-summary-export-translated',
 							label: localize('chatQuickActionExportTranslatedArticleSummaries', "翻译并导出摘要"),
 							icon: 'translate',
 							onClick: () => {
