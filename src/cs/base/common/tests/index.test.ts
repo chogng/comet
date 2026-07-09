@@ -6,6 +6,7 @@ import './fuzzyScorer.test';
 import './json.test';
 import './keybindings.test';
 import './lifecycle.test';
+import './observable.test';
 import './resources.test';
 import './uri.test';
 import 'cs/platform/action/tests/action.test';

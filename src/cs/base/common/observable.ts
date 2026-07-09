@@ -1,11 +1,26 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Comet Studio. All rights reserved.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import { DisposableStore, type IDisposable } from 'cs/base/common/lifecycle';
 
+interface ObservableObserver {
+	handleChange(): void;
+}
+
+interface ObservableDependency {
+	addObserver(observer: ObservableObserver): void;
+	removeObserver(observer: ObservableObserver): void;
+}
+
+interface TrackedObserver extends ObservableObserver {
+	addDependency(dependency: ObservableDependency): void;
+}
+
 export interface IReader {
 	readonly store: DisposableStore;
+	readonly delayedStore: DisposableStore;
 	readObservable<T>(observable: IObservable<T>): T;
 }
 
@@ -19,10 +34,24 @@ export interface ISettableObservable<T> extends IObservable<T> {
 }
 
 class Reader implements IReader {
-	readonly store = new DisposableStore();
+	constructor(
+		private readonly observer: TrackedObserver | undefined,
+		readonly store = new DisposableStore(),
+		readonly delayedStore = new DisposableStore(),
+	) {}
 
 	readObservable<T>(observable: IObservable<T>): T {
 		return observable.read(this);
+	}
+
+	track(dependency: ObservableDependency): void {
+		this.observer?.addDependency(dependency);
+	}
+}
+
+function track(reader: IReader | undefined, dependency: ObservableDependency): void {
+	if (reader instanceof Reader) {
+		reader.track(dependency);
 	}
 }
 
@@ -38,42 +67,102 @@ class ConstObservable<T> implements IObservable<T> {
 	}
 }
 
-class ObservableValue<T> implements ISettableObservable<T> {
+class ObservableValue<T> implements ISettableObservable<T>, ObservableDependency {
+	private readonly observers = new Set<ObservableObserver>();
+
 	constructor(private value: T) {}
 
 	get(): T {
 		return this.value;
 	}
 
-	read(_reader: IReader | undefined): T {
+	read(reader: IReader | undefined): T {
+		track(reader, this);
 		return this.value;
 	}
 
 	set(value: T, _transaction: unknown): void {
+		if (Object.is(this.value, value)) {
+			return;
+		}
+
 		this.value = value;
-	}
-}
-
-class DerivedObservable<T> implements IObservable<T> {
-	constructor(private readonly compute: (reader: IReader) => T) {}
-
-	get(): T {
-		const reader = new Reader();
-		try {
-			return this.compute(reader);
-		} finally {
-			reader.store.dispose();
+		for (const observer of [...this.observers]) {
+			observer.handleChange();
 		}
 	}
 
-	read(_reader: IReader | undefined): T {
+	addObserver(observer: ObservableObserver): void {
+		this.observers.add(observer);
+	}
+
+	removeObserver(observer: ObservableObserver): void {
+		this.observers.delete(observer);
+	}
+}
+
+class DerivedObservable<T> implements IObservable<T>, ObservableDependency, TrackedObserver {
+	private readonly observers = new Set<ObservableObserver>();
+	private readonly dependencies = new Set<ObservableDependency>();
+	private store = new DisposableStore();
+	private delayedStore = new DisposableStore();
+
+	constructor(private readonly compute: (reader: IReader) => T) {}
+
+	get(): T {
+		return this.recompute();
+	}
+
+	read(reader: IReader | undefined): T {
+		track(reader, this);
 		return this.get();
 	}
 
 	recomputeInitiallyAndOnChange(store: DisposableStore): void {
-		const reader = new Reader();
-		store.add(reader.store);
-		this.compute(reader);
+		store.add(autorun(reader => {
+			this.read(reader);
+		}));
+	}
+
+	addObserver(observer: ObservableObserver): void {
+		this.observers.add(observer);
+	}
+
+	removeObserver(observer: ObservableObserver): void {
+		this.observers.delete(observer);
+	}
+
+	addDependency(dependency: ObservableDependency): void {
+		if (this.dependencies.has(dependency)) {
+			return;
+		}
+
+		this.dependencies.add(dependency);
+		dependency.addObserver(this);
+	}
+
+	handleChange(): void {
+		for (const observer of [...this.observers]) {
+			observer.handleChange();
+		}
+	}
+
+	private recompute(): T {
+		this.store.dispose();
+		for (const dependency of this.dependencies) {
+			dependency.removeObserver(this);
+		}
+		this.dependencies.clear();
+
+		const previousDelayedStore = this.delayedStore;
+		this.store = new DisposableStore();
+		this.delayedStore = new DisposableStore();
+
+		try {
+			return this.compute(new Reader(this, this.store, this.delayedStore));
+		} finally {
+			previousDelayedStore.dispose();
+		}
 	}
 }
 
@@ -81,6 +170,85 @@ type DerivedOptions = {
 	readonly owner?: unknown;
 	readonly debugName?: () => string;
 };
+
+class Autorun implements IDisposable, TrackedObserver {
+	private readonly dependencies = new Set<ObservableDependency>();
+	private store = new DisposableStore();
+	private delayedStore = new DisposableStore();
+	private disposed = false;
+	private running = false;
+	private needsRun = false;
+
+	constructor(private readonly runner: (reader: IReader) => void) {
+		this.run();
+	}
+
+	dispose(): void {
+		if (this.disposed) {
+			return;
+		}
+
+		this.disposed = true;
+		this.disposeDependencies();
+		this.store.dispose();
+		this.delayedStore.dispose();
+	}
+
+	addDependency(dependency: ObservableDependency): void {
+		if (this.dependencies.has(dependency)) {
+			return;
+		}
+
+		this.dependencies.add(dependency);
+		dependency.addObserver(this);
+	}
+
+	handleChange(): void {
+		if (this.running) {
+			this.needsRun = true;
+			return;
+		}
+
+		this.run();
+	}
+
+	private run(): void {
+		if (this.disposed) {
+			return;
+		}
+
+		if (this.running) {
+			this.needsRun = true;
+			return;
+		}
+
+		do {
+			this.needsRun = false;
+			this.running = true;
+
+			this.disposeDependencies();
+			this.store.dispose();
+
+			const previousDelayedStore = this.delayedStore;
+			this.store = new DisposableStore();
+			this.delayedStore = new DisposableStore();
+
+			try {
+				this.runner(new Reader(this, this.store, this.delayedStore));
+			} finally {
+				this.running = false;
+				previousDelayedStore.dispose();
+			}
+		} while (this.needsRun && !this.disposed);
+	}
+
+	private disposeDependencies(): void {
+		for (const dependency of this.dependencies) {
+			dependency.removeObserver(this);
+		}
+		this.dependencies.clear();
+	}
+}
 
 export function constObservable<T>(value: T): IObservable<T> {
 	return new ConstObservable(value);
@@ -115,7 +283,5 @@ export function isObservable<T = unknown>(value: unknown): value is IObservable<
 }
 
 export function autorun(runner: (reader: IReader) => void): IDisposable {
-	const reader = new Reader();
-	runner(reader);
-	return reader.store;
+	return new Autorun(runner);
 }
