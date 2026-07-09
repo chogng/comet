@@ -7,6 +7,7 @@ import {
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
 import { EventEmitter } from 'cs/base/common/event';
+import { isMacintosh } from 'cs/base/common/platform';
 
 type Listener<T> = (event: T) => void;
 
@@ -144,10 +145,13 @@ export class Sash {
   ) {
     this.explicitSize = options.size;
     this.offsetMode = options.offsetMode ?? 'start';
-    this.element.className = [
+    this.element.classList.add(
       'comet-sash',
       this.orientation === Orientation.VERTICAL ? 'comet-vertical' : 'comet-horizontal',
-    ].join(' ');
+    );
+    if (isMacintosh) {
+      this.element.classList.add('comet-mac');
+    }
     if (typeof options.size === 'number') {
       this.element.style.setProperty('--comet-sash-size', `${options.size}px`);
     }

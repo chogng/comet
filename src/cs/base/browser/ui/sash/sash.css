@@ -6,6 +6,7 @@
   background: transparent;
 }
 
+/* Cursors: ew/ns are plain two-way resize, col/row are macOS divider cursors, and e/w/s/n are one-way constrained resize. */
 .comet-sash.comet-vertical {
   top: 0;
   width: var(--comet-sash-size);
@@ -13,11 +14,19 @@
   cursor: ew-resize;
 }
 
+.comet-sash.comet-mac.comet-vertical {
+  cursor: col-resize;
+}
+
 .comet-sash.comet-horizontal {
   left: 0;
   width: 100%;
   height: var(--comet-sash-size);
   cursor: ns-resize;
+}
+
+.comet-sash.comet-mac.comet-horizontal {
+  cursor: row-resize;
 }
 
 .comet-sash.comet-disabled {
