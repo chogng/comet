@@ -15,12 +15,14 @@ export type WindowChromeLayout = {
 	titleBarStyle: WindowChromeTitleBarStyle;
 	nativeWindowControlsOverlay: boolean;
 	windowControlsContainerMode: WindowControlsContainerMode;
+	titlebarHeightPx: number;
 	leadingWindowControlsWidthPx: number;
 	trailingWindowControlsWidthPx: number;
 };
 
 const MACOS_WINDOW_CONTROLS_WIDTH_PX = 70;
 const WINDOWS_WINDOW_CONTROLS_WIDTH_PX = 138;
+export const WORKBENCH_TITLEBAR_HEIGHT_PX = 40;
 
 export const WindowMinimumSize = {
 	WIDTH: 400,
@@ -53,6 +55,7 @@ export function getWindowChromeLayout(): WindowChromeLayout {
 		titleBarStyle,
 		nativeWindowControlsOverlay,
 		windowControlsContainerMode,
+		titlebarHeightPx: WORKBENCH_TITLEBAR_HEIGHT_PX,
 		leadingWindowControlsWidthPx:
 			windowControlsContainerMode === 'native' ? MACOS_WINDOW_CONTROLS_WIDTH_PX : 0,
 		trailingWindowControlsWidthPx: nativeWindowControlsOverlay

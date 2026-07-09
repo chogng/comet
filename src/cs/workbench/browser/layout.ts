@@ -564,7 +564,7 @@ const SESSION_SPLITVIEW_LIMITS = {
 		maximum: Number.POSITIVE_INFINITY,
 	},
 	editor: {
-		minimum: 320,
+		minimum: 420,
 		maximum: Number.POSITIVE_INFINITY,
 	},
 } as const;

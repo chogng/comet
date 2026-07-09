@@ -98,15 +98,16 @@ export class SessionSidebar {
 			this.contentHostElement,
 			this.footerElement,
 		);
-		this.element.append(
-			this.titlebarElement,
-			this.contentElement,
-		);
+		this.element.append(this.contentElement);
 		this.render();
 	}
 
 	getElement() {
 		return this.element;
+	}
+
+	getTitlebarElement() {
+		return this.titlebarElement;
 	}
 
 	setProps(props: SessionSidebarViewProps) {
@@ -129,6 +130,7 @@ export class SessionSidebar {
 
 		this.disposed = true;
 		this.fetchContentView.dispose();
+		this.titlebarElement.replaceChildren();
 		this.element.replaceChildren();
 	}
 
@@ -284,7 +286,10 @@ export class SessionSidebarPartView {
 	constructor(props: SessionSidebarViewProps) {
 		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.sidebar, this.element);
 		this.sidebar = new SessionSidebar(props);
-		this.element.append(this.sidebar.getElement());
+		this.element.append(
+			this.sidebar.getTitlebarElement(),
+			this.sidebar.getElement(),
+		);
 		this.syncCollapsedState(props);
 	}
 

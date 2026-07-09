@@ -6,7 +6,11 @@
 import type { BrowserWindow } from 'electron';
 
 import type { WindowState } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { DEFAULT_EMPTY_WINDOW_SIZE, DEFAULT_WORKSPACE_WINDOW_SIZE } from 'cs/platform/window/common/window';
+import {
+	DEFAULT_EMPTY_WINDOW_SIZE,
+	DEFAULT_WORKSPACE_WINDOW_SIZE,
+	WORKBENCH_TITLEBAR_HEIGHT_PX,
+} from 'cs/platform/window/common/window';
 
 export enum WindowMode {
 	Normal = 0,
@@ -92,7 +96,7 @@ export function resolveTitleBarOverlay() {
 	return {
 		color: '#00000000',
 		symbolColor: '#1f2d3a',
-		height: 38,
+		height: WORKBENCH_TITLEBAR_HEIGHT_PX,
 	} as const;
 }
 

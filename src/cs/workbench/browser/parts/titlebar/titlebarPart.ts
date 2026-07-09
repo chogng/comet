@@ -98,6 +98,10 @@ export class TitlebarPart {
         '--workbench-window-controls-width',
       );
     }
+    this.containerElement.style.setProperty(
+      '--workbench-titlebar-height',
+      `${WINDOW_CHROME_LAYOUT.titlebarHeightPx}px`,
+    );
     if (hasLeadingWindowControls) {
       this.containerElement.style.setProperty(
         '--workbench-leading-window-controls-width',

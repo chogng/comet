@@ -23,9 +23,9 @@
 
 .comet-session-titlebar {
 	box-sizing: border-box;
-	flex: 0 0 48px;
-	min-height: 48px;
-	height: 48px;
+	flex: 0 0 var(--workbench-titlebar-height, 40px);
+	min-height: var(--workbench-titlebar-height, 40px);
+	height: var(--workbench-titlebar-height, 40px);
 	display: flex;
 	align-items: center;
 	justify-content: space-between;

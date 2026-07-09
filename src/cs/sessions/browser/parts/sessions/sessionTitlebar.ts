@@ -12,12 +12,17 @@ export class SessionTitlebarView {
 	private readonly element = $<HTMLElementTagNameMap['header']>('header.comet-session-titlebar');
 	private readonly leadingElement = $<HTMLElementTagNameMap['div']>('div.comet-session-titlebar-leading');
 	private readonly trailingElement = $<HTMLElementTagNameMap['div']>('div.comet-session-titlebar-trailing');
+	private readonly windowControlsSpacerElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-window-controls-spacer');
 
 	private disposed = false;
 
 	constructor(props: SessionTitlebarViewProps) {
 		this.props = props;
-		this.element.append(this.leadingElement, this.trailingElement);
+		this.element.append(
+			this.leadingElement,
+			this.trailingElement,
+			this.windowControlsSpacerElement,
+		);
 		this.render();
 	}
 

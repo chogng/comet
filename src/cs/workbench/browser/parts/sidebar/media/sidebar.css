@@ -165,9 +165,9 @@
 .comet-sidebar-titlebar {
   box-sizing: border-box;
   min-width: 0;
-  min-height: var(--workbench-titlebar-height, 36px);
-  height: var(--workbench-titlebar-height, 36px);
-  flex: 0 0 var(--workbench-titlebar-height, 36px);
+  min-height: var(--workbench-titlebar-height, 40px);
+  height: var(--workbench-titlebar-height, 40px);
+  flex: 0 0 var(--workbench-titlebar-height, 40px);
   display: flex;
   align-items: center;
   gap: 8px;

@@ -477,6 +477,7 @@ export class EditorGroupView {
   private readonly toolbarElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-toolbar');
   private readonly tabsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar-tabs');
   private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar-actions');
+  private readonly windowControlsSpacerElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-window-controls-spacer');
   private readonly titlebarActionsView = createEditorTitlebarActionsView({
     isEditorCollapsed: false,
     isAgentSidebarVisible: false,
@@ -547,7 +548,11 @@ export class EditorGroupView {
       onOpenEditor: this.openEditorFromEmptyWorkspace,
     });
     this.tabsElement.append(this.titleAreaControl.getElement());
-    this.titlebarElement.append(this.tabsElement, this.actionsElement);
+    this.titlebarElement.append(
+      this.tabsElement,
+      this.actionsElement,
+      this.windowControlsSpacerElement,
+    );
     this.element.append(this.titlebarElement, this.toolbarElement, this.contentElement);
     this.render();
   }

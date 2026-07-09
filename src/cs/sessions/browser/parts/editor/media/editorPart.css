@@ -4,5 +4,5 @@
  *--------------------------------------------------------------------------------------------*/
 
 .comet-session-editor-panel .comet-editor-frame {
-	--editor-titlebar-height: 48px;
+	--editor-titlebar-height: var(--workbench-titlebar-height, 40px);
 }
