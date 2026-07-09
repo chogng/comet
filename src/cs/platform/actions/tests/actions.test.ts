@@ -18,7 +18,10 @@ import {
 } from 'cs/platform/instantiation/common/instantiation';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
-import { KeybindingsRegistry } from 'cs/platform/keybinding/common/keybindingsRegistry';
+import {
+  KeybindingWeight,
+  KeybindingsRegistry,
+} from 'cs/platform/keybinding/common/keybindingsRegistry';
 
 interface TestActionService {
   readonly _serviceBrand: undefined;
@@ -36,6 +39,7 @@ test('registerAction2 wires command palette menu and keybinding', () => {
         title: 'Sample',
         f1: true,
         keybinding: {
+          weight: KeybindingWeight.WorkbenchContrib,
           primary: KeyMod.CtrlCmd | KeyCode.KeyP,
         },
       });
@@ -68,7 +72,7 @@ test('registerAction2 wires command palette menu and keybinding', () => {
     );
     assert.equal(
       KeybindingsRegistry.getDefaultKeybindings().some(
-        (rule) => rule.id === 'test.sampleAction',
+        (rule) => rule.command === 'test.sampleAction',
       ),
       true,
     );
