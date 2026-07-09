@@ -287,8 +287,6 @@
   "editorInsertCitation": "Citation",
   "editorInsertFigure": "Figure",
   "editorInsertFigureRef": "Figure ref",
-  "editorCommandPaletteTitle": "Draft commands",
-  "editorCommandPaletteInputLabel": "Enter a command number",
   "editorModalCancel": "Cancel",
   "editorModalConfirm": "Apply",
   "editorCitationPrompt": "Citation ids (comma or space separated)",

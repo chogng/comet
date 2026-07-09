@@ -287,8 +287,6 @@
   "editorInsertCitation": "插入引用",
   "editorInsertFigure": "插入图片",
   "editorInsertFigureRef": "插入图引用",
-  "editorCommandPaletteTitle": "草稿命令",
-  "editorCommandPaletteInputLabel": "输入命令编号",
   "editorModalCancel": "取消",
   "editorModalConfirm": "确认",
   "editorCitationPrompt": "输入 citation id，可用逗号或空格分隔",
