@@ -21,7 +21,7 @@ import {
   getLlmModelByIdForProvider,
 } from 'cs/workbench/services/llm/registry';
 
-export type TranslationWidgetProps = {
+export type TranslationSettingsSectionProps = {
   labels: SettingsPartLabels;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
@@ -50,8 +50,8 @@ function createCustomTranslationModelOptions(models: readonly string[]) {
   }));
 }
 
-export class TranslationWidget {
-  private props: TranslationWidgetProps;
+export class TranslationSettingsSection {
+  private props: TranslationSettingsSectionProps;
   private readonly element = el('div', 'comet-settings-field');
   private readonly apiKeyWidget = new ApiKeyWidget({
     title: '',
@@ -67,7 +67,7 @@ export class TranslationWidget {
     onInput: (value) => this.props.onTranslationProviderApiKeyChange(this.props.activeTranslationProvider, value),
   });
 
-  constructor(props: TranslationWidgetProps) {
+  constructor(props: TranslationSettingsSectionProps) {
     this.props = props;
     this.setProps(props);
   }
@@ -76,7 +76,7 @@ export class TranslationWidget {
     return this.element;
   }
 
-  setProps(props: TranslationWidgetProps) {
+  setProps(props: TranslationSettingsSectionProps) {
     this.props = props;
     this.element.replaceChildren(this.render());
   }

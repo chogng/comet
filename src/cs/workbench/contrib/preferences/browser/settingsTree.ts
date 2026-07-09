@@ -6,10 +6,12 @@
 import type { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import {
 	createSettingsSectionMap,
-	type SettingsPageId,
-	type SettingsSectionId,
 	type SettingsSectionMap,
 } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
+import type {
+	SettingsPageId,
+	SettingsSectionId,
+} from 'cs/workbench/contrib/preferences/common/settings';
 import { shouldUpdateSettingsSection } from 'cs/workbench/contrib/preferences/browser/settingsSectionUpdates';
 import type { SettingsTreeModel } from 'cs/workbench/contrib/preferences/browser/settingsTreeModel';
 import {

@@ -1,27 +1,11 @@
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
+import {
+	SettingsId,
+	type SettingsPageId,
+	type SettingsSearchId,
+	type SettingsSectionId,
+} from 'cs/workbench/contrib/preferences/common/settings';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
-
-export type SettingsSectionId =
-  | 'locale'
-  | 'layout'
-  | 'notifications'
-  | 'appearance'
-  | 'configPath'
-  | 'textEditor'
-  | 'llm'
-  | 'translation'
-  | 'batchOptions'
-  | 'supportedSources'
-  | 'knowledgeBase'
-  | 'downloadDirectory';
-
-export type SettingsPageId =
-  | 'general'
-  | 'appearance'
-  | 'textEditor'
-  | 'model'
-  | 'knowledgeBase'
-  | 'literature';
 
 type SettingsPageDefinition = {
   id: SettingsPageId;
@@ -32,6 +16,7 @@ type SettingsPageDefinition = {
 
 export type SettingsSectionDefinition = {
   id: SettingsSectionId;
+  settingIds: readonly SettingsSearchId[];
   searchLabels: (labels: SettingsPartLabels) => readonly string[];
 };
 
@@ -58,13 +43,13 @@ export const settingsPageLayout: readonly SettingsPageDefinition[] = [
     id: 'model',
     label: (labels) => labels.settingsLlmTitle,
     icon: 'model',
-    sections: ['llm'],
+    sections: ['llmModel', 'llmApiKey'],
   },
   {
     id: 'knowledgeBase',
     label: (labels) => labels.settingsNavigationKnowledgeBase,
     icon: 'database-1',
-    sections: ['knowledgeBase'],
+    sections: ['knowledgeBaseLibrary', 'knowledgeBaseRag'],
   },
   {
     id: 'literature',
@@ -77,6 +62,7 @@ export const settingsPageLayout: readonly SettingsPageDefinition[] = [
 export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsSectionDefinition>> = {
   locale: {
     id: 'locale',
+    settingIds: [SettingsId.Locale],
     searchLabels: labels => [
       labels.settingsLanguage,
       labels.settingsLanguageHint,
@@ -86,6 +72,11 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   layout: {
     id: 'layout',
+    settingIds: [
+      SettingsId.StartupLayout,
+      SettingsId.StatusbarVisible,
+      SettingsId.BrowserTabKeepAliveLimit,
+    ],
     searchLabels: labels => [
       labels.settingsLayoutTitle,
       labels.settingsStartupLayout,
@@ -100,6 +91,12 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   notifications: {
     id: 'notifications',
+    settingIds: [
+      SettingsId.SystemNotificationsEnabled,
+      SettingsId.WarningNotificationsEnabled,
+      SettingsId.MenuBarIconEnabled,
+      SettingsId.CompletionNotificationsEnabled,
+    ],
     searchLabels: labels => [
       labels.settingsNotificationsTitle,
       labels.settingsNotificationsHint,
@@ -115,6 +112,10 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   appearance: {
     id: 'appearance',
+    settingIds: [
+      SettingsId.Theme,
+      SettingsId.UseMica,
+    ],
     searchLabels: labels => [
       labels.settingsAppearanceTitle,
       labels.settingsTheme,
@@ -128,6 +129,7 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   configPath: {
     id: 'configPath',
+    settingIds: [SettingsId.UserSettingsPathOverride],
     searchLabels: labels => [
       labels.settingsConfigPath,
       labels.settingsHintPath,
@@ -136,6 +138,14 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   textEditor: {
     id: 'textEditor',
+    settingIds: [
+      SettingsId.EditorDraftFontFamily,
+      SettingsId.EditorDraftFontSize,
+      SettingsId.EditorDraftLineHeight,
+      SettingsId.EditorDraftParagraphSpacingBefore,
+      SettingsId.EditorDraftParagraphSpacingAfter,
+      SettingsId.EditorDraftColor,
+    ],
     searchLabels: labels => [
       labels.settingsTextEditorTitle,
       labels.settingsTextEditorHint,
@@ -148,8 +158,14 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsTextEditorColor,
     ],
   },
-  llm: {
-    id: 'llm',
+  llmModel: {
+    id: 'llmModel',
+    settingIds: [
+      SettingsId.LlmActiveProvider,
+      SettingsId.LlmProviderModel,
+      SettingsId.LlmProviderEnabledModels,
+      SettingsId.LlmProviderUseMaxContextWindow,
+    ],
     searchLabels: labels => [
       labels.settingsLlmTitle,
       labels.settingsLlmProvider,
@@ -158,14 +174,30 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsLlmProviderKimi,
       labels.settingsLlmProviderDeepSeek,
       labels.settingsLlmProviderGemini,
-      labels.settingsLlmApiKey,
       labels.settingsLlmModel,
       labels.settingsLlmMaxContext,
       labels.settingsLlmMaxContextHint,
     ],
   },
+  llmApiKey: {
+    id: 'llmApiKey',
+    settingIds: [SettingsId.LlmProviderApiKey],
+    searchLabels: labels => [
+      labels.settingsLlmTitle,
+      labels.settingsLlmApiKey,
+      labels.settingsLlmApiKeyPlaceholder,
+      labels.settingsLlmShowApiKey,
+      labels.settingsLlmHideApiKey,
+    ],
+  },
   translation: {
     id: 'translation',
+    settingIds: [
+      SettingsId.TranslationActiveProvider,
+      SettingsId.TranslationProviderBaseUrl,
+      SettingsId.TranslationProviderApiKey,
+      SettingsId.TranslationProviderModel,
+    ],
     searchLabels: labels => [
       labels.settingsTranslationTitle,
       labels.settingsTranslationProvider,
@@ -181,6 +213,11 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   batchOptions: {
     id: 'batchOptions',
+    settingIds: [
+      SettingsId.DefaultBatchLimit,
+      SettingsId.FetchStartDate,
+      SettingsId.FetchEndDate,
+    ],
     searchLabels: labels => [
       labels.settingsBatchOptions,
       labels.settingsBatchHint,
@@ -191,6 +228,7 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   supportedSources: {
     id: 'supportedSources',
+    settingIds: [SettingsId.JournalSourceOverrides],
     searchLabels: labels => [
       labels.settingsSupportedSources,
       labels.settingsSupportedSourcesHint,
@@ -198,8 +236,16 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsSupportedSourceJournalTitle,
     ],
   },
-  knowledgeBase: {
-    id: 'knowledgeBase',
+  knowledgeBaseLibrary: {
+    id: 'knowledgeBaseLibrary',
+    settingIds: [
+      SettingsId.KnowledgeBaseEnabled,
+      SettingsId.KnowledgeBaseAutoIndexDownloadedPdf,
+      SettingsId.KnowledgeBaseDownloadDirectory,
+      SettingsId.KnowledgeBaseLibraryStorageMode,
+      SettingsId.KnowledgeBaseLibraryDirectory,
+      SettingsId.KnowledgeBaseMaxConcurrentIndexJobs,
+    ],
     searchLabels: labels => [
       labels.settingsKnowledgeBaseTitle,
       labels.settingsKnowledgeBaseHint,
@@ -221,6 +267,22 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsLibraryCacheDir,
       labels.settingsLibraryMaxConcurrentJobs,
       labels.settingsLibraryMaxConcurrentJobsHint,
+    ],
+  },
+  knowledgeBaseRag: {
+    id: 'knowledgeBaseRag',
+    settingIds: [
+      SettingsId.RagActiveProvider,
+      SettingsId.RagProviderApiKey,
+      SettingsId.RagProviderBaseUrl,
+      SettingsId.RagProviderEmbeddingModel,
+      SettingsId.RagProviderRerankerModel,
+      SettingsId.RagProviderEmbeddingPath,
+      SettingsId.RagProviderRerankPath,
+      SettingsId.RagRetrievalCandidateCount,
+      SettingsId.RagRetrievalTopK,
+    ],
+    searchLabels: labels => [
       labels.settingsRagTitle,
       labels.settingsRagHint,
       labels.settingsRagProvider,
@@ -237,6 +299,10 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   downloadDirectory: {
     id: 'downloadDirectory',
+    settingIds: [
+      SettingsId.DefaultDownloadDir,
+      SettingsId.PdfFileNameUseSelectionOrder,
+    ],
     searchLabels: labels => [
       labels.defaultPdfDir,
       labels.downloadDirPlaceholder,

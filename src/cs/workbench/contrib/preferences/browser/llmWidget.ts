@@ -29,7 +29,7 @@ function normalizeModelLabel(value: string) {
   return value.replace(/[\u2010-\u2015\u2212]/g, '-');
 }
 
-export type LlmWidgetProps = {
+export type LlmSettingsSectionProps = {
   labels: SettingsPartLabels;
   activeLlmProvider: LlmProviderId;
   llmProviders: Record<LlmProviderId, LlmProviderSettings>;
@@ -57,6 +57,27 @@ export type LlmWidgetProps = {
   onTestLlmConnection: () => void;
 };
 
+function getLlmProviderLabel(labels: SettingsPartLabels, providerId: LlmProviderId) {
+  switch (providerId) {
+    case 'glm':
+      return labels.settingsLlmProviderGlm;
+    case 'kimi':
+      return labels.settingsLlmProviderKimi;
+    case 'deepseek':
+      return labels.settingsLlmProviderDeepSeek;
+    case 'anthropic':
+      return 'Anthropic';
+    case 'gemini':
+      return labels.settingsLlmProviderGemini;
+    case 'openai':
+      return 'OpenAI';
+    case 'custom':
+      return 'Custom';
+    default:
+      return providerId;
+  }
+}
+
 type LlmModelListEntry = {
   providerId: LlmProviderId;
   providerLabel: string;
@@ -78,8 +99,8 @@ type ModelOrderState =
 
 const COLLAPSED_MODEL_COUNT = 8;
 
-export class LlmWidget {
-  private props: LlmWidgetProps;
+export class LlmModelSettingsSection {
+  private props: LlmSettingsSectionProps;
   private readonly element = el('div', 'comet-settings-llm-settings');
   private readonly modelSection = createSettingsSection({
     title: ' ',
@@ -89,12 +110,6 @@ export class LlmWidget {
   });
   private readonly maxContextSwitchRowControl = el('div', 'comet-settings-llm-max-context-control');
   private readonly maxContextSwitch = createSwitchView();
-  private readonly apiKeySection = createSettingsSection({
-    sectionClassName: 'comet-settings-llm-api-section',
-    panelClassName: 'comet-settings-llm-api-block-panel',
-    listClassName: 'comet-settings-llm-api-list',
-  });
-  private readonly apiKeyControl = el('div', 'comet-settings-llm-api-key-control');
   private readonly modelPanel = el('div', 'comet-settings-model-panel');
   private readonly modelSearchRow = el('div', 'comet-settings-model-search-row');
   private readonly modelSearchInputHost = el('div', 'comet-settings-model-search-input-host');
@@ -113,23 +128,8 @@ export class LlmWidget {
   private modelOrderState: ModelOrderState = { phase: 'uninitialized' };
   private modelQuery = '';
   private isModelListExpanded = false;
-  private readonly apiKeyWidget = new ApiKeyWidget({
-    title: '',
-    subtitle: '',
-    value: '',
-    placeholder: '',
-    show: false,
-    focusKey: 'settings.llm.apiKey',
-    toggleKey: 'settings.llm.apiKey.toggle',
-    toggleLabelShow: '',
-    toggleLabelHide: '',
-    onToggle: () => this.props.onToggleShowApiKey(),
-    onInput: (value) =>
-      this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
-    className: 'comet-settings-field comet-settings-llm-api-field comet-settings-llm-api-panel',
-  });
 
-  constructor(props: LlmWidgetProps) {
+  constructor(props: LlmSettingsSectionProps) {
     this.props = props;
     this.modelSearchInputBox.onDidChange((value) => {
       this.modelQuery = value;
@@ -139,8 +139,7 @@ export class LlmWidget {
     this.maxContextSwitchRowControl.append(this.maxContextSwitch.getElement());
     this.modelSearchRow.append(this.modelSearchInputHost, this.modelSearchActions.getElement());
     this.modelPanel.append(this.modelSearchRow, this.modelList);
-    this.apiKeyControl.append(this.apiKeyWidget.getElement());
-    this.element.append(this.modelSection.element, this.apiKeySection.element);
+    this.element.append(this.modelSection.element);
     this.setProps(props);
   }
 
@@ -158,7 +157,7 @@ export class LlmWidget {
     this.renderModelList();
   }
 
-  setProps(props: LlmWidgetProps) {
+  setProps(props: LlmSettingsSectionProps) {
     const previousEnabledStateKey = this.getEnabledStateKey(this.props);
     this.props = props;
     const nextEnabledStateKey = this.getEnabledStateKey(this.props);
@@ -197,54 +196,6 @@ export class LlmWidget {
         controlClassName: 'comet-settings-llm-model-picker-control',
       }),
     );
-
-    const provider = activeProviderSettings;
-    this.apiKeyWidget.setProps({
-      title: this.props.labels.settingsLlmApiKey,
-      subtitle: this.getProviderLabel(this.props.activeLlmProvider),
-      value: provider.apiKey,
-      placeholder: this.props.labels.settingsLlmApiKeyPlaceholder,
-      show: this.props.showApiKey,
-      focusKey: 'settings.llm.apiKey',
-      toggleKey: 'settings.llm.apiKey.toggle',
-      toggleLabelShow: this.props.labels.settingsLlmShowApiKey,
-      toggleLabelHide: this.props.labels.settingsLlmHideApiKey,
-      onToggle: () => this.props.onToggleShowApiKey(),
-      onInput: (value) =>
-        this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
-      className: 'comet-settings-field comet-settings-llm-api-field',
-    });
-    this.apiKeySection.list.replaceChildren(
-      createSettingsRow({
-        title: '',
-        control: this.apiKeyControl,
-        itemClassName: 'comet-settings-llm-api-key-item',
-        titleClassName: 'comet-settings-block-list-item-title-empty',
-        contentClassName: 'comet-settings-llm-api-key-content',
-        controlClassName: 'comet-settings-llm-api-key-row-control',
-      }),
-    );
-  }
-
-  private getProviderLabel(providerId: LlmProviderId) {
-    switch (providerId) {
-      case 'glm':
-        return this.props.labels.settingsLlmProviderGlm;
-      case 'kimi':
-        return this.props.labels.settingsLlmProviderKimi;
-      case 'deepseek':
-        return this.props.labels.settingsLlmProviderDeepSeek;
-      case 'anthropic':
-        return 'Anthropic';
-      case 'gemini':
-        return this.props.labels.settingsLlmProviderGemini;
-      case 'openai':
-        return 'OpenAI';
-      case 'custom':
-        return 'Custom';
-      default:
-        return providerId;
-    }
   }
 
   private createModelSearchActions() {
@@ -276,7 +227,7 @@ export class LlmWidget {
         providerId,
         provider.enabledModelOptions,
       );
-      const providerLabel = this.getProviderLabel(providerId);
+      const providerLabel = getLlmProviderLabel(this.props.labels, providerId);
       const optionsByModelId = new Map<string, LlmModelOption[]>();
 
       for (const option of getLlmModelOptionsForProvider(providerId, provider.enabledModelOptions)) {
@@ -304,7 +255,7 @@ export class LlmWidget {
     return entries;
   }
 
-  private getEnabledStateKey(props: LlmWidgetProps) {
+  private getEnabledStateKey(props: LlmSettingsSectionProps) {
     return llmProviderIds
       .map((providerId) => {
         const enabled = getEnabledLlmModelOptionValuesForProvider(
@@ -552,5 +503,72 @@ export class LlmWidget {
     for (const node of nodes) {
       this.modelList.append(node);
     }
+  }
+}
+
+export class LlmApiKeySettingsSection {
+  private props: LlmSettingsSectionProps;
+  private readonly element = el('div', 'comet-settings-llm-settings');
+  private readonly apiKeySection = createSettingsSection({
+    sectionClassName: 'comet-settings-llm-api-section',
+    panelClassName: 'comet-settings-llm-api-block-panel',
+    listClassName: 'comet-settings-llm-api-list',
+  });
+  private readonly apiKeyControl = el('div', 'comet-settings-llm-api-key-control');
+  private readonly apiKeyWidget = new ApiKeyWidget({
+    title: '',
+    subtitle: '',
+    value: '',
+    placeholder: '',
+    show: false,
+    focusKey: 'settings.llm.apiKey',
+    toggleKey: 'settings.llm.apiKey.toggle',
+    toggleLabelShow: '',
+    toggleLabelHide: '',
+    onToggle: () => this.props.onToggleShowApiKey(),
+    onInput: (value) =>
+      this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
+    className: 'comet-settings-field comet-settings-llm-api-field comet-settings-llm-api-panel',
+  });
+
+  constructor(props: LlmSettingsSectionProps) {
+    this.props = props;
+    this.apiKeyControl.append(this.apiKeyWidget.getElement());
+    this.element.append(this.apiKeySection.element);
+    this.setProps(props);
+  }
+
+  getElement() {
+    return this.element;
+  }
+
+  setProps(props: LlmSettingsSectionProps) {
+    this.props = props;
+    const provider = this.props.llmProviders[this.props.activeLlmProvider];
+    this.apiKeyWidget.setProps({
+      title: this.props.labels.settingsLlmApiKey,
+      subtitle: getLlmProviderLabel(this.props.labels, this.props.activeLlmProvider),
+      value: provider.apiKey,
+      placeholder: this.props.labels.settingsLlmApiKeyPlaceholder,
+      show: this.props.showApiKey,
+      focusKey: 'settings.llm.apiKey',
+      toggleKey: 'settings.llm.apiKey.toggle',
+      toggleLabelShow: this.props.labels.settingsLlmShowApiKey,
+      toggleLabelHide: this.props.labels.settingsLlmHideApiKey,
+      onToggle: () => this.props.onToggleShowApiKey(),
+      onInput: (value) =>
+        this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, value),
+      className: 'comet-settings-field comet-settings-llm-api-field',
+    });
+    this.apiKeySection.list.replaceChildren(
+      createSettingsRow({
+        title: '',
+        control: this.apiKeyControl,
+        itemClassName: 'comet-settings-llm-api-key-item',
+        titleClassName: 'comet-settings-block-list-item-title-empty',
+        contentClassName: 'comet-settings-llm-api-key-content',
+        controlClassName: 'comet-settings-llm-api-key-row-control',
+      }),
+    );
   }
 }

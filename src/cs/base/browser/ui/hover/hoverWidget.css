@@ -124,7 +124,7 @@
 	padding: 0;
 	border: 0;
 	background: transparent;
-	color: inherit;
+	color: #0a5fbf;
 	font: inherit;
 	line-height: inherit;
 	cursor: inherit;
@@ -135,10 +135,6 @@
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
-}
-
-.comet-hover-action {
-	color: #0a5fbf;
 }
 
 .comet-hover-action:hover,

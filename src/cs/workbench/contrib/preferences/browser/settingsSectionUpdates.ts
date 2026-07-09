@@ -1,4 +1,4 @@
-import type { SettingsSectionId } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
+import type { SettingsSectionId } from 'cs/workbench/contrib/preferences/common/settings';
 import type { SettingsPartProps } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 
 export function shouldUpdateSettingsSection(
@@ -19,16 +19,20 @@ export function shouldUpdateSettingsSection(
       return shouldUpdateConfigPathSection(previousProps, currentProps);
     case 'textEditor':
       return shouldUpdateTextEditorSection(previousProps, currentProps);
-    case 'llm':
-      return shouldUpdateLlmSection(previousProps, currentProps);
+    case 'llmModel':
+      return shouldUpdateLlmModelSection(previousProps, currentProps);
+    case 'llmApiKey':
+      return shouldUpdateLlmApiKeySection(previousProps, currentProps);
     case 'translation':
       return shouldUpdateTranslationSection(previousProps, currentProps);
     case 'batchOptions':
       return shouldUpdateBatchOptionsSection(previousProps, currentProps);
     case 'supportedSources':
       return shouldUpdateSupportedSourcesSection(previousProps, currentProps);
-    case 'knowledgeBase':
-      return shouldUpdateKnowledgeBaseSection(previousProps, currentProps);
+    case 'knowledgeBaseLibrary':
+      return shouldUpdateKnowledgeBaseLibrarySection(previousProps, currentProps);
+    case 'knowledgeBaseRag':
+      return shouldUpdateKnowledgeBaseRagSection(previousProps, currentProps);
     case 'downloadDirectory':
       return shouldUpdateDownloadDirectorySection(previousProps, currentProps);
   }
@@ -186,7 +190,7 @@ function shouldUpdateTextEditorSection(
   );
 }
 
-function shouldUpdateKnowledgeBaseSection(
+function shouldUpdateKnowledgeBaseLibrarySection(
   previousProps: SettingsPartProps | undefined,
   currentProps: SettingsPartProps,
 ) {
@@ -207,11 +211,21 @@ function shouldUpdateKnowledgeBaseSection(
     previousProps.libraryQueuedJobCount !== currentProps.libraryQueuedJobCount ||
     previousProps.libraryDocuments !== currentProps.libraryDocuments ||
     previousProps.libraryDbFile !== currentProps.libraryDbFile ||
+    previousProps.ragCacheDir !== currentProps.ragCacheDir ||
+    previousProps.labels !== currentProps.labels
+  );
+}
+
+function shouldUpdateKnowledgeBaseRagSection(
+  previousProps: SettingsPartProps | undefined,
+  currentProps: SettingsPartProps,
+) {
+  return (
+    !previousProps ||
     previousProps.activeRagProvider !== currentProps.activeRagProvider ||
     previousProps.ragProviders !== currentProps.ragProviders ||
     previousProps.retrievalCandidateCount !== currentProps.retrievalCandidateCount ||
     previousProps.retrievalTopK !== currentProps.retrievalTopK ||
-    previousProps.ragCacheDir !== currentProps.ragCacheDir ||
     previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
     previousProps.isTestingRagConnection !== currentProps.isTestingRagConnection ||
     previousProps.labels !== currentProps.labels
@@ -238,7 +252,20 @@ function shouldUpdateDownloadDirectorySection(
   );
 }
 
-function shouldUpdateLlmSection(
+function shouldUpdateLlmModelSection(
+  previousProps: SettingsPartProps | undefined,
+  currentProps: SettingsPartProps,
+) {
+  return (
+    !previousProps ||
+    previousProps.activeLlmProvider !== currentProps.activeLlmProvider ||
+    previousProps.llmProviders !== currentProps.llmProviders ||
+    previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
+    previousProps.labels !== currentProps.labels
+  );
+}
+
+function shouldUpdateLlmApiKeySection(
   previousProps: SettingsPartProps | undefined,
   currentProps: SettingsPartProps,
 ) {

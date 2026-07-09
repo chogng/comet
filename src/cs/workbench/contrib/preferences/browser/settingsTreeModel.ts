@@ -10,9 +10,11 @@ import {
 } from 'cs/workbench/contrib/preferences/browser/preferencesSearch';
 import {
 	settingsPageLayout,
-	type SettingsPageId,
-	type SettingsSectionId,
 } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
+import type {
+	SettingsPageId,
+	SettingsSectionId,
+} from 'cs/workbench/contrib/preferences/common/settings';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 
 abstract class SettingsTreeElement {

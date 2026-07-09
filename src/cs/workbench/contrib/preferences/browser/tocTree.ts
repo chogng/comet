@@ -7,8 +7,8 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import {
 	getSettingsPageNavigationItems,
-	type SettingsPageId,
 } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
+import type { SettingsPageId } from 'cs/workbench/contrib/preferences/common/settings';
 import type { SettingsTreeModel } from 'cs/workbench/contrib/preferences/browser/settingsTreeModel';
 import {
 	createSettingsElement,

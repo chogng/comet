@@ -12,7 +12,7 @@ import {
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import { buildSettingsNumberStepperInput as buildNumberStepperInput } from 'cs/workbench/contrib/preferences/browser/settingsNumberStepperInput';
 
-export type RagWidgetProps = {
+export type RagSettingsSectionProps = {
   labels: SettingsPartLabels;
   activeRagProvider: RagProviderId;
   ragProviders: Record<RagProviderId, RagProviderSettings>;
@@ -33,8 +33,8 @@ export type RagWidgetProps = {
   onTestRagConnection: () => void;
 };
 
-export class RagWidget {
-  private props: RagWidgetProps;
+export class RagSettingsSection {
+  private props: RagSettingsSectionProps;
   private readonly element = el('div', 'comet-settings-field');
   private readonly apiKeyWidget = new ApiKeyWidget({
     title: '',
@@ -50,7 +50,7 @@ export class RagWidget {
     onInput: (value) => this.props.onRagProviderApiKeyChange(this.props.activeRagProvider, value),
   });
 
-  constructor(props: RagWidgetProps) {
+  constructor(props: RagSettingsSectionProps) {
     this.props = props;
     this.setProps(props);
   }
@@ -59,7 +59,7 @@ export class RagWidget {
     return this.element;
   }
 
-  setProps(props: RagWidgetProps) {
+  setProps(props: RagSettingsSectionProps) {
     this.props = props;
     this.element.replaceChildren(this.render());
   }

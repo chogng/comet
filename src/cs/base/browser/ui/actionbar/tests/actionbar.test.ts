@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import type { IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
@@ -146,6 +147,47 @@ test('comet-actionbar actions use shared hover content instead of native title t
       throw new Error('Expected hover overlay content.');
     }
     assert.equal(overlayContent.textContent, 'Settings');
+  } finally {
+    actionBarView.dispose();
+    document.body.replaceChildren();
+  }
+});
+
+test('comet-actionbar binds managed hover to the outer action item', () => {
+  const hoverTargets: HTMLElement[] = [];
+  const hoverService: IHoverDelegate = {
+    createHover(target) {
+      hoverTargets.push(target);
+      return {
+        show() {},
+        hide() {},
+        update() {},
+        dispose() {},
+      };
+    },
+  };
+  const actionBarView = createActionBarView({
+    hoverService,
+    items: [
+      {
+        label: 'Settings',
+        title: 'Settings',
+        content: createLxIcon('gear'),
+      },
+    ],
+  });
+  const element = actionBarView.getElement();
+  document.body.append(element);
+
+  try {
+    const actionItem = element.querySelector('.comet-actionbar-item');
+    const button = element.querySelector('.comet-actionbar-action');
+    assert(actionItem instanceof HTMLElement);
+    assert(button instanceof HTMLButtonElement);
+    assert.equal(hoverTargets.length, 1);
+    assert.equal(hoverTargets[0], actionItem);
+    assert.notEqual(hoverTargets[0], button);
+    assert.equal(hoverTargets[0].classList.contains('comet-is-action'), true);
   } finally {
     actionBarView.dispose();
     document.body.replaceChildren();

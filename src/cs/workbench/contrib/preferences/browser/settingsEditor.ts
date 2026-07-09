@@ -3,11 +3,16 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 
-import { KnowledgeBaseWidget } from 'cs/workbench/contrib/preferences/browser/knowledgeBaseWidget';
-import type { KnowledgeBaseWidgetProps } from 'cs/workbench/contrib/preferences/browser/knowledgeBaseWidget';
-
-import { LlmWidget } from 'cs/workbench/contrib/preferences/browser/llmWidget';
-import type { SettingsPageId } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
+import { LibrarySettingsSection } from 'cs/workbench/contrib/preferences/browser/libraryWidget';
+import type { LibrarySettingsSectionProps } from 'cs/workbench/contrib/preferences/browser/libraryWidget';
+import {
+  LlmApiKeySettingsSection,
+  LlmModelSettingsSection,
+  type LlmSettingsSectionProps,
+} from 'cs/workbench/contrib/preferences/browser/llmWidget';
+import { RagSettingsSection } from 'cs/workbench/contrib/preferences/browser/ragWidget';
+import type { RagSettingsSectionProps } from 'cs/workbench/contrib/preferences/browser/ragWidget';
+import type { SettingsPageId } from 'cs/workbench/contrib/preferences/common/settings';
 import { SettingsTree } from 'cs/workbench/contrib/preferences/browser/settingsTree';
 import type { SettingsSectionRenderers } from 'cs/workbench/contrib/preferences/browser/settingsTree';
 import { SettingsTreeModel } from 'cs/workbench/contrib/preferences/browser/settingsTreeModel';
@@ -35,7 +40,10 @@ import type {
   SettingsPartState,
 } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 import { TOCTree, TOCTreeModel } from 'cs/workbench/contrib/preferences/browser/tocTree';
-import { TranslationWidget } from 'cs/workbench/contrib/preferences/browser/translationWidget';
+import {
+  TranslationSettingsSection,
+  type TranslationSettingsSectionProps,
+} from 'cs/workbench/contrib/preferences/browser/translationWidget';
 import { registerWorkbenchPartDomNode, WORKBENCH_PART_IDS } from 'cs/workbench/browser/layout';
 import 'cs/workbench/contrib/preferences/browser/media/settingsEditor.css';
 import 'cs/workbench/contrib/preferences/browser/media/settingsWidgets.css';
@@ -107,9 +115,11 @@ export class SettingsPartView {
   private readonly pageTitle = el('h2', 'comet-settings-page-title');
   private readonly loadingHint = buildHint('');
   private readonly noResultsHint = buildHint('', 'comet-settings-hint comet-settings-no-results');
-  private readonly knowledgeBaseWidget: KnowledgeBaseWidget;
-  private readonly llmWidget: LlmWidget;
-  private readonly translationWidget: TranslationWidget;
+  private readonly librarySection: LibrarySettingsSection;
+  private readonly ragSection: RagSettingsSection;
+  private readonly llmModelSection: LlmModelSettingsSection;
+  private readonly llmApiKeySection: LlmApiKeySettingsSection;
+  private readonly translationSection: TranslationSettingsSection;
   private readonly settingsTree: SettingsTree;
   private readonly settingsTreeModel: SettingsTreeModel;
   private readonly tocTreeModel: TOCTreeModel;
@@ -139,42 +149,12 @@ export class SettingsPartView {
       onDidSelectPage: this.handleDidSelectPage,
     });
     this.initializeSearch();
-    this.knowledgeBaseWidget = new KnowledgeBaseWidget(this.getKnowledgeBaseWidgetProps());
-    this.llmWidget = new LlmWidget({
-      labels: this.props.labels,
-      activeLlmProvider: this.props.activeLlmProvider,
-      llmProviders: this.props.llmProviders,
-      isSettingsSaving: this.props.isSettingsSaving,
-      isTestingLlmConnection: this.props.isTestingLlmConnection,
-      showApiKey: this.showLlmApiKey,
-      onToggleShowApiKey: () => { this.showLlmApiKey = !this.showLlmApiKey; this.updateLlmWidget(); },
-      onActiveLlmProviderChange: (provider) => this.props.onActiveLlmProviderChange(provider),
-      onLlmProviderApiKeyChange: (provider, apiKey) => this.props.onLlmProviderApiKeyChange(provider, apiKey),
-      onLlmProviderModelChange: (provider, model) => this.props.onLlmProviderModelChange(provider, model),
-      onLlmProviderSelectedModelOption: (provider, optionValue) => this.props.onLlmProviderSelectedModelOption(provider, optionValue),
-      onLlmProviderReasoningEffortChange: (provider, reasoningEffort) => this.props.onLlmProviderReasoningEffortChange(provider, reasoningEffort),
-      onLlmProviderModelEnabledChange: (provider, model, enabled) => this.props.onLlmProviderModelEnabledChange(provider, model, enabled),
-      onLlmProviderUseMaxContextWindowChange: (provider, useMaxContextWindow) => this.props.onLlmProviderUseMaxContextWindowChange(provider, useMaxContextWindow),
-      onTestLlmConnection: () => this.props.onTestLlmConnection(),
-    });
-    this.translationWidget = new TranslationWidget({
-      labels: this.props.labels,
-      activeTranslationProvider: this.props.activeTranslationProvider,
-      translationProviders: this.props.translationProviders,
-      llmProviders: this.props.llmProviders,
-      isSettingsSaving: this.props.isSettingsSaving,
-      isTestingTranslationConnection: this.props.isTestingTranslationConnection,
-      isLoadingTranslationModels: this.props.isLoadingTranslationModels,
-      showApiKey: this.showTranslationApiKey,
-      onToggleShowApiKey: () => { this.showTranslationApiKey = !this.showTranslationApiKey; this.updateTranslationWidget(); },
-      onActiveTranslationProviderChange: (provider) => this.props.onActiveTranslationProviderChange(provider),
-      onTranslationProviderApiKeyChange: (provider, apiKey) => this.props.onTranslationProviderApiKeyChange(provider, apiKey),
-      onTranslationProviderBaseUrlChange: (provider, baseUrl) => this.props.onTranslationProviderBaseUrlChange(provider, baseUrl),
-      onTranslationProviderModelChange: (provider, model) => this.props.onTranslationProviderModelChange(provider, model),
-      onGlmModelChange: (optionValue) => this.props.onLlmProviderSelectedModelOption('glm', optionValue),
-      onFetchTranslationModels: () => this.props.onFetchTranslationModels(),
-      onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
-    });
+    this.librarySection = new LibrarySettingsSection(this.getLibrarySectionProps());
+    this.ragSection = new RagSettingsSection(this.getRagSectionProps());
+    const llmSectionProps = this.getLlmSectionProps();
+    this.llmModelSection = new LlmModelSettingsSection(llmSectionProps);
+    this.llmApiKeySection = new LlmApiKeySettingsSection(llmSectionProps);
+    this.translationSection = new TranslationSettingsSection(this.getTranslationSectionProps());
     this.navigation.append(this.search, this.tocTree.getElement());
     this.container.append(this.topbar, this.contentScrollable.getDomNode());
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, this.container);
@@ -253,73 +233,74 @@ export class SettingsPartView {
     }
   }
 
-  private getKnowledgeBaseWidgetProps(): KnowledgeBaseWidgetProps {
+  private getLibrarySectionProps(): LibrarySettingsSectionProps {
     return {
-      title: this.props.labels.settingsKnowledgeBaseTitle,
-      hint: this.props.labels.settingsKnowledgeBaseHint,
-      library: {
-        labels: this.props.labels,
-        knowledgeBaseEnabled: this.props.knowledgeBaseEnabled,
-        autoIndexDownloadedPdf: this.props.autoIndexDownloadedPdf,
-        knowledgeBasePdfDownloadDir: this.props.knowledgeBasePdfDownloadDir,
-        libraryStorageMode: this.props.libraryStorageMode,
-        libraryDirectory: this.props.libraryDirectory,
-        defaultManagedDirectory: this.props.defaultManagedDirectory,
-        maxConcurrentIndexJobs: this.props.maxConcurrentIndexJobs,
-        desktopRuntime: this.props.desktopRuntime,
-        isSettingsSaving: this.props.isSettingsSaving,
-        isLibraryLoading: this.props.isLibraryLoading,
-        libraryDocumentCount: this.props.libraryDocumentCount,
-        libraryFileCount: this.props.libraryFileCount,
-        libraryQueuedJobCount: this.props.libraryQueuedJobCount,
-        libraryDocuments: this.props.libraryDocuments,
-        libraryDbFile: this.props.libraryDbFile,
-        ragCacheDir: this.props.ragCacheDir,
-        onKnowledgeBaseEnabledChange: (checked) => this.props.onKnowledgeBaseEnabledChange(checked),
-        onAutoIndexDownloadedPdfChange: (checked) => this.props.onAutoIndexDownloadedPdfChange(checked),
-        onKnowledgeBasePdfDownloadDirChange: (value) => this.props.onKnowledgeBasePdfDownloadDirChange(value),
-        onChooseKnowledgeBasePdfDownloadDir: () => this.props.onChooseKnowledgeBasePdfDownloadDir(),
-        onLibraryStorageModeChange: (value) => this.props.onLibraryStorageModeChange(value),
-        onLibraryDirectoryChange: (value) => this.props.onLibraryDirectoryChange(value),
-        onChooseLibraryDirectory: () => this.props.onChooseLibraryDirectory(),
-        onMaxConcurrentIndexJobsChange: (value) => this.props.onMaxConcurrentIndexJobsChange(value),
-      },
-      rag: {
-        labels: this.props.labels,
-        activeRagProvider: this.props.activeRagProvider,
-        ragProviders: this.props.ragProviders,
-        retrievalCandidateCount: this.props.retrievalCandidateCount,
-        retrievalTopK: this.props.retrievalTopK,
-        isSettingsSaving: this.props.isSettingsSaving,
-        isTestingRagConnection: this.props.isTestingRagConnection,
-        showApiKey: this.showRagApiKey,
-        onToggleShowApiKey: () => { this.showRagApiKey = !this.showRagApiKey; this.updateKnowledgeBaseWidget(); },
-        onRagProviderApiKeyChange: (provider, apiKey) => this.props.onRagProviderApiKeyChange(provider, apiKey),
-        onRagProviderBaseUrlChange: (provider, baseUrl) => this.props.onRagProviderBaseUrlChange(provider, baseUrl),
-        onRagProviderEmbeddingModelChange: (provider, model) => this.props.onRagProviderEmbeddingModelChange(provider, model),
-        onRagProviderRerankerModelChange: (provider, model) => this.props.onRagProviderRerankerModelChange(provider, model),
-        onRagProviderEmbeddingPathChange: (provider, path) => this.props.onRagProviderEmbeddingPathChange(provider, path),
-        onRagProviderRerankPathChange: (provider, path) => this.props.onRagProviderRerankPathChange(provider, path),
-        onRetrievalCandidateCountChange: (value) => this.props.onRetrievalCandidateCountChange(value),
-        onRetrievalTopKChange: (value) => this.props.onRetrievalTopKChange(value),
-        onTestRagConnection: () => this.props.onTestRagConnection(),
-      },
+      labels: this.props.labels,
+      knowledgeBaseEnabled: this.props.knowledgeBaseEnabled,
+      autoIndexDownloadedPdf: this.props.autoIndexDownloadedPdf,
+      knowledgeBasePdfDownloadDir: this.props.knowledgeBasePdfDownloadDir,
+      libraryStorageMode: this.props.libraryStorageMode,
+      libraryDirectory: this.props.libraryDirectory,
+      defaultManagedDirectory: this.props.defaultManagedDirectory,
+      maxConcurrentIndexJobs: this.props.maxConcurrentIndexJobs,
+      desktopRuntime: this.props.desktopRuntime,
+      isSettingsSaving: this.props.isSettingsSaving,
+      isLibraryLoading: this.props.isLibraryLoading,
+      libraryDocumentCount: this.props.libraryDocumentCount,
+      libraryFileCount: this.props.libraryFileCount,
+      libraryQueuedJobCount: this.props.libraryQueuedJobCount,
+      libraryDocuments: this.props.libraryDocuments,
+      libraryDbFile: this.props.libraryDbFile,
+      ragCacheDir: this.props.ragCacheDir,
+      onKnowledgeBaseEnabledChange: (checked) => this.props.onKnowledgeBaseEnabledChange(checked),
+      onAutoIndexDownloadedPdfChange: (checked) => this.props.onAutoIndexDownloadedPdfChange(checked),
+      onKnowledgeBasePdfDownloadDirChange: (value) => this.props.onKnowledgeBasePdfDownloadDirChange(value),
+      onChooseKnowledgeBasePdfDownloadDir: () => this.props.onChooseKnowledgeBasePdfDownloadDir(),
+      onLibraryStorageModeChange: (value) => this.props.onLibraryStorageModeChange(value),
+      onLibraryDirectoryChange: (value) => this.props.onLibraryDirectoryChange(value),
+      onChooseLibraryDirectory: () => this.props.onChooseLibraryDirectory(),
+      onMaxConcurrentIndexJobsChange: (value) => this.props.onMaxConcurrentIndexJobsChange(value),
     };
   }
 
-  private updateKnowledgeBaseWidget() {
-    this.knowledgeBaseWidget.setProps(this.getKnowledgeBaseWidgetProps());
+  private getRagSectionProps(): RagSettingsSectionProps {
+    return {
+      labels: this.props.labels,
+      activeRagProvider: this.props.activeRagProvider,
+      ragProviders: this.props.ragProviders,
+      retrievalCandidateCount: this.props.retrievalCandidateCount,
+      retrievalTopK: this.props.retrievalTopK,
+      isSettingsSaving: this.props.isSettingsSaving,
+      isTestingRagConnection: this.props.isTestingRagConnection,
+      showApiKey: this.showRagApiKey,
+      onToggleShowApiKey: () => {
+        this.showRagApiKey = !this.showRagApiKey;
+        this.updateRagSection();
+      },
+      onRagProviderApiKeyChange: (provider, apiKey) => this.props.onRagProviderApiKeyChange(provider, apiKey),
+      onRagProviderBaseUrlChange: (provider, baseUrl) => this.props.onRagProviderBaseUrlChange(provider, baseUrl),
+      onRagProviderEmbeddingModelChange: (provider, model) => this.props.onRagProviderEmbeddingModelChange(provider, model),
+      onRagProviderRerankerModelChange: (provider, model) => this.props.onRagProviderRerankerModelChange(provider, model),
+      onRagProviderEmbeddingPathChange: (provider, path) => this.props.onRagProviderEmbeddingPathChange(provider, path),
+      onRagProviderRerankPathChange: (provider, path) => this.props.onRagProviderRerankPathChange(provider, path),
+      onRetrievalCandidateCountChange: (value) => this.props.onRetrievalCandidateCountChange(value),
+      onRetrievalTopKChange: (value) => this.props.onRetrievalTopKChange(value),
+      onTestRagConnection: () => this.props.onTestRagConnection(),
+    };
   }
 
-  private updateLlmWidget() {
-    this.llmWidget.setProps({
+  private getLlmSectionProps(): LlmSettingsSectionProps {
+    return {
       labels: this.props.labels,
       activeLlmProvider: this.props.activeLlmProvider,
       llmProviders: this.props.llmProviders,
       isSettingsSaving: this.props.isSettingsSaving,
       isTestingLlmConnection: this.props.isTestingLlmConnection,
       showApiKey: this.showLlmApiKey,
-      onToggleShowApiKey: () => { this.showLlmApiKey = !this.showLlmApiKey; this.updateLlmWidget(); },
+      onToggleShowApiKey: () => {
+        this.showLlmApiKey = !this.showLlmApiKey;
+        this.updateLlmApiKeySection();
+      },
       onActiveLlmProviderChange: (provider) => this.props.onActiveLlmProviderChange(provider),
       onLlmProviderApiKeyChange: (provider, apiKey) => this.props.onLlmProviderApiKeyChange(provider, apiKey),
       onLlmProviderModelChange: (provider, model) => this.props.onLlmProviderModelChange(provider, model),
@@ -328,11 +309,11 @@ export class SettingsPartView {
       onLlmProviderModelEnabledChange: (provider, model, enabled) => this.props.onLlmProviderModelEnabledChange(provider, model, enabled),
       onLlmProviderUseMaxContextWindowChange: (provider, useMaxContextWindow) => this.props.onLlmProviderUseMaxContextWindowChange(provider, useMaxContextWindow),
       onTestLlmConnection: () => this.props.onTestLlmConnection(),
-    });
+    };
   }
 
-  private updateTranslationWidget() {
-    this.translationWidget.setProps({
+  private getTranslationSectionProps(): TranslationSettingsSectionProps {
+    return {
       labels: this.props.labels,
       activeTranslationProvider: this.props.activeTranslationProvider,
       translationProviders: this.props.translationProviders,
@@ -341,7 +322,10 @@ export class SettingsPartView {
       isTestingTranslationConnection: this.props.isTestingTranslationConnection,
       isLoadingTranslationModels: this.props.isLoadingTranslationModels,
       showApiKey: this.showTranslationApiKey,
-      onToggleShowApiKey: () => { this.showTranslationApiKey = !this.showTranslationApiKey; this.updateTranslationWidget(); },
+      onToggleShowApiKey: () => {
+        this.showTranslationApiKey = !this.showTranslationApiKey;
+        this.updateTranslationSection();
+      },
       onActiveTranslationProviderChange: (provider) => this.props.onActiveTranslationProviderChange(provider),
       onTranslationProviderApiKeyChange: (provider, apiKey) => this.props.onTranslationProviderApiKeyChange(provider, apiKey),
       onTranslationProviderBaseUrlChange: (provider, baseUrl) => this.props.onTranslationProviderBaseUrlChange(provider, baseUrl),
@@ -349,7 +333,27 @@ export class SettingsPartView {
       onGlmModelChange: (optionValue) => this.props.onLlmProviderSelectedModelOption('glm', optionValue),
       onFetchTranslationModels: () => this.props.onFetchTranslationModels(),
       onTestTranslationConnection: () => this.props.onTestTranslationConnection(),
-    });
+    };
+  }
+
+  private updateLibrarySection() {
+    this.librarySection.setProps(this.getLibrarySectionProps());
+  }
+
+  private updateRagSection() {
+    this.ragSection.setProps(this.getRagSectionProps());
+  }
+
+  private updateLlmModelSection() {
+    this.llmModelSection.setProps(this.getLlmSectionProps());
+  }
+
+  private updateLlmApiKeySection() {
+    this.llmApiKeySection.setProps(this.getLlmSectionProps());
+  }
+
+  private updateTranslationSection() {
+    this.translationSection.setProps(this.getTranslationSectionProps());
   }
 
   private createSectionRenderers(): SettingsSectionRenderers {
@@ -360,19 +364,27 @@ export class SettingsPartView {
       appearance: renderAppearanceSection,
       configPath: renderConfigPathSection,
       textEditor: renderTextEditorSection,
-      llm: () => {
-        this.updateLlmWidget();
-        return this.llmWidget.getElement();
+      llmModel: () => {
+        this.updateLlmModelSection();
+        return this.llmModelSection.getElement();
+      },
+      llmApiKey: () => {
+        this.updateLlmApiKeySection();
+        return this.llmApiKeySection.getElement();
       },
       translation: () => {
-        this.updateTranslationWidget();
-        return this.translationWidget.getElement();
+        this.updateTranslationSection();
+        return this.translationSection.getElement();
       },
       batchOptions: renderBatchOptionsSection,
       supportedSources: renderSupportedSourcesSection,
-      knowledgeBase: () => {
-        this.updateKnowledgeBaseWidget();
-        return this.knowledgeBaseWidget.getElement();
+      knowledgeBaseLibrary: () => {
+        this.updateLibrarySection();
+        return this.librarySection.getElement();
+      },
+      knowledgeBaseRag: () => {
+        this.updateRagSection();
+        return this.ragSection.getElement();
       },
       downloadDirectory: renderDownloadDirectorySection,
     };
@@ -445,7 +457,7 @@ export class SettingsPartView {
     }
     this.activePageId = pageId;
     if (pageId === 'model') {
-      this.llmWidget.enterModelPage();
+      this.llmModelSection.enterModelPage();
     }
     return true;
   }

@@ -8,7 +8,7 @@ import type {
   HoverInput,
   IHoverDelegate,
 } from 'cs/base/browser/ui/hover/hover';
-import { Disposable } from 'cs/base/common/lifecycle';
+import { Disposable, MutableDisposable } from 'cs/base/common/lifecycle';
 import type {
   ActionBarActionItem,
   ActionView,
@@ -131,8 +131,10 @@ export class ActionViewItem extends BaseActionViewItem {
   protected readonly button: HTMLButtonElement;
   protected readonly content = DOM.$<HTMLSpanElement>('span.comet-actionbar-content');
   protected item: ActionBarActionItem;
-  protected readonly hoverBinding: HoverBinding;
   protected itemElement: HTMLElement | null = null;
+  private readonly hoverBinding = this._register(new MutableDisposable<HoverBinding>());
+  private hoverBindingTarget: HTMLElement | null = null;
+  private readonly hoverService: IHoverDelegate;
   private readonly itemClassNames = new Set<string>();
 
   constructor(item: ActionBarActionItem, options?: ActionViewItemOptions);
@@ -141,16 +143,13 @@ export class ActionViewItem extends BaseActionViewItem {
     item: ActionBarActionItem,
     optionsOrHoverService: ActionViewItemOptions | IHoverDelegate = getBaseLayerHoverDelegate(),
   ) {
-    const hoverService = resolveHoverService(optionsOrHoverService);
-
     const button = DOM.$<HTMLButtonElement>('button.comet-actionbar-action');
     super(button);
     this.button = button;
     this.item = item;
+    this.hoverService = resolveHoverService(optionsOrHoverService);
     this.button.type = 'button';
     this.button.append(this.content);
-    this.hoverBinding = bindHover(this.button, null, hoverService);
-    this._register(this.hoverBinding);
     this._register(DOM.addDisposableListener(this.button, 'click', this.handleButtonClick));
     this.render();
   }
@@ -248,7 +247,19 @@ export class ActionViewItem extends BaseActionViewItem {
   }
 
   protected updateTooltip() {
-    this.hoverBinding.update(resolveHoverInput(this.item));
+    this.updateHoverBindingTarget();
+    this.hoverBinding.value?.update(resolveHoverInput(this.item));
+  }
+
+  private updateHoverBindingTarget() {
+    if (this.itemElement === this.hoverBindingTarget) {
+      return;
+    }
+
+    this.hoverBindingTarget = this.itemElement;
+    this.hoverBinding.value = this.itemElement
+      ? bindHover(this.itemElement, null, this.hoverService)
+      : undefined;
   }
 
   protected updateContent() {

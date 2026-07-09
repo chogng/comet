@@ -25,8 +25,7 @@ import {
 const PLAIN_HOVER_HIDE_DELAY_MS = 120;
 const ACTION_HOVER_HIDE_DELAY_MS = 200;
 const HOVER_REENTRY_COOLDOWN_MS = 300;
-const HOVER_ABOVE_OFFSET_PX = 4;
-const HOVER_BELOW_OFFSET_PX = 10;
+const HOVER_OFFSET_PX = 10;
 const HOVER_EXIT_ANIMATION_MS = 90;
 const VIEWPORT_MARGIN_PX = 8;
 
@@ -378,7 +377,6 @@ class WorkbenchHoverWidget {
 		this.renderDisposables.clear();
 		this.card.className = 'comet-hover-card';
 		this.card.classList.toggle('comet-is-compact', Boolean(options.compact));
-		this.card.classList.remove('comet-is-right-aligned');
 		if (options.className) {
 			this.card.classList.add(...options.className.split(/\s+/).filter(Boolean));
 		}
@@ -430,8 +428,8 @@ class WorkbenchHoverWidget {
 		this.element.style.top = `${VIEWPORT_MARGIN_PX}px`;
 
 		const hoverRect = this.element.getBoundingClientRect();
-		const canFitBelow = targetRect.bottom + hoverRect.height + HOVER_BELOW_OFFSET_PX + VIEWPORT_MARGIN_PX <= viewportHeight;
-		const canFitAbove = targetRect.top - hoverRect.height - HOVER_ABOVE_OFFSET_PX - VIEWPORT_MARGIN_PX >= 0;
+		const canFitBelow = targetRect.bottom + hoverRect.height + HOVER_OFFSET_PX + VIEWPORT_MARGIN_PX <= viewportHeight;
+		const canFitAbove = targetRect.top - hoverRect.height - HOVER_OFFSET_PX - VIEWPORT_MARGIN_PX >= 0;
 		let placement: 'above' | 'below';
 		if (options.position === 'above' || options.position === 'below') {
 			placement = options.position;
@@ -441,8 +439,8 @@ class WorkbenchHoverWidget {
 
 		this.element.classList.add(placement === 'above' ? 'comet-is-above' : 'comet-is-below');
 		const nextTop = placement === 'above'
-			? targetRect.top - hoverRect.height - HOVER_ABOVE_OFFSET_PX
-			: targetRect.bottom + HOVER_BELOW_OFFSET_PX;
+			? targetRect.top - hoverRect.height - HOVER_OFFSET_PX
+			: targetRect.bottom + HOVER_OFFSET_PX;
 		const top = Math.max(
 			VIEWPORT_MARGIN_PX,
 			Math.min(nextTop, viewportHeight - hoverRect.height - VIEWPORT_MARGIN_PX),
@@ -453,11 +451,9 @@ class WorkbenchHoverWidget {
 			VIEWPORT_MARGIN_PX,
 			Math.min(nextLeft, viewportWidth - hoverRect.width - VIEWPORT_MARGIN_PX),
 		);
-		const isRightAligned = nextLeft + hoverRect.width >= viewportWidth - VIEWPORT_MARGIN_PX;
 
 		this.element.style.left = `${Math.round(left)}px`;
 		this.element.style.top = `${Math.round(top)}px`;
-		this.card.classList.toggle('comet-is-right-aligned', isRightAligned);
 	}
 
 	private readonly handleMouseEnter = () => {

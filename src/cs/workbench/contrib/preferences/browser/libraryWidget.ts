@@ -24,7 +24,7 @@ function resolveLibraryDocumentStatusLabel(labels: SettingsPartLabels, document:
   return labels.settingsLibraryDocumentRegistered;
 }
 
-export type LibraryWidgetProps = {
+export type LibrarySettingsSectionProps = {
   labels: SettingsPartLabels;
   knowledgeBaseEnabled: boolean;
   autoIndexDownloadedPdf: boolean;
@@ -52,11 +52,11 @@ export type LibraryWidgetProps = {
   onMaxConcurrentIndexJobsChange: (value: string) => void;
 };
 
-export class LibraryWidget {
-  private props: LibraryWidgetProps;
+export class LibrarySettingsSection {
+  private props: LibrarySettingsSectionProps;
   private readonly element = el('div', 'comet-settings-field');
 
-  constructor(props: LibraryWidgetProps) {
+  constructor(props: LibrarySettingsSectionProps) {
     this.props = props;
     this.setProps(props);
   }
@@ -65,7 +65,7 @@ export class LibraryWidget {
     return this.element;
   }
 
-  setProps(props: LibraryWidgetProps) {
+  setProps(props: LibrarySettingsSectionProps) {
     this.props = props;
     this.element.replaceChildren(this.render());
   }
