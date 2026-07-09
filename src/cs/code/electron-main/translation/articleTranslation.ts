@@ -1,6 +1,7 @@
 import type { Article } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
+import type { TranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
 import { translateTextsToChinese } from 'cs/code/electron-main/translation/translationRouter';
 import type { TranslationProgressReporter } from 'cs/code/electron-main/translation/translationRouter';
 
@@ -35,7 +36,7 @@ export function resolvePreferredArticleTranslationContent(
 
 export async function translateArticlesToChinese(
   articles: Article[],
-  storage: StorageService,
+  storage: AppSettingsConfigurationService & TranslationCacheStore,
   onProgress?: TranslationProgressReporter,
   signal?: AbortSignal,
 ): Promise<Article[]> {

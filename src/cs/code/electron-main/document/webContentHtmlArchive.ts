@@ -13,7 +13,7 @@ import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
 import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/common/browserViewErrors';
 import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import { resolveWebContentSnapshotHtml } from 'cs/workbench/services/fetch/electron-main/webContentChannel';
 
 function resolveSourceHostLabel(sourceUrl: string) {
@@ -156,7 +156,7 @@ function resolveArchiveArticle(
 export async function archiveWebContentHtml(
   payload: WebContentHtmlArchivePayload,
   defaultDownloadDirectory: string,
-  storage: StorageService,
+  storage: AppStorageService,
 ): Promise<WebContentHtmlArchiveResult> {
   const sourceUrl = normalizeUrl(payload.pageUrl ?? '');
   const snapshotHtml = await resolveWebContentSnapshotHtml({

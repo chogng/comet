@@ -222,7 +222,8 @@ export class Storage extends Disposable implements IStorage {
 
   async flush(): Promise<void> {
     if (this.pendingFlush) {
-      return this.pendingFlush;
+      await this.pendingFlush;
+      return this.flush();
     }
 
     if (this.pendingInserts.size === 0 && this.pendingDeletes.size === 0) {

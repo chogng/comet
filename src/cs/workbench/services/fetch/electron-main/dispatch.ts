@@ -7,7 +7,8 @@ import type {
   FetchStatus,
   WebContentReuseMode,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
+import type { HistoryStore } from 'cs/platform/storage/electron-main/historyStore';
 import { parseDateRange, parseDateHintFromText } from 'cs/base/common/date';
 import type { DateRange } from 'cs/base/common/date';
 
@@ -115,6 +116,8 @@ type FetchHtmlOptions = {
   signal?: AbortSignal;
 };
 
+type FetchStorageService = AppSettingsConfigurationService & HistoryStore;
+
 type PageSource = {
   sourceId: string;
   pageUrl: string;
@@ -165,7 +168,7 @@ function normalizeBatchLimitValue(value: unknown, fallback: number = DEFAULT_USE
   return Math.min(SYSTEM_BATCH_LIMIT_MAX, Math.max(USER_BATCH_LIMIT_MIN, parsed));
 }
 
-async function resolveConfiguredUserBatchLimit(storage: StorageService) {
+async function resolveConfiguredUserBatchLimit(storage: FetchStorageService) {
   try {
     const settings = await storage.loadSettings();
     return normalizeBatchLimitValue(settings?.defaultBatchLimit, DEFAULT_USER_BATCH_LIMIT);
@@ -1094,7 +1097,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
   }
 }
 
-export async function fetchArticle(urlValue: unknown, storage: StorageService) {
+export async function fetchArticle(urlValue: unknown, storage: FetchStorageService) {
   const traceId = createFetchTraceId('single');
   const totalStartedAt = Date.now();
   const normalized = normalizeUrl(urlValue);
@@ -1336,7 +1339,7 @@ async function fetchLatestArticlesFromPage(
 
 export async function fetchLatestArticles(
   payload: FetchLatestArticlesPayload = {},
-  storage: StorageService,
+  storage: FetchStorageService,
   options: FetchLatestArticlesOptions = {},
 ) {
   const traceId = createFetchTraceId('batch');

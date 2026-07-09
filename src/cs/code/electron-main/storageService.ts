@@ -1,9 +1,10 @@
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { IStorageService } from 'cs/platform/storage/common/storage';
+import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
 import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import { createConfigurationMainService } from 'cs/platform/configuration/electron-main/configurationService';
-import { createHistoryStore } from 'cs/platform/storage/electron-main/historyStore';
-import { createLibraryStore } from 'cs/platform/storage/electron-main/libraryStore';
-import { createTranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
+import { createHistoryStore, type HistoryStore } from 'cs/platform/storage/electron-main/historyStore';
+import { createLibraryStore, type LibraryStore } from 'cs/platform/storage/electron-main/libraryStore';
+import { createTranslationCacheStore, type TranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
 import { createStorageMainService } from 'cs/platform/storage/electron-main/storageMainService';
 
 interface StoragePaths {
@@ -21,7 +22,14 @@ interface StorageOptions {
   defaultLocale?: 'zh' | 'en';
 }
 
-export function createStorageService(paths: StoragePaths, options: StorageOptions = {}): StorageService {
+export type AppStorageService =
+  IStorageService &
+  AppSettingsConfigurationService &
+  HistoryStore &
+  TranslationCacheStore &
+  Omit<LibraryStore, 'dispose'>;
+
+export function createStorageService(paths: StoragePaths, options: StorageOptions = {}): AppStorageService {
   const storageMainService = createStorageMainService({
     stateDbFile: paths.stateDbFile,
   });
@@ -37,8 +45,10 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
   });
 
   return {
+    _serviceBrand: undefined,
     applicationStorage: storageMainService.applicationStorage.storage,
     onDidChangeValue: storageMainService.onDidChangeValue,
+    onDidChangeTarget: storageMainService.onDidChangeTarget,
     onWillSaveState: storageMainService.onWillSaveState,
 
     async init() {

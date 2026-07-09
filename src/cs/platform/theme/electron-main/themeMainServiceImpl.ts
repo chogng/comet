@@ -3,7 +3,7 @@ import { nativeTheme } from 'electron';
 import type { AppSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { EventEmitter } from 'cs/base/common/event';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { IStorageService } from 'cs/platform/storage/common/storage';
 import {
   StorageScope,
   StorageTarget,
@@ -43,7 +43,7 @@ export class ThemeMainService implements IThemeMainService {
   readonly onDidChangeColorScheme = this.didChangeColorSchemeEmitter.event;
 
   constructor(
-    private readonly storageService: StorageService,
+    private readonly storageService: IStorageService,
     private settings: AppSettings,
   ) {
     this.updateNativeThemeSource();

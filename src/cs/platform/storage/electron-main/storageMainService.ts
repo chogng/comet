@@ -3,6 +3,7 @@ import {
   type IStorageMain,
   type IStorageMainOptions,
 } from 'cs/platform/storage/electron-main/storageMain';
+import { WillSaveStateReason } from 'cs/platform/storage/common/storage';
 import { ApplicationStorageService } from 'cs/platform/storage/common/storageService';
 
 export interface IStorageMainService {
@@ -40,6 +41,7 @@ export class StorageMainService extends ApplicationStorageService implements ISt
   }
 
   override async close(): Promise<void> {
+    this.emitWillSaveState(WillSaveStateReason.SHUTDOWN);
     await this.applicationStorageMain.close();
   }
 }

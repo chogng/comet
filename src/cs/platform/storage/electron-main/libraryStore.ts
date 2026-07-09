@@ -13,25 +13,26 @@ import type {
   LibraryDocumentStatusPayload,
   LibraryDocumentSummary,
   LibraryDocumentsResult,
+  LibraryRegistrationResult,
   LibraryIngestStatus,
   ReindexLibraryDocumentResult,
   UpsertLibraryDocumentMetadataPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
-import { createDefaultKnowledgeBaseSettings } from 'cs/workbench/services/knowledgeBase/config';
-import type { StorageService } from 'cs/platform/storage/common/storage';
 
-type LibraryStore = Pick<
-  StorageService,
-  | 'upsertLibraryDocumentMetadata'
-  | 'deleteLibraryDocument'
-  | 'registerLibraryDocument'
-  | 'getLibraryDocumentStatus'
-  | 'listLibraryDocuments'
-  | 'reindexLibraryDocument'
-> & {
+export interface LibraryStore {
+  upsertLibraryDocumentMetadata(
+    payload: UpsertLibraryDocumentMetadataPayload,
+  ): Promise<LibraryDocumentSummary>;
+  deleteLibraryDocument(payload: DeleteLibraryDocumentPayload): Promise<boolean>;
+  registerLibraryDocument(payload: IndexDownloadedPdfPayload): Promise<LibraryRegistrationResult>;
+  getLibraryDocumentStatus(
+    payload: LibraryDocumentStatusPayload,
+  ): Promise<LibraryDocumentSummary | null>;
+  listLibraryDocuments(payload?: { limit?: unknown }): Promise<LibraryDocumentsResult>;
+  reindexLibraryDocument(payload: { documentId?: string }): Promise<ReindexLibraryDocumentResult>;
   dispose(): void;
-};
+}
 
 type StorageMode = KnowledgeBaseSettings['libraryStorageMode'];
 
@@ -73,6 +74,7 @@ type FileRow = {
 
 type DocumentFilePathRow = {
   file_path: string;
+  storage_mode: StorageMode;
 };
 
 type DocumentSummaryRow = {
@@ -423,7 +425,7 @@ export function createLibraryStore(paths: LibraryPaths): LibraryStore {
     'SELECT file_id, document_id FROM document_files WHERE file_sha256 = ? LIMIT 1',
   );
   const selectFilePathsByDocumentId = db.prepare(`
-    SELECT file_path
+    SELECT file_path, storage_mode
     FROM document_files
     WHERE document_id = ?
   `);
@@ -761,7 +763,11 @@ export function createLibraryStore(paths: LibraryPaths): LibraryStore {
       }
 
       const fileRows = selectFilePathsByDocumentId.all(documentId) as DocumentFilePathRow[];
-      await deleteDocumentFiles(fileRows.map((row) => row.file_path));
+      await deleteDocumentFiles(
+        fileRows
+          .filter((row) => row.storage_mode === 'managed-copy')
+          .map((row) => row.file_path),
+      );
 
       return runTransaction(db, () => {
         deleteDocumentById.run(documentId);
@@ -790,13 +796,9 @@ export function createLibraryStore(paths: LibraryPaths): LibraryStore {
       const titleKey = normalizeTextKey(normalizedTitle);
       const firstAuthorKey = normalizeTextKey(normalizedAuthors[0] ?? '');
       const publishedYear = extractPublishedYear(normalizedPublishedAt);
-      const knowledgeBaseSettings: KnowledgeBaseSettings = {
-        ...createDefaultKnowledgeBaseSettings(),
-        enabled: true,
-        autoIndexDownloadedPdf: true,
+      const knowledgeBaseSettings: Pick<KnowledgeBaseSettings, 'libraryStorageMode' | 'libraryDirectory'> = {
         libraryStorageMode: normalizeStorageMode((payload as { storageMode?: unknown }).storageMode),
         libraryDirectory: cleanText((payload as { libraryDirectory?: unknown }).libraryDirectory) || null,
-        maxConcurrentIndexJobs: 1,
       };
       const match = resolveDocumentMatch(
         absoluteSourcePath,

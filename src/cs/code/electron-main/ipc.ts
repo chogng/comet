@@ -38,7 +38,7 @@ import type {
   WebContentNavigatePayload,
   WebContentState,
 } from 'cs/platform/browserView/common/browserView';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import {
   captureWebContentScreenshot,
 	getWebContentState,
@@ -151,7 +151,7 @@ function cancelDocumentTask(payload: CancelDocumentTaskPayload | undefined) {
 async function invokeCommand<TCommand extends AppCommand>(
   command: TCommand,
   payload: AppCommandPayloadMap[TCommand],
-  storage: StorageService,
+  storage: AppStorageService,
   nativeHostMainService: NativeHostMainService,
   themeMainService: IThemeMainService,
   emitToRenderer?: (channel: string, payload: unknown) => void,
@@ -393,7 +393,7 @@ async function invokeCommand<TCommand extends AppCommand>(
 }
 
 export function registerAppIpc(
-  storage: StorageService,
+  storage: AppStorageService,
   nativeHostMainService: NativeHostMainService,
   themeMainService: IThemeMainService,
 ) {

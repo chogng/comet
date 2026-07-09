@@ -8,10 +8,15 @@ import {
   StorageScope,
   type StorageChangeEvent,
   StorageTarget,
+  TARGET_KEY,
   WillSaveStateReason,
+  type IStorageEntry,
+  type IStorageTargetChangeEvent,
   type IStorageValueChangeEvent,
   type IWillSaveStateEvent,
 } from 'cs/platform/storage/common/storage';
+
+type KeyTargets = Record<string, StorageTarget>;
 
 export abstract class AbstractStorageService extends Disposable {
   private readonly didChangeValueEmitter = this._register(new EventEmitter<IStorageValueChangeEvent>());
@@ -29,11 +34,11 @@ export abstract class AbstractStorageService extends Disposable {
     }
 
     const scope = listenerOrScope;
-    const key = String(thisArgsOrKey ?? '');
+    const key = typeof thisArgsOrKey === 'string' ? thisArgsOrKey : undefined;
     const store = disposablesOrStore;
     const event: Event<IStorageValueChangeEvent> = (listener, thisArgs, disposables) =>
       this.didChangeValueEmitter.event(change => {
-        if (change.scope === scope && change.key === key) {
+        if (change.scope === scope && (key === undefined || change.key === key)) {
           listener.call(thisArgs, change);
         }
       }, undefined, disposables ?? store);
@@ -43,15 +48,24 @@ export abstract class AbstractStorageService extends Disposable {
   private readonly willSaveStateEmitter = this._register(new EventEmitter<IWillSaveStateEvent>());
   readonly onWillSaveState = this.willSaveStateEmitter.event;
 
+  private readonly didChangeTargetEmitter = this._register(new EventEmitter<IStorageTargetChangeEvent>());
+  readonly onDidChangeTarget = this.didChangeTargetEmitter.event;
+
   protected abstract getStorage(scope: StorageScope): IStorage | undefined;
 
   protected emitDidChangeValue(
     scope: StorageScope,
     event: { key: string; external?: boolean },
   ) {
+    if (event.key === TARGET_KEY) {
+      this.didChangeTargetEmitter.fire({ scope });
+      return;
+    }
+
     this.didChangeValueEmitter.fire({
       key: event.key,
       scope,
+      target: this.getKeyTargets(scope)[event.key],
       external: event.external,
     });
   }
@@ -116,31 +130,31 @@ export abstract class AbstractStorageService extends Disposable {
     key: string,
     value: StorageValue,
     scope: StorageScope,
-    _target: StorageTarget = StorageTarget.MACHINE,
+    target: StorageTarget = StorageTarget.MACHINE,
   ): void {
-    void this.getStorage(scope)?.set(key, value);
+    void this.storeValue(key, value, scope, target);
   }
 
-  storeAll(
-    entries: Array<{
-      readonly key: string;
-      readonly value: StorageValue;
-      readonly scope: StorageScope;
-      readonly target: StorageTarget;
-    }>,
-    external = false,
-  ): void {
+  storeAll(entries: Array<IStorageEntry>, external = false): void {
     for (const entry of entries) {
-      void this.getStorage(entry.scope)?.set(entry.key, entry.value, external);
+      this.storeValue(entry.key, entry.value, entry.scope, entry.target, external);
     }
   }
 
   remove(key: string, scope: StorageScope): void {
-    void this.getStorage(scope)?.delete(key);
+    const storage = this.getStorage(scope);
+    if (!storage) {
+      return;
+    }
+
+    this.removeKeyTarget(storage, scope, key);
+    void storage.delete(key);
   }
 
-  keys(scope: StorageScope): string[] {
-    return [...(this.getStorage(scope)?.items.keys() ?? [])];
+  keys(scope: StorageScope, target: StorageTarget): string[] {
+    return Object.entries(this.getKeyTargets(scope))
+      .filter(([, value]) => value === target)
+      .map(([key]) => key);
   }
 
   log(): void {
@@ -169,6 +183,57 @@ export abstract class AbstractStorageService extends Disposable {
       this.getStorage(StorageScope.PROFILE)?.flush() ?? Promise.resolve(),
       this.getStorage(StorageScope.WORKSPACE)?.flush() ?? Promise.resolve(),
     ]);
+  }
+
+  private storeValue(
+    key: string,
+    value: StorageValue,
+    scope: StorageScope,
+    target: StorageTarget,
+    external = false,
+  ): void {
+    const storage = this.getStorage(scope);
+    if (!storage) {
+      return;
+    }
+
+    if (value === undefined || value === null) {
+      this.remove(key, scope);
+      return;
+    }
+
+    this.setKeyTarget(storage, scope, key, target);
+    void storage.set(key, value, external);
+  }
+
+  private getKeyTargets(scope: StorageScope): KeyTargets {
+    const rawValue = this.getStorage(scope)?.get(TARGET_KEY);
+    return rawValue ? JSON.parse(rawValue) as KeyTargets : {};
+  }
+
+  private setKeyTarget(
+    storage: IStorage,
+    scope: StorageScope,
+    key: string,
+    target: StorageTarget,
+  ): void {
+    const targets = this.getKeyTargets(scope);
+    if (targets[key] === target) {
+      return;
+    }
+
+    targets[key] = target;
+    void storage.set(TARGET_KEY, targets);
+  }
+
+  private removeKeyTarget(storage: IStorage, scope: StorageScope, key: string): void {
+    const targets = this.getKeyTargets(scope);
+    if (targets[key] === undefined) {
+      return;
+    }
+
+    delete targets[key];
+    void storage.set(TARGET_KEY, targets);
   }
 
 }

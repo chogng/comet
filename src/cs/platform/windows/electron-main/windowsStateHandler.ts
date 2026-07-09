@@ -6,7 +6,7 @@
 import { screen } from 'electron';
 import type { BrowserWindow, Display, Rectangle } from 'electron';
 
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { IStorageService } from 'cs/platform/storage/common/storage';
 import {
 	StorageScope,
 	StorageTarget,
@@ -28,7 +28,7 @@ interface ISerializedWindowsState {
 export class WindowsStateHandler {
 	private static readonly windowsStateStorageKey = 'windowsState';
 
-	constructor(private readonly storageService: StorageService) {}
+	constructor(private readonly storageService: IStorageService) {}
 
 	getNewWindowState(): IWindowState {
 		const storedWindowState = this.getStoredWindowState();

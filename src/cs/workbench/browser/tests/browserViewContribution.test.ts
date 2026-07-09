@@ -366,7 +366,7 @@ function createTestStorageService(values = new Map<string, string>()): IStorageS
 		remove: (key: string, scope: StorageScope) => {
 			values.delete(keyFor(key, scope));
 		},
-		keys: scope => [...values.keys()]
+		keys: (_scope, _target) => [...values.keys()]
 			.filter(key => key.startsWith(`${scope}:`))
 			.map(key => key.slice(`${scope}:`.length)),
 		log() {},

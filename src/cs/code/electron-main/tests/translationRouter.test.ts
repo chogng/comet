@@ -10,7 +10,7 @@ import type {
 	DocumentTranslationProgress,
 	LlmSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { TranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
 import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
 import { translateTextsToChinese } from 'cs/code/electron-main/translation/translationRouter';
 
@@ -44,14 +44,14 @@ test('translation progress reports failures and rethrows translation errors', as
 		async saveTranslationCache() {
 			throw new Error('save should not run');
 		},
-	} as Pick<StorageService, 'loadTranslationCache' | 'saveTranslationCache'>;
+	} satisfies TranslationCacheStore;
 
 	await assert.rejects(
 		translateTextsToChinese(
 			['Example source text'],
 			llmSettings,
 			translationSettings,
-			storage as StorageService,
+			storage,
 			progress => progressUpdates.push(progress),
 		),
 		/cache unavailable/,

@@ -18,8 +18,7 @@ const entryPoint = path.join(
   'cs',
   'platform',
   'storage',
-  'electron-main',
-  'tests',
+  'test',
   'index.test.ts',
 );
 const outputFile = path.join(outputDir, 'index.test.mjs');

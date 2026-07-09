@@ -8,7 +8,7 @@ import type {
   DocxExportResult,
   ExportArticlesDocxPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { StorageService } from 'cs/platform/storage/common/storage';
+import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import { defaultDocxExportConfig } from 'cs/code/electron-main/document/docxConfig';
 import { CancellationError, isCancellationError } from 'cs/base/common/errors';
 import { AppError } from 'cs/base/parts/sandbox/common/appError';
@@ -360,7 +360,7 @@ export function buildBatchDocxFileName(
 export async function exportArticlesDocx(
   payload: ExportArticlesDocxPayload = {},
   defaultDownloadDir: string,
-  storage: StorageService,
+  storage: AppStorageService,
   window?: BrowserWindow | null,
   options: {
     onTranslationProgress?: DocumentTranslationProgressReporter;

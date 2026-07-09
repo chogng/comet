@@ -1,21 +1,7 @@
-import type {
-  Article,
-  DeleteLibraryDocumentPayload,
-  IndexDownloadedPdfPayload,
-  UpsertLibraryDocumentMetadataPayload,
-  LibraryDocumentStatusPayload,
-  LibraryDocumentSummary,
-  LibraryDocumentsResult,
-  LibraryRegistrationResult,
-  ListLibraryDocumentsPayload,
-  ReindexLibraryDocumentPayload,
-  ReindexLibraryDocumentResult,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { IStorage } from 'cs/base/parts/storage/common/storage';
 import type { StorageValue } from 'cs/base/parts/storage/common/storage';
 import type { Event } from 'cs/base/common/event';
 import type { DisposableStore } from 'cs/base/common/lifecycle';
-import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export const IS_NEW_KEY = '__$__isNewStorageMarker';
@@ -39,7 +25,7 @@ export interface IStorageValueChangeEvent {
 
 export type StorageChangeEvent = Event<IStorageValueChangeEvent> & ((
   scope: StorageScope,
-  key: string,
+  key: string | undefined,
   disposable: DisposableStore,
 ) => Event<IStorageValueChangeEvent>);
 
@@ -55,14 +41,22 @@ export enum StorageTarget {
   MACHINE,
 }
 
-export interface TranslationCacheRecord {
-  key: string;
-  value: string;
+export interface IStorageEntry {
+  readonly key: string;
+  readonly value: StorageValue;
+  readonly scope: StorageScope;
+  readonly target: StorageTarget;
 }
 
-export interface StorageService extends AppSettingsConfigurationService {
- readonly applicationStorage: IStorage;
+export interface IStorageTargetChangeEvent {
+  readonly scope: StorageScope;
+}
+
+export interface IStorageService {
+  readonly _serviceBrand: undefined;
+  readonly applicationStorage: IStorage;
   readonly onDidChangeValue: StorageChangeEvent;
+  readonly onDidChangeTarget: Event<IStorageTargetChangeEvent>;
   readonly onWillSaveState: Event<IWillSaveStateEvent>;
   init(): Promise<void>;
   close(): Promise<void>;
@@ -93,35 +87,14 @@ export interface StorageService extends AppSettingsConfigurationService {
     target: StorageTarget,
   ): void;
   storeAll(
-    entries: Array<{
-      readonly key: string;
-      readonly value: StorageValue;
-      readonly scope: StorageScope;
-      readonly target: StorageTarget;
-    }>,
+    entries: Array<IStorageEntry>,
     external: boolean,
   ): void;
   remove(key: string, scope: StorageScope): void;
-  keys(scope: StorageScope): string[];
+  keys(scope: StorageScope, target: StorageTarget): string[];
   log(): void;
   optimize(scope: StorageScope): Promise<void>;
   flush(reason?: WillSaveStateReason): Promise<void>;
-  saveFetchedArticles(items: Article[]): Promise<void>;
-  loadTranslationCache(keys: string[]): Promise<Record<string, string>>;
-  saveTranslationCache(entries: TranslationCacheRecord[]): Promise<void>;
-  upsertLibraryDocumentMetadata(
-    payload: UpsertLibraryDocumentMetadataPayload,
-  ): Promise<LibraryDocumentSummary>;
-  deleteLibraryDocument(payload: DeleteLibraryDocumentPayload): Promise<boolean>;
-  registerLibraryDocument(payload: IndexDownloadedPdfPayload): Promise<LibraryRegistrationResult>;
-  getLibraryDocumentStatus(
-    payload: LibraryDocumentStatusPayload,
-  ): Promise<LibraryDocumentSummary | null>;
-  listLibraryDocuments(payload?: ListLibraryDocumentsPayload): Promise<LibraryDocumentsResult>;
-  reindexLibraryDocument(
-    payload: ReindexLibraryDocumentPayload,
-  ): Promise<ReindexLibraryDocumentResult>;
 }
 
-export const IStorageService = createDecorator<StorageService>('storageService');
-export type IStorageService = StorageService;
+export const IStorageService = createDecorator<IStorageService>('storageService');

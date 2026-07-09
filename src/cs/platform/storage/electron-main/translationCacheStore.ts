@@ -1,10 +1,13 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
-import type { StorageService, TranslationCacheRecord } from 'cs/platform/storage/common/storage';
+import type { TranslationCacheRecord } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
 
-type TranslationCacheStore = Pick<StorageService, 'loadTranslationCache' | 'saveTranslationCache'>;
+export interface TranslationCacheStore {
+  loadTranslationCache(keys: string[]): Promise<Record<string, string>>;
+  saveTranslationCache(entries: TranslationCacheRecord[]): Promise<void>;
+}
 
 type TranslationCacheEntry = {
   value: string;
@@ -19,12 +22,25 @@ type TranslationCacheFile = {
 const translationCacheVersion = 1;
 const maxTranslationCacheEntries = 5000;
 
-async function readJson<T>(filePath: string, fallbackValue: T) {
+function isNotFoundError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ENOENT'
+  );
+}
+
+async function readJson<T>(filePath: string) {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
     return JSON.parse(raw) as T;
-  } catch {
-    return fallbackValue;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return undefined;
+    }
+
+    throw error;
   }
 }
 
@@ -33,11 +49,12 @@ async function writeJson(filePath: string, value: unknown) {
   await fs.writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
 }
 
-function normalizeCacheFile(payload: unknown): Map<string, TranslationCacheEntry> {
-  const entries =
-    payload && typeof payload === 'object' && Array.isArray((payload as TranslationCacheFile).entries)
-      ? (payload as TranslationCacheFile).entries
-      : [];
+function normalizeCacheFile(payload: unknown, filePath: string): Map<string, TranslationCacheEntry> {
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as TranslationCacheFile).entries)) {
+    throw new Error(`Translation cache file '${filePath}' must contain an entries array.`);
+  }
+
+  const entries = (payload as TranslationCacheFile).entries;
   const cache = new Map<string, TranslationCacheEntry>();
 
   for (const item of entries) {
@@ -80,8 +97,10 @@ export function createTranslationCacheStore(translationCacheFile: string): Trans
     if (!cachePromise) {
       cachePromise = readJson<TranslationCacheFile>(
         translationCacheFile,
-        { version: translationCacheVersion, entries: [] },
-      ).then(normalizeCacheFile);
+      ).then(payload => normalizeCacheFile(
+        payload ?? { version: translationCacheVersion, entries: [] },
+        translationCacheFile,
+      ));
     }
 
     return cachePromise;

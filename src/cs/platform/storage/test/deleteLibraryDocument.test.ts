@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 
-import { createLibraryStore } from '../libraryStore.js';
+import { createLibraryStore } from '../electron-main/libraryStore.js';
 
 async function pathExists(targetPath: string) {
   try {
@@ -50,7 +50,7 @@ async function withLibraryStore(
   }
 }
 
-test('deleteLibraryDocument removes a linked original PDF from disk', async () => {
+test('deleteLibraryDocument preserves a linked original PDF on disk', async () => {
   await withLibraryStore(async (store, tempDir) => {
     const sourceFilePath = path.join(tempDir, 'linked-original.pdf');
     await writeFile(sourceFilePath, 'linked-original-pdf');
@@ -65,7 +65,7 @@ test('deleteLibraryDocument removes a linked original PDF from disk', async () =
     });
 
     assert.equal(deleted, true);
-    assert.equal(await pathExists(sourceFilePath), false);
+    assert.equal(await pathExists(sourceFilePath), true);
 
     const snapshot = await store.listLibraryDocuments();
     assert.equal(snapshot.totalCount, 0);

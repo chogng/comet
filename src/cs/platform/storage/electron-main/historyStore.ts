@@ -2,16 +2,30 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
 import type { Article } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { StorageService } from 'cs/platform/storage/common/storage';
 
-type HistoryStore = Pick<StorageService, 'saveFetchedArticles'>;
+export interface HistoryStore {
+  saveFetchedArticles(items: Article[]): Promise<void>;
+}
 
-async function readJson<T>(filePath: string, fallbackValue: T) {
+function isNotFoundError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ENOENT'
+  );
+}
+
+async function readJson<T>(filePath: string) {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
     return JSON.parse(raw) as T;
-  } catch {
-    return fallbackValue;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return undefined;
+    }
+
+    throw error;
   }
 }
 
@@ -22,8 +36,16 @@ async function writeJson(filePath: string, value: unknown) {
 
 export function createHistoryStore(historyFile: string): HistoryStore {
   async function readHistory() {
-    const payload = await readJson<Article[]>(historyFile, []);
-    return Array.isArray(payload) ? payload : [];
+    const payload = await readJson<Article[]>(historyFile);
+    if (payload === undefined) {
+      return [];
+    }
+
+    if (!Array.isArray(payload)) {
+      throw new Error(`History file '${historyFile}' must contain a JSON array.`);
+    }
+
+    return payload;
   }
 
   async function writeHistory(items: Article[]) {
