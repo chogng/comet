@@ -3,10 +3,87 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationToken } from 'cs/base/common/cancellation';
 import { Event } from 'cs/base/common/event';
+import { URI } from 'cs/base/common/uri';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export const IPlaywrightService = createDecorator<IPlaywrightService>('playwrightService');
+
+export const defaultPageSnapshotTimeoutMs = 15_000;
+export const maximumPageSnapshotTimeoutMs = 60_000;
+export const defaultPageSnapshotMaximumBytes = 16 * 1024 * 1024;
+
+export interface IBrowserPageSnapshot {
+	readonly pageId: string;
+	readonly uri: URI;
+	readonly title: string;
+	readonly html: string;
+	readonly capturedAt: number;
+}
+
+export interface IPageSnapshotReadiness {
+	readonly selector: string;
+	readonly state?: 'attached' | 'visible';
+	readonly minimumCount?: number;
+}
+
+export interface IPageSnapshotOptions {
+	readonly readiness?: IPageSnapshotReadiness;
+	readonly timeoutMs?: number;
+	readonly maximumBytes?: number;
+}
+
+class BrowserPageSnapshotError extends Error {
+	constructor(name: string, message: string, cause?: unknown) {
+		super(message, { cause });
+		this.name = name;
+	}
+}
+
+export class BrowserPageNotTrackedError extends BrowserPageSnapshotError {
+	constructor(pageId: string) {
+		super('BrowserPageNotTrackedError', `Browser page "${pageId}" is not tracked.`);
+	}
+}
+
+export class BrowserPageClosedError extends BrowserPageSnapshotError {
+	constructor(pageId: string) {
+		super('BrowserPageClosedError', `Browser page "${pageId}" is closed.`);
+	}
+}
+
+export class BrowserPageReadinessSelectorError extends BrowserPageSnapshotError {
+	constructor(selector: string, cause: unknown) {
+		super('BrowserPageReadinessSelectorError', `Browser page readiness selector "${selector}" is invalid.`, cause);
+	}
+}
+
+export class BrowserPageReadinessTimeoutError extends BrowserPageSnapshotError {
+	constructor(selector: string | undefined, timeoutMs: number) {
+		super('BrowserPageReadinessTimeoutError', selector
+			? `Browser page readiness selector "${selector}" did not complete within ${timeoutMs} ms.`
+			: `Browser page snapshot did not complete within ${timeoutMs} ms.`);
+	}
+}
+
+export class BrowserPageNavigationInterruptedError extends BrowserPageSnapshotError {
+	constructor(cause: unknown) {
+		super('BrowserPageNavigationInterruptedError', 'Browser page navigation interrupted snapshot capture.', cause);
+	}
+}
+
+export class BrowserPageSnapshotEmptyError extends BrowserPageSnapshotError {
+	constructor(pageId: string) {
+		super('BrowserPageSnapshotEmptyError', `Browser page "${pageId}" did not have a document element.`);
+	}
+}
+
+export class BrowserPageSnapshotTooLargeError extends BrowserPageSnapshotError {
+	constructor(maximumBytes: number) {
+		super('BrowserPageSnapshotTooLargeError', `Browser page snapshot exceeds the ${maximumBytes} byte limit.`);
+	}
+}
 
 export interface IInvokeFunctionResult {
 	result?: unknown;
@@ -74,6 +151,8 @@ export interface IPlaywrightService {
 	 * @returns The summary of the page's current state.
 	 */
 	getSummary(sessionId: string, pageId: string): Promise<string>;
+
+	captureSnapshot(sessionId: string, pageId: string, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IBrowserPageSnapshot>;
 
 	/**
 	 * Run a function with access to a Playwright page and return its raw result, or throw an error.
