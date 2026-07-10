@@ -39,6 +39,7 @@ import type {
   WebContentState,
 } from 'cs/platform/browserView/common/browserView';
 import { ipcBrowserViewChannelName } from 'cs/platform/browserView/common/browserView';
+import { ipcBrowserViewGroupChannelName } from 'cs/platform/browserView/common/browserViewGroup';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import {
   captureWebContentScreenshot,
@@ -60,6 +61,7 @@ import {
   setWebContentVisible,
   BrowserViewMainService,
 } from 'cs/platform/browserView/electron-main/browserViewMainService';
+import { BrowserViewGroupMainService } from 'cs/platform/browserView/electron-main/browserViewGroupMainService';
 import {
   clearWorkbenchSharedSessionCache,
   clearWorkbenchSharedSessionCookies,
@@ -113,7 +115,10 @@ const browserViewIpcDisposables = new DisposableStore();
 const browserViewMainService = browserViewIpcDisposables.add(
   new BrowserViewMainService(),
 );
-const fetchTargetService = new FetchTargetService();
+const browserViewGroupMainService = browserViewIpcDisposables.add(
+  new BrowserViewGroupMainService(browserViewMainService),
+);
+const fetchTargetService = new FetchTargetService(browserViewMainService);
 const fetchTargetProvider = new ConfiguredFetchTargetProvider(fetchTargetService);
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -412,9 +417,12 @@ export function registerAppIpc(
     ipcBrowserViewChannelName,
     ProxyChannel.fromService(browserViewMainService, browserViewIpcDisposables),
   );
+  electronMainChannelServer.registerChannel(
+    ipcBrowserViewGroupChannelName,
+    ProxyChannel.fromService(browserViewGroupMainService, browserViewIpcDisposables),
+  );
   app.once('before-quit', () => {
     browserViewIpcDisposables.dispose();
-		fetchTargetService.dispose();
   });
   registerContextMenuListener();
   try {

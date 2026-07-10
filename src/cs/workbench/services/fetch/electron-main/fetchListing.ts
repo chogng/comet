@@ -46,7 +46,7 @@ function createTargetReadyStatus(
 	return {
 		phase: 'loading',
 		targetMode: 'background',
-		targetId: null,
+		targetId: targetSession.targetId,
 		articleProof,
 		...options,
 	};
@@ -183,7 +183,7 @@ export async function fetchListing({
 		timeoutMs: targetSession.targetMode === 'webContentsView'
 			? candidatePlanConfig.webContentsViewTimeoutMs
 			: candidatePlanConfig.pageTimeoutMs,
-		admitWebContentsViewDocument: document => {
+		admitDocument: document => {
 			const hasCandidates = hasSynchronousListingCandidates(
 				document.html,
 				page,

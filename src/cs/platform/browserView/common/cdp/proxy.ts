@@ -32,8 +32,8 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 	private readonly _sessions = this._register(new DisposableMap<string, ICDPConnection>());
 	private readonly _targets = this._register(new DisposableMap<string, ICDPTarget>());
 
-	// Only auto-attach once per target.
-	private readonly _autoAttachments = new WeakSet<ICDPTarget>();
+	private readonly _autoAttachments = new WeakMap<ICDPTarget, Promise<ICDPConnection>>();
+	private _isDisposed = false;
 
 	// CDP method handlers map
 	private readonly _handlers = new Map<string, (params: unknown, sessionId?: string) => Promise<object> | object>([
@@ -70,7 +70,11 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 
 	registerTarget(target: ICDPTarget): void {
 		const targetInfo = target.targetInfo;
-		if (this._targets.has(targetInfo.targetId)) {
+		const existing = this._targets.get(targetInfo.targetId);
+		if (existing) {
+			if (existing !== target) {
+				target.dispose();
+			}
 			return;
 		}
 		this._targets.set(targetInfo.targetId, target);
@@ -80,9 +84,8 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 				targetInfo: target.targetInfo,
 			});
 		}
-		if (this._autoAttach && !this._autoAttachments.has(target)) {
-			this._autoAttachments.add(target);
-			void target.attach();
+		if (this._autoAttach) {
+			void this.autoAttach(target);
 		}
 
 		target.onClose(() => {
@@ -104,6 +107,22 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 		target.onSessionCreated(({ session, waitingForDebugger }) => {
 			this.registerSession(session, waitingForDebugger);
 		});
+	}
+
+	private autoAttach(target: ICDPTarget): Promise<ICDPConnection> {
+		const existing = this._autoAttachments.get(target);
+		if (existing) {
+			return existing;
+		}
+		const attachment = target.attach();
+		this._autoAttachments.set(target, attachment);
+		void attachment.then(
+			session => {
+				Event.once(session.onClose)(() => this._autoAttachments.delete(target));
+			},
+			() => this._autoAttachments.delete(target),
+		);
+		return attachment;
 	}
 
 	notifySessionCreated(session: ICDPConnection, waitingForDebugger: boolean): void {
@@ -235,6 +254,15 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 			});
 	}
 
+	override dispose(): void {
+		if (this._isDisposed) {
+			return;
+		}
+		this._isDisposed = true;
+		this._onClose.fire();
+		super.dispose();
+	}
+
 	// #endregion
 
 	// #region CDP Commands
@@ -298,8 +326,10 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 			throw new CDPInvalidParamsError('This implementation only supports auto-attach with flatten=true');
 		}
 
-		// Proxy-level auto-attach: attach to new targets as they are registered.
 		this._autoAttach = params.autoAttach ?? false;
+		if (this._autoAttach) {
+			await Promise.all(Array.from(this._targets.values(), target => this.autoAttach(target)));
+		}
 
 		return {};
 	}
@@ -363,10 +393,8 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 		const target = await this.browserTarget.createTarget(url || 'about:blank', browserContextId);
 		this.registerTarget(target);
 
-		// Playwright expects the attachment to happen before createTarget returns.
-		if (this._autoAttach && !this._autoAttachments.has(target)) {
-			this._autoAttachments.add(target);
-			await target.attach();
+		if (this._autoAttach) {
+			await this.autoAttach(target);
 		}
 
 		return { targetId: target.targetInfo.targetId };

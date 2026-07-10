@@ -56,7 +56,7 @@ export class ArticleFetchService {
 			timeoutMs,
 			settleMs: publisher.backgroundSettleMs,
 			signal: request.signal,
-			admitWebContentsViewDocument: candidate =>
+			admitDocument: candidate =>
 				parseArticleDocument(candidate, requireBody).accepted,
 		});
 		const parsed = parseArticleDocument(document, requireBody);

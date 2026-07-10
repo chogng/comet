@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import {
 	buildArticlePageProof,
 	isArticlePageProofSatisfied,
@@ -17,8 +18,8 @@ const BODY_TEXT = 'This paragraph contains the complete scientific article body 
 
 function createTargetDocument(url: string, html: string): FetchTargetDocument {
 	return {
+		resource: BrowserViewUri.forId('article-proof'),
 		targetMode: 'background',
-		targetId: null,
 		requestedUrl: url,
 		finalUrl: url,
 		statusCode: 200,

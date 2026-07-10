@@ -2,10 +2,11 @@
  *  Copyright (c) Comet Studio. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
-import { BrowserWindow, session, WebContentsView } from 'electron';
+import { BrowserWindow, session, WebContentsView, type Session } from 'electron';
 import { VSBuffer } from 'cs/base/common/buffer';
 import { Emitter, type Event } from 'cs/base/common/event';
 import { DisposableStore } from 'cs/base/common/lifecycle';
+import { generateUuid } from 'cs/base/common/uuid';
 import { normalizeListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
 import type { ListingCandidateExtraction, ListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
 
@@ -35,6 +36,7 @@ import {
   type IBrowserViewTitleChangeEvent,
   type IBrowserViewVisibilityEvent,
   type IBrowserViewWindowConfiguration,
+  type BrowserViewTargetPresentation,
   type IElementData,
   type WebContentBounds,
   type WebContentLayoutPhase,
@@ -47,6 +49,7 @@ import type {
   ISerializedBrowserPermissionsSnapshot,
 } from 'cs/platform/browserView/common/browserPermissions';
 import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/common/browserViewErrors';
+import { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
 import {
   defaultBrowserTabKeepAliveLimit,
@@ -56,6 +59,7 @@ import {
 const DEFAULT_WEB_CONTENT_TARGET_ID = '__shared__';
 const RETAINED_WEB_CONTENT_TARGET_TTL_MS = 3 * 60 * 1000;
 const DEFAULT_WEB_CONTENT_BOUNDS = { x: 0, y: 0, width: 1024, height: 768 };
+const BACKGROUND_WEB_CONTENT_BOUNDS = { x: 0, y: 0, width: 1280, height: 900 };
 const HIDDEN_WEB_CONTENT_BOUNDS = { x: 0, y: 0, width: 1, height: 1 };
 
 type WebContentTargetState = Pick<
@@ -74,10 +78,30 @@ type WebContentTargetMetadataMachine = {
   pendingFaviconUrl: string;
 };
 
+export interface BrowserViewMainContext {
+  readonly id: string;
+  readonly session: Session;
+  readonly storageScope: BrowserViewStorageScope;
+}
+
+export interface BrowserViewMainTarget {
+  readonly context: BrowserViewMainContext;
+  readonly debuggerTransport: BrowserViewDebugger;
+  readonly onDidClose: Event<void>;
+  readonly owner: IBrowserViewOwner;
+  readonly targetId: string;
+  readonly view: WebContentsView;
+}
+
 type ManagedWebContentTarget = {
   cleanup: Array<() => void>;
+  context: BrowserViewMainContext;
+  debuggerTransport: BrowserViewDebugger;
   metadataMachine: WebContentTargetMetadataMachine;
+  onDidClose?: Event<void>;
+  owner?: IBrowserViewOwner;
   state: WebContentTargetState;
+  statusCode: number | null;
   targetId: string;
   view: WebContentsView;
 };
@@ -108,6 +132,7 @@ type BrowserViewTargetMetadata = {
   readonly owner: IBrowserViewOwner;
   readonly storageScope: BrowserViewStorageScope;
   readonly events: BrowserViewTargetEvents;
+  presentation: BrowserViewTargetPresentation;
   permissions: ISerializedBrowserPermissionsSnapshot;
   browserZoomIndex: number;
   device: IBrowserDeviceProfile | undefined;
@@ -160,6 +185,49 @@ function createBrowserViewTargetEvents(): BrowserViewTargetEvents {
     onDidChangeRemoteStatus: disposables.add(new Emitter<boolean>()),
     onDidRequestPermission: disposables.add(new Emitter<IBrowserViewPermissionRequestEvent>()),
     onDidChangePermissions: disposables.add(new Emitter<ISerializedBrowserPermissionsSnapshot>()),
+  };
+}
+
+function createBrowserViewContext(
+  targetId: string,
+  storageScope: BrowserViewStorageScope,
+): BrowserViewMainContext {
+  switch (storageScope) {
+    case BrowserViewStorageScope.Global:
+      return {
+        id: WORKBENCH_SHARED_WEB_PARTITION,
+        session: session.fromPartition(WORKBENCH_SHARED_WEB_PARTITION),
+        storageScope,
+      };
+    case BrowserViewStorageScope.Ephemeral:
+      return {
+        id: targetId,
+        session: session.fromPartition(`comet-browser-view-${targetId}`),
+        storageScope,
+      };
+    case BrowserViewStorageScope.Workspace:
+      throw new Error('Workspace-scoped browser sessions require a workspace identifier.');
+  }
+}
+
+function createBrowserViewTargetMetadata(
+  options: IBrowserViewCreateOptions,
+): BrowserViewTargetMetadata {
+  const initialState = options.initialState;
+  return {
+    owner: options.owner,
+    storageScope: options.sessionOptions.scope,
+    events: createBrowserViewTargetEvents(),
+    presentation: options.presentation,
+    permissions: initialState?.permissions ?? { origins: {} },
+    browserZoomIndex: normalizeBrowserZoomIndex(initialState?.browserZoomIndex),
+    device: initialState?.device,
+    isElementSelectionActive: initialState?.isElementSelectionActive ?? false,
+    isAreaSelectionActive: initialState?.isAreaSelectionActive ?? false,
+    visible: false,
+    bounds: undefined,
+    lastScreenshot: initialState?.lastScreenshot,
+    consoleLogs: [],
   };
 }
 
@@ -360,6 +428,7 @@ function areWebContentStatesEqual(previous: WebContentState, next: WebContentSta
 export type WebContentDocumentSnapshot = {
   url: string;
   html: string;
+  statusCode: number | null;
   captureMs: number;
   isLoading: boolean;
 	documentReadyState: string;
@@ -1748,6 +1817,7 @@ function disposeWebContentTargetEntry(targetId: string) {
 
   webContentTargets.delete(normalizedTargetId);
   disposeBrowserViewTargetMetadata(normalizedTargetId);
+  entry.debuggerTransport.dispose();
   for (const cleanup of entry.cleanup) {
     cleanup();
   }
@@ -1842,11 +1912,17 @@ function emitBrowserViewStateChanges(
   }
 }
 
-function createWebContentTarget(targetId: string) {
+function createWebContentTarget(
+  targetId: string,
+  context: BrowserViewMainContext = createBrowserViewContext(
+    targetId,
+    BrowserViewStorageScope.Global,
+  ),
+) {
   const window = getWebContentOwnerWindow();
   const view = new WebContentsView({
     webPreferences: {
-      session: session.fromPartition(WORKBENCH_SHARED_WEB_PARTITION),
+      session: context.session,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -1860,10 +1936,17 @@ function createWebContentTarget(targetId: string) {
   view.setVisible(false);
   window.contentView.addChildView(view);
 
+  const metadata = browserViewTargetMetadata.get(targetId);
+
   const entry: ManagedWebContentTarget = {
     cleanup: [],
+    context,
+    debuggerTransport: new BrowserViewDebugger(view.webContents),
     metadataMachine: createDefaultTargetMetadataMachine(),
+    onDidClose: metadata?.events.onDidClose.event,
+    owner: metadata?.owner,
     state: createDefaultWebContentTargetState(),
+    statusCode: null,
     targetId,
     view,
   };
@@ -1882,6 +1965,27 @@ function createWebContentTarget(targetId: string) {
   ]) {
     addWebContentTargetListener(entry, event, syncState);
   }
+
+  addWebContentTargetListener(entry, 'did-start-navigation', (
+    _event,
+    _url,
+    _isInPlace,
+    isMainFrame,
+  ) => {
+    if (isMainFrame === true) {
+      entry.statusCode = null;
+    }
+  });
+  addWebContentTargetListener(entry, 'did-navigate', (
+    _event,
+    _url,
+    httpResponseCode,
+  ) => {
+    const responseCode = Number(httpResponseCode);
+    entry.statusCode = Number.isFinite(responseCode) && responseCode > 0
+      ? responseCode
+      : null;
+  });
 
   addWebContentTargetListener(entry, 'focus', () => {
     browserViewTargetMetadata.get(targetId)?.events.onDidChangeFocus.fire({ focused: true });
@@ -1992,6 +2096,7 @@ function createWebContentTarget(targetId: string) {
   });
 
   addWebContentTargetListener(entry, 'destroyed', () => {
+    entry.debuggerTransport.dispose();
     webContentTargets.delete(targetId);
     retainedWebContentTargets.delete(targetId);
     disposeBrowserViewTargetMetadata(targetId);
@@ -2017,7 +2122,10 @@ function createWebContentTarget(targetId: string) {
   return entry;
 }
 
-function ensureWebContentTarget(targetId?: string | null) {
+function ensureWebContentTarget(
+  targetId?: string | null,
+  context?: BrowserViewMainContext,
+) {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
   const existingEntry = webContentTargets.get(normalizedTargetId);
   if (existingEntry && !existingEntry.view.webContents.isDestroyed()) {
@@ -2028,7 +2136,7 @@ function ensureWebContentTarget(targetId?: string | null) {
     webContentTargets.delete(normalizedTargetId);
   }
 
-  return createWebContentTarget(normalizedTargetId);
+  return createWebContentTarget(normalizedTargetId, context);
 }
 
 function readWebContentTargetState(entry: ManagedWebContentTarget): WebContentTargetState {
@@ -2157,7 +2265,11 @@ function applyWebContentLayout() {
       webContentWindow?.webContents.focus();
     }
     entry.view.setVisible(false);
-    entry.view.setBounds(HIDDEN_WEB_CONTENT_BOUNDS);
+    entry.view.setBounds(
+      metadata?.presentation === 'background'
+        ? BACKGROUND_WEB_CONTENT_BOUNDS
+        : HIDDEN_WEB_CONTENT_BOUNDS,
+    );
   }
 
   reportActiveWebContentState();
@@ -2239,16 +2351,6 @@ export function getWebContentState(targetId?: string | null): WebContentState {
   return buildWebContentState(normalizedTargetId);
 }
 
-export function hasManagedWebContentTarget(targetId: string) {
-	const normalizedTargetId = normalizeWebContentTargetId(targetId);
-	const entry = webContentTargets.get(normalizedTargetId);
-	return Boolean(
-		entry &&
-		!entry.view.webContents.isDestroyed() &&
-		browserViewTargetMetadata.has(normalizedTargetId),
-	);
-}
-
 export async function captureWebContentScreenshot(targetId?: string | null) {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
   const entry = webContentTargets.get(normalizedTargetId);
@@ -2305,8 +2407,9 @@ export async function getWebContentDocumentSnapshot(
     }
 
     return {
-	  url,
-      html,
+		  url,
+	      html,
+	      statusCode: webContentTargets.get(normalizeWebContentTargetId(targetId))?.statusCode ?? null,
       captureMs: Date.now() - startedAt,
 	  isLoading: documentReadyState !== 'complete',
 	  documentReadyState,
@@ -2548,33 +2651,6 @@ export async function navigateWebContentTarget(
   }
 }
 
-export function startExistingWebContentTargetNavigation(
-	url: string,
-	targetId: string,
-) {
-	const resolvedUrl = coerceWebContentNavigationUrl(url);
-	const normalizedTargetId = normalizeWebContentTargetId(targetId);
-	const entry = webContentTargets.get(normalizedTargetId);
-	if (
-		!resolvedUrl ||
-		!entry ||
-		entry.view.webContents.isDestroyed() ||
-		!browserViewTargetMetadata.has(normalizedTargetId)
-	) {
-		throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
-			message: 'The requested Browser target is no longer available.',
-			targetId,
-			targetUrl: url,
-		});
-	}
-
-	void entry.view.webContents.loadURL(resolvedUrl).catch(error => {
-		if (!isAbortLikeWebContentNavigationError(error)) {
-			console.warn('[browser-view] navigation failed', describeWebContentError(error));
-		}
-	});
-}
-
 export async function navigateWebContentForPrint(url: string, timeoutMs = 12000) {
   await navigateWebContentTarget(url, getActiveWebContentTargetId(), 'strict');
 
@@ -2793,6 +2869,12 @@ function getBrowserViewTargetEntry(targetId: string) {
   return entry;
 }
 
+function isBrowserViewMainTarget(
+  entry: ManagedWebContentTarget,
+): entry is ManagedWebContentTarget & BrowserViewMainTarget {
+  return entry.owner !== undefined && entry.onDidClose !== undefined;
+}
+
 function toBrowserViewState(targetId: string): IBrowserViewState {
   const metadata = getBrowserViewTargetMetadata(targetId);
   const entry = getBrowserViewTargetEntry(targetId);
@@ -2906,6 +2988,9 @@ export class BrowserViewMainService implements IBrowserViewService {
   async getBrowserViews(windowId?: number): Promise<IBrowserViewInfo[]> {
     const result: IBrowserViewInfo[] = [];
     for (const [id, metadata] of browserViewTargetMetadata) {
+      if (metadata.presentation !== 'editor') {
+        continue;
+      }
       if (windowId !== undefined && metadata.owner.mainWindowId !== windowId) {
         continue;
       }
@@ -2918,29 +3003,27 @@ export class BrowserViewMainService implements IBrowserViewService {
     id: string,
     options: IBrowserViewCreateOptions,
   ): Promise<IBrowserViewState> {
-    if (browserViewTargetMetadata.has(id)) {
+    const existingMetadata = browserViewTargetMetadata.get(id);
+    if (existingMetadata) {
+      if (
+        options.presentation === 'editor' &&
+        existingMetadata.presentation !== 'editor'
+      ) {
+        existingMetadata.presentation = 'editor';
+        applyWebContentLayout();
+      }
       return toBrowserViewState(id);
     }
 
     const initialState = options.initialState;
-    const metadata: BrowserViewTargetMetadata = {
-      owner: options.owner,
-      storageScope: options.sessionOptions.scope,
-      events: createBrowserViewTargetEvents(),
-      permissions: initialState?.permissions ?? { origins: {} },
-      browserZoomIndex: normalizeBrowserZoomIndex(initialState?.browserZoomIndex),
-      device: initialState?.device,
-      isElementSelectionActive: initialState?.isElementSelectionActive ?? false,
-      isAreaSelectionActive: initialState?.isAreaSelectionActive ?? false,
-      visible: false,
-      bounds: undefined,
-      lastScreenshot: initialState?.lastScreenshot,
-      consoleLogs: [],
-    };
+    const metadata = createBrowserViewTargetMetadata(options);
     browserViewTargetMetadata.set(id, metadata);
 
     try {
-      const entry = ensureWebContentTarget(id);
+      const entry = ensureWebContentTarget(
+        id,
+        createBrowserViewContext(id, options.sessionOptions.scope),
+      );
       if (initialState?.title) {
         entry.state.pageTitle = initialState.title;
       }
@@ -2964,6 +3047,70 @@ export class BrowserViewMainService implements IBrowserViewService {
       disposeWebContentTargetEntry(id);
       throw error;
     }
+  }
+
+  tryGetTarget(id: string): BrowserViewMainTarget | undefined {
+    const entry = webContentTargets.get(id);
+    if (
+      !entry ||
+      entry.view.webContents.isDestroyed() ||
+      !browserViewTargetMetadata.has(id) ||
+      !isBrowserViewMainTarget(entry)
+    ) {
+      return undefined;
+    }
+    return entry;
+  }
+
+  getTargetPresentation(id: string): BrowserViewTargetPresentation | undefined {
+    return browserViewTargetMetadata.get(id)?.presentation;
+  }
+
+  async createTarget(
+    url: string,
+    owner: IBrowserViewOwner,
+    context: BrowserViewMainContext,
+  ): Promise<BrowserViewMainTarget> {
+    const id = generateUuid();
+    const options: IBrowserViewCreateOptions = {
+      owner,
+      sessionOptions: { scope: context.storageScope },
+      presentation: 'editor',
+      initialState: { url },
+    };
+    const metadata = createBrowserViewTargetMetadata(options);
+    browserViewTargetMetadata.set(id, metadata);
+
+    try {
+      const entry = createWebContentTarget(id, context);
+      if (!isBrowserViewMainTarget(entry)) {
+        throw new Error(`Browser view '${id}' has no CDP target metadata.`);
+      }
+      if (url) {
+        void navigateWebContentTarget(url, id, 'browser').catch(error => {
+          console.warn('[browser-view] CDP target navigation failed', describeWebContentError(error));
+        });
+      }
+
+      const state = toBrowserViewState(id);
+      browserViewCreatedEmitter.fire({
+        info: {
+          id,
+          owner,
+          state: url ? { ...state, url } : state,
+        },
+        openOptions: { preserveFocus: true },
+      });
+      return entry;
+    } catch (error) {
+      disposeWebContentTargetEntry(id);
+      throw error;
+    }
+  }
+
+  async activateTarget(id: string): Promise<void> {
+    getBrowserViewTargetEntry(id);
+    activateWebContentTarget(id);
   }
 
   async destroyBrowserView(id: string): Promise<void> {

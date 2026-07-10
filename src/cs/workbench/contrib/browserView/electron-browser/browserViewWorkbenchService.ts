@@ -179,6 +179,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 					sessionOptions: {
 						scope: BrowserViewStorageScope.Global,
 					},
+					presentation: 'editor',
 					initialState: {
 						url: initialState.url,
 						title: initialState.title,

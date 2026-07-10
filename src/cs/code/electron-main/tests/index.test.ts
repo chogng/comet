@@ -1,4 +1,6 @@
 import './configurationService.test';
+import '../../../platform/browserView/test/common/cdpProxy.test';
+import '../../../platform/browserView/test/electron-main/browserViewDebugger.test';
 import './articlePageProof.test';
 import './docx.test';
 import './fetchTargetProvider.test';

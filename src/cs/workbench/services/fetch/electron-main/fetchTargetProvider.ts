@@ -5,6 +5,8 @@
 
 import type { FetchTargetPreference } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { generateUuid } from 'cs/base/common/uuid';
+import type { URI } from 'cs/base/common/uri';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import type {
 	FetchTargetDocument,
 	FetchTargetDocumentAdmission,
@@ -14,7 +16,7 @@ import type { FetchTargetService } from 'cs/workbench/services/fetch/electron-ma
 
 type FetchTargetRuntime = Pick<
 	FetchTargetService,
-	'loadBackground' | 'hasWebContentsViewTarget' | 'navigateWebContentsView' | 'waitForWebContentsView'
+	'hasTarget' | 'ensureTarget' | 'waitForEditorTarget' | 'load' | 'destroyTarget'
 >;
 
 export interface FetchTargetProviderSource {
@@ -32,16 +34,16 @@ export interface FetchTargetProvider {
 }
 
 export interface FetchTargetProviderCallbacks {
-	onWebContentsViewRequired(targetId: string, pageUrl: string): void;
+	onBrowserTargetRequired(resource: URI, pageUrl: string): void;
 }
 
 export interface FetchTargetSessionLoadOptions extends FetchTargetLoadOptions {
-	readonly admitWebContentsViewDocument: FetchTargetDocumentAdmission;
+	readonly admitDocument: FetchTargetDocumentAdmission;
 }
 
 export class FetchTargetSession {
 	readonly targetMode: FetchTargetPreference;
-	readonly targetId: string | null;
+	readonly resource: URI;
 	private queue: Promise<void> = Promise.resolve();
 
 	constructor(
@@ -50,7 +52,11 @@ export class FetchTargetSession {
 		private readonly callbacks: FetchTargetProviderCallbacks,
 	) {
 		this.targetMode = targetMode;
-		this.targetId = targetMode === 'webContentsView' ? generateUuid() : null;
+		this.resource = BrowserViewUri.forId(generateUuid());
+	}
+
+	get targetId(): string {
+		return BrowserViewUri.getId(this.resource)!;
 	}
 
 	async load(
@@ -74,22 +80,28 @@ export class FetchTargetSession {
 			throw new DOMException('The Fetch target load was aborted.', 'AbortError');
 		}
 
-		if (this.targetMode === 'background') {
-			return this.targetService.loadBackground(pageUrl, options);
+		const hadTarget = this.targetService.hasTarget(this.resource);
+		await this.targetService.ensureTarget(this.resource);
+		if (this.targetMode === 'webContentsView' && !hadTarget) {
+			this.callbacks.onBrowserTargetRequired(this.resource, pageUrl);
 		}
-
-		const targetId = this.targetId!;
-		if (this.targetService.hasWebContentsViewTarget(targetId)) {
-			await this.targetService.navigateWebContentsView(targetId, pageUrl);
-		} else {
-			this.callbacks.onWebContentsViewRequired(targetId, pageUrl);
+		if (this.targetMode === 'webContentsView') {
+			await this.targetService.waitForEditorTarget(this.resource, pageUrl, options);
 		}
-		return this.targetService.waitForWebContentsView(
-			targetId,
+		return this.targetService.load(
+			this.resource,
+			this.targetMode,
 			pageUrl,
-			options.admitWebContentsViewDocument,
+			options.admitDocument,
 			options,
 		);
+	}
+
+	async dispose(): Promise<void> {
+		await this.queue;
+		if (this.targetService.hasTarget(this.resource)) {
+			await this.targetService.destroyTarget(this.resource);
+		}
 	}
 }
 

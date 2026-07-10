@@ -30,7 +30,7 @@ function createTargetReadyStatus(
 	return {
 		phase: 'loading',
 		targetMode: 'background',
-		targetId: null,
+		targetId: targetSession.targetId,
 		articleProof,
 	};
 }

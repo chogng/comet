@@ -216,9 +216,12 @@ export interface IBrowserViewCreatedEvent {
 	readonly openOptions?: IBrowserViewOpenOptions;
 }
 
+export type BrowserViewTargetPresentation = 'background' | 'editor';
+
 export interface IBrowserViewCreateOptions {
 	readonly owner: IBrowserViewOwner;
 	readonly sessionOptions: IBrowserSessionOptions;
+	readonly presentation: BrowserViewTargetPresentation;
 	readonly initialState?: Partial<IBrowserViewState>;
 }
 

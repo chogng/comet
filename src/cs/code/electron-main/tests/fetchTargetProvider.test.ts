@@ -6,19 +6,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import type { URI } from 'cs/base/common/uri';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import {
 	ConfiguredFetchTargetProvider,
 } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
 import type { FetchTargetDocument } from 'cs/workbench/services/fetch/electron-main/fetchTargetService';
 
 function createDocument(
+	resource: URI,
 	targetMode: FetchTargetDocument['targetMode'],
 	pageUrl: string,
-	targetId: string | null,
 ): FetchTargetDocument {
 	return {
+		resource,
 		targetMode,
-		targetId,
 		requestedUrl: pageUrl,
 		finalUrl: pageUrl,
 		statusCode: 200,
@@ -27,24 +29,30 @@ function createDocument(
 	};
 }
 
-test('configured target provider keeps background sources on the hidden target', async () => {
+test('configured target provider loads background sources through a hidden Browser target', async () => {
 	const calls: string[] = [];
 	const pageUrl = 'https://example.com/articles';
+	let targetExists = false;
 	const provider = new ConfiguredFetchTargetProvider({
-		async loadBackground(url) {
-			calls.push(`background:${url}`);
-			return createDocument('background', url, null);
+		hasTarget() {
+			return targetExists;
 		},
-		hasWebContentsViewTarget() {
-			calls.push('has-web-contents-view');
-			return false;
+		async ensureTarget(resource) {
+			targetExists = true;
+			calls.push(`ensure:background:${BrowserViewUri.getId(resource)}`);
 		},
-		async navigateWebContentsView() {
-			calls.push('navigate-web-contents-view');
+		async waitForEditorTarget() {
+			calls.push('wait-for-editor');
 		},
-		async waitForWebContentsView() {
-			calls.push('wait-web-contents-view');
-			return createDocument('webContentsView', pageUrl, 'unexpected');
+		async load(resource, targetMode, url, admit) {
+			calls.push(`load:${targetMode}:${url}`);
+			const document = createDocument(resource, targetMode, url);
+			assert.equal(admit(document), true);
+			return document;
+		},
+		async destroyTarget(resource) {
+			targetExists = false;
+			calls.push(`destroy:${BrowserViewUri.getId(resource)}`);
 		},
 	});
 	const session = provider.createSession(
@@ -54,45 +62,52 @@ test('configured target provider keeps background sources on the hidden target',
 			fetchTarget: 'background',
 		},
 		{
-			onWebContentsViewRequired() {
-				calls.push('require-web-contents-view');
+			onBrowserTargetRequired() {
+				calls.push('require-visible-target');
 			},
 		},
 	);
 
 	const document = await session.load(pageUrl, {
 		timeoutMs: 1000,
-		admitWebContentsViewDocument: () => true,
+		admitDocument: () => true,
 	});
+	await session.dispose();
 
 	assert.equal(session.targetMode, 'background');
-	assert.equal(session.targetId, null);
+	assert.equal(BrowserViewUri.getId(session.resource), session.targetId);
+	assert.equal(document.resource.toString(), session.resource.toString());
 	assert.equal(document.targetMode, 'background');
-	assert.deepEqual(calls, [`background:${pageUrl}`]);
+	assert.equal(calls.some(call => call === 'require-visible-target'), false);
+	assert.deepEqual(calls.map(call => call.split(':')[0]), ['ensure', 'load', 'destroy']);
 });
 
-test('configured target provider opens and reuses one explicit WebContentsView target', async () => {
+test('configured target provider opens and reuses one visible Browser target', async () => {
 	const calls: string[] = [];
 	const pageUrl = 'https://www.science.org/toc/science/current';
 	let targetExists = false;
-	let requiredTargetId = '';
+	let editorReady = false;
+	let requiredResource: URI | undefined;
 	const provider = new ConfiguredFetchTargetProvider({
-		async loadBackground(url) {
-			calls.push(`background:${url}`);
-			return createDocument('background', url, null);
-		},
-		hasWebContentsViewTarget(targetId) {
-			calls.push(`has:${targetId}`);
+		hasTarget() {
 			return targetExists;
 		},
-		async navigateWebContentsView(targetId, url) {
-			calls.push(`navigate:${targetId}:${url}`);
+		async ensureTarget(resource) {
+			targetExists = true;
+			calls.push(`ensure:background:${BrowserViewUri.getId(resource)}`);
 		},
-		async waitForWebContentsView(targetId, requestedUrl, admit) {
-			calls.push(`wait:${targetId}:${requestedUrl}`);
-			const document = createDocument('webContentsView', requestedUrl, targetId);
+		async waitForEditorTarget() {
+			assert.equal(editorReady, true);
+			calls.push('wait-for-editor');
+		},
+		async load(resource, targetMode, requestedUrl, admit) {
+			calls.push(`load:${targetMode}:${requestedUrl}`);
+			const document = createDocument(resource, targetMode, requestedUrl);
 			assert.equal(admit(document), true);
 			return document;
+		},
+		async destroyTarget() {
+			calls.push(editorReady ? 'preserve-editor' : 'destroy');
 		},
 	});
 	const session = provider.createSession(
@@ -102,49 +117,47 @@ test('configured target provider opens and reuses one explicit WebContentsView t
 			fetchTarget: 'webContentsView',
 		},
 		{
-			onWebContentsViewRequired(targetId, url) {
-				requiredTargetId = targetId;
-				calls.push(`require:${targetId}:${url}`);
+			onBrowserTargetRequired(resource, url) {
+				requiredResource = resource;
+				editorReady = true;
+				calls.push(`require:${BrowserViewUri.getId(resource)}:${url}`);
 			},
 		},
 	);
 
 	const firstDocument = await session.load(pageUrl, {
 		timeoutMs: 1000,
-		admitWebContentsViewDocument: () => true,
+		admitDocument: () => true,
 	});
-	targetExists = true;
 	const articleUrl = 'https://www.science.org/doi/10.1126/example';
 	const secondDocument = await session.load(articleUrl, {
 		timeoutMs: 1000,
-		admitWebContentsViewDocument: () => true,
+		admitDocument: () => true,
 	});
+	await session.dispose();
 
 	assert.equal(session.targetMode, 'webContentsView');
-	assert.equal(session.targetId, requiredTargetId);
-	assert.equal(firstDocument.targetId, requiredTargetId);
-	assert.equal(secondDocument.targetId, requiredTargetId);
-	assert.equal(calls.some(call => call.startsWith('background:')), false);
+	assert.equal(requiredResource?.toString(), session.resource.toString());
+	assert.equal(firstDocument.resource.toString(), session.resource.toString());
+	assert.equal(secondDocument.resource.toString(), session.resource.toString());
 	assert.equal(calls.filter(call => call.startsWith('require:')).length, 1);
-	assert.equal(calls.filter(call => call.startsWith('navigate:')).length, 1);
+	assert.equal(calls.filter(call => call === 'wait-for-editor').length, 2);
+	assert.equal(calls.filter(call => call.startsWith('load:')).length, 2);
+	assert.equal(calls.includes('preserve-editor'), true);
 });
 
-test('background target failure never switches to WebContentsView', async () => {
+test('background target failure never requests visible presentation', async () => {
 	let visibleTargetRequested = false;
 	const provider = new ConfiguredFetchTargetProvider({
-		async loadBackground() {
-			throw new Error('background failed');
-		},
-		hasWebContentsViewTarget() {
+		hasTarget() {
 			return false;
 		},
-		async navigateWebContentsView() {
-			visibleTargetRequested = true;
+		async ensureTarget() {},
+		async waitForEditorTarget() {},
+		async load() {
+			throw new Error('background failed');
 		},
-		async waitForWebContentsView() {
-			visibleTargetRequested = true;
-			return createDocument('webContentsView', 'https://example.com', 'unexpected');
-		},
+		async destroyTarget() {},
 	});
 	const session = provider.createSession(
 		{
@@ -153,7 +166,7 @@ test('background target failure never switches to WebContentsView', async () => 
 			fetchTarget: 'background',
 		},
 		{
-			onWebContentsViewRequired() {
+			onBrowserTargetRequired() {
 				visibleTargetRequested = true;
 			},
 		},
@@ -161,7 +174,7 @@ test('background target failure never switches to WebContentsView', async () => 
 
 	await assert.rejects(() => session.load('https://example.com', {
 		timeoutMs: 1000,
-		admitWebContentsViewDocument: () => true,
+		admitDocument: () => true,
 	}), /background failed/);
 	assert.equal(visibleTargetRequested, false);
 });

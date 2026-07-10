@@ -9,6 +9,7 @@ import type {
 	FetchTargetPreference,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import type { HistoryStore } from 'cs/platform/storage/electron-main/historyStore';
 import { parseDateRange, parseDateHintFromText } from 'cs/base/common/date';
 import type { DateRange } from 'cs/base/common/date';
@@ -669,20 +670,22 @@ export async function fetchArticle(
   const traceId = createFetchTraceId('single');
   const totalStartedAt = Date.now();
   const normalized = normalizeUrl(urlValue);
+  let targetSession: FetchTargetSession | null = null;
   timingLog(traceId, 'fetch_article:start', {
     url: shortenForLog(normalized),
   });
 
   try {
 		const publisher = resolvePublisherProfile(normalized);
-		const targetSession = options.targetProvider.createSession(
+		targetSession = options.targetProvider.createSession(
 			{
 				sourceId: 'single',
 				pageUrl: normalized,
 				fetchTarget: options.fetchTarget,
 			},
 			{
-				onWebContentsViewRequired: (targetId, pageUrl) => {
+				onBrowserTargetRequired: (resource, pageUrl) => {
+					const targetId = BrowserViewUri.getId(resource)!;
 					options.onFetchStatus?.({
 						requestId: options.requestId,
 						sourceId: 'single',
@@ -733,9 +736,11 @@ export async function fetchArticle(
     timingLog(traceId, 'fetch_article:failed', {
       totalMs: elapsedMs(totalStartedAt),
       message: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+		});
+		throw error;
+	} finally {
+		await targetSession?.dispose();
+	}
 }
 
 function normalizePageSources(payload: FetchLatestArticlesPayload): PageSource[] {
@@ -819,7 +824,8 @@ async function fetchLatestArticlesFromPage(
 				fetchTarget,
 			},
 			{
-				onWebContentsViewRequired: (targetId, targetPageUrl) => {
+				onBrowserTargetRequired: (resource, targetPageUrl) => {
+					const targetId = BrowserViewUri.getId(resource)!;
 					const reporter = options.onFetchStatus;
 					if (!reporter) {
 						return;
@@ -930,7 +936,7 @@ async function fetchLatestArticlesFromPage(
       paginated: pageCount > 1,
     });
     return fetched;
-  } catch (error) {
+	} catch (error) {
 		const details = getFetchErrorDetails(error);
 		const publisher = resolvePublisherProfile(activePageUrl);
 		options.onFetchStatus?.({
@@ -950,9 +956,11 @@ async function fetchLatestArticlesFromPage(
     timingLog(traceId, 'source:failed', {
       totalMs: elapsedMs(sourceStartedAt),
       message: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+		});
+		throw error;
+	} finally {
+		await targetSession?.dispose();
+	}
 }
 
 export async function fetchLatestArticles(
