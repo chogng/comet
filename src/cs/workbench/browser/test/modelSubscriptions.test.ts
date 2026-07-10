@@ -43,7 +43,6 @@ import {
   setWorkbenchSidebarSizes,
   subscribeWorkbenchLayoutState,
   subscribeWorkbenchPartDom,
-  WORKBENCH_CONTENT_LAYOUT_BREAKPOINT,
   WORKBENCH_PART_IDS,
 } from 'cs/workbench/browser/layout';
 import {
@@ -141,12 +140,20 @@ function createNativeHostService(
   };
 }
 
-function createFetchStatus(overrides: Partial<FetchStatus> = {}): FetchStatus {
+function createFetchStatus(
+	overrides: Partial<Extract<FetchStatus, { phase: 'loading' }>> = {},
+): FetchStatus {
   return {
+		requestId: 'request-1',
     sourceId: 'source-1',
     pageUrl: 'https://example.com',
     pageNumber: 1,
-    fetchChannel: 'network',
+		phase: 'loading',
+		targetMode: 'background',
+		targetId: null,
+		articleProof: null,
+		publisherId: 'other',
+		publisherAccessRisk: 'standard',
     extractorId: 'extractor-1',
     ...overrides,
   };
@@ -326,6 +333,7 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
       ui: locales.en,
       onBeforeFetch: () => {},
       onFetchSuccess: () => {},
+		onWebContentsViewRequired: () => {},
     });
     const sourceTexts: string[] = [];
     const disposeListener = controller.subscribe(() => {
@@ -335,17 +343,88 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
     controller.start();
     assert(fetchStatusListener);
 
-    fetchStatusListener(createFetchStatus({
-      fetchChannel: 'web-content',
-      webContentReuseMode: 'live-extract',
-    }));
+    fetchStatusListener(createFetchStatus({ targetMode: 'webContentsView' }));
     disposeListener();
     controller.dispose();
 
-    assert.equal(sourceTexts[0], 'Source: live web content DOM');
+		assert.deepEqual(sourceTexts, []);
     assert.equal(removed, true);
     assert.equal(fetchStatusListener, undefined);
   });
+});
+
+test('BatchFetchController opens the exact WebContentsView target for the active request', async () => {
+	let fetchStatusListener: ((status: FetchStatus) => void) | undefined;
+	let activeRequestId = '';
+	let resolveFetch: ((articles: []) => void) | undefined;
+	const requiredTargets: Array<{ targetId: string; pageUrl: string }> = [];
+	const invokeDesktop = (async (command: string, payload: unknown) => {
+		assert.equal(command, 'fetch_latest_articles');
+		activeRequestId = String((payload as { requestId?: unknown }).requestId ?? '');
+		return new Promise<[]>(resolve => {
+			resolveFetch = resolve;
+		});
+	}) as ElectronInvoke;
+	const nativeHost = createNativeHostService({
+		fetch: {
+			onFetchStatus(listener) {
+				fetchStatusListener = listener;
+				return () => {
+					fetchStatusListener = undefined;
+				};
+			},
+		} as NonNullable<ElectronAPI['fetch']>,
+	});
+	const controller = createBatchFetchController({
+		desktopRuntime: true,
+		addressBarUrl: '',
+		journalSourceOverrides: [],
+		batchStartDate: '',
+		batchEndDate: '',
+		invokeDesktop,
+		nativeHost,
+		notificationService: new NoOpNotificationService(),
+		ui: locales.en,
+		onBeforeFetch: () => {},
+		onFetchSuccess: () => {},
+		onWebContentsViewRequired: (targetId, pageUrl) => {
+			requiredTargets.push({ targetId, pageUrl });
+		},
+	});
+	controller.start();
+	const fetchPromise = controller.handleFetchSource({
+		id: 'source-1',
+		url: 'https://www.science.org/toc/science/current',
+		journalTitle: 'Science',
+		fetchTarget: 'webContentsView',
+	});
+	assert(fetchStatusListener);
+	assert(activeRequestId);
+
+	const targetStatus: FetchStatus = {
+		requestId: activeRequestId,
+		sourceId: 'source-1',
+		pageUrl: 'https://www.science.org/toc/science/current',
+		pageNumber: 1,
+		publisherId: 'science',
+		publisherAccessRisk: 'elevated',
+		extractorId: 'science-current-news-in-depth-research-articles',
+		phase: 'targetRequired',
+		targetMode: 'webContentsView',
+		targetId: 'fetch-target-1',
+		articleProof: null,
+	};
+	fetchStatusListener({ ...targetStatus, requestId: 'stale-request' });
+	assert.deepEqual(requiredTargets, []);
+	fetchStatusListener(targetStatus);
+	assert.deepEqual(requiredTargets, [{
+		targetId: 'fetch-target-1',
+		pageUrl: 'https://www.science.org/toc/science/current',
+	}]);
+
+	resolveFetch?.([]);
+	await fetchPromise;
+	controller.dispose();
 });
 
 test('BatchFetchController reports date range no-match as empty result', async () => {
@@ -369,12 +448,14 @@ test('BatchFetchController reports date range no-match as empty result', async (
     onFetchSuccess: () => {
       successCount += 1;
     },
+		onWebContentsViewRequired: () => {},
   });
 
   const result = await controller.handleFetchSource({
     id: 'source-1',
     url: 'https://example.com/articles',
     journalTitle: 'Example',
+		fetchTarget: 'background',
   });
   const snapshot = controller.getSnapshot();
 
@@ -659,33 +740,6 @@ test('workbenchLayout subscriptions stop after disposal', () => {
     getWorkbenchLayoutStateSnapshot().isPrimarySidebarVisible,
     originalWorkbenchLayoutState.isPrimarySidebarVisible,
   );
-});
-
-test('setWorkbenchSidebarSizes clamps with horizontal limits on narrow viewport', () => {
-  const previousInnerWidth = window.innerWidth;
-
-  try {
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: WORKBENCH_CONTENT_LAYOUT_BREAKPOINT,
-    });
-
-    setWorkbenchSidebarSizes({
-      primarySidebarSize: 0,
-      agentSidebarSize: 0,
-    });
-
-    const nextState = getWorkbenchLayoutStateSnapshot();
-    assert.equal(nextState.primarySidebarSize, 160);
-    assert.equal(nextState.agentSidebarSize, 160);
-  } finally {
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: previousInnerWidth,
-    });
-  }
 });
 
 test('workbenchPartDom subscriptions stop after disposal', () => {

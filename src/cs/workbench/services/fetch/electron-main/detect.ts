@@ -12,7 +12,7 @@ export type SourcePageTypeResult = {
 
 export function matchesArticleDetailPath(pathname: string) {
   const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
-  return /^(?:\/(?:article|articles|paper|papers|doi|abs|content)\/[^/]+)$/i.test(normalizedPathname);
+  return /^\/(?:article|articles|paper|papers|doi|abs|content)\/.+$/i.test(normalizedPathname);
 }
 
 export function detect(page: URL): SourcePageTypeResult {

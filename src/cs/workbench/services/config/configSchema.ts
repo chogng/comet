@@ -1,4 +1,7 @@
-import type { BatchSource as DesktopBatchSource } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type {
+	BatchSource as DesktopBatchSource,
+	FetchTargetPreference,
+} from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { sanitizeUrlInput } from 'cs/workbench/common/url';
 import {
   batchLimitMax,
@@ -20,6 +23,7 @@ export type ResolvedSourceTableMetadata = {
   articleListId: string;
   journalTitle: string;
   preferredExtractorId: string;
+  fetchTarget: FetchTargetPreference;
   defaultJournalTitle: string;
 };
 
@@ -27,6 +31,7 @@ type SourceLookupMaps = {
   journalTitleByLookupKey: Map<string, string>;
   articleListIdByLookupKey: Map<string, string>;
   preferredExtractorIdByLookupKey: Map<string, string>;
+	fetchTargetByLookupKey: Map<string, FetchTargetPreference>;
 };
 
 function createSourceLookupKey(input: unknown) {
@@ -87,6 +92,7 @@ export function createEmptyBatchSource(): BatchSource {
     url: '',
     journalTitle: '',
     preferredExtractorId: null,
+		fetchTarget: 'background',
   };
 }
 
@@ -116,6 +122,10 @@ function normalizePreferredExtractorId(value: unknown): string | null {
   return cleaned || null;
 }
 
+export function normalizeFetchTargetPreference(value: unknown): FetchTargetPreference {
+	return value === 'webContentsView' ? 'webContentsView' : 'background';
+}
+
 function createSourceLookupMaps(entries: ReadonlyArray<BatchSource>): SourceLookupMaps {
   return {
     journalTitleByLookupKey: createLookupMap(
@@ -136,6 +146,12 @@ function createSourceLookupMaps(entries: ReadonlyArray<BatchSource>): SourceLook
         value: String(item.preferredExtractorId ?? '').trim(),
       })),
     ),
+		fetchTargetByLookupKey: createLookupMap(
+			entries.map(item => ({
+				url: item.url,
+				value: item.fetchTarget,
+			})),
+		),
   };
 }
 
@@ -143,6 +159,7 @@ const emptySourceLookupMaps: SourceLookupMaps = {
   journalTitleByLookupKey: new Map<string, string>(),
   articleListIdByLookupKey: new Map<string, string>(),
   preferredExtractorIdByLookupKey: new Map<string, string>(),
+	fetchTargetByLookupKey: new Map<string, FetchTargetPreference>(),
 };
 
 function resolveSourceLookupMaps(batchSources?: ReadonlyArray<BatchSource>): SourceLookupMaps {
@@ -161,6 +178,7 @@ function sanitizeBatchSourceEntry(value: unknown, index: number): BatchSource {
       url: '',
       journalTitle: '',
       preferredExtractorId: null,
+			fetchTarget: 'background',
     };
   }
 
@@ -172,6 +190,7 @@ function sanitizeBatchSourceEntry(value: unknown, index: number): BatchSource {
     url,
     journalTitle: String(record.journalTitle ?? '').trim(),
     preferredExtractorId: normalizePreferredExtractorId(record.preferredExtractorId),
+		fetchTarget: normalizeFetchTargetPreference(record.fetchTarget),
   };
 }
 
@@ -190,6 +209,7 @@ function dedupeBatchSources(sources: BatchSource[]): BatchSource[] {
       id: source.id || previous.id,
       journalTitle: source.journalTitle || previous.journalTitle,
       preferredExtractorId: source.preferredExtractorId || previous.preferredExtractorId,
+			fetchTarget: source.fetchTarget,
     });
   }
 
@@ -226,6 +246,7 @@ export function resolveSourceTableMetadata(
       articleListId: '',
       journalTitle: '',
       preferredExtractorId: '',
+			fetchTarget: 'background',
       defaultJournalTitle: '',
     };
   }
@@ -234,12 +255,14 @@ export function resolveSourceTableMetadata(
   const articleListId = lookupMaps.articleListIdByLookupKey.get(lookupKey) ?? '';
   const journalTitle = lookupMaps.journalTitleByLookupKey.get(lookupKey) ?? '';
   const preferredExtractorId = lookupMaps.preferredExtractorIdByLookupKey.get(lookupKey) ?? '';
+	const fetchTarget = lookupMaps.fetchTargetByLookupKey.get(lookupKey) ?? 'background';
 
   return {
     lookupKey,
     articleListId,
     journalTitle,
     preferredExtractorId,
+		fetchTarget,
     defaultJournalTitle: journalTitle || articleListId,
   };
 }
@@ -263,6 +286,7 @@ export function getConfigBatchSourceSeed(): BatchSource[] {
     url: source.url,
     journalTitle: source.journalTitle,
     preferredExtractorId: normalizePreferredExtractorId(source.preferredExtractorId),
+		fetchTarget: source.fetchTarget,
   }));
 }
 

@@ -214,6 +214,35 @@
   background: var(--comet-chatInput-composerToolbarBackground, #FCFCFC);
 }
 
+.comet-chat-composer-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.comet-chat-composer-add-menu-actions.comet-actionbar {
+  flex: 0 0 auto;
+}
+
+.comet-chat-add-menu .comet-actionbar-action.comet-chat-add-menu-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #304357;
+}
+
+.comet-chat-add-menu .comet-actionbar-action.comet-chat-add-menu-btn:hover:not(:disabled),
+.comet-chat-add-menu .comet-actionbar-action.comet-chat-add-menu-btn[aria-expanded='true'] {
+  background: #f2f2f2;
+}
+
+.comet-chat-add-menu .comet-actionbar-action.comet-chat-add-menu-btn .lx-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
 .comet-chat-model-switch {
   flex: 0 0 auto;
 }
@@ -222,7 +251,6 @@
   min-height: 26px;
   min-width: 88px;
   padding: 0 8px;
-  border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: #304357;
@@ -240,8 +268,7 @@
 
 .comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn:hover:not(:disabled),
 .comet-chat-model-switch .comet-actionbar-action.comet-chat-model-switch-btn[aria-expanded='true'] {
-  background: #f3f7fb;
-  border-color: #dde7f0;
+  background: #f2f2f2;
 }
 
 .comet-chat-model-switch-trigger {

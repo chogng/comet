@@ -298,7 +298,19 @@ function getJournalOverrideTitle(props: SettingsPartProps, url: string) {
   return override?.journalTitle ?? null;
 }
 
-export function renderSupportedSourcesSection(props: SettingsPartProps) {
+function getJournalFetchTarget(
+	props: SettingsPartProps,
+	url: string,
+	configuredTarget: 'background' | 'webContentsView',
+) {
+	const override = props.journalSourceOverrides.find(item => item.url === url);
+	return override?.fetchTarget ?? configuredTarget;
+}
+
+export function renderSupportedSourcesSection(
+	props: SettingsPartProps,
+	contextViewProvider: ContextViewProvider,
+) {
   const supportedSources = createSettingsSection({
     title: props.labels.settingsSupportedSources,
     description: props.labels.settingsSupportedSourcesHint,
@@ -330,7 +342,31 @@ export function renderSupportedSourcesSection(props: SettingsPartProps) {
     journalInput.inputElement.ariaLabel = props.labels.settingsSupportedSourceJournalTitle;
     journalCell.append(journalLabel, journalInput.element);
 
-    row.append(url, journalCell);
+		const fetchTarget = getJournalFetchTarget(props, source.url, source.fetchTarget);
+		const fetchTargetSelect = buildSelect(
+			[
+				{
+					value: 'background',
+					label: props.labels.settingsFetchTargetBackground,
+				},
+				{
+					value: 'webContentsView',
+					label: props.labels.settingsFetchTargetWebContentsView,
+				},
+			],
+			fetchTarget,
+			`settings.supportedSources.${index}.fetchTarget`,
+			value => props.onJournalSourceFetchTargetChange(
+				source.url,
+				value === 'webContentsView' ? 'webContentsView' : 'background',
+			),
+			contextViewProvider,
+			'comet-settings-supported-source-target-select',
+		);
+		fetchTargetSelect.title = props.labels.settingsSupportedSourceFetchTarget;
+		setSelectHostDisabled(fetchTargetSelect, props.isSettingsSaving);
+
+    row.append(url, journalCell, fetchTargetSelect);
     table.append(row);
   }
 

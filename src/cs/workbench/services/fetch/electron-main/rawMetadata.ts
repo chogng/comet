@@ -228,7 +228,7 @@ export function extractRawAuthors(
   return [];
 }
 
-export function extractRawDoi($: ReturnType<typeof load>, html: string) {
+export function extractRawDoi($: ReturnType<typeof load>) {
   const fromMeta = normalizeDoiValue(
     pickMetaContent($, [
       'meta[name="citation_doi"]',
@@ -250,7 +250,7 @@ export function extractRawDoi($: ReturnType<typeof load>, html: string) {
   const doiData = normalizeDoiValue($('[data-doi]').first().attr('data-doi'));
   if (doiData) return doiData;
 
-  return normalizeDoiValue(cleanText(html));
+  return null;
 }
 
 export function extractRawPublishedDate(

@@ -14,7 +14,7 @@ import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/
 import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
-import { resolveWebContentSnapshotHtml } from 'cs/workbench/services/fetch/electron-main/webContentChannel';
+import { resolveActiveWebContentSnapshotHtml } from 'cs/code/electron-main/pdf/webContentSnapshot';
 
 function resolveSourceHostLabel(sourceUrl: string) {
   try {
@@ -159,7 +159,7 @@ export async function archiveWebContentHtml(
   storage: AppStorageService,
 ): Promise<WebContentHtmlArchiveResult> {
   const sourceUrl = normalizeUrl(payload.pageUrl ?? '');
-  const snapshotHtml = await resolveWebContentSnapshotHtml({
+	const snapshotHtml = await resolveActiveWebContentSnapshotHtml({
     pageUrl: sourceUrl,
   });
   if (!snapshotHtml) {

@@ -43,12 +43,14 @@ export interface BatchSource {
   url: string;
   journalTitle: string;
   preferredExtractorId?: string | null;
+	fetchTarget: FetchTargetPreference;
 }
 
 export interface JournalSourceOverride {
   url: string;
   journalTitle?: string;
   preferredExtractorId?: string | null;
+	fetchTarget?: FetchTargetPreference;
 }
 
 export type LlmProviderId =
@@ -122,6 +124,7 @@ export interface FetchBatchSource {
   pageUrl?: string;
   journalTitle?: string;
   preferredExtractorId?: string | null;
+	fetchTarget?: FetchTargetPreference;
 }
 
 export type DateRange = import('cs/base/common/date').DateRange;
@@ -167,21 +170,74 @@ export interface WindowState {
   isFullscreen: boolean;
 }
 
-export type FetchStrategy = 'network-first' | 'web-content-first' | 'compare';
-export type FetchChannel = 'network' | 'web-content';
-export type WebContentReuseMode = 'snapshot' | 'live-extract';
+export type ArticlePublisherId = 'nature' | 'science' | 'acs' | 'wiley' | 'other';
+export type PublisherAccessRisk = 'standard' | 'elevated';
 
-export interface FetchStatus {
-  sourceId: string;
-  pageUrl: string;
-  pageNumber: number;
-  fetchChannel: FetchChannel;
-  fetchDetail?: string | null;
-  webContentReuseMode?: WebContentReuseMode | null;
-  extractorId: string | null;
-  paginationStopped?: boolean;
-  paginationStopReason?: string | null;
+export type FetchTargetPreference = 'background' | 'webContentsView';
+
+export type FetchAccessGateReason =
+	| 'cloudflareChallenge'
+	| 'loginRequired'
+	| 'institutionalSso'
+	| 'subscriptionGate'
+	| 'manualInteractionRequired';
+
+export interface ArticlePageProof {
+	readonly canonicalUrlMatched: boolean;
+	readonly titleFound: boolean;
+	readonly authorsFound: boolean;
+	readonly abstractFound: boolean;
+	readonly bodyFound: boolean;
+	readonly accessGate: FetchAccessGateReason | null;
 }
+
+export type FetchFailureReason =
+	| 'loadTimeout'
+	| 'navigationFailed'
+	| 'articleProofFailed'
+	| 'listingProofFailed'
+	| 'rateLimited'
+	| 'accessDenied'
+	| 'javascriptError';
+
+interface FetchStatusBase {
+	readonly requestId: string;
+	readonly sourceId: string;
+	readonly pageUrl: string;
+	readonly pageNumber: number;
+	readonly publisherId: ArticlePublisherId;
+	readonly publisherAccessRisk: PublisherAccessRisk;
+	readonly extractorId: string | null;
+	readonly paginationStopped?: boolean;
+	readonly paginationStopReason?: string | null;
+}
+
+export type FetchStatus =
+	| FetchStatusBase & {
+		readonly phase: 'loading';
+		readonly targetMode: FetchTargetPreference;
+		readonly targetId: string | null;
+		readonly articleProof: ArticlePageProof | null;
+	}
+	| FetchStatusBase & {
+		readonly phase: 'targetRequired';
+		readonly targetMode: 'webContentsView';
+		readonly targetId: string;
+		readonly articleProof: ArticlePageProof | null;
+	}
+	| FetchStatusBase & {
+		readonly phase: 'targetReady';
+		readonly targetMode: 'webContentsView';
+		readonly targetId: string;
+		readonly articleProof: ArticlePageProof | null;
+	}
+	| FetchStatusBase & {
+		readonly phase: 'failed';
+		readonly targetMode: FetchTargetPreference;
+		readonly targetId: string | null;
+		readonly failureReason: FetchFailureReason;
+		readonly articleProof: ArticlePageProof | null;
+	};
 
 export type DocumentTranslationProgressPhase = 'started' | 'batch' | 'completed' | 'failed';
 
@@ -195,10 +251,10 @@ export interface DocumentTranslationProgress {
 }
 
 export interface FetchLatestArticlesPayload {
-  sources?: FetchBatchSource[];
-  startDate?: string | null;
-  endDate?: string | null;
-  fetchStrategy?: FetchStrategy;
+	requestId: string;
+	sources?: FetchBatchSource[];
+	startDate?: string | null;
+	endDate?: string | null;
 }
 
 export interface WebContentPdfDownloadPayload {
@@ -271,7 +327,9 @@ export interface ExportEditorDocxPayload {
 }
 
 export interface FetchArticlePayload {
+	requestId: string;
   url?: string;
+	fetchTarget: FetchTargetPreference;
 }
 
 export interface SaveSettingsPayload {

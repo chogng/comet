@@ -47,6 +47,7 @@ type TestJournalSourceOverride = {
   url?: string;
   journalTitle?: string;
   preferredExtractorId?: string | null;
+	fetchTarget?: 'background' | 'webContentsView';
 };
 
 function getJournalSourceOverrides(settingsJson: unknown): TestJournalSourceOverride[] {
@@ -83,6 +84,7 @@ test('configuration service reads journal source overrides from user settings js
             url: 'https://example.com/latest',
             journalTitle: 'Example Journal',
             preferredExtractorId: 'example-latest',
+						fetchTarget: 'webContentsView',
           },
         ],
       }),
@@ -97,7 +99,8 @@ test('configuration service reads journal source overrides from user settings js
         (source) =>
           source.url === 'https://example.com/latest' &&
           source.journalTitle === 'Example Journal' &&
-          source.preferredExtractorId === 'example-latest',
+					source.preferredExtractorId === 'example-latest' &&
+					source.fetchTarget === 'webContentsView',
       ),
     );
     assert.ok(
@@ -148,6 +151,7 @@ test('configuration service keeps user settings json separate from saved app set
             url: 'https://example.com/latest',
             journalTitle: 'Example Journal',
             preferredExtractorId: null,
+						fetchTarget: 'background',
           }),
       ),
     );
@@ -159,6 +163,7 @@ test('configuration service keeps user settings json separate from saved app set
             url: 'https://www.science.org/toc/science/current',
             journalTitle: 'Science',
             preferredExtractorId: 'science-current-news-in-depth-research-articles',
+						fetchTarget: 'background',
           }),
       ),
     );
@@ -258,6 +263,7 @@ test('configuration service creates user settings json with editable journal tit
       url: 'https://www.science.org/toc/science/current',
       journalTitle: 'Science',
       preferredExtractorId: 'science-current-news-in-depth-research-articles',
+		fetchTarget: 'background',
     });
   });
 });
@@ -292,6 +298,7 @@ test('configuration service migrates legacy journal source overrides into user s
             url: 'https://legacy.example/latest',
             journalTitle: 'Legacy Journal',
             preferredExtractorId: 'legacy-latest',
+						fetchTarget: 'background',
           }),
       ),
     );

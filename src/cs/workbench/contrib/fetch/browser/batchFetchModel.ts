@@ -3,6 +3,7 @@ import { MutableDisposable } from 'cs/base/common/lifecycle';
 import type {
   JournalSourceOverride,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { generateUuid } from 'cs/base/common/uuid';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
@@ -39,6 +40,7 @@ export type BatchFetchControllerContext = {
   ui: LocaleMessages;
   onBeforeFetch: () => void;
   onFetchSuccess: (articles: Article[]) => void;
+	onWebContentsViewRequired: (targetId: string, pageUrl: string) => void;
 };
 
 export type BatchFetchControllerSnapshot = BatchFetchMachineState &
@@ -59,27 +61,30 @@ const emptyFetchErrorCodes = new Set<string>([
 
 function createBatchFetchSnapshot(
   machineState: BatchFetchMachineState,
+	ui: LocaleMessages,
 ): BatchFetchControllerSnapshot {
   return {
     ...machineState,
     isBatchLoading: machineState.phase === 'loading',
     emptyMessage: machineState.phase === 'empty' ? machineState.lastErrorMessage ?? '' : '',
-    ...resolveBatchFetchStatusbarStatus(machineState.fetchStatus),
+		...resolveBatchFetchStatusbarStatus(machineState.fetchStatus, ui),
   };
 }
 
 export class BatchFetchController {
   private context: BatchFetchControllerContext;
   private machineState = INITIAL_BATCH_FETCH_MACHINE_STATE;
-  private snapshot = createBatchFetchSnapshot(this.machineState);
+	private snapshot: BatchFetchControllerSnapshot;
   private readonly onDidChangeEmitter = new EventEmitter<void>();
   private readonly fetchStatusListener = new MutableDisposable<() => void>();
   private requestId = 0;
+	private activeFetchRequestId: string | null = null;
   private started = false;
   private disposed = false;
 
   constructor(context: BatchFetchControllerContext) {
     this.context = context;
+		this.snapshot = createBatchFetchSnapshot(this.machineState, context.ui);
   }
 
   readonly subscribe = (listener: () => void) => {
@@ -89,6 +94,7 @@ export class BatchFetchController {
   readonly getSnapshot = () => this.snapshot;
 
   readonly setContext = (context: BatchFetchControllerContext) => {
+		const localeChanged = context.ui !== this.context.ui;
     const shouldReconnect =
       this.started &&
       (context.desktopRuntime !== this.context.desktopRuntime ||
@@ -98,6 +104,10 @@ export class BatchFetchController {
     if (shouldReconnect) {
       this.connectFetchStatus();
     }
+		if (localeChanged) {
+			this.snapshot = createBatchFetchSnapshot(this.machineState, context.ui);
+			this.emitChange();
+		}
   };
 
   readonly start = () => {
@@ -171,9 +181,12 @@ export class BatchFetchController {
       ui,
       onFetchSuccess,
     } = this.context;
+		const fetchRequestId = generateUuid();
+		this.activeFetchRequestId = fetchRequestId;
 
     try {
       const result = await fetchLatestArticlesBatch({
+				requestId: fetchRequestId,
         desktopRuntime,
         batchSources,
         sourceTable,
@@ -272,6 +285,10 @@ export class BatchFetchController {
         errorMessage: errorMessage || ui.errorUnknown,
       });
       return { ok: false };
+		} finally {
+			if (this.activeFetchRequestId === fetchRequestId) {
+				this.activeFetchRequestId = null;
+			}
     }
   }
 
@@ -286,7 +303,13 @@ export class BatchFetchController {
 
     this.fetchStatusListener.value =
       fetchApi.onFetchStatus((status) => {
+				if (status.requestId !== this.activeFetchRequestId) {
+					return;
+				}
         this.dispatch({ type: 'FETCH_STATUS_UPDATED', status });
+				if (status.phase === 'targetRequired') {
+					this.context.onWebContentsViewRequired(status.targetId, status.pageUrl);
+				}
       });
   }
 
@@ -297,7 +320,7 @@ export class BatchFetchController {
     }
 
     this.machineState = nextMachineState;
-    this.snapshot = createBatchFetchSnapshot(this.machineState);
+		this.snapshot = createBatchFetchSnapshot(this.machineState, this.context.ui);
     this.emitChange();
   }
 

@@ -1535,6 +1535,21 @@ class WorkbenchHost {
     const handleBatchFetchSuccess = (nextArticles: Article[]) => {
       setWorkbenchArticles(nextArticles);
     };
+		const handleFetchWebContentsViewRequired = (
+			targetId: string,
+			pageUrl: string,
+		) => {
+			handleOpenEditor({
+				kind: 'browser',
+				disposition: 'reveal-or-open',
+				resource: BrowserViewUri.forId(targetId),
+				options: {
+					viewState: {
+						url: pageUrl,
+					},
+				},
+			});
+		};
 
     const batchFetchControllerInstance = getWorkbenchBatchFetchController({
       desktopRuntime,
@@ -1548,6 +1563,7 @@ class WorkbenchHost {
       ui,
       onBeforeFetch: handleBatchFetchStart,
       onFetchSuccess: handleBatchFetchSuccess,
+		onWebContentsViewRequired: handleFetchWebContentsViewRequired,
     });
     const { isBatchLoading } = batchFetchControllerInstance.getSnapshot();
     const chatArticleBatch = chatServiceInstance.collectArticleBatch(filteredArticles);
@@ -1555,12 +1571,6 @@ class WorkbenchHost {
       chatServiceInstance.collectSelectedArticleBatch(filteredArticles);
     const articleQuickSources = getConfigBatchSourceSeed();
     const handleFetchArticleSource = async (source: BatchSource) => {
-      handleOpenEditor({
-        kind: 'browser',
-        disposition: 'reveal-or-open',
-      });
-      navigateToAddressBarUrl(source.url, false);
-
       const result = await batchFetchControllerInstance.handleFetchSource(source);
       if (!result.ok) {
         if ('reason' in result && result.reason === 'empty') {
@@ -1677,6 +1687,7 @@ class WorkbenchHost {
         ui,
         onBeforeFetch: handleBatchFetchStart,
         onFetchSuccess: handleBatchFetchSuccess,
+			onWebContentsViewRequired: handleFetchWebContentsViewRequired,
       },
     });
 
@@ -1895,6 +1906,8 @@ class WorkbenchHost {
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
         onJournalSourceTitleChange:
           settingsControllerInstance.setJournalSourceTitle,
+		onJournalSourceFetchTargetChange:
+			settingsControllerInstance.setJournalSourceFetchTarget,
         onFetchStartDateChange: setBatchStartDate,
         onFetchEndDateChange: setBatchEndDate,
         onSystemNotificationsEnabledChange:

@@ -56,28 +56,33 @@ const SCIENCE_VALIDATION_WINDOW_CLOSED_STATUS_TEXT =
   'Science validation window was closed before verification completed.';
 
 async function tryUseExistingScienceWebContent(pageUrl: string): Promise<ScienceValidationResult | null> {
-  const webContentState = getWebContentState();
-  const webContentUrl = cleanText(webContentState.url);
-  if (!webContentUrl || !matchesScienceComparableUrl(webContentUrl, pageUrl)) {
-    return null;
-  }
+	const activeTargetId = getWebContentState().activeTargetId;
+	if (!activeTargetId) {
+		return null;
+	}
 
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < SCIENCE_VALIDATION_TIMEOUT_MS) {
-    const currentState = getWebContentState();
-    const currentWebContentUrl = cleanText(currentState.url);
-    if (!currentWebContentUrl || !matchesScienceComparableUrl(currentWebContentUrl, pageUrl)) {
-      return null;
-    }
+	const webContentState = getWebContentState(activeTargetId);
+	const webContentUrl = cleanText(webContentState.url);
+	if (!webContentUrl || !matchesScienceComparableUrl(webContentUrl, pageUrl)) {
+		return null;
+	}
 
-    const [extraction, snapshot] = await Promise.all([
-      getWebContentListingCandidateSnapshot({
-        timeoutMs: Math.min(1200, SCIENCE_VALIDATION_POLL_MS * 2),
-      }),
-      getWebContentDocumentSnapshot({
-        timeoutMs: Math.min(1200, SCIENCE_VALIDATION_POLL_MS * 2),
-      }),
-    ]);
+	const startedAt = Date.now();
+	while (Date.now() - startedAt < SCIENCE_VALIDATION_TIMEOUT_MS) {
+		const currentState = getWebContentState(activeTargetId);
+		const currentWebContentUrl = cleanText(currentState.url);
+		if (!currentWebContentUrl || !matchesScienceComparableUrl(currentWebContentUrl, pageUrl)) {
+			return null;
+		}
+
+		const [extraction, snapshot] = await Promise.all([
+			getWebContentListingCandidateSnapshot(activeTargetId, {
+				timeoutMs: Math.min(1200, SCIENCE_VALIDATION_POLL_MS * 2),
+			}),
+			getWebContentDocumentSnapshot(activeTargetId, {
+				timeoutMs: Math.min(1200, SCIENCE_VALIDATION_POLL_MS * 2),
+			}),
+		]);
 
     const extractionUrl = cleanText(extraction?.webContentUrl);
     const snapshotUrl = cleanText(snapshot?.url);

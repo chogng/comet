@@ -1,6 +1,7 @@
 import type {
   AppStartupLayout,
   AppTheme,
+	FetchTargetPreference,
   JournalSourceOverride,
   LibraryStorageMode,
   LlmProviderId,
@@ -296,19 +297,18 @@ export class SettingsModel {
 
     const normalizedJournalTitle = String(journalTitle ?? '').trim();
     this.updateSnapshot((snapshot) => {
+			const previousOverride = snapshot.journalSourceOverrides.find(
+				(override) => override.url === normalizedUrl,
+			);
       const nextOverrides = snapshot.journalSourceOverrides.filter(
         (override) => override.url !== normalizedUrl,
       );
-      if (normalizedJournalTitle) {
-        const previousOverride = snapshot.journalSourceOverrides.find(
-          (override) => override.url === normalizedUrl,
-        );
-        nextOverrides.push({
-          url: normalizedUrl,
-          journalTitle: normalizedJournalTitle,
-          preferredExtractorId: previousOverride?.preferredExtractorId ?? null,
-        });
-      }
+			nextOverrides.push({
+				url: normalizedUrl,
+				journalTitle: normalizedJournalTitle || undefined,
+				preferredExtractorId: previousOverride?.preferredExtractorId ?? null,
+				fetchTarget: previousOverride?.fetchTarget ?? 'background',
+			});
 
       if (areJsonEqual(snapshot.journalSourceOverrides, nextOverrides)) {
         return snapshot;
@@ -320,6 +320,40 @@ export class SettingsModel {
       };
     });
   };
+
+	readonly setJournalSourceFetchTarget = (
+		url: string,
+		fetchTarget: FetchTargetPreference,
+	) => {
+		const normalizedUrl = String(url ?? '').trim();
+		if (!normalizedUrl) {
+			return;
+		}
+
+		this.updateSnapshot(snapshot => {
+			const previousOverride = snapshot.journalSourceOverrides.find(
+				override => override.url === normalizedUrl,
+			);
+			const nextOverrides = snapshot.journalSourceOverrides.filter(
+				override => override.url !== normalizedUrl,
+			);
+			nextOverrides.push({
+				url: normalizedUrl,
+				journalTitle: previousOverride?.journalTitle,
+				preferredExtractorId: previousOverride?.preferredExtractorId ?? null,
+				fetchTarget,
+			});
+
+			if (areJsonEqual(snapshot.journalSourceOverrides, nextOverrides)) {
+				return snapshot;
+			}
+
+			return {
+				...snapshot,
+				journalSourceOverrides: nextOverrides,
+			};
+		});
+	};
 
   readonly setSystemNotificationsEnabled = (systemNotificationsEnabled: boolean) => {
     if (this.snapshot.systemNotificationsEnabled === systemNotificationsEnabled) {

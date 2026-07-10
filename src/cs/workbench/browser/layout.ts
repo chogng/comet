@@ -69,7 +69,6 @@ export type WorkbenchLayoutEvent =
       expandedEditorSize?: number;
     };
 
-export const WORKBENCH_CONTENT_LAYOUT_BREAKPOINT = 980;
 export const WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE = false;
 
 export { WORKBENCH_PART_IDS };
@@ -89,21 +88,6 @@ const WORKBENCH_SPLITVIEW_LIMITS = {
     minimum: 332,
     maximum: Number.POSITIVE_INFINITY,
     defaultSize: 360,
-  },
-} as const;
-
-const MOBILE_SPLITVIEW_LIMITS = {
-  sidebar: {
-    minimum: 160,
-    maximum: Number.POSITIVE_INFINITY,
-  },
-  editor: {
-    minimum: 180,
-    maximum: Number.POSITIVE_INFINITY,
-  },
-  agentSidebar: {
-    minimum: 160,
-    maximum: Number.POSITIVE_INFINITY,
   },
 } as const;
 
@@ -148,34 +132,19 @@ const workbenchPartRefCallbacks = new Map<
   WorkbenchPartRefCallback
 >();
 
-function getLayoutLimits(
-  orientation: Orientation,
-): LayoutLimits {
-  const desktop = WORKBENCH_SPLITVIEW_LIMITS;
-  const isHorizontal = orientation === Orientation.HORIZONTAL;
-
+function getLayoutLimits(): LayoutLimits {
   return {
     primarySidebar: {
-      minimum: isHorizontal
-        ? MOBILE_SPLITVIEW_LIMITS.sidebar.minimum
-        : desktop.sidebar.minimum,
-      maximum: isHorizontal
-        ? MOBILE_SPLITVIEW_LIMITS.sidebar.maximum
-        : desktop.sidebar.maximum,
+      minimum: WORKBENCH_SPLITVIEW_LIMITS.sidebar.minimum,
+      maximum: WORKBENCH_SPLITVIEW_LIMITS.sidebar.maximum,
     },
     editor: {
-      minimum: isHorizontal
-        ? MOBILE_SPLITVIEW_LIMITS.editor.minimum
-        : desktop.editor.minimum,
-      maximum: desktop.editor.maximum,
+      minimum: WORKBENCH_SPLITVIEW_LIMITS.editor.minimum,
+      maximum: WORKBENCH_SPLITVIEW_LIMITS.editor.maximum,
     },
     agentSidebar: {
-      minimum: isHorizontal
-        ? MOBILE_SPLITVIEW_LIMITS.agentSidebar.minimum
-        : desktop.agentSidebar.minimum,
-      maximum: isHorizontal
-        ? MOBILE_SPLITVIEW_LIMITS.agentSidebar.maximum
-        : desktop.agentSidebar.maximum,
+      minimum: WORKBENCH_SPLITVIEW_LIMITS.agentSidebar.minimum,
+      maximum: WORKBENCH_SPLITVIEW_LIMITS.agentSidebar.maximum,
     },
   };
 }
@@ -199,17 +168,7 @@ function clampExpandedEditorSize(size: number) {
 }
 
 function resolveActiveClampLimits() {
-  if (typeof window === 'undefined') {
-    return getLayoutLimits(Orientation.VERTICAL);
-  }
-
-  return getLayoutLimits(resolveOrientationFromWidth(window.innerWidth));
-}
-
-function resolveOrientationFromWidth(width: number) {
-  return width <= WORKBENCH_CONTENT_LAYOUT_BREAKPOINT
-    ? Orientation.HORIZONTAL
-    : Orientation.VERTICAL;
+  return getLayoutLimits();
 }
 
 function normalizeEditorCollapseState(
@@ -543,16 +502,9 @@ export type SessionWorkbenchLayoutViewProps = {
 	partViews: SessionWorkbenchLayoutPartViews;
 };
 
-type SessionLayoutLimits = {
-	sidebar: LayoutAxisLimits;
-	sessions: LayoutAxisLimits;
-	editor: LayoutAxisLimits;
-};
-
 const SESSION_SIDEBAR_INDEX = 0;
 const SESSION_EDITOR_INDEX = 2;
 const SESSION_COLLAPSED_SIDEBAR_VERTICAL_SIZE = 188;
-const SESSION_COLLAPSED_SIDEBAR_HORIZONTAL_SIZE = 48;
 
 const SESSION_SPLITVIEW_LIMITS = {
 	sidebar: {
@@ -569,42 +521,18 @@ const SESSION_SPLITVIEW_LIMITS = {
 	},
 } as const;
 
-const MOBILE_SESSION_SPLITVIEW_LIMITS = {
-	sidebar: {
-		minimum: 160,
-		maximum: Number.POSITIVE_INFINITY,
-	},
-	sessions: {
-		minimum: 220,
-		maximum: Number.POSITIVE_INFINITY,
-	},
-	editor: {
-		minimum: 220,
-		maximum: Number.POSITIVE_INFINITY,
-	},
-} as const;
-
-function getSessionLayoutLimits(orientation: Orientation): SessionLayoutLimits {
-	return orientation === Orientation.HORIZONTAL
-		? MOBILE_SESSION_SPLITVIEW_LIMITS
-		: SESSION_SPLITVIEW_LIMITS;
-}
-
-function getCollapsedSessionSidebarSize(orientation: Orientation) {
-	return orientation === Orientation.HORIZONTAL
-		? SESSION_COLLAPSED_SIDEBAR_HORIZONTAL_SIZE
-		: SESSION_COLLAPSED_SIDEBAR_VERTICAL_SIZE;
+function getCollapsedSessionSidebarSize() {
+	return SESSION_COLLAPSED_SIDEBAR_VERTICAL_SIZE;
 }
 
 function getSessionSidebarLimits(
-	orientation: Orientation,
 	isPrimarySidebarVisible: boolean,
 ): LayoutAxisLimits {
 	if (isPrimarySidebarVisible) {
-		return getSessionLayoutLimits(orientation).sidebar;
+		return SESSION_SPLITVIEW_LIMITS.sidebar;
 	}
 
-	const collapsedSize = getCollapsedSessionSidebarSize(orientation);
+	const collapsedSize = getCollapsedSessionSidebarSize();
 	return {
 		minimum: collapsedSize,
 		maximum: collapsedSize,
@@ -641,22 +569,11 @@ class SessionWorkbenchLayoutPartView implements IGridView {
 		return this.maximumHeightValue;
 	}
 
-	setConstraints(
-		orientation: Orientation,
-		constraints: LayoutAxisLimits,
-	) {
-		if (orientation === Orientation.VERTICAL) {
-			this.minimumWidthValue = constraints.minimum;
-			this.maximumWidthValue = constraints.maximum;
-			this.minimumHeightValue = 0;
-			this.maximumHeightValue = Number.POSITIVE_INFINITY;
-			return;
-		}
-
-		this.minimumWidthValue = 0;
-		this.maximumWidthValue = Number.POSITIVE_INFINITY;
-		this.minimumHeightValue = constraints.minimum;
-		this.maximumHeightValue = constraints.maximum;
+	setConstraints(constraints: LayoutAxisLimits) {
+		this.minimumWidthValue = constraints.minimum;
+		this.maximumWidthValue = constraints.maximum;
+		this.minimumHeightValue = 0;
+		this.maximumHeightValue = Number.POSITIVE_INFINITY;
 	}
 
 	setContent(content: HTMLElement | null) {
@@ -671,8 +588,6 @@ class SessionWorkbenchLayoutPartView implements IGridView {
 class SessionWorkbenchLayoutController {
 	private gridView: GridView | null = null;
 	private rootGrid: GridBranchView | null = null;
-	private gridOrientation: Orientation | null = null;
-	private splitConstraints = getSessionLayoutLimits(Orientation.VERTICAL);
 	private disposed = false;
 	private readonly gridDisposables = new DisposableStore();
 	private readonly resizeObserver = new MutableDisposable<DisposableLike>();
@@ -704,9 +619,8 @@ class SessionWorkbenchLayoutController {
 
 	sync() {
 		const state = this.options.getState();
-		const orientation = this.resolveSplitOrientation();
-		this.syncSplitPartConstraints(orientation, state.isPrimarySidebarVisible);
-		this.ensureGridView(state, orientation);
+		this.syncSplitPartConstraints(state.isPrimarySidebarVisible);
+		this.ensureGridView(state);
 		if (!this.gridView) {
 			return;
 		}
@@ -716,7 +630,7 @@ class SessionWorkbenchLayoutController {
 		this.gridView.setViewVisible([SESSION_EDITOR_INDEX], state.isEditorVisible);
 		this.gridView.setViewSize(
 			[SESSION_SIDEBAR_INDEX],
-			this.resolveSidebarSize(state, orientation),
+			this.resolveSidebarSize(state),
 		);
 		if (state.isEditorVisible) {
 			this.gridView.setViewSize([SESSION_EDITOR_INDEX], state.editorSize);
@@ -745,12 +659,10 @@ class SessionWorkbenchLayoutController {
 
 	private ensureGridView(
 		state: ReturnType<typeof this.options.getState>,
-		orientation: Orientation,
 	) {
 		if (
 			this.gridView &&
 			this.rootGrid &&
-			this.gridOrientation === orientation &&
 			this.options.contentHost.firstChild === this.gridView.element
 		) {
 			return;
@@ -758,13 +670,13 @@ class SessionWorkbenchLayoutController {
 
 		this.disposeGridView();
 		const rootGrid = new GridBranchView(
-			orientation,
+			Orientation.VERTICAL,
 			undefined,
 			WORKBENCH_SPLITVIEW_RESERVE_SASH_SPACE,
 			[
 				{
 					view: this.options.sidebarPartView,
-					size: this.resolveSidebarSize(state, orientation),
+					size: this.resolveSidebarSize(state),
 					visible: true,
 				},
 				{
@@ -786,7 +698,6 @@ class SessionWorkbenchLayoutController {
 		this.gridDisposables.add(gridView.onDidSashEnd(this.handleGridSashEnd));
 		this.rootGrid = rootGrid;
 		this.gridView = gridView;
-		this.gridOrientation = orientation;
 		this.options.contentHost.replaceChildren(gridView.element);
 	}
 
@@ -795,7 +706,6 @@ class SessionWorkbenchLayoutController {
 		this.gridView?.dispose();
 		this.gridView = null;
 		this.rootGrid = null;
-		this.gridOrientation = null;
 	}
 
 	private resolveInitialSessionsSize() {
@@ -808,11 +718,10 @@ class SessionWorkbenchLayoutController {
 
 	private resolveSidebarSize(
 		state: ReturnType<typeof this.options.getState>,
-		orientation: Orientation,
 	) {
 		return state.isPrimarySidebarVisible
 			? state.primarySidebarSize
-			: getCollapsedSessionSidebarSize(orientation);
+			: getCollapsedSessionSidebarSize();
 	}
 
 	private readonly handleGridSashSnap = (event: GridSashSnapEvent) => {
@@ -864,9 +773,8 @@ class SessionWorkbenchLayoutController {
 
 	private handleContainerResize() {
 		const state = this.options.getState();
-		const orientation = this.resolveSplitOrientation();
-		this.syncSplitPartConstraints(orientation, state.isPrimarySidebarVisible);
-		this.ensureGridView(state, orientation);
+		this.syncSplitPartConstraints(state.isPrimarySidebarVisible);
+		this.ensureGridView(state);
 		this.scheduleGridViewLayout();
 	}
 
@@ -891,11 +799,7 @@ class SessionWorkbenchLayoutController {
 			}
 
 			const state = this.options.getState();
-			const nextOrientation = this.resolveSplitOrientation();
-			this.syncSplitPartConstraints(nextOrientation, state.isPrimarySidebarVisible);
-			if (nextOrientation !== this.gridOrientation) {
-				this.ensureGridView(state, nextOrientation);
-			}
+			this.syncSplitPartConstraints(state.isPrimarySidebarVisible);
 			this.gridView.layout(
 				this.options.contentHost.clientWidth,
 				this.options.contentHost.clientHeight,
@@ -903,30 +807,17 @@ class SessionWorkbenchLayoutController {
 		});
 	}
 
-	private resolveSplitOrientation() {
-		const containerWidth =
-			this.options.contentHost.clientWidth ||
-			this.options.container.clientWidth ||
-			window.innerWidth;
-		return resolveOrientationFromWidth(containerWidth);
-	}
-
 	private syncSplitPartConstraints(
-		orientation: Orientation,
 		isPrimarySidebarVisible: boolean,
 	) {
-		this.splitConstraints = getSessionLayoutLimits(orientation);
 		this.options.sidebarPartView.setConstraints(
-			orientation,
-			getSessionSidebarLimits(orientation, isPrimarySidebarVisible),
+			getSessionSidebarLimits(isPrimarySidebarVisible),
 		);
 		this.options.sessionsPartView.setConstraints(
-			orientation,
-			this.splitConstraints.sessions,
+			SESSION_SPLITVIEW_LIMITS.sessions,
 		);
 		this.options.editorPartView.setConstraints(
-			orientation,
-			this.splitConstraints.editor,
+			SESSION_SPLITVIEW_LIMITS.editor,
 		);
 	}
 }

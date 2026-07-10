@@ -565,51 +565,6 @@ export const titleBarCloseActiveForeground = registerColor('titleBar.closeActive
   light: '#ffffff',
 });
 
-export const titleBarFetchSourceNetworkBackground = registerColor('titleBar.fetchSourceNetworkBackground', {
-  dark: '#3b3020',
-  light: '#fff7ec',
-});
-
-export const titleBarFetchSourceNetworkBorder = registerColor('titleBar.fetchSourceNetworkBorder', {
-  dark: '#8b6940',
-  light: '#f5cf99',
-});
-
-export const titleBarFetchSourceNetworkForeground = registerColor('titleBar.fetchSourceNetworkForeground', {
-  dark: '#f2c572',
-  light: '#8b5a14',
-});
-
-export const titleBarFetchSourceWebBackground = registerColor('titleBar.fetchSourceWebBackground', {
-  dark: '#1d3326',
-  light: '#e9f8ef',
-});
-
-export const titleBarFetchSourceWebBorder = registerColor('titleBar.fetchSourceWebBorder', {
-  dark: '#3d6b4e',
-  light: '#93d2aa',
-});
-
-export const titleBarFetchSourceWebForeground = registerColor('titleBar.fetchSourceWebForeground', {
-  dark: '#7cd39c',
-  light: '#1e6b3d',
-});
-
-export const titleBarFetchSourceLiveBackground = registerColor('titleBar.fetchSourceLiveBackground', {
-  dark: '#22344a',
-  light: '#eaf2ff',
-});
-
-export const titleBarFetchSourceLiveBorder = registerColor('titleBar.fetchSourceLiveBorder', {
-  dark: '#4c6892',
-  light: '#a9c2ef',
-});
-
-export const titleBarFetchSourceLiveForeground = registerColor('titleBar.fetchSourceLiveForeground', {
-  dark: '#8cb9ff',
-  light: '#244f93',
-});
-
 export const titleBarFetchStopBackground = registerColor('titleBar.fetchStopBackground', {
   dark: '#3b3020',
   light: '#fff3dd',

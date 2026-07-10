@@ -1,118 +1,88 @@
-import { load } from 'cheerio';
-import type { Article, FetchChannel, WebContentReuseMode } from 'cs/base/parts/sandbox/common/sandboxTypes';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import type { Article } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { isWithinDateRange } from 'cs/base/common/date';
 import type { DateRange } from 'cs/base/common/date';
 
-import { hasStrongArticleSignals } from 'cs/workbench/services/fetch/electron-main/acceptance';
-import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
-import type { SourcePageTypeResult } from 'cs/workbench/services/fetch/electron-main/detect';
+import { ArticleFetchService } from 'cs/workbench/services/fetch/electron-main/articleFetchService';
+import type { FetchTargetSession } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
 import type {
-  FetchLatestArticlesOptions,
-  PageFetchResult,
-  PageHtmlResult,
+	FetchStatusUpdate,
+	PageFetchResult,
 } from 'cs/workbench/services/fetch/electron-main/sourcePageFetchTypes';
 
+function createTargetReadyStatus(
+	targetSession: FetchTargetSession,
+	articleProof: FetchStatusUpdate['articleProof'],
+): FetchStatusUpdate {
+	if (targetSession.targetMode === 'webContentsView' && targetSession.targetId) {
+		return {
+			phase: 'targetReady',
+			targetMode: 'webContentsView',
+			targetId: targetSession.targetId,
+			articleProof,
+		};
+	}
+
+	return {
+		phase: 'loading',
+		targetMode: 'background',
+		targetId: null,
+		articleProof,
+	};
+}
+
 export async function fetchDetail({
-  sourceId,
-  pageUrl,
-  journalTitle,
-  remainingLimit,
-  dateRange,
-  sourcePageType,
-  resolvePageHtml,
-  reportFetchStatus,
-  timingLog,
-  elapsedMs,
-  shortenForLog,
-  traceId,
-  pageNumber,
-  options,
+	sourceId,
+	pageUrl,
+	journalTitle,
+	remainingLimit,
+	dateRange,
+	targetSession,
+	articleFetchService,
+	reportFetchStatus,
+	backgroundTimeoutMs,
+	webContentsViewTimeoutMs,
 }: {
-  sourceId: string;
-  pageUrl: string;
-  journalTitle: string;
-  remainingLimit: number;
-  dateRange: DateRange;
-  sourcePageType: SourcePageTypeResult;
-  resolvePageHtml: (
-    pageUrl: string,
-    traceId: string,
-    options: FetchLatestArticlesOptions,
-  ) => Promise<PageHtmlResult>;
-  reportFetchStatus: (fetchChannel: FetchChannel, webContentReuseMode: WebContentReuseMode | null) => void;
-  timingLog: (traceId: string, event: string, data?: Record<string, unknown>) => void;
-  elapsedMs: (startedAt: number) => number;
-  shortenForLog: (value: string) => string;
-  traceId: string;
-  pageNumber: number;
-  options: FetchLatestArticlesOptions;
+	sourceId: string;
+	pageUrl: string;
+	journalTitle: string;
+	remainingLimit: number;
+	dateRange: DateRange;
+	targetSession: FetchTargetSession;
+	articleFetchService: ArticleFetchService;
+	reportFetchStatus: (status: FetchStatusUpdate) => void;
+	backgroundTimeoutMs: number;
+	webContentsViewTimeoutMs: number;
 }): Promise<PageFetchResult> {
-  const fetched: Article[] = [];
-  const pageResult = await resolvePageHtml(pageUrl, traceId, options);
-  const fetchChannel = pageResult.source;
-  const webContentReuseMode = pageResult.source === 'web-content' ? 'snapshot' : null;
-  reportFetchStatus(fetchChannel, webContentReuseMode);
+	const fetched: Article[] = [];
+	const result = await articleFetchService.fetch({
+		pageUrl,
+		targetSession,
+		backgroundTimeoutMs,
+		webContentsViewTimeoutMs,
+	});
+	reportFetchStatus(createTargetReadyStatus(targetSession, result.proof));
 
-  const html = pageResult.html;
-  const pageParseStartedAt = Date.now();
-  const pageArticle = buildArticleFromHtml(pageUrl, html);
-  load(html);
-  timingLog(traceId, 'source:page_parsed', {
-    pageNumber,
-    ms: elapsedMs(pageParseStartedAt),
-    fetchChannel: pageResult.source,
-    webContentReuseMode,
-    hasTitle: Boolean(pageArticle.title),
-    hasDoi: Boolean(pageArticle.doi),
-    hasAbstract: Boolean(pageArticle.abstractText),
-    hasDescription: Boolean(pageArticle.descriptionText),
-    publishedAt: pageArticle.publishedAt,
-  });
+	if (isWithinDateRange(result.article.publishedAt, dateRange) && remainingLimit > 0) {
+		result.article.sourceId = sourceId;
+		if (journalTitle) {
+			result.article.journalTitle = journalTitle;
+		}
+		fetched.push(result.article);
+	}
 
-  if (
-    sourcePageType.hasArticlePath &&
-    hasStrongArticleSignals(pageUrl, pageArticle) &&
-    isWithinDateRange(pageArticle.publishedAt, dateRange)
-  ) {
-    pageArticle.sourceId = sourceId;
-    if (journalTitle) {
-      pageArticle.journalTitle = journalTitle;
-    }
-    fetched.push(pageArticle);
-    timingLog(traceId, 'source:page_accepted', {
-      pageNumber,
-      sourceUrl: shortenForLog(pageArticle.sourceUrl),
-    });
-    if (fetched.length >= remainingLimit) {
-      return {
-        fetchChannel,
-        webContentReuseMode,
-        articles: fetched,
-        candidateAttempted: 0,
-        candidateResolved: 0,
-        candidateAccepted: 0,
-        usedPageOnly: true,
-        nextPageUrl: null,
-        stoppedByDateHint: false,
-      };
-    }
-  }
-
-  timingLog(traceId, 'source:page_detail_only', {
-    pageNumber,
-    sourceUrl: shortenForLog(pageUrl),
-    reason: sourcePageType.reason,
-    pageAccepted: fetched.length > 0,
-  });
-  return {
-    fetchChannel,
-    webContentReuseMode,
-    articles: fetched,
-    candidateAttempted: 0,
-    candidateResolved: 0,
-    candidateAccepted: 0,
-    usedPageOnly: true,
-    nextPageUrl: null,
-    stoppedByDateHint: false,
-  };
+	return {
+		targetMode: targetSession.targetMode,
+		articles: fetched,
+		candidateAttempted: 0,
+		candidateResolved: fetched.length,
+		candidateAccepted: fetched.length,
+		usedPageOnly: true,
+		nextPageUrl: null,
+		stoppedByDateHint: false,
+	};
 }

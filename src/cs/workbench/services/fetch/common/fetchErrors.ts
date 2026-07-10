@@ -8,6 +8,10 @@ import type { AppErrorData } from 'cs/base/parts/sandbox/common/appError';
 
 export const enum FetchErrorCode {
 	HttpRequestFailed = 'HTTP_REQUEST_FAILED',
+	ArticlePageRejected = 'ARTICLE_PAGE_REJECTED',
+	ListingPageRejected = 'LISTING_PAGE_REJECTED',
+	InteractiveTargetTimedOut = 'INTERACTIVE_TARGET_TIMED_OUT',
+	InteractiveTargetClosed = 'INTERACTIVE_TARGET_CLOSED',
 	BatchPageUrlsEmpty = 'BATCH_PAGE_URLS_EMPTY',
 	BatchSourceFetchFailed = 'BATCH_SOURCE_FETCH_FAILED',
 	BatchNoMatchInDateRange = 'BATCH_NO_MATCH_IN_DATE_RANGE',

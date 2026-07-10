@@ -468,12 +468,16 @@ const electronAPI: ElectronAPI = {
   fetch: {
     onFetchStatus(listener: (status: FetchStatus) => void) {
       return subscribeIpc<FetchStatus>('app:fetch-status', listener, {
+				requestId: '',
         sourceId: '',
         pageUrl: '',
         pageNumber: 0,
-        fetchChannel: 'network',
-        fetchDetail: null,
-        webContentReuseMode: null,
+				phase: 'loading',
+				targetMode: 'background',
+				targetId: null,
+				articleProof: null,
+				publisherId: 'other',
+				publisherAccessRisk: 'standard',
         extractorId: null,
         paginationStopped: false,
         paginationStopReason: null,

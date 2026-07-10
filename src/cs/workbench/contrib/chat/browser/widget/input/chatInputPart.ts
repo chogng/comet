@@ -6,8 +6,9 @@
 import { $, addDisposableListener, EventType } from 'cs/base/browser/dom';
 import {
 	createActionBarView,
-	type ActionBarActionItem,
+	type ActionBarMenuItem,
 } from 'cs/base/browser/ui/actionbar/actionbar';
+import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
@@ -70,6 +71,50 @@ function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerPro
 function getArticleSourceLabel(source: BatchSource) {
 	const journalTitle = source.journalTitle.trim();
 	return journalTitle || source.url;
+}
+
+function createChatInputAddActionItem() {
+	const addLabel = localize('chatInputAdd', "Add");
+	const menu: ActionBarMenuItem[] = [
+		{
+			id: 'chat-input-add-agents',
+			label: localize('chatInputAddAgents', "Agents"),
+			icon: 'agent',
+		},
+		{
+			id: 'chat-input-add-image',
+			label: localize('chatInputAddImage', "Image"),
+			icon: 'image',
+		},
+		{
+			id: 'chat-input-add-skills',
+			label: localize('chatInputAddSkills', "Skills"),
+			icon: 'brain',
+		},
+		{
+			id: 'chat-input-add-mcp',
+			label: localize('chatInputAddMcp', "MCP"),
+			icon: 'database',
+		},
+		{
+			id: 'chat-input-add-plugins',
+			label: localize('chatInputAddPlugins', "Plugins"),
+			icon: 'extensions',
+		},
+	];
+
+	return createDropdownMenuActionViewItem({
+		label: addLabel,
+		title: addLabel,
+		content: createLxIcon('add'),
+		className: 'comet-chat-add-menu',
+		buttonClassName: 'comet-chat-add-menu-btn',
+		menu,
+		menuClassName: 'comet-chat-add-menu',
+		menuData: 'chat-add-menu',
+		minWidth: 180,
+		overlayAlignmentPolicy: 'prefer-start',
+	});
 }
 
 export class ChatInputPart {
@@ -168,33 +213,35 @@ export class ChatInputPart {
 		}));
 
 		const toolbar = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-toolbar');
+		const composerTools = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-tools');
+		const addMenuActions = createActionBarView({
+			className: 'comet-chat-composer-add-menu-actions',
+			ariaRole: 'group',
+			items: [createChatInputAddActionItem()],
+		});
+		this.renderDisposables.add(addMenuActions);
+		composerTools.append(addMenuActions.getElement());
 		const modelPickerContainer = $<HTMLElementTagNameMap['div']>('div');
 		this.renderDisposables.add(this.modelPicker.render(modelPickerContainer));
-		toolbar.append(modelPickerContainer);
+		composerTools.append(modelPickerContainer);
+		toolbar.append(composerTools);
 		const sendLabel = this.props.isAsking
 			? localize('assistantSidebarSendBusy', "Asking...")
 			: localize('assistantSidebarSend', "Send");
 		const actionsView = createActionBarView({
 			className: 'comet-chat-composer-actions',
 			ariaRole: 'group',
-			items: [
-				this.createComposerActionItem(
-					localize('assistantSidebarImage', "Image"),
-					'image-filled',
-					'comet-chat-composer-tool-action',
+			items: [{
+				label: sendLabel,
+				title: sendLabel,
+				content: createLxIcon(
+					this.props.isAsking
+						? lxIconSemanticMap.assistant.busy
+						: 'mic',
 				),
-				{
-					label: sendLabel,
-					title: sendLabel,
-					content: createLxIcon(
-						this.props.isAsking
-							? lxIconSemanticMap.assistant.busy
-							: 'voice-circle-filled',
-					),
-					buttonClassName: 'comet-chat-composer-send-action',
-					onClick: () => this.props.onAsk(),
-				},
-			],
+				buttonClassName: 'comet-chat-composer-send-action',
+				onClick: () => this.props.onAsk(),
+			}],
 		});
 		this.renderDisposables.add(actionsView);
 		toolbar.append(actionsView.getElement());
@@ -214,19 +261,6 @@ export class ChatInputPart {
 
 	private canSend() {
 		return !this.props.isAsking && this.props.question.trim().length > 0;
-	}
-
-	private createComposerActionItem(
-		label: string,
-		icon: LxIconName,
-		buttonClassName = 'comet-chat-composer-tool-action',
-	): ActionBarActionItem {
-		return {
-			label,
-			title: label,
-			content: createLxIcon(icon),
-			buttonClassName,
-		};
 	}
 
 	private renderQuickActions() {

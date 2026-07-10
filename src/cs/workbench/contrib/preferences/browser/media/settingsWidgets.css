@@ -479,7 +479,7 @@
 
 .comet-settings-supported-source-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) minmax(160px, 200px);
   gap: 16px;
   align-items: center;
   min-width: 0;
@@ -545,6 +545,11 @@
 .comet-settings-supported-source-journal-input > .comet-inputbox-wrapper > .comet-input {
   padding: 2px 8px;
   line-height: 1.2;
+}
+
+.comet-settings-supported-source-target-select {
+	min-width: 0;
+	width: 100%;
 }
 
 /* ===== Literature Batch / Download / Translation Blocks ===== */

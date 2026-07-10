@@ -1,29 +1,44 @@
 import type {
   Article,
-  FetchChannel,
+	ArticlePageProof,
+	FetchFailureReason,
   FetchStatus,
-  WebContentReuseMode,
+	FetchTargetPreference,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { CandidateArticleSnapshot } from 'cs/workbench/services/fetch/electron-main/merge';
 import type { ListingPaginationStopEvaluation } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
-import type {
-  FetchStrategy,
-  WebContentExtractionSnapshot,
-  WebContentSnapshot,
-} from 'cs/workbench/services/fetch/electron-main/fetchStrategy';
+import type { FetchTargetProvider } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
 
 export type FetchLatestArticlesOptions = {
-  previewExtractions?: ReadonlyMap<string, WebContentExtractionSnapshot>;
-  previewSnapshots?: ReadonlyMap<string, WebContentSnapshot>;
-  fetchStrategy?: FetchStrategy;
+	requestId: string;
+	targetProvider: FetchTargetProvider;
   onFetchStatus?: (status: FetchStatus) => void;
 };
 
-export type PageHtmlResult = {
-  html: string;
-  source: 'network' | 'web-content';
-  usedRenderFallback?: boolean;
-};
+export type FetchStatusUpdate =
+	| {
+		readonly phase: 'loading';
+		readonly targetMode: FetchTargetPreference;
+		readonly targetId: string | null;
+		readonly articleProof: ArticlePageProof | null;
+		readonly paginationStopped?: boolean;
+		readonly paginationStopReason?: string | null;
+	}
+	| {
+		readonly phase: 'targetReady';
+		readonly targetMode: 'webContentsView';
+		readonly targetId: string;
+		readonly articleProof: ArticlePageProof | null;
+		readonly paginationStopped?: boolean;
+		readonly paginationStopReason?: string | null;
+	}
+	| {
+		readonly phase: 'failed';
+		readonly targetMode: FetchTargetPreference;
+		readonly targetId: string | null;
+		readonly failureReason: FetchFailureReason;
+		readonly articleProof: ArticlePageProof | null;
+	};
 
 export type CandidateDescriptor = CandidateArticleSnapshot & {
   score: number;
@@ -46,8 +61,7 @@ export type CandidateCollectionResult = {
 };
 
 export type PageFetchResult = {
-  fetchChannel: FetchChannel;
-  webContentReuseMode: WebContentReuseMode | null;
+	targetMode: FetchTargetPreference;
   articles: Article[];
   candidateAttempted: number;
   candidateResolved: number;

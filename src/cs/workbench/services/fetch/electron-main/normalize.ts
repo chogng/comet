@@ -3,6 +3,8 @@ import { load } from 'cheerio';
 import { cleanText, pickFirstNonEmpty, uniq } from 'cs/base/common/strings';
 import { collectStructuredFieldTextCandidates, extractRawAbstract, extractRawArticleType, extractRawAuthors, extractRawDescription, extractRawDomArticleType, extractRawDomTitle, extractRawDoi, extractRawPublishedDate, extractRawTitle, normalizeRawAuthorName } from 'cs/workbench/services/fetch/electron-main/rawMetadata';
 import type { StructuredDataRecord } from 'cs/workbench/services/fetch/electron-main/rawMetadata';
+import { extractArticleBodyText } from 'cs/workbench/services/fetch/electron-main/articleBody';
+import { resolvePublisherProfile } from 'cs/workbench/services/fetch/electron-main/publisherResolver';
 
 import {
   extractNatureAbstract,
@@ -35,8 +37,18 @@ export function extractAuthors(
   return [];
 }
 
-export function extractDoi($: ReturnType<typeof load>, html: string) {
-  return extractRawDoi($, html);
+export function extractDoi($: ReturnType<typeof load>, sourceUrl: string) {
+	const metadataDoi = extractRawDoi($);
+	if (metadataDoi) {
+		return metadataDoi;
+	}
+	try {
+		return decodeURIComponent(new URL(sourceUrl).pathname).match(
+			/10\.\d{4,9}\/[-._;()/:a-z0-9]+/i,
+		)?.[0] ?? null;
+	} catch {
+		return null;
+	}
 }
 
 export function extractPublishedDate(
@@ -71,6 +83,7 @@ export function extractAbstract(
 export function extractDescription(
   $: ReturnType<typeof load>,
   structuredDataItems: StructuredDataRecord[],
+	sourceUrl: string,
 ) {
   if (isNatureArticlePage($)) {
     const natureMainText = extractNatureMainText($);
@@ -82,6 +95,13 @@ export function extractDescription(
       return [natureMainText, ...figureCaptions, referencesBlock].filter(Boolean).join('\n\n');
     }
   }
+	const articleBodyText = extractArticleBodyText(
+		$,
+		resolvePublisherProfile(sourceUrl).id,
+	);
+	if (articleBodyText) {
+		return articleBodyText;
+	}
 
   return extractRawDescription($, structuredDataItems);
 }

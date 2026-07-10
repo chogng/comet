@@ -34,7 +34,7 @@ await build({
   format: 'esm',
   target: 'node20',
   sourcemap: 'inline',
-  external: ['node:assert/strict', 'node:test'],
+	external: ['cheerio', 'node:assert/strict', 'node:test'],
 });
 
 const result = spawnSync(process.execPath, ['--test', outputFile], {

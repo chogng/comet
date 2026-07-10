@@ -362,6 +362,7 @@ export type WebContentDocumentSnapshot = {
   html: string;
   captureMs: number;
   isLoading: boolean;
+	documentReadyState: string;
 };
 
 export type WebContentListingCandidateSnapshot = {
@@ -2238,6 +2239,16 @@ export function getWebContentState(targetId?: string | null): WebContentState {
   return buildWebContentState(normalizedTargetId);
 }
 
+export function hasManagedWebContentTarget(targetId: string) {
+	const normalizedTargetId = normalizeWebContentTargetId(targetId);
+	const entry = webContentTargets.get(normalizedTargetId);
+	return Boolean(
+		entry &&
+		!entry.view.webContents.isDestroyed() &&
+		browserViewTargetMetadata.has(normalizedTargetId),
+	);
+}
+
 export async function captureWebContentScreenshot(targetId?: string | null) {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
   const entry = webContentTargets.get(normalizedTargetId);
@@ -2254,36 +2265,51 @@ export async function captureWebContentScreenshot(targetId?: string | null) {
 }
 
 export async function getWebContentDocumentSnapshot(
+	targetId: string,
   options: WebContentDocumentSnapshotOptions = {},
 ): Promise<WebContentDocumentSnapshot | null> {
   const startedAt = Date.now();
-  const state = getWebContentState();
 
   try {
-    const html = await executeWebContentScript<string>(
+    const snapshot = await executeWebContentScriptForTarget<{
+		url?: unknown;
+		html?: unknown;
+		documentReadyState?: unknown;
+	}>(
+		targetId,
       `(() => {
         try {
-          return document.documentElement ? document.documentElement.outerHTML : '';
+          return {
+			url: location.href,
+			html: document.documentElement ? document.documentElement.outerHTML : '',
+			documentReadyState: document.readyState,
+		  };
         } catch {
-          return '';
+		  return null;
         }
       })()`,
       options,
     );
 
-    if (html === webContentDocumentSnapshotTimedOut) {
+    if (snapshot === webContentDocumentSnapshotTimedOut || !isRecord(snapshot)) {
       return null;
     }
 
+	const url = typeof snapshot.url === 'string' ? snapshot.url.trim() : '';
+	const html = typeof snapshot.html === 'string' ? snapshot.html : '';
+	const documentReadyState = typeof snapshot.documentReadyState === 'string'
+		? snapshot.documentReadyState
+		: '';
     if (typeof html !== 'string' || !html.trim()) {
       return null;
     }
 
     return {
-      url: state.url,
+	  url,
       html,
       captureMs: Date.now() - startedAt,
-      isLoading: state.isLoading,
+	  isLoading: documentReadyState !== 'complete',
+	  documentReadyState,
     };
   } catch {
     return null;
@@ -2381,19 +2407,19 @@ export async function getWebContentSelection(
   };
 }
 
-export async function getWebContentDocumentHtml() {
-  const snapshot = await getWebContentDocumentSnapshot();
+export async function getWebContentDocumentHtml(targetId: string) {
+  const snapshot = await getWebContentDocumentSnapshot(targetId);
   return snapshot?.html ?? null;
 }
 
 export async function getWebContentListingCandidateSnapshot(
+	targetId: string,
   options: WebContentListingCandidateSnapshotOptions = {},
 ): Promise<WebContentListingCandidateSnapshot | null> {
   const startedAt = Date.now();
-  const state = getWebContentState();
 
   try {
-    const result = await executeWebContentScript<{
+    const result = await executeWebContentScriptForTarget<{
       webContentUrl?: unknown;
       extractorId?: unknown;
       extraction?: {
@@ -2401,7 +2427,7 @@ export async function getWebContentListingCandidateSnapshot(
         diagnostics?: unknown;
       };
       nextPageUrl?: unknown;
-    }>(createWebContentListingCandidateExtractionScript(options.preferredExtractorId), options);
+    }>(targetId, createWebContentListingCandidateExtractionScript(options.preferredExtractorId), options);
 
     if (result === webContentDocumentSnapshotTimedOut || !isRecord(result)) {
       return null;
@@ -2425,7 +2451,7 @@ export async function getWebContentListingCandidateSnapshot(
       },
       nextPageUrl: String(result.nextPageUrl ?? '').trim() || null,
       captureMs: Date.now() - startedAt,
-      isLoading: state.isLoading,
+	  isLoading: getWebContentState(targetId).isLoading,
     };
   } catch {
     return null;
@@ -2447,9 +2473,6 @@ export async function navigateWebContentTarget(
   const resolvedUrl = coerceWebContentNavigationUrl(url);
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
   const entry = ensureWebContentTarget(normalizedTargetId);
-  markWebContentTargetAsActive(normalizedTargetId);
-  activeWebContentTargetId = normalizedTargetId;
-  applyWebContentLayout();
   syncWebContentTargetState(normalizedTargetId);
 
   try {
@@ -2523,6 +2546,33 @@ export async function navigateWebContentTarget(
       navigationMode: mode,
     });
   }
+}
+
+export function startExistingWebContentTargetNavigation(
+	url: string,
+	targetId: string,
+) {
+	const resolvedUrl = coerceWebContentNavigationUrl(url);
+	const normalizedTargetId = normalizeWebContentTargetId(targetId);
+	const entry = webContentTargets.get(normalizedTargetId);
+	if (
+		!resolvedUrl ||
+		!entry ||
+		entry.view.webContents.isDestroyed() ||
+		!browserViewTargetMetadata.has(normalizedTargetId)
+	) {
+		throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
+			message: 'The requested Browser target is no longer available.',
+			targetId,
+			targetUrl: url,
+		});
+	}
+
+	void entry.view.webContents.loadURL(resolvedUrl).catch(error => {
+		if (!isAbortLikeWebContentNavigationError(error)) {
+			console.warn('[browser-view] navigation failed', describeWebContentError(error));
+		}
+	});
 }
 
 export async function navigateWebContentForPrint(url: string, timeoutMs = 12000) {
@@ -2901,10 +2951,15 @@ export class BrowserViewMainService implements IBrowserViewService {
       if (metadata.device) {
         await this.setDeviceEmulation(id, metadata.device);
       }
-      if (initialState?.url) {
-        await navigateWebContentTarget(initialState.url, id, 'browser');
-      }
-      return toBrowserViewState(id);
+		if (initialState?.url) {
+			void navigateWebContentTarget(initialState.url, id, 'browser').catch(error => {
+				console.warn('[browser-view] initial navigation failed', describeWebContentError(error));
+			});
+		}
+		return {
+			...toBrowserViewState(id),
+			...initialState,
+		};
     } catch (error) {
       disposeWebContentTargetEntry(id);
       throw error;

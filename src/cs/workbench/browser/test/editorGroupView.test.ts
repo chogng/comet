@@ -8,6 +8,7 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import { BrowserViewStorageScope } from 'cs/platform/browserView/common/browserView';
+import { BrowserHistoryStore } from 'cs/platform/browserView/common/browserHistory';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/browser/editorGroupIdentity';
@@ -265,6 +266,7 @@ function createBrowserViewWorkbenchService(): IBrowserViewWorkbenchService {
 
   return {
     _serviceBrand: undefined,
+		browserHistory: new BrowserHistoryStore(Number.MAX_SAFE_INTEGER),
     onDidChangeBrowserViews: BaseEvent.None,
     onDidChangeSharingAvailable: BaseEvent.None,
     isSharingAvailable: false,

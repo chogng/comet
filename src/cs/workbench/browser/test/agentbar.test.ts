@@ -350,15 +350,15 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', a
   document.body.append(element);
 
   try {
-    const toolButtons = Array.from(
+    const composerActions = Array.from(
       element.querySelectorAll(
-        '.comet-chat-composer-actions .comet-chat-composer-tool-action',
+        '.comet-chat-composer-actions .comet-actionbar-action',
       ),
     );
-    assert.equal(toolButtons.length, 1);
-    assert.deepEqual(
-      toolButtons.map((button) => button.getAttribute('aria-label')),
-      ['Image'],
+    assert.equal(composerActions.length, 1);
+    assert.equal(
+      composerActions.some(button => button.getAttribute('aria-label') === 'Image'),
+      false,
     );
 
     const sendButton = element.querySelector(
@@ -367,6 +367,7 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', a
     assert(sendButton instanceof HTMLButtonElement);
     assert.equal(sendButton.getAttribute('aria-label'), 'Send');
     assert.equal(sendButton.disabled, false);
+    assert(sendButton.querySelector('.lx-icon-mic') instanceof HTMLElement);
 
     sendButton.click();
     assert.equal(askCount, 1);
@@ -374,12 +375,32 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', a
     const dropdownButton = element.querySelector('.comet-chat-model-switch-btn');
     assert(dropdownButton instanceof HTMLButtonElement);
 		const modelPickerContainer = dropdownButton.parentElement;
-		const composerToolbar = modelPickerContainer?.parentElement;
+		const composerTools = modelPickerContainer?.parentElement;
+		const composerToolbar = composerTools?.parentElement;
 		assert(modelPickerContainer instanceof HTMLDivElement);
+		assert(composerTools instanceof HTMLDivElement);
 		assert(composerToolbar instanceof HTMLDivElement);
 		assert.equal(modelPickerContainer.classList.contains('comet-chat-model-switch'), true);
-		assert.equal(composerToolbar.classList.contains('comet-chat-model-switch'), false);
+		assert.equal(composerTools.classList.contains('comet-chat-composer-tools'), true);
+		assert.equal(
+			composerTools.firstElementChild?.classList.contains('comet-chat-composer-add-menu-actions'),
+			true,
+		);
+		assert.equal(composerTools.lastElementChild, modelPickerContainer);
 		assert.equal(composerToolbar.classList.contains('comet-chat-composer-toolbar'), true);
+
+		const addButton = element.querySelector('.comet-chat-add-menu-btn');
+		assert(addButton instanceof HTMLButtonElement);
+		addButton.click();
+		const addMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-add-menu"]');
+		assert(addMenu instanceof HTMLElement);
+		assert.deepEqual(
+			Array.from(addMenu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'))
+				.map(node => node.textContent?.trim()),
+			['Agents', 'Image', 'Skills', 'MCP', 'Plugins'],
+		);
+		addButton.click();
+		await delay(0);
     assert.equal(
       dropdownButton.querySelector('.comet-chat-model-switch-label')?.textContent,
       'GLM-4.7-Flash',
@@ -518,6 +539,7 @@ test('composer article quick comet-hover-action opens source menu and runs selec
         url: 'https://www.science.org/toc/science/current',
         journalTitle: 'Science',
         preferredExtractorId: 'science-current-news-in-depth-research-articles',
+				fetchTarget: 'background',
       },
     ],
     onFetchArticleSource: (source) => {
@@ -578,6 +600,7 @@ test('composer article quick menu is disposed with the chat widget', async () =>
         url: 'https://www.science.org/toc/science/current',
         journalTitle: 'Science',
         preferredExtractorId: 'science-current-news-in-depth-research-articles',
+				fetchTarget: 'background',
       },
     ],
   });

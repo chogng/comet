@@ -19,10 +19,10 @@ export function buildArticleFromHtml(sourceUrl: string, html: string): Article {
   const structuredDataItems = extractStructuredDataItems($);
   const title = extractTitle($, structuredDataItems);
   const articleType = extractArticleType($, structuredDataItems);
-  const doi = extractDoi($, html);
+  const doi = extractDoi($, sourceUrl);
   const authors = extractAuthors($, structuredDataItems);
   const abstractText = extractAbstract($, structuredDataItems);
-  const descriptionText = extractDescription($, structuredDataItems);
+  const descriptionText = extractDescription($, structuredDataItems, sourceUrl);
   const figures = extractNatureFigures($, sourceUrl);
   const publishedAt = extractPublishedDate($, structuredDataItems);
 

@@ -2,10 +2,11 @@ import { load } from 'cheerio';
 
 import type {
   Article,
-  FetchChannel,
+	ArticlePageProof,
+	FetchFailureReason,
   FetchLatestArticlesPayload,
   FetchStatus,
-  WebContentReuseMode,
+	FetchTargetPreference,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
 import type { HistoryStore } from 'cs/platform/storage/electron-main/historyStore';
@@ -15,14 +16,8 @@ import type { DateRange } from 'cs/base/common/date';
 import { cleanText } from 'cs/base/common/strings';
 import { normalizeNatureMainSiteListingUrl, normalizeUrl } from 'cs/base/common/url';
 import { collectCandidateDescriptorsFromSeeds as collectListingCandidateDescriptorsFromSeeds } from 'cs/workbench/services/fetch/electron-main/listing/candidates';
-import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
-import { isProbablyArticle } from 'cs/workbench/services/fetch/electron-main/acceptance';
-import { hasArticlePathSignal } from 'cs/workbench/services/fetch/electron-main/articleUrlRules';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
-import {
-  renderHtmlWithBrowserWindow,
-  requestWithPreferredTransport,
-} from 'cs/platform/request/electron-main/requestMainService';
+import { requestWithBrowserSession } from 'cs/platform/request/electron-main/requestMainService';
 import {
   batchLimitMax,
   batchLimitMin,
@@ -35,14 +30,15 @@ import {
   shortenForLog,
   timingLog,
 } from 'cs/platform/fetch/node/fetchTiming';
-import { buildPageHtmlFetchPlan, normalizeFetchStrategy } from 'cs/workbench/services/fetch/electron-main/fetchStrategy';
-import type { WebContentExtractionSnapshot } from 'cs/workbench/services/fetch/electron-main/fetchStrategy';
-import { attemptNetworkHtml, resolveNetworkAttemptResult } from 'cs/workbench/services/fetch/electron-main/networkChannel';
-import type { NetworkAttemptResult } from 'cs/workbench/services/fetch/electron-main/networkChannel';
-
 import { detect } from 'cs/workbench/services/fetch/electron-main/detect';
 import { fetchDetail } from 'cs/workbench/services/fetch/electron-main/fetchDetail';
 import { fetchListing } from 'cs/workbench/services/fetch/electron-main/fetchListing';
+import { ArticleFetchService } from 'cs/workbench/services/fetch/electron-main/articleFetchService';
+import type {
+	FetchTargetProvider,
+	FetchTargetSession,
+} from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
+import { resolvePublisherProfile } from 'cs/workbench/services/fetch/electron-main/publisherResolver';
 import { findListingCandidateExtractor, normalizeListingCandidateSeeds } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
 import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
 
@@ -55,8 +51,8 @@ import {
 import type {
   CandidateCollectionResult,
   FetchLatestArticlesOptions,
+	FetchStatusUpdate,
   PageFetchResult,
-  PageHtmlResult,
 } from 'cs/workbench/services/fetch/electron-main/sourcePageFetchTypes';
 
 const SYSTEM_BATCH_LIMIT_MAX = batchLimitMax;
@@ -64,13 +60,11 @@ const USER_BATCH_LIMIT_MIN = batchLimitMin;
 const DEFAULT_USER_BATCH_LIMIT = defaultBatchLimit;
 const DEFAULT_FETCH_TIMEOUT_MS = 12000;
 const PAGE_FETCH_TIMEOUT_MS = 12000;
-const ARTICLE_FETCH_TIMEOUT_MS = 3000;
-const ARTICLE_FETCH_RETRY_TIMEOUT_MS = 4200;
-const ARTICLE_FETCH_RETRY_MAX_ATTEMPTS = 2;
-const ARTICLE_FETCH_RETRY_BACKOFF_MS = 20;
+const ARTICLE_FETCH_TIMEOUT_MS = 12000;
+const WEB_CONTENTS_VIEW_FETCH_TIMEOUT_MS = 3 * 60 * 1000;
 const CANDIDATE_FETCH_CONCURRENCY = 12;
 const EXTRACTOR_CANDIDATE_FETCH_CONCURRENCY = 8;
-const SOURCE_FETCH_CONCURRENCY = 4;
+const SOURCE_FETCH_CONCURRENCY = 1;
 const MIN_CANDIDATE_ATTEMPTS = 12;
 const ATTEMPTS_PER_LIMIT = 4;
 const EXTRACTOR_ATTEMPTS_MULTIPLIER = 1.25;
@@ -85,28 +79,16 @@ const CANDIDATE_DATE_HINT_TEXT_MAX_LENGTH = 320;
 const MIN_SORTED_DATE_HINTS_FOR_EARLY_STOP = 3;
 const MIN_CONSECUTIVE_OLDER_DATE_HINTS_FOR_EARLY_STOP = 4;
 const IN_RANGE_DATE_HINT_SCORE_BOOST = 40;
-const HTML_FETCH_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 const HTML_FETCH_ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
 const BROWSER_FETCH_PARTITION = WORKBENCH_SHARED_WEB_PARTITION;
-const PREFER_BROWSER_FETCH =
+const HTML_FETCH_TRANSPORT =
   getCompatFetchEnvValueOrDefault(
     'LS_FETCH_TRANSPORT',
     'READER_FETCH_TRANSPORT',
     'browser',
-  ) !== 'node';
-const ENABLE_BROWSER_RENDER_FALLBACK =
-  getCompatFetchEnvValueOrDefault(
-    'LS_FETCH_RENDER_FALLBACK',
-    'READER_FETCH_RENDER_FALLBACK',
-    '1',
-  ) !== '0';
-const ARTICLE_RENDER_TIMEOUT_MS = 4500;
-const PAGE_RENDER_TIMEOUT_MS = 4500;
-const BROWSER_RENDER_DOM_SETTLE_MS = 180;
-const RENDER_FALLBACK_MAX_ORDER = 8;
-const EXTRACTOR_RENDER_FALLBACK_MAX_ORDER = 10;
-const RENDER_FALLBACK_HTTP_STATUS = new Set(['401', '403', '408', '409', '423', '425', '429', '451']);
+  ) === 'node'
+		? 'node'
+		: 'browser';
 const MAX_PAGINATED_PAGE_COUNT = 20;
 
 type FetchHtmlOptions = {
@@ -123,17 +105,10 @@ type PageSource = {
   pageUrl: string;
   journalTitle: string;
   preferredExtractorId: string | null;
+	fetchTarget: FetchTargetPreference;
 };
 
 type CheerioAcceptedNode = Parameters<ReturnType<typeof load>>[0];
-
-function describeFetchDetail(fetchChannel: FetchChannel, webContentReuseMode: WebContentReuseMode | null) {
-  if (fetchChannel === 'web-content') {
-    return webContentReuseMode === 'live-extract' ? 'live-web-content-dom' : 'web-content-dom-snapshot';
-  }
-
-  return 'network-fetch';
-}
 
 function normalizeSourceId(input: unknown, index: number) {
   const cleaned = cleanText(input);
@@ -181,33 +156,56 @@ function isAbortError(error: unknown) {
   return Boolean(error && typeof error === 'object' && (error as { name?: string }).name === 'AbortError');
 }
 
-function isTimeoutRequestError(error: unknown) {
-  if (getFetchErrorCode(error) !== FetchErrorCode.HttpRequestFailed) return false;
-  return cleanText(getFetchErrorDetails(error)?.status) === 'TIMEOUT';
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
 }
 
-function isAbortedRequestError(error: unknown) {
-  if (getFetchErrorCode(error) !== FetchErrorCode.HttpRequestFailed) return false;
-  return cleanText(getFetchErrorDetails(error)?.status) === 'ABORTED';
+function readArticlePageProof(value: unknown): ArticlePageProof | null {
+	if (!isRecord(value)) {
+		return null;
+	}
+	if (
+		typeof value.canonicalUrlMatched !== 'boolean' ||
+		typeof value.titleFound !== 'boolean' ||
+		typeof value.authorsFound !== 'boolean' ||
+		typeof value.abstractFound !== 'boolean' ||
+		typeof value.bodyFound !== 'boolean'
+	) {
+		return null;
+	}
+	return value as unknown as ArticlePageProof;
 }
 
-function describeError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function hasUsableWebContentPageHtml(html: string) {
-  const trimmed = typeof html === 'string' ? html.trim() : '';
-  if (!trimmed) return false;
-  return /<(?:html|body|a)\b/i.test(trimmed);
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function resolveFetchFailureReason(error: unknown): FetchFailureReason {
+	const code = getFetchErrorCode(error);
+	const details = getFetchErrorDetails(error);
+	const status = details?.status ?? details?.statusCode;
+	if (
+		code === FetchErrorCode.InteractiveTargetTimedOut ||
+		status === 'TIMEOUT'
+	) {
+		return 'loadTimeout';
+	}
+	if (status === 429 || status === '429') {
+		return 'rateLimited';
+	}
+	if (status === 403 || status === '403') {
+		return 'accessDenied';
+	}
+	if (status === 'JAVASCRIPT_ERROR') {
+		return 'javascriptError';
+	}
+	if (code === FetchErrorCode.ArticlePageRejected) {
+		return 'articleProofFailed';
+	}
+	if (code === FetchErrorCode.ListingPageRejected) {
+		return 'listingProofFailed';
+	}
+	return 'navigationFailed';
 }
 
 function buildHtmlFetchHeaders() {
   return {
-    'user-agent': HTML_FETCH_USER_AGENT,
     accept: HTML_FETCH_ACCEPT,
   };
 }
@@ -222,210 +220,30 @@ function collectHttpErrorResponseHeaders(response: Response) {
   return Object.values(responseHeaders).some((value) => Boolean(value)) ? responseHeaders : null;
 }
 
-function logBrowserLoadFailure({
-  traceId,
-  stage,
-  partition,
-  requestedUrl,
-  currentUrl,
-  failedUrl,
-  errorCode,
-  errorDescription,
-  isMainFrame,
-}: {
-  traceId: string;
-  stage: string;
-  partition: string;
-  requestedUrl: string;
-  currentUrl: string;
-  failedUrl: string;
-  errorCode: number;
-  errorDescription: string;
-  isMainFrame: boolean;
-}) {
-  if (errorCode === -3 || /^ERR_ABORTED$/i.test(errorDescription)) {
-    return;
-  }
-
-  timingLog(traceId, `${stage}:did_fail_load`, {
-    partition,
-    requestedUrl: shortenForLog(requestedUrl),
-    currentUrl: shortenForLog(currentUrl),
-    failedUrl: shortenForLog(failedUrl),
-    errorCode,
-    errorDescription,
-    isMainFrame,
-  });
-}
-
-async function requestHtmlWithPreferredTransport({
-  traceId,
-  stage,
+async function requestHtml({
   url,
   signal,
 }: {
-  traceId: string;
-  stage: string;
   url: string;
   signal: AbortSignal;
 }) {
-  return requestWithPreferredTransport({
-    url,
-    signal,
-    headers: buildHtmlFetchHeaders(),
-    browser: {
-      enabled: PREFER_BROWSER_FETCH,
-      partition: BROWSER_FETCH_PARTITION,
-      onFallback: ({ partition, message }) => {
-        timingLog(traceId, `${stage}:browser_fallback`, {
-          url: shortenForLog(url),
-          partition,
-          message,
-        });
-      },
-    },
-  });
-}
+	const headers = buildHtmlFetchHeaders();
+	if (HTML_FETCH_TRANSPORT === 'node') {
+		return {
+			response: await fetch(url, { signal, headers }),
+			transport: HTML_FETCH_TRANSPORT,
+		};
+	}
 
-function toErrorStatusCode(error: unknown) {
-  return cleanText(getFetchErrorDetails(error)?.status);
-}
-
-function canAttemptRenderedFallback({
-  candidateOrder,
-  extractorId,
-}: {
-  candidateOrder: number;
-  extractorId: string | null;
-}) {
-  if (!ENABLE_BROWSER_RENDER_FALLBACK) return false;
-  if (extractorId) return candidateOrder <= EXTRACTOR_RENDER_FALLBACK_MAX_ORDER;
-  return candidateOrder <= RENDER_FALLBACK_MAX_ORDER;
-}
-
-function shouldRenderCandidateAfterError({
-  error,
-  candidateOrder,
-  extractorId,
-}: {
-  error: unknown;
-  candidateOrder: number;
-  extractorId: string | null;
-}) {
-  if (!canAttemptRenderedFallback({ candidateOrder, extractorId })) {
-    return false;
-  }
-
-  const status = toErrorStatusCode(error);
-  return status === 'TIMEOUT' || status === 'NETWORK_ERROR' || RENDER_FALLBACK_HTTP_STATUS.has(status);
-}
-
-function shouldRenderPageAfterError(error: unknown) {
-  if (!ENABLE_BROWSER_RENDER_FALLBACK) return false;
-  const status = toErrorStatusCode(error);
-  return status === 'TIMEOUT' || status === 'NETWORK_ERROR' || RENDER_FALLBACK_HTTP_STATUS.has(status);
-}
-
-function shouldConfirmRenderedArticle({
-  article,
-  candidateUrl,
-}: {
-  article: Article;
-  candidateUrl: string;
-}) {
-  if (!isProbablyArticle(candidateUrl, article)) {
-    return true;
-  }
-
-  const pathname = new URL(candidateUrl).pathname.toLowerCase();
-  if (!hasArticlePathSignal(pathname)) {
-    return false;
-  }
-
-  const title = cleanText(article.title);
-  const weakMetadata =
-    !article.doi && !article.publishedAt && !article.abstractText && !article.descriptionText;
-  const genericTitle = title.length < 12 || /^(?:shell|loading|article|home)$/i.test(title);
-  return weakMetadata && genericTitle;
-}
-
-async function fetchRenderedHtml(url: string, options: FetchHtmlOptions = {}) {
-  const traceId = cleanText(options.traceId) || 'fetch';
-  const stage = cleanText(options.stage) || 'html_render';
-  const timeoutMs = toTimeoutMs(options.timeoutMs, ARTICLE_RENDER_TIMEOUT_MS);
-  const requestStartedAt = Date.now();
-
-  try {
-    const rendered = await renderHtmlWithBrowserWindow({
-      url,
-      partition: BROWSER_FETCH_PARTITION,
-      timeoutMs,
-      settleMs: BROWSER_RENDER_DOM_SETTLE_MS,
-      signal: options.signal,
-      userAgent: HTML_FETCH_USER_AGENT,
-      acceptHeader: HTML_FETCH_ACCEPT,
-      onDidFailLoad: (details) => {
-        logBrowserLoadFailure({
-          traceId,
-          stage,
-          ...details,
-        });
-      },
-    });
-
-    timingLog(traceId, `${stage}:ok`, {
-      ms: elapsedMs(requestStartedAt),
-      timeoutMs,
-      transport: 'browser-render',
-      url: shortenForLog(url),
-      finalUrl: shortenForLog(rendered.finalUrl),
-      size: rendered.html.length,
-    });
-    return rendered.html;
-  } catch (error) {
-    if (getFetchErrorCode(error) === FetchErrorCode.HttpRequestFailed) {
-      const details = getFetchErrorDetails(error);
-      const status = cleanText(details?.status);
-      if (status === 'ABORTED') {
-        timingLog(traceId, `${stage}:aborted`, {
-          ms: elapsedMs(requestStartedAt),
-          timeoutMs,
-          transport: 'browser-render',
-          url: shortenForLog(url),
-        });
-      } else if (status === 'TIMEOUT') {
-        timingLog(traceId, `${stage}:timeout`, {
-          ms: elapsedMs(requestStartedAt),
-          timeoutMs,
-          transport: 'browser-render',
-          url: shortenForLog(url),
-        });
-      } else if (status === 'NETWORK_ERROR') {
-        timingLog(traceId, `${stage}:network_error`, {
-          ms: elapsedMs(requestStartedAt),
-          timeoutMs,
-          transport: 'browser-render',
-          url: shortenForLog(url),
-          message: cleanText(details?.statusText) || describeError(error),
-        });
-      }
-
-      throw error;
-    }
-
-    timingLog(traceId, `${stage}:network_error`, {
-      ms: elapsedMs(requestStartedAt),
-      timeoutMs,
-      transport: 'browser-render',
-      url: shortenForLog(url),
-      message: error instanceof Error ? error.message : String(error),
-    });
-    throw fetchError(FetchErrorCode.HttpRequestFailed, {
-      status: 'NETWORK_ERROR',
-      statusText: error instanceof Error ? error.message : String(error),
-      url,
-    });
-  }
+	return {
+		response: await requestWithBrowserSession({
+			url,
+			signal,
+			headers,
+			partition: BROWSER_FETCH_PARTITION,
+		}),
+		transport: HTML_FETCH_TRANSPORT,
+	};
 }
 
 function extractDateHintFromElement($: ReturnType<typeof load>, node: CheerioAcceptedNode) {
@@ -603,6 +421,18 @@ async function collectListingCandidateDescriptors(
         paginationStopEvaluation,
       };
     }
+
+		return {
+			...collectCandidateDescriptorsFromSeeds(
+				page,
+				pageUrl,
+				dateRange,
+				[],
+			),
+			extractorId: extractor.id,
+			extractorDiagnostics: extracted?.diagnostics ?? null,
+			paginationStopEvaluation: null,
+		};
   }
 
   return collectCandidateDescriptorsFromSeeds(
@@ -611,78 +441,6 @@ async function collectListingCandidateDescriptors(
     dateRange,
     buildGenericCandidateSeeds($),
   );
-}
-
-async function collectListingCandidateDescriptorsFromWebContentExtraction({
-  page,
-  pageUrl,
-  extractor,
-  dateRange,
-  traceId,
-  pageNumber,
-  previewExtraction,
-}: {
-  page: URL;
-  pageUrl: string;
-  extractor: ListingCandidateExtractor;
-  dateRange: DateRange;
-  traceId: string;
-  pageNumber: number;
-  previewExtraction: WebContentExtractionSnapshot;
-}): Promise<CandidateCollectionResult | null> {
-  if (previewExtraction.extractorId !== extractor.id) {
-    return null;
-  }
-
-  let extracted = previewExtraction.extraction;
-  if (!extracted || extracted.candidates.length === 0) {
-    return null;
-  }
-
-  if (extractor.refineExtraction) {
-    const refined = await extractor.refineExtraction({
-      page,
-      pageUrl,
-      $: load(''),
-      pageNumber,
-      traceId,
-      dateRange,
-      extraction: extracted,
-      fetchHtml,
-    });
-    if (refined && refined.candidates.length > 0) {
-      extracted = refined;
-    }
-  }
-
-  const result = collectCandidateDescriptorsFromSeeds(
-    page,
-    pageUrl,
-    dateRange,
-    extracted.candidates,
-  );
-  const paginationStopEvaluation = evaluateExtractorPaginationStop({
-    extractor,
-    page,
-    pageUrl,
-    pageNumber,
-    dateRange,
-    extraction: extracted,
-  });
-
-  return {
-    ...result,
-    extractorId: extractor.id,
-    extractorDiagnostics: {
-      ...(extracted.diagnostics ?? {}),
-      previewCaptureMs: previewExtraction.captureMs,
-      previewNextPageUrl: previewExtraction.nextPageUrl,
-      webContentUrl: previewExtraction.webContentUrl,
-      source: 'web-content',
-      webContentReuseMode: 'live-extract',
-    },
-    paginationStopEvaluation,
-  };
 }
 
 async function fetchLatestArticlesFromPageOnce({
@@ -697,6 +455,8 @@ async function fetchLatestArticlesFromPageOnce({
   fetchedSourceUrls,
   seenPageUrls,
   pageNumber,
+	targetSession,
+	articleFetchService,
 }: {
   sourceId: string;
   pageUrl: string;
@@ -709,39 +469,34 @@ async function fetchLatestArticlesFromPageOnce({
   fetchedSourceUrls: Set<string>;
   seenPageUrls: ReadonlySet<string>;
   pageNumber: number;
+	targetSession: FetchTargetSession;
+	articleFetchService: ArticleFetchService;
 }): Promise<PageFetchResult> {
   const page = new URL(pageUrl);
   const sourcePageType = detect(page);
   const extractor =
     sourcePageType.type === 'listing' ? findListingCandidateExtractor(page, preferredExtractorId) : null;
-  let fetchStatusReported = false;
-  const reportFetchStatus = (
-    fetchChannel: FetchChannel,
-    webContentReuseMode: WebContentReuseMode | null,
-    overrides: Partial<FetchStatus> = {},
-  ) => {
+	const reportFetchStatus = (update: FetchStatusUpdate) => {
     const reporter = options.onFetchStatus;
     if (typeof reporter !== 'function') return;
-
-    reporter({
+		const publisher = resolvePublisherProfile(pageUrl);
+		reporter({
+			requestId: options.requestId,
       sourceId,
       pageUrl,
       pageNumber,
-      fetchChannel,
-      fetchDetail: describeFetchDetail(fetchChannel, webContentReuseMode),
-      webContentReuseMode,
+			publisherId: publisher.id,
+			publisherAccessRisk: publisher.accessRisk,
       extractorId: extractor?.id ?? null,
-      ...overrides,
-    });
+			...update,
+		} as FetchStatus);
   };
-  const reportInitialFetchStatus = (
-    fetchChannel: FetchChannel,
-    webContentReuseMode: WebContentReuseMode | null,
-  ) => {
-    if (fetchStatusReported) return;
-    reportFetchStatus(fetchChannel, webContentReuseMode);
-    fetchStatusReported = true;
-  };
+	reportFetchStatus({
+		phase: 'loading',
+		targetMode: targetSession.targetMode,
+		targetId: targetSession.targetId,
+		articleProof: null,
+	});
   if (sourcePageType.type === 'detail') {
     return fetchDetail({
       sourceId,
@@ -749,15 +504,11 @@ async function fetchLatestArticlesFromPageOnce({
       journalTitle,
       remainingLimit,
       dateRange,
-      sourcePageType,
-      resolvePageHtml,
-      reportFetchStatus: reportInitialFetchStatus,
-      timingLog,
-      elapsedMs,
-      shortenForLog,
-      traceId,
-      pageNumber,
-      options,
+			targetSession,
+			articleFetchService,
+			reportFetchStatus,
+			backgroundTimeoutMs: ARTICLE_FETCH_TIMEOUT_MS,
+			webContentsViewTimeoutMs: WEB_CONTENTS_VIEW_FETCH_TIMEOUT_MS,
     });
   }
 
@@ -770,29 +521,16 @@ async function fetchLatestArticlesFromPageOnce({
     remainingLimit,
     dateRange,
     traceId,
-    options,
     fetchedSourceUrls,
     seenPageUrls,
     pageNumber,
-    sourcePageType,
-    resolvePageHtml,
+		targetSession,
+		articleFetchService,
     collectListingCandidateDescriptors,
-    collectListingCandidateDescriptorsFromWebContentExtraction,
-    fetchRenderedHtml,
-    fetchCandidateHtmlWithRetry,
-    shouldRenderCandidateAfterError,
-    shouldConfirmRenderedArticle,
-    canAttemptRenderedFallback,
     timingLog,
     elapsedMs,
     shortenForLog,
-    reportFetchStatus: (fetchChannel, webContentReuseMode, overrides) => {
-      if (overrides) {
-        reportFetchStatus(fetchChannel, webContentReuseMode, overrides);
-        return;
-      }
-      reportInitialFetchStatus(fetchChannel, webContentReuseMode);
-    },
+		reportFetchStatus,
     candidatePlanConfig: {
       minCandidateAttempts: MIN_CANDIDATE_ATTEMPTS,
       attemptsPerLimit: ATTEMPTS_PER_LIMIT,
@@ -805,188 +543,11 @@ async function fetchLatestArticlesFromPageOnce({
       candidateFetchConcurrency: CANDIDATE_FETCH_CONCURRENCY,
       retryPriorityMinOrder: RETRY_PRIORITY_MIN_ORDER,
       retryPriorityLimitMultiplier: RETRY_PRIORITY_LIMIT_MULTIPLIER,
-      pageRenderTimeoutMs: PAGE_RENDER_TIMEOUT_MS,
-      articleRenderTimeoutMs: ARTICLE_RENDER_TIMEOUT_MS,
+			pageTimeoutMs: PAGE_FETCH_TIMEOUT_MS,
+			articleTimeoutMs: ARTICLE_FETCH_TIMEOUT_MS,
+			webContentsViewTimeoutMs: WEB_CONTENTS_VIEW_FETCH_TIMEOUT_MS,
     },
   });
-}
-
-async function fetchCandidateHtmlWithRetry(
-  candidateUrl: string,
-  traceId: string,
-  candidateOrder: number,
-  signal?: AbortSignal,
-  allowTimeoutRetry = true,
-) {
-  const maxAttempts = allowTimeoutRetry ? ARTICLE_FETCH_RETRY_MAX_ATTEMPTS : 1;
-  let attempt = 1;
-  let timeoutMs = ARTICLE_FETCH_TIMEOUT_MS;
-
-  while (attempt <= maxAttempts) {
-    if (signal?.aborted) {
-      throw fetchError(FetchErrorCode.HttpRequestFailed, {
-        status: 'ABORTED',
-        statusText: 'Request aborted',
-        url: candidateUrl,
-      });
-    }
-
-    const stage = attempt === 1 ? `candidate#${candidateOrder}` : `candidate#${candidateOrder}:retry${attempt - 1}`;
-    try {
-      return await fetchHtml(candidateUrl, {
-        timeoutMs,
-        traceId,
-        stage,
-        signal,
-      });
-    } catch (error) {
-      if (isAbortedRequestError(error)) {
-        throw error;
-      }
-
-      const canRetry = allowTimeoutRetry && isTimeoutRequestError(error) && attempt < maxAttempts;
-      if (!canRetry) {
-        throw error;
-      }
-
-      const nextAttempt = attempt + 1;
-      const nextTimeoutMs = Math.max(timeoutMs, ARTICLE_FETCH_RETRY_TIMEOUT_MS);
-      timingLog(traceId, 'candidate:retry_scheduled', {
-        candidateOrder,
-        attempt,
-        nextAttempt,
-        timeoutMs,
-        nextTimeoutMs,
-        allowTimeoutRetry,
-        backoffMs: ARTICLE_FETCH_RETRY_BACKOFF_MS,
-        url: shortenForLog(candidateUrl),
-      });
-
-      if (ARTICLE_FETCH_RETRY_BACKOFF_MS > 0) {
-        await sleep(ARTICLE_FETCH_RETRY_BACKOFF_MS);
-      }
-
-      attempt = nextAttempt;
-      timeoutMs = nextTimeoutMs;
-    }
-  }
-
-  throw fetchError(FetchErrorCode.HttpRequestFailed, {
-    status: 'RETRY_EXHAUSTED',
-    statusText: 'Candidate fetch retries exhausted',
-    url: candidateUrl,
-  });
-}
-
-async function resolvePageHtml(
-  pageUrl: string,
-  traceId: string,
-  options: FetchLatestArticlesOptions,
-): Promise<PageHtmlResult> {
-  const webContentSnapshot = options.previewSnapshots?.get(pageUrl) ?? null;
-  const pageHtmlFetchPlan = buildPageHtmlFetchPlan({
-    fetchStrategy: options.fetchStrategy,
-    hasWebContentSnapshot: Boolean(webContentSnapshot),
-  });
-  let networkAttemptPromise: Promise<NetworkAttemptResult> | null = null;
-
-  const startNetworkAttempt = () => {
-    if (!networkAttemptPromise) {
-      networkAttemptPromise = attemptNetworkHtml(
-        {
-          pageUrl,
-          traceId,
-          stage: pageHtmlFetchPlan.networkStage,
-          benchmarkStage: pageHtmlFetchPlan.shouldStartNetworkBenchmark ? 'source:page_benchmark_done' : null,
-          pageFetchTimeoutMs: PAGE_FETCH_TIMEOUT_MS,
-        },
-        {
-          fetchHtml,
-          describeError,
-        },
-      );
-    }
-
-    return networkAttemptPromise;
-  };
-
-  const useNetwork = async (reason: string) => {
-    const attemptResult = await startNetworkAttempt();
-    return resolveNetworkAttemptResult(
-      {
-        pageUrl,
-        traceId,
-        reason,
-        attemptResult,
-        renderStage: 'source_page_render_on_error',
-        pageRenderTimeoutMs: PAGE_RENDER_TIMEOUT_MS,
-      },
-      {
-        fetchRenderedHtml,
-        shouldRenderPageAfterError,
-        describeError,
-        toErrorStatusCode,
-      },
-    );
-  };
-
-  timingLog(traceId, 'source:page_strategy', {
-    requestedStrategy: pageHtmlFetchPlan.requestedStrategy,
-    effectiveStrategy: pageHtmlFetchPlan.effectiveStrategy,
-    hasWebContentSnapshot: Boolean(webContentSnapshot),
-    webContentCaptureMs: webContentSnapshot?.captureMs ?? null,
-    webContentSize: webContentSnapshot?.html.length ?? null,
-    webContentIsLoading: webContentSnapshot?.isLoading ?? null,
-  });
-
-  if (pageHtmlFetchPlan.selectedChannel === 'network' || !webContentSnapshot) {
-    return useNetwork('network_only');
-  }
-
-  if (pageHtmlFetchPlan.shouldStartNetworkBenchmark) {
-    timingLog(traceId, 'source:page_benchmark_started', {
-      against: 'network',
-      url: shortenForLog(pageUrl),
-    });
-    void startNetworkAttempt();
-  }
-
-  if (!hasUsableWebContentPageHtml(webContentSnapshot.html)) {
-    timingLog(traceId, 'source:page_web_content_skipped', {
-      reason: 'web_content_html_invalid',
-      webContentUrl: shortenForLog(webContentSnapshot.webContentUrl),
-      captureMs: webContentSnapshot.captureMs,
-      size: webContentSnapshot.html.length,
-    });
-    return useNetwork('web_content_html_invalid');
-  }
-
-  if (webContentSnapshot.isLoading) {
-    timingLog(traceId, 'source:page_web_content_loading', {
-      webContentUrl: shortenForLog(webContentSnapshot.webContentUrl),
-      captureMs: webContentSnapshot.captureMs,
-      size: webContentSnapshot.html.length,
-    });
-  }
-
-  timingLog(traceId, 'source_page_web_content:ok', {
-    ms: webContentSnapshot.captureMs,
-    size: webContentSnapshot.html.length,
-    url: shortenForLog(pageUrl),
-    webContentUrl: shortenForLog(webContentSnapshot.webContentUrl),
-  });
-  timingLog(traceId, 'source:page_selected', {
-    selected: 'web-content',
-    reason: pageHtmlFetchPlan.effectiveStrategy,
-    size: webContentSnapshot.html.length,
-    captureMs: webContentSnapshot.captureMs,
-    url: shortenForLog(pageUrl),
-  });
-
-  return {
-    html: webContentSnapshot.html,
-    source: 'web-content',
-  };
 }
 
 export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
@@ -1011,9 +572,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const { response, transport } = await requestHtmlWithPreferredTransport({
-      traceId,
-      stage,
+    const { response, transport } = await requestHtml({
       url,
       signal: controller.signal,
     });
@@ -1097,7 +656,16 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}) {
   }
 }
 
-export async function fetchArticle(urlValue: unknown, storage: FetchStorageService) {
+export async function fetchArticle(
+	urlValue: unknown,
+	storage: FetchStorageService,
+	options: {
+		requestId: string;
+		fetchTarget: FetchTargetPreference;
+		targetProvider: FetchTargetProvider;
+		onFetchStatus?: (status: FetchStatus) => void;
+	},
+) {
   const traceId = createFetchTraceId('single');
   const totalStartedAt = Date.now();
   const normalized = normalizeUrl(urlValue);
@@ -1106,50 +674,39 @@ export async function fetchArticle(urlValue: unknown, storage: FetchStorageServi
   });
 
   try {
-    let html = '';
-    let usedRenderedHtml = false;
-    try {
-      html = await fetchHtml(normalized, {
-        traceId,
-        stage: 'single_page',
-      });
-    } catch (error) {
-      if (!ENABLE_BROWSER_RENDER_FALLBACK) {
-        throw error;
-      }
-
-      html = await fetchRenderedHtml(normalized, {
-        timeoutMs: ARTICLE_RENDER_TIMEOUT_MS,
-        traceId,
-        stage: 'single_page_render',
-      });
-      usedRenderedHtml = true;
-    }
-
-    const parseStartedAt = Date.now();
-    let article = buildArticleFromHtml(normalized, html);
-    if (
-      !usedRenderedHtml &&
-      shouldConfirmRenderedArticle({
-        article,
-        candidateUrl: normalized,
-      })
-    ) {
-      try {
-        const renderedHtml = await fetchRenderedHtml(normalized, {
-          timeoutMs: ARTICLE_RENDER_TIMEOUT_MS,
-          traceId,
-          stage: 'single_page_render_after_parse',
-        });
-        const renderedArticle = buildArticleFromHtml(normalized, renderedHtml);
-        if (isProbablyArticle(normalized, renderedArticle)) {
-          article = renderedArticle;
-          usedRenderedHtml = true;
-        }
-      } catch {
-        // Keep the raw article parse if render fallback cannot improve it.
-      }
-    }
+		const publisher = resolvePublisherProfile(normalized);
+		const targetSession = options.targetProvider.createSession(
+			{
+				sourceId: 'single',
+				pageUrl: normalized,
+				fetchTarget: options.fetchTarget,
+			},
+			{
+				onWebContentsViewRequired: (targetId, pageUrl) => {
+					options.onFetchStatus?.({
+						requestId: options.requestId,
+						sourceId: 'single',
+						pageUrl,
+						pageNumber: 1,
+						publisherId: publisher.id,
+						publisherAccessRisk: publisher.accessRisk,
+						extractorId: null,
+						phase: 'targetRequired',
+						targetMode: 'webContentsView',
+						targetId,
+						articleProof: null,
+					});
+				},
+			},
+		);
+		const parseStartedAt = Date.now();
+		const result = await new ArticleFetchService().fetch({
+			pageUrl: normalized,
+			targetSession,
+			backgroundTimeoutMs: ARTICLE_FETCH_TIMEOUT_MS,
+			webContentsViewTimeoutMs: WEB_CONTENTS_VIEW_FETCH_TIMEOUT_MS,
+		});
+		const article = result.article;
     timingLog(traceId, 'fetch_article:parsed', {
       ms: elapsedMs(parseStartedAt),
       hasTitle: Boolean(article.title),
@@ -1158,7 +715,8 @@ export async function fetchArticle(urlValue: unknown, storage: FetchStorageServi
       hasDescription: Boolean(article.descriptionText),
       authorCount: article.authors.length,
       publishedAt: article.publishedAt,
-      rendered: usedRenderedHtml,
+			targetMode: targetSession.targetMode,
+			proof: result.proof,
     });
 
     const saveStartedAt = Date.now();
@@ -1194,6 +752,9 @@ function normalizePageSources(payload: FetchLatestArticlesPayload): PageSource[]
         pageUrl: normalizedPageUrl,
         journalTitle: cleanText(item?.journalTitle),
         preferredExtractorId: cleanText(item?.preferredExtractorId) || null,
+				fetchTarget: item?.fetchTarget === 'webContentsView'
+					? 'webContentsView'
+					: 'background',
       } satisfies PageSource;
     })
     .filter((source): source is PageSource => Boolean(source));
@@ -1213,6 +774,11 @@ function normalizePageSources(payload: FetchLatestArticlesPayload): PageSource[]
 
     if (!existing.preferredExtractorId && source.preferredExtractorId) {
       deduped.set(source.pageUrl, source);
+			continue;
+		}
+
+		if (existing.fetchTarget !== source.fetchTarget) {
+			deduped.set(source.pageUrl, source);
     }
   }
 
@@ -1224,22 +790,57 @@ async function fetchLatestArticlesFromPage(
   pageUrl: string,
   journalTitle: string,
   preferredExtractorId: string | null,
+	fetchTarget: FetchTargetPreference,
   perSourceLimit: number,
   dateRange: DateRange,
   traceId: string,
   options: FetchLatestArticlesOptions,
 ): Promise<Article[]> {
   const sourceStartedAt = Date.now();
+	let activePageNumber = 1;
+	let activePageUrl = pageUrl;
+	let targetSession: FetchTargetSession | null = null;
   timingLog(traceId, 'source:start', {
     sourceId,
     pageUrl: shortenForLog(pageUrl),
     preferredExtractorId,
+		fetchTarget,
     perSourceLimit,
     dateStart: dateRange.start,
     dateEnd: dateRange.end,
   });
 
   try {
+		const articleFetchService = new ArticleFetchService();
+		targetSession = options.targetProvider.createSession(
+			{
+				sourceId,
+				pageUrl,
+				fetchTarget,
+			},
+			{
+				onWebContentsViewRequired: (targetId, targetPageUrl) => {
+					const reporter = options.onFetchStatus;
+					if (!reporter) {
+						return;
+					}
+					const publisher = resolvePublisherProfile(targetPageUrl);
+					reporter({
+						requestId: options.requestId,
+						sourceId,
+						pageUrl: targetPageUrl,
+						pageNumber: activePageNumber,
+						publisherId: publisher.id,
+						publisherAccessRisk: publisher.accessRisk,
+						extractorId: preferredExtractorId,
+						phase: 'targetRequired',
+						targetMode: 'webContentsView',
+						targetId,
+						articleProof: null,
+					});
+				},
+			},
+		);
     const fetched: Article[] = [];
     const fetchedSourceUrls = new Set<string>();
     const seenPageUrls = new Set<string>();
@@ -1248,12 +849,12 @@ async function fetchLatestArticlesFromPage(
     let totalCandidateResolved = 0;
     let totalCandidateAccepted = 0;
     let usedPageOnly = false;
-    let lastFetchChannel: FetchChannel = 'network';
-    let lastPreviewReuseMode: WebContentReuseMode | null = null;
+		let lastTargetMode: FetchTargetPreference = fetchTarget;
     let currentPageUrl: string | null = pageUrl;
 
     while (currentPageUrl && fetched.length < perSourceLimit && pageCount < MAX_PAGINATED_PAGE_COUNT) {
       const normalizedPageUrl = new URL(currentPageUrl).toString();
+			activePageUrl = normalizedPageUrl;
       if (seenPageUrls.has(normalizedPageUrl)) {
         timingLog(traceId, 'source:pagination_loop_detected', {
           pageCount,
@@ -1264,6 +865,7 @@ async function fetchLatestArticlesFromPage(
 
       seenPageUrls.add(normalizedPageUrl);
       pageCount += 1;
+			activePageNumber = pageCount;
 
       const pageResult = await fetchLatestArticlesFromPageOnce({
         sourceId,
@@ -1277,10 +879,11 @@ async function fetchLatestArticlesFromPage(
         fetchedSourceUrls,
         seenPageUrls,
         pageNumber: pageCount,
+			targetSession,
+			articleFetchService,
       });
 
-      lastFetchChannel = pageResult.fetchChannel;
-      lastPreviewReuseMode = pageResult.webContentReuseMode;
+			lastTargetMode = pageResult.targetMode;
       totalCandidateAttempted += pageResult.candidateAttempted;
       totalCandidateResolved += pageResult.candidateResolved;
       totalCandidateAccepted += pageResult.candidateAccepted;
@@ -1317,8 +920,7 @@ async function fetchLatestArticlesFromPage(
 
     timingLog(traceId, 'source:done', {
       totalMs: elapsedMs(sourceStartedAt),
-      fetchChannel: lastFetchChannel,
-      webContentReuseMode: lastPreviewReuseMode,
+			targetMode: lastTargetMode,
       pageCount,
       fetchedCount: fetched.length,
       candidateAttempted: totalCandidateAttempted,
@@ -1329,6 +931,22 @@ async function fetchLatestArticlesFromPage(
     });
     return fetched;
   } catch (error) {
+		const details = getFetchErrorDetails(error);
+		const publisher = resolvePublisherProfile(activePageUrl);
+		options.onFetchStatus?.({
+			requestId: options.requestId,
+			sourceId,
+			pageUrl: activePageUrl,
+			pageNumber: activePageNumber,
+			publisherId: publisher.id,
+			publisherAccessRisk: publisher.accessRisk,
+			extractorId: preferredExtractorId,
+			phase: 'failed',
+			targetMode: targetSession?.targetMode ?? fetchTarget,
+			targetId: targetSession?.targetId ?? null,
+			failureReason: resolveFetchFailureReason(error),
+			articleProof: readArticlePageProof(details?.proof),
+		});
     timingLog(traceId, 'source:failed', {
       totalMs: elapsedMs(sourceStartedAt),
       message: error instanceof Error ? error.message : String(error),
@@ -1338,9 +956,9 @@ async function fetchLatestArticlesFromPage(
 }
 
 export async function fetchLatestArticles(
-  payload: FetchLatestArticlesPayload = {},
+	payload: FetchLatestArticlesPayload,
   storage: FetchStorageService,
-  options: FetchLatestArticlesOptions = {},
+	options: FetchLatestArticlesOptions,
 ) {
   const traceId = createFetchTraceId('batch');
   const totalStartedAt = Date.now();
@@ -1353,7 +971,6 @@ export async function fetchLatestArticles(
   // Per-source cap comes only from persisted user settings.
   const perSourceLimit = configuredUserLimit;
   const dateRange = parseDateRange(payload.startDate ?? null, payload.endDate ?? null);
-  const fetchStrategy = normalizeFetchStrategy(options.fetchStrategy ?? payload.fetchStrategy);
   const fetched: Article[] = [];
   const seenSourceUrls = new Set<string>();
   const failedSources: Array<Record<string, unknown>> = [];
@@ -1365,9 +982,10 @@ export async function fetchLatestArticles(
     systemLimit: SYSTEM_BATCH_LIMIT_MAX,
     dateStart: dateRange.start,
     dateEnd: dateRange.end,
-    fetchStrategy,
-    previewSnapshotCount: options.previewSnapshots?.size ?? 0,
-    previewExtractionCount: options.previewExtractions?.size ?? 0,
+		fetchTargets: pageSources.map(source => ({
+			sourceId: source.sourceId,
+			fetchTarget: source.fetchTarget,
+		})),
   });
 
   for (let index = 0; index < pageSources.length; index += SOURCE_FETCH_CONCURRENCY) {
@@ -1380,6 +998,7 @@ export async function fetchLatestArticles(
             source.pageUrl,
             source.journalTitle,
             source.preferredExtractorId,
+				source.fetchTarget,
             perSourceLimit,
             dateRange,
             `${traceId}:${source.sourceId}`,

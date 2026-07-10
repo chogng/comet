@@ -71,11 +71,10 @@ import {
 import { exportArticlesDocx } from 'cs/code/electron-main/document/docx';
 import { exportEditorDocx } from 'cs/code/electron-main/document/editorDocx';
 import { archiveWebContentHtml } from 'cs/code/electron-main/document/webContentHtmlArchive';
-import { normalizeFetchStrategy, shouldPrepareWebContentArtifacts } from 'cs/workbench/services/fetch/electron-main/fetchStrategy';
-import type { WebContentExtractionSnapshot, WebContentSnapshot } from 'cs/workbench/services/fetch/electron-main/fetchStrategy';
-
-import { resolveBatchWebContentExtractions, resolveBatchWebContentSnapshots, resolveWebContentSnapshotHtml } from 'cs/workbench/services/fetch/electron-main/webContentChannel';
+import { ConfiguredFetchTargetProvider } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
+import { FetchTargetService } from 'cs/workbench/services/fetch/electron-main/fetchTargetService';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
+import { resolveActiveWebContentSnapshotHtml } from 'cs/code/electron-main/pdf/webContentSnapshot';
 import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
 import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import {
@@ -114,6 +113,8 @@ const browserViewIpcDisposables = new DisposableStore();
 const browserViewMainService = browserViewIpcDisposables.add(
   new BrowserViewMainService(),
 );
+const fetchTargetService = new FetchTargetService();
+const fetchTargetProvider = new ConfiguredFetchTargetProvider(fetchTargetService);
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -166,27 +167,28 @@ async function invokeCommand<TCommand extends AppCommand>(
 ): Promise<AppCommandResultMap[TCommand]> {
   switch (command) {
     case 'fetch_article':
-      return fetchArticle((payload as FetchArticlePayload)?.url, storage) as Promise<AppCommandResultMap[TCommand]>;
+		{
+			const fetchArticlePayload = payload as FetchArticlePayload;
+			return fetchArticle(
+				fetchArticlePayload.url,
+				storage,
+				{
+					requestId: fetchArticlePayload.requestId,
+					fetchTarget: fetchArticlePayload.fetchTarget,
+					targetProvider: fetchTargetProvider,
+					onFetchStatus: status => emitToRenderer?.(FETCH_STATUS_CHANNEL, status),
+				},
+			) as Promise<AppCommandResultMap[TCommand]>;
+		}
     case 'fetch_latest_articles':
       {
         const fetchLatestPayload = payload as FetchLatestArticlesPayload;
-        const fetchStrategy = normalizeFetchStrategy(fetchLatestPayload.fetchStrategy ?? 'web-content-first');
-        const previewExtractions = shouldPrepareWebContentArtifacts(fetchStrategy)
-          ? await resolveBatchWebContentExtractions(fetchLatestPayload)
-          : new Map<string, WebContentExtractionSnapshot>();
-        const previewSnapshots =
-          shouldPrepareWebContentArtifacts(fetchStrategy)
-            ? (previewExtractions.size > 0
-              ? new Map<string, WebContentSnapshot>()
-              : await resolveBatchWebContentSnapshots(fetchLatestPayload))
-            : new Map<string, WebContentSnapshot>();
         return fetchLatestArticles(
           fetchLatestPayload,
           storage,
           {
-            previewExtractions,
-            previewSnapshots,
-            fetchStrategy,
+				requestId: fetchLatestPayload.requestId,
+				targetProvider: fetchTargetProvider,
             onFetchStatus: (status) => {
               emitToRenderer?.(FETCH_STATUS_CHANNEL, status);
             },
@@ -281,7 +283,7 @@ async function invokeCommand<TCommand extends AppCommand>(
       const downloadPayload = payload as WebContentPdfDownloadPayload;
       const taskAbortController = startDocumentTaskAbortController(downloadPayload);
       try {
-        const previewHtml = await resolveWebContentSnapshotHtml(downloadPayload);
+				const previewHtml = await resolveActiveWebContentSnapshotHtml(downloadPayload);
         const downloadResult = await previewDownloadPdf(
           downloadPayload,
           app.getPath('downloads'),
@@ -412,6 +414,7 @@ export function registerAppIpc(
   );
   app.once('before-quit', () => {
     browserViewIpcDisposables.dispose();
+		fetchTargetService.dispose();
   });
   registerContextMenuListener();
   try {

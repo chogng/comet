@@ -110,6 +110,7 @@ function createDefaultUserJournalSourceOverrides() {
     url: source.url,
     journalTitle: source.journalTitle,
     preferredExtractorId: source.preferredExtractorId ?? null,
+		fetchTarget: source.fetchTarget,
   }));
 }
 
@@ -128,6 +129,7 @@ function mergeJournalSourceOverrides(
       url,
       journalTitle: cleanText(source.journalTitle),
       preferredExtractorId: source.preferredExtractorId ?? null,
+			fetchTarget: source.fetchTarget === 'webContentsView' ? 'webContentsView' : 'background',
     });
   }
 
@@ -460,6 +462,7 @@ function normalizeJournalSourceOverrides(value: unknown): JournalSourceOverride[
 
     const override: JournalSourceOverride = {
       url,
+			fetchTarget: record.fetchTarget === 'webContentsView' ? 'webContentsView' : 'background',
     };
     const journalTitle = cleanText(record.journalTitle);
     if (journalTitle) {
