@@ -37,6 +37,7 @@ export const natureArticleListCatalogFixture = `
 
 export const natureNewsOpinionListFixture = `
 	<main>
+		<h1>News</h1>
 		<div data-test="news-opinion-list">
 			<article data-test="news-card">
 				<h2><a href="/articles/d41586-026-00001">News article</a></h2>

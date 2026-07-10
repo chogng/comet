@@ -28,13 +28,31 @@ export function isNatureExploreCatalog(document: Document): boolean {
 }
 
 export function isNatureArticleListCatalog(document: Document): boolean {
-	return !!document.querySelector('main h1') && !!document.querySelector('main article, main li[data-test*="article"]');
+	return !isNatureNewsOpinionListCatalog(document) && !!document.querySelector('main h1') && !!document.querySelector('main article, main li[data-test*="article"]');
 }
 
 export function parseNatureArticleListCatalog(document: Document, base: URI): ParsedArticleListCatalog {
 	const label = text(document.querySelector('main h1'));
 	if (!label) {
 		throw new Error(`Nature article list "${base.toString(true)}" does not contain a title.`);
+	}
+	return {
+		entries: [{
+			kind: 'group',
+			label,
+			sources: [{ kind: 'source', label, url: base }],
+		}],
+	};
+}
+
+export function isNatureNewsOpinionListCatalog(document: Document): boolean {
+	return !!document.querySelector('main [data-test="news-opinion-list"], main .news-and-views-list');
+}
+
+export function parseNatureNewsOpinionListCatalog(document: Document, base: URI): ParsedArticleListCatalog {
+	const label = text(document.querySelector('main h1'));
+	if (!label) {
+		throw new Error(`Nature news or opinion list "${base.toString(true)}" does not contain a title.`);
 	}
 	return {
 		entries: [{

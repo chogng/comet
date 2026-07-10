@@ -9,7 +9,7 @@ import { JSDOM } from 'jsdom';
 import { URI } from 'cs/base/common/uri';
 import { parseNatureArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleDetailParser';
 import { isNatureArticleList, parseNatureArticleList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleListParser';
-import { isNatureArticleListCatalog, isNatureExploreCatalog, parseNatureArticleListCatalog, parseNatureCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
+import { isNatureArticleListCatalog, isNatureExploreCatalog, isNatureNewsOpinionListCatalog, parseNatureArticleListCatalog, parseNatureCatalog, parseNatureNewsOpinionListCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
 import { NatureFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureFetchProvider';
 import { isNatureNewsOpinionList, parseNatureNewsOpinionList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureNewsOpinionListParser';
 import { natureArticleDetailFixture, natureArticleListCatalogFixture, natureArticleListFixture, natureCatalogFixture, natureNewsOpinionListFixture } from 'cs/workbench/services/fetch/test/electron-browser/providers/nature/fixtures/nature.fixture';
@@ -42,6 +42,13 @@ test('Nature fixtures parse catalog, ordinary list, news list, and article detai
 	const newsDocument = documentFrom(natureNewsOpinionListFixture);
 	assert.equal(isNatureArticleList(newsDocument), false);
 	assert.equal(isNatureNewsOpinionList(newsDocument), true);
+	assert.equal(isNatureArticleListCatalog(newsDocument), false);
+	assert.equal(isNatureNewsOpinionListCatalog(newsDocument), true);
+	assert.deepEqual(parseNatureNewsOpinionListCatalog(newsDocument, base).entries, [{
+		kind: 'group',
+		label: 'News',
+		sources: [{ kind: 'source', label: 'News', url: base }],
+	}]);
 	assert.equal(parseNatureNewsOpinionList(newsDocument, base).ungroupedItems[0].title, 'News article');
 
 	const detail = parseNatureArticleDetail(documentFrom(natureArticleDetailFixture), base, journal);

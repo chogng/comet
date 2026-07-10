@@ -11,7 +11,7 @@ import { FetchPageSessionFactory, IFetchPageSessionFactory } from 'cs/workbench/
 import { resolveFetchParser, type FetchParseContext } from 'cs/workbench/services/fetch/electron-browser/fetchParserResolver';
 import { parseNatureArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleDetailParser';
 import { isNatureArticleList, parseNatureArticleList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleListParser';
-import { isNatureArticleListCatalog, isNatureExploreCatalog, parseNatureArticleListCatalog, parseNatureCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
+import { isNatureArticleListCatalog, isNatureExploreCatalog, isNatureNewsOpinionListCatalog, parseNatureArticleListCatalog, parseNatureCatalog, parseNatureNewsOpinionListCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
 import { isNatureNewsOpinionList, parseNatureNewsOpinionList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureNewsOpinionListParser';
 
 export class NatureFetchProvider implements IFetchProvider {
@@ -39,6 +39,7 @@ export class NatureFetchProvider implements IFetchProvider {
 			return resolveFetchParser([
 				{ id: 'nature.explore-catalog', matches: ({ document }) => isNatureExploreCatalog(document), parser: parseNatureCatalog },
 				{ id: 'nature.article-list-catalog', matches: ({ document }) => isNatureArticleListCatalog(document), parser: parseNatureArticleListCatalog },
+				{ id: 'nature.news-opinion-list-catalog', matches: ({ document }) => isNatureNewsOpinionListCatalog(document), parser: parseNatureNewsOpinionListCatalog },
 			], context)(context.document, context.uri);
 		} finally {
 			await session.dispose();
