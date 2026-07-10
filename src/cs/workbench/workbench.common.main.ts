@@ -26,6 +26,8 @@ import { ILogService } from 'cs/platform/log/common/log';
 import { BrowserLogService } from 'cs/platform/log/browser/log';
 import { IThemeService } from 'cs/platform/theme/common/themeService';
 import { themeService } from 'cs/platform/theme/browser/themeService';
+import { AgentNetworkFilterService, IAgentNetworkFilterService } from 'cs/platform/networkFilter/common/networkFilterService';
+import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import {
   ITelemetryService,
   NullTelemetryService,
@@ -63,6 +65,7 @@ registerWorkbenchService(IContextKeyService, contextKeyService);
 registerWorkbenchService(ILogService, new BrowserLogService());
 registerWorkbenchService(IThemeService, themeService);
 registerWorkbenchService(ITelemetryService, new NullTelemetryService());
+registerSingleton(IAgentNetworkFilterService, AgentNetworkFilterService, InstantiationType.Delayed);
 
 //#endregion
 

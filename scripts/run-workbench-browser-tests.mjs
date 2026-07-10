@@ -189,6 +189,17 @@ const entryPoints = [
     'electron-browser',
     'fetchService.test.ts',
   ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'workbench',
+    'services',
+    'fetch',
+    'test',
+    'electron-browser',
+    'fetchParserResolver.test.ts',
+  ),
 ];
 
 await rm(outputDir, { recursive: true, force: true });

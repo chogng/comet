@@ -22,6 +22,7 @@ import {
 
 //#region --- workbench (desktop main)
 import 'cs/workbench/contrib/browserView/electron-browser/browserView.contribution';
+import 'cs/workbench/contrib/fetch/electron-browser/fetch.contribution';
 import 'cs/workbench/contrib/window/window.contribution';
 import 'cs/workbench/contrib/splash/browser/partsSplash';
 //#endregion
