@@ -13,13 +13,13 @@ const rootDir =
     : path.dirname(scriptFilePath);
 const outputDir = path.join(rootDir, '.tmp', 'workbench-browser-tests');
 const entryPoints = [
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'splitview.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'gridview.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'articleFetch.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'documentActionsModel.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'editorInput.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'editorModel.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'tests', 'editorOpenService.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'splitview.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'gridview.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'articleFetch.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'documentActionsModel.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorInput.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorModel.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorOpenService.test.ts'),
   path.join(
     rootDir,
     'src',
@@ -29,6 +29,17 @@ const entryPoints = [
     'editor',
     'browser',
     'editorResolverService.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'workbench',
+    'contrib',
+    'chat',
+    'test',
+    'common',
+    'languageModels.test.ts',
   ),
   path.join(
     rootDir,
@@ -58,7 +69,7 @@ const entryPoints = [
     'cs',
     'workbench',
     'browser',
-    'tests',
+    'test',
     'notificationsStatus.test.ts',
   ),
   path.join(
@@ -67,7 +78,7 @@ const entryPoints = [
     'cs',
     'workbench',
     'browser',
-    'tests',
+    'test',
     'contextkeys.test.ts',
   ),
   path.join(
@@ -120,7 +131,7 @@ const entryPoints = [
     'cs',
     'workbench',
     'browser',
-    'tests',
+    'test',
     'browserViewContribution.test.ts',
   ),
 ];

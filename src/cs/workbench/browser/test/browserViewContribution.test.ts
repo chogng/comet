@@ -31,7 +31,7 @@ import { ILogService, type ILogService as ILogServiceType } from 'cs/platform/lo
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { INotificationService, NoOpNotification, NoOpNotificationService, type INotificationService as INotificationServiceType } from 'cs/platform/notification/common/notification';
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceType } from 'cs/platform/quickinput/common/quickInput';
-import { IStorageService, StorageScope, StorageTarget, type IStorageService as IStorageServiceType } from 'cs/platform/storage/common/storage';
+import { IStorageService, StorageScope, StorageTarget, type IStorageEntry, type IStorageService as IStorageServiceType } from 'cs/platform/storage/common/storage';
 import { IThemeService, type IThemeService as IThemeServiceType } from 'cs/platform/theme/common/themeService';
 import { ITelemetryService, TelemetryLevel, type ITelemetryService as ITelemetryServiceType } from 'cs/platform/telemetry/common/telemetry';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
@@ -341,7 +341,7 @@ function createTestStorageService(values = new Map<string, string>()): IStorageS
 	return {
 		_serviceBrand: undefined,
 		applicationStorage: undefined,
-		onDidChangeValue: ((scopeOrListener: StorageScope | ((event: unknown) => void), key?: string) => {
+		onDidChangeValue: ((scopeOrListener: StorageScope | ((event: unknown) => void), _key?: string) => {
 			if (typeof scopeOrListener === 'function') {
 				return toDisposable(() => {});
 			}
@@ -358,7 +358,7 @@ function createTestStorageService(values = new Map<string, string>()): IStorageS
 		store: (key: string, value: string | number | boolean | object | undefined | null, scope: StorageScope, _target: StorageTarget) => {
 			values.set(keyFor(key, scope), String(value));
 		},
-		storeAll(entries) {
+		storeAll(entries: Array<IStorageEntry>, _external: boolean) {
 			for (const entry of entries) {
 				values.set(keyFor(entry.key, entry.scope), String(entry.value));
 			}
@@ -366,7 +366,7 @@ function createTestStorageService(values = new Map<string, string>()): IStorageS
 		remove: (key: string, scope: StorageScope) => {
 			values.delete(keyFor(key, scope));
 		},
-		keys: (_scope, _target) => [...values.keys()]
+		keys: (scope: StorageScope, _target: StorageTarget) => [...values.keys()]
 			.filter(key => key.startsWith(`${scope}:`))
 			.map(key => key.slice(`${scope}:`.length)),
 		log() {},
@@ -674,18 +674,14 @@ test('browser tab management commands open through the workbench editor controll
 	assert.equal(openRequests.length, 2);
 	assert.deepEqual(openRequests.map(request => request.kind), ['browser', 'browser']);
 	assert.deepEqual(openRequests.map(request => request.disposition), ['new-tab', 'new-tab']);
-	assert.equal(openRequests[0]?.options?.viewState?.url, 'https://example.com/article');
-	assert.equal(openRequests[1]?.options?.viewState?.url, 'about:blank');
-	const firstResource = openRequests[0]?.kind === 'browser' && 'resource' in openRequests[0]
-		? openRequests[0].resource
-		: undefined;
-	const secondResource = openRequests[1]?.kind === 'browser' && 'resource' in openRequests[1]
-		? openRequests[1].resource
-		: undefined;
-	assert.ok(firstResource);
-	assert.ok(secondResource);
-	assert.ok(BrowserViewUri.getId(firstResource));
-	assert.ok(BrowserViewUri.getId(secondResource));
+	const firstRequest = openRequests[0];
+	const secondRequest = openRequests[1];
+	assert(firstRequest?.kind === 'browser' && firstRequest.disposition === 'new-tab');
+	assert(secondRequest?.kind === 'browser' && secondRequest.disposition === 'new-tab');
+	assert.equal(firstRequest.options.viewState.url, 'https://example.com/article');
+	assert.equal(secondRequest.options.viewState.url, 'about:blank');
+	assert.ok(BrowserViewUri.getId(firstRequest.resource));
+	assert.ok(BrowserViewUri.getId(secondRequest.resource));
 });
 
 test('browser contribution registers find actions in the browser toolbar menu', () => {

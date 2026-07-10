@@ -49,8 +49,6 @@ function createTranslationWidgetProps(
     isSettingsSaving: false,
     isTestingTranslationConnection: false,
     isLoadingTranslationModels: false,
-    showApiKey: false,
-    onToggleShowApiKey: () => {},
     onActiveTranslationProviderChange: () => {},
     onTranslationProviderApiKeyChange: () => {},
     onTranslationProviderBaseUrlChange: () => {},
