@@ -42,13 +42,11 @@ function createGroupModel(
 function createTabItem(
   tab: Pick<EditorGroupTabItem, 'id' | 'kind' | 'label' | 'title'> & {
     paneMode?: EditorGroupTabItem['paneMode'];
-    residency?: EditorGroupTabItem['residency'];
     faviconUrl?: string;
     isActive?: boolean;
     isClosable?: boolean;
     isDirty?: boolean;
     hasLocalHistory?: boolean;
-    targetTabId?: string | null;
   },
 ): EditorGroupTabItem {
   const fallbackPaneModeByKind: Record<EditorGroupTabItem['kind'], EditorGroupTabItem['paneMode']> = {
@@ -64,16 +62,9 @@ function createTabItem(
     id: tab.id,
     kind: tab.kind,
     paneMode: tab.paneMode ?? fallbackPaneModeByKind[tab.kind],
-    residency:
-      tab.residency ??
-      (tab.targetTabId === null ? 'resident' : 'dynamic'),
     label: tab.label,
     title: tab.title,
     faviconUrl: tab.faviconUrl,
-    targetTabId:
-      Object.prototype.hasOwnProperty.call(tab, 'targetTabId')
-        ? tab.targetTabId ?? null
-        : tab.id,
     state: {
       isActive: Boolean(tab.isActive),
       isClosable: Boolean(tab.isClosable),
@@ -261,7 +252,6 @@ test('TabsTitleControl reuses tab nodes across prop updates', () => {
       activatedTabIds.push(tabId);
     },
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -293,7 +283,6 @@ test('TabsTitleControl reuses tab nodes across prop updates', () => {
       activatedTabIds.push(tabId);
     },
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
 
   assert.equal(container.children.length, 2);
@@ -362,17 +351,12 @@ test('createEditorGroupModel keeps concrete tabs in workspace order', () => {
     model.tabs.map((tab) => tab.id),
     ['draft-a', 'draft-b', 'browser-a', 'pdf-a'],
   );
-  assert.equal(model.tabs[0]?.targetTabId, 'draft-a');
   assert.equal(model.tabs[0]?.label, 'Draft A');
-  assert.equal(model.tabs[1]?.targetTabId, 'draft-b');
-  assert.equal(model.tabs[1]?.residency, 'dynamic');
-  assert.equal(model.tabs[2]?.targetTabId, 'browser-a');
   assert.equal(model.tabs[2]?.state.isClosable, true);
-  assert.equal(model.tabs[3]?.targetTabId, 'pdf-a');
   assert.equal(model.tabs[3]?.state.isActive, false);
 });
 
-test('createEditorGroupModel keeps a resident tab in its workspace position instead of pinning it first', () => {
+test('createEditorGroupModel keeps empty concrete tabs in workspace order', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -411,8 +395,14 @@ test('createEditorGroupModel keeps a resident tab in its workspace position inst
     model.tabs.map((tab) => tab.id),
     ['browser-a', 'draft-a', 'pdf-a'],
   );
-  assert.equal(model.tabs[1]?.residency, 'resident');
-  assert.equal(model.tabs[2]?.residency, 'resident');
+  assert.deepEqual(
+    model.tabs.map((tab) => ({ label: tab.label, isClosable: tab.state.isClosable })),
+    [
+      { label: 'Example A', isClosable: true },
+      { label: 'New Tab', isClosable: true },
+      { label: 'New Tab', isClosable: true },
+    ],
+  );
 });
 
 test('createEditorGroupModel only renders the concrete workspace tabs it receives', () => {
@@ -482,11 +472,10 @@ test('createEditorGroupModel keeps browser favicons on tabs even when inactive',
     dirtyDraftTabIds: [],
   });
 
-  assert.equal(model.tabs[1]?.targetTabId, 'browser-a');
   assert.equal(model.tabs[1]?.faviconUrl, 'https://a.test/favicon.ico');
 });
 
-test('createEditorGroupModel respects explicit resident tabs even when they are not first in kind order', () => {
+test('createEditorGroupModel treats every empty browser tab as a concrete tab', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -494,14 +483,12 @@ test('createEditorGroupModel respects explicit resident tabs even when they are 
         kind: 'browser',
         title: '',
         url: 'about:blank',
-        residency: 'dynamic',
       },
       {
         id: 'browser-resident',
         kind: 'browser',
         title: '',
         url: 'about:blank',
-        residency: 'resident',
       },
       {
         id: 'pdf-a',
@@ -516,7 +503,6 @@ test('createEditorGroupModel respects explicit resident tabs even when they are 
       kind: 'browser',
       title: '',
       url: 'about:blank',
-      residency: 'dynamic',
     },
     labels: editorLabels,
     draftStatusByTabId: {},
@@ -527,14 +513,14 @@ test('createEditorGroupModel respects explicit resident tabs even when they are 
     model.tabs.map((tab) => tab.id),
     ['browser-dynamic', 'browser-resident', 'pdf-a'],
   );
-  assert.equal(model.tabs[1]?.residency, 'resident');
   assert.equal(model.tabs[1]?.label, 'New Tab');
-  const dynamicBrowser = model.tabs.find((tab) => tab.id === 'browser-dynamic');
-  assert.equal(dynamicBrowser?.residency, 'dynamic');
-  assert.equal(dynamicBrowser?.label, 'New Tab');
+  assert.equal(model.tabs[1]?.state.isClosable, true);
+  const activeBrowser = model.tabs.find((tab) => tab.id === 'browser-dynamic');
+  assert.equal(activeBrowser?.label, 'New Tab');
+  assert.equal(activeBrowser?.state.isClosable, true);
 });
 
-test('createEditorGroupModel keeps a resident untitled browser tab icon-only', () => {
+test('createEditorGroupModel keeps a single empty browser tab labeled and closable', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -557,14 +543,12 @@ test('createEditorGroupModel keeps a resident untitled browser tab icon-only', (
   });
 
   const browserTab = model.tabs.find((tab) => tab.id === 'browser-a');
-  assert.equal(browserTab?.targetTabId, 'browser-a');
-  assert.equal(browserTab?.residency, 'resident');
-  assert.equal(browserTab?.label, '');
-  assert.equal(browserTab?.title, 'Browser');
-  assert.equal(browserTab?.state.isClosable, false);
+  assert.equal(browserTab?.label, 'New Tab');
+  assert.equal(browserTab?.title, 'New Tab');
+  assert.equal(browserTab?.state.isClosable, true);
 });
 
-test('createEditorGroupModel keeps a resident empty pdf tab icon-only', () => {
+test('createEditorGroupModel keeps a single empty pdf tab labeled and closable', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -587,14 +571,12 @@ test('createEditorGroupModel keeps a resident empty pdf tab icon-only', () => {
   });
 
   const pdfTab = model.tabs.find((tab) => tab.id === 'pdf-a');
-  assert.equal(pdfTab?.targetTabId, 'pdf-a');
-  assert.equal(pdfTab?.residency, 'resident');
-  assert.equal(pdfTab?.label, '');
-  assert.equal(pdfTab?.title, 'PDF');
-  assert.equal(pdfTab?.state.isClosable, false);
+  assert.equal(pdfTab?.label, 'New Tab');
+  assert.equal(pdfTab?.title, 'New Tab');
+  assert.equal(pdfTab?.state.isClosable, true);
 });
 
-test('createEditorGroupModel keeps a resident untitled draft tab icon-only', () => {
+test('createEditorGroupModel keeps a single empty draft tab labeled and closable', () => {
   const model = createEditorGroupModel({
     tabs: [
       {
@@ -618,11 +600,9 @@ test('createEditorGroupModel keeps a resident untitled draft tab icon-only', () 
     dirtyDraftTabIds: [],
   });
 
-  assert.equal(model.tabs[0]?.targetTabId, 'draft-a');
-  assert.equal(model.tabs[0]?.residency, 'resident');
-  assert.equal(model.tabs[0]?.label, '');
-  assert.equal(model.tabs[0]?.title, 'Draft');
-  assert.equal(model.tabs[0]?.state.isClosable, false);
+  assert.equal(model.tabs[0]?.label, 'New Tab');
+  assert.equal(model.tabs[0]?.title, 'New Tab');
+  assert.equal(model.tabs[0]?.state.isClosable, true);
 });
 
 test('createEditorGroupModel keeps empty dirty draft tabs closable', () => {
@@ -649,10 +629,9 @@ test('createEditorGroupModel keeps empty dirty draft tabs closable', () => {
     dirtyDraftTabIds: ['draft-a'],
   });
 
-  assert.equal(model.tabs[0]?.targetTabId, 'draft-a');
   assert.equal(model.tabs[0]?.state.isClosable, true);
-  assert.equal(model.tabs[0]?.label, '');
-  assert.equal(model.tabs[0]?.title, 'Draft');
+  assert.equal(model.tabs[0]?.label, 'New Tab');
+  assert.equal(model.tabs[0]?.title, 'New Tab');
 });
 
 test('createEditorGroupModel shows label for a single non-empty clean draft tab', () => {
@@ -679,7 +658,6 @@ test('createEditorGroupModel shows label for a single non-empty clean draft tab'
     dirtyDraftTabIds: [],
   });
 
-  assert.equal(model.tabs[0]?.targetTabId, 'draft-a');
   assert.equal(model.tabs[0]?.state.isClosable, true);
   assert.equal(model.tabs[0]?.label, 'Draft 1');
   assert.equal(model.tabs[0]?.title, 'Draft 1');
@@ -716,16 +694,12 @@ test('createEditorGroupModel gives empty drafts labels when more than one draft 
     dirtyDraftTabIds: [],
   });
 
-  assert.equal(model.tabs[0]?.targetTabId, 'draft-a');
-  assert.equal(model.tabs[0]?.residency, 'resident');
   assert.equal(model.tabs[0]?.label, 'New Tab');
   assert.equal(model.tabs[0]?.title, 'New Tab');
-  const dynamicDraft = model.tabs.find((tab) => tab.id === 'draft-b');
-  assert.equal(dynamicDraft?.targetTabId, 'draft-b');
-  assert.equal(dynamicDraft?.residency, 'dynamic');
-  assert.equal(dynamicDraft?.state.isClosable, true);
-  assert.equal(dynamicDraft?.label, 'New Tab');
-  assert.equal(dynamicDraft?.title, 'New Tab');
+  const secondDraft = model.tabs.find((tab) => tab.id === 'draft-b');
+  assert.equal(secondDraft?.state.isClosable, true);
+  assert.equal(secondDraft?.label, 'New Tab');
+  assert.equal(secondDraft?.title, 'New Tab');
 });
 
 test('createEditorGroupModel gives empty pdf tabs labels when more than one pdf exists', () => {
@@ -736,14 +710,12 @@ test('createEditorGroupModel gives empty pdf tabs labels when more than one pdf 
         kind: 'pdf',
         title: '',
         url: 'about:blank',
-        residency: 'resident',
       },
       {
         id: 'pdf-b',
         kind: 'pdf',
         title: '',
         url: 'about:blank',
-        residency: 'dynamic',
       },
     ],
     activeTabId: 'pdf-b',
@@ -752,23 +724,20 @@ test('createEditorGroupModel gives empty pdf tabs labels when more than one pdf 
       kind: 'pdf',
       title: '',
       url: 'about:blank',
-      residency: 'dynamic',
     },
     labels: editorLabels,
     draftStatusByTabId: {},
     dirtyDraftTabIds: [],
   });
 
-  const residentPdf = model.tabs.find((tab) => tab.id === 'pdf-a');
-  assert.equal(residentPdf?.residency, 'resident');
-  assert.equal(residentPdf?.state.isClosable, true);
-  assert.equal(residentPdf?.label, 'New Tab');
-  assert.equal(residentPdf?.title, 'New Tab');
-  const dynamicPdf = model.tabs.find((tab) => tab.id === 'pdf-b');
-  assert.equal(dynamicPdf?.residency, 'dynamic');
-  assert.equal(dynamicPdf?.state.isClosable, true);
-  assert.equal(dynamicPdf?.label, 'New Tab');
-  assert.equal(dynamicPdf?.title, 'New Tab');
+  const firstPdf = model.tabs.find((tab) => tab.id === 'pdf-a');
+  assert.equal(firstPdf?.state.isClosable, true);
+  assert.equal(firstPdf?.label, 'New Tab');
+  assert.equal(firstPdf?.title, 'New Tab');
+  const secondPdf = model.tabs.find((tab) => tab.id === 'pdf-b');
+  assert.equal(secondPdf?.state.isClosable, true);
+  assert.equal(secondPdf?.label, 'New Tab');
+  assert.equal(secondPdf?.title, 'New Tab');
 });
 
 test('createEditorGroupModel gives empty browser tabs labels when more than one browser exists', () => {
@@ -779,14 +748,12 @@ test('createEditorGroupModel gives empty browser tabs labels when more than one 
         kind: 'browser',
         title: '',
         url: 'about:blank',
-        residency: 'resident',
       },
       {
         id: 'browser-b',
         kind: 'browser',
         title: '',
         url: 'about:blank',
-        residency: 'dynamic',
       },
     ],
     activeTabId: 'browser-b',
@@ -795,27 +762,24 @@ test('createEditorGroupModel gives empty browser tabs labels when more than one 
       kind: 'browser',
       title: '',
       url: 'about:blank',
-      residency: 'dynamic',
     },
     labels: editorLabels,
     draftStatusByTabId: {},
     dirtyDraftTabIds: [],
   });
 
-  const residentBrowser = model.tabs.find((tab) => tab.id === 'browser-a');
-  assert.equal(residentBrowser?.residency, 'resident');
-  assert.equal(residentBrowser?.state.isClosable, true);
-  assert.equal(residentBrowser?.label, 'New Tab');
-  assert.equal(residentBrowser?.title, 'New Tab');
+  const firstBrowser = model.tabs.find((tab) => tab.id === 'browser-a');
+  assert.equal(firstBrowser?.state.isClosable, true);
+  assert.equal(firstBrowser?.label, 'New Tab');
+  assert.equal(firstBrowser?.title, 'New Tab');
 
-  const dynamicBrowser = model.tabs.find((tab) => tab.id === 'browser-b');
-  assert.equal(dynamicBrowser?.residency, 'dynamic');
-  assert.equal(dynamicBrowser?.state.isClosable, true);
-  assert.equal(dynamicBrowser?.label, 'New Tab');
-  assert.equal(dynamicBrowser?.title, 'New Tab');
+  const secondBrowser = model.tabs.find((tab) => tab.id === 'browser-b');
+  assert.equal(secondBrowser?.state.isClosable, true);
+  assert.equal(secondBrowser?.label, 'New Tab');
+  assert.equal(secondBrowser?.title, 'New Tab');
 });
 
-test('TabsTitleControl allows resident real tabs to be dragged for reordering', () => {
+test('TabsTitleControl allows real tabs to be dragged for reordering', () => {
   const control = new TabsTitleControl({
     group: createGroupModel('draft-a', [
       createTabItem({
@@ -823,14 +787,12 @@ test('TabsTitleControl allows resident real tabs to be dragged for reordering', 
         kind: 'draft',
         label: '',
         title: 'Draft',
-        residency: 'resident',
       }),
       createTabItem({
         id: 'browser-a',
         kind: 'browser',
         label: 'Example',
         title: 'Example',
-        residency: 'resident',
       }),
     ]),
     labels: {
@@ -840,7 +802,6 @@ test('TabsTitleControl allows resident real tabs to be dragged for reordering', 
       rename: 'Rename',
     },
     onActivateTab: () => {},
-    onOpenPaneMode: () => {},
     onCloseTab: () => {},
     onCloseOtherTabs: () => false,
     onCloseAllTabs: () => false,
@@ -894,64 +855,11 @@ test('createEditorGroupModel keeps dirty draft tabs reachable when a clean draft
   });
 
   assert.equal(model.tabs[0]?.id, 'draft-a');
-  assert.equal(model.tabs[0]?.targetTabId, 'draft-a');
-  assert.equal(model.tabs[0]?.residency, 'resident');
   assert.equal(model.tabs[0]?.state.isDirty, true);
   assert.equal(model.tabs[0]?.state.isClosable, true);
   const activeDraft = model.tabs.find((tab) => tab.id === 'draft-b');
-  assert.equal(activeDraft?.targetTabId, 'draft-b');
-  assert.equal(activeDraft?.residency, 'dynamic');
   assert.equal(activeDraft?.state.isActive, true);
   assert.equal(activeDraft?.state.isClosable, true);
-});
-
-test('TabsTitleControl opens a pane mode when a resident entry has no target tab yet', () => {
-  const openedPaneModes: string[] = [];
-  const control = new TabsTitleControl({
-    group: createGroupModel(null, [
-      createTabItem({
-        id: 'draft-entry',
-        kind: 'draft',
-        label: '',
-        title: 'Draft',
-        targetTabId: null,
-      }),
-      createTabItem({
-        id: 'browser-entry',
-        kind: 'browser',
-        label: '',
-        title: 'Browser',
-        targetTabId: null,
-      }),
-      createTabItem({
-        id: 'pdf-entry',
-        kind: 'pdf',
-        label: '',
-        title: 'PDF',
-        targetTabId: null,
-      }),
-    ]),
-    labels: {
-      close: 'Close',
-    },
-    onActivateTab: () => {},
-    onCloseTab: () => {},
-    onOpenPaneMode: (paneMode) => {
-      openedPaneModes.push(paneMode);
-    },
-  });
-  const rootElement = control.getElement();
-  document.body.append(rootElement);
-  const container = getTabsContainer(rootElement);
-
-  const browserButton = container.children[1]?.querySelector('.comet-editor-tab-main');
-  assert(browserButton instanceof HTMLButtonElement);
-
-  browserButton.click();
-
-  assert.deepEqual(openedPaneModes, ['browser']);
-
-  control.dispose();
 });
 
 test('TabsTitleControl uses file-text for both inactive and active pdf tabs', () => {
@@ -976,7 +884,6 @@ test('TabsTitleControl uses file-text for both inactive and active pdf tabs', ()
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1009,7 +916,6 @@ test('TabsTitleControl uses file-text for both inactive and active pdf tabs', ()
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
 
   assert.equal(getPdfIcon()?.classList.contains('lx-icon-file-text'), true);
@@ -1050,7 +956,6 @@ test('TabsTitleControl reorders tabs by drag and drop', () => {
       reorderCalls.push([tabId, targetSlotIndex]);
     },
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1124,7 +1029,6 @@ test('TabsTitleControl anchors the drag preview to the left edge of the dragged 
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1196,7 +1100,6 @@ test('TabsTitleControl clears hovered state after drag ends', () => {
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1241,7 +1144,6 @@ test('TabsTitleControl clears focused tab controls after drag ends without a reo
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1286,7 +1188,6 @@ test('TabsTitleControl clears hovered and focused source tab state on drag start
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1333,7 +1234,6 @@ test('TabsTitleControl activates the dragged tab on drag start', () => {
   };
   const onReorderTab = () => {};
   const onCloseTab = () => {};
-  const onOpenPaneMode = () => {};
   const onActivateTab = (tabId: string) => {
     activatedTabIds.push(tabId);
     currentGroup = createGroupModel('draft-a', [
@@ -1357,7 +1257,6 @@ test('TabsTitleControl activates the dragged tab on drag start', () => {
       onActivateTab,
       onReorderTab,
       onCloseTab,
-      onOpenPaneMode,
     });
   };
 
@@ -1367,7 +1266,6 @@ test('TabsTitleControl activates the dragged tab on drag start', () => {
     onActivateTab,
     onReorderTab,
     onCloseTab,
-    onOpenPaneMode,
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1423,7 +1321,6 @@ test('TabsTitleControl keeps one stable insertion indicator between adjacent tab
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1536,7 +1433,6 @@ test('TabsTitleControl keeps the insertion indicator visible when host drag even
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1624,7 +1520,6 @@ test('TabsTitleControl keeps the same drop side for small cursor moves near a ta
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1700,7 +1595,6 @@ test('TabsTitleControl keeps the first drop indicator fully visible at the leadi
     onActivateTab: () => {},
     onReorderTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1791,7 +1685,6 @@ test('TabsTitleControl supports dropping a tab after the last tab from container
       reorderCalls.push([tabId, targetSlotIndex]);
     },
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1888,7 +1781,6 @@ test('TabsTitleControl replaces browser pane icon with favicon when available', 
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1927,7 +1819,6 @@ test('TabsTitleControl renders unsave for dirty closable tabs and close for clea
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -1956,7 +1847,6 @@ test('TabsTitleControl renders unsave for dirty closable tabs and close for clea
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
 
   assert.equal(getCloseActionIcon()?.classList.contains('lx-icon-unsave'), false);
@@ -1993,7 +1883,6 @@ test('TabsTitleControl reveals the active tab when the strip overflows', async (
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -2061,7 +1950,6 @@ test('TabsTitleControl reveals the active tab when the strip overflows', async (
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
 
   await waitForAnimationFrame();
@@ -2103,7 +1991,6 @@ test('TabsTitleControl keeps scroll position stable for metadata-only active tab
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -2180,7 +2067,6 @@ test('TabsTitleControl keeps scroll position stable for metadata-only active tab
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
 
   scrollWidth = 420;
@@ -2225,7 +2111,6 @@ test('TabsTitleControl keeps scroll position stable when an empty browser tab ga
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);
@@ -2298,7 +2183,6 @@ test('TabsTitleControl keeps scroll position stable when an empty browser tab ga
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
 
   scrollWidth = 420;
@@ -2336,7 +2220,6 @@ test('TabsTitleControl keeps scroll position stable when an empty browser tab ga
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
 
   await waitForAnimationFrame();
@@ -2365,7 +2248,6 @@ test('TabsTitleControl disconnects resize observers on dispose', () => {
       },
       onActivateTab: () => {},
       onCloseTab: () => {},
-      onOpenPaneMode: () => {},
     });
     document.body.append(control.getElement());
 
@@ -2429,7 +2311,6 @@ test('TabsTitleControl opens a context menu with close, close others, close all,
       onRenameTab: (tabId) => {
         renamedTabIds.push(tabId);
       },
-      onOpenPaneMode: () => {},
     },
     {
       contextMenuService: contextMenuSpy.contextMenuService,
@@ -2543,7 +2424,6 @@ test('TabsTitleControl renders its DOM context menu below the cursor for availab
     },
     onActivateTab: () => {},
     onCloseTab: () => {},
-    onOpenPaneMode: () => {},
   });
   const rootElement = control.getElement();
   document.body.append(rootElement);

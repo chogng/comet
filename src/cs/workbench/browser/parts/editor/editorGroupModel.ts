@@ -1,8 +1,6 @@
 import {
-  SUPPORTED_EDITOR_PANE_MODES,
   type EditorPaneMode,
   type EditorPlannedTabKind,
-  type SupportedEditorPaneMode,
   getEditorPaneMode,
   isEmptyBrowserTabInput,
   isEmptyPdfTabInput,
@@ -19,7 +17,6 @@ import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorP
 import {
   createDirtyDraftTabIdSet,
   getDraftTabDisplayLabel as resolveDraftTabDisplayLabel,
-  isClosableEditorTab,
   isEmptyDraftTab,
 } from 'cs/workbench/browser/parts/editor/editorTabPolicy';
 
@@ -36,11 +33,9 @@ export type EditorGroupTabItem = {
   id: string;
   kind: EditorPlannedTabKind;
   paneMode: EditorPaneMode;
-  residency: 'resident' | 'dynamic';
   label: string;
   title: string;
   faviconUrl?: string;
-  targetTabId: string | null;
   state: EditorGroupTabState;
 };
 
@@ -55,7 +50,6 @@ function getTabDisplayLabel(
   labels: EditorPartLabels,
   draftIndex: number,
   isEmpty: boolean,
-  isOnlyTabOfKind: boolean,
 ) {
   const paneMode = getEditorPaneMode(tab);
 
@@ -68,7 +62,6 @@ function getTabDisplayLabel(
             draftModeLabel: labels.draftMode,
             draftIndex,
             isEmpty,
-            isOnlyTabOfKind,
           })
         : labels.draftMode;
     case 'pdf':
@@ -76,13 +69,13 @@ function getTabDisplayLabel(
         return tab.title.trim() || labels.pdfMode;
       }
 
-      return isOnlyTabOfKind ? '' : labels.newTab;
+      return labels.newTab;
     default:
       if (!isEmptyBrowserTabInput(tab)) {
         return tab.title.trim();
       }
 
-      return isOnlyTabOfKind ? '' : labels.newTab;
+      return labels.newTab;
   }
 }
 
@@ -127,12 +120,6 @@ function resolveTabFaviconUrl(
   return sanitizeTabFaviconUrl(tab.faviconUrl);
 }
 
-function isSupportedPaneMode(
-  paneMode: EditorPaneMode,
-): paneMode is SupportedEditorPaneMode {
-  return SUPPORTED_EDITOR_PANE_MODES.includes(paneMode as SupportedEditorPaneMode);
-}
-
 export function createEditorGroupModel({
   tabs,
   activeTabId,
@@ -150,34 +137,11 @@ export function createEditorGroupModel({
 }): EditorGroupModel {
   // Keep close/label behavior centralized by evaluating tab policy once per render.
   const dirtyDraftTabIdSet = createDirtyDraftTabIdSet(dirtyDraftTabIds);
-  const residentTabIdByPaneMode = new Map<SupportedEditorPaneMode, string>();
-  const firstTabIdByPaneMode = new Map<SupportedEditorPaneMode, string>();
-  const tabCountByPaneMode = new Map<SupportedEditorPaneMode, number>();
-  for (const tab of tabs) {
-    const paneMode = getEditorPaneMode(tab);
-    if (!isSupportedPaneMode(paneMode)) {
-      continue;
-    }
-
-    tabCountByPaneMode.set(paneMode, (tabCountByPaneMode.get(paneMode) ?? 0) + 1);
-
-    if (!firstTabIdByPaneMode.has(paneMode)) {
-      firstTabIdByPaneMode.set(paneMode, tab.id);
-    }
-
-    if (tab.residency === 'resident' && !residentTabIdByPaneMode.has(paneMode)) {
-      residentTabIdByPaneMode.set(paneMode, tab.id);
-    }
-  }
-
   const draftTabIds = tabs
     .filter((tab) => isEditorDraftTabInput(tab))
     .map((tab) => tab.id);
 
-  const toTabItem = (
-    tab: EditorWorkspaceTab,
-    residency: EditorGroupTabItem['residency'],
-  ): EditorGroupTabItem => {
+  const toTabItem = (tab: EditorWorkspaceTab): EditorGroupTabItem => {
     const paneMode = getEditorPaneMode(tab);
     const draftIndex =
       isEditorDraftTabInput(tab) ? draftTabIds.indexOf(tab.id) : -1;
@@ -185,39 +149,28 @@ export function createEditorGroupModel({
       ? dirtyDraftTabIdSet.has(tab.id)
       : false;
     const isEmpty = isEmptyWorkspaceTab(tab);
-    const isOnlyTabOfKind =
-      isSupportedPaneMode(paneMode) &&
-      (tabCountByPaneMode.get(paneMode) ?? 0) === 1;
     const label = getTabDisplayLabel(
       tab,
       labels,
       Math.max(draftIndex, 0),
       isEmpty,
-      isOnlyTabOfKind,
     );
     const draftStatus = isEditorDraftTabInput(tab)
       ? draftStatusByTabId[tab.id]
       : undefined;
     const canUndo = Boolean(draftStatus?.canUndo);
     const canRedo = Boolean(draftStatus?.canRedo);
-    const isClosable = isClosableEditorTab(
-      tab,
-      dirtyDraftTabIdSet,
-      isOnlyTabOfKind,
-    );
 
     return {
       id: tab.id,
       kind: tab.kind,
       paneMode,
-      residency,
       label,
       title: getTabDisplayTitle(tab, labels, label),
       faviconUrl: resolveTabFaviconUrl(tab),
-      targetTabId: tab.id,
       state: {
         isActive: tab.id === activeTabId,
-        isClosable,
+        isClosable: true,
         isDirty,
         hasLocalHistory: canUndo || canRedo,
         canUndo,
@@ -226,20 +179,8 @@ export function createEditorGroupModel({
     };
   };
 
-  const normalizedTabs = tabs.map((tab) => {
-    const paneMode = getEditorPaneMode(tab);
-    if (!isSupportedPaneMode(paneMode)) {
-      return toTabItem(tab, 'dynamic');
-    }
-
-    const residentTabId =
-      residentTabIdByPaneMode.get(paneMode) ??
-      firstTabIdByPaneMode.get(paneMode);
-    return toTabItem(tab, residentTabId === tab.id ? 'resident' : 'dynamic');
-  });
-
   return {
-    tabs: normalizedTabs,
+    tabs: tabs.map(toTabItem),
     activeTabId,
     activeTab,
   };

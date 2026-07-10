@@ -5,8 +5,9 @@ import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import { $ } from 'cs/base/browser/dom';
 import { toAction } from 'cs/base/common/actions';
+import { Emitter } from 'cs/base/common/event';
+import { generateUuid } from 'cs/base/common/uuid';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
-import { createEditorTabInputId } from 'cs/workbench/browser/parts/editor/editorInput';
 
 const EDITOR_BROWSER_LIBRARY_STORAGE_KEY = 'cs.editor.browser.library.v1';
 const MAX_RECENT_BROWSER_LIBRARY_ENTRIES = 25;
@@ -15,6 +16,15 @@ const MAX_FAVORITE_BROWSER_LIBRARY_FOLDERS = 25;
 const EDITOR_BROWSER_LIBRARY_DESKTOP_OVERLAY_CLASS = 'comet-is-desktop-overlay';
 const NATIVE_WEBCONTENT_ACTIVE_SELECTOR =
   '.comet-browser-frame-placeholder[data-webcontent-active="true"]';
+const browserLibraryChangeEmitter = new Emitter<void>();
+
+export const onDidChangeBrowserLibrary = browserLibraryChangeEmitter.event;
+
+export type BrowserLibraryRecentEntry = {
+  url: string;
+  title: string;
+  faviconUrl: string;
+};
 
 type StoredBrowserLibraryFavoriteFolder = {
   id: string;
@@ -617,6 +627,7 @@ function updateStoredBrowserLibraryState(
 
   storedBrowserLibraryState = nextState;
   writeStoredBrowserLibraryStateToStorage(nextState);
+  browserLibraryChangeEmitter.fire();
   return true;
 }
 
@@ -834,7 +845,7 @@ const nextFolderId = createBrowserLibraryFavoriteFolderId();
   });
 }
 
-function clearRecentBrowserLibraryEntries() {
+export function clearRecentBrowserLibraryEntries() {
   return updateStoredBrowserLibraryState((state) => {
     const favoriteUrlSet = new Set(state.favoriteUrls);
     const nextFaviconByUrl: Record<string, string> = {};
@@ -910,8 +921,19 @@ function isFavoriteBrowserLibraryEntry(url: string) {
   );
 }
 
-function getRecentBrowserLibraryEntries() {
+function getRecentBrowserLibraryUrls() {
   return [...storedBrowserLibraryState.recentUrls];
+}
+
+export function getRecentBrowserLibraryEntries(): BrowserLibraryRecentEntry[] {
+  return getRecentBrowserLibraryUrls()
+    .map((url) => ({
+      url,
+      title:
+        sanitizeBrowserLibraryPageTitle(getBrowserLibraryEntryPageTitle(url)) ||
+        resolveBrowserLibraryTitle(url),
+      faviconUrl: getBrowserLibraryEntryFavicon(url),
+    }));
 }
 
 function getFavoriteBrowserLibraryEntries() {
@@ -1304,7 +1326,7 @@ const normalizedPageTitle = sanitizeBrowserLibraryPageTitle(
     void this.context.onOpenEditor({
       kind: 'browser',
       disposition: 'new-tab',
-      resource: BrowserViewUri.forId(createEditorTabInputId('browser')),
+      resource: BrowserViewUri.forId(generateUuid()),
       options: {
         viewState: {
           url,
@@ -1391,7 +1413,7 @@ const changed = createFavoriteBrowserLibraryFolder(
     const favoriteFolderNamesById = new Map(
       getFavoriteBrowserLibraryFolders().map((folder) => [folder.id, folder.name]),
     );
-    const recentUrls = getRecentBrowserLibraryEntries();
+    const recentUrls = getRecentBrowserLibraryUrls();
     const listItems: BrowserLibraryListItem[] = [];
 
     const appendUrl = (url: string, sectionKind: BrowserLibrarySectionKind) => {

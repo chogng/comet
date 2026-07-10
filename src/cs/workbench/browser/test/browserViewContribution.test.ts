@@ -8,6 +8,7 @@ import test, { after, before } from 'node:test';
 import { VSBuffer } from 'cs/base/common/buffer';
 import { Emitter, Event as BaseEvent } from 'cs/base/common/event';
 import { toDisposable } from 'cs/base/common/lifecycle';
+import { isUUID } from 'cs/base/common/uuid';
 import { isIMenuItem, MenuId, MenuRegistry } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId, BrowserViewStorageScope, browserZoomDefaultIndex, type IBrowserDeviceProfile, type IBrowserViewCertificateError, type IBrowserViewLoadError, type IBrowserViewPermissionRequestEvent } from 'cs/platform/browserView/common/browserView';
 import { BrowserHistoryStore } from 'cs/platform/browserView/common/browserHistory';
@@ -70,8 +71,10 @@ let BrowserEditor: typeof import('cs/workbench/contrib/browserView/electron-brow
 let BrowserEditorFindContribution: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorFindFeature').BrowserEditorFindContribution;
 let BrowserFavoritesFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserFavoritesFeature').BrowserFavoritesFeature;
 let BrowserHistoryFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserHistoryFeature').BrowserHistoryFeature;
+let BrowserWelcomeFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature').BrowserWelcomeFeature;
 let BrowserPermissionsFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserPermissionsFeature').BrowserPermissionsFeature;
 let BrowserEditorEmulationSupport: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorEmulationFeatures').BrowserEditorEmulationSupport;
+let EditorBrowserLibraryPanel: typeof import('cs/workbench/browser/parts/editor/editorBrowserLibraryPanel').EditorBrowserLibraryPanel;
 
 function createTestThemeService(): IThemeServiceType {
 	return {
@@ -548,8 +551,10 @@ before(async () => {
 	({ BrowserEditorFindContribution } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorFindFeature'));
 	({ BrowserFavoritesFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserFavoritesFeature'));
 	({ BrowserHistoryFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserHistoryFeature'));
+	({ BrowserWelcomeFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature'));
 	({ BrowserPermissionsFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserPermissionsFeature'));
 	({ BrowserEditorEmulationSupport } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorEmulationFeatures'));
+	({ EditorBrowserLibraryPanel } = await import('cs/workbench/browser/parts/editor/editorBrowserLibraryPanel'));
 });
 
 after(() => {
@@ -676,8 +681,8 @@ test('browser tab management commands open through the workbench editor controll
 	assert(secondRequest?.kind === 'browser' && secondRequest.disposition === 'new-tab');
 	assert.equal(firstRequest.options.viewState.url, 'https://example.com/article');
 	assert.equal(secondRequest.options.viewState.url, 'about:blank');
-	assert.ok(BrowserViewUri.getId(firstRequest.resource));
-	assert.ok(BrowserViewUri.getId(secondRequest.resource));
+	assert.equal(isUUID(BrowserViewUri.getId(firstRequest.resource) ?? ''), true);
+	assert.equal(isUUID(BrowserViewUri.getId(secondRequest.resource) ?? ''), true);
 });
 
 test('browser contribution registers find actions in the browser toolbar menu', () => {
@@ -1313,6 +1318,109 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 		editor.dispose();
 		instantiationService.dispose();
 		history.dispose();
+	}
+});
+
+test('browser welcome contribution renders recents and opens the selected entry', async () => {
+	const createLibraryContext = (url: string, title = '', faviconUrl = '') => ({
+		browserUrl: url,
+		browserPageTitle: title,
+		browserFaviconUrl: faviconUrl,
+		labels: {
+			title: 'Sources',
+			recentTitle: 'Recents',
+			recentTodayTitle: 'Today',
+			recentYesterdayTitle: 'Yesterday',
+			recentLast7DaysTitle: 'Last 7 Days',
+			recentLast30DaysTitle: 'Last 30 Days',
+			recentOlderTitle: 'Older',
+			favoritesTitle: 'Favorites',
+			emptyState: 'No favorites or history yet.',
+		},
+		onNavigateToUrl() {},
+	});
+	const libraryPanel = new EditorBrowserLibraryPanel(createLibraryContext(''));
+	libraryPanel.clearRecentLibraryEntries();
+	libraryPanel.setContext(createLibraryContext('https://example.com/a', 'Old A'));
+	libraryPanel.setContext(createLibraryContext('https://example.com/background', 'Background'));
+	libraryPanel.setContext(createLibraryContext('https://example.com/a', 'New A'));
+	libraryPanel.setContext(createLibraryContext('https://example.org/d', 'Example D'));
+	libraryPanel.setContext(createLibraryContext('https://example.org/e', 'Example E'));
+	libraryPanel.setContext(createLibraryContext('https://example.org/f', 'Example F'));
+	libraryPanel.setContext(createLibraryContext('https://example.org/g', 'Example G'));
+	libraryPanel.setContext(createLibraryContext('https://example.net/c', 'Example C', 'https://example.net/missing.ico'));
+	const loadedUrls: string[] = [];
+	const serviceCollection = new ServiceCollection(
+		[IThemeService, createTestThemeService()],
+		[ITelemetryService, createTestTelemetryService()],
+		[ILogService, createTestLogService()],
+		[IKeybindingService, createTestKeybindingService()],
+		[IHoverService, createTestHoverService()],
+		[IContextViewService, createTestContextViewService()],
+		[INotificationService, createTestNotificationService()],
+		[IQuickInputService, createTestQuickInputService()],
+		[IBrowserZoomService, createTestBrowserZoomService()],
+		[IStorageService, createTestStorageService()],
+		[IConfigurationService, new ConfigurationService()],
+		[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
+		[IChatService, createTestChatService([])],
+	);
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => ({
+			...createTestBrowserViewModel(id, state),
+			loadURL: async url => {
+				loadedUrls.push(url);
+			},
+		} as IBrowserViewModel),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+
+	const editor = instantiationService.createInstance(BrowserEditor, {
+		labels: {},
+		browserTab: {
+			id: 'welcome-browser',
+			kind: 'browser',
+			title: 'Browser',
+			url: '',
+		},
+		nativeHost: createTestNativeHostService(),
+	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+
+	try {
+		await editor.input?.resolve();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		const welcome = editor.getContribution(BrowserWelcomeFeature);
+		const recents = welcome?.widgets[0].element.querySelectorAll<HTMLAnchorElement>('.comet-browser-recents-item');
+
+		assert.deepEqual(
+			[...recents ?? []].map(recent => recent.getAttribute('href')),
+			[
+				'https://example.net/c',
+				'https://example.org/g',
+				'https://example.org/f',
+				'https://example.org/e',
+				'https://example.org/d',
+				'https://example.com/a',
+				'https://example.com/background',
+			],
+		);
+		const favicon = recents?.[0].querySelector('img');
+		assert.ok(favicon);
+		favicon.dispatchEvent(new window.Event('error'));
+		assert.ok(recents?.[0].querySelector('.codicon-globe'));
+		recents?.[0].click();
+		assert.deepEqual(loadedUrls, ['https://example.net/c']);
+
+		welcome?.widgets[0].element.querySelector<HTMLButtonElement>('.comet-browser-recents-clear')?.click();
+		assert.equal(welcome?.widgets[0].element.querySelector('.comet-browser-recents'), null);
+		assert.equal(welcome?.widgets[0].element.querySelector('.browser-welcome-subtitle')?.textContent, 'Enter a URL above to get started.');
+	} finally {
+		editor.dispose();
+		instantiationService.dispose();
+		libraryPanel.clearRecentLibraryEntries();
+		libraryPanel.dispose();
 	}
 });
 

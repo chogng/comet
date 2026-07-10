@@ -1,6 +1,7 @@
 import { getEditorContentTabTitle } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
 import { getComparisonKey } from 'cs/base/common/resources';
 import { URI } from 'cs/base/common/uri';
+import { generateUuid } from 'cs/base/common/uuid';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 
@@ -116,11 +117,6 @@ export type EditorPlannedTabKind = EditorPlannedTabInput['kind'];
 
 const DEFAULT_VIEW_MODE: EditorTabViewMode = 'draft';
 
-export function createEditorTabInputId(prefix: 'draft' | 'browser' | 'pdf') {
-  const randomPart = Math.random().toString(36).slice(2, 8);
-  return `cs-${prefix}-tab-${Date.now().toString(36)}-${randomPart}`;
-}
-
 export function getEditorPaneMode(
   input: Pick<EditorTabInput, 'kind'>,
 ): SupportedEditorPaneMode;
@@ -152,7 +148,7 @@ export function createEditorDraftTabInput(
   initial?: Partial<Pick<EditorDraftTabInput, 'id' | 'title' | 'viewMode'>>,
 ): EditorDraftTabInput {
   return {
-    id: initial?.id ?? createEditorTabInputId('draft'),
+    id: initial?.id ?? generateUuid(),
     kind: 'draft',
     title: initial?.title ?? '',
     viewMode: initial?.viewMode === 'draft' ? initial.viewMode : DEFAULT_VIEW_MODE,
@@ -173,7 +169,7 @@ function createEditorContentTabInput<K extends EditorContentTabInput['kind']>(
       : normalizedInitialTitle || derivedTitle;
 
   return {
-    id: initial?.id ?? createEditorTabInputId(kind),
+    id: initial?.id ?? generateUuid(),
     kind,
     title: resolvedTitle,
     url: normalizedUrl,

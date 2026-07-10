@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createEditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
-import { createEditorTabInputId, EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { generateUuid } from 'cs/base/common/uuid';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { createEditorOpenService } from 'cs/workbench/services/editor/browser/editorOpenService';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
@@ -97,21 +98,20 @@ function createTestEditorOpenService(
   return createEditorOpenService(model, createBrowserEditorResolverService(resolvedResources));
 }
 
-test('editor open service reuses the existing empty draft for reveal-or-open draft requests', () => {
+test('editor open service creates a draft from an empty editor group', () => {
   const restoreWindow = installMockWindow(createLocalStorage());
 
   try {
     const model = createEditorModel();
     const service = createTestEditorOpenService(model);
 
-    const initialDraftTabId = model.getSnapshot().activeTab?.id ?? null;
     const result = service.open({
       kind: 'draft',
       disposition: 'reveal-or-open',
     });
 
     assert.equal(result.handled, true);
-    assert.equal(result.activeTabId, initialDraftTabId);
+    assert.ok(result.activeTabId);
     assert.equal(
       model.getSnapshot().tabs.filter((tab) => tab.kind === 'draft').length,
       1,
@@ -129,6 +129,10 @@ test('editor open service creates a fresh draft tab for new-tab draft requests',
   try {
     const model = createEditorModel();
     const service = createTestEditorOpenService(model);
+    service.open({
+      kind: 'draft',
+      disposition: 'reveal-or-open',
+    });
     const initialDraftTabId = model.getSnapshot().activeTab?.id ?? null;
 
     const result = service.open({
@@ -165,7 +169,7 @@ test('editor open service creates a non-reused browser tab for browser new-tab r
         },
       },
     });
-    const newTabResource = BrowserViewUri.forId(createEditorTabInputId('browser'));
+    const newTabResource = BrowserViewUri.forId(generateUuid());
     const result = service.open({
       kind: 'browser',
       disposition: 'new-tab',

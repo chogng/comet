@@ -489,6 +489,14 @@ test('EditorGroupView schedules browser primary input focus when opening browser
   document.body.append(view.getElement());
 
   try {
+    assert.equal(
+      view.getElement().querySelectorAll('.comet-editor-tab').length,
+      0,
+    );
+    assert.equal(
+      view.getElement().querySelectorAll('.comet-editor-empty-workspace-action').length,
+      3,
+    );
     const browserButton = [...view
       .getElement()
       .querySelectorAll('.comet-editor-empty-workspace-action')]
@@ -508,6 +516,38 @@ test('EditorGroupView schedules browser primary input focus when opening browser
     );
   } finally {
     view.dispose();
+  }
+});
+
+test('EditorGroupView renders an empty draft as a real editor tab', () => {
+  const draftTab = {
+    id: 'draft-a',
+    kind: 'draft' as const,
+    title: '',
+    document: createWritingEditorDocumentFromPlainText(''),
+    viewMode: 'draft' as const,
+  };
+  const view = new EditorGroupView(
+    createProps(draftTab.id, draftTab, [draftTab]),
+  );
+  document.body.append(view.getElement());
+
+  try {
+    assert.equal(
+      view.getElement().querySelectorAll('.comet-editor-tab').length,
+      1,
+    );
+    assert.equal(
+      view.getElement().querySelector('.comet-editor-empty-workspace'),
+      null,
+    );
+    assert.equal(
+      view.getElement().querySelector('.comet-editor-content')?.getAttribute('data-editor-pane'),
+      'draft',
+    );
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
   }
 });
 

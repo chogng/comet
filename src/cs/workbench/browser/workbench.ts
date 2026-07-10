@@ -44,7 +44,7 @@ import type { SettingsController, SettingsControllerContext } from 'cs/workbench
 import { createEditorPartController } from 'cs/workbench/browser/parts/editor/editorPart';
 import type { EditorPartChangeReason, EditorPartControllerContext, EditorPartModel } from 'cs/workbench/browser/parts/editor/editorPart';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
-import { createEditorTabInputId } from 'cs/workbench/browser/parts/editor/editorInput';
+import { generateUuid } from 'cs/base/common/uuid';
 
 import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { createEditorBrowserToolbarActions } from 'cs/workbench/browser/parts/editor/editorBrowserToolbarActions';
@@ -1425,7 +1425,7 @@ class WorkbenchHost {
         handleOpenEditor({
           kind: 'browser',
           disposition: 'new-tab',
-          resource: BrowserViewUri.forId(createEditorTabInputId('browser')),
+          resource: BrowserViewUri.forId(generateUuid()),
           options: {
             viewState: {
               url: browserLinkUrl,

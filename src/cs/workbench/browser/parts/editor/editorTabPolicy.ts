@@ -54,30 +54,12 @@ export function isReusableEmptyPdfTab(
   return Boolean(tab && isEmptyPdfTabInput(tab));
 }
 
-export function isClosableEditorTab(
-  tab: EditorWorkspaceTab,
-  dirtyDraftTabIds: ReadonlySet<string>,
-  isOnlyTabOfKind: boolean,
-) {
-  // The last reusable empty tab of a kind stays as the always-available resident tab.
-  if (isEditorDraftTabInput(tab)) {
-    return !isOnlyTabOfKind || !isReusableEmptyDraftTab(tab, dirtyDraftTabIds);
-  }
-
-  if (isEmptyBrowserTabInput(tab) || isEmptyPdfTabInput(tab)) {
-    return !isOnlyTabOfKind;
-  }
-
-  return true;
-}
-
 export function getDraftTabDisplayLabel(params: {
   tab: EditorWorkspaceDraftTab;
   newTabLabel: string;
   draftModeLabel: string;
   draftIndex: number;
   isEmpty: boolean;
-  isOnlyTabOfKind: boolean;
 }) {
   const {
     tab,
@@ -85,7 +67,6 @@ export function getDraftTabDisplayLabel(params: {
     draftModeLabel,
     draftIndex,
     isEmpty,
-    isOnlyTabOfKind,
   } = params;
   const normalizedTitle = tab.title.trim();
   if (normalizedTitle) {
@@ -93,7 +74,7 @@ export function getDraftTabDisplayLabel(params: {
   }
 
   if (isEmpty) {
-    return isOnlyTabOfKind ? '' : newTabLabel;
+    return newTabLabel;
   }
 
   return `${draftModeLabel} ${draftIndex + 1}`;

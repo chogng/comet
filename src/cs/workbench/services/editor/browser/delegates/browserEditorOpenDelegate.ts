@@ -1,8 +1,8 @@
 import {
-  createEditorTabInputId,
   EMPTY_BROWSER_TAB_URL,
   isEditorDraftTabInput,
 } from 'cs/workbench/browser/parts/editor/editorInput';
+import { generateUuid } from 'cs/base/common/uuid';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { isReusableEmptyBrowserTab } from 'cs/workbench/browser/parts/editor/editorTabPolicy';
 import type { EditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
@@ -35,7 +35,7 @@ export function createBrowserEditorOpenDelegate(
     options: EditorOpenOptions | undefined,
   ) => {
     const resolvedResource =
-      resource ?? BrowserViewUri.forId(createEditorTabInputId('browser'));
+      resource ?? BrowserViewUri.forId(generateUuid());
     const resolved = editorResolverService.resolveEditor({
       resource: resolvedResource,
       options,

@@ -5,10 +5,6 @@ import {
   writingEditorDocumentToPlainText,
 } from 'cs/editor/common/writingEditorDocument';
 import { DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/browser/editorGroupIdentity';
-import {
-  EMPTY_BROWSER_TAB_URL,
-  EMPTY_PDF_TAB_URL,
-} from 'cs/workbench/browser/parts/editor/editorInput';
 import { createEditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
 
 type MockStorage = {
@@ -52,6 +48,75 @@ function installMockWindow(localStorage: MockStorage) {
   };
 }
 
+test('editor model starts with an empty editor group', () => {
+  const restoreWindow = installMockWindow(createLocalStorage());
+
+  try {
+    const model = createEditorModel();
+    const snapshot = model.getSnapshot();
+
+    assert.deepEqual(snapshot.tabs, []);
+    assert.equal(snapshot.activeTabId, null);
+    assert.equal(snapshot.activeTab, null);
+    assert.deepEqual(snapshot.mruTabIds, []);
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
+test('editor model removes legacy empty resident tabs during restore', () => {
+  const localStorage = createLocalStorage({
+    'cs.writingWorkspace.state': JSON.stringify({
+      groups: [
+        {
+          groupId: DEFAULT_EDITOR_GROUP_ID,
+          inputs: [
+            {
+              id: 'draft-empty',
+              kind: 'draft',
+              title: '',
+              viewMode: 'draft',
+              residency: 'resident',
+            },
+            {
+              id: 'browser-empty',
+              kind: 'browser',
+              title: '',
+              url: 'about:blank',
+              residency: 'resident',
+            },
+            {
+              id: 'pdf-empty',
+              kind: 'pdf',
+              title: '',
+              url: 'about:blank',
+              residency: 'resident',
+            },
+          ],
+          activeTabId: 'draft-empty',
+          mruTabIds: ['draft-empty', 'browser-empty', 'pdf-empty'],
+        },
+      ],
+      activeGroupId: DEFAULT_EDITOR_GROUP_ID,
+    }),
+  });
+  const restoreWindow = installMockWindow(localStorage);
+
+  try {
+    const model = createEditorModel();
+    const snapshot = model.getSnapshot();
+
+    assert.deepEqual(snapshot.tabs, []);
+    assert.equal(snapshot.activeTabId, null);
+    assert.equal(snapshot.activeTab, null);
+    assert.deepEqual(snapshot.mruTabIds, []);
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
 test('editor model restores draft documents from persisted input and draft-state records', () => {
   const localStorage = createLocalStorage({
     'cs.writingWorkspace.state': JSON.stringify({
@@ -64,6 +129,7 @@ test('editor model restores draft documents from persisted input and draft-state
               kind: 'draft',
               title: 'Draft A',
               viewMode: 'draft',
+              residency: 'resident',
             },
             {
               id: 'browser-a',
@@ -210,7 +276,7 @@ test('editor model flattens the active group while preserving grouped workspace 
     assert.equal(snapshot.groupId, 'editor-group-b');
     assert.equal(snapshot.activeTabId, 'browser-b');
     assert.equal(snapshot.activeTab?.kind, 'browser');
-    assert.equal(snapshot.tabs.length, 3);
+    assert.equal(snapshot.tabs.length, 1);
     assert.equal(snapshot.tabs.some((tab) => tab.id === 'browser-b'), true);
     assert.equal(snapshot.groups.length, 2);
     assert.equal(snapshot.viewStateEntries.length, 2);
@@ -340,8 +406,8 @@ test('editor model can create and activate explicit editor groups', () => {
     snapshot = model.getSnapshot();
     assert.equal(snapshot.activeGroupId, 'editor-group-b');
     assert.equal(snapshot.groupId, 'editor-group-b');
-    assert.equal(snapshot.tabs.length, 3);
-    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
+    assert.equal(snapshot.tabs.length, 0);
+    assert.equal(snapshot.activeTabId, null);
   } finally {
     model.dispose();
   }
@@ -389,8 +455,8 @@ test('editor model can open the same browser resource into another group without
     assert.equal(snapshot.activeGroupId, 'editor-group-a');
     assert.equal(snapshot.groupId, 'editor-group-a');
     assert.equal(snapshot.activeTab?.id, 'browser-a');
-    assert.equal(firstGroup.tabs.length, 3);
-    assert.equal(secondGroup.tabs.length, 4);
+    assert.equal(firstGroup.tabs.length, 1);
+    assert.equal(secondGroup.tabs.length, 1);
     const firstGroupBrowser = firstGroup.tabs.find(
       (tab) => tab.kind === 'browser' && tab.url === 'https://example.com/article',
     );
@@ -455,7 +521,7 @@ test('editor model reveals an existing browser tab inside the target group and c
     assert.equal(snapshot.groupId, 'editor-group-b');
     assert.equal(snapshot.activeTabId, 'browser-b');
     assert.equal(snapshot.activeTab?.id, 'browser-b');
-    assert.equal(secondGroup.tabs.length, 3);
+    assert.equal(secondGroup.tabs.length, 1);
     assert.equal(secondGroup.mruTabIds[0], 'browser-b');
   } finally {
     model.dispose();
@@ -515,17 +581,16 @@ test('editor model can close other tabs, rename a tab, preserve a custom title, 
     model.closeAllTabs();
     snapshot = model.getSnapshot();
 
-    assert.equal(snapshot.tabs.length, 3);
-    assert.equal(snapshot.activeTabId, snapshot.tabs[0]?.id ?? null);
-    assert.equal(snapshot.activeTab?.residency, 'resident');
-    assert.equal(snapshot.mruTabIds[0], snapshot.tabs[0]?.id ?? null);
-    assert.equal(snapshot.mruTabIds.length, snapshot.tabs.length);
+    assert.equal(snapshot.tabs.length, 0);
+    assert.equal(snapshot.activeTabId, null);
+    assert.equal(snapshot.activeTab, null);
+    assert.deepEqual(snapshot.mruTabIds, []);
   } finally {
     model.dispose();
   }
 });
 
-test('editor model resets the last browser tab to an empty resident tab when closed', () => {
+test('editor model returns to an empty group when the last browser tab closes', () => {
   const model = createEditorModel({
     groups: [
       {
@@ -550,19 +615,16 @@ test('editor model resets the last browser tab to an empty resident tab when clo
     model.closeTab('browser-a');
     const snapshot = model.getSnapshot();
 
-    assert.equal(snapshot.tabs.length, 3);
-    const nextBrowser = snapshot.tabs.find((tab) => tab.kind === 'browser');
-    assert.equal(nextBrowser?.residency, 'resident');
-    assert.equal(nextBrowser?.title, '');
-    assert.equal(nextBrowser?.url, EMPTY_BROWSER_TAB_URL);
-    assert.equal(snapshot.activeTabId, nextBrowser?.id ?? null);
-    assert.notEqual(nextBrowser?.id, 'browser-a');
+    assert.deepEqual(snapshot.tabs, []);
+    assert.equal(snapshot.activeTabId, null);
+    assert.equal(snapshot.activeTab, null);
+    assert.deepEqual(snapshot.mruTabIds, []);
   } finally {
     model.dispose();
   }
 });
 
-test('editor model resets the last pdf tab to an empty resident tab when closed', () => {
+test('editor model returns to an empty group when the last pdf tab closes', () => {
   const model = createEditorModel({
     groups: [
       {
@@ -587,19 +649,16 @@ test('editor model resets the last pdf tab to an empty resident tab when closed'
     model.closeTab('pdf-a');
     const snapshot = model.getSnapshot();
 
-    assert.equal(snapshot.tabs.length, 3);
-    const nextPdf = snapshot.tabs.find((tab) => tab.kind === 'pdf');
-    assert.equal(nextPdf?.residency, 'resident');
-    assert.equal(nextPdf?.title, '');
-    assert.equal(nextPdf?.url, EMPTY_PDF_TAB_URL);
-    assert.equal(snapshot.activeTabId, nextPdf?.id ?? null);
-    assert.notEqual(nextPdf?.id, 'pdf-a');
+    assert.deepEqual(snapshot.tabs, []);
+    assert.equal(snapshot.activeTabId, null);
+    assert.equal(snapshot.activeTab, null);
+    assert.deepEqual(snapshot.mruTabIds, []);
   } finally {
     model.dispose();
   }
 });
 
-test('editor model resets the last draft tab to an empty resident draft when closed', () => {
+test('editor model returns to an empty group when the last draft tab closes', () => {
   const model = createEditorModel({
     groups: [
       {
@@ -624,18 +683,10 @@ test('editor model resets the last draft tab to an empty resident draft when clo
   try {
     model.closeTab('draft-a');
     const snapshot = model.getSnapshot();
-    const nextDraft = snapshot.tabs.find((tab) => tab.kind === 'draft');
-
-    assert.equal(snapshot.tabs.length, 3);
-    assert.equal(nextDraft?.kind, 'draft');
-    assert.equal(nextDraft?.residency, 'resident');
-    assert.equal(nextDraft?.title, '');
-    assert.equal(
-      writingEditorDocumentToPlainText(nextDraft?.document ?? createWritingEditorDocumentFromPlainText('fallback')),
-      '',
-    );
-    assert.equal(snapshot.activeTabId, nextDraft?.id ?? null);
-    assert.notEqual(nextDraft?.id, 'draft-a');
+    assert.deepEqual(snapshot.tabs, []);
+    assert.equal(snapshot.activeTabId, null);
+    assert.equal(snapshot.activeTab, null);
+    assert.deepEqual(snapshot.mruTabIds, []);
     assert.deepEqual(snapshot.dirtyDraftTabIds, []);
   } finally {
     model.dispose();

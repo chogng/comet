@@ -1,9 +1,9 @@
 import type { LocaleMessages } from 'language/locales';
 import {
-  createEditorTabInputId,
   isEditorBrowserTabInput,
   toEditorTabInput,
 } from 'cs/workbench/browser/parts/editor/editorInput';
+import { generateUuid } from 'cs/base/common/uuid';
 import { createWebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
@@ -96,10 +96,7 @@ type CreateEditorPartPropsParams = {
 };
 
 function toStructuralWorkspaceTab(tab: EditorWorkspaceTab) {
-  return {
-    ...toEditorTabInput(tab),
-    residency: tab.residency,
-  };
+  return toEditorTabInput(tab);
 }
 
 function createEditorPartStructureKey(snapshot: EditorPartControllerSnapshot) {
@@ -448,7 +445,7 @@ export class EditorPartController {
       resource: BrowserViewUri.forId(
         isEditorBrowserTabInput(activeTab)
           ? activeTab.id
-          : createEditorTabInputId('browser'),
+          : generateUuid(),
       ),
       options: {
         viewState: {
@@ -503,14 +500,7 @@ export class EditorPartController {
         return false;
       }
 
-      const shouldKeepBrowserPane = this.shouldKeepBrowserPaneAfterClosingTab(tabId);
       this.editorModel.closeTab(tabId);
-      if (shouldKeepBrowserPane) {
-        this.openEditor({
-          kind: 'browser',
-          disposition: 'reveal-or-open',
-        });
-      }
       return true;
     });
 
@@ -665,22 +655,6 @@ export class EditorPartController {
     return this.editorModel
       .getSnapshot()
       .tabs.some((tab) => tab.id === tabId);
-  }
-
-  private shouldKeepBrowserPaneAfterClosingTab(tabId: string) {
-    const { tabs, activeTabId } = this.editorModel.getSnapshot();
-    const closingTab = tabs.find((tab) => tab.id === tabId);
-    if (!closingTab || closingTab.kind !== 'browser') {
-      return false;
-    }
-
-    if (activeTabId !== tabId) {
-      return false;
-    }
-
-    return !tabs.some(
-      (tab) => tab.id !== tabId && tab.kind === 'browser',
-    );
   }
 
   private enqueueCloseOperation<T>(operation: () => Promise<T>) {

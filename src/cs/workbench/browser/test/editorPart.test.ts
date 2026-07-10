@@ -4,7 +4,8 @@ import test, { after, before, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import en from 'language/locales/en.json';
-import { createEditorTabInputId, EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
+import { generateUuid } from 'cs/base/common/uuid';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { Schemas } from 'cs/base/common/network';
 import type { URI } from 'cs/base/common/uri';
@@ -218,7 +219,7 @@ test('EditorPartController opens the browser pane as an empty about:blank tab', 
   controller.dispose();
 });
 
-test('EditorPartController reuses an existing empty draft tab for explicit draft creation', async () => {
+test('EditorPartController creates a draft tab from the empty workspace', async () => {
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
@@ -231,7 +232,7 @@ test('EditorPartController reuses an existing empty draft tab for explicit draft
     editorResolverService: createBrowserEditorResolverService(),
   });
 
-  const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
+  assert.equal(controller.getSnapshot().activeTab, null);
   controller.getSnapshot().editorPartProps.onOpenEditor({
     kind: 'draft',
     disposition: 'reveal-or-open',
@@ -241,7 +242,7 @@ test('EditorPartController reuses an existing empty draft tab for explicit draft
     .getSnapshot()
     .tabs.filter((tab) => tab.kind === 'draft');
   assert.equal(draftTabs.length, 1);
-  assert.equal(controller.getSnapshot().activeTab?.id, initialDraftTabId);
+  assert.equal(controller.getSnapshot().activeTab?.id, draftTabs[0]?.id);
 
   controller.dispose();
 });
@@ -259,6 +260,10 @@ test('EditorPartController creates a new draft tab when the reusable draft is di
     editorResolverService: createBrowserEditorResolverService(),
   });
 
+  controller.getSnapshot().editorPartProps.onOpenEditor({
+    kind: 'draft',
+    disposition: 'reveal-or-open',
+  });
   const initialDraftTabId = controller.getSnapshot().activeTab?.id ?? null;
   controller.setDraftDocument(createWritingEditorDocumentFromPlainText('dirty'));
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -336,7 +341,7 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
   controller.dispose();
 });
 
-test('EditorPartController keeps browser pane active as about:blank when closing the last browser tab', async () => {
+test('EditorPartController returns to the empty workspace after closing the last browser tab', async () => {
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
@@ -366,12 +371,9 @@ test('EditorPartController keeps browser pane active as about:blank when closing
   await controller.onCloseTab(browserTab.id);
 
   const snapshot = controller.getSnapshot();
-  const browserTabs = snapshot.tabs.filter((tab) => tab.kind === 'browser');
-  assert.equal(browserTabs.length, 1);
-  assert.equal(browserTabs[0]?.url, 'about:blank');
-  assert.equal(browserTabs[0]?.title, '');
-  assert.equal(snapshot.activeTab?.id, browserTabs[0]?.id);
-  assert.equal(snapshot.activeTab?.kind, 'browser');
+  assert.deepEqual(snapshot.tabs, []);
+  assert.equal(snapshot.activeTabId, null);
+  assert.equal(snapshot.activeTab, null);
 
   controller.dispose();
 });
@@ -398,7 +400,7 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
       },
     },
   });
-  const newTabResource = BrowserViewUri.forId(createEditorTabInputId('browser'));
+  const newTabResource = BrowserViewUri.forId(generateUuid());
   controller
     .getSnapshot()
     .editorPartProps
@@ -437,7 +439,7 @@ test('EditorPartController opens a browser URL in a new tab', async () => {
     editorResolverService: createBrowserEditorResolverService(),
   });
   const url = 'https://example.com/chat-link';
-  const resource = BrowserViewUri.forId(createEditorTabInputId('browser'));
+  const resource = BrowserViewUri.forId(generateUuid());
 
   controller.openEditor({
     kind: 'browser',

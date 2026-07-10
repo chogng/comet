@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { isUUID } from 'cs/base/common/uuid';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import type { EditorWorkspaceDraftTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import {
   EMPTY_BROWSER_TAB_URL,
   EMPTY_PDF_TAB_URL,
+  createEditorBrowserTabInput,
+  createEditorDraftTabInput,
+  createEditorPdfTabInput,
   getEditorContentTabInputResource,
   getEditorContentTabInputOpenKey,
   getEditorTabInputResourceKey,
@@ -18,6 +22,16 @@ import {
   getEditorContentDisplayUrl,
   getEditorContentTabTitle,
 } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
+
+test('editor tab input factories generate UUIDs', () => {
+  const ids = [
+    createEditorDraftTabInput().id,
+    createEditorBrowserTabInput(EMPTY_BROWSER_TAB_URL).id,
+    createEditorPdfTabInput(EMPTY_PDF_TAB_URL).id,
+  ];
+
+  assert.deepEqual(ids.map(isUUID), [true, true, true]);
+});
 
 test('toEditorTabInput strips draft-only payload from workspace tabs', () => {
   const draftTab: EditorWorkspaceDraftTab = {

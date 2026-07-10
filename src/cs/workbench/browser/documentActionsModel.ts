@@ -34,8 +34,8 @@ import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import { generateUuid } from 'cs/base/common/uuid';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
-import { createEditorTabInputId } from 'cs/workbench/browser/parts/editor/editorInput';
 
 export type DocumentActionsControllerContext = {
   desktopRuntime: boolean;
@@ -342,7 +342,7 @@ export class DocumentActionsController {
     this.context.onOpenEditor({
       kind: 'browser',
       disposition: 'reveal-or-open',
-      resource: BrowserViewUri.forId(createEditorTabInputId('browser')),
+      resource: BrowserViewUri.forId(generateUuid()),
       options: {
         viewState: {
           url: article.sourceUrl,

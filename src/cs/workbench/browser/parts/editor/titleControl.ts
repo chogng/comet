@@ -10,7 +10,6 @@ export type TitleControlCallbacks = {
   onCloseOtherTabs?: (tabId: string) => Promise<boolean> | boolean | void;
   onCloseAllTabs?: () => Promise<boolean> | boolean | void;
   onRenameTab?: (tabId: string) => void | Promise<void>;
-  onOpenPaneMode: (paneMode: EditorGroupModel['tabs'][number]['paneMode']) => void;
 };
 
 export type TitleControlLabels = {

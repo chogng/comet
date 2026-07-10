@@ -4,10 +4,6 @@ import {
   getEditorTabInputResourceKey,
   isEditorDraftTabInput,
 } from 'cs/workbench/browser/parts/editor/editorInput';
-import {
-  createDirtyDraftTabIdSet,
-  isReusableEmptyDraftTab,
-} from 'cs/workbench/browser/parts/editor/editorTabPolicy';
 import type {
   EditorWorkspaceTab,
   WritingEditorDocument,
@@ -181,34 +177,6 @@ const targetTab = group.activeTabId === tabId
     onCloseOtherTabs: props.onCloseOtherTabs,
     onCloseAllTabs: props.onCloseAllTabs,
     onRenameTab: props.onRenameTab,
-    onOpenPaneMode: (paneMode) => {
-      switch (paneMode) {
-        case 'draft':
-          void props.onOpenEditor({
-            kind: 'draft',
-            disposition: 'reveal-or-open',
-          });
-          return;
-        case 'browser':
-          void props.onOpenEditor({
-            kind: 'browser',
-            disposition: 'reveal-or-open',
-          });
-          requestBrowserPrimaryInputFocus();
-          return;
-        case 'pdf':
-          void props.onOpenEditor({
-            kind: 'pdf',
-            disposition: 'reveal-or-open',
-          });
-          return;
-        case 'file':
-        case 'terminal':
-        case 'git-changes':
-          // Future launcher kinds are intentionally not wired yet.
-          return;
-      }
-    },
   };
 }
 
@@ -693,8 +661,7 @@ export class EditorGroupView {
       onPdfHighlightSelection: this.handlePdfHighlightSelection,
       onPdfNoteSelection: this.handlePdfNoteSelection,
     }));
-    const shouldShowEmptyWorkspace = this.shouldShowEmptyWorkspace(group.activeTab);
-    this.syncToolbarMode(shouldShowEmptyWorkspace ? null : group.activeTab);
+    this.syncToolbarMode(group.activeTab);
     this.syncTitlebarActions(
       this.props.showTitlebarActions ? this.titlebarActionsView.getElement() : null,
       this.props.titlebarAuxiliaryActionsElements ?? [],
@@ -703,7 +670,7 @@ export class EditorGroupView {
     this.contentElement.className = 'comet-editor-content';
     this.contentElement.removeAttribute('data-editor-pane');
 
-    if (!group.activeTab || shouldShowEmptyWorkspace) {
+    if (!group.activeTab) {
       this.releaseActivePane();
       this.syncToolbar(null);
       this.emptyWorkspaceView.setProps({
@@ -834,16 +801,6 @@ const panelHost = this.contentElement.querySelector('.browser-root');
     }
     return result;
   };
-
-  private shouldShowEmptyWorkspace(activeTab: EditorWorkspaceTab | null) {
-    return Boolean(
-      activeTab?.residency === 'resident' &&
-        isReusableEmptyDraftTab(
-          activeTab,
-          createDirtyDraftTabIdSet(this.props.dirtyDraftTabIds),
-        ),
-    );
-  }
 
   private flushBrowserPrimaryInputFocus(activeTab: EditorWorkspaceTab | null) {
     if (!this.shouldFocusBrowserPrimaryInput || !isEmptyBrowserTabInput(activeTab)) {

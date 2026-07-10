@@ -67,8 +67,8 @@ function getTabPaneModeIconName(
   }
 }
 
-function isTabClosable(tab: Pick<EditorGroupTabItem, 'targetTabId' | 'state'>) {
-  return Boolean(tab.targetTabId && tab.state.isClosable);
+function isTabClosable(tab: Pick<EditorGroupTabItem, 'state'>) {
+  return tab.state.isClosable;
 }
 
 function createDirtyCloseButtonContent() {
@@ -89,7 +89,6 @@ function isDragEventLike(event: Event): event is DragEvent {
 }
 
 type DragState = {
-  sourceViewTabId: string;
   sourceTabId: string;
   targetSlotIndex: number | null;
 };
@@ -304,13 +303,10 @@ const nextTabElements: HTMLDivElement[] = [];
     tabView.element.classList.toggle('comet-is-closable', closable);
     tabView.element.classList.toggle('comet-is-dirty', tab.state.isDirty);
     tabView.element.classList.toggle('comet-has-title', Boolean(tab.label.trim()));
-    tabView.element.classList.toggle('comet-is-available', Boolean(tab.targetTabId));
     tabView.element.dataset.paneMode = tab.paneMode;
     tabView.element.dataset.tabId = tab.id;
-    tabView.element.dataset.targetTabId = tab.targetTabId ?? '';
     const canReorder = Boolean(
-      this.props.onReorderTab &&
-        tab.targetTabId,
+      this.props.onReorderTab,
     );
     tabView.mainButton.draggable = canReorder;
 
@@ -324,12 +320,7 @@ const nextTabElements: HTMLDivElement[] = [];
       this.openTabContextMenu(event, tab);
     };
     tabView.mainButton.onclick = () => {
-      if (tab.targetTabId) {
-        this.props.onActivateTab(tab.targetTabId);
-        return;
-      }
-
-      this.props.onOpenPaneMode(tab.paneMode);
+      this.props.onActivateTab(tab.id);
     };
 
     const createFallbackPaneIcon = () =>
@@ -367,7 +358,7 @@ const nextTabElements: HTMLDivElement[] = [];
                 : createLxIcon('close'),
               onClick: (event) => {
                 event.stopPropagation();
-                void this.props.onCloseTab(tab.targetTabId!);
+                void this.props.onCloseTab(tab.id);
               },
             },
           ]
@@ -380,16 +371,12 @@ const nextTabElements: HTMLDivElement[] = [];
       return null;
     }
 
-const viewTabId = element.dataset.tabId?.trim() ?? '';
-    const targetTabId = element.dataset.targetTabId?.trim() ?? '';
-    if (!viewTabId || !targetTabId) {
+const tabId = element.dataset.tabId?.trim() ?? '';
+    if (!tabId) {
       return null;
     }
 
-    return {
-      viewTabId,
-      targetTabId,
-    };
+    return { tabId };
   }
 
   private getReorderableTabElements() {
@@ -588,7 +575,7 @@ const targetElement = event.currentTarget;
         ? this.getReorderableTabMetadata(targetElement)
         : null;
     const targetSlotIndex =
-      targetMetadata && targetMetadata.targetTabId !== this.dragState.sourceTabId
+      targetMetadata && targetMetadata.tabId !== this.dragState.sourceTabId
         ? this.resolveDropSlotIndexFromTab(event, targetElement as HTMLElement)
         : this.resolveDropSlotIndexFromStrip(event);
     if (targetSlotIndex === null) {
@@ -624,8 +611,8 @@ const targetElement = event.currentTarget;
   private clearDragState() {
     this.disposeDragPreviewElement();
     this.updateDropIndicator(null);
-    const sourceTabElement = this.dragState?.sourceViewTabId
-      ? this.tabViews.get(this.dragState.sourceViewTabId)?.element ?? null
+    const sourceTabElement = this.dragState?.sourceTabId
+      ? this.tabViews.get(this.dragState.sourceTabId)?.element ?? null
       : null;
     if (sourceTabElement) {
       sourceTabElement.classList.remove('comet-is-dragging');
@@ -682,11 +669,7 @@ const targetElement = event.currentTarget;
   ) {
     event.preventDefault();
     event.stopPropagation();
-    if (!tab.targetTabId) {
-      return;
-    }
-
-    const tabId = tab.targetTabId;
+    const tabId = tab.id;
     const actions: IAction[] = [
       ...(tab.state.isClosable
         ? [
@@ -906,14 +889,13 @@ const tabMetadata = this.getReorderableTabMetadata(tabElement);
       return;
     }
 
-    if (this.props.group.activeTabId !== tabMetadata.viewTabId) {
-      this.props.onActivateTab(tabMetadata.targetTabId);
+    if (this.props.group.activeTabId !== tabMetadata.tabId) {
+      this.props.onActivateTab(tabMetadata.tabId);
     }
 
     this.clearDragState();
     this.dragState = {
-      sourceViewTabId: tabMetadata.viewTabId,
-      sourceTabId: tabMetadata.targetTabId,
+      sourceTabId: tabMetadata.tabId,
       targetSlotIndex: null,
     };
     delete tabElement.dataset.hovered;
@@ -924,7 +906,7 @@ const tabMetadata = this.getReorderableTabMetadata(tabElement);
     tabElement.classList.add('comet-is-dragging');
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', tabMetadata.targetTabId);
+      event.dataTransfer.setData('text/plain', tabMetadata.tabId);
       const dragPreviewElement = this.createDragPreviewElement(tabElement);
       if (dragPreviewElement && typeof event.dataTransfer.setDragImage === 'function') {
         const { height } = tabElement.getBoundingClientRect();

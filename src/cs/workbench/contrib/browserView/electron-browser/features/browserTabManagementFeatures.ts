@@ -5,6 +5,7 @@
 
 import { Codicon } from 'cs/base/common/codicons';
 import { URI } from 'cs/base/common/uri';
+import { generateUuid } from 'cs/base/common/uuid';
 import { localize, localize2 } from 'cs/nls';
 import { Action2, MenuId, MenuRegistry, registerAction2 } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
@@ -16,7 +17,6 @@ import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegis
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import {
 	EMPTY_BROWSER_TAB_URL,
-	createEditorTabInputId,
 	isEditorBrowserTabInput,
 } from 'cs/workbench/browser/parts/editor/editorInput';
 import { getWorkbenchEditorCommandHandlers } from 'cs/workbench/browser/editorCommands';
@@ -37,7 +37,7 @@ interface IBrowserQuickPickItem extends IQuickPickItem {
 }
 
 function createBrowserResource(): URI {
-	return BrowserViewUri.forId(createEditorTabInputId('browser'));
+	return BrowserViewUri.forId(generateUuid());
 }
 
 function getEditorCommandHandlers() {
