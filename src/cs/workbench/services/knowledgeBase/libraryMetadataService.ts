@@ -4,7 +4,11 @@ import type {
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
+import {
+  getFetchArticleAuthorNames,
+  getFetchArticleSourceUrl,
+} from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 
 export async function syncLibraryMetadataFromArticle({
   enabled,
@@ -15,14 +19,8 @@ export async function syncLibraryMetadataFromArticle({
   enabled: boolean;
   invokeDesktop: ElectronInvoke;
   article: Pick<
-    Article,
-    | 'title'
-    | 'doi'
-    | 'authors'
-    | 'journalTitle'
-    | 'publishedAt'
-    | 'sourceUrl'
-    | 'sourceId'
+	FetchArticle,
+	'title' | 'doi' | 'authors' | 'publication' | 'publishedAt' | 'sourceUri' | 'articleListSourceId'
   >;
   onDocumentUpserted?: (document: LibraryDocumentSummary) => void;
 }) {
@@ -35,13 +33,12 @@ export async function syncLibraryMetadataFromArticle({
     {
       articleTitle: article.title,
       doi: typeof article.doi === 'string' ? article.doi : null,
-      authors: article.authors,
-      journalTitle:
-        typeof article.journalTitle === 'string' ? article.journalTitle : null,
+      authors: getFetchArticleAuthorNames(article),
+      journalTitle: article.publication.title,
       publishedAt:
         typeof article.publishedAt === 'string' ? article.publishedAt : null,
-      sourceUrl: typeof article.sourceUrl === 'string' ? article.sourceUrl : null,
-      sourceId: typeof article.sourceId === 'string' ? article.sourceId : null,
+      sourceUrl: getFetchArticleSourceUrl(article),
+      sourceId: article.articleListSourceId ?? null,
     },
   );
 

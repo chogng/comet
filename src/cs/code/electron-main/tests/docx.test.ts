@@ -4,24 +4,32 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import type { Article } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { URI } from 'cs/base/common/uri';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { exportArticlesToDocxFile } from 'cs/code/electron-main/document/docx';
 import { buildDocxBuffer } from 'cs/code/electron-main/document/docxPackage';
 
-function createArticle(fetchOrder: number, title: string): Article {
+function createArticle(fetchOrder: number, title: string): FetchArticle {
 	return {
+		sourceUri: URI.parse(`https://example.com/articles/${fetchOrder}`).toJSON(),
 		title,
-		articleType: 'Research Article',
-		doi: null,
+		publication: {
+			id: 'exampleJournal',
+			title: 'Example Journal',
+			publisherId: 'example',
+			publisherTitle: 'Example Publisher',
+		},
+		articleKind: 'researchArticle',
+		sourceArticleType: 'Research Article',
 		authors: [],
-		abstractText: 'Abstract',
-		descriptionText: null,
+		abstract: 'Abstract',
+		sections: [],
+		figures: [],
+		references: [],
 		publishedAt: '2026-07-04',
-		sourceUrl: `https://example.com/articles/${fetchOrder}`,
 		fetchedAt: `2026-07-04T00:00:0${fetchOrder}.000Z`,
 		fetchOrder,
-		sourceId: 'example',
-		journalTitle: 'Example Journal',
+		articleListSourceId: 'example',
 	};
 }
 

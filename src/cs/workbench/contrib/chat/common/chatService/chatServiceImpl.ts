@@ -6,11 +6,14 @@
 import { EventEmitter } from 'cs/base/common/event';
 import type {
   AgentMessagePayload,
-  Article,
   MainAgentPatchProposal,
   RagAnswerResult,
   RunMainAgentTurnResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import {
+  getFetchArticleSourceUrl,
+} from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import {
   applyWritingEditorEdits,
   collectWritingEditorTextUnits,
@@ -119,18 +122,18 @@ function createLinkedTextLabel(label: string): string {
   return label.replace(/\]/g, ')');
 }
 
-function createArticleMessageLine(article: Article): string {
+function createArticleMessageLine(article: FetchArticle): string {
   const description = [
     article.publishedAt,
-    article.articleType,
+    article.sourceArticleType,
   ].filter(Boolean).join(' | ');
-  const linkedTitle = `[${createLinkedTextLabel(article.title)}](${article.sourceUrl})`;
+  const linkedTitle = `[${createLinkedTextLabel(article.title)}](${getFetchArticleSourceUrl(article)})`;
   return description ? `- ${linkedTitle} - ${description}` : `- ${linkedTitle}`;
 }
 
 function createArticleMessageContent(
   sourceLabel: string,
-  articles: readonly Article[],
+  articles: readonly FetchArticle[],
 ): string {
   return [
     sourceLabel,
@@ -224,11 +227,11 @@ function areStringArraysEqual(
 
 function appendSelectedArticleUrls(
   previousUrls: string[],
-  articles: readonly Article[],
+  articles: readonly FetchArticle[],
 ) {
   const nextUrls = [...previousUrls];
   for (const article of articles) {
-    const sourceUrl = normalizeUrl(article.sourceUrl);
+    const sourceUrl = normalizeUrl(getFetchArticleSourceUrl(article));
     if (sourceUrl && !nextUrls.includes(sourceUrl)) {
       nextUrls.push(sourceUrl);
     }
@@ -417,7 +420,7 @@ export class ChatService implements IChatService {
   };
 
   readonly insertArticles = (
-    articles: readonly Article[],
+    articles: readonly FetchArticle[],
     sourceLabel: string,
   ) => {
     if (articles.length === 0) {
@@ -679,7 +682,7 @@ export class ChatService implements IChatService {
       const draftDocument = context.getDraftDocument?.() ?? null;
       const activeDraftStableSelectionTarget =
         context.getActiveDraftStableSelectionTarget?.() ?? null;
-      const nextResult = await context.invokeDesktop("run_main_agent_turn", {
+      const nextResult = await context.invokeDesktop<RunMainAgentTurnResult>("run_main_agent_turn", {
         messages: [...activeConversation.messages, userMessage]
           .filter(isAgentTextMessage)
           .map((message) => toAgentMessage(message)),
@@ -742,11 +745,11 @@ export class ChatService implements IChatService {
     }
   };
 
-  readonly collectArticleBatch = (articles: readonly Article[]): Article[] => {
+  readonly collectArticleBatch = (articles: readonly FetchArticle[]): FetchArticle[] => {
     const articlesByUrl = new Map(
-      articles.map((article) => [normalizeUrl(article.sourceUrl), article] as const),
+      articles.map((article) => [normalizeUrl(getFetchArticleSourceUrl(article)), article] as const),
     );
-    const result: Article[] = [];
+    const result: FetchArticle[] = [];
     const seenUrls = new Set<string>();
 
     for (const message of this.snapshot.messages) {
@@ -778,16 +781,16 @@ export class ChatService implements IChatService {
   };
 
   readonly collectSelectedArticleBatch = (
-    articles: readonly Article[],
-  ): Article[] => {
+    articles: readonly FetchArticle[],
+  ): FetchArticle[] => {
     const articleBatch = this.collectArticleBatch(articles);
     const articlesByUrl = new Map(
-      articleBatch.map((article) => [normalizeUrl(article.sourceUrl), article] as const),
+      articleBatch.map((article) => [normalizeUrl(getFetchArticleSourceUrl(article)), article] as const),
     );
 
     return this.snapshot.selectedArticleUrlsInOrder
       .map((sourceUrl) => articlesByUrl.get(sourceUrl))
-      .filter((article): article is Article => Boolean(article));
+      .filter((article): article is FetchArticle => Boolean(article));
   };
 
   readonly isArticleSelected = (href: string) => {

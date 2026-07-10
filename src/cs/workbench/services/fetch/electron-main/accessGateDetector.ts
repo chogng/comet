@@ -5,13 +5,13 @@
 
 import { load } from 'cheerio';
 
-import type { FetchAccessGateReason } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { FetchAccessGateReason } from 'cs/base/parts/sandbox/common/fetchArticleProof';
 import { cleanText } from 'cs/base/common/strings';
-import type { FetchTargetDocument } from 'cs/workbench/services/fetch/electron-main/fetchTargetService';
+import type { FetchPageSnapshot } from 'cs/workbench/services/fetch/electron-main/fetchPageSession';
 
 export interface AccessGateDetectionContext {
 	readonly bodyFound: boolean;
-	readonly listingContentFound?: boolean;
+	readonly articleListContentFound?: boolean;
 }
 
 function hasCloudflareChallenge(
@@ -64,9 +64,15 @@ function isLoginPage(
 	return hasAuthenticationPath || (includeEmbeddedForm && hasPasswordForm);
 }
 
-function hasSubscriptionGate($: ReturnType<typeof load>) {
+function hasExplicitSubscriptionGate($: ReturnType<typeof load>) {
 	return $(
-		'[data-test*="paywall" i], [data-testid*="paywall" i], [class~="paywall" i], [id*="paywall" i], [data-test*="access-denied" i], [data-test*="subscription" i], .article-access-options, .purchase-access, .access-denied-content',
+		'[data-test*="paywall" i], [data-testid*="paywall" i], [class~="paywall" i], [id*="paywall" i], [data-test*="access-denied" i], [data-test="access-wall"], .app-access-wall, .purchase-access, .access-denied-content',
+	).length > 0;
+}
+
+function hasSubscriptionOffer($: ReturnType<typeof load>) {
+	return $(
+		'[data-test*="subscription" i], .article-access-options',
 	).length > 0;
 }
 
@@ -77,7 +83,7 @@ function hasManualChallenge($: ReturnType<typeof load>) {
 }
 
 export function detectAccessGate(
-	document: FetchTargetDocument,
+	document: FetchPageSnapshot,
 	context: AccessGateDetectionContext,
 ): FetchAccessGateReason | null {
 	const $ = load(document.html);
@@ -86,19 +92,20 @@ export function detectAccessGate(
 	if (!context.bodyFound && hasCloudflareChallenge($, documentText)) {
 		return 'cloudflareChallenge';
 	}
-	if (!context.bodyFound && isInstitutionalSsoPage($, document.finalUrl)) {
+	const finalUrl = document.finalUri.toString(true);
+	if (!context.bodyFound && isInstitutionalSsoPage($, finalUrl)) {
 		return 'institutionalSso';
 	}
 	if (
 		!context.bodyFound &&
-		isLoginPage($, document.finalUrl, !context.listingContentFound)
+		isLoginPage($, finalUrl, !context.articleListContentFound)
 	) {
 		return 'loginRequired';
 	}
-	if (!context.bodyFound && hasSubscriptionGate($)) {
+	if (hasExplicitSubscriptionGate($) || (!context.bodyFound && hasSubscriptionOffer($))) {
 		return 'subscriptionGate';
 	}
-	if (!context.bodyFound && !context.listingContentFound && hasManualChallenge($)) {
+	if (!context.bodyFound && hasManualChallenge($)) {
 		return 'manualInteractionRequired';
 	}
 

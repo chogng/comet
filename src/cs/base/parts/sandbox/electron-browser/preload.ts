@@ -476,9 +476,9 @@ const electronAPI: ElectronAPI = {
 				targetMode: 'background',
 				targetId: null,
 				articleProof: null,
-				publisherId: 'other',
-				publisherAccessRisk: 'standard',
-        extractorId: null,
+				siteId: null,
+				articleListSourceId: null,
+				parserId: null,
         paginationStopped: false,
         paginationStopReason: null,
       });

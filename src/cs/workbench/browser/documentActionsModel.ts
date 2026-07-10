@@ -1,15 +1,20 @@
 import { EventEmitter } from 'cs/base/common/event';
 import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import type { CancellationToken } from 'cs/base/common/cancellation';
+import { URI } from 'cs/base/common/uri';
 import type {
   LibraryDocumentSummary,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import {
+  getFetchArticleAuthorNames,
+  getFetchArticleSourceUrl,
+} from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 import {
   parseAppErrorData,
 } from 'cs/base/parts/sandbox/common/appError';
@@ -49,9 +54,9 @@ export type DocumentActionsControllerContext = {
   pdfFileNameUseSelectionOrder: boolean;
   isSelectionModeEnabled: boolean;
   selectedArticleOrderLookup: ReadonlyMap<string, number>;
-  exportableArticles: Article[];
+  exportableArticles: FetchArticle[];
   onOpenEditor: EditorOpenHandler;
-  onExportArticleSummaries: (articles: readonly Article[], translateSummaries: boolean) => void | Promise<void>;
+  onExportArticleSummaries: (articles: readonly FetchArticle[], translateSummaries: boolean) => void | Promise<void>;
   activeDraftExport: {
     title: string;
     document: WritingEditorDocument;
@@ -76,20 +81,10 @@ type SharedPdfDownloadOptions = {
   token?: CancellationToken;
 };
 
-type DownloadableArticle = Pick<
-  Article,
-  | 'title'
-  | 'sourceUrl'
-  | 'fetchedAt'
-  | 'journalTitle'
-  | 'doi'
-  | 'authors'
-  | 'publishedAt'
-  | 'sourceId'
-> & { fetchOrder: number | null };
+type DownloadableArticle = Omit<FetchArticle, 'fetchOrder'> & { fetchOrder: number | null };
 
-function getArticleSelectionKey(article: Pick<Article, 'sourceUrl' | 'fetchedAt'>) {
-  return `${article.sourceUrl}::${article.fetchedAt}`;
+function getArticleSelectionKey(article: Pick<FetchArticle, 'sourceUri' | 'fetchedAt'>) {
+  return `${getFetchArticleSourceUrl(article)}::${article.fetchedAt}`;
 }
 
 function isPositiveInteger(value: unknown): value is number {
@@ -97,7 +92,7 @@ function isPositiveInteger(value: unknown): value is number {
 }
 
 function getDownloadArticleOrder(
-  article: Pick<Article, 'sourceUrl' | 'fetchedAt'> & { fetchOrder: number | null },
+  article: Pick<FetchArticle, 'sourceUri' | 'fetchedAt'> & { fetchOrder: number | null },
   pdfFileNameUseSelectionOrder: boolean,
   isSelectionModeEnabled: boolean,
   selectedArticleOrderLookup: ReadonlyMap<string, number>,
@@ -111,7 +106,7 @@ function getDownloadArticleOrder(
 }
 
 function buildDownloadArticleTitle(
-  article: Pick<Article, 'title' | 'sourceUrl' | 'fetchedAt'> & { fetchOrder: number | null },
+  article: Pick<FetchArticle, 'title' | 'sourceUri' | 'fetchedAt'> & { fetchOrder: number | null },
   pdfFileNameUseSelectionOrder: boolean,
   isSelectionModeEnabled: boolean,
   selectedArticleOrderLookup: ReadonlyMap<string, number>,
@@ -232,7 +227,8 @@ export class DocumentActionsController {
       onLibraryDocumentUpserted,
     } = this.context;
 
-    const preparedPdfDownload = preparePdfDownload(article.sourceUrl, article.doi);
+    const sourceUrl = getFetchArticleSourceUrl(article);
+    const preparedPdfDownload = preparePdfDownload(sourceUrl, article.doi);
     if (!preparedPdfDownload) {
       if (options.token?.isCancellationRequested) {
         return;
@@ -254,10 +250,7 @@ export class DocumentActionsController {
         await syncLibraryMetadataFromArticle({
           enabled: knowledgeBaseEnabled,
           invokeDesktop,
-          article: {
-            ...article,
-            sourceUrl: preparedPdfDownload.normalizedSourceUrl,
-          },
+          article: { ...article, sourceUri: URI.parse(preparedPdfDownload.normalizedSourceUrl).toJSON() },
           onDocumentUpserted: onLibraryDocumentUpserted,
         });
       } catch (metadataError) {
@@ -290,10 +283,10 @@ export class DocumentActionsController {
           isSelectionModeEnabled,
           selectedArticleOrderLookup,
         ),
-        authors: article.authors,
+        authors: getFetchArticleAuthorNames(article),
         publishedAt: typeof article.publishedAt === 'string' ? article.publishedAt : null,
-        sourceId: typeof article.sourceId === 'string' ? article.sourceId : null,
-        journalTitle: typeof article.journalTitle === 'string' ? article.journalTitle : undefined,
+        sourceId: article.articleListSourceId ?? null,
+        journalTitle: article.publication.title,
         customDownloadDir: resolvePreferredDirectory(
           knowledgeBaseEnabled ? knowledgeBasePdfDownloadDir : pdfDownloadDir,
         ),
@@ -334,8 +327,9 @@ export class DocumentActionsController {
     }
   };
 
-  readonly handleOpenArticleDetails = async (article: Article) => {
-    if (!article.sourceUrl) {
+  readonly handleOpenArticleDetails = async (article: FetchArticle) => {
+    const sourceUrl = getFetchArticleSourceUrl(article);
+    if (!sourceUrl) {
       return;
     }
 
@@ -345,13 +339,13 @@ export class DocumentActionsController {
       resource: BrowserViewUri.forId(generateUuid()),
       options: {
         viewState: {
-          url: article.sourceUrl,
+          url: sourceUrl,
         },
       },
     });
   };
 
-  readonly handleDownloadAllArticles = async (articles: readonly Article[]) => {
+  readonly handleDownloadAllArticles = async (articles: readonly FetchArticle[]) => {
     if (this.currentDownloadTask) {
       this.cancelDownloadAllArticles();
       return;

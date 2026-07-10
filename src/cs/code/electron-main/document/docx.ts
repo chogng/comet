@@ -3,11 +3,12 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
 import type {
-  Article,
   DocumentTranslationProgress,
   DocxExportResult,
   ExportArticlesDocxPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { getFetchArticleBodyText } from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import { defaultDocxExportConfig } from 'cs/code/electron-main/document/docxConfig';
 import { CancellationError, isCancellationError } from 'cs/base/common/errors';
@@ -106,37 +107,21 @@ function pageBreakXml() {
 type JournalArticleGroup = {
   journalTitle: string;
   articles: Array<{
-    article: Article;
+    article: FetchArticle;
     exportOrder: number;
   }>;
 };
 
-function resolveJournalTitle(article: Article, locale: SupportedLocale) {
-  const explicitTitle = cleanText(article.journalTitle);
-  if (explicitTitle) return explicitTitle;
-
-  const sourceId = cleanText(article.sourceId);
-  if (sourceId) return sourceId;
-
-  const sourceUrl = cleanText(article.sourceUrl);
-  if (sourceUrl) {
-    try {
-      const hostname = cleanText(new URL(sourceUrl).hostname.replace(/^www\./i, ''));
-      if (hostname) return hostname;
-    } catch {
-      // Ignore malformed URL and fall back to uncategorized label.
-    }
-  }
-
-  return resolveDocxExportCopy(locale).uncategorizedJournal;
+function resolveJournalTitle(article: FetchArticle) {
+  return cleanText(article.publication.title);
 }
 
-function groupArticlesByJournal(articles: Article[], locale: SupportedLocale): JournalArticleGroup[] {
+function groupArticlesByJournal(articles: FetchArticle[]): JournalArticleGroup[] {
   const groups: JournalArticleGroup[] = [];
   const groupIndexByTitle = new Map<string, number>();
 
   articles.forEach((article, index) => {
-    const journalTitle = resolveJournalTitle(article, locale);
+    const journalTitle = resolveJournalTitle(article);
     const normalizedKey = journalTitle.toLowerCase();
     const existingIndex = groupIndexByTitle.get(normalizedKey);
     const groupArticle = {
@@ -203,15 +188,15 @@ function createDocxTranslationFailedError(error: unknown, filePath: string) {
 }
 
 function articleParagraphsXml(
-  article: Article,
+  article: FetchArticle,
   indexInJournal: number,
   exportOrder: number,
   locale: SupportedLocale,
 ) {
   const copy = resolveDocxExportCopy(locale);
   const title = cleanText(article.title) || copy.untitled;
-  const descriptionLines = normalizeLines(article.descriptionText);
-  const abstractLines = normalizeLines(article.abstractText);
+  const descriptionLines = normalizeLines(getFetchArticleBodyText(article));
+  const abstractLines = normalizeLines(article.abstract);
   const contentLines =
     descriptionLines.length > 0
       ? descriptionLines
@@ -245,9 +230,9 @@ function articleParagraphsXml(
   return paragraphs.join('');
 }
 
-function buildDocumentXml(articles: Article[], locale: SupportedLocale) {
+function buildDocumentXml(articles: FetchArticle[], locale: SupportedLocale) {
   const page = docxConfig.page;
-  const journalGroups = groupArticlesByJournal(articles, locale);
+  const journalGroups = groupArticlesByJournal(articles);
   const bodyParts: string[] = [];
 
   journalGroups.forEach((group, groupIndex) => {
@@ -292,7 +277,7 @@ function buildDocumentXml(articles: Article[], locale: SupportedLocale) {
 }
 
 
-function buildDocxBuffer(articles: Article[], locale: SupportedLocale) {
+function buildDocxBuffer(articles: FetchArticle[], locale: SupportedLocale) {
   return buildDocxArchiveBuffer({
     documentXml: buildDocumentXml(articles, locale),
     coreTitle: 'Comet Studio Batch Export',
@@ -303,7 +288,7 @@ function pad(value: number) {
   return String(value).padStart(2, '0');
 }
 
-function resolveSingleJournalDocxFileStem(articles: Article[], locale: SupportedLocale) {
+function resolveSingleJournalDocxFileStem(articles: FetchArticle[], locale: SupportedLocale) {
   if (articles.length === 0) {
     return '';
   }
@@ -311,7 +296,7 @@ function resolveSingleJournalDocxFileStem(articles: Article[], locale: Supported
   const uncategorized = resolveDocxExportCopy(locale).uncategorizedJournal.toLowerCase();
   const uniqueJournalTitles = new Map<string, string>();
   for (const article of articles) {
-    const journalTitle = resolveJournalTitle(article, locale);
+    const journalTitle = resolveJournalTitle(article);
     const normalizedTitle = journalTitle.toLowerCase();
 
     if (!uniqueJournalTitles.has(normalizedTitle)) {
@@ -337,7 +322,7 @@ export function buildBatchDocxFileName(
     locale = 'en',
     referenceDate = new Date(),
   }: {
-    articles?: Article[];
+    articles?: FetchArticle[];
     locale?: SupportedLocale;
     referenceDate?: Date;
   } = {},
@@ -439,7 +424,7 @@ export async function exportArticlesToDocxFile({
   locale = 'en',
   signal,
 }: {
-  articles: Article[];
+  articles: FetchArticle[];
   filePath: string;
   locale?: SupportedLocale;
   signal?: AbortSignal;

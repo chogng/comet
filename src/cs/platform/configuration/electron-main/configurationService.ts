@@ -116,7 +116,6 @@ function createDefaultUserJournalSourceOverrides() {
   return getDefaultBatchSources().map((source): JournalSourceOverride => ({
     url: source.url,
     journalTitle: source.journalTitle,
-    preferredExtractorId: source.preferredExtractorId ?? null,
 		fetchTarget: source.fetchTarget,
   }));
 }
@@ -135,7 +134,6 @@ function mergeJournalSourceOverrides(
     merged.set(url, {
       url,
       journalTitle: cleanText(source.journalTitle),
-      preferredExtractorId: source.preferredExtractorId ?? null,
 			fetchTarget: source.fetchTarget === 'webContentsView' ? 'webContentsView' : 'background',
     });
   }
@@ -474,12 +472,6 @@ function normalizeJournalSourceOverrides(value: unknown): JournalSourceOverride[
     const journalTitle = cleanText(record.journalTitle);
     if (journalTitle) {
       override.journalTitle = journalTitle;
-    }
-    const preferredExtractorId = cleanText(record.preferredExtractorId);
-    if (preferredExtractorId) {
-      override.preferredExtractorId = preferredExtractorId;
-    } else if (record.preferredExtractorId === null) {
-      override.preferredExtractorId = null;
     }
 
     deduped.set(url, override);

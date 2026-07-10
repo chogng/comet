@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
-import type { Article } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 
 export interface HistoryStore {
-  saveFetchedArticles(items: Article[]): Promise<void>;
+  saveFetchedArticles(items: FetchArticle[]): Promise<void>;
 }
 
 function isNotFoundError(error: unknown) {
@@ -36,7 +37,7 @@ async function writeJson(filePath: string, value: unknown) {
 
 export function createHistoryStore(historyFile: string): HistoryStore {
   async function readHistory() {
-    const payload = await readJson<Article[]>(historyFile);
+    const payload = await readJson<FetchArticle[]>(historyFile);
     if (payload === undefined) {
       return [];
     }
@@ -48,7 +49,7 @@ export function createHistoryStore(historyFile: string): HistoryStore {
     return payload;
   }
 
-  async function writeHistory(items: Article[]) {
+  async function writeHistory(items: FetchArticle[]) {
     await writeJson(historyFile, items);
   }
 
@@ -63,10 +64,10 @@ export function createHistoryStore(historyFile: string): HistoryStore {
       const previous = await readHistory();
       const next = [...items, ...previous];
       const seen = new Set<string>();
-      const deduped: Article[] = [];
+      const deduped: FetchArticle[] = [];
 
       for (const item of next) {
-        const key = `${item.sourceId ?? ''}::${item.sourceUrl}::${item.fetchedAt}`;
+        const key = `${item.articleListSourceId ?? ''}::${getFetchArticleSourceUrl(item)}::${item.fetchedAt}`;
         if (seen.has(key)) continue;
         seen.add(key);
         deduped.push(item);

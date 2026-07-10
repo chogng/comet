@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { JSDOM } from 'jsdom';
 
+import { URI } from 'cs/base/common/uri';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type {
   AgentMessagePayload,
-  Article,
   LlmSettings,
   RagAnswerResult,
   RagSettings,
@@ -136,7 +137,7 @@ function createAssistantContext(
     invokeDesktop: createInvokeDesktop(capture),
     ui: locales[locale],
     isKnowledgeBaseModeEnabled: false,
-    articles: [] as Article[],
+    articles: [] as FetchArticle[],
     llmSettings: {
       activeProvider: 'glm',
       providers: {
@@ -382,34 +383,50 @@ test('assistant inserts fetched article links without sending them as agent text
     payloads: [],
   };
   const assistantModel = createChatService(createAssistantContext('en', capture));
-  const articles: Article[] = [
+  const articles: FetchArticle[] = [
     {
+      sourceUri: URI.parse('https://www.science.org/doi/example').toJSON(),
       title: 'Fetched article',
-      articleType: 'Research Article',
       doi: '10.1126/example',
-      authors: ['Ada Lovelace'],
-      abstractText: 'Abstract',
-      descriptionText: 'Description',
+      publication: {
+        id: 'science',
+        title: 'Science',
+        publisherId: 'science',
+        publisherTitle: 'AAAS',
+      },
+      articleKind: 'researchArticle',
+      sourceArticleType: 'Research Article',
+      authors: [{ name: 'Ada Lovelace' }],
+      abstract: 'Abstract',
+      sections: [{ content: 'Description' }],
+      figures: [],
+      references: [],
       publishedAt: '2026-07-03',
-      sourceUrl: 'https://www.science.org/doi/example',
       fetchedAt: '2026-07-04T00:00:00.000Z',
       fetchOrder: 1,
-      sourceId: 'science',
-      journalTitle: 'Science',
+      articleListSourceId: 'science.current',
     },
     {
+      sourceUri: URI.parse('https://www.science.org/doi/example-2').toJSON(),
       title: 'Second fetched article',
-      articleType: 'Research Article',
       doi: '10.1126/example-2',
-      authors: ['Grace Hopper'],
-      abstractText: 'Second abstract',
-      descriptionText: 'Second description',
+      publication: {
+        id: 'science',
+        title: 'Science',
+        publisherId: 'science',
+        publisherTitle: 'AAAS',
+      },
+      articleKind: 'researchArticle',
+      sourceArticleType: 'Research Article',
+      authors: [{ name: 'Grace Hopper' }],
+      abstract: 'Second abstract',
+      sections: [{ content: 'Second description' }],
+      figures: [],
+      references: [],
       publishedAt: '2026-07-04',
-      sourceUrl: 'https://www.science.org/doi/example-2',
       fetchedAt: '2026-07-04T00:00:01.000Z',
       fetchOrder: 2,
-      sourceId: 'science',
-      journalTitle: 'Science',
+      articleListSourceId: 'science.current',
     },
   ];
 

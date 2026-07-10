@@ -1,6 +1,5 @@
 import type {
   AppSettings,
-  Article,
   LlmSettings,
   MainAgentAvailableToolId,
   MainAgentPatchProposal,
@@ -13,6 +12,8 @@ import type {
   WritingEditorStableSelectionTargetPayload,
   WritingEditorTextUnitPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type {
   AgentMessage,
   AgentMessagePart,
@@ -72,7 +73,7 @@ type MainAgentContext = {
   editorSelection: WritingEditorStableSelectionTargetPayload | null;
   editorDocument: WritingEditorDocumentPayload | null;
   editorTextUnits: WritingEditorTextUnitPayload[];
-  articles: Article[];
+  articles: FetchArticle[];
   llmSettings: LlmSettings;
   ragSettings: RagSettings;
 };
@@ -442,7 +443,7 @@ function normalizeAvailableTools(
 }
 
 function resolveToolArticles(
-  allArticles: Article[],
+  allArticles: FetchArticle[],
   selectedSourceUrls?: string[],
 ) {
   if (!Array.isArray(selectedSourceUrls) || selectedSourceUrls.length === 0) {
@@ -455,7 +456,7 @@ function resolveToolArticles(
       .filter(Boolean),
   );
 
-  return allArticles.filter((article) => selectedUrlSet.has(cleanText(article.sourceUrl)));
+  return allArticles.filter((article) => selectedUrlSet.has(cleanText(getFetchArticleSourceUrl(article))));
 }
 
 function createGetSelectionContextTool(

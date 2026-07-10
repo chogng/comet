@@ -1,37 +1,12 @@
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import type { UriComponents } from 'cs/base/common/uri';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticleProof } from 'cs/base/parts/sandbox/common/fetchArticleProof';
 
 export type Locale = 'zh' | 'en';
 export type AppTheme = 'light' | 'dark' | 'system';
 export type AppStartupLayout = 'agent' | 'flow';
 export type ThemeColorCustomizations = Record<string, string>;
-
-export interface ArticleFigure {
-  id: string | null;
-  title: string | null;
-  captionText: string | null;
-  imageUrl: string | null;
-  fullSizeUrl: string | null;
-}
-
-export interface Article {
-  title: string;
-  articleType: string | null;
-  doi: string | null;
-  authors: string[];
-  abstractText: string | null;
-  descriptionText: string | null;
-  figures?: ArticleFigure[];
-  publishedAt: string | null;
-  sourceUrl: string;
-  fetchedAt: string;
-  fetchOrder: number;
-  sourceId?: string | null;
-  journalTitle?: string | null;
-  archiveHtmlPath?: string | null;
-  archiveTextPath?: string | null;
-  archivePdfPath?: string | null;
-}
 
 export interface TranslationCacheRecord {
   key: string;
@@ -42,14 +17,12 @@ export interface BatchSource {
   id: string;
   url: string;
   journalTitle: string;
-  preferredExtractorId?: string | null;
 	fetchTarget: FetchTargetPreference;
 }
 
 export interface JournalSourceOverride {
   url: string;
   journalTitle?: string;
-  preferredExtractorId?: string | null;
 	fetchTarget?: FetchTargetPreference;
 }
 
@@ -123,7 +96,6 @@ export interface FetchBatchSource {
   sourceId?: string;
   pageUrl?: string;
   journalTitle?: string;
-  preferredExtractorId?: string | null;
 	fetchTarget?: FetchTargetPreference;
 }
 
@@ -173,32 +145,13 @@ export interface WindowState {
   isFullscreen: boolean;
 }
 
-export type ArticlePublisherId = 'nature' | 'science' | 'acs' | 'wiley' | 'other';
-export type PublisherAccessRisk = 'standard' | 'elevated';
-
 export type FetchTargetPreference = 'background' | 'webContentsView';
-
-export type FetchAccessGateReason =
-	| 'cloudflareChallenge'
-	| 'loginRequired'
-	| 'institutionalSso'
-	| 'subscriptionGate'
-	| 'manualInteractionRequired';
-
-export interface ArticlePageProof {
-	readonly canonicalUrlMatched: boolean;
-	readonly titleFound: boolean;
-	readonly authorsFound: boolean;
-	readonly abstractFound: boolean;
-	readonly bodyFound: boolean;
-	readonly accessGate: FetchAccessGateReason | null;
-}
 
 export type FetchFailureReason =
 	| 'loadTimeout'
 	| 'navigationFailed'
 	| 'articleProofFailed'
-	| 'listingProofFailed'
+	| 'articleListProofFailed'
 	| 'rateLimited'
 	| 'accessDenied'
 	| 'javascriptError';
@@ -208,9 +161,9 @@ interface FetchStatusBase {
 	readonly sourceId: string;
 	readonly pageUrl: string;
 	readonly pageNumber: number;
-	readonly publisherId: ArticlePublisherId;
-	readonly publisherAccessRisk: PublisherAccessRisk;
-	readonly extractorId: string | null;
+	readonly siteId: string | null;
+	readonly articleListSourceId: string | null;
+	readonly parserId: string | null;
 	readonly paginationStopped?: boolean;
 	readonly paginationStopReason?: string | null;
 }
@@ -220,26 +173,26 @@ export type FetchStatus =
 		readonly phase: 'loading';
 		readonly targetMode: FetchTargetPreference;
 		readonly targetId: string | null;
-		readonly articleProof: ArticlePageProof | null;
+		readonly articleProof: FetchArticleProof | null;
 	}
 	| FetchStatusBase & {
 		readonly phase: 'targetRequired';
 		readonly targetMode: 'webContentsView';
 		readonly targetId: string;
-		readonly articleProof: ArticlePageProof | null;
+		readonly articleProof: FetchArticleProof | null;
 	}
 	| FetchStatusBase & {
 		readonly phase: 'targetReady';
 		readonly targetMode: 'webContentsView';
 		readonly targetId: string;
-		readonly articleProof: ArticlePageProof | null;
+		readonly articleProof: FetchArticleProof | null;
 	}
 	| FetchStatusBase & {
 		readonly phase: 'failed';
 		readonly targetMode: FetchTargetPreference;
 		readonly targetId: string | null;
 		readonly failureReason: FetchFailureReason;
-		readonly articleProof: ArticlePageProof | null;
+		readonly articleProof: FetchArticleProof | null;
 	};
 
 export type DocumentTranslationProgressPhase = 'started' | 'batch' | 'completed' | 'failed';
@@ -283,15 +236,15 @@ export interface WebContentHtmlArchiveResult {
   htmlPath: string;
   textPath: string;
   pdfPath: string | null;
+  title: string;
   sourceUrl: string;
   pdfSourceUrl: string | null;
   extractedText: string;
-  article: Article;
 }
 
 export interface ExportArticlesDocxPayload {
   taskId?: string;
-  articles?: Article[];
+  articles?: FetchArticle[];
   preferredDirectory?: string | null;
   targetFilePath?: string | null;
   translateSummaries?: boolean;
@@ -340,7 +293,7 @@ export interface SaveSettingsPayload {
 }
 
 export interface SaveFetchedArticlesPayload {
-  items?: Article[];
+  items?: FetchArticle[];
 }
 
 export interface LoadTranslationCachePayload {
@@ -604,7 +557,7 @@ export interface RagEvidenceItem {
 export interface RagAnswerArticlesPayload {
   question?: string;
   writingContext?: string | null;
-  articles?: Article[];
+  articles?: FetchArticle[];
   llm?: LlmSettings;
   rag?: RagSettings;
 }
@@ -651,7 +604,7 @@ export interface RunMainAgentTurnPayload {
   editorSelection?: WritingEditorStableSelectionTargetPayload | null;
   editorDocument?: WritingEditorDocumentPayload | null;
   editorTextUnits?: WritingEditorTextUnitPayload[];
-  articles?: Article[];
+  articles?: FetchArticle[];
   llm?: LlmSettings;
   rag?: RagSettings;
   availableTools?: MainAgentAvailableToolId[];
@@ -712,8 +665,8 @@ export interface AppCommandPayloadMap {
 }
 
 export interface AppCommandResultMap {
-  fetch_article: Article;
-  fetch_latest_articles: Article[];
+  fetch_article: FetchArticle;
+  fetch_latest_articles: FetchArticle[];
   clear_web_cache: boolean;
   clear_web_cookies: boolean;
   load_settings: AppSettings;

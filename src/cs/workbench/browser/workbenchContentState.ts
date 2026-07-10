@@ -1,5 +1,6 @@
 import { EventEmitter } from 'cs/base/common/event';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
+import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { buildDefaultBatchDateRange } from 'cs/workbench/common/dateRange';
 
 export type WorkbenchContentStateSnapshot = {
@@ -9,7 +10,7 @@ export type WorkbenchContentStateSnapshot = {
 };
 
 export type WorkbenchContentDerivedState = {
-  filteredArticles: Article[];
+  filteredArticles: FetchArticle[];
   hasData: boolean;
 };
 
@@ -90,7 +91,7 @@ export function resetWorkbenchContentFilters() {
 
 export function selectFilteredArticles(
   snapshot: WorkbenchContentStateSnapshot,
-  articles: ReadonlyArray<Article>,
+  articles: ReadonlyArray<FetchArticle>,
 ) {
   const journal = snapshot.filterJournal.trim().toLowerCase();
   if (!journal) {
@@ -99,20 +100,20 @@ export function selectFilteredArticles(
 
   return articles.filter(
     (article) =>
-      article.sourceUrl.toLowerCase().includes(journal) ||
-      String(article.journalTitle ?? '')
+      getFetchArticleSourceUrl(article).toLowerCase().includes(journal) ||
+      article.publication.title
         .toLowerCase()
         .includes(journal),
   );
 }
 
-export function selectHasData(articles: ReadonlyArray<Article>) {
+export function selectHasData(articles: ReadonlyArray<FetchArticle>) {
   return articles.length > 0;
 }
 
 export function selectWorkbenchContentDerivedState(
   snapshot: WorkbenchContentStateSnapshot,
-  articles: ReadonlyArray<Article>,
+  articles: ReadonlyArray<FetchArticle>,
 ): WorkbenchContentDerivedState {
   return {
     filteredArticles: selectFilteredArticles(snapshot, articles),

@@ -1,5 +1,4 @@
 import type {
-  LibraryDocumentSummary,
   WebContentHtmlArchiveResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
@@ -9,8 +8,6 @@ import type { LocaleMessages } from 'language/locales';
 import type { EditorPartBrowserToolbarActions } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
 import type { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
-import { syncLibraryMetadataFromArticle } from 'cs/workbench/services/knowledgeBase/libraryMetadataService';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 type EditorBrowserToolbarActionHandlers = EditorPartBrowserToolbarActions;
@@ -26,8 +23,6 @@ type CreateEditorBrowserToolbarActionsParams = {
   setWebUrl: (value: string) => void;
   ui: LocaleMessages;
   webContentNavigationModel: WebContentNavigationModel;
-  onArchiveArticle: (article: Article) => void;
-  onLibraryDocumentUpserted?: (document: LibraryDocumentSummary) => void;
   onLibraryUpdated?: () => void | Promise<void>;
   onOpenAddressBarSourceMenu: () => void;
   onToolbarAddressSubmit: () => void;
@@ -74,8 +69,6 @@ export function createEditorBrowserToolbarActions(
     setWebUrl,
     ui,
     webContentNavigationModel,
-    onArchiveArticle,
-    onLibraryDocumentUpserted,
     onLibraryUpdated,
     onOpenAddressBarSourceMenu,
     onToolbarAddressSubmit,
@@ -113,20 +106,8 @@ export function createEditorBrowserToolbarActions(
             pageTitle: browserPageTitle || null,
           },
         );
-        onArchiveArticle(result.article);
-
-        if (knowledgeBaseEnabled) {
-          try {
-            await syncLibraryMetadataFromArticle({
-              enabled: knowledgeBaseEnabled,
-              invokeDesktop,
-              article: result.article,
-              onDocumentUpserted: onLibraryDocumentUpserted,
-            });
-            void onLibraryUpdated?.();
-          } catch (metadataError) {
-            console.error('Failed to sync archived page metadata to the library.', metadataError);
-          }
+        if (knowledgeBaseEnabled && result.pdfPath) {
+          void onLibraryUpdated?.();
         }
 
         notificationService.info(

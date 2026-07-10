@@ -42,9 +42,9 @@ function resolveFetchStopText(fetchStatus: FetchStatus, ui: LocaleMessages) {
 	if (!fetchStatus.paginationStopped) {
 		return '';
 	}
-	return fetchStatus.paginationStopReason === 'tail_dates_before_start_date'
+	return fetchStatus.paginationStopReason === 'articleListTailDatesBeforeStartDate'
 		? ui.statusFetchStopTailDate
-		: ui.statusFetchStopExtractor;
+		: ui.statusFetchStopSourcePolicy;
 }
 
 function resolveFetchStopTitle(fetchStatus: FetchStatus, ui: LocaleMessages) {
@@ -54,7 +54,7 @@ function resolveFetchStopTitle(fetchStatus: FetchStatus, ui: LocaleMessages) {
 	return formatLocaleMessage(ui.statusFetchStopTitle, {
 		source: fetchStatus.sourceId || 'source',
 		page: fetchStatus.pageNumber,
-		reason: fetchStatus.paginationStopReason || 'extractor_policy',
+		reason: fetchStatus.paginationStopReason || 'articleListSourcePolicy',
 	});
 }
 

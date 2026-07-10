@@ -6,79 +6,163 @@
 import { load } from 'cheerio';
 
 import type { DateRange } from 'cs/base/common/date';
+import type { URI } from 'cs/base/common/uri';
 import type {
-  ListingCandidateExtraction,
-} from 'cs/platform/browserView/common/listingCandidates';
-export {
-  normalizeListingCandidateSeed,
-  normalizeListingCandidateSeeds,
-} from 'cs/platform/browserView/common/listingCandidates';
-export type {
-  ListingCandidateExtraction,
-  ListingCandidateSeed,
-} from 'cs/platform/browserView/common/listingCandidates';
+	FetchArticleAuthor,
+	FetchArticleCandidate,
+	FetchArticleFigure,
+	FetchArticleReference,
+	FetchArticleSection,
+} from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticleKind } from 'cs/base/parts/sandbox/common/fetchArticleKind';
+import type { FetchArticlePublication } from 'cs/base/parts/sandbox/common/fetchPublication';
+import type { FetchStructureEvidence } from 'cs/workbench/services/fetch/common/fetchDiagnostics';
 
-export type ListingDom = ReturnType<typeof load>;
+export type FetchPageDom = ReturnType<typeof load>;
 
-export type ListingCandidateExtractorContext = {
-  page: URL;
-  pageUrl: string;
-  $: ListingDom;
-};
+export interface FetchArticleIdentity {
+	readonly articleId: string;
+	readonly pageFamilyHint: string;
+	readonly doiHint?: string;
+	readonly publicationHint?: FetchArticlePublication;
+}
 
-export type ListingPaginationContext = ListingCandidateExtractorContext & {
-  seenPageUrls?: ReadonlySet<string>;
-};
+export interface FetchArticleListParserContext {
+	readonly sourceUri: URI;
+	readonly articleListSourceId: string;
+	readonly $: FetchPageDom;
+}
 
-export type ListingExtractorFetchHtmlOptions = {
-  timeoutMs?: number;
-  traceId?: string;
-  stage?: string;
-  signal?: AbortSignal;
-};
+export interface FetchArticleListParserProof {
+	readonly parserId: string;
+	readonly evidence: readonly FetchStructureEvidence[];
+}
 
-export type ListingExtractorFetchHtml = (
-  url: string,
-  options?: ListingExtractorFetchHtmlOptions,
-) => Promise<string>;
+export interface FetchArticleListParseResult {
+	readonly candidates: readonly FetchArticleCandidate[];
+	readonly diagnostics?: Readonly<Record<string, unknown>>;
+}
 
-export type ListingCandidateRefinementContext = ListingCandidateExtractorContext & {
-  pageNumber: number;
-  traceId: string;
-  dateRange: DateRange;
-  extraction: ListingCandidateExtraction;
-  fetchHtml: ListingExtractorFetchHtml;
-};
+export interface FetchArticleListParser {
+	readonly id: string;
+	match(context: FetchArticleListParserContext): FetchArticleListParserProof | undefined;
+	parse(
+		context: FetchArticleListParserContext,
+		proof: FetchArticleListParserProof,
+	): FetchArticleListParseResult;
+}
 
-export type ListingPaginationStopEvaluation = {
-  shouldStop: boolean;
-  reason?: string;
-  diagnostics?: Record<string, unknown>;
-};
+export interface FetchArticleListPaginationContext extends FetchArticleListParserContext {
+	readonly seenPageUris: ReadonlySet<string>;
+}
 
-export type ListingPaginationStopContext = {
-  page: URL;
-  pageUrl: string;
-  pageNumber: number;
-  dateRange: DateRange;
-  extraction: ListingCandidateExtraction;
-};
+export interface FetchArticleListPaginationStopContext {
+	readonly sourceUri: URI;
+	readonly pageNumber: number;
+	readonly dateRange: DateRange;
+	readonly candidates: readonly FetchArticleCandidate[];
+}
 
-export interface ListingCandidateExtractor {
-  id: string;
-  matches(page: URL): boolean;
-  extract(context: ListingCandidateExtractorContext): ListingCandidateExtraction | null;
-  findNextPageUrl?(context: ListingPaginationContext): string | null;
-  refineExtraction?(
-    context: ListingCandidateRefinementContext,
-  ): Promise<ListingCandidateExtraction | null> | ListingCandidateExtraction | null;
-  evaluatePaginationStop?(
-    context: ListingPaginationStopContext,
-  ): ListingPaginationStopEvaluation | null;
+export interface FetchArticleListPaginationStopEvaluation {
+	readonly shouldStop: boolean;
+	readonly reason?: string;
+	readonly diagnostics?: Readonly<Record<string, unknown>>;
+}
+
+export type FetchArticleListPaginationPolicy =
+	| { readonly kind: 'none' }
+	| {
+		readonly kind: 'nextLink';
+		findNextPageUri(context: FetchArticleListPaginationContext): URI | undefined;
+		evaluateStop?(
+			context: FetchArticleListPaginationStopContext,
+		): FetchArticleListPaginationStopEvaluation | undefined;
+	};
+
+export interface FetchArticleListEnrichmentContext {
+	readonly sourceUri: URI;
+	readonly pageNumber: number;
+	readonly traceId: string;
+	readonly candidates: readonly FetchArticleCandidate[];
+	readonly signal?: AbortSignal;
+	readonly fetchText: (
+		uri: URI,
+		options: { readonly timeoutMs: number; readonly stage: string; readonly signal?: AbortSignal },
+	) => Promise<string>;
+}
+
+export interface FetchArticleListEnrichmentPolicy {
+	readonly kind: string;
+	enrich(
+		context: FetchArticleListEnrichmentContext,
+	): Promise<readonly FetchArticleCandidate[]>;
+}
+
+export interface FetchArticleListSource {
+	readonly id: string;
+	readonly allowedParserIds: readonly string[];
+	matchUri(uri: URI): boolean;
+	matchLoadedUri(requestedUri: URI, finalUri: URI): boolean;
+	readonly pagination: FetchArticleListPaginationPolicy;
+	readonly enrichment?: FetchArticleListEnrichmentPolicy;
+}
+
+export interface FetchArticleDetailParserContext {
+	readonly sourceUri: URI;
+	readonly finalUri: URI;
+	readonly $: FetchPageDom;
+	readonly identity?: FetchArticleIdentity;
+}
+
+export interface FetchArticleDetailParserProof {
+	readonly parserId: string;
+	readonly evidence: readonly FetchStructureEvidence[];
+}
+
+export interface FetchArticleDraft {
+	readonly sourceUri: URI;
+	readonly canonicalUri?: URI;
+	readonly publisherArticleId?: string;
+	readonly doi?: string;
+	readonly doiSource?: string;
+	readonly title?: string;
+	readonly publication?: FetchArticlePublication;
+	readonly articleKind?: FetchArticleKind;
+	readonly sourceArticleType?: string;
+	readonly authors: readonly FetchArticleAuthor[];
+	readonly abstract?: string;
+	readonly sections: readonly FetchArticleSection[];
+	readonly figures: readonly FetchArticleFigure[];
+	readonly references: readonly FetchArticleReference[];
+	readonly publishedAt?: string;
+	readonly receivedAt?: string;
+	readonly acceptedAt?: string;
+	readonly classificationEvidence: readonly string[];
+}
+
+export interface FetchArticleDetailParser {
+	readonly id: string;
+	match(context: FetchArticleDetailParserContext): FetchArticleDetailParserProof | undefined;
+	parse(
+		context: FetchArticleDetailParserContext,
+		proof: FetchArticleDetailParserProof,
+	): FetchArticleDraft;
+}
+
+export interface FetchPageAcquisitionPolicy {
+	readonly settleMs: number;
 }
 
 export interface FetchSiteProvider {
-	id: string;
-	matches(page: URL): boolean;
-	readonly listingCandidateExtractors: readonly ListingCandidateExtractor[];
+	readonly id: string;
+	readonly acquisitionPolicy: FetchPageAcquisitionPolicy;
+	readonly articleListSources: readonly FetchArticleListSource[];
+	readonly articleListParsers: readonly FetchArticleListParser[];
+	readonly articleDetailParsers: readonly FetchArticleDetailParser[];
+	matchUri(uri: URI): boolean;
+	normalizeArticleAuthority?(authority: string): string;
+	resolveArticleIdentity?(uri: URI): FetchArticleIdentity | undefined;
+	resolveArticleDetailParserIds?(
+		identity: FetchArticleIdentity,
+	): readonly string[] | undefined;
 }

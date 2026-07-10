@@ -1,12 +1,12 @@
 import { EventEmitter } from "cs/base/common/event";
-import type { Article } from "cs/workbench/services/fetch/browser/articleFetch";
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 
 export type SelectionModePhase = "off" | "multi" | "all";
 
 export type WorkbenchSessionSnapshot = {
   webUrl: string;
   fetchSeedUrl: string;
-  articles: Article[];
+  articles: FetchArticle[];
   selectionModePhase: SelectionModePhase;
   selectedArticleKeysInOrder: string[];
 };
@@ -64,7 +64,7 @@ export function setWorkbenchFetchSeedUrl(
 }
 
 export function setWorkbenchArticles(
-  articles: Article[] | ((current: Article[]) => Article[]),
+  articles: FetchArticle[] | ((current: FetchArticle[]) => FetchArticle[]),
 ) {
   updateWorkbenchSessionState((current) => {
     const nextArticles =

@@ -46,7 +46,6 @@ async function withConfigurationService(
 type TestJournalSourceOverride = {
   url?: string;
   journalTitle?: string;
-  preferredExtractorId?: string | null;
 	fetchTarget?: 'background' | 'webContentsView';
 };
 
@@ -83,7 +82,6 @@ test('configuration service reads journal source overrides from user settings js
           {
             url: 'https://example.com/latest',
             journalTitle: 'Example Journal',
-            preferredExtractorId: 'example-latest',
 						fetchTarget: 'webContentsView',
           },
         ],
@@ -99,7 +97,6 @@ test('configuration service reads journal source overrides from user settings js
         (source) =>
           source.url === 'https://example.com/latest' &&
           source.journalTitle === 'Example Journal' &&
-					source.preferredExtractorId === 'example-latest' &&
 					source.fetchTarget === 'webContentsView',
       ),
     );
@@ -107,8 +104,7 @@ test('configuration service reads journal source overrides from user settings js
       settings.journalSourceOverrides.some(
         (source) =>
           source.url === 'https://www.science.org/toc/science/current' &&
-          source.journalTitle === 'Science' &&
-          source.preferredExtractorId === 'science-current-news-in-depth-research-articles',
+          source.journalTitle === 'Science',
       ),
     );
   });
@@ -150,7 +146,6 @@ test('configuration service keeps user settings json separate from saved app set
           JSON.stringify({
             url: 'https://example.com/latest',
             journalTitle: 'Example Journal',
-            preferredExtractorId: null,
 						fetchTarget: 'background',
           }),
       ),
@@ -162,7 +157,6 @@ test('configuration service keeps user settings json separate from saved app set
           JSON.stringify({
             url: 'https://www.science.org/toc/science/current',
             journalTitle: 'Science',
-            preferredExtractorId: 'science-current-news-in-depth-research-articles',
 						fetchTarget: 'background',
           }),
       ),
@@ -288,7 +282,6 @@ test('configuration service creates user settings json with editable journal tit
     assert.deepEqual(sourceOverrides[0], {
       url: 'https://www.science.org/toc/science/current',
       journalTitle: 'Science',
-      preferredExtractorId: 'science-current-news-in-depth-research-articles',
 		fetchTarget: 'background',
     });
   });
@@ -304,7 +297,6 @@ test('configuration service migrates legacy journal source overrides into user s
           {
             url: 'https://legacy.example/latest',
             journalTitle: 'Legacy Journal',
-            preferredExtractorId: 'legacy-latest',
           },
         ],
       }),
@@ -323,7 +315,6 @@ test('configuration service migrates legacy journal source overrides into user s
           JSON.stringify({
             url: 'https://legacy.example/latest',
             journalTitle: 'Legacy Journal',
-            preferredExtractorId: 'legacy-latest',
 						fetchTarget: 'background',
           }),
       ),
@@ -332,8 +323,7 @@ test('configuration service migrates legacy journal source overrides into user s
       settings.journalSourceOverrides.some(
         (source) =>
           source.url === 'https://legacy.example/latest' &&
-          source.journalTitle === 'Legacy Journal' &&
-          source.preferredExtractorId === 'legacy-latest',
+          source.journalTitle === 'Legacy Journal',
       ),
     );
   });

@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-  Article as DesktopArticle,
 	FetchTargetPreference,
   JournalSourceOverride,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
@@ -27,20 +27,17 @@ import {
   type FetchErrorData,
 } from 'cs/workbench/services/fetch/common/fetchErrors';
 
-export type Article = DesktopArticle;
-
 const manualAddressBarSourceId = 'source-manual-address-bar';
 
 type BatchFetchSource = {
   sourceId: string;
   pageUrl: string;
   journalTitle: string;
-  preferredExtractorId: string | null;
 	fetchTarget: FetchTargetPreference;
 };
 
 export type FetchLatestArticlesBatchResult =
-  | { ok: true; articles: Article[] }
+  | { ok: true; articles: FetchArticle[] }
   | { ok: false; reason: 'desktop_unsupported' }
   | {
       ok: false;
@@ -80,13 +77,11 @@ function toBatchFetchSourceCandidate(
   const {
     articleListId,
     defaultJournalTitle,
-    preferredExtractorId: matchedPreferredExtractorId,
 		fetchTarget: matchedFetchTarget,
   } = resolveSourceTableMetadata(normalizedUrl, sourceTable);
 
   const sourceId = ensureBatchSourceId(source.id || articleListId, index);
   const journalTitle = source.journalTitle.trim() || defaultJournalTitle || sourceId;
-  const preferredExtractorId = matchedPreferredExtractorId || null;
 	const fetchTarget = matchedFetchTarget;
 
   return {
@@ -95,7 +90,6 @@ function toBatchFetchSourceCandidate(
       sourceId,
       pageUrl: normalizedUrl,
       journalTitle,
-      preferredExtractorId,
 			fetchTarget,
     },
   };
@@ -103,7 +97,6 @@ function toBatchFetchSourceCandidate(
 
 function canImproveBatchFetchSource(existing: BatchFetchSource, candidate: BatchFetchSource) {
   return (!existing.journalTitle && candidate.journalTitle) ||
-		(!existing.preferredExtractorId && candidate.preferredExtractorId) ||
 		existing.fetchTarget !== candidate.fetchTarget;
 }
 
@@ -128,7 +121,6 @@ export function prepareBatchSourcesForFetch(
         deduped.set(dedupeKey, {
           ...existing,
           journalTitle: candidate.journalTitle,
-          preferredExtractorId: candidate.preferredExtractorId,
 					fetchTarget: candidate.fetchTarget,
         });
       }
@@ -161,7 +153,6 @@ function createBatchSourceFromJournalOverride(
     id: `override-${index + 1}`,
     url: override.url,
     journalTitle: override.journalTitle?.trim() ?? '',
-    preferredExtractorId: override.preferredExtractorId ?? null,
 		fetchTarget: override.fetchTarget ?? 'background',
   };
 }
@@ -201,7 +192,7 @@ export async function fetchLatestArticlesBatch({
   }
 
   try {
-    const articles = await invokeDesktop<Article[]>('fetch_latest_articles', {
+    const articles = await invokeDesktop<FetchArticle[]>('fetch_latest_articles', {
 		requestId,
       sources,
       startDate: startDate || null,

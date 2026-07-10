@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type {
-	Article,
 	LlmSettings,
 	MainAgentPatchProposal,
 	RagAnswerResult,
 	RagSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
 import type {
 	WritingEditorDocument,
@@ -26,7 +26,7 @@ export type ChatServiceContext = {
 	invokeDesktop: ElectronInvoke;
 	ui: LocaleMessages;
 	isKnowledgeBaseModeEnabled: boolean;
-	articles: Article[];
+	articles: FetchArticle[];
 	llmSettings: LlmSettings;
 	ragSettings: RagSettings;
 	fallbackWritingContext?: string;
@@ -91,12 +91,12 @@ export interface IChatService {
 	activateConversation(conversationId: string): void;
 	closeConversation(conversationId: string): void;
 	insertContextMessage(title: string, content: string): void;
-	insertArticles(articles: readonly Article[], sourceLabel: string): void;
+	insertArticles(articles: readonly FetchArticle[], sourceLabel: string): void;
 	insertArticleFetchEmptyResult(sourceLabel: string, message: string): void;
 	applyPatch(messageId: string): void;
 	ask(): Promise<void>;
-	collectArticleBatch(articles: readonly Article[]): Article[];
-	collectSelectedArticleBatch(articles: readonly Article[]): Article[];
+	collectArticleBatch(articles: readonly FetchArticle[]): FetchArticle[];
+	collectSelectedArticleBatch(articles: readonly FetchArticle[]): FetchArticle[];
 	isArticleSelected(href: string): boolean;
 	toggleArticleSelected(href: string): void;
 }

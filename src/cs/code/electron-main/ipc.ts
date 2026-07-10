@@ -73,8 +73,8 @@ import {
 import { exportArticlesDocx } from 'cs/code/electron-main/document/docx';
 import { exportEditorDocx } from 'cs/code/electron-main/document/editorDocx';
 import { archiveWebContentHtml } from 'cs/code/electron-main/document/webContentHtmlArchive';
-import { ConfiguredFetchTargetProvider } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
-import { FetchTargetService } from 'cs/workbench/services/fetch/electron-main/fetchTargetService';
+import { FetchPageSessionService } from 'cs/workbench/services/fetch/electron-main/fetchPageSessionService';
+import { FetchService } from 'cs/workbench/services/fetch/electron-main/fetchService';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import { resolveActiveWebContentSnapshotHtml } from 'cs/code/electron-main/pdf/webContentSnapshot';
 import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
@@ -118,8 +118,7 @@ const browserViewMainService = browserViewIpcDisposables.add(
 const browserViewGroupMainService = browserViewIpcDisposables.add(
   new BrowserViewGroupMainService(browserViewMainService),
 );
-const fetchTargetService = new FetchTargetService(browserViewMainService);
-const fetchTargetProvider = new ConfiguredFetchTargetProvider(fetchTargetService);
+const fetchService = new FetchService(new FetchPageSessionService(browserViewMainService));
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -180,7 +179,7 @@ async function invokeCommand<TCommand extends AppCommand>(
 				{
 					requestId: fetchArticlePayload.requestId,
 					fetchTarget: fetchArticlePayload.fetchTarget,
-					targetProvider: fetchTargetProvider,
+					fetchService,
 					onFetchStatus: status => emitToRenderer?.(FETCH_STATUS_CHANNEL, status),
 				},
 			) as Promise<AppCommandResultMap[TCommand]>;
@@ -193,7 +192,7 @@ async function invokeCommand<TCommand extends AppCommand>(
           storage,
           {
 				requestId: fetchLatestPayload.requestId,
-				targetProvider: fetchTargetProvider,
+				fetchService,
             onFetchStatus: (status) => {
               emitToRenderer?.(FETCH_STATUS_CHANNEL, status);
             },

@@ -320,7 +320,6 @@ export class SettingsModel {
 			nextOverrides.push({
 				url: normalizedUrl,
 				journalTitle: normalizedJournalTitle || undefined,
-				preferredExtractorId: previousOverride?.preferredExtractorId ?? null,
 				fetchTarget: previousOverride?.fetchTarget ?? 'background',
 			});
 
@@ -354,7 +353,6 @@ export class SettingsModel {
 			nextOverrides.push({
 				url: normalizedUrl,
 				journalTitle: previousOverride?.journalTitle,
-				preferredExtractorId: previousOverride?.preferredExtractorId ?? null,
 				fetchTarget,
 			});
 

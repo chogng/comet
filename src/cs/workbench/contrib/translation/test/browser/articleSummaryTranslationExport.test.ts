@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { URI } from 'cs/base/common/uri';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
 import type {
   DocumentTranslationProgress,
@@ -18,7 +20,6 @@ import {
   type NotificationMessage,
 } from 'cs/platform/notification/common/notification';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createArticleSummaryTranslationExportController: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').createArticleSummaryTranslationExportController;
@@ -41,16 +42,23 @@ test.after(() => {
   cleanupDomEnvironment = null;
 });
 
-function createArticle(overrides: Partial<Article> = {}): Article {
+function createArticle(overrides: Partial<FetchArticle> = {}): FetchArticle {
   return {
     title: 'Example article',
-    articleType: 'News',
-    doi: null,
-    authors: [],
-    abstractText: 'An abstract',
-    descriptionText: null,
-    publishedAt: null,
-    sourceUrl: 'https://example.com/article',
+    publication: {
+      id: 'example-journal',
+      title: 'Example Journal',
+      publisherId: 'example-publisher',
+      publisherTitle: 'Example Publisher',
+    },
+    articleKind: 'news',
+    sourceArticleType: 'News',
+    authors: [{ name: 'Example Author' }],
+    abstract: 'An abstract',
+    sections: [],
+    figures: [],
+    references: [],
+    sourceUri: URI.parse('https://example.com/article').toJSON(),
     fetchedAt: '2026-07-04T00:00:00.000Z',
     fetchOrder: 1,
     ...overrides,

@@ -3,7 +3,6 @@ import { promises as fs } from 'node:fs';
 import { load } from 'cheerio';
 
 import type {
-  Article,
   WebContentHtmlArchivePayload,
   WebContentHtmlArchiveResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -12,7 +11,6 @@ import { normalizeUrl } from 'cs/base/common/url';
 import { appError } from 'cs/base/parts/sandbox/common/appError';
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
 import { BrowserViewErrorCode } from 'cs/platform/browserView/common/browserView';
-import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import { resolveActiveWebContentSnapshotHtml } from 'cs/code/electron-main/pdf/webContentSnapshot';
@@ -25,19 +23,25 @@ function resolveSourceHostLabel(sourceUrl: string) {
   }
 }
 
-function buildArchiveStem(article: Pick<Article, 'title' | 'sourceUrl'>) {
+interface ArchivePageMetadata {
+  readonly title: string;
+  readonly sourceUrl: string;
+  readonly archivedAt: string;
+}
+
+function buildArchiveStem(page: Pick<ArchivePageMetadata, 'title' | 'sourceUrl'>) {
   return (
-    buildPdfDirectoryName(article.title) ||
-    buildPdfDirectoryName(resolveSourceHostLabel(article.sourceUrl)) ||
+    buildPdfDirectoryName(page.title) ||
+    buildPdfDirectoryName(resolveSourceHostLabel(page.sourceUrl)) ||
     `page-${Date.now()}`
   );
 }
 
 async function resolveUniqueArchiveDirectory(
   archiveRootDirectory: string,
-  article: Pick<Article, 'title' | 'sourceUrl'>,
+  page: Pick<ArchivePageMetadata, 'title' | 'sourceUrl'>,
 ) {
-  const baseStem = buildArchiveStem(article);
+  const baseStem = buildArchiveStem(page);
 
   let attempt = 0;
   while (true) {
@@ -125,16 +129,11 @@ function extractStructuredTextFromHtml(html: string) {
   return normalizeTextBlock(root.text());
 }
 
-function buildArchiveTextContent(article: Article, extractedText: string) {
+function buildArchiveTextContent(page: ArchivePageMetadata, extractedText: string) {
   const lines = [
-    `Title: ${cleanText(article.title) || 'Untitled'}`,
-    `Source URL: ${cleanText(article.sourceUrl) || '-'}`,
-    article.publishedAt ? `Published At: ${cleanText(article.publishedAt)}` : '',
-    article.doi ? `DOI: ${cleanText(article.doi)}` : '',
-    article.authors.length > 0 ? `Authors: ${article.authors.map((author) => cleanText(author)).filter(Boolean).join(', ')}` : '',
-    article.journalTitle ? `Journal: ${cleanText(article.journalTitle)}` : '',
-    article.sourceId ? `Source ID: ${cleanText(article.sourceId)}` : '',
-    `Archived At: ${cleanText(article.fetchedAt) || new Date().toISOString()}`,
+    `Title: ${cleanText(page.title) || 'Untitled'}`,
+    `Source URL: ${cleanText(page.sourceUrl) || '-'}`,
+    `Archived At: ${page.archivedAt}`,
     '',
     extractedText,
   ].filter(Boolean);
@@ -142,15 +141,21 @@ function buildArchiveTextContent(article: Article, extractedText: string) {
   return `${lines.join('\n')}\n`;
 }
 
-function resolveArchiveArticle(
+function resolveArchivePageMetadata(
   sourceUrl: string,
   snapshotHtml: string,
-  pageTitle: string,
-): Article {
-  const parsedArticle = buildArticleFromHtml(sourceUrl, snapshotHtml);
+  pageTitle: string | null | undefined,
+): ArchivePageMetadata {
+  const $ = load(snapshotHtml);
+  const title = cleanText(pageTitle) ||
+    cleanText($('title').first().text()) ||
+    cleanText($('h1').first().text()) ||
+    resolveSourceHostLabel(sourceUrl) ||
+    'Untitled';
   return {
-    ...parsedArticle,
-    title: cleanText(parsedArticle.title) || pageTitle || sourceUrl,
+    title,
+    sourceUrl,
+    archivedAt: new Date().toISOString(),
   };
 }
 
@@ -167,13 +172,7 @@ export async function archiveWebContentHtml(
     throw appError(BrowserViewErrorCode.PreviewNotReady);
   }
 
-  const fallbackTitle = cleanText(payload.pageTitle);
-  const baseArticle = resolveArchiveArticle(sourceUrl, snapshotHtml, fallbackTitle);
-  const extractedText = normalizeTextBlock(
-    cleanText(baseArticle.descriptionText) ||
-      cleanText(baseArticle.abstractText) ||
-      extractStructuredTextFromHtml(snapshotHtml),
-  );
+  const page = resolveArchivePageMetadata(sourceUrl, snapshotHtml, payload.pageTitle);
   const archiveRootDirectory = path.join(
     defaultDownloadDirectory,
     'Comet Studio Archive',
@@ -181,22 +180,13 @@ export async function archiveWebContentHtml(
   await fs.mkdir(archiveRootDirectory, { recursive: true });
   const archiveEntry = await resolveUniqueArchiveDirectory(
     archiveRootDirectory,
-    baseArticle,
+    page,
   );
 
   const htmlPath = path.join(archiveEntry.directoryPath, `${archiveEntry.stem}.html`);
   const textPath = path.join(archiveEntry.directoryPath, `${archiveEntry.stem}.txt`);
-  const article: Article = {
-    ...baseArticle,
-    descriptionText: cleanText(baseArticle.descriptionText) || extractedText || null,
-    archiveHtmlPath: htmlPath,
-    archiveTextPath: textPath,
-    archivePdfPath: null,
-  };
   const normalizedExtractedText = normalizeTextBlock(
-    cleanText(article.descriptionText) ||
-      cleanText(article.abstractText) ||
-      extractStructuredTextFromHtml(snapshotHtml),
+    extractStructuredTextFromHtml(snapshotHtml),
   );
   await fs.writeFile(
     htmlPath,
@@ -205,7 +195,7 @@ export async function archiveWebContentHtml(
   );
   await fs.writeFile(
     textPath,
-    buildArchiveTextContent(article, normalizedExtractedText),
+    buildArchiveTextContent(page, normalizedExtractedText),
     'utf8',
   );
 
@@ -215,12 +205,7 @@ export async function archiveWebContentHtml(
     const pdfResult = await previewDownloadPdf(
       {
         pageUrl: sourceUrl,
-        articleTitle: article.title,
-        doi: article.doi ?? undefined,
-        authors: article.authors,
-        publishedAt: article.publishedAt,
-        sourceId: article.sourceId ?? null,
-        journalTitle: '',
+        articleTitle: page.title,
         customDownloadDir: archiveEntry.directoryPath,
       },
       defaultDownloadDirectory,
@@ -229,17 +214,16 @@ export async function archiveWebContentHtml(
     pdfPath = cleanText(pdfResult.filePath) || null;
     pdfSourceUrl = cleanText(pdfResult.sourceUrl) || null;
     if (pdfPath) {
-      article.archivePdfPath = pdfPath;
       try {
         await storage.registerLibraryDocument({
           filePath: pdfPath,
           sourceUrl,
-          sourceId: article.sourceId ?? null,
-          doi: article.doi ?? null,
-          articleTitle: article.title,
-          authors: article.authors,
-          journalTitle: article.journalTitle ?? null,
-          publishedAt: article.publishedAt ?? null,
+          sourceId: null,
+          doi: null,
+          articleTitle: page.title,
+          authors: [],
+          journalTitle: null,
+          publishedAt: null,
         });
       } catch (registrationError) {
         console.error('Failed to register archived PDF in the library.', registrationError);
@@ -249,16 +233,14 @@ export async function archiveWebContentHtml(
     console.error('Failed to generate companion PDF for archived web content.', pdfError);
   }
 
-  await storage.saveFetchedArticles([article]);
-
   return {
     filePath: htmlPath,
     htmlPath,
     textPath,
     pdfPath,
+    title: page.title,
     sourceUrl,
     pdfSourceUrl,
     extractedText: normalizedExtractedText,
-    article,
   };
 }

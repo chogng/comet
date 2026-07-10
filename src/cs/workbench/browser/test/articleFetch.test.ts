@@ -13,14 +13,12 @@ test('current URL source metadata can be overridden from settings JSON', () => {
       id: 'builtin',
       url: 'https://example.com/latest',
       journalTitle: 'Built-in title',
-      preferredExtractorId: 'builtin-extractor',
 		fetchTarget: 'background',
     },
     {
       id: 'override-1',
       url: 'https://example.com/latest',
       journalTitle: 'Override title',
-      preferredExtractorId: 'override-extractor',
 		fetchTarget: 'webContentsView',
     },
   ];
@@ -33,6 +31,5 @@ test('current URL source metadata can be overridden from settings JSON', () => {
 
   assert.equal(sources.length, 1);
   assert.equal(sources[0].journalTitle, 'Override title');
-  assert.equal(sources[0].preferredExtractorId, 'override-extractor');
 	assert.equal(sources[0].fetchTarget, 'webContentsView');
 });

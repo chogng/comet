@@ -1,8 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { BrowserWindow } from 'electron';
 import {
-  getWebContentDocumentSnapshot,
-  getWebContentListingCandidateSnapshot,
-  getWebContentState,
+	executeWebContentTargetScript,
+	getWebContentDocumentSnapshot,
+	getWebContentState,
 } from 'cs/platform/browserView/electron-main/browserViewMainService';
 import { createAuxiliaryWindow } from 'cs/platform/windows/electron-main/windows';
 import { RequestErrorCode, isRequestError, requestError } from 'cs/platform/request/common/requestErrors';
@@ -75,49 +80,52 @@ async function tryUseExistingScienceWebContent(pageUrl: string): Promise<Science
 			return null;
 		}
 
-		const [extraction, snapshot] = await Promise.all([
-			getWebContentListingCandidateSnapshot(activeTargetId, {
-				timeoutMs: Math.min(1200, SCIENCE_VALIDATION_POLL_MS * 2),
-			}),
+		const [validationState, snapshot] = await Promise.all([
+			executeWebContentTargetScript<ScienceValidationWindowState>(
+				activeTargetId,
+				SCIENCE_VALIDATION_STATE_SCRIPT,
+				{
+					timeoutMs: Math.min(1200, SCIENCE_VALIDATION_POLL_MS * 2),
+				},
+			),
 			getWebContentDocumentSnapshot(activeTargetId, {
 				timeoutMs: Math.min(1200, SCIENCE_VALIDATION_POLL_MS * 2),
 			}),
 		]);
 
-    const extractionUrl = cleanText(extraction?.webContentUrl);
-    const snapshotUrl = cleanText(snapshot?.url);
-    const matchesExtraction = extractionUrl && matchesScienceComparableUrl(extractionUrl, pageUrl);
-    const matchesSnapshot = snapshotUrl && matchesScienceComparableUrl(snapshotUrl, pageUrl);
-    const html = matchesSnapshot ? String(snapshot?.html ?? '') : '';
-    const title = matchesSnapshot ? extractTitleFromHtml(html) : '';
-    const diagnostics = extraction?.extraction?.diagnostics;
-    const sectionCount =
-      matchesExtraction && diagnostics && typeof diagnostics === 'object'
-        ? Number((diagnostics as Record<string, unknown>).sectionCount) || 0
-        : 0;
+		const validationUrl = cleanText(validationState?.currentUrl);
+		const snapshotUrl = cleanText(snapshot?.url);
+		const matchesValidation = validationUrl && matchesScienceComparableUrl(validationUrl, pageUrl);
+		const matchesSnapshot = snapshotUrl && matchesScienceComparableUrl(snapshotUrl, pageUrl);
+		const html = matchesSnapshot ? String(snapshot?.html ?? '') : '';
+		const title = matchesSnapshot ? extractTitleFromHtml(html) : '';
+		const sectionCount = matchesValidation ? Number(validationState?.sectionCount) || 0 : 0;
+		const isStable = validationState
+			? isScienceValidationStableReadyState(validationState, true)
+			: false;
 
-    if (
-      matchesExtraction &&
-      matchesSnapshot &&
-      sectionCount > 0 &&
-      cleanText(html) &&
-      !isScienceChallengeHtml(html)
-    ) {
-      return {
-        finalUrl: snapshotUrl || extractionUrl || pageUrl,
-        html,
-        sectionCount,
-        title,
-        readyMs: Date.now() - startedAt,
-        navigationMode: 'web-content-existing',
-        source: 'web-content',
-      };
-    }
+		if (
+			matchesValidation &&
+			matchesSnapshot &&
+			isStable &&
+			cleanText(html) &&
+			!isScienceChallengeHtml(html)
+		) {
+			return {
+				finalUrl: snapshotUrl || validationUrl || pageUrl,
+				html,
+				sectionCount,
+				title,
+				readyMs: Date.now() - startedAt,
+				navigationMode: 'web-content-existing',
+				source: 'web-content',
+			};
+		}
 
-    await new Promise((resolve) => setTimeout(resolve, SCIENCE_VALIDATION_POLL_MS));
-  }
+		await new Promise(resolve => setTimeout(resolve, SCIENCE_VALIDATION_POLL_MS));
+	}
 
-  return null;
+	return null;
 }
 
 function applyWindowChrome(window: BrowserWindow) {

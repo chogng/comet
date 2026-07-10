@@ -114,7 +114,8 @@ import {
 import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 
 import { getLocaleMessages } from 'language/i18n';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
+import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
@@ -199,8 +200,8 @@ const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
 };
 
 const AGENT_CHAT_AUTO_MODEL_OPTION_VALUE = 'auto';
-function getArticleSelectionKey(article: Pick<Article, 'sourceUrl' | 'fetchedAt'>) {
-  return `${article.sourceUrl}::${article.fetchedAt}`;
+function getArticleSelectionKey(article: Pick<FetchArticle, 'sourceUri' | 'fetchedAt'>) {
+  return `${getFetchArticleSourceUrl(article)}::${article.fetchedAt}`;
 }
 
 function buildSelectedArticleOrderLookup(
@@ -1432,7 +1433,7 @@ class WorkbenchHost {
         ? []
         : selectedArticleKeysInOrder
             .map((key) => filteredArticleMap.get(key))
-            .filter((article): article is Article => Boolean(article));
+            .filter((article): article is FetchArticle => Boolean(article));
     const activeDraftExport =
       activeEditorTab?.kind === 'draft'
         ? {
@@ -1540,11 +1541,6 @@ class WorkbenchHost {
       setWebUrl: setWorkbenchWebUrl,
       ui,
       webContentNavigationModel: webContentNavigationModelInstance,
-      onArchiveArticle: (article) => {
-        setWorkbenchArticles((currentArticles) => [article, ...currentArticles]);
-      },
-      onLibraryDocumentUpserted:
-        libraryModelInstance.upsertDocumentSummary,
       onLibraryUpdated: refreshLibrary,
       onOpenAddressBarSourceMenu: focusWorkbenchWebUrlInput,
       onToolbarExportDocx: () => {
@@ -1583,7 +1579,7 @@ class WorkbenchHost {
 
     const handleBatchFetchStart = () => {};
 
-    const handleBatchFetchSuccess = (nextArticles: Article[]) => {
+    const handleBatchFetchSuccess = (nextArticles: FetchArticle[]) => {
       setWorkbenchArticles(nextArticles);
     };
 		const handleFetchWebContentsViewRequired = (

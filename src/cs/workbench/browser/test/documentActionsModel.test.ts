@@ -1,7 +1,17 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { URI } from 'cs/base/common/uri';
+import {
+  getFetchArticleSourceUrl,
+  type FetchArticle,
+} from 'cs/base/parts/sandbox/common/fetchArticle';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
@@ -14,7 +24,6 @@ import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import type { DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createDocumentActionsController: typeof import('cs/workbench/browser/documentActionsModel').createDocumentActionsController;
@@ -76,16 +85,23 @@ function createDocumentActionsContext(
   };
 }
 
-function createArticle(overrides: Partial<Article> = {}): Article {
+function createArticle(overrides: Partial<FetchArticle> = {}): FetchArticle {
   return {
     title: 'Example article',
-    articleType: 'News',
-    doi: null,
-    authors: [],
-    abstractText: null,
-    descriptionText: null,
-    publishedAt: null,
-    sourceUrl: 'https://example.com/article',
+    publication: {
+      id: 'example-journal',
+      title: 'Example Journal',
+      publisherId: 'example-publisher',
+      publisherTitle: 'Example Publisher',
+    },
+    articleKind: 'news',
+    sourceArticleType: 'News',
+    authors: [{ name: 'Example Author' }],
+    abstract: 'An abstract',
+    sections: [],
+    figures: [],
+    references: [],
+    sourceUri: URI.parse('https://example.com/article').toJSON(),
     fetchedAt: '2026-07-04T00:00:00.000Z',
     fetchOrder: 1,
     ...overrides,
@@ -115,7 +131,7 @@ test('DocumentActionsController opens article details in a browser tab', async (
   });
 
   await controller.handleOpenArticleDetails(createArticle({
-    sourceUrl: 'https://www.nature.com/articles/example',
+    sourceUri: URI.parse('https://www.nature.com/articles/example').toJSON(),
   }));
 
   controller.dispose();
@@ -130,10 +146,10 @@ test('DocumentActionsController opens article details in a browser tab', async (
 
 test('DocumentActionsController delegates article summary export', async () => {
   const article = createArticle({
-    sourceUrl: 'https://www.nature.com/articles/export',
+    sourceUri: URI.parse('https://www.nature.com/articles/export').toJSON(),
   });
   const delegatedExports: Array<{
-    articles: readonly Article[];
+    articles: readonly FetchArticle[];
     translateSummaries: boolean;
   }> = [];
   const controller = createDocumentActionsController({
@@ -176,7 +192,7 @@ test('DocumentActionsController prefixes PDF titles by fetch order outside selec
 
   await controller.handleSharedPdfDownload(createArticle({
     title: 'Second article',
-    sourceUrl: 'https://example.com/articles/second',
+    sourceUri: URI.parse('https://example.com/articles/second').toJSON(),
     fetchOrder: 2,
   }));
 
@@ -196,12 +212,12 @@ test('DocumentActionsController numbers batch PDF titles by batch order', async 
   await controller.handleDownloadAllArticles([
     createArticle({
       title: 'Checked first',
-      sourceUrl: 'https://example.com/articles/checked-first',
+      sourceUri: URI.parse('https://example.com/articles/checked-first').toJSON(),
       fetchOrder: 7,
     }),
     createArticle({
       title: 'Checked second',
-      sourceUrl: 'https://example.com/articles/checked-second',
+      sourceUri: URI.parse('https://example.com/articles/checked-second').toJSON(),
       fetchOrder: 8,
     }),
   ]);
@@ -240,7 +256,7 @@ test('DocumentActionsController cancels an active batch PDF download task', asyn
   const running = controller.handleDownloadAllArticles([
     createArticle({
       title: 'Cancelable article',
-      sourceUrl: 'https://example.com/articles/cancelable',
+      sourceUri: URI.parse('https://example.com/articles/cancelable').toJSON(),
     }),
   ]);
   await delay(0);
@@ -248,7 +264,7 @@ test('DocumentActionsController cancels an active batch PDF download task', asyn
   await controller.handleDownloadAllArticles([
     createArticle({
       title: 'Cancelable article',
-      sourceUrl: 'https://example.com/articles/cancelable',
+      sourceUri: URI.parse('https://example.com/articles/cancelable').toJSON(),
     }),
   ]);
   await running;
@@ -264,7 +280,7 @@ test('DocumentActionsController uses selected order for PDF titles when enabled 
   const invokeDesktop = createSuccessfulDownloadInvoke(payloads);
   const article = createArticle({
     title: 'Selected article',
-    sourceUrl: 'https://example.com/articles/selected',
+    sourceUri: URI.parse('https://example.com/articles/selected').toJSON(),
     fetchedAt: '2026-07-04T00:00:02.000Z',
     fetchOrder: 7,
   });
@@ -273,7 +289,7 @@ test('DocumentActionsController uses selected order for PDF titles when enabled 
     pdfFileNameUseSelectionOrder: true,
     isSelectionModeEnabled: true,
     selectedArticleOrderLookup: new Map([
-      [`${article.sourceUrl}::${article.fetchedAt}`, 1],
+      [`${getFetchArticleSourceUrl(article)}::${article.fetchedAt}`, 1],
     ]),
   }));
 

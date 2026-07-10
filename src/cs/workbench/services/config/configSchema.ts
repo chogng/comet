@@ -22,7 +22,6 @@ export type ResolvedSourceTableMetadata = {
   lookupKey: string;
   articleListId: string;
   journalTitle: string;
-  preferredExtractorId: string;
   fetchTarget: FetchTargetPreference;
   defaultJournalTitle: string;
 };
@@ -30,7 +29,6 @@ export type ResolvedSourceTableMetadata = {
 type SourceLookupMaps = {
   journalTitleByLookupKey: Map<string, string>;
   articleListIdByLookupKey: Map<string, string>;
-  preferredExtractorIdByLookupKey: Map<string, string>;
 	fetchTargetByLookupKey: Map<string, FetchTargetPreference>;
 };
 
@@ -91,7 +89,6 @@ export function createEmptyBatchSource(): BatchSource {
     id: createRandomBatchSourceId(),
     url: '',
     journalTitle: '',
-    preferredExtractorId: null,
 		fetchTarget: 'background',
   };
 }
@@ -117,11 +114,6 @@ function createLookupMap<T extends string>(table: ReadonlyArray<{ url: string; v
   return map;
 }
 
-function normalizePreferredExtractorId(value: unknown): string | null {
-  const cleaned = String(value ?? '').trim();
-  return cleaned || null;
-}
-
 export function normalizeFetchTargetPreference(value: unknown): FetchTargetPreference {
 	return value === 'webContentsView' ? 'webContentsView' : 'background';
 }
@@ -140,12 +132,6 @@ function createSourceLookupMaps(entries: ReadonlyArray<BatchSource>): SourceLook
         value: item.id.trim(),
       })),
     ),
-    preferredExtractorIdByLookupKey: createLookupMap(
-      entries.map((item) => ({
-        url: item.url,
-        value: String(item.preferredExtractorId ?? '').trim(),
-      })),
-    ),
 		fetchTargetByLookupKey: createLookupMap(
 			entries.map(item => ({
 				url: item.url,
@@ -158,7 +144,6 @@ function createSourceLookupMaps(entries: ReadonlyArray<BatchSource>): SourceLook
 const emptySourceLookupMaps: SourceLookupMaps = {
   journalTitleByLookupKey: new Map<string, string>(),
   articleListIdByLookupKey: new Map<string, string>(),
-  preferredExtractorIdByLookupKey: new Map<string, string>(),
 	fetchTargetByLookupKey: new Map<string, FetchTargetPreference>(),
 };
 
@@ -177,7 +162,6 @@ function sanitizeBatchSourceEntry(value: unknown, index: number): BatchSource {
       id: '',
       url: '',
       journalTitle: '',
-      preferredExtractorId: null,
 			fetchTarget: 'background',
     };
   }
@@ -189,7 +173,6 @@ function sanitizeBatchSourceEntry(value: unknown, index: number): BatchSource {
     id: ensureBatchSourceId(record.id, index),
     url,
     journalTitle: String(record.journalTitle ?? '').trim(),
-    preferredExtractorId: normalizePreferredExtractorId(record.preferredExtractorId),
 		fetchTarget: normalizeFetchTargetPreference(record.fetchTarget),
   };
 }
@@ -208,7 +191,6 @@ function dedupeBatchSources(sources: BatchSource[]): BatchSource[] {
       ...previous,
       id: source.id || previous.id,
       journalTitle: source.journalTitle || previous.journalTitle,
-      preferredExtractorId: source.preferredExtractorId || previous.preferredExtractorId,
 			fetchTarget: source.fetchTarget,
     });
   }
@@ -245,7 +227,6 @@ export function resolveSourceTableMetadata(
       lookupKey: '',
       articleListId: '',
       journalTitle: '',
-      preferredExtractorId: '',
 			fetchTarget: 'background',
       defaultJournalTitle: '',
     };
@@ -254,14 +235,12 @@ export function resolveSourceTableMetadata(
   const lookupMaps = resolveSourceLookupMaps(batchSources);
   const articleListId = lookupMaps.articleListIdByLookupKey.get(lookupKey) ?? '';
   const journalTitle = lookupMaps.journalTitleByLookupKey.get(lookupKey) ?? '';
-  const preferredExtractorId = lookupMaps.preferredExtractorIdByLookupKey.get(lookupKey) ?? '';
 	const fetchTarget = lookupMaps.fetchTargetByLookupKey.get(lookupKey) ?? 'background';
 
   return {
     lookupKey,
     articleListId,
     journalTitle,
-    preferredExtractorId,
 		fetchTarget,
     defaultJournalTitle: journalTitle || articleListId,
   };
@@ -285,7 +264,6 @@ export function getConfigBatchSourceSeed(): BatchSource[] {
     id: source.id,
     url: source.url,
     journalTitle: source.journalTitle,
-    preferredExtractorId: normalizePreferredExtractorId(source.preferredExtractorId),
 		fetchTarget: source.fetchTarget,
   }));
 }

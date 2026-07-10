@@ -16,7 +16,7 @@ import type {
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import {
   canExportArticlesDocx,
@@ -127,7 +127,7 @@ export class ArticleSummaryTranslationExportController {
   };
 
   readonly handleExportArticleSummaries = async (
-    articles: readonly Article[],
+    articles: readonly FetchArticle[],
     translateSummaries: boolean,
   ) => {
     if (this.currentTask) {

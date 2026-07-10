@@ -12,7 +12,6 @@ import type {
 } from 'cs/base/parts/storage/common/storage';
 import { Storage } from 'cs/base/parts/storage/common/storage';
 import type {
-	Article,
 	AppSettings,
 	DeleteLibraryDocumentPayload,
 	IndexDownloadedPdfPayload,
@@ -27,6 +26,7 @@ import type {
 	TranslationCacheRecord,
 	UpsertLibraryDocumentMetadataPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { IStorageService, StorageScope } from 'cs/platform/storage/common/storage';
 import { AbstractStorageService } from 'cs/platform/storage/common/storageService';
@@ -161,7 +161,7 @@ export class WorkbenchStorageService
 		return this.nativeHostService.invoke('save_settings', { settings });
 	}
 
-	async saveFetchedArticles(items: Article[]): Promise<void> {
+	async saveFetchedArticles(items: FetchArticle[]): Promise<void> {
 		await this.nativeHostService.invoke('save_fetched_articles', { items });
 	}
 

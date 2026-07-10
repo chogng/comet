@@ -14,7 +14,7 @@ import {
   resolveBatchFetchSources,
   resolveBatchFetchSourceTable,
 } from 'cs/workbench/services/fetch/browser/articleFetch';
-import type { Article } from 'cs/workbench/services/fetch/browser/articleFetch';
+import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { INITIAL_BATCH_FETCH_MACHINE_STATE, reduceBatchFetchMachineState } from 'cs/workbench/services/fetch/common/batchFetchState';
 import type { BatchFetchMachineEvent, BatchFetchMachineState } from 'cs/workbench/services/fetch/common/batchFetchState';
 import { resolveBatchFetchStatusbarStatus } from 'cs/workbench/contrib/fetch/browser/batchFetchStatusbarStatus';
@@ -39,7 +39,7 @@ export type BatchFetchControllerContext = {
   notificationService: INotificationService;
   ui: LocaleMessages;
   onBeforeFetch: () => void;
-  onFetchSuccess: (articles: Article[]) => void;
+  onFetchSuccess: (articles: FetchArticle[]) => void;
 	onWebContentsViewRequired: (targetId: string, pageUrl: string) => void;
 };
 
@@ -50,7 +50,7 @@ export type BatchFetchControllerSnapshot = BatchFetchMachineState &
   };
 
 export type BatchFetchControllerResult =
-  | { ok: true; articles: Article[] }
+  | { ok: true; articles: FetchArticle[] }
   | { ok: false; reason: 'empty'; message: string }
   | { ok: false };
 

@@ -1,51 +1,75 @@
-import type { Article } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { FetchArticle, FetchArticleSection } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { cleanText } from 'cs/base/common/strings';
 import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
 import type { TranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
 import { translateTextsToChinese } from 'cs/code/electron-main/translation/translationRouter';
 import type { TranslationProgressReporter } from 'cs/code/electron-main/translation/translationRouter';
 
-export type TranslatableArticleField = 'descriptionText' | 'abstractText';
+interface ArticleTranslationUnit {
+  readonly articleIndex: number;
+  readonly field: 'section' | 'abstract';
+  readonly sectionPath?: readonly number[];
+  readonly text: string;
+}
 
-export type PreferredArticleTranslationContent = {
-  field: TranslatableArticleField;
-  text: string;
-};
+function collectSectionTranslationUnits(
+  articleIndex: number,
+  sections: readonly FetchArticleSection[],
+  target: ArticleTranslationUnit[],
+  parentPath: readonly number[] = [],
+): void {
+  sections.forEach((section, sectionIndex) => {
+    const sectionPath = [...parentPath, sectionIndex];
+    const content = cleanText(section.content);
+    if (content) {
+      target.push({ articleIndex, field: 'section', sectionPath, text: content });
+    }
+    if (section.children) {
+      collectSectionTranslationUnits(articleIndex, section.children, target, sectionPath);
+    }
+  });
+}
 
-export function resolvePreferredArticleTranslationContent(
-  article: Article,
-): PreferredArticleTranslationContent | null {
-  const description = cleanText(article.descriptionText);
-  if (description) {
+function sectionTranslationKey(articleIndex: number, sectionPath: readonly number[]): string {
+  return `${articleIndex}:${sectionPath.join('.')}`;
+}
+
+function applySectionTranslations(
+  articleIndex: number,
+  sections: readonly FetchArticleSection[],
+  translations: ReadonlyMap<string, string>,
+  parentPath: readonly number[] = [],
+): readonly FetchArticleSection[] {
+  return sections.map((section, sectionIndex) => {
+    const sectionPath = [...parentPath, sectionIndex];
+    const translatedContent = translations.get(sectionTranslationKey(articleIndex, sectionPath));
     return {
-      field: 'descriptionText',
-      text: description,
+      ...section,
+      content: translatedContent ?? section.content,
+      ...(section.children ? {
+        children: applySectionTranslations(articleIndex, section.children, translations, sectionPath),
+      } : {}),
     };
-  }
-
-  const abstract = cleanText(article.abstractText);
-  if (abstract) {
-    return {
-      field: 'abstractText',
-      text: abstract,
-    };
-  }
-
-  return null;
+  });
 }
 
 export async function translateArticlesToChinese(
-  articles: Article[],
+  articles: FetchArticle[],
   storage: AppSettingsConfigurationService & TranslationCacheStore,
   onProgress?: TranslationProgressReporter,
   signal?: AbortSignal,
-): Promise<Article[]> {
-  const selectedContent = articles
-    .map((article, index) => {
-      const preferredContent = resolvePreferredArticleTranslationContent(article);
-      return preferredContent ? { index, ...preferredContent } : null;
-    })
-    .filter((item): item is { index: number; field: TranslatableArticleField; text: string } => Boolean(item));
+): Promise<FetchArticle[]> {
+  const selectedContent: ArticleTranslationUnit[] = [];
+  articles.forEach((article, articleIndex) => {
+    const firstSectionUnit = selectedContent.length;
+    collectSectionTranslationUnits(articleIndex, article.sections, selectedContent);
+    if (selectedContent.length === firstSectionUnit) {
+      const abstract = cleanText(article.abstract);
+      if (abstract) {
+        selectedContent.push({ articleIndex, field: 'abstract', text: abstract });
+      }
+    }
+  });
 
   if (selectedContent.length === 0) {
     return articles;
@@ -60,14 +84,22 @@ export async function translateArticlesToChinese(
     onProgress,
     signal,
   );
-  const translatedArticles = [...articles];
-
+  const sectionTranslations = new Map<string, string>();
+  const abstractTranslations = new Map<number, string>();
   selectedContent.forEach((item, index) => {
-    translatedArticles[item.index] = {
-      ...translatedArticles[item.index],
-      [item.field]: translatedTexts[index],
-    };
+    if (item.field === 'section' && item.sectionPath) {
+      sectionTranslations.set(
+        sectionTranslationKey(item.articleIndex, item.sectionPath),
+        translatedTexts[index],
+      );
+    } else {
+      abstractTranslations.set(item.articleIndex, translatedTexts[index]);
+    }
   });
 
-  return translatedArticles;
+  return articles.map((article, articleIndex) => ({
+    ...article,
+    sections: applySectionTranslations(articleIndex, article.sections, sectionTranslations),
+    abstract: abstractTranslations.get(articleIndex) ?? article.abstract,
+  }));
 }
