@@ -185,6 +185,10 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	}
 
 	private async showPage(model: IBrowserViewModel): Promise<void> {
+		const didLayout = await this.editor.layoutBrowserContainer();
+		if (!didLayout || this.model !== model || !this.shouldShowPage()) {
+			return;
+		}
 		await model.setVisible(true);
 		if (this.model !== model || !this.shouldShowPage()) {
 			return;

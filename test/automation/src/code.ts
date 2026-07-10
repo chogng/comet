@@ -7,7 +7,11 @@ import type { Page } from '@playwright/test';
 
 import type { IElement } from './driver';
 import type { Logger } from './logger';
-import { PlaywrightDriver, type ConsoleMessage } from './playwrightDriver';
+import {
+	PlaywrightDriver,
+	type ConsoleMessage,
+	type WebContentsViewBoundsSnapshot,
+} from './playwrightDriver';
 
 export type WaitOptions = {
 	readonly timeoutMs?: number;
@@ -44,6 +48,10 @@ export class Code {
 
 	async evaluate<T>(expression: string): Promise<T> {
 		return this.driver.evaluateExpression<T>(expression);
+	}
+
+	async getVisibleWebContentsViewBounds(): Promise<WebContentsViewBoundsSnapshot[]> {
+		return this.driver.getVisibleWebContentsViewBounds();
 	}
 
 	async setLocalStorage(entries: Readonly<Record<string, string>>): Promise<void> {

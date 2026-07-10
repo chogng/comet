@@ -309,7 +309,7 @@ export class BrowserEditor extends EditorPane<
 				contribution.onPaneResized(_dimension.width);
 			}
 		}
-		this.layoutBrowserContainer();
+		void this.layoutBrowserContainer();
 	}
 
 	override getViewState() {
@@ -352,9 +352,10 @@ export class BrowserEditor extends EditorPane<
 		this.disposables.dispose();
 	}
 
-	layoutBrowserContainer(retries = 2): void {
-		if (!this._model) {
-			return;
+	async layoutBrowserContainer(retries = 2): Promise<boolean> {
+		const model = this._model;
+		if (!model) {
+			return false;
 		}
 
 		const overrides: IContainerLayoutOverride[] = [];
@@ -376,8 +377,13 @@ export class BrowserEditor extends EditorPane<
 
 		const wrapperRect = this.browserContainerWrapper.getBoundingClientRect();
 		if ((wrapperRect.width === 0 || wrapperRect.height === 0) && retries > 0) {
-			this.window.requestAnimationFrame(() => this.layoutBrowserContainer(retries - 1));
-			return;
+			await new Promise<void>(resolve => {
+				this.window.requestAnimationFrame(() => resolve());
+			});
+			return this.layoutBrowserContainer(retries - 1);
+		}
+		if (wrapperRect.width === 0 || wrapperRect.height === 0) {
+			return false;
 		}
 
 		const paneWidth = Math.max(0, wrapperRect.width - padding.left - padding.right);
@@ -405,7 +411,7 @@ export class BrowserEditor extends EditorPane<
 		this.browserContainerElement.style.left = `${left}px`;
 		this.browserContainerElement.style.top = `${top}px`;
 
-		void this._model.layout({
+		await model.layout({
 			windowId: this.window.vscodeWindowId,
 			x: wrapperRect.left + left,
 			y: wrapperRect.top + top,
@@ -415,10 +421,14 @@ export class BrowserEditor extends EditorPane<
 			cornerRadius: parseFloat(this.window.getComputedStyle(this.browserContainerElement).borderTopLeftRadius ?? '0'),
 			emulation: containerLayout.emulation,
 		});
+		if (this._model !== model) {
+			return false;
+		}
 
 		for (const contribution of this.contributionInstances.values()) {
 			contribution.afterContainerLayout();
 		}
+		return true;
 	}
 
 	get paneSize(): { width: number; height: number } {
@@ -541,7 +551,7 @@ export class BrowserEditor extends EditorPane<
 		this.inputDisposables.add(onDidChangeZoomLevel(targetWindowId => {
 			if (targetWindowId === this.window.vscodeWindowId) {
 				this.browserContainerWrapper.style.setProperty('--zoom-factor', String(getZoomFactor(this.window)));
-				this.layoutBrowserContainer();
+				void this.layoutBrowserContainer();
 			}
 		}));
 

@@ -15,6 +15,13 @@ export type ConsoleMessage = {
 	readonly text: string;
 };
 
+export type WebContentsViewBoundsSnapshot = {
+	readonly x: number;
+	readonly y: number;
+	readonly width: number;
+	readonly height: number;
+};
+
 export class PlaywrightDriver {
 	private readonly consoleMessages: ConsoleMessage[] = [];
 	private screenshotCounter = 1;
@@ -70,6 +77,16 @@ export class PlaywrightDriver {
 
 	async evaluateExpression<T>(expression: string): Promise<T> {
 		return this.page.evaluate(expression) as Promise<T>;
+	}
+
+	async getVisibleWebContentsViewBounds(): Promise<WebContentsViewBoundsSnapshot[]> {
+		return this.application.evaluate(({ BrowserWindow, WebContentsView }) =>
+			BrowserWindow.getAllWindows().flatMap(targetWindow =>
+				targetWindow.contentView.children
+					.filter(view => view instanceof WebContentsView && view.getVisible())
+					.map(view => view.getBounds()),
+			),
+		);
 	}
 
 	async setLocalStorage(entries: Readonly<Record<string, string>>): Promise<void> {

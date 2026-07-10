@@ -344,7 +344,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 			this.toolbar.refresh();
 			this.syncContextKeys(device);
 			this.setToolbarVisible(!!device);
-			this.editor.layoutBrowserContainer();
+			void this.editor.layoutBrowserContainer();
 		}));
 	}
 
@@ -389,7 +389,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 		this.scaleValue = scale;
 		lastSettings.scale = scale;
 		this.toolbar.refresh();
-		this.editor.layoutBrowserContainer();
+		void this.editor.layoutBrowserContainer();
 	}
 
 	applyPreset(preset: IBrowserDevicePreset): void {
@@ -479,7 +479,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 			this.toolbar.hide();
 		}
 		this.toolbarVisibleContext.set(visible);
-		this.editor.layoutBrowserContainer();
+		void this.editor.layoutBrowserContainer();
 	}
 
 	private syncContextKeys(device: IBrowserDeviceProfile | undefined): void {

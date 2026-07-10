@@ -19,6 +19,12 @@ type RendererSnapshot = {
 	readonly rendererWebviewCount: number;
 	readonly browserContainer: {
 		readonly childCount: number;
+		readonly bounds: {
+			readonly x: number;
+			readonly y: number;
+			readonly width: number;
+			readonly height: number;
+		};
 	} | null;
 	readonly hasWorkbench: boolean;
 	readonly tabCount: number;
@@ -112,7 +118,7 @@ async function stopSmokeServer(server: Server | undefined): Promise<void> {
 	});
 }
 
-function createSeedWorkspace(smokeUrl: string): object {
+function createSeedWorkspace(smokeUrl: string, includeDraft = true): object {
 	return {
 		groups: [
 			{
@@ -124,15 +130,15 @@ function createSeedWorkspace(smokeUrl: string): object {
 						title: 'Smoke Browser',
 						url: smokeUrl,
 					},
-					{
+					...(includeDraft ? [{
 						id: 'draft-a',
 						kind: 'draft',
 						title: 'Smoke Draft',
 						viewMode: 'draft',
-					},
+					}] : []),
 				],
 				activeTabId: 'browser-a',
-				mruTabIds: ['browser-a', 'draft-a'],
+				mruTabIds: includeDraft ? ['browser-a', 'draft-a'] : ['browser-a'],
 			},
 		],
 		activeGroupId: 'editor-group-a',
@@ -162,15 +168,39 @@ async function getRendererSnapshot(code: Code): Promise<RendererSnapshot> {
 		rendererWebviewCount: document.querySelectorAll('webview').length,
 		browserContainer: (() => {
 			const host = document.querySelector('.browser-root .browser-container');
+			const bounds = host?.getBoundingClientRect();
 			return host instanceof HTMLElement
 				? {
 					childCount: host.childElementCount,
+					bounds: {
+						x: Math.round(bounds?.left ?? 0),
+						y: Math.round(bounds?.top ?? 0),
+						width: Math.round(bounds?.width ?? 0),
+						height: Math.round(bounds?.height ?? 0),
+					},
 				}
 				: null;
 		})(),
 		hasWorkbench: Boolean(document.querySelector('.comet-session-workbench-content-grid')),
 		tabCount: document.querySelectorAll('.comet-editor-tab').length,
 	}))()`);
+}
+
+function hasAlignedBrowserBounds(
+	renderer: RendererSnapshot,
+	nativeBounds: Awaited<ReturnType<Code['getVisibleWebContentsViewBounds']>>,
+) {
+	const containerBounds = renderer.browserContainer?.bounds;
+	const viewBounds = nativeBounds[0];
+	return Boolean(
+		containerBounds &&
+		viewBounds &&
+		nativeBounds.length === 1 &&
+		containerBounds.x === viewBounds.x &&
+		containerBounds.y === viewBounds.y &&
+		containerBounds.width === viewBounds.width &&
+		containerBounds.height === viewBounds.height,
+	);
 }
 
 async function getContentState(
@@ -280,13 +310,14 @@ suite('Editor lifecycle smoke', function() {
 			'initial browser target activation',
 			async () => ({
 				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
 				state: await getContentState(code, 'browser-a'),
 				browser: await getBrowserDomSnapshot(code, 'browser-a'),
 			}),
 			result =>
 				result.renderer.activeTabKind === 'browser' &&
 				result.renderer.rendererWebviewCount === 0 &&
-				Boolean(result.renderer.browserContainer) &&
+				hasAlignedBrowserBounds(result.renderer, result.nativeBounds) &&
 				result.state.activeTargetId === 'browser-a' &&
 				result.state.ownership === 'active' &&
 				result.state.visible &&
@@ -307,6 +338,7 @@ suite('Editor lifecycle smoke', function() {
 			'browser target hide after activating the draft',
 			async () => ({
 				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
 				state: await getContentState(code, 'browser-a'),
 				browser: await getBrowserDomSnapshot(code, 'browser-a'),
 			}),
@@ -314,6 +346,7 @@ suite('Editor lifecycle smoke', function() {
 				result.renderer.activeTabKind === 'draft' &&
 				result.renderer.rendererWebviewCount === 0 &&
 				result.renderer.browserContainer === null &&
+				result.nativeBounds.length === 0 &&
 				result.state.activeTargetId === null &&
 				result.state.ownership === 'inactive' &&
 				!result.state.visible &&
@@ -329,13 +362,14 @@ suite('Editor lifecycle smoke', function() {
 			'browser target restoration',
 			async () => ({
 				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
 				state: await getContentState(code, 'browser-a'),
 				browser: await getBrowserDomSnapshot(code, 'browser-a'),
 				scrollTop: await getBrowserScroll(code, 'browser-a'),
 			}),
 			result =>
 				result.renderer.activeTabKind === 'browser' &&
-				Boolean(result.renderer.browserContainer) &&
+				hasAlignedBrowserBounds(result.renderer, result.nativeBounds) &&
 				result.state.activeTargetId === 'browser-a' &&
 				result.state.ownership === 'active' &&
 				result.state.visible &&
@@ -347,5 +381,104 @@ suite('Editor lifecycle smoke', function() {
 		);
 
 		assert.ok(restored.scrollTop >= 900);
+
+		await code.click('.comet-editor-titlebar-toggle-editor-btn');
+		await code.waitForCondition(
+			'browser target hide after collapsing the editor',
+			async () => ({
+				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
+				state: await getContentState(code, 'browser-a'),
+			}),
+			result =>
+				result.renderer.browserContainer === null &&
+				result.nativeBounds.length === 0 &&
+				result.state.activeTargetId === 'browser-a' &&
+				result.state.ownership === 'active' &&
+				!result.state.visible &&
+				result.state.layoutPhase === 'hidden',
+			{ timeoutMs: 30_000, intervalMs: 150 },
+		);
+
+		await application.workbench.ensureEditorExpanded();
+		await code.waitForCondition(
+			'browser target bounds after expanding the editor',
+			async () => ({
+				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
+				state: await getContentState(code, 'browser-a'),
+				scrollTop: await getBrowserScroll(code, 'browser-a'),
+			}),
+			result =>
+				result.renderer.activeTabKind === 'browser' &&
+				hasAlignedBrowserBounds(result.renderer, result.nativeBounds) &&
+				result.state.activeTargetId === 'browser-a' &&
+				result.state.visible &&
+				result.state.layoutPhase === 'visible' &&
+				result.scrollTop >= 900,
+			{ timeoutMs: 30_000, intervalMs: 150 },
+		);
+	});
+
+	test('hides the active browser target after closing its last tab', async () => {
+		const smokeServer = await startSmokeServer();
+		server = smokeServer.server;
+		context = await createSmokeTestContext('editor-close-last-browser-tab');
+
+		const application = context.application;
+		await application.start();
+		await application.reloadWithLocalStorage({
+			'cs.writingWorkspace.state': JSON.stringify(
+				createSeedWorkspace(smokeServer.url, false),
+			),
+		});
+		await application.workbench.ensureEditorExpanded();
+
+		const code = application.code;
+		await code.waitForCondition(
+			'initial browser target activation',
+			async () => ({
+				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
+				state: await getContentState(code, 'browser-a'),
+			}),
+			result =>
+				result.renderer.activeTabKind === 'browser' &&
+				result.renderer.tabCount === 1 &&
+				hasAlignedBrowserBounds(result.renderer, result.nativeBounds) &&
+				result.state.activeTargetId === 'browser-a' &&
+				result.state.visible &&
+				result.state.layoutPhase === 'visible',
+			{ timeoutMs: 30_000, intervalMs: 150 },
+		);
+
+		await code.evaluate(`(() => {
+			const closeButton = document.querySelector(
+				'.comet-editor-tab[data-tab-id="browser-a"] .comet-editor-tab-close-btn'
+			);
+			if (!(closeButton instanceof HTMLButtonElement)) {
+				throw new Error('Browser tab close button was not found.');
+			}
+			closeButton.click();
+		})()`);
+
+		await code.waitForCondition(
+			'browser target release after closing the last tab',
+			async () => ({
+				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
+				state: await getContentState(code, 'browser-a'),
+			}),
+			result =>
+				result.renderer.activeTabKind === null &&
+				result.renderer.tabCount === 0 &&
+				result.renderer.browserContainer === null &&
+				result.nativeBounds.length === 0 &&
+				result.state.activeTargetId === null &&
+				result.state.ownership === 'inactive' &&
+				!result.state.visible &&
+				result.state.layoutPhase === 'hidden',
+			{ timeoutMs: 30_000, intervalMs: 150 },
+		);
 	});
 });
