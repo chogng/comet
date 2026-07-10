@@ -16,6 +16,11 @@ import { IEditorResolverService, RegisteredEditorPriority } from 'cs/workbench/s
 import { localize } from 'cs/nls';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { BrowserViewWorkbenchService } from 'cs/workbench/contrib/browserView/electron-browser/browserViewWorkbenchService';
+import { IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
+import { PlaywrightWorkbenchService } from 'cs/workbench/services/browserView/electron-browser/playwrightWorkbenchService';
+import { AgentNetworkDomainSettingId } from 'cs/platform/networkFilter/common/settings';
+import { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
+import { IWorkbenchConfigurationService } from 'cs/workbench/services/configuration/common/configuration';
 import { BrowserViewCDPService } from 'cs/workbench/contrib/browserView/electron-browser/browserViewCDPService';
 import { BrowserEditor } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
 import type { BrowserEditorProps } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
@@ -44,6 +49,8 @@ import 'cs/workbench/contrib/browserView/electron-browser/features/browserEditor
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserSearchFeatures';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserTabManagementFeatures';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserRemoteFeatures';
+
+registerSingleton(IPlaywrightService, PlaywrightWorkbenchService, InstantiationType.Delayed);
 
 function isBrowserWorkspaceTab(
 	input: EditorWorkspaceTab,
@@ -115,8 +122,40 @@ export class BrowserEditorResolverContribution extends Disposable {
 	}
 }
 
+class SharedProcessNetworkFilterContribution extends Disposable {
+	constructor(
+		@IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
+		@IMainProcessService private readonly mainProcessService: IMainProcessService,
+	) {
+		super();
+		this.update();
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (
+				event.affectsConfiguration(AgentNetworkDomainSettingId.NetworkFilter) ||
+				event.affectsConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains) ||
+				event.affectsConfiguration(AgentNetworkDomainSettingId.DeniedNetworkDomains)
+			) {
+				this.update();
+			}
+		}));
+	}
+
+	private update(): void {
+		void this.mainProcessService.getChannel('networkFilter').call('update', [
+			this.configurationService.getValue<boolean>(AgentNetworkDomainSettingId.NetworkFilter) ?? false,
+			this.configurationService.getValue<string[]>(AgentNetworkDomainSettingId.AllowedNetworkDomains) ?? [],
+			this.configurationService.getValue<string[]>(AgentNetworkDomainSettingId.DeniedNetworkDomains) ?? [],
+		]).catch(error => {
+			console.error('Failed to update shared network filter settings.', error);
+		});
+	}
+}
+
 registerWorkbenchContribution(() =>
 	getWorkbenchInstantiationService().createInstance(BrowserEditorResolverContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(SharedProcessNetworkFilterContribution),
 );
 
 registerSingleton(IBrowserViewWorkbenchService, BrowserViewWorkbenchService, InstantiationType.Delayed);

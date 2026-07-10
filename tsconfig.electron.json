@@ -11,6 +11,10 @@
   },
   "include": [
     "src/cs/code/electron-main/**/*.ts",
+    "src/cs/code/electron-utility/**/*.ts",
+    "src/cs/platform/browserView/node/**/*.ts",
+    "src/cs/platform/sharedProcess/electron-main/**/*.ts",
+    "src/cs/platform/utilityProcess/electron-main/**/*.ts",
     "src/cs/platform/windows/electron-main/**/*.ts",
     "src/cs/base/parts/sandbox/electron-browser/preload.ts",
     "src/cs/platform/browserView/electron-browser/preload-browserView.ts"

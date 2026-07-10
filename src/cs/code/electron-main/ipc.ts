@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { app, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 import type {
@@ -104,6 +104,7 @@ import {
 } from 'cs/platform/native/electron-main/nativeHostMainService';
 import type { NativeHostMainService } from 'cs/platform/native/electron-main/nativeHostMainService';
 import type { IThemeMainService } from 'cs/platform/theme/electron-main/themeMainService';
+import { SharedProcess } from 'cs/platform/sharedProcess/electron-main/sharedProcess';
 const FETCH_STATUS_CHANNEL = 'app:fetch-status';
 const DOCUMENT_TRANSLATION_PROGRESS_CHANNEL = 'app:document-translation-progress';
 type AppInvokeResponse<T> =
@@ -119,8 +120,25 @@ const browserViewGroupMainService = browserViewIpcDisposables.add(
   new BrowserViewGroupMainService(browserViewMainService),
 );
 const fetchService = new FetchService(new FetchPageSessionService(browserViewMainService));
+const sharedProcess = new SharedProcess();
+const sharedProcessWindowCleanup = new Set<number>();
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function getSharedProcessWindowId(event: IpcMainInvokeEvent): number {
+	const window = BrowserWindow.fromWebContents(event.sender);
+	if (!window) {
+		throw new Error('Shared process request did not originate from a workbench window.');
+	}
+	if (!sharedProcessWindowCleanup.has(window.id)) {
+		sharedProcessWindowCleanup.add(window.id);
+		event.sender.once('destroyed', () => {
+			sharedProcessWindowCleanup.delete(window.id);
+			void sharedProcess.getChannel('playwright').call('disposeWindow', [window.id, undefined]);
+		});
+	}
+	return window.id;
+}
 
 function getDocumentTaskId(payload: { taskId?: string } | undefined) {
   return typeof payload?.taskId === 'string' ? payload.taskId.trim() : '';
@@ -412,6 +430,13 @@ export function registerAppIpc(
   themeMainService: IThemeMainService,
 ) {
   electronMainChannelServer.register();
+	const sharedProcessMainChannels = new Map<string, IServerChannel<string>>([
+		[ipcBrowserViewChannelName, ProxyChannel.fromService<string>(browserViewMainService, browserViewIpcDisposables)],
+		[ipcBrowserViewGroupChannelName, ProxyChannel.fromService<string>(browserViewGroupMainService, browserViewIpcDisposables)],
+	]);
+	void sharedProcess.start(sharedProcessMainChannels).catch(error => {
+		console.error('Shared process failed to start.', error);
+	});
   electronMainChannelServer.registerChannel(
     ipcBrowserViewChannelName,
     ProxyChannel.fromService(browserViewMainService, browserViewIpcDisposables),
@@ -420,8 +445,26 @@ export function registerAppIpc(
     ipcBrowserViewGroupChannelName,
     ProxyChannel.fromService(browserViewGroupMainService, browserViewIpcDisposables),
   );
+	electronMainChannelServer.registerChannel('playwright', {
+		call: (event, command, arg, cancellationToken) => {
+			const windowId = getSharedProcessWindowId(event);
+			return sharedProcess.getChannel('playwright').call(command, [windowId, arg], cancellationToken);
+		},
+		listen: (event, eventName, arg) => {
+			const windowId = getSharedProcessWindowId(event);
+			return sharedProcess.getChannel('playwright').listen(eventName, [windowId, arg]);
+		},
+	} satisfies IServerChannel<IpcMainInvokeEvent>);
+	electronMainChannelServer.registerChannel('networkFilter', {
+		call: (_event, command, arg, cancellationToken) =>
+			sharedProcess.getChannel('networkFilter').call(command, arg, cancellationToken),
+		listen: () => {
+			throw new Error('Shared network filter does not expose events.');
+		},
+	} satisfies IServerChannel<IpcMainInvokeEvent>);
   app.once('before-quit', () => {
     browserViewIpcDisposables.dispose();
+		sharedProcess.dispose();
   });
   registerContextMenuListener();
   try {
