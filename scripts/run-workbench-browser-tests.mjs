@@ -248,6 +248,16 @@ const entryPoints = [
     'electron-browser',
     'fetchActions.test.ts',
   ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'platform',
+    'browserView',
+    'test',
+    'node',
+    'playwrightTabSnapshot.test.ts',
+  ),
 ];
 
 await rm(outputDir, { recursive: true, force: true });
@@ -262,7 +272,7 @@ await build({
   format: 'esm',
   target: 'node20',
   sourcemap: 'inline',
-  external: ['node:assert/strict', 'node:test', 'jsdom'],
+  external: ['node:assert/strict', 'node:test', 'jsdom', 'playwright-core'],
   loader: {
     '.css': 'empty',
     '.svg': 'text',
