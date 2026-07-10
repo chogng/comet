@@ -1,7 +1,12 @@
-import { isNatureListingPage } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/nature-listing-shared';
-import { createNatureResearchArticlesCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/nature-research-articles';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-import type { ListingCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+import { isNatureListingPage } from 'cs/workbench/services/fetch/electron-main/sites/natureListingShared';
+import { createNatureResearchArticlesCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sites/natureResearchArticles';
+
+import type { ListingCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 type NaturePathDef = {
   id: string;

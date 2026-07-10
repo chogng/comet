@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { cleanText } from 'cs/base/common/strings';
-import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
-import type { ListingCandidateExtraction, ListingCandidateExtractorContext, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
+import type { ListingCandidateExtraction, ListingCandidateExtractorContext, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 type ListingDomNode = Parameters<ListingCandidateExtractorContext['$']>[0];
 type ListingDateValueParser = (value: unknown) => string | null;

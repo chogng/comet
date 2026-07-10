@@ -1,8 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { parseDateHintFromText } from 'cs/base/common/date';
 import { cleanText, uniq } from 'cs/base/common/strings';
 import { extractScienceDoiFromPathLike } from 'cs/base/common/url';
-import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
-import type { ListingCandidateExtractorContext, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
+import type { ListingCandidateExtractorContext, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 export const TOC_BODY_SELECTORS = [
   'div.toc > div.toc__body > div.toc__body',

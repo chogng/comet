@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { load } from 'cheerio';
 
 import type { DateRange } from 'cs/base/common/date';
@@ -70,4 +75,10 @@ export interface ListingCandidateExtractor {
   evaluatePaginationStop?(
     context: ListingPaginationStopContext,
   ): ListingPaginationStopEvaluation | null;
+}
+
+export interface FetchSiteProvider {
+	id: string;
+	matches(page: URL): boolean;
+	readonly listingCandidateExtractors: readonly ListingCandidateExtractor[];
 }

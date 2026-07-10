@@ -1,13 +1,18 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { parseDateHintFromText } from 'cs/base/common/date';
 import { parseDateString } from 'cs/base/common/date';
 import { isNatureMainSiteUrl } from 'cs/base/common/url';
-import { createDateSortedPaginationStopEvaluator } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/date-sorted-pagination';
-import { extractListingCardCandidates } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/listing-card-dom';
+import { createDateSortedPaginationStopEvaluator } from 'cs/workbench/services/fetch/electron-main/sites/dateSortedPagination';
+import { extractListingCardCandidates } from 'cs/workbench/services/fetch/electron-main/sites/listingCardDom';
 import {
   createNatureListingCandidateExtractor,
   findNatureListingNextPageUrl,
-} from 'cs/workbench/services/fetch/electron-main/sourceExtractors/nature-listing-shared';
-import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingPaginationContext } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+} from 'cs/workbench/services/fetch/electron-main/sites/natureListingShared';
+import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingPaginationContext } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 const NATURE_RESEARCH_ARTICLES_PATH_RE = /^\/[^/]+\/research-articles\/?$/i;
 const NATURE_RESEARCH_CARD_SELECTORS = [

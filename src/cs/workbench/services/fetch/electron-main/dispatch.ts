@@ -40,8 +40,9 @@ import type {
 	FetchTargetSession,
 } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
 import { resolvePublisherProfile } from 'cs/workbench/services/fetch/electron-main/publisherResolver';
-import { findListingCandidateExtractor, normalizeListingCandidateSeeds } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
-import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
+import { findListingCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/fetchSitesProvider';
+import { normalizeListingCandidateSeeds } from 'cs/workbench/services/fetch/electron-main/sites/types';
+import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 import {
   FetchErrorCode,

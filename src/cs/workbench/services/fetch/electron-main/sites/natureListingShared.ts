@@ -1,9 +1,14 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { parseDateHintFromText } from 'cs/base/common/date';
 import { cleanText } from 'cs/base/common/strings';
 import { isNatureMainSiteUrl } from 'cs/base/common/url';
-import { createDateSortedPaginationStopEvaluator } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/date-sorted-pagination';
-import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
-import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingPaginationStopContext, ListingPaginationStopEvaluation, ListingCandidateRefinementContext, ListingPaginationContext } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+import { createDateSortedPaginationStopEvaluator } from 'cs/workbench/services/fetch/electron-main/sites/dateSortedPagination';
+import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
+import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingPaginationStopContext, ListingPaginationStopEvaluation, ListingCandidateRefinementContext, ListingPaginationContext } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 const NATURE_LISTING_LAYOUT_SELECTORS = [
   'section.section__top-new > div.u-container',

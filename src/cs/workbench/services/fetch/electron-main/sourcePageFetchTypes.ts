@@ -6,7 +6,7 @@ import type {
 	FetchTargetPreference,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { CandidateArticleSnapshot } from 'cs/workbench/services/fetch/electron-main/merge';
-import type { ListingPaginationStopEvaluation } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
+import type { ListingPaginationStopEvaluation } from 'cs/workbench/services/fetch/electron-main/sites/types';
 import type { FetchTargetProvider } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
 
 export type FetchLatestArticlesOptions = {

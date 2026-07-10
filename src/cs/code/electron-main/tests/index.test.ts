@@ -4,6 +4,7 @@ import '../../../platform/browserView/test/electron-main/browserViewDebugger.tes
 import './articlePageProof.test';
 import './docx.test';
 import './fetchTargetProvider.test';
+import './fetchSitesProvider.test';
 import './llm.test';
 import './storageService.test';
 import './translationRouter.test';

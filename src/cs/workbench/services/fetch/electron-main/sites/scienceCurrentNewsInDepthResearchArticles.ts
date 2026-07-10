@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { cleanText } from 'cs/base/common/strings';
 import { isScienceCurrentTocUrl } from 'cs/base/common/url';
 
@@ -5,7 +10,7 @@ import type {
   ListingCandidateExtraction,
   ListingCandidateExtractor,
   ListingCandidateExtractorContext,
-} from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+} from 'cs/workbench/services/fetch/electron-main/sites/types';
 import {
   ABSTRACT_SELECTOR,
   AUTHORS_SELECTOR,
@@ -20,7 +25,7 @@ import {
   SUBSECTION_HEADING_SELECTOR,
   TITLE_SELECTOR,
   TOC_BODY_SELECTORS,
-} from 'cs/workbench/services/fetch/electron-main/sourceExtractors/science-common';
+} from 'cs/workbench/services/fetch/electron-main/sites/scienceCommon';
 
 const SCIENCE_CURRENT_TARGET_SUBSECTIONS = [
   {

@@ -1,13 +1,18 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { parseDateHintFromText } from 'cs/base/common/date';
 import { cleanText } from 'cs/base/common/strings';
-import { extractListingCardCandidates } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/listing-card-dom';
+import { extractListingCardCandidates } from 'cs/workbench/services/fetch/electron-main/sites/listingCardDom';
 import {
   createNatureListingCandidateExtractor,
   evaluateNatureListingPaginationStop,
   findNatureListingNextPageUrl,
   isNatureListingPage,
-} from 'cs/workbench/services/fetch/electron-main/sourceExtractors/nature-listing-shared';
-import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingPaginationContext } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+} from 'cs/workbench/services/fetch/electron-main/sites/natureListingShared';
+import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingPaginationContext } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 const NATURE_OPINION_LISTING_PAGE_PATH = '/opinion';
 const NATURE_OPINION_CARD_SELECTOR = 'div.c-article-item__wrapper';

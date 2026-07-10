@@ -1,7 +1,33 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { load } from 'cheerio';
 
 import type { ArticleFigure } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText, pickFirstNonEmpty, uniq } from 'cs/base/common/strings';
+import { natureLatestNewsCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sites/natureLatestNews';
+import { natureOpinionCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sites/natureOpinions';
+import { naturePathExtractors } from 'cs/workbench/services/fetch/electron-main/sites/naturePaths';
+import { natureResearchArticlesCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sites/natureResearchArticles';
+import type { FetchSiteProvider } from 'cs/workbench/services/fetch/electron-main/sites/types';
+
+function matchesNatureSite(page: URL) {
+	const hostname = page.hostname.toLowerCase();
+	return hostname === 'nature.com' || hostname.endsWith('.nature.com');
+}
+
+export const natureFetchSiteProvider: FetchSiteProvider = {
+	id: 'nature',
+	matches: matchesNatureSite,
+	listingCandidateExtractors: [
+		...naturePathExtractors,
+		natureResearchArticlesCandidateExtractor,
+		natureLatestNewsCandidateExtractor,
+		natureOpinionCandidateExtractor,
+	],
+};
 
 export function isNatureArticlePage($: ReturnType<typeof load>) {
   return (

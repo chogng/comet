@@ -1,7 +1,12 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type {
   ListingPaginationStopContext,
   ListingPaginationStopEvaluation,
-} from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+} from 'cs/workbench/services/fetch/electron-main/sites/types';
 import { hasDateRangeStart } from 'cs/base/common/date';
 
 const DEFAULT_TAIL_WINDOW = 3;

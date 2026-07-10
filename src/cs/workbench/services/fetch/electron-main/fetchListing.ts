@@ -17,7 +17,7 @@ import { applyCandidateArticleType } from 'cs/workbench/services/fetch/electron-
 import { planCandidateFetch } from 'cs/workbench/services/fetch/electron-main/listing/planning';
 import type { FetchTargetSession } from 'cs/workbench/services/fetch/electron-main/fetchTargetProvider';
 import type { FetchTargetDocument } from 'cs/workbench/services/fetch/electron-main/fetchTargetService';
-import type { ListingCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sourceExtractors';
+import type { ListingCandidateExtractor } from 'cs/workbench/services/fetch/electron-main/sites/types';
 import type {
 	CandidateCollectionResult,
 	FetchStatusUpdate,

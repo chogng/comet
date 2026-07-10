@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { parseDateHintFromText } from 'cs/base/common/date';
 import { parseDateString } from 'cs/base/common/date';
 import { cleanText } from 'cs/base/common/strings';
@@ -7,10 +12,10 @@ import {
   evaluateNatureListingPaginationStop,
   findNatureListingNextPageUrl,
   isNatureListingPage,
-} from 'cs/workbench/services/fetch/electron-main/sourceExtractors/nature-listing-shared';
+} from 'cs/workbench/services/fetch/electron-main/sites/natureListingShared';
 import { shortenForLog, timingLog } from 'cs/platform/fetch/node/fetchTiming';
-import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
-import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingCandidateRefinementContext, ListingPaginationContext, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sourceExtractors/types';
+import { normalizeListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
+import type { ListingCandidateExtraction, ListingCandidateExtractor, ListingCandidateExtractorContext, ListingCandidateRefinementContext, ListingPaginationContext, ListingCandidateSeed } from 'cs/workbench/services/fetch/electron-main/sites/types';
 
 const NATURE_LATEST_NEWS_LISTING_PAGE_PATH = '/latest-news';
 const NATURE_LATEST_NEWS_RSS_URL = 'https://www.nature.com/nature.rss';
@@ -406,4 +411,3 @@ function findNatureLatestNewsNextPageUrl({
     seenPageUrls,
   });
 }
-
