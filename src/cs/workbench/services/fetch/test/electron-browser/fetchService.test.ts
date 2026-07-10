@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
+import { CancellationError, CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
 import { URI } from 'cs/base/common/uri';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
@@ -82,10 +82,10 @@ const journal: JournalDescriptor = {
 	providerId: 'provider.test',
 };
 
-function createFetchService(): FetchService {
+function createFetchService(provider: typeof TestFetchProvider = TestFetchProvider): FetchService {
 	const registry = new FetchRegistry();
 	registry.registerJournal(journal);
-	registry.registerProvider({ id: 'provider.test', ctor: TestFetchProvider });
+	registry.registerProvider({ id: 'provider.test', ctor: provider });
 	const instantiationService: IInstantiationService = new InstantiationService(new ServiceCollection([IFetchRegistry, registry]), true);
 	return instantiationService.createInstance(new SyncDescriptor(FetchService));
 }
@@ -122,4 +122,47 @@ test('FetchService keeps source, list item, article record, and detail state dis
 	assert.deepEqual(catalogChanges, [journal.id]);
 	assert.deepEqual(sourceChanges, [sourceId, sourceId]);
 	assert.deepEqual(articleChanges, [firstArticleId]);
+	assert.equal(service.getSourceLoadState(sourceId).status, 'ready');
+
+	await service.refreshArticleListSource(sourceId, CancellationTokenNone);
+	assert.equal(service.getArticlePages(sourceId).length, 1);
+	assert.equal(service.getArticlePages(sourceId)[0].ungroupedItemIds.length, 1);
+	assert.equal(service.getArticleDetail(firstArticleId)?.title, 'Authoritative title');
+
+	await service.refreshJournal(journal.id, CancellationTokenNone);
+	assert.equal(service.getArticlePages(sourceId).length, 1);
+	assert.equal(service.getCatalogLoadState(journal.id).status, 'ready');
+});
+
+class DeferredCatalogFetchProvider extends TestFetchProvider {
+	static readonly catalogs: Array<(catalog: ParsedArticleListCatalog) => void> = [];
+
+	static reset(): void {
+		this.catalogs.length = 0;
+	}
+
+	override discoverArticleListSources(_journal: JournalDescriptor, _token: CancellationToken): Promise<ParsedArticleListCatalog> {
+		return new Promise(resolve => DeferredCatalogFetchProvider.catalogs.push(resolve));
+	}
+}
+
+test('FetchService rejects cancelled catalog results without writing stale state', async () => {
+	DeferredCatalogFetchProvider.reset();
+	const service = createFetchService(DeferredCatalogFetchProvider);
+	const first = service.discoverArticleListSources(journal.id, CancellationTokenNone);
+	const second = service.refreshJournal(journal.id, CancellationTokenNone);
+	assert.equal(DeferredCatalogFetchProvider.catalogs.length, 2);
+
+	DeferredCatalogFetchProvider.catalogs[0]({
+		entries: [{ kind: 'source', label: 'Stale', url: URI.parse('https://example.com/stale') }],
+	});
+	DeferredCatalogFetchProvider.catalogs[1]({
+		entries: [{ kind: 'source', label: 'Current', url: URI.parse('https://example.com/current') }],
+	});
+
+	await assert.rejects(first, CancellationError);
+	await second;
+	const catalog = service.getArticleListCatalog(journal.id);
+	assert.equal(catalog?.entries[0].kind === 'source' ? catalog.entries[0].label : undefined, 'Current');
+	assert.equal(service.getCatalogLoadState(journal.id).status, 'ready');
 });

@@ -163,17 +163,15 @@ export interface IFetchService {
 	getJournal(journalId: JournalId): JournalDescriptor | undefined;
 	getArticleListCatalog(journalId: JournalId): ArticleListCatalog | undefined;
 	getArticlePage(pageId: ArticlePageId): ArticlePage | undefined;
+	getArticlePages(sourceId: ArticleListSourceId): readonly ArticlePage[];
 	getArticleListItem(itemId: ArticleListItemId): ArticleListItem | undefined;
 	getArticle(articleId: ArticleId): ArticleRecord | undefined;
 	getArticleDetail(articleId: ArticleId): ArticleDetail | undefined;
+	getCatalogLoadState(journalId: JournalId): FetchLoadState;
+	getSourceLoadState(sourceId: ArticleListSourceId): FetchLoadState;
+	getArticleLoadState(articleId: ArticleId): FetchLoadState;
 	discoverArticleListSources(journalId: JournalId, token: CancellationToken): Promise<void>;
 	fetchArticleListSource(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void>;
-	fetchArticleListUrl(
-		journalId: JournalId,
-		url: URI,
-		label: string,
-		token: CancellationToken,
-	): Promise<ArticlePage>;
 	fetchNextPage(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void>;
 	fetchArticle(articleId: ArticleId, token: CancellationToken): Promise<ArticleDetail>;
 	refreshJournal(journalId: JournalId, token: CancellationToken): Promise<void>;

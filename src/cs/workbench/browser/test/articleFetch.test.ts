@@ -46,13 +46,25 @@ test('batch fetch loads configured list URLs through IFetchService', async () =>
 			discoveryUrl: listUrl,
 			providerId: 'publisher.example',
 		}],
-		fetchArticleListUrl: async () => ({
+		discoverArticleListSources: async () => undefined,
+		getArticleListCatalog: () => ({
+			journalId: 'journal.example',
+			entries: [{
+				kind: 'source' as const,
+				id: 'source:example',
+				journalId: 'journal.example',
+				label: 'Example',
+				url: listUrl,
+			}],
+		}),
+		fetchArticleListSource: async () => undefined,
+		getArticlePages: () => [{
 			id: 'page:example',
 			sourceId: 'source:example',
 			url: listUrl,
 			groups: [],
 			ungroupedItemIds: ['item:example'],
-		}),
+		}],
 		getArticleListItem: (id: string) => id === 'item:example' ? {
 			id,
 			articleId: 'article:example',

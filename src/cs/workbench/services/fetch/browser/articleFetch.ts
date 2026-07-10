@@ -6,7 +6,6 @@
 import type { JournalSourceOverride } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
 import { isWithinDateRange, parseDateHintFromText, parseDateRange } from 'cs/base/common/date';
-import { URI } from 'cs/base/common/uri';
 import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { isDateRangeValid } from 'cs/workbench/common/dateRange';
 import { normalizeUrl } from 'cs/workbench/common/url';
@@ -17,7 +16,7 @@ import {
   sanitizeBatchSources,
 } from 'cs/workbench/services/config/configSchema';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
-import type { ArticleDetail, ArticleListItem, ArticlePage, IFetchService, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
+import type { ArticleDetail, ArticleListCatalog, ArticleListItem, ArticleListSource, ArticlePage, IFetchService, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import {
   FetchErrorCode,
   fetchError,
@@ -185,11 +184,7 @@ export async function fetchLatestArticlesBatch({
 				break;
 			}
 			try {
-				const journal = resolveJournal(fetchService.getJournals(), URI.parse(source.pageUrl));
-				if (!journal) {
-					throw new Error(`No fetch provider is registered for "${source.pageUrl}".`);
-				}
-				const page = await fetchService.fetchArticleListUrl(journal.id, URI.parse(source.pageUrl), source.journalTitle, token);
+				const { journal, source: articleListSource, page } = await resolveArticleListSource(fetchService, source.pageUrl, token);
 				for (const item of getPageItems(page, fetchService)) {
 					if (articles.length >= maximum || seenArticleIds.has(item.articleId)) {
 						continue;
@@ -200,7 +195,7 @@ export async function fetchLatestArticlesBatch({
 					}
 					const detail = await fetchService.fetchArticle(item.articleId, token);
 					seenArticleIds.add(item.articleId);
-					articles.push(toFetchArticle(detail, journal, source.sourceId, articles.length + 1));
+					articles.push(toFetchArticle(detail, journal, articleListSource.id, articles.length + 1));
 				}
 			} catch (error) {
 				failedSources.push({ sourceId: source.sourceId, pageUrl: source.pageUrl, error: error instanceof Error ? error.message : String(error) });
@@ -221,8 +216,36 @@ export async function fetchLatestArticlesBatch({
 	}
 }
 
-function resolveJournal(journals: readonly JournalDescriptor[], uri: URI): JournalDescriptor | undefined {
-	return journals.find(journal => journal.homeUrl.authority === uri.authority);
+async function resolveArticleListSource(fetchService: IFetchService, pageUrl: string, token: CancellationToken): Promise<{ journal: JournalDescriptor; source: ArticleListSource; page: ArticlePage }> {
+	const normalizedPageUrl = normalizeUrl(pageUrl);
+	for (const journal of fetchService.getJournals()) {
+		await fetchService.discoverArticleListSources(journal.id, token);
+		const source = findArticleListSource(fetchService.getArticleListCatalog(journal.id), normalizedPageUrl);
+		if (!source) {
+			continue;
+		}
+		await fetchService.fetchArticleListSource(source.id, token);
+		const page = fetchService.getArticlePages(source.id)[0];
+		if (!page) {
+			throw new Error(`Article list source "${source.id}" did not produce a page.`);
+		}
+		return { journal, source, page };
+	}
+	throw new Error(`No discovered article list source matches "${pageUrl}".`);
+}
+
+function findArticleListSource(catalog: ArticleListCatalog | undefined, normalizedPageUrl: string): ArticleListSource | undefined {
+	if (!catalog) {
+		return undefined;
+	}
+	for (const entry of catalog.entries) {
+		const sources = entry.kind === 'group' ? entry.sources : [entry];
+		const source = sources.find(candidate => normalizeUrl(candidate.url.toString(true)) === normalizedPageUrl);
+		if (source) {
+			return source;
+		}
+	}
+	return undefined;
 }
 
 function getPageItems(page: ArticlePage, fetchService: IFetchService): ArticleListItem[] {

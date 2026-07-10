@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { registerWorkbenchContribution } from 'cs/workbench/common/contributions';
+import 'cs/workbench/contrib/fetch/electron-browser/fetchActions';
+import 'cs/workbench/contrib/fetch/electron-browser/fetchMenus';
 import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { FetchRegistry, IFetchRegistry } from 'cs/workbench/services/fetch/common/fetchRegistry';
 import { FetchService } from 'cs/workbench/services/fetch/electron-browser/fetchService';
 import { FetchPageSessionFactory, IFetchPageSessionFactory } from 'cs/workbench/services/fetch/electron-browser/fetchPageSession';
-import { NatureFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureFetchProvider';
-import { natureJournals } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureJournals';
-import { ScienceFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceFetchProvider';
-import { scienceJournals } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceJournals';
+import { natureFetchProviderDescriptor, natureJournals } from 'cs/workbench/services/fetch/electron-browser/providers/nature/nature.contribution';
+import { scienceFetchProviderDescriptor, scienceJournals } from 'cs/workbench/services/fetch/electron-browser/providers/science/science.contribution';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 
@@ -22,8 +22,8 @@ registerSingleton(IFetchPageSessionFactory, FetchPageSessionFactory, Instantiati
 registerWorkbenchContribution(() => {
 	const registry = getWorkbenchInstantiationService().invokeFunction(accessor => accessor.get(IFetchRegistry));
 	const registrations = [
-		registry.registerProvider({ id: 'publisher.nature', ctor: NatureFetchProvider }),
-		registry.registerProvider({ id: 'publisher.science', ctor: ScienceFetchProvider }),
+		registry.registerProvider(natureFetchProviderDescriptor),
+		registry.registerProvider(scienceFetchProviderDescriptor),
 		...natureJournals.map(journal => registry.registerJournal(journal)),
 		...scienceJournals.map(journal => registry.registerJournal(journal)),
 	];

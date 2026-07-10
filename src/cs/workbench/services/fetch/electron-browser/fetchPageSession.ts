@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { mainWindow } from 'cs/base/browser/window';
 import { CancellationError, type CancellationToken } from 'cs/base/common/cancellation';
 import { ProxyChannel } from 'cs/base/parts/ipc/common/ipc';
 import { generateUuid } from 'cs/base/common/uuid';
+import type { CodeWindow } from 'cs/base/browser/window';
 import type { IBrowserViewService } from 'cs/platform/browserView/common/browserView';
 import { BrowserViewStorageScope as BrowserViewStorageScopes, ipcBrowserViewChannelName } from 'cs/platform/browserView/common/browserView';
 import type {
@@ -49,6 +49,7 @@ export class FetchPageSession implements IFetchPageSession {
 		mainProcessService: IMainProcessService,
 		playwrightService: IPlaywrightService,
 		admission: FetchSnapshotAdmission,
+		mainWindowId: number,
 	): Promise<FetchPageSession> {
 		const browserViewService = ProxyChannel.toService<IBrowserViewService>(
 			mainProcessService.getChannel(ipcBrowserViewChannelName),
@@ -56,7 +57,7 @@ export class FetchPageSession implements IFetchPageSession {
 		const sessionId = `fetch:${generateUuid()}`;
 		const pageId = generateUuid();
 		await browserViewService.getOrCreateBrowserView(pageId, {
-			owner: { mainWindowId: mainWindow.vscodeWindowId, sessionId },
+			owner: { mainWindowId, sessionId },
 			sessionOptions: { scope: BrowserViewStorageScopes.Global },
 			presentation: 'background',
 		});
@@ -127,7 +128,8 @@ export class FetchPageSessionFactory {
 	) {}
 
 	createOwned(admission: FetchSnapshotAdmission): Promise<FetchPageSession> {
-		return FetchPageSession.createOwned(this.mainProcessService, this.playwrightService, admission);
+		const mainWindow = window as CodeWindow;
+		return FetchPageSession.createOwned(this.mainProcessService, this.playwrightService, admission, mainWindow.vscodeWindowId);
 	}
 
 	borrow(pageId: string, admission: FetchSnapshotAdmission): Promise<FetchPageSession> {
