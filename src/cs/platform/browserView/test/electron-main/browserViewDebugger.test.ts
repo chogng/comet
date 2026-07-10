@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
 import type { WebContents } from 'electron';
+import { Emitter } from 'cs/base/common/event';
+import { BrowserViewCDPTarget } from 'cs/platform/browserView/electron-main/browserViewCDPTarget';
 import { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
 
 type RecordedCommand = {
@@ -126,6 +128,127 @@ test('BrowserViewDebugger closes active sessions when Electron detaches', async 
 
 		assert.equal(closed, true);
 	} finally {
+		browserViewDebugger.dispose();
+	}
+});
+
+test('BrowserViewDebugger routes nested target lifecycle and session events', async () => {
+	const { browserViewDebugger, electronDebugger } = createDebugger();
+	const discoveredTargets: string[] = [];
+	const changedTargets: string[] = [];
+	const destroyedTargets: string[] = [];
+	const childEvents: string[] = [];
+	let childSessionId: string | undefined;
+
+	try {
+		browserViewDebugger.onTargetDiscovered(info => discoveredTargets.push(info.targetId));
+		browserViewDebugger.onTargetInfoChanged(info => changedTargets.push(info.targetId));
+		browserViewDebugger.onTargetDestroyed(targetId => destroyedTargets.push(targetId));
+		browserViewDebugger.onSessionCreated(({ session }) => {
+			if (session.targetId !== 'worker-target') {
+				return;
+			}
+			childSessionId = session.sessionId;
+			session.onEvent(event => childEvents.push(event.method));
+		});
+
+		const parentSession = await browserViewDebugger.attach();
+		electronDebugger.emit('message', {}, 'Target.attachedToTarget', {
+			sessionId: 'worker-session',
+			targetInfo: {
+				targetId: 'worker-target',
+				type: 'worker',
+				title: 'Worker',
+				url: 'https://example.com/worker.js',
+				attached: true,
+				canAccessOpener: false,
+			},
+			waitingForDebugger: false,
+		}, parentSession.sessionId);
+		electronDebugger.emit('message', {}, 'Runtime.consoleAPICalled', { type: 'log' }, 'worker-session');
+		electronDebugger.emit('message', {}, 'Target.targetInfoChanged', {
+			targetInfo: {
+				targetId: 'worker-target',
+				type: 'worker',
+				title: 'Updated Worker',
+				url: 'https://example.com/worker.js',
+				attached: true,
+				canAccessOpener: false,
+			},
+		}, undefined);
+		electronDebugger.emit('message', {}, 'Target.detachedFromTarget', { sessionId: 'worker-session' }, undefined);
+		electronDebugger.emit('message', {}, 'Target.targetDestroyed', { targetId: 'worker-target' }, undefined);
+
+		assert.equal(childSessionId, 'worker-session');
+		assert.deepEqual(discoveredTargets, ['worker-target']);
+		assert.deepEqual(changedTargets, ['worker-target']);
+		assert.deepEqual(destroyedTargets, ['worker-target']);
+		assert.deepEqual(childEvents, ['Runtime.consoleAPICalled']);
+		assert.equal(browserViewDebugger.knownTargets.has('worker-target'), false);
+	} finally {
+		browserViewDebugger.dispose();
+	}
+});
+
+test('BrowserViewDebugger applies intercepted device metrics and rejects unhandled overrides', async () => {
+	const { browserViewDebugger, electronDebugger } = createDebugger();
+	let interceptedParams: unknown;
+	const interceptor = browserViewDebugger.registerCommandInterceptor((method, params) => {
+		if (method !== 'Emulation.setDeviceMetricsOverride') {
+			return undefined;
+		}
+		interceptedParams = params;
+		return Promise.resolve({});
+	});
+
+	try {
+		const session = await browserViewDebugger.attach();
+		await session.sendCommand('Emulation.setDeviceMetricsOverride', { width: 390, height: 844 });
+		assert.deepEqual(interceptedParams, { width: 390, height: 844 });
+		assert.equal(electronDebugger.commands.some(command => command.method === 'Emulation.setDeviceMetricsOverride'), false);
+
+		interceptor.dispose();
+		await assert.rejects(
+			session.sendCommand('Emulation.setDeviceMetricsOverride', { width: 1024, height: 768 }),
+			/only supported for integrated browser page targets/,
+		);
+	} finally {
+		interceptor.dispose();
+		browserViewDebugger.dispose();
+	}
+});
+
+test('BrowserViewCDPTarget updates attachment state and closes with its view', async () => {
+	const { browserViewDebugger } = createDebugger();
+	const viewClose = new Emitter<void>();
+	const targetInfo = await browserViewDebugger.getTargetInfo();
+	const target = new BrowserViewCDPTarget(
+		'view',
+		'context',
+		browserViewDebugger,
+		targetInfo,
+		viewClose.event,
+	);
+	const attachmentStates: boolean[] = [];
+	let closed = false;
+
+	try {
+		target.onTargetInfoChanged(info => attachmentStates.push(info.attached));
+		target.onClose(() => {
+			closed = true;
+		});
+		const session = await target.attach();
+		target.notifySessionCreated(session, false);
+		session.dispose();
+
+		assert.deepEqual(attachmentStates, [true, false]);
+		assert.equal(target.sessions.size, 0);
+
+		viewClose.fire();
+		assert.equal(closed, true);
+	} finally {
+		target.dispose();
+		viewClose.dispose();
 		browserViewDebugger.dispose();
 	}
 });

@@ -5,8 +5,10 @@
 
 import type { Debugger as ElectronDebugger, Event as ElectronEvent, WebContents } from 'electron';
 import { Emitter, Event } from 'cs/base/common/event';
-import { Disposable, DisposableMap } from 'cs/base/common/lifecycle';
+import { Disposable, DisposableMap, toDisposable, type IDisposable } from 'cs/base/common/lifecycle';
 import type { CDPEvent, CDPTargetInfo, ICDPConnection } from 'cs/platform/browserView/common/cdp/types';
+
+export type CDPCommandInterceptor = (method: string, params: unknown, session: ICDPConnection | undefined) => Promise<unknown> | undefined;
 
 /** CDP transport for one Electron WebContents. */
 export class BrowserViewDebugger extends Disposable {
@@ -33,6 +35,7 @@ export class BrowserViewDebugger extends Disposable {
 	private readonly electronDebugger: ElectronDebugger;
 	private readonly messageHandler: (event: ElectronEvent, method: string, params: unknown, sessionId?: string) => void;
 	private readonly detachHandler: (event: ElectronEvent, reason: string) => void;
+	private readonly interceptors = new Set<CDPCommandInterceptor>();
 
 	constructor(private readonly webContents: WebContents) {
 		super();
@@ -71,16 +74,33 @@ export class BrowserViewDebugger extends Disposable {
 	}
 
 	sendCommand(method: string, params?: unknown, sessionId?: string): Promise<unknown> {
-		if (method === 'Emulation.setDeviceMetricsOverride') {
-			return Promise.resolve({});
+		const session = sessionId ? this.sessions.get(sessionId) : undefined;
+		for (const interceptor of this.interceptors) {
+			const result = interceptor(method, params, session);
+			if (result !== undefined) {
+				return result;
+			}
 		}
 
+		if (method === 'Emulation.setDeviceMetricsOverride') {
+			return Promise.reject(new Error('Device metrics override is only supported for integrated browser page targets'));
+		}
+
+		return this.sendCommandRaw(method, params, sessionId);
+	}
+
+	sendCommandRaw(method: string, params?: unknown, sessionId?: string): Promise<unknown> {
 		this.ensureAttached();
 		const result = this.electronDebugger.sendCommand(method, params, sessionId);
 		if (method === 'Page.handleJavaScriptDialog') {
 			this.webContents.emit('-cancel-dialogs');
 		}
 		return result;
+	}
+
+	registerCommandInterceptor(interceptor: CDPCommandInterceptor): IDisposable {
+		this.interceptors.add(interceptor);
+		return toDisposable(() => this.interceptors.delete(interceptor));
 	}
 
 	private ensureAttached(): void {
@@ -191,6 +211,7 @@ export class BrowserViewDebugger extends Disposable {
 	}
 
 	override dispose(): void {
+		this.interceptors.clear();
 		this.handleDebuggerDetach();
 		try {
 			this.electronDebugger.removeListener('message', this.messageHandler);

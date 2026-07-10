@@ -5,7 +5,7 @@
 
 import { app, session } from 'electron';
 import { Emitter, Event } from 'cs/base/common/event';
-import { Disposable, DisposableMap, DisposableStore } from 'cs/base/common/lifecycle';
+import { Disposable, DisposableMap, DisposableStore, type IDisposable } from 'cs/base/common/lifecycle';
 import { generateUuid } from 'cs/base/common/uuid';
 import type { IBrowserViewGroup, IBrowserViewGroupViewEvent } from 'cs/platform/browserView/common/browserViewGroup';
 import { BrowserViewStorageScope, type IBrowserViewOwner } from 'cs/platform/browserView/common/browserView';
@@ -33,11 +33,19 @@ type BrowserContextEntry = {
 	readonly owned: boolean;
 };
 
+class BrowserViewGroupViewResources extends Disposable {
+	readonly childTargets = this._register(new DisposableMap<string, DisposableStore>());
+
+	add<T extends IDisposable>(disposable: T): T {
+		return this._register(disposable);
+	}
+}
+
 /** A set of browser views exposed through one CDP browser endpoint. */
 export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, IBrowserViewGroup {
 	private readonly views = new Map<string, BrowserViewMainTarget>();
 	private readonly viewTargets = this._register(new DisposableMap<string, BrowserViewCDPTarget>());
-	private readonly viewDisposables = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly viewResources = this._register(new DisposableMap<string, BrowserViewGroupViewResources>());
 	private readonly contexts = new Map<string, BrowserContextEntry>();
 	private defaultContextId: string | undefined;
 	private disposed = false;
@@ -90,9 +98,9 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 		}
 		this.defaultContextId ??= view.context.id;
 
-		const disposables = new DisposableStore();
-		this.viewDisposables.set(viewId, disposables);
-		disposables.add(Event.once(view.onDidClose)(() => {
+		const resources = new BrowserViewGroupViewResources();
+		this.viewResources.set(viewId, resources);
+		resources.add(Event.once(view.onDidClose)(() => {
 			void this.removeView(viewId);
 		}));
 
@@ -115,10 +123,10 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 			for (const childTargetInfo of view.debuggerTransport.knownTargets.values()) {
 				this.registerChildTarget(view, childTargetInfo);
 			}
-			disposables.add(view.debuggerTransport.onTargetDiscovered(info => {
+			resources.add(view.debuggerTransport.onTargetDiscovered(info => {
 				this.registerChildTarget(view, info);
 			}));
-			disposables.add(view.debuggerTransport.onSessionCreated(({ session, waitingForDebugger }) => {
+			resources.add(view.debuggerTransport.onSessionCreated(({ session, waitingForDebugger }) => {
 				this.debugger.notifySessionCreated(session, waitingForDebugger);
 			}));
 
@@ -135,7 +143,7 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 			return;
 		}
 
-		this.viewDisposables.deleteAndDispose(viewId);
+		this.viewResources.deleteAndDispose(viewId);
 		this.viewTargets.deleteAndDispose(viewId);
 		if (!this.contexts.get(view.context.id)?.owned && !this.hasViewInContext(view.context.id)) {
 			this.contexts.delete(view.context.id);
@@ -150,17 +158,23 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 		if (targetInfo.targetId === view.debuggerTransport.targetId) {
 			return;
 		}
-		const disposables = this.viewDisposables.get(view.targetId);
-		if (!disposables) {
+		const resources = this.viewResources.get(view.targetId);
+		if (!resources || resources.childTargets.has(targetInfo.targetId)) {
 			return;
 		}
-		const target = disposables.add(new BrowserViewCDPTarget(
+		const target = new BrowserViewCDPTarget(
 			view.targetId,
 			view.context.id,
 			view.debuggerTransport,
 			targetInfo,
 			view.onDidClose,
-		));
+		);
+		const targetDisposables = new DisposableStore();
+		targetDisposables.add(target);
+		targetDisposables.add(Event.once(target.onClose)(() => {
+			resources.childTargets.deleteAndDispose(targetInfo.targetId);
+		}));
+		resources.childTargets.set(targetInfo.targetId, targetDisposables);
 		this.debugger.registerTarget(target);
 	}
 

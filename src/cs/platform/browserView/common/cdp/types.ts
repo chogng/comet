@@ -14,8 +14,6 @@ export const CDPErrorCode = {
 	MethodNotFound: -32601,
 	/** Invalid params */
 	InvalidParams: -32602,
-	/** Internal error */
-	InternalError: -32603,
 	/** Server error (generic) */
 	ServerError: -32000,
 } as const;
@@ -50,16 +48,6 @@ export class CDPInvalidParamsError extends CDPError {
 	constructor(message: string) {
 		super(message, CDPErrorCode.InvalidParams);
 		this.name = 'CDPInvalidParamsError';
-	}
-}
-
-/**
- * Error thrown for internal CDP errors
- */
-export class CDPInternalError extends CDPError {
-	constructor(message: string) {
-		super(message, CDPErrorCode.InternalError);
-		this.name = 'CDPInternalError';
 	}
 }
 

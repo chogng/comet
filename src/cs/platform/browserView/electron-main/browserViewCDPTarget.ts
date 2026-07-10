@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Emitter, Event } from 'cs/base/common/event';
-import { Disposable } from 'cs/base/common/lifecycle';
+import { Disposable, DisposableMap, type IDisposable } from 'cs/base/common/lifecycle';
 import type { CDPTargetInfo, ICDPConnection, ICDPTarget } from 'cs/platform/browserView/common/cdp/types';
 import type { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
 
 /** A page, frame, or worker target backed by one browser view debugger. */
 export class BrowserViewCDPTarget extends Disposable implements ICDPTarget {
 	private readonly targetSessions = new Map<string, ICDPConnection>();
+	private readonly sessionCloseListeners = this._register(new DisposableMap<string, IDisposable>());
 	get sessions(): ReadonlyMap<string, ICDPConnection> {
 		return this.targetSessions;
 	}
@@ -74,12 +75,14 @@ export class BrowserViewCDPTarget extends Disposable implements ICDPTarget {
 
 		const wasDetached = this.targetSessions.size === 0;
 		this.targetSessions.set(session.sessionId, session);
-		this._register(Event.once(session.onClose)(() => {
+		const closeListener = Event.once(session.onClose)(() => {
+			this.sessionCloseListeners.deleteAndLeak(session.sessionId);
 			this.targetSessions.delete(session.sessionId);
 			if (this.targetSessions.size === 0) {
 				this._onTargetInfoChanged.fire(this.targetInfo);
 			}
-		}));
+		});
+		this.sessionCloseListeners.set(session.sessionId, closeListener);
 		if (wasDetached) {
 			this._onTargetInfoChanged.fire(this.targetInfo);
 		}

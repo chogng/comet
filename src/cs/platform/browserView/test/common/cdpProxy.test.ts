@@ -8,9 +8,11 @@ import test from 'node:test';
 import { Emitter } from 'cs/base/common/event';
 import { Disposable } from 'cs/base/common/lifecycle';
 import { CDPBrowserProxy } from 'cs/platform/browserView/common/cdp/proxy';
+import { CDPErrorCode } from 'cs/platform/browserView/common/cdp/types';
 import type {
 	CDPBrowserVersion,
 	CDPEvent,
+	CDPResponse,
 	CDPTargetInfo,
 	CDPWindowBounds,
 	ICDPBrowserTarget,
@@ -264,6 +266,58 @@ test('Target.createTarget waits for auto-attachment before responding', async ()
 		assert.deepEqual(await creation, { targetId: 'created-page' });
 		assert.equal(completed, true);
 	} finally {
+		proxy.dispose();
+	}
+});
+
+test('CDP browser proxy returns protocol errors with request context', async () => {
+	const browser = new TestBrowserTarget();
+	const proxy = new CDPBrowserProxy(browser);
+	const messages: Array<CDPResponse | CDPEvent> = [];
+	const listener = proxy.onMessage(message => messages.push(message));
+
+	try {
+		await proxy.sendMessage({ id: 1, method: 'Missing.method', sessionId: proxy.sessionId });
+		await proxy.sendMessage({
+			id: 2,
+			method: 'Target.setAutoAttach',
+			params: { autoAttach: true, flatten: false },
+		});
+		await proxy.sendMessage({
+			id: 3,
+			method: 'Runtime.evaluate',
+			params: { expression: 'document.title' },
+			sessionId: 'missing-session',
+		});
+
+		assert.deepEqual(messages, [
+			{
+				id: 1,
+				error: {
+					code: CDPErrorCode.MethodNotFound,
+					message: 'Method not found: Missing.method',
+				},
+				sessionId: proxy.sessionId,
+			},
+			{
+				id: 2,
+				error: {
+					code: CDPErrorCode.InvalidParams,
+					message: 'This implementation only supports auto-attach with flatten=true',
+				},
+				sessionId: undefined,
+			},
+			{
+				id: 3,
+				error: {
+					code: CDPErrorCode.ServerError,
+					message: 'Session not found: missing-session',
+				},
+				sessionId: 'missing-session',
+			},
+		]);
+	} finally {
+		listener.dispose();
 		proxy.dispose();
 	}
 });

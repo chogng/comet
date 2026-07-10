@@ -50,6 +50,7 @@ import type {
   IPermissionCategoryState,
   ISerializedBrowserPermissionsSnapshot,
 } from 'cs/platform/browserView/common/browserPermissions';
+import type { ICDPConnection } from 'cs/platform/browserView/common/cdp/types';
 import { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
 import { resolveBrowserViewPreloadScriptPath } from 'cs/platform/window/electron-main/windowPaths';
@@ -1912,6 +1913,79 @@ function emitBrowserViewStateChanges(
   }
 }
 
+function applyBrowserViewDeviceEmulation(
+	targetId: string,
+	device: IBrowserDeviceProfile | undefined,
+): void {
+	const metadata = getBrowserViewTargetMetadata(targetId);
+	const webContents = getBrowserViewTargetEntry(targetId).view.webContents;
+	metadata.device = device;
+	if (!device) {
+		webContents.disableDeviceEmulation();
+		webContents.setUserAgent(webContents.session.getUserAgent());
+		metadata.events.onDidChangeDeviceEmulation.fire(undefined);
+		return;
+	}
+
+	const width = Math.max(1, Math.round(device.width ?? 1024));
+	const height = Math.max(1, Math.round(device.height ?? 768));
+	webContents.enableDeviceEmulation({
+		screenPosition: device.mobile ? 'mobile' : 'desktop',
+		screenSize: { width, height },
+		viewPosition: { x: 0, y: 0 },
+		deviceScaleFactor: Math.max(0, device.deviceScaleFactor ?? 1),
+		viewSize: { width, height },
+		scale: 1,
+	});
+	if (device.userAgent) {
+		webContents.setUserAgent(device.userAgent);
+	}
+	metadata.events.onDidChangeDeviceEmulation.fire(device);
+}
+
+function interceptBrowserViewCDPCommand(
+	entry: ManagedWebContentTarget,
+	method: string,
+	params: unknown,
+	session: ICDPConnection | undefined,
+): Promise<unknown> | undefined {
+	if (session && session.targetId !== entry.debuggerTransport.targetId) {
+		return undefined;
+	}
+
+	const currentDevice = browserViewTargetMetadata.get(entry.targetId)?.device;
+	switch (method) {
+		case 'Emulation.setDeviceMetricsOverride': {
+			const metrics = (params ?? {}) as {
+				width?: number;
+				height?: number;
+				mobile?: boolean;
+				deviceScaleFactor?: number;
+			};
+			applyBrowserViewDeviceEmulation(entry.targetId, {
+				...currentDevice,
+				width: metrics.width || undefined,
+				height: metrics.height || undefined,
+				mobile: metrics.mobile ?? currentDevice?.mobile,
+				deviceScaleFactor: metrics.deviceScaleFactor ?? currentDevice?.deviceScaleFactor,
+			});
+			return Promise.resolve({});
+		}
+		case 'Emulation.clearDeviceMetricsOverride': {
+			if (!currentDevice) {
+				return Promise.resolve({});
+			}
+			applyBrowserViewDeviceEmulation(
+				entry.targetId,
+				currentDevice.userAgent !== undefined ? { userAgent: currentDevice.userAgent } : undefined,
+			);
+			return Promise.resolve({});
+		}
+		default:
+			return undefined;
+	}
+}
+
 function createWebContentTarget(
   targetId: string,
   context: BrowserViewMainContext = createBrowserViewContext(
@@ -1952,6 +2026,10 @@ function createWebContentTarget(
     targetId,
     view,
   };
+	const cdpCommandInterceptor = entry.debuggerTransport.registerCommandInterceptor((method, params, session) =>
+		interceptBrowserViewCDPCommand(entry, method, params, session)
+	);
+	entry.cleanup.push(() => cdpCommandInterceptor.dispose());
 
   const syncState = () => {
     syncWebContentTargetState(targetId);
@@ -2101,6 +2179,10 @@ function createWebContentTarget(
 
   addWebContentTargetListener(entry, 'destroyed', () => {
     entry.debuggerTransport.dispose();
+    for (const cleanup of entry.cleanup) {
+      cleanup();
+    }
+    entry.cleanup.length = 0;
     webContentTargets.delete(targetId);
     retainedWebContentTargets.delete(targetId);
     disposeBrowserViewTargetMetadata(targetId);
@@ -3297,30 +3379,7 @@ export class BrowserViewMainService implements IBrowserViewService {
     id: string,
     device: IBrowserDeviceProfile | undefined,
   ): Promise<void> {
-    const metadata = getBrowserViewTargetMetadata(id);
-    const webContents = getBrowserViewTargetEntry(id).view.webContents;
-    metadata.device = device;
-    if (!device) {
-      webContents.disableDeviceEmulation();
-      webContents.setUserAgent(webContents.session.getUserAgent());
-      metadata.events.onDidChangeDeviceEmulation.fire(undefined);
-      return;
-    }
-
-    const width = Math.max(1, Math.round(device.width ?? 1024));
-    const height = Math.max(1, Math.round(device.height ?? 768));
-    webContents.enableDeviceEmulation({
-      screenPosition: device.mobile ? 'mobile' : 'desktop',
-      screenSize: { width, height },
-      viewPosition: { x: 0, y: 0 },
-      deviceScaleFactor: Math.max(0, device.deviceScaleFactor ?? 1),
-      viewSize: { width, height },
-      scale: 1,
-    });
-    if (device.userAgent) {
-      webContents.setUserAgent(device.userAgent);
-    }
-    metadata.events.onDidChangeDeviceEmulation.fire(device);
+	applyBrowserViewDeviceEmulation(id, device);
   }
 
   async trustCertificate(_id: string, _host: string, _fingerprint: string): Promise<void> {
