@@ -22,7 +22,7 @@ import type { ServicesAccessor } from 'cs/platform/instantiation/common/instanti
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import type { IQuickInputService, IQuickPickItem, IQuickPickSeparator } from 'cs/platform/quickinput/common/quickInput';
 import { IQuickInputService as IQuickInputServiceDecorator } from 'cs/platform/quickinput/common/quickInput';
-import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	BrowserActionCategory,
@@ -41,39 +41,36 @@ const MAX_HISTORY = 6;
 export class BrowserHistoryFeature extends BrowserEditorContribution {
 	private readonly onDidChangeEmitter = this._register(new Emitter<void>());
 	private model: IBrowserViewModel | undefined;
-	private history: BrowserHistoryStore | undefined;
 
 	constructor(
 		editor: BrowserEditor,
 		@IQuickInputServiceDecorator private readonly quickInputService: IQuickInputService,
+		@IBrowserViewWorkbenchService private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService,
 	) {
 		super(editor);
+		this._register(this.browserViewWorkbenchService.browserHistory.onDidChange(() => this.onDidChangeEmitter.fire()));
 	}
 
 	override get urlSuggestionProviders(): readonly IBrowserUrlSuggestionProvider[] {
 		return [this.recentsProvider, this.historyProvider];
 	}
 
-	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
+	protected override onModelAttached(model: IBrowserViewModel, _store: DisposableStore): void {
 		this.model = model;
-		this.history = model.history;
-		store.add(model.history.onDidChange(() => this.onDidChangeEmitter.fire()));
 		this.onDidChangeEmitter.fire();
 	}
 
 	override onModelDetached(): void {
 		this.model = undefined;
-		this.history = undefined;
 		this.onDidChangeEmitter.fire();
 	}
 
 	showManagementPicker(): void {
 		const model = this.model;
-		const history = this.history;
-		if (!model || !history) {
+		if (!model) {
 			return;
 		}
-		showHistoryPicker(this.quickInputService, model, history);
+		showHistoryPicker(this.quickInputService, model, this.browserViewWorkbenchService.browserHistory);
 	}
 
 	private readonly recentsProvider: IBrowserUrlSuggestionProvider = {
@@ -106,11 +103,10 @@ export class BrowserHistoryFeature extends BrowserEditorContribution {
 	}
 
 	private buildList(currentUrl: string | undefined, needle: string, onlyUserInitiated: boolean, max: number): IBrowserUrlSuggestion[] {
-		const history = this.history;
-		if (!history) {
+		if (this.model?.storageScope === BrowserViewStorageScope.Ephemeral) {
 			return [];
 		}
-
+		const history = this.browserViewWorkbenchService.browserHistory;
 		const seen = new Set<string>();
 		if (currentUrl) {
 			seen.add(dedupKey(currentUrl));

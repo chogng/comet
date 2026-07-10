@@ -5,8 +5,14 @@
 
 import { mainWindow } from 'cs/base/browser/window';
 import { Emitter, Event } from 'cs/base/common/event';
-import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
+import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { ProxyChannel } from 'cs/base/parts/ipc/common/ipc';
+import {
+	BrowserHistoryStore,
+	type IBrowserHistoryItemHandle,
+	type ISerializedBrowserFaviconsSnapshot,
+	type ISerializedBrowserHistoryEntriesSnapshot,
+} from 'cs/platform/browserView/common/browserHistory';
 import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import {
 	BrowserViewCommandId,
@@ -23,6 +29,7 @@ import { IKeybindingService } from 'cs/platform/keybinding/common/keybinding';
 import { IConfigurationService } from 'cs/platform/configuration/common/configuration';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { ILogService } from 'cs/platform/log/common/log';
+import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
 import { IThemeService } from 'cs/platform/theme/common/themeService';
 import { ITunnelProxyInfo } from 'cs/platform/tunnel/common/tunnelProxy';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
@@ -41,6 +48,9 @@ export const BrowserMaxHistoryEntriesSettingId = 'workbench.browser.maxHistoryEn
 export const BrowserNewTabPlacementSettingId = 'workbench.browser.newTabPlacement';
 export const BrowserRemoteProxyEnabledSettingId = 'workbench.browser.enableRemoteProxy';
 
+const BrowserHistoryEntriesStorageKey = 'workbench.browser.history.entries';
+const BrowserHistoryFaviconsStorageKey = 'workbench.browser.history.favicons';
+
 export type BrowserNewTabPlacement = 'activeGroup' | 'sideGroup' | 'window';
 
 const browserViewContextMenuCommands = [
@@ -53,6 +63,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	declare readonly _serviceBrand: undefined;
 
 	private browserViewService: IBrowserViewService | undefined;
+	readonly browserHistory = this._register(new BrowserHistoryStore(Number.MAX_SAFE_INTEGER));
 	private readonly known = new Map<string, BrowserEditorInput>();
 	private readonly contextualFilters = new Set<IBrowserViewContextualFilter>();
 	private readonly openHandlers = new Set<IBrowserViewOpenHandler>();
@@ -72,8 +83,11 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IThemeService private readonly themeService: IThemeService,
 		@ILogService private readonly logService: ILogService,
+		@IStorageService private readonly storageService: IStorageService,
 	) {
 		super();
+		this.restoreBrowserHistory();
+		this._register(this.browserHistory.onDidChange(() => this.persistBrowserHistory()));
 
 		this._register(this.keybindingService.onDidUpdateKeybindings(() => {
 			if (this.browserViewService) {
@@ -187,6 +201,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	async clearGlobalStorage(): Promise<void> {
+		this.browserHistory.clear();
 		await this.getBrowserViewService().clearGlobalStorage();
 	}
 
@@ -222,6 +237,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		const model = this.instantiationService.createInstance(
 			new SyncDescriptor(BrowserViewModel, [id, owner, state, this.getBrowserViewService()]),
 		);
+		this.trackBrowserHistory(model);
 		this.getOrCreateLazy(id, {
 			url: state.url,
 			title: state.title,
@@ -229,6 +245,76 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		}, model);
 		this._onDidChangeBrowserViews.fire();
 		return model;
+	}
+
+	private trackBrowserHistory(model: IBrowserViewModel): void {
+		if (model.storageScope === BrowserViewStorageScope.Ephemeral) {
+			return;
+		}
+		let currentUrl = '';
+		let currentNavigationEntry: IBrowserHistoryItemHandle | undefined;
+		let latestEntry: IBrowserHistoryItemHandle | undefined;
+		let isLoading = model.loading;
+		let isExplicitNavigationPending = false;
+		const store = this._register(new DisposableStore());
+
+		store.add(model.onWillNavigate(() => isExplicitNavigationPending = true));
+		store.add(model.onDidChangeLoadingState(event => {
+			isLoading = event.loading;
+			if (!isLoading) {
+				currentNavigationEntry = undefined;
+			}
+		}));
+		store.add(model.onDidNavigate(event => {
+			const isExplicitNavigation = isExplicitNavigationPending;
+			isExplicitNavigationPending = false;
+			if (!event.url) {
+				return;
+			}
+			if (event.url === currentUrl) {
+				latestEntry?.update({ title: event.title });
+				return;
+			}
+			currentUrl = event.url;
+			if (currentNavigationEntry && isLoading) {
+				currentNavigationEntry.update({ url: event.url, title: event.title });
+				latestEntry = currentNavigationEntry;
+				return;
+			}
+			latestEntry = this.browserHistory.add(event.url, event.title, model.favicon, isExplicitNavigation);
+			currentNavigationEntry = latestEntry;
+		}));
+		store.add(model.onDidChangeTitle(event => latestEntry?.update({ title: event.title })));
+		store.add(model.onDidChangeFavicon(event => latestEntry?.update({ favicon: event.favicon ?? null })));
+		store.add(model.onWillDispose(() => store.dispose()));
+	}
+
+	private restoreBrowserHistory(): void {
+		this.browserHistory.entries.hydrate(
+			parseBrowserHistorySnapshot<ISerializedBrowserHistoryEntriesSnapshot>(
+				this.storageService.get(BrowserHistoryEntriesStorageKey, StorageScope.APPLICATION),
+			),
+		);
+		this.browserHistory.favicons.hydrate(
+			parseBrowserHistorySnapshot<ISerializedBrowserFaviconsSnapshot>(
+				this.storageService.get(BrowserHistoryFaviconsStorageKey, StorageScope.APPLICATION),
+			),
+		);
+	}
+
+	private persistBrowserHistory(): void {
+		this.storageService.store(
+			BrowserHistoryEntriesStorageKey,
+			JSON.stringify(this.browserHistory.entries.serialize()),
+			StorageScope.APPLICATION,
+			StorageTarget.USER,
+		);
+		this.storageService.store(
+			BrowserHistoryFaviconsStorageKey,
+			JSON.stringify(this.browserHistory.favicons.serialize()),
+			StorageScope.APPLICATION,
+			StorageTarget.USER,
+		);
 	}
 
 	private getBrowserViewService(): IBrowserViewService {
@@ -302,5 +388,16 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			buttonBackground: theme.getColor('button.background')?.toString(),
 			buttonForeground: theme.getColor('button.foreground')?.toString(),
 		};
+	}
+}
+
+function parseBrowserHistorySnapshot<T>(raw: string | undefined): T | undefined {
+	if (!raw) {
+		return undefined;
+	}
+	try {
+		return JSON.parse(raw) as T;
+	} catch {
+		return undefined;
 	}
 }

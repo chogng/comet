@@ -5,27 +5,15 @@ import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import { $ } from 'cs/base/browser/dom';
 import { toAction } from 'cs/base/common/actions';
-import { Emitter } from 'cs/base/common/event';
 import { generateUuid } from 'cs/base/common/uuid';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 
 const EDITOR_BROWSER_LIBRARY_STORAGE_KEY = 'cs.editor.browser.library.v1';
-const MAX_RECENT_BROWSER_LIBRARY_ENTRIES = 25;
 const MAX_FAVORITE_BROWSER_LIBRARY_ENTRIES = 25;
 const MAX_FAVORITE_BROWSER_LIBRARY_FOLDERS = 25;
 const EDITOR_BROWSER_LIBRARY_DESKTOP_OVERLAY_CLASS = 'comet-is-desktop-overlay';
 const NATIVE_WEBCONTENT_ACTIVE_SELECTOR =
   '.comet-browser-frame-placeholder[data-webcontent-active="true"]';
-const browserLibraryChangeEmitter = new Emitter<void>();
-
-export const onDidChangeBrowserLibrary = browserLibraryChangeEmitter.event;
-
-export type BrowserLibraryRecentEntry = {
-  url: string;
-  title: string;
-  faviconUrl: string;
-};
-
 type StoredBrowserLibraryFavoriteFolder = {
   id: string;
   name: string;
@@ -486,10 +474,7 @@ const recentUrls = Array.isArray(value.recentUrls)
   const favoriteUrls = Array.isArray(value.favoriteUrls)
     ? value.favoriteUrls.map((url) => String(url))
     : [];
-  const sanitizedRecentUrls = trimUrlList(
-    dedupeUrlList(recentUrls),
-    MAX_RECENT_BROWSER_LIBRARY_ENTRIES,
-  );
+  const sanitizedRecentUrls = dedupeUrlList(recentUrls);
   const sanitizedFavoriteUrls = trimUrlList(
     dedupeUrlList(favoriteUrls),
     MAX_FAVORITE_BROWSER_LIBRARY_ENTRIES,
@@ -627,7 +612,6 @@ function updateStoredBrowserLibraryState(
 
   storedBrowserLibraryState = nextState;
   writeStoredBrowserLibraryStateToStorage(nextState);
-  browserLibraryChangeEmitter.fire();
   return true;
 }
 
@@ -650,10 +634,7 @@ const normalizedFaviconUrl = sanitizeBrowserLibraryFaviconUrl(faviconUrl);
   const visitedAt = Date.now();
 
   return updateStoredBrowserLibraryState((state) => {
-    const recentUrls = trimUrlList(
-      [normalizedUrl, ...state.recentUrls.filter((entry) => entry !== normalizedUrl)],
-      MAX_RECENT_BROWSER_LIBRARY_ENTRIES,
-    );
+    const recentUrls = [normalizedUrl, ...state.recentUrls.filter((entry) => entry !== normalizedUrl)];
 
     let faviconByUrl = state.faviconByUrl;
     if (normalizedFaviconUrl) {
@@ -708,15 +689,12 @@ function toggleFavoriteBrowserLibraryEntry(url: string) {
         MAX_FAVORITE_BROWSER_LIBRARY_ENTRIES,
       );
 
-    const recentUrls = trimUrlList(
-      [
-        normalizedUrl,
-        ...state.recentUrls.filter(
-          (entry) => !areBrowserLibraryUrlsEquivalent(entry, normalizedUrl),
-        ),
-      ],
-      MAX_RECENT_BROWSER_LIBRARY_ENTRIES,
-    );
+    const recentUrls = [
+      normalizedUrl,
+      ...state.recentUrls.filter(
+        (entry) => !areBrowserLibraryUrlsEquivalent(entry, normalizedUrl),
+      ),
+    ];
     const favoriteFolderByUrl = { ...state.favoriteFolderByUrl };
     const favoriteCustomTitleByUrl = { ...state.favoriteCustomTitleByUrl };
     if (alreadyFavorite) {
@@ -758,15 +736,12 @@ function removeFavoriteBrowserLibraryEntry(url: string) {
     }
 
 const favoriteUrls = state.favoriteUrls.filter((entry) => entry !== existingFavoriteUrl);
-    const recentUrls = trimUrlList(
-      [
-        normalizedUrl,
-        ...state.recentUrls.filter(
-          (entry) => !areBrowserLibraryUrlsEquivalent(entry, normalizedUrl),
-        ),
-      ],
-      MAX_RECENT_BROWSER_LIBRARY_ENTRIES,
-    );
+    const recentUrls = [
+      normalizedUrl,
+      ...state.recentUrls.filter(
+        (entry) => !areBrowserLibraryUrlsEquivalent(entry, normalizedUrl),
+      ),
+    ];
     const favoriteFolderByUrl = { ...state.favoriteFolderByUrl };
     const favoriteCustomTitleByUrl = { ...state.favoriteCustomTitleByUrl };
     delete favoriteFolderByUrl[existingFavoriteUrl];
@@ -845,7 +820,7 @@ const nextFolderId = createBrowserLibraryFavoriteFolderId();
   });
 }
 
-export function clearRecentBrowserLibraryEntries() {
+function clearRecentBrowserLibraryEntries() {
   return updateStoredBrowserLibraryState((state) => {
     const favoriteUrlSet = new Set(state.favoriteUrls);
     const nextFaviconByUrl: Record<string, string> = {};
@@ -923,17 +898,6 @@ function isFavoriteBrowserLibraryEntry(url: string) {
 
 function getRecentBrowserLibraryUrls() {
   return [...storedBrowserLibraryState.recentUrls];
-}
-
-export function getRecentBrowserLibraryEntries(): BrowserLibraryRecentEntry[] {
-  return getRecentBrowserLibraryUrls()
-    .map((url) => ({
-      url,
-      title:
-        sanitizeBrowserLibraryPageTitle(getBrowserLibraryEntryPageTitle(url)) ||
-        resolveBrowserLibraryTitle(url),
-      faviconUrl: getBrowserLibraryEntryFavicon(url),
-    }));
 }
 
 function getFavoriteBrowserLibraryEntries() {

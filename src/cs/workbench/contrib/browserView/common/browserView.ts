@@ -193,6 +193,7 @@ export interface IBrowserViewOpenHandler {
  */
 export interface IBrowserViewWorkbenchService {
 	readonly _serviceBrand: undefined;
+	readonly browserHistory: BrowserHistoryStore;
 
 	/** Returns true if the remote proxy is enabled; i.e. we are in a remote workspace and the setting is enabled. */
 	willUseRemoteProxy(): boolean;

@@ -74,7 +74,6 @@ let BrowserHistoryFeature: typeof import('cs/workbench/contrib/browserView/elect
 let BrowserWelcomeFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature').BrowserWelcomeFeature;
 let BrowserPermissionsFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserPermissionsFeature').BrowserPermissionsFeature;
 let BrowserEditorEmulationSupport: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorEmulationFeatures').BrowserEditorEmulationSupport;
-let EditorBrowserLibraryPanel: typeof import('cs/workbench/browser/parts/editor/editorBrowserLibraryPanel').EditorBrowserLibraryPanel;
 
 function createTestThemeService(): IThemeServiceType {
 	return {
@@ -483,6 +482,7 @@ class TestBrowserViewWorkbenchService implements IBrowserViewWorkbenchService {
 
 	readonly requests: Array<{ readonly id: string; readonly state: IBrowserEditorViewState }> = [];
 	readonly resolveCalls: string[] = [];
+	readonly browserHistory = new BrowserHistoryStore(Number.MAX_SAFE_INTEGER);
 	readonly onDidChangeBrowserViews = BaseEvent.None;
 	readonly onDidChangeSharingAvailable = BaseEvent.None;
 	readonly isSharingAvailable = false;
@@ -554,7 +554,6 @@ before(async () => {
 	({ BrowserWelcomeFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature'));
 	({ BrowserPermissionsFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserPermissionsFeature'));
 	({ BrowserEditorEmulationSupport } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorEmulationFeatures'));
-	({ EditorBrowserLibraryPanel } = await import('cs/workbench/browser/parts/editor/editorBrowserLibraryPanel'));
 });
 
 after(() => {
@@ -1250,11 +1249,6 @@ test('browser favorites contribution persists the current URL without mounting t
 });
 
 test('browser history contribution surfaces recent and matching URL suggestions', async () => {
-	const history = new BrowserHistoryStore();
-	history.add('https://example.com/a?old=1', 'Old A', undefined, true);
-	history.add('https://example.com/a?new=1', 'New A', undefined, true);
-	history.add('https://example.com/b', 'Example B', undefined, false);
-	history.add('https://example.net/c', 'Example C', undefined, true);
 	const serviceCollection = new ServiceCollection(
 		[IThemeService, createTestThemeService()],
 		[ITelemetryService, createTestTelemetryService()],
@@ -1276,9 +1270,12 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 		(id, state) => ({
 			...createTestBrowserViewModel(id, state),
 			url: 'https://current.example',
-			history,
 		} as IBrowserViewModel),
 	);
+	browserViewWorkbenchService.browserHistory.add('https://example.com/a?old=1', 'Old A', undefined, true);
+	browserViewWorkbenchService.browserHistory.add('https://example.com/a?new=1', 'New A', undefined, true);
+	browserViewWorkbenchService.browserHistory.add('https://example.com/b', 'Example B');
+	browserViewWorkbenchService.browserHistory.add('https://example.net/c', 'Example C', undefined, true);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
 	const editor = instantiationService.createInstance(BrowserEditor, {
@@ -1317,38 +1314,21 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 	} finally {
 		editor.dispose();
 		instantiationService.dispose();
-		history.dispose();
+		browserViewWorkbenchService.browserHistory.dispose();
 	}
 });
 
 test('browser welcome contribution renders recents and opens the selected entry', async () => {
-	const createLibraryContext = (url: string, title = '', faviconUrl = '') => ({
-		browserUrl: url,
-		browserPageTitle: title,
-		browserFaviconUrl: faviconUrl,
-		labels: {
-			title: 'Sources',
-			recentTitle: 'Recents',
-			recentTodayTitle: 'Today',
-			recentYesterdayTitle: 'Yesterday',
-			recentLast7DaysTitle: 'Last 7 Days',
-			recentLast30DaysTitle: 'Last 30 Days',
-			recentOlderTitle: 'Older',
-			favoritesTitle: 'Favorites',
-			emptyState: 'No favorites or history yet.',
-		},
-		onNavigateToUrl() {},
-	});
-	const libraryPanel = new EditorBrowserLibraryPanel(createLibraryContext(''));
-	libraryPanel.clearRecentLibraryEntries();
-	libraryPanel.setContext(createLibraryContext('https://example.com/a', 'Old A'));
-	libraryPanel.setContext(createLibraryContext('https://example.com/background', 'Background'));
-	libraryPanel.setContext(createLibraryContext('https://example.com/a', 'New A'));
-	libraryPanel.setContext(createLibraryContext('https://example.org/d', 'Example D'));
-	libraryPanel.setContext(createLibraryContext('https://example.org/e', 'Example E'));
-	libraryPanel.setContext(createLibraryContext('https://example.org/f', 'Example F'));
-	libraryPanel.setContext(createLibraryContext('https://example.org/g', 'Example G'));
-	libraryPanel.setContext(createLibraryContext('https://example.net/c', 'Example C', 'https://example.net/missing.ico'));
+	const expectedRecentUrls = [
+		...Array.from({ length: 26 }, (_, index) => `https://example.dev/history-${25 - index}`),
+		'https://example.net/c',
+		'https://example.org/g',
+		'https://example.org/f',
+		'https://example.org/e',
+		'https://example.org/d',
+		'https://example.com/a',
+		'https://example.com/background',
+	];
 	const loadedUrls: string[] = [];
 	const serviceCollection = new ServiceCollection(
 		[IThemeService, createTestThemeService()],
@@ -1375,6 +1355,16 @@ test('browser welcome contribution renders recents and opens the selected entry'
 			},
 		} as IBrowserViewModel),
 	);
+	browserViewWorkbenchService.browserHistory.add('https://example.com/background', 'Background');
+	browserViewWorkbenchService.browserHistory.add('https://example.com/a', 'Old A');
+	browserViewWorkbenchService.browserHistory.add('https://example.org/d', 'Example D');
+	browserViewWorkbenchService.browserHistory.add('https://example.org/e', 'Example E');
+	browserViewWorkbenchService.browserHistory.add('https://example.org/f', 'Example F');
+	browserViewWorkbenchService.browserHistory.add('https://example.org/g', 'Example G');
+	browserViewWorkbenchService.browserHistory.add('https://example.net/c', 'Example C', 'https://example.net/missing.ico');
+	for (let index = 0; index < 26; index++) {
+		browserViewWorkbenchService.browserHistory.add(`https://example.dev/history-${index}`, `History ${index}`);
+	}
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
 	const editor = instantiationService.createInstance(BrowserEditor, {
@@ -1392,26 +1382,26 @@ test('browser welcome contribution renders recents and opens the selected entry'
 		await editor.input?.resolve();
 		await new Promise(resolve => setTimeout(resolve, 0));
 		const welcome = editor.getContribution(BrowserWelcomeFeature);
-		const recents = welcome?.widgets[0].element.querySelectorAll<HTMLAnchorElement>('.comet-browser-recents-item');
+		const recents = welcome?.widgets[0].element.querySelectorAll<HTMLAnchorElement>('.comet-browser-recents-link');
 
 		assert.deepEqual(
 			[...recents ?? []].map(recent => recent.getAttribute('href')),
-			[
-				'https://example.net/c',
-				'https://example.org/g',
-				'https://example.org/f',
-				'https://example.org/e',
-				'https://example.org/d',
-				'https://example.com/a',
-				'https://example.com/background',
-			],
+			expectedRecentUrls,
 		);
-		const favicon = recents?.[0].querySelector('img');
+		const favicon = recents?.[26].querySelector('img');
 		assert.ok(favicon);
 		favicon.dispatchEvent(new window.Event('error'));
-		assert.ok(recents?.[0].querySelector('.codicon-globe'));
-		recents?.[0].click();
-		assert.deepEqual(loadedUrls, ['https://example.net/c']);
+		assert.ok(recents?.[26].querySelector('.codicon-globe'));
+		const removeButtons = welcome?.widgets[0].element.querySelectorAll<HTMLButtonElement>('.comet-browser-recents-delete .comet-actionbar-action');
+		assert.equal(removeButtons?.[1].getAttribute('aria-label'), 'Remove from history');
+		removeButtons?.[1].click();
+		assert.deepEqual(
+			[...welcome?.widgets[0].element.querySelectorAll<HTMLAnchorElement>('.comet-browser-recents-link') ?? []].map(recent => recent.getAttribute('href')),
+			expectedRecentUrls.filter(url => url !== 'https://example.dev/history-24'),
+		);
+		assert.deepEqual(loadedUrls, []);
+		welcome?.widgets[0].element.querySelector<HTMLAnchorElement>('.comet-browser-recents-link')?.click();
+		assert.deepEqual(loadedUrls, ['https://example.dev/history-25']);
 
 		welcome?.widgets[0].element.querySelector<HTMLButtonElement>('.comet-browser-recents-clear')?.click();
 		assert.equal(welcome?.widgets[0].element.querySelector('.comet-browser-recents'), null);
@@ -1419,8 +1409,7 @@ test('browser welcome contribution renders recents and opens the selected entry'
 	} finally {
 		editor.dispose();
 		instantiationService.dispose();
-		libraryPanel.clearRecentLibraryEntries();
-		libraryPanel.dispose();
+		browserViewWorkbenchService.browserHistory.dispose();
 	}
 });
 

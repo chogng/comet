@@ -4,19 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { $, addDisposableListener, append, EventType } from 'cs/base/browser/dom';
+import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { ButtonView } from 'cs/base/browser/ui/button/button';
 import { renderIcon } from 'cs/base/browser/ui/iconLabel/iconLabels';
 import { Codicon } from 'cs/base/common/codicons';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
-import {
-	clearRecentBrowserLibraryEntries,
-	getRecentBrowserLibraryEntries,
-	onDidChangeBrowserLibrary,
-	type BrowserLibraryRecentEntry,
-} from 'cs/workbench/browser/parts/editor/editorBrowserLibraryPanel';
+import type { IBrowserHistoryEntry } from 'cs/platform/browserView/common/browserHistory';
+import { BrowserViewStorageScope } from 'cs/platform/browserView/common/browserView';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
-import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import {
 	BrowserEditor,
 	BrowserEditorContribution,
@@ -29,7 +26,10 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 	private readonly widget: IBrowserEditorWidget;
 	private readonly renderStore = this._register(new DisposableStore());
 
-	constructor(editor: BrowserEditor) {
+	constructor(
+		editor: BrowserEditor,
+		@IBrowserViewWorkbenchService private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService,
+	) {
 		super(editor);
 
 		this.container = $('.browser-welcome-container');
@@ -53,7 +53,7 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 		this.setVisible(!model.url);
 		this.render(model);
 		store.add(model.onDidNavigate(event => this.setVisible(!event.url)));
-		store.add(onDidChangeBrowserLibrary(() => this.render(model)));
+		store.add(this.browserViewWorkbenchService.browserHistory.onDidChange(() => this.render(model)));
 	}
 
 	override onModelDetached(): void {
@@ -69,7 +69,9 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 		this.renderStore.clear();
 		this.container.replaceChildren();
 
-		const recents = model ? getRecentBrowserLibraryEntries() : [];
+		const recents = model && model.storageScope !== BrowserViewStorageScope.Ephemeral
+			? this.browserViewWorkbenchService.browserHistory.entries.items
+			: [];
 		if (model && recents.length > 0) {
 			this.renderRecents(model, recents);
 			return;
@@ -78,7 +80,7 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 		this.renderEmptyState();
 	}
 
-	private renderRecents(model: IBrowserViewModel, recents: readonly BrowserLibraryRecentEntry[]): void {
+	private renderRecents(model: IBrowserViewModel, recents: readonly IBrowserHistoryEntry[]): void {
 		const section = append(this.container, $('section.comet-browser-recents'));
 		section.setAttribute('aria-label', localize('browser.recents', "Recents"));
 
@@ -91,13 +93,14 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 			variant: 'ghost',
 			size: 'sm',
 			content: localize('browser.recents.clear', "Clear"),
-			onClick: () => clearRecentBrowserLibraryEntries(),
+			onClick: () => this.browserViewWorkbenchService.browserHistory.clear(),
 		}));
 		header.append(clearButton.getElement());
 
 		const list = append(section, $('.comet-browser-recents-list'));
-		for (const entry of recents) {
-			const link = append(list, $<HTMLAnchorElement>('a.comet-browser-recents-item'));
+		for (const entry of [...recents].reverse()) {
+			const item = append(list, $('.comet-browser-recents-item'));
+			const link = append(item, $<HTMLAnchorElement>('a.comet-browser-recents-link'));
 			link.href = entry.url;
 			this.renderStore.add(addDisposableListener(link, EventType.CLICK, event => {
 				event.preventDefault();
@@ -105,9 +108,12 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 			}));
 
 			const icon = append(link, $('.comet-browser-recents-icon'));
-			if (entry.faviconUrl) {
+			const faviconUrl = entry.icon
+				? this.browserViewWorkbenchService.browserHistory.favicons.get(entry.icon)
+				: undefined;
+			if (faviconUrl) {
 				const image = append(icon, $<HTMLImageElement>('img'));
-				image.src = entry.faviconUrl;
+				image.src = faviconUrl;
 				image.alt = '';
 				image.loading = 'lazy';
 				image.decoding = 'async';
@@ -121,9 +127,26 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 
 			const label = append(link, $('.comet-browser-recents-label'));
 			const entryTitle = append(label, $('.comet-browser-recents-entry-title'));
-			entryTitle.textContent = entry.title;
+			entryTitle.textContent = entry.title || entry.url;
 			const entryUrl = append(label, $('.comet-browser-recents-entry-url'));
 			entryUrl.textContent = entry.url;
+
+			const removeActionBar = this.renderStore.add(createActionBarView({
+				className: 'comet-browser-recents-delete',
+				ariaLabel: localize('browser.recents.actions', "Recent item actions"),
+				items: [{
+					id: 'remove',
+					label: localize('browser.recents.remove', "Remove from history"),
+					hover: localize('browser.recents.remove', "Remove from history"),
+					content: renderIcon(Codicon.close),
+					onClick: event => {
+						event.preventDefault();
+						event.stopPropagation();
+						this.browserViewWorkbenchService.browserHistory.entries.delete(entry.id);
+					},
+				}],
+			}));
+			item.append(removeActionBar.getElement());
 		}
 	}
 

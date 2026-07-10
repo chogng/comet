@@ -1,8 +1,7 @@
-- Must read the [Coding Guidelines](.github/instructions/coding-guidelines.instructions.md) before thinking or editing
+- Must read the [Coding Guidelines](.github/instructions/coding-guidelines.instructions.md) and [instructions](.github/instructions) before thinking or editing
 - NEVER add fallback logic
 - NEVER replace a real fix with renamed declarations, moved logic, wrappers, facades, adapters, aliases, re-exports, or compatibility layers.
 - NEVER keep legacy interfaces or local compatibility code just to avoid updating call sites
 - Call sites MUST migrate directly to the target interface.
 - When the target interface requires call-site changes, migrate the affected call sites directly instead of adding wrappers, aliases, or compatibility code to shrink the diff
-- Must read the [instructions](.github/instructions) before coding
 - Compare the upstream architecture [`C:\Users\lanxi\Desktop\vscode` or `/Users/lance/Desktop/vscode`].
