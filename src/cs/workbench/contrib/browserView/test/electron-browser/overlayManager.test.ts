@@ -108,3 +108,43 @@ test('browser overlay manager ignores non-overlapping overlays', () => {
 		manager.dispose();
 	}
 });
+
+test('browser overlay manager skips context-view blocker hit targets', () => {
+	const manager = new BrowserOverlayManager(window);
+	const host = addElement('comet-browser-frame-placeholder', createDomRect(0, 0, 300, 300));
+	const dialog = addElement('comet-dialog-modal-block', createDomRect(0, 0, 400, 400));
+	const contextView = addElement('comet-context-view', createDomRect(320, 320, 60, 60));
+	const blocker = addElement('context-view-block', createDomRect(0, 0, 400, 400), contextView);
+	const restoreHitTest = installHitTest([blocker, dialog, host]);
+
+	try {
+		const overlays = manager.getOverlappingOverlays(host);
+		assert.deepEqual(overlays.map(overlay => overlay.type), [BrowserOverlayType.Dialog]);
+	} finally {
+		restoreHitTest();
+		manager.dispose();
+	}
+});
+
+test('browser overlay manager detects Comet overlays rendered inside a shadow root', () => {
+	const manager = new BrowserOverlayManager(window);
+	const host = addElement('comet-browser-frame-placeholder', createDomRect(0, 0, 300, 300));
+	const shadowHost = addElement('shadow-root-host', createDomRect(20, 20, 200, 200));
+	const shadowRoot = shadowHost.attachShadow({ mode: 'open' });
+	const overlay = addElement('comet-quick-input-widget', createDomRect(20, 20, 200, 200), shadowRoot);
+	const restoreHitTest = installHitTest([shadowHost, host]);
+	const previousShadowElementFromPoint = shadowRoot.elementFromPoint;
+	const previousShadowElementsFromPoint = shadowRoot.elementsFromPoint;
+	shadowRoot.elementFromPoint = (() => overlay) as typeof shadowRoot.elementFromPoint;
+	shadowRoot.elementsFromPoint = (() => [overlay]) as typeof shadowRoot.elementsFromPoint;
+
+	try {
+		const overlays = manager.getOverlappingOverlays(host);
+		assert.deepEqual(overlays.map(foundOverlay => foundOverlay.type), [BrowserOverlayType.QuickInput]);
+	} finally {
+		shadowRoot.elementFromPoint = previousShadowElementFromPoint;
+		shadowRoot.elementsFromPoint = previousShadowElementsFromPoint;
+		restoreHitTest();
+		manager.dispose();
+	}
+});
