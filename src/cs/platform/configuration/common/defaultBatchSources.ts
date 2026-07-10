@@ -5,7 +5,7 @@ export const batchLimitMax = 1000;
 export const defaultBatchLimit = 50;
 
 // Immutable baseline list so callers can safely clone/reset source config.
-const defaultBatchSourceSeed: ReadonlyArray<Omit<BatchSource, 'fetchTarget'>> = [
+const defaultBatchSourceSeed: ReadonlyArray<BatchSource> = [
   {
     id: '1',
     url: 'https://www.science.org/toc/science/current',
@@ -99,6 +99,5 @@ export function getDefaultBatchSources(): BatchSource[] {
     id: source.id,
     url: source.url,
     journalTitle: source.journalTitle,
-    fetchTarget: 'background',
   }));
 }

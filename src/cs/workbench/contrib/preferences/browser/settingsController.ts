@@ -1,7 +1,6 @@
 import type {
   AppStartupLayout,
   AppTheme,
-	FetchTargetPreference,
   LlmProviderId,
   TranslationProviderId,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -175,14 +174,6 @@ export class SettingsController {
     this.settingsModel.setJournalSourceTitle(url, journalTitle);
     this.scheduleDebouncedAutoSave();
   };
-
-	readonly setJournalSourceFetchTarget = (
-		url: string,
-		fetchTarget: FetchTargetPreference,
-	) => {
-		this.settingsModel.setJournalSourceFetchTarget(url, fetchTarget);
-		this.scheduleImmediateAutoSave();
-	};
 
   readonly setSystemNotificationsEnabled = (
     nextSystemNotificationsEnabled: boolean,

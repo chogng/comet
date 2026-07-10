@@ -8,7 +8,7 @@ import { cleanText } from 'cs/base/common/strings';
 import { normalizeUrl } from 'cs/base/common/url';
 import { CancellationError, isCancellationError } from 'cs/base/common/errors';
 import { PdfErrorCode, pdfError } from 'cs/platform/download/common/pdfErrors';
-import { fetchHtml } from 'cs/workbench/services/fetch/electron-main/dispatch';
+import { fetchHtml } from 'cs/platform/request/electron-main/fetchHtml';
 import { isCompatFetchEnvEnabled } from 'cs/platform/fetch/node/fetchTiming';
 import {
   buildNatureResearchPdfDownloadCandidates,

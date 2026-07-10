@@ -7,7 +7,6 @@ import type {
   AppCommandPayloadMap,
   AppCommandResultMap,
   DocumentTranslationProgress,
-  FetchStatus,
   WindowControlAction,
   WindowState,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -462,25 +461,6 @@ const electronAPI: ElectronAPI = {
         canGoForward: false,
         isLoading: false,
         visible: false,
-      });
-    },
-  },
-  fetch: {
-    onFetchStatus(listener: (status: FetchStatus) => void) {
-      return subscribeIpc<FetchStatus>('app:fetch-status', listener, {
-				requestId: '',
-        sourceId: '',
-        pageUrl: '',
-        pageNumber: 0,
-				phase: 'loading',
-				targetMode: 'background',
-				targetId: null,
-				articleProof: null,
-				siteId: null,
-				articleListSourceId: null,
-				parserId: null,
-        paginationStopped: false,
-        paginationStopReason: null,
       });
     },
   },

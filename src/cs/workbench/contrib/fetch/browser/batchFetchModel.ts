@@ -1,13 +1,8 @@
 import { EventEmitter } from 'cs/base/common/event';
-import { MutableDisposable } from 'cs/base/common/lifecycle';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import type {
   JournalSourceOverride,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { generateUuid } from 'cs/base/common/uuid';
-import type {
-  ElectronInvoke,
-} from 'cs/base/parts/sandbox/common/electronTypes';
-import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { LocaleMessages } from 'language/locales';
 import {
   fetchLatestArticlesBatch,
@@ -17,10 +12,9 @@ import {
 import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { INITIAL_BATCH_FETCH_MACHINE_STATE, reduceBatchFetchMachineState } from 'cs/workbench/services/fetch/common/batchFetchState';
 import type { BatchFetchMachineEvent, BatchFetchMachineState } from 'cs/workbench/services/fetch/common/batchFetchState';
-import { resolveBatchFetchStatusbarStatus } from 'cs/workbench/contrib/fetch/browser/batchFetchStatusbarStatus';
-import type { BatchFetchStatusbarStatus } from 'cs/workbench/contrib/fetch/browser/batchFetchStatusbarStatus';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
+import type { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { FetchErrorCode } from 'cs/workbench/services/fetch/common/fetchErrors';
 
 import {
@@ -29,22 +23,19 @@ import {
 } from 'cs/workbench/common/errorMessages';
 
 export type BatchFetchControllerContext = {
-  desktopRuntime: boolean;
   addressBarUrl: string;
   journalSourceOverrides: JournalSourceOverride[];
   batchStartDate: string;
   batchEndDate: string;
-  invokeDesktop: ElectronInvoke;
-  nativeHost: INativeHostService;
+  batchLimit: number;
+  fetchService: IFetchService;
   notificationService: INotificationService;
   ui: LocaleMessages;
   onBeforeFetch: () => void;
   onFetchSuccess: (articles: FetchArticle[]) => void;
-	onWebContentsViewRequired: (targetId: string, pageUrl: string) => void;
 };
 
-export type BatchFetchControllerSnapshot = BatchFetchMachineState &
-  BatchFetchStatusbarStatus & {
+export type BatchFetchControllerSnapshot = BatchFetchMachineState & {
     isBatchLoading: boolean;
     emptyMessage: string;
   };
@@ -61,13 +52,11 @@ const emptyFetchErrorCodes = new Set<string>([
 
 function createBatchFetchSnapshot(
   machineState: BatchFetchMachineState,
-	ui: LocaleMessages,
 ): BatchFetchControllerSnapshot {
   return {
     ...machineState,
     isBatchLoading: machineState.phase === 'loading',
     emptyMessage: machineState.phase === 'empty' ? machineState.lastErrorMessage ?? '' : '',
-		...resolveBatchFetchStatusbarStatus(machineState.fetchStatus, ui),
   };
 }
 
@@ -76,15 +65,14 @@ export class BatchFetchController {
   private machineState = INITIAL_BATCH_FETCH_MACHINE_STATE;
 	private snapshot: BatchFetchControllerSnapshot;
   private readonly onDidChangeEmitter = new EventEmitter<void>();
-  private readonly fetchStatusListener = new MutableDisposable<() => void>();
   private requestId = 0;
-	private activeFetchRequestId: string | null = null;
+  private activeFetchCancellation: CancellationTokenSource | undefined;
   private started = false;
   private disposed = false;
 
   constructor(context: BatchFetchControllerContext) {
     this.context = context;
-		this.snapshot = createBatchFetchSnapshot(this.machineState, context.ui);
+		this.snapshot = createBatchFetchSnapshot(this.machineState);
   }
 
   readonly subscribe = (listener: () => void) => {
@@ -95,17 +83,9 @@ export class BatchFetchController {
 
   readonly setContext = (context: BatchFetchControllerContext) => {
 		const localeChanged = context.ui !== this.context.ui;
-    const shouldReconnect =
-      this.started &&
-      (context.desktopRuntime !== this.context.desktopRuntime ||
-        context.nativeHost !== this.context.nativeHost);
     this.context = context;
-
-    if (shouldReconnect) {
-      this.connectFetchStatus();
-    }
 		if (localeChanged) {
-			this.snapshot = createBatchFetchSnapshot(this.machineState, context.ui);
+			this.snapshot = createBatchFetchSnapshot(this.machineState);
 			this.emitChange();
 		}
   };
@@ -116,7 +96,6 @@ export class BatchFetchController {
     }
 
     this.started = true;
-    this.connectFetchStatus();
   };
 
   readonly dispose = () => {
@@ -125,12 +104,9 @@ export class BatchFetchController {
     }
 
     this.disposed = true;
-    this.fetchStatusListener.dispose();
+    this.activeFetchCancellation?.cancel();
+    this.activeFetchCancellation?.dispose();
     this.onDidChangeEmitter.dispose();
-  };
-
-  readonly clearFetchStatus = () => {
-    this.dispatch({ type: 'FETCH_STATUS_CLEARED' });
   };
 
   readonly handleFetchLatestBatch = async () => {
@@ -173,26 +149,28 @@ export class BatchFetchController {
     sourceTable: ReadonlyArray<BatchSource>,
   ): Promise<BatchFetchControllerResult> {
     const {
-      desktopRuntime,
       batchStartDate,
       batchEndDate,
-      invokeDesktop,
+      batchLimit,
+      fetchService,
       notificationService,
       ui,
       onFetchSuccess,
     } = this.context;
-		const fetchRequestId = generateUuid();
-		this.activeFetchRequestId = fetchRequestId;
+    this.activeFetchCancellation?.cancel();
+    this.activeFetchCancellation?.dispose();
+    const cancellationSource = new CancellationTokenSource();
+    this.activeFetchCancellation = cancellationSource;
 
     try {
       const result = await fetchLatestArticlesBatch({
-				requestId: fetchRequestId,
-        desktopRuntime,
         batchSources,
         sourceTable,
+				limit: batchLimit,
         startDate: batchStartDate || null,
         endDate: batchEndDate || null,
-        invokeDesktop,
+				fetchService,
+				token: cancellationSource.token,
       });
 
       if (this.disposed) {
@@ -200,16 +178,6 @@ export class BatchFetchController {
       }
 
       if (!result.ok) {
-        if ('reason' in result) {
-          notificationService.info(ui.toastDesktopBatchFetchOnly);
-          this.dispatch({
-            type: 'FETCH_FAILED',
-            requestId,
-            errorMessage: 'desktop_unsupported',
-          });
-          return { ok: false };
-        }
-
         if (result.error.code === FetchErrorCode.BatchPageUrlsEmpty) {
           notificationService.error(ui.toastEnterPageUrl);
           this.dispatch({
@@ -286,31 +254,11 @@ export class BatchFetchController {
       });
       return { ok: false };
 		} finally {
-			if (this.activeFetchRequestId === fetchRequestId) {
-				this.activeFetchRequestId = null;
+			if (this.activeFetchCancellation === cancellationSource) {
+				this.activeFetchCancellation = undefined;
 			}
+			cancellationSource.dispose();
     }
-  }
-
-  private connectFetchStatus() {
-    this.fetchStatusListener.clear();
-
-    const fetchApi = this.context.nativeHost.fetch;
-    if (!this.context.desktopRuntime || !fetchApi) {
-      this.dispatch({ type: 'FETCH_STATUS_CLEARED' });
-      return;
-    }
-
-    this.fetchStatusListener.value =
-      fetchApi.onFetchStatus((status) => {
-				if (status.requestId !== this.activeFetchRequestId) {
-					return;
-				}
-        this.dispatch({ type: 'FETCH_STATUS_UPDATED', status });
-				if (status.phase === 'targetRequired') {
-					this.context.onWebContentsViewRequired(status.targetId, status.pageUrl);
-				}
-      });
   }
 
   private dispatch(event: BatchFetchMachineEvent) {
@@ -320,7 +268,7 @@ export class BatchFetchController {
     }
 
     this.machineState = nextMachineState;
-		this.snapshot = createBatchFetchSnapshot(this.machineState, this.context.ui);
+		this.snapshot = createBatchFetchSnapshot(this.machineState);
     this.emitChange();
   }
 

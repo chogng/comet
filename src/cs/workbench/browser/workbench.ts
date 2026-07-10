@@ -116,6 +116,7 @@ import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView
 import { getLocaleMessages } from 'language/i18n';
 import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
+import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
@@ -468,6 +469,7 @@ class WorkbenchHost {
     @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
     @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
+    @IFetchService private readonly fetchService: IFetchService,
     @IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
     @ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
   ) {
@@ -1582,35 +1584,17 @@ class WorkbenchHost {
     const handleBatchFetchSuccess = (nextArticles: FetchArticle[]) => {
       setWorkbenchArticles(nextArticles);
     };
-		const handleFetchWebContentsViewRequired = (
-			targetId: string,
-			pageUrl: string,
-		) => {
-			handleOpenEditor({
-				kind: 'browser',
-				disposition: 'reveal-or-open',
-				resource: BrowserViewUri.forId(targetId),
-				options: {
-					viewState: {
-						url: pageUrl,
-					},
-				},
-			});
-		};
-
     const batchFetchControllerInstance = getWorkbenchBatchFetchController({
-      desktopRuntime,
       addressBarUrl: fetchSeedUrl || webUrl,
       journalSourceOverrides,
       batchStartDate,
       batchEndDate,
-      invokeDesktop,
-      nativeHost,
+		batchLimit,
+		fetchService: this.fetchService,
       notificationService: this.notificationService,
       ui,
       onBeforeFetch: handleBatchFetchStart,
       onFetchSuccess: handleBatchFetchSuccess,
-		onWebContentsViewRequired: handleFetchWebContentsViewRequired,
     });
     const { isBatchLoading } = batchFetchControllerInstance.getSnapshot();
     const chatArticleBatch = chatServiceInstance.collectArticleBatch(filteredArticles);
@@ -1723,18 +1707,16 @@ class WorkbenchHost {
       },
       batchFetchController: batchFetchControllerInstance,
       batchFetchContext: {
-        desktopRuntime,
         addressBarUrl: fetchSeedUrl || webUrl,
         journalSourceOverrides,
         batchStartDate,
         batchEndDate,
-        invokeDesktop,
-        nativeHost,
+		batchLimit,
+		fetchService: this.fetchService,
         notificationService: this.notificationService,
         ui,
         onBeforeFetch: handleBatchFetchStart,
         onFetchSuccess: handleBatchFetchSuccess,
-			onWebContentsViewRequired: handleFetchWebContentsViewRequired,
       },
     });
 
@@ -1956,8 +1938,6 @@ class WorkbenchHost {
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
         onJournalSourceTitleChange:
           settingsControllerInstance.setJournalSourceTitle,
-		onJournalSourceFetchTargetChange:
-			settingsControllerInstance.setJournalSourceFetchTarget,
         onFetchStartDateChange: setBatchStartDate,
         onFetchEndDateChange: setBatchEndDate,
         onSystemNotificationsEnabledChange:

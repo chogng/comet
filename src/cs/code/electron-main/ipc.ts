@@ -12,8 +12,6 @@ import type {
   AppCommandResultMap,
   CancelDocumentTaskPayload,
   DeleteLibraryDocumentPayload,
-  FetchArticlePayload,
-  FetchLatestArticlesPayload,
   IndexDownloadedPdfPayload,
   LibraryDocumentStatusPayload,
   ListTranslationModelsPayload,
@@ -66,15 +64,9 @@ import {
   clearWorkbenchSharedSessionCache,
   clearWorkbenchSharedSessionCookies,
 } from 'cs/platform/native/electron-main/sharedWebSession';
-import {
-  fetchArticle,
-  fetchLatestArticles,
-} from 'cs/workbench/services/fetch/electron-main/dispatch';
 import { exportArticlesDocx } from 'cs/code/electron-main/document/docx';
 import { exportEditorDocx } from 'cs/code/electron-main/document/editorDocx';
 import { archiveWebContentHtml } from 'cs/code/electron-main/document/webContentHtmlArchive';
-import { FetchPageSessionService } from 'cs/workbench/services/fetch/electron-main/fetchPageSessionService';
-import { FetchService } from 'cs/workbench/services/fetch/electron-main/fetchService';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import { resolveActiveWebContentSnapshotHtml } from 'cs/code/electron-main/pdf/webContentSnapshot';
 import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
@@ -105,7 +97,6 @@ import {
 import type { NativeHostMainService } from 'cs/platform/native/electron-main/nativeHostMainService';
 import type { IThemeMainService } from 'cs/platform/theme/electron-main/themeMainService';
 import { SharedProcess } from 'cs/platform/sharedProcess/electron-main/sharedProcess';
-const FETCH_STATUS_CHANNEL = 'app:fetch-status';
 const DOCUMENT_TRANSLATION_PROGRESS_CHANNEL = 'app:document-translation-progress';
 type AppInvokeResponse<T> =
   | { ok: true; result: T }
@@ -119,7 +110,6 @@ const browserViewMainService = browserViewIpcDisposables.add(
 const browserViewGroupMainService = browserViewIpcDisposables.add(
   new BrowserViewGroupMainService(browserViewMainService),
 );
-const fetchService = new FetchService(new FetchPageSessionService(browserViewMainService));
 const sharedProcess = new SharedProcess();
 const sharedProcessWindowCleanup = new Set<number>();
 
@@ -188,35 +178,6 @@ async function invokeCommand<TCommand extends AppCommand>(
   emitToRenderer?: (channel: string, payload: unknown) => void,
 ): Promise<AppCommandResultMap[TCommand]> {
   switch (command) {
-    case 'fetch_article':
-		{
-			const fetchArticlePayload = payload as FetchArticlePayload;
-			return fetchArticle(
-				fetchArticlePayload.url,
-				storage,
-				{
-					requestId: fetchArticlePayload.requestId,
-					fetchTarget: fetchArticlePayload.fetchTarget,
-					fetchService,
-					onFetchStatus: status => emitToRenderer?.(FETCH_STATUS_CHANNEL, status),
-				},
-			) as Promise<AppCommandResultMap[TCommand]>;
-		}
-    case 'fetch_latest_articles':
-      {
-        const fetchLatestPayload = payload as FetchLatestArticlesPayload;
-        return fetchLatestArticles(
-          fetchLatestPayload,
-          storage,
-          {
-				requestId: fetchLatestPayload.requestId,
-				fetchService,
-            onFetchStatus: (status) => {
-              emitToRenderer?.(FETCH_STATUS_CHANNEL, status);
-            },
-          },
-        ) as Promise<AppCommandResultMap[TCommand]>;
-      }
     case 'clear_web_cache':
       return clearWorkbenchSharedSessionCache() as Promise<AppCommandResultMap[TCommand]>;
     case 'clear_web_cookies':

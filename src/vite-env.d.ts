@@ -18,7 +18,6 @@ type DesktopWebContentBounds = import('cs/base/parts/sandbox/common/sandboxTypes
 type DesktopWebContentState = import('cs/base/parts/sandbox/common/sandboxTypes').WebContentState;
 type DesktopFetchChannel = import('cs/base/parts/sandbox/common/sandboxTypes').FetchChannel;
 type DesktopPreviewReuseMode = import('cs/base/parts/sandbox/common/sandboxTypes').WebContentReuseMode;
-type DesktopFetchStatus = import('cs/base/parts/sandbox/common/sandboxTypes').FetchStatus;
 type ElectronInvoke = import('cs/base/parts/sandbox/common/sandboxTypes').ElectronInvoke;
 
 interface Window {

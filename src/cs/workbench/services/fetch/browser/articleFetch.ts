@@ -3,14 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type {
-	FetchTargetPreference,
-  JournalSourceOverride,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { JournalSourceOverride } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
+import { isWithinDateRange, parseDateHintFromText, parseDateRange } from 'cs/base/common/date';
+import { URI } from 'cs/base/common/uri';
 import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
-import type {
-  ElectronInvoke,
-} from 'cs/base/parts/sandbox/common/electronTypes';
 import { isDateRangeValid } from 'cs/workbench/common/dateRange';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import {
@@ -20,6 +17,7 @@ import {
   sanitizeBatchSources,
 } from 'cs/workbench/services/config/configSchema';
 import type { BatchSource } from 'cs/workbench/services/config/configSchema';
+import type { ArticleDetail, ArticleListItem, ArticlePage, IFetchService, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import {
   FetchErrorCode,
   fetchError,
@@ -33,36 +31,32 @@ type BatchFetchSource = {
   sourceId: string;
   pageUrl: string;
   journalTitle: string;
-	fetchTarget: FetchTargetPreference;
 };
 
 export type FetchLatestArticlesBatchResult =
   | { ok: true; articles: FetchArticle[] }
-  | { ok: false; reason: 'desktop_unsupported' }
   | {
       ok: false;
       error: FetchErrorData;
     };
 
-type FetchLatestArticlesBatchParams = {
-	requestId: string;
-  desktopRuntime: boolean;
+export type FetchLatestArticlesBatchParams = {
   batchSources: ReadonlyArray<BatchSource>;
   sourceTable: ReadonlyArray<BatchSource>;
   limit?: number;
   startDate?: string | null;
   endDate?: string | null;
-  invokeDesktop: ElectronInvoke;
+  fetchService: IFetchService;
+  token?: CancellationToken;
 };
 
 function buildManualBatchSource(url: string, sourceTable: ReadonlyArray<BatchSource>): BatchSource {
-	const { articleListId, defaultJournalTitle, fetchTarget } = resolveSourceTableMetadata(url, sourceTable);
+	const { articleListId, defaultJournalTitle } = resolveSourceTableMetadata(url, sourceTable);
 
   return {
     id: manualAddressBarSourceId,
     url,
     journalTitle: defaultJournalTitle || articleListId || '',
-		fetchTarget,
   };
 }
 
@@ -77,12 +71,10 @@ function toBatchFetchSourceCandidate(
   const {
     articleListId,
     defaultJournalTitle,
-		fetchTarget: matchedFetchTarget,
   } = resolveSourceTableMetadata(normalizedUrl, sourceTable);
 
   const sourceId = ensureBatchSourceId(source.id || articleListId, index);
   const journalTitle = source.journalTitle.trim() || defaultJournalTitle || sourceId;
-	const fetchTarget = matchedFetchTarget;
 
   return {
     dedupeKey: normalizedUrl,
@@ -90,14 +82,12 @@ function toBatchFetchSourceCandidate(
       sourceId,
       pageUrl: normalizedUrl,
       journalTitle,
-			fetchTarget,
     },
   };
 }
 
 function canImproveBatchFetchSource(existing: BatchFetchSource, candidate: BatchFetchSource) {
-  return (!existing.journalTitle && candidate.journalTitle) ||
-		existing.fetchTarget !== candidate.fetchTarget;
+	return !existing.journalTitle && candidate.journalTitle;
 }
 
 export function prepareBatchSourcesForFetch(
@@ -121,7 +111,6 @@ export function prepareBatchSourcesForFetch(
         deduped.set(dedupeKey, {
           ...existing,
           journalTitle: candidate.journalTitle,
-					fetchTarget: candidate.fetchTarget,
         });
       }
       continue;
@@ -153,7 +142,6 @@ function createBatchSourceFromJournalOverride(
     id: `override-${index + 1}`,
     url: override.url,
     journalTitle: override.journalTitle?.trim() ?? '',
-		fetchTarget: override.fetchTarget ?? 'background',
   };
 }
 
@@ -167,19 +155,14 @@ export function resolveBatchFetchSourceTable(
 }
 
 export async function fetchLatestArticlesBatch({
-	requestId,
-  desktopRuntime,
   batchSources,
   sourceTable,
-  limit: _limit,
+  limit,
   startDate,
   endDate,
-  invokeDesktop,
+  fetchService,
+  token = CancellationTokenNone,
 }: FetchLatestArticlesBatchParams): Promise<FetchLatestArticlesBatchResult> {
-  if (!desktopRuntime) {
-    return { ok: false, reason: 'desktop_unsupported' };
-  }
-
   const { sources } = prepareBatchSourcesForFetch(batchSources, sourceTable);
   if (sources.length === 0) {
     return { ok: false, error: parseFetchErrorData(fetchError(FetchErrorCode.BatchPageUrlsEmpty)) };
@@ -192,14 +175,89 @@ export async function fetchLatestArticlesBatch({
   }
 
   try {
-    const articles = await invokeDesktop<FetchArticle[]>('fetch_latest_articles', {
-		requestId,
-      sources,
-      startDate: startDate || null,
-      endDate: endDate || null,
-    });
-    return { ok: true, articles };
-  } catch (error) {
-    return { ok: false, error: parseFetchErrorData(error) };
-  }
+		const range = parseDateRange(startDate, endDate);
+		const articles: FetchArticle[] = [];
+		const seenArticleIds = new Set<string>();
+		const failedSources: Record<string, unknown>[] = [];
+		const maximum = limit ?? 50;
+		for (const source of sources) {
+			if (articles.length >= maximum) {
+				break;
+			}
+			try {
+				const journal = resolveJournal(fetchService.getJournals(), URI.parse(source.pageUrl));
+				if (!journal) {
+					throw new Error(`No fetch provider is registered for "${source.pageUrl}".`);
+				}
+				const page = await fetchService.fetchArticleListUrl(journal.id, URI.parse(source.pageUrl), source.journalTitle, token);
+				for (const item of getPageItems(page, fetchService)) {
+					if (articles.length >= maximum || seenArticleIds.has(item.articleId)) {
+						continue;
+					}
+					const date = parseDateHintFromText(item.publishedAt);
+					if (!isWithinDateRange(date, range)) {
+						continue;
+					}
+					const detail = await fetchService.fetchArticle(item.articleId, token);
+					seenArticleIds.add(item.articleId);
+					articles.push(toFetchArticle(detail, journal, source.sourceId, articles.length + 1));
+				}
+			} catch (error) {
+				failedSources.push({ sourceId: source.sourceId, pageUrl: source.pageUrl, error: error instanceof Error ? error.message : String(error) });
+			}
+		}
+		if (articles.length === 0) {
+			if (failedSources.length > 0) {
+				throw fetchError(FetchErrorCode.BatchSourceFetchFailed, { failedSources });
+			}
+			if (range.start || range.end) {
+				throw fetchError(FetchErrorCode.BatchNoMatchInDateRange, { startDate: range.start, endDate: range.end });
+			}
+			throw fetchError(FetchErrorCode.BatchNoValidArticles);
+		}
+		return { ok: true, articles };
+	} catch (error) {
+		return { ok: false, error: parseFetchErrorData(error) };
+	}
+}
+
+function resolveJournal(journals: readonly JournalDescriptor[], uri: URI): JournalDescriptor | undefined {
+	return journals.find(journal => journal.homeUrl.authority === uri.authority);
+}
+
+function getPageItems(page: ArticlePage, fetchService: IFetchService): ArticleListItem[] {
+	return [...page.groups.flatMap(group => group.itemIds), ...page.ungroupedItemIds]
+		.map(itemId => fetchService.getArticleListItem(itemId))
+		.filter((item): item is ArticleListItem => !!item);
+}
+
+function toFetchArticle(
+	detail: ArticleDetail,
+	journal: JournalDescriptor,
+	articleListSourceId: string,
+	fetchOrder: number,
+): FetchArticle {
+	return {
+		sourceUri: detail.url.toJSON(),
+		canonicalUri: detail.url.toJSON(),
+		doi: detail.doi,
+		title: detail.title,
+		publication: {
+			id: detail.publication.journalId ?? journal.id,
+			title: detail.publication.title,
+			publisherId: journal.providerId,
+			publisherTitle: journal.providerId,
+		},
+		articleKind: 'other',
+		sourceArticleType: detail.articleType,
+		authors: detail.authors.map(author => ({ name: author.name })),
+		abstract: detail.abstract,
+		sections: [],
+		figures: [],
+		references: [],
+		publishedAt: detail.publishedAt,
+		fetchedAt: new Date().toISOString(),
+		fetchOrder,
+		articleListSourceId,
+	};
 }

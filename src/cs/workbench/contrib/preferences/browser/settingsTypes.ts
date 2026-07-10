@@ -4,7 +4,6 @@ import type {
   AppStartupLayout,
   AppTheme,
   BatchSource,
-	FetchTargetPreference,
   JournalSourceOverride,
   LibraryDocumentSummary,
   LibraryStorageMode,
@@ -60,7 +59,7 @@ export type SettingsPartProps = {
   editorDraftFontFamilyOptions: readonly SettingsDropdownOption[];
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
   batchLimit: number; onBatchLimitChange: (value: string) => void;
-  supportedSources: BatchSource[]; journalSourceOverrides: JournalSourceOverride[]; showSupportedSources: boolean; onToggleSupportedSources: () => void; onJournalSourceTitleChange: (url: string, journalTitle: string) => void; onJournalSourceFetchTargetChange: (url: string, fetchTarget: FetchTargetPreference) => void;
+  supportedSources: BatchSource[]; journalSourceOverrides: JournalSourceOverride[]; showSupportedSources: boolean; onToggleSupportedSources: () => void; onJournalSourceTitleChange: (url: string, journalTitle: string) => void;
   fetchStartDate: string; onFetchStartDateChange: (value: string) => void; fetchEndDate: string; onFetchEndDateChange: (value: string) => void; systemNotificationsEnabled: boolean; onSystemNotificationsEnabledChange: (checked: boolean) => void; warningNotificationsEnabled: boolean; onWarningNotificationsEnabledChange: (checked: boolean) => void; menuBarIconEnabled: boolean; onMenuBarIconEnabledChange: (checked: boolean) => void; completionNotificationsEnabled: boolean; onCompletionNotificationsEnabledChange: (checked: boolean) => void; useMica: boolean; onUseMicaChange: (checked: boolean) => void; statusbarVisible: boolean; onStatusbarVisibleChange: (checked: boolean) => void; startupLayout: AppStartupLayout; onStartupLayoutChange: (value: AppStartupLayout) => void; browserTabKeepAliveLimit: number; onBrowserTabKeepAliveLimitChange: (value: string) => void; browserMaxHistoryEntries: number; onBrowserMaxHistoryEntriesChange: (value: string) => void; browserPageZoom: string; onBrowserPageZoomChange: (value: string) => void; browserSearchEngine: string; onBrowserSearchEngineChange: (value: string) => void; theme: AppTheme; onThemeChange: (value: AppTheme) => void; knowledgeBaseEnabled: boolean;
   onKnowledgeBaseEnabledChange: (checked: boolean) => void; autoIndexDownloadedPdf: boolean; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; knowledgeBasePdfDownloadDir: string; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void; libraryStorageMode: LibraryStorageMode;
   onLibraryStorageModeChange: (value: LibraryStorageMode) => void; libraryDirectory: string; onLibraryDirectoryChange: (value: string) => void; onChooseLibraryDirectory: () => void;
@@ -95,7 +94,6 @@ export type SettingsPartState = {
 export type SettingsPartActions = {
   onBatchLimitChange: (value: string) => void;
   onJournalSourceTitleChange: (url: string, journalTitle: string) => void;
-	onJournalSourceFetchTargetChange: (url: string, fetchTarget: FetchTargetPreference) => void;
   onFetchStartDateChange: (value: string) => void; onFetchEndDateChange: (value: string) => void; onSystemNotificationsEnabledChange: (checked: boolean) => void; onWarningNotificationsEnabledChange: (checked: boolean) => void; onMenuBarIconEnabledChange: (checked: boolean) => void; onCompletionNotificationsEnabledChange: (checked: boolean) => void; onUseMicaChange: (checked: boolean) => void; onStatusbarVisibleChange: (checked: boolean) => void; onStartupLayoutChange: (value: AppStartupLayout) => void; onBrowserTabKeepAliveLimitChange: (value: string) => void; onBrowserMaxHistoryEntriesChange: (value: string) => void; onBrowserPageZoomChange: (value: string) => void; onBrowserSearchEngineChange: (value: string) => void; onThemeChange: (value: AppTheme) => void; onKnowledgeBaseEnabledChange: (checked: boolean) => void; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void;
   onLibraryStorageModeChange: (value: LibraryStorageMode) => void; onLibraryDirectoryChange: (value: string) => void; onChooseLibraryDirectory: () => void; onMaxConcurrentIndexJobsChange: (value: string) => void;
   onRagProviderApiKeyChange: (provider: RagProviderId, apiKey: string) => void; onRagProviderBaseUrlChange: (provider: RagProviderId, baseUrl: string) => void; onRagProviderEmbeddingModelChange: (provider: RagProviderId, model: string) => void;

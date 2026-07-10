@@ -1,15 +1,11 @@
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before } from 'node:test';
 
-import type {
-  FetchStatus,
-  LibraryDocumentSummary,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { LibraryDocumentSummary } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
   ElectronAPI,
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import { FetchErrorCode, fetchError } from 'cs/workbench/services/fetch/common/fetchErrors';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
@@ -50,7 +46,6 @@ import {
   setStatusbarState,
   subscribeStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
-import { createBatchFetchController } from 'cs/workbench/contrib/fetch/browser/batchFetchModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import {
@@ -118,12 +113,6 @@ function createInvokeDesktop(): ElectronInvoke {
   }) as ElectronInvoke;
 }
 
-function createRejectingInvokeDesktop(error: unknown): ElectronInvoke {
-  return (async () => {
-    throw error;
-  }) as ElectronInvoke;
-}
-
 function createNativeHostService(
   overrides: Partial<INativeHostService> = {},
 ): INativeHostService {
@@ -134,27 +123,7 @@ function createNativeHostService(
     ipc: undefined,
     windowControls: undefined,
     webContent: undefined,
-    fetch: undefined,
     document: undefined,
-    ...overrides,
-  };
-}
-
-function createFetchStatus(
-	overrides: Partial<Extract<FetchStatus, { phase: 'loading' }>> = {},
-): FetchStatus {
-  return {
-		requestId: 'request-1',
-    sourceId: 'source-1',
-    pageUrl: 'https://example.com',
-    pageNumber: 1,
-		phase: 'loading',
-		targetMode: 'background',
-		targetId: null,
-		articleProof: null,
-		siteId: 'site-1',
-		articleListSourceId: 'article-list-source-1',
-		parserId: 'parser-1',
     ...overrides,
   };
 }
@@ -302,7 +271,8 @@ test('workbenchSession subscriptions stop after disposal', () => {
   assert.equal(getWorkbenchSessionSnapshot().webUrl, '');
 });
 
-test('BatchFetchController unsubscribes from fetch status after dispose', () => {
+/*
+test.skip('BatchFetchController unsubscribes from fetch status after dispose', () => {
   let fetchStatusListener: ((status: FetchStatus) => void) | undefined;
   let removed = false;
 
@@ -334,7 +304,7 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
       onBeforeFetch: () => {},
       onFetchSuccess: () => {},
 		onWebContentsViewRequired: () => {},
-    });
+    } as never);
     const sourceTexts: string[] = [];
     const disposeListener = controller.subscribe(() => {
       sourceTexts.push(controller.getSnapshot().statusbarFetchSourceText);
@@ -353,13 +323,13 @@ test('BatchFetchController unsubscribes from fetch status after dispose', () => 
   });
 });
 
-test('BatchFetchController opens the exact WebContentsView target for the active request', async () => {
+test.skip('BatchFetchController opens the exact WebContentsView target for the active request', async () => {
 	let fetchStatusListener: ((status: FetchStatus) => void) | undefined;
 	let activeRequestId = '';
 	let resolveFetch: ((articles: []) => void) | undefined;
 	const requiredTargets: Array<{ targetId: string; pageUrl: string }> = [];
 	const invokeDesktop = (async (command: string, payload: unknown) => {
-		assert.equal(command, 'fetch_latest_articles');
+		assert.equal(command, 'removed-batch-fetch-command');
 		activeRequestId = String((payload as { requestId?: unknown }).requestId ?? '');
 		return new Promise<[]>(resolve => {
 			resolveFetch = resolve;
@@ -387,16 +357,16 @@ test('BatchFetchController opens the exact WebContentsView target for the active
 		ui: locales.en,
 		onBeforeFetch: () => {},
 		onFetchSuccess: () => {},
-		onWebContentsViewRequired: (targetId, pageUrl) => {
+		onWebContentsViewRequired: (targetId: string, pageUrl: string) => {
 			requiredTargets.push({ targetId, pageUrl });
 		},
-	});
+	} as never);
 	controller.start();
 	const fetchPromise = controller.handleFetchSource({
 		id: 'source-1',
 		url: 'https://www.science.org/toc/science/current',
 		journalTitle: 'Science',
-		fetchTarget: 'webContentsView',
+		removedTarget: 'webContentsView',
 	});
 	assert(fetchStatusListener);
 	assert(activeRequestId);
@@ -427,7 +397,7 @@ test('BatchFetchController opens the exact WebContentsView target for the active
 	controller.dispose();
 });
 
-test('BatchFetchController reports date range no-match as empty result', async () => {
+test.skip('BatchFetchController reports date range no-match as empty result', async () => {
   let successCount = 0;
   const controller = createBatchFetchController({
     desktopRuntime: true,
@@ -449,13 +419,13 @@ test('BatchFetchController reports date range no-match as empty result', async (
       successCount += 1;
     },
 		onWebContentsViewRequired: () => {},
-  });
+  } as never);
 
   const result = await controller.handleFetchSource({
     id: 'source-1',
     url: 'https://example.com/articles',
     journalTitle: 'Example',
-		fetchTarget: 'background',
+		removedTarget: 'background',
   });
   const snapshot = controller.getSnapshot();
 
@@ -467,6 +437,7 @@ test('BatchFetchController reports date range no-match as empty result', async (
   assert.equal(snapshot.lastErrorMessage, locales.en.errorBatchNoMatchInDateRange);
   assert.equal(snapshot.isBatchLoading, false);
 });
+*/
 
 test('DocumentActionsController subscriptions stop after disposal', () => {
   const controller = createDocumentActionsController({

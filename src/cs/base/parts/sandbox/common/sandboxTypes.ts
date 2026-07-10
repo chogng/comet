@@ -1,7 +1,6 @@
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import type { UriComponents } from 'cs/base/common/uri';
 import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
-import type { FetchArticleProof } from 'cs/base/parts/sandbox/common/fetchArticleProof';
 
 export type Locale = 'zh' | 'en';
 export type AppTheme = 'light' | 'dark' | 'system';
@@ -17,13 +16,11 @@ export interface BatchSource {
   id: string;
   url: string;
   journalTitle: string;
-	fetchTarget: FetchTargetPreference;
 }
 
 export interface JournalSourceOverride {
   url: string;
   journalTitle?: string;
-	fetchTarget?: FetchTargetPreference;
 }
 
 export type LlmProviderId =
@@ -96,7 +93,6 @@ export interface FetchBatchSource {
   sourceId?: string;
   pageUrl?: string;
   journalTitle?: string;
-	fetchTarget?: FetchTargetPreference;
 }
 
 export type DateRange = import('cs/base/common/date').DateRange;
@@ -145,55 +141,6 @@ export interface WindowState {
   isFullscreen: boolean;
 }
 
-export type FetchTargetPreference = 'background' | 'webContentsView';
-
-export type FetchFailureReason =
-	| 'loadTimeout'
-	| 'navigationFailed'
-	| 'articleProofFailed'
-	| 'articleListProofFailed'
-	| 'rateLimited'
-	| 'accessDenied'
-	| 'javascriptError';
-
-interface FetchStatusBase {
-	readonly requestId: string;
-	readonly sourceId: string;
-	readonly pageUrl: string;
-	readonly pageNumber: number;
-	readonly siteId: string | null;
-	readonly articleListSourceId: string | null;
-	readonly parserId: string | null;
-	readonly paginationStopped?: boolean;
-	readonly paginationStopReason?: string | null;
-}
-
-export type FetchStatus =
-	| FetchStatusBase & {
-		readonly phase: 'loading';
-		readonly targetMode: FetchTargetPreference;
-		readonly targetId: string | null;
-		readonly articleProof: FetchArticleProof | null;
-	}
-	| FetchStatusBase & {
-		readonly phase: 'targetRequired';
-		readonly targetMode: 'webContentsView';
-		readonly targetId: string;
-		readonly articleProof: FetchArticleProof | null;
-	}
-	| FetchStatusBase & {
-		readonly phase: 'targetReady';
-		readonly targetMode: 'webContentsView';
-		readonly targetId: string;
-		readonly articleProof: FetchArticleProof | null;
-	}
-	| FetchStatusBase & {
-		readonly phase: 'failed';
-		readonly targetMode: FetchTargetPreference;
-		readonly targetId: string | null;
-		readonly failureReason: FetchFailureReason;
-		readonly articleProof: FetchArticleProof | null;
-	};
 
 export type DocumentTranslationProgressPhase = 'started' | 'batch' | 'completed' | 'failed';
 
@@ -204,13 +151,6 @@ export interface DocumentTranslationProgress {
   provider: string;
   model: string;
   message?: string | null;
-}
-
-export interface FetchLatestArticlesPayload {
-	requestId: string;
-	sources?: FetchBatchSource[];
-	startDate?: string | null;
-	endDate?: string | null;
 }
 
 export interface WebContentPdfDownloadPayload {
@@ -280,12 +220,6 @@ export interface ExportEditorDocxPayload {
   title?: string | null;
   preferredDirectory?: string | null;
   locale?: Locale;
-}
-
-export interface FetchArticlePayload {
-	requestId: string;
-  url?: string;
-	fetchTarget: FetchTargetPreference;
 }
 
 export interface SaveSettingsPayload {
@@ -629,8 +563,6 @@ export interface RunMainAgentTurnResult {
 }
 
 export interface AppCommandPayloadMap {
-  fetch_article: FetchArticlePayload;
-  fetch_latest_articles: FetchLatestArticlesPayload;
   clear_web_cache: undefined;
   clear_web_cookies: undefined;
   load_settings: undefined;
@@ -665,8 +597,6 @@ export interface AppCommandPayloadMap {
 }
 
 export interface AppCommandResultMap {
-  fetch_article: FetchArticle;
-  fetch_latest_articles: FetchArticle[];
   clear_web_cache: boolean;
   clear_web_cookies: boolean;
   load_settings: AppSettings;

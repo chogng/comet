@@ -1,12 +1,7 @@
 import './configurationService.test';
 import '../../../platform/browserView/test/common/cdpProxy.test';
 import '../../../platform/browserView/test/electron-main/browserViewDebugger.test';
-import './articlePageProof.test';
 import './docx.test';
-import './fetchPageSession.test';
-import './fetchArticleListService.test';
-import './fetchSitesProvider.test';
-import './fetchArchitecture.test';
 import './llm.test';
 import './storageService.test';
 import './translationRouter.test';

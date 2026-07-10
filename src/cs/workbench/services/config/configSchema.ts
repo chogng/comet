@@ -1,7 +1,4 @@
-import type {
-	BatchSource as DesktopBatchSource,
-	FetchTargetPreference,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { BatchSource as DesktopBatchSource } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { sanitizeUrlInput } from 'cs/workbench/common/url';
 import {
   batchLimitMax,
@@ -22,14 +19,12 @@ export type ResolvedSourceTableMetadata = {
   lookupKey: string;
   articleListId: string;
   journalTitle: string;
-  fetchTarget: FetchTargetPreference;
   defaultJournalTitle: string;
 };
 
 type SourceLookupMaps = {
   journalTitleByLookupKey: Map<string, string>;
   articleListIdByLookupKey: Map<string, string>;
-	fetchTargetByLookupKey: Map<string, FetchTargetPreference>;
 };
 
 function createSourceLookupKey(input: unknown) {
@@ -89,7 +84,6 @@ export function createEmptyBatchSource(): BatchSource {
     id: createRandomBatchSourceId(),
     url: '',
     journalTitle: '',
-		fetchTarget: 'background',
   };
 }
 
@@ -114,10 +108,6 @@ function createLookupMap<T extends string>(table: ReadonlyArray<{ url: string; v
   return map;
 }
 
-export function normalizeFetchTargetPreference(value: unknown): FetchTargetPreference {
-	return value === 'webContentsView' ? 'webContentsView' : 'background';
-}
-
 function createSourceLookupMaps(entries: ReadonlyArray<BatchSource>): SourceLookupMaps {
   return {
     journalTitleByLookupKey: createLookupMap(
@@ -132,19 +122,12 @@ function createSourceLookupMaps(entries: ReadonlyArray<BatchSource>): SourceLook
         value: item.id.trim(),
       })),
     ),
-		fetchTargetByLookupKey: createLookupMap(
-			entries.map(item => ({
-				url: item.url,
-				value: item.fetchTarget,
-			})),
-		),
   };
 }
 
 const emptySourceLookupMaps: SourceLookupMaps = {
   journalTitleByLookupKey: new Map<string, string>(),
   articleListIdByLookupKey: new Map<string, string>(),
-	fetchTargetByLookupKey: new Map<string, FetchTargetPreference>(),
 };
 
 function resolveSourceLookupMaps(batchSources?: ReadonlyArray<BatchSource>): SourceLookupMaps {
@@ -162,7 +145,6 @@ function sanitizeBatchSourceEntry(value: unknown, index: number): BatchSource {
       id: '',
       url: '',
       journalTitle: '',
-			fetchTarget: 'background',
     };
   }
 
@@ -173,7 +155,6 @@ function sanitizeBatchSourceEntry(value: unknown, index: number): BatchSource {
     id: ensureBatchSourceId(record.id, index),
     url,
     journalTitle: String(record.journalTitle ?? '').trim(),
-		fetchTarget: normalizeFetchTargetPreference(record.fetchTarget),
   };
 }
 
@@ -191,7 +172,6 @@ function dedupeBatchSources(sources: BatchSource[]): BatchSource[] {
       ...previous,
       id: source.id || previous.id,
       journalTitle: source.journalTitle || previous.journalTitle,
-			fetchTarget: source.fetchTarget,
     });
   }
 
@@ -227,7 +207,6 @@ export function resolveSourceTableMetadata(
       lookupKey: '',
       articleListId: '',
       journalTitle: '',
-			fetchTarget: 'background',
       defaultJournalTitle: '',
     };
   }
@@ -235,13 +214,11 @@ export function resolveSourceTableMetadata(
   const lookupMaps = resolveSourceLookupMaps(batchSources);
   const articleListId = lookupMaps.articleListIdByLookupKey.get(lookupKey) ?? '';
   const journalTitle = lookupMaps.journalTitleByLookupKey.get(lookupKey) ?? '';
-	const fetchTarget = lookupMaps.fetchTargetByLookupKey.get(lookupKey) ?? 'background';
 
   return {
     lookupKey,
     articleListId,
     journalTitle,
-		fetchTarget,
     defaultJournalTitle: journalTitle || articleListId,
   };
 }
@@ -264,7 +241,6 @@ export function getConfigBatchSourceSeed(): BatchSource[] {
     id: source.id,
     url: source.url,
     journalTitle: source.journalTitle,
-		fetchTarget: source.fetchTarget,
   }));
 }
 

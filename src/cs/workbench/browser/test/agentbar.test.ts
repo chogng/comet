@@ -538,7 +538,6 @@ test('composer article quick comet-hover-action opens source menu and runs selec
         id: 'science',
         url: 'https://www.science.org/toc/science/current',
         journalTitle: 'Science',
-				fetchTarget: 'background',
       },
     ],
     onFetchArticleSource: (source) => {
@@ -598,7 +597,6 @@ test('composer article quick menu is disposed with the chat widget', async () =>
         id: 'science',
         url: 'https://www.science.org/toc/science/current',
         journalTitle: 'Science',
-				fetchTarget: 'background',
       },
     ],
   });

@@ -141,6 +141,30 @@ export class FetchService extends Disposable implements IFetchService {
 		return this._fetchArticleListSource(sourceId, token, false);
 	}
 
+	async fetchArticleListUrl(
+		journalId: JournalId,
+		url: ArticleListSource['url'],
+		label: string,
+		token: CancellationToken,
+	): Promise<ArticlePage> {
+		const journal = this._requireJournal(journalId);
+		const provider = this._getProvider(journal.providerId);
+		const source = this._createSource(journal, provider, label, url);
+		let page: ArticlePage | undefined;
+		await this._startTask(this.sourceTasks, source.id, token, async taskToken => {
+			this.sources.set(source.id, source);
+			const parsed = await provider.fetchArticleListPage(journal, source, source.url, taskToken);
+			this._throwIfCancelled(taskToken);
+			this._replaceSourcePages(source.id);
+			page = this._commitPage(journal, source, provider, parsed, false);
+			this.onDidChangeSourceEmitter.fire(source.id);
+		}).promise;
+		if (!page) {
+			throw new Error(`Article list URL "${url.toString(true)}" did not produce a page.`);
+		}
+		return page;
+	}
+
 	refreshArticleListSource(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void> {
 		return this._fetchArticleListSource(sourceId, token, true);
 	}
@@ -273,7 +297,7 @@ export class FetchService extends Disposable implements IFetchService {
 		};
 	}
 
-	private _commitPage(journal: JournalDescriptor, source: ArticleListSource, provider: IFetchProvider, parsed: ParsedArticleListPage, append: boolean): void {
+	private _commitPage(journal: JournalDescriptor, source: ArticleListSource, provider: IFetchProvider, parsed: ParsedArticleListPage, append: boolean): ArticlePage {
 		const url = provider.canonicalizePageUri(parsed.url);
 		const pageId = createArticlePageId(source.id, url);
 		const itemIds: ArticleListItemId[] = [];
@@ -304,6 +328,7 @@ export class FetchService extends Disposable implements IFetchService {
 			pageIds.push(pageId);
 		}
 		this.sourcePageIds.set(source.id, pageIds);
+		return page;
 	}
 
 	private _commitItem(journal: JournalDescriptor, provider: IFetchProvider, pageId: ArticlePageId, parsed: ParsedArticleListItem): ArticleListItemId {

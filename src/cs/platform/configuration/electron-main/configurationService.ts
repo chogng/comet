@@ -116,7 +116,6 @@ function createDefaultUserJournalSourceOverrides() {
   return getDefaultBatchSources().map((source): JournalSourceOverride => ({
     url: source.url,
     journalTitle: source.journalTitle,
-		fetchTarget: source.fetchTarget,
   }));
 }
 
@@ -134,7 +133,6 @@ function mergeJournalSourceOverrides(
     merged.set(url, {
       url,
       journalTitle: cleanText(source.journalTitle),
-			fetchTarget: source.fetchTarget === 'webContentsView' ? 'webContentsView' : 'background',
     });
   }
 
@@ -467,7 +465,6 @@ function normalizeJournalSourceOverrides(value: unknown): JournalSourceOverride[
 
     const override: JournalSourceOverride = {
       url,
-			fetchTarget: record.fetchTarget === 'webContentsView' ? 'webContentsView' : 'background',
     };
     const journalTitle = cleanText(record.journalTitle);
     if (journalTitle) {

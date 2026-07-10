@@ -46,7 +46,6 @@ async function withConfigurationService(
 type TestJournalSourceOverride = {
   url?: string;
   journalTitle?: string;
-	fetchTarget?: 'background' | 'webContentsView';
 };
 
 function getJournalSourceOverrides(settingsJson: unknown): TestJournalSourceOverride[] {
@@ -82,7 +81,6 @@ test('configuration service reads journal source overrides from user settings js
           {
             url: 'https://example.com/latest',
             journalTitle: 'Example Journal',
-						fetchTarget: 'webContentsView',
           },
         ],
       }),
@@ -96,8 +94,7 @@ test('configuration service reads journal source overrides from user settings js
       settings.journalSourceOverrides.some(
         (source) =>
           source.url === 'https://example.com/latest' &&
-          source.journalTitle === 'Example Journal' &&
-					source.fetchTarget === 'webContentsView',
+          source.journalTitle === 'Example Journal',
       ),
     );
     assert.ok(
@@ -146,7 +143,6 @@ test('configuration service keeps user settings json separate from saved app set
           JSON.stringify({
             url: 'https://example.com/latest',
             journalTitle: 'Example Journal',
-						fetchTarget: 'background',
           }),
       ),
     );
@@ -157,7 +153,6 @@ test('configuration service keeps user settings json separate from saved app set
           JSON.stringify({
             url: 'https://www.science.org/toc/science/current',
             journalTitle: 'Science',
-						fetchTarget: 'background',
           }),
       ),
     );
@@ -282,7 +277,6 @@ test('configuration service creates user settings json with editable journal tit
     assert.deepEqual(sourceOverrides[0], {
       url: 'https://www.science.org/toc/science/current',
       journalTitle: 'Science',
-		fetchTarget: 'background',
     });
   });
 });
@@ -315,7 +309,6 @@ test('configuration service migrates legacy journal source overrides into user s
           JSON.stringify({
             url: 'https://legacy.example/latest',
             journalTitle: 'Legacy Journal',
-						fetchTarget: 'background',
           }),
       ),
     );

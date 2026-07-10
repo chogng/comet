@@ -3,7 +3,6 @@ import type {
   AppCommandPayloadMap,
   AppCommandResultMap,
   DocumentTranslationProgress,
-  FetchStatus,
   WindowControlAction,
   WindowState,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -63,10 +62,6 @@ export interface ElectronWebContentApi {
   onStateChange: (listener: (state: WebContentState) => void) => () => void;
 }
 
-export interface ElectronFetchApi {
-  onFetchStatus: (listener: (status: FetchStatus) => void) => () => void;
-}
-
 export interface ElectronDocumentApi {
   onTranslationProgress: (listener: (progress: DocumentTranslationProgress) => void) => () => void;
 }
@@ -94,6 +89,5 @@ export interface ElectronAPI {
   ipc?: ElectronIpcApi;
   windowControls?: ElectronWindowControls;
   webContent?: ElectronWebContentApi;
-  fetch?: ElectronFetchApi;
   document?: ElectronDocumentApi;
 }

@@ -44,10 +44,6 @@ class WorkbenchNativeHostService implements INativeHostService {
 		return this.api?.webContent;
 	}
 
-	get fetch() {
-		return this.api?.fetch;
-	}
-
 	get document() {
 		return this.api?.document;
 	}

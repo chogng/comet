@@ -25,7 +25,6 @@ function createNativeHostService(): INativeHostService {
     ipc: undefined,
     windowControls: undefined,
     webContent: undefined,
-    fetch: undefined,
     document: undefined,
   };
 }

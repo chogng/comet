@@ -76,7 +76,6 @@ function createNativeHostService(
     ipc: undefined,
     windowControls: undefined,
     webContent: undefined,
-    fetch: undefined,
     document: documentApi,
   };
 }

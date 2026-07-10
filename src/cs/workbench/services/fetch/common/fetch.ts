@@ -168,6 +168,12 @@ export interface IFetchService {
 	getArticleDetail(articleId: ArticleId): ArticleDetail | undefined;
 	discoverArticleListSources(journalId: JournalId, token: CancellationToken): Promise<void>;
 	fetchArticleListSource(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void>;
+	fetchArticleListUrl(
+		journalId: JournalId,
+		url: URI,
+		label: string,
+		token: CancellationToken,
+	): Promise<ArticlePage>;
 	fetchNextPage(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void>;
 	fetchArticle(articleId: ArticleId, token: CancellationToken): Promise<ArticleDetail>;
 	refreshJournal(journalId: JournalId, token: CancellationToken): Promise<void>;

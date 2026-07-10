@@ -1,5 +1,4 @@
 import type {
-  ElectronFetchApi,
   ElectronDocumentApi,
   ElectronInvoke,
   ElectronIpcApi,
@@ -18,6 +17,5 @@ export interface INativeHostService {
   readonly ipc: ElectronIpcApi | undefined;
   readonly windowControls: ElectronWindowControls | undefined;
   readonly webContent: ElectronWebContentApi | undefined;
-  readonly fetch: ElectronFetchApi | undefined;
   readonly document: ElectronDocumentApi | undefined;
 }

@@ -359,7 +359,7 @@ export class SettingsPartView {
         return this.translationSection.getElement();
       },
       batchOptions: renderBatchOptionsSection,
-		supportedSources: props => renderSupportedSourcesSection(props, this.contextViewProvider),
+		supportedSources: props => renderSupportedSourcesSection(props),
       knowledgeBaseLibrary: () => renderLibrarySettingsSection(this.getLibrarySectionProps()),
       knowledgeBaseRag: () => renderRagSettingsSection(this.getRagSectionProps()),
       downloadDirectory: renderDownloadDirectorySection,

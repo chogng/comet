@@ -1,7 +1,6 @@
 import type {
   AppStartupLayout,
   AppTheme,
-	FetchTargetPreference,
   JournalSourceOverride,
   LibraryStorageMode,
   LlmProviderId,
@@ -311,16 +310,12 @@ export class SettingsModel {
 
     const normalizedJournalTitle = String(journalTitle ?? '').trim();
     this.updateSnapshot((snapshot) => {
-			const previousOverride = snapshot.journalSourceOverrides.find(
-				(override) => override.url === normalizedUrl,
-			);
       const nextOverrides = snapshot.journalSourceOverrides.filter(
         (override) => override.url !== normalizedUrl,
       );
 			nextOverrides.push({
 				url: normalizedUrl,
 				journalTitle: normalizedJournalTitle || undefined,
-				fetchTarget: previousOverride?.fetchTarget ?? 'background',
 			});
 
       if (areJsonEqual(snapshot.journalSourceOverrides, nextOverrides)) {
@@ -333,39 +328,6 @@ export class SettingsModel {
       };
     });
   };
-
-	readonly setJournalSourceFetchTarget = (
-		url: string,
-		fetchTarget: FetchTargetPreference,
-	) => {
-		const normalizedUrl = String(url ?? '').trim();
-		if (!normalizedUrl) {
-			return;
-		}
-
-		this.updateSnapshot(snapshot => {
-			const previousOverride = snapshot.journalSourceOverrides.find(
-				override => override.url === normalizedUrl,
-			);
-			const nextOverrides = snapshot.journalSourceOverrides.filter(
-				override => override.url !== normalizedUrl,
-			);
-			nextOverrides.push({
-				url: normalizedUrl,
-				journalTitle: previousOverride?.journalTitle,
-				fetchTarget,
-			});
-
-			if (areJsonEqual(snapshot.journalSourceOverrides, nextOverrides)) {
-				return snapshot;
-			}
-
-			return {
-				...snapshot,
-				journalSourceOverrides: nextOverrides,
-			};
-		});
-	};
 
   readonly setSystemNotificationsEnabled = (systemNotificationsEnabled: boolean) => {
     if (this.snapshot.systemNotificationsEnabled === systemNotificationsEnabled) {

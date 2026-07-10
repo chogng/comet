@@ -161,9 +161,6 @@ function createNativeHostService(): INativeHostService {
     get webContent() {
       return window.electronAPI?.webContent;
     },
-    get fetch() {
-      return window.electronAPI?.fetch;
-    },
     get document() {
       return window.electronAPI?.document;
     },
