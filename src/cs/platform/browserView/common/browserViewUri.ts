@@ -8,6 +8,9 @@ import { URI } from 'cs/base/common/uri';
 
 /**
  * Helper for creating and parsing URIs for browser views.
+ * Examples:
+ * - tab A: actual URL: https://example.com
+ * - tab A: inner URI: vscode-browser:/tab-a
  */
 
 export namespace BrowserViewUri {
