@@ -9,8 +9,9 @@ import type {
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { cleanText } from 'cs/base/common/strings';
 import { normalizeUrl } from 'cs/base/common/url';
+import { appError } from 'cs/base/parts/sandbox/common/appError';
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
-import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/common/browserViewErrors';
+import { BrowserViewErrorCode } from 'cs/platform/browserView/common/browserView';
 import { buildArticleFromHtml } from 'cs/workbench/services/fetch/electron-main/parser';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
@@ -163,7 +164,7 @@ export async function archiveWebContentHtml(
     pageUrl: sourceUrl,
   });
   if (!snapshotHtml) {
-    throw browserViewError(BrowserViewErrorCode.PreviewNotReady);
+    throw appError(BrowserViewErrorCode.PreviewNotReady);
   }
 
   const fallbackTitle = cleanText(payload.pageTitle);

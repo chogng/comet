@@ -10,6 +10,11 @@ import { ITunnelProxyInfo } from 'cs/platform/tunnel/common/tunnelProxy';
 import { IPermissionCategoryState, ISerializedBrowserPermissionsSnapshot, IBrowserDeviceCandidate, BrowserDeviceType, PermissionCategory } from 'cs/platform/browserView/common/browserPermissions';
 
 const commandPrefix = 'workbench.action.browser';
+
+export enum BrowserViewErrorCode {
+	PreviewNotReady = 'PREVIEW_NOT_READY',
+}
+
 export enum BrowserViewCommandId {
 	// Tab management
 	Open = `${commandPrefix}.open`,

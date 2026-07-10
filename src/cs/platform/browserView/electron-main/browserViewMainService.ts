@@ -7,10 +7,12 @@ import { VSBuffer } from 'cs/base/common/buffer';
 import { Emitter, type Event } from 'cs/base/common/event';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { generateUuid } from 'cs/base/common/uuid';
+import { appError } from 'cs/base/parts/sandbox/common/appError';
 import { normalizeListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
 import type { ListingCandidateExtraction, ListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
 
 import {
+  BrowserViewErrorCode,
   BrowserViewStorageScope,
   browserZoomDefaultIndex,
   browserZoomFactors,
@@ -48,7 +50,6 @@ import type {
   IPermissionCategoryState,
   ISerializedBrowserPermissionsSnapshot,
 } from 'cs/platform/browserView/common/browserPermissions';
-import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/common/browserViewErrors';
 import { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
 import {
@@ -1560,7 +1561,7 @@ function isValidWebContentBounds(bounds: WebContentBounds | null): bounds is Web
 
 function getWebContentOwnerWindow() {
   if (!webContentWindow || webContentWindow.isDestroyed()) {
-    throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
+    throw appError(BrowserViewErrorCode.PreviewNotReady, {
       message: 'Desktop web content window is unavailable.',
     });
   }
@@ -2104,6 +2105,11 @@ function createWebContentTarget(
     disposeBrowserViewTargetMetadata(targetId);
     if (activeWebContentTargetId === targetId) {
       activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
+      webContentBounds = null;
+      webContentVisible = false;
+      webContentLayoutPhase = 'hidden';
+      applyWebContentLayout();
+      return;
     }
     reportActiveWebContentState();
   });
@@ -2325,6 +2331,13 @@ export function releaseWebContentTarget(targetId?: string | null) {
 
   if (activeWebContentTargetId === normalizedTargetId) {
     activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
+    webContentBounds = null;
+    webContentVisible = false;
+    webContentLayoutPhase = 'hidden';
+  }
+  const metadata = browserViewTargetMetadata.get(normalizedTargetId);
+  if (metadata) {
+    metadata.bounds = undefined;
   }
   markWebContentTargetAsRetained(normalizedTargetId);
   sweepReleasedWebContentTargets(Date.now());
@@ -2340,6 +2353,9 @@ export function disposeWebContentTarget(targetId?: string | null) {
   disposeWebContentTargetEntry(normalizedTargetId);
   if (activeWebContentTargetId === normalizedTargetId) {
     activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
+    webContentBounds = null;
+    webContentVisible = false;
+    webContentLayoutPhase = 'hidden';
   }
   applyWebContentLayout();
 }
@@ -2644,7 +2660,7 @@ export async function navigateWebContentTarget(
         : 'Timed out while waiting for web content navigation to settle on a destination.',
     );
   } catch (error) {
-    throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
+    throw appError(BrowserViewErrorCode.PreviewNotReady, {
       message: describeWebContentError(error),
       targetUrl: url,
       currentUrl: getWebContentState(normalizedTargetId).url,
@@ -2676,7 +2692,7 @@ export async function navigateWebContentForPrint(url: string, timeoutMs = 12000)
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
-  throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
+  throw appError(BrowserViewErrorCode.PreviewNotReady, {
     message: 'Timed out while waiting for web content main content to become printable.',
     targetUrl: url,
     currentUrl: getWebContentState().url,
@@ -2786,7 +2802,7 @@ export async function printCurrentWebContentToPdf() {
       },
     });
   } catch (error) {
-    throw browserViewError(BrowserViewErrorCode.PreviewNotReady, {
+    throw appError(BrowserViewErrorCode.PreviewNotReady, {
       message: describeWebContentError(error),
       currentUrl: getWebContentState().url,
     });
@@ -3115,7 +3131,7 @@ export class BrowserViewMainService implements IBrowserViewService {
   }
 
   async destroyBrowserView(id: string): Promise<void> {
-    disposeWebContentTargetEntry(id);
+    disposeWebContentTarget(id);
   }
 
   async getState(id: string): Promise<IBrowserViewState> {
@@ -3140,15 +3156,20 @@ export class BrowserViewMainService implements IBrowserViewService {
     const metadata = getBrowserViewTargetMetadata(id);
     getBrowserViewTargetEntry(id);
     if (visible) {
+      if (!metadata.bounds) {
+        throw new Error(`Browser view '${id}' must be laid out before it becomes visible.`);
+      }
       activeWebContentTargetId = id;
-      webContentBounds = metadata.bounds ?? webContentBounds;
+      webContentBounds = metadata.bounds;
       webContentVisible = true;
       webContentLayoutPhase = 'visible';
       applyWebContentLayout();
       return;
     }
 
+    metadata.bounds = undefined;
     if (activeWebContentTargetId === id) {
+      webContentBounds = null;
       webContentVisible = false;
       webContentLayoutPhase = 'hidden';
       applyWebContentLayout();
