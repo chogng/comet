@@ -23,7 +23,6 @@ import {
 import {
   getWorkbenchSessionSnapshot,
   setWorkbenchArticles,
-  setWorkbenchFetchSeedUrl,
   setWorkbenchSelectedArticleKeysInOrder,
   setWorkbenchSelectionModePhase,
   setWorkbenchWebUrl,
@@ -218,7 +217,6 @@ afterEach(() => {
   setBatchEndDate(originalWorkbenchContentState.batchEndDate);
   setFilterJournal(originalWorkbenchContentState.filterJournal);
   setWorkbenchWebUrl(originalWorkbenchSession.webUrl);
-  setWorkbenchFetchSeedUrl(originalWorkbenchSession.fetchSeedUrl);
   setWorkbenchArticles(originalWorkbenchSession.articles);
   setWorkbenchSelectionModePhase(originalWorkbenchSession.selectionModePhase);
   setWorkbenchSelectedArticleKeysInOrder(
@@ -394,7 +392,6 @@ test('WebContentNavigationModel subscriptions stop after listener disposal', asy
     );
     const browserUrls: string[] = [];
     let webUrl = '';
-    let fetchSeedUrl = '';
     const disposeListener = model.subscribe(() => {
       browserUrls.push(model.getSnapshot().browserUrl);
     });
@@ -404,10 +401,6 @@ test('WebContentNavigationModel subscriptions stop after listener disposal', asy
       webContentRuntime: true,
       setWebUrl: (value) => {
         webUrl = value;
-      },
-      setFetchSeedUrl: (value) => {
-        fetchSeedUrl =
-          typeof value === 'function' ? value(fetchSeedUrl) : value;
       },
     });
 
@@ -425,7 +418,6 @@ test('WebContentNavigationModel subscriptions stop after listener disposal', asy
     assert.deepEqual(browserUrls, ['', 'https://example.com/initial']);
     assert.equal(model.getSnapshot().browserUrl, 'https://example.com/next');
     assert.equal(webUrl, 'https://example.com/next');
-    assert.equal(fetchSeedUrl, 'https://example.com/initial');
 
     disconnect();
   });
@@ -434,7 +426,6 @@ test('WebContentNavigationModel subscriptions stop after listener disposal', asy
 test('WebContentNavigationModel does not activate a default web content target for null tabs', async () => {
   const activatedTargetIds: Array<string | null | undefined> = [];
   let setWebUrlCalls = 0;
-  let setFetchSeedUrlCalls = 0;
   const nativeHost = createNativeHostService({
     webContent: {
       activate(targetId?: string | null) {
@@ -459,14 +450,10 @@ test('WebContentNavigationModel does not activate a default web content target f
       setWebUrl: () => {
         setWebUrlCalls += 1;
       },
-      setFetchSeedUrl: () => {
-        setFetchSeedUrlCalls += 1;
-      },
     });
 
     assert.deepEqual(activatedTargetIds, []);
     assert.equal(setWebUrlCalls, 0);
-    assert.equal(setFetchSeedUrlCalls, 0);
     assert.deepEqual(model.getSnapshot().webContentState, EMPTY_WEB_CONTENT_STATE);
   });
 });

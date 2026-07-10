@@ -8,7 +8,7 @@ import type { LlmProviderId } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
 	ChatMessage,
 } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import type { BatchSource } from 'cs/workbench/services/config/configSchema';
+import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import type {
 	LlmReasoningEffort,
 	LlmServiceTier,
@@ -35,9 +35,9 @@ export type ChatWidgetProps = {
 	readonly errorMessage: string | null;
 	readonly onAsk: () => void;
 	readonly onApplyPatch: (messageId: string) => void;
-	readonly articleQuickSources: BatchSource[];
+	readonly articleQuickSources: readonly JournalDescriptor[];
 	readonly isArticleSourceFetching: boolean;
-	readonly onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
+	readonly onFetchArticleSource: (source: JournalDescriptor) => void | Promise<void>;
 	readonly showArticleBatchActions: boolean;
 	readonly downloadAllProgress: ArticleBatchTaskProgress | null;
 	readonly translationExportProgress: ArticleBatchTaskProgress | null;

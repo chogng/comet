@@ -12,7 +12,6 @@ import type { WebContentState } from 'cs/platform/browserView/common/browserView
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 type StringSetter = (value: string) => void;
-type StringStateSetter = (value: string | ((current: string) => string)) => void;
 
 export type WebContentNavigationSnapshot = {
   browserUrl: string;
@@ -22,7 +21,6 @@ export type WebContentNavigationSnapshot = {
 type WebContentStateSyncContext = {
   webContentRuntime: boolean;
   setWebUrl: StringSetter;
-  setFetchSeedUrl: StringStateSetter;
 };
 
 type NavigateToAddressBarUrlParams = {
@@ -32,7 +30,6 @@ type NavigateToAddressBarUrlParams = {
   webContentRuntime: boolean;
   ui: LocaleMessages;
   setWebUrl: StringSetter;
-  setFetchSeedUrl: StringSetter;
 };
 
 type BrowserRefreshParams = {
@@ -141,7 +138,7 @@ export class WebContentNavigationModel {
 
   private applyWebContentState(
     state: WebContentState,
-    context: Pick<WebContentStateSyncContext, 'setWebUrl' | 'setFetchSeedUrl'>,
+    context: Pick<WebContentStateSyncContext, 'setWebUrl'>,
   ) {
     this.setWebContentState(state);
 
@@ -152,7 +149,6 @@ export class WebContentNavigationModel {
 
     this.setBrowserUrl(webContentStateUrlUpdate.browserUrl);
     context.setWebUrl(webContentStateUrlUpdate.webUrl);
-    context.setFetchSeedUrl((current) => current || webContentStateUrlUpdate.fetchSeedUrl);
   }
 
   readonly subscribe = (listener: () => void) => {
@@ -163,7 +159,7 @@ export class WebContentNavigationModel {
 
   async activateTarget(
     targetId: string | null,
-    context?: Pick<WebContentStateSyncContext, 'setWebUrl' | 'setFetchSeedUrl'>,
+    context?: Pick<WebContentStateSyncContext, 'setWebUrl'>,
   ) {
     this.activeTargetId = targetId;
     const requestedTargetId = targetId;
@@ -220,7 +216,6 @@ export class WebContentNavigationModel {
   connectWebContentState({
     webContentRuntime,
     setWebUrl,
-    setFetchSeedUrl,
   }: WebContentStateSyncContext): () => void {
     const webContent = this.nativeHost.webContent;
     if (!webContentRuntime || !webContent) {
@@ -244,7 +239,6 @@ export class WebContentNavigationModel {
 
         this.applyWebContentState(state, {
           setWebUrl,
-          setFetchSeedUrl,
         });
       })
       .catch(() => {});
@@ -255,7 +249,6 @@ export class WebContentNavigationModel {
       }
       this.applyWebContentState(state, {
         setWebUrl,
-        setFetchSeedUrl,
       });
     });
 
@@ -272,7 +265,6 @@ export class WebContentNavigationModel {
     webContentRuntime,
     ui,
     setWebUrl,
-    setFetchSeedUrl,
   }: NavigateToAddressBarUrlParams): boolean {
     const webContentNavigation = resolveWebContentNavigation(
       nextUrl,
@@ -287,7 +279,6 @@ export class WebContentNavigationModel {
 
     setWebUrl(webContentNavigation.normalizedUrl);
     this.setBrowserUrl(webContentNavigation.normalizedUrl);
-    setFetchSeedUrl(webContentNavigation.normalizedUrl);
 
     if (webContentNavigation.kind === 'content-runtime-unavailable') {
       this.notificationService.error(ui.toastWebContentRuntimeUnavailable);

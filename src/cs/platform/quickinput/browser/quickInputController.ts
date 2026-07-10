@@ -520,7 +520,7 @@ export class QuickInputController extends Disposable {
 
 	private createShell(title: string | undefined) {
 		const overlay = createElement('div', 'quick-input-overlay');
-		const widget = createElement('div', `quick-input-widget${this.alignmentValue === 'center' ? ' center' : ''}`);
+		const widget = createElement('div', `comet-quick-input-widget${this.alignmentValue === 'center' ? ' center' : ''}`);
 		if (title) {
 			widget.append(createElement('div', 'quick-input-title', title));
 		}

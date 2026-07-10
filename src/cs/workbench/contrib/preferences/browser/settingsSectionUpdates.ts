@@ -80,7 +80,6 @@ function shouldUpdateSupportedSourcesSection(
   return (
     !previousProps ||
     previousProps.supportedSources !== currentProps.supportedSources ||
-    previousProps.journalSourceOverrides !== currentProps.journalSourceOverrides ||
     previousProps.showSupportedSources !== currentProps.showSupportedSources ||
     previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
     previousProps.labels.settingsSupportedSources !== currentProps.labels.settingsSupportedSources ||

@@ -839,7 +839,6 @@ export type WebContentRefreshMode =
 export type WebContentStateUrlUpdate = {
 	browserUrl: string;
 	webUrl: string;
-	fetchSeedUrl: string;
 };
 
 export function resolveWebContentNavigation(
@@ -886,6 +885,5 @@ export function resolveWebContentStateUrlUpdate(
 	return {
 		browserUrl: webContentState.url,
 		webUrl: webContentState.url,
-		fetchSeedUrl: webContentState.url,
 	};
 }

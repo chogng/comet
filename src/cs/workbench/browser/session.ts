@@ -5,7 +5,6 @@ export type SelectionModePhase = "off" | "multi" | "all";
 
 export type WorkbenchSessionSnapshot = {
   webUrl: string;
-  fetchSeedUrl: string;
   articles: FetchArticle[];
   selectionModePhase: SelectionModePhase;
   selectedArticleKeysInOrder: string[];
@@ -13,7 +12,6 @@ export type WorkbenchSessionSnapshot = {
 
 const DEFAULT_WORKBENCH_SESSION: WorkbenchSessionSnapshot = {
   webUrl: "",
-  fetchSeedUrl: "",
   articles: [],
   selectionModePhase: "off",
   selectedArticleKeysInOrder: [],
@@ -46,21 +44,6 @@ export function setWorkbenchWebUrl(webUrl: string) {
   updateWorkbenchSessionState((current) =>
     current.webUrl === webUrl ? current : { ...current, webUrl },
   );
-}
-
-export function setWorkbenchFetchSeedUrl(
-  fetchSeedUrl: string | ((current: string) => string),
-) {
-  updateWorkbenchSessionState((current) => {
-    const nextFetchSeedUrl =
-      typeof fetchSeedUrl === "function"
-        ? fetchSeedUrl(current.fetchSeedUrl)
-        : fetchSeedUrl;
-
-    return current.fetchSeedUrl === nextFetchSeedUrl
-      ? current
-      : { ...current, fetchSeedUrl: nextFetchSeedUrl };
-  });
 }
 
 export function setWorkbenchArticles(

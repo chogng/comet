@@ -27,28 +27,18 @@ type TrackedOverlay = {
 };
 
 const OVERLAY_DEFINITIONS: readonly OverlayDefinition[] = [
-	{ className: 'monaco-menu-container', type: BrowserOverlayType.Menu },
-	{ className: 'action-list-submenu-panel', type: BrowserOverlayType.Menu },
-	{ className: 'quick-input-widget', type: BrowserOverlayType.QuickInput },
-	{ className: 'monaco-hover', type: BrowserOverlayType.Hover },
-	{ className: 'editor-widget', type: BrowserOverlayType.Hover },
-	{ className: 'suggest-details-container', type: BrowserOverlayType.Hover },
-	{ className: 'monaco-dialog-modal-block', type: BrowserOverlayType.Dialog },
-	{ className: 'monaco-modal-editor-block', type: BrowserOverlayType.Dialog },
-	{ className: 'notifications-center', type: BrowserOverlayType.Notification },
-	{ className: 'notification-toast-container', type: BrowserOverlayType.Notification },
-	{ className: 'context-view', type: BrowserOverlayType.Unknown },
+	{ className: 'comet-menu-submenu', type: BrowserOverlayType.Menu },
+	{ className: 'comet-quick-input-widget', type: BrowserOverlayType.QuickInput },
+	{ className: 'comet-hover-card', type: BrowserOverlayType.Hover },
+	{ className: 'comet-dialog-modal-block', type: BrowserOverlayType.Dialog },
+	{ className: 'comet-notifications-center', type: BrowserOverlayType.Notification },
+	{ className: 'comet-notifications-toasts', type: BrowserOverlayType.Notification },
+	{ className: 'comet-context-view', type: BrowserOverlayType.Unknown },
 ];
-
-const CONTEXT_VIEW_BLOCKER_CLASSES = ['context-view-block', 'context-view-pointerBlock'];
 
 export interface IBrowserOverlayInfo {
 	readonly type: BrowserOverlayType;
 	readonly rect: IDomNodePagePosition;
-}
-
-function isContextViewBlocker(element: Element): boolean {
-	return CONTEXT_VIEW_BLOCKER_CLASSES.some(className => element.classList.contains(className));
 }
 
 function getOverlappingRectangleCenterPoint(
@@ -73,8 +63,6 @@ function getOverlappingRectangleCenterPoint(
 export class BrowserOverlayManager {
 	private readonly disposables = new DisposableStore();
 	private readonly overlayCollections = new Map<string, { type: BrowserOverlayType; collection: HTMLCollectionOf<Element> }>();
-	private readonly shadowRootHostCollection: HTMLCollectionOf<Element>;
-	private readonly shadowRootObservers = new WeakMap<ShadowRoot, MutationObserver>();
 	private readonly onDidChangeOverlayStateEmitter = new Emitter<void>();
 
 	readonly onDidChangeOverlayState: Event<void> = this.onDidChangeOverlayStateEmitter.event;
@@ -86,13 +74,11 @@ export class BrowserOverlayManager {
 				collection: this.targetWindow.document.getElementsByClassName(overlayDefinition.className),
 			});
 		}
-		this.shadowRootHostCollection = this.targetWindow.document.getElementsByClassName('shadow-root-host');
 
 		const MutationObserverConstructor = (this.targetWindow as Window & {
 			readonly MutationObserver: typeof MutationObserver;
 		}).MutationObserver;
 		const observer = new MutationObserverConstructor(() => {
-			this.updateShadowRootObservers();
 			this.onDidChangeOverlayStateEmitter.fire();
 		});
 		observer.observe(this.targetWindow.document.body, {
@@ -103,15 +89,9 @@ export class BrowserOverlayManager {
 		});
 		this.disposables.add(toDisposable(() => observer.disconnect()));
 		this.disposables.add(this.onDidChangeOverlayStateEmitter);
-		this.updateShadowRootObservers();
 	}
 
 	dispose() {
-		for (const hostElement of this.shadowRootHostCollection) {
-			const shadowRoot = (hostElement as HTMLElement).shadowRoot;
-			const observer = shadowRoot ? this.shadowRootObservers.get(shadowRoot) : undefined;
-			observer?.disconnect();
-		}
 		this.disposables.dispose();
 	}
 
@@ -154,62 +134,9 @@ export class BrowserOverlayManager {
 				};
 			}
 		}
-
-		for (const hostElement of this.shadowRootHostCollection) {
-			const shadowRoot = hostElement.shadowRoot;
-			if (!shadowRoot) {
-				continue;
-			}
-
-			for (const overlayDefinition of OVERLAY_DEFINITIONS) {
-				for (const element of shadowRoot.querySelectorAll(`.${overlayDefinition.className}`)) {
-					yield {
-						element: element as HTMLElement,
-						type: overlayDefinition.type,
-					};
-				}
-			}
-		}
 	}
 
 	private getTopmostElementAt(clientX: number, clientY: number): Element | null {
-		const topmostAt = (root: Document | ShadowRoot): Element | null => {
-			const elementAtPoint = root.elementFromPoint(clientX, clientY);
-			if (elementAtPoint && !isContextViewBlocker(elementAtPoint)) {
-				return elementAtPoint;
-			}
-
-			const elementsFromPoint = root.elementsFromPoint(clientX, clientY);
-			return elementsFromPoint.find(element => !isContextViewBlocker(element)) ?? null;
-		};
-
-		const elementAtPoint = topmostAt(this.targetWindow.document);
-		if (elementAtPoint?.shadowRoot) {
-			return topmostAt(elementAtPoint.shadowRoot);
-		}
-		return elementAtPoint;
-	}
-
-	private updateShadowRootObservers() {
-		for (const hostElement of this.shadowRootHostCollection) {
-			const shadowRoot = hostElement.shadowRoot;
-			if (!shadowRoot || this.shadowRootObservers.has(shadowRoot)) {
-				continue;
-			}
-
-			const MutationObserverConstructor = (this.targetWindow as Window & {
-				readonly MutationObserver: typeof MutationObserver;
-			}).MutationObserver;
-			const observer = new MutationObserverConstructor(() => {
-				this.onDidChangeOverlayStateEmitter.fire();
-			});
-			observer.observe(shadowRoot, {
-				attributes: true,
-				attributeFilter: ['class', 'style'],
-				childList: true,
-				subtree: true,
-			});
-			this.shadowRootObservers.set(shadowRoot, observer);
-		}
+		return this.targetWindow.document.elementFromPoint(clientX, clientY);
 	}
 }

@@ -337,11 +337,6 @@ export function renderBatchOptionsSection(props: SettingsPartProps) {
   return field;
 }
 
-function getJournalOverrideTitle(props: SettingsPartProps, url: string) {
-  const override = props.journalSourceOverrides.find((item) => item.url === url);
-  return override?.journalTitle ?? null;
-}
-
 export function renderSupportedSourcesSection(
 	props: SettingsPartProps,
 ) {
@@ -355,26 +350,17 @@ export function renderSupportedSourcesSection(
 
   const table = el('div', 'comet-settings-supported-sources-table');
   table.hidden = !props.showSupportedSources;
-  for (const [index, source] of props.supportedSources.entries()) {
+  for (const source of props.supportedSources) {
     const row = el('div', 'comet-settings-supported-source-row');
     const url = el('div', 'comet-settings-supported-source-url');
-    url.textContent = source.url;
-    url.title = `${props.labels.settingsSupportedSourceUrl}: ${source.url}`;
+    url.textContent = source.discoveryUrl.toString(true);
+    url.title = `${props.labels.settingsSupportedSourceUrl}: ${source.discoveryUrl.toString(true)}`;
 
     const journalCell = el('div', 'comet-settings-supported-source-journal-cell');
-    const effectiveJournalTitle = getJournalOverrideTitle(props, source.url) ?? source.journalTitle;
     const journalLabel = el('div', 'comet-settings-supported-source-journal');
-    journalLabel.textContent = effectiveJournalTitle || '-';
+    journalLabel.textContent = source.title;
     journalLabel.title = props.labels.settingsSupportedSourceJournalTitle;
-    const journalInput = buildInput({
-      value: effectiveJournalTitle,
-      className: 'comet-settings-supported-source-journal-input',
-      focusKey: `settings.supportedSources.${index}.journalTitle`,
-      disabled: props.isSettingsSaving,
-      onInput: (value) => props.onJournalSourceTitleChange(source.url, value),
-    });
-    journalInput.inputElement.ariaLabel = props.labels.settingsSupportedSourceJournalTitle;
-    journalCell.append(journalLabel, journalInput.element);
+    journalCell.append(journalLabel);
 
     row.append(url, journalCell);
     table.append(row);

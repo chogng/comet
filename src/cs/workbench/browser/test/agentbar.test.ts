@@ -6,6 +6,7 @@ import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestU
 import type { HorizontalScrollbar as HorizontalScrollbarType } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
 import type { IRenderedMarkdown, MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
 import type { IMarkdownString } from 'cs/base/common/htmlContent';
+import { URI } from 'cs/base/common/uri';
 import type { RagAnswerResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
@@ -529,19 +530,21 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', a
   }
 });
 
-test('composer article quick comet-hover-action opens source menu and runs selected source', async () => {
-  let selectedSourceUrl = '';
+test('composer article quick comet-hover-action opens source menu and runs selected journal', async () => {
+	let selectedJournalId = '';
   const chatSurface = createChatWidget({
     ...createProps(),
-    articleQuickSources: [
-      {
-        id: 'science',
-        url: 'https://www.science.org/toc/science/current',
-        journalTitle: 'Science',
-      },
-    ],
-    onFetchArticleSource: (source) => {
-      selectedSourceUrl = source.url;
+	articleQuickSources: [
+		{
+			id: 'journal.science.science',
+			title: 'Science',
+			homeUrl: URI.parse('https://www.science.org/journal/science'),
+			discoveryUrl: URI.parse('https://www.science.org/toc/science/current'),
+			providerId: 'publisher.science',
+		},
+	],
+	onFetchArticleSource: (source) => {
+		selectedJournalId = source.id;
     },
   });
   const element = chatSurface.getElement();
@@ -582,7 +585,7 @@ test('composer article quick comet-hover-action opens source menu and runs selec
     assert.equal(sourceButton.textContent, 'Science');
     sourceButton.click();
 
-    assert.equal(selectedSourceUrl, 'https://www.science.org/toc/science/current');
+	assert.equal(selectedJournalId, 'journal.science.science');
     assert.equal(document.body.querySelector('.comet-chat-composer-article-menu'), null);
   } finally {
     chatSurface.dispose();
@@ -592,12 +595,14 @@ test('composer article quick comet-hover-action opens source menu and runs selec
 test('composer article quick menu is disposed with the chat widget', async () => {
   const chatSurface = createChatWidget({
     ...createProps(),
-    articleQuickSources: [
-      {
-        id: 'science',
-        url: 'https://www.science.org/toc/science/current',
-        journalTitle: 'Science',
-      },
+	articleQuickSources: [
+		{
+			id: 'journal.science.science',
+			title: 'Science',
+			homeUrl: URI.parse('https://www.science.org/journal/science'),
+			discoveryUrl: URI.parse('https://www.science.org/toc/science/current'),
+			providerId: 'publisher.science',
+		},
     ],
   });
   const element = chatSurface.getElement();

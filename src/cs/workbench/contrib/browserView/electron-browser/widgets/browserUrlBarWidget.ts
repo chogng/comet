@@ -151,7 +151,7 @@ export class BrowserUrlBarWidget extends Disposable {
 				pendingMouseFocus = false;
 				return;
 			}
-			if (!(event.relatedTarget instanceof Element) || event.relatedTarget.closest('.quick-input-widget')) {
+			if (!(event.relatedTarget instanceof Element) || event.relatedTarget.closest('.comet-quick-input-widget')) {
 				return;
 			}
 			if (!pendingMouseFocus) {

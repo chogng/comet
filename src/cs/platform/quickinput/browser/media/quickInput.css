@@ -10,7 +10,7 @@
 	pointer-events: none;
 }
 
-.quick-input-widget {
+.comet-quick-input-widget {
 	position: absolute;
 	top: 48px;
 	left: 50%;
@@ -28,7 +28,7 @@
 	pointer-events: auto;
 }
 
-.quick-input-widget.center {
+.comet-quick-input-widget.center {
 	top: 30vh;
 }
 

@@ -21,7 +21,7 @@ import {
 	type ContextViewDisposable,
 } from 'cs/platform/contextview/browser/contextView';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
-import type { BatchSource } from 'cs/workbench/services/config/configSchema';
+import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import {
 	ChatInputModelPickerActionViewItem,
 	type ChatInputModelPickerProps,
@@ -68,9 +68,8 @@ function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerPro
 	};
 }
 
-function getArticleSourceLabel(source: BatchSource) {
-	const journalTitle = source.journalTitle.trim();
-	return journalTitle || source.url;
+function getArticleSourceLabel(source: JournalDescriptor) {
+	return source.title;
 }
 
 function createChatInputAddActionItem() {
@@ -337,7 +336,7 @@ export class ChatInputPart {
 			sourceButton.type = 'button';
 			sourceButton.disabled = this.props.isArticleSourceFetching;
 			sourceButton.textContent = sourceLabel;
-			sourceButton.title = source.url;
+			sourceButton.title = source.homeUrl.toString(true);
 			this.renderDisposables.add(
 				addDisposableListener(sourceButton, EventType.CLICK, () => {
 					this.isArticleMenuOpen = false;

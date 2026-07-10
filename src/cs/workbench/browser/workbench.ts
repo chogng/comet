@@ -7,8 +7,6 @@ import type {
   IChatService,
 } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { IChatService as IChatServiceDecorator } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { createBatchFetchController } from 'cs/workbench/contrib/fetch/browser/batchFetchModel';
-import type { BatchFetchController, BatchFetchControllerContext } from 'cs/workbench/contrib/fetch/browser/batchFetchModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
 import type { DocumentActionsController, DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
 import { createArticleSummaryTranslationExportController } from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
@@ -89,7 +87,6 @@ import {
 import {
   getWorkbenchSessionSnapshot,
   setWorkbenchArticles,
-  setWorkbenchFetchSeedUrl,
   setWorkbenchSelectedArticleKeysInOrder,
   setWorkbenchWebUrl,
   subscribeWorkbenchSession,
@@ -116,11 +113,12 @@ import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView
 import { getLocaleMessages } from 'language/i18n';
 import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
+import { CancellationTokenNone } from 'cs/base/common/cancellation';
 import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
+import type { ArticleDetail, ArticleListCatalog, ArticleListItem, ArticleListSource, ArticlePage, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { getConfigBatchSourceSeed, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
-import type { BatchSource } from 'cs/workbench/services/config/configSchema';
+import { normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import { normalizeBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
 import {
@@ -174,8 +172,6 @@ export type WorkbenchServicesSyncParams = {
   articleSummaryTranslationExportContext: ArticleSummaryTranslationExportControllerContext;
   documentActionsController: DocumentActionsController;
   documentActionsContext: DocumentActionsControllerContext;
-  batchFetchController: BatchFetchController;
-  batchFetchContext: BatchFetchControllerContext;
 };
 
 type DesktopInvokeArgs = Record<string, unknown> | undefined;
@@ -186,7 +182,6 @@ let webContentNavigationModel: WebContentNavigationModel | null = null;
 let editorPartController: EditorPartModel | null = null;
 let articleSummaryTranslationExportController: ArticleSummaryTranslationExportController | null = null;
 let documentActionsController: DocumentActionsController | null = null;
-let batchFetchController: BatchFetchController | null = null;
 let activeWorkbenchHost: WorkbenchHost | null = null;
 let activeAgentChatModelOptionValue: string | null = null;
 
@@ -203,6 +198,67 @@ const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
 const AGENT_CHAT_AUTO_MODEL_OPTION_VALUE = 'auto';
 function getArticleSelectionKey(article: Pick<FetchArticle, 'sourceUri' | 'fetchedAt'>) {
   return `${getFetchArticleSourceUrl(article)}::${article.fetchedAt}`;
+}
+
+function getCatalogSources(catalog: ArticleListCatalog | undefined): readonly ArticleListSource[] {
+  return catalog?.entries.flatMap(entry => entry.kind === 'group' ? entry.sources : [entry]) ?? [];
+}
+
+function getPageItems(page: ArticlePage, fetchService: IFetchService): ArticleListItem[] {
+  return [...page.groups.flatMap(group => group.itemIds), ...page.ungroupedItemIds]
+    .map(itemId => fetchService.getArticleListItem(itemId))
+    .filter((item): item is ArticleListItem => !!item);
+}
+
+function toFetchedArticle(detail: ArticleDetail, journal: JournalDescriptor, articleListSourceId: string, fetchOrder: number): FetchArticle {
+  return {
+    sourceUri: detail.url.toJSON(),
+    canonicalUri: detail.url.toJSON(),
+    doi: detail.doi,
+    title: detail.title,
+    publication: {
+      id: detail.publication.journalId ?? journal.id,
+      title: detail.publication.title,
+      publisherId: journal.providerId,
+      publisherTitle: journal.providerId,
+    },
+    articleKind: 'other',
+    sourceArticleType: detail.articleType,
+    authors: detail.authors.map(author => ({ name: author.name })),
+    abstract: detail.abstract,
+    sections: [],
+    figures: [],
+    references: [],
+    publishedAt: detail.publishedAt,
+    fetchedAt: new Date().toISOString(),
+    fetchOrder,
+    articleListSourceId,
+  };
+}
+
+async function fetchJournalArticles(fetchService: IFetchService, journalId: string): Promise<FetchArticle[]> {
+  const journal = fetchService.getJournal(journalId);
+  if (!journal) {
+    throw new Error(`Journal "${journalId}" is not registered.`);
+  }
+  await fetchService.discoverArticleListSources(journalId, CancellationTokenNone);
+  const sources = getCatalogSources(fetchService.getArticleListCatalog(journalId));
+  const articles: FetchArticle[] = [];
+  const seenArticleIds = new Set<string>();
+  for (const source of sources) {
+    await fetchService.fetchArticleListSource(source.id, CancellationTokenNone);
+    for (const page of fetchService.getArticlePages(source.id)) {
+      for (const item of getPageItems(page, fetchService)) {
+        if (seenArticleIds.has(item.articleId)) {
+          continue;
+        }
+        const detail = await fetchService.fetchArticle(item.articleId, CancellationTokenNone);
+        seenArticleIds.add(item.articleId);
+        articles.push(toFetchedArticle(detail, journal, source.id, articles.length + 1));
+      }
+    }
+  }
+  return articles;
 }
 
 function buildSelectedArticleOrderLookup(
@@ -332,11 +388,6 @@ function doesAgentChatModelSupportMaxContextWindow(
   return model ? hasLlmMaxContextWindow(model) : false;
 }
 
-function getBatchSourceDisplayLabel(source: Pick<BatchSource, 'journalTitle' | 'url'>) {
-  const journalTitle = source.journalTitle.trim();
-  return journalTitle || source.url;
-}
-
 function isContentTab(tab: EditorWorkspaceTab) {
   return isEditorContentTabInput(tab);
 }
@@ -430,6 +481,7 @@ class WorkbenchHost {
   private renderPending = false;
   private webContentRuntime = false;
   private settingsOverlayVisible = false;
+  private isArticleSourceFetching = false;
   private readonly sidebarEntryConversationIds: Record<
     WorkbenchSidebarEntry,
     string | null
@@ -671,7 +723,6 @@ class WorkbenchHost {
     chatService: IChatService;
     articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
     documentActionsController: DocumentActionsController;
-    batchFetchController: BatchFetchController;
   }) {
     if (this.servicesSubscribed) {
       return;
@@ -686,7 +737,6 @@ class WorkbenchHost {
       services.chatService.subscribe(this.requestRender),
       services.articleSummaryTranslationExportController.subscribe(this.requestRender),
       services.documentActionsController.subscribe(this.requestRender),
-      services.batchFetchController.subscribe(this.requestRender),
     );
   }
 
@@ -782,7 +832,6 @@ class WorkbenchHost {
     this.webContentStateDisposable = webContentNavigationModelInstance.connectWebContentState({
       webContentRuntime,
       setWebUrl: setWorkbenchWebUrl,
-      setFetchSeedUrl: setWorkbenchFetchSeedUrl,
     });
   }
 
@@ -866,7 +915,6 @@ class WorkbenchHost {
       void webContentNavigationModel
         .activateTarget(targetId, {
           setWebUrl: setWorkbenchWebUrl,
-          setFetchSeedUrl: setWorkbenchFetchSeedUrl,
         })
         .then((state) => {
           if (
@@ -1175,7 +1223,6 @@ class WorkbenchHost {
     const ui = getLocaleMessages(locale);
     const {
       webUrl,
-      fetchSeedUrl,
       articles,
       selectionModePhase,
       selectedArticleKeysInOrder,
@@ -1258,7 +1305,6 @@ class WorkbenchHost {
       isTestingLlmConnection,
       isTestingTranslationConnection,
       isLoadingTranslationModels,
-      journalSourceOverrides,
     } = settingsSnapshot;
     this.syncBrowserSettings({
       browserMaxHistoryEntries,
@@ -1463,7 +1509,6 @@ class WorkbenchHost {
         webContentRuntime,
         ui,
         setWebUrl: setWorkbenchWebUrl,
-        setFetchSeedUrl: setWorkbenchFetchSeedUrl,
       });
     this.openerService.setDefaultExternalOpener({
       openExternal: async (href, { sourceUri }) => {
@@ -1579,44 +1624,28 @@ class WorkbenchHost {
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     });
 
-    const handleBatchFetchStart = () => {};
-
-    const handleBatchFetchSuccess = (nextArticles: FetchArticle[]) => {
-      setWorkbenchArticles(nextArticles);
-    };
-    const batchFetchControllerInstance = getWorkbenchBatchFetchController({
-      addressBarUrl: fetchSeedUrl || webUrl,
-      journalSourceOverrides,
-      batchStartDate,
-      batchEndDate,
-		batchLimit,
-		fetchService: this.fetchService,
-      notificationService: this.notificationService,
-      ui,
-      onBeforeFetch: handleBatchFetchStart,
-      onFetchSuccess: handleBatchFetchSuccess,
-    });
-    const { isBatchLoading } = batchFetchControllerInstance.getSnapshot();
     const chatArticleBatch = chatServiceInstance.collectArticleBatch(filteredArticles);
     const selectedChatArticleBatch =
       chatServiceInstance.collectSelectedArticleBatch(filteredArticles);
-    const articleQuickSources = getConfigBatchSourceSeed();
-    const handleFetchArticleSource = async (source: BatchSource) => {
-      const result = await batchFetchControllerInstance.handleFetchSource(source);
-      if (!result.ok) {
-        if ('reason' in result && result.reason === 'empty') {
-          chatServiceInstance.insertArticleFetchEmptyResult(
-            getBatchSourceDisplayLabel(source),
-            result.message,
-          );
+    const articleQuickSources = this.fetchService.getJournals();
+    const handleFetchArticleSource = async (source: JournalDescriptor) => {
+      this.isArticleSourceFetching = true;
+      this.requestRender();
+      try {
+        const articles = await fetchJournalArticles(this.fetchService, source.id);
+        if (articles.length === 0) {
+          chatServiceInstance.insertArticleFetchEmptyResult(source.title, ui.errorBatchNoValidArticles);
+          return;
         }
-        return;
+        setWorkbenchArticles(articles);
+        chatServiceInstance.insertArticles(articles, source.title);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.notificationService.error(errorMessage || ui.errorUnknown);
+      } finally {
+        this.isArticleSourceFetching = false;
+        this.requestRender();
       }
-
-      chatServiceInstance.insertArticles(
-        result.articles,
-        getBatchSourceDisplayLabel(source),
-      );
     };
 
     const activeDraftStableSelectionTarget =
@@ -1705,19 +1734,6 @@ class WorkbenchHost {
         activeDraftExport,
         onLibraryUpdated: refreshLibrary,
       },
-      batchFetchController: batchFetchControllerInstance,
-      batchFetchContext: {
-        addressBarUrl: fetchSeedUrl || webUrl,
-        journalSourceOverrides,
-        batchStartDate,
-        batchEndDate,
-		batchLimit,
-		fetchService: this.fetchService,
-        notificationService: this.notificationService,
-        ui,
-        onBeforeFetch: handleBatchFetchStart,
-        onFetchSuccess: handleBatchFetchSuccess,
-      },
     });
 
     this.ensureServiceSubscriptions({
@@ -1729,7 +1745,6 @@ class WorkbenchHost {
       articleSummaryTranslationExportController:
         articleSummaryTranslationExportControllerInstance,
       documentActionsController: documentActionsControllerInstance,
-      batchFetchController: batchFetchControllerInstance,
     });
 
     const sidebarProps: SidebarProps = {
@@ -1771,10 +1786,10 @@ class WorkbenchHost {
         activeLlmModelSupportsMaxContextWindow:
           doesAgentChatModelSupportMaxContextWindow(currentLlmSettings),
         articleQuickSources,
-        isArticleSourceFetching: isBatchLoading,
+        isArticleSourceFetching: this.isArticleSourceFetching,
         showArticleBatchActions:
           chatArticleBatch.length > 0 &&
-          (!isBatchLoading ||
+          (!this.isArticleSourceFetching ||
             Boolean(documentActionsSnapshot.downloadAllProgress) ||
             Boolean(articleSummaryTranslationExportSnapshot.translationExportProgress)),
         downloadAllProgress: documentActionsSnapshot.downloadAllProgress,
@@ -1854,8 +1869,7 @@ class WorkbenchHost {
         isSettingsLoading,
         locale,
         batchLimit,
-        supportedSources: getConfigBatchSourceSeed(),
-        journalSourceOverrides,
+        supportedSources: this.fetchService.getJournals(),
         fetchStartDate: batchStartDate,
         fetchEndDate: batchEndDate,
         systemNotificationsEnabled,
@@ -1936,8 +1950,6 @@ class WorkbenchHost {
       actions: {
         onBatchLimitChange: (value) =>
           settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
-        onJournalSourceTitleChange:
-          settingsControllerInstance.setJournalSourceTitle,
         onFetchStartDateChange: setBatchStartDate,
         onFetchEndDateChange: setBatchEndDate,
         onSystemNotificationsEnabledChange:
@@ -2141,9 +2153,6 @@ export function disposeWorkbenchServices() {
   documentActionsController?.dispose();
   documentActionsController = null;
 
-  batchFetchController?.dispose();
-  batchFetchController = null;
-
   webContentNavigationModel = null;
 }
 
@@ -2198,16 +2207,6 @@ export function getWorkbenchDocumentActionsController(
   return documentActionsController;
 }
 
-export function getWorkbenchBatchFetchController(
-  context: BatchFetchControllerContext,
-) {
-  if (!batchFetchController) {
-    batchFetchController = createBatchFetchController(context);
-    batchFetchController.start();
-  }
-  return batchFetchController;
-}
-
 export function syncWorkbenchServicesContext({
   settingsController: settingsControllerInstance,
   settingsContext,
@@ -2222,8 +2221,6 @@ export function syncWorkbenchServicesContext({
   articleSummaryTranslationExportContext,
   documentActionsController: documentActionsControllerInstance,
   documentActionsContext,
-  batchFetchController: batchFetchControllerInstance,
-  batchFetchContext,
 }: WorkbenchServicesSyncParams) {
   settingsControllerInstance.setContext(settingsContext);
   libraryModelInstance.setContext(libraryContext);
@@ -2233,7 +2230,6 @@ export function syncWorkbenchServicesContext({
     articleSummaryTranslationExportContext,
   );
   documentActionsControllerInstance.setContext(documentActionsContext);
-  batchFetchControllerInstance.setContext(batchFetchContext);
 }
 
 export function renderWorkbench() {

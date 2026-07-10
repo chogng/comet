@@ -2,7 +2,7 @@ import type { ChatServiceSnapshot } from 'cs/workbench/contrib/chat/common/chatS
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
-import type { BatchSource } from 'cs/workbench/services/config/configSchema';
+import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import { $ } from 'cs/base/browser/dom';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
@@ -24,7 +24,7 @@ type CreateSessionChatViewPropsParams = {
 		activeLlmModelLabel: string;
 		isMaxContextWindowEnabled: boolean;
 		activeLlmModelSupportsMaxContextWindow: boolean;
-		articleQuickSources: BatchSource[];
+		articleQuickSources: readonly JournalDescriptor[];
 		isArticleSourceFetching: boolean;
 		showArticleBatchActions: boolean;
 		downloadAllProgress: ArticleBatchTaskProgress | null;
@@ -35,7 +35,7 @@ type CreateSessionChatViewPropsParams = {
 		onQuestionChange: (value: string) => void;
 		onAsk: () => void;
 		onApplyPatch: (messageId: string) => void;
-		onFetchArticleSource: (source: BatchSource) => void | Promise<void>;
+		onFetchArticleSource: (source: JournalDescriptor) => void | Promise<void>;
 		onDownloadAllArticles: () => void | Promise<void>;
 		onExportArticleSummaries: (translateSummaries: boolean) => void | Promise<void>;
 		onToggleArticleSelected: (href: string) => void;
