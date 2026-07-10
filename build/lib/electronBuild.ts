@@ -21,6 +21,7 @@ const entryPoints = [
   path.join(srcRoot, 'code', 'electron-main', 'launch.ts'),
   path.join(srcRoot, 'code', 'electron-main', 'main.ts'),
   path.join(srcRoot, 'base', 'parts', 'sandbox', 'electron-browser', 'preload.ts'),
+  path.join(srcRoot, 'platform', 'browserView', 'electron-browser', 'preload-browserView.ts'),
 ];
 
 function resolveSourcePath(candidatePath: string) {

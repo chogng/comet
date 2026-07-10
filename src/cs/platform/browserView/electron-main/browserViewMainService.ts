@@ -52,6 +52,7 @@ import type {
 } from 'cs/platform/browserView/common/browserPermissions';
 import { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
+import { resolveBrowserViewPreloadScriptPath } from 'cs/platform/window/electron-main/windowPaths';
 import {
   defaultBrowserTabKeepAliveLimit,
   normalizeBrowserTabKeepAliveLimit,
@@ -1924,6 +1925,8 @@ function createWebContentTarget(
       session: context.session,
       contextIsolation: true,
       nodeIntegration: false,
+      nodeIntegrationInSubFrames: true,
+      preload: resolveBrowserViewPreloadScriptPath(),
       sandbox: true,
       webviewTag: false,
       plugins: true,
@@ -2025,20 +2028,18 @@ function createWebContentTarget(
       finalUpdate: result.finalUpdate === true,
     });
   });
-  addWebContentTargetListener(entry, 'before-input-event', (_event, input) => {
-    if (!isRecord(input) || input.type !== 'keyDown') {
-      return;
-    }
-    browserViewTargetMetadata.get(targetId)?.events.onDidKeyCommand.fire({
-      key: String(input.key ?? ''),
-      keyCode: 0,
-      code: String(input.code ?? ''),
-      ctrlKey: input.control === true,
-      shiftKey: input.shift === true,
-      altKey: input.alt === true,
-      metaKey: input.meta === true,
-      repeat: input.isAutoRepeat === true,
-    });
+  const handleCommandKeydown = (
+    _event: unknown,
+    keyEvent: IBrowserViewKeyDownEvent,
+  ) => {
+    browserViewTargetMetadata.get(targetId)?.events.onDidKeyCommand.fire(keyEvent);
+  };
+  entry.view.webContents.ipc.on('vscode:browserView:keydown', handleCommandKeydown);
+  entry.cleanup.push(() => {
+    entry.view.webContents.ipc.removeListener(
+      'vscode:browserView:keydown',
+      handleCommandKeydown,
+    );
   });
   addWebContentTargetListener(entry, 'console-message', (...args) => {
     const metadata = browserViewTargetMetadata.get(targetId);

@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"],
     "rootDir": ".",
     "outDir": "dist-electron",
@@ -12,7 +12,8 @@
   "include": [
     "src/cs/code/electron-main/**/*.ts",
     "src/cs/platform/windows/electron-main/**/*.ts",
-    "src/cs/base/parts/sandbox/electron-browser/preload.ts"
+    "src/cs/base/parts/sandbox/electron-browser/preload.ts",
+    "src/cs/platform/browserView/electron-browser/preload-browserView.ts"
   ],
   "exclude": ["dist-electron", "node_modules"]
 }

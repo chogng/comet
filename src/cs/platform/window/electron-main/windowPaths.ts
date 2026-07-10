@@ -61,3 +61,13 @@ export function resolveWorkbenchRendererFilePath() {
 export function resolvePreloadScriptPath() {
   return path.join(resolvePreloadBrowserDir(), 'preload.js');
 }
+
+export function resolveBrowserViewPreloadScriptPath() {
+  return path.join(
+    resolveDistElectronDir(),
+    'platform',
+    'browserView',
+    'electron-browser',
+    'preload-browserView.js',
+  );
+}
