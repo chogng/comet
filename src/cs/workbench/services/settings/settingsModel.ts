@@ -1,7 +1,6 @@
 import type {
   AppStartupLayout,
   AppTheme,
-  JournalSourceOverride,
   LibraryStorageMode,
   LlmProviderId,
   LlmProviderSettings,
@@ -72,7 +71,6 @@ export type SettingsModelSnapshot = {
   browserPageZoom: string;
   browserSearchEngine: string;
   batchLimit: number;
-  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -158,7 +156,6 @@ function areSettingsModelSnapshotsEqual(
     previous.browserPageZoom === next.browserPageZoom &&
     previous.browserSearchEngine === next.browserSearchEngine &&
     previous.batchLimit === next.batchLimit &&
-    areJsonEqual(previous.journalSourceOverrides, next.journalSourceOverrides) &&
     previous.systemNotificationsEnabled === next.systemNotificationsEnabled &&
     previous.warningNotificationsEnabled === next.warningNotificationsEnabled &&
     previous.menuBarIconEnabled === next.menuBarIconEnabled &&
@@ -213,7 +210,6 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     browserPageZoom: defaultBrowserPageZoom,
     browserSearchEngine: defaultBrowserSearchEngine,
     batchLimit: defaultBatchLimit,
-    journalSourceOverrides: [],
     systemNotificationsEnabled: true,
     warningNotificationsEnabled: true,
     menuBarIconEnabled: false,
@@ -302,32 +298,6 @@ export class SettingsModel {
     }));
   };
 
-  readonly setJournalSourceTitle = (url: string, journalTitle: string) => {
-    const normalizedUrl = String(url ?? '').trim();
-    if (!normalizedUrl) {
-      return;
-    }
-
-    const normalizedJournalTitle = String(journalTitle ?? '').trim();
-    this.updateSnapshot((snapshot) => {
-      const nextOverrides = snapshot.journalSourceOverrides.filter(
-        (override) => override.url !== normalizedUrl,
-      );
-			nextOverrides.push({
-				url: normalizedUrl,
-				journalTitle: normalizedJournalTitle || undefined,
-			});
-
-      if (areJsonEqual(snapshot.journalSourceOverrides, nextOverrides)) {
-        return snapshot;
-      }
-
-      return {
-        ...snapshot,
-        journalSourceOverrides: nextOverrides,
-      };
-    });
-  };
 
   readonly setSystemNotificationsEnabled = (systemNotificationsEnabled: boolean) => {
     if (this.snapshot.systemNotificationsEnabled === systemNotificationsEnabled) {
@@ -1059,7 +1029,6 @@ export class SettingsModel {
         browserPageZoom: resolved.browserPageZoom,
         browserSearchEngine: resolved.browserSearchEngine,
         batchLimit: resolved.batchLimit,
-        journalSourceOverrides: resolved.journalSourceOverrides,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,
@@ -1223,7 +1192,6 @@ export class SettingsModel {
       browserPageZoom,
       browserSearchEngine,
       batchLimit,
-      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1259,7 +1227,6 @@ export class SettingsModel {
       browserPageZoom,
       browserSearchEngine,
       batchLimit,
-      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1340,7 +1307,6 @@ export class SettingsModel {
       browserPageZoom,
       browserSearchEngine,
       batchLimit,
-      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1376,7 +1342,6 @@ export class SettingsModel {
       browserPageZoom,
       browserSearchEngine,
       batchLimit,
-      journalSourceOverrides,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1483,7 +1448,6 @@ export class SettingsModel {
         browserPageZoom: resolved.browserPageZoom,
         browserSearchEngine: resolved.browserSearchEngine,
         batchLimit: resolved.batchLimit,
-        journalSourceOverrides: resolved.journalSourceOverrides,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,

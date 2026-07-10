@@ -10,7 +10,6 @@ import {
   ProviderApiKeySecretStorage,
 } from 'cs/platform/secrets/common/secret';
 import { createStorageMainService } from 'cs/platform/storage/electron-main/storageMainService';
-import { getDefaultBatchSources } from 'cs/platform/configuration/common/defaultBatchSources';
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
 
@@ -43,17 +42,6 @@ async function withConfigurationService(
   }
 }
 
-type TestJournalSourceOverride = {
-  url?: string;
-  journalTitle?: string;
-};
-
-function getJournalSourceOverrides(settingsJson: unknown): TestJournalSourceOverride[] {
-  return (settingsJson as {
-    'literature.journalSourceOverrides'?: TestJournalSourceOverride[];
-  })['literature.journalSourceOverrides'] ?? [];
-}
-
 function createTestEditorDraftStyle(fontFamilyValue: string): EditorDraftStyleSettings {
   return {
     defaultBodyStyle: {
@@ -72,99 +60,6 @@ function createTestEditorDraftStyle(fontFamilyValue: string): EditorDraftStyleSe
   };
 }
 
-test('configuration service reads journal source overrides from user settings json', async () => {
-  await withConfigurationService(async (service, { userSettingsFile }) => {
-    await writeFile(
-      userSettingsFile,
-      JSON.stringify({
-        'literature.journalSourceOverrides': [
-          {
-            url: 'https://example.com/latest',
-            journalTitle: 'Example Journal',
-          },
-        ],
-      }),
-      'utf8',
-    );
-
-    const settings = await service.loadSettings();
-
-    assert.equal(settings.configPath, userSettingsFile);
-    assert.ok(
-      settings.journalSourceOverrides.some(
-        (source) =>
-          source.url === 'https://example.com/latest' &&
-          source.journalTitle === 'Example Journal',
-      ),
-    );
-    assert.ok(
-      settings.journalSourceOverrides.some(
-        (source) =>
-          source.url === 'https://www.science.org/toc/science/current' &&
-          source.journalTitle === 'Science',
-      ),
-    );
-  });
-});
-
-test('configuration service keeps user settings json separate from saved app settings', async () => {
-  await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
-    const userSettings = {
-      'literature.journalSourceOverrides': [
-        {
-          url: 'https://example.com/latest',
-          journalTitle: 'Example Journal',
-        },
-      ],
-    };
-    await writeFile(userSettingsFile, JSON.stringify(userSettings), 'utf8');
-
-    await service.saveSettings({
-      defaultBatchLimit: 12,
-      journalSourceOverrides: [
-        {
-          url: 'https://ignored.example/latest',
-          journalTitle: 'Ignored',
-        },
-      ],
-    });
-
-    const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
-    const savedUserSettings = JSON.parse(await readFile(userSettingsFile, 'utf8'));
-    const settings = await service.loadSettings();
-
-    assert.equal(savedConfig.defaultBatchLimit, 12);
-    assert.deepEqual(savedConfig.journalSourceOverrides, []);
-    const savedSourceOverrides = getJournalSourceOverrides(savedUserSettings);
-    assert.ok(
-      savedSourceOverrides.some(
-        (source) =>
-          JSON.stringify(source) ===
-          JSON.stringify({
-            url: 'https://example.com/latest',
-            journalTitle: 'Example Journal',
-          }),
-      ),
-    );
-    assert.ok(
-      savedSourceOverrides.some(
-        (source) =>
-          JSON.stringify(source) ===
-          JSON.stringify({
-            url: 'https://www.science.org/toc/science/current',
-            journalTitle: 'Science',
-          }),
-      ),
-    );
-    assert.ok(
-      settings.journalSourceOverrides.some(
-        (source) =>
-          source.url === 'https://example.com/latest' &&
-          source.journalTitle === 'Example Journal',
-      ),
-    );
-  });
-});
 
 test('configuration service persists integrated browser settings locally', async () => {
   await withConfigurationService(async (service, { configFile }) => {
@@ -265,63 +160,6 @@ test('configuration service saves editor draft style into user settings json', a
   });
 });
 
-test('configuration service creates user settings json with editable journal titles on first load', async () => {
-  await withConfigurationService(async (service, { userSettingsFile }) => {
-    const settings = await service.loadSettings();
-    const rawUserSettings = await readFile(userSettingsFile, 'utf8');
-    const sourceOverrides = getJournalSourceOverrides(JSON.parse(rawUserSettings));
-    const defaultSources = getDefaultBatchSources();
-
-    assert.equal(settings.configPath, userSettingsFile);
-    assert.equal(sourceOverrides.length, defaultSources.length);
-    assert.deepEqual(sourceOverrides[0], {
-      url: 'https://www.science.org/toc/science/current',
-      journalTitle: 'Science',
-    });
-  });
-});
-
-test('configuration service migrates legacy journal source overrides into user settings json', async () => {
-  await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
-    await mkdir(path.dirname(configFile), { recursive: true });
-    await writeFile(
-      configFile,
-      JSON.stringify({
-        journalSourceOverrides: [
-          {
-            url: 'https://legacy.example/latest',
-            journalTitle: 'Legacy Journal',
-          },
-        ],
-      }),
-      'utf8',
-    );
-
-    const settings = await service.loadSettings();
-    const rawUserSettings = await readFile(userSettingsFile, 'utf8');
-
-    const sourceOverrides = getJournalSourceOverrides(JSON.parse(rawUserSettings));
-
-    assert.ok(
-      sourceOverrides.some(
-        (source) =>
-          JSON.stringify(source) ===
-          JSON.stringify({
-            url: 'https://legacy.example/latest',
-            journalTitle: 'Legacy Journal',
-          }),
-      ),
-    );
-    assert.ok(
-      settings.journalSourceOverrides.some(
-        (source) =>
-          source.url === 'https://legacy.example/latest' &&
-          source.journalTitle === 'Legacy Journal',
-      ),
-    );
-  });
-});
-
 test('configuration service saves user settings into a changed config path', async () => {
   await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
     const customUserSettingsFile = path.join(
@@ -330,19 +168,6 @@ test('configuration service saves user settings into a changed config path', asy
       'settings.json',
     );
     const nextEditorDraftStyle = createTestEditorDraftStyle('"Moved Sans", sans-serif');
-
-    await writeFile(
-      userSettingsFile,
-      JSON.stringify({
-        'literature.journalSourceOverrides': [
-          {
-            url: 'https://example.com/latest',
-            journalTitle: 'Example Journal',
-          },
-        ],
-      }),
-      'utf8',
-    );
 
     await service.saveSettings({
       userSettingsPathOverride: customUserSettingsFile,
@@ -355,13 +180,6 @@ test('configuration service saves user settings into a changed config path', asy
 
     assert.equal(savedConfig.userSettingsPathOverride, customUserSettingsFile);
     assert.equal(settings.configPath, customUserSettingsFile);
-    assert.ok(
-      getJournalSourceOverrides(movedUserSettings).some(
-        (source) =>
-          source.url === 'https://example.com/latest' &&
-          source.journalTitle === 'Example Journal',
-      ),
-    );
     assert.equal(
       movedUserSettings['literature.editorDraftStyle'].defaultBodyStyle.fontFamilyValue,
       '"Moved Sans", sans-serif',

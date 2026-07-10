@@ -2,7 +2,6 @@ import type {
   AppStartupLayout,
   AppTheme,
   AppSettings as DesktopAppSettings,
-  JournalSourceOverride,
   KnowledgeBaseSettings,
   LlmSettings,
   RagSettings,
@@ -58,7 +57,6 @@ export type ResolvedSettingsState = {
   browserPageZoom: string;
   browserSearchEngine: string;
   batchLimit: number;
-  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -87,7 +85,6 @@ export type SaveSettingsDraft = {
   browserPageZoom: string;
   browserSearchEngine: string;
   batchLimit: number;
-  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -169,9 +166,6 @@ export function resolveSettingsState(
         ? loaded.browserSearchEngine.trim()
         : defaultBrowserSearchEngine,
     batchLimit: normalizeBatchLimit(loaded.defaultBatchLimit, defaultBatchLimit),
-    journalSourceOverrides: Array.isArray(loaded.journalSourceOverrides)
-      ? [...loaded.journalSourceOverrides]
-      : [],
     systemNotificationsEnabled:
       typeof loaded.systemNotificationsEnabled === 'boolean'
         ? loaded.systemNotificationsEnabled
@@ -245,7 +239,6 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
       browserPageZoom: draft.browserPageZoom,
       browserSearchEngine: draft.browserSearchEngine,
       defaultBatchLimit: nextBatchLimit,
-      journalSourceOverrides: [...draft.journalSourceOverrides],
       systemNotificationsEnabled: draft.systemNotificationsEnabled,
       warningNotificationsEnabled: draft.warningNotificationsEnabled,
       menuBarIconEnabled: draft.menuBarIconEnabled,

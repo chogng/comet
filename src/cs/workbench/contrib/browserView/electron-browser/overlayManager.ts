@@ -36,8 +36,10 @@ const OVERLAY_DEFINITIONS: readonly OverlayDefinition[] = [
 	{ className: 'comet-context-view', type: BrowserOverlayType.Unknown },
 ];
 
+// These transparent layers capture input for context views but are not the visible overlay.
 const CONTEXT_VIEW_BLOCKER_CLASSES = ['context-view-block', 'context-view-pointerBlock'];
 
+/** Describes a visible overlay that overlaps a browser host. */
 export interface IBrowserOverlayInfo {
 	readonly type: BrowserOverlayType;
 	readonly rect: IDomNodePagePosition;
@@ -66,6 +68,7 @@ function getOverlappingRectangleCenterPoint(
 	};
 }
 
+/** Tracks Comet overlays and reports when they obscure a browser host. */
 export class BrowserOverlayManager {
 	private readonly disposables = new DisposableStore();
 	private readonly overlayCollections = new Map<string, { type: BrowserOverlayType; collection: HTMLCollectionOf<Element> }>();
@@ -73,6 +76,7 @@ export class BrowserOverlayManager {
 	private readonly shadowRootObservers = new WeakMap<ShadowRoot, MutationObserver>();
 	private readonly onDidChangeOverlayStateEmitter = new Emitter<void>();
 
+	/** Fires when overlay DOM, geometry, or visibility may have changed. */
 	readonly onDidChangeOverlayState: Event<void> = this.onDidChangeOverlayStateEmitter.event;
 
 	constructor(private readonly targetWindow: Window) {
@@ -111,6 +115,7 @@ export class BrowserOverlayManager {
 		this.disposables.dispose();
 	}
 
+	/** Returns overlays whose visible rectangles cover part of the given element. */
 	getOverlappingOverlays(element: HTMLElement): IBrowserOverlayInfo[] {
 		const elementRect = getDomNodePagePosition(element);
 		const overlappingOverlays: IBrowserOverlayInfo[] = [];
@@ -151,6 +156,7 @@ export class BrowserOverlayManager {
 			}
 		}
 
+		// Overlay classes inside open Shadow Roots are invisible to document collections.
 		for (const hostElement of this.shadowRootHostCollection) {
 			const shadowRoot = hostElement.shadowRoot;
 			if (!shadowRoot) {
@@ -175,6 +181,7 @@ export class BrowserOverlayManager {
 				return elementAtPoint;
 			}
 
+			// A blocker can be topmost while the overlay beneath it is the visible obstruction.
 			const elementsFromPoint = root.elementsFromPoint(clientX, clientY);
 			return elementsFromPoint.find(element => !isContextViewBlocker(element)) ?? null;
 		};
@@ -187,6 +194,7 @@ export class BrowserOverlayManager {
 	}
 
 	private updateShadowRootObservers() {
+		// Shadow roots need their own observer because document mutations do not cross the boundary.
 		for (const hostElement of this.shadowRootHostCollection) {
 			const shadowRoot = hostElement.shadowRoot;
 			if (!shadowRoot || this.shadowRootObservers.has(shadowRoot)) {

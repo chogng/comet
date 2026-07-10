@@ -4,7 +4,6 @@ import { promises as fs } from 'node:fs';
 import type {
   AppTheme,
   AppSettings,
-  JournalSourceOverride,
   KnowledgeBaseSettings,
   RagSettings,
   StoredAppSettings,
@@ -28,11 +27,10 @@ import type {
   ProviderApiKeyScope,
 } from 'cs/platform/secrets/common/secret';
 import {
-  batchLimitMax,
-  batchLimitMin,
-  defaultBatchLimit,
-  getDefaultBatchSources,
-} from 'cs/platform/configuration/common/defaultBatchSources';
+  defaultFetchLimit as defaultBatchLimit,
+  fetchLimitMax as batchLimitMax,
+  fetchLimitMin as batchLimitMin,
+} from 'cs/platform/configuration/common/fetchLimits';
 import {
   createDefaultLlmSettings,
   defaultLlmProviderSettings,
@@ -74,9 +72,7 @@ type ConfigurationMainServiceOptions = {
 };
 
 type UserSettings = {
-  'literature.journalSourceOverrides'?: JournalSourceOverride[];
   'literature.editorDraftStyle'?: EditorDraftStyleSettings;
-  journalSourceOverrides?: JournalSourceOverride[];
 };
 
 function normalizeUserSettingsPathOverride(value: unknown, defaultUserSettingsFile: string) {
@@ -112,61 +108,11 @@ async function writeJson(filePath: string, value: unknown) {
   await fs.writeFile(filePath, JSON.stringify(serializeConfigValue(value), null, 2), 'utf8');
 }
 
-function createDefaultUserJournalSourceOverrides() {
-  return getDefaultBatchSources().map((source): JournalSourceOverride => ({
-    url: source.url,
-    journalTitle: source.journalTitle,
-  }));
-}
-
-function mergeJournalSourceOverrides(
-  base: ReadonlyArray<JournalSourceOverride>,
-  overrides: ReadonlyArray<JournalSourceOverride>,
-) {
-  const merged = new Map<string, JournalSourceOverride>();
-  for (const source of [...base, ...overrides]) {
-    const url = cleanText(source.url);
-    if (!url) {
-      continue;
-    }
-
-    merged.set(url, {
-      url,
-      journalTitle: cleanText(source.journalTitle),
-    });
-  }
-
-  return [...merged.values()];
-}
-
 async function ensureUserSettingsFile(
   filePath: string,
-  appSettingsPayload: Partial<StoredAppSettings>,
 ) {
-  const defaultSourceOverrides = createDefaultUserJournalSourceOverrides();
-  const legacySourceOverrides = normalizeJournalSourceOverrides(
-    appSettingsPayload.journalSourceOverrides,
-  );
-
-  try {
-    const existing = await readJson<Partial<UserSettings>>(filePath, {});
-    const existingSourceOverrides = resolveUserJournalSourceOverrides(existing);
-    const nextSourceOverrides = mergeJournalSourceOverrides(
-      defaultSourceOverrides,
-      existingSourceOverrides.length > 0 ? existingSourceOverrides : legacySourceOverrides,
-    );
-    await writeJson(filePath, {
-      ...existing,
-      'literature.journalSourceOverrides': nextSourceOverrides,
-    });
-  } catch {
-    await writeJson(filePath, {
-      'literature.journalSourceOverrides': mergeJournalSourceOverrides(
-        defaultSourceOverrides,
-        legacySourceOverrides,
-      ),
-    } satisfies Partial<UserSettings>);
-  }
+  const existing = await readJson<Partial<UserSettings>>(filePath, {});
+  await writeJson(filePath, existing);
 }
 
 async function writeUserSettingsEditorDraftStyle(
@@ -446,45 +392,6 @@ function normalizeThemeColorCustomizations(value: unknown): StoredAppSettings['w
   return Object.fromEntries(entries);
 }
 
-function normalizeJournalSourceOverrides(value: unknown): JournalSourceOverride[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const deduped = new Map<string, JournalSourceOverride>();
-  for (const item of value) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      continue;
-    }
-
-    const record = item as Record<string, unknown>;
-    const url = cleanText(record.url);
-    if (!url) {
-      continue;
-    }
-
-    const override: JournalSourceOverride = {
-      url,
-    };
-    const journalTitle = cleanText(record.journalTitle);
-    if (journalTitle) {
-      override.journalTitle = journalTitle;
-    }
-
-    deduped.set(url, override);
-  }
-
-  return [...deduped.values()];
-}
-
-function resolveUserJournalSourceOverrides(userSettings: Partial<UserSettings>) {
-  if (Array.isArray(userSettings['literature.journalSourceOverrides'])) {
-    return normalizeJournalSourceOverrides(userSettings['literature.journalSourceOverrides']);
-  }
-
-  return normalizeJournalSourceOverrides(userSettings.journalSourceOverrides);
-}
-
 function resolveUserEditorDraftStyle(userSettings: Partial<UserSettings>) {
   if (userSettings['literature.editorDraftStyle'] !== undefined) {
     return normalizeEditorDraftStyleSettings(userSettings['literature.editorDraftStyle']);
@@ -536,7 +443,6 @@ function normalizeSettings(
     browserPageZoom,
     browserSearchEngine,
     defaultBatchLimit: normalizedLimit,
-    journalSourceOverrides: normalizeJournalSourceOverrides(payload.journalSourceOverrides),
     systemNotificationsEnabled:
       typeof payload.systemNotificationsEnabled === 'boolean'
         ? payload.systemNotificationsEnabled
@@ -847,13 +753,12 @@ export function createConfigurationMainService(
     if (migratedProviderApiKeys) {
       await writeJson(configFile, removeProviderApiKeysFromPayload(configPayload));
     }
-    await ensureUserSettingsFile(resolvedUserSettingsFile, payload);
+    await ensureUserSettingsFile(resolvedUserSettingsFile);
     const userSettings = await readJson<Partial<UserSettings>>(resolvedUserSettingsFile, {});
     const userEditorDraftStyle = resolveUserEditorDraftStyle(userSettings);
     const normalized = normalizeSettings(
       {
         ...configPayload,
-        journalSourceOverrides: resolveUserJournalSourceOverrides(userSettings),
         ...(userEditorDraftStyle ? { editorDraftStyle: userEditorDraftStyle } : {}),
       },
       defaultLocale,
@@ -878,7 +783,6 @@ export function createConfigurationMainService(
         {
           ...currentStored,
           ...settings,
-          journalSourceOverrides: [],
         },
         defaultLocale,
         userSettingsFile,
@@ -888,10 +792,7 @@ export function createConfigurationMainService(
         resolveUserSettingsFilePath(saved, userSettingsFile);
       const { editorDraftStyle, ...savedConfig } = saved;
       await writeJson(configFile, savedConfig);
-      await ensureUserSettingsFile(targetUserSettingsFile, {
-        ...saved,
-        journalSourceOverrides: currentStored.journalSourceOverrides,
-      });
+      await ensureUserSettingsFile(targetUserSettingsFile);
       await writeUserSettingsEditorDraftStyle(targetUserSettingsFile, editorDraftStyle);
       return readSettings();
     },

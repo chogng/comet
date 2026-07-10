@@ -258,7 +258,7 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
   supportedSources: {
     id: 'supportedSources',
-    settingIds: [SettingsId.JournalSourceOverrides],
+    settingIds: [],
     searchLabels: labels => [
       labels.settingsSupportedSources,
       labels.settingsSupportedSourcesHint,

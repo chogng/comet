@@ -12,17 +12,6 @@ export interface TranslationCacheRecord {
   value: string;
 }
 
-export interface BatchSource {
-  id: string;
-  url: string;
-  journalTitle: string;
-}
-
-export interface JournalSourceOverride {
-  url: string;
-  journalTitle?: string;
-}
-
 export type LlmProviderId =
   | 'glm'
   | 'kimi'
@@ -89,12 +78,6 @@ export interface RagSettings {
   retrievalTopK: number;
 }
 
-export interface FetchBatchSource {
-  sourceId?: string;
-  pageUrl?: string;
-  journalTitle?: string;
-}
-
 export type DateRange = import('cs/base/common/date').DateRange;
 
 export interface StoredAppSettings {
@@ -105,7 +88,6 @@ export interface StoredAppSettings {
   browserPageZoom: string;
   browserSearchEngine: string;
   defaultBatchLimit: number;
-  journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;

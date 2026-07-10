@@ -170,11 +170,6 @@ export class SettingsController {
     this.scheduleImmediateAutoSave();
   };
 
-  readonly setJournalSourceTitle = (url: string, journalTitle: string) => {
-    this.settingsModel.setJournalSourceTitle(url, journalTitle);
-    this.scheduleDebouncedAutoSave();
-  };
-
   readonly setSystemNotificationsEnabled = (
     nextSystemNotificationsEnabled: boolean,
   ) => {

@@ -51,8 +51,6 @@ export function localizeAppError(ui: LocaleMessages, error: AppErrorData): strin
 			}).trim();
 		case 'BATCH_PAGE_URLS_EMPTY':
 			return ui.errorBatchPageUrlsEmpty;
-		case 'BATCH_SOURCE_FETCH_FAILED':
-			return ui.errorBatchSourceFetchFailed;
 		case 'BATCH_NO_MATCH_IN_DATE_RANGE':
 			return ui.errorBatchNoMatchInDateRange;
 		case 'BATCH_NO_VALID_ARTICLES':

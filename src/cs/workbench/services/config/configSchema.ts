@@ -1,261 +1,30 @@
-import type { BatchSource as DesktopBatchSource } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { sanitizeUrlInput } from 'cs/workbench/common/url';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import {
-  batchLimitMax,
-  batchLimitMin,
-  defaultBatchLimit,
-  getDefaultBatchSources,
-} from 'cs/platform/configuration/common/defaultBatchSources';
+	defaultFetchLimit,
+	fetchLimitMax,
+	fetchLimitMin,
+} from 'cs/platform/configuration/common/fetchLimits';
 
 export {
-  batchLimitMax,
-  batchLimitMin,
-  defaultBatchLimit,
+	defaultFetchLimit,
+	fetchLimitMax,
+	fetchLimitMin,
 };
 
-export type BatchSource = DesktopBatchSource;
+export const defaultBatchLimit = defaultFetchLimit;
+export const batchLimitMax = fetchLimitMax;
+export const batchLimitMin = fetchLimitMin;
 
-export type ResolvedSourceTableMetadata = {
-  lookupKey: string;
-  articleListId: string;
-  journalTitle: string;
-  defaultJournalTitle: string;
-};
-
-type SourceLookupMaps = {
-  journalTitleByLookupKey: Map<string, string>;
-  articleListIdByLookupKey: Map<string, string>;
-};
-
-function createSourceLookupKey(input: unknown) {
-  const normalized = normalizeConfigSourceUrl(String(input ?? ''));
-  if (!normalized) {
-    return '';
-  }
-
-  try {
-    const url = new URL(normalized);
-    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
-    const pathname = url.pathname.replace(/\/+$/, '') || '/';
-    return `${hostname}${pathname}`;
-  } catch {
-    return '';
-  }
+export function normalizeFetchLimit(input: unknown, fallback: number = defaultFetchLimit): number {
+	const parsed = Number.parseInt(String(input), 10);
+	if (Number.isNaN(parsed)) {
+		return fallback;
+	}
+	return Math.min(fetchLimitMax, Math.max(fetchLimitMin, parsed));
 }
 
-function normalizeConfigSourceUrl(input: string) {
-  const trimmed = sanitizeUrlInput(input);
-  if (!trimmed) {
-    return '';
-  }
-
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed;
-  }
-
-  return `https://${trimmed}`;
-}
-
-function randomIdSegment() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function createIndexedBatchSourceId(index: number) {
-  return String(Math.max(0, Math.trunc(index)) + 1);
-}
-
-function createRandomBatchSourceId() {
-  return `source-${Date.now().toString(36)}-${randomIdSegment()}`;
-}
-
-export function ensureBatchSourceId(input: unknown, fallbackIndex?: number) {
-  const cleaned = String(input ?? '').trim();
-  if (cleaned) return cleaned;
-
-  if (Number.isInteger(fallbackIndex) && Number(fallbackIndex) >= 0) {
-    return createIndexedBatchSourceId(Number(fallbackIndex));
-  }
-
-  return createRandomBatchSourceId();
-}
-
-export function createEmptyBatchSource(): BatchSource {
-  return {
-    id: createRandomBatchSourceId(),
-    url: '',
-    journalTitle: '',
-  };
-}
-
-export function normalizeBatchLimit(input: unknown, fallback: number = defaultBatchLimit): number {
-  const parsed = Number.parseInt(String(input), 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.min(batchLimitMax, Math.max(batchLimitMin, parsed));
-}
-
-function createLookupMap<T extends string>(table: ReadonlyArray<{ url: string; value: T }>) {
-  const map = new Map<string, T>();
-
-  for (const item of table) {
-    const lookupKey = createSourceLookupKey(item.url);
-    if (!lookupKey || !item.value || map.has(lookupKey)) {
-      continue;
-    }
-
-    map.set(lookupKey, item.value);
-  }
-
-  return map;
-}
-
-function createSourceLookupMaps(entries: ReadonlyArray<BatchSource>): SourceLookupMaps {
-  return {
-    journalTitleByLookupKey: createLookupMap(
-      entries.map((item) => ({
-        url: item.url,
-        value: item.journalTitle.trim(),
-      })),
-    ),
-    articleListIdByLookupKey: createLookupMap(
-      entries.map((item) => ({
-        url: item.url,
-        value: item.id.trim(),
-      })),
-    ),
-  };
-}
-
-const emptySourceLookupMaps: SourceLookupMaps = {
-  journalTitleByLookupKey: new Map<string, string>(),
-  articleListIdByLookupKey: new Map<string, string>(),
-};
-
-function resolveSourceLookupMaps(batchSources?: ReadonlyArray<BatchSource>): SourceLookupMaps {
-  const sanitized = sanitizeBatchSources(batchSources);
-  if (sanitized.length === 0) {
-    return emptySourceLookupMaps;
-  }
-
-  return createSourceLookupMaps(sanitized);
-}
-
-function sanitizeBatchSourceEntry(value: unknown, index: number): BatchSource {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {
-      id: '',
-      url: '',
-      journalTitle: '',
-    };
-  }
-
-  const record = value as Record<string, unknown>;
-  const url = sanitizeUrlInput(String(record.url ?? ''));
-
-  return {
-    id: ensureBatchSourceId(record.id, index),
-    url,
-    journalTitle: String(record.journalTitle ?? '').trim(),
-  };
-}
-
-function dedupeBatchSources(sources: BatchSource[]): BatchSource[] {
-  const deduped = new Map<string, BatchSource>();
-
-  for (const source of sources) {
-    const key = createSourceLookupKey(source.url) || source.url;
-    const previous = deduped.get(key);
-    if (!previous) {
-      deduped.set(key, source);
-      continue;
-    }
-    deduped.set(key, {
-      ...previous,
-      id: source.id || previous.id,
-      journalTitle: source.journalTitle || previous.journalTitle,
-    });
-  }
-
-  return [...deduped.values()];
-}
-
-export function sanitizeBatchSources(input: unknown): BatchSource[] {
-  const values = Array.isArray(input) ? input : [];
-  const normalized = values
-    .map((value, index) => sanitizeBatchSourceEntry(value, index))
-    .filter((source) => source.url);
-  return dedupeBatchSources(normalized);
-}
-
-export function normalizeBatchSources(
-  input: unknown,
-  fallback: ReadonlyArray<BatchSource>,
-): BatchSource[] {
-  if (Array.isArray(input)) {
-    return sanitizeBatchSources(input);
-  }
-
-  return sanitizeBatchSources(fallback);
-}
-
-export function resolveSourceTableMetadata(
-  input: unknown,
-  batchSources?: ReadonlyArray<BatchSource>,
-): ResolvedSourceTableMetadata {
-  const lookupKey = createSourceLookupKey(input);
-  if (!lookupKey) {
-    return {
-      lookupKey: '',
-      articleListId: '',
-      journalTitle: '',
-      defaultJournalTitle: '',
-    };
-  }
-
-  const lookupMaps = resolveSourceLookupMaps(batchSources);
-  const articleListId = lookupMaps.articleListIdByLookupKey.get(lookupKey) ?? '';
-  const journalTitle = lookupMaps.journalTitleByLookupKey.get(lookupKey) ?? '';
-
-  return {
-    lookupKey,
-    articleListId,
-    journalTitle,
-    defaultJournalTitle: journalTitle || articleListId,
-  };
-}
-
-export function resolveDefaultJournalTitleFromSourceUrl(
-  input: unknown,
-  batchSources?: ReadonlyArray<BatchSource>,
-) {
-  return resolveSourceTableMetadata(input, batchSources).defaultJournalTitle;
-}
-
-type ConfigBatchSourceResolution = {
-  batchSources: BatchSource[];
-};
-
-const configBatchSourceSeed: ReadonlyArray<BatchSource> = getDefaultBatchSources();
-
-export function getConfigBatchSourceSeed(): BatchSource[] {
-  return configBatchSourceSeed.map((source) => ({
-    id: source.id,
-    url: source.url,
-    journalTitle: source.journalTitle,
-  }));
-}
-
-function createConfigBatchSourceResolution(
-  input: unknown,
-  fallback: ReadonlyArray<BatchSource> = configBatchSourceSeed,
-): ConfigBatchSourceResolution {
-  return {
-    batchSources: normalizeBatchSources(input, fallback),
-  };
-}
-
-export function resolveConfigBatchSources(
-  input: unknown,
-  fallback: ReadonlyArray<BatchSource> = configBatchSourceSeed,
-): BatchSource[] {
-  return createConfigBatchSourceResolution(input, fallback).batchSources;
-}
+export const normalizeBatchLimit = normalizeFetchLimit;

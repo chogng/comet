@@ -23,7 +23,6 @@ export const enum FetchErrorCode {
 	InteractiveTargetTimedOut = 'INTERACTIVE_TARGET_TIMED_OUT',
 	InteractiveTargetClosed = 'INTERACTIVE_TARGET_CLOSED',
 	BatchPageUrlsEmpty = 'BATCH_PAGE_URLS_EMPTY',
-	BatchSourceFetchFailed = 'BATCH_SOURCE_FETCH_FAILED',
 	BatchNoMatchInDateRange = 'BATCH_NO_MATCH_IN_DATE_RANGE',
 	BatchNoValidArticles = 'BATCH_NO_VALID_ARTICLES',
 	DateRangeInvalid = 'DATE_RANGE_INVALID',

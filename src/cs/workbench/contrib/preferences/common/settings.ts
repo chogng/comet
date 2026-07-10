@@ -64,7 +64,6 @@ export const SettingsId = {
 	DefaultBatchLimit: 'defaultBatchLimit',
 	FetchStartDate: 'fetch.startDate',
 	FetchEndDate: 'fetch.endDate',
-	JournalSourceOverrides: 'journalSourceOverrides',
 	DefaultDownloadDir: 'defaultDownloadDir',
 	PdfFileNameUseSelectionOrder: 'pdfFileNameUseSelectionOrder',
 	KnowledgeBaseEnabled: 'knowledgeBase.enabled',
