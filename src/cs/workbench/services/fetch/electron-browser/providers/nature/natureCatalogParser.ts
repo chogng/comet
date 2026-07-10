@@ -16,7 +16,37 @@ function uriFromHref(href: string | null, base: URI): URI | undefined {
 }
 
 export function parseNatureCatalog(document: Document, base: URI): ParsedArticleListCatalog {
-	const entries = [...document.querySelectorAll('nav, aside, section')].map(container => {
+	const entries = getNatureExploreCatalogEntries(document, base);
+	if (entries.length === 0) {
+		throw new Error(`Nature source discovery for "${base.toString(true)}" did not find an Explore content catalog.`);
+	}
+	return { entries };
+}
+
+export function isNatureExploreCatalog(document: Document): boolean {
+	return getNatureExploreCatalogEntries(document, URI.parse('https://www.nature.com/')).length > 0;
+}
+
+export function isNatureArticleListCatalog(document: Document): boolean {
+	return !!document.querySelector('main h1') && !!document.querySelector('main article, main li[data-test*="article"]');
+}
+
+export function parseNatureArticleListCatalog(document: Document, base: URI): ParsedArticleListCatalog {
+	const label = text(document.querySelector('main h1'));
+	if (!label) {
+		throw new Error(`Nature article list "${base.toString(true)}" does not contain a title.`);
+	}
+	return {
+		entries: [{
+			kind: 'group',
+			label,
+			sources: [{ kind: 'source', label, url: base }],
+		}],
+	};
+}
+
+function getNatureExploreCatalogEntries(document: Document, base: URI): ParsedArticleListCatalog['entries'] {
+	return [...document.querySelectorAll('nav, aside, section')].map(container => {
 		const label = text(container.querySelector('h2, h3, [aria-level]'));
 		const sources = [...container.querySelectorAll('a[href]')]
 			.map(anchor => ({ label: text(anchor), url: uriFromHref(anchor.getAttribute('href'), base) }))
@@ -31,10 +61,6 @@ export function parseNatureCatalog(document: Document, base: URI): ParsedArticle
 			sources: dedupeSources(sources).map(source => ({ kind: 'source' as const, ...source })),
 		};
 	}).filter((entry): entry is NonNullable<typeof entry> => !!entry);
-	if (entries.length === 0) {
-		throw new Error(`Nature source discovery for "${base.toString(true)}" did not find an article type catalog.`);
-	}
-	return { entries };
 }
 
 function dedupeSources(sources: readonly { label: string; url: URI }[]): readonly { label: string; url: URI }[] {

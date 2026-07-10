@@ -11,7 +11,7 @@ import { FetchPageSessionFactory, IFetchPageSessionFactory } from 'cs/workbench/
 import { resolveFetchParser, type FetchParseContext } from 'cs/workbench/services/fetch/electron-browser/fetchParserResolver';
 import { parseNatureArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleDetailParser';
 import { isNatureArticleList, parseNatureArticleList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleListParser';
-import { parseNatureCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
+import { isNatureArticleListCatalog, isNatureExploreCatalog, parseNatureArticleListCatalog, parseNatureCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
 import { isNatureNewsOpinionList, parseNatureNewsOpinionList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureNewsOpinionListParser';
 
 export class NatureFetchProvider implements IFetchProvider {
@@ -34,8 +34,12 @@ export class NatureFetchProvider implements IFetchProvider {
 	async discoverArticleListSources(journal: JournalDescriptor, token: CancellationToken): Promise<ParsedArticleListCatalog> {
 		const session = await this.pageSessionFactory.createOwned((target, snapshot) => target.authority === snapshot.authority);
 		try {
-			const snapshot = await session.navigateAndCapture(journal.discoveryUrl, { selector: 'a[href]', state: 'attached' }, token);
-			return parseNatureCatalog(this._parseDocument(snapshot.html), snapshot.uri);
+			const snapshot = await session.navigateAndCapture(journal.discoveryUrl, { selector: 'main', state: 'attached' }, token);
+			const context: FetchParseContext = { uri: snapshot.uri, document: this._parseDocument(snapshot.html) };
+			return resolveFetchParser([
+				{ id: 'nature.explore-catalog', matches: ({ document }) => isNatureExploreCatalog(document), parser: parseNatureCatalog },
+				{ id: 'nature.article-list-catalog', matches: ({ document }) => isNatureArticleListCatalog(document), parser: parseNatureArticleListCatalog },
+			], context)(context.document, context.uri);
 		} finally {
 			await session.dispose();
 		}

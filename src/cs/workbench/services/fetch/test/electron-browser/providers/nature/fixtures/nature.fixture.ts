@@ -26,6 +26,15 @@ export const natureArticleListFixture = `
 	</main>
 `;
 
+export const natureArticleListCatalogFixture = `
+	<main>
+		<h1>Research articles</h1>
+		<article data-test="article-card">
+			<h2><a href="/articles/s41586-026-00001">Nature article</a></h2>
+		</article>
+	</main>
+`;
+
 export const natureNewsOpinionListFixture = `
 	<main>
 		<div data-test="news-opinion-list">

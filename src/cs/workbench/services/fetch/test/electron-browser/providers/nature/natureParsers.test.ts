@@ -9,10 +9,10 @@ import { JSDOM } from 'jsdom';
 import { URI } from 'cs/base/common/uri';
 import { parseNatureArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleDetailParser';
 import { isNatureArticleList, parseNatureArticleList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleListParser';
-import { parseNatureCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
+import { isNatureArticleListCatalog, isNatureExploreCatalog, parseNatureArticleListCatalog, parseNatureCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
 import { NatureFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureFetchProvider';
 import { isNatureNewsOpinionList, parseNatureNewsOpinionList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureNewsOpinionListParser';
-import { natureArticleDetailFixture, natureArticleListFixture, natureCatalogFixture, natureNewsOpinionListFixture } from 'cs/workbench/services/fetch/test/electron-browser/providers/nature/fixtures/nature.fixture';
+import { natureArticleDetailFixture, natureArticleListCatalogFixture, natureArticleListFixture, natureCatalogFixture, natureNewsOpinionListFixture } from 'cs/workbench/services/fetch/test/electron-browser/providers/nature/fixtures/nature.fixture';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 
 const base = URI.parse('https://www.nature.com/nature/');
@@ -25,6 +25,15 @@ function documentFrom(html: string): Document {
 test('Nature fixtures parse catalog, ordinary list, news list, and article detail separately', () => {
 	const catalog = parseNatureCatalog(documentFrom(natureCatalogFixture), base);
 	assert.deepEqual(catalog.entries.map(entry => entry.kind === 'group' ? [entry.label, entry.sources.map(source => source.label)] : entry.label), [['Research articles', ['Article', 'Matters Arising']]]);
+	assert.equal(isNatureExploreCatalog(documentFrom(natureCatalogFixture)), true);
+	const articleListCatalogDocument = documentFrom(natureArticleListCatalogFixture);
+	assert.equal(isNatureExploreCatalog(articleListCatalogDocument), false);
+	assert.equal(isNatureArticleListCatalog(articleListCatalogDocument), true);
+	assert.deepEqual(parseNatureArticleListCatalog(articleListCatalogDocument, base).entries, [{
+		kind: 'group',
+		label: 'Research articles',
+		sources: [{ kind: 'source', label: 'Research articles', url: base }],
+	}]);
 
 	const articleDocument = documentFrom(natureArticleListFixture);
 	assert.equal(isNatureArticleList(articleDocument), true);
