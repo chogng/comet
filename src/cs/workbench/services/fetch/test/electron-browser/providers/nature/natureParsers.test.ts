@@ -10,6 +10,7 @@ import { URI } from 'cs/base/common/uri';
 import { parseNatureArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleDetailParser';
 import { isNatureArticleList, parseNatureArticleList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleListParser';
 import { parseNatureCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureCatalogParser';
+import { NatureFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureFetchProvider';
 import { isNatureNewsOpinionList, parseNatureNewsOpinionList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureNewsOpinionListParser';
 import { natureArticleDetailFixture, natureArticleListFixture, natureCatalogFixture, natureNewsOpinionListFixture } from 'cs/workbench/services/fetch/test/electron-browser/providers/nature/fixtures/nature.fixture';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
@@ -47,4 +48,14 @@ test('Nature fixtures parse catalog, ordinary list, news list, and article detai
 		publication: { title: 'Nature' },
 		pdfUrl: URI.parse('https://www.nature.com/articles/s41586-026-00001.pdf'),
 	});
+});
+
+test('Nature canonicalization removes fragments without merging query-distinct resources', () => {
+	const provider = new NatureFetchProvider(undefined as never);
+	const source = provider.canonicalizeSourceUri(URI.parse('HTTPS://WWW.NATURE.COM/articles?type=article#catalog'));
+	assert.equal(source.toString(true), 'https://www.nature.com/articles?type=article');
+	assert.notEqual(
+		provider.canonicalizeSourceUri(URI.parse('https://www.nature.com/articles?type=article')).toString(true),
+		provider.canonicalizeSourceUri(URI.parse('https://www.nature.com/articles?type=review')).toString(true),
+	);
 });

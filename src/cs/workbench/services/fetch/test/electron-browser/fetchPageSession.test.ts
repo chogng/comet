@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CancellationTokenNone } from 'cs/base/common/cancellation';
+import { CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/cancellation';
 import { Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import type { IChannel } from 'cs/base/parts/ipc/common/ipc';
@@ -84,4 +84,25 @@ test('borrowed FetchPageSession leaves an already tracked BrowserView alive and 
 
 	assert.deepEqual(playwrightCalls, ['captureSnapshot', 'disposeSession']);
 	assert.deepEqual(calls.map(call => call.command), ['loadURL']);
+});
+
+test('FetchPageSession rejects cancellation before navigation and releases owned resources', async () => {
+	const calls: BrowserViewCall[] = [];
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService();
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel(calls),
+	} as unknown as IMainProcessService;
+	const session = await FetchPageSession.createOwned(mainProcessService, playwrightService, () => true, 1);
+	const cancellationSource = new CancellationTokenSource();
+	cancellationSource.cancel();
+
+	await assert.rejects(
+		session.navigateAndCapture(URI.parse('https://example.com/target'), undefined, cancellationSource.token),
+		/Canceled/,
+	);
+	await session.dispose();
+	cancellationSource.dispose();
+
+	assert.deepEqual(playwrightCalls, ['startTrackingPage', 'stopTrackingPage', 'disposeSession']);
+	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'destroyBrowserView']);
 });

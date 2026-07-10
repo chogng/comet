@@ -10,6 +10,7 @@ import { URI } from 'cs/base/common/uri';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import { parseScienceArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceArticleDetailParser';
 import { parseScienceCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceCatalogParser';
+import { ScienceFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceFetchProvider';
 import { isScienceCurrentIssue, parseScienceCurrentIssue } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceCurrentIssueParser';
 import { isScienceFirstRelease, parseScienceFirstRelease } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceFirstReleaseParser';
 import { scienceArticleDetailFixture, scienceCatalogFixture, scienceCurrentIssueFixture, scienceFirstReleaseFixture } from 'cs/workbench/services/fetch/test/electron-browser/providers/science/fixtures/science.fixture';
@@ -44,4 +45,14 @@ test('Science fixtures parse catalog, issue sections, first release, and article
 	assert.equal(detail.authors[0].isCorresponding, undefined);
 	assert.equal(detail.editorsSummary, "Editor's summary");
 	assert.equal(detail.publication.volume, '12');
+});
+
+test('Science canonicalization removes fragments without merging issue queries', () => {
+	const provider = new ScienceFetchProvider(undefined as never);
+	const page = provider.canonicalizePageUri(URI.parse('HTTPS://WWW.SCIENCE.ORG/toc/science/current?issue=4#contents'));
+	assert.equal(page.toString(true), 'https://www.science.org/toc/science/current?issue=4');
+	assert.notEqual(
+		provider.canonicalizePageUri(URI.parse('https://www.science.org/toc/science/current?issue=4')).toString(true),
+		provider.canonicalizePageUri(URI.parse('https://www.science.org/toc/science/current?issue=5')).toString(true),
+	);
 });

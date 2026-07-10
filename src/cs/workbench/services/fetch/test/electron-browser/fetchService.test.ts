@@ -166,3 +166,65 @@ test('FetchService rejects cancelled catalog results without writing stale state
 	assert.equal(catalog?.entries[0].kind === 'source' ? catalog.entries[0].label : undefined, 'Current');
 	assert.equal(service.getCatalogLoadState(journal.id).status, 'ready');
 });
+
+class IsolatedSourceFetchProvider extends TestFetchProvider {
+	override async discoverArticleListSources(_journal: JournalDescriptor, _token: CancellationToken): Promise<ParsedArticleListCatalog> {
+		return {
+			entries: [
+				{ kind: 'source', label: 'Working source', url: URI.parse('https://example.com/working') },
+				{ kind: 'source', label: 'Failing source', url: URI.parse('https://example.com/failing') },
+			],
+		};
+	}
+
+	override async fetchArticleListPage(journal: JournalDescriptor, source: ArticleListSource, url: URI, token: CancellationToken): Promise<ParsedArticleListPage> {
+		if (source.url.path === '/failing') {
+			throw new Error('Source failed');
+		}
+		return super.fetchArticleListPage(journal, source, url, token);
+	}
+}
+
+test('FetchService isolates failed sources within the same journal', async () => {
+	const service = createFetchService(IsolatedSourceFetchProvider);
+	await service.discoverArticleListSources(journal.id, CancellationTokenNone);
+	const workingId = createArticleListSourceId(journal.id, URI.parse('https://example.com/working'));
+	const failingId = createArticleListSourceId(journal.id, URI.parse('https://example.com/failing'));
+
+	await service.fetchArticleListSource(workingId, CancellationTokenNone);
+	await assert.rejects(service.fetchArticleListSource(failingId, CancellationTokenNone), /Source failed/);
+
+	assert.equal(service.getSourceLoadState(workingId).status, 'ready');
+	assert.equal(service.getSourceLoadState(failingId).status, 'error');
+	assert.equal(service.getArticlePages(workingId).length, 1);
+	assert.equal(service.getArticlePages(failingId).length, 0);
+});
+
+class ReplacingCatalogFetchProvider extends TestFetchProvider {
+	private discoveryCount = 0;
+
+	override async discoverArticleListSources(_journal: JournalDescriptor, _token: CancellationToken): Promise<ParsedArticleListCatalog> {
+		this.discoveryCount += 1;
+		return {
+			entries: [{
+				kind: 'source',
+				label: this.discoveryCount === 1 ? 'Original source' : 'Replacement source',
+				url: URI.parse(this.discoveryCount === 1 ? 'https://example.com/original' : 'https://example.com/replacement'),
+			}],
+		};
+	}
+}
+
+test('refreshJournal removes disappeared source pages and load state', async () => {
+	const service = createFetchService(ReplacingCatalogFetchProvider);
+	const originalId = createArticleListSourceId(journal.id, URI.parse('https://example.com/original'));
+	await service.discoverArticleListSources(journal.id, CancellationTokenNone);
+	await service.fetchArticleListSource(originalId, CancellationTokenNone);
+	assert.equal(service.getArticlePages(originalId).length, 1);
+
+	await service.refreshJournal(journal.id, CancellationTokenNone);
+	assert.equal(service.getArticlePages(originalId).length, 0);
+	assert.equal(service.getSourceLoadState(originalId).status, 'idle');
+	const catalog = service.getArticleListCatalog(journal.id);
+	assert.equal(catalog?.entries[0].kind === 'source' ? catalog.entries[0].label : undefined, 'Replacement source');
+});
