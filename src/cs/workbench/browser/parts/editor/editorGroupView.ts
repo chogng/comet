@@ -535,6 +535,13 @@ export class EditorGroupView {
     return this.element;
   }
 
+  layout(_width: number, _height: number) {
+    this.activePane?.layout({
+      width: this.contentElement.clientWidth,
+      height: this.contentElement.clientHeight,
+    });
+  }
+
   getTitlebarElement() {
     this.element.classList.add('comet-has-external-titlebar');
     return this.titlebarElement;

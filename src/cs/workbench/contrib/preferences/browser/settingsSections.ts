@@ -1,5 +1,19 @@
 import type { Locale } from 'language/i18n';
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'cs/base/common/editorDraftStyle';
+import {
+  BrowserSearchEngineId,
+  BROWSER_SEARCH_ENGINES,
+  BROWSER_SEARCH_NONE,
+} from 'cs/workbench/contrib/browserView/common/browserSearch';
+import {
+  browserZoomFactors,
+  browserZoomLabel,
+} from 'cs/platform/browserView/common/browserView';
+import { MATCH_WINDOW_ZOOM_LABEL } from 'cs/workbench/contrib/browserView/common/browserZoomService';
+import {
+  maxBrowserMaxHistoryEntries,
+  minBrowserMaxHistoryEntries,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 import { createDateInput } from 'cs/base/browser/ui/dateInput/dateInput';
 import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import {
@@ -55,6 +69,36 @@ function createStartupLayoutOptions(props: SettingsPartProps): readonly SelectOp
   return [
     { value: 'agent', label: props.labels.settingsStartupLayoutAgent },
     { value: 'flow', label: props.labels.settingsStartupLayoutFlow },
+  ];
+}
+
+function createBrowserPageZoomOptions(props: SettingsPartProps): readonly SelectOption[] {
+  return [
+    {
+      value: MATCH_WINDOW_ZOOM_LABEL,
+      label: props.labels.settingsBrowserPageZoomMatchWindow,
+    },
+    ...browserZoomFactors.map(factor => ({
+      value: browserZoomLabel(factor),
+      label: browserZoomLabel(factor),
+    })),
+  ];
+}
+
+function createBrowserSearchEngineOptions(props: SettingsPartProps): readonly SelectOption[] {
+  const labels: Record<BrowserSearchEngineId, string> = {
+    [BrowserSearchEngineId.Bing]: props.labels.settingsBrowserSearchEngineBing,
+    [BrowserSearchEngineId.Google]: props.labels.settingsBrowserSearchEngineGoogle,
+    [BrowserSearchEngineId.Yahoo]: props.labels.settingsBrowserSearchEngineYahoo,
+    [BrowserSearchEngineId.DuckDuckGo]: props.labels.settingsBrowserSearchEngineDuckDuckGo,
+  };
+
+  return [
+    { value: BROWSER_SEARCH_NONE, label: props.labels.settingsBrowserSearchEngineNone },
+    ...BROWSER_SEARCH_ENGINES.map(engine => ({
+      value: engine.id,
+      label: labels[engine.id],
+    })),
   ];
 }
 
@@ -448,6 +492,70 @@ export function renderLayoutSection(props: SettingsPartProps, contextViewProvide
     }),
   );
   return layout.element;
+}
+
+export function renderBrowserSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
+  const browser = createSettingsSection({
+    title: props.labels.settingsBrowserTitle,
+    sectionClassName: 'comet-settings-browser-section',
+    panelClassName: 'comet-settings-browser-panel',
+    listClassName: 'comet-settings-browser-list',
+  });
+  const maxHistoryEntriesInput = new NumberStepper({
+    value: props.browserMaxHistoryEntries,
+    className: 'comet-settings-number-stepper comet-settings-limit-input',
+    min: String(minBrowserMaxHistoryEntries),
+    max: String(maxBrowserMaxHistoryEntries),
+    inputMode: 'numeric',
+    step: '1',
+    decrementAriaLabel: numberStepperDecrementAriaLabel,
+    incrementAriaLabel: numberStepperIncrementAriaLabel,
+    onDidChange: props.onBrowserMaxHistoryEntriesChange,
+    disabled: props.isSettingsSaving,
+  });
+  setSettingsFocusKey(maxHistoryEntriesInput.inputElement, 'settings.browser.maxHistoryEntries');
+  const pageZoomSelect = buildSelect(
+    ensureCurrentSelectOption(
+      createBrowserPageZoomOptions(props),
+      props.browserPageZoom,
+    ),
+    props.browserPageZoom,
+    'settings.browser.pageZoom',
+    props.onBrowserPageZoomChange,
+    contextViewProvider,
+    'comet-settings-browser-select',
+  );
+  setSelectHostDisabled(pageZoomSelect, props.isSettingsSaving);
+  const searchEngineSelect = buildSelect(
+    ensureCurrentSelectOption(
+      createBrowserSearchEngineOptions(props),
+      props.browserSearchEngine,
+    ),
+    props.browserSearchEngine,
+    'settings.browser.searchEngine',
+    props.onBrowserSearchEngineChange,
+    contextViewProvider,
+    'comet-settings-browser-select',
+  );
+  setSelectHostDisabled(searchEngineSelect, props.isSettingsSaving);
+  browser.list.append(
+    createSettingsRow({
+      title: props.labels.settingsBrowserMaxHistoryEntries,
+      description: props.labels.settingsBrowserMaxHistoryEntriesHint,
+      control: maxHistoryEntriesInput.element,
+    }),
+    createSettingsRow({
+      title: props.labels.settingsBrowserPageZoom,
+      description: props.labels.settingsBrowserPageZoomHint,
+      control: pageZoomSelect,
+    }),
+    createSettingsRow({
+      title: props.labels.settingsBrowserSearchEngine,
+      description: props.labels.settingsBrowserSearchEngineHint,
+      control: searchEngineSelect,
+    }),
+  );
+  return browser.element;
 }
 
 export function renderAppearanceSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {

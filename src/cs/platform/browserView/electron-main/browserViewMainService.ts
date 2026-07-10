@@ -1875,21 +1875,19 @@ function emitBrowserViewStateChanges(
   targetId: string,
   previousState: WebContentTargetState,
   nextState: WebContentTargetState,
+  navigationCommitted: boolean,
 ) {
   const metadata = browserViewTargetMetadata.get(targetId);
-  if (!metadata) {
+  const entry = webContentTargets.get(targetId);
+  if (!metadata || !entry) {
     return;
   }
 
-  if (
-    previousState.url !== nextState.url ||
-    previousState.pageTitle !== nextState.pageTitle ||
-    previousState.canGoBack !== nextState.canGoBack ||
-    previousState.canGoForward !== nextState.canGoForward
-  ) {
+  if (navigationCommitted) {
     metadata.events.onDidNavigate.fire({
       url: nextState.url,
       title: nextState.pageTitle ?? '',
+      navigationEntryIndex: entry.view.webContents.navigationHistory.getActiveIndex(),
       canGoBack: nextState.canGoBack,
       canGoForward: nextState.canGoForward,
       certificateError: undefined,
@@ -1954,16 +1952,20 @@ function createWebContentTarget(
   const syncState = () => {
     syncWebContentTargetState(targetId);
   };
+  const syncNavigationState = () => {
+    syncWebContentTargetState(targetId, true);
+  };
 
   for (const event of [
     'did-start-loading',
     'did-stop-loading',
     'did-finish-load',
-    'did-navigate',
-    'did-navigate-in-page',
     'did-fail-load',
   ]) {
     addWebContentTargetListener(entry, event, syncState);
+  }
+  for (const event of ['did-navigate', 'did-navigate-in-page']) {
+    addWebContentTargetListener(entry, event, syncNavigationState);
   }
 
   addWebContentTargetListener(entry, 'did-start-navigation', (
@@ -2204,7 +2206,7 @@ function readWebContentTargetState(entry: ManagedWebContentTarget): WebContentTa
   }
 }
 
-function syncWebContentTargetState(targetId?: string | null) {
+function syncWebContentTargetState(targetId?: string | null, navigationCommitted = false) {
   const normalizedTargetId = normalizeWebContentTargetId(targetId);
   const entry = webContentTargets.get(normalizedTargetId);
   if (!entry) {
@@ -2214,7 +2216,7 @@ function syncWebContentTargetState(targetId?: string | null) {
   const previousState = entry.state;
   const nextState = readWebContentTargetState(entry);
   entry.state = nextState;
-  emitBrowserViewStateChanges(normalizedTargetId, previousState, nextState);
+  emitBrowserViewStateChanges(normalizedTargetId, previousState, nextState, navigationCommitted);
   if (normalizedTargetId === activeWebContentTargetId) {
     reportActiveWebContentState();
   }
@@ -2893,7 +2895,6 @@ function toBrowserViewState(targetId: string): IBrowserViewState {
     lastError: undefined,
     certificateError: undefined,
     storageScope: metadata.storageScope,
-    storageKeys: {},
     permissions: metadata.permissions,
     browserZoomIndex: metadata.browserZoomIndex,
     isElementSelectionActive: metadata.isElementSelectionActive,
@@ -3308,10 +3309,6 @@ export class BrowserViewMainService implements IBrowserViewService {
     throw new Error('Integrated browser certificate exceptions are not supported.');
   }
 
-  async deleteBrowserHistory(id: string, _entryIds?: readonly number[]): Promise<void> {
-    clearWebContentHistory(id);
-  }
-
   async setPermissions(
     id: string,
     origin: string,
@@ -3356,9 +3353,6 @@ export class BrowserViewMainService implements IBrowserViewService {
     config: IBrowserViewWindowConfiguration,
   ): Promise<void> {
     browserViewWindowConfigurations.set(windowId, config);
-    if (typeof config.maxHistoryEntries === 'number') {
-      setWebContentRetentionLimit(config.maxHistoryEntries);
-    }
   }
 
   dispose(): void {

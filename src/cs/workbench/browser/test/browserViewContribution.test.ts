@@ -17,6 +17,10 @@ import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { commandService, commandsRegistry, setCommandServiceInstantiationService } from 'cs/platform/commands/common/commands';
 import { IConfigurationService } from 'cs/platform/configuration/common/configuration';
 import { ConfigurationService } from 'cs/platform/configuration/common/configurationService';
+import {
+	BrowserPageZoomSettingId,
+	BrowserSearchEngineSettingId,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 import { configurationRegistry, ConfigurationScope } from 'cs/platform/configuration/common/configurationRegistry';
 import { IContextViewService, type IContextViewService as IContextViewServiceType } from 'cs/platform/contextview/browser/contextView';
 import type { IContextKeyService } from 'cs/platform/contextkey/common/contextkey';
@@ -29,6 +33,7 @@ import { InstantiationService } from 'cs/platform/instantiation/common/instantia
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { IKeybindingService, type IKeybindingService as IKeybindingServiceType } from 'cs/platform/keybinding/common/keybinding';
 import { ILogService, type ILogService as ILogServiceType } from 'cs/platform/log/common/log';
+import type { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { INotificationService, NoOpNotification, NoOpNotificationService, type INotificationService as INotificationServiceType } from 'cs/platform/notification/common/notification';
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceType } from 'cs/platform/quickinput/common/quickInput';
@@ -42,7 +47,6 @@ import {
 	BROWSER_SEARCH_ENGINES,
 	BROWSER_SEARCH_NONE,
 	BrowserSearchEngineId,
-	BrowserSearchEngineSettingId,
 } from 'cs/workbench/contrib/browserView/common/browserSearch';
 import { IBrowserZoomService, MATCH_WINDOW_ZOOM_LABEL, type IBrowserZoomService as IBrowserZoomServiceType } from 'cs/workbench/contrib/browserView/common/browserZoomService';
 import {
@@ -62,7 +66,6 @@ import type { WorkbenchEditorCommandHandlers } from 'cs/workbench/browser/editor
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
 const BrowserRemoteProxyEnabledSettingId = 'workbench.browser.enableRemoteProxy';
-const BrowserPageZoomSettingId = 'workbench.browser.pageZoom';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let cleanupResizeObserver: (() => void) | null = null;
@@ -74,6 +77,7 @@ let BrowserHistoryFeature: typeof import('cs/workbench/contrib/browserView/elect
 let BrowserWelcomeFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature').BrowserWelcomeFeature;
 let BrowserPermissionsFeature: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserPermissionsFeature').BrowserPermissionsFeature;
 let BrowserEditorEmulationSupport: typeof import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorEmulationFeatures').BrowserEditorEmulationSupport;
+let BrowserViewWorkbenchService: typeof import('cs/workbench/contrib/browserView/electron-browser/browserViewWorkbenchService').BrowserViewWorkbenchService;
 
 function createTestThemeService(): IThemeServiceType {
 	return {
@@ -199,6 +203,16 @@ function createTestKeybindingService(): IKeybindingServiceType {
 		_dumpDebugInfo: () => '',
 		_dumpDebugInfoJSON: () => '',
 	} as unknown as IKeybindingServiceType;
+}
+
+function createTestMainProcessService(): IMainProcessService {
+	return {
+		_serviceBrand: undefined,
+		getChannel: () => {
+			throw new Error('Unexpected main process channel access in browser contribution test');
+		},
+		registerChannel() {},
+	};
 }
 
 function createTestHoverHandle(): HoverHandle {
@@ -411,7 +425,6 @@ function createTestBrowserViewModel(id: string, state: IBrowserEditorViewState):
 		canZoomOut: true,
 		device: undefined,
 		storageScope: BrowserViewStorageScope.Workspace,
-		history: new BrowserHistoryStore(),
 		permissions: new BrowserPermissionStore(),
 		sharingState: BrowserViewSharingState.Unavailable,
 		onDidFindInPage: BaseEvent.None,
@@ -450,7 +463,6 @@ function createTestBrowserViewModel(id: string, state: IBrowserEditorViewState):
 		toggleDevTools: async () => {},
 		trustCertificate: async () => {},
 		untrustCertificate: async () => {},
-		deleteHistory: async () => {},
 		setPermissions: async () => {},
 		selectDevice: async () => {},
 		setDevice: async () => {},
@@ -554,6 +566,7 @@ before(async () => {
 	({ BrowserWelcomeFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature'));
 	({ BrowserPermissionsFeature } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserPermissionsFeature'));
 	({ BrowserEditorEmulationSupport } = await import('cs/workbench/contrib/browserView/electron-browser/features/browserEditorEmulationFeatures'));
+	({ BrowserViewWorkbenchService } = await import('cs/workbench/contrib/browserView/electron-browser/browserViewWorkbenchService'));
 });
 
 after(() => {
@@ -729,6 +742,56 @@ test('browser contribution registers history action and max history setting', ()
 	const historySetting = configurationRegistry.getConfigurationProperties()['workbench.browser.maxHistoryEntries'];
 	assert.equal(historySetting.default, 200);
 	assert.equal(historySetting.scope, ConfigurationScope.APPLICATION);
+});
+
+test('browser history service restores, limits, persists, and disables global history', async () => {
+	const storageValues = new Map<string, string>();
+	storageValues.set(`${StorageScope.APPLICATION}:workbench.browser.history.entries`, JSON.stringify({
+		items: [
+			{ id: 1, url: 'https://example.com/a', time: 1, title: 'A' },
+			{ id: 2, url: 'https://example.com/b', time: 2, title: 'B' },
+			{ id: 3, url: 'https://example.com/c', time: 3, title: 'C' },
+		],
+	}));
+	const configurationService = new ConfigurationService();
+	await configurationService.updateValue('workbench.browser.maxHistoryEntries', 2);
+	const instantiationService = new InstantiationService(new ServiceCollection(), true);
+	const service = new BrowserViewWorkbenchService(
+		createTestMainProcessService(),
+		instantiationService,
+		configurationService,
+		createTestKeybindingService(),
+		createTestThemeService(),
+		createTestLogService(),
+		createTestStorageService(storageValues),
+	);
+
+	try {
+		const restored = service.browserHistory.entries.items.map(entry => entry.url);
+		service.browserHistory.add('https://example.com/d', 'D');
+		const afterAdd = service.browserHistory.entries.items.map(entry => entry.url);
+		await configurationService.updateValue('workbench.browser.maxHistoryEntries', 1);
+		const afterLimitChange = service.browserHistory.entries.items.map(entry => entry.url);
+		await configurationService.updateValue('workbench.browser.maxHistoryEntries', 0);
+		service.browserHistory.add('https://example.com/e', 'E');
+
+		assert.deepEqual({
+			restored,
+			afterAdd,
+			afterLimitChange,
+			afterDisable: service.browserHistory.entries.items.map(entry => entry.url),
+			persistedEntries: storageValues.get(`${StorageScope.APPLICATION}:workbench.browser.history.entries`),
+		}, {
+			restored: ['https://example.com/b', 'https://example.com/c'],
+			afterAdd: ['https://example.com/c', 'https://example.com/d'],
+			afterLimitChange: ['https://example.com/d'],
+			afterDisable: [],
+			persistedEntries: undefined,
+		});
+	} finally {
+		service.dispose();
+		instantiationService.dispose();
+	}
 });
 
 test('browser contribution registers permissions action in the browser toolbar menu', () => {
@@ -1295,22 +1358,28 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 		const providers = editor.getContribution(BrowserHistoryFeature)?.urlSuggestionProviders ?? [];
 		const recents = await providers[0].getSuggestions(editor.input!, '');
 		const matching = await providers[1].getSuggestions(editor.input!, 'example');
+		await matching[0].actions?.[0].run(editor.input!);
+		const matchingAfterDelete = await providers[1].getSuggestions(editor.input!, 'example');
 
-		assert.deepEqual(
-			recents.map(suggestion => suggestion.description ?? suggestion.label),
-			[
+		assert.deepEqual({
+			recents: recents.map(suggestion => suggestion.description ?? suggestion.label),
+			matching: matching.map(suggestion => suggestion.description ?? suggestion.label),
+			matchingAfterDelete: matchingAfterDelete.map(suggestion => suggestion.description ?? suggestion.label),
+		}, {
+			recents: [
 				'https://example.net/c',
 				'https://example.com/a?new=1',
 			],
-		);
-		assert.deepEqual(
-			matching.map(suggestion => suggestion.description ?? suggestion.label),
-			[
+			matching: [
 				'https://example.net/c',
 				'https://example.com/b',
 				'https://example.com/a?new=1',
 			],
-		);
+			matchingAfterDelete: [
+				'https://example.com/b',
+				'https://example.com/a?new=1',
+			],
+		});
 	} finally {
 		editor.dispose();
 		instantiationService.dispose();

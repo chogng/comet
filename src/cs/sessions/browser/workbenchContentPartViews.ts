@@ -73,6 +73,10 @@ export class SessionWorkbenchContentPartViews {
 		return this.editorView?.getElement() ?? null;
 	}
 
+	layoutEditor(width: number, height: number) {
+		this.editorView?.layout(width, height);
+	}
+
 	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
 		return this.editorView?.executeActiveDraftCommand(commandId) ?? false;
 	}

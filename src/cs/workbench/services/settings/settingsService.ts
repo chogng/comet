@@ -10,6 +10,13 @@ import type {
   TranslationSettings,
   StoredAppSettings as DesktopStoredAppSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import {
+  defaultBrowserMaxHistoryEntries,
+  defaultBrowserPageZoom,
+  defaultBrowserSearchEngine,
+  maxBrowserMaxHistoryEntries,
+  minBrowserMaxHistoryEntries,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
@@ -47,6 +54,9 @@ export type ResolvedSettingsState = {
   knowledgeBasePdfDownloadDir: string;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
+  browserMaxHistoryEntries: number;
+  browserPageZoom: string;
+  browserSearchEngine: string;
   batchLimit: number;
   journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
@@ -73,6 +83,9 @@ export type SaveSettingsDraft = {
   knowledgeBasePdfDownloadDir: string;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
+  browserMaxHistoryEntries: number;
+  browserPageZoom: string;
+  browserSearchEngine: string;
   batchLimit: number;
   journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
@@ -110,6 +123,16 @@ export function resolveSettingsState(
     typeof loaded.configPath === 'string' ? loaded.configPath : (options.fallbackConfigPath ?? '');
   const loadedDefaultConfigPath =
     typeof loaded.defaultConfigPath === 'string' ? loaded.defaultConfigPath : loadedConfigPath;
+  const parsedBrowserHistoryEntries = Number.parseInt(
+    String(loaded.browserMaxHistoryEntries),
+    10,
+  );
+  const browserMaxHistoryEntries = Number.isNaN(parsedBrowserHistoryEntries)
+    ? defaultBrowserMaxHistoryEntries
+    : Math.min(
+        maxBrowserMaxHistoryEntries,
+        Math.max(minBrowserMaxHistoryEntries, parsedBrowserHistoryEntries),
+      );
 
   const defaultEditorDraftStyle = createDefaultEditorDraftStyleSettings();
   const normalizedUserEditorDraftStyle =
@@ -136,6 +159,15 @@ export function resolveSettingsState(
       loaded.browserTabKeepAliveLimit,
       defaultBrowserTabKeepAliveLimit,
     ),
+    browserMaxHistoryEntries,
+    browserPageZoom:
+      typeof loaded.browserPageZoom === 'string' && loaded.browserPageZoom.trim()
+        ? loaded.browserPageZoom.trim()
+        : defaultBrowserPageZoom,
+    browserSearchEngine:
+      typeof loaded.browserSearchEngine === 'string' && loaded.browserSearchEngine.trim()
+        ? loaded.browserSearchEngine.trim()
+        : defaultBrowserSearchEngine,
     batchLimit: normalizeBatchLimit(loaded.defaultBatchLimit, defaultBatchLimit),
     journalSourceOverrides: Array.isArray(loaded.journalSourceOverrides)
       ? [...loaded.journalSourceOverrides]
@@ -188,6 +220,10 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
     draft.browserTabKeepAliveLimit,
     defaultBrowserTabKeepAliveLimit,
   );
+  const nextBrowserMaxHistoryEntries = Math.min(
+    maxBrowserMaxHistoryEntries,
+    Math.max(minBrowserMaxHistoryEntries, Math.trunc(draft.browserMaxHistoryEntries)),
+  );
 
   const nextEditorDraftStyle =
     draft.editorDraftStyle.userValue &&
@@ -205,6 +241,9 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
       defaultDownloadDir: nextDir || null,
       pdfFileNameUseSelectionOrder: draft.pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit: nextBrowserTabKeepAliveLimit,
+      browserMaxHistoryEntries: nextBrowserMaxHistoryEntries,
+      browserPageZoom: draft.browserPageZoom,
+      browserSearchEngine: draft.browserSearchEngine,
       defaultBatchLimit: nextBatchLimit,
       journalSourceOverrides: [...draft.journalSourceOverrides],
       systemNotificationsEnabled: draft.systemNotificationsEnabled,

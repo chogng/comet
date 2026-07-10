@@ -6,6 +6,10 @@
 import { $ } from 'cs/base/browser/dom';
 import { getZoomLevel, onDidChangeZoomLevel } from 'cs/base/browser/browser';
 import { mainWindow } from 'cs/base/browser/window';
+import {
+	BrowserPageZoomSettingId,
+	defaultBrowserPageZoom,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 import { status } from 'cs/base/browser/ui/aria/aria';
 import { disposableTimeout } from 'cs/base/common/async';
 import { Codicon } from 'cs/base/common/codicons';
@@ -51,8 +55,6 @@ import { getWorkbenchInstantiationService } from 'cs/workbench/services/instanti
 
 const CONTEXT_BROWSER_CAN_ZOOM_IN = new RawContextKey<boolean>('browserCanZoomIn', true);
 const CONTEXT_BROWSER_CAN_ZOOM_OUT = new RawContextKey<boolean>('browserCanZoomOut', true);
-const BrowserPageZoomSettingId = 'workbench.browser.pageZoom';
-
 class BrowserZoomPill extends Disposable {
 	readonly element: HTMLElement;
 	private readonly icon: HTMLElement;
@@ -294,7 +296,7 @@ configurationRegistry.registerConfigurationProperties({
 			),
 			...browserZoomFactors.map(() => ''),
 		],
-		default: MATCH_WINDOW_ZOOM_LABEL,
+		default: defaultBrowserPageZoom,
 		markdownDescription: localize(
 			{ key: 'browser.pageZoom', comment: ['This is the description for a setting.'] },
 			"Default zoom level for all sites in the Integrated Browser.",

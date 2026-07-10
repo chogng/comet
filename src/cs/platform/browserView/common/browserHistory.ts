@@ -274,7 +274,7 @@ export class BrowserFaviconsStore extends Disposable {
 }
 
 /**
- * Per-session browser history. The two sub-stores are exposed directly so
+ * Browser history collection. The two sub-stores are exposed directly so
  * persistence layers can flush them independently.
  */
 export class BrowserHistoryStore extends Disposable {

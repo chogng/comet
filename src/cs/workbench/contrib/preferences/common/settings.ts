@@ -6,6 +6,7 @@
 export type SettingsSectionId =
 	| 'locale'
 	| 'layout'
+	| 'browser'
 	| 'notifications'
 	| 'appearance'
 	| 'configPath'
@@ -21,6 +22,7 @@ export type SettingsSectionId =
 
 export type SettingsPageId =
 	| 'general'
+	| 'browser'
 	| 'appearance'
 	| 'textEditor'
 	| 'model'
@@ -34,6 +36,9 @@ export const SettingsId = {
 	StartupLayout: 'startupLayout',
 	StatusbarVisible: 'statusbarVisible',
 	BrowserTabKeepAliveLimit: 'browserTabKeepAliveLimit',
+	BrowserMaxHistoryEntries: 'browserMaxHistoryEntries',
+	BrowserPageZoom: 'browserPageZoom',
+	BrowserSearchEngine: 'browserSearchEngine',
 	SystemNotificationsEnabled: 'systemNotificationsEnabled',
 	WarningNotificationsEnabled: 'warningNotificationsEnabled',
 	MenuBarIconEnabled: 'menuBarIconEnabled',

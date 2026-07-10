@@ -116,7 +116,10 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
 		this.model = model;
 		this.setBackgroundImage(model.screenshot);
-		store.add(model.onDidChangeVisibility(() => void this.captureScreenshot()));
+		store.add(model.onDidChangeVisibility(() => {
+			this.refresh();
+			void this.captureScreenshot();
+		}));
 		store.add(model.onDidKeyCommand(keyEvent => void this.handleKeyEvent(keyEvent)));
 		store.add(model.onDidNavigate(() => this.refresh()));
 		store.add(model.onDidChangeLoadingState(() => this.refresh()));
@@ -148,36 +151,49 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	}
 
 	private refresh(): void {
-		const placeholderActive = !!this.model?.url && !this.model?.error;
-		this.placeholderScreenshot.style.display = placeholderActive ? '' : 'none';
-
 		const pauseActive = !!this.model?.url && this.editorVisible && this.overlayObscured;
 		this.overlayPauseElement.classList.toggle('visible', pauseActive);
 
 		if (!this.model) {
+			this.setPlaceholderVisible(false);
 			return;
 		}
 
+		const placeholderActive = !!this.model.url && !this.model.error;
 		const show = this.shouldShowPage();
-		if (show === this.model.visible) {
+		if (show && this.model.visible) {
+			this.setPlaceholderVisible(false);
 			return;
 		}
 
 		if (show) {
-			void this.model.setVisible(true);
-			const doc = this.container?.ownerDocument;
-			if (doc?.hasFocus() && doc.activeElement === this.container) {
-				this.tryFocus();
-			}
+			this.setPlaceholderVisible(placeholderActive);
+			void this.showPage(this.model);
 			return;
 		}
 
+		this.setPlaceholderVisible(placeholderActive);
+		if (!this.model.visible) {
+			return;
+		}
 		void this.captureScreenshot();
 		window.requestAnimationFrame(() => {
 			if (this.model && !this.shouldShowPage()) {
 				void this.model.setVisible(false);
 			}
 		});
+	}
+
+	private async showPage(model: IBrowserViewModel): Promise<void> {
+		await model.setVisible(true);
+		if (this.model !== model || !this.shouldShowPage()) {
+			return;
+		}
+		this.setPlaceholderVisible(false);
+		const doc = this.container?.ownerDocument;
+		if (doc?.hasFocus() && doc.activeElement === this.container) {
+			this.tryFocus();
+		}
 	}
 
 	private refreshOverlayObscured(): void {
@@ -216,6 +232,10 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 		this.placeholderScreenshot.style.backgroundImage = buffer
 			? `url('data:image/jpeg;base64,${encodeBase64(buffer)}')`
 			: '';
+	}
+
+	private setPlaceholderVisible(visible: boolean): void {
+		this.placeholderScreenshot.style.display = visible ? '' : 'none';
 	}
 
 	private async handleKeyEvent(keyEvent: IBrowserViewKeyDownEvent): Promise<void> {

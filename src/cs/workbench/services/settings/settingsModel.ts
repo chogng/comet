@@ -58,12 +58,20 @@ import { cloneRagSettings, createDefaultRagSettings } from 'cs/workbench/service
 import { resolveRagRoute } from 'cs/workbench/services/rag/routing';
 import { cloneTranslationSettings, createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
 import { defaultBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
+import {
+  defaultBrowserMaxHistoryEntries,
+  defaultBrowserPageZoom,
+  defaultBrowserSearchEngine,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 
 export type SettingsModelSnapshot = {
   pdfDownloadDir: string;
   knowledgeBasePdfDownloadDir: string;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
+  browserMaxHistoryEntries: number;
+  browserPageZoom: string;
+  browserSearchEngine: string;
   batchLimit: number;
   journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;
@@ -147,6 +155,9 @@ function areSettingsModelSnapshotsEqual(
     previous.knowledgeBasePdfDownloadDir === next.knowledgeBasePdfDownloadDir &&
     previous.pdfFileNameUseSelectionOrder === next.pdfFileNameUseSelectionOrder &&
     previous.browserTabKeepAliveLimit === next.browserTabKeepAliveLimit &&
+    previous.browserMaxHistoryEntries === next.browserMaxHistoryEntries &&
+    previous.browserPageZoom === next.browserPageZoom &&
+    previous.browserSearchEngine === next.browserSearchEngine &&
     previous.batchLimit === next.batchLimit &&
     areJsonEqual(previous.journalSourceOverrides, next.journalSourceOverrides) &&
     previous.systemNotificationsEnabled === next.systemNotificationsEnabled &&
@@ -199,6 +210,9 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
     browserTabKeepAliveLimit: defaultBrowserTabKeepAliveLimit,
+    browserMaxHistoryEntries: defaultBrowserMaxHistoryEntries,
+    browserPageZoom: defaultBrowserPageZoom,
+    browserSearchEngine: defaultBrowserSearchEngine,
     batchLimit: defaultBatchLimit,
     journalSourceOverrides: [],
     systemNotificationsEnabled: true,
@@ -697,6 +711,39 @@ export class SettingsModel {
     }));
   };
 
+  readonly setBrowserMaxHistoryEntries = (browserMaxHistoryEntries: number) => {
+    if (this.snapshot.browserMaxHistoryEntries === browserMaxHistoryEntries) {
+      return;
+    }
+
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      browserMaxHistoryEntries,
+    }));
+  };
+
+  readonly setBrowserPageZoom = (browserPageZoom: string) => {
+    if (this.snapshot.browserPageZoom === browserPageZoom) {
+      return;
+    }
+
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      browserPageZoom,
+    }));
+  };
+
+  readonly setBrowserSearchEngine = (browserSearchEngine: string) => {
+    if (this.snapshot.browserSearchEngine === browserSearchEngine) {
+      return;
+    }
+
+    this.updateSnapshot((snapshot) => ({
+      ...snapshot,
+      browserSearchEngine,
+    }));
+  };
+
   readonly setActiveLlmProvider = (activeLlmProvider: LlmProviderId) => {
     if (this.snapshot.activeLlmProvider === activeLlmProvider) {
       return;
@@ -1048,6 +1095,9 @@ export class SettingsModel {
         knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
         pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
         browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
+        browserMaxHistoryEntries: resolved.browserMaxHistoryEntries,
+        browserPageZoom: resolved.browserPageZoom,
+        browserSearchEngine: resolved.browserSearchEngine,
         batchLimit: resolved.batchLimit,
         journalSourceOverrides: resolved.journalSourceOverrides,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
@@ -1209,6 +1259,9 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
+      browserMaxHistoryEntries,
+      browserPageZoom,
+      browserSearchEngine,
       batchLimit,
       journalSourceOverrides,
       systemNotificationsEnabled,
@@ -1242,6 +1295,9 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
+      browserMaxHistoryEntries,
+      browserPageZoom,
+      browserSearchEngine,
       batchLimit,
       journalSourceOverrides,
       systemNotificationsEnabled,
@@ -1320,6 +1376,9 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
+      browserMaxHistoryEntries,
+      browserPageZoom,
+      browserSearchEngine,
       batchLimit,
       journalSourceOverrides,
       systemNotificationsEnabled,
@@ -1353,6 +1412,9 @@ export class SettingsModel {
       knowledgeBasePdfDownloadDir,
       pdfFileNameUseSelectionOrder,
       browserTabKeepAliveLimit,
+      browserMaxHistoryEntries,
+      browserPageZoom,
+      browserSearchEngine,
       batchLimit,
       journalSourceOverrides,
       systemNotificationsEnabled,
@@ -1457,6 +1519,9 @@ export class SettingsModel {
         knowledgeBasePdfDownloadDir: resolved.knowledgeBasePdfDownloadDir,
         pdfFileNameUseSelectionOrder: resolved.pdfFileNameUseSelectionOrder,
         browserTabKeepAliveLimit: resolved.browserTabKeepAliveLimit,
+        browserMaxHistoryEntries: resolved.browserMaxHistoryEntries,
+        browserPageZoom: resolved.browserPageZoom,
+        browserSearchEngine: resolved.browserSearchEngine,
         batchLimit: resolved.batchLimit,
         journalSourceOverrides: resolved.journalSourceOverrides,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,

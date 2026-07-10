@@ -177,6 +177,32 @@ test('configuration service keeps user settings json separate from saved app set
   });
 });
 
+test('configuration service persists integrated browser settings locally', async () => {
+  await withConfigurationService(async (service, { configFile }) => {
+    const initial = await service.loadSettings();
+
+    assert.equal(initial.browserMaxHistoryEntries, 200);
+    assert.equal(initial.browserPageZoom, 'Match Window');
+    assert.equal(initial.browserSearchEngine, 'bing');
+
+    await service.saveSettings({
+      browserMaxHistoryEntries: 512,
+      browserPageZoom: '125%',
+      browserSearchEngine: 'google',
+    });
+
+    const savedConfig = JSON.parse(await readFile(configFile, 'utf8'));
+    const saved = await service.loadSettings();
+
+    assert.equal(savedConfig.browserMaxHistoryEntries, 512);
+    assert.equal(savedConfig.browserPageZoom, '125%');
+    assert.equal(savedConfig.browserSearchEngine, 'google');
+    assert.equal(saved.browserMaxHistoryEntries, 512);
+    assert.equal(saved.browserPageZoom, '125%');
+    assert.equal(saved.browserSearchEngine, 'google');
+  });
+});
+
 test('configuration service reads editor draft style only from user settings json', async () => {
   await withConfigurationService(async (service, { configFile, userSettingsFile }) => {
     await mkdir(path.dirname(configFile), { recursive: true });

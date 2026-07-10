@@ -11,6 +11,8 @@ export function shouldUpdateSettingsSection(
       return shouldUpdateLocaleSection(previousProps, currentProps);
     case 'layout':
       return shouldUpdateLayoutSection(previousProps, currentProps);
+    case 'browser':
+      return shouldUpdateBrowserSection(previousProps, currentProps);
     case 'notifications':
       return shouldUpdateNotificationsSection(previousProps, currentProps);
     case 'appearance':
@@ -106,6 +108,32 @@ function shouldUpdateLayoutSection(
       currentProps.labels.settingsBrowserTabKeepAliveLimit ||
     previousProps.labels.settingsBrowserTabKeepAliveLimitHint !==
       currentProps.labels.settingsBrowserTabKeepAliveLimitHint
+  );
+}
+
+function shouldUpdateBrowserSection(
+  previousProps: SettingsPartProps | undefined,
+  currentProps: SettingsPartProps,
+) {
+  return (
+    !previousProps ||
+    previousProps.browserMaxHistoryEntries !== currentProps.browserMaxHistoryEntries ||
+    previousProps.browserPageZoom !== currentProps.browserPageZoom ||
+    previousProps.browserSearchEngine !== currentProps.browserSearchEngine ||
+    previousProps.isSettingsSaving !== currentProps.isSettingsSaving ||
+    previousProps.labels.settingsBrowserTitle !== currentProps.labels.settingsBrowserTitle ||
+    previousProps.labels.settingsBrowserMaxHistoryEntries !== currentProps.labels.settingsBrowserMaxHistoryEntries ||
+    previousProps.labels.settingsBrowserMaxHistoryEntriesHint !== currentProps.labels.settingsBrowserMaxHistoryEntriesHint ||
+    previousProps.labels.settingsBrowserPageZoom !== currentProps.labels.settingsBrowserPageZoom ||
+    previousProps.labels.settingsBrowserPageZoomHint !== currentProps.labels.settingsBrowserPageZoomHint ||
+    previousProps.labels.settingsBrowserPageZoomMatchWindow !== currentProps.labels.settingsBrowserPageZoomMatchWindow ||
+    previousProps.labels.settingsBrowserSearchEngine !== currentProps.labels.settingsBrowserSearchEngine ||
+    previousProps.labels.settingsBrowserSearchEngineHint !== currentProps.labels.settingsBrowserSearchEngineHint ||
+    previousProps.labels.settingsBrowserSearchEngineNone !== currentProps.labels.settingsBrowserSearchEngineNone ||
+    previousProps.labels.settingsBrowserSearchEngineBing !== currentProps.labels.settingsBrowserSearchEngineBing ||
+    previousProps.labels.settingsBrowserSearchEngineGoogle !== currentProps.labels.settingsBrowserSearchEngineGoogle ||
+    previousProps.labels.settingsBrowserSearchEngineYahoo !== currentProps.labels.settingsBrowserSearchEngineYahoo ||
+    previousProps.labels.settingsBrowserSearchEngineDuckDuckGo !== currentProps.labels.settingsBrowserSearchEngineDuckDuckGo
   );
 }
 

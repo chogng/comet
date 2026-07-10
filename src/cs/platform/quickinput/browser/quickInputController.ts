@@ -5,6 +5,7 @@
 
 import './media/quickInput.css';
 
+import { ButtonView } from 'cs/base/browser/ui/button/button';
 import { CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
 import { Emitter, type Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
@@ -20,7 +21,9 @@ import type {
 	IQuickPick,
 	IQuickPickDidAcceptEvent,
 	IQuickPickItem,
+	IQuickPickItemButtonEvent,
 	IQuickPickSeparator,
+	IQuickPickSeparatorButtonEvent,
 	IQuickTree,
 	IQuickTreeItem,
 	IQuickWidget,
@@ -83,6 +86,8 @@ abstract class QuickInputBase extends Disposable implements IQuickInput {
 
 	private readonly onDidHideEmitter = this._register(new Emitter<IQuickInputHideEvent>());
 	readonly onDidHide: Event<IQuickInputHideEvent> = this.onDidHideEmitter.event;
+	private readonly onDidTriggerButtonEmitter = this._register(new Emitter<IQuickInputButton>());
+	readonly onDidTriggerButton: Event<IQuickInputButton> = this.onDidTriggerButtonEmitter.event;
 
 	constructor(protected readonly controller: QuickInputController) {
 		super();
@@ -97,12 +102,16 @@ abstract class QuickInputBase extends Disposable implements IQuickInput {
 	fireHide(reason?: QuickInputHideReason): void {
 		this.onDidHideEmitter.fire({ reason });
 	}
+
+	fireButton(button: IQuickInputButton): void {
+		this.onDidTriggerButtonEmitter.fire(button);
+	}
 }
 
 export class QuickPick<T extends IQuickPickItem> extends QuickInputBase implements IQuickPick<T> {
 	value = '';
 	placeholder: string | undefined;
-	items: readonly QuickPickInput<T>[] = [];
+	private itemsValue: readonly QuickPickInput<T>[] = [];
 	activeItems: readonly T[] = [];
 	selectedItems: readonly T[] = [];
 	canSelectMany = false;
@@ -111,6 +120,8 @@ export class QuickPick<T extends IQuickPickItem> extends QuickInputBase implemen
 
 	private readonly onDidChangeValueEmitter = this._register(new Emitter<string>());
 	readonly onDidChangeValue = this.onDidChangeValueEmitter.event;
+	private readonly onDidChangeItemsEmitter = this._register(new Emitter<void>());
+	readonly onDidChangeItems = this.onDidChangeItemsEmitter.event;
 
 	private readonly onDidAcceptEmitter = this._register(new Emitter<IQuickPickDidAcceptEvent>());
 	readonly onDidAccept = this.onDidAcceptEmitter.event;
@@ -121,11 +132,22 @@ export class QuickPick<T extends IQuickPickItem> extends QuickInputBase implemen
 	private readonly onDidChangeSelectionEmitter = this._register(new Emitter<readonly T[]>());
 	readonly onDidChangeSelection = this.onDidChangeSelectionEmitter.event;
 
-	private readonly onDidTriggerItemButtonEmitter = this._register(new Emitter<never>());
+	private readonly onDidTriggerItemButtonEmitter = this._register(new Emitter<IQuickPickItemButtonEvent<T>>());
 	readonly onDidTriggerItemButton = this.onDidTriggerItemButtonEmitter.event;
+	private readonly onDidTriggerSeparatorButtonEmitter = this._register(new Emitter<IQuickPickSeparatorButtonEvent>());
+	readonly onDidTriggerSeparatorButton = this.onDidTriggerSeparatorButtonEmitter.event;
 
 	show(): void {
 		this.controller.showQuickPick(this);
+	}
+
+	get items(): readonly QuickPickInput<T>[] {
+		return this.itemsValue;
+	}
+
+	set items(items: readonly QuickPickInput<T>[]) {
+		this.itemsValue = items;
+		this.onDidChangeItemsEmitter.fire();
 	}
 
 	accept(): void {
@@ -149,6 +171,14 @@ export class QuickPick<T extends IQuickPickItem> extends QuickInputBase implemen
 	setSelectedItems(items: readonly T[]): void {
 		this.selectedItems = items;
 		this.onDidChangeSelectionEmitter.fire(items);
+	}
+
+	fireItemButton(item: T, button: IQuickInputButton): void {
+		this.onDidTriggerItemButtonEmitter.fire({ item, button });
+	}
+
+	fireSeparatorButton(separator: IQuickPickSeparator, button: IQuickInputButton): void {
+		this.onDidTriggerSeparatorButtonEmitter.fire({ separator, button });
 	}
 }
 
@@ -225,6 +255,7 @@ export class QuickInputController extends Disposable {
 	private input: HTMLInputElement | undefined;
 	private current: IQuickInput | undefined;
 	private currentDisposables = this._register(new DisposableStore());
+	private renderDisposables: DisposableStore | undefined;
 	private alignmentValue: QuickInputAlignment = 'top';
 
 	private readonly onShowEmitter = this._register(new Emitter<void>());
@@ -319,11 +350,30 @@ export class QuickInputController extends Disposable {
 		const elements = this.createShell(quickPick.title);
 		const input = this.createInput(quickPick.placeholder, quickPick.value, 'text');
 		const list = createElement('div', 'quick-input-list');
-		elements.header.append(input);
+		const headerRow = createElement('div', 'comet-quick-input-header-row');
+		headerRow.append(input);
+		if (quickPick.buttons.length > 0) {
+			const actions = createElement('div', 'comet-quick-input-actions');
+			for (const button of quickPick.buttons) {
+				actions.append(this.createQuickInputButton(
+					button,
+					() => quickPick.fireButton(button),
+					this.currentDisposables,
+				));
+			}
+			headerRow.append(actions);
+		}
+		elements.header.append(headerRow);
 		elements.widget.append(list);
 		this.input = input;
 
-		const render = () => this.renderQuickPickItems(quickPick, list);
+		const renderDisposables = this.currentDisposables.add(new DisposableStore());
+		this.renderDisposables = renderDisposables;
+		const render = () => {
+			renderDisposables.clear();
+			this.renderQuickPickItems(quickPick, list, renderDisposables);
+		};
+		this.currentDisposables.add(quickPick.onDidChangeItems(render));
 		this.currentDisposables.add(toDisposable(() => input.removeEventListener('input', handleInput)));
 		this.currentDisposables.add(toDisposable(() => input.removeEventListener('keydown', handleKeyDown)));
 
@@ -405,6 +455,7 @@ export class QuickInputController extends Disposable {
 			input.fireHide(reason);
 		}
 		this.currentDisposables.clear();
+		this.renderDisposables = undefined;
 		this.overlay?.remove();
 		this.overlay = undefined;
 		this.widget = undefined;
@@ -431,8 +482,9 @@ export class QuickInputController extends Disposable {
 		this.focusQuickPick(quickPick, next ? QuickPickFocus.Next : QuickPickFocus.Previous);
 		if (this.widget) {
 			const list = this.widget.querySelector<HTMLElement>('.quick-input-list');
-			if (list) {
-				this.renderQuickPickItems(quickPick, list);
+			if (list && this.renderDisposables) {
+				this.renderDisposables.clear();
+				this.renderQuickPickItems(quickPick, list, this.renderDisposables);
 			}
 		}
 	}
@@ -492,7 +544,11 @@ export class QuickInputController extends Disposable {
 		return input;
 	}
 
-	private renderQuickPickItems<T extends IQuickPickItem>(quickPick: QuickPick<T>, list: HTMLElement): void {
+	private renderQuickPickItems<T extends IQuickPickItem>(
+		quickPick: QuickPick<T>,
+		list: HTMLElement,
+		disposables: DisposableStore,
+	): void {
 		list.replaceChildren();
 		const visibleItems = quickPick.items.filter(item =>
 			isSeparator(item) || itemMatches(item, quickPick.value, quickPick.matchOnDescription, quickPick.matchOnDetail),
@@ -510,7 +566,20 @@ export class QuickInputController extends Disposable {
 
 		for (const item of visibleItems) {
 			if (isSeparator(item)) {
-				list.append(createElement('div', 'quick-input-separator', item.label ?? ''));
+				const separator = createElement('div', 'quick-input-separator');
+				separator.append(createElement('span', 'comet-quick-input-separator-label', item.label ?? ''));
+				if (item.buttons?.length) {
+					const actions = createElement('div', 'comet-quick-input-actions');
+					for (const button of item.buttons) {
+						actions.append(this.createQuickInputButton(
+							button,
+							() => quickPick.fireSeparatorButton(item, button),
+							disposables,
+						));
+					}
+					separator.append(actions);
+				}
+				list.append(separator);
 				continue;
 			}
 
@@ -518,12 +587,25 @@ export class QuickInputController extends Disposable {
 			row.classList.toggle('active', quickPick.activeItems.includes(item));
 			row.classList.toggle('selected', quickPick.selectedItems.includes(item));
 			row.tabIndex = -1;
-			row.append(createElement('div', 'quick-input-label', item.label));
+			const content = createElement('div', 'comet-quick-input-item-content');
+			content.append(createElement('div', 'quick-input-label', item.label));
 			if (item.description) {
-				row.append(createElement('div', 'quick-input-description', item.description));
+				content.append(createElement('div', 'quick-input-description', item.description));
 			}
 			if (item.detail) {
-				row.append(createElement('div', 'quick-input-detail', item.detail));
+				content.append(createElement('div', 'quick-input-detail', item.detail));
+			}
+			row.append(content);
+			if (item.buttons?.length) {
+				const actions = createElement('div', 'comet-quick-input-actions');
+				for (const button of item.buttons) {
+					actions.append(this.createQuickInputButton(
+						button,
+						() => quickPick.fireItemButton(item, button),
+						disposables,
+					));
+				}
+				row.append(actions);
 			}
 			row.addEventListener('mousemove', () => quickPick.setActiveItems([item]));
 			row.addEventListener('click', () => {
@@ -533,13 +615,37 @@ export class QuickInputController extends Disposable {
 						? quickPick.selectedItems.filter(selected => selected !== item)
 						: [...quickPick.selectedItems, item];
 					quickPick.setSelectedItems(nextSelection);
-					this.renderQuickPickItems(quickPick, list);
+					disposables.clear();
+					this.renderQuickPickItems(quickPick, list, disposables);
 					return;
 				}
 				quickPick.accept();
 			});
 			list.append(row);
 		}
+	}
+
+	private createQuickInputButton(
+		button: IQuickInputButton,
+		onClick: () => void,
+		disposables: DisposableStore,
+	): HTMLElement {
+		const icon = button.iconClass ? createElement('span', button.iconClass) : undefined;
+		const view = disposables.add(new ButtonView({
+			className: 'comet-quick-input-action',
+			variant: 'ghost',
+			size: 'icon',
+			mode: 'icon',
+			content: icon,
+			ariaLabel: button.tooltip,
+			title: button.tooltip,
+			onClick: event => {
+				event.preventDefault();
+				event.stopPropagation();
+				onClick();
+			},
+		}));
+		return view.getElement();
 	}
 
 	private focusQuickPick<T extends IQuickPickItem>(quickPick: QuickPick<T>, focus: QuickPickFocus): void {

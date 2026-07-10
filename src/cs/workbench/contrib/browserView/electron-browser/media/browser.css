@@ -502,12 +502,6 @@
 		background-repeat: no-repeat;
 	}
 
-	.browser-container--dragging .browser-placeholder-screenshot {
-		opacity: 0.9;
-		background-size: cover;
-		filter: blur(10px);
-	}
-
 	.browser-overlay-paused {
 		position: absolute;
 		top: 0;

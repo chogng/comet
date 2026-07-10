@@ -133,6 +133,9 @@ export interface StoredAppSettings {
   defaultDownloadDir: string | null;
   pdfFileNameUseSelectionOrder: boolean;
   browserTabKeepAliveLimit: number;
+  browserMaxHistoryEntries: number;
+  browserPageZoom: string;
+  browserSearchEngine: string;
   defaultBatchLimit: number;
   journalSourceOverrides: JournalSourceOverride[];
   systemNotificationsEnabled: boolean;

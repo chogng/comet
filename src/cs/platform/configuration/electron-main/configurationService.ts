@@ -10,6 +10,13 @@ import type {
   StoredAppSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import {
+  defaultBrowserMaxHistoryEntries,
+  defaultBrowserPageZoom,
+  defaultBrowserSearchEngine,
+  maxBrowserMaxHistoryEntries,
+  minBrowserMaxHistoryEntries,
+} from 'cs/base/parts/sandbox/common/browserSettings';
+import {
   cloneEditorDraftStyleSettings,
   normalizeEditorDraftStyleSettings,
   type EditorDraftStyleSettings,
@@ -507,6 +514,24 @@ function normalizeSettings(
   const normalizedLimit = Number.isNaN(parsedLimit)
     ? defaultBatchLimit
     : Math.min(batchLimitMax, Math.max(batchLimitMin, parsedLimit));
+  const parsedBrowserHistoryEntries = Number.parseInt(
+    String(payload.browserMaxHistoryEntries),
+    10,
+  );
+  const normalizedBrowserHistoryEntries = Number.isNaN(parsedBrowserHistoryEntries)
+    ? defaultBrowserMaxHistoryEntries
+    : Math.min(
+        maxBrowserMaxHistoryEntries,
+        Math.max(minBrowserMaxHistoryEntries, parsedBrowserHistoryEntries),
+      );
+  const browserPageZoom =
+    typeof payload.browserPageZoom === 'string' && payload.browserPageZoom.trim()
+      ? payload.browserPageZoom.trim()
+      : defaultBrowserPageZoom;
+  const browserSearchEngine =
+    typeof payload.browserSearchEngine === 'string' && payload.browserSearchEngine.trim()
+      ? payload.browserSearchEngine.trim()
+      : defaultBrowserSearchEngine;
 
   return {
     defaultDownloadDir: downloadDir || null,
@@ -518,6 +543,9 @@ function normalizeSettings(
       payload.browserTabKeepAliveLimit,
       defaultBrowserTabKeepAliveLimit,
     ),
+    browserMaxHistoryEntries: normalizedBrowserHistoryEntries,
+    browserPageZoom,
+    browserSearchEngine,
     defaultBatchLimit: normalizedLimit,
     journalSourceOverrides: normalizeJournalSourceOverrides(payload.journalSourceOverrides),
     systemNotificationsEnabled:

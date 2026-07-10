@@ -34,6 +34,10 @@ export class SessionEditorPartView {
 		return this.element;
 	}
 
+	layout(width: number, height: number) {
+		this.groupView.layout(width, height);
+	}
+
 	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
 		return this.groupView.executeActiveDraftCommand(commandId);
 	}

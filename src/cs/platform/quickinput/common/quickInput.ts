@@ -77,6 +77,7 @@ export interface IQuickPickItem {
 export interface IQuickPickSeparator {
 	readonly type: 'separator';
 	readonly label?: string;
+	readonly buttons?: readonly IQuickInputButton[];
 }
 
 export type QuickPickItem = IQuickPickItem | IQuickPickSeparator;
@@ -117,6 +118,7 @@ export interface IQuickInput extends IDisposable {
 	totalSteps: number | undefined;
 	buttons: readonly IQuickInputButton[];
 	readonly onDidHide: Event<IQuickInputHideEvent>;
+	readonly onDidTriggerButton: Event<IQuickInputButton>;
 	show(): void;
 	hide(): void;
 	fireHide(reason?: QuickInputHideReason): void;
@@ -129,11 +131,14 @@ export interface IQuickPick<T extends IQuickPickItem = IQuickPickItem, _O = { us
 	activeItems: readonly T[];
 	selectedItems: readonly T[];
 	canSelectMany: boolean;
+	matchOnDescription: boolean;
+	matchOnDetail: boolean;
 	readonly onDidChangeValue: Event<string>;
 	readonly onDidAccept: Event<IQuickPickDidAcceptEvent>;
 	readonly onDidChangeActive: Event<readonly T[]>;
 	readonly onDidChangeSelection: Event<readonly T[]>;
 	readonly onDidTriggerItemButton: Event<IQuickPickItemButtonEvent<T>>;
+	readonly onDidTriggerSeparatorButton: Event<IQuickPickSeparatorButtonEvent>;
 	accept(): void;
 }
 

@@ -44,6 +44,26 @@
 	border-bottom: 1px solid var(--vscode-widget-border, rgba(0, 0, 0, 0.12));
 }
 
+.comet-quick-input-header-row,
+.comet-quick-input-actions {
+	display: flex;
+	align-items: center;
+}
+
+.comet-quick-input-header-row {
+	gap: 8px;
+}
+
+.comet-quick-input-header-row > .quick-input-box {
+	min-width: 0;
+	flex: 1;
+}
+
+.comet-quick-input-actions {
+	flex: 0 0 auto;
+	gap: 2px;
+}
+
 .quick-input-box {
 	width: 100%;
 	height: 34px;
@@ -88,6 +108,13 @@
 	cursor: pointer;
 }
 
+.comet-quick-input-item-content {
+	min-width: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: 12px;
+}
+
 .quick-input-item.active {
 	background: var(--vscode-quickInputList-focusBackground, rgba(9, 105, 218, 0.12));
 	color: var(--vscode-quickInputList-focusForeground, inherit);
@@ -122,6 +149,10 @@
 }
 
 .quick-input-separator {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
 	color: var(--vscode-descriptionForeground, #5f6a72);
 	font-size: 11px;
 	font-weight: 600;

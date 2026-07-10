@@ -106,8 +106,6 @@ export interface IBrowserViewWindowConfiguration {
 
 	/** Whether AI features are disabled for this window. */
 	readonly aiFeaturesDisabled?: boolean;
-	/** Maximum number of entries to retain per browser session history. */
-	readonly maxHistoryEntries?: number;
 	/**
 	 * Resolved tunnel-proxy credentials for the window's remote browser views,
 	 * produced by the window's local node extension host (which hosts the HTTPS
@@ -225,13 +223,6 @@ export interface IBrowserViewCreateOptions {
 	readonly initialState?: Partial<IBrowserViewState>;
 }
 
-/** `applicationSharedStorage` keys this session writes to. Empty for ephemeral sessions. */
-export interface IBrowserViewStorageKeys {
-	readonly history?: string;
-	readonly favicons?: string;
-	readonly permissions?: string;
-}
-
 export interface IBrowserViewState {
 	url: string;
 	title: string;
@@ -246,7 +237,6 @@ export interface IBrowserViewState {
 	lastError: IBrowserViewLoadError | undefined;
 	certificateError: IBrowserViewCertificateError | undefined;
 	storageScope: BrowserViewStorageScope;
-	storageKeys: IBrowserViewStorageKeys;
 	permissions: ISerializedBrowserPermissionsSnapshot;
 	browserZoomIndex: number;
 	isElementSelectionActive: boolean;
@@ -258,6 +248,7 @@ export interface IBrowserViewState {
 export interface IBrowserViewNavigationEvent {
 	url: string;
 	title: string;
+	navigationEntryIndex: number;
 	canGoBack: boolean;
 	canGoForward: boolean;
 	certificateError: IBrowserViewCertificateError | undefined;
@@ -582,13 +573,6 @@ export interface IBrowserViewService {
 	 * @param fingerprint The SHA-256 fingerprint of the certificate to revoke
 	 */
 	untrustCertificate(id: string, host: string, fingerprint: string): Promise<void>;
-
-	/**
-	 * Delete entries from this view's session history.
-	 * @param id The browser view identifier
-	 * @param entryIds The IDs of the history entries to delete. If omitted, deletes all history.
-	 */
-	deleteBrowserHistory(id: string, entryIds?: readonly number[]): Promise<void>;
 
 	/**
 	 * Record permission decisions for an origin in this view's session. This is

@@ -22,11 +22,17 @@ export type SettingsSectionDefinition = {
 
 export const settingsPageLayout: readonly SettingsPageDefinition[] = [
   {
-    id: 'general',
+		id: 'general',
     label: (labels) => labels.settingsNavigationGeneral,
     icon: 'gear',
-    sections: ['locale', 'layout', 'notifications', 'configPath'],
-  },
+		sections: ['locale', 'layout', 'notifications', 'configPath'],
+	},
+	{
+		id: 'browser',
+		label: labels => labels.settingsNavigationBrowser,
+		icon: 'browser',
+		sections: ['browser'],
+	},
   {
     id: 'appearance',
     label: (labels) => labels.settingsNavigationAppearance,
@@ -70,7 +76,7 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.languageEnglish,
     ],
   },
-  layout: {
+	layout: {
     id: 'layout',
     settingIds: [
       SettingsId.StartupLayout,
@@ -88,7 +94,30 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsBrowserTabKeepAliveLimit,
       labels.settingsBrowserTabKeepAliveLimitHint,
     ],
-  },
+	},
+	browser: {
+		id: 'browser',
+		settingIds: [
+			SettingsId.BrowserMaxHistoryEntries,
+			SettingsId.BrowserPageZoom,
+			SettingsId.BrowserSearchEngine,
+		],
+		searchLabels: labels => [
+			labels.settingsBrowserTitle,
+			labels.settingsBrowserMaxHistoryEntries,
+			labels.settingsBrowserMaxHistoryEntriesHint,
+			labels.settingsBrowserPageZoom,
+			labels.settingsBrowserPageZoomHint,
+			labels.settingsBrowserPageZoomMatchWindow,
+			labels.settingsBrowserSearchEngine,
+			labels.settingsBrowserSearchEngineHint,
+			labels.settingsBrowserSearchEngineNone,
+			labels.settingsBrowserSearchEngineBing,
+			labels.settingsBrowserSearchEngineGoogle,
+			labels.settingsBrowserSearchEngineYahoo,
+			labels.settingsBrowserSearchEngineDuckDuckGo,
+		],
+	},
   notifications: {
     id: 'notifications',
     settingIds: [

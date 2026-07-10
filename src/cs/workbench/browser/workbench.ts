@@ -135,6 +135,14 @@ import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/edito
 import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writingEditorDocument';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 import { INativeHostService } from 'cs/platform/native/common/native';
+import { IWorkbenchConfigurationService } from 'cs/workbench/services/configuration/common/configuration';
+import {
+  BrowserMaxHistoryEntriesSettingId,
+  BrowserPageZoomSettingId,
+  BrowserSearchEngineSettingId,
+  maxBrowserMaxHistoryEntries,
+  minBrowserMaxHistoryEntries,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
@@ -438,6 +446,11 @@ class WorkbenchHost {
   >();
   private appliedKnowledgeBaseModeEnabled: boolean | null = null;
   private hasAppliedStartupLayoutPreference = false;
+  private appliedBrowserSettings: {
+    maxHistoryEntries: number;
+    pageZoom: string;
+    searchEngine: string;
+  } | null = null;
   private readonly handleWindowKeydown = (event: KeyboardEvent) => {
     handleWorkbenchEditorShortcut(event);
   };
@@ -454,6 +467,7 @@ class WorkbenchHost {
     @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
     @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
+    @IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
     @ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
   ) {
     this.rootElement = rootElement;
@@ -616,6 +630,35 @@ class WorkbenchHost {
       this.isRendering = false;
     }
   };
+
+  private syncBrowserSettings(settings: {
+    browserMaxHistoryEntries: number;
+    browserPageZoom: string;
+    browserSearchEngine: string;
+  }) {
+    if (
+      this.appliedBrowserSettings?.maxHistoryEntries === settings.browserMaxHistoryEntries &&
+      this.appliedBrowserSettings?.pageZoom === settings.browserPageZoom &&
+      this.appliedBrowserSettings?.searchEngine === settings.browserSearchEngine
+    ) {
+      return;
+    }
+
+    this.appliedBrowserSettings = {
+      maxHistoryEntries: settings.browserMaxHistoryEntries,
+      pageZoom: settings.browserPageZoom,
+      searchEngine: settings.browserSearchEngine,
+    };
+    void this.configurationService.updateValue(
+      BrowserMaxHistoryEntriesSettingId,
+      settings.browserMaxHistoryEntries,
+    );
+    void this.configurationService.updateValue(BrowserPageZoomSettingId, settings.browserPageZoom);
+    void this.configurationService.updateValue(
+      BrowserSearchEngineSettingId,
+      settings.browserSearchEngine,
+    );
+  }
 
   private ensureServiceSubscriptions(services: {
     settingsController: SettingsController;
@@ -1182,6 +1225,9 @@ class WorkbenchHost {
       statusbarVisible,
       startupLayout,
       browserTabKeepAliveLimit,
+      browserMaxHistoryEntries,
+      browserPageZoom,
+      browserSearchEngine,
       useMica,
       theme,
       workbenchColorCustomizations,
@@ -1211,6 +1257,11 @@ class WorkbenchHost {
       isLoadingTranslationModels,
       journalSourceOverrides,
     } = settingsSnapshot;
+    this.syncBrowserSettings({
+      browserMaxHistoryEntries,
+      browserPageZoom,
+      browserSearchEngine,
+    });
     applyWorkbenchTheme(theme, workbenchColorCustomizations);
     applyWorkbenchBrowserStyles();
     const knowledgeBaseModeEnabled = knowledgeBaseEnabled;
@@ -1837,6 +1888,9 @@ class WorkbenchHost {
         statusbarVisible,
         startupLayout,
         browserTabKeepAliveLimit,
+        browserMaxHistoryEntries,
+        browserPageZoom,
+        browserSearchEngine,
         theme,
         editorDraftStyle: {
           defaultValue: {
@@ -1925,6 +1979,18 @@ class WorkbenchHost {
           settingsControllerInstance.setBrowserTabKeepAliveLimit(
             normalizeBrowserTabKeepAliveLimit(value, browserTabKeepAliveLimit),
           ),
+        onBrowserMaxHistoryEntriesChange: (value) =>
+          settingsControllerInstance.setBrowserMaxHistoryEntries(
+            Math.min(
+              maxBrowserMaxHistoryEntries,
+              Math.max(
+                minBrowserMaxHistoryEntries,
+                Number.parseInt(String(value), 10) || minBrowserMaxHistoryEntries,
+              ),
+            ),
+          ),
+        onBrowserPageZoomChange: settingsControllerInstance.setBrowserPageZoom,
+        onBrowserSearchEngineChange: settingsControllerInstance.setBrowserSearchEngine,
         onThemeChange: settingsControllerInstance.setTheme,
         onEditorDraftFontFamilyChange:
           settingsControllerInstance.setEditorDraftFontFamily,

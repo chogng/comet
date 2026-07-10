@@ -378,6 +378,21 @@ export class SettingsController {
     this.scheduleImmediateAutoSave();
   };
 
+  readonly setBrowserMaxHistoryEntries = (nextBrowserMaxHistoryEntries: number) => {
+    this.settingsModel.setBrowserMaxHistoryEntries(nextBrowserMaxHistoryEntries);
+    this.scheduleImmediateAutoSave();
+  };
+
+  readonly setBrowserPageZoom = (nextBrowserPageZoom: string) => {
+    this.settingsModel.setBrowserPageZoom(nextBrowserPageZoom);
+    this.scheduleImmediateAutoSave();
+  };
+
+  readonly setBrowserSearchEngine = (nextBrowserSearchEngine: string) => {
+    this.settingsModel.setBrowserSearchEngine(nextBrowserSearchEngine);
+    this.scheduleImmediateAutoSave();
+  };
+
   readonly setKnowledgeBaseEnabled = (nextKnowledgeBaseEnabled: boolean) => {
     this.settingsModel.setKnowledgeBaseEnabled(nextKnowledgeBaseEnabled);
     this.scheduleImmediateAutoSave();

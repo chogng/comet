@@ -522,7 +522,6 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 				return;
 			}
 			const device = model.device;
-			container.classList.add('browser-container--dragging');
 			const pane = this.editor.paneSize;
 			const containerRect = container.getBoundingClientRect();
 			const fitScale = pane.width > 0 && pane.height > 0
@@ -555,7 +554,6 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 			if (!drag) {
 				return;
 			}
-			container.classList.remove('browser-container--dragging');
 			drag = undefined;
 		};
 

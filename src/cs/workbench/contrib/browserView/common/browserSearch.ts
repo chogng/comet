@@ -12,9 +12,6 @@ export enum BrowserSearchEngineId {
 	DuckDuckGo = 'duckduckgo',
 }
 
-export const BrowserSearchEngineSettingId =
-	'workbench.browser.searchEngine';
-
 export const BROWSER_SEARCH_NONE = 'none';
 
 export type BrowserSearchEngineValue = BrowserSearchEngineId | typeof BROWSER_SEARCH_NONE;

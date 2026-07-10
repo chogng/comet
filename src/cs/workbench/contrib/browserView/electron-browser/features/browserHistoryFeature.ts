@@ -4,6 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Codicon } from 'cs/base/common/codicons';
+import {
+	BrowserMaxHistoryEntriesSettingId,
+	defaultBrowserMaxHistoryEntries,
+	maxBrowserMaxHistoryEntries,
+	minBrowserMaxHistoryEntries,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 import { Emitter } from 'cs/base/common/event';
 import { KeyCode, KeyMod } from 'cs/base/common/keyCodes';
 import { DisposableStore } from 'cs/base/common/lifecycle';
@@ -20,7 +26,7 @@ import {
 import { ContextKeyExpr } from 'cs/platform/contextkey/common/contextkey';
 import type { ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
-import type { IQuickInputService, IQuickPickItem, IQuickPickSeparator } from 'cs/platform/quickinput/common/quickInput';
+import type { IQuickInputButton, IQuickInputService, IQuickPickItem, IQuickPickSeparator } from 'cs/platform/quickinput/common/quickInput';
 import { IQuickInputService as IQuickInputServiceDecorator } from 'cs/platform/quickinput/common/quickInput';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import {
@@ -32,7 +38,6 @@ import {
 	type IBrowserUrlSuggestion,
 	type IBrowserUrlSuggestionProvider,
 } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
-import { BrowserMaxHistoryEntriesSettingId } from 'cs/workbench/contrib/browserView/electron-browser/browserViewWorkbenchService';
 import { CONTEXT_BROWSER_STORAGE_SCOPE } from 'cs/workbench/contrib/browserView/electron-browser/features/browserDataStorageFeatures';
 
 const MAX_RECENTS = 3;
@@ -143,6 +148,15 @@ function toSuggestion(history: BrowserHistoryStore, entry: IBrowserHistoryEntry)
 		icon: faviconUri ? undefined : Codicon.globe,
 		iconPath: faviconUri,
 		apply: input => input.navigate(entry.url),
+		actions: [{
+			id: 'browser.history.delete',
+			label: localize('browser.removeFromHistory', "Remove from History"),
+			iconClass: ThemeIcon.asClassName(Codicon.close),
+			tooltip: localize('browser.removeFromHistory', "Remove from History"),
+			run: () => {
+				history.entries.delete(entry.id);
+			},
+		}],
 	};
 }
 
@@ -164,11 +178,13 @@ function resolveFavicon(history: BrowserHistoryStore, hash: string): URI | undef
 interface HistoryQuickPickItem extends IQuickPickItem {
 	readonly iconClass?: string;
 	readonly iconPath?: URI;
+	readonly entryId: number;
 	readonly entryUrl: string;
 }
 
 interface HistoryQuickPickSeparator extends IQuickPickSeparator {
 	readonly id: string;
+	readonly entryIds: readonly number[];
 }
 
 function showHistoryPicker(quickInputService: IQuickInputService, model: IBrowserViewModel, history: BrowserHistoryStore): void {
@@ -176,12 +192,45 @@ function showHistoryPicker(quickInputService: IQuickInputService, model: IBrowse
 	const picker = disposables.add(quickInputService.createQuickPick<HistoryQuickPickItem>({ useSeparators: true }));
 	picker.title = localize('browser.history.title', "Browser History");
 	picker.placeholder = localize('browser.history.placeholder', "Filter browser history");
+	picker.matchOnDescription = true;
+	picker.matchOnDetail = true;
+
+	const clearAllButton: IQuickInputButton = {
+		iconClass: ThemeIcon.asClassName(Codicon.trash),
+		tooltip: localize('browser.history.clearAll', "Clear All History"),
+	};
+	const clearDayButton: IQuickInputButton = {
+		iconClass: ThemeIcon.asClassName(Codicon.trash),
+		tooltip: localize('browser.history.clearDay', "Clear Entries for This Day"),
+	};
+	const removeEntryButton: IQuickInputButton = {
+		iconClass: ThemeIcon.asClassName(Codicon.close),
+		tooltip: localize('browser.removeFromHistory', "Remove from History"),
+	};
+	picker.buttons = [clearAllButton];
 
 	const rebuild = () => {
-		picker.items = buildPickerItems(history);
+		picker.items = buildPickerItems(history, clearDayButton, removeEntryButton);
 	};
 	rebuild();
 	disposables.add(history.onDidChange(rebuild));
+	disposables.add(picker.onDidTriggerButton(button => {
+		if (button === clearAllButton) {
+			history.clear();
+		}
+	}));
+	disposables.add(picker.onDidTriggerSeparatorButton(({ button, separator }) => {
+		if (button === clearDayButton) {
+			for (const entryId of (separator as HistoryQuickPickSeparator).entryIds) {
+				history.entries.delete(entryId);
+			}
+		}
+	}));
+	disposables.add(picker.onDidTriggerItemButton(({ button, item }) => {
+		if (button === removeEntryButton) {
+			history.entries.delete(item.entryId);
+		}
+	}));
 
 	disposables.add(picker.onDidAccept(() => {
 		const selected = picker.activeItems[0];
@@ -194,7 +243,11 @@ function showHistoryPicker(quickInputService: IQuickInputService, model: IBrowse
 	picker.show();
 }
 
-function buildPickerItems(history: BrowserHistoryStore): (HistoryQuickPickItem | HistoryQuickPickSeparator)[] {
+function buildPickerItems(
+	history: BrowserHistoryStore,
+	clearDayButton: IQuickInputButton,
+	removeEntryButton: IQuickInputButton,
+): (HistoryQuickPickItem | HistoryQuickPickSeparator)[] {
 	const sorted = [...history.entries.items].sort((a, b) => b.time - a.time);
 	const groups = new Map<string, { label: string; entries: IBrowserHistoryEntry[] }>();
 	const orderedKeys: string[] = [];
@@ -218,6 +271,8 @@ function buildPickerItems(history: BrowserHistoryStore): (HistoryQuickPickItem |
 			type: 'separator',
 			id: key,
 			label: group.label,
+			buttons: [clearDayButton],
+			entryIds: group.entries.map(entry => entry.id),
 		});
 		for (const entry of group.entries) {
 			const faviconUri = entry.icon ? resolveFavicon(history, entry.icon) : undefined;
@@ -226,6 +281,8 @@ function buildPickerItems(history: BrowserHistoryStore): (HistoryQuickPickItem |
 				description: entry.title ? entry.url : undefined,
 				iconClass: faviconUri ? undefined : ThemeIcon.asClassName(Codicon.globe),
 				iconPath: faviconUri,
+				buttons: [removeEntryButton],
+				entryId: entry.id,
 				entryUrl: entry.url,
 			});
 		}
@@ -299,13 +356,13 @@ registerAction2(ShowBrowserHistoryAction);
 configurationRegistry.registerConfigurationProperties({
 	[BrowserMaxHistoryEntriesSettingId]: {
 		type: 'integer',
-		default: 200,
-		minimum: 0,
-		maximum: 10000,
+		default: defaultBrowserMaxHistoryEntries,
+		minimum: minBrowserMaxHistoryEntries,
+		maximum: maxBrowserMaxHistoryEntries,
 		scope: ConfigurationScope.APPLICATION,
 		description: localize(
 			'browser.maxHistoryEntries',
-			"Maximum number of history items kept per session scope. Older entries are evicted first.",
+			"Maximum number of browser history items to keep. Older entries are evicted first.",
 		),
 	},
 });

@@ -9,10 +9,12 @@ import {
 } from 'cs/platform/configuration/common/configurationRegistry';
 import { localize } from 'cs/nls';
 import {
+	BrowserSearchEngineSettingId,
+	defaultBrowserSearchEngine,
+} from 'cs/base/parts/sandbox/common/browserSettings';
+import {
 	BROWSER_SEARCH_ENGINES,
 	BROWSER_SEARCH_NONE,
-	BrowserSearchEngineId,
-	BrowserSearchEngineSettingId,
 } from 'cs/workbench/contrib/browserView/common/browserSearch';
 
 configurationRegistry.registerConfigurationProperties({
@@ -26,7 +28,7 @@ configurationRegistry.registerConfigurationProperties({
 			localize('browser.search.engine.none', "None"),
 			...BROWSER_SEARCH_ENGINES.map(engine => engine.label),
 		],
-		default: BrowserSearchEngineId.Bing,
+		default: defaultBrowserSearchEngine,
 		markdownDescription: localize(
 			'browser.searchEngine',
 			"Controls the search engine used to search the web from the address bar of the integrated browser. Select 'None' to disable search.",

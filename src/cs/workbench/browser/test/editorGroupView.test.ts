@@ -191,7 +191,6 @@ function createBrowserViewModel(id: string, url: string): IBrowserViewModel {
     error: undefined,
     certificateError: undefined,
     storageScope: BrowserViewStorageScope.Global,
-    history: undefined,
     permissions: undefined,
     sharingState: BrowserViewSharingState.Unavailable,
     isRemoteSession: false,
@@ -240,7 +239,6 @@ function createBrowserViewModel(id: string, url: string): IBrowserViewModel {
     setSharedWithAgent: async () => false,
     trustCertificate: async () => {},
     untrustCertificate: async () => {},
-    deleteHistory: async () => {},
     setPermissions: async () => {},
     selectDevice: async () => {},
     zoomIn: async () => {},
@@ -391,6 +389,52 @@ function waitForAsyncWork() {
     setTimeout(resolve, 0);
   });
 }
+
+test('EditorGroupView forwards every layout change to the active editor pane', () => {
+  const draftTab = {
+    id: 'draft-layout',
+    kind: 'draft' as const,
+    title: 'Draft layout',
+    document: createWritingEditorDocumentFromPlainText('layout'),
+    viewMode: 'draft' as const,
+  };
+  const view = new EditorGroupView(
+    createProps(draftTab.id, draftTab, [draftTab]),
+  );
+  document.body.append(view.getElement());
+
+  try {
+    const internals = view as unknown as {
+      activePane: {
+        layout: (layout: { width: number; height: number }) => void;
+      } | null;
+      contentElement: HTMLElement;
+    };
+    assert(internals.activePane);
+
+    let contentWidth = 720;
+    let contentHeight = 540;
+    Object.defineProperties(internals.contentElement, {
+      clientWidth: { configurable: true, get: () => contentWidth },
+      clientHeight: { configurable: true, get: () => contentHeight },
+    });
+    const layouts: Array<{ width: number; height: number }> = [];
+    internals.activePane.layout = layout => layouts.push(layout);
+
+    view.layout(900, 600);
+    contentWidth = 610;
+    contentHeight = 500;
+    view.layout(790, 560);
+
+    assert.deepEqual(layouts, [
+      { width: 720, height: 540 },
+      { width: 610, height: 500 },
+    ]);
+  } finally {
+    view.dispose();
+    document.body.replaceChildren();
+  }
+});
 
 async function withElectronApi<T>(
   electronAPI: ElectronAPI | undefined,

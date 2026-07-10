@@ -491,6 +491,7 @@ export type SessionWorkbenchLayoutPartViews = {
 	getSidebarElement(): HTMLElement | null;
 	getSessionsElement(): HTMLElement | null;
 	getEditorElement(): HTMLElement | null;
+	layoutEditor(width: number, height: number): void;
 };
 
 export type SessionWorkbenchLayoutViewProps = {
@@ -547,7 +548,11 @@ class SessionWorkbenchLayoutPartView implements IGridView {
 	private minimumHeightValue = 0;
 	private maximumHeightValue = Number.POSITIVE_INFINITY;
 
-	constructor(className: string, snap = false) {
+	constructor(
+		className: string,
+		snap = false,
+		private readonly onLayout?: (width: number, height: number) => void,
+	) {
 		this.snap = snap;
 		this.element = document.createElement('div');
 		this.element.className = `comet-session-workbench-part ${className}`.trim();
@@ -580,8 +585,8 @@ class SessionWorkbenchLayoutPartView implements IGridView {
 		syncElementContent(this.element, content);
 	}
 
-	layout() {
-		// The part roots stretch with CSS.
+	layout(width: number, height: number) {
+		this.onLayout?.(width, height);
 	}
 }
 
@@ -835,6 +840,8 @@ export class SessionWorkbenchLayoutView {
 	);
 	private readonly editorPartView = new SessionWorkbenchLayoutPartView(
 		'comet-session-workbench-part-editor',
+		false,
+		(width, height) => this.props.partViews.layoutEditor(width, height),
 	);
 	private readonly layoutController: SessionWorkbenchLayoutController;
 	private disposed = false;

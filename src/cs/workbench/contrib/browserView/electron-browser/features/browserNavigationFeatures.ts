@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { $ } from 'cs/base/browser/dom';
+import { BrowserSearchEngineSettingId } from 'cs/base/parts/sandbox/common/browserSettings';
 import { Codicon } from 'cs/base/common/codicons';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { MenuWorkbenchToolBar } from 'cs/platform/actions/browser/toolbar';
@@ -27,7 +28,6 @@ import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/
 import {
 	BROWSER_SEARCH_NONE,
 	BrowserSearchEngineId,
-	BrowserSearchEngineSettingId,
 	buildSearchUrl,
 	getBrowserSearchEngineLabel,
 	resolveAddressBarInputType,
