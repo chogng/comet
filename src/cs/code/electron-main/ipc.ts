@@ -38,6 +38,7 @@ import type {
   WebContentNavigatePayload,
   WebContentState,
 } from 'cs/platform/browserView/common/browserView';
+import { ipcBrowserViewChannelName } from 'cs/platform/browserView/common/browserView';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import {
   captureWebContentScreenshot,
@@ -57,6 +58,7 @@ import {
   setWebContentLayoutPhaseState,
   setWebContentRetentionLimit,
   setWebContentVisible,
+  BrowserViewMainService,
 } from 'cs/platform/browserView/electron-main/browserViewMainService';
 import {
   clearWorkbenchSharedSessionCache,
@@ -92,6 +94,8 @@ import {
 } from 'cs/platform/windows/electron-main/windows';
 import { setMenuBarIconEnabled } from 'cs/platform/window/electron-main/trayIcon';
 import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
+import { ProxyChannel } from 'cs/base/parts/ipc/common/ipc';
+import { DisposableStore } from 'cs/base/common/lifecycle';
 import { registerContextMenuListener } from 'cs/base/parts/contextmenu/electron-main/contextmenu';
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import {
@@ -106,6 +110,10 @@ type AppInvokeResponse<T> =
   | { ok: false; error: string };
 
 const documentTaskAbortControllers = new Map<string, AbortController>();
+const browserViewIpcDisposables = new DisposableStore();
+const browserViewMainService = browserViewIpcDisposables.add(
+  new BrowserViewMainService(),
+);
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -398,6 +406,13 @@ export function registerAppIpc(
   themeMainService: IThemeMainService,
 ) {
   electronMainChannelServer.register();
+  electronMainChannelServer.registerChannel(
+    ipcBrowserViewChannelName,
+    ProxyChannel.fromService(browserViewMainService, browserViewIpcDisposables),
+  );
+  app.once('before-quit', () => {
+    browserViewIpcDisposables.dispose();
+  });
   registerContextMenuListener();
   try {
     electronMainChannelServer.registerChannel(

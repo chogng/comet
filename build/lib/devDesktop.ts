@@ -9,6 +9,7 @@ import { resolveProjectPath, run } from './util.ts';
 
 const rendererHost = '127.0.0.1';
 const rendererPort = 1420;
+const rendererServerUrl = `http://${rendererHost}:${rendererPort}/`;
 const restartDebounceMs = 150;
 const mainScriptPath = resolveProjectPath('dist-electron', 'code', 'electron-main', 'main.js');
 const electronArgs = process.argv.slice(2);
@@ -42,12 +43,14 @@ function spawnElectron() {
     return;
   }
 
+  console.log('[dev:desktop] launching Electron');
+
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     NODE_ENV: 'development',
     ELECTRON_ENABLE_LOGGING: '1',
     ELECTRON_ENABLE_STACK_DUMPING: '1',
-    ELECTRON_RENDERER_URL: `http://${rendererHost}:${rendererPort}/`,
+    ELECTRON_RENDERER_URL: rendererServerUrl,
   };
 
   delete env.ELECTRON_RUN_AS_NODE;
@@ -108,7 +111,7 @@ function scheduleElectronRestart() {
 async function startViteServer() {
   const server = await createServer({ mode: 'desktop' });
   await server.listen();
-  server.printUrls();
+  console.log(rendererServerUrl);
   return server;
 }
 

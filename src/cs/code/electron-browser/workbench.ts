@@ -15,7 +15,7 @@ function assertDesktopIpcBridge() {
 		throw new Error(
 			[
 				'Desktop renderer was loaded without the Electron preload bridge.',
-				'Launch the desktop workbench through scripts/code.sh, scripts/code.bat, or npm run dev:desktop instead of opening the Vite renderer URL in a browser.',
+				'Launch the desktop workbench through scripts/code.sh or scripts/code.bat instead of opening the renderer URL in a browser.',
 			].join(' '),
 		);
 	}

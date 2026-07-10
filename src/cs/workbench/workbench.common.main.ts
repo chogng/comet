@@ -26,6 +26,10 @@ import { ILogService } from 'cs/platform/log/common/log';
 import { BrowserLogService } from 'cs/platform/log/browser/log';
 import { IThemeService } from 'cs/platform/theme/common/themeService';
 import { themeService } from 'cs/platform/theme/browser/themeService';
+import {
+  ITelemetryService,
+  NullTelemetryService,
+} from 'cs/platform/telemetry/common/telemetry';
 import { nativeHostService } from 'cs/workbench/services/host/electron-browser/nativeHostService';
 import {
   registerWorkbenchService,
@@ -58,6 +62,7 @@ registerWorkbenchService(INativeHostService, nativeHostService);
 registerWorkbenchService(IContextKeyService, contextKeyService);
 registerWorkbenchService(ILogService, new BrowserLogService());
 registerWorkbenchService(IThemeService, themeService);
+registerWorkbenchService(ITelemetryService, new NullTelemetryService());
 
 //#endregion
 

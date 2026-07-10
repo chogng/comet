@@ -3,16 +3,49 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { BrowserWindow, session, WebContentsView } from 'electron';
+import { VSBuffer } from 'cs/base/common/buffer';
+import { Emitter, type Event } from 'cs/base/common/event';
+import { DisposableStore } from 'cs/base/common/lifecycle';
 import { normalizeListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
 import type { ListingCandidateExtraction, ListingCandidateSeed } from 'cs/platform/browserView/common/listingCandidates';
 
-import type {
-  WebContentBounds,
-  WebContentLayoutPhase,
-  WebContentNavigationMode,
-  WebContentSelectionSnapshot,
-  WebContentState,
+import {
+  BrowserViewStorageScope,
+  browserZoomDefaultIndex,
+  browserZoomFactors,
+  type IBrowserDeviceProfile,
+  type IBrowserViewBounds,
+  type IBrowserViewCaptureScreenshotOptions,
+  type IBrowserViewCreatedEvent,
+  type IBrowserViewCreateOptions,
+  type IBrowserViewDevToolsStateEvent,
+  type IBrowserViewFaviconChangeEvent,
+  type IBrowserViewFindInPageOptions,
+  type IBrowserViewFindInPageResult,
+  type IBrowserViewFocusEvent,
+  type IBrowserViewInfo,
+  type IBrowserViewKeyDownEvent,
+  type IBrowserViewLoadingEvent,
+  type IBrowserViewNavigationEvent,
+  type IBrowserViewOwner,
+  type IBrowserViewPermissionRequestEvent,
+  type IBrowserViewRect,
+  type IBrowserViewService,
+  type IBrowserViewState,
+  type IBrowserViewTitleChangeEvent,
+  type IBrowserViewVisibilityEvent,
+  type IBrowserViewWindowConfiguration,
+  type IElementData,
+  type WebContentBounds,
+  type WebContentLayoutPhase,
+  type WebContentNavigationMode,
+  type WebContentSelectionSnapshot,
+  type WebContentState,
 } from 'cs/platform/browserView/common/browserView';
+import type {
+  IPermissionCategoryState,
+  ISerializedBrowserPermissionsSnapshot,
+} from 'cs/platform/browserView/common/browserPermissions';
 import { BrowserViewErrorCode, browserViewError } from 'cs/platform/browserView/common/browserViewErrors';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
 import {
@@ -49,6 +82,43 @@ type ManagedWebContentTarget = {
   view: WebContentsView;
 };
 
+type BrowserViewTargetEvents = {
+  readonly disposables: DisposableStore;
+  readonly onDidNavigate: Emitter<IBrowserViewNavigationEvent>;
+  readonly onDidChangeLoadingState: Emitter<IBrowserViewLoadingEvent>;
+  readonly onDidChangeFocus: Emitter<IBrowserViewFocusEvent>;
+  readonly onDidChangeVisibility: Emitter<IBrowserViewVisibilityEvent>;
+  readonly onDidChangeDevToolsState: Emitter<IBrowserViewDevToolsStateEvent>;
+  readonly onDidKeyCommand: Emitter<IBrowserViewKeyDownEvent>;
+  readonly onDidChangeTitle: Emitter<IBrowserViewTitleChangeEvent>;
+  readonly onDidChangeFavicon: Emitter<IBrowserViewFaviconChangeEvent>;
+  readonly onDidFindInPage: Emitter<IBrowserViewFindInPageResult>;
+  readonly onDidClose: Emitter<void>;
+  readonly onDidSelectElement: Emitter<IElementData>;
+  readonly onDidChangeElementSelectionActive: Emitter<boolean>;
+  readonly onDidPickArea: Emitter<IBrowserViewRect | undefined>;
+  readonly onDidChangeAreaSelectionActive: Emitter<boolean>;
+  readonly onDidChangeDeviceEmulation: Emitter<IBrowserDeviceProfile | undefined>;
+  readonly onDidChangeRemoteStatus: Emitter<boolean>;
+  readonly onDidRequestPermission: Emitter<IBrowserViewPermissionRequestEvent>;
+  readonly onDidChangePermissions: Emitter<ISerializedBrowserPermissionsSnapshot>;
+};
+
+type BrowserViewTargetMetadata = {
+  readonly owner: IBrowserViewOwner;
+  readonly storageScope: BrowserViewStorageScope;
+  readonly events: BrowserViewTargetEvents;
+  permissions: ISerializedBrowserPermissionsSnapshot;
+  browserZoomIndex: number;
+  device: IBrowserDeviceProfile | undefined;
+  isElementSelectionActive: boolean;
+  isAreaSelectionActive: boolean;
+  visible: boolean;
+  bounds: WebContentBounds | undefined;
+  lastScreenshot: VSBuffer | undefined;
+  readonly consoleLogs: string[];
+};
+
 type RetainedWebContentTarget = {
   releasedAt: number;
 };
@@ -64,6 +134,53 @@ let webContentRetentionSweepTimer: ReturnType<typeof setTimeout> | null = null;
 let browserTabKeepAliveLimit = defaultBrowserTabKeepAliveLimit;
 const webContentTargets = new Map<string, ManagedWebContentTarget>();
 const retainedWebContentTargets = new Map<string, RetainedWebContentTarget>();
+const browserViewTargetMetadata = new Map<string, BrowserViewTargetMetadata>();
+const browserViewWindowConfigurations = new Map<number, IBrowserViewWindowConfiguration>();
+const browserViewCreatedEmitter = new Emitter<IBrowserViewCreatedEvent>();
+
+function createBrowserViewTargetEvents(): BrowserViewTargetEvents {
+  const disposables = new DisposableStore();
+  return {
+    disposables,
+    onDidNavigate: disposables.add(new Emitter<IBrowserViewNavigationEvent>()),
+    onDidChangeLoadingState: disposables.add(new Emitter<IBrowserViewLoadingEvent>()),
+    onDidChangeFocus: disposables.add(new Emitter<IBrowserViewFocusEvent>()),
+    onDidChangeVisibility: disposables.add(new Emitter<IBrowserViewVisibilityEvent>()),
+    onDidChangeDevToolsState: disposables.add(new Emitter<IBrowserViewDevToolsStateEvent>()),
+    onDidKeyCommand: disposables.add(new Emitter<IBrowserViewKeyDownEvent>()),
+    onDidChangeTitle: disposables.add(new Emitter<IBrowserViewTitleChangeEvent>()),
+    onDidChangeFavicon: disposables.add(new Emitter<IBrowserViewFaviconChangeEvent>()),
+    onDidFindInPage: disposables.add(new Emitter<IBrowserViewFindInPageResult>()),
+    onDidClose: disposables.add(new Emitter<void>()),
+    onDidSelectElement: disposables.add(new Emitter<IElementData>()),
+    onDidChangeElementSelectionActive: disposables.add(new Emitter<boolean>()),
+    onDidPickArea: disposables.add(new Emitter<IBrowserViewRect | undefined>()),
+    onDidChangeAreaSelectionActive: disposables.add(new Emitter<boolean>()),
+    onDidChangeDeviceEmulation: disposables.add(new Emitter<IBrowserDeviceProfile | undefined>()),
+    onDidChangeRemoteStatus: disposables.add(new Emitter<boolean>()),
+    onDidRequestPermission: disposables.add(new Emitter<IBrowserViewPermissionRequestEvent>()),
+    onDidChangePermissions: disposables.add(new Emitter<ISerializedBrowserPermissionsSnapshot>()),
+  };
+}
+
+function getBrowserViewTargetMetadata(targetId: string) {
+  const metadata = browserViewTargetMetadata.get(targetId);
+  if (!metadata) {
+    throw new Error(`Browser view '${targetId}' does not exist.`);
+  }
+  return metadata;
+}
+
+function disposeBrowserViewTargetMetadata(targetId: string) {
+  const metadata = browserViewTargetMetadata.get(targetId);
+  if (!metadata) {
+    return;
+  }
+
+  metadata.events.onDidClose.fire();
+  metadata.events.disposables.dispose();
+  browserViewTargetMetadata.delete(targetId);
+}
 
 function createDefaultWebContentTargetState(): WebContentTargetState {
   return {
@@ -1629,6 +1746,7 @@ function disposeWebContentTargetEntry(targetId: string) {
   }
 
   webContentTargets.delete(normalizedTargetId);
+  disposeBrowserViewTargetMetadata(normalizedTargetId);
   for (const cleanup of entry.cleanup) {
     cleanup();
   }
@@ -1682,6 +1800,47 @@ function resolveFaviconUrl(favicons: unknown) {
   return '';
 }
 
+function emitBrowserViewStateChanges(
+  targetId: string,
+  previousState: WebContentTargetState,
+  nextState: WebContentTargetState,
+) {
+  const metadata = browserViewTargetMetadata.get(targetId);
+  if (!metadata) {
+    return;
+  }
+
+  if (
+    previousState.url !== nextState.url ||
+    previousState.pageTitle !== nextState.pageTitle ||
+    previousState.canGoBack !== nextState.canGoBack ||
+    previousState.canGoForward !== nextState.canGoForward
+  ) {
+    metadata.events.onDidNavigate.fire({
+      url: nextState.url,
+      title: nextState.pageTitle ?? '',
+      canGoBack: nextState.canGoBack,
+      canGoForward: nextState.canGoForward,
+      certificateError: undefined,
+    });
+  }
+  if (previousState.isLoading !== nextState.isLoading) {
+    metadata.events.onDidChangeLoadingState.fire({
+      loading: nextState.isLoading,
+    });
+  }
+  if (previousState.pageTitle !== nextState.pageTitle) {
+    metadata.events.onDidChangeTitle.fire({
+      title: nextState.pageTitle ?? '',
+    });
+  }
+  if (previousState.faviconUrl !== nextState.faviconUrl) {
+    metadata.events.onDidChangeFavicon.fire({
+      favicon: nextState.faviconUrl || undefined,
+    });
+  }
+}
+
 function createWebContentTarget(targetId: string) {
   const window = getWebContentOwnerWindow();
   const view = new WebContentsView({
@@ -1722,6 +1881,74 @@ function createWebContentTarget(targetId: string) {
   ]) {
     addWebContentTargetListener(entry, event, syncState);
   }
+
+  addWebContentTargetListener(entry, 'focus', () => {
+    browserViewTargetMetadata.get(targetId)?.events.onDidChangeFocus.fire({ focused: true });
+  });
+  addWebContentTargetListener(entry, 'blur', () => {
+    browserViewTargetMetadata.get(targetId)?.events.onDidChangeFocus.fire({ focused: false });
+  });
+  addWebContentTargetListener(entry, 'devtools-opened', () => {
+    browserViewTargetMetadata.get(targetId)?.events.onDidChangeDevToolsState.fire({
+      isDevToolsOpen: true,
+    });
+  });
+  addWebContentTargetListener(entry, 'devtools-closed', () => {
+    browserViewTargetMetadata.get(targetId)?.events.onDidChangeDevToolsState.fire({
+      isDevToolsOpen: false,
+    });
+  });
+  addWebContentTargetListener(entry, 'found-in-page', (_event, result) => {
+    if (!isRecord(result)) {
+      return;
+    }
+    const selectionArea = isRecord(result.selectionArea)
+      ? {
+          x: Number(result.selectionArea.x) || 0,
+          y: Number(result.selectionArea.y) || 0,
+          width: Number(result.selectionArea.width) || 0,
+          height: Number(result.selectionArea.height) || 0,
+        }
+      : undefined;
+    browserViewTargetMetadata.get(targetId)?.events.onDidFindInPage.fire({
+      activeMatchOrdinal: Number(result.activeMatchOrdinal) || 0,
+      matches: Number(result.matches) || 0,
+      selectionArea,
+      finalUpdate: result.finalUpdate === true,
+    });
+  });
+  addWebContentTargetListener(entry, 'before-input-event', (_event, input) => {
+    if (!isRecord(input) || input.type !== 'keyDown') {
+      return;
+    }
+    browserViewTargetMetadata.get(targetId)?.events.onDidKeyCommand.fire({
+      key: String(input.key ?? ''),
+      keyCode: 0,
+      code: String(input.code ?? ''),
+      ctrlKey: input.control === true,
+      shiftKey: input.shift === true,
+      altKey: input.alt === true,
+      metaKey: input.meta === true,
+      repeat: input.isAutoRepeat === true,
+    });
+  });
+  addWebContentTargetListener(entry, 'console-message', (...args) => {
+    const metadata = browserViewTargetMetadata.get(targetId);
+    if (!metadata) {
+      return;
+    }
+    const message = args
+      .map(value => String(value ?? '').trim())
+      .filter(Boolean)
+      .join(' ');
+    if (!message) {
+      return;
+    }
+    metadata.consoleLogs.push(message);
+    if (metadata.consoleLogs.length > 200) {
+      metadata.consoleLogs.splice(0, metadata.consoleLogs.length - 200);
+    }
+  });
 
   addWebContentTargetListener(entry, 'page-title-updated', (_event, title) => {
     const pageTitle = String(title ?? '').trim();
@@ -1766,6 +1993,7 @@ function createWebContentTarget(targetId: string) {
   addWebContentTargetListener(entry, 'destroyed', () => {
     webContentTargets.delete(targetId);
     retainedWebContentTargets.delete(targetId);
+    disposeBrowserViewTargetMetadata(targetId);
     if (activeWebContentTargetId === targetId) {
       activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
     }
@@ -1874,7 +2102,10 @@ function syncWebContentTargetState(targetId?: string | null) {
     return createDefaultWebContentTargetState();
   }
 
-  entry.state = readWebContentTargetState(entry);
+  const previousState = entry.state;
+  const nextState = readWebContentTargetState(entry);
+  entry.state = nextState;
+  emitBrowserViewStateChanges(normalizedTargetId, previousState, nextState);
   if (normalizedTargetId === activeWebContentTargetId) {
     reportActiveWebContentState();
   }
@@ -1910,6 +2141,11 @@ function applyWebContentLayout() {
 
   for (const [targetId, entry] of webContentTargets) {
     const shouldShowTarget = shouldShow && targetId === activeTargetId;
+    const metadata = browserViewTargetMetadata.get(targetId);
+    if (metadata && metadata.visible !== shouldShowTarget) {
+      metadata.visible = shouldShowTarget;
+      metadata.events.onDidChangeVisibility.fire({ visible: shouldShowTarget });
+    }
     if (shouldShowTarget) {
       entry.view.setBounds(visibleBounds);
       entry.view.setVisible(true);
@@ -2224,7 +2460,15 @@ export async function navigateWebContentTarget(
     const initialUrl = normalizeComparableWebContentUrl(getWebContentState(normalizedTargetId).url);
     const normalizedTargetUrl = normalizeComparableWebContentUrl(resolvedUrl);
     if (normalizedTargetUrl === 'about:blank') {
-      await entry.view.webContents.loadURL('about:blank');
+      if (normalizeComparableWebContentUrl(entry.view.webContents.getURL()) !== 'about:blank') {
+        try {
+          await entry.view.webContents.loadURL('about:blank');
+        } catch (error) {
+          if (!isAbortLikeWebContentNavigationError(error)) {
+            throw error;
+          }
+        }
+      }
       entry.state = {
         ...createDefaultWebContentTargetState(),
         url: 'about:blank',
@@ -2488,4 +2732,439 @@ export function goForwardWebContent(targetId?: string | null) {
     entry.view.webContents.navigationHistory.goForward();
   }
   syncWebContentTargetState(normalizedTargetId);
+}
+
+function getBrowserViewTargetEntry(targetId: string) {
+  getBrowserViewTargetMetadata(targetId);
+  const entry = webContentTargets.get(targetId);
+  if (!entry || entry.view.webContents.isDestroyed()) {
+    throw new Error(`Browser view '${targetId}' is unavailable.`);
+  }
+  return entry;
+}
+
+function toBrowserViewState(targetId: string): IBrowserViewState {
+  const metadata = getBrowserViewTargetMetadata(targetId);
+  const entry = getBrowserViewTargetEntry(targetId);
+  syncWebContentTargetState(targetId);
+  return {
+    url: entry.state.url,
+    title: entry.state.pageTitle ?? '',
+    canGoBack: entry.state.canGoBack,
+    canGoForward: entry.state.canGoForward,
+    loading: entry.state.isLoading,
+    focused: entry.view.webContents.isFocused(),
+    visible: metadata.visible,
+    isDevToolsOpen: entry.view.webContents.isDevToolsOpened(),
+    lastScreenshot: metadata.lastScreenshot,
+    lastFavicon: entry.state.faviconUrl || undefined,
+    lastError: undefined,
+    certificateError: undefined,
+    storageScope: metadata.storageScope,
+    storageKeys: {},
+    permissions: metadata.permissions,
+    browserZoomIndex: metadata.browserZoomIndex,
+    isElementSelectionActive: metadata.isElementSelectionActive,
+    isRemoteSession: false,
+    isAreaSelectionActive: metadata.isAreaSelectionActive,
+    device: metadata.device,
+  };
+}
+
+function normalizeBrowserZoomIndex(value: number | undefined) {
+  if (!Number.isFinite(value)) {
+    return browserZoomDefaultIndex;
+  }
+  return Math.max(0, Math.min(Math.trunc(value ?? browserZoomDefaultIndex), browserZoomFactors.length - 1));
+}
+
+export class BrowserViewMainService implements IBrowserViewService {
+  readonly onDidCreateBrowserView = browserViewCreatedEmitter.event;
+
+  onDynamicDidNavigate(id: string): Event<IBrowserViewNavigationEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidNavigate.event;
+  }
+
+  onDynamicDidChangeLoadingState(id: string): Event<IBrowserViewLoadingEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeLoadingState.event;
+  }
+
+  onDynamicDidChangeFocus(id: string): Event<IBrowserViewFocusEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeFocus.event;
+  }
+
+  onDynamicDidChangeVisibility(id: string): Event<IBrowserViewVisibilityEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeVisibility.event;
+  }
+
+  onDynamicDidChangeDevToolsState(id: string): Event<IBrowserViewDevToolsStateEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeDevToolsState.event;
+  }
+
+  onDynamicDidKeyCommand(id: string): Event<IBrowserViewKeyDownEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidKeyCommand.event;
+  }
+
+  onDynamicDidChangeTitle(id: string): Event<IBrowserViewTitleChangeEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeTitle.event;
+  }
+
+  onDynamicDidChangeFavicon(id: string): Event<IBrowserViewFaviconChangeEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeFavicon.event;
+  }
+
+  onDynamicDidFindInPage(id: string): Event<IBrowserViewFindInPageResult> {
+    return getBrowserViewTargetMetadata(id).events.onDidFindInPage.event;
+  }
+
+  onDynamicDidClose(id: string): Event<void> {
+    return getBrowserViewTargetMetadata(id).events.onDidClose.event;
+  }
+
+  onDynamicDidSelectElement(id: string): Event<IElementData> {
+    return getBrowserViewTargetMetadata(id).events.onDidSelectElement.event;
+  }
+
+  onDynamicDidChangeElementSelectionActive(id: string): Event<boolean> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeElementSelectionActive.event;
+  }
+
+  onDynamicDidPickArea(id: string): Event<IBrowserViewRect | undefined> {
+    return getBrowserViewTargetMetadata(id).events.onDidPickArea.event;
+  }
+
+  onDynamicDidChangeAreaSelectionActive(id: string): Event<boolean> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeAreaSelectionActive.event;
+  }
+
+  onDynamicDidChangeDeviceEmulation(id: string): Event<IBrowserDeviceProfile | undefined> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeDeviceEmulation.event;
+  }
+
+  onDynamicDidChangeRemoteStatus(id: string): Event<boolean> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeRemoteStatus.event;
+  }
+
+  onDynamicDidRequestPermission(id: string): Event<IBrowserViewPermissionRequestEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidRequestPermission.event;
+  }
+
+  onDynamicDidChangePermissions(id: string): Event<ISerializedBrowserPermissionsSnapshot> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangePermissions.event;
+  }
+
+  async getBrowserViews(windowId?: number): Promise<IBrowserViewInfo[]> {
+    const result: IBrowserViewInfo[] = [];
+    for (const [id, metadata] of browserViewTargetMetadata) {
+      if (windowId !== undefined && metadata.owner.mainWindowId !== windowId) {
+        continue;
+      }
+      result.push({ id, owner: metadata.owner, state: toBrowserViewState(id) });
+    }
+    return result;
+  }
+
+  async getOrCreateBrowserView(
+    id: string,
+    options: IBrowserViewCreateOptions,
+  ): Promise<IBrowserViewState> {
+    if (browserViewTargetMetadata.has(id)) {
+      return toBrowserViewState(id);
+    }
+
+    const initialState = options.initialState;
+    const metadata: BrowserViewTargetMetadata = {
+      owner: options.owner,
+      storageScope: options.sessionOptions.scope,
+      events: createBrowserViewTargetEvents(),
+      permissions: initialState?.permissions ?? { origins: {} },
+      browserZoomIndex: normalizeBrowserZoomIndex(initialState?.browserZoomIndex),
+      device: initialState?.device,
+      isElementSelectionActive: initialState?.isElementSelectionActive ?? false,
+      isAreaSelectionActive: initialState?.isAreaSelectionActive ?? false,
+      visible: false,
+      bounds: undefined,
+      lastScreenshot: initialState?.lastScreenshot,
+      consoleLogs: [],
+    };
+    browserViewTargetMetadata.set(id, metadata);
+
+    try {
+      const entry = ensureWebContentTarget(id);
+      if (initialState?.title) {
+        entry.state.pageTitle = initialState.title;
+      }
+      if (initialState?.lastFavicon) {
+        entry.state.faviconUrl = initialState.lastFavicon;
+      }
+      entry.view.webContents.setZoomFactor(browserZoomFactors[metadata.browserZoomIndex]);
+      if (metadata.device) {
+        await this.setDeviceEmulation(id, metadata.device);
+      }
+      if (initialState?.url) {
+        await navigateWebContentTarget(initialState.url, id, 'browser');
+      }
+      return toBrowserViewState(id);
+    } catch (error) {
+      disposeWebContentTargetEntry(id);
+      throw error;
+    }
+  }
+
+  async destroyBrowserView(id: string): Promise<void> {
+    getBrowserViewTargetMetadata(id);
+    disposeWebContentTargetEntry(id);
+  }
+
+  async getState(id: string): Promise<IBrowserViewState> {
+    return toBrowserViewState(id);
+  }
+
+  async layout(id: string, bounds: IBrowserViewBounds): Promise<void> {
+    const metadata = getBrowserViewTargetMetadata(id);
+    getBrowserViewTargetEntry(id);
+    metadata.bounds = {
+      x: Math.round(bounds.x),
+      y: Math.round(bounds.y),
+      width: Math.max(1, Math.round(bounds.width)),
+      height: Math.max(1, Math.round(bounds.height)),
+    };
+    if (activeWebContentTargetId === id) {
+      setWebContentBounds(metadata.bounds);
+    }
+  }
+
+  async setVisible(id: string, visible: boolean): Promise<void> {
+    const metadata = getBrowserViewTargetMetadata(id);
+    getBrowserViewTargetEntry(id);
+    if (visible) {
+      activeWebContentTargetId = id;
+      webContentBounds = metadata.bounds ?? webContentBounds;
+      webContentVisible = true;
+      webContentLayoutPhase = 'visible';
+      applyWebContentLayout();
+      return;
+    }
+
+    if (activeWebContentTargetId === id) {
+      webContentVisible = false;
+      webContentLayoutPhase = 'hidden';
+      applyWebContentLayout();
+    }
+  }
+
+  async loadURL(id: string, url: string): Promise<void> {
+    getBrowserViewTargetMetadata(id);
+    await navigateWebContentTarget(url, id, 'browser');
+  }
+
+  async getURL(id: string): Promise<string> {
+    return toBrowserViewState(id).url;
+  }
+
+  async goBack(id: string): Promise<void> {
+    getBrowserViewTargetMetadata(id);
+    goBackWebContent(id);
+  }
+
+  async goForward(id: string): Promise<void> {
+    getBrowserViewTargetMetadata(id);
+    goForwardWebContent(id);
+  }
+
+  async reload(id: string, hard?: boolean): Promise<void> {
+    getBrowserViewTargetMetadata(id);
+    if (hard) {
+      hardReloadWebContent(id);
+      return;
+    }
+    reloadWebContent(id);
+  }
+
+  async toggleDevTools(id: string): Promise<void> {
+    const webContents = getBrowserViewTargetEntry(id).view.webContents;
+    if (webContents.isDevToolsOpened()) {
+      webContents.closeDevTools();
+      return;
+    }
+    webContents.openDevTools({ mode: 'detach' });
+  }
+
+  async canGoBack(id: string): Promise<boolean> {
+    return toBrowserViewState(id).canGoBack;
+  }
+
+  async canGoForward(id: string): Promise<boolean> {
+    return toBrowserViewState(id).canGoForward;
+  }
+
+  async captureScreenshot(
+    id: string,
+    options: IBrowserViewCaptureScreenshotOptions = {},
+  ): Promise<VSBuffer> {
+    const metadata = getBrowserViewTargetMetadata(id);
+    const webContents = getBrowserViewTargetEntry(id).view.webContents;
+    const captureRect = options.screenRect ?? options.pageRect;
+    const image = await webContents.capturePage(captureRect ? {
+      x: Math.round(captureRect.x),
+      y: Math.round(captureRect.y),
+      width: Math.max(1, Math.round(captureRect.width)),
+      height: Math.max(1, Math.round(captureRect.height)),
+    } : undefined);
+    const bytes = options.format === 'png'
+      ? image.toPNG()
+      : image.toJPEG(Math.max(0, Math.min(100, Math.round(options.quality ?? 80))));
+    const screenshot = VSBuffer.wrap(bytes);
+    metadata.lastScreenshot = screenshot;
+    return screenshot;
+  }
+
+  async focus(id: string, force?: boolean): Promise<void> {
+    const entry = getBrowserViewTargetEntry(id);
+    if (force) {
+      webContentWindow?.focus();
+    }
+    entry.view.webContents.focus();
+  }
+
+  async findInPage(
+    id: string,
+    text: string,
+    options: IBrowserViewFindInPageOptions = {},
+  ): Promise<void> {
+    getBrowserViewTargetEntry(id).view.webContents.findInPage(text, {
+      forward: options.forward,
+      findNext: options.recompute !== true,
+      matchCase: options.matchCase,
+    });
+  }
+
+  async stopFindInPage(id: string, keepSelection?: boolean): Promise<void> {
+    getBrowserViewTargetEntry(id).view.webContents.stopFindInPage(
+      keepSelection ? 'keepSelection' : 'clearSelection',
+    );
+  }
+
+  async getSelectedText(id: string): Promise<string> {
+    return (await getWebContentSelection(id))?.text ?? '';
+  }
+
+  async clearGlobalStorage(): Promise<void> {
+    await session.fromPartition(WORKBENCH_SHARED_WEB_PARTITION).clearStorageData();
+  }
+
+  async clearWorkspaceStorage(_workspaceId: string): Promise<void> {
+    throw new Error('Workspace-scoped browser storage is not supported.');
+  }
+
+  async clearStorage(id: string): Promise<void> {
+    await getBrowserViewTargetEntry(id).view.webContents.session.clearStorageData();
+  }
+
+  async setBrowserZoomIndex(id: string, zoomIndex: number): Promise<void> {
+    const metadata = getBrowserViewTargetMetadata(id);
+    metadata.browserZoomIndex = normalizeBrowserZoomIndex(zoomIndex);
+    getBrowserViewTargetEntry(id).view.webContents.setZoomFactor(
+      browserZoomFactors[metadata.browserZoomIndex],
+    );
+  }
+
+  async setDeviceEmulation(
+    id: string,
+    device: IBrowserDeviceProfile | undefined,
+  ): Promise<void> {
+    const metadata = getBrowserViewTargetMetadata(id);
+    const webContents = getBrowserViewTargetEntry(id).view.webContents;
+    metadata.device = device;
+    if (!device) {
+      webContents.disableDeviceEmulation();
+      webContents.setUserAgent(webContents.session.getUserAgent());
+      metadata.events.onDidChangeDeviceEmulation.fire(undefined);
+      return;
+    }
+
+    const width = Math.max(1, Math.round(device.width ?? 1024));
+    const height = Math.max(1, Math.round(device.height ?? 768));
+    webContents.enableDeviceEmulation({
+      screenPosition: device.mobile ? 'mobile' : 'desktop',
+      screenSize: { width, height },
+      viewPosition: { x: 0, y: 0 },
+      deviceScaleFactor: Math.max(0, device.deviceScaleFactor ?? 1),
+      viewSize: { width, height },
+      scale: 1,
+    });
+    if (device.userAgent) {
+      webContents.setUserAgent(device.userAgent);
+    }
+    metadata.events.onDidChangeDeviceEmulation.fire(device);
+  }
+
+  async trustCertificate(_id: string, _host: string, _fingerprint: string): Promise<void> {
+    throw new Error('Integrated browser certificate exceptions are not supported.');
+  }
+
+  async untrustCertificate(_id: string, _host: string, _fingerprint: string): Promise<void> {
+    throw new Error('Integrated browser certificate exceptions are not supported.');
+  }
+
+  async deleteBrowserHistory(id: string, _entryIds?: readonly number[]): Promise<void> {
+    clearWebContentHistory(id);
+  }
+
+  async setPermissions(
+    id: string,
+    origin: string,
+    grants: readonly IPermissionCategoryState[],
+  ): Promise<void> {
+    const metadata = getBrowserViewTargetMetadata(id);
+    const nextOrigin = { ...(metadata.permissions.origins[origin] ?? {}) };
+    for (const grant of grants) {
+      if (grant.state === null) {
+        delete nextOrigin[grant.category];
+      } else {
+        nextOrigin[grant.category] = grant.state;
+      }
+    }
+    metadata.permissions = {
+      origins: {
+        ...metadata.permissions.origins,
+        [origin]: nextOrigin,
+      },
+    };
+    metadata.events.onDidChangePermissions.fire(metadata.permissions);
+  }
+
+  async selectDevice(_id: string, _requestId: string, _deviceId: string | null): Promise<void> {
+    throw new Error('Integrated browser device selection is not active.');
+  }
+
+  async getConsoleLogs(id: string): Promise<string> {
+    return getBrowserViewTargetMetadata(id).consoleLogs.join('\n');
+  }
+
+  async toggleElementSelection(_id: string, _enabled?: boolean): Promise<void> {
+    throw new Error('Integrated browser element selection is not active.');
+  }
+
+  async toggleAreaSelection(_id: string, _enabled?: boolean): Promise<void> {
+    throw new Error('Integrated browser area selection is not active.');
+  }
+
+  async updateWindowConfiguration(
+    windowId: number,
+    config: IBrowserViewWindowConfiguration,
+  ): Promise<void> {
+    browserViewWindowConfigurations.set(windowId, config);
+    if (typeof config.maxHistoryEntries === 'number') {
+      setWebContentRetentionLimit(config.maxHistoryEntries);
+    }
+  }
+
+  dispose(): void {
+    for (const id of [...browserViewTargetMetadata.keys()]) {
+      disposeWebContentTargetEntry(id);
+    }
+    browserViewWindowConfigurations.clear();
+    browserViewCreatedEmitter.dispose();
+  }
 }

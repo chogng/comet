@@ -15,13 +15,11 @@ yarn-error.log*
 # macOS
 .DS_Store
 
-
+# playwright
+.playwright-mcp/
+.playwright-cli/
 
 tests/*
 !tests/writing-editor/
 !tests/writing-editor/**
 tests/.tmp*
-
-# Local agent/runtime cache
-.snow/
-.tooling/

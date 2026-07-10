@@ -12,10 +12,6 @@ fi
 function code() {
 	cd "$ROOT"
 
-	export NODE_ENV=development
-	export ELECTRON_ENABLE_LOGGING=1
-	export ELECTRON_ENABLE_STACK_DUMPING=1
-
 	if [[ "$OSTYPE" == "darwin"* ]]; then
 		currentLimit=$(ulimit -n)
 		if [[ "$currentLimit" =~ ^[0-9]+$ && "$currentLimit" -lt 4096 ]]; then

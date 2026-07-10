@@ -33,7 +33,7 @@ export type SessionWorkbenchContentPartViewsProps = {
 	editorPartProps: EditorPartProps;
 	leadingTitlebarActionsElement?: HTMLElement | null;
 	sidebarFooterActionsElement: HTMLElement;
-	editorTitlebarActionsElement?: HTMLElement | null;
+	collapsedEditorTitlebarActionsElement: HTMLElement;
 };
 
 export class SessionWorkbenchContentPartViews {
@@ -115,8 +115,13 @@ export class SessionWorkbenchContentPartViews {
 	private render() {
 		initializeStatusbarState(this.props.editorPartProps.labels.status);
 		this.renderSidebar();
-		this.renderSessions();
-		this.renderEditor();
+		if (this.props.isEditorVisible) {
+			this.renderEditor();
+			this.renderSessions();
+		} else {
+			this.renderSessions();
+			this.renderEditor();
+		}
 	}
 
 	//#region Column titlebar routing
@@ -144,7 +149,7 @@ export class SessionWorkbenchContentPartViews {
 			titlebarTrailingActionsElement:
 				this.props.isEditorVisible
 					? null
-					: (this.props.editorTitlebarActionsElement ?? null),
+					: this.props.collapsedEditorTitlebarActionsElement,
 		};
 
 		if (!this.sessionsView) {
@@ -166,14 +171,12 @@ export class SessionWorkbenchContentPartViews {
 
 		const nextProps: EditorPartProps = {
 			...this.props.editorPartProps,
-			showTitlebarActions: false,
+			showTitlebarActions: true,
 			showToolbar: true,
 			isEditorCollapsed: false,
 			isAgentSidebarVisible: false,
 			showAgentSidebarToggle: false,
-			titlebarAuxiliaryActionsElements: this.props.editorTitlebarActionsElement
-				? [this.props.editorTitlebarActionsElement]
-				: [],
+			titlebarAuxiliaryActionsElements: [],
 			hasLeadingTitlebarWindowControlsInset: false,
 			onStatusChange: this.handleEditorStatusChange,
 		};

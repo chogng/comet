@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after, beforeEach } from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import en from 'language/locales/en.json';
 
 const domEnvironment = installDomTestEnvironment();
 
@@ -72,35 +73,222 @@ test('editor titlebar actions open editors and toggle the editor layout', async 
 	}
 });
 
-test('editor titlebar actions preserve one element across collapsed and expanded hosts', async () => {
-	const { createEditorTitlebarActionsView } = await import(
-		'cs/workbench/browser/parts/editor/editorTitlebarActionsView'
-	);
-	const collapsedHost = document.createElement('div');
-	const expandedHost = document.createElement('div');
-	const view = createEditorTitlebarActionsView({
+test('session workbench keeps titlebar actions through editor collapse cycles', async () => {
+	const [
+		{ InstantiationService },
+		{ ServiceCollection },
+		{ BrowserDialogService },
+		{ nativeHostService },
+		{ createEditorPartProps },
+		{ createSessionChatViewProps },
+		{ SessionWorkbenchContentPartViews },
+		{
+			createSessionWorkbenchLayoutView,
+			getWorkbenchLayoutStateSnapshot,
+			setAgentSidebarVisible,
+			setEditorCollapsed,
+			setPrimarySidebarVisible,
+			setWorkbenchSidebarSizes,
+		},
+		{ createEditorTitlebarActionsView },
+	] = await Promise.all([
+		import('cs/platform/instantiation/common/instantiationService'),
+		import('cs/platform/instantiation/common/serviceCollection'),
+		import('cs/workbench/services/dialogs/browser/dialogService'),
+		import('cs/workbench/services/host/electron-browser/nativeHostService'),
+		import('cs/workbench/browser/parts/editor/editorPart'),
+		import('cs/sessions/browser/parts/sessions/chatView'),
+		import('cs/sessions/browser/workbenchContentPartViews'),
+		import('cs/workbench/browser/layout'),
+		import('cs/workbench/browser/parts/editor/editorTitlebarActionsView'),
+	]);
+	const instantiationService = new InstantiationService(new ServiceCollection());
+	const dialogService = new BrowserDialogService();
+	const initialLayoutState = getWorkbenchLayoutStateSnapshot();
+	let setEditorVisible = (_isEditorVisible: boolean) => {};
+	const collapsedActionsView = createEditorTitlebarActionsView({
 		isEditorCollapsed: true,
 		labels,
 		onOpenEditor: () => {},
-		onToggleEditorCollapse: () => {},
+		onToggleEditorCollapse: () => setEditorVisible(true),
 	});
-	const actionsElement = view.getElement();
+	const collapsedActionsElement = collapsedActionsView.getElement();
+	const editorPartProps = {
+		...createEditorPartProps({
+			state: {
+				ui: en,
+				viewPartProps: {
+					browserUrl: '',
+					electronRuntime: false,
+					webContentRuntime: false,
+					labels: {
+						emptyState: 'Empty',
+						contentUnavailable: 'Unavailable',
+						overlayPauseHeading: 'Paused',
+						overlayPauseDetail: 'Dismiss',
+					},
+				},
+				nativeHost: nativeHostService,
+				dialogService,
+				instantiationService,
+				groupId: 'editor-group-default',
+				tabs: [],
+				dirtyDraftTabIds: [],
+				activeTabId: null,
+				activeTab: null,
+				viewStateEntries: [],
+			},
+			actions: {
+				onActivateTab: () => {},
+				onReorderTab: () => {},
+				onCloseTab: async () => true,
+				onCloseOtherTabs: async () => true,
+				onCloseAllTabs: async () => true,
+				onRenameTab: () => {},
+				onOpenEditor: () => {},
+				onPromptRenameBrowserFavorite: async () => null,
+				onPromptCreateBrowserFavoriteFolder: async () => null,
+				onDraftDocumentChange: () => {},
+				onSetEditorViewState: () => {},
+				onDeleteEditorViewState: () => {},
+			},
+		}),
+		onOpenAddressBarSourceMenu: () => {},
+		onToolbarNavigateBack: () => {},
+		onToolbarNavigateForward: () => {},
+		onToolbarNavigateRefresh: () => {},
+		onToolbarArchiveCurrentPage: () => {},
+		onToolbarHardReload: () => {},
+		onToolbarCopyCurrentUrl: () => {},
+		onToolbarClearBrowsingHistory: () => {},
+		onToolbarClearCookies: () => {},
+		onToolbarClearCache: () => {},
+		onToolbarAddressChange: () => {},
+		onToolbarAddressSubmit: () => {},
+		onToolbarNavigateToUrl: () => {},
+		onToggleEditorCollapse: () => setEditorVisible(false),
+	};
+	const sessionChatProps = createSessionChatViewProps({
+		state: {
+			isKnowledgeBaseModeEnabled: false,
+			question: '',
+			messages: [],
+			isAsking: false,
+			errorMessage: null,
+			availableArticleCount: 0,
+			llmModelOptions: [],
+			activeLlmModelOptionValue: '',
+			activeLlmModelLabel: 'Auto',
+			isMaxContextWindowEnabled: false,
+			activeLlmModelSupportsMaxContextWindow: false,
+			articleQuickSources: [],
+			isArticleSourceFetching: false,
+			showArticleBatchActions: false,
+			downloadAllProgress: null,
+			translationExportProgress: null,
+			isArticleSelected: () => false,
+		},
+		actions: {
+			onQuestionChange: () => {},
+			onAsk: () => {},
+			onApplyPatch: () => {},
+			onFetchArticleSource: () => {},
+			onDownloadAllArticles: () => {},
+			onExportArticleSummaries: () => {},
+			onToggleArticleSelected: () => {},
+			onToggleAutoModelRouting: () => {},
+			onSelectLlmModel: () => {},
+			onToggleMaxContextWindow: () => {},
+			onOpenModelSettings: () => {},
+		},
+	});
+	const sidebarFooterActionsElement = document.createElement('div');
+	const createContentPartProps = (isEditorVisible: boolean) => ({
+		isPrimarySidebarVisible: true,
+		isEditorVisible,
+		sidebarProps: {
+			labels: {
+				homeTitle: 'Home',
+				codeTitle: 'Code',
+				homeNavNewChat: 'New chat',
+				homeNavProjects: 'Projects',
+				homeNavArtifacts: 'Artifacts',
+				homeNavCustomize: 'Customize',
+				recentsTitle: 'Recents',
+			},
+			activeEntry: 'home' as const,
+			onActivateEntry: () => {},
+		},
+		sessionChatProps,
+		editorPartProps,
+		sidebarFooterActionsElement,
+		collapsedEditorTitlebarActionsElement: collapsedActionsElement,
+	});
+	const partViews = instantiationService.createInstance(
+		SessionWorkbenchContentPartViews,
+		createContentPartProps(false),
+	);
+	const createLayoutProps = (isEditorVisible: boolean) => ({
+		isPrimarySidebarVisible: true,
+		isLayoutEdgeSnappingEnabled: true,
+		primarySidebarSize: 248,
+		isEditorCollapsed: !isEditorVisible,
+		expandedEditorSize: 420,
+		partViews,
+	});
+	const layoutView = createSessionWorkbenchLayoutView(createLayoutProps(false));
+	setEditorVisible = isEditorVisible => {
+		partViews.setProps(createContentPartProps(isEditorVisible));
+		layoutView.setProps(createLayoutProps(isEditorVisible));
+		layoutView.layout();
+	};
 
 	try {
-		collapsedHost.append(actionsElement);
-		expandedHost.append(actionsElement);
-		assert.equal(collapsedHost.childElementCount, 0);
-		assert.equal(expandedHost.firstElementChild, actionsElement);
+		document.body.append(layoutView.getElement());
+		layoutView.layout();
+		assert.equal(partViews.getEditorElement(), null);
+		assert.equal(collapsedActionsElement.isConnected, true);
+		assert.equal(document.querySelectorAll('.comet-editor-titlebar-actionbar').length, 1);
 
-		view.setProps({
-			isEditorCollapsed: false,
-			labels,
-			onOpenEditor: () => {},
-			onToggleEditorCollapse: () => {},
-		});
-		assert(actionsElement.querySelector('[aria-label="Collapse editor"]'));
-		assert(actionsElement.querySelector('.lx-icon-layout-sidebar-right'));
+		const expandButton = collapsedActionsElement.querySelector('[aria-label="Expand editor"]');
+		assert(expandButton instanceof HTMLButtonElement);
+		expandButton.click();
+
+		const expandedActionsElement = document.querySelector(
+			'.comet-editor-titlebar .comet-editor-titlebar-actionbar',
+		);
+		assert(expandedActionsElement instanceof HTMLElement);
+		assert.notEqual(expandedActionsElement, collapsedActionsElement);
+		assert.equal(collapsedActionsElement.isConnected, false);
+		assert.equal(partViews.getEditorElement()?.isConnected, true);
+		assert.equal(document.querySelectorAll('.comet-editor-titlebar-actionbar').length, 1);
+
+		const collapseButton = expandedActionsElement.querySelector(
+			'[aria-label="Collapse editor"]',
+		);
+		assert(collapseButton instanceof HTMLButtonElement);
+		collapseButton.click();
+
+		assert.equal(partViews.getEditorElement(), null);
+		assert.equal(expandedActionsElement.isConnected, false);
+		assert.equal(collapsedActionsElement.isConnected, true);
+		assert.equal(document.querySelectorAll('.comet-editor-titlebar-actionbar').length, 1);
+		assert(collapsedActionsElement.querySelector('[aria-label="Expand editor"]'));
 	} finally {
-		view.dispose();
+		layoutView.dispose();
+		partViews.dispose();
+		collapsedActionsView.dispose();
+		dialogService.dispose();
+		instantiationService.dispose();
+		setPrimarySidebarVisible(initialLayoutState.isPrimarySidebarVisible);
+		setAgentSidebarVisible(initialLayoutState.isAgentSidebarVisible);
+		setWorkbenchSidebarSizes({
+			primarySidebarSize: initialLayoutState.primarySidebarSize,
+			agentSidebarSize: initialLayoutState.agentSidebarSize,
+		});
+		setEditorCollapsed(
+			initialLayoutState.isEditorCollapsed,
+			initialLayoutState.expandedEditorSize,
+		);
 	}
 });

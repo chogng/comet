@@ -388,7 +388,7 @@ class WorkbenchHost {
   private retiredWorkbenchContentPartViews:
     | SessionWorkbenchContentPartViews
     | null = null;
-  private readonly editorTitlebarActionsView = createEditorTitlebarActionsView({
+  private readonly collapsedEditorTitlebarActionsView = createEditorTitlebarActionsView({
     isEditorCollapsed: true,
     isAgentSidebarVisible: false,
     showAgentSidebarToggle: false,
@@ -523,7 +523,7 @@ class WorkbenchHost {
     this.workbenchContentPartViews?.dispose();
     this.workbenchContentPartViews = null;
     this.retiredWorkbenchContentPartViews = null;
-    this.editorTitlebarActionsView.dispose();
+    this.collapsedEditorTitlebarActionsView.dispose();
     this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
     this.settingsView = null;
@@ -997,7 +997,7 @@ class WorkbenchHost {
     sidebarFooterActionsProps: ReturnType<
       typeof createSidebarFooterTitlebarActionsProps
     >;
-    editorTitlebarActionsElement?: HTMLElement | null;
+    collapsedEditorTitlebarActionsElement: HTMLElement;
     editorPartProps: EditorPartProps;
   }) {
     this.retiredWorkbenchContentPartViews = null;
@@ -1005,7 +1005,7 @@ class WorkbenchHost {
       props.sidebarFooterActionsProps,
     );
 
-    //#region Column titlebar handoff
+    //#region Column titlebar routing
 
     const partViewProps = {
       isPrimarySidebarVisible: props.isPrimarySidebarVisible,
@@ -1016,8 +1016,8 @@ class WorkbenchHost {
       leadingTitlebarActionsElement:
         this.titlebarPart.getLeadingActionsElement(),
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-      editorTitlebarActionsElement:
-        props.editorTitlebarActionsElement,
+      collapsedEditorTitlebarActionsElement:
+        props.collapsedEditorTitlebarActionsElement,
     };
 
     //#endregion
@@ -1508,8 +1508,8 @@ class WorkbenchHost {
       onOpenEditor: handleOpenEditor,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     };
-    this.editorTitlebarActionsView.setProps({
-      isEditorCollapsed,
+    this.collapsedEditorTitlebarActionsView.setProps({
+      isEditorCollapsed: true,
       isAgentSidebarVisible: false,
       showAgentSidebarToggle: false,
       labels: {
@@ -2025,8 +2025,8 @@ class WorkbenchHost {
         onApplyLayoutFlow: this.applyFlowLayout,
         onOpenSettings: this.toggleSettingsPage,
       }),
-      editorTitlebarActionsElement:
-        this.editorTitlebarActionsView.getElement(),
+      collapsedEditorTitlebarActionsElement:
+        this.collapsedEditorTitlebarActionsView.getElement(),
       editorPartProps: {
         ...contentAwareEditorPartProps,
         isAgentSidebarVisible: false,

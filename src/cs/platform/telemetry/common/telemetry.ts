@@ -114,6 +114,24 @@ export const enum TelemetryConfiguration {
 	ON = 'all'
 }
 
+export class NullTelemetryService implements ITelemetryService {
+	declare readonly _serviceBrand: undefined;
+	readonly telemetryLevel = TelemetryLevel.NONE;
+	readonly sessionId = '';
+	readonly machineId = '';
+	readonly sqmId = '';
+	readonly devDeviceId = '';
+	readonly firstSessionDate = '';
+	readonly sendErrorTelemetry = false;
+
+	publicLog(): void { }
+	publicLog2(): void { }
+	publicLogError(): void { }
+	publicLogError2(): void { }
+	setExperimentProperty(): void { }
+	setCommonProperty(): void { }
+}
+
 export interface ICommonProperties {
 	[name: string]: string | boolean | undefined;
 }
