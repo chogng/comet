@@ -122,6 +122,10 @@ export interface IPageSnapshotOptions {
 	readonly timeoutMs?: number;
 	readonly maximumBytes?: number;
 }
+
+export const defaultPageSnapshotTimeoutMs = 15_000;
+export const maximumPageSnapshotTimeoutMs = 60_000;
+export const defaultPageSnapshotMaximumBytes = 16 * 1024 * 1024;
 ~~~
 
 IPlaywrightService 增加：
@@ -142,7 +146,9 @@ captureSnapshot(
 3. captureSnapshot 不负责导航。
 4. 调用方必须先通过 openPage、现有 BrowserView 导航或 PageSession 完成目标页面加载。
 5. readiness 是通用 DOM 条件，不包含 Publisher 枚举。
-6. maximumBytes 使用统一安全默认值；调用方只能降低限制，不能无限扩大。
+6. timeoutMs 是整个 captureSnapshot 操作的单一 deadline，默认 15 秒，最大 60 秒。超出范围的输入立即拒绝。
+7. maximumBytes 默认 16 MiB，按 UTF-8 编码后字节数计算。调用方只能降低限制，不能扩大平台上限。
+8. `state` 默认 `attached`，`minimumCount` 默认 1 且必须是正整数。
 
 ---
 
@@ -219,6 +225,14 @@ Readiness 示例：
 ~~~
 
 readiness selector 由上层 PageSession 或 Provider 提供，但 IPlaywrightService 只理解通用 DOM 条件。
+
+精确语义：
+
+1. `attached` 表示至少 `minimumCount` 个匹配节点存在于 main-frame DOM。
+2. `visible` 表示至少 `minimumCount` 个匹配节点同时满足 Playwright visible 语义，不是“总匹配数达标后只验证第一个”。
+3. 非法 selector 立即返回 BrowserPageReadinessSelectorError，不等待到 timeout。
+4. domcontentloaded、readiness 和下一次渲染共享同一 timeout deadline，不为每个阶段重新计时。
+5. 下一次渲染使用一次 `requestAnimationFrame`，仍受剩余 deadline 和 CancellationToken 限制；超时明确失败，不跳过该阶段。
 
 如果没有 readiness：
 
@@ -340,11 +354,11 @@ evaluate 后
 ~~~text
 BrowserPageNotTrackedError
 BrowserPageClosedError
+BrowserPageReadinessSelectorError
 BrowserPageReadinessTimeoutError
 BrowserPageNavigationInterruptedError
 BrowserPageSnapshotEmptyError
 BrowserPageSnapshotTooLargeError
-BrowserPageSnapshotCancelledError
 ~~~
 
 规则：
@@ -353,7 +367,9 @@ BrowserPageSnapshotCancelledError
 2. execution context destroyed 映射为 NavigationInterruptedError。
 3. Page 关闭或 Browser 断开映射为 ClosedError。
 4. readiness 超时保留 selector 和 timeout 信息。
-5. 错误消息不得包含完整 HTML。
+5. 非法 selector 映射为 ReadinessSelectorError。
+6. 取消沿用上游 CancellationError / isCancellationError 语义，不创建 Snapshot 专用取消错误。
+7. 错误消息不得包含完整 HTML。
 
 ---
 
@@ -362,8 +378,8 @@ BrowserPageSnapshotCancelledError
 1. 继续使用 IPlaywrightService 已有 network policy。
 2. Snapshot 只对已经 tracked 的 Page 开放。
 3. 不把 HTML 写入普通日志。
-4. 日志只记录 pageId、URI、字符数、耗时和错误类型。
-5. maximumBytes 在返回 IPC 前验证。
+4. 日志只记录 pageId、URI、UTF-8 字节数、耗时和错误类型。
+5. 在 shared process 向 electron-browser IPC 返回前，使用 `Buffer.byteLength(html, 'utf8')` 验证 maximumBytes。该限制避免超限 HTML 继续进入工作台 IPC 和业务状态，但不声称能避免 page.evaluate/CDP 已经产生字符串的内存成本。
 6. detached DOM Parser 不执行 script。
 7. Snapshot 可以包含 JSON-LD script 文本，但不能执行。
 8. 调用方不得把完整 HTML 直接发送到遥测。
@@ -377,6 +393,8 @@ Comet 当前已有公共接口：
 ~~~text
 src/cs/platform/browserView/common/playwrightService.ts
 ~~~
+
+当前 Comet 只有 common contract，尚未包含上游 shared-process PlaywrightService、PlaywrightSession、PlaywrightTab、PlaywrightChannel 和 electron-browser remote service 注册。因此 Snapshot 不是只增加一个方法，而是先完整补齐上游 Playwright runtime 基线，再在该基线上扩展类型化 Snapshot。
 
 需要对齐或移植上游运行时实现：
 
@@ -403,7 +421,7 @@ unit tests
 
 ### Step 0：验证现有 Playwright runtime
 
-确认 Comet 当前如何注册 IPlaywrightService，以及是否完整包含上游 PlaywrightService、PlaywrightSession 和 PlaywrightTab。
+确认 Comet 当前只有 `platform/browserView/common/playwrightService.ts` 契约，没有 IPlaywrightService 运行时注册。列出上游 shared process channel、node implementation、electron-browser proxy 及 BrowserViewGroup remote service 的全部直接依赖，作为 Step 1 的固定迁移范围。
 
 ### Step 1：补齐上游基线
 
@@ -415,7 +433,7 @@ unit tests
 
 ### Step 3：实现 captureSnapshot
 
-在 PlaywrightSession/PlaywrightTab 正常页面操作边界中实现 readiness、原子 evaluate、大小限制和错误映射。
+在 PlaywrightSession/PlaywrightTab 正常页面操作边界中实现单一 deadline、readiness、有界下一次渲染等待、原子 evaluate、UTF-8 大小限制和错误映射。
 
 ### Step 4：接入 CancellationToken
 
@@ -443,17 +461,21 @@ Article Fetch PageSession 作为第一个类型化调用方。调用方只接收
 6. navigation Promise 失败后 PageSession 不调用 captureSnapshot。
 7. readiness selector 出现后成功。
 8. readiness selector 超时明确失败。
-9. minimumCount 生效。
-10. CancellationToken 在等待期间终止操作。
-11. 取消后的 evaluate 结果不返回。
-12. Page 关闭时明确失败。
-13. Browser 断开时明确失败。
-14. 空 documentElement 明确失败。
-15. 超过 maximumBytes 明确失败。
-16. HTML 不写入日志或遥测。
-17. getSummary() 继续返回 ARIA Snapshot。
-18. invokeFunctionRaw() 行为不变。
-19. read_page 行为不变。
+9. attached 和 visible 分别按至少 minimumCount 个元素计数。
+10. 非法 selector 立即返回 ReadinessSelectorError。
+11. 默认 timeout、最大 timeout 和非法参数验证生效。
+12. 下一次渲染等待受同一 deadline 限制。
+13. CancellationToken 在等待期间以标准 CancellationError 终止操作。
+14. 取消后的 evaluate 结果不返回。
+15. Page 关闭时明确失败。
+16. Browser 断开时明确失败。
+17. 空 documentElement 明确失败。
+18. maximumBytes 按 UTF-8 字节数验证，多字节字符不按 JS length 计算。
+19. 超过 maximumBytes 明确失败。
+20. HTML 不写入日志或遥测。
+21. getSummary() 继续返回 ARIA Snapshot。
+22. invokeFunctionRaw() 行为不变。
+23. read_page 行为不变。
 
 ---
 
@@ -475,6 +497,10 @@ Article Fetch PageSession 作为第一个类型化调用方。调用方只接收
 14. 不存在自动重试。
 15. 页面关闭、取消、超时和大小限制均有测试。
 16. Article Fetch 只依赖 IBrowserPageSnapshot 契约。
+17. timeoutMs 使用整个 Snapshot 操作的单一 deadline，下一次渲染等待不能无界阻塞。
+18. visible 和 attached 的 minimumCount 语义明确且有测试。
+19. maximumBytes 按 UTF-8 字节数计算，并且不把 IPC 前验证描述为 CDP 内存上限。
+20. 取消沿用上游标准 CancellationError，不存在 BrowserPageSnapshotCancelledError。
 
 ---
 

@@ -118,7 +118,7 @@ IFetchPageSession
 
 IPlaywrightService
 ├── BrowserView Page tracking
-├── Cookie 和 Session
+├── Playwright session routing
 ├── Playwright Page 生命周期
 ├── ARIA Snapshot
 └── 类型化 HTML Snapshot
@@ -157,6 +157,25 @@ ID Factory + normalization
 FetchService state
 ~~~
 
+进程边界固定为：
+
+~~~text
+electron-browser
+├── IFetchService 运行时状态与编排
+├── IFetchPageSession
+├── Provider / Parser / Registry
+├── 通过 IBrowserViewService 创建、导航和销毁 BrowserView
+└── 通过 IPlaywrightService remote service 读取 Snapshot
+
+shared process
+└── IPlaywrightService 的 PlaywrightService / PlaywrightSession / PlaywrightTab
+
+electron-main
+└── BrowserView WebContentsView 实现与主进程 IPC
+~~~
+
+现有 `src/cs/workbench/services/fetch/electron-main` 的抓取编排必须直接迁移到 electron-browser service，不保留主进程 Facade、Adapter 或双轨状态。Contribution 只负责 Action、Menu 和注册，不拥有 Fetch 业务状态。
+
 ---
 
 ## 3. Stable IDs
@@ -164,7 +183,6 @@ FetchService state
 ~~~ts
 export type JournalId = string;
 export type FetchProviderId = string;
-export type ArticleListSourceGroupId = string;
 export type ArticleListSourceId = string;
 export type ArticlePageId = string;
 export type ArticleGroupId = string;
@@ -186,15 +204,16 @@ journal.science.science-advances
 动态 ID 规则：
 
 ~~~ts
-createArticleListSourceGroupId(journalId, providerGroupKey);
 createArticleListSourceId(journalId, canonicalSourceUri);
 createArticlePageId(sourceId, canonicalPageUri);
 createArticleGroupId(pageId, groupIndex);
 createArticleId(journalId, canonicalArticleUri);
-createArticleListItemId(pageId, articleId);
+createArticleListItemId(pageId, articleId, providerOccurrenceKey);
 ~~~
 
-providerGroupKey 由 Provider 从稳定 DOM key、分组 URL 或所属 Source URI 集合生成，禁止直接使用显示 label。结果页面中的 ArticleGroup 只在所属 Page Snapshot 内需要稳定，因此使用 pageId 和页面顺序生成。
+ArticleListSourceGroup 是 Catalog Snapshot 内的嵌套展示结构，没有独立查询、刷新或变化事件，因此不分配长期 ID。它的 label 变化或 Source 成员增减只表示新 Catalog Snapshot，不需要推导 providerGroupKey。
+
+providerOccurrenceKey 表示文章在某个 Page Snapshot 中的一次具体出现。Provider 应使用稳定卡片 key；页面没有稳定 key 时，使用明确的 `groupKey + occurrenceIndex`。同一文章在 featured 区域和普通 Section 同时出现时必须产生不同 ArticleListItemId。结果页面中的 ArticleGroup 只在所属 Page Snapshot 内需要稳定，因此使用 pageId 和页面顺序生成。
 
 ArticleId 始终基于 journalId 和 canonical article URI，首次创建后不改变。DOI 是可补充的外部标识，不参与后续身份升级。
 
@@ -207,6 +226,26 @@ DOI 二级索引更新
 ~~~
 
 禁止把 url:... 身份替换为 doi:... 身份。
+
+### 3.1 Canonical URI
+
+稳定 ID 依赖的 canonical URI 必须由 Provider 通过明确方法生成：
+
+~~~ts
+canonicalizeSourceUri(uri: URI): URI;
+canonicalizePageUri(uri: URI): URI;
+canonicalizeArticleUri(uri: URI): URI;
+~~~
+
+通用层只处理 URI 语法级规范化，包括 scheme/host 大小写、默认端口和空 fragment。Provider 负责 Publisher 语义：
+
+1. 删除已明确证明只用于追踪的参数。
+2. 保留会改变 Source、分页、排序、日期范围或文章身份的 query。
+3. 移除不参与服务端资源身份的 fragment。
+4. 只根据明确的 Publisher 规则合并 redirect 后的等价 URL。
+5. 不允许“删除全部 query”或“尝试多套 canonicalization”。
+
+每个 Provider 必须用 Fixture 分别验证等价 URL 生成相同 ID，以及非等价 URL 不被合并。
 
 ---
 
@@ -266,7 +305,6 @@ export type ArticleListCatalogEntry =
 
 export interface ArticleListSourceGroup {
 	readonly kind: 'group';
-	readonly id: ArticleListSourceGroupId;
 	readonly label: string;
 	readonly sources: readonly ArticleListSource[];
 }
@@ -443,7 +481,6 @@ export interface ArticleRecord {
 	readonly id: ArticleId;
 	readonly journalId: JournalId;
 	readonly url: URI;
-	readonly title: string;
 	readonly doi?: string;
 }
 ~~~
@@ -453,9 +490,10 @@ export interface ArticleRecord {
 ArticleRecord 的合并规则：
 
 1. 第一个 ArticleListItem 创建 ArticleRecord。
-2. 后续列表卡片不覆盖已有 ArticleRecord.title。
-3. ArticleDetail 可以用详情页权威 title 和 DOI 更新 ArticleRecord。
-4. ArticleId 和 canonical article URI 不随字段更新而改变。
+2. 列表 title 只属于 ArticleListItem，不写入 ArticleRecord。
+3. 详情页权威 title 只属于 ArticleDetail。
+4. ArticleDetail 可以补充 ArticleRecord.doi 和 DOI 二级索引。
+5. ArticleId 和 canonical article URI 不随字段更新而改变。
 
 ---
 
@@ -522,23 +560,51 @@ Fetch 不在 IBrowserViewService 上增加 Snapshot API，也不直接使用 Pla
 Fetch 内部只依赖：
 
 ~~~ts
+export type FetchPageOwnership = 'owned-background' | 'borrowed-interactive';
+
 export interface IFetchPageSession {
+	readonly sessionId: string;
+	readonly pageId: string;
+	readonly ownership: FetchPageOwnership;
+
 	navigateAndCapture(
 		uri: URI,
 		readiness: IPageSnapshotReadiness | undefined,
 		token: CancellationToken
 	): Promise<IBrowserPageSnapshot>;
+
+	dispose(): Promise<void>;
 }
 ~~~
 
 IFetchPageSession 负责：
 
-1. 获取或创建 Fetch 所属的 tracked Browser Page。
-2. 导航到目标 URI。
-3. 导航 Promise 失败时直接终止，不读取旧页面。
-4. 导航成功后调用 IPlaywrightService.captureSnapshot()。
-5. 验证 Snapshot URI 满足目标 URI 和 redirect policy。
-6. 返回 IBrowserPageSnapshot。
+1. 在 electron-browser 中创建并持有一个稳定 sessionId。
+2. `owned-background` 通过 IBrowserViewService 创建使用 `BrowserViewStorageScope.Global` 的后台 BrowserView，以复用 Integrated Browser 的 Cookie 和登录状态。不使用 `IPlaywrightService.openPage()` 创建隔离 BrowserContext。
+3. `borrowed-interactive` 只引用用户已打开或明确选择的 BrowserView，不取得其销毁所有权。
+4. 调用 `IPlaywrightService.startTrackingPage(pageId)` 后才允许 Snapshot。
+5. 通过 BrowserView 导航 API 导航到目标 URI。
+6. 导航 Promise 失败时直接终止，不读取旧页面。
+7. 导航成功后调用 `IPlaywrightService.captureSnapshot(sessionId, pageId, ...)`。
+8. 验证 Snapshot URI 满足目标 URI 和 redirect policy。
+9. 返回 IBrowserPageSnapshot。
+
+所有权和清理规则：
+
+~~~text
+owned-background
+├── FetchPageSession 创建 BrowserView
+├── FetchPageSession 负责 stopTrackingPage
+└── dispose 时销毁 BrowserView
+
+borrowed-interactive
+├── FetchPageSession 只保存引用
+├── Page 被用户关闭时明确失败
+├── 仅在本 Session 负责添加 tracking 时才 stopTrackingPage
+└── 永远不销毁用户 BrowserView
+~~~
+
+`disposeSession(sessionId)` 只清理本 FetchPageSession 创建的 Playwright session routing，不得关闭借用页面。每个终端路径（成功、失败、取消、页面关闭）都必须经过同一 dispose 逻辑。
 
 IFetchProvider 负责为页面提供 Publisher-specific readiness 和 admission，但不管理 BrowserView、Playwright Page、Cookie 或 Session。
 
@@ -702,6 +768,10 @@ updatedAt 使用 ISO 8601 UTC 字符串。错误对象在内部保留，公共 L
 export interface IFetchProvider {
 	readonly id: FetchProviderId;
 
+	canonicalizeSourceUri(uri: URI): URI;
+	canonicalizePageUri(uri: URI): URI;
+	canonicalizeArticleUri(uri: URI): URI;
+
 	discoverArticleListSources(
 		journal: JournalDescriptor,
 		token: CancellationToken
@@ -735,7 +805,6 @@ export type ParsedArticleListCatalogEntry =
 
 export interface ParsedArticleListSourceGroup {
 	readonly kind: 'group';
-	readonly providerKey: string;
 	readonly label: string;
 	readonly sources: readonly ParsedArticleListSource[];
 }
@@ -761,6 +830,7 @@ export interface ParsedArticleGroup {
 
 export interface ParsedArticleListItem
 	extends Omit<ArticleListItem, 'id' | 'articleId'> {
+	readonly providerOccurrenceKey: string;
 	readonly articleUrl: URI;
 	readonly doi?: string;
 }
@@ -1026,7 +1096,7 @@ MenuId 不进入 JournalDescriptor。
 ## 19. 文件结构
 
 ~~~text
-src/cs/workbench/contrib/fetch/
+src/cs/workbench/services/fetch/
 ├── common/
 │   ├── fetch.ts
 │   ├── fetchIds.ts
@@ -1036,9 +1106,7 @@ src/cs/workbench/contrib/fetch/
 │
 ├── electron-browser/
 │   ├── fetchService.ts
-│   ├── fetchActions.ts
-│   ├── fetchMenus.ts
-│   ├── fetch.contribution.ts
+│   ├── fetchPageSession.ts
 │   │
 │   └── providers/
 │       ├── nature/
@@ -1073,6 +1141,12 @@ src/cs/workbench/contrib/fetch/
             └── science/
                 ├── fixtures/
                 └── *.test.ts
+
+src/cs/workbench/contrib/fetch/
+└── electron-browser/
+    ├── fetchActions.ts
+    ├── fetchMenus.ts
+    └── fetch.contribution.ts
 ~~~
 
 Browser Page Snapshot 契约和实现位于 IPlaywrightService，不放入 Publisher Provider：
@@ -1083,7 +1157,7 @@ src/cs/platform/browserView/common/playwrightService.ts
 上游参考：src/vs/platform/browserView/node/playwrightTab.ts
 ~~~
 
-Fetch 侧只增加 IFetchPageSession 实现，不创建 Fetch 私有的 BrowserView 或 Playwright Facade。
+Fetch 侧在 `workbench/services/fetch/electron-browser` 实现 IFetchPageSession，直接使用 IBrowserViewService 和 IPlaywrightService，不创建 Fetch 私有 BrowserView Service、Playwright Facade 或主进程兼容层。
 
 ---
 
@@ -1101,7 +1175,13 @@ Fetch 侧只增加 IFetchPageSession 实现，不创建 Fetch 私有的 BrowserV
 
 按 plan_browser_page_snapshot.md 完成 IPlaywrightService.captureSnapshot()。Fetch Plan 不重复实现该平台能力。
 
-### Step 2：建立新公共模型
+### Step 2：迁移 Fetch 运行进程
+
+将现有 `workbench/services/fetch/electron-main` 的抓取编排、PageSession、Provider 和 Parser 直接迁移到 `workbench/services/fetch/electron-browser`。同时迁移所有调用点和 IPC 入口，删除旧 electron-main Fetch 运行时，不保留转发 Facade。
+
+完成 IFetchPageSession 的 owned-background / borrowed-interactive、Global storage scope、tracking 和 dispose 契约后，才进入领域模型实现。
+
+### Step 3：建立新公共模型
 
 新增：
 
@@ -1119,27 +1199,27 @@ ArticleDetail
 
 不创建 ExploreContentItem 或 ArticleTypeItem 公共类型。
 
-### Step 3：实现 ID Factory
+### Step 4：实现 ID Factory
 
 集中实现所有稳定 ID。ArticleId 不因详情页发现 DOI 而改变。
 
-### Step 4：实现 Registry 与 Provider DI
+### Step 5：实现 Registry 与 Provider DI
 
 Registry 注册 JournalDescriptor 和 Provider 构造描述符，重复 ID 报错，注册返回 IDisposable。
 
-### Step 5：实现 FetchService
+### Step 6：实现 FetchService
 
 完成 Catalog、Source、Page、Group、ListItem、Record、Detail 状态，以及取消、并发、refresh 和事件。
 
-### Step 6：实现 Nature Provider
+### Step 7：实现 Nature Provider
 
 先完成 Catalog discovery，再完成普通列表、News/Opinion 列表和详情 Parser。
 
-### Step 7：实现 Science Provider
+### Step 8：实现 Science Provider
 
 完成 Current Issue、First Release、动态 Section、可选 article type、Related Article 和详情 Parser。
 
-### Step 8：迁移调用方
+### Step 9：迁移调用方
 
 调用方改为：
 
@@ -1150,11 +1230,11 @@ fetchService.fetchNextPage(sourceId, token);
 fetchService.fetchArticle(articleId, token);
 ~~~
 
-### Step 9：增加菜单
+### Step 10：增加菜单
 
 通过 Action2、MenuRegistry 和 IOpenerService 打开 JournalDescriptor.homeUrl。
 
-### Step 10：删除旧结构
+### Step 11：删除旧结构
 
 删除：
 
@@ -1192,17 +1272,23 @@ Re-export
 5. CancellationToken 可终止 PageSession。
 6. Parser 只接收 detached Document。
 7. Snapshot 平台层完整测试由 plan_browser_page_snapshot.md 验收。
+8. owned-background 使用 Global storage scope，完成后 stop tracking 并销毁自有 BrowserView。
+9. borrowed-interactive 被用户关闭时明确失败，dispose 不销毁用户 BrowserView。
+10. 成功、失败和取消路径均清理本 Session 拥有的 tracking 和 Playwright session routing。
 
 ### 21.2 ID
 
 验证：
 
 1. 相同输入生成相同 ID。
-2. Source Group label 变化时不改变基于 providerGroupKey 的身份。
+2. Source Group 不分配长期 ID，label 变化只替换 Catalog Snapshot。
 3. 相同 Source 的不同分页 URL 不冲突。
 4. ArticleId 基于 journalId 和 canonical URI。
 5. 详情发现 DOI 不改变 ArticleId。
-6. 同一 Page 中同一 Article 生成同一 ListItemId。
+6. 同一 Page 中同一 Article 的不同 occurrence 生成不同 ListItemId。
+7. 相同 providerOccurrenceKey 稳定生成相同 ListItemId。
+8. 等价 canonical URI 生成相同 ID，非等价 URL 不被合并。
+9. Source Group 成员增减不改变其中 canonical Source URI 未变的 SourceId。
 
 ### 21.3 Registry
 
@@ -1295,6 +1381,12 @@ Re-export
 26. 公共模型中不存在 href。
 27. 不存在兼容别名、Facade、Adapter 或 Re-export。
 28. Nature 和 Science 均有 Catalog、List、Detail Fixture 测试。
+29. Fetch 业务运行时位于 `workbench/services/fetch/electron-browser`，Contribution 只负责 UI 注册。
+30. 旧 `workbench/services/fetch/electron-main` 抓取编排被直接删除，不存在主进程转发 Facade。
+31. IFetchPageSession 明确区分 owned-background 和 borrowed-interactive 所有权。
+32. Provider 显式实现 Source、Page 和 Article canonicalization，不删除会改变资源身份的 query。
+33. ArticleRecord 不保存列表 title，列表 title 与详情 title 分别属于 ArticleListItem 和 ArticleDetail。
+34. ArticleListItemId 包含 providerOccurrenceKey，不合并同页不同位置的卡片。
 
 ---
 
