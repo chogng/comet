@@ -16,7 +16,6 @@
     "verify": "tsx scripts/verify/verify-all.ts",
     "bench": "tsx scripts/bench/bench-all.ts",
     "build:electron": "tsc -p tsconfig.electron.json --noEmit && tsx build/lib/buildElectron.ts",
-    "dev:web": "vite --config vite.web.config.ts",
     "check:i18n": "node scripts/check-i18n-keys.mjs",
     "test:base-common": "node scripts/run-base-common-tests.mjs",
     "test:workbench-browser": "node scripts/run-workbench-browser-tests.mjs",

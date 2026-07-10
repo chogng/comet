@@ -10,3 +10,8 @@ name = "run"
 icon = "run"
 command = "./scripts/code.sh"
 platform = "darwin"
+
+[[actions]]
+name = "run web"
+icon = "run"
+command = "./scripts/code-web.sh"
