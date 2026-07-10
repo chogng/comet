@@ -2,80 +2,105 @@
 
 ## 0. 结论
 
-本次重构统一收口到一个对外服务：
+本次重构只暴露一个文章抓取服务：
 
-```ts
+~~~ts
 IFetchService
-```
+~~~
 
-不同网站家族通过内部 Provider 扩展：
+不同出版商家族通过内部 Provider 扩展：
 
-```ts
+~~~ts
 IFetchProvider
-```
+~~~
 
-Nature、Science、ACS、Wiley 等 Provider 内部再根据页面结构选择具体 Parser。
+公共领域不再使用 Nature 专属的固定层级：
 
-最终不再引入以下独立领域：
+~~~text
+ExploreContentItem
+└── ArticleTypeItem
+~~~
 
-```text
-ArticleBrowseService
-ArticleDetailService
-ArticleBrowseState
-ArticleBrowseIndex
-JournalArticleBrowseModel
-```
+最终公共主链为：
 
-`Browse` 只是抓取流程中的一个阶段，不单独成为对外 Service 或公共领域模型。
+~~~text
+Journal
+└── ArticleListSource
+    └── Article
+~~~
+
+完整抓取结构允许来源目录和抓取结果拥有不同的可选分组：
+
+~~~text
+Journal
+├── ArticleListSourceGroup      来源发现阶段的可选分组
+│   └── ArticleListSource       实际可抓取的叶子入口
+└── ArticleListSource           未分组的实际抓取入口
+    └── ArticlePage
+        ├── ArticleGroup        结果页面中的可选展示分组
+        │   └── ArticleListItem
+        └── ArticleListItem
+            └── ArticleRecord
+                └── ArticleDetail
+~~~
+
+Nature 与 Science 的映射不同：
+
+~~~text
+Nature
+Journal
+└── ArticleListSourceGroup      Explore content
+    └── ArticleListSource       Article type
+        └── Article
+
+Science
+Journal
+└── ArticleListSource           Current Issue / First Release
+    └── ArticlePage
+        └── ArticleGroup        Section
+            └── Article
+~~~
+
+Nature 的 Article type 决定抓取哪个文章列表。Science 的 Article type 通常只是文章元数据，可能在列表卡片中出现，也可能直到详情页才被发现。
 
 ---
 
 ## 1. 目标
 
-建立一套支持多出版商、多期刊、多栏目、多文章类型和分页抓取的统一 Fetch 架构。
+建立支持多出版商、多期刊、多来源、期次、结果分组、分页和文章详情抓取的统一架构。
 
 核心目标：
 
-1. 调用方只依赖 `IFetchService`。
-2. 每个期刊拥有稳定 `JournalId`。
-3. 每个期刊保留：
-   - `homeUrl`：官网快速访问；
-   - `articlesUrl`：文章列表主页抓取入口。
-4. 每个期刊自己的 `Explore content` 和 `Article type` 从页面动态解析，禁止静态写死。
-5. 物理存储采用规范化结构。
-6. 逻辑层级保持为：
+1. 调用方只依赖 IFetchService。
+2. 每个期刊拥有稳定 JournalId。
+3. JournalDescriptor 保存 homeUrl 作为官网快速访问入口。
+4. JournalDescriptor 保存 discoveryUrl 作为 Provider 发现文章列表来源的起点。
+5. Nature 的 Explore content、Article type 和 Science 的 Current Issue、Section 均由页面动态解析。
+6. Publisher 专属术语不进入公共领域模型。
+7. Article list 与 Article detail 分阶段抓取，但由同一个服务管理。
+8. ArticleListItem、ArticleRecord、ArticleDetail 保持独立语义。
+9. BrowserView 负责页面加载和 HTML Snapshot；Fetch Provider 负责出版商解析。
+10. 公共资源使用 URI；href 只存在于 HTML Parser 局部。
+11. 所有长时间运行的抓取 API 接收 CancellationToken。
+12. 不保留旧接口、兼容别名、Facade、Adapter 或 Re-export。
 
-```text
-Journal
-└── ExploreContentItem
-    └── ArticleTypeItem
-        └── ArticlePage
-            └── ArticleSummary
-```
-
-7. Article list 与 Article detail 分阶段抓取，但统一由 `IFetchService` 管理。
-8. 公共模型统一使用 `url`；`href` 只允许存在于 HTML Parser 内部。
-9. 不保留旧接口、兼容别名、Facade 或 Re-export。
+第一版只定义规范化运行时状态，不承诺持久化存储。若未来需要跨启动恢复，必须单独设计存储版本、失效和迁移协议。
 
 ---
 
-## 2. 最终架构
+## 2. 架构边界
 
-```text
+~~~text
 Contribution
 ├── 注册 JournalDescriptor
-└── 注册 IFetchProvider
+└── 注册 FetchProviderDescriptor
 
 IFetchService
-├── 读取 JournalDescriptor
-├── 解析 Provider
-├── 抓取期刊 articles 主页
-├── 抓取 Article type 分页
+├── 发现期刊的 ArticleListSource Catalog
+├── 抓取 ArticleListSource
+├── 抓取下一页
 ├── 抓取 Article detail
-├── 管理多期刊状态
-├── 合并分页
-├── 去重文章
-├── 缓存详情
+├── 管理状态、并发、缓存和错误
 └── 发布变化事件
 
 IFetchProvider
@@ -84,647 +109,694 @@ IFetchProvider
 ├── AcsFetchProvider
 └── ...
 
-Provider 内部
-├── 根页面 Parser
-├── Nature Article List Parser
-├── Nature News / Opinion List Parser（仅 Nature 主刊特例）
-├── Nature Article Detail Parser
-└── Nature News / Opinion Detail Parser（仅在详情结构确实需要时）
-```
+BrowserView / PageSession
+├── 页面导航
+├── Cookie 和 Session
+├── 页面加载状态
+├── readiness
+└── 序列化 HTML Snapshot
+
+Parser
+├── 只读取 detached Document
+├── 不创建 BrowserView
+├── 不管理 Cookie
+├── 不发起网络请求
+└── 不写入 Fetch 状态
+~~~
+
+运行链路：
+
+~~~text
+IFetchService
+    ↓
+IFetchProvider
+    ↓
+BrowserView / PageSession
+    ↓
+BrowserPageSnapshot
+    ↓
+DOMParser
+    ↓
+Provider-owned Parser Resolver
+    ↓
+Publisher Parser
+    ↓
+Parsed Result
+    ↓
+ID Factory + normalization
+    ↓
+FetchService state
+~~~
 
 ---
 
-## 3. 公共数据模型
+## 3. Stable IDs
 
-### 3.1 Stable IDs
-
-```ts
+~~~ts
 export type JournalId = string;
 export type FetchProviderId = string;
-export type ExploreContentId = string;
-export type ArticleTypeId = string;
+export type ArticleListSourceGroupId = string;
+export type ArticleListSourceId = string;
 export type ArticlePageId = string;
+export type ArticleGroupId = string;
+export type ArticleListItemId = string;
 export type ArticleId = string;
-```
+~~~
 
-所有动态 ID 必须通过统一 Factory 生成，禁止 Parser、Provider 或 Service 各自拼接字符串。
+所有 ID 必须通过统一 Factory 生成。Parser、Provider 和 Service 不得各自拼接 ID。
+
+JournalId 显式声明：
+
+~~~text
+journal.nature.nature
+journal.nature.nature-communications
+journal.science.science
+journal.science.science-advances
+~~~
+
+动态 ID 规则：
+
+~~~ts
+createArticleListSourceGroupId(journalId, providerGroupKey);
+createArticleListSourceId(journalId, canonicalSourceUri);
+createArticlePageId(sourceId, canonicalPageUri);
+createArticleGroupId(pageId, groupIndex);
+createArticleId(journalId, canonicalArticleUri);
+createArticleListItemId(pageId, articleId);
+~~~
+
+providerGroupKey 由 Provider 从稳定 DOM key、分组 URL 或所属 Source URI 集合生成，禁止直接使用显示 label。结果页面中的 ArticleGroup 只在所属 Page Snapshot 内需要稳定，因此使用 pageId 和页面顺序生成。
+
+ArticleId 始终基于 journalId 和 canonical article URI，首次创建后不改变。DOI 是可补充的外部标识，不参与后续身份升级。
+
+同一文章在详情页发现 DOI 时：
+
+~~~text
+ArticleId 保持不变
+ArticleRecord.doi 更新
+DOI 二级索引更新
+~~~
+
+禁止把 url:... 身份替换为 doi:... 身份。
 
 ---
 
-### 3.2 JournalDescriptor
+## 4. JournalDescriptor
 
-```ts
+~~~ts
 export interface JournalDescriptor {
-	/**
-	 * 稳定业务身份。
-	 *
-	 * 显示名称或 URL 变化时，ID 不应变化。
-	 */
 	readonly id: JournalId;
-
 	readonly title: string;
 
 	/**
-	 * 期刊官方网站主页。
-	 *
-	 * 用于：
-	 * - 快速访问官网；
-	 * - 菜单项；
-	 * - 期刊标题链接；
-	 * - 未来其他官网级操作。
+	 * 官网快速访问入口。
 	 */
-	readonly homeUrl: string;
+	readonly homeUrl: URI;
 
 	/**
-	 * 期刊文章列表主页。
+	 * Provider 发现 ArticleListSource 的起始页面。
 	 *
-	 * 用于解析：
-	 * Explore content → Article type → Article page。
+	 * Nature 可以是 articles 根页面。
+	 * Science 可以是包含 Current Issue 入口的期刊主页。
 	 */
-	readonly articlesUrl: string;
+	readonly discoveryUrl: URI;
 
-	/**
-	 * 负责该期刊页面的 Provider。
-	 */
 	readonly providerId: FetchProviderId;
 }
-```
+~~~
 
-示例：
+JournalDescriptor 不包含：
 
-```ts
-export const NatureJournalIds = {
-	nature: 'journal.nature.nature',
-	natureCommunications: 'journal.nature.nature-communications',
-	scientificReports: 'journal.nature.scientific-reports'
-} as const;
-
-export const natureJournals = [
-	{
-		id: NatureJournalIds.nature,
-		title: 'Nature',
-		homeUrl: 'https://www.nature.com/nature',
-		articlesUrl: 'https://www.nature.com/nature/articles',
-		providerId: 'fetch.provider.nature'
-	},
-	{
-		id: NatureJournalIds.natureCommunications,
-		title: 'Nature Communications',
-		homeUrl: 'https://www.nature.com/ncomms',
-		articlesUrl: 'https://www.nature.com/ncomms/articles',
-		providerId: 'fetch.provider.nature'
-	}
-] satisfies readonly JournalDescriptor[];
-```
-
-`natureJournals.ts` 中禁止出现：
-
-```text
+~~~text
 Explore content
 Article type
-News & Comment
-Reviews & Analysis
-Collections
-Subjects
-```
+Current Issue
+First Release
+Section
+Parser ID
+Menu ID
+~~~
 
-这些必须来自运行时页面解析。
+这些数据均由 Provider 运行时发现。
 
 ---
 
-### 3.3 JournalArticles
+## 5. ArticleListSource Catalog
 
-`JournalArticles` 表示某个期刊当前已经加载的文章结构和数据。
+Catalog 描述某个 Journal 当前可用的实际文章列表入口。
 
-它允许部分加载，不表示已经抓取该期刊全部文章。
-
-```ts
-export interface JournalArticles {
+~~~ts
+export interface ArticleListCatalog {
 	readonly journalId: JournalId;
-
-	/**
-	 * Explore content 的网站展示顺序。
-	 */
-	readonly exploreContentIds: readonly ExploreContentId[];
-
-	readonly exploreContentById: Readonly<
-		Record<ExploreContentId, ExploreContentItem>
-	>;
-
-	readonly articleTypeById: Readonly<
-		Record<ArticleTypeId, ArticleTypeItem>
-	>;
-
-	readonly pageById: Readonly<
-		Record<ArticlePageId, ArticlePage>
-	>;
-
-	readonly articleById: Readonly<
-		Record<ArticleId, ArticleSummary>
-	>;
+	readonly entries: readonly ArticleListCatalogEntry[];
 }
-```
 
-逻辑关系：
+export type ArticleListCatalogEntry =
+	| ArticleListSourceGroup
+	| ArticleListSource;
 
-```text
-JournalArticles.exploreContentIds
-    ↓
-ExploreContentItem.articleTypeIds
-    ↓
-ArticleTypeItem.pageIds
-    ↓
-ArticlePage.articleIds
-    ↓
-ArticleSummary
-```
-
----
-
-### 3.4 ExploreContentItem
-
-```ts
-export interface ExploreContentItem {
-	readonly id: ExploreContentId;
-
-	/**
-	 * 例如：
-	 * Research articles
-	 * Reviews & Analysis
-	 * News & Comment
-	 */
+export interface ArticleListSourceGroup {
+	readonly kind: 'group';
+	readonly id: ArticleListSourceGroupId;
 	readonly label: string;
-
-	readonly url: string;
-
-	/**
-	 * 当前栏目实际包含的 Article type。
-	 *
-	 * 顺序与网站一致。
-	 */
-	readonly articleTypeIds: readonly ArticleTypeId[];
+	readonly sources: readonly ArticleListSource[];
 }
-```
 
-对于 `Videos`、`Collections`、`Subjects` 等没有 Article type 子项的入口：
-
-```ts
-{
-	id: '...',
-	label: 'Collections',
-	url: '...',
-	articleTypeIds: []
-}
-```
-
-不创建虚假的 `ArticleTypeItem` 补齐层级。
-
----
-
-### 3.5 ArticleTypeItem
-
-```ts
-export interface ArticleTypeItem {
-	readonly id: ArticleTypeId;
-
-	/**
-	 * 例如：
-	 * Article
-	 * Matters Arising
-	 * Review Article
-	 * Perspective
-	 */
+export interface ArticleListSource {
+	readonly kind: 'source';
+	readonly id: ArticleListSourceId;
+	readonly journalId: JournalId;
 	readonly label: string;
-
-	/**
-	 * 该类型的文章列表入口。
-	 */
-	readonly url: string;
-
-	/**
-	 * 当前已经加载的分页实体。
-	 *
-	 * 数组顺序即页面顺序或加载顺序。
-	 */
-	readonly pageIds: readonly ArticlePageId[];
+	readonly url: URI;
 }
-```
+~~~
 
-父子关系只保存在：
+ArticleListSourceGroup 只组织可抓取 Source，不允许嵌套 Group。
 
-```ts
-ExploreContentItem.articleTypeIds
-```
+Nature 示例：
 
-不再给 `ArticleTypeItem` 同时保存 `exploreContentId`，避免双向状态不一致。
+~~~text
+ArticleListSourceGroup: Research articles
+├── ArticleListSource: Article
+├── ArticleListSource: Matters Arising
+└── ArticleListSource: Registered Report
+
+ArticleListSourceGroup: Reviews & Analysis
+├── ArticleListSource: Review Article
+└── ArticleListSource: Perspective
+~~~
+
+Science 示例：
+
+~~~text
+ArticleListSource: Current Issue
+ArticleListSource: First Release
+~~~
+
+Science 不创建虚假的 Source Group。
+
+Videos、Collections、Subjects 等入口只有在其 URL 实际返回文章列表时才注册为 ArticleListSource。不能为了补齐层级创建空 Source。
 
 ---
 
-### 3.6 ArticlePage
+## 6. ArticlePage 与 ArticleGroup
 
-```ts
+ArticlePage 表示 ArticleListSource 的一次真实页面结果。
+
+~~~ts
 export interface ArticlePage {
 	readonly id: ArticlePageId;
+	readonly sourceId: ArticleListSourceId;
+	readonly url: URI;
 
 	/**
-	 * 当前真实分页 URL。
-	 *
-	 * 必须保留 page、sort、date、cursor 等会改变结果的参数。
+	 * Science Current Issue 等页面的期次信息。
 	 */
-	readonly url: string;
+	readonly issue?: IssueMetadata;
 
 	/**
-	 * 当前页面中的文章顺序。
+	 * 页面存在 Section 时按页面顺序保存。
 	 */
-	readonly articleIds: readonly ArticleId[];
+	readonly groups: readonly ArticleGroup[];
 
 	/**
-	 * 页面明确提供可靠数字页码时才保存。
+	 * 页面不存在 Section 时使用。
 	 */
-	readonly pageNumber?: number;
+	readonly ungroupedItemIds: readonly ArticleListItemId[];
 
-	/**
-	 * 没有下一页时不存在。
-	 */
-	readonly nextPageUrl?: string;
+	readonly nextPageUrl?: URI;
 }
-```
 
-`pageIds` 表示已加载的分页实体，不等同于页码数组。
+export interface IssueMetadata {
+	readonly volume?: string;
+	readonly issue?: string;
+	readonly publishedAt?: string;
+	readonly canonicalUrl?: URI;
+}
 
-分页身份不能只依赖 `pageNumber`，因为部分网站可能采用：
+export interface ArticleGroup {
+	readonly id: ArticleGroupId;
+	readonly label: string;
+	readonly itemIds: readonly ArticleListItemId[];
+}
+~~~
 
-```text
-page=2
-start=20
-cursor=...
-Load more
-日期窗口
-不透明 next URL
-```
+ArticleGroup 是抓取结果分组，不是来源入口。
+
+Science 示例：
+
+~~~text
+ArticleGroup: Commentary
+├── Expert Voices article
+└── Perspectives article
+
+ArticleGroup: Research
+└── Research articles
+~~~
+
+Nature 的普通 Article type 列表没有 Section 时：
+
+~~~text
+groups: []
+ungroupedItemIds: [...]
+~~~
+
+分页身份必须保留 page、cursor、start、date、sort 等会改变结果的参数。不能只使用数字页码。
+
+同一个页面 URL 被重新抓取时，替换该 Page 的当前内容，不得因为 PageId 已存在就忽略更新。
 
 ---
 
-### 3.7 ArticleSummary
+## 7. ArticleListItem 与 ArticleRecord
 
-第一版不拆 `ArticleListItem` 和 `ArticleRecord`。
+ArticleListItem 表示某篇文章在特定列表页面中的卡片快照。
 
-```ts
-export interface ArticleSummary {
-	readonly id: ArticleId;
-
-	/**
-	 * 文章实际所属期刊。
-	 */
-	readonly journalId: JournalId;
-
-	/**
-	 * 文章详情页 canonical URL。
-	 */
-	readonly url: string;
-
-	/**
-	 * 不包含 https://doi.org/ 前缀。
-	 */
-	readonly doi?: string;
+~~~ts
+export interface ArticleListItem {
+	readonly id: ArticleListItemId;
+	readonly articleId: ArticleId;
 
 	readonly title: string;
-
-	/**
-	 * 列表卡片中的 description、teaser 或摘要片段。
-	 */
 	readonly description?: string;
 
-	readonly articleType?: string;
-	readonly publishedAt?: string;
+	/**
+	 * 只有列表 DOM 中存在真实 Abstract 内容时才保存。
+	 */
+	readonly abstract?: string;
 
 	/**
-	 * 列表页实际展示的作者，不保证完整。
+	 * 列表卡片中显示的类型。Science 中可能不存在。
+	 */
+	readonly articleType?: string;
+
+	readonly subject?: string;
+	readonly publishedAt?: string;
+	readonly pageRange?: string;
+	readonly isOpenAccess?: boolean;
+
+	/**
+	 * 列表页显示的作者，可能被截断。
 	 */
 	readonly authors: readonly ArticleAuthorRef[];
 
 	readonly image?: ArticleImage;
+	readonly pdfUrl?: URI;
+	readonly relatedArticles: readonly RelatedArticleRef[];
+}
+
+export interface RelatedArticleRef {
+	readonly relationLabel: string;
+	readonly url: URI;
+	readonly articleType?: string;
+	readonly title: string;
+	readonly authors: readonly ArticleAuthorRef[];
+	readonly journalTitle?: string;
+	readonly publishedAt?: string;
 }
 
 export interface ArticleAuthorRef {
 	readonly name: string;
-	readonly url?: string;
+	readonly url?: URI;
 }
 
 export interface ArticleImage {
-	readonly url: string;
+	readonly url: URI;
 	readonly alt?: string;
 }
-```
+~~~
 
-同一文章出现在多个列表时，由多个 `ArticlePage.articleIds` 引用同一个 `ArticleId`。
+description 与 abstract 是不同字段。abstract 缺失时保持 undefined，不得使用 description 作为替代。
 
-第一版接受不同列表卡片字段被合并的限制。
+ArticleRecord 表示稳定文章身份：
 
-只有未来明确需要保留不同列表的卡片快照时，再新增：
+~~~ts
+export interface ArticleRecord {
+	readonly id: ArticleId;
+	readonly journalId: JournalId;
+	readonly url: URI;
+	readonly title: string;
+	readonly doi?: string;
+}
+~~~
 
-```text
-ArticleListItem
-ArticleListItemId
-listItemById
-```
+同一 ArticleRecord 可以被多个 ArticleListItem 引用。不同列表中的 description、截断作者、图片和 article type 不互相覆盖。
 
-本次不提前引入。
+ArticleRecord 的合并规则：
+
+1. 第一个 ArticleListItem 创建 ArticleRecord。
+2. 后续列表卡片不覆盖已有 ArticleRecord.title。
+3. ArticleDetail 可以用详情页权威 title 和 DOI 更新 ArticleRecord。
+4. ArticleId 和 canonical article URI 不随字段更新而改变。
 
 ---
 
-### 3.8 ArticleDetail
+## 8. ArticleDetail
 
-```ts
+~~~ts
 export interface ArticleDetail {
 	readonly articleId: ArticleId;
 	readonly journalId: JournalId;
+	readonly url: URI;
 
-	readonly url: string;
 	readonly doi?: string;
 	readonly title: string;
-
-	/**
-	 * News、Opinion 等页面中的 teaser 或 standfirst。
-	 */
 	readonly description?: string;
-
-	/**
-	 * 正式论文摘要。
-	 */
+	readonly editorsSummary?: string;
 	readonly abstract?: string;
-
 	readonly articleType?: string;
+	readonly subjects: readonly string[];
 	readonly publishedAt?: string;
 	readonly isOpenAccess?: boolean;
 
-	/**
-	 * 详情页中的完整作者列表。
-	 */
 	readonly authors: readonly ArticleAuthor[];
-
 	readonly publication: ArticlePublication;
 
-	readonly pdfUrl?: string;
-	readonly citationUrl?: string;
+	readonly pdfUrl?: URI;
+	readonly citationUrl?: URI;
 }
 
 export interface ArticleAuthor extends ArticleAuthorRef {
-	readonly isCorresponding: boolean;
+	/**
+	 * undefined 表示页面没有提供可靠证据。
+	 */
+	readonly isCorresponding?: boolean;
 }
 
 export interface ArticlePublication {
 	readonly journalId?: JournalId;
-
-	/**
-	 * 页面实际显示的期刊或杂志名称。
-	 */
 	readonly title: string;
-
-	readonly url?: string;
+	readonly url?: URI;
 	readonly volume?: string;
 	readonly issue?: string;
 	readonly articleNumber?: string;
-	readonly pages?: string;
+	readonly pageRange?: string;
 	readonly year?: number;
 }
-```
+~~~
+
+类似 href="#con3" 的作者锚点不能单独证明 corresponding author。只有明确语义标记存在时才写入 true 或 false。
+
+Science 的 Article type 可能直到详情页才被发现。ArticleListItem.articleType 和 ArticleDetail.articleType 均为可选字段。
 
 ---
 
-## 4. IFetchService
+## 9. BrowserView Page Snapshot
 
-`IFetchService` 是 Fetch contrib 唯一对外 Service。
+Fetch 不接收跨进程 DOM 对象。BrowserView 返回可序列化 HTML Snapshot。
 
-```ts
+~~~ts
+export interface BrowserPageSnapshot {
+	readonly browserViewId: string;
+	readonly navigationId: number;
+	readonly uri: URI;
+	readonly title: string;
+	readonly html: string;
+	readonly capturedAt: number;
+}
+~~~
+
+BrowserView 侧提供直接请求方法：
+
+~~~ts
+capturePageSnapshot(
+	id: string,
+	expectedNavigationId: number,
+	token: CancellationToken
+): Promise<BrowserPageSnapshot>;
+~~~
+
+规则：
+
+1. Snapshot 来自当前实际 WebContents。
+2. html 使用 document.documentElement.outerHTML 序列化。
+3. 返回最终 URI 和 navigationId。
+4. expectedNavigationId 不匹配时明确报错。
+5. 页面加载、Cookie、Session、重定向和 readiness 由 BrowserView/PageSession 管理。
+6. Fetch 只在本地使用 DOMParser 创建 detached Document。
+7. detached Document 中的脚本不得执行。
+8. 第一版只抓取 main frame；iframe 支持必须单独设计。
+9. Snapshot 必须设置大小限制并记录明确错误。
+
+BrowserView 的导航和 loading 事件只用于状态通知。获取 Snapshot 使用直接方法调用，不通过事件请求和事件回传。
+
+---
+
+## 10. IFetchService
+
+~~~ts
 export interface IFetchService {
 	readonly _serviceBrand: undefined;
 
-	/**
-	 * 某个期刊的栏目、类型、分页或文章摘要发生变化。
-	 */
-	readonly onDidChangeJournal: Event<JournalId>;
-
-	/**
-	 * 某篇文章详情发生变化。
-	 */
+	readonly onDidChangeCatalog: Event<JournalId>;
+	readonly onDidChangeSource: Event<ArticleListSourceId>;
 	readonly onDidChangeArticle: Event<ArticleId>;
 
 	getJournals(): readonly JournalDescriptor[];
+	getJournal(journalId: JournalId): JournalDescriptor | undefined;
 
-	getJournal(
+	getArticleListCatalog(
 		journalId: JournalId
-	): JournalDescriptor | undefined;
+	): ArticleListCatalog | undefined;
 
-	getJournalArticles(
-		journalId: JournalId
-	): JournalArticles | undefined;
+	getArticlePage(
+		pageId: ArticlePageId
+	): ArticlePage | undefined;
+
+	getArticleListItem(
+		itemId: ArticleListItemId
+	): ArticleListItem | undefined;
 
 	getArticle(
-		journalId: JournalId,
 		articleId: ArticleId
-	): ArticleSummary | undefined;
+	): ArticleRecord | undefined;
 
 	getArticleDetail(
 		articleId: ArticleId
 	): ArticleDetail | undefined;
 
-	/**
-	 * 抓取期刊 articles 根页面，建立：
-	 *
-	 * Explore content → Article type。
-	 */
-	fetchJournal(
-		journalId: JournalId
-	): Promise<void>;
-
-	/**
-	 * 抓取某一个 Article type 的第一页。
-	 */
-	fetchArticleType(
+	discoverArticleListSources(
 		journalId: JournalId,
-		articleTypeId: ArticleTypeId
+		token: CancellationToken
 	): Promise<void>;
 
-	/**
-	 * 抓取该 Article type 的下一页。
-	 */
+	fetchArticleListSource(
+		sourceId: ArticleListSourceId,
+		token: CancellationToken
+	): Promise<void>;
+
 	fetchNextPage(
-		journalId: JournalId,
-		articleTypeId: ArticleTypeId
+		sourceId: ArticleListSourceId,
+		token: CancellationToken
 	): Promise<void>;
 
-	/**
-	 * 抓取单篇文章详情。
-	 */
 	fetchArticle(
-		journalId: JournalId,
-		articleId: ArticleId
+		articleId: ArticleId,
+		token: CancellationToken
 	): Promise<ArticleDetail>;
 
 	refreshJournal(
-		journalId: JournalId
+		journalId: JournalId,
+		token: CancellationToken
+	): Promise<void>;
+
+	refreshArticleListSource(
+		sourceId: ArticleListSourceId,
+		token: CancellationToken
 	): Promise<void>;
 }
-```
+~~~
 
-### 4.1 Service 职责
+FetchService 负责：
 
-`FetchService` 负责：
-
-```text
+~~~text
 JournalDescriptor 读取
-Provider 解析
-多期刊状态
-抓取任务调度
+Provider 实例解析
+Catalog 状态
+Source/Page/Group/ListItem 状态
+ArticleRecord 与 ArticleDetail
+任务调度和取消
 并发控制
-分页合并
-文章去重
+分页追加
+文章身份和去重
 详情缓存
 加载状态
 错误隔离
+过期结果拒绝
 变化事件
-```
+~~~
 
-调用方不应自行：
+调用方不得自行：
 
-```text
+~~~text
 根据 URL 猜 Provider
-根据 label 建立父子关系
+解释 Explore content 或 Section
 拼接分页 URL
+选择 Publisher Parser
 合并 Parser 结果
-维护文章详情缓存
-```
+维护 ArticleDetail 缓存
+~~~
 
 ---
 
-## 5. 运行时状态
+## 11. Refresh 与并发语义
 
-```ts
-export interface FetchState {
-	readonly journalArticlesById: Readonly<
-		Partial<Record<JournalId, JournalArticles>>
-	>;
+refreshJournal：
 
-	readonly articleDetailById: Readonly<
-		Partial<Record<ArticleId, ArticleDetail>>
-	>;
+1. 重新发现该 Journal 的 Catalog。
+2. 原子替换 Catalog。
+3. SourceId 未变化时保留其已加载页面。
+4. 删除已消失 Source 的 Page、Group、ListItem 和 LoadState。
+5. 保留仍被其他页面引用的 ArticleRecord。
+6. 保留 ArticleDetail 缓存。
+7. 不影响其他 Journal。
 
-	readonly journalLoadStateById: Readonly<
-		Partial<Record<JournalId, FetchLoadState>>
-	>;
+refreshArticleListSource：
 
-	readonly articleTypeLoadStateById: Readonly<
-		Partial<Record<ArticleTypeId, FetchLoadState>>
-	>;
+1. 重新抓取第一页。
+2. 替换第一页当前内容。
+3. 清除该 Source 后续已加载分页。
+4. 不影响其他 Source。
 
-	readonly articleDetailLoadStateById: Readonly<
-		Partial<Record<ArticleId, FetchLoadState>>
-	>;
-}
+并发规则：
 
+1. 同一个 Catalog、Source 或 Article 同时只保留一个活动任务。
+2. 新 refresh 取消同目标的旧任务。
+3. 取消后的结果不得写入状态。
+4. navigationId 或任务 generation 不匹配的结果必须丢弃并报告过期。
+5. 一个 Source 失败不能污染同 Journal 的其他 Source。
+
+---
+
+## 12. 运行时状态
+
+内部状态使用 Map，公共 API 通过查询方法返回只读 Snapshot。
+
+~~~ts
 export interface FetchLoadState {
 	readonly status: 'idle' | 'loading' | 'ready' | 'error';
 	readonly error?: string;
 	readonly updatedAt?: string;
 }
-```
+~~~
 
-必须支持：
+状态至少按以下键隔离：
 
-```text
-Nature：ready
-Nature Communications：loading
-Scientific Reports：error
-```
+~~~text
+JournalId                 Catalog discovery
+ArticleListSourceId       Page loading
+ArticleId                 Detail loading
+~~~
 
-单个期刊、类型或文章失败，不能污染其他状态。
+updatedAt 使用 ISO 8601 UTC 字符串。错误对象在内部保留，公共 LoadState 只暴露安全消息。
 
 ---
 
-## 6. IFetchProvider
+## 13. IFetchProvider
 
-```ts
+~~~ts
 export interface IFetchProvider {
 	readonly id: FetchProviderId;
 
-	/**
-	 * 抓取期刊 articles 根页面。
-	 */
-	fetchJournal(
-		journal: JournalDescriptor
-	): Promise<FetchJournalResult>;
-
-	/**
-	 * 抓取某个 Article type 的某一页。
-	 */
-	fetchPage(
+	discoverArticleListSources(
 		journal: JournalDescriptor,
-		url: string
-	): Promise<FetchPageResult>;
+		token: CancellationToken
+	): Promise<ParsedArticleListCatalog>;
 
-	/**
-	 * 抓取单篇文章详情。
-	 */
-	fetchArticle(
+	fetchArticleListPage(
 		journal: JournalDescriptor,
-		url: string
-	): Promise<ArticleDetail>;
+		source: ArticleListSource,
+		url: URI,
+		token: CancellationToken
+	): Promise<ParsedArticleListPage>;
+
+	fetchArticleDetail(
+		journal: JournalDescriptor,
+		article: ArticleRecord,
+		token: CancellationToken
+	): Promise<ParsedArticleDetail>;
 }
-```
+~~~
 
-结果类型：
+Parsed 类型只包含解析值和规范化 URI，不包含应用状态写入。
 
-```ts
-export interface FetchJournalResult {
-	readonly exploreContentIds: readonly ExploreContentId[];
-
-	readonly exploreContentById: Readonly<
-		Record<ExploreContentId, ExploreContentItem>
-	>;
-
-	readonly articleTypeById: Readonly<
-		Record<ArticleTypeId, ArticleTypeItem>
-	>;
+~~~ts
+export interface ParsedArticleListCatalog {
+	readonly entries: readonly ParsedArticleListCatalogEntry[];
 }
 
-export interface FetchPageResult {
-	readonly page: ArticlePage;
+export type ParsedArticleListCatalogEntry =
+	| ParsedArticleListSourceGroup
+	| ParsedArticleListSource;
 
-	readonly articleById: Readonly<
-		Record<ArticleId, ArticleSummary>
-	>;
+export interface ParsedArticleListSourceGroup {
+	readonly kind: 'group';
+	readonly providerKey: string;
+	readonly label: string;
+	readonly sources: readonly ParsedArticleListSource[];
 }
-```
+
+export interface ParsedArticleListSource {
+	readonly kind: 'source';
+	readonly label: string;
+	readonly url: URI;
+}
+
+export interface ParsedArticleListPage {
+	readonly url: URI;
+	readonly issue?: IssueMetadata;
+	readonly groups: readonly ParsedArticleGroup[];
+	readonly ungroupedItems: readonly ParsedArticleListItem[];
+	readonly nextPageUrl?: URI;
+}
+
+export interface ParsedArticleGroup {
+	readonly label: string;
+	readonly items: readonly ParsedArticleListItem[];
+}
+
+export interface ParsedArticleListItem
+	extends Omit<ArticleListItem, 'id' | 'articleId'> {
+	readonly articleUrl: URI;
+	readonly doi?: string;
+}
+
+export type ParsedArticleDetail =
+	Omit<ArticleDetail, 'articleId' | 'journalId'>;
+~~~
 
 边界：
 
-```text
-IFetchService
-    负责应用级状态和工作流
+~~~text
+FetchService
+    状态、身份、工作流、并发和缓存
 
-IFetchProvider
-    负责某个网站家族的抓取实现
+FetchProvider
+    Publisher 流程、Snapshot 请求、Parser Resolver 和 URI 规范化
 
 Parser
-    负责某一种具体 HTML 结构
-```
+    detached Document 到 Parsed Result 的纯解析
+~~~
 
 ---
 
-## 7. Fetch Registry
+## 14. Registry 与 DI
 
-Registry 只负责静态 Contribution 注册，不对 UI 暴露为 Service。
+Registry 只保存静态 JournalDescriptor 和 Provider 构造描述符，不直接保存模块加载阶段创建的 Provider 实例。
 
-```ts
+~~~ts
+export interface FetchProviderDescriptor {
+	readonly id: FetchProviderId;
+	readonly ctor: IConstructorSignature<IFetchProvider>;
+}
+
 export interface IFetchRegistry {
 	registerJournal(
 		descriptor: JournalDescriptor
-	): void;
+	): IDisposable;
 
 	registerProvider(
-		provider: IFetchProvider
-	): void;
+		descriptor: FetchProviderDescriptor
+	): IDisposable;
 
 	getJournal(
 		journalId: JournalId
@@ -732,474 +804,229 @@ export interface IFetchRegistry {
 
 	getJournals(): readonly JournalDescriptor[];
 
-	getProvider(
+	getProviderDescriptor(
 		providerId: FetchProviderId
-	): IFetchProvider | undefined;
+	): FetchProviderDescriptor | undefined;
 }
-```
+~~~
 
-注册链路：
+FetchService 通过 DI 创建 Provider。
 
-```text
-Nature contribution
-├── registerProvider(NatureFetchProvider)
-└── registerJournal(Nature / Nature Communications / ...)
-
-Science contribution
-├── registerProvider(ScienceFetchProvider)
-└── registerJournal(Science / Science Advances / ...)
-
-ACS contribution
-├── registerProvider(AcsFetchProvider)
-└── registerJournal(ACS Nano / Nano Letters / ...)
-```
-
-`FetchService` 内部解析：
-
-```text
-journalId
-→ JournalDescriptor
-→ providerId
-→ IFetchProvider
-```
-
-重复 `JournalId` 或 `FetchProviderId` 必须直接报错。
+重复 JournalId 或 FetchProviderId 必须直接报错。注册返回 IDisposable，测试和生命周期可以撤销注册。
 
 ---
 
-## 8. Nature Provider
+## 15. Parser Resolver
 
-### 8.1 先按页面职责区分
+Provider 持有 Parser Descriptor：
 
-Nature Provider 只保留三条明确的解析链：
+~~~ts
+export interface ParserDescriptor<TParser> {
+	readonly id: string;
+	readonly matches: (context: ParseContext) => boolean;
+	readonly parser: TParser;
+}
+~~~
 
-```text
-articles 根页面
-    NatureExploreContentParser
+Resolver 规则：
 
-文章列表页面
-    Article List Parser
+~~~text
+0 matches
+    → 明确报错
 
-单篇文章详情页面
-    Article Detail Parser
-```
+1 match
+    → 执行 Parser
 
-三类页面的输入目标和输出不同：
+multiple matches
+    → 明确歧义错误
+~~~
 
-```text
-根页面 Parser
-    输入：期刊 articles 主页
-    输出：Explore content + Article type
+禁止：
 
-List Parser
-    输入：包含多篇文章的列表页面
-    输出：ArticlePage + ArticleSummary
+~~~text
+专用 Parser 优先、普通 Parser 随后
+默认 Parser
+catch 后尝试另一个 Parser
+unknown 页面走 generic Parser
+~~~
 
-Detail Parser
-    输入：只描述一篇文章的详情页面
-    输出：ArticleDetail
-```
-
-List 与 Detail 必须继续分开，因为它们属于不同页面职责和不同输出契约。
+Parser 匹配依据可以包含 DOM 标记、HTML 结构和必要 URL 特征。URL 只能作为辅助证据。
 
 ---
 
-### 8.2 News / Opinion 是 Nature 主刊特例，不是通用分类轴
+## 16. Nature Provider
 
-`News` 和 `Opinion` 是 Nature 主刊 `Explore content` 下的栏目。
+### 16.1 Catalog discovery
 
-它们的特殊点是页面 HTML 结构不同，因此需要 Nature 内部的专用 Parser；但不应由此建立一套对称的：
+Nature Catalog Parser 从 discoveryUrl 解析：
 
-```text
-Standard
-News / Opinion
-```
+~~~text
+Explore content
+└── Article type
+~~~
 
-通用分类。
+映射为：
 
-否则会错误暗示：
+~~~text
+Explore content
+    → ArticleListSourceGroup
 
-1. 所有 Nature 页面都必须被归入 `Standard` 或 `News / Opinion`；
-2. 所有 List 和 Detail 都必须对称拆成两套实现；
-3. 以后每出现一个特殊布局，都要继续扩展同一分类轴；
-4. `Standard` 会逐渐变成含义模糊的默认桶。
+Article type
+    → ArticleListSource
+~~~
 
-正确关系是：
+示例：
 
-```text
+~~~text
+Research articles
+├── Article
+├── Matters Arising
+└── Registered Report
+~~~
+
+其中 Research articles 是 Group，三个 Article type 是实际 Source。
+
+### 16.2 List parsing
+
+Nature 第一版保留：
+
+~~~text
 NatureArticleListParser
-    处理 Nature 系列通常使用的文章列表结构
-
 NatureNewsOpinionListParser
-    只处理 Nature 主刊 News / Opinion 的特殊列表结构
+~~~
 
+两者输出 ParsedArticleListPage，不输出 ArticleDetail。
+
+News / Opinion 是 Nature 主刊特殊列表结构，不是公共分类轴，也不建立 Standard / NewsOpinion 通用枚举。
+
+### 16.3 Detail parsing
+
+先实现：
+
+~~~text
 NatureArticleDetailParser
-    处理通常的 Nature 文章详情结构
+~~~
 
+只有 Fixture 证明 News / Opinion 详情主结构无法由同一 Parser 清楚覆盖时，才增加：
+
+~~~text
 NatureNewsOpinionArticleDetailParser
-    仅在 News / Opinion 详情结构无法由主 Detail Parser 清楚覆盖时存在
-```
+~~~
 
-因此，News / Opinion Parser 是 Nature Provider 内部的特例实现，不进入公共模型，也不成为跨出版商的通用类型。
-
----
-
-### 8.3 List Parser 契约
-
-```ts
-export interface INatureArticleListParser {
-	canParse(context: NatureParseContext): boolean;
-
-	parse(
-		context: NatureParseContext
-	): FetchPageResult;
-}
-```
-
-List Parser 只能输出：
-
-```text
-ArticlePage
-ArticleSummary
-```
-
-不能输出 `ArticleDetail`，也不能承担详情字段补全。
-
-Nature Provider 当前可以持有两个 List Parser：
-
-```ts
-private readonly articleListParser =
-	new NatureArticleListParser();
-
-private readonly newsOpinionListParser =
-	new NatureNewsOpinionListParser();
-```
-
-分派时先检查专用 Parser，再检查通常 Parser：
-
-```ts
-private parsePage(
-	context: NatureParseContext
-): FetchPageResult {
-	if (this.newsOpinionListParser.canParse(context)) {
-		return this.newsOpinionListParser.parse(context);
-	}
-
-	if (this.articleListParser.canParse(context)) {
-		return this.articleListParser.parse(context);
-	}
-
-	throw new Error(
-		`No Nature article list parser for ${context.url}`
-	);
-}
-```
-
-这里不是把通常 Parser 当作无条件 fallback。两个 Parser 都必须通过自己的结构识别。
+不得为了与 List Parser 形式对称而创建第二个 Detail Parser。
 
 ---
 
-### 8.4 Detail Parser 契约
+## 17. Science Provider
 
-```ts
-export interface INatureArticleDetailParser {
-	canParse(context: NatureParseContext): boolean;
+### 17.1 Catalog discovery
 
-	parse(
-		context: NatureParseContext
-	): ArticleDetail;
-}
-```
+Science Provider 从 discoveryUrl 发现：
 
-默认先保留一个：
+~~~text
+ArticleListSource: Current Issue
+ArticleListSource: First Release
+~~~
 
-```text
-NatureArticleDetailParser
-```
+不创建 Source Group。
 
-只有在实际 Fixture 和页面验证中确认 News / Opinion 详情结构存在独立解析流程时，才增加：
+### 17.2 Current Issue parsing
 
-```text
-NatureNewsOpinionArticleDetailParser
-```
+Current Issue Parser 输出：
 
-判断标准：
+~~~text
+IssueMetadata
+ArticleGroup[]
+ArticleListItem[]
+~~~
 
-```text
-只有少量 selector 不同
-    → 保留一个 NatureArticleDetailParser
-    → 在局部使用替代 selector 或小型 helper
+Science：
 
-标题区、作者区、teaser / abstract、publication 等主结构明显不同
-    → 增加 NatureNewsOpinionArticleDetailParser
-```
+~~~text
+ArticleGroup: Commentary
+ArticleGroup: Research
+...
+~~~
 
-不要为了与 List 形成形式上的对称，预先创建第二个 Detail Parser。
+Science Advances：
 
-如果需要专用 Detail Parser，Provider 使用同样的“专用优先、通常结构随后、无匹配报错”分派：
+~~~text
+ArticleGroup: Focus
+ArticleGroup: Neuroscience
+ArticleGroup: Social and Interdisciplinary Sciences and Public Health
+...
+~~~
 
-```ts
-private parseArticle(
-	context: NatureParseContext
-): ArticleDetail {
-	if (
-		this.newsOpinionArticleDetailParser?.canParse(context)
-	) {
-		return this.newsOpinionArticleDetailParser.parse(context);
-	}
+Section label 动态解析，禁止写入 JournalDescriptor。
 
-	if (this.articleDetailParser.canParse(context)) {
-		return this.articleDetailParser.parse(context);
-	}
+Science 列表卡片中的 article type 是可选字段，例如 Expert Voices、Perspectives。Science Advances 通常不在列表卡片直接显示 article type。
 
-	throw new Error(
-		`No Nature article detail parser for ${context.url}`
-	);
-}
-```
+列表 Parser 还需区分：
 
----
+~~~text
+description
+abstract
+PDF URL
+access status
+related article
+~~~
 
-### 8.5 Parser 选择依据
+Related article 是包含它的 ArticleListItem 的嵌套关系，不是当前 ArticleGroup 的普通 ArticleListItem。
 
-Parser 选择依据：
+### 17.3 Detail parsing
 
-```text
-DOM 标记
-HTML 结构
-必要的 URL 特征
-```
+Science 与 Science Advances 共享基础字段，但只有 Fixture 证明 DOM 主结构和匹配条件一致时才共用 Parser。
 
-URL 特征只能作为辅助证据。
+详情字段包括：
 
-禁止在 `JournalDescriptor` 中增加：
+~~~text
+article type
+subject / discipline
+title
+complete authors
+publication
+DOI
+Editor's Summary
+abstract
+PDF
+citation
+access status
+~~~
 
-```ts
-kind: 'articles' | 'news' | 'opinion';
-```
-
-也禁止在公共 `ArticleTypeItem` 中加入 Parser ID。
-
-内容栏目与 Parser 选择不是同一个概念。
+作者 href="#con3" 不证明 corresponding author。
 
 ---
 
-### 8.6 公共解析能力
+## 18. Menu 与 homeUrl
 
-第一版不预设宽泛的：
+homeUrl 只用于官网快速访问、菜单和标题链接。
 
-```text
-common/natureParser.ts
-```
+使用 Action2 注册通用命令：
 
-也不建立 Parser 基类。
+~~~text
+fetch.openJournalHome
+~~~
 
-只有在两个以上 Parser 出现真实重复后，才提取纯解析函数，例如：
+命令根据 journalId 查询 JournalDescriptor，并通过 IOpenerService 打开 homeUrl。
 
-```text
-parseCanonicalUrl
-parseDoi
-parsePublishedAt
-parseArticleType
-parseOpenAccess
-parseJournalTitle
-```
+discoveryUrl 只用于 Provider 发现 ArticleListSource，不用于菜单。
 
-公共 helper 必须满足：
-
-```text
-无网络请求
-无状态写入
-不依赖具体 Parser 生命周期
-输入明确
-输出明确
-可单独测试
-```
-
-出现真实复用后，可以建立：
-
-```text
-natureArticleMetadata.ts
-```
-
-如果尚无重复，则不创建公共文件。
-
----
-## 9. ID 规则
-
-### 9.1 JournalId
-
-显式声明：
-
-```text
-journal.nature.nature
-journal.nature.nature-communications
-journal.acs.nano-letters
-```
-
-不使用固定数字作为业务 ID。
+MenuId 不进入 JournalDescriptor。
 
 ---
 
-### 9.2 动态浏览节点
+## 19. 文件结构
 
-根据以下内容确定性生成：
-
-```text
-实体类型 + journalId + canonical URL
-```
-
-统一 Factory：
-
-```ts
-createExploreContentId(
-	journalId,
-	canonicalUrl
-);
-
-createArticleTypeId(
-	journalId,
-	canonicalUrl
-);
-
-createArticlePageId(
-	journalId,
-	canonicalUrl
-);
-```
-
-禁止根据 `label` 生成 ID。
-
----
-
-### 9.3 ArticleId
-
-优先使用 DOI：
-
-```ts
-const articleId = doi
-	? `doi:${doi.toLowerCase()}`
-	: `url:${canonicalUrl}`;
-```
-
-DOI 必须规范化，不包含：
-
-```text
-https://doi.org/
-http://dx.doi.org/
-doi:
-```
-
----
-
-## 10. URL 命名规则
-
-公共模型统一使用：
-
-```text
-homeUrl
-articlesUrl
-url
-nextPageUrl
-pdfUrl
-citationUrl
-image.url
-publication.url
-```
-
-`href` 只存在于 Parser 局部变量：
-
-```ts
-const href = anchor.getAttribute('href');
-
-const url = href
-	? new URL(href, pageUrl).href
-	: undefined;
-```
-
-公共接口中禁止出现：
-
-```text
-href
-articleHref
-journalHref
-pdfHref
-```
-
----
-
-## 11. Menu 与 homeUrl
-
-`homeUrl` 保留，用于菜单和快速访问。
-
-Menu ID 属于 UI Contribution，不进入 `JournalDescriptor`：
-
-```ts
-export const JournalMenuId = new MenuId(
-	'fetch.journals'
-);
-```
-
-使用一个通用 Command：
-
-```ts
-export const OpenJournalHomeCommandId =
-	'fetch.openJournalHome';
-```
-
-菜单项通过参数传递 `journalId`：
-
-```ts
-for (const journal of fetchRegistry.getJournals()) {
-	MenuRegistry.appendMenuItem(JournalMenuId, {
-		command: {
-			id: OpenJournalHomeCommandId,
-			title: journal.title,
-			arguments: [journal.id]
-		}
-	});
-}
-```
-
-Command Handler：
-
-```ts
-const journal = fetchService.getJournal(journalId);
-
-if (!journal) {
-	throw new Error(`Unknown journal: ${journalId}`);
-}
-
-openExternal(journal.homeUrl);
-```
-
-边界：
-
-```text
-homeUrl
-    官网访问、菜单、外部链接
-
-articlesUrl
-    FetchService 和 Provider 抓取入口
-
-JournalMenuId
-    UI 菜单容器
-```
-
----
-
-## 12. 文件结构
-
-```text
+~~~text
 src/cs/workbench/contrib/fetch/
 ├── common/
 │   ├── fetch.ts
 │   ├── fetchIds.ts
-│   ├── fetchService.ts
 │   ├── fetchProvider.ts
-│   └── fetchRegistry.ts
+│   ├── fetchRegistry.ts
+│   └── fetchService.ts
 │
-├── browser/
+├── electron-browser/
 │   ├── fetchService.ts
 │   ├── fetchActions.ts
 │   ├── fetchMenus.ts
@@ -1209,591 +1036,325 @@ src/cs/workbench/contrib/fetch/
 │       ├── nature/
 │       │   ├── natureJournals.ts
 │       │   ├── natureFetchProvider.ts
-│       │   ├── natureExploreContentParser.ts
+│       │   ├── natureCatalogParser.ts
 │       │   ├── natureArticleListParser.ts
 │       │   ├── natureNewsOpinionListParser.ts
 │       │   ├── natureArticleDetailParser.ts
-│       │   ├── natureNewsOpinionArticleDetailParser.ts
 │       │   └── nature.contribution.ts
 │       │
-│       ├── science/
-│       │   ├── scienceJournals.ts
-│       │   ├── scienceFetchProvider.ts
-│       │   └── science.contribution.ts
-│       │
-│       └── acs/
-│           ├── acsJournals.ts
-│           ├── acsFetchProvider.ts
-│           └── acs.contribution.ts
+│       └── science/
+│           ├── scienceJournals.ts
+│           ├── scienceFetchProvider.ts
+│           ├── scienceCatalogParser.ts
+│           ├── scienceCurrentIssueParser.ts
+│           ├── scienceFirstReleaseParser.ts
+│           ├── scienceArticleDetailParser.ts
+│           └── science.contribution.ts
 │
 └── test/
     ├── common/
     │   ├── fetchIds.test.ts
     │   └── fetchRegistry.test.ts
     │
-    └── browser/
+    └── electron-browser/
         ├── fetchService.test.ts
-        │
         └── providers/
-            └── nature/
+            ├── nature/
+            │   ├── fixtures/
+            │   └── *.test.ts
+            └── science/
                 ├── fixtures/
-                │   ├── nature-communications-articles.html
-                │   ├── nature-article-list.html
-                │   ├── nature-news-opinion-list.html
-                │   ├── nature-article-detail.html
-                │   └── nature-news-opinion-detail.html
-                │
-                ├── natureExploreContentParser.test.ts
-                ├── natureArticleListParser.test.ts
-                ├── natureNewsOpinionListParser.test.ts
-                ├── natureArticleDetailParser.test.ts
-                └── natureNewsOpinionArticleDetailParser.test.ts
-```
+                └── *.test.ts
+~~~
 
-职责：
+BrowserView Snapshot 契约和实现位于 BrowserView 平台层，不放入 Publisher Provider：
 
-```text
-common/fetch.ts
-    公共数据结构
+~~~text
+src/cs/platform/browserView/common/
+src/cs/platform/browserView/electron-main/
+~~~
 
-common/fetchIds.ts
-    所有确定性 ID 生成逻辑
-
-common/fetchService.ts
-    IFetchService 和 Service Decorator
-
-common/fetchProvider.ts
-    IFetchProvider 及 Provider Result
-
-common/fetchRegistry.ts
-    Journal / Provider Contribution Registry
-
-browser/fetchService.ts
-    状态、缓存、任务、合并、事件
-
-browser/fetchActions.ts
-    打开官网、刷新期刊等 Action
-
-browser/fetchMenus.ts
-    Journal Menu Contribution
-
-browser/fetch.contribution.ts
-    注册 FetchService、Action 和 Menu
-
-natureJournals.ts
-    Nature 系列 JournalDescriptor
-
-natureFetchProvider.ts
-    Nature 抓取流程和 Parser 分派
-
-natureExploreContentParser.ts
-    解析 articles 根页面中的 Explore content 和 Article type
-
-natureArticleListParser.ts
-    解析 Nature 系列通常使用的文章列表结构
-
-natureNewsOpinionListParser.ts
-    只解析 Nature 主刊 News / Opinion 的特殊列表结构
-
-natureArticleDetailParser.ts
-    解析通常的 Nature 文章详情结构
-
-natureNewsOpinionArticleDetailParser.ts
-    仅在 News / Opinion 详情结构确实需要独立流程时保留
-
-nature.contribution.ts
-    注册 Nature Provider 和 Nature Journals
-```
-
-如果最终验证表明 News / Opinion 详情只存在少量 selector 差异，则删除：
-
-```text
-natureNewsOpinionArticleDetailParser.ts
-natureNewsOpinionArticleDetailParser.test.ts
-nature-news-opinion-detail.html
-```
-
-并将差异留在 `natureArticleDetailParser.ts` 的局部解析逻辑中。
-
-第一版不预设：
-
-```text
-nature/common/
-common/natureParser.ts
-Parser 基类
-Standard Parser 命名
-```
-
----
-## 13. 实施步骤
-
-### Step 0：读取仓库约束
-
-修改前必须读取：
-
-1. `.github/instructions/coding-guidelines.instructions.md`
-2. `.github/instructions/architecture.instructions.md`
-3. 所有匹配 `fetch` 路径的 `.github/instructions/*.instructions.md`
-4. `.github/conductor-instructions.md`
-5. 当前 Fetch 相关代码、测试和调用面
-6. 上游 VS Code 的 Registry、Service、Command、Action、Menu 和 Contribution 实现
-
-文档只作为参考，最终以当前代码、测试和运行行为为准。
+实际路径以当前 BrowserView 服务边界为准，不创建 Fetch 私有的 BrowserView Facade。
 
 ---
 
-### Step 1：建立最终公共模型
+## 20. 实施步骤
+
+### Step 0：读取约束与上游
+
+修改前读取：
+
+1. .github/instructions 下全部适用规则。
+2. 当前 Fetch、BrowserView、IPC 和调用面。
+3. /Users/lance/Desktop/vscode 中的 Registry、Service、Contribution、CancellationToken 和进程实现。
+
+### Step 1：增加 BrowserView Page Snapshot
+
+实现可取消的 capturePageSnapshot，并验证 navigationId、最终 URI、HTML 序列化、大小限制和销毁行为。
+
+### Step 2：建立新公共模型
 
 新增：
 
-```text
-JournalDescriptor
-JournalArticles
-ExploreContentItem
-ArticleTypeItem
+~~~text
+ArticleListCatalog
+ArticleListSourceGroup
+ArticleListSource
 ArticlePage
-ArticleSummary
+IssueMetadata
+ArticleGroup
+ArticleListItem
+ArticleRecord
 ArticleDetail
-FetchState
-FetchLoadState
-```
+~~~
 
-不创建旧类型别名。
+不创建 ExploreContentItem 或 ArticleTypeItem 公共类型。
 
----
+### Step 3：实现 ID Factory
 
-### Step 2：集中实现 ID Factory
+集中实现所有稳定 ID。ArticleId 不因详情页发现 DOI 而改变。
 
-新增：
+### Step 4：实现 Registry 与 Provider DI
 
-```text
-createExploreContentId
-createArticleTypeId
-createArticlePageId
-createArticleId
-```
+Registry 注册 JournalDescriptor 和 Provider 构造描述符，重复 ID 报错，注册返回 IDisposable。
 
-所有 Parser、Provider、Service 和测试统一使用。
+### Step 5：实现 FetchService
 
----
+完成 Catalog、Source、Page、Group、ListItem、Record、Detail 状态，以及取消、并发、refresh 和事件。
 
-### Step 3：实现 Fetch Registry
+### Step 6：实现 Nature Provider
 
-实现：
+先完成 Catalog discovery，再完成普通列表、News/Opinion 列表和详情 Parser。
 
-```text
-registerJournal
-registerProvider
-getJournal
-getJournals
-getProvider
-```
+### Step 7：实现 Science Provider
 
-重复稳定 ID 时直接报错。
+完成 Current Issue、First Release、动态 Section、可选 article type、Related Article 和详情 Parser。
 
----
+### Step 8：迁移调用方
 
-### Step 4：注册 Nature 系列期刊
+调用方改为：
 
-建立 `natureJournals.ts`。
+~~~ts
+fetchService.discoverArticleListSources(journalId, token);
+fetchService.fetchArticleListSource(sourceId, token);
+fetchService.fetchNextPage(sourceId, token);
+fetchService.fetchArticle(articleId, token);
+~~~
 
-每个期刊只登记：
+### Step 9：增加菜单
 
-```text
-id
-title
-homeUrl
-articlesUrl
-providerId
-```
+通过 Action2、MenuRegistry 和 IOpenerService 打开 JournalDescriptor.homeUrl。
 
-不登记任何 Explore content 或 Article type。
-
----
-
-### Step 5：建立 IFetchProvider 契约
-
-将不同网站家族的实现统一到：
-
-```text
-fetchJournal
-fetchPage
-fetchArticle
-```
-
-删除调用方直接按站点或 URL 分支的逻辑。
-
----
-
-### Step 6：实现 Nature 根页面 Parser
-
-从每个期刊自己的 `articlesUrl` 动态解析：
-
-```text
-Explore content
-└── Article type
-```
-
-输出规范化 `FetchJournalResult`。
-
----
-
-### Step 7：实现 Nature List Parsers
-
-实现：
-
-```text
-NatureArticleListParser
-NatureNewsOpinionListParser
-```
-
-两者实现同一个 `INatureArticleListParser` 契约，并统一输出：
-
-```text
-ArticlePage
-ArticleSummary
-```
-
-其中：
-
-```text
-NatureArticleListParser
-    处理 Nature 系列通常使用的列表结构
-
-NatureNewsOpinionListParser
-    只处理 Nature 主刊 News / Opinion 特殊列表结构
-```
-
-不创建：
-
-```text
-NatureArticleListParser
-```
-
-也不建立 `Standard / NewsOpinion` 的通用分类体系。
-
-Provider 分派时先检查 News / Opinion 专用结构，再检查通常列表结构；两者都必须通过 `canParse()`。
-
----
-
-### Step 8：实现 Nature Detail Parser
-
-先实现：
-
-```text
-NatureArticleDetailParser
-```
-
-并使用普通 Nature 文章与 News / Opinion Fixture 验证其覆盖范围。
-
-只有在确认 News / Opinion 详情的主结构无法由局部 selector 差异清楚表达时，才新增：
-
-```text
-NatureNewsOpinionArticleDetailParser
-```
-
-无论采用一个还是两个 Detail Parser，最终都统一输出：
-
-```text
-ArticleDetail
-```
-
-不创建：
-
-```text
-NatureArticleDetailParser
-```
-
-也不为了与 List Parser 形成对称而强制拆分 Detail Parser。
-
----
-### Step 9：实现 FetchService
-
-实现：
-
-```text
-多期刊状态
-Provider 解析
-抓取任务调度
-类型独立加载
-分页追加
-文章去重
-详情缓存
-加载状态
-错误隔离
-变化事件
-```
-
-内部状态可以使用 `Map`，对外暴露只读 Snapshot 或查询方法。
-
----
-
-### Step 10：迁移调用方
-
-调用方统一改为：
-
-```ts
-fetchService.fetchJournal(journalId);
-
-fetchService.fetchArticleType(
-	journalId,
-	articleTypeId
-);
-
-fetchService.fetchNextPage(
-	journalId,
-	articleTypeId
-);
-
-fetchService.fetchArticle(
-	journalId,
-	articleId
-);
-```
-
-UI 不再直接依赖：
-
-```text
-IFetchProvider
-IFetchRegistry
-具体 Nature Parser
-具体 URL 规则
-```
-
----
-
-### Step 11：增加 Journal Menu
-
-增加：
-
-```text
-JournalMenuId
-fetch.openJournalHome
-```
-
-根据已注册 `JournalDescriptor` 生成菜单项，并使用 `homeUrl`。
-
----
-
-### Step 12：删除旧结构
+### Step 10：删除旧结构
 
 删除：
 
-```text
-ArticleBrowseService
+~~~text
+ExploreContentItem 公共类型
+ArticleTypeItem 公共类型
+JournalArticles 旧聚合
+ArticleBrowse*
 ArticleDetailService
-ArticleBrowseState
-ArticleBrowseIndex
-JournalArticleBrowseModel
-articleBrowse.ts
-articleBrowseIds.ts
-articleBrowseUrl
-ArticleListPage
-ArticleListItem
-ArticleRecord
+按 DOI 升级 ArticleId
 公共模型中的 href
-pdfHref
-articleHref
-journalHref
-静态 Explore content
-kind: 'news' | 'opinion'
-旧 Provider 选择分支
+静态 Nature Explore content
+静态 Science Section
+Parser 默认分支
 兼容别名
 Facade
+Adapter
 Re-export
-```
+~~~
 
-迁移触及多少文件，就是实际修改范围，不通过旧接口包装缩小调用面。
+迁移所有调用点，不保留旧接口包装。
 
 ---
 
-## 14. 测试计划
+## 21. 测试计划
 
-### 14.1 ID Tests
+### 21.1 BrowserView Snapshot
+
+验证：
+
+1. 返回当前 main frame 的完整 HTML。
+2. 最终 URI 和 navigationId 正确。
+3. navigationId 不匹配时报错。
+4. CancellationToken 可终止等待。
+5. 页面销毁时请求失败。
+6. 超过大小限制时报错。
+7. Snapshot 中脚本不会在 detached Document 中执行。
+
+### 21.2 ID
 
 验证：
 
 1. 相同输入生成相同 ID。
-2. 不同期刊相同 Label 不冲突。
-3. URL canonicalization 后生成稳定 ID。
-4. DOI 大小写和 resolver 前缀被规范化。
-5. URL fallback ArticleId 稳定。
+2. Source Group label 变化时不改变基于 providerGroupKey 的身份。
+3. 相同 Source 的不同分页 URL 不冲突。
+4. ArticleId 基于 journalId 和 canonical URI。
+5. 详情发现 DOI 不改变 ArticleId。
+6. 同一 Page 中同一 Article 生成同一 ListItemId。
 
----
-
-### 14.2 Registry Tests
-
-验证：
-
-1. 注册并读取 Journal。
-2. 注册并读取 Provider。
-3. 重复 JournalId 报错。
-4. 重复 ProviderId 报错。
-5. 未知 ID 返回明确结果。
-6. 多 Contribution 注册顺序不影响最终结果。
-
----
-
-### 14.3 Nature Parser Fixture Tests
-
-至少覆盖：
-
-```text
-Nature Communications articles 根页面
-Nature 通常文章列表
-Nature 主刊 News / Opinion 列表
-Nature 通常文章详情
-Nature 主刊 News / Opinion 详情
-无图片文章
-无摘要文章
-无 DOI 文章
-多作者文章
-Corresponding author
-无下一页列表
-```
-
-分别验证：
-
-```text
-NatureExploreContentParser
-NatureArticleListParser
-NatureNewsOpinionListParser
-NatureArticleDetailParser
-```
-
-只有保留专用 News / Opinion Detail Parser 时，再验证：
-
-```text
-NatureNewsOpinionArticleDetailParser
-```
-
-额外验证：
-
-1. `NatureNewsOpinionListParser` 只匹配 Nature 主刊的特殊列表结构。
-2. `NatureArticleListParser` 不静默吞掉 News / Opinion 特殊列表页面。
-3. 两个 List Parser 都不匹配时，Provider 明确报错。
-4. Detail 只有少量 selector 差异时，由一个 Parser 覆盖。
-5. Detail 主结构明显不同且已拆分时，两个 Parser 的匹配范围互不重叠。
-6. Parser 选择主要依据 DOM 结构，而不是静态内容类型枚举。
-7. 可选字段缺失时保持 `undefined`，不构造虚假值。
-8. 不存在名为 `Standard` 的 Parser。
-
-Parser 测试只基于固定 HTML Fixture，不依赖在线网页。
-
----
-### 14.4 FetchService Tests
+### 21.3 Registry
 
 验证：
 
-1. Nature 与 Nature Communications 可同时加载。
-2. 两个期刊同名 `Article` 类型 ID 不冲突。
-3. 每个期刊可以拥有不同 Explore content。
-4. 一个期刊失败不影响其他期刊。
-5. 一个 Article type 失败不影响同一期刊其他类型。
-6. `pageIds: []` 与“已加载但无文章”可通过 LoadState 区分。
-7. `fetchNextPage` 只追加目标类型分页。
-8. 重复抓取同一页不会重复追加文章。
-9. 同一文章在多个页面中只保留一个 `ArticleSummary`。
-10. Article detail 独立缓存。
-11. 刷新期刊不会清空其他期刊。
-12. 变化事件只携带受影响 JournalId 或 ArticleId。
+1. 注册和读取 Journal。
+2. 注册和读取 Provider Descriptor。
+3. 重复 ID 报错。
+4. dispose 后撤销注册。
+5. 注册顺序不改变最终结果。
+
+### 21.4 Nature
+
+验证：
+
+1. Explore content 解析为 Source Group。
+2. Article type 解析为 Source。
+3. 不存在 Article type 的非文章入口不创建空 Source。
+4. 普通列表和 News/Opinion 列表匹配范围明确。
+5. 0 个 Parser 匹配时报错。
+6. 多个 Parser 匹配时报错。
+7. 列表 Parser 不输出 ArticleDetail。
+8. Detail Parser 不处理列表页面。
+
+### 21.5 Science
+
+验证：
+
+1. Current Issue 和 First Release 是直接 Source。
+2. Current Issue 解析 IssueMetadata。
+3. Science Section 动态解析为 ArticleGroup。
+4. Science Advances 学科 Section 动态解析为 ArticleGroup。
+5. Section 不写入 articleType。
+6. 列表 articleType 缺失时保持 undefined。
+7. description 与 abstract 分开。
+8. Abstract 控件没有内容时不创建 abstract。
+9. PDF 和 access status 为可选。
+10. Related Article 保存在所属 ListItem 内。
+11. href="#con3" 不产生 corresponding author。
+12. 两个 Journal 共用 Detail Parser 前必须通过双 Fixture。
+
+### 21.6 FetchService
+
+验证：
+
+1. Nature 与 Science Catalog 可同时加载。
+2. Source Group 和 Result Group 不混用。
+3. 一个 Source 失败不影响其他 Source。
+4. 同 URL 第一页重新抓取时替换内容。
+5. fetchNextPage 只追加目标 Source。
+6. 同一 ArticleRecord 可被多个 ListItem 引用。
+7. 不同 ListItem 的卡片字段不互相覆盖。
+8. ArticleDetail 独立缓存。
+9. refreshJournal 只影响目标 Journal。
+10. refreshArticleListSource 清除目标 Source 后续页。
+11. 取消和过期结果不能写入状态。
+12. 事件只携带受影响的 JournalId、SourceId 或 ArticleId。
+
+所有 Parser 测试使用固定 HTML Fixture，不依赖在线网页。
 
 ---
 
-## 15. 验收条件
+## 22. 验收条件
 
-1. 调用方只依赖 `IFetchService`。
-2. 公共层不再存在 `ArticleBrowse*` Service、State 或 Model。
-3. Nature 与 Nature Communications 可同时加载且互不覆盖。
-4. 不同期刊可以拥有完全不同的 Explore content。
-5. `natureJournals.ts` 不包含任何 Explore content 或 Article type。
-6. `homeUrl` 只用于官网访问。
-7. `articlesUrl` 只用于文章结构抓取。
-8. `JournalMenuId` 不进入 `JournalDescriptor`。
-9. `Explore content → Article type → page → article` 可通过 ID 完整恢复。
-10. 每个 Article type 独立维护分页和加载状态。
-11. 一个期刊或类型失败不会污染全局状态。
-12. News / Opinion Parser 由页面结构选择，不依赖静态内容枚举。
-13. `NatureNewsOpinionListParser` 只作为 Nature 主刊特殊列表解析器存在。
-14. 不存在 `NatureArticleListParser` 或 `NatureArticleDetailParser`。
-15. Detail 只有在主结构确实不同时才拆出 News / Opinion 专用 Parser。
-16. 不存在同时处理 News / Opinion List 和 Detail 的宽泛 Parser。
-17. Article detail 独立加载，但由同一个 `IFetchService` 管理。
-18. 第一版不预设 `common/natureParser.ts` 或 Parser 基类。
-19. 公共模型中不存在 `href`。
-20. 增加同结构 Nature 子刊时，只需新增 `JournalDescriptor`。
-21. 增加新出版商时，只需新增 Provider、Journal Descriptor 和 Contribution。
-22. 旧模型、兼容路径、Facade 和 Re-export 全部删除。
-23. 所有新增模型、Registry、Service 和 Parser 均有测试覆盖。
+1. 调用方只依赖 IFetchService。
+2. JournalDescriptor 使用 URI 类型的 homeUrl 和 discoveryUrl。
+3. homeUrl 只用于快速访问。
+4. discoveryUrl 只用于 Source discovery。
+5. 公共模型不存在 ExploreContentItem。
+6. 公共模型不存在 ArticleTypeItem。
+7. Nature Explore content 映射为 ArticleListSourceGroup。
+8. Nature Article type 映射为 ArticleListSource。
+9. Science Current Issue 和 First Release 映射为直接 ArticleListSource。
+10. Science Section 映射为 ArticleGroup。
+11. Source Group 和 Result Group 是不同类型。
+12. Science articleType 是可选 Article 元数据，不是 Source 层级。
+13. ArticleListItem、ArticleRecord、ArticleDetail 保持独立。
+14. ArticleId 不因 DOI 出现而改变。
+15. description 不作为 abstract fallback。
+16. corresponding author 无证据时保持 undefined。
+17. BrowserView 返回序列化 HTML Snapshot，不返回 DOM 对象。
+18. Snapshot 使用直接方法调用，不使用事件控制流。
+19. 所有异步抓取 API 接收 CancellationToken。
+20. Parser Resolver 对 0、1、多个匹配有明确行为。
+21. 不存在默认 Parser 或 Parser fallback。
+22. Registry 保存 Provider 构造描述符并通过 DI 创建实例。
+23. 注册返回 IDisposable。
+24. 同 URL 页面重新抓取可以更新内容。
+25. Refresh、取消和过期结果语义有测试。
+26. 公共模型中不存在 href。
+27. 不存在兼容别名、Facade、Adapter 或 Re-export。
+28. Nature 和 Science 均有 Catalog、List、Detail Fixture 测试。
 
 ---
 
-## 16. 最终命名定案
+## 23. 最终命名
 
-```text
+~~~text
 对外服务
     IFetchService
 
 服务实现
     FetchService
 
-站点实现契约
+出版商契约
     IFetchProvider
-
-Nature 实现
-    NatureFetchProvider
-
-Nature 根页面解析
-    NatureExploreContentParser
-
-Nature 列表解析
-    NatureArticleListParser
-    NatureNewsOpinionListParser
-
-Nature 详情解析
-    NatureArticleDetailParser
-    NatureNewsOpinionArticleDetailParser（仅在确有必要时）
 
 静态期刊
     JournalDescriptor
 
-单期刊动态数据
-    JournalArticles
+来源目录
+    ArticleListCatalog
 
-一级栏目
-    ExploreContentItem
+来源目录分组
+    ArticleListSourceGroup
 
-二级类型
-    ArticleTypeItem
+实际可抓取来源
+    ArticleListSource
 
-分页
+真实分页结果
     ArticlePage
 
-列表文章
-    ArticleSummary
+期次元数据
+    IssueMetadata
+
+结果页面分组
+    ArticleGroup
+
+列表卡片快照
+    ArticleListItem
+
+稳定文章身份
+    ArticleRecord
 
 文章详情
     ArticleDetail
-```
 
-最终主链路：
+浏览器页面快照
+    BrowserPageSnapshot
+~~~
 
-```text
-JournalDescriptor.articlesUrl
+最终主链：
+
+~~~text
+JournalDescriptor.discoveryUrl
           ↓
      IFetchService
           ↓
     IFetchProvider
           ↓
-    JournalArticles
+ ArticleListCatalog
           ↓
-ExploreContentItem
-          ↓
-  ArticleTypeItem
-          ↓
-     ArticlePage
-          ↓
-   ArticleSummary
-          ↓
-    ArticleDetail
-```
+ArticleListSourceGroup? → ArticleListSource
+                              ↓
+                         ArticlePage
+                              ↓
+                         ArticleGroup?
+                              ↓
+                       ArticleListItem
+                              ↓
+                        ArticleRecord
+                              ↓
+                        ArticleDetail
+~~~

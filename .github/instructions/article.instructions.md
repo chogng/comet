@@ -43,7 +43,7 @@ include 7 fields. `Explore content` and `Article type` contain multiple items, s
 
 The website uses `href` values for links rather than `url` values, so decide which property name best matches the data source.
 
-## Article Detail
+## Article Detail Entry
 
 This article page includes the following fields (article-header):
 - article identifier includes article type, if oa, and published time
@@ -72,17 +72,6 @@ for the explore content of news, opinions, the article list structure is differe
 - maybe should print the page as to the PDF.
 
 
-## RSS feed
-
-maybe you can use this to download PDF, but it cannot be used to get the proper article orders follow the website.
-
-## Attention
-
-- the article list contains many articles, one list item corresponse to  one article page, and one article page contain only one article detail. maybe you can call the list as home page which contains many article page. 
-- so you need to divide into two parts, one is get the article list, and the other is get the article detail. includes the nature news, opinions and other nature journals from articles.
-
-The remaining publishers still include ACS, Wiley, Springer, Elsevier, Taylor & Francis, MDPI, Frontiers, PLOS, BMJ, JMIR, JAMA Network, The Lancet, NEJM, Cell, bioRxiv, medRxiv, and others.
-
 # Science
 
 Science-family journals expose a journal home page and two article-list sources:
@@ -97,8 +86,8 @@ The Current Issue page has the following logical structure:
 ```text
 Journal
 └── ArticleListSource
-    └── Issue
-        └── Section
+    └── ArticlePage with IssueMetadata
+        └── Section / ArticleGroup
             └── ArticleListItem
 ```
 
@@ -155,7 +144,7 @@ A related article is a nested relationship of the containing article card, not a
 
 ![Science Current Issue sections, article types, and related articles](image-3.png)
 
-## Article detail for Science and Science Advances
+## Article detail entry for Science and Science Advances
 
 Science and Science Advances article detail pages share the following base fields:
 
@@ -178,3 +167,15 @@ An author link such as `href="#con3"` does not by itself identify a correspondin
 The two journals may share a detail parser only when HTML fixtures confirm that their main structures and matching conditions are the same. Shared fields alone are not sufficient evidence that they use the same parser.
 
 ![Science Advances article detail](image.png)
+
+
+# RSS feed
+
+maybe you can use this to download PDF, but it cannot be used to get the proper article orders follow the website.
+
+# Attention
+
+- the article list contains many articles, one list item corresponse to  one article page, and one article page contain only one article detail. maybe you can call the list as home page which contains many article page.
+- so you need to divide into two parts, one is get the article list, and the other is get the article detail. includes the nature news, opinions and other nature journals from articles.
+
+The remaining publishers still include ACS, Wiley, Springer, Elsevier, Taylor & Francis, MDPI, Frontiers, PLOS, BMJ, JMIR, JAMA Network, The Lancet, NEJM, Cell, bioRxiv, medRxiv, and others.
