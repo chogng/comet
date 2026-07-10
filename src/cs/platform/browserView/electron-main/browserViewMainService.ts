@@ -2912,7 +2912,6 @@ export class BrowserViewMainService implements IBrowserViewService {
   }
 
   async destroyBrowserView(id: string): Promise<void> {
-    getBrowserViewTargetMetadata(id);
     disposeWebContentTargetEntry(id);
   }
 

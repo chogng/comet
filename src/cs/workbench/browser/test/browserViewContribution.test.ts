@@ -596,7 +596,7 @@ test('browser contribution registers storage actions and data storage setting', 
 	]);
 });
 
-test('browser contribution registers navigation actions in the browser navigation toolbar menu', () => {
+test('browser contribution does not register the upstream browser navigation toolbar', () => {
 	const navigationCommandIds = [
 		BrowserViewCommandId.GoBack,
 		BrowserViewCommandId.GoForward,
@@ -606,21 +606,17 @@ test('browser contribution registers navigation actions in the browser navigatio
 
 	assert.deepEqual(
 		navigationCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
-		navigationCommandIds,
+		[undefined, undefined, undefined, undefined],
 	);
 	assert.deepEqual(
 		navigationCommandIds.map(id =>
 			MenuRegistry.getMenuItems(MenuId.BrowserNavigationToolbar).some(item =>
 				isIMenuItem(item) && item.command.id === id)),
-		[true, true, true, true],
+		[false, false, false, false],
 	);
 	assert.equal(
-		commandsRegistry.getCommand(BrowserViewCommandId.FocusUrlInput)?.id,
-		BrowserViewCommandId.FocusUrlInput,
-	);
-	assert.equal(
-		commandsRegistry.getCommand(BrowserViewCommandId.OpenExternal)?.id,
-		BrowserViewCommandId.OpenExternal,
+		commandsRegistry.getCommand(BrowserViewCommandId.FocusUrlInput),
+		null,
 	);
 });
 
@@ -1023,9 +1019,8 @@ test('browser editor renders welcome content for an empty browser tab', () => {
 
 	try {
 		const element = editor.getElement();
-		assert.ok(element.querySelector('.browser-navbar'));
-		assert.ok(element.querySelector('.browser-url-container'));
-		assert.ok(element.querySelector('.browser-remote-indicator'));
+		assert.equal(element.querySelector('.browser-navbar'), null);
+		assert.equal(element.querySelector('.browser-url-container'), null);
 		const welcome = element.querySelector('.browser-welcome-container') as HTMLElement | null;
 		assert.ok(welcome);
 		assert.equal(
@@ -1116,10 +1111,7 @@ test('browser editor error contribution renders certificate errors and trusts on
 			element.querySelector('.browser-cert-details-value')?.textContent,
 			'ERR_CERT_AUTHORITY_INVALID',
 		);
-		assert.equal(
-			(element.querySelector('.browser-site-info-container') as HTMLElement | null)?.style.display,
-			'',
-		);
+		assert.equal(element.querySelector('.browser-site-info-container'), null);
 
 		const proceedButton = [...element.querySelectorAll('.browser-cert-action button')]
 			.find(button => button.textContent === 'Proceed anyway (unsafe)') as HTMLButtonElement | undefined;
@@ -1198,7 +1190,7 @@ test('browser editor find contribution searches selected text in the model', asy
 	}
 });
 
-test('browser favorites contribution persists the current URL and updates the indicator', async () => {
+test('browser favorites contribution persists the current URL without mounting the upstream indicator', async () => {
 	const storageValues = new Map<string, string>();
 	const serviceCollection = new ServiceCollection(
 		[IThemeService, createTestThemeService()],
@@ -1245,10 +1237,7 @@ test('browser favorites contribution persists the current URL and updates the in
 			storageValues.get(`${StorageScope.WORKSPACE}:workbench.browser.favorites`),
 			'["https://example.com/article"]',
 		);
-		assert.equal(
-			(editor.getElement().querySelector('.browser-favorite-indicator-container') as HTMLElement | null)?.style.display,
-			'',
-		);
+		assert.equal(editor.getElement().querySelector('.browser-favorite-indicator-container'), null);
 	} finally {
 		editor.dispose();
 		instantiationService.dispose();

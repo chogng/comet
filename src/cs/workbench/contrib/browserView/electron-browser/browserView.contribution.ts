@@ -30,7 +30,6 @@ import type {
 } from 'cs/workbench/browser/parts/editor/editorModel';
 
 import 'cs/workbench/contrib/browserView/electron-browser/features/webContentsViewRendererFeature';
-import 'cs/workbench/contrib/browserView/electron-browser/features/browserNavigationFeatures';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserFavoritesFeature';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserHistoryFeature';
