@@ -8,10 +8,28 @@ const workbenchHtmlPath = fileURLToPath(
   new URL('./src/cs/code/electron-browser/workbench.html', import.meta.url),
 );
 const loopbackHost = '127.0.0.1';
+const webWorkbenchPath = '/src/cs/code/browser/';
 
 export default defineConfig({
   base: './',
   clearScreen: false,
+	plugins: [
+		{
+			name: 'web-workbench-root-redirect',
+			configureServer(server) {
+				server.middlewares.use((request, response, next) => {
+					if (request.url !== '/') {
+						next();
+						return;
+					}
+
+					response.statusCode = 302;
+					response.setHeader('Location', webWorkbenchPath);
+					response.end();
+				});
+			},
+		},
+	],
 	resolve: {
 		alias: {
 			app: appPath,
