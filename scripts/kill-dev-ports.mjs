@@ -119,7 +119,6 @@ async function main() {
       : await getPosixListeningPidsByPort(TARGET_PORTS);
 
   if (pids.length === 0) {
-    console.log(`[predev] no stale listeners on ports ${targetText}`);
     return;
   }
 

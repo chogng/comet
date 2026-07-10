@@ -51,7 +51,6 @@ $targetText = ($Ports -join ', ')
 $pids = Get-ListeningPidsByPort -TargetPorts $Ports
 
 if ($pids.Length -eq 0) {
-  Write-Host "[predev] no stale listeners on ports $targetText"
   exit 0
 }
 
