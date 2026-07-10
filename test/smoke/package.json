@@ -1,0 +1,12 @@
+{
+	"name": "comet-studio-smoke-tests",
+	"version": "0.1.0",
+	"description": "Comet Studio Electron smoke tests",
+	"license": "MIT",
+	"private": true,
+	"type": "commonjs",
+	"scripts": {
+		"compile": "npm --prefix ../automation run compile && node ../../node_modules/typescript/bin/tsc",
+		"mocha": "node ../../node_modules/mocha/bin/mocha --ui tdd --timeout 120000 \"out/**/*.test.js\""
+	}
+}

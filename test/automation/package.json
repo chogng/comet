@@ -1,0 +1,14 @@
+{
+	"name": "comet-studio-automation",
+	"version": "0.1.0",
+	"description": "Comet Studio UI automation driver",
+	"license": "MIT",
+	"main": "./out/index.js",
+	"types": "./out/index.d.ts",
+	"private": true,
+	"type": "commonjs",
+	"scripts": {
+		"compile": "npm run copy-driver-definition && node ../../node_modules/typescript/bin/tsc",
+		"copy-driver-definition": "node tools/copy-driver-definition.mjs"
+	}
+}

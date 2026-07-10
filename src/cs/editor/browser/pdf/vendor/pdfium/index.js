@@ -7999,7 +7999,7 @@ var createPdfium = (() => {
       'demangle',
       'stackTrace',
     ];
-    missingLibrarySymbocs.forEach(missingLibrarySymbol);
+    missingLibrarySymbols.forEach(missingLibrarySymbol);
 
     var unexportedSymbols = [
       'run',
@@ -8120,7 +8120,7 @@ var createPdfium = (() => {
       'print',
       'printErr',
     ];
-    unexportedSymbocs.forEach(unexportedRuntimeSymbol);
+    unexportedSymbols.forEach(unexportedRuntimeSymbol);
 
     var calledRun;
     var calledPrerun;

@@ -32,6 +32,11 @@ function isNativeWorkbenchAuxiliaryWindow() {
 	return query.has('nativeOverlay');
 }
 
+function isSmokeTestDriverEnabled() {
+	const query = new URLSearchParams(window.location.search);
+	return query.get('enableSmokeTestDriver') === 'true';
+}
+
 async function main() {
 	assertDesktopIpcBridge();
 	await import('cs/workbench/workbench.desktop.main');
@@ -41,6 +46,19 @@ async function main() {
 	if (!isNativeWorkbenchAuxiliaryWindow()) {
 		startWorkbenchContributions();
 		window.addEventListener('beforeunload', stopWorkbenchContributions, {
+			once: true,
+		});
+	}
+
+	if (isSmokeTestDriverEnabled()) {
+		const { registerWindowDriver } = await import(
+			'cs/workbench/services/driver/browser/driver'
+		);
+		const { getWorkbenchInstantiationService } = await import(
+			'cs/workbench/services/instantiation/browser/workbenchInstantiationService'
+		);
+		const driver = registerWindowDriver(getWorkbenchInstantiationService());
+		window.addEventListener('beforeunload', () => driver.dispose(), {
 			once: true,
 		});
 	}

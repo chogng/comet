@@ -32,6 +32,7 @@ let currentUseMica = true;
 let currentBackgroundColor = '#ffffff';
 const AUX_WINDOW_LOG_ENABLED = isCompatFetchEnvEnabled('LS_FETCH_TIMING', 'READER_FETCH_TIMING');
 const RENDERER_DEBUG_LOG_ENABLED = process.env.LS_RENDERER_DEBUG === '1';
+const SMOKE_TEST_DRIVER_ENABLED = process.argv.includes('--enable-smoke-test-driver');
 
 interface IDefaultBrowserWindowOptions {
 	readonly useMica: boolean;
@@ -382,10 +383,15 @@ export function createMainWindow(options: ICreateMainWindowOptions) {
 	setTrayMainWindow(window);
 
 	const devUrl = process.env.ELECTRON_RENDERER_URL;
+	const rendererQuery: Record<string, string> = SMOKE_TEST_DRIVER_ENABLED
+		? { enableSmokeTestDriver: 'true' }
+		: {};
 	if (devUrl) {
-		void window.loadURL(resolveWorkbenchRendererUrl(devUrl));
+		void window.loadURL(resolveWorkbenchRendererUrl(devUrl, rendererQuery));
 	} else {
-		void window.loadFile(resolveWorkbenchRendererFilePath());
+		void window.loadFile(resolveWorkbenchRendererFilePath(), {
+			query: rendererQuery,
+		});
 	}
 
 	window.on('close', () => {

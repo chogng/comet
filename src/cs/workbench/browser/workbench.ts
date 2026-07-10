@@ -145,6 +145,11 @@ import {
 } from 'cs/workbench/services/sidebar/common/sidebarEntryService';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
+import {
+  ILifecycleService,
+  LifecyclePhase,
+  type IWorkbenchLifecycleService,
+} from 'cs/workbench/services/lifecycle/common/lifecycle';
 
 export type WorkbenchServicesSyncParams = {
   settingsController: SettingsController;
@@ -449,6 +454,7 @@ class WorkbenchHost {
     @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
     @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
+    @ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
   ) {
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
@@ -2058,6 +2064,8 @@ class WorkbenchHost {
       updateActiveBrowserTabPageTitle,
       updateActiveBrowserTabFaviconUrl,
     });
+
+    this.lifecycleService.setPhase(LifecyclePhase.Restored);
 
   }
 }

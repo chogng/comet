@@ -239,3 +239,5 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 		this.focusTimeout = undefined;
 	}
 }
+
+BrowserEditor.registerContribution(WebContentsViewRendererFeature);
