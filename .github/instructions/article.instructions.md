@@ -1,4 +1,4 @@
-# Articles for nature journals
+# Nature
 
 maybe check this string in HTML？
 > li
@@ -76,9 +76,51 @@ for the explore content of news, opinions, the article list structure is differe
 
 maybe you can use this to download PDF, but it cannot be used to get the proper article orders follow the website.
 
-# Attention
+## Attention
 
 - the article list contains many articles, one list item corresponse to  one article page, and one article page contain only one article detail. maybe you can call the list as home page which contains many article page. 
 - so you need to divide into two parts, one is get the article list, and the other is get the article detail. includes the nature news, opinions and other nature journals from articles.
 
 above almost include the nature, without the scicence, acs, wiley, springer, elsevier, taylorfrancis, mdpi, frontiers, plos, bmj, jmir, jamanetwork, thelancet, nejm, cell, biorxiv, medrxiv and so on.
+
+# science
+
+- current issue
+- first release papers (almost none)
+
+## Article list for sci. adv.
+- section title
+- article title
+- author list
+- published time
+- oa
+- description
+- abstract(simple)
+![sci. adv. article list](image-2.png)
+![sci. adv. article list](image-1.png)
+
+## Article detail for sci. adv.
+- the same as the science article detail.
+![sci. adv. article](image.png)
+
+## Article list for science
+- section title
+- article type (red font, looks like only science show this field directly on the current issue page, other journals show this field on the article detail page)
+- article title
+- author list
+- published time
+- page range (if exist)
+- oa
+- description (if exist)
+- abstract(simple)
+- related article info (if exist)(the info includes the article type, article title, author list(simple), journal title, published time)
+![science](image-3.png)
+
+## Article detail for science
+- article type
+- article title
+- author list （detailed, the author use the format of `href="#con3"`, but i cannot find the corresponding author labels in the HTML, so maybe you can read the HTML to find the labels for checking the cors au.
+- journal title, published time, volume, issue, page range, doi
+- cite link
+- editor abstract (if exist)
+- abstract (if exist, for some articles like the persepctive article)
