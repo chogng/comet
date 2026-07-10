@@ -79,7 +79,7 @@ Nature 的 Article type 决定抓取哪个文章列表。Science 的 Article typ
 6. Publisher 专属术语不进入公共领域模型。
 7. Article list 与 Article detail 分阶段抓取，但由同一个服务管理。
 8. ArticleListItem、ArticleRecord、ArticleDetail 保持独立语义。
-9. BrowserView 负责页面加载和 HTML Snapshot；Fetch Provider 负责出版商解析。
+9. FetchPageSession 复用 IPlaywrightService 获取类型化 HTML Snapshot；Fetch Provider 负责出版商解析。
 10. 公共资源使用 URI；href 只存在于 HTML Parser 局部。
 11. 所有长时间运行的抓取 API 接收 CancellationToken。
 12. 不保留旧接口、兼容别名、Facade、Adapter 或 Re-export。
@@ -109,12 +109,19 @@ IFetchProvider
 ├── AcsFetchProvider
 └── ...
 
-BrowserView / PageSession
-├── 页面导航
-├── Cookie 和 Session
-├── 页面加载状态
+IFetchPageSession
+├── 目标页面导航
+├── 导航成功验证
 ├── readiness
-└── 序列化 HTML Snapshot
+├── 调用 IPlaywrightService.captureSnapshot()
+└── Snapshot URI admission
+
+IPlaywrightService
+├── BrowserView Page tracking
+├── Cookie 和 Session
+├── Playwright Page 生命周期
+├── ARIA Snapshot
+└── 类型化 HTML Snapshot
 
 Parser
 ├── 只读取 detached Document
@@ -131,9 +138,11 @@ IFetchService
     ↓
 IFetchProvider
     ↓
-BrowserView / PageSession
+IFetchPageSession
     ↓
-BrowserPageSnapshot
+IPlaywrightService.captureSnapshot()
+    ↓
+IBrowserPageSnapshot
     ↓
 DOMParser
     ↓
@@ -500,44 +509,40 @@ Science 的 Article type 可能直到详情页才被发现。ArticleListItem.art
 
 ---
 
-## 9. BrowserView Page Snapshot
+## 9. Browser Page Snapshot 依赖
 
-Fetch 不接收跨进程 DOM 对象。BrowserView 返回可序列化 HTML Snapshot。
+Browser Page Snapshot 是独立平台能力，详细方案见：
+
+~~~text
+.github/instructions/plan_browser_page_snapshot.md
+~~~
+
+Fetch 不在 IBrowserViewService 上增加 Snapshot API，也不直接使用 Playwright Page 或 invokeFunctionRaw()。
+
+Fetch 内部只依赖：
 
 ~~~ts
-export interface BrowserPageSnapshot {
-	readonly browserViewId: string;
-	readonly navigationId: number;
-	readonly uri: URI;
-	readonly title: string;
-	readonly html: string;
-	readonly capturedAt: number;
+export interface IFetchPageSession {
+	navigateAndCapture(
+		uri: URI,
+		readiness: IPageSnapshotReadiness | undefined,
+		token: CancellationToken
+	): Promise<IBrowserPageSnapshot>;
 }
 ~~~
 
-BrowserView 侧提供直接请求方法：
+IFetchPageSession 负责：
 
-~~~ts
-capturePageSnapshot(
-	id: string,
-	expectedNavigationId: number,
-	token: CancellationToken
-): Promise<BrowserPageSnapshot>;
-~~~
+1. 获取或创建 Fetch 所属的 tracked Browser Page。
+2. 导航到目标 URI。
+3. 导航 Promise 失败时直接终止，不读取旧页面。
+4. 导航成功后调用 IPlaywrightService.captureSnapshot()。
+5. 验证 Snapshot URI 满足目标 URI 和 redirect policy。
+6. 返回 IBrowserPageSnapshot。
 
-规则：
+IFetchProvider 负责为页面提供 Publisher-specific readiness 和 admission，但不管理 BrowserView、Playwright Page、Cookie 或 Session。
 
-1. Snapshot 来自当前实际 WebContents。
-2. html 使用 document.documentElement.outerHTML 序列化。
-3. 返回最终 URI 和 navigationId。
-4. expectedNavigationId 不匹配时明确报错。
-5. 页面加载、Cookie、Session、重定向和 readiness 由 BrowserView/PageSession 管理。
-6. Fetch 只在本地使用 DOMParser 创建 detached Document。
-7. detached Document 中的脚本不得执行。
-8. 第一版只抓取 main frame；iframe 支持必须单独设计。
-9. Snapshot 必须设置大小限制并记录明确错误。
-
-BrowserView 的导航和 loading 事件只用于状态通知。获取 Snapshot 使用直接方法调用，不通过事件请求和事件回传。
+Parser 只接收由 snapshot.html 创建的 detached Document。第一版不自行引入 navigationId 或 pageVersion。
 
 ---
 
@@ -662,7 +667,7 @@ refreshArticleListSource：
 1. 同一个 Catalog、Source 或 Article 同时只保留一个活动任务。
 2. 新 refresh 取消同目标的旧任务。
 3. 取消后的结果不得写入状态。
-4. navigationId 或任务 generation 不匹配的结果必须丢弃并报告过期。
+4. 任务 generation 不匹配或 Snapshot URI admission 失败的结果必须丢弃并报告过期。
 5. 一个 Source 失败不能污染同 Journal 的其他 Source。
 
 ---
@@ -771,7 +776,10 @@ FetchService
     状态、身份、工作流、并发和缓存
 
 FetchProvider
-    Publisher 流程、Snapshot 请求、Parser Resolver 和 URI 规范化
+    Publisher 流程、readiness、admission、Parser Resolver 和 URI 规范化
+
+FetchPageSession
+    页面导航和 IPlaywrightService Snapshot 调用
 
 Parser
     detached Document 到 Parsed Result 的纯解析
@@ -1067,14 +1075,15 @@ src/cs/workbench/contrib/fetch/
                 └── *.test.ts
 ~~~
 
-BrowserView Snapshot 契约和实现位于 BrowserView 平台层，不放入 Publisher Provider：
+Browser Page Snapshot 契约和实现位于 IPlaywrightService，不放入 Publisher Provider：
 
 ~~~text
-src/cs/platform/browserView/common/
-src/cs/platform/browserView/electron-main/
+src/cs/platform/browserView/common/playwrightService.ts
+上游参考：src/vs/platform/browserView/node/playwrightService.ts
+上游参考：src/vs/platform/browserView/node/playwrightTab.ts
 ~~~
 
-实际路径以当前 BrowserView 服务边界为准，不创建 Fetch 私有的 BrowserView Facade。
+Fetch 侧只增加 IFetchPageSession 实现，不创建 Fetch 私有的 BrowserView 或 Playwright Facade。
 
 ---
 
@@ -1085,12 +1094,12 @@ src/cs/platform/browserView/electron-main/
 修改前读取：
 
 1. .github/instructions 下全部适用规则。
-2. 当前 Fetch、BrowserView、IPC 和调用面。
-3. /Users/lance/Desktop/vscode 中的 Registry、Service、Contribution、CancellationToken 和进程实现。
+2. 当前 Fetch、IPlaywrightService、BrowserView 和调用面。
+3. /Users/lance/Desktop/vscode 中的 Registry、Service、Playwright Snapshot、Contribution、CancellationToken 和进程实现。
 
-### Step 1：增加 BrowserView Page Snapshot
+### Step 1：完成 Browser Page Snapshot 前置方案
 
-实现可取消的 capturePageSnapshot，并验证 navigationId、最终 URI、HTML 序列化、大小限制和销毁行为。
+按 plan_browser_page_snapshot.md 完成 IPlaywrightService.captureSnapshot()。Fetch Plan 不重复实现该平台能力。
 
 ### Step 2：建立新公共模型
 
@@ -1172,17 +1181,17 @@ Re-export
 
 ## 21. 测试计划
 
-### 21.1 BrowserView Snapshot
+### 21.1 Browser Page Snapshot 集成
 
 验证：
 
-1. 返回当前 main frame 的完整 HTML。
-2. 最终 URI 和 navigationId 正确。
-3. navigationId 不匹配时报错。
-4. CancellationToken 可终止等待。
-5. 页面销毁时请求失败。
-6. 超过大小限制时报错。
-7. Snapshot 中脚本不会在 detached Document 中执行。
+1. IFetchPageSession 使用 IPlaywrightService.captureSnapshot()。
+2. 导航失败后不调用 captureSnapshot()。
+3. Snapshot URI admission 失败时不进入 Parser。
+4. readiness 由 Provider 提供并传递给 Snapshot API。
+5. CancellationToken 可终止 PageSession。
+6. Parser 只接收 detached Document。
+7. Snapshot 平台层完整测试由 plan_browser_page_snapshot.md 验收。
 
 ### 21.2 ID
 
@@ -1274,8 +1283,8 @@ Re-export
 14. ArticleId 不因 DOI 出现而改变。
 15. description 不作为 abstract fallback。
 16. corresponding author 无证据时保持 undefined。
-17. BrowserView 返回序列化 HTML Snapshot，不返回 DOM 对象。
-18. Snapshot 使用直接方法调用，不使用事件控制流。
+17. Fetch 通过 IPlaywrightService 获取 IBrowserPageSnapshot，不在 IBrowserViewService 创建平行 API。
+18. Fetch 不直接使用 Playwright Page 或 invokeFunctionRaw()。
 19. 所有异步抓取 API 接收 CancellationToken。
 20. Parser Resolver 对 0、1、多个匹配有明确行为。
 21. 不存在默认 Parser 或 Parser fallback。
@@ -1332,7 +1341,10 @@ Re-export
     ArticleDetail
 
 浏览器页面快照
-    BrowserPageSnapshot
+    IBrowserPageSnapshot
+
+Fetch 页面会话
+    IFetchPageSession
 ~~~
 
 最终主链：
@@ -1343,6 +1355,12 @@ JournalDescriptor.discoveryUrl
      IFetchService
           ↓
     IFetchProvider
+          ↓
+ IFetchPageSession
+          ↓
+IPlaywrightService.captureSnapshot()
+          ↓
+IBrowserPageSnapshot
           ↓
  ArticleListCatalog
           ↓
