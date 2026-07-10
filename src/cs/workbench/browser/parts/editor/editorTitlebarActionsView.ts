@@ -2,8 +2,10 @@ import {
   createActionBarView,
   type ActionBarItem,
 } from 'cs/base/browser/ui/actionbar/actionbar';
+import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
 export type EditorTitlebarActionsViewProps = {
   isEditorCollapsed: boolean;
@@ -12,9 +14,14 @@ export type EditorTitlebarActionsViewProps = {
   agentSidebarToggleLabel?: string;
   labels: Pick<
     EditorPartLabels,
+    | 'headerAddAction'
+    | 'createDraft'
+    | 'createBrowser'
+    | 'createFile'
     | 'expandEditor'
     | 'collapseEditor'
   >;
+  onOpenEditor: EditorOpenHandler;
   onToggleEditorCollapse: () => void;
   onToggleAgentSidebar?: () => void;
 };
@@ -45,7 +52,48 @@ export class EditorTitlebarActionsView {
   }
 
   private render() {
-    const actionItems: ActionBarItem[] = [];
+    const actionItems: ActionBarItem[] = [
+      createDropdownMenuActionViewItem({
+        label: this.props.labels.headerAddAction,
+        title: this.props.labels.headerAddAction,
+        content: createLxIcon('add'),
+        buttonClassName: 'comet-editor-titlebar-add-btn',
+        overlayAlignment: 'end',
+        menuData: 'editor-titlebar-add',
+        menu: [
+          {
+            label: this.props.labels.createDraft,
+            icon: 'draft',
+            onClick: () => {
+              void this.props.onOpenEditor({
+                kind: 'draft',
+                disposition: 'reveal-or-open',
+              });
+            },
+          },
+          {
+            label: this.props.labels.createBrowser,
+            icon: 'link-external',
+            onClick: () => {
+              void this.props.onOpenEditor({
+                kind: 'browser',
+                disposition: 'reveal-or-open',
+              });
+            },
+          },
+          {
+            label: this.props.labels.createFile,
+            icon: 'file-text',
+            onClick: () => {
+              void this.props.onOpenEditor({
+                kind: 'pdf',
+                disposition: 'reveal-or-open',
+              });
+            },
+          },
+        ],
+      }),
+    ];
     if (this.props.showAgentSidebarToggle && this.props.onToggleAgentSidebar) {
       actionItems.push({
         label: this.props.agentSidebarToggleLabel ?? '',

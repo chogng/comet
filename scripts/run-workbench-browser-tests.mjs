@@ -20,6 +20,7 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorInput.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorModel.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorOpenService.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorTitlebarActionsView.test.ts'),
   path.join(
     rootDir,
     'src',

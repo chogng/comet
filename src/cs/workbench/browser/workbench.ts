@@ -394,9 +394,14 @@ class WorkbenchHost {
     showAgentSidebarToggle: false,
     agentSidebarToggleLabel: '',
     labels: {
+      headerAddAction: '',
+      createDraft: '',
+      createBrowser: '',
+      createFile: '',
       expandEditor: '',
       collapseEditor: '',
     },
+    onOpenEditor: () => {},
     onToggleEditorCollapse: () => {},
   });
   private readonly sidebarFooterActionsView = new SidebarFooterActionsView();
@@ -1011,7 +1016,7 @@ class WorkbenchHost {
       leadingTitlebarActionsElement:
         this.titlebarPart.getLeadingActionsElement(),
       sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-      collapsedEditorTitlebarActionsElement:
+      editorTitlebarActionsElement:
         props.editorTitlebarActionsElement,
     };
 
@@ -1319,6 +1324,12 @@ class WorkbenchHost {
       updateActiveBrowserTabFaviconUrl:
         editorPartControllerInstance.updateActiveBrowserTabFaviconUrl,
     };
+    const handleOpenEditor: EditorPartProps['onOpenEditor'] = request => {
+      if (isEditorCollapsed) {
+        setEditorCollapsed(false, expandedEditorSize);
+      }
+      return editorPartControllerInstance.openEditor(request);
+    };
 
     const chatServiceInstance = this.chatService;
     chatServiceInstance.setContext({
@@ -1405,10 +1416,7 @@ class WorkbenchHost {
           return false;
         }
 
-        if (isEditorCollapsed) {
-          setEditorCollapsed(false, expandedEditorSize);
-        }
-        editorPartControllerInstance.openEditor({
+        handleOpenEditor({
           kind: 'browser',
           disposition: 'new-tab',
           resource: BrowserViewUri.forId(createEditorTabInputId('browser')),
@@ -1447,7 +1455,7 @@ class WorkbenchHost {
         isSelectionModeEnabled: selectionModePhase !== 'off',
         selectedArticleOrderLookup,
         exportableArticles,
-        onOpenEditor: editorPartControllerInstance.openEditor,
+        onOpenEditor: handleOpenEditor,
         onExportArticleSummaries:
           articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
         activeDraftExport,
@@ -1458,7 +1466,7 @@ class WorkbenchHost {
 
     const baseEditorPartProps = editorPartProps;
     const focusWorkbenchWebUrlInput = () => {
-      editorPartControllerInstance.openEditor({
+      handleOpenEditor({
         kind: 'browser',
         disposition: 'reveal-or-open',
       });
@@ -1497,16 +1505,22 @@ class WorkbenchHost {
       ...baseEditorPartProps,
       nativeHost,
       ...editorBrowserToolbarActions,
+      onOpenEditor: handleOpenEditor,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     };
     this.editorTitlebarActionsView.setProps({
-      isEditorCollapsed: true,
+      isEditorCollapsed,
       isAgentSidebarVisible: false,
       showAgentSidebarToggle: false,
       labels: {
+        headerAddAction: contentAwareEditorPartProps.labels.headerAddAction,
+        createDraft: contentAwareEditorPartProps.labels.createDraft,
+        createBrowser: contentAwareEditorPartProps.labels.createBrowser,
+        createFile: contentAwareEditorPartProps.labels.createFile,
         expandEditor: contentAwareEditorPartProps.labels.expandEditor,
         collapseEditor: contentAwareEditorPartProps.labels.collapseEditor,
       },
+      onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     });
 
@@ -1535,10 +1549,7 @@ class WorkbenchHost {
       chatServiceInstance.collectSelectedArticleBatch(filteredArticles);
     const articleQuickSources = getConfigBatchSourceSeed();
     const handleFetchArticleSource = async (source: BatchSource) => {
-      if (isEditorCollapsed) {
-        setEditorCollapsed(false, expandedEditorSize);
-      }
-      editorPartControllerInstance.openEditor({
+      handleOpenEditor({
         kind: 'browser',
         disposition: 'reveal-or-open',
       });
@@ -1641,7 +1652,7 @@ class WorkbenchHost {
         isSelectionModeEnabled: selectionModePhase !== 'off',
         selectedArticleOrderLookup,
         exportableArticles,
-        onOpenEditor: editorPartControllerInstance.openEditor,
+        onOpenEditor: handleOpenEditor,
         onExportArticleSummaries:
           articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
         activeDraftExport,

@@ -490,9 +490,14 @@ export class EditorGroupView {
     showAgentSidebarToggle: false,
     agentSidebarToggleLabel: '',
     labels: {
+      headerAddAction: '',
+      createDraft: '',
+      createBrowser: '',
+      createFile: '',
       expandEditor: '',
       collapseEditor: '',
     },
+    onOpenEditor: () => {},
     onToggleEditorCollapse: () => {},
     onToggleAgentSidebar: () => {},
   });
@@ -670,9 +675,14 @@ export class EditorGroupView {
       showAgentSidebarToggle: Boolean(this.props.showAgentSidebarToggle),
       agentSidebarToggleLabel: this.props.agentSidebarToggleLabel ?? '',
       labels: {
+        headerAddAction: this.props.labels.headerAddAction,
+        createDraft: this.props.labels.createDraft,
+        createBrowser: this.props.labels.createBrowser,
+        createFile: this.props.labels.createFile,
         expandEditor: this.props.labels.expandEditor,
         collapseEditor: this.props.labels.collapseEditor,
       },
+      onOpenEditor: this.props.onOpenEditor,
       onToggleEditorCollapse: this.props.onToggleEditorCollapse ?? (() => {}),
       onToggleAgentSidebar: this.props.onToggleAgentSidebar,
     });

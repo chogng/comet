@@ -63,6 +63,7 @@ export function resolveTitlebarCloseLabel(ui: LocaleMessages) {
 export function createEditorTitlebarActionsProps(params: {
   ui: LocaleMessages;
   editorPartProps: EditorPartProps;
+  isEditorCollapsed: boolean;
   isAgentSidebarVisible: boolean;
   showAgentSidebarToggle: boolean;
   onToggleEditorCollapse: () => void;
@@ -71,6 +72,7 @@ export function createEditorTitlebarActionsProps(params: {
   const {
     ui,
     editorPartProps,
+    isEditorCollapsed,
     isAgentSidebarVisible,
     showAgentSidebarToggle,
     onToggleEditorCollapse,
@@ -78,7 +80,7 @@ export function createEditorTitlebarActionsProps(params: {
   } = params;
 
   return {
-    isEditorCollapsed: true,
+    isEditorCollapsed,
     isAgentSidebarVisible,
     showAgentSidebarToggle,
     agentSidebarToggleLabel: resolveTitlebarAssistantToggleLabel(
@@ -86,9 +88,14 @@ export function createEditorTitlebarActionsProps(params: {
       isAgentSidebarVisible,
     ),
     labels: {
+      headerAddAction: editorPartProps.labels.headerAddAction,
+      createDraft: editorPartProps.labels.createDraft,
+      createBrowser: editorPartProps.labels.createBrowser,
+      createFile: editorPartProps.labels.createFile,
       expandEditor: editorPartProps.labels.expandEditor,
       collapseEditor: editorPartProps.labels.collapseEditor,
     },
+    onOpenEditor: editorPartProps.onOpenEditor,
     onToggleEditorCollapse,
     onToggleAgentSidebar,
   };
