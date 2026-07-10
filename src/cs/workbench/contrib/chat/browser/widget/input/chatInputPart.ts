@@ -168,7 +168,9 @@ export class ChatInputPart {
 		}));
 
 		const toolbar = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-toolbar');
-		this.renderDisposables.add(this.modelPicker.render(toolbar));
+		const modelPickerContainer = $<HTMLElementTagNameMap['div']>('div');
+		this.renderDisposables.add(this.modelPicker.render(modelPickerContainer));
+		toolbar.append(modelPickerContainer);
 		const sendLabel = this.props.isAsking
 			? localize('assistantSidebarSendBusy', "Asking...")
 			: localize('assistantSidebarSend', "Send");

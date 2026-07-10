@@ -373,6 +373,13 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', a
 
     const dropdownButton = element.querySelector('.comet-chat-model-switch-btn');
     assert(dropdownButton instanceof HTMLButtonElement);
+		const modelPickerContainer = dropdownButton.parentElement;
+		const composerToolbar = modelPickerContainer?.parentElement;
+		assert(modelPickerContainer instanceof HTMLDivElement);
+		assert(composerToolbar instanceof HTMLDivElement);
+		assert.equal(modelPickerContainer.classList.contains('comet-chat-model-switch'), true);
+		assert.equal(composerToolbar.classList.contains('comet-chat-model-switch'), false);
+		assert.equal(composerToolbar.classList.contains('comet-chat-composer-toolbar'), true);
     assert.equal(
       dropdownButton.querySelector('.comet-chat-model-switch-label')?.textContent,
       'GLM-4.7-Flash',
