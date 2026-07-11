@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon, createLxLoadingIcon } from 'cs/base/browser/ui/lxicons/lxicons';

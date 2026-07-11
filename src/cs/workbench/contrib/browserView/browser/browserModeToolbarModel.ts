@@ -1,13 +1,18 @@
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import type { LocaleMessages } from 'language/locales';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import type { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
-import type { EditorModeToolbarContributionContext } from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
+import type { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
+import type { EditorModeToolbarContributionContext } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarTypes';
 import { Verbosity } from 'cs/workbench/common/editor';
 
 type EditorModeToolbarSourceProps = {
   activeTab: EditorInput | null;
   activePaneId: string | null;
-  labels: EditorPartLabels;
+  ui: LocaleMessages;
   viewPartProps: {
     browserUrl: string;
     browserPageTitle?: string;
@@ -100,6 +105,7 @@ export function createEditorModeToolbarContext(
 ): EditorModeToolbarContext {
   const mode = props.activePaneId === 'browser' ? 'browser' : null;
   const activeBrowserMetadata = resolveActiveBrowserMetadata(props);
+	const { ui } = props;
 
   return {
     mode,
@@ -109,33 +115,30 @@ export function createEditorModeToolbarContext(
     browserTabTitle: activeBrowserMetadata.browserTabTitle,
     electronRuntime: props.viewPartProps.electronRuntime,
     labels: {
-      toolbarSources: props.labels.toolbarSources,
-      toolbarBack: props.labels.toolbarBack,
-      toolbarForward: props.labels.toolbarForward,
-      toolbarRefresh: props.labels.toolbarRefresh,
-      toolbarFavorite: props.labels.toolbarFavorite,
-      toolbarArchivePage: props.labels.toolbarArchivePage,
-      toolbarExportDocx: props.labels.toolbarExportDocx,
-      toolbarMore: props.labels.toolbarMore,
-      toolbarHardReload: props.labels.toolbarHardReload,
-      toolbarCopyCurrentUrl: props.labels.toolbarCopyCurrentUrl,
-      toolbarClearBrowsingHistory: props.labels.toolbarClearBrowsingHistory,
-      toolbarClearCookies: props.labels.toolbarClearCookies,
-      toolbarClearCache: props.labels.toolbarClearCache,
-      toolbarAddressBar: props.labels.toolbarAddressBar,
-      toolbarAddressPlaceholder: props.labels.toolbarAddressPlaceholder,
-      browserHistoryAndFavoritesPanelTitle: props.labels.browserHistoryAndFavoritesPanelTitle,
-      browserHistoryAndFavoritesPanelRecentTitle: props.labels.browserHistoryAndFavoritesPanelRecentTitle,
-      browserHistoryAndFavoritesPanelRecentTodayTitle: props.labels.browserHistoryAndFavoritesPanelRecentTodayTitle,
-      browserHistoryAndFavoritesPanelRecentYesterdayTitle:
-        props.labels.browserHistoryAndFavoritesPanelRecentYesterdayTitle,
-      browserHistoryAndFavoritesPanelRecentLast7DaysTitle:
-        props.labels.browserHistoryAndFavoritesPanelRecentLast7DaysTitle,
-      browserHistoryAndFavoritesPanelRecentLast30DaysTitle:
-        props.labels.browserHistoryAndFavoritesPanelRecentLast30DaysTitle,
-      browserHistoryAndFavoritesPanelRecentOlderTitle: props.labels.browserHistoryAndFavoritesPanelRecentOlderTitle,
-      browserHistoryAndFavoritesPanelFavoritesTitle: props.labels.browserHistoryAndFavoritesPanelFavoritesTitle,
-      browserHistoryAndFavoritesPanelEmptyState: props.labels.browserHistoryAndFavoritesPanelEmptyState,
+			toolbarSources: ui.agentbarToolbarSources,
+			toolbarBack: ui.titlebarBack,
+			toolbarForward: ui.titlebarForward,
+			toolbarRefresh: ui.titlebarRefresh,
+			toolbarFavorite: ui.agentbarToolbarFavorite,
+			toolbarArchivePage: ui.editorToolbarArchivePage,
+			toolbarExportDocx: ui.titlebarExportDocx,
+			toolbarMore: ui.agentbarToolbarMore,
+			toolbarHardReload: ui.editorToolbarHardReload,
+			toolbarCopyCurrentUrl: ui.editorToolbarCopyCurrentUrl,
+			toolbarClearBrowsingHistory: ui.editorToolbarClearBrowsingHistory,
+			toolbarClearCookies: ui.editorToolbarClearCookies,
+			toolbarClearCache: ui.editorToolbarClearCache,
+			toolbarAddressBar: ui.agentbarToolbarAddressBar,
+			toolbarAddressPlaceholder: ui.editorToolbarAddressPlaceholder,
+			browserHistoryAndFavoritesPanelTitle: ui.agentbarToolbarSources,
+			browserHistoryAndFavoritesPanelRecentTitle: ui.editorToolbarSourcesRecent,
+			browserHistoryAndFavoritesPanelRecentTodayTitle: ui.editorToolbarSourcesToday,
+			browserHistoryAndFavoritesPanelRecentYesterdayTitle: ui.editorToolbarSourcesYesterday,
+			browserHistoryAndFavoritesPanelRecentLast7DaysTitle: ui.editorToolbarSourcesLast7Days,
+			browserHistoryAndFavoritesPanelRecentLast30DaysTitle: ui.editorToolbarSourcesLast30Days,
+			browserHistoryAndFavoritesPanelRecentOlderTitle: ui.editorToolbarSourcesOlder,
+			browserHistoryAndFavoritesPanelFavoritesTitle: ui.editorToolbarSourcesFavorites,
+			browserHistoryAndFavoritesPanelEmptyState: ui.editorToolbarSourcesEmpty,
     },
     onOpenSources: props.onOpenAddressBarSourceMenu,
     onNavigateBack: props.onToolbarNavigateBack,

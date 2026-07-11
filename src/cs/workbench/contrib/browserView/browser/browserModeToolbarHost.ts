@@ -1,18 +1,46 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
-import { createEditorBrowserModeToolbarContribution } from 'cs/workbench/browser/parts/editor/editorBrowserModeToolbarContribution';
-import { createEditorModeToolbarContext, resolveActiveBrowserMetadata } from 'cs/workbench/browser/parts/editor/editorModeToolbarModel';
-import { isBrowserEditorPane } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
-import type { BrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
+import { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
+import { createEditorBrowserModeToolbarContribution } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarContribution';
+import { createEditorModeToolbarContext, resolveActiveBrowserMetadata } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarModel';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
 import { Verbosity } from 'cs/workbench/common/editor';
-import { MutableDisposable } from 'cs/base/common/lifecycle';
+import { MutableDisposable, type IDisposable } from 'cs/base/common/lifecycle';
 import type { EditorModeToolbarHostContext } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
+import type { AnyEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import type { BrowserHistoryAndFavoritesPanelFeatures } from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
+import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
+
+export interface BrowserEditorModeToolbarState {
+	readonly tabId: string;
+	readonly url: string;
+	readonly title: string;
+	readonly favicon: string | undefined;
+	readonly loading: boolean;
+}
+
+export interface BrowserEditorModeToolbarPaneAdapter {
+	supportsPane(pane: AnyEditorPane | null): boolean;
+	getState(pane: AnyEditorPane): BrowserEditorModeToolbarState | undefined;
+	onDidChangeState(
+		pane: AnyEditorPane,
+		listener: (state: BrowserEditorModeToolbarState) => void,
+	): IDisposable;
+	getHistoryAndFavoritesFeatures(pane: AnyEditorPane): BrowserHistoryAndFavoritesPanelFeatures | undefined;
+	navigate(pane: AnyEditorPane, url: string): void | Promise<void>;
+	goBack(pane: AnyEditorPane): void | Promise<void>;
+	goForward(pane: AnyEditorPane): void | Promise<void>;
+	reload(pane: AnyEditorPane, hard?: boolean): void | Promise<void>;
+}
 
 export class EditorModeToolbarHost {
 	private context: EditorModeToolbarHostContext;
-	private readonly browserStateByTabId = new Map<string, BrowserEditorPaneState>();
+	private readonly browserStateByTabId = new Map<string, BrowserEditorModeToolbarState>();
 	private readonly browserHistoryAndFavoritesPanel: BrowserHistoryAndFavoritesPanel;
 	private readonly browserToolbar: ReturnType<typeof createEditorBrowserModeToolbarContribution>;
 	private readonly browserStateListener = new MutableDisposable();
@@ -20,6 +48,8 @@ export class EditorModeToolbarHost {
 	constructor(
 		context: EditorModeToolbarHostContext,
 		dropdownServices: DropdownContextServices,
+		private readonly paneAdapter: BrowserEditorModeToolbarPaneAdapter,
+		@IBrowserEditorToolbarService private readonly toolbarService: IBrowserEditorToolbarService,
 	) {
 		this.context = context;
 		this.browserHistoryAndFavoritesPanel = new BrowserHistoryAndFavoritesPanel(
@@ -41,25 +71,25 @@ export class EditorModeToolbarHost {
 		this.context = context;
 		this.pruneBrowserStates();
 		this.browserHistoryAndFavoritesPanel.setContext(this.createBrowserHistoryAndFavoritesPanelContext());
-		this.browserHistoryAndFavoritesPanel.setFeatures(
-			isBrowserEditorPane(context.activePane)
-				? context.activePane.getHistoryAndFavoritesFeatures()
-				: undefined,
-		);
+		this.browserHistoryAndFavoritesPanel.setFeatures(context.activePane && this.paneAdapter.supportsPane(context.activePane)
+			? this.paneAdapter.getHistoryAndFavoritesFeatures(context.activePane)
+			: undefined);
 		this.browserStateListener.clear();
-		if (isBrowserEditorPane(context.activePane)) {
-			this.browserStateListener.value = context.activePane.onDidChangeBrowserState(
+		if (context.activePane && this.paneAdapter.supportsPane(context.activePane)) {
+			this.browserStateListener.value = this.paneAdapter.onDidChangeState(
+				context.activePane,
 				state => this.updateBrowserState(state),
 			);
-			if (context.activePane.browserState) {
-				this.updateBrowserState(context.activePane.browserState);
+			const state = this.paneAdapter.getState(context.activePane);
+			if (state) {
+				this.updateBrowserState(state);
 			}
 		}
 		this.browserToolbar.setContext(this.createBrowserToolbarContext());
 		this.mountBrowserPanel();
 	}
 
-	private updateBrowserState(browserState: BrowserEditorPaneState): void {
+	private updateBrowserState(browserState: BrowserEditorModeToolbarState): void {
 		const previous = this.browserStateByTabId.get(browserState.tabId);
 		if (
 			previous?.url === browserState.url &&
@@ -90,9 +120,17 @@ export class EditorModeToolbarHost {
 	}
 
 	private createBrowserToolbarContext() {
+		const actions = this.toolbarService.actions;
 		return createEditorModeToolbarContext({
 			...this.context,
 			viewPartProps: this.getBrowserViewPartProps(),
+			onOpenAddressBarSourceMenu: actions.onOpenSources,
+			onToolbarArchiveCurrentPage: actions.onArchiveCurrentPage,
+			onToolbarExportDocx: actions.onExportDocx,
+			onToolbarCopyCurrentUrl: actions.onCopyCurrentUrl,
+			onToolbarClearBrowsingHistory: actions.onClearBrowsingHistory,
+			onToolbarClearCookies: actions.onClearCookies,
+			onToolbarClearCache: actions.onClearCache,
 			onToolbarNavigateBack: this.navigateBrowserBack,
 			onToolbarNavigateForward: this.navigateBrowserForward,
 			onToolbarNavigateRefresh: this.reloadBrowser,
@@ -116,18 +154,18 @@ export class EditorModeToolbarHost {
 			browserIsLoading: activeBrowserMetadata.hasActiveBrowserTab ? Boolean(viewPartProps.browserIsLoading) : false,
 			browserTabTitle: activeBrowserMetadata.hasActiveBrowserTab ? activeBrowserMetadata.browserTabTitle : '',
 			labels: {
-				title: this.context.labels.browserHistoryAndFavoritesPanelTitle,
-				recentTitle: this.context.labels.browserHistoryAndFavoritesPanelRecentTitle,
-				recentTodayTitle: this.context.labels.browserHistoryAndFavoritesPanelRecentTodayTitle,
-				recentYesterdayTitle: this.context.labels.browserHistoryAndFavoritesPanelRecentYesterdayTitle,
-				recentLast7DaysTitle: this.context.labels.browserHistoryAndFavoritesPanelRecentLast7DaysTitle,
-				recentLast30DaysTitle: this.context.labels.browserHistoryAndFavoritesPanelRecentLast30DaysTitle,
-				recentOlderTitle: this.context.labels.browserHistoryAndFavoritesPanelRecentOlderTitle,
-				favoritesTitle: this.context.labels.browserHistoryAndFavoritesPanelFavoritesTitle,
-				emptyState: this.context.labels.browserHistoryAndFavoritesPanelEmptyState,
-				contextOpen: this.context.labels.browserHistoryAndFavoritesPanelContextOpen,
-				contextOpenInNewTab: this.context.labels.browserHistoryAndFavoritesPanelContextOpenInNewTab,
-				contextRemoveFavorite: this.context.labels.browserHistoryAndFavoritesPanelContextRemoveFavorite,
+				title: this.context.ui.agentbarToolbarSources,
+				recentTitle: this.context.ui.editorToolbarSourcesRecent,
+				recentTodayTitle: this.context.ui.editorToolbarSourcesToday,
+				recentYesterdayTitle: this.context.ui.editorToolbarSourcesYesterday,
+				recentLast7DaysTitle: this.context.ui.editorToolbarSourcesLast7Days,
+				recentLast30DaysTitle: this.context.ui.editorToolbarSourcesLast30Days,
+				recentOlderTitle: this.context.ui.editorToolbarSourcesOlder,
+				favoritesTitle: this.context.ui.editorToolbarSourcesFavorites,
+				emptyState: this.context.ui.editorToolbarSourcesEmpty,
+				contextOpen: this.context.ui.editorFavoriteContextOpen,
+				contextOpenInNewTab: this.context.ui.editorFavoriteContextOpenInNewTab,
+				contextRemoveFavorite: this.context.ui.editorFavoriteContextRemove,
 			},
 			onNavigateToUrl: this.navigateBrowserToUrl,
 			onOpenEditor: this.context.onOpenEditor,
@@ -148,17 +186,17 @@ export class EditorModeToolbarHost {
 	}
 
 	private getActiveBrowserPane() {
-		if (!isBrowserEditorPane(this.context.activePane)) {
+		if (!this.context.activePane || !this.paneAdapter.supportsPane(this.context.activePane)) {
 			throw new Error('The active editor pane is not a Browser editor.');
 		}
 		return this.context.activePane;
 	}
 
-	private readonly navigateBrowserToUrl = (url: string) => void this.getActiveBrowserPane().navigate(url);
-	private readonly navigateBrowserBack = () => void this.getActiveBrowserPane().goBack();
-	private readonly navigateBrowserForward = () => void this.getActiveBrowserPane().goForward();
-	private readonly reloadBrowser = () => void this.getActiveBrowserPane().reload();
-	private readonly hardReloadBrowser = () => void this.getActiveBrowserPane().reload(true);
+	private readonly navigateBrowserToUrl = (url: string) => void this.paneAdapter.navigate(this.getActiveBrowserPane(), url);
+	private readonly navigateBrowserBack = () => void this.paneAdapter.goBack(this.getActiveBrowserPane());
+	private readonly navigateBrowserForward = () => void this.paneAdapter.goForward(this.getActiveBrowserPane());
+	private readonly reloadBrowser = () => void this.paneAdapter.reload(this.getActiveBrowserPane());
+	private readonly hardReloadBrowser = () => void this.paneAdapter.reload(this.getActiveBrowserPane(), true);
 
 	private mountBrowserPanel(): void {
 		if (this.context.activePaneId !== 'browser') {
@@ -184,6 +222,12 @@ export class EditorModeToolbarHost {
 export function createEditorModeToolbarHost(
 	context: EditorModeToolbarHostContext,
 	dropdownServices: DropdownContextServices,
+	paneAdapter: BrowserEditorModeToolbarPaneAdapter,
 ) {
-	return new EditorModeToolbarHost(context, dropdownServices);
+	return context.instantiationService.createInstance(
+		EditorModeToolbarHost,
+		context,
+		dropdownServices,
+		paneAdapter,
+	);
 }

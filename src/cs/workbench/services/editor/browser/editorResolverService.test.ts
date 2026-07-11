@@ -57,7 +57,7 @@ test('editor resolver resolves resources through scheme glob registrations', () 
 	const service = new EditorResolverService();
 	const resource = URI.parse('vscode-browser:/browser-a');
 	const options: IEditorOptions = {
-		override: 'workbench.editor.browser',
+		override: 'browser',
 		viewState: {
 			url: 'https://example.com',
 		},
@@ -144,4 +144,25 @@ test('editor resolver requires both glob and resource support to match', () => {
 	});
 
 	assert.equal(service.resolveEditor({ resource }), undefined);
+});
+
+test('editor resolver honors an explicit editor override', () => {
+	const service = new EditorResolverService();
+	const resource = URI.parse('test:/resource');
+	registerTestEditor(service, {
+		globPattern: '*',
+		id: 'default-editor',
+		priority: RegisteredEditorPriority.default,
+	});
+	registerTestEditor(service, {
+		globPattern: '*',
+		id: 'alternate-editor',
+		priority: RegisteredEditorPriority.builtin,
+	});
+
+	const resolved = service.resolveEditor({
+		resource,
+		options: { override: 'alternate-editor' },
+	});
+	assert.equal(resolved?.editor.typeId, 'alternate-editor');
 });

@@ -27,11 +27,19 @@ export class EditorService implements IEditorService {
 		input: EditorInput | IUntypedEditorInput,
 		options: IEditorOpenOptions = {},
 	): Promise<EditorInput> {
+		const ownsResolvedInput = !(input instanceof EditorInput);
+		const typedInput = ownsResolvedInput ? this.resolveEditorInput(input, options) : input;
+		let openedInput: EditorInput;
+		try {
+			openedInput = this.editorGroupsService.openEditor(typedInput, options);
+		} catch (error) {
+			if (ownsResolvedInput) {
+				typedInput.dispose();
+			}
+			throw error;
+		}
 		this.ensureEditorPartVisible();
-		const typedInput = input instanceof EditorInput
-			? input
-			: this.resolveEditorInput(input, options);
-		return this.editorGroupsService.openEditor(typedInput, options);
+		return openedInput;
 	}
 
 	activateEditor(editor: EditorInput): void {

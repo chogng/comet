@@ -257,18 +257,6 @@
   border-radius: 3px;
 }
 
-.comet-editor-tab[data-pane-mode='draft'] .comet-editor-tab-icon {
-  color: var(--comet-editor-tabKindDraftForeground, #35536f);
-}
-
-.comet-editor-tab[data-pane-mode='browser'] .comet-editor-tab-icon {
-  color: var(--comet-editor-tabKindWebForeground, #5f572f);
-}
-
-.comet-editor-tab[data-pane-mode='pdf'] .comet-editor-tab-icon {
-  color: var(--comet-editor-tabKindPdfForeground, #6f3f35);
-}
-
 .comet-editor-tab-label-text {
   min-width: 0;
   overflow: hidden;

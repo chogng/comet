@@ -21,14 +21,14 @@ import { IInstantiationService } from 'cs/platform/instantiation/common/instanti
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPaneLayout } from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { BrowserEditorPaneLabels } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
 import type {
 	BrowserEditorPaneState,
 	IBrowserEditorPane,
 } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
-import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
+import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import type { ThemeIcon } from 'cs/base/common/themables';
@@ -136,7 +136,7 @@ export interface IBrowserUrlPickerActionProvider {
 }
 
 export type BrowserEditorProps = {
-	labels: EditorPartLabels;
+	labels: BrowserEditorPaneLabels;
 	nativeHost: INativeHostService;
 };
 
@@ -270,7 +270,6 @@ export class BrowserEditor extends EditorPane<
 	}
 
 	constructor(
-		input: BrowserEditorInput,
 		props: BrowserEditorProps,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
@@ -280,7 +279,6 @@ export class BrowserEditor extends EditorPane<
 		this.hasUrlContext = CONTEXT_BROWSER_HAS_URL.bindTo(this.browserContextKeyService);
 		this.hasErrorContext = CONTEXT_BROWSER_HAS_ERROR.bindTo(this.browserContextKeyService);
 		this.createEditor();
-		this.setInput(input);
 	}
 
 	static registerContribution(ctor: BrowserEditorContributionCtor): void {

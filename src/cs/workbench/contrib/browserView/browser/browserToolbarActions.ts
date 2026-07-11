@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type {
   WebContentHtmlArchiveResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -5,11 +10,9 @@ import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { LocaleMessages } from 'language/locales';
-import type { EditorPartBrowserToolbarActions } from 'cs/workbench/browser/parts/editor/editorPartView';
-import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
+import { getEditorContentDisplayUrl } from 'cs/workbench/contrib/browserView/browser/browserUrlPresentation';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
-
-type EditorBrowserToolbarActionHandlers = EditorPartBrowserToolbarActions;
+import type { BrowserEditorToolbarActions } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
 
 type CreateEditorBrowserToolbarActionsParams = {
   browserUrl: string;
@@ -20,7 +23,7 @@ type CreateEditorBrowserToolbarActionsParams = {
   ui: LocaleMessages;
   onLibraryUpdated?: () => void | Promise<void>;
   onOpenAddressBarSourceMenu: () => void;
-  onToolbarExportDocx?: () => void | Promise<void>;
+  onToolbarExportDocx: () => void | Promise<void>;
 };
 
 async function copyTextToClipboard(value: string) {
@@ -50,7 +53,7 @@ async function copyTextToClipboard(value: string) {
 
 export function createEditorBrowserToolbarActions(
   params: CreateEditorBrowserToolbarActionsParams,
-): EditorBrowserToolbarActionHandlers {
+): BrowserEditorToolbarActions {
   const {
     browserUrl,
     browserPageTitle,
@@ -60,12 +63,12 @@ export function createEditorBrowserToolbarActions(
     ui,
     onLibraryUpdated,
     onOpenAddressBarSourceMenu,
-    onToolbarExportDocx = () => {},
+    onToolbarExportDocx,
   } = params;
 
   return {
-    onOpenAddressBarSourceMenu,
-    onToolbarArchiveCurrentPage: async () => {
+		onOpenSources: onOpenAddressBarSourceMenu,
+		onArchiveCurrentPage: async () => {
       try {
         const result = await invokeDesktop<WebContentHtmlArchiveResult>(
           'web_content_archive_html',
@@ -91,10 +94,10 @@ export function createEditorBrowserToolbarActions(
         notificationService.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
       }
     },
-    onToolbarExportDocx: () => {
+		onExportDocx: () => {
       void onToolbarExportDocx();
     },
-    onToolbarCopyCurrentUrl: async () => {
+		onCopyCurrentUrl: async () => {
       const currentUrl = getEditorContentDisplayUrl(browserUrl);
       if (!currentUrl) {
         return;
@@ -109,10 +112,10 @@ export function createEditorBrowserToolbarActions(
         notificationService.error(ui.toastCurrentUrlCopyFailed.replace('{error}', message));
       }
     },
-    onToolbarClearBrowsingHistory: () => {
+		onClearBrowsingHistory: () => {
       notificationService.info(ui.toastBrowsingHistoryCleared);
     },
-    onToolbarClearCookies: async () => {
+		onClearCookies: async () => {
       try {
         const cleared = await invokeDesktop<boolean>('clear_web_cookies');
         if (!cleared) {
@@ -125,7 +128,7 @@ export function createEditorBrowserToolbarActions(
         notificationService.error(ui.toastCookiesClearFailed.replace('{error}', message));
       }
     },
-    onToolbarClearCache: async () => {
+		onClearCache: async () => {
       try {
         const cleared = await invokeDesktop<boolean>('clear_web_cache');
         if (!cleared) {
@@ -138,5 +141,5 @@ export function createEditorBrowserToolbarActions(
         notificationService.error(ui.toastCacheClearFailed.replace('{error}', message));
       }
     },
-  };
+  } satisfies BrowserEditorToolbarActions;
 }

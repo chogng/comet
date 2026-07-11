@@ -21,7 +21,7 @@ import {
 	EditorInput,
 	type IEditorCloseHandler,
 } from 'cs/workbench/common/editor/editorInput';
-import { DraftEditorInputScheme } from 'cs/workbench/common/editor/editorResources';
+import { DraftEditorInputScheme } from 'cs/workbench/contrib/draftEditor/common/draftEditorResources';
 import { Codicon } from 'cs/base/common/codicons';
 import { localize } from 'cs/nls';
 

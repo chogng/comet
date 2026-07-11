@@ -1,6 +1,6 @@
 import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { DraftEditorPaneLabels } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
 import type { EditorStatusItem } from 'cs/workbench/browser/parts/editor/editorStatus';
 
 function formatBlockValue(status: DraftEditorStatusState): string {
@@ -10,7 +10,7 @@ function formatBlockValue(status: DraftEditorStatusState): string {
 }
 
 export function createDraftEditorPaneState(
-	labels: EditorPartLabels,
+	labels: DraftEditorPaneLabels,
 	status: DraftEditorStatusState,
 ): EditorPaneRuntimeState {
 	const leftItems: EditorStatusItem[] = [

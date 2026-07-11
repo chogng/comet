@@ -14,9 +14,9 @@ export type TitleControlCallbacks = {
 
 export type TitleControlLabels = {
   close: string;
-  closeOthers?: string;
-  closeAll?: string;
-  rename?: string;
+  closeOthers: string;
+  closeAll: string;
+  rename: string;
 };
 
 export type TitleControlProps = {

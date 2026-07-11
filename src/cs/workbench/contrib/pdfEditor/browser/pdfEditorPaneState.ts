@@ -2,7 +2,7 @@ import type { PdfReaderRuntimeStatus } from 'cs/editor/browser/pdf/pdfDocumentRe
 import { Verbosity } from 'cs/workbench/common/editor';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { PdfEditorPaneLabels } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPane';
 import type { EditorContentStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 
 function createContentStatus(status: PdfReaderRuntimeStatus): EditorContentStatusState | undefined {
@@ -26,7 +26,7 @@ function createContentStatus(status: PdfReaderRuntimeStatus): EditorContentStatu
 
 export function createPdfEditorPaneState(
 	input: EditorInput,
-	labels: EditorPartLabels,
+	labels: PdfEditorPaneLabels,
 	readerStatus: PdfReaderRuntimeStatus,
 ): EditorPaneRuntimeState {
 	const contentStatus = createContentStatus(readerStatus);

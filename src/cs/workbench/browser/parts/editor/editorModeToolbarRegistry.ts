@@ -1,18 +1,25 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { toDisposable } from 'cs/base/common/lifecycle';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import type { EditorPartBrowserToolbarActions, EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { AnyEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
+import type { LocaleMessages } from 'language/locales';
+import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
-export type EditorModeToolbarHostContext = EditorPartBrowserToolbarActions & {
+export type EditorModeToolbarHostContext = {
+	readonly ui: LocaleMessages;
+	readonly instantiationService: IInstantiationService;
 	readonly activeTab: EditorInput | null;
 	readonly activePaneId: string | null;
 	readonly activePane: AnyEditorPane | null;
 	readonly contentElement: HTMLElement;
 	readonly toolbarElement: HTMLElement;
-	readonly labels: EditorPartLabels;
 	readonly viewPartProps: ViewPartProps;
 	readonly onOpenEditor: EditorOpenHandler;
 };

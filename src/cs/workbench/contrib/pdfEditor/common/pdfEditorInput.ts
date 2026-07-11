@@ -12,7 +12,7 @@ import type { IEditorSerializer } from 'cs/workbench/common/editor';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { normalizeUrl } from 'cs/workbench/common/url';
-import { EmptyEditorUrl, PdfEditorInputScheme } from 'cs/workbench/common/editor/editorResources';
+import { EmptyPdfEditorUrl, PdfEditorInputScheme } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorResources';
 import { Codicon } from 'cs/base/common/codicons';
 import { localize } from 'cs/nls';
 
@@ -48,7 +48,7 @@ export interface PdfEditorInputOptions {
 }
 
 function getPdfEditorTitle(url: string): string {
-	if (url === EmptyEditorUrl) {
+	if (url === EmptyPdfEditorUrl) {
 		return '';
 	}
 	const uri = URI.parse(url);
@@ -69,7 +69,7 @@ export class PdfEditorInput extends EditorInput {
 	constructor(options: PdfEditorInputOptions = {}) {
 		super();
 		this._id = options.id ?? generateUuid();
-		this._url = normalizeUrl(options.url?.trim() || EmptyEditorUrl);
+		this._url = normalizeUrl(options.url?.trim() || EmptyPdfEditorUrl);
 		this._title = options.title?.trim()
 			|| getPdfEditorTitle(this._url);
 		this.resource = options.resource ?? URI.from({ scheme: PdfEditorInputScheme, path: this._id });
@@ -126,7 +126,7 @@ export class PdfEditorInput extends EditorInput {
 	}
 
 	setSource(url: string, title?: string): void {
-		const nextUrl = normalizeUrl(url.trim() || EmptyEditorUrl);
+		const nextUrl = normalizeUrl(url.trim() || EmptyPdfEditorUrl);
 		const nextTitle = title?.trim()
 			|| getPdfEditorTitle(nextUrl);
 		if (this._url === nextUrl && this._title === nextTitle) {

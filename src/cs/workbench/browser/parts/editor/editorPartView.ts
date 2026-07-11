@@ -6,11 +6,7 @@ import type {
   EditorStatusLabels,
   EditorStatusState,
 } from 'cs/workbench/browser/parts/editor/editorStatus';
-import type { WritingEditorSurfaceLabels } from 'cs/editor/browser/text/editor';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
-import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
-import { createActiveDraftEditorCommandExecutor } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
-import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import { EditorGroupView } from 'cs/workbench/browser/parts/editor/editorGroupView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
@@ -20,77 +16,26 @@ import type { IInstantiationService } from 'cs/platform/instantiation/common/ins
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { IEditorGroup } from 'cs/workbench/services/editor/common/editorGroupsService';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import type { LocaleMessages } from 'language/locales';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
-import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
-import 'cs/workbench/browser/parts/editor/media/browserHistoryAndFavoritesPanel.css';
 import 'cs/workbench/browser/parts/editor/media/tabsTitleControl.css';
 
 export type EditorPartLabels = {
   headerAddAction: string;
-  createDraft: string;
-  createBrowser: string;
-  createFile: string;
-  newTab: string;
-  toolbarSources: string;
-  toolbarBack: string;
-  toolbarForward: string;
-  toolbarRefresh: string;
-  toolbarFavorite: string;
-  toolbarArchivePage: string;
-  toolbarExportDocx: string;
-  toolbarMore: string;
-  toolbarHardReload: string;
-  toolbarCopyCurrentUrl: string;
-  toolbarClearBrowsingHistory: string;
-  toolbarClearCookies: string;
-  toolbarClearCache: string;
-  toolbarAddressBar: string;
-  toolbarAddressPlaceholder: string;
-  browserHistoryAndFavoritesPanelTitle: string;
-  browserHistoryAndFavoritesPanelRecentTitle: string;
-  browserHistoryAndFavoritesPanelRecentTodayTitle: string;
-  browserHistoryAndFavoritesPanelRecentYesterdayTitle: string;
-  browserHistoryAndFavoritesPanelRecentLast7DaysTitle: string;
-  browserHistoryAndFavoritesPanelRecentLast30DaysTitle: string;
-  browserHistoryAndFavoritesPanelRecentOlderTitle: string;
-  browserHistoryAndFavoritesPanelFavoritesTitle: string;
-  browserHistoryAndFavoritesPanelEmptyState: string;
-  browserHistoryAndFavoritesPanelContextOpen: string;
-  browserHistoryAndFavoritesPanelContextOpenInNewTab: string;
-  browserHistoryAndFavoritesPanelContextRemoveFavorite: string;
-  draftMode: string;
-  sourceMode: string;
-  pdfMode: string;
   close: string;
-  closeOthers?: string;
-  closeAll?: string;
-  rename?: string;
-  editorModalConfirm: string;
-  editorModalCancel: string;
+  closeOthers: string;
+  closeAll: string;
+  rename: string;
   expandEditor: string;
   collapseEditor: string;
-  emptyWorkspaceTitle: string;
-  emptyWorkspaceBody: string;
-  draftBodyPlaceholder: string;
-  pdfTitle: string;
-  pdfOpenFile?: string;
-  renameTabTitle?: string;
-  renameTabLabel?: string;
   status: EditorStatusLabels;
-} & WritingEditorSurfaceLabels;
-
-export type EditorPartBrowserToolbarActions = {
-  onOpenAddressBarSourceMenu: () => void;
-  onToolbarArchiveCurrentPage: () => void | Promise<void>;
-  onToolbarExportDocx?: () => void | Promise<void>;
-  onToolbarCopyCurrentUrl: () => void | Promise<void>;
-  onToolbarClearBrowsingHistory: () => void;
-  onToolbarClearCookies: () => void | Promise<void>;
-  onToolbarClearCache: () => void | Promise<void>;
 };
 
 export type EditorPartBaseProps = {
+  ui: LocaleMessages;
   labels: EditorPartLabels;
+  creationActions: readonly EditorCreationAction[];
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
@@ -123,20 +68,18 @@ export type EditorPartBaseProps = {
   onStatusChange?: (status: EditorStatusState) => void;
 };
 
-export type EditorPartProps = EditorPartBaseProps &
-  EditorPartBrowserToolbarActions &
-  DropdownContextServices;
+export type EditorPartProps = EditorPartBaseProps & DropdownContextServices & {
+	onOpenSources: () => void;
+};
 
 export class EditorPartView {
   private readonly element = document.createElement('section');
   private readonly groupView: EditorGroupView;
-  private readonly draftCommandExecutor: ReturnType<typeof createActiveDraftEditorCommandExecutor>;
 
   constructor(props: EditorPartProps) {
     this.element.className = 'comet-panel comet-editor-panel';
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, this.element);
     this.groupView = new EditorGroupView(props);
-    this.draftCommandExecutor = createActiveDraftEditorCommandExecutor(() => this.groupView.getActivePane());
     this.element.append(this.groupView.getElement());
   }
 
@@ -150,22 +93,6 @@ export class EditorPartView {
 
   layout(width: number, height: number) {
     this.groupView.layout(width, height);
-  }
-
-  executeActiveDraftCommand(commandId: DraftEditorCommandId) {
-    return this.draftCommandExecutor.execute(commandId);
-  }
-
-  canExecuteActiveDraftCommand(commandId: DraftEditorCommandId) {
-    return this.draftCommandExecutor.canExecute(commandId);
-  }
-
-  runActiveDraftEditorAction(actionId: DraftEditorSurfaceActionId) {
-    return this.draftCommandExecutor.runAction(actionId);
-  }
-
-  getActiveDraftStableSelectionTarget() {
-    return this.draftCommandExecutor.getStableSelectionTarget();
   }
 
   whenEditorTabViewStateSettled(tabId: string) {

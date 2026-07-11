@@ -663,7 +663,7 @@ const targetElement = event.currentTarget;
             this.props.onCloseOtherTabs
               ? toAction({
                   id: 'close-others',
-                  label: this.props.labels.closeOthers ?? 'Close Others',
+                  label: this.props.labels.closeOthers,
                   run: () => {
                     void this.props.onCloseOtherTabs?.(tabId);
                   },
@@ -672,7 +672,7 @@ const targetElement = event.currentTarget;
             this.props.onCloseAllTabs
               ? toAction({
                   id: 'close-all',
-                  label: this.props.labels.closeAll ?? 'Close All',
+                  label: this.props.labels.closeAll,
                   run: () => {
                     void this.props.onCloseAllTabs?.();
                   },
@@ -683,7 +683,7 @@ const targetElement = event.currentTarget;
       this.props.onRenameTab
         ? toAction({
             id: 'rename',
-            label: this.props.labels.rename ?? 'Rename',
+            label: this.props.labels.rename,
             run: () => {
               void this.props.onRenameTab?.(tabId);
             },

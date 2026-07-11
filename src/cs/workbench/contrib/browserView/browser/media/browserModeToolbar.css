@@ -1,0 +1,67 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.comet-editor-browser-toolbar-leading,
+.comet-editor-browser-toolbar-trailing {
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.comet-editor-browser-toolbar {
+	position: relative;
+	overflow: visible;
+}
+
+.comet-editor-browser-toolbar-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+}
+
+.comet-editor-browser-toolbar-address-host {
+	flex: 1;
+	min-width: 0;
+}
+
+.comet-editor-browser-toolbar-actions {
+	--editor-browser-toolbar-action-size: 24px;
+	--editor-browser-toolbar-icon-size: 16px;
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.comet-editor-browser-toolbar-actions .comet-actionbar-actions-container {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.comet-editor-browser-toolbar-btn.comet-actionbar-action {
+	width: var(--editor-browser-toolbar-action-size);
+	height: var(--editor-browser-toolbar-action-size);
+	border: none;
+	background: transparent;
+	color: var(--comet-sideBar-foreground, #1f2d3a);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
+
+.comet-editor-browser-toolbar-btn.comet-actionbar-action .lx-icon {
+	width: var(--editor-browser-toolbar-icon-size);
+	height: var(--editor-browser-toolbar-icon-size);
+	font-size: var(--editor-browser-toolbar-icon-size);
+}
+
+.comet-editor-browser-toolbar-address-input.comet-inputbox {
+	--comet-inputbox-height: 26px;
+	--comet-inputbox-border-radius: 7px;
+	--comet-inputbox-foreground: var(--comet-agentBar-inputForeground, #1f2d3a);
+	width: 100%;
+}

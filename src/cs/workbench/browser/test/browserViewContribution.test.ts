@@ -333,9 +333,8 @@ function createTestBrowserEditor(
 		dispose() {},
 	} as IContextMenuServiceType);
 	const input = browserViewWorkbenchService.getOrCreateLazy(options.id, options);
-	return instantiationService.createInstance(
+	const editor = instantiationService.createInstance(
 		BrowserEditor,
-		input,
 		{
 			labels: {
 				sourceMode: 'Browser',
@@ -346,8 +345,10 @@ function createTestBrowserEditor(
 			},
 			nativeHost: createTestNativeHostService(),
 			onDidChangeBrowserState: () => {},
-		} as unknown as ConstructorParameters<typeof BrowserEditorType>[1],
+		} as unknown as ConstructorParameters<typeof BrowserEditorType>[0],
 	);
+	editor.setInput(input);
+	return editor;
 }
 
 type ChatContextInsert = {

@@ -149,3 +149,13 @@ test('EditorGroup forwards input label and dirty changes without knowing input t
 	]);
 	group.dispose();
 });
+
+test('EditorInput emits its disposal event only once', () => {
+	const input = new TestEditorInput(URI.parse('test:/dispose-once'));
+	let disposeEvents = 0;
+	input.onWillDispose(() => disposeEvents += 1);
+
+	input.dispose();
+	input.dispose();
+	assert.equal(disposeEvents, 1);
+});

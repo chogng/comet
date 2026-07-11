@@ -44,7 +44,7 @@ import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { generateUuid } from 'cs/base/common/uuid';
 
 import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
-import { createEditorBrowserToolbarActions } from 'cs/workbench/browser/parts/editor/editorBrowserToolbarActions';
+import { createEditorBrowserToolbarActions } from 'cs/workbench/contrib/browserView/browser/browserToolbarActions';
 import { SidebarFooterActionsView } from 'cs/workbench/browser/parts/sidebar/sidebarFooterActions';
 import {
   createSidebarFooterTitlebarLabels,
@@ -78,6 +78,7 @@ import { IInstantiationService } from 'cs/platform/instantiation/common/instanti
 import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
+import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
 import { NotificationsStatus } from 'cs/workbench/browser/parts/notifications/notificationsStatus';
@@ -377,6 +378,7 @@ class WorkbenchHost {
     @IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
     @IEditorService private readonly editorService: IEditorService,
     @IDraftEditorService private readonly draftEditorService: IDraftEditorService,
+	@IBrowserEditorToolbarService private readonly browserEditorToolbarService: IBrowserEditorToolbarService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
     @IFetchService private readonly fetchService: IFetchService,
     @IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
@@ -395,12 +397,10 @@ class WorkbenchHost {
       agentSidebarToggleLabel: '',
       labels: {
         headerAddAction: '',
-        createDraft: '',
-        createBrowser: '',
-        createFile: '',
         expandEditor: '',
         collapseEditor: '',
       },
+		creationActions: [],
       commandService: this.commandService,
       onToggleEditorCollapse: () => {},
     });
@@ -467,6 +467,7 @@ class WorkbenchHost {
     }
 
     setWorkbenchEditorCommandHandlers(null);
+	this.browserEditorToolbarService.setActions(null);
     this.titlebarPart.dispose();
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, null);
 
@@ -1115,12 +1116,13 @@ class WorkbenchHost {
         void documentActionsControllerInstance.handleExportDocx();
       },
     });
+	this.browserEditorToolbarService.setActions(editorBrowserToolbarActions);
     const contentAwareEditorPartProps: EditorPartProps = {
       ...baseEditorPartProps,
       contextMenuService: this.contextMenuService,
       contextViewProvider: this.contextViewService,
       nativeHost,
-      ...editorBrowserToolbarActions,
+		onOpenSources: focusWorkbenchWebUrlInput,
       onOpenEditor: handleOpenEditor,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     };
@@ -1132,12 +1134,10 @@ class WorkbenchHost {
       showAgentSidebarToggle: false,
       labels: {
         headerAddAction: contentAwareEditorPartProps.labels.headerAddAction,
-        createDraft: contentAwareEditorPartProps.labels.createDraft,
-        createBrowser: contentAwareEditorPartProps.labels.createBrowser,
-        createFile: contentAwareEditorPartProps.labels.createFile,
         expandEditor: contentAwareEditorPartProps.labels.expandEditor,
         collapseEditor: contentAwareEditorPartProps.labels.collapseEditor,
       },
+		creationActions: contentAwareEditorPartProps.creationActions,
       commandService: contentAwareEditorPartProps.commandService,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     });

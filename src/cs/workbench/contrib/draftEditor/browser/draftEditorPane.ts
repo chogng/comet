@@ -1,7 +1,6 @@
 import { isDraftEditorCommandEnabled } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
 import { ProseMirrorEditor } from 'cs/editor/browser/text/editor';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createDraftEditorCommandAction } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
@@ -20,8 +19,60 @@ export interface DraftEditorPaneInput extends EditorInput {
   setDocument(value: WritingEditorDocument): void;
 }
 
+export interface DraftEditorPaneLabels {
+	readonly toolbarMore: string;
+	readonly draftBodyPlaceholder: string;
+	readonly draftMode: string;
+	readonly editorModalConfirm: string;
+	readonly editorModalCancel: string;
+	readonly textGroup: string;
+	readonly formatGroup: string;
+	readonly insertGroup: string;
+	readonly historyGroup: string;
+	readonly paragraph: string;
+	readonly heading1: string;
+	readonly heading2: string;
+	readonly heading3: string;
+	readonly bold: string;
+	readonly italic: string;
+	readonly underline: string;
+	readonly fontFamily: string;
+	readonly fontSize: string;
+	readonly defaultTextStyle: string;
+	readonly alignLeft: string;
+	readonly alignCenter: string;
+	readonly alignRight: string;
+	readonly clearInlineStyles: string;
+	readonly bulletList: string;
+	readonly orderedList: string;
+	readonly blockquote: string;
+	readonly undo: string;
+	readonly redo: string;
+	readonly insertCitation: string;
+	readonly insertFigure: string;
+	readonly insertFigureRef: string;
+	readonly citationPrompt: string;
+	readonly figureUrlPrompt: string;
+	readonly figureCaptionPrompt: string;
+	readonly figureRefPrompt: string;
+	readonly fontFamilyPrompt: string;
+	readonly fontSizePrompt: string;
+	readonly status: {
+		readonly statusbarAriaLabel: string;
+		readonly words: string;
+		readonly characters: string;
+		readonly paragraphs: string;
+		readonly selection: string;
+		readonly block: string;
+		readonly line: string;
+		readonly column: string;
+		readonly blockFigure: string;
+		readonly ready: string;
+	};
+}
+
 export type DraftEditorPaneContext = DropdownContextServices & {
-  labels: EditorPartLabels;
+  labels: DraftEditorPaneLabels;
   dialogService: IDialogService;
 };
 
@@ -29,19 +80,16 @@ export class DraftEditorPane extends EditorPane<
   DraftEditorPaneInput,
   WritingEditorSurfaceViewState
 > {
-  private input: DraftEditorPaneInput;
+  private input: DraftEditorPaneInput | undefined;
   private readonly element = document.createElement('div');
-  private readonly editor: ProseMirrorEditor;
+  private editor: ProseMirrorEditor | undefined;
   private runtimeState: EditorPaneRuntimeState | undefined;
   private readonly runtimeStateEmitter = new Emitter<EditorPaneRuntimeState>();
   override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
 
-  constructor(input: DraftEditorPaneInput, private context: DraftEditorPaneContext) {
+  constructor(private context: DraftEditorPaneContext) {
     super();
-    this.input = input;
     this.element.className = 'comet-editor-draft-pane';
-    this.editor = new ProseMirrorEditor(this.toEditorProps());
-    this.element.append(this.editor.getElement());
   }
 
   override getElement() {
@@ -53,7 +101,7 @@ export class DraftEditorPane extends EditorPane<
   }
 
   override getToolbarElement() {
-    return this.editor.getToolbarElement();
+    return this.getEditor().getToolbarElement();
   }
 
   override getRuntimeState() {
@@ -61,12 +109,12 @@ export class DraftEditorPane extends EditorPane<
   }
 
   getStableSelectionTarget() {
-    return this.editor.getStableSelectionTarget();
+    return this.getEditor().getStableSelectionTarget();
   }
 
   canExecuteCommand(commandId: DraftEditorCommandId) {
     return isDraftEditorCommandEnabled(commandId, {
-      availableFigureIds: this.editor.getAvailableFigureIds(),
+      availableFigureIds: this.getEditor().getAvailableFigureIds(),
     });
   }
 
@@ -91,37 +139,44 @@ export class DraftEditorPane extends EditorPane<
   executeEditorAction(actionId: DraftEditorSurfaceActionId) {
     switch (actionId) {
       case 'undo':
-        return this.editor.undo();
+        return this.getEditor().undo();
       case 'redo':
-        return this.editor.redo();
+        return this.getEditor().redo();
     }
   }
 
   override setInput(input: DraftEditorPaneInput) {
     this.input = input;
-    this.editor.setProps(this.toEditorProps());
+		if (this.editor) {
+			this.editor.setProps(this.toEditorProps());
+			return;
+		}
+		this.editor = new ProseMirrorEditor(this.toEditorProps());
+		this.element.append(this.editor.getElement());
   }
 
   override focus() {
-    this.editor.focus();
+    this.getEditor().focus();
   }
 
   override getViewState() {
-    return this.editor.getViewState();
+    return this.getEditor().getViewState();
   }
 
   override restoreViewState(viewState: WritingEditorSurfaceViewState | undefined) {
-    this.editor.restoreViewState(viewState);
+    this.getEditor().restoreViewState(viewState);
   }
 
   override dispose() {
-    this.editor.dispose();
+		this.editor?.dispose();
+		this.editor = undefined;
+		this.input = undefined;
     this.runtimeStateEmitter.dispose();
     this.element.replaceChildren();
   }
 
   private createCommandContext = () => ({
-    editor: this.editor,
+    editor: this.getEditor(),
     labels: {
       citationPrompt: this.context.labels.citationPrompt,
       figureUrlPrompt: this.context.labels.figureUrlPrompt,
@@ -154,7 +209,10 @@ export class DraftEditorPane extends EditorPane<
   );
 
   private toEditorProps() {
-    const input = this.input;
+		const input = this.input;
+		if (!input) {
+			throw new Error('Draft editor pane requires an input before creating editor props.');
+		}
     const { labels } = this.context;
     return {
       contextMenuService: this.context.contextMenuService,
@@ -209,10 +267,17 @@ export class DraftEditorPane extends EditorPane<
       },
     };
   }
+
+	private getEditor(): ProseMirrorEditor {
+		if (!this.editor) {
+			throw new Error('Draft editor pane has no active input.');
+		}
+		return this.editor;
+	}
 }
 
-export function createDraftEditorPane(input: DraftEditorPaneInput, context: DraftEditorPaneContext) {
-  return new DraftEditorPane(input, context);
+export function createDraftEditorPane(context: DraftEditorPaneContext) {
+  return new DraftEditorPane(context);
 }
 
 export default DraftEditorPane;

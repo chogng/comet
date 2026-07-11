@@ -5,15 +5,6 @@
 
 export type EditorStatusLabels = {
 	statusbarAriaLabel: string;
-	words: string;
-	characters: string;
-	paragraphs: string;
-	selection: string;
-	block: string;
-	line: string;
-	column: string;
-	url: string;
-	blockFigure: string;
 	ready: string;
 };
 

@@ -1,11 +1,17 @@
 import { Verbosity } from 'cs/workbench/common/editor';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+export interface BrowserEditorPaneLabels {
+	readonly sourceMode: string;
+	readonly status: {
+		readonly statusbarAriaLabel: string;
+		readonly url: string;
+	};
+}
 
 export function createBrowserEditorPaneState(
 	input: EditorInput,
-	labels: EditorPartLabels,
+	labels: BrowserEditorPaneLabels,
 ): EditorPaneRuntimeState {
 	return {
 		status: {

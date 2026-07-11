@@ -1,5 +1,4 @@
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
@@ -13,9 +12,10 @@ import type {
 import { toDisposable } from 'cs/base/common/lifecycle';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import type { LocaleMessages } from 'language/locales';
 
 export type EditorPaneResolverContext = DropdownContextServices & {
-  labels: EditorPartLabels;
+  ui: LocaleMessages;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
@@ -49,7 +49,7 @@ type EditorPaneDescriptorOptions<
   contentClassNames: readonly string[];
   acceptsInput: (input: EditorInput) => input is TInput;
   createPaneKey?: (input: TInput) => string;
-  createPane: (input: TInput, context: EditorPaneResolverContext) => TPane;
+  createPane: (context: EditorPaneResolverContext) => TPane;
   updatePane?: (pane: TPane, context: EditorPaneResolverContext) => void;
 };
 
@@ -74,7 +74,7 @@ export function createEditorPaneDescriptor<
         paneId: options.paneId,
         paneKey: options.createPaneKey?.(input) ?? options.paneId,
         contentClassNames: options.contentClassNames,
-        createPane: () => options.createPane(input, context),
+		createPane: () => options.createPane(context),
         setInput: (pane, token) => {
           options.updatePane?.(pane, context);
           return pane.setInput(input, token);

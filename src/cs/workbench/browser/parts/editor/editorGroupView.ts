@@ -42,11 +42,15 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import type { LocaleMessages } from 'language/locales';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 export type EditorGroupViewProps = DropdownContextServices & {
+  ui: LocaleMessages;
   labels: EditorPartLabels;
+  creationActions: readonly EditorCreationAction[];
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   dialogService: IDialogService;
@@ -64,13 +68,7 @@ export type EditorGroupViewProps = DropdownContextServices & {
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
   commandService: IWorkbenchCommandService;
-  onOpenAddressBarSourceMenu: () => void;
-  onToolbarArchiveCurrentPage: () => void | Promise<void>;
-  onToolbarExportDocx?: () => void | Promise<void>;
-  onToolbarCopyCurrentUrl: () => void | Promise<void>;
-  onToolbarClearBrowsingHistory: () => void;
-  onToolbarClearCookies: () => void | Promise<void>;
-  onToolbarClearCache: () => void | Promise<void>;
+  onOpenSources: () => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
   showTitlebarActions?: boolean;
@@ -286,12 +284,10 @@ export class EditorGroupView {
       agentSidebarToggleLabel: '',
       labels: {
         headerAddAction: '',
-        createDraft: '',
-        createBrowser: '',
-        createFile: '',
         expandEditor: '',
         collapseEditor: '',
       },
+		creationActions: [],
       commandService: props.commandService,
       onToggleEditorCollapse: () => {},
       onToggleAgentSidebar: () => {},
@@ -317,7 +313,7 @@ export class EditorGroupView {
       this.requestPrimaryInputFocus,
     );
     this.emptyWorkspaceView = new EditorEmptyWorkspaceView({
-      labels: props.labels,
+		creationActions: props.creationActions,
       commandService: props.commandService,
     });
     this.tabsElement.append(this.titleAreaControl.getElement());
@@ -419,12 +415,10 @@ export class EditorGroupView {
       agentSidebarToggleLabel: this.props.agentSidebarToggleLabel ?? '',
       labels: {
         headerAddAction: this.props.labels.headerAddAction,
-        createDraft: this.props.labels.createDraft,
-        createBrowser: this.props.labels.createBrowser,
-        createFile: this.props.labels.createFile,
         expandEditor: this.props.labels.expandEditor,
         collapseEditor: this.props.labels.collapseEditor,
       },
+		creationActions: this.props.creationActions,
       commandService: this.props.commandService,
       onToggleEditorCollapse: this.props.onToggleEditorCollapse ?? (() => {}),
       onToggleAgentSidebar: this.props.onToggleAgentSidebar,
@@ -443,7 +437,7 @@ export class EditorGroupView {
       this.syncToolbar(null);
       this.syncToolbarMode(null);
       this.emptyWorkspaceView.setProps({
-        labels: this.props.labels,
+		creationActions: this.props.creationActions,
         commandService: this.props.commandService,
       });
       this.contentElement.replaceChildren(this.emptyWorkspaceView.getElement());
@@ -606,13 +600,13 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     return {
       contextMenuService: this.props.contextMenuService,
       contextViewProvider: this.props.contextViewProvider,
-      labels: this.props.labels,
+		ui: this.props.ui,
       viewPartProps: this.props.viewPartProps,
       nativeHost: this.props.nativeHost,
       dialogService: this.props.dialogService,
       instantiationService: this.props.instantiationService,
       onOpenEditor: this.props.onOpenEditor,
-      onOpenSources: this.props.onOpenAddressBarSourceMenu,
+      onOpenSources: this.props.onOpenSources,
     };
   }
 
@@ -630,9 +624,7 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     this.activePaneViewStateKey = viewStateKey;
     this.activePaneKey = resolvedPane.paneKey;
     this.bindActivePaneRuntimeState(this.activePane, input);
-    if (existingPane) {
-      this.setActivePaneInput(resolvedPane, this.activePane);
-    }
+		this.setActivePaneInput(resolvedPane, this.activePane);
     this.activePane.setVisible(true);
     this.contentElement.replaceChildren(this.activePane.getElement());
     this.restorePaneViewState(this.activePane, viewStateKey);
@@ -657,25 +649,31 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     this.activePaneInputSource?.dispose();
     const source = new CancellationTokenSource();
     this.activePaneInputSource = source;
-    const result = resolvedPane.setInput(pane, source.token);
-    if (result) {
-      const finalize = () => {
-        if (this.activePaneInputSource === source) {
-          this.activePaneInputSource = null;
-        }
-        source.dispose();
-      };
-      void result.then(finalize, error => {
-        finalize();
-        queueMicrotask(() => { throw error; });
-      });
-      return;
-    }
-    this.activePaneInputSource = null;
-    this.activePaneRuntimeStateListener.dispose();
-    this.activePaneRuntimeStateListener = Disposable.None;
-    source.dispose();
-  }
+		const result = resolvedPane.setInput(pane, source.token);
+		if (result) {
+			void this.completeSetActivePaneInput(result, source);
+			return;
+		}
+		this.finishSetActivePaneInput(source);
+	}
+
+	private async completeSetActivePaneInput(
+		result: Promise<void>,
+		source: CancellationTokenSource,
+	): Promise<void> {
+		try {
+			await result;
+		} finally {
+			this.finishSetActivePaneInput(source);
+		}
+	}
+
+	private finishSetActivePaneInput(source: CancellationTokenSource): void {
+		if (this.activePaneInputSource === source) {
+			this.activePaneInputSource = null;
+		}
+		source.dispose();
+	}
 
   private releaseActivePane() {
     if (!this.activePane) {
@@ -686,6 +684,8 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     this.activePaneInputSource?.cancel();
     this.activePaneInputSource?.dispose();
     this.activePaneInputSource = null;
+		this.activePaneRuntimeStateListener.dispose();
+		this.activePaneRuntimeStateListener = Disposable.None;
 
     const pane = this.activePane;
     this.activePane = null;
@@ -703,6 +703,9 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
   }
 
   private disposeAllPaneInstances() {
+		this.activePaneInputSource?.cancel();
+		this.activePaneInputSource?.dispose();
+		this.activePaneInputSource = null;
     this.activePaneRuntimeStateListener.dispose();
     this.activePaneRuntimeStateListener = Disposable.None;
     for (const pane of this.paneInstances.values()) {

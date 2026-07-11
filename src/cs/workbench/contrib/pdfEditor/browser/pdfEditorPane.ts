@@ -23,13 +23,12 @@ import type {
   PdfReaderViewState,
 } from 'cs/editor/browser/pdf/pdfReaderState';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { URI } from 'cs/base/common/uri';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import { EmptyEditorUrl } from 'cs/workbench/common/editor/editorResources';
+import { EmptyPdfEditorUrl } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorResources';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createEditorPdfModeToolbarContribution } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorToolbar';
 import { Emitter } from 'cs/base/common/event';
@@ -41,12 +40,25 @@ export interface PdfEditorPaneInput extends EditorInput {
   readonly url: string;
 }
 
+export interface PdfEditorPaneLabels {
+	readonly toolbarSources: string;
+	readonly toolbarMore: string;
+	readonly pdfTitle: string;
+	readonly pdfOpenFile: string;
+	readonly emptyWorkspaceBody: string;
+	readonly pdfMode: string;
+	readonly status: {
+		readonly statusbarAriaLabel: string;
+		readonly url: string;
+	};
+}
+
 export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
   reader: PdfReaderViewState;
 };
 
 export type PdfEditorPaneContext = DropdownContextServices & {
-  labels: EditorPartLabels;
+  labels: PdfEditorPaneLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   onOpenEditor?: EditorOpenHandler;
@@ -98,26 +110,23 @@ export class PdfEditorPane extends EditorPane<
   PdfEditorPaneInput,
   PdfEditorPaneViewState
 > {
-  private input: PdfEditorPaneInput;
+  private input: PdfEditorPaneInput | undefined;
   private readonly element = document.createElement('div');
   private readonly bodyElement = document.createElement('div');
   private readonly editor = new PdfEditorPaneStateController();
-  private readerSnapshot: PdfReaderSnapshot;
+  private readerSnapshot: PdfReaderSnapshot | undefined;
   private documentReader: ReturnType<typeof createPdfDocumentReader> | null = null;
   private readonly toolbar: ReturnType<typeof createEditorPdfModeToolbarContribution>;
   private runtimeState: EditorPaneRuntimeState | undefined;
   private readonly runtimeStateEmitter = new Emitter<EditorPaneRuntimeState>();
   override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
 
-  constructor(input: PdfEditorPaneInput, private context: PdfEditorPaneContext) {
+  constructor(private context: PdfEditorPaneContext) {
     super();
-    this.input = input;
-    this.readerSnapshot = this.createReaderSnapshot(input);
     this.element.className = 'comet-editor-pdf-pane';
     this.bodyElement.className = 'comet-editor-pdf-body';
     this.element.append(this.bodyElement);
     this.toolbar = createEditorPdfModeToolbarContribution(this.createToolbarContext(), context);
-    this.render();
   }
 
   override getElement() {
@@ -187,6 +196,8 @@ export class PdfEditorPane extends EditorPane<
     this.documentReader = null;
     this.toolbar.dispose();
     this.runtimeStateEmitter.dispose();
+		this.input = undefined;
+		this.readerSnapshot = undefined;
     this.element.replaceChildren();
   }
 
@@ -208,14 +219,14 @@ export class PdfEditorPane extends EditorPane<
       source: createPdfReaderDocumentSource({
         url: input.url,
         title: input.getName(),
-        emptyUrl: EmptyEditorUrl,
+        emptyUrl: EmptyPdfEditorUrl,
       }),
       viewState: this.editor.getViewState().reader,
     });
   }
 
   private createReaderViewPartProps(): ViewPartProps {
-    const { source } = this.readerSnapshot;
+		const { source } = this.getReaderSnapshot();
     return {
       ...this.context.viewPartProps,
       browserUrl: source.kind === 'url' ? source.url : '',
@@ -225,9 +236,10 @@ export class PdfEditorPane extends EditorPane<
   }
 
   private getAnnotationTargetId() {
-    return this.readerSnapshot.source.kind === 'url'
-      ? this.readerSnapshot.source.url
-      : this.input.id;
+		const snapshot = this.getReaderSnapshot();
+		return snapshot.source.kind === 'url'
+			? snapshot.source.url
+			: this.getInput().id;
   }
 
   private addAnnotationFromSelection(mode: NonNullable<Annotation['mode']>) {
@@ -260,12 +272,14 @@ export class PdfEditorPane extends EditorPane<
   }
 
   private render() {
+		const input = this.getInput();
+		const snapshot = this.getReaderSnapshot();
     const annotations = readStoredPdfAnnotations(this.getAnnotationTargetId());
     const readerProps = {
-      url: this.readerSnapshot.source.kind === 'url'
-        ? this.readerSnapshot.source.url
+			url: snapshot.source.kind === 'url'
+				? snapshot.source.url
         : '',
-      targetId: this.input.id,
+			targetId: input.id,
       annotationTargetId: this.getAnnotationTargetId(),
       labels: {
         title: this.context.labels.pdfTitle,
@@ -286,7 +300,7 @@ export class PdfEditorPane extends EditorPane<
         this.deletePdfAnnotation(annotationId);
       },
       onReaderStatusChange: (status: PdfReaderRuntimeStatus) => {
-        this.runtimeState = createPdfEditorPaneState(this.input, this.context.labels, status);
+				this.runtimeState = createPdfEditorPaneState(input, this.context.labels, status);
         this.runtimeStateEmitter.fire(this.runtimeState);
       },
       onOpenPdfFile: this.handleOpenPdfFile,
@@ -300,6 +314,20 @@ export class PdfEditorPane extends EditorPane<
 
     this.documentReader.setProps(readerProps);
   }
+
+	private getInput(): PdfEditorPaneInput {
+		if (!this.input) {
+			throw new Error('PDF editor pane has no active input.');
+		}
+		return this.input;
+	}
+
+	private getReaderSnapshot(): PdfReaderSnapshot {
+		if (!this.readerSnapshot) {
+			throw new Error('PDF editor pane has no reader snapshot.');
+		}
+		return this.readerSnapshot;
+	}
 
   private readonly handleOpenPdfFile = async () => {
     try {
@@ -323,8 +351,8 @@ export class PdfEditorPane extends EditorPane<
   };
 }
 
-export function createPdfEditorPane(input: PdfEditorPaneInput, context: PdfEditorPaneContext) {
-  return new PdfEditorPane(input, context);
+export function createPdfEditorPane(context: PdfEditorPaneContext) {
+  return new PdfEditorPane(context);
 }
 
 export default PdfEditorPane;

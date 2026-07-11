@@ -70,8 +70,10 @@ export class EditorResolverService implements IEditorResolverService {
 		readonly resource: URI;
 		readonly options?: IEditorOptions;
 	}): IResolvedEditorInput | undefined {
+		const requestedEditorId = input.options?.override;
 		const [entry] = this.entries
 			.filter(candidate =>
+				(requestedEditorId === undefined || candidate.registration.id === requestedEditorId) &&
 				globPatternMatchesResource(candidate.globPattern, input.resource) &&
 				candidate.options.canSupportResource(input.resource))
 			.sort((left, right) => {

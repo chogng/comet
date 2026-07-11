@@ -118,8 +118,14 @@ export abstract class EditorInput extends Disposable {
 		return undefined;
 	}
 
+	isDisposed(): boolean {
+		return this._store.isDisposed;
+	}
+
 	override dispose(): void {
-		this._onWillDispose.fire();
+		if (!this.isDisposed()) {
+			this._onWillDispose.fire();
+		}
 		super.dispose();
 	}
 }

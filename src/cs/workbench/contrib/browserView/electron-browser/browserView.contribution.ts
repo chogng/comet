@@ -30,9 +30,16 @@ import {
 	type EditorPaneResolverContext,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
-import { renderBrowserStatusbarMode } from 'cs/workbench/browser/parts/statusbar/renderers/browser';
+import { renderBrowserStatusbarMode } from 'cs/workbench/contrib/browserView/browser/browserStatusbarRenderer';
 import { registerEditorModeToolbar } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
-import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
+import { createBrowserEditorModeToolbarHost } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
+import type { BrowserEditorPaneLabels } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
+import 'cs/workbench/contrib/browserView/browser/media/browserHistoryAndFavoritesPanel.css';
+import 'cs/workbench/contrib/browserView/browser/media/browserEditorTab.css';
+import 'cs/workbench/contrib/browserView/browser/media/browserModeToolbar.css';
+import { registerEditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
+import 'cs/workbench/contrib/browserView/browser/browserEditorToolbarService';
 
 import 'cs/workbench/contrib/browserView/electron-browser/features/webContentsViewRendererFeature';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature';
@@ -52,14 +59,30 @@ import 'cs/workbench/contrib/browserView/electron-browser/features/browserRemote
 
 registerSingleton(IPlaywrightService, PlaywrightWorkbenchService, InstantiationType.Delayed);
 registerStatusbarModeRenderer('browser', renderBrowserStatusbarMode);
-registerEditorModeToolbar('browser', createEditorModeToolbarHost);
+registerEditorModeToolbar('browser', createBrowserEditorModeToolbarHost);
+registerEditorCreationAction({
+	commandId: BrowserViewCommandId.NewTab,
+	icon: 'link-external',
+	order: 20,
+	getLabel: ui => ui.editorCreateBrowser,
+});
 
 function createBrowserEditorProps(
 	context: EditorPaneResolverContext,
 ): BrowserEditorProps {
 	return {
-		labels: context.labels,
+		labels: createBrowserEditorPaneLabels(context),
 		nativeHost: context.nativeHost,
+	};
+}
+
+function createBrowserEditorPaneLabels(context: EditorPaneResolverContext): BrowserEditorPaneLabels {
+	return {
+		sourceMode: context.ui.editorSourceMode,
+		status: {
+			statusbarAriaLabel: context.ui.editorStatusbarAriaLabel,
+			url: context.ui.editorStatusUrl,
+		},
 	};
 }
 
@@ -67,9 +90,8 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	paneId: 'browser',
 	contentClassNames: ['comet-is-mode-browser'] as const,
 	acceptsInput: (input): input is BrowserEditorInput => input instanceof BrowserEditorInput,
-	createPane: (input, context) => context.instantiationService.createInstance(
+	createPane: context => context.instantiationService.createInstance(
 		BrowserEditor,
-		input,
 		createBrowserEditorProps(context),
 	),
 	updatePane: (pane, context) => pane.setProps(createBrowserEditorProps(context)),

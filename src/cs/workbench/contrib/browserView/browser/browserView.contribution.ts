@@ -35,14 +35,37 @@ import {
 import { localize } from 'cs/nls';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
+import type { BrowserEditorPaneLabels } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
 import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
-import { renderBrowserStatusbarMode } from 'cs/workbench/browser/parts/statusbar/renderers/browser';
+import { renderBrowserStatusbarMode } from 'cs/workbench/contrib/browserView/browser/browserStatusbarRenderer';
 import { registerEditorModeToolbar } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
-import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
+import { createBrowserEditorModeToolbarHost } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
+import 'cs/workbench/contrib/browserView/browser/media/browserHistoryAndFavoritesPanel.css';
+import 'cs/workbench/contrib/browserView/browser/media/browserEditorTab.css';
+import 'cs/workbench/contrib/browserView/browser/media/browserModeToolbar.css';
+import { registerEditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
+import 'cs/workbench/contrib/browserView/browser/browserEditorToolbarService';
 
 const unavailableMessage = 'Integrated Browser is not available in web.';
 registerStatusbarModeRenderer('browser', renderBrowserStatusbarMode);
-registerEditorModeToolbar('browser', createEditorModeToolbarHost);
+registerEditorModeToolbar('browser', createBrowserEditorModeToolbarHost);
+registerEditorCreationAction({
+	commandId: BrowserViewCommandId.NewTab,
+	icon: 'link-external',
+	order: 20,
+	getLabel: ui => ui.editorCreateBrowser,
+});
+
+function createBrowserEditorPaneLabels(context: EditorPaneResolverContext): BrowserEditorPaneLabels {
+	return {
+		sourceMode: context.ui.editorSourceMode,
+		status: {
+			statusbarAriaLabel: context.ui.editorStatusbarAriaLabel,
+			url: context.ui.editorStatusUrl,
+		},
+	};
+}
 
 class WebBrowserViewWorkbenchService extends Disposable implements IBrowserViewWorkbenchService {
 	declare readonly _serviceBrand: undefined;
@@ -139,10 +162,9 @@ class WebBrowserViewCDPService implements IBrowserViewCDPService {
 class WebBrowserEditorPane extends EditorPane<BrowserEditorInput> {
 	private readonly element = document.createElement('div');
 
-	constructor(
-		private input: BrowserEditorInput,
-		private labels: EditorPaneResolverContext['labels'],
-	) {
+	private input: BrowserEditorInput | undefined;
+
+	constructor(private labels: BrowserEditorPaneLabels) {
 		super();
 		this.element.className = 'comet-editor-browser-pane';
 	}
@@ -155,15 +177,19 @@ class WebBrowserEditorPane extends EditorPane<BrowserEditorInput> {
 		this.input = input;
 	}
 
-	setLabels(labels: EditorPaneResolverContext['labels']): void {
+	setLabels(labels: BrowserEditorPaneLabels): void {
 		this.labels = labels;
 	}
 
 	override getRuntimeState() {
+		if (!this.input) {
+			return undefined;
+		}
 		return createBrowserEditorPaneState(this.input, this.labels);
 	}
 
 	override dispose(): void {
+		this.input = undefined;
 		this.element.replaceChildren();
 	}
 }
@@ -172,8 +198,8 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	paneId: 'browser',
 	contentClassNames: ['comet-is-mode-browser'],
 	acceptsInput: (input): input is BrowserEditorInput => input instanceof BrowserEditorInput,
-	createPane: (input, context) => new WebBrowserEditorPane(input, context.labels),
-	updatePane: (pane, context) => pane.setLabels(context.labels),
+	createPane: context => new WebBrowserEditorPane(createBrowserEditorPaneLabels(context)),
+	updatePane: (pane, context) => pane.setLabels(createBrowserEditorPaneLabels(context)),
 }));
 
 class WebBrowserEditorResolverContribution extends Disposable {

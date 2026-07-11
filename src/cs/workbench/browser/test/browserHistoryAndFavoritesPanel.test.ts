@@ -13,15 +13,15 @@ import type {
 	BrowserHistoryAndFavoritesPanelFeatures,
 	BrowserHistoryPanelEntry,
 	BrowserHistoryPanelFeature,
-} from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
+} from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
 
 let cleanupDomEnvironment: (() => void) | undefined;
-let BrowserHistoryAndFavoritesPanel: typeof import('cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel').BrowserHistoryAndFavoritesPanel;
+let BrowserHistoryAndFavoritesPanel: typeof import('cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel').BrowserHistoryAndFavoritesPanel;
 
 before(async () => {
 	const domEnvironment = installDomTestEnvironment();
 	cleanupDomEnvironment = domEnvironment.cleanup;
-	({ BrowserHistoryAndFavoritesPanel } = await import('cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel'));
+	({ BrowserHistoryAndFavoritesPanel } = await import('cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel'));
 });
 
 after(() => cleanupDomEnvironment?.());

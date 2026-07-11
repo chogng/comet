@@ -1,5 +1,5 @@
 import type { LocaleMessages } from 'language/locales';
-import type { EditorPartLabels, EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorTitlebarActionsViewProps } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import type { SidebarFooterActionsProps, SidebarFooterLayoutMode } from 'cs/workbench/browser/parts/sidebar/sidebarFooterActions';
 import type { TitlebarLeadingActionsProps } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
@@ -7,11 +7,6 @@ import type { TitlebarLeadingActionsProps } from 'cs/workbench/browser/parts/tit
 export type SidebarFooterTitlebarLabels = Pick<
   SidebarFooterActionsProps,
   'accountLabel' | 'moreLabel' | 'settingsLabel'
->;
-
-export type EditorBrowserToolbarTitlebarLabels = Pick<
-  EditorPartLabels,
-  'toolbarBack' | 'toolbarForward' | 'toolbarRefresh' | 'toolbarExportDocx'
 >;
 
 export type SidebarTitlebarLabels = {
@@ -91,12 +86,10 @@ export function createEditorTitlebarActionsProps(params: {
     ),
     labels: {
       headerAddAction: editorPartProps.labels.headerAddAction,
-      createDraft: editorPartProps.labels.createDraft,
-      createBrowser: editorPartProps.labels.createBrowser,
-      createFile: editorPartProps.labels.createFile,
       expandEditor: editorPartProps.labels.expandEditor,
       collapseEditor: editorPartProps.labels.collapseEditor,
     },
+		creationActions: editorPartProps.creationActions,
     commandService: editorPartProps.commandService,
     onToggleEditorCollapse,
     onToggleAgentSidebar,
@@ -126,17 +119,6 @@ export function createTitlebarLeadingActionsProps(params: {
     addressBarLabel: ui.agentbarToolbarAddressBar,
     onTogglePrimarySidebar,
     onFocusAddressBar,
-  };
-}
-
-export function createEditorBrowserToolbarTitlebarLabels(
-  ui: LocaleMessages,
-): EditorBrowserToolbarTitlebarLabels {
-  return {
-    toolbarBack: ui.titlebarBack,
-    toolbarForward: ui.titlebarForward,
-    toolbarRefresh: ui.titlebarRefresh,
-    toolbarExportDocx: ui.titlebarExportDocx,
   };
 }
 

@@ -111,12 +111,12 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 	}
 
 	findEditor(editor: EditorInput): { group: IEditorGroup; editor: EditorInput } | undefined {
-		for (const group of this.groups.values()) {
+		for (const group of this.getGroupsByActiveOrder()) {
 			if (group.getEditors().includes(editor)) {
 				return { group, editor };
 			}
 		}
-		for (const group of this.groups.values()) {
+		for (const group of this.getGroupsByActiveOrder()) {
 			const existing = group.getEditors().find(candidate => candidate.matches(editor));
 			if (existing) {
 				return { group, editor: existing };
@@ -226,6 +226,13 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 		if (!isReferenced) {
 			editor.dispose();
 		}
+	}
+
+	private getGroupsByActiveOrder(): readonly EditorGroupModel[] {
+		return [
+			this.active,
+			...[...this.groups.values()].filter(group => group !== this.active),
+		];
 	}
 
 	private persist(): void {

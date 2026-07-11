@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after, afterEach, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
-import type { EditorModeToolbarContributionContext } from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
+import type { EditorModeToolbarContributionContext } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarTypes';
 
 const domEnvironment = installDomTestEnvironment();
 let dropdownServices: Awaited<ReturnType<typeof createDropdownTestServices>>;
@@ -74,7 +74,7 @@ function createContext(): EditorModeToolbarContributionContext {
 
 test('browser More menu stays open across context updates', async () => {
 	const { createEditorBrowserModeToolbarContribution } = await import(
-		'cs/workbench/browser/parts/editor/editorBrowserModeToolbarContribution'
+		'cs/workbench/contrib/browserView/browser/browserModeToolbarContribution'
 	);
 	const contribution = createEditorBrowserModeToolbarContribution(createContext(), dropdownServices);
 	document.body.append(contribution.getElement());

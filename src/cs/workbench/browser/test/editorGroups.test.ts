@@ -147,6 +147,23 @@ test('EditorGroupsService permits an explicit target group and disposes shared i
 	groups.dispose();
 });
 
+test('EditorGroupsService closes a shared input from the active group first', async () => {
+	const groups = createEditorGroupsService();
+	const firstGroup = groups.activeGroup;
+	const input = new TestEditorInput(URI.parse('test:/shared-active'));
+	groups.openEditor(input);
+	groups.openEditor(input, { groupId: 'group-b' });
+	const secondGroup = groups.getGroup('group-b');
+	assert(secondGroup);
+	groups.activateGroup(secondGroup);
+
+	assert.equal(await groups.closeEditor(input), true);
+	assert.equal(secondGroup.count, 0);
+	assert.equal(firstGroup.count, 1);
+	assert.equal(input.disposeCount, 0);
+	groups.dispose();
+});
+
 test('EditorGroupsService validates persistence before mutating groups', () => {
 	class UnserializableEditorInput extends EditorInput {
 		readonly resource = URI.parse('unserializable:/input');

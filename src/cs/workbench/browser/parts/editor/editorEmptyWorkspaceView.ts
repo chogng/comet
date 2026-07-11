@@ -1,17 +1,10 @@
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { $ } from 'cs/base/browser/dom';
 import { createLxIcon, type LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
-import { CreateDraftEditorCommandId, CreatePdfEditorCommandId } from 'cs/workbench/common/editor/editorResources';
-import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 
 export type EditorEmptyWorkspaceViewProps = {
-  labels: Pick<
-    EditorPartLabels,
-    | 'createDraft'
-    | 'createBrowser'
-    | 'createFile'
-  >;
+  creationActions: readonly EditorCreationAction[];
   commandService: IWorkbenchCommandService;
 };
 
@@ -33,27 +26,13 @@ export class EditorEmptyWorkspaceView {
   setProps(props: EditorEmptyWorkspaceViewProps) {
     this.commandService = props.commandService;
     this.actionsElement.replaceChildren(
-      this.createActionCard({
-        label: props.labels.createDraft,
-        icon: 'draft',
-        onRun: () => {
-          void this.commandService.executeCommand(CreateDraftEditorCommandId);
-        },
-      }),
-      this.createActionCard({
-        label: props.labels.createBrowser,
-        icon: 'browser',
-        onRun: () => {
-          void this.commandService.executeCommand(BrowserViewCommandId.NewTab);
-        },
-      }),
-      this.createActionCard({
-        label: props.labels.createFile,
-        icon: 'file-text',
-        onRun: () => {
-          void this.commandService.executeCommand(CreatePdfEditorCommandId);
-        },
-      }),
+			...props.creationActions.map(action => this.createActionCard({
+				label: action.label,
+				icon: action.icon,
+				onRun: () => {
+					void this.commandService.executeCommand(action.commandId);
+				},
+			})),
     );
   }
 

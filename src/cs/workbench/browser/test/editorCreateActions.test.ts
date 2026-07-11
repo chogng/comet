@@ -9,12 +9,26 @@ import { URI } from 'cs/base/common/uri';
 import { commandService, setCommandServiceInstantiationService } from 'cs/platform/commands/common/commands';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
-import { CreateDraftEditorCommandId, CreatePdfEditorCommandId, DraftEditorInputScheme, PdfEditorInputScheme } from 'cs/workbench/common/editor/editorResources';
+import { CreateDraftEditorCommandId, DraftEditorInputScheme } from 'cs/workbench/contrib/draftEditor/common/draftEditorResources';
+import { CreatePdfEditorCommandId, PdfEditorInputScheme } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorResources';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { IEditorService, type IEditorService as IEditorServiceType } from 'cs/workbench/services/editor/common/editorService';
+import { getEditorCreationActions } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import type { LocaleMessages } from 'language/locales';
 
 import 'cs/workbench/contrib/draftEditor/browser/draftEditor.contribution';
 import 'cs/workbench/contrib/pdfEditor/browser/pdfEditor.contribution';
+
+test('Editor creation actions are contributed by editor features', () => {
+	const actions = getEditorCreationActions({
+		editorCreateDraft: 'Draft',
+		editorCreateFile: 'PDF',
+	} as LocaleMessages);
+	assert.deepEqual(
+		actions.map(action => action.commandId),
+		[CreateDraftEditorCommandId, CreatePdfEditorCommandId],
+	);
+});
 
 class TestEditorInput extends EditorInput {
 	constructor(readonly resource: URI) {

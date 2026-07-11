@@ -6,9 +6,8 @@ import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dr
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import { CreateDraftEditorCommandId, CreatePdfEditorCommandId } from 'cs/workbench/common/editor/editorResources';
-import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 
 export type EditorTitlebarActionsViewProps = DropdownContextServices & {
   isEditorCollapsed: boolean;
@@ -18,12 +17,10 @@ export type EditorTitlebarActionsViewProps = DropdownContextServices & {
   labels: Pick<
     EditorPartLabels,
     | 'headerAddAction'
-    | 'createDraft'
-    | 'createBrowser'
-    | 'createFile'
     | 'expandEditor'
     | 'collapseEditor'
   >;
+  creationActions: readonly EditorCreationAction[];
   commandService: IWorkbenchCommandService;
   onToggleEditorCollapse: () => void;
   onToggleAgentSidebar?: () => void;
@@ -65,29 +62,13 @@ export class EditorTitlebarActionsView {
         buttonClassName: 'comet-editor-titlebar-add-btn',
         overlayAlignment: 'end',
         menuData: 'editor-titlebar-add',
-        menu: [
-          {
-            label: this.props.labels.createDraft,
-            icon: 'draft',
-            onClick: () => {
-              void this.props.commandService.executeCommand(CreateDraftEditorCommandId);
-            },
-          },
-          {
-            label: this.props.labels.createBrowser,
-            icon: 'link-external',
-            onClick: () => {
-              void this.props.commandService.executeCommand(BrowserViewCommandId.NewTab);
-            },
-          },
-          {
-            label: this.props.labels.createFile,
-            icon: 'file-text',
-            onClick: () => {
-              void this.props.commandService.executeCommand(CreatePdfEditorCommandId);
-            },
-          },
-        ],
+		menu: this.props.creationActions.map(action => ({
+			label: action.label,
+			icon: action.icon,
+			onClick: () => {
+				void this.props.commandService.executeCommand(action.commandId);
+			},
+		})),
       }),
     ];
     if (this.props.showAgentSidebarToggle && this.props.onToggleAgentSidebar) {

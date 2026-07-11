@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { ActionBarActionItem, ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { ActionViewItem } from 'cs/base/browser/ui/actionbar/actionViewItems';
@@ -8,11 +13,11 @@ import {
 } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
-import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
+import { getEditorContentDisplayUrl } from 'cs/workbench/contrib/browserView/browser/browserUrlPresentation';
 import type {
   EditorModeToolbarContribution,
   EditorModeToolbarContributionContext,
-} from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';const EDITOR_BROWSER_TOOLBAR_MORE_MENU_DATA = 'editor-browser-toolbar-more';
+} from 'cs/workbench/contrib/browserView/browser/browserModeToolbarTypes';const EDITOR_BROWSER_TOOLBAR_MORE_MENU_DATA = 'editor-browser-toolbar-more';
 import { $ } from 'cs/base/browser/dom';
 
 export class EditorBrowserModeToolbarContribution
