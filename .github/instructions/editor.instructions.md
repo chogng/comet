@@ -1,26 +1,62 @@
 ---
 description: Architecture guidelines for the collapsible Editor Part and its Draft, PDF, and Browser editor inputs.
-applyTo: "{src/cs/workbench/browser/parts/editor/**,src/cs/workbench/services/editor/**,src/cs/workbench/contrib/browserView/**}"
+applyTo: "{src/cs/workbench/common/editor/**,src/cs/workbench/browser/parts/editor/**,src/cs/workbench/services/editor/**,src/cs/workbench/contrib/draftEditor/**,src/cs/workbench/contrib/pdfEditor/**,src/cs/workbench/contrib/browserView/**}"
 ---
 
 # Editor architecture
 
-Comet's Editor differs from the upstream workbench sidebars and panels. It is a collapsible part that contains multiple typed editor inputs, so layout visibility and editor content must remain separate state dimensions.
+Comet's Editor uses separate owners for opening, resource resolution, group
+state, pane selection, rendering, and Workbench layout. The Editor Part is a
+collapsible presentation container for typed Draft, PDF, and Browser editors;
+it is not the owner of editor group state or content models.
 
 ```text
-Editor Part
-├─ layout: collapsed / expanded
-└─ editor model
-   ├─ DraftEditorInput
-   ├─ PdfEditorInput
-   └─ BrowserEditorInput
+Workbench layout owner
+└─ Editor Part layout: collapsed / expanded
+
+IEditorService
+└─ open/reveal orchestration
+   ├─ IEditorResolverService: untyped resource → typed EditorInput
+   └─ IEditorGroupsService / EditorGroupModel
+      ├─ groups, tabs, active input, persistence, and input lifecycle
+      └─ editor group presentation
+         ├─ EditorPane registry: EditorInput → pane descriptor
+         └─ EditorPane: DOM, layout, focus, and view state
 ```
 
-Collapsing the Editor changes only its layout. It must not close tabs, dispose editor inputs, change the active input, cancel work owned by an input, or reset view state. Expanding the Editor displays the active input unless a user action explicitly requests another input.
+The Editor Part does not own the group model merely because it renders it.
+Collapsing the Editor changes only its layout. It must not close tabs, dispose
+editor inputs, change the active input, cancel work owned by an input, or reset
+view state. Expanding the Editor displays the active input unless a user action
+explicitly requests another input.
+
+## Resolution and rendering
+
+Opening an untyped resource and opening an existing typed input share the same
+path after input resolution:
+
+```text
+resource or typed EditorInput
+  → IEditorService.openEditor(...)
+  → IEditorResolverService resolves only untyped resources
+  → IEditorGroupsService opens, reuses, and activates the typed input
+  → Editor Part observes the active group
+  → editor group presentation obtains the matching pane descriptor
+  → create or reuse EditorPane
+  → apply the input, options, context, and cancellation to the pane
+  → mount the pane in the Editor Part
+  → request deterministic Editor reveal from the Workbench layout owner
+```
+
+Resolver priority, glob matching, resource support, and an explicit override
+belong to the untyped resource-to-input stage. Input-to-pane matching is a
+separate registry operation. When multiple panes support one input, resolve the
+choice through an explicit input-to-pane preference contract. Do not reuse
+resource resolver priorities or capabilities as pane-selection policy.
 
 ## Commands and state
 
-Follow the upstream command pattern:
+Follow the command pattern:
 
 ```text
 Menu / toolbar / keybinding
@@ -61,6 +97,15 @@ The generic toggle action must not import or depend on any editor input implemen
 ## Typed editor inputs
 
 Draft, PDF, and Browser content must enter the Editor through their typed inputs and the editor pane resolver. Do not add feature-specific rendering branches to the Editor Part and do not infer the desired input type from DOM state.
+
+An `EditorInput` owns content identity, resource information, dirty/save/revert
+behavior, model resolution, and its lifecycle contract. Group and tab
+persistence use the registered editor input serializer; serialization is not an
+implicit responsibility of the Editor Part or Pane.
+
+An `EditorPane` owns concrete UI creation, rendering, focus, layout, and view
+state for accepted inputs. It does not own the tab or the durable identity of
+the input it currently displays.
 
 Opening one input type must preserve the other tabs. Activating a Browser input must not discard a Draft or PDF input, and collapsing or expanding the Editor must not replace the active input implicitly.
 

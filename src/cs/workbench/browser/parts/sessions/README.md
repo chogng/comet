@@ -30,7 +30,7 @@ Sessions Part owns only its session and chat presentation.
 2. Put provider-agnostic contracts and orchestration in
    `services/sessions/`.
 3. Put backend implementations in
-   `contrib/sessionProviders/<provider>/`.
+   `contrib/sessions/providers/<provider>/`.
 4. Register providers through the Workbench contribution entry points.
 5. Update `SESSIONS.md` when changing the domain model, service ownership, or
    data flow.

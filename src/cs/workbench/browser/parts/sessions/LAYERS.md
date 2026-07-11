@@ -88,7 +88,7 @@ their public service contracts.
 
 ### Provider contributions
 
-**Location:** `src/cs/workbench/contrib/sessionProviders/<provider>/**`
+**Location:** `src/cs/workbench/contrib/sessions/providers/<provider>/**`
 
 Providers may import session contracts, Workbench contribution APIs, and their
 own backend dependencies. Providers register with

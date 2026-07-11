@@ -43,7 +43,7 @@ Within each layer, code is organized by runtime environment:
 - `cs/workbench/contrib` — feature contributions
 - `cs/workbench/browser/parts/sessions` — Sessions Part presentation
 - `cs/workbench/services/sessions` — provider-agnostic session contracts and services
-- `cs/workbench/contrib/sessionProviders` — backend-specific session providers
+- `cs/workbench/contrib/sessions/providers` — backend-specific providers contributed by the Sessions feature
 
 ### Contribution Rules
 

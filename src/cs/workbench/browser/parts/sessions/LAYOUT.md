@@ -115,11 +115,12 @@ explicit model state, not title text or DOM class inference.
 Session content enters the Editor through typed editor services:
 
 ```text
-session resource
-    → typed EditorInput or resolver
+session resource or typed EditorInput
     → IEditorService.openEditor(...)
-    → Editor Part activates the input
-    → Workbench reveals Editor deterministically
+    → IEditorResolverService resolves the resource when needed
+    → IEditorGroupsService opens and activates the typed input
+    → Editor Part observes the active group and renders the matching pane
+    → IEditorService requests deterministic reveal from the Workbench layout owner
 ```
 
 Editor collapse and editor content remain separate state dimensions. Session

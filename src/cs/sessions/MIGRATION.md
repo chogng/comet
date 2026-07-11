@@ -120,7 +120,7 @@ No session module may import a concrete sibling Part after this step.
 - Implement shared registry, routing, lifecycle, and observable state in
   `src/cs/workbench/services/sessions/browser/`.
 - Move backend-specific behavior into
-  `src/cs/workbench/contrib/sessionProviders/<provider>/`.
+  `src/cs/workbench/contrib/sessions/providers/<provider>/`.
 - Register providers through the service contract and Workbench contribution
   entry points.
 

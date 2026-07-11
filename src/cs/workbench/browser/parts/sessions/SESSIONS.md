@@ -25,7 +25,7 @@ Part consumes their public contracts.
 
 ### `ISession`
 
-An `ISession` is a stable, provider-agnostic facade for one agent working
+An `ISession` is a stable, provider-agnostic model for one agent working
 context. It has a globally unique identity, identifies its provider and session
 type, and exposes observable session state.
 
@@ -42,8 +42,8 @@ ISession
 └── session-level observables
 ```
 
-Consumers use the shared facade and never reach into a provider adapter or
-backend client.
+Consumers use the shared contract and never reach into a provider
+implementation or backend client.
 
 ### `IChat`
 
@@ -226,25 +226,27 @@ not route a peer-chat request through the main chat as a fallback.
 
 ```text
 backend change
-    → provider updates its session facade observables
+    → provider updates its session model observables
     → provider publishes added, removed, changed, or replaced identities
     → management service reconciles the aggregate collection
     → view service reconciles active presentation state
     → Sessions Part reacts through observables
 ```
 
-Provider notifications are authoritative. Reconciliation preserves a stable
-facade identity when the provider reports an update and performs an explicit
+Provider notifications are authoritative. Reconciliation preserves stable
+model identity when the provider reports an update and performs an explicit
 replacement only when the provider reports a replacement.
 
 ### Opening session content in the Editor
 
 ```text
 session action
-    → typed resource or EditorInput
+    → resource or typed EditorInput
     → IEditorService.openEditor(...)
-    → Editor Part reveals the input
-    → Workbench layout owner ensures the Editor Part is visible
+    → IEditorResolverService resolves the resource when needed
+    → IEditorGroupsService opens and activates the typed input
+    → Editor Part observes the active group and renders the matching pane
+    → IEditorService requests deterministic reveal from the Workbench layout owner
 ```
 
 Session code does not import a concrete Editor Part, inspect Editor DOM, or
@@ -262,7 +264,8 @@ Persistence follows ownership:
 | active session, active chat, and navigation | view-facing service |
 | session-scoped prompt history | session service keyed by stable session identity |
 | Part visibility and column sizes | Workbench layout owner |
-| open editor inputs and editor view state | Editor services |
+| open editor inputs, groups, tabs, and active editor | Editor group services and models |
+| editor pane presentation and view state | Editor Part |
 
 Restoration must hydrate the owning model and let consumers react. It must not
 reconstruct state by reading DOM, context keys, or sibling Part internals.
@@ -288,9 +291,9 @@ Parts. See [LAYOUT.md](LAYOUT.md) for its visual contract.
 - Optional feature families use explicit capabilities and coherent typed
   contracts; call sites do not probe for methods and fall back.
 - Unsupported operations fail explicitly and are not offered by the UI.
-- Providers update observable facades and publish authoritative collection
-  changes for every lifecycle transition.
-- Providers dispose backend subscriptions, chat adapters, and session adapters
+- Providers update observable session and chat models and publish authoritative
+  collection changes for every lifecycle transition.
+- Providers dispose backend subscriptions and owned chat/session model resources
   when their registrations or sessions are removed.
 - Providers do not import UI, Workbench Parts, or Workbench layout.
 
@@ -329,11 +332,11 @@ an alternative mutable source of truth.
 ## Adding a provider
 
 1. Implement the provider contract with a stable provider ID.
-2. Implement provider-agnostic `ISession` and `IChat` facades backed by
+2. Implement provider-agnostic `ISession` and `IChat` models backed by
    observables.
 3. Declare truthful capabilities and explicit unsupported operations.
 4. Place the implementation under
-   `src/cs/workbench/contrib/sessionProviders/<provider>/`.
+   `src/cs/workbench/contrib/sessions/providers/<provider>/`.
 5. Register it through a Workbench contribution and immediately register all
    created disposables.
 6. Publish every added, removed, changed, and replaced session transition.

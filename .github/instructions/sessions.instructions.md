@@ -1,6 +1,6 @@
 ---
 description: Architecture rules for the Sessions Part inside the Comet Workbench.
-applyTo: "{src/cs/workbench/browser/parts/sessions/**,src/cs/workbench/services/sessions/**,src/cs/workbench/contrib/sessionProviders/**}"
+applyTo: "{src/cs/workbench/browser/parts/sessions/**,src/cs/workbench/services/sessions/**,src/cs/workbench/contrib/sessions/**}"
 ---
 
 # Sessions Part
@@ -29,14 +29,15 @@ Comet Workbench shell
   presentation.
 - Session services own provider-agnostic state, selection, and routing.
 - Providers own backend integration and never depend on UI.
-- Editor services and the Editor Part own typed editor inputs and tabs.
+- Editor group services and models own groups, tabs, typed inputs, and active
+  editor state. The Editor Part owns their presentation and editor panes.
 
 ## Module locations
 
 ```text
 src/cs/workbench/browser/parts/sessions/
 src/cs/workbench/services/sessions/{common,browser}/
-src/cs/workbench/contrib/sessionProviders/<provider>/
+src/cs/workbench/contrib/sessions/providers/<provider>/
 ```
 
 ## Boundaries
