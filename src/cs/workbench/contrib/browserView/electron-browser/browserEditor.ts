@@ -8,6 +8,7 @@ import 'cs/workbench/contrib/browserView/electron-browser/media/browser.css';
 import { $, getWindow } from 'cs/base/browser/dom';
 import { getZoomFactor, onDidChangeZoomLevel } from 'cs/base/browser/browser';
 import { Emitter, Event } from 'cs/base/common/event';
+import type { CancellationToken } from 'cs/base/common/cancellation';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import {
 	ContextKeyExpr,
@@ -25,6 +26,8 @@ import type {
 	BrowserEditorPaneState,
 	IBrowserEditorPane,
 } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
+import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
 import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
@@ -135,7 +138,6 @@ export interface IBrowserUrlPickerActionProvider {
 export type BrowserEditorProps = {
 	labels: EditorPartLabels;
 	nativeHost: INativeHostService;
-	onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
 };
 
 export abstract class BrowserEditorContribution extends Disposable {
@@ -195,6 +197,10 @@ export class BrowserEditor extends EditorPane<
 		model: IBrowserViewModel | undefined;
 		isNew: boolean;
 	}>());
+	private readonly browserStateEmitter = this.disposables.add(new Emitter<BrowserEditorPaneState>());
+	private readonly runtimeStateEmitter = this.disposables.add(new Emitter<EditorPaneRuntimeState>());
+	private _browserState: BrowserEditorPaneState | undefined;
+	private runtimeState: EditorPaneRuntimeState | undefined;
 	private readonly browserContextKeyService = new ContextKeyServiceImpl();
 	private readonly browserFocusedContext: ContextKey<boolean>;
 	private readonly hasUrlContext: ContextKey<boolean>;
@@ -214,6 +220,12 @@ export class BrowserEditor extends EditorPane<
 
 	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 	readonly onDidChangeModel = this._onDidChangeModel.event;
+	readonly onDidChangeBrowserState = this.browserStateEmitter.event;
+	override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
+
+	get browserState(): BrowserEditorPaneState | undefined {
+		return this._browserState;
+	}
 
 	get input(): BrowserEditorInput | undefined {
 		return this._input;
@@ -299,12 +311,23 @@ export class BrowserEditor extends EditorPane<
 		return this.rootElement;
 	}
 
-	override setInput(input: BrowserEditorInput) {
+	setProps(props: BrowserEditorProps) {
+		this.props = props;
+	}
+
+	override getRuntimeState() {
+		return this.runtimeState;
+	}
+
+	override setInput(input: BrowserEditorInput, token?: CancellationToken) {
+		if (token?.isCancellationRequested) {
+			return;
+		}
 		const previousInputId = this._input?.id;
 		if (previousInputId !== input.id) {
 			this.cancelRestoreSequence();
 		}
-		this.attachInput(input);
+		this.attachInput(input, token);
 	}
 
 	override focus() {
@@ -314,6 +337,15 @@ export class BrowserEditor extends EditorPane<
 			}
 		}
 		this.ensureBrowserFocus();
+	}
+
+	override setVisible(visible: boolean) {
+		for (const contribution of this.contributionInstances.values()) {
+			contribution.onPaneVisibilityChanged(visible);
+		}
+		if (visible) {
+			this.layout();
+		}
 	}
 
 	async navigate(url: string): Promise<void> {
@@ -374,9 +406,7 @@ export class BrowserEditor extends EditorPane<
 
 	override dispose() {
 		this.cancelRestoreSequence();
-		for (const contribution of this.contributionInstances.values()) {
-			contribution.onPaneVisibilityChanged(false);
-		}
+		this.setVisible(false);
 		this.clearInput();
 		this.rootElement.replaceChildren();
 		this.disposables.dispose();
@@ -522,7 +552,7 @@ export class BrowserEditor extends EditorPane<
 		}
 	}
 
-	private attachInput(input: BrowserEditorInput) {
+	private attachInput(input: BrowserEditorInput, token?: CancellationToken) {
 		if (this._input === input) {
 			this.layout();
 			return;
@@ -541,7 +571,7 @@ export class BrowserEditor extends EditorPane<
 				contribution.prerenderInput(input);
 			}
 			void input.resolve().then((resolvedModel) => {
-				if (this.inputModelSequence !== sequence || this._input !== input) {
+				if (token?.isCancellationRequested || this.inputModelSequence !== sequence || this._input !== input) {
 					return;
 				}
 				this.attachModel(resolvedModel, isNew);
@@ -606,13 +636,16 @@ export class BrowserEditor extends EditorPane<
 	}
 
 	private emitBrowserState(model: IBrowserViewModel): void {
-		this.props.onDidChangeBrowserState({
+		this._browserState = {
 			tabId: this.getCurrentInput().resource.toString(),
 			url: model.url,
 			title: model.title,
 			favicon: model.favicon,
 			loading: model.loading,
-		});
+		};
+		this.runtimeState = createBrowserEditorPaneState(this.getCurrentInput(), this.props.labels);
+		this.browserStateEmitter.fire(this._browserState);
+		this.runtimeStateEmitter.fire(this.runtimeState);
 	}
 
 	private getCurrentInput(): BrowserEditorInput {

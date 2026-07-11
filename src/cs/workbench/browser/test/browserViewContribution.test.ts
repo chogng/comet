@@ -337,7 +337,13 @@ function createTestBrowserEditor(
 		BrowserEditor,
 		input,
 		{
-			labels: {},
+			labels: {
+				sourceMode: 'Browser',
+				status: {
+					statusbarAriaLabel: 'Editor status',
+					url: 'URL',
+				},
+			},
 			nativeHost: createTestNativeHostService(),
 			onDidChangeBrowserState: () => {},
 		} as unknown as ConstructorParameters<typeof BrowserEditorType>[1],

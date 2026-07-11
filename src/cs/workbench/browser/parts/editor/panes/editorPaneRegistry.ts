@@ -9,7 +9,6 @@ import type {
   EditorPaneDescriptor,
   EditorPaneResolution,
   EditorPane,
-  EditorPaneRuntimeState,
 } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { toDisposable } from 'cs/base/common/lifecycle';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
@@ -23,7 +22,6 @@ export type EditorPaneResolverContext = DropdownContextServices & {
   instantiationService: IInstantiationService;
   onOpenEditor?: EditorOpenHandler;
   onOpenSources: () => void;
-  onDidChangePaneState: (input: EditorInput, state: EditorPaneRuntimeState) => void;
 };
 
 export type EditorPaneId = string;
@@ -52,6 +50,7 @@ type EditorPaneDescriptorOptions<
   acceptsInput: (input: EditorInput) => input is TInput;
   createPaneKey?: (input: TInput) => string;
   createPane: (input: TInput, context: EditorPaneResolverContext) => TPane;
+  updatePane?: (pane: TPane, context: EditorPaneResolverContext) => void;
 };
 
 type AnyEditorPaneRegistryDescriptor = {
@@ -75,18 +74,17 @@ export function createEditorPaneDescriptor<
         paneId: options.paneId,
         paneKey: options.createPaneKey?.(input) ?? options.paneId,
         contentClassNames: options.contentClassNames,
-        createPane: () => {
-          const pane = options.createPane(input, context);
-          pane.setInput(input);
-          return pane;
+        createPane: () => options.createPane(input, context),
+        setInput: (pane, token) => {
+          options.updatePane?.(pane, context);
+          return pane.setInput(input, token);
         },
-        setInput: pane => pane.setInput(input),
       };
     },
   };
 }
 
-export const editorPaneDescriptors: AnyEditorPaneRegistryDescriptor[] = [];
+const editorPaneDescriptors: AnyEditorPaneRegistryDescriptor[] = [];
 
 export function registerEditorPaneDescriptor<
   TInput extends EditorInput,
@@ -96,6 +94,9 @@ export function registerEditorPaneDescriptor<
   descriptor: EditorPaneRegistryDescriptor<TInput, TPane, TPaneId>,
 ) {
   const registeredDescriptor = descriptor as unknown as AnyEditorPaneRegistryDescriptor;
+  if (editorPaneDescriptors.some(candidate => candidate.paneId === descriptor.paneId)) {
+    throw new Error(`Editor pane '${descriptor.paneId}' is already registered.`);
+  }
   editorPaneDescriptors.push(registeredDescriptor);
   return toDisposable(() => {
     const index = editorPaneDescriptors.indexOf(registeredDescriptor);
@@ -109,18 +110,18 @@ export function resolveEditorPane(
   input: EditorInput,
   context: EditorPaneResolverContext,
 ): ResolvedEditorPane {
-  for (const descriptor of editorPaneDescriptors) {
-    if (!descriptor.acceptsInput(input)) {
-      continue;
-    }
-
-    const resolvedPane = descriptor.resolvePane(input, context);
-    if (resolvedPane) {
-      return resolvedPane;
-    }
+  const matchingDescriptors = editorPaneDescriptors.filter(descriptor => descriptor.acceptsInput(input));
+  if (matchingDescriptors.length === 0) {
+    throw new Error(`No editor pane descriptor found for input type '${input.typeId}'.`);
+  }
+  if (matchingDescriptors.length === 1) {
+    return matchingDescriptors[0]!.resolvePane(input, context);
   }
 
-  throw new Error(
-    `No editor pane descriptor found for input type '${input.typeId}'.`,
-  );
+  const preferredPaneId = input.editorId;
+  const preferredDescriptors = matchingDescriptors.filter(descriptor => descriptor.paneId === preferredPaneId);
+  if (preferredDescriptors.length !== 1) {
+    throw new Error(`Multiple editor panes match '${input.typeId}' and no unique preferred pane is registered.`);
+  }
+  return preferredDescriptors[0]!.resolvePane(input, context);
 }

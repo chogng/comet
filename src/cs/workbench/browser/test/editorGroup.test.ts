@@ -78,7 +78,7 @@ test('EditorGroup owns open, active, MRU, move, and close state for generic inpu
 	assert.deepEqual(group.getMostRecentlyActiveEditors(), [first, second]);
 
 	assert.equal(await group.closeEditor(first), true);
-	assert.equal(first.disposeCount, 1);
+	assert.equal(first.disposeCount, 0);
 	assert.equal(group.activeEditor, second);
 	assert.deepEqual(group.getEditors(), [second]);
 	assert.equal(changes.includes(EditorGroupModelChangeKind.EditorOpen), true);
@@ -86,6 +86,8 @@ test('EditorGroup owns open, active, MRU, move, and close state for generic inpu
 	assert.equal(changes.includes(EditorGroupModelChangeKind.EditorMove), true);
 	assert.equal(changes.includes(EditorGroupModelChangeKind.EditorClose), true);
 	group.dispose();
+	first.dispose();
+	second.dispose();
 });
 
 test('EditorGroup reuses matching input identity without adding another tab', () => {
@@ -116,8 +118,9 @@ test('EditorGroup delegates close confirmation to the input', async () => {
 	canClose = true;
 	assert.equal(await group.closeEditor(input), true);
 	assert.equal(group.contains(input), false);
-	assert.equal(input.disposeCount, 1);
+	assert.equal(input.disposeCount, 0);
 	group.dispose();
+	input.dispose();
 });
 
 test('EditorGroup removes an input that is disposed by its feature owner', () => {

@@ -3,31 +3,19 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import { createEditorBrowserModeToolbarContribution } from 'cs/workbench/browser/parts/editor/editorBrowserModeToolbarContribution';
 import { createEditorModeToolbarContext, resolveActiveBrowserMetadata } from 'cs/workbench/browser/parts/editor/editorModeToolbarModel';
-import type { EditorPartBrowserToolbarActions, EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { AnyEditorPane, EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { isBrowserEditorPane } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
 import type { BrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
-import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import { Verbosity } from 'cs/workbench/common/editor';
-
-export type EditorModeToolbarHostContext = EditorPartBrowserToolbarActions & {
-	readonly activeTab: EditorInput | null;
-	readonly activePaneId: string | null;
-	readonly activePane: AnyEditorPane | null;
-	readonly contentElement: HTMLElement;
-	readonly toolbarElement: HTMLElement;
-	readonly labels: EditorPartLabels;
-	readonly viewPartProps: ViewPartProps;
-	readonly onOpenEditor: EditorOpenHandler;
-};
+import { MutableDisposable } from 'cs/base/common/lifecycle';
+import type { EditorModeToolbarHostContext } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
 
 export class EditorModeToolbarHost {
 	private context: EditorModeToolbarHostContext;
 	private readonly browserStateByTabId = new Map<string, BrowserEditorPaneState>();
 	private readonly browserHistoryAndFavoritesPanel: BrowserHistoryAndFavoritesPanel;
 	private readonly browserToolbar: ReturnType<typeof createEditorBrowserModeToolbarContribution>;
+	private readonly browserStateListener = new MutableDisposable();
 
 	constructor(
 		context: EditorModeToolbarHostContext,
@@ -45,8 +33,8 @@ export class EditorModeToolbarHost {
 		this.mountBrowserPanel();
 	}
 
-	getElement(): HTMLElement | null {
-		return this.context.activePaneId === 'browser' ? this.browserToolbar.getElement() : null;
+	getElement(): HTMLElement {
+		return this.browserToolbar.getElement();
 	}
 
 	setContext(context: EditorModeToolbarHostContext): void {
@@ -58,18 +46,20 @@ export class EditorModeToolbarHost {
 				? context.activePane.getHistoryAndFavoritesFeatures()
 				: undefined,
 		);
+		this.browserStateListener.clear();
+		if (isBrowserEditorPane(context.activePane)) {
+			this.browserStateListener.value = context.activePane.onDidChangeBrowserState(
+				state => this.updateBrowserState(state),
+			);
+			if (context.activePane.browserState) {
+				this.updateBrowserState(context.activePane.browserState);
+			}
+		}
 		this.browserToolbar.setContext(this.createBrowserToolbarContext());
 		this.mountBrowserPanel();
 	}
 
-	updatePaneState(input: EditorInput, state: EditorPaneRuntimeState): void {
-		if (state.metadata?.kind !== 'browser') {
-			return;
-		}
-		const browserState = state.metadata.value as BrowserEditorPaneState;
-		if (browserState.tabId !== getEditorInputId(input)) {
-			throw new Error('Browser pane state does not match its editor input.');
-		}
+	private updateBrowserState(browserState: BrowserEditorPaneState): void {
 		const previous = this.browserStateByTabId.get(browserState.tabId);
 		if (
 			previous?.url === browserState.url &&
@@ -93,6 +83,7 @@ export class EditorModeToolbarHost {
 	}
 
 	dispose(): void {
+		this.browserStateListener.dispose();
 		this.browserHistoryAndFavoritesPanel.dispose();
 		this.browserToolbar.dispose();
 		this.browserStateByTabId.clear();

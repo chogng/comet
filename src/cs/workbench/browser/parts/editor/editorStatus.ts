@@ -38,7 +38,7 @@ export type EditorContentStatusState = {
 
 export type EditorStatusState = {
 	ariaLabel: string;
-	paneMode: 'empty' | 'draft' | 'browser' | 'pdf';
+	paneMode: string;
 	modeLabel?: string;
 	summary?: string;
 	leftItems: readonly EditorStatusItem[];

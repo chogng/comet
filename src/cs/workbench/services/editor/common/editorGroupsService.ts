@@ -26,8 +26,16 @@ export interface IEditorGroup {
 }
 
 export interface IEditorGroupsChangeEvent {
+	readonly kind: EditorGroupsChangeKind;
 	readonly group: IEditorGroup;
 	readonly groupChange?: EditorGroupModelChangeEvent;
+}
+
+export const enum EditorGroupsChangeKind {
+	GroupAdd,
+	GroupRemove,
+	GroupActivate,
+	GroupModel,
 }
 
 export interface IEditorGroupsOpenOptions {
@@ -44,6 +52,7 @@ export interface IEditorGroupsService {
 	getGroups(): readonly IEditorGroup[];
 	getGroup(groupId: string): IEditorGroup | undefined;
 	createGroup(groupId?: string): IEditorGroup;
+	removeGroup(group: IEditorGroup): void;
 	activateGroup(group: IEditorGroup): void;
 	findEditor(editor: EditorInput): { group: IEditorGroup; editor: EditorInput } | undefined;
 	openEditor(editor: EditorInput, options?: IEditorGroupsOpenOptions): EditorInput;

@@ -16,6 +16,7 @@ import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import {
 	createEditorPaneDescriptor,
 	registerEditorPaneDescriptor,
+	type EditorPaneResolverContext,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import { BrowserEditorInput, BrowserEditorSerializer } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {
@@ -34,8 +35,14 @@ import {
 import { localize } from 'cs/nls';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
+import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
+import { renderBrowserStatusbarMode } from 'cs/workbench/browser/parts/statusbar/renderers/browser';
+import { registerEditorModeToolbar } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
+import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
 
 const unavailableMessage = 'Integrated Browser is not available in web.';
+registerStatusbarModeRenderer('browser', renderBrowserStatusbarMode);
+registerEditorModeToolbar('browser', createEditorModeToolbarHost);
 
 class WebBrowserViewWorkbenchService extends Disposable implements IBrowserViewWorkbenchService {
 	declare readonly _serviceBrand: undefined;
@@ -132,7 +139,10 @@ class WebBrowserViewCDPService implements IBrowserViewCDPService {
 class WebBrowserEditorPane extends EditorPane<BrowserEditorInput> {
 	private readonly element = document.createElement('div');
 
-	constructor() {
+	constructor(
+		private input: BrowserEditorInput,
+		private labels: EditorPaneResolverContext['labels'],
+	) {
 		super();
 		this.element.className = 'comet-editor-browser-pane';
 	}
@@ -141,7 +151,17 @@ class WebBrowserEditorPane extends EditorPane<BrowserEditorInput> {
 		return this.element;
 	}
 
-	override setInput(_input: BrowserEditorInput): void {}
+	override setInput(input: BrowserEditorInput): void {
+		this.input = input;
+	}
+
+	setLabels(labels: EditorPaneResolverContext['labels']): void {
+		this.labels = labels;
+	}
+
+	override getRuntimeState() {
+		return createBrowserEditorPaneState(this.input, this.labels);
+	}
 
 	override dispose(): void {
 		this.element.replaceChildren();
@@ -152,10 +172,8 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	paneId: 'browser',
 	contentClassNames: ['comet-is-mode-browser'],
 	acceptsInput: (input): input is BrowserEditorInput => input instanceof BrowserEditorInput,
-	createPane: (input, context) => {
-		context.onDidChangePaneState(input, createBrowserEditorPaneState(input, context.labels));
-		return new WebBrowserEditorPane();
-	},
+	createPane: (input, context) => new WebBrowserEditorPane(input, context.labels),
+	updatePane: (pane, context) => pane.setLabels(context.labels),
 }));
 
 class WebBrowserEditorResolverContribution extends Disposable {

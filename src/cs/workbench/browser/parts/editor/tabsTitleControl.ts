@@ -5,7 +5,7 @@ import {
 import type {
   HoverHandle,
 } from 'cs/base/browser/ui/hover/hover';
-import { createLxIcon, type LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
+import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { HorizontalScrollbar } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
 import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
 import { toAction, type IAction } from 'cs/base/common/actions';
@@ -47,25 +47,6 @@ function addDisposableListener(
   return toDisposable(() => {
     target.removeEventListener(type, listener, options);
   });
-}
-
-function getTabPaneModeIconName(
-  paneMode: EditorGroupTabItem['paneMode'],
-): LxIconName {
-  switch (paneMode) {
-    case 'draft':
-      return 'draft';
-    case 'pdf':
-      return 'file-text';
-    case 'file':
-      return 'file-text';
-    case 'terminal':
-      return 'terminal';
-    case 'git-changes':
-      return 'git-branch';
-    default:
-      return 'browser-1';
-  }
 }
 
 function isTabClosable(tab: Pick<EditorGroupTabItem, 'state'>) {
@@ -326,7 +307,7 @@ const nextTabElements: HTMLDivElement[] = [];
 
     const createFallbackPaneIcon = () => tab.icon
       ? renderIcon(tab.icon)
-      : createLxIcon(getTabPaneModeIconName(tab.paneMode));
+      : createLxIcon('file-text');
     const faviconUrl = normalizeTabFaviconUrl(tab.faviconUrl);
 
     if (faviconUrl) {

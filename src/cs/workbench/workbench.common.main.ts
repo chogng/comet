@@ -42,6 +42,7 @@ import 'cs/workbench/services/environment/browser/environmentService';
 import 'cs/workbench/services/dialogs/browser/dialogService';
 import 'cs/workbench/services/editor/browser/editorResolverService';
 import 'cs/workbench/services/editor/browser/editorGroupsService';
+import 'cs/workbench/services/editor/browser/editorService';
 import 'cs/workbench/services/host/browser/host';
 import {
   contextKeyService,

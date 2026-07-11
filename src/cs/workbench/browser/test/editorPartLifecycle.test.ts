@@ -14,6 +14,7 @@ import { createEditorPartController, type EditorPartControllerContext } from 'cs
 import { PdfEditorInput, PdfEditorInputSerializer } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorInput';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { EditorGroupsService } from 'cs/workbench/services/editor/browser/editorGroupsService';
+import { EditorService } from 'cs/workbench/services/editor/browser/editorService';
 
 function createStorageService(): IStorageService {
 	return {
@@ -47,28 +48,35 @@ test('EditorPart starts with an empty generic group and resolves inputs only whe
 	const instantiationService = new InstantiationService(new ServiceCollection());
 	const storageService = createStorageService();
 	const editorGroupsService = new EditorGroupsService(storageService, instantiationService);
+	const editorService = new EditorService(
+		editorGroupsService,
+		{
+			resolveEditor: ({ resource }: { resource: URI }) => {
+				resolveCount += 1;
+				return { editor: new PdfEditorInput({ resource }) };
+			},
+		} as never,
+		{
+			getLayoutState: () => ({ isEditorCollapsed: false }),
+			setEditorCollapsed() {},
+		} as never,
+	);
 	const context = {
 		ui: {},
 		viewPartProps: {},
 		nativeHost: {},
 		dialogService: {},
 		instantiationService,
-		editorResolverService: {
-			resolveEditor: ({ resource }: { resource: URI }) => {
-				resolveCount += 1;
-				return { editor: new PdfEditorInput({ resource }) };
-			},
-		},
 		editorGroupsService,
+		editorService,
 		storageService,
 		commandService: {},
-		ensureEditorPartVisible() {},
 	} as unknown as EditorPartControllerContext;
 	const controller = createEditorPartController(context);
 
 	assert.equal(controller.getSnapshot().group.count, 0);
 	assert.equal(resolveCount, 0);
-	const opened = await controller.openEditor({ resource: URI.parse('test:/editor-a') });
+	const opened = await editorService.openEditor({ resource: URI.parse('test:/editor-a') });
 	assert.equal(resolveCount, 1);
 	assert.equal(controller.getSnapshot().group.activeEditor, opened);
 	controller.dispose();

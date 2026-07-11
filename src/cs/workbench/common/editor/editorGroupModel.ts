@@ -21,6 +21,7 @@ export interface EditorGroupModelChangeEvent {
 	readonly editor: EditorInput;
 	readonly editorIndex: number;
 	readonly oldEditorIndex?: number;
+	readonly editorWillDispose?: boolean;
 }
 
 export interface EditorGroupModelOpenOptions {
@@ -94,7 +95,7 @@ export class EditorGroupModel extends Disposable {
 		if (target.closeHandler && !(await target.closeHandler.confirmClose())) {
 			return false;
 		}
-		this.removeEditor(target, true);
+		this.removeEditor(target, false);
 		return true;
 	}
 
@@ -133,7 +134,7 @@ export class EditorGroupModel extends Disposable {
 
 	override dispose(): void {
 		for (const editor of [...this.editors]) {
-			this.removeEditor(editor, true);
+			this.removeEditor(editor, false);
 		}
 		super.dispose();
 	}
@@ -150,7 +151,7 @@ export class EditorGroupModel extends Disposable {
 
 	private registerEditorListeners(editor: EditorInput): void {
 		const listeners = new DisposableStore();
-		listeners.add(editor.onWillDispose(() => this.removeEditor(editor, false)));
+		listeners.add(editor.onWillDispose(() => this.removeEditor(editor, true)));
 		listeners.add(editor.onDidChangeLabel(() => this.emitEditorChange(EditorGroupModelChangeKind.EditorLabel, editor)));
 		listeners.add(editor.onDidChangeDirty(() => this.emitEditorChange(EditorGroupModelChangeKind.EditorDirty, editor)));
 		this.editorListeners.set(editor, listeners);
@@ -163,7 +164,7 @@ export class EditorGroupModel extends Disposable {
 		}
 	}
 
-	private removeEditor(editor: EditorInput, disposeEditor: boolean): void {
+	private removeEditor(editor: EditorInput, editorWillDispose: boolean): void {
 		const editorIndex = this.editors.indexOf(editor);
 		if (editorIndex < 0) {
 			return;
@@ -184,10 +185,8 @@ export class EditorGroupModel extends Disposable {
 			kind: EditorGroupModelChangeKind.EditorClose,
 			editor,
 			editorIndex,
+			editorWillDispose,
 		});
-		if (disposeEditor) {
-			editor.dispose();
-		}
 	}
 
 	private touchMostRecentlyActive(editor: EditorInput): void {

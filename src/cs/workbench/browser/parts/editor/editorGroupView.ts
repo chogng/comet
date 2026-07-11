@@ -2,6 +2,8 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import { createEmptyEditorStatus } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import { $ } from 'cs/base/browser/dom';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
+import { Disposable, type IDisposable } from 'cs/base/common/lifecycle';
 
 import { resolveEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import type { EditorPaneResolverContext } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
@@ -13,7 +15,7 @@ import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/p
 
 import { EditorEmptyWorkspaceView } from 'cs/workbench/browser/parts/editor/editorEmptyWorkspaceView';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
+import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
 import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
 import { createEditorTabsModel, type EditorTabsModel } from 'cs/workbench/browser/parts/editor/editorTabsModel';
@@ -210,10 +212,6 @@ class EditorGroupController {
   }
 
   updateRuntimeState = (tabId: string, nextState: EditorPaneRuntimeState) => {
-    if (JSON.stringify(this.runtimeStateByTabId[tabId]) === JSON.stringify(nextState)) {
-      return;
-    }
-
     this.runtimeStateByTabId = {
       ...this.runtimeStateByTabId,
       [tabId]: nextState,
@@ -271,6 +269,9 @@ export class EditorGroupView {
   private activePaneTabId: string | null = null;
   private activePaneViewStateKey: EditorViewStateKey | null = null;
   private activePaneKey: string | null = null;
+  private readonly paneInstances = new Map<string, AnyEditorPane>();
+  private activePaneInputSource: CancellationTokenSource | null = null;
+  private activePaneRuntimeStateListener: IDisposable = Disposable.None;
   private readonly pendingViewStateSaveByTabId = new Map<string, Promise<void>>();
   private shouldFocusPrimaryInput = false;
 
@@ -386,7 +387,6 @@ export class EditorGroupView {
     state: EditorPaneRuntimeState,
   ) => {
     this.controller.updateRuntimeState(getEditorInputId(input), state);
-    this.modeToolbarHost.updatePaneState(input, state);
     const snapshot = this.controller.getSnapshot();
     this.titleAreaControl.setProps(
       createTitleControlProps(this.props, snapshot.group, this.requestPrimaryInputFocus),
@@ -468,7 +468,7 @@ export class EditorGroupView {
       this.releaseActivePane();
       this.activateResolvedPane(
         resolvedPane,
-        getEditorInputId(group.activeTab),
+        group.activeTab,
         nextPaneViewStateKey,
       );
     } else {
@@ -478,9 +478,10 @@ export class EditorGroupView {
         this.saveActivePaneViewState();
       }
 
-      resolvedPane.setInput(this.activePane);
       this.activePaneTabId = activeEditorId;
       this.activePaneViewStateKey = nextPaneViewStateKey;
+      this.bindActivePaneRuntimeState(this.activePane, group.activeTab);
+      this.setActivePaneInput(resolvedPane, this.activePane);
       if (didSwitchActivePaneTab) {
         this.restorePaneViewState(this.activePane, nextPaneViewStateKey);
       }
@@ -612,21 +613,68 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
       instantiationService: this.props.instantiationService,
       onOpenEditor: this.props.onOpenEditor,
       onOpenSources: this.props.onOpenAddressBarSourceMenu,
-      onDidChangePaneState: this.handlePaneStateChange,
     };
   }
 
   private activateResolvedPane(
     resolvedPane: ReturnType<typeof resolveEditorPane>,
-    tabId: string,
+    input: EditorInput,
     viewStateKey: EditorViewStateKey,
   ) {
-    this.activePane = resolvedPane.createPane();
-    this.activePaneTabId = tabId;
+    const existingPane = this.paneInstances.get(resolvedPane.paneKey);
+    this.activePane = existingPane ?? resolvedPane.createPane();
+    if (!existingPane) {
+      this.paneInstances.set(resolvedPane.paneKey, this.activePane);
+    }
+    this.activePaneTabId = getEditorInputId(input);
     this.activePaneViewStateKey = viewStateKey;
     this.activePaneKey = resolvedPane.paneKey;
+    this.bindActivePaneRuntimeState(this.activePane, input);
+    if (existingPane) {
+      this.setActivePaneInput(resolvedPane, this.activePane);
+    }
+    this.activePane.setVisible(true);
     this.contentElement.replaceChildren(this.activePane.getElement());
     this.restorePaneViewState(this.activePane, viewStateKey);
+  }
+
+  private bindActivePaneRuntimeState(pane: AnyEditorPane, input: EditorInput): void {
+    this.activePaneRuntimeStateListener.dispose();
+    this.activePaneRuntimeStateListener = pane.onDidChangeRuntimeState(state => {
+      this.handlePaneStateChange(input, state);
+    });
+    const state = pane.getRuntimeState();
+    if (state) {
+      this.handlePaneStateChange(input, state);
+    }
+  }
+
+  private setActivePaneInput(
+    resolvedPane: ReturnType<typeof resolveEditorPane>,
+    pane: AnyEditorPane,
+  ): void {
+    this.activePaneInputSource?.cancel();
+    this.activePaneInputSource?.dispose();
+    const source = new CancellationTokenSource();
+    this.activePaneInputSource = source;
+    const result = resolvedPane.setInput(pane, source.token);
+    if (result) {
+      const finalize = () => {
+        if (this.activePaneInputSource === source) {
+          this.activePaneInputSource = null;
+        }
+        source.dispose();
+      };
+      void result.then(finalize, error => {
+        finalize();
+        queueMicrotask(() => { throw error; });
+      });
+      return;
+    }
+    this.activePaneInputSource = null;
+    this.activePaneRuntimeStateListener.dispose();
+    this.activePaneRuntimeStateListener = Disposable.None;
+    source.dispose();
   }
 
   private releaseActivePane() {
@@ -635,15 +683,18 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     }
 
     this.saveActivePaneViewState();
+    this.activePaneInputSource?.cancel();
+    this.activePaneInputSource?.dispose();
+    this.activePaneInputSource = null;
 
     const pane = this.activePane;
-
     this.activePane = null;
     this.activePaneTabId = null;
     this.activePaneViewStateKey = null;
     this.activePaneKey = null;
 
-    this.disposePane(pane);
+    pane.clearInput();
+    pane.setVisible(false);
   }
 
   private disposePane(pane: AnyEditorPane) {
@@ -652,9 +703,12 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
   }
 
   private disposeAllPaneInstances() {
-    if (this.activePane) {
-      this.disposePane(this.activePane);
+    this.activePaneRuntimeStateListener.dispose();
+    this.activePaneRuntimeStateListener = Disposable.None;
+    for (const pane of this.paneInstances.values()) {
+      this.disposePane(pane);
     }
+    this.paneInstances.clear();
     this.activePane = null;
     this.activePaneTabId = null;
     this.activePaneViewStateKey = null;

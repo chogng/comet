@@ -11,6 +11,9 @@ import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialog
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import { Emitter } from 'cs/base/common/event';
+import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import { createDraftEditorPaneState } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPaneState';
 
 export interface DraftEditorPaneInput extends EditorInput {
   readonly document: WritingEditorDocument;
@@ -20,7 +23,6 @@ export interface DraftEditorPaneInput extends EditorInput {
 export type DraftEditorPaneContext = DropdownContextServices & {
   labels: EditorPartLabels;
   dialogService: IDialogService;
-  onStatusChange?: (input: DraftEditorPaneInput, status: DraftEditorStatusState) => void;
 };
 
 export class DraftEditorPane extends EditorPane<
@@ -30,8 +32,11 @@ export class DraftEditorPane extends EditorPane<
   private input: DraftEditorPaneInput;
   private readonly element = document.createElement('div');
   private readonly editor: ProseMirrorEditor;
+  private runtimeState: EditorPaneRuntimeState | undefined;
+  private readonly runtimeStateEmitter = new Emitter<EditorPaneRuntimeState>();
+  override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
 
-  constructor(input: DraftEditorPaneInput, private readonly context: DraftEditorPaneContext) {
+  constructor(input: DraftEditorPaneInput, private context: DraftEditorPaneContext) {
     super();
     this.input = input;
     this.element.className = 'comet-editor-draft-pane';
@@ -43,8 +48,16 @@ export class DraftEditorPane extends EditorPane<
     return this.element;
   }
 
+  setContext(context: DraftEditorPaneContext) {
+    this.context = context;
+  }
+
   override getToolbarElement() {
     return this.editor.getToolbarElement();
+  }
+
+  override getRuntimeState() {
+    return this.runtimeState;
   }
 
   getStableSelectionTarget() {
@@ -103,6 +116,7 @@ export class DraftEditorPane extends EditorPane<
 
   override dispose() {
     this.editor.dispose();
+    this.runtimeStateEmitter.dispose();
     this.element.replaceChildren();
   }
 
@@ -190,7 +204,8 @@ export class DraftEditorPane extends EditorPane<
       onInsertFigureRef: this.handleInsertFigureRef,
       onDocumentChange: (value: WritingEditorDocument) => input.setDocument(value),
       onStatusChange: (status: DraftEditorStatusState) => {
-        this.context.onStatusChange?.(input, status);
+        this.runtimeState = createDraftEditorPaneState(this.context.labels, status);
+        this.runtimeStateEmitter.fire(this.runtimeState);
       },
     };
   }

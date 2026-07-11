@@ -9,7 +9,7 @@ import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
 import { createEditorGroupId, DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/common/editor/editorGroupIdentity';
-import { EditorGroupModel } from 'cs/workbench/common/editor/editorGroupModel';
+import { EditorGroupModel, EditorGroupModelChangeKind } from 'cs/workbench/common/editor/editorGroupModel';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import {
@@ -22,6 +22,7 @@ import {
 	type IEditorGroup,
 	type IEditorGroupsChangeEvent,
 	type IEditorGroupsOpenOptions,
+	EditorGroupsChangeKind,
 } from 'cs/workbench/services/editor/common/editorGroupsService';
 
 const EditorGroupsStorageKey = 'workbench.editorGroups';
@@ -77,11 +78,44 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 			return;
 		}
 		this.active = registered;
-		this.changeEmitter.fire({ group });
+		this.changeEmitter.fire({ kind: EditorGroupsChangeKind.GroupActivate, group });
+		this.persist();
+	}
+
+	removeGroup(group: IEditorGroup): void {
+		const registered = this.groups.get(group.id);
+		if (registered !== group) {
+			throw new Error(`Editor group '${group.id}' is not registered.`);
+		}
+		if (this.groups.size === 1) {
+			throw new Error('The last editor group cannot be removed.');
+		}
+		const editors = registered.getEditors();
+		this.groupListeners.get(group.id)?.dispose();
+		this.groupListeners.delete(group.id);
+		this.groups.delete(group.id);
+		registered.dispose();
+		if (this.active === registered) {
+			const nextActiveGroup = this.groups.values().next().value;
+			if (!nextActiveGroup) {
+				throw new Error('Removing an editor group left no active group.');
+			}
+			this.active = nextActiveGroup;
+			this.changeEmitter.fire({ kind: EditorGroupsChangeKind.GroupActivate, group: this.active });
+		}
+		this.changeEmitter.fire({ kind: EditorGroupsChangeKind.GroupRemove, group });
+		for (const editor of editors) {
+			this.disposeEditorIfUnreferenced(editor);
+		}
 		this.persist();
 	}
 
 	findEditor(editor: EditorInput): { group: IEditorGroup; editor: EditorInput } | undefined {
+		for (const group of this.groups.values()) {
+			if (group.getEditors().includes(editor)) {
+				return { group, editor };
+			}
+		}
 		for (const group of this.groups.values()) {
 			const existing = group.getEditors().find(candidate => candidate.matches(editor));
 			if (existing) {
@@ -92,16 +126,26 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 	}
 
 	openEditor(editor: EditorInput, options: IEditorGroupsOpenOptions = {}): EditorInput {
-		const existing = this.findEditor(editor);
+		const targetGroup = options.groupId ? this.getGroup(options.groupId) : undefined;
+		const targetExisting = targetGroup?.getEditors().find(candidate => candidate.matches(editor));
+		const existing = options.groupId
+			? targetGroup && targetExisting ? { group: targetGroup, editor: targetExisting } : undefined
+			: this.findEditor(editor);
 		if (existing) {
-			existing.group.setActive(existing.editor);
+			existing.group.openEditor(existing.editor, { active: options.active });
 			if (options.active !== false) {
 				this.activateGroup(existing.group);
+			}
+			if (existing.editor !== editor) {
+				editor.dispose();
 			}
 			return existing.editor;
 		}
 
-		const group = options.groupId ? this.createGroup(options.groupId) : this.active;
+		editorInputSerializerRegistry.serialize(editor);
+		const group = options.groupId
+			? targetGroup ?? this.createGroup(options.groupId)
+			: this.active;
 		const opened = group.openEditor(editor, { active: options.active });
 		if (options.active !== false) {
 			this.activateGroup(group);
@@ -119,10 +163,17 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 			listeners.dispose();
 		}
 		this.groupListeners.clear();
+		const editors = new Set<EditorInput>();
 		for (const group of this.groups.values()) {
+			for (const editor of group.getEditors()) {
+				editors.add(editor);
+			}
 			group.dispose();
 		}
 		this.groups.clear();
+		for (const editor of editors) {
+			editor.dispose();
+		}
 		super.dispose();
 	}
 
@@ -154,7 +205,10 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 		}
 		const listeners = new DisposableStore();
 		listeners.add(group.onDidModelChange(groupChange => {
-			this.changeEmitter.fire({ group, groupChange });
+			this.changeEmitter.fire({ kind: EditorGroupsChangeKind.GroupModel, group, groupChange });
+			if (groupChange.kind === EditorGroupModelChangeKind.EditorClose && !groupChange.editorWillDispose) {
+				this.disposeEditorIfUnreferenced(groupChange.editor);
+			}
 			this.persist();
 		}));
 		this.groups.set(group.id, group);
@@ -162,7 +216,16 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 		if (!this.active) {
 			this.active = group;
 		}
-		this.changeEmitter.fire({ group });
+		this.changeEmitter.fire({ kind: EditorGroupsChangeKind.GroupAdd, group });
+	}
+
+	private disposeEditorIfUnreferenced(editor: EditorInput): void {
+		const isReferenced = [...this.groups.values()].some(group =>
+			group.getEditors().includes(editor),
+		);
+		if (!isReferenced) {
+			editor.dispose();
+		}
 	}
 
 	private persist(): void {

@@ -32,6 +32,9 @@ import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { EmptyEditorUrl } from 'cs/workbench/common/editor/editorResources';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createEditorPdfModeToolbarContribution } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorToolbar';
+import { Emitter } from 'cs/base/common/event';
+import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import { createPdfEditorPaneState } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPaneState';
 
 export interface PdfEditorPaneInput extends EditorInput {
   readonly id: string;
@@ -48,10 +51,6 @@ export type PdfEditorPaneContext = DropdownContextServices & {
   nativeHost: INativeHostService;
   onOpenEditor?: EditorOpenHandler;
   onOpenSources: () => void;
-  onReaderStatusChange?: (
-    input: PdfEditorPaneInput,
-    status: PdfReaderRuntimeStatus,
-  ) => void;
 };
 
 class PdfEditorPaneStateController {
@@ -106,8 +105,11 @@ export class PdfEditorPane extends EditorPane<
   private readerSnapshot: PdfReaderSnapshot;
   private documentReader: ReturnType<typeof createPdfDocumentReader> | null = null;
   private readonly toolbar: ReturnType<typeof createEditorPdfModeToolbarContribution>;
+  private runtimeState: EditorPaneRuntimeState | undefined;
+  private readonly runtimeStateEmitter = new Emitter<EditorPaneRuntimeState>();
+  override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
 
-  constructor(input: PdfEditorPaneInput, private readonly context: PdfEditorPaneContext) {
+  constructor(input: PdfEditorPaneInput, private context: PdfEditorPaneContext) {
     super();
     this.input = input;
     this.readerSnapshot = this.createReaderSnapshot(input);
@@ -122,8 +124,17 @@ export class PdfEditorPane extends EditorPane<
     return this.element;
   }
 
+  setContext(context: PdfEditorPaneContext) {
+    this.context = context;
+    this.toolbar.setContext(this.createToolbarContext());
+  }
+
   override getToolbarElement() {
     return this.toolbar.getElement();
+  }
+
+  override getRuntimeState() {
+    return this.runtimeState;
   }
 
   override setInput(input: PdfEditorPaneInput) {
@@ -175,6 +186,7 @@ export class PdfEditorPane extends EditorPane<
     this.documentReader?.dispose();
     this.documentReader = null;
     this.toolbar.dispose();
+    this.runtimeStateEmitter.dispose();
     this.element.replaceChildren();
   }
 
@@ -274,7 +286,8 @@ export class PdfEditorPane extends EditorPane<
         this.deletePdfAnnotation(annotationId);
       },
       onReaderStatusChange: (status: PdfReaderRuntimeStatus) => {
-        this.context.onReaderStatusChange?.(this.input, status);
+        this.runtimeState = createPdfEditorPaneState(this.input, this.context.labels, status);
+        this.runtimeStateEmitter.fire(this.runtimeState);
       },
       onOpenPdfFile: this.handleOpenPdfFile,
     };

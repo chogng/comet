@@ -20,24 +20,32 @@ import { IInstantiationService } from 'cs/platform/instantiation/common/instanti
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
-import { createDraftEditorPaneState } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPaneState';
+import 'cs/workbench/contrib/draftEditor/common/draftEditorService';
+import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
+import { renderDraftStatusbarMode } from 'cs/workbench/browser/parts/statusbar/renderers/draft';
 
 editorInputSerializerRegistry.register(DraftEditorInput.ID, new DraftEditorInputSerializer());
+registerStatusbarModeRenderer('draft', renderDraftStatusbarMode);
+
+function createDraftEditorPaneContext(context: import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').EditorPaneResolverContext) {
+	return {
+		contextMenuService: context.contextMenuService,
+		contextViewProvider: context.contextViewProvider,
+		labels: context.labels,
+		dialogService: context.dialogService,
+	};
+}
 
 registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	paneId: 'draft',
 	contentClassNames: ['comet-is-mode-draft'],
 	acceptsInput: (input): input is DraftEditorInput => input instanceof DraftEditorInput,
-	createPane: (input, context) => new DraftEditorPane(input, {
-		contextMenuService: context.contextMenuService,
-		contextViewProvider: context.contextViewProvider,
-		labels: context.labels,
-		dialogService: context.dialogService,
-		onStatusChange: (draftInput, status) => context.onDidChangePaneState(
-			draftInput,
-			createDraftEditorPaneState(context.labels, status),
-		),
-	}),
+	createPane: (input, context) => context.instantiationService.createInstance(
+		DraftEditorPane,
+		input,
+		createDraftEditorPaneContext(context),
+	),
+	updatePane: (pane, context) => pane.setContext(createDraftEditorPaneContext(context)),
 }));
 
 registerAction2(class CreateDraftEditorAction extends Action2 {

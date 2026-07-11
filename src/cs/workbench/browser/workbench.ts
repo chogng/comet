@@ -73,12 +73,11 @@ import { DisposableStore } from 'cs/base/common/lifecycle';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import {
   getWorkbenchInstantiationService,
-  registerWorkbenchService,
 } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
 import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
+import { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
 import { NotificationsStatus } from 'cs/workbench/browser/parts/notifications/notificationsStatus';
@@ -341,8 +340,7 @@ class WorkbenchHost {
   private readonly collapsedEditorTitlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
   private readonly sidebarFooterActionsView: SidebarFooterActionsView;
   private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
-  private editorPartController: EditorPartModel | null = null;
-  private readonly globalDisposables: Array<() => void> = [];
+	private readonly globalDisposables: Array<() => void> = [];
   private servicesSubscribed = false;
   private isDisposed = false;
   private isRendering = false;
@@ -365,13 +363,6 @@ class WorkbenchHost {
   private readonly handleWindowKeydown = (event: KeyboardEvent) => {
     handleWorkbenchEditorShortcut(event);
   };
-  private readonly ensureEditorPartVisible = () => {
-    const { isEditorCollapsed, expandedEditorSize } = getWorkbenchLayoutStateSnapshot();
-    if (isEditorCollapsed) {
-      setEditorCollapsed(false, expandedEditorSize);
-    }
-  };
-
   constructor(
     rootElement: HTMLElement,
     @INotificationService private readonly notificationService: NotificationService,
@@ -383,8 +374,9 @@ class WorkbenchHost {
     @IContextMenuService private readonly contextMenuService: IContextMenuService,
     @IChatServiceDecorator private readonly chatService: IChatService,
     @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
-    @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
     @IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
+    @IEditorService private readonly editorService: IEditorService,
+    @IDraftEditorService private readonly draftEditorService: IDraftEditorService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
     @IFetchService private readonly fetchService: IFetchService,
     @IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
@@ -486,8 +478,7 @@ class WorkbenchHost {
     this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
     this.settingsView = null;
-    this.editorPartController = null;
-    this.notificationsDisposables.dispose();
+		this.notificationsDisposables.dispose();
     this.rootElement.replaceChildren();
   }
 
@@ -683,9 +674,9 @@ class WorkbenchHost {
       getActiveDraftStableSelectionTarget: () =>
         this.workbenchContentPartViews?.getActiveDraftStableSelectionTarget() ?? null,
       saveActiveDraft: () =>
-        this.editorPartController?.saveActiveDraft() ?? false,
+        this.draftEditorService.saveActive(),
       canSaveActiveDraft: () =>
-        this.editorPartController?.canSaveActiveDraft() ?? false,
+        this.draftEditorService.canSaveActive(),
     });
   }
 
@@ -982,20 +973,17 @@ class WorkbenchHost {
       nativeHost,
       dialogService: this.dialogService,
       instantiationService: this.instantiationService,
-      editorResolverService: this.editorResolverService,
       editorGroupsService: this.editorGroupsService,
+      editorService: this.editorService,
       storageService: this.storageService,
       commandService: this.commandService,
-      ensureEditorPartVisible: this.ensureEditorPartVisible,
     });
-    this.editorPartController = editorPartControllerInstance;
-    registerWorkbenchService(IEditorService, editorPartControllerInstance);
-    const editorPartSnapshot = editorPartControllerInstance.getSnapshot();
+		const editorPartSnapshot = editorPartControllerInstance.getSnapshot();
     const {
       group: editorGroup,
-      draftBody,
       editorPartProps,
     } = editorPartSnapshot;
+    const draftBody = this.draftEditorService.getActiveBody();
     const activeEditor = editorGroup.activeEditor;
     const browserUrl = activeEditor?.getDescription() ?? '';
     const browserPageTitle = activeEditor?.getName() ?? '';
@@ -1010,9 +998,9 @@ class WorkbenchHost {
       llmSettings: currentLlmSettings,
       ragSettings: currentRagSettings,
       fallbackWritingContext: draftBody,
-      getFallbackWritingContext: editorPartControllerInstance.getDraftBody,
-      getDraftDocument: editorPartControllerInstance.getDraftDocument,
-      setDraftDocument: editorPartControllerInstance.setDraftDocument,
+      getFallbackWritingContext: () => this.draftEditorService.getActiveBody(),
+      getDraftDocument: () => this.draftEditorService.getActiveDocument(),
+      setDraftDocument: value => this.draftEditorService.setActiveDocument(value),
     });
     this.syncActiveSidebarEntryConversation();
     const assistantSnapshot = chatServiceInstance.getSnapshot();
@@ -1027,7 +1015,7 @@ class WorkbenchHost {
     const handleAssistantApplyPatch =
       chatServiceInstance.applyPatch;
 
-    const activeDraftDocument = editorPartControllerInstance.getDraftDocument();
+    const activeDraftDocument = this.draftEditorService.getActiveDocument();
     const activeDraftExport =
       activeDraftDocument
         ? {
@@ -1182,11 +1170,10 @@ class WorkbenchHost {
         nativeHost,
         dialogService: this.dialogService,
         instantiationService: this.instantiationService,
-        editorResolverService: this.editorResolverService,
         editorGroupsService: this.editorGroupsService,
+        editorService: this.editorService,
         storageService: this.storageService,
         commandService: this.commandService,
-        ensureEditorPartVisible: this.ensureEditorPartVisible,
       },
       chatService: chatServiceInstance,
       chatContext: {
@@ -1200,12 +1187,12 @@ class WorkbenchHost {
         getFallbackWritingContext: () =>
           formatStableSelectionWritingContext(
             this.workbenchContentPartViews?.getActiveDraftStableSelectionTarget() ?? null,
-            editorPartControllerInstance.getDraftBody(),
+            this.draftEditorService.getActiveBody(),
           ),
-        getDraftBody: () => editorPartControllerInstance.getDraftBody(),
-        getDraftDocument: () => editorPartControllerInstance.getDraftDocument(),
+        getDraftBody: () => this.draftEditorService.getActiveBody(),
+        getDraftDocument: () => this.draftEditorService.getActiveDocument(),
         setDraftDocument: (value) =>
-          editorPartControllerInstance.setDraftDocument(value),
+          this.draftEditorService.setActiveDocument(value),
         getActiveDraftStableSelectionTarget: () =>
           this.workbenchContentPartViews?.getActiveDraftStableSelectionTarget() ?? null,
       },

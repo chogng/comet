@@ -18,15 +18,14 @@ import { localize } from 'cs/nls';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
-import { createPdfEditorPaneState } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPaneState';
+import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
+import { renderPdfStatusbarMode } from 'cs/workbench/browser/parts/statusbar/renderers/pdf';
 
 editorInputSerializerRegistry.register(PdfEditorInput.ID, new PdfEditorInputSerializer());
+registerStatusbarModeRenderer('pdf', renderPdfStatusbarMode);
 
-registerEditorPaneDescriptor(createEditorPaneDescriptor({
-	paneId: 'pdf',
-	contentClassNames: ['comet-is-mode-pdf'],
-	acceptsInput: (input): input is PdfEditorInput => input instanceof PdfEditorInput,
-	createPane: (input, context) => new PdfEditorPane(input, {
+function createPdfEditorPaneContext(context: import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').EditorPaneResolverContext) {
+	return {
 		contextMenuService: context.contextMenuService,
 		contextViewProvider: context.contextViewProvider,
 		labels: context.labels,
@@ -34,11 +33,19 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 		nativeHost: context.nativeHost,
 		onOpenEditor: context.onOpenEditor,
 		onOpenSources: context.onOpenSources,
-		onReaderStatusChange: (pdfInput, status) => context.onDidChangePaneState(
-			pdfInput,
-			createPdfEditorPaneState(pdfInput, context.labels, status),
-		),
-	}),
+	};
+}
+
+registerEditorPaneDescriptor(createEditorPaneDescriptor({
+	paneId: 'pdf',
+	contentClassNames: ['comet-is-mode-pdf'],
+	acceptsInput: (input): input is PdfEditorInput => input instanceof PdfEditorInput,
+	createPane: (input, context) => context.instantiationService.createInstance(
+		PdfEditorPane,
+		input,
+		createPdfEditorPaneContext(context),
+	),
+	updatePane: (pane, context) => pane.setContext(createPdfEditorPaneContext(context)),
 }));
 
 registerAction2(class CreatePdfEditorAction extends Action2 {

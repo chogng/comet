@@ -16,6 +16,7 @@ import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editor
 import { EditorGroupsService } from 'cs/workbench/services/editor/browser/editorGroupsService';
 
 class TestEditorInput extends EditorInput {
+	disposeCount = 0;
 	constructor(readonly resource: URI) {
 		super();
 	}
@@ -27,6 +28,11 @@ class TestEditorInput extends EditorInput {
 	override matches(otherInput: EditorInput): boolean {
 		return otherInput instanceof TestEditorInput
 			&& this.resource.toString() === otherInput.resource.toString();
+	}
+
+	override dispose(): void {
+		this.disposeCount += 1;
+		super.dispose();
 	}
 }
 
@@ -103,8 +109,8 @@ test('EditorGroups reveals matching resource identity where it already lives', (
 	assert.equal(groups.activeGroup, firstGroup);
 	assert.deepEqual(firstGroup.getEditors(), [first]);
 	assert.deepEqual(secondGroup.getEditors(), []);
+	assert.equal(matching.disposeCount, 1);
 	groups.dispose();
-	matching.dispose();
 });
 
 test('EditorGroupsService restores group ownership and active group from storage', () => {
@@ -122,4 +128,38 @@ test('EditorGroupsService restores group ownership and active group from storage
 		[['/first'], ['/second']],
 	);
 	restored.dispose();
+});
+
+test('EditorGroupsService permits an explicit target group and disposes shared input after its last group closes', async () => {
+	const groups = createEditorGroupsService();
+	const input = new TestEditorInput(URI.parse('test:/shared'));
+	groups.openEditor(input);
+	groups.openEditor(input, { groupId: 'group-b' });
+	const secondGroup = groups.getGroup('group-b');
+	assert(secondGroup);
+	assert.equal(groups.getGroups()[0]?.getEditors()[0], input);
+	assert.equal(secondGroup.getEditors()[0], input);
+
+	groups.removeGroup(secondGroup);
+	assert.equal(input.disposeCount, 0);
+	assert.equal(await groups.closeEditor(input), true);
+	assert.equal(input.disposeCount, 1);
+	groups.dispose();
+});
+
+test('EditorGroupsService validates persistence before mutating groups', () => {
+	class UnserializableEditorInput extends EditorInput {
+		readonly resource = URI.parse('unserializable:/input');
+		get typeId(): string { return 'test.unserializableEditorInput'; }
+	}
+	const groups = createEditorGroupsService();
+	const input = new UnserializableEditorInput();
+	assert.throws(
+		() => groups.openEditor(input, { groupId: 'group-b' }),
+		/No serializer is registered/,
+	);
+	assert.equal(groups.getGroup('group-b'), undefined);
+	assert.equal(groups.activeGroup.count, 0);
+	input.dispose();
+	groups.dispose();
 });

@@ -29,7 +29,10 @@ import {
 	registerEditorPaneDescriptor,
 	type EditorPaneResolverContext,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
-import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
+import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
+import { renderBrowserStatusbarMode } from 'cs/workbench/browser/parts/statusbar/renderers/browser';
+import { registerEditorModeToolbar } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
+import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
 
 import 'cs/workbench/contrib/browserView/electron-browser/features/webContentsViewRendererFeature';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature';
@@ -48,17 +51,15 @@ import 'cs/workbench/contrib/browserView/electron-browser/features/browserTabMan
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserRemoteFeatures';
 
 registerSingleton(IPlaywrightService, PlaywrightWorkbenchService, InstantiationType.Delayed);
+registerStatusbarModeRenderer('browser', renderBrowserStatusbarMode);
+registerEditorModeToolbar('browser', createEditorModeToolbarHost);
 
 function createBrowserEditorProps(
 	context: EditorPaneResolverContext,
-	input: BrowserEditorInput,
 ): BrowserEditorProps {
 	return {
 		labels: context.labels,
 		nativeHost: context.nativeHost,
-		onDidChangeBrowserState: state => {
-			context.onDidChangePaneState(input, createBrowserEditorPaneState(input, context.labels, state));
-		},
 	};
 }
 
@@ -69,8 +70,9 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	createPane: (input, context) => context.instantiationService.createInstance(
 		BrowserEditor,
 		input,
-		createBrowserEditorProps(context, input),
+		createBrowserEditorProps(context),
 	),
+	updatePane: (pane, context) => pane.setProps(createBrowserEditorProps(context)),
 }));
 
 export class BrowserEditorResolverContribution extends Disposable {

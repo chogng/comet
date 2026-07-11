@@ -1,6 +1,6 @@
 import type { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 
-export type EditorModeToolbarKind = 'browser';
+export type EditorModeToolbarKind = string;
 
 export type EditorModeToolbarContributionContext = {
   mode: EditorModeToolbarKind | null;

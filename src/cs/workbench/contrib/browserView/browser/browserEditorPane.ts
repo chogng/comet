@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { Event } from 'cs/base/common/event';
+import type { BrowserHistoryAndFavoritesPanelFeatures } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
+
 export interface BrowserEditorPaneState {
 	readonly tabId: string;
 	readonly url: string;
@@ -17,6 +20,8 @@ export interface IBrowserEditorPane {
 	goForward(): Promise<void>;
 	reload(hard?: boolean): Promise<void>;
 	getHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined;
+	readonly onDidChangeBrowserState: Event<BrowserEditorPaneState>;
+	readonly browserState: BrowserEditorPaneState | undefined;
 }
 
 export function isBrowserEditorPane(value: unknown): value is IBrowserEditorPane {
@@ -27,7 +32,7 @@ export function isBrowserEditorPane(value: unknown): value is IBrowserEditorPane
 		typeof candidate.goBack === 'function' &&
 		typeof candidate.goForward === 'function' &&
 		typeof candidate.reload === 'function' &&
-		typeof candidate.getHistoryAndFavoritesFeatures === 'function',
+		typeof candidate.getHistoryAndFavoritesFeatures === 'function' &&
+		typeof candidate.onDidChangeBrowserState === 'function',
 	);
 }
-import type { BrowserHistoryAndFavoritesPanelFeatures } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
