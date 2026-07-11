@@ -6,6 +6,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/cancellation';
+import { Event } from 'cs/base/common/event';
+import type { IAgentNetworkFilterService } from 'cs/platform/networkFilter/common/networkFilterService';
 import {
 	BrowserPageReadinessSelectorError,
 	BrowserPageReadinessTimeoutError,
@@ -82,9 +84,11 @@ class FakePage {
 
 function createTab(page = new FakePage()): { readonly page: FakePage; readonly tab: PlaywrightTab } {
 	const actionScope = { activeCalls: 0 };
-	const networkFilter = {
+	const networkFilter: IAgentNetworkFilterService = {
+		_serviceBrand: undefined,
 		isUriAllowed: () => true,
 		formatError: () => '',
+		onDidChange: Event.None,
 	};
 	return {
 		page,

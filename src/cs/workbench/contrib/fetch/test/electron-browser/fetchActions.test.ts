@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { URI } from 'cs/base/common/uri';
-import { MenuRegistry } from 'cs/platform/actions/common/actions';
+import { isIMenuItem, MenuRegistry } from 'cs/platform/actions/common/actions';
 import { commandsRegistry } from 'cs/platform/commands/common/commands';
 import type { ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
@@ -30,5 +30,7 @@ test('Fetch journal action opens the registered journal home URL through the Fet
 	assert.ok(command);
 	await command.handler(accessor, 'journal.example');
 	assert.equal(openedUrl, homeUrl);
-	assert.equal(MenuRegistry.getMenuItems(FetchJournalMenuId)[0].command.id, FetchCommandId.OpenJournalHome);
+	const menuItem = MenuRegistry.getMenuItems(FetchJournalMenuId)[0];
+	assert.ok(isIMenuItem(menuItem));
+	assert.equal(menuItem.command.id, FetchCommandId.OpenJournalHome);
 });
