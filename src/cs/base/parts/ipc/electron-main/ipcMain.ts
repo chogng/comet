@@ -11,11 +11,13 @@ import {
 } from 'electron';
 
 import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import { EventEmitter, type Event } from 'cs/base/common/event';
 import { toDisposable } from 'cs/base/common/lifecycle';
 import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 
 const APP_SERVICE_IPC_CALL_CHANNEL = 'app:ipc-call';
+const APP_SERVICE_IPC_CANCEL_CHANNEL = 'app:ipc-cancel';
 const APP_SERVICE_IPC_EVENT_CHANNEL = 'app:ipc-event';
 const APP_SERVICE_IPC_DISPOSE_CHANNEL = 'app:ipc-dispose';
 const APP_SERVICE_IPC_RENDERER_CHANNEL_REGISTER_CHANNEL = 'app:ipc-renderer-channel-register';
@@ -33,6 +35,11 @@ type AppIpcResponse<T> =
 type ActiveSubscription = {
 	readonly senderId: number;
 	dispose(): void;
+};
+
+type PendingServiceCall = {
+	readonly senderId: number;
+	readonly cancellationSource: CancellationTokenSource;
 };
 
 type RendererCallRequest = {
@@ -75,6 +82,7 @@ type RendererEventSubscription = {
 export class ElectronMainChannelServer {
 	private readonly channels = new Map<string, IServerChannel<IpcMainInvokeEvent>>();
 	private readonly subscriptions = new Map<string, ActiveSubscription>();
+	private readonly pendingServiceCalls = new Map<string, PendingServiceCall>();
 	private readonly rendererChannels = new Map<number, Set<string>>();
 	private readonly rendererSenderCleanup = new Map<number, () => void>();
 	private readonly pendingRendererCalls = new Map<string, PendingRendererCall>();
@@ -97,21 +105,45 @@ export class ElectronMainChannelServer {
 				channelName: string,
 				command: string,
 				arg?: unknown,
+				cancellationId?: string,
 			): Promise<AppIpcResponse<unknown>> => {
+				const source = typeof cancellationId === 'string' && cancellationId
+					? new CancellationTokenSource()
+					: undefined;
+				const serviceCallId = source ? this.getServiceCallId(event.sender.id, cancellationId!) : undefined;
+				if (source && serviceCallId) {
+					this.trackRendererSender(event.sender);
+					this.pendingServiceCalls.set(serviceCallId, {
+						senderId: event.sender.id,
+						cancellationSource: source,
+					});
+				}
 				try {
 					const channel = this.resolveChannel(channelName);
 					return {
 						ok: true,
-						result: await channel.call(event, command, arg),
+						result: await channel.call(event, command, arg, source?.token),
 					};
 				} catch (error) {
 					return {
 						ok: false,
 						error: serializeAppError(error),
 					};
+				} finally {
+					if (serviceCallId) {
+						this.pendingServiceCalls.delete(serviceCallId);
+					}
+					source?.dispose();
 				}
 			},
 		);
+
+		ipcMain.on(APP_SERVICE_IPC_CANCEL_CHANNEL, (event, cancellationId: unknown) => {
+			if (typeof cancellationId !== 'string' || !cancellationId) {
+				return;
+			}
+			this.pendingServiceCalls.get(this.getServiceCallId(event.sender.id, cancellationId))?.cancellationSource.cancel();
+		});
 
 		ipcMain.handle(
 			APP_SERVICE_IPC_EVENT_CHANNEL,
@@ -238,6 +270,14 @@ export class ElectronMainChannelServer {
 	}
 
 	disposeWebContentsSubscriptions(senderId: number): void {
+		for (const [serviceCallId, pendingCall] of this.pendingServiceCalls) {
+			if (pendingCall.senderId === senderId) {
+				pendingCall.cancellationSource.cancel();
+				pendingCall.cancellationSource.dispose();
+				this.pendingServiceCalls.delete(serviceCallId);
+			}
+		}
+
 		for (const [subscriptionId, subscription] of this.subscriptions) {
 			if (subscription.senderId === senderId) {
 				subscription.dispose();
@@ -271,6 +311,10 @@ export class ElectronMainChannelServer {
 		}
 
 		return channel;
+	}
+
+	private getServiceCallId(senderId: number, cancellationId: string): string {
+		return `${senderId}:${cancellationId}`;
 	}
 
 	private registerRendererChannel(

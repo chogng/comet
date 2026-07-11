@@ -24,15 +24,23 @@ interface SnapshotValue {
 	readonly html: string;
 }
 
+interface TooLargeSnapshotValue {
+	readonly uri: string;
+	readonly title: string;
+	readonly tooLarge: true;
+}
+
 class FakePage {
 	readonly evaluateCalls: unknown[] = [];
 	private readonly listeners = new Map<string, readonly ((...args: readonly unknown[]) => void)[]>();
 	readonly locatorCalls: string[] = [];
 	loadState: Promise<void> = Promise.resolve();
-	snapshot: SnapshotValue | undefined = { uri: 'https://example.com/article', title: 'Example article', html: '<html><body>Example</body></html>' };
+	snapshot: SnapshotValue | TooLargeSnapshotValue | undefined = { uri: 'https://example.com/article', title: 'Example article', html: '<html><body>Example</body></html>' };
 	locatorCount = 1;
+	initialLocatorCount: Promise<number> | undefined;
 	visible = [true];
 	locatorError: Error | undefined;
+	private locatorCountCalls = 0;
 
 	on(event: string, listener: (...args: readonly unknown[]) => void): this {
 		this.listeners.set(event, [...(this.listeners.get(event) ?? []), listener]);
@@ -64,6 +72,10 @@ class FakePage {
 		this.locatorCalls.push(selector);
 		return {
 			count: async () => {
+				this.locatorCountCalls++;
+				if (this.locatorCountCalls === 1 && this.initialLocatorCount) {
+					return this.initialLocatorCount;
+				}
 				if (this.locatorError) {
 					throw this.locatorError;
 				}
@@ -109,6 +121,7 @@ test('captureSnapshot returns an atomic main-frame HTML snapshot after readiness
 	assert.match(atomicSnapshotEvaluate, /location\.href/);
 	assert.match(atomicSnapshotEvaluate, /document\.title/);
 	assert.match(atomicSnapshotEvaluate, /documentElement.*outerHTML/);
+	assert.match(atomicSnapshotEvaluate, /TextEncoder/);
 });
 
 test('captureSnapshot requires every requested visible readiness element', async () => {
@@ -151,6 +164,23 @@ test('captureSnapshot rejects empty documents and UTF-8 byte-limit overflow', as
 		tab.captureSnapshot('page-1', { maximumBytes: 2 }, CancellationTokenNone),
 		BrowserPageSnapshotTooLargeError,
 	);
+
+	page.snapshot = { uri: 'https://example.com/article', title: 'Example article', tooLarge: true };
+	await assert.rejects(
+		tab.captureSnapshot('page-1', undefined, CancellationTokenNone),
+		BrowserPageSnapshotTooLargeError,
+	);
+});
+
+test('captureSnapshot cancels while validating a readiness selector', async () => {
+	const { page, tab } = createTab();
+	page.initialLocatorCount = new Promise(() => {});
+	const cancellationSource = new CancellationTokenSource();
+	const capture = tab.captureSnapshot('page-1', { readiness: { selector: 'main' } }, cancellationSource.token);
+	cancellationSource.cancel();
+
+	await assert.rejects(capture, /Canceled/);
+	cancellationSource.dispose();
 });
 
 test('captureSnapshot cancels during a pending load-state wait without returning a snapshot', async () => {
@@ -185,4 +215,37 @@ test('PlaywrightService rejects snapshot requests for untracked pages before cre
 		BrowserPageNotTrackedError,
 	);
 	service.dispose();
+});
+
+test('PlaywrightService waits for existing groups to register a tracked page', async () => {
+	let resolveAdd: (() => void) | undefined;
+	const add = new Promise<void>(resolve => {
+		resolveAdd = resolve;
+	});
+	const group = {
+		addView: async () => add,
+		removeView: async () => {},
+	};
+	const session = {
+		group,
+		dispose: () => {},
+	};
+	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
+	(service as unknown as { _sessions: { set(key: string, value: typeof session): void } })._sessions.set('session', session);
+
+	try {
+		let completed = false;
+		const tracking = service.startTrackingPage('page-1').then(() => {
+			completed = true;
+		});
+
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(completed, false);
+
+		resolveAdd?.();
+		await tracking;
+		assert.equal(completed, true);
+	} finally {
+		service.dispose();
+	}
 });

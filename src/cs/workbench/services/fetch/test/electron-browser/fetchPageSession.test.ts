@@ -9,7 +9,7 @@ import { CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/c
 import { Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import type { IChannel } from 'cs/base/parts/ipc/common/ipc';
-import type { IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
+import type { IPageSnapshotOptions, IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
 import type { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
 
 const { FetchPageSession } = await import('cs/workbench/services/fetch/electron-browser/fetchPageSession');
@@ -32,18 +32,20 @@ function createBrowserViewChannel(calls: BrowserViewCall[], loadError?: Error): 
 
 function createPlaywrightService(options: { tracked?: boolean; snapshot?: { uri: URI; title: string; html: string } } = {}) {
 	const calls: string[] = [];
+	const captureOptions: Array<IPageSnapshotOptions | undefined> = [];
 	const service = {
 		startTrackingPage: async () => { calls.push('startTrackingPage'); },
 		stopTrackingPage: async () => { calls.push('stopTrackingPage'); },
 		isPageTracked: async () => options.tracked ?? false,
-		captureSnapshot: async () => {
+		captureSnapshot: async (_sessionId: string, _pageId: string, snapshotOptions: IPageSnapshotOptions | undefined) => {
 			calls.push('captureSnapshot');
+			captureOptions.push(snapshotOptions);
 			const snapshot = options.snapshot ?? { uri: URI.parse('https://example.com/loaded'), title: 'Loaded', html: '<html></html>' };
 			return { pageId: 'page', ...snapshot, capturedAt: Date.now() };
 		},
 		disposeSession: async () => { calls.push('disposeSession'); },
 	} as unknown as IPlaywrightService;
-	return { calls, service };
+	return { calls, captureOptions, service };
 }
 
 test('owned FetchPageSession does not capture after navigation fails and releases its BrowserView', async () => {
@@ -67,7 +69,7 @@ test('owned FetchPageSession does not capture after navigation fails and release
 
 test('borrowed FetchPageSession leaves an already tracked BrowserView alive and rejects an inadmissible snapshot', async () => {
 	const calls: BrowserViewCall[] = [];
-	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService({
+	const { calls: playwrightCalls, captureOptions, service: playwrightService } = createPlaywrightService({
 		tracked: true,
 		snapshot: { uri: URI.parse('https://example.com/redirected'), title: 'Redirected', html: '<html></html>' },
 	});
@@ -83,6 +85,7 @@ test('borrowed FetchPageSession leaves an already tracked BrowserView alive and 
 	await session.dispose();
 
 	assert.deepEqual(playwrightCalls, ['captureSnapshot', 'disposeSession']);
+	assert.deepEqual(captureOptions, [{ readiness: undefined, maximumBytes: 2 * 1024 * 1024 }]);
 	assert.deepEqual(calls.map(call => call.command), ['loadURL']);
 });
 

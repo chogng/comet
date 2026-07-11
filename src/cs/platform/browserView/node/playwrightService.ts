@@ -81,6 +81,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	/** Global set of tracked page IDs (shared across all sessions). */
 	private readonly _trackedPages = new Set<string>();
+	private readonly _pageTrackingOperations = new Map<string, Promise<void>>();
 
 	private readonly _onDidChangeTrackedPages = this._register(new Emitter<readonly string[]>());
 	readonly onDidChangeTrackedPages: Event<readonly string[]> = this._onDidChangeTrackedPages.event;
@@ -136,12 +137,22 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		let browser: Browser;
 		try {
 			const playwright = await import('playwright-core');
+			let transport: ConnectOverCDPTransport;
+			let transportClosed = false;
+			let groupDestroyListener: IDisposable | undefined;
 			const sub = group.onCDPMessage(msg => transport.onmessage?.(msg));
-			const transport: ConnectOverCDPTransport = {
-				close() {
-					sub.dispose();
-					this.onclose?.();
-				},
+			const closeTransport = () => {
+				if (transportClosed) {
+					return;
+				}
+				transportClosed = true;
+				sub.dispose();
+				groupDestroyListener?.dispose();
+				transport.onclose?.();
+			};
+			groupDestroyListener = group.onDidDestroy(closeTransport);
+			transport = {
+				close: closeTransport,
 				send: (rawMessage) => {
 					if (!isCDPRequest(rawMessage)) {
 						// Fail loudly: returning silently would leave Playwright
@@ -158,11 +169,16 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 					// never hits the view.
 					if (actionScope.activeCalls === 0 && message.method.startsWith('Emulation.')) {
 						setTimeout(() => {
-							transport.onmessage?.({ id: message.id, result: {}, sessionId: message.sessionId } satisfies CDPResponse);
+							if (!transportClosed) {
+								transport.onmessage?.({ id: message.id, result: {}, sessionId: message.sessionId } satisfies CDPResponse);
+							}
 						}, 1);
 						return;
 					}
-					void group.sendCDPMessage(message);
+					void group.sendCDPMessage(message).catch(error => {
+						this.logService.error(`[PlaywrightService] CDP transport send failed for session ${sessionId}`, error);
+						closeTransport();
+					});
 				}
 			};
 			browser = await playwright.chromium.connectOverCDP(transport);
@@ -191,22 +207,10 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			viewId => this.startTrackingPage(viewId),
 		);
 
-		// Keep the global tracked set in sync with group events. When a
-		// view is added via external means (e.g. CDP createTarget), the
-		// group fires onDidAddView — update _trackedPages accordingly.
-		// The Set makes double-adds (from startTrackingPage) harmless.
-		// Also replicate the view into other sessions so that CDP-created
-		// targets become accessible everywhere, not just the originating session.
 		session.registerDisposable(group.onDidAddView(e => {
-			if (!this._trackedPages.has(e.viewId)) {
-				this._trackedPages.add(e.viewId);
-				this._fireTrackedPages();
-			}
-			for (const other of this._sessions.values()) {
-				if (other !== session) {
-					void other.group.addView(e.viewId).catch(() => { });
-				}
-			}
+			void this.startTrackingPage(e.viewId).catch(error => {
+				this.logService.error(`[PlaywrightService] Failed to track page ${e.viewId}`, error);
+			});
 		}));
 		session.registerDisposable(group.onDidRemoveView(e => {
 			if (this._trackedPages.delete(e.viewId)) {
@@ -243,26 +247,41 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	// --- Page tracking (global) ---
 
-	async startTrackingPage(viewId: string): Promise<void> {
-		// Update the canonical set directly so tracking works even when
-		// no sessions exist yet. The Set makes the double-add from
-		// the group's onDidAddView listener harmless.
-		if (!this._trackedPages.has(viewId)) {
+	startTrackingPage(viewId: string): Promise<void> {
+		return this._enqueuePageTrackingOperation(viewId, async () => {
+			if (this._trackedPages.has(viewId)) {
+				return;
+			}
+
+			const sessions = [...this._sessions.values()];
 			this._trackedPages.add(viewId);
 			this._fireTrackedPages();
-		}
-		for (const session of this._sessions.values()) {
-			session.group.addView(viewId);
-		}
+
+			const additions = await Promise.allSettled(sessions.map(session => session.group.addView(viewId)));
+			const rejected = additions.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+			if (!rejected) {
+				return;
+			}
+
+			await Promise.allSettled(sessions.map(session => session.group.removeView(viewId)));
+			if (this._trackedPages.delete(viewId)) {
+				this._fireTrackedPages();
+			}
+			throw rejected.reason;
+		});
 	}
 
-	async stopTrackingPage(viewId: string): Promise<void> {
-		if (this._trackedPages.delete(viewId)) {
-			this._fireTrackedPages();
-		}
-		for (const session of this._sessions.values()) {
-			session.group.removeView(viewId);
-		}
+	stopTrackingPage(viewId: string): Promise<void> {
+		return this._enqueuePageTrackingOperation(viewId, async () => {
+			if (!this._trackedPages.has(viewId)) {
+				return;
+			}
+
+			await Promise.all([...this._sessions.values()].map(session => session.group.removeView(viewId)));
+			if (this._trackedPages.delete(viewId)) {
+				this._fireTrackedPages();
+			}
+		});
 	}
 
 	async isPageTracked(viewId: string): Promise<boolean> {
@@ -271,6 +290,19 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	async getTrackedPages(): Promise<readonly string[]> {
 		return [...this._trackedPages];
+	}
+
+	private _enqueuePageTrackingOperation(viewId: string, operation: () => Promise<void>): Promise<void> {
+		const previous = this._pageTrackingOperations.get(viewId) ?? Promise.resolve();
+		const current = previous.catch(() => undefined).then(operation);
+		this._pageTrackingOperations.set(viewId, current);
+		const clear = () => {
+			if (this._pageTrackingOperations.get(viewId) === current) {
+				this._pageTrackingOperations.delete(viewId);
+			}
+		};
+		void current.then(clear, clear);
+		return current;
 	}
 
 	// --- Playwright operations (delegated to per-session instances) ---

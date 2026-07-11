@@ -20,6 +20,8 @@ import { URI } from 'cs/base/common/uri';
 
 export type FetchPageOwnership = 'owned-background' | 'borrowed-interactive';
 
+const fetchPageSnapshotMaximumBytes = 2 * 1024 * 1024;
+
 export interface IFetchPageSession {
 	readonly sessionId: string;
 	readonly pageId: string;
@@ -90,7 +92,10 @@ export class FetchPageSession implements IFetchPageSession {
 		if (token.isCancellationRequested) {
 			throw new CancellationError();
 		}
-		const snapshot = await this.playwrightService.captureSnapshot(this.sessionId, this.pageId, { readiness }, token);
+		const snapshot = await this.playwrightService.captureSnapshot(this.sessionId, this.pageId, {
+			readiness,
+			maximumBytes: fetchPageSnapshotMaximumBytes,
+		}, token);
 		if (!this.admission(uri, snapshot.uri)) {
 			throw new Error(`Snapshot URI "${snapshot.uri.toString(true)}" was not admitted for "${uri.toString(true)}".`);
 		}

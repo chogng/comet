@@ -8,8 +8,8 @@ import { Emitter, type Event } from 'cs/base/common/event';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 
 /**
- * 
- * 
+ * set UI type which can overlay browserview
+ * Idendify the overlay through the className, 
  */
 export enum BrowserOverlayType {
 	Menu = 'menu',

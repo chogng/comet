@@ -13,5 +13,5 @@ platform = "darwin"
 
 [[actions]]
 name = "run web"
-icon = "run"
+icon = "debug"
 command = "./scripts/code-web.sh"

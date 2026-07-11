@@ -1,5 +1,9 @@
 import 'cs/base/browser/ui/dateInput/dateInput.css';
-import { createContextViewController, type ContextViewHandle } from 'cs/base/browser/ui/contextview/contextview';
+import {
+  AnchorAlignment,
+  ContextView,
+  ContextViewDOMPosition,
+} from 'cs/base/browser/ui/contextview/contextview';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { formatDateInputValue } from 'cs/base/common/date';
@@ -121,7 +125,7 @@ function resolveNextFocusValue(value: string, dayOffset: number) {
 
 export class DateInput extends Disposable {
   private options: DateInputOptions;
-  private readonly contextView: ContextViewHandle;
+  private readonly contextView: ContextView;
   private readonly ownsContextView: boolean;
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-date-input');
   private readonly inputBox: InputBox;
@@ -132,13 +136,14 @@ export class DateInput extends Disposable {
   private pendingFocusValue: string | null = null;
   private cleanupObserver: MutationObserver | null = null;
   private disposed = false;
+  private contextViewVisible = false;
 
-  constructor(options: DateInputOptions, contextView?: ContextViewHandle) {
+  constructor(options: DateInputOptions, contextView?: ContextView) {
     super();
     this.options = this.normalizeOptions(options);
     this.selectedValue = this.options.value;
     this.visibleMonth = resolveVisibleMonth(this.selectedValue);
-    this.contextView = contextView ?? createContextViewController();
+    this.contextView = contextView ?? new ContextView(document.body, ContextViewDOMPosition.FIXED);
     this.ownsContextView = !contextView;
 
     const host = $<HTMLElementTagNameMap['div']>('div');
@@ -273,7 +278,7 @@ export class DateInput extends Disposable {
   };
 
   private toggle() {
-    if (this.contextView.isVisible()) {
+    if (this.contextViewVisible) {
       this.hide();
       return;
     }
@@ -288,20 +293,24 @@ export class DateInput extends Disposable {
 
     this.visibleMonth = resolveVisibleMonth(this.selectedValue);
     this.contextView.show({
-      anchor: this.element,
-      className: 'comet-date-input-context-view',
-      render: () => this.renderPopover(),
-      alignment: 'end',
-      offset: 4,
+      getAnchor: () => this.element,
+      render: container => {
+        container.classList.add('comet-date-input-context-view');
+        container.append(this.renderPopover());
+        return null;
+      },
+      anchorAlignment: AnchorAlignment.RIGHT,
       layer: this.options.contextViewLayer,
       onHide: () => {
+        this.contextViewVisible = false;
         this.pendingFocusValue = null;
       },
     });
+    this.contextViewVisible = true;
   }
 
   private hide() {
-    if (this.contextView.isVisible()) {
+    if (this.contextViewVisible) {
       this.contextView.hide();
     }
   }
@@ -322,21 +331,25 @@ export class DateInput extends Disposable {
   }
 
   private refreshPopover() {
-    if (!this.contextView.isVisible()) {
+    if (!this.contextViewVisible) {
       return;
     }
 
     this.contextView.show({
-      anchor: this.element,
-      className: 'comet-date-input-context-view',
-      render: () => this.renderPopover(),
-      alignment: 'end',
-      offset: 4,
+      getAnchor: () => this.element,
+      render: container => {
+        container.classList.add('comet-date-input-context-view');
+        container.append(this.renderPopover());
+        return null;
+      },
+      anchorAlignment: AnchorAlignment.RIGHT,
       layer: this.options.contextViewLayer,
       onHide: () => {
+        this.contextViewVisible = false;
         this.pendingFocusValue = null;
       },
     });
+    this.contextViewVisible = true;
     this.restorePendingFocus();
   }
 
@@ -458,6 +471,6 @@ export class DateInput extends Disposable {
   }
 }
 
-export function createDateInput(options: DateInputOptions, contextView?: ContextViewHandle) {
+export function createDateInput(options: DateInputOptions, contextView?: ContextView) {
   return new DateInput(options, contextView);
 }

@@ -71,7 +71,9 @@ export interface ElectronIpcApi {
     channelName: string,
     command: string,
     arg?: unknown,
+    cancellationId?: string,
   ) => Promise<T>;
+  cancel: (cancellationId: string) => void;
   listen: <T = unknown>(
     channelName: string,
     event: string,

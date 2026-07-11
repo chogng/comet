@@ -30,6 +30,12 @@ interface IPageSnapshotCapture {
 	readonly html: string;
 }
 
+interface IPageSnapshotTooLarge {
+	readonly uri: string;
+	readonly title: string;
+	readonly tooLarge: true;
+}
+
 interface IResolvedReadiness {
 	readonly selector: string;
 	readonly state: 'attached' | 'visible';
@@ -310,13 +316,23 @@ export class PlaywrightTab {
 				await this._waitForReadiness(page, deadline, resolved, token);
 			}
 			await this._awaitSnapshotStage(page.evaluate(() => new Promise<void>(resolve => globalThis.requestAnimationFrame(() => resolve()))), deadline, resolved, token);
-			const snapshot = await this._awaitSnapshotStage(page.evaluate(() => {
+			const snapshot = await this._awaitSnapshotStage(page.evaluate((maximumBytes: number): IPageSnapshotCapture | IPageSnapshotTooLarge | undefined => {
 				const documentElement = globalThis.document.documentElement;
-				return documentElement ? { uri: globalThis.location.href, title: globalThis.document.title, html: documentElement.outerHTML } : undefined;
-			}), deadline, resolved, token);
+				if (!documentElement) {
+					return undefined;
+				}
+				const html = documentElement.outerHTML;
+				if (new TextEncoder().encode(html).byteLength > maximumBytes) {
+					return { uri: globalThis.location.href, title: globalThis.document.title, tooLarge: true };
+				}
+				return { uri: globalThis.location.href, title: globalThis.document.title, html };
+			}, resolved.maximumBytes), deadline, resolved, token);
 			this._throwIfCancelled(token);
 			if (!snapshot) {
 				throw new BrowserPageSnapshotEmptyError(pageId);
+			}
+			if ('tooLarge' in snapshot) {
+				throw new BrowserPageSnapshotTooLargeError(resolved.maximumBytes);
 			}
 			if (Buffer.byteLength(snapshot.html, 'utf8') > resolved.maximumBytes) {
 				throw new BrowserPageSnapshotTooLargeError(resolved.maximumBytes);
@@ -329,7 +345,7 @@ export class PlaywrightTab {
 		const readiness = options.readiness!;
 		const locator = page.locator(readiness.selector);
 		try {
-			await locator.count();
+			await this._awaitSnapshotStage(locator.count(), deadline, options, token);
 		} catch (error) {
 			if (isInvalidSelectorError(error)) {
 				throw new BrowserPageReadinessSelectorError(readiness.selector, error);

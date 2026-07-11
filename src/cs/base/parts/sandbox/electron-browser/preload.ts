@@ -29,6 +29,7 @@ import type { DisposableLike } from 'cs/base/common/lifecycle';
 
 const APP_IPC_CHANNEL_PREFIX = 'app:';
 const APP_SERVICE_IPC_CALL_CHANNEL = 'app:ipc-call';
+const APP_SERVICE_IPC_CANCEL_CHANNEL = 'app:ipc-cancel';
 const APP_SERVICE_IPC_EVENT_CHANNEL = 'app:ipc-event';
 const APP_SERVICE_IPC_DISPOSE_CHANNEL = 'app:ipc-dispose';
 const APP_SERVICE_IPC_RENDERER_CHANNEL_REGISTER_CHANNEL = 'app:ipc-renderer-channel-register';
@@ -88,12 +89,14 @@ async function callIpcService<TResult>(
   channelName: string,
   command: string,
   arg?: unknown,
+  cancellationId?: string,
 ) {
   const response = await invokeIpc<AppInvokeResponse<TResult>>(
     APP_SERVICE_IPC_CALL_CHANNEL,
     channelName,
     command,
     arg,
+    cancellationId,
   );
   if (!response.ok) {
     throw normalizeInvokeError(new Error(response.error));
@@ -318,8 +321,11 @@ registerRendererChannelHandlers();
 
 const electronAPI: ElectronAPI = {
   ipc: {
-    async call<T = unknown>(channelName: string, command: string, arg?: unknown) {
-      return callIpcService<T>(channelName, command, arg);
+    async call<T = unknown>(channelName: string, command: string, arg?: unknown, cancellationId?: string) {
+      return callIpcService<T>(channelName, command, arg, cancellationId);
+    },
+    cancel(cancellationId: string) {
+      sendIpc(APP_SERVICE_IPC_CANCEL_CHANNEL, cancellationId);
     },
     listen<T = unknown>(
       channelName: string,

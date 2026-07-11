@@ -1,6 +1,7 @@
 import './configurationService.test';
 import '../../../platform/browserView/test/common/cdpProxy.test';
 import '../../../platform/browserView/test/electron-main/browserViewDebugger.test';
+import '../../../platform/ipc/test/electron-browser/mainProcessService.test';
 import './docx.test';
 import './llm.test';
 import './storageService.test';
