@@ -22,7 +22,7 @@ export default defineConfig({
   server: {
     host: loopbackHost,
     port: 5173,
-    strictPort: false,
+    strictPort: true,
   },
   build: {
     outDir: webOutputPath,

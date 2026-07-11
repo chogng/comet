@@ -5,7 +5,7 @@ import { createServer, type ViteDevServer } from 'vite';
 
 import { resolveElectronBinary } from './electron.ts';
 import { watchElectronBuild } from './electronBuild.ts';
-import { resolveProjectPath, run } from './util.ts';
+import { resolveProjectPath } from './util.ts';
 
 const rendererHost = '127.0.0.1';
 const rendererPort = 1420;
@@ -129,8 +129,6 @@ async function shutdown(signal: NodeJS.Signals) {
 }
 
 async function main() {
-  await run('node', ['./scripts/kill-dev-ports.mjs']);
-
   viteServer = await startViteServer();
   electronBuildContext = await watchElectronBuild(scheduleElectronRestart);
 

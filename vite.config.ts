@@ -43,7 +43,6 @@ export default defineConfig({
     strictPort: true,
     hmr: {
       host: loopbackHost,
-      port: 1421,
     },
   },
   build: {
