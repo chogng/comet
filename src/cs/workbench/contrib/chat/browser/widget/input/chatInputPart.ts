@@ -19,7 +19,7 @@ import { DisposableStore, MutableDisposable } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import {
 	IContextViewService,
-	type ContextViewDisposable,
+	type IOpenContextView,
 } from 'cs/platform/contextview/browser/contextView';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
@@ -124,7 +124,7 @@ export class ChatInputPart {
 	private readonly renderDisposables = new DisposableStore();
 	private readonly articleFetchCancellation = this.disposables.add(new MutableDisposable<CancellationTokenSource>());
 	private readonly modelPicker: ChatInputModelPickerActionViewItem;
-	private articleMenuContextView: ContextViewDisposable | null = null;
+	private articleMenuContextView: IOpenContextView | null = null;
 	private articleMenuAnchor: HTMLElement | null = null;
 	private isReplacingArticleMenuContextView = false;
 	private isArticleMenuOpen = false;
@@ -541,13 +541,11 @@ export class ChatInputPart {
 		}
 		this.articleMenuContextView = this.contextViewService.showContextView({
 			getAnchor: () => anchor,
-			className: 'comet-chat-composer-article-context-view',
 			render: container => {
+				container.classList.add('comet-chat-composer-article-context-view');
 				container.append(this.renderArticleMenu());
+				return null;
 			},
-			alignment: 'center',
-			position: 'below',
-			offset: 8,
 			onHide: this.handleArticleMenuHide,
 		});
 	}
@@ -570,7 +568,7 @@ export class ChatInputPart {
 	};
 
 	private closeArticleMenuContextView() {
-		this.articleMenuContextView?.dispose();
+		this.articleMenuContextView?.close();
 		this.articleMenuContextView = null;
 	}
 

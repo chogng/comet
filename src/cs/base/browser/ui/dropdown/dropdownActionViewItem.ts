@@ -4,7 +4,7 @@ import {
   ActionViewItem,
   BaseActionViewItem,
 } from 'cs/base/browser/ui/actionbar/actionViewItems';
-import { createContextViewController } from 'cs/base/browser/ui/contextview/contextview';
+import { AnchorAlignment, AnchorPosition, ContextView, ContextViewDOMPosition } from 'cs/base/browser/ui/contextview/contextview';
 import type {
   ActionBarActionItem,
   ActionBarActionMode,
@@ -255,7 +255,7 @@ function toMenuActions(
 }
 
 class DomDropdownActionOverlayPresenter {
-  private readonly contextView = createContextViewController();
+  private readonly contextView = new ContextView(document.body, ContextViewDOMPosition.FIXED);
   private overlayView: HTMLElement | null = null;
   private currentRequest: DropdownActionOverlayRequest | null = null;
   private placementSyncFrame: number | null = null;
@@ -268,14 +268,17 @@ class DomDropdownActionOverlayPresenter {
     this.overlayView?.remove();
     this.overlayView = overlay;
     this.contextView.show({
-      anchor: request.anchor,
-      className: request.className,
-      render: () => overlay,
+      getAnchor: () => request.anchor,
+      render: container => {
+        if (request.className) {
+          container.classList.add(request.className);
+        }
+        container.append(overlay);
+        return null;
+      },
       onHide: this.handleHide,
-      position: request.position ?? 'below',
-      alignment: request.alignment ?? 'start',
-      offset: request.offset,
-      minWidth: request.minWidth,
+      anchorPosition: request.position === 'above' ? AnchorPosition.ABOVE : AnchorPosition.BELOW,
+      anchorAlignment: request.alignment === 'end' ? AnchorAlignment.RIGHT : AnchorAlignment.LEFT,
     });
     this.syncOverlayPlacementClass();
     this.schedulePlacementClassSync();
@@ -422,7 +425,7 @@ class ContextMenuDropdownActionPresenter {
     }
 
     this.defaultContextMenuService ??= createPlatformContextMenuService();
-    return this.defaultContextMenuService;
+    return this.defaultContextMenuService!;
   }
 
   private resolveContextMenuService(options: DropdownMenuActionViewItemOptions) {

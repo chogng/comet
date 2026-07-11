@@ -14,6 +14,10 @@ import 'cs/base/browser/ui/contextview/contextview.css';
 
 export { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from 'cs/base/common/layout';
 
+/**
+ *  ABSOLUTE: contextview 
+ * 
+ */
 export const enum ContextViewDOMPosition {
 	ABSOLUTE = 1,
 	FIXED,

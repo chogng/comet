@@ -217,10 +217,10 @@ function createTestMainProcessService(): IMainProcessService {
 
 function createTestHoverHandle(): HoverHandle {
 	return {
-		dispose() {},
 		show() {},
 		hide() {},
 		update(_input: HoverInput) {},
+		dispose() {},
 	};
 }
 
@@ -241,12 +241,10 @@ function createTestHoverService(): IHoverServiceType {
 function createTestContextViewService(): IContextViewServiceType {
 	return {
 		_serviceBrand: undefined,
-		showContextView: () => toDisposable(() => {}),
+		showContextView: () => ({ close: () => {} }),
 		hideContextView() {},
 		getContextViewElement: () => document.body,
 		layout() {},
-		isVisible: () => false,
-		dispose() {},
 	};
 }
 

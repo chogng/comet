@@ -13,6 +13,7 @@ import {
 } from 'cs/base/browser/ui/contextview/contextview';
 import type { IDisposable } from 'cs/base/common/lifecycle';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
+import type { ContextMenuService as BaseContextMenuService } from 'cs/base/browser/contextmenu';
 
 export { ContextViewDOMPosition } from 'cs/base/browser/ui/contextview/contextview';
 
@@ -44,5 +45,11 @@ export interface IContextViewService extends IContextViewProvider {
 
 export type ContextMenuListener = () => void;
 export interface ContextMenuListenerDisposable {
+  dispose: () => void;
+}
+
+export interface ContextMenuService extends BaseContextMenuService {
+  onDidShowContextMenu: (listener: ContextMenuListener) => ContextMenuListenerDisposable;
+  onDidHideContextMenu: (listener: ContextMenuListener) => ContextMenuListenerDisposable;
   dispose: () => void;
 }

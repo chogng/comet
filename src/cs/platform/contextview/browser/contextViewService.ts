@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ContextView, ContextViewDOMPosition, type IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import { ContextView, ContextViewDOMPosition } from 'cs/base/browser/ui/contextview/contextview';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { IContextViewService, type IContextViewDelegate, type IOpenContextView } from 'cs/platform/contextview/browser/contextView';
 

@@ -34,12 +34,9 @@ function createTranslationWidgetProps(
   return {
     labels: createSettingsPartLabels({ ui: locales.en }),
     contextViewProvider: {
-      showContextView: () => ({ dispose: () => {} }),
+      showContextView: () => {},
       hideContextView: () => {},
-      getContextViewElement: () => document.body,
       layout: () => {},
-      isVisible: () => false,
-      dispose: () => {},
     },
     activeTranslationProvider: 'custom',
     translationProviders: createDefaultTranslationSettings().providers,

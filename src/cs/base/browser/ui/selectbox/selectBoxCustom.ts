@@ -34,8 +34,6 @@ export class SelectBoxCustom extends Disposable {
   private readonly onSelectIndex: (index: number) => void;
   private readonly contextViewLayer: number | undefined;
   private readonly contextViewProvider: IContextViewProvider | undefined;
-  private readonly ownsContextView: boolean;
-  private openContextView: { close: () => void } | null = null;
   private menu: Menu | null = null;
   private isMenuVisible = false;
   private activeOptionIndex = -1;
@@ -49,7 +47,6 @@ export class SelectBoxCustom extends Disposable {
     this.onSelectIndex = options.onSelectIndex;
     this.contextViewLayer = options.contextViewLayer;
     this.contextViewProvider = options.contextViewProvider;
-    this.ownsContextView = false;
 
     this._register(addDisposableListener(this.selectElement, 'click', this.handleClick));
     this._register(addDisposableListener(this.selectElement, 'mousedown', this.handleMouseDown));
@@ -77,9 +74,6 @@ export class SelectBoxCustom extends Disposable {
     this.disposed = true;
     this.hideMenu();
     super.dispose();
-    if (this.ownsContextView) {
-      this.contextViewProvider.dispose();
-    }
   }
 
   private readonly handleClick = (event: MouseEvent) => {
@@ -155,7 +149,6 @@ export class SelectBoxCustom extends Disposable {
 
   private readonly handleMenuHide = () => {
     this.isMenuVisible = false;
-    this.openContextView = null;
     this.menu?.dispose();
     this.menu = null;
   };
@@ -181,11 +174,12 @@ export class SelectBoxCustom extends Disposable {
       event.preventDefault();
     });
     this.isMenuVisible = true;
-    this.openContextView = this.contextViewProvider?.showContextView({
+    this.contextViewProvider?.showContextView({
       getAnchor: () => this.selectElement,
-      className: 'comet-select-box-context-view',
       render: (container) => {
+        container.classList.add('comet-select-box-context-view');
         container.append(menuElement);
+        return null;
       },
       onHide: this.handleMenuHide,
       layer: this.contextViewLayer,
@@ -198,7 +192,7 @@ export class SelectBoxCustom extends Disposable {
       return;
     }
 
-    this.openContextView?.close();
+    this.contextViewProvider?.hideContextView();
   }
 
   private resolveInitialActiveOptionIndex() {

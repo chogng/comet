@@ -18,10 +18,8 @@ import {
   type IActionRunner,
 } from 'cs/base/common/actions';
 import type { IContextViewService } from 'cs/platform/contextview/browser/contextView';
-
-function composeClassName(parts: Array<string | undefined | null | false>) {
-  return parts.filter(Boolean).join(' ');
-}
+import { AnchorAlignment, AnchorAxisAlignment } from 'cs/base/browser/ui/contextview/contextview';
+import { toDisposable } from 'cs/base/common/lifecycle';
 
 type ContextMenuHidePayload = {
   didCancel: boolean;
@@ -87,6 +85,7 @@ function resolveMenuPlacement(
 
 export class ContextMenuHandler {
   private focusToReturn: HTMLElement | null = null;
+  private visible = false;
 
   constructor(private readonly contextViewService: IContextViewService) {}
 
@@ -106,29 +105,31 @@ export class ContextMenuHandler {
     const actionRunner = delegate.actionRunner ?? new ActionRunner();
     let menu: Menu | null = null;
 
+    this.visible = true;
     this.contextViewService.showContextView({
       getAnchor: delegate.getAnchor,
       canRelayout: false,
-      className: composeClassName([
-        'comet-actionbar-context-view',
-        delegate.getMenuClassName?.(),
-      ]),
-      anchorAlignment: delegate.anchorAlignment
-        ?? (delegate.alignment === 'end' ? 'right' : 'left'),
-      position: delegate.position ?? 'auto',
-      anchorAxisAlignment: delegate.anchorAxisAlignment ?? 'vertical',
-      offset: resolveContextMenuOffset(delegate),
-      minWidth: delegate.minWidth,
+      anchorAlignment: delegate.anchorAlignment === 'right' || delegate.alignment === 'end'
+        ? AnchorAlignment.RIGHT
+        : AnchorAlignment.LEFT,
+      anchorAxisAlignment: delegate.anchorAxisAlignment === 'horizontal'
+        ? AnchorAxisAlignment.HORIZONTAL
+        : AnchorAxisAlignment.VERTICAL,
       render: (container) => {
         menu = this.renderMenu(options, delegate, header, actionRunner);
+        container.classList.add('comet-actionbar-context-view');
+        const menuClassName = delegate.getMenuClassName?.();
+        if (menuClassName) {
+          container.classList.add(menuClassName);
+        }
         container.append(menu.getElement());
-        return () => {
+        return toDisposable(() => {
           menu?.dispose();
           if (!delegate.actionRunner) {
             actionRunner.dispose();
           }
           menu = null;
-        };
+        });
       },
       focus: () => {
         if (!menu || header?.autoFocusOnShow) {
@@ -154,10 +155,11 @@ export class ContextMenuHandler {
   }
 
   hideContextMenu(didCancel = true) {
+    this.visible = false;
     this.contextViewService.hideContextView({ didCancel });
   }
 
-  isVisible = () => this.contextViewService.isVisible();
+  isVisible = () => this.visible;
 
   dispose = () => {
     this.hideContextMenu();

@@ -1,5 +1,5 @@
 import 'cs/base/browser/ui/dropdown/dropdown.css';
-import { createContextViewController } from 'cs/base/browser/ui/contextview/contextview';
+import { AnchorAlignment, ContextView, ContextViewDOMPosition } from 'cs/base/browser/ui/contextview/contextview';
 import { getBaseLayerHoverDelegate } from 'cs/base/browser/ui/hover/hoverDelegate';
 import type {
   HoverHandle,
@@ -195,7 +195,7 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
   readonly isDetached = true;
   readonly supportsActiveDescendant = true;
   readonly respondsToViewportChanges = true;
-  private readonly contextView = createContextViewController();
+  private readonly contextView = new ContextView(document.body, ContextViewDOMPosition.FIXED);
   private menuView: HTMLElement | null = null;
   private menu: Menu | null = null;
   private currentRequest: DropdownMenuRequest | null = null;
@@ -208,13 +208,14 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
     this.menuView = menuElement;
 
     this.contextView.show({
-      anchor: request.anchor,
-      className: 'comet-dropdown-context-view',
-      render: () => menuElement,
+      getAnchor: () => request.anchor,
+      render: container => {
+        container.classList.add('comet-dropdown-context-view');
+        container.append(menuElement);
+        return null;
+      },
       onHide: this.handlePortalHide,
-      alignment: request.align,
-      offset: 4,
-      matchAnchorWidth: request.matchTriggerWidth,
+      anchorAlignment: request.align === 'end' ? AnchorAlignment.RIGHT : AnchorAlignment.LEFT,
     });
     this.updateMenuLayout(menuElement, request);
     requestAnimationFrame(() => {
@@ -230,7 +231,7 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
     this.contextView.hide();
   };
 
-  isVisible = () => this.contextView.isVisible();
+  isVisible = () => this.menuView !== null;
 
   containsTarget = (target: Node) => this.menuView?.contains(target) ?? false;
 
