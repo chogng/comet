@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
@@ -66,20 +71,19 @@ export function createEditorPaneDescriptor<
 >(
   options: EditorPaneDescriptorOptions<TInput, TPane, TPaneId>,
 ): EditorPaneRegistryDescriptor<TInput, TPane, TPaneId> {
+	const updatePane = options.updatePane;
   return {
     paneId: options.paneId,
     acceptsInput: options.acceptsInput,
     resolvePane: (input, context) => {
       return {
         paneId: options.paneId,
-        paneKey: options.createPaneKey?.(input) ?? options.paneId,
-        contentClassNames: options.contentClassNames,
-		createPane: () => options.createPane(context),
-        setInput: (pane, token) => {
-          options.updatePane?.(pane, context);
-          return pane.setInput(input, token);
-        },
-      };
+			paneKey: options.createPaneKey?.(input) ?? options.paneId,
+			contentClassNames: options.contentClassNames,
+			createPane: () => options.createPane(context),
+			updatePane: updatePane ? pane => updatePane(pane, context) : undefined,
+			setInput: (pane, token) => pane.setInput(input, token),
+		};
     },
   };
 }

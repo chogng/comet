@@ -26,6 +26,8 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorInputSerializerRegistry.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorCreateActions.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorPartLifecycle.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorPaneHost.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'editorPartLifecycle.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'browserHistoryAndFavoritesPanel.test.ts'),
   path.join(
     rootDir,

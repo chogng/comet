@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import './media/style.css';
 
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
@@ -41,7 +46,6 @@ export class SessionWorkbenchContentPartViews {
 	private sidebarView: SessionSidebarPartView | null = null;
 	private sessionsView: SessionsPartView | null = null;
 	private editorView: SessionEditorPartView | null = null;
-	private retiredEditorView: SessionEditorPartView | null = null;
 	private disposed = false;
 
 	constructor(
@@ -94,11 +98,7 @@ export class SessionWorkbenchContentPartViews {
 	}
 
 	whenEditorTabViewStateSettled(tabId: string) {
-		return (
-			this.editorView?.whenEditorTabViewStateSettled(tabId) ??
-			this.retiredEditorView?.whenEditorTabViewStateSettled(tabId) ??
-			Promise.resolve()
-		);
+		return this.editorView?.whenEditorTabViewStateSettled(tabId) ?? Promise.resolve();
 	}
 
 	dispose() {
@@ -110,8 +110,7 @@ export class SessionWorkbenchContentPartViews {
 		clearStatusbarCommandHandlers();
 		this.sidebarView?.dispose();
 		this.disposeSessionsView();
-		this.retiredEditorView = this.editorView;
-		this.retiredEditorView?.dispose();
+		this.editorView?.dispose();
 		this.sidebarView = null;
 		this.editorView = null;
 	}
@@ -168,16 +167,11 @@ export class SessionWorkbenchContentPartViews {
 	}
 
 	private renderEditor() {
-		if (!this.props.isEditorVisible) {
-			this.retireEditorView();
-			return;
-		}
-
 		const nextProps: EditorPartProps = {
 			...this.props.editorPartProps,
-			showTitlebarActions: true,
+			showTitlebarActions: this.props.isEditorVisible,
 			showToolbar: true,
-			isEditorCollapsed: false,
+			isEditorCollapsed: !this.props.isEditorVisible,
 			isAgentSidebarVisible: false,
 			showAgentSidebarToggle: false,
 			titlebarAuxiliaryActionsElements: [],
@@ -191,22 +185,14 @@ export class SessionWorkbenchContentPartViews {
 			this.editorView.setProps(nextProps);
 		}
 
-		this.syncStatusbarCommandHandlers();
+		if (this.props.isEditorVisible) {
+			this.syncStatusbarCommandHandlers();
+		} else {
+			clearStatusbarCommandHandlers();
+		}
 	}
 
 	//#endregion
-
-	private retireEditorView() {
-		if (!this.editorView) {
-			clearStatusbarCommandHandlers();
-			return;
-		}
-
-		this.retiredEditorView = this.editorView;
-		this.retiredEditorView.dispose();
-		this.editorView = null;
-		clearStatusbarCommandHandlers();
-	}
 
 	private handleEditorStatusChange = (status: EditorStatusState) => {
 		updateStatusbarState(status);

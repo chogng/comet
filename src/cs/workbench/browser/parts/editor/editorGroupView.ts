@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import { createEmptyEditorStatus } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
@@ -475,10 +480,12 @@ export class EditorGroupView {
       this.activePaneTabId = activeEditorId;
       this.activePaneViewStateKey = nextPaneViewStateKey;
       this.bindActivePaneRuntimeState(this.activePane, group.activeTab);
-      this.setActivePaneInput(resolvedPane, this.activePane);
+      resolvedPane.updatePane?.(this.activePane);
       if (didSwitchActivePaneTab) {
+        this.setActivePaneInput(resolvedPane, this.activePane);
         this.restorePaneViewState(this.activePane, nextPaneViewStateKey);
       }
+      this.activePane.setVisible(!this.props.isEditorCollapsed);
       if (this.contentElement.firstChild !== this.activePane.getElement()) {
         this.contentElement.replaceChildren(this.activePane.getElement());
       }
@@ -624,8 +631,9 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     this.activePaneViewStateKey = viewStateKey;
     this.activePaneKey = resolvedPane.paneKey;
     this.bindActivePaneRuntimeState(this.activePane, input);
+		resolvedPane.updatePane?.(this.activePane);
 		this.setActivePaneInput(resolvedPane, this.activePane);
-    this.activePane.setVisible(true);
+    this.activePane.setVisible(!this.props.isEditorCollapsed);
     this.contentElement.replaceChildren(this.activePane.getElement());
     this.restorePaneViewState(this.activePane, viewStateKey);
   }

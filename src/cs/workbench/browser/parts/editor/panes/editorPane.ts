@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { CancellationToken } from 'cs/base/common/cancellation';
@@ -66,6 +71,7 @@ export type EditorPaneResolution<
 	paneKey: string;
 	contentClassNames: readonly string[];
 	createPane: () => TPane;
+	updatePane?: (pane: TPane) => void;
 	setInput: (pane: TPane, token: CancellationToken) => void | Promise<void>;
 };
 

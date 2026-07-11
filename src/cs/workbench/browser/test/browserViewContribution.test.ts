@@ -1,5 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Comet Studio. All rights reserved.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'node:assert/strict';
@@ -1554,7 +1555,7 @@ test('browser permissions contribution prompts and records permission decisions'
 	}
 });
 
-test('browser editor resolver creates and starts resolving BrowserEditorInput from browser view resources', async () => {
+test('browser editor resolver creates and reuses BrowserEditorInput without navigating the BrowserView', async () => {
 	const editorResolverService = new EditorResolverService();
 	const serviceCollection = new ServiceCollection(
 		[IThemeService, createTestThemeService()],
@@ -1592,6 +1593,21 @@ test('browser editor resolver creates and starts resolving BrowserEditorInput fr
 		const model = await resolved.editor.resolve();
 		assert.equal(model.url, 'https://example.com');
 		assert.equal(resolved.editor.model, model);
+		assert.deepEqual(browserViewWorkbenchService.resolveCalls, ['browser-a']);
+
+		const reopened = editorResolverService.resolveEditor({
+			resource: BrowserViewUri.forId('browser-a'),
+			options: {
+				viewState: {
+					url: 'https://example.com/reopen-must-not-navigate',
+				},
+			},
+		});
+		assert.ok(reopened);
+		assert.equal(reopened.editor, resolved.editor);
+		assert.equal(await reopened.editor.resolve(), model);
+		assert.equal(model.url, 'https://example.com');
+		assert.equal(browserViewWorkbenchService.getKnownBrowserViews().size, 1);
 		assert.deepEqual(browserViewWorkbenchService.resolveCalls, ['browser-a']);
 	} finally {
 		contribution.dispose();
