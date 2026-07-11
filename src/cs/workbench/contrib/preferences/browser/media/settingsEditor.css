@@ -274,12 +274,4 @@
     height: 100%;
   }
 
-  .comet-settings-body {
-    grid-template-columns: 1fr;
-  }
-
-  .comet-settings-navigation {
-    border-inline-end: 0;
-    border-bottom: 1px solid var(--settings-page-separator);
-  }
 }
