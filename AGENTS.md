@@ -4,4 +4,4 @@
 - NEVER keep legacy interfaces or local compatibility code just to avoid updating call sites
 - Call sites MUST migrate directly to the target interface.
 - When the target interface requires call-site changes, migrate the affected call sites directly instead of adding wrappers, aliases, or compatibility code to shrink the diff
-- Compare the upstream architecture [`C:\Users\lanxi\Desktop\vscode` or `/Users/lance/Desktop/vscode`].
+- Compare the upstream architecture [`..\vscode` or `../vscode`].
