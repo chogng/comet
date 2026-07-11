@@ -13,6 +13,8 @@ import type {
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import {
   areEditorDraftStyleSettingsEqual,
   cloneEditorDraftStyleSettings,
@@ -102,6 +104,8 @@ export type SettingsModelSnapshot = {
   isTestingTranslationConnection: boolean;
   isLoadingTranslationModels: boolean;
 };
+
+export const ISettingsModel = createDecorator<SettingsModel>('settingsModel');
 
 type SettingsModelContext = {
   desktopRuntime: boolean;
@@ -246,6 +250,8 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
 }
 
 export class SettingsModel {
+  declare readonly _serviceBrand: undefined;
+
   private snapshot: SettingsModelSnapshot;
   private readonly onDidChangeEmitter = new EventEmitter<void>();
   private readonly saveOperation = new LatestAsyncOperation();
@@ -1628,3 +1634,5 @@ export class SettingsModel {
     }
   }
 }
+
+registerSingleton(ISettingsModel, SettingsModel, InstantiationType.Delayed);

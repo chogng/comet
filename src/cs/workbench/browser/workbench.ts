@@ -36,8 +36,10 @@ import {
   ToggleEditorCollapsedAction,
   ToggleSidebarVisibilityAction,
 } from 'cs/workbench/browser/actions/layoutActions';
-import { createSettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
-import type { SettingsController, SettingsControllerContext } from 'cs/workbench/contrib/preferences/browser/settingsController';
+import {
+  SettingsController,
+  type SettingsControllerContext,
+} from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { createEditorPartController } from 'cs/workbench/browser/parts/editor/editorPart';
 import type { EditorPartChangeReason, EditorPartControllerContext, EditorPartModel } from 'cs/workbench/browser/parts/editor/editorPart';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
@@ -834,13 +836,16 @@ class WorkbenchHost {
       return nativeHost.invoke(command as never, args as never) as Promise<T>;
     };
 
-    const settingsControllerInstance = getWorkbenchSettingsController({
-      desktopRuntime,
-      invokeDesktop,
-      notificationService: this.notificationService,
-      ui,
-      locale,
-    });
+    const settingsControllerInstance = getWorkbenchSettingsController(
+      this.instantiationService,
+      {
+        desktopRuntime,
+        invokeDesktop,
+        notificationService: this.notificationService,
+        ui,
+        locale,
+      },
+    );
     const settingsSnapshot = settingsControllerInstance.getSnapshot();
     if (
       this.applyStartupLayoutPreferenceIfNeeded({
@@ -1606,10 +1611,14 @@ export function disposeWorkbenchServices() {
 }
 
 export function getWorkbenchSettingsController(
+  instantiationService: IInstantiationService,
   context: SettingsControllerContext,
 ) {
   if (!settingsController) {
-    settingsController = createSettingsController(context);
+    settingsController = instantiationService.createInstance(
+      SettingsController,
+      context,
+    );
     settingsController.start();
   }
   return settingsController;

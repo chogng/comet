@@ -23,7 +23,10 @@ import {
   formatLocaleMessage,
   localizeAppError,
 } from 'cs/workbench/common/errorMessages';
-import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
+import {
+  ISettingsModel,
+  SettingsModel,
+} from 'cs/workbench/services/settings/settingsModel';
 import type { SettingsModelSnapshot } from 'cs/workbench/services/settings/settingsModel';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 
@@ -51,7 +54,6 @@ function localizeSettingsError(ui: LocaleMessages, error: unknown) {
 
 export class SettingsController {
   private context: SettingsControllerContext;
-  private readonly settingsModel: SettingsModel;
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private disposeEditorDraftStyleSubscription: (() => void) | null = null;
   private isApplyingLoadedEditorDraftStyle = false;
@@ -59,9 +61,11 @@ export class SettingsController {
   private disposed = false;
   private loadSequence = 0;
 
-  constructor(context: CreateSettingsControllerParams) {
+  constructor(
+    context: CreateSettingsControllerParams,
+    @ISettingsModel private readonly settingsModel: SettingsModel,
+  ) {
     this.context = context;
-    this.settingsModel = new SettingsModel();
   }
 
   readonly subscribe = (listener: () => void) =>
@@ -778,13 +782,4 @@ export class SettingsController {
   private scheduleDebouncedAutoSave() {
     this.scheduleAutoSave(debouncedAutoSaveDelayMs);
   }
-}
-
-// The controller stays feature-local: it coordinates UI actions, autosave, and
-// desktop side effects for the preferences editor, while the pure data model
-// remains under services/settings.
-export function createSettingsController(
-  params: CreateSettingsControllerParams,
-) {
-  return new SettingsController(params);
 }
