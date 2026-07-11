@@ -12,6 +12,7 @@ import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dr
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
+import { StandardMouseEvent } from 'cs/base/browser/mouseEvent';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { CancellationTokenSource, isCancellationError } from 'cs/base/common/cancellation';
@@ -557,7 +558,20 @@ export class ChatInputPart {
 				});
 				resizeObserver.observe(anchor);
 				disposables.add(toDisposable(() => resizeObserver.disconnect()));
-				disposables.add(addDisposableListener(getWindow(container), EventType.BLUR, () => {
+				const targetWindow = getWindow(container);
+				disposables.add(addDisposableListener(targetWindow, EventType.BLUR, () => {
+					this.contextViewService.hideContextView();
+				}));
+				disposables.add(addDisposableListener(targetWindow, EventType.MOUSE_DOWN, (browserEvent: MouseEvent) => {
+					if (browserEvent.defaultPrevented) {
+						return;
+					}
+
+					const event = new StandardMouseEvent(targetWindow, browserEvent);
+					if (event.rightButton || (event.target && container.contains(event.target))) {
+						return;
+					}
+
 					this.contextViewService.hideContextView();
 				}));
 				return disposables;

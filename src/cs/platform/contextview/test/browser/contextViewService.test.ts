@@ -78,3 +78,38 @@ test('context menu closes when focus moves out of the workbench window', async (
 		document.body.replaceChildren();
 	}
 });
+
+test('context menu closes on an outside primary-button press', async () => {
+	const { PlatformContextViewService } = await import('cs/platform/contextview/browser/contextViewService');
+	const { ContextMenuHandler } = await import('cs/platform/contextview/browser/contextMenuHandler');
+	const contextViewService = new PlatformContextViewService();
+	const contextMenuHandler = new ContextMenuHandler(contextViewService);
+	const outside = document.body.appendChild(document.createElement('button'));
+
+	try {
+		contextMenuHandler.showContextMenu({
+			getAnchor: () => ({ x: 24, y: 48 }),
+			getActions: () => [{
+				id: 'test.action',
+				label: 'Test Action',
+				tooltip: '',
+				class: undefined,
+				enabled: true,
+				run: () => undefined,
+			}],
+		});
+
+		contextViewService.getContextViewElement().dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+		outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
+		assert.equal(contextMenuHandler.isVisible(), true);
+
+		outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+
+		assert.equal(contextMenuHandler.isVisible(), false);
+		assert.equal(contextViewService.getContextViewElement().style.display, 'none');
+	} finally {
+		contextMenuHandler.dispose();
+		contextViewService.dispose();
+		document.body.replaceChildren();
+	}
+});

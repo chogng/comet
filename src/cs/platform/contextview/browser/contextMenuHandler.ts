@@ -13,6 +13,7 @@ import {
   type MenuHeaderOptions,
   type MenuOptions,
 } from 'cs/base/browser/ui/menu/menu';
+import { StandardMouseEvent } from 'cs/base/browser/mouseEvent';
 import {
   ActionRunner,
   type IAction,
@@ -125,7 +126,20 @@ export class ContextMenuHandler {
           container.classList.add(menuClassName);
         }
         container.append(menu.getElement());
-        menuDisposables.add(addDisposableListener(getWindow(container), EventType.BLUR, () => {
+        const targetWindow = getWindow(container);
+        menuDisposables.add(addDisposableListener(targetWindow, EventType.BLUR, () => {
+          this.contextViewService.hideContextView({ didCancel: true });
+        }));
+        menuDisposables.add(addDisposableListener(targetWindow, EventType.MOUSE_DOWN, (browserEvent: MouseEvent) => {
+          if (browserEvent.defaultPrevented) {
+            return;
+          }
+
+          const event = new StandardMouseEvent(targetWindow, browserEvent);
+          if (event.rightButton || (event.target && container.contains(event.target))) {
+            return;
+          }
+
           this.contextViewService.hideContextView({ didCancel: true });
         }));
         menuDisposables.add(toDisposable(() => {
