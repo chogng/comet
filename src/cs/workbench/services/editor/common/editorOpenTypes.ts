@@ -29,15 +29,6 @@ export type EditorOpenOptionsWithUrl = EditorOpenOptions & {
   };
 };
 
-export type BrowserEditorCurrentOpenRequest = {
-  kind: 'browser';
-  disposition: 'current';
-  resource: URI;
-  options: EditorOpenOptionsWithUrl & {
-    isLoading?: boolean;
-  };
-};
-
 export type BrowserEditorNewTabOpenRequest = {
   kind: 'browser';
   disposition: 'new-tab';
@@ -61,7 +52,6 @@ export type PdfEditorOpenRequest = {
 
 export type EditorOpenRequest =
   | DraftEditorOpenRequest
-  | BrowserEditorCurrentOpenRequest
   | BrowserEditorNewTabOpenRequest
   | BrowserEditorRevealOrOpenRequest
   | PdfEditorOpenRequest;

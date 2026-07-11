@@ -27,6 +27,8 @@ let dropdownServices: Awaited<ReturnType<typeof createDropdownTestServices>>;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 class TestBrowserEditorInput extends EditorInput {
+  disposeCount = 0;
+
   constructor(
     readonly resource: URI,
   ) {
@@ -36,7 +38,14 @@ class TestBrowserEditorInput extends EditorInput {
   get typeId(): string {
     return 'workbench.editorinputs.browser';
   }
+
+  override dispose(): void {
+    this.disposeCount += 1;
+    super.dispose();
+  }
 }
+
+const testBrowserInputs = new Map<string, TestBrowserEditorInput>();
 
 const defaultViewPartProps: ViewPartProps = {
   browserUrl: '',
@@ -84,10 +93,16 @@ function createBrowserEditorResolverService() {
       singlePerResource: true,
     },
     {
-      createEditorInput: ({ resource, options }) => ({
-        editor: new TestBrowserEditorInput(resource),
-        options,
-      }),
+      createEditorInput: ({ resource, options }) => {
+        const id = BrowserViewUri.getId(resource);
+        assert(id);
+        let editor = testBrowserInputs.get(id);
+        if (!editor) {
+          editor = new TestBrowserEditorInput(resource);
+          testBrowserInputs.set(id, editor);
+        }
+        return { editor, options };
+      },
     },
   );
   return editorResolverService;
@@ -96,6 +111,7 @@ function createBrowserEditorResolverService() {
 beforeEach(async () => {
   window.localStorage.clear();
   document.body.replaceChildren();
+  testBrowserInputs.clear();
   dropdownServices = await createDropdownTestServices();
 });
 
@@ -105,6 +121,7 @@ afterEach(() => {
 
 before(async () => {
   ({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
+  await import('cs/workbench/contrib/browserView/browser/browserView.contribution');
 });
 
 function waitForNextTask() {
@@ -141,6 +158,7 @@ test('EditorPartController creates a new browser tab as an empty about:blank tab
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -167,6 +185,7 @@ test('EditorPartController keeps browser tab creation empty even without an avai
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -193,6 +212,7 @@ test('EditorPartController opens the browser pane as an empty about:blank tab', 
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -219,6 +239,7 @@ test('EditorPartController creates a draft tab from the empty workspace', async 
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   assert.equal(controller.getSnapshot().activeTab, null);
@@ -245,6 +266,7 @@ test('EditorPartController creates a new draft tab when the reusable draft is di
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -267,7 +289,7 @@ test('EditorPartController creates a new draft tab when the reusable draft is di
   controller.dispose();
 });
 
-test('EditorPartController reuses an existing empty browser tab for explicit browser creation', async () => {
+test('EditorPartController creates a distinct BrowserView resource for each explicit browser creation', async () => {
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
@@ -276,6 +298,7 @@ test('EditorPartController reuses an existing empty browser tab for explicit bro
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -290,9 +313,11 @@ test('EditorPartController reuses an existing empty browser tab for explicit bro
   const browserTabs = controller
     .getSnapshot()
     .tabs.filter((tab) => tab.kind === 'browser');
-  assert.equal(browserTabs.length, 1);
+  assert.equal(browserTabs.length, 2);
   assert.equal(browserTabs[0]?.url, 'about:blank');
-  assert.equal(controller.getSnapshot().activeTab?.id, browserTabs[0]?.id);
+  assert.equal(browserTabs[1]?.url, 'about:blank');
+  assert.notEqual(browserTabs[0]?.id, browserTabs[1]?.id);
+  assert.equal(controller.getSnapshot().activeTab?.id, browserTabs[1]?.id);
 
   controller.dispose();
 });
@@ -306,6 +331,7 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   await Promise.resolve(controller.getSnapshot().editorPartProps.onOpenEditor({
@@ -333,6 +359,7 @@ test('EditorPartController returns to the empty workspace after closing the last
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   controller.openEditor({
@@ -359,6 +386,50 @@ test('EditorPartController returns to the empty workspace after closing the last
   controller.dispose();
 });
 
+test('EditorPartController keeps BrowserEditorInput disposal and tab closure in sync', async () => {
+  const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
+  const controller = new EditorPartController({
+    ui: en,
+    viewPartProps: defaultViewPartProps,
+    nativeHost: createNativeHostService(),
+    dialogService: createDialogService(),
+    instantiationService: createTestInstantiationService(),
+    editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
+  });
+  const firstResource = BrowserViewUri.forId(generateUuid());
+  const secondResource = BrowserViewUri.forId(generateUuid());
+
+  controller.openEditor({
+    kind: 'browser',
+    disposition: 'new-tab',
+    resource: firstResource,
+    options: { viewState: { url: 'https://example.com/first' } },
+  });
+  controller.openEditor({
+    kind: 'browser',
+    disposition: 'new-tab',
+    resource: secondResource,
+    options: { viewState: { url: 'https://example.com/second' } },
+  });
+
+  const firstId = BrowserViewUri.getId(firstResource);
+  const secondId = BrowserViewUri.getId(secondResource);
+  assert(firstId && secondId);
+  const firstInput = testBrowserInputs.get(firstId);
+  const secondInput = testBrowserInputs.get(secondId);
+  assert(firstInput && secondInput);
+
+  firstInput.dispose();
+  assert.equal(controller.getEditors().some(editor => editor.id === firstId), false);
+
+  const didClose = await controller.closeEditor(secondId);
+  assert.equal(didClose, true);
+  assert.equal(secondInput.disposeCount, 1);
+  assert.equal(controller.getEditors().some(editor => editor.id === secondId), false);
+  controller.dispose();
+});
+
 test('EditorPartController opens a browser favorite in a new tab without reusing the existing url tab', async () => {
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
@@ -368,6 +439,7 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   controller.openEditor({
@@ -414,6 +486,7 @@ test('EditorPartController opens a browser URL in a new tab', async () => {
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
   const url = 'https://example.com/chat-link';
   const resource = BrowserViewUri.forId(generateUuid());
@@ -461,6 +534,7 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
   });
 
   controller.openEditor({
@@ -548,6 +622,12 @@ test('EditorPartController serializes close requests while unsaved confirm is op
     dialogService: createDialogService(),
     instantiationService: createTestInstantiationService(),
     editorResolverService: createBrowserEditorResolverService(),
+    ensureEditorPartVisible: () => {},
+  });
+
+  controller.openEditor({
+    kind: 'draft',
+    disposition: 'reveal-or-open',
   });
 
   const activeDraftTab = controller
@@ -559,7 +639,7 @@ test('EditorPartController serializes close requests while unsaved confirm is op
   const firstClose = controller.onCloseTab(activeDraftTab.id);
   const secondClose = controller.onCloseTab(activeDraftTab.id);
 
-  await Promise.resolve();
+  await waitForNextTask();
   assert.equal(document.querySelectorAll('.comet-dialog-box').length, 1);
 
   const discardButton = Array.from(

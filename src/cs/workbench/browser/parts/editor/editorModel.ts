@@ -194,7 +194,7 @@ function dedupeContentTabs(
 ): EditorEditorGroupState {
   const duplicateIdsByOpenKey = new Map<string, string[]>();
   for (const tab of state.tabs) {
-    if (!isEditorBrowserTabInput(tab) && !isEditorPdfTabInput(tab)) {
+    if (!isEditorPdfTabInput(tab)) {
       continue;
     }
 
@@ -892,7 +892,14 @@ export class EditorModel {
   };
 
   readonly activateTab = (tabId: string) => {
-    this.updateActiveGroupState((group) => ({
+    const targetGroup = this.workspaceState.groups.find(group =>
+      group.tabs.some(tab => tab.id === tabId),
+    );
+    if (!targetGroup) {
+      return;
+    }
+
+    this.updateTargetGroupState({ groupId: targetGroup.groupId, activateGroup: true }, group => ({
       ...group,
       activeTabId: tabId,
       mruTabIds: touchMruTab(group.mruTabIds, tabId),
@@ -924,7 +931,14 @@ export class EditorModel {
   };
 
   readonly closeTab = (tabId: string) => {
-    this.updateActiveGroupState((group) => {
+    const targetGroup = this.workspaceState.groups.find(group =>
+      group.tabs.some(tab => tab.id === tabId),
+    );
+    if (!targetGroup) {
+      return;
+    }
+
+    this.updateTargetGroupState({ groupId: targetGroup.groupId, activateGroup: false }, group => {
       const tabIndex = group.tabs.findIndex((tab) => tab.id === tabId);
       if (tabIndex < 0) {
         return group;
@@ -996,28 +1010,17 @@ export class EditorModel {
       return;
     }
 
-    const reuseExisting = options.reuseExisting ?? true;
-    const openKey = getEditorContentTabInputOpenKey({
-      kind: 'browser',
-      url: normalizedUrl,
-    });
+    const existingGroup = options.id
+      ? this.workspaceState.groups.find(group =>
+          group.tabs.some(tab => isEditorBrowserTabInput(tab) && tab.id === options.id),
+        )
+      : undefined;
+    if (existingGroup && options.id) {
+      this.activateTab(options.id);
+      return;
+    }
 
     this.updateTargetGroupState(target, (group) => {
-      const existingTab = reuseExisting
-        ? group.tabs.find(
-            (tab) =>
-              isEditorBrowserTabInput(tab) &&
-              getEditorContentTabInputOpenKey(tab) === openKey,
-          )
-        : null;
-      if (reuseExisting && existingTab) {
-        return {
-          ...group,
-          activeTabId: existingTab.id,
-          mruTabIds: touchMruTab(group.mruTabIds, existingTab.id),
-        };
-      }
-
       const nextTab = createBrowserTab(normalizedUrl, {
         id: options.id,
       });

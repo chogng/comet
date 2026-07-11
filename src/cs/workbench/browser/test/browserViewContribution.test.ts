@@ -59,10 +59,12 @@ import {
 	type IBrowserViewOpenHandler,
 } from 'cs/workbench/contrib/browserView/common/browserView';
 import type { BrowserEditor as BrowserEditorType } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
-import type { PreferredGroup } from 'cs/workbench/services/editor/common/editorService';
+import {
+	IEditorService,
+	type IEditorService as IEditorServiceType,
+	type PreferredGroup,
+} from 'cs/workbench/services/editor/common/editorService';
 import { IChatService, type ChatServiceContext, type ChatServiceSnapshot } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { setWorkbenchEditorCommandHandlers } from 'cs/workbench/browser/editorCommands';
-import type { WorkbenchEditorCommandHandlers } from 'cs/workbench/browser/editorCommands';
 import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
 const BrowserRemoteProxyEnabledSettingId = 'workbench.browser.enableRemoteProxy';
@@ -281,21 +283,19 @@ function createTestQuickInputService(): IQuickInputServiceType {
 	} as unknown as IQuickInputServiceType;
 }
 
-function createTestWorkbenchEditorCommandHandlers(
+function createTestEditorService(
 	openRequests: EditorOpenRequest[],
-): WorkbenchEditorCommandHandlers {
+): IEditorServiceType {
 	return {
-		executeActiveDraftCommand: () => false,
-		canExecuteActiveDraftCommand: () => false,
-		getActiveDraftStableSelectionTarget: () => null,
-		saveActiveDraft: () => false,
-		canSaveActiveDraft: () => false,
+		_serviceBrand: undefined,
 		openEditor: request => {
 			openRequests.push(request);
+			return { handled: true, activeTabId: null };
 		},
-		activateTab() {},
-		closeTab: () => false,
-		getTabs: () => [],
+		activateEditor() {},
+		closeEditor: async () => false,
+		getEditors: () => [],
+		getActiveGroupId: () => 'editor-group-main',
 	};
 }
 
@@ -664,17 +664,17 @@ test('browser contribution registers tab management actions in browser menus', (
 	);
 });
 
-test('browser tab management commands open through the workbench editor controller handlers', async () => {
+test('browser tab management commands open through the editor service', async () => {
 	const openRequests: EditorOpenRequest[] = [];
-	const instantiationService = new InstantiationService(new ServiceCollection(), true);
+	const instantiationService = new InstantiationService(new ServiceCollection(
+		[IEditorService, createTestEditorService(openRequests)],
+	), true);
 	const commandServiceInstantiationService = setCommandServiceInstantiationService(instantiationService);
-	setWorkbenchEditorCommandHandlers(createTestWorkbenchEditorCommandHandlers(openRequests));
 
 	try {
 		await commandService.executeCommand(BrowserViewCommandId.Open, 'https://example.com/article');
 		await commandService.executeCommand(BrowserViewCommandId.NewTab);
 	} finally {
-		setWorkbenchEditorCommandHandlers(null);
 		commandServiceInstantiationService.dispose();
 		instantiationService.dispose();
 	}

@@ -19,6 +19,13 @@ import { createEditorBrowserToolbarTitlebarLabels } from 'cs/workbench/browser/p
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import type { IDisposable } from 'cs/base/common/lifecycle';
+import type {
+  IEditorService,
+  IEditorServiceEntry,
+} from 'cs/workbench/services/editor/common/editorService';
 
 export type EditorPartState = {
   ui: LocaleMessages;
@@ -58,6 +65,7 @@ export type EditorPartControllerContext = {
   dialogService: IDialogService;
   instantiationService: IInstantiationService;
   editorResolverService: IEditorResolverService;
+  ensureEditorPartVisible: () => void;
 };
 
 export type EditorPartControllerSnapshot = Pick<
@@ -298,6 +306,7 @@ function areEditorPartControllerContextsEqual(
     previous.nativeHost === next.nativeHost &&
     previous.dialogService === next.dialogService &&
     previous.instantiationService === next.instantiationService &&
+    previous.ensureEditorPartVisible === next.ensureEditorPartVisible &&
     previous.viewPartProps.browserUrl === next.viewPartProps.browserUrl &&
     (previous.viewPartProps.browserPageTitle ?? '') ===
       (next.viewPartProps.browserPageTitle ?? '') &&
@@ -317,7 +326,8 @@ function areEditorPartControllerContextsEqual(
   );
 }
 
-export class EditorPartController {
+export class EditorPartController implements IEditorService {
+  declare readonly _serviceBrand: undefined;
   private context: EditorPartControllerContext;
   private readonly editorModel = createEditorModel();
   private readonly editorOpenService: EditorOpenService;
@@ -326,6 +336,10 @@ export class EditorPartController {
   private readonly listeners = new Set<
     (reason: EditorPartChangeReason) => void
   >();
+  private readonly browserInputBindings = new Map<string, {
+    readonly input: EditorInput;
+    readonly listener: IDisposable;
+  }>();
   private readonly actions: EditorPartActions;
   private readonly unsubscribeWritingModel: () => void;
 
@@ -378,13 +392,20 @@ export class EditorPartController {
 
   readonly dispose = () => {
     this.unsubscribeWritingModel();
+    const browserInputBindings = [...this.browserInputBindings.values()];
+    this.browserInputBindings.clear();
+    for (const binding of browserInputBindings) {
+      binding.listener.dispose();
+      binding.input.dispose();
+    }
     this.editorModel.dispose();
     this.listeners.clear();
   };
 
   readonly openEditor = (request: EditorOpenRequest) => {
+    this.context.ensureEditorPartVisible();
     if (request.kind !== 'pdf' || request.options?.viewState?.url?.trim()) {
-      return this.editorOpenService.open(request);
+      return this.openResolvedEditor(request);
     }
 
     return this.resolveOpenEditorRequest(request).then((resolvedRequest) => {
@@ -395,7 +416,7 @@ export class EditorPartController {
         };
       }
 
-      return this.editorOpenService.open(resolvedRequest);
+      return this.openResolvedEditor(resolvedRequest);
     });
   };
 
@@ -404,6 +425,7 @@ export class EditorPartController {
   readonly saveActiveDraft = () => this.editorModel.saveActiveDraft();
 
   readonly updateBrowserState = (state: BrowserEditorPaneState) => {
+    this.bindBrowserInput(state.tabId);
     this.editorModel.updateBrowserTabState(state);
   };
 
@@ -426,6 +448,23 @@ export class EditorPartController {
     this.editorModel.activateTab(tabId);
   };
 
+  readonly activateEditor = (editorId: string) => {
+    this.onActivateTab(editorId);
+  };
+
+  readonly getEditors = (): readonly IEditorServiceEntry[] =>
+    this.editorModel.getSnapshot().groups.flatMap(group =>
+      group.tabs.map(tab => ({
+        groupId: group.groupId,
+        id: tab.id,
+        kind: tab.kind,
+        title: tab.title,
+        url: tab.kind === 'draft' ? undefined : tab.url,
+      })),
+    );
+
+  readonly getActiveGroupId = () => this.editorModel.getSnapshot().activeGroupId;
+
   readonly onReorderTab = (
     tabId: string,
     targetSlotIndex: number,
@@ -444,9 +483,10 @@ export class EditorPartController {
         return false;
       }
 
-      this.editorModel.closeTab(tabId);
-      return true;
+      return this.closeTabAfterConfirmation(tabId);
     });
+
+  readonly closeEditor = (editorId: string) => this.onCloseTab(editorId);
 
   readonly onCloseOtherTabs = (tabId: string) =>
     this.enqueueCloseOperation(async () => {
@@ -463,7 +503,11 @@ export class EditorPartController {
         return false;
       }
 
-      this.editorModel.closeOtherTabs(tabId);
+      for (const tabToClose of tabsToClose) {
+        if (!this.closeTabAfterConfirmation(tabToClose)) {
+          return false;
+        }
+      }
       return true;
     });
 
@@ -475,7 +519,11 @@ export class EditorPartController {
         return false;
       }
 
-      this.editorModel.closeAllTabs();
+      for (const tabToClose of tabsToClose) {
+        if (!this.closeTabAfterConfirmation(tabToClose)) {
+          return false;
+        }
+      }
       return true;
     });
 
@@ -516,7 +564,8 @@ export class EditorPartController {
     const { ui } = this.context;
     const dirtyTabs = this.editorModel
       .getSnapshot()
-      .tabs.filter(
+      .groups.flatMap(group => group.tabs)
+      .filter(
         (tab): tab is Extract<EditorWorkspaceTab, { kind: 'draft' }> =>
           tab.kind === 'draft' && dirtyDraftTabIds.includes(tab.id),
       );
@@ -561,7 +610,62 @@ export class EditorPartController {
   private hasTab(tabId: string) {
     return this.editorModel
       .getSnapshot()
-      .tabs.some((tab) => tab.id === tabId);
+      .groups.some(group => group.tabs.some(tab => tab.id === tabId));
+  }
+
+  private openResolvedEditor(request: EditorOpenRequest) {
+    const result = this.editorOpenService.open(request);
+    if (request.kind === 'browser' && result.handled && result.activeTabId) {
+      this.bindBrowserInput(result.activeTabId);
+    }
+    return result;
+  }
+
+  private bindBrowserInput(tabId: string): EditorInput {
+    const resolved = this.context.editorResolverService.resolveEditor({
+      resource: BrowserViewUri.forId(tabId),
+    });
+    if (!resolved) {
+      throw new Error(`No Browser editor input is registered for tab '${tabId}'.`);
+    }
+
+    const existing = this.browserInputBindings.get(tabId);
+    if (existing?.input === resolved.editor) {
+      return existing.input;
+    }
+    existing?.listener.dispose();
+
+    const listener = resolved.editor.onWillDispose(() => {
+      const binding = this.browserInputBindings.get(tabId);
+      if (binding?.input !== resolved.editor) {
+        return;
+      }
+      binding.listener.dispose();
+      this.browserInputBindings.delete(tabId);
+      this.editorModel.closeTab(tabId);
+    });
+    this.browserInputBindings.set(tabId, {
+      input: resolved.editor,
+      listener,
+    });
+    return resolved.editor;
+  }
+
+  private closeTabAfterConfirmation(tabId: string): boolean {
+    const tab = this.editorModel
+      .getSnapshot()
+      .groups.flatMap(group => group.tabs)
+      .find(candidate => candidate.id === tabId);
+    if (!tab) {
+      return true;
+    }
+    if (tab.kind !== 'browser') {
+      this.editorModel.closeTab(tabId);
+      return true;
+    }
+
+    this.bindBrowserInput(tabId).dispose();
+    return !this.hasTab(tabId);
   }
 
   private enqueueCloseOperation<T>(operation: () => Promise<T>) {

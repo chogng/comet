@@ -71,9 +71,13 @@ import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { INotificationService } from 'cs/platform/notification/common/notification';
-import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
+import {
+  getWorkbenchInstantiationService,
+  registerWorkbenchService,
+} from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
 import { NotificationsStatus } from 'cs/workbench/browser/parts/notifications/notificationsStatus';
@@ -358,6 +362,12 @@ class WorkbenchHost {
   } | null = null;
   private readonly handleWindowKeydown = (event: KeyboardEvent) => {
     handleWorkbenchEditorShortcut(event);
+  };
+  private readonly ensureEditorPartVisible = () => {
+    const { isEditorCollapsed, expandedEditorSize } = getWorkbenchLayoutStateSnapshot();
+    if (isEditorCollapsed) {
+      setEditorCollapsed(false, expandedEditorSize);
+    }
   };
 
   constructor(
@@ -672,14 +682,6 @@ class WorkbenchHost {
         this.editorPartController?.saveActiveDraft() ?? false,
       canSaveActiveDraft: () =>
         this.editorPartController?.canSaveActiveDraft() ?? false,
-      openEditor: request =>
-        this.editorPartController?.openEditor(request),
-      activateTab: tabId =>
-        this.editorPartController?.onActivateTab(tabId),
-      closeTab: tabId =>
-        this.editorPartController?.onCloseTab(tabId) ?? false,
-      getTabs: () =>
-        this.editorPartController?.getSnapshot().tabs ?? [],
     });
   }
 
@@ -977,8 +979,10 @@ class WorkbenchHost {
       dialogService: this.dialogService,
       instantiationService: this.instantiationService,
       editorResolverService: this.editorResolverService,
+      ensureEditorPartVisible: this.ensureEditorPartVisible,
     });
     this.editorPartController = editorPartControllerInstance;
+    registerWorkbenchService(IEditorService, editorPartControllerInstance);
     const editorPartSnapshot = editorPartControllerInstance.getSnapshot();
     const {
       activeTab: activeEditorTab,
@@ -992,9 +996,6 @@ class WorkbenchHost {
       ? activeEditorTab.title
       : '';
     const handleOpenEditor: EditorPartProps['onOpenEditor'] = request => {
-      if (isEditorCollapsed) {
-        setEditorCollapsed(false, expandedEditorSize);
-      }
       return editorPartControllerInstance.openEditor(request);
     };
 
@@ -1182,6 +1183,7 @@ class WorkbenchHost {
         dialogService: this.dialogService,
         instantiationService: this.instantiationService,
         editorResolverService: this.editorResolverService,
+        ensureEditorPartVisible: this.ensureEditorPartVisible,
       },
       chatService: chatServiceInstance,
       chatContext: {

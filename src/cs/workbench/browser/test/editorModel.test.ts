@@ -317,7 +317,7 @@ test('editor model restores legacy flat workspace payloads into a default group'
   }
 });
 
-test('editor model dedupes restored browser tabs for the same normalized article URL', () => {
+test('editor model preserves restored BrowserView identities for the same URL', () => {
   const localStorage = createLocalStorage({
     'cs.writingWorkspace.state': JSON.stringify({
       groups: [
@@ -356,8 +356,8 @@ test('editor model dedupes restored browser tabs for the same normalized article
         tab.url === 'https://www.nature.com/articles/example',
     );
 
-    assert.equal(articleTabs.length, 1);
-    assert.equal(articleTabs[0]?.id, 'browser-b');
+    assert.equal(articleTabs.length, 2);
+    assert.deepEqual(articleTabs.map(tab => tab.id), ['browser-a', 'browser-b']);
     assert.equal(snapshot.activeTab?.id, 'browser-b');
     model.dispose();
   } finally {
@@ -413,7 +413,7 @@ test('editor model can create and activate explicit editor groups', () => {
   }
 });
 
-test('editor model can open the same browser resource into another group without changing the active group', () => {
+test('editor model can open the same URL with a distinct BrowserView resource in another group', () => {
   const model = createEditorModel({
     groups: [
       {
@@ -511,6 +511,8 @@ test('editor model reveals an existing browser tab inside the target group and c
     model.createBrowserTab('https://example.com/article', {
       groupId: 'editor-group-b',
       activateGroup: true,
+    }, {
+      id: 'browser-b',
     });
 
     const snapshot = model.getSnapshot();

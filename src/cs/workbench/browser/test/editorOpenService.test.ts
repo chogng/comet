@@ -226,16 +226,18 @@ test('editor open service resolves browser resources through the editor resolver
   }
 });
 
-test('editor open service reveals an existing browser tab for normalized article URLs', () => {
+test('editor open service reveals an existing browser tab for the same BrowserView resource', () => {
   const restoreWindow = installMockWindow(createLocalStorage());
 
   try {
     const model = createEditorModel();
     const service = createTestEditorOpenService(model);
 
+    const resource = BrowserViewUri.forId(generateUuid());
     service.open({
       kind: 'browser',
       disposition: 'reveal-or-open',
+      resource,
       options: {
         viewState: {
           url: 'www.nature.com/articles/example',
@@ -246,6 +248,7 @@ test('editor open service reveals an existing browser tab for normalized article
     const result = service.open({
       kind: 'browser',
       disposition: 'reveal-or-open',
+      resource,
       options: {
         viewState: {
           url: 'https://www.nature.com/articles/example',
@@ -262,6 +265,40 @@ test('editor open service reveals an existing browser tab for normalized article
     assert.equal(result.activeTabId, firstArticleTab?.id ?? null);
     assert.equal(matchingBrowserTabs.length, 1);
 
+    model.dispose();
+  } finally {
+    restoreWindow();
+  }
+});
+
+test('editor open service preserves distinct BrowserView resources with the same URL', () => {
+  const restoreWindow = installMockWindow(createLocalStorage());
+
+  try {
+    const model = createEditorModel();
+    const service = createTestEditorOpenService(model);
+    const firstResource = BrowserViewUri.forId(generateUuid());
+    const secondResource = BrowserViewUri.forId(generateUuid());
+
+    service.open({
+      kind: 'browser',
+      disposition: 'reveal-or-open',
+      resource: firstResource,
+      options: { viewState: { url: 'https://example.com/article' } },
+    });
+    service.open({
+      kind: 'browser',
+      disposition: 'reveal-or-open',
+      resource: secondResource,
+      options: { viewState: { url: 'https://example.com/article' } },
+    });
+
+    const browserTabs = model.getSnapshot().tabs.filter(tab => tab.kind === 'browser');
+    assert.equal(browserTabs.length, 2);
+    assert.deepEqual(
+      browserTabs.map(tab => tab.id),
+      [BrowserViewUri.getId(firstResource), BrowserViewUri.getId(secondResource)],
+    );
     model.dispose();
   } finally {
     restoreWindow();
