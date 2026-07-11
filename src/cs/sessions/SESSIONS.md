@@ -164,15 +164,20 @@ workspace-less session, not an error state.
 
 Workspace absence must be represented explicitly by the session contract. Do
 not infer it from a temporarily unresolved folder, editor state, or provider
-identity.
+identity. Workspace state distinguishes `Resolving`, `Workspace`, and
+`WorkspaceLess`; new-session creation accepts only either resolved state.
+Workspace-less creation support belongs to the provider-owned session type so
+the new-session UI can gate the operation before it creates a draft.
 
 ### Capabilities
 
 `ISessionCapabilities` describes behavior that the active provider can
 guarantee. `supportsMultipleChats` gates user-created peer chats, and
 `supportsFork` gates chat forks. Other capabilities cover rename, changes,
-models, and workspace-less sessions. Capabilities are observable when they can
-change after provider registration or session hydration.
+and models. Capabilities are observable when they can change after provider
+registration or session hydration. They describe operations available now;
+they do not invalidate peer, fork, or worker chats already reported by the
+provider.
 
 UI availability is derived from capabilities. UI and shared services do not
 branch on a provider ID or session type to choose provider-specific behavior.
@@ -228,6 +233,11 @@ The management service owns the domain and orchestration model:
 
 It does not own the active visible session, focus, navigation, Part visibility,
 or Editor layout.
+
+Provider collection events contain ordered, discriminated transitions. A
+draft-to-committed replacement is one atomic transition from one model to the
+other, emitted after `getSessions()` reflects the committed state; consumers
+do not correlate overlapping added and removed arrays to infer replacement.
 
 ### Supporting session services
 
