@@ -1,9 +1,5 @@
 import 'cs/base/browser/ui/contextview/contextview.css';
-import {
-  $,
-  getDomNodePagePosition,
-  getDomNodeZoomLevel,
-} from 'cs/base/browser/dom';
+import * as DOM from 'cs/base/browser/dom';
 import {
   AnchorAlignment as LayoutAnchorAlignment,
   AnchorAxisAlignment as LayoutAnchorAxisAlignment,
@@ -172,8 +168,8 @@ function resolveViewportAnchorRect(anchor: ContextViewAnchor): ViewportRect {
     };
   }
 
-  const pagePosition = getDomNodePagePosition(anchor);
-  const zoom = getDomNodeZoomLevel(anchor);
+  const pagePosition = DOM.getDomNodePagePosition(anchor);
+  const zoom = DOM.getDomNodeZoomLevel(anchor);
 
   return {
     left: pagePosition.left * zoom - window.scrollX,
@@ -336,11 +332,11 @@ function addDisposableListener(
 }
 
 export class ContextViewController extends Disposable implements ContextViewHandle, ContextViewProvider {
-  private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-context-view');
-  private readonly content = $<HTMLElementTagNameMap['div']>('div.comet-context-view-content');
+  private readonly element = DOM.$<HTMLElementTagNameMap['div']>('div.comet-context-view');
+  private readonly content = DOM.$<HTMLElementTagNameMap['div']>('div.comet-context-view-content');
   private readonly mountedListeners = new MutableDisposable<DisposableLike>();
   private container: HTMLElement | null = null;
-  private domPosition = ContextViewDOMPosition.Absolute;
+  private domPosition = ContextViewDOMPosition.Fixed;
   private shadowRoot: ShadowRoot | null = null;
   private shadowRootHostElement: HTMLElement | null = null;
   private options: ContextViewOptions | null = null;
@@ -358,7 +354,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
     this._register(
       addDisposableListener(this.content, 'mousedown', this.handleContentMouseDown, true),
     );
-    this.setContainer(document.body, ContextViewDOMPosition.Absolute);
+    this.setContainer(document.body, ContextViewDOMPosition.Fixed);
   }
 
   setContainer(container: HTMLElement | null, domPosition: ContextViewDOMPosition): void {
@@ -378,7 +374,7 @@ export class ContextViewController extends Disposable implements ContextViewHand
 
     if (container) {
       if (domPosition === ContextViewDOMPosition.FixedShadow) {
-        const host = $('div.comet-shadow-root-host');
+        const host = DOM.$('div.comet-shadow-root-host');
         this.shadowRootHostElement = host;
         this.shadowRoot = host.attachShadow({ mode: 'open' });
         const style = document.createElement('style');
@@ -387,15 +383,14 @@ export class ContextViewController extends Disposable implements ContextViewHand
           .comet-context-view { position: fixed; top: 0; left: 0; z-index: 1000; }
           .comet-context-view-content { display: inline-block; max-width: calc(100vw - 16px); pointer-events: auto; }
         `;
-        this.shadowRoot.append(style, this.element);
+        this.shadowRoot.append(style);
         container.append(host);
-      } else {
-        container.append(this.element);
       }
     }
 
     if (wasVisible && container) {
       this.visible = true;
+      this.appendElement();
       this.mountListeners();
       this.layout(false);
     }

@@ -407,6 +407,21 @@ export function getMenuActions(
   contextService: ContextKeyService = contextKeyService,
   options?: IMenuActionOptions,
 ): [string, Array<MenuItemAction | SubmenuItemAction>][] {
+  return getMenuActionsFor(menuId, contextService, options, new Set());
+}
+
+function getMenuActionsFor(
+  menuId: MenuId,
+  contextService: ContextKeyService,
+  options: IMenuActionOptions | undefined,
+  parentMenus: ReadonlySet<MenuId>,
+): [string, Array<MenuItemAction | SubmenuItemAction>][] {
+  if (parentMenus.has(menuId)) {
+    return [];
+  }
+
+  const nestedParentMenus = new Set(parentMenus);
+  nestedParentMenus.add(menuId);
   const groups = new Map<string, Array<MenuItemAction | SubmenuItemAction>>();
 
   for (const item of MenuRegistry.getMenuItems(menuId)) {
@@ -437,7 +452,13 @@ export function getMenuActions(
 
     const group = item.group ?? '';
     const actions = groups.get(group) ?? [];
-    actions.push(new SubmenuItemAction(item, undefined, []));
+    const submenuActions = getMenuActionsFor(
+      item.submenu,
+      contextService,
+      options,
+      nestedParentMenus,
+    ).flatMap(([, submenuGroupActions]) => submenuGroupActions);
+    actions.push(new SubmenuItemAction(item, undefined, submenuActions));
     groups.set(group, actions);
   }
 

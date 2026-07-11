@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { SubmenuAction } from 'cs/base/common/actions';
 import { KeyCode, KeyMod } from 'cs/base/common/keyCodes';
+import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import {
   Action2,
   MenuId,
@@ -22,6 +24,7 @@ import {
   KeybindingWeight,
   KeybindingsRegistry,
 } from 'cs/platform/keybinding/common/keybindingsRegistry';
+import { ContextKeyServiceImpl } from 'cs/platform/contextkey/common/contextkey';
 
 interface TestActionService {
   readonly _serviceBrand: undefined;
@@ -84,5 +87,66 @@ test('registerAction2 wires command palette menu and keybinding', () => {
     disposable.dispose();
     commandServiceInstantiationService.dispose();
     instantiationService.dispose();
+  }
+});
+
+test('getMenuActions resolves submenu actions', () => {
+  const menu = new MenuId('test.submenuMenu');
+  const submenu = new MenuId('test.submenuMenu.items');
+  const submenuItem = MenuRegistry.appendMenuItem(submenu, {
+    command: {
+      id: 'test.submenuAction',
+      title: 'Submenu Action',
+    },
+  });
+  const menuItem = MenuRegistry.appendMenuItem(menu, {
+    submenu,
+    title: 'Submenu',
+  });
+
+  try {
+    const submenuAction = getMenuActions(menu)[0]?.[1][0];
+    assert(submenuAction instanceof SubmenuAction);
+    assert.deepEqual(submenuAction.actions.map(action => action.id), ['test.submenuAction']);
+  } finally {
+    menuItem.dispose();
+    submenuItem.dispose();
+  }
+});
+
+test('menu workbench toolbar keeps an open submenu through unrelated context changes', async () => {
+  const domEnvironment = installDomTestEnvironment();
+  const { MenuWorkbenchToolBar } = await import('cs/platform/actions/browser/toolbar');
+  const contextKeyService = new ContextKeyServiceImpl();
+  const menu = new MenuId('test.toolbarSubmenu');
+  const submenu = new MenuId('test.toolbarSubmenu.items');
+  const submenuItem = MenuRegistry.appendMenuItem(submenu, {
+    command: { id: 'test.toolbarSubmenuAction', title: 'Submenu Action' },
+  });
+  const menuItem = MenuRegistry.appendMenuItem(menu, {
+    submenu,
+    title: 'Submenu',
+  });
+  const host = document.createElement('div');
+  document.body.append(host);
+  const toolbar = new MenuWorkbenchToolBar(host, menu, {
+    toolbarOptions: { primaryGroup: () => true },
+  }, contextKeyService);
+
+  try {
+    const button = host.querySelector('button');
+    assert(button instanceof HTMLButtonElement);
+    button.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(document.body.querySelector('.comet-dropdown-menu'));
+
+    contextKeyService.setContextKeyValue('test.unrelatedContext', true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(document.body.querySelector('.comet-dropdown-menu'));
+  } finally {
+    toolbar.dispose();
+    menuItem.dispose();
+    submenuItem.dispose();
+    domEnvironment.cleanup();
   }
 });

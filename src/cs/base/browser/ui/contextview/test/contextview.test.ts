@@ -131,6 +131,17 @@ test('contextview can be shown again after being hidden', () => {
 	}
 });
 
+test('contextview does not mount an empty element before it is shown', () => {
+	const contextView = createContextViewController();
+
+	try {
+		assert.equal(document.body.querySelector('.comet-context-view'), null);
+	} finally {
+		contextView.dispose();
+		document.body.replaceChildren();
+	}
+});
+
 test('contextview keeps canRelayout false visible for initial layout and hides on relayout', () => {
 	const contextView = createContextViewController();
 

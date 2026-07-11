@@ -26,7 +26,7 @@ export class PlatformContextViewService implements IContextViewService {
     this.currentDelegate = delegate;
 
     const domPosition = !container || container === document.body
-      ? DOMPosition.Absolute
+      ? DOMPosition.Fixed
       : shadowRoot
         ? DOMPosition.FixedShadow
         : DOMPosition.Fixed;
