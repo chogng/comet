@@ -5,10 +5,6 @@ applyTo: src/cs/**
 
 # Coding Guidelines
 
-Canonical reference: waiting...
-
-Also see the WATING...
-
 ## Indentation
 
 Use tabs, not spaces.

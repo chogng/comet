@@ -5,8 +5,6 @@ applyTo: "{src/cs/**/test/**,src/cs/**/*.test.ts,src/cs/**/*.integrationTest.ts}
 
 # Writing Tests
 
-Canonical reference: WATING...
-
 ## Test Types
 
 | Type | File suffix | Location | Runs in |
@@ -21,7 +19,8 @@ Canonical reference: WATING...
   - Filter: `--grep <pattern>`
   - Glob: `--runGlob **/myFile.test.js`
 - **Integration tests:** `scripts/test-integration.sh` or `scripts/test-integration.bat`
-- **Comet Studio UI:** Use the [Selfhost Test Provider]???
+- **Comet Studio UI:** Follow the
+  [smoke test instructions](../../test/smoke/README.md).
 
 ## Writing Unit Tests
 

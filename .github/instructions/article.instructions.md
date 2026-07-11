@@ -1,33 +1,82 @@
-# Nature
+---
+description: Durable architecture and parsing rules for Article Fetch.
+applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**}"
+---
 
-maybe check this string in HTML？
-> li
-> a
-> ul
+# Article Fetch
 
-## Article list
+## Service ownership
 
-An article list, such as the one on `Nature Communications`, includes the following fields:
+`IFetchService` is the single owner of journal catalogs, source pages, article
+records, article details, load state, refresh generations, and shared request
+coordination. Views query it by stable ID and subscribe to relevant changes;
+they do not maintain synchronized article collections or detail caches.
 
-- Explore content
-- Article type
-- Datetime or published time
-- Article title
-- Article description
-- Author list (simple, usually only the former 2 authors and the last author are displayed)
-- Image (if exist)
+Navigation state such as an active journal, source, or article belongs to the
+view that renders it. Chat-specific article selection belongs to the addressed
+Chat model keyed by `chatResource`. Sessions, the product shell, downloads,
+exports, and knowledge-base services do not own copies of those states.
 
-### Explore content structure example
+Downstream operations receive an `ArticleId` snapshot and resolve the required
+`ArticleRecord` or `ArticleDetail` through `IFetchService` at operation start.
+Cross-process calls use feature-specific DTOs; `ArticleId` and Fetch domain
+objects do not move to electron-main for later lookup.
+
+## Runtime boundary
+
+Fetch orchestration and providers run in electron-browser. Page acquisition
+uses `IPlaywrightService.captureSnapshot()` and a typed page-session ownership
+contract. Fetch does not expose a parallel BrowserView DOM API, access a raw
+Playwright Page, or implement a private Playwright facade.
+
+Providers register descriptors and constructors through the Fetch registry.
+The registry rejects duplicate IDs, and registrations are disposable. Parser
+resolution requires exactly one match; there is no default parser or priority
+fallback.
+
+## Provider parsing
+
+Provider parsers preserve the distinction between list discovery, list pages,
+article identity, and article details:
+
+```text
+JournalDescriptor
+└── ArticleListSourceGroup?
+    └── ArticleListSource
+        └── ArticlePage
+            └── ArticleGroup?
+                └── ArticleListItem
+                    └── ArticleRecord
+                        └── ArticleDetail
+```
+
+A list item identifies one article but is not its detail record. List parsers do
+not manufacture detail fields, and detail parsers do not determine list order.
+Optional values remain absent when the page provides no evidence. Parser
+sharing requires fixtures demonstrating the same DOM structure and matching
+conditions; similar output fields alone are insufficient.
+
+## Nature family
+
+### Catalog discovery
+
+Nature-family discovery maps the site's dynamic classification into source
+groups and sources:
+
+```text
+Explore content → ArticleListSourceGroup
+Article type    → ArticleListSource
+```
+
+Examples include:
 
 - Research articles
-	- Article
-	- Matters Arising
-	- Registered Report
-
+  - Article
+  - Matters Arising
+  - Registered Report
 - Reviews & Analysis
-	- Review Article
-	- Perspective
-
+  - Review Article
+  - Perspective
 - News & Comment
   - Comment
   - Correspondence
@@ -35,147 +84,109 @@ An article list, such as the one on `Nature Communications`, includes the follow
   - Poster
   - Q&A
 
-- Videos
-- Collections
-- Subjects
+These values are parsed from the current catalog. They are not a closed public
+enum and are not hardcoded into `JournalDescriptor`.
 
-include 7 fields. `Explore content` and `Article type` contain multiple items, so consider introducing an `ExploreContentItem` interface:
+### Article lists
 
-The website uses `href` values for links rather than `url` values, so decide which property name best matches the data source.
+A Nature list item may provide:
 
-## Article Detail Entry
+- article type;
+- published time;
+- title and description;
+- a truncated author list;
+- image and canonical article link;
+- access status when explicitly present.
 
-This article page includes the following fields (article-header):
-- article identifier includes article type, if oa, and published time
-- article title
-- author list (detailed, include which author is corresponding author, the corresponding author has the field `data-corresp-id = "c1/c2"` in HTML)
-- journal details includes journal title/link, volume, article number, articlepublication year and cite this article (link)
+Links use normalized URI fields in the provider model even when the source DOM
+attribute is `href`.
 
-(article-body):
-- article abstract
+Nature News and Opinion pages use a distinct list structure. Their dedicated
+list parser still returns the common `ArticlePage` and `ArticleListItem`
+contracts; it does not introduce a public News/Opinion article kind.
 
-- href to download PDF if available (href = "/articles/s41586-023-06461-0.pdf")
+### Article details
 
-## nature news,opinions article list
-for the explore content of news, opinions, the article list structure is different to other articles, so need to use the new parser
-- article title
-- article description
-- article type
-- datetime
-- image
+A Nature detail may provide article type, access status, publication time,
+title, complete authors, corresponding-author evidence, journal metadata,
+volume, article number, citation link, abstract, and PDF URI.
 
-## Nature News and Opinion article detail
-- article identifier includes article type, datetime
-- article magazine title
-- teaser
+Corresponding-author state is set only from an explicit semantic marker such as
+the page's correspondence metadata. The parser does not infer it from author
+position or anchor numbering.
 
-- maybe should print the page as to the PDF.
+## Science family
 
+Science-family journals expose two independent sources:
 
-# Science
+- Current Issue;
+- First Release.
 
-Science-family journals expose a journal home page and two article-list sources:
+An empty source remains a valid `ArticleListSource` with an empty page result.
+It is not removed merely because it currently contains no articles.
 
-- Current Issue
-- First Release papers
-
-`Current Issue` and `First Release` are separate `ArticleListSource` values. A source with no articles returns an empty result; it is not omitted from the model merely because it usually contains few articles.
-
-The Current Issue page has the following logical structure:
+The Current Issue structure is:
 
 ```text
 Journal
 └── ArticleListSource
     └── ArticlePage with IssueMetadata
-        └── Section / ArticleGroup
+        └── ArticleGroup
             └── ArticleListItem
 ```
 
-Issue metadata can include volume, issue number, publication date, and canonical issue URL.
+Issue metadata can include volume, issue number, publication date, and canonical
+issue URI. Section titles are dynamic `ArticleGroup` labels, not article types:
 
-A section is a dynamic group rendered by the Current Issue page. Its meaning depends on the journal:
+- Science can expose groups such as Commentary, News, and Research.
+- Science Advances can expose subject-oriented groups such as Focus,
+  Neuroscience, and Social and Interdisciplinary Sciences and Public Health.
 
-- Science uses sections such as Commentary, News, and Research.
-- Science Advances uses subject-oriented sections such as Focus, Neuroscience, and Social and Interdisciplinary Sciences and Public Health.
+### Science Advances list items
 
-Do not treat a section title as an article type. Science can render a separate article type inside an article card, such as Expert Voices or Perspectives. Science Advances can render an article type and a subject on the article detail page, such as Research Article and Materials Science.
-
-## Article list for Science Advances
-
-- issue metadata: volume, issue number, publication date, and canonical issue URL
-- section title
-- article title
-- author list, which may be truncated
-- published time
-- access status or OA indicator
-- description, if available
-- abstract, only when abstract content is available in the list DOM; the Abstract control alone is not an abstract
-- PDF URL, if available
-
-The description and abstract are separate fields. Do not use the description as an abstract when the abstract is absent.
+A list item may provide issue metadata, section title, article title, truncated
+authors, publication time, access status, description, abstract, and PDF URI.
+Description and abstract are separate optional fields. An Abstract control
+without abstract content is not evidence of an abstract.
 
 ![Science Advances Current Issue](image-2.png)
 ![Science Advances sections and article cards](image-1.png)
 
-## Article list for Science
+### Science list items
 
-- issue metadata: volume, issue number, publication date, and canonical issue URL
-- section title
-- article type, if displayed separately inside the article card
-- article title
-- author list, which may be truncated
-- published time
-- page range, if available
-- access status or OA indicator
-- description, if available
-- abstract, only when abstract content is available in the list DOM
-- PDF URL, if available
-- related article, if available
-
-A related article is a nested relationship of the containing article card, not another top-level item in the current section. Related article fields can include:
-
-- relation label, such as Related Research Article
-- URL
-- article type
-- article title
-- simple author list
-- journal title
-- published time
+A Science list item may additionally provide article type, page range, and a
+related article. A related article is nested under its containing list item; it
+is not another top-level item in the current group. Its fields can include
+relation label, URI, article type, title, truncated authors, journal title, and
+publication time.
 
 ![Science Current Issue sections, article types, and related articles](image-3.png)
 
-## Article detail entry for Science and Science Advances
+### Science-family details
 
-Science and Science Advances article detail pages share the following base fields:
+Science and Science Advances details may provide access status, article type,
+subject, title, complete authors, publication metadata, DOI, citation URI, PDF
+URI, Editor's Summary, and abstract.
 
-- access status or OA indicator
-- article type
-- subject or discipline, if available
-- article title
-- complete author list
-- journal title
-- published time
-- volume, issue, and page range, if available
-- DOI, if available
-- cite URL
-- PDF URL, if available
-- Editor's Summary, if available
-- abstract, if available
+An author link such as `href="#con3"` does not identify a corresponding author.
+The value remains unknown unless an explicit semantic marker exists.
 
-An author link such as `href="#con3"` does not by itself identify a corresponding author. Only set corresponding-author status when the HTML contains an explicit semantic marker. Otherwise, keep the status unknown rather than setting it to `false` or inferring it from the anchor number.
-
-The two journals may share a detail parser only when HTML fixtures confirm that their main structures and matching conditions are the same. Shared fields alone are not sufficient evidence that they use the same parser.
+Science and Science Advances share a detail parser only when fixtures prove
+that their main DOM structures and matching rules are equivalent.
 
 ![Science Advances article detail](image.png)
 
+## RSS
 
-# RSS feed
+RSS may supplement metadata or provide a PDF link when a provider contract
+explicitly uses it. It is not the authority for website article ordering and
+does not replace catalog or list-page parsing.
 
-maybe you can use this to download PDF, but it cannot be used to get the proper article orders follow the website.
+## Provider verification
 
-# Attention
-
-- the article list contains many articles, one list item corresponse to  one article page, and one article page contain only one article detail. maybe you can call the list as home page which contains many article page.
-- so you need to divide into two parts, one is get the article list, and the other is get the article detail. includes the nature news, opinions and other nature journals from articles.
-
-The remaining publishers still include ACS, Wiley, Springer, Elsevier, Taylor & Francis, MDPI, Frontiers, PLOS, BMJ, JMIR, JAMA Network, The Lancet, NEJM, Cell, bioRxiv, medRxiv, and others.
+- Add saved HTML fixtures for every supported page family.
+- Test catalog discovery, empty sources, pagination, grouping, identity, and
+  optional-field absence.
+- Treat zero parser matches and multiple parser matches as explicit errors.
+- Do not add a generic parser, priority fallback, or catch-and-try-next path.
+- Do not execute scripts contained in captured HTML.

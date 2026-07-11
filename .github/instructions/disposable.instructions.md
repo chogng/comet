@@ -1,5 +1,6 @@
 ---
 description: Guidelines for writing code using IDisposable
+applyTo: "src/cs/**/*.ts"
 ---
 
 Core symbols:

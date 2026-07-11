@@ -1,4 +1,22 @@
-# Plan：Integrated Browser Page Snapshot
+# Browser Page Snapshot migration
+
+## Purpose and scope
+
+本文档跟踪补齐 Integrated Browser Playwright runtime 并增加类型化页面
+Snapshot 能力的单次迁移。适用范围是：
+
+~~~text
+src/cs/platform/browserView/**
+src/cs/workbench/services/browserView/**
+src/cs/workbench/contrib/browserView/**
+src/cs/workbench/services/fetch/**
+以及 Playwright remote/IPC 注册、shared process 接线和直接影响的测试
+~~~
+
+长期 BrowserView 和 Playwright 契约由对应服务代码及架构文档定义。本文档
+只保留当前缺口、实施步骤和验收条件；全部验收通过后必须删除本文档。
+长期 BrowserView 与 Snapshot 边界见
+[browserView.instructions.md](../../../../.github/instructions/browserView.instructions.md)。
 
 ## 0. 结论
 
@@ -55,10 +73,10 @@ Publisher 布局识别标记
 上游参考文件：
 
 ~~~text
-/Users/lance/Desktop/vscode/src/vs/platform/browserView/common/playwrightService.ts
-/Users/lance/Desktop/vscode/src/vs/platform/browserView/node/playwrightService.ts
-/Users/lance/Desktop/vscode/src/vs/platform/browserView/node/playwrightTab.ts
-/Users/lance/Desktop/vscode/src/vs/workbench/contrib/browserView/electron-browser/tools/readBrowserTool.ts
+../vscode/src/vs/platform/browserView/common/playwrightService.ts
+../vscode/src/vs/platform/browserView/node/playwrightService.ts
+../vscode/src/vs/platform/browserView/node/playwrightTab.ts
+../vscode/src/vs/workbench/contrib/browserView/electron-browser/tools/readBrowserTool.ts
 ~~~
 
 ---
@@ -526,3 +544,10 @@ typed consumers
 ├── Page Archive
 └── future structured readers
 ~~~
+
+---
+
+## 17. 删除条件
+
+第 15 节全部验收条件通过、Playwright runtime 和 Snapshot 契约只保留最终
+实现且所有直接调用点完成迁移后，删除本文档。

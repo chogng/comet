@@ -1,4 +1,30 @@
-# Plan：多期刊 Article Fetch 重构
+# Article Fetch migration
+
+## Purpose and scope
+
+本文档跟踪从旧 `FetchArticle` 聚合、WorkbenchHost 编排和主进程 Fetch
+运行时迁移到类型化 Article Fetch 服务的单次重构。适用范围是：
+
+~~~text
+src/cs/workbench/services/fetch/**
+src/cs/workbench/contrib/fetch/**
+src/cs/platform/browserView/**
+src/cs/workbench/services/browserView/**
+src/cs/workbench/contrib/browserView/**
+src/cs/workbench/contrib/chat/**
+src/cs/sessions/browser/parts/sessions/**
+src/cs/workbench/browser/{session.ts,documentActionsModel.ts,workbenchContentState.ts,workbench.ts}
+src/cs/base/parts/sandbox/common/**
+src/cs/workbench/contrib/translation/**
+src/cs/workbench/services/{knowledgeBase,storage}/**
+src/cs/code/electron-main/{agent,rag,document,translation}/**
+以及上述边界直接影响的测试、注册和调用点
+~~~
+
+长期架构由最终服务契约和各所有者文档定义。本文档只保留迁移所需的
+当前边界、直接实施步骤和验收条件；全部验收通过后必须删除本文档。
+长期 Article Fetch 所有权与 Provider 规则见
+[article.instructions.md](../../../../../.github/instructions/article.instructions.md)。
 
 ## 0. 结论
 
@@ -549,11 +575,8 @@ Science 的 Article type 可能直到详情页才被发现。ArticleListItem.art
 
 ## 9. Browser Page Snapshot 依赖
 
-Browser Page Snapshot 是独立平台能力，详细方案见：
-
-~~~text
-.github/instructions/plan_browser_page_snapshot.md
-~~~
+Browser Page Snapshot 是独立平台能力，详细方案见
+[Browser Page Snapshot migration](../../../platform/browserView/browser-page-snapshot.migration.md)。
 
 Fetch 不在 IBrowserViewService 上增加 Snapshot API，也不直接使用 Playwright Page 或 invokeFunctionRaw()。
 
@@ -1190,7 +1213,7 @@ ArticleId 只在拥有 IFetchService 的 electron-browser 边界解析。跨 IPC
 4. 知识库命令构造自己的 `LibraryArticleMetadataInput`，不让 Fetch 模型成为知识库存储模型。
 5. 这些 DTO 属于各自命令或 IPC 契约，不放回 Fetch 公共模型，也不形成 ArticleDetail 的通用替代聚合。
 
-旧 `FetchArticle` 相关持久化不迁移：第一版 Fetch 状态不跨启动恢复，因此删除 workbench session articles、saveFetchedArticles 和 historyStore 的 FetchArticle 读写。依赖 sections/figures/references 的正文翻译、旧 RAG 正文提取等能力按第一版范围删除；若产品仍需要，必须另立 Article Full Text 方案，不能把空字段带入新 DTO。
+旧 `FetchArticle` 相关持久化不迁移：第一版 Fetch 状态不跨启动恢复，因此删除旧 Workbench session 中的 articles、saveFetchedArticles 和 historyStore 的 FetchArticle 读写。依赖 sections/figures/references 的正文翻译、旧 RAG 正文提取等能力按第一版范围删除；若产品仍需要，必须另立 Article Full Text 方案，不能把空字段带入新 DTO。
 
 知识库不是 Fetch 状态存储。用户执行入库操作时，可以从 ArticleRecord 与 ArticleDetail 生成知识库文档元数据，但该投影只存在于知识库命令边界，不得作为 Fetch Facade、Adapter 或缓存回流到 FetchService。
 
@@ -1350,7 +1373,6 @@ src/cs/workbench/services/knowledgeBase/libraryMetadataService.ts
     使用 LibraryArticleMetadataInput
 
 src/cs/workbench/services/storage/{browser,electron-browser}/storageService.ts
-src/cs/platform/storage/electron-main/historyStore.ts
     删除 FetchArticle 持久化 API
 
 src/cs/code/electron-main/{agent,rag,document,translation}/
@@ -1379,11 +1401,11 @@ Fetch 侧在 `workbench/services/fetch/electron-browser` 实现 IFetchPageSessio
 
 1. .github/instructions 下全部适用规则。
 2. 当前 Fetch、IPlaywrightService、BrowserView 和调用面。
-3. /Users/lance/Desktop/vscode 中的 Registry、Service、Playwright Snapshot、Contribution、CancellationToken 和进程实现。
+3. `../vscode` 中的 Registry、Service、Playwright Snapshot、Contribution、CancellationToken 和进程实现。
 
 ### Step 1：完成 Browser Page Snapshot 前置方案
 
-按 plan_browser_page_snapshot.md 完成 IPlaywrightService.captureSnapshot()。Fetch Plan 不重复实现该平台能力。
+按 [Browser Page Snapshot migration](../../../platform/browserView/browser-page-snapshot.migration.md) 完成 IPlaywrightService.captureSnapshot()。Fetch migration 不重复实现该平台能力。
 
 ### Step 2：迁移 Fetch 运行进程
 
@@ -1452,7 +1474,7 @@ fetchService.fetchArticle(articleId, token);
 8. 删除 Markdown href/DOM 反解析文章身份、`isArticleSelected(href)` 和 `toggleArticleSelected(href)`，checkbox 直接读写 ArticleId。
 9. PDF 下载和 DOCX 摘要导出接收 `ArticleId[]` 并按需读取详情。
 10. electron-browser 在 IPC 前把 ArticleId 解析为 PDF、DOCX、Agent/RAG 或知识库各自的最小输入 DTO；electron-main 不接收 ArticleId 或 FetchArticle。
-11. 删除旧 FetchArticle 的 workbench session、storage/history、sandbox 和 IPC 契约；删除依赖伪造全文字段的超范围功能。
+11. 删除旧 FetchArticle 的 Workbench session、storage/history、sandbox 和 IPC 契约；删除依赖伪造全文字段的超范围功能。
 12. 知识库入库从 ArticleRecord 与 ArticleDetail 生成一次性元数据。
 13. 删除地址栏 fetch seed、BatchSource、BatchFetch 状态机和静态来源 URL 设置。
 14. 为各 View 增加目标切换和 dispose 取消，并在 Catalog/Article 变化后清理无法解析的 active ID。
@@ -1512,7 +1534,7 @@ Re-export
 4. readiness 由 Provider 提供并传递给 Snapshot API。
 5. CancellationToken 可终止 PageSession。
 6. Parser 只接收 detached Document。
-7. Snapshot 平台层完整测试由 plan_browser_page_snapshot.md 验收。
+7. Snapshot 平台层完整测试由 [Browser Page Snapshot migration](../../../platform/browserView/browser-page-snapshot.migration.md) 验收。
 8. owned-background 使用 Global storage scope，完成后 stop tracking 并销毁自有 BrowserView。
 9. borrowed-interactive 被用户关闭时明确失败，dispose 不销毁用户 BrowserView。
 10. 成功、失败和取消路径均清理本 Session 拥有的 tracking 和 Playwright session routing。
@@ -1596,7 +1618,7 @@ Re-export
 
 验证：
 
-1. 工作台会话不保存文章对象、文章 ID 或文章 View 状态；active Journal/Source/Article 归具体 View 局部持有。
+1. Sessions 不保存文章对象、文章 ID 或文章 View 状态；active Journal/Source/Article 归具体 View 局部持有。
 2. ChatInputPart 和 ChatListWidget 直接注入 IFetchService；未来新增独立列表或详情 View 时各自直接注入。
 3. 各 View 只响应当前 Journal、Source 或 ArticleId 的相关事件。
 4. 相关事件发生后，View 重新查询 Snapshot，不维护同步副本。
@@ -1668,7 +1690,7 @@ Re-export
 32. Provider 显式实现 Source、Page 和 Article canonicalization，不删除会改变资源身份的 query。
 33. ArticleRecord 不保存列表 title，列表 title 与详情 title 分别属于 ArticleListItem 和 ArticleDetail。
 34. ArticleListItemId 包含 providerOccurrenceKey，不合并同页不同位置的卡片。
-35. 工作台会话不存在文章状态，不保存 active/checked/selected Article ID、visibleSourceIds、FetchArticle[] 或 ArticleDetail[] 副本。
+35. Sessions 不保存文章状态，不保存 active/checked/selected Article ID、visibleSourceIds、FetchArticle[] 或 ArticleDetail[] 副本。
 36. View 直接订阅 IFetchService 变化事件，并在相关 ID 变化后重新查询 Snapshot。
 37. `getArticlePages(sourceId)` 和三个 LoadState 查询存在，View 不自行维护分页顺序或加载状态。
 38. 每次 LoadState 转换先提交状态再触发对应 ID 事件，事件回调读取到一致 Snapshot。
@@ -1781,3 +1803,11 @@ ArticleListSourceGroup? → ArticleListSource
                               ↓
                         ArticleDetail
 ~~~
+
+---
+
+## 25. 删除条件
+
+第 23 节全部验收条件通过、旧 `FetchArticle` 与 WorkbenchHost 编排路径已
+删除、所有直接调用点使用最终契约后，删除本文档。最终服务和类型继续由
+其代码、测试及长期所有者文档定义。

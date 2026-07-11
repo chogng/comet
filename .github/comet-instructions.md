@@ -6,7 +6,7 @@ Comet is built with a layered architecture using TypeScript, web APIs and Electr
 
 ### Product Names and Source Roots
 - `Comet` is the top-level project and product family.
-- `Comet Studio` is the desktop workbench product.
+- `Comet Studio` is the Sessions-based Agent application product.
 - `src/cs/` is the Comet Studio source root; `cs` means Comet Studio and should stay an internal engineering abbreviation.
 - `Comet Code` is the CLI and terminal coding product; use this name for CLI-specific user-facing surfaces and packages instead of the `cs` abbreviation.
 
@@ -22,17 +22,21 @@ Comet is built with a layered architecture using TypeScript, web APIs and Electr
 - `src/cs/base/` - Foundation utilities and cross-platform abstractions
 - `src/cs/platform/` - Platform services and dependency injection infrastructure
 - `src/cs/editor/` - Text editor implementation with language services, syntax highlighting, and editing features
-- `src/cs/workbench/` - Main application workbench for web and desktop
-  - `workbench/browser/` - Core workbench UI components (parts, layout, actions)
+- `src/cs/workbench/` - Reusable Workbench foundation for web and desktop
+  - `workbench/browser/` - Reusable Workbench UI components and Part primitives
   - `workbench/services/` - Service implementations
   - `workbench/contrib/` - Feature contributions (git, debug, search, terminal, etc.)
   - `workbench/api/` - Extension host and VS Code API implementation
+- `src/cs/sessions/` - Top-level Agent application shell, Sessions services,
+  Parts, feature integrations, and providers. Sessions may import public
+  Workbench APIs; Workbench and lower layers never import Sessions.
 - `src/cs/code/` - Electron main process specific implementation
 - `src/cs/server/` - Server specific implementation
-- `src/cs/sessions/` - Agent sessions window, a dedicated workbench layer for agentic workflows (sits alongside `cs/workbench`, may import from it but not vice versa)
 
 The core architecture follows these principles:
-- **Layered architecture** - from `base`, `platform`, `editor`, to `workbench`
+- **Layered architecture** - `base → platform → editor → workbench → sessions → code/server`; imports flow toward lower layers
+- **Single product shell** - Code and server start the Sessions application;
+  Workbench provides the foundation and does not instantiate a parallel shell
 - **Dependency injection** - Services are injected through constructor parameters
     - If non-service parameters are needed, they need to come before the service parameters
 - **Contribution model** - Features contribute to registries and extension points

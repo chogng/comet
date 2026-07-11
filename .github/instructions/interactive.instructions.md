@@ -1,5 +1,6 @@
 ---
 description: Architecture documentation for Comet interactive window component. Use when working in `src/cs/workbench/contrib/interactive`
+applyTo: "src/cs/workbench/contrib/interactive/**"
 ---
 
 # Interactive Window
@@ -15,14 +16,22 @@ Users can type in code in the text editor and after users pressing `Shift+Enter`
 
 ## Interactive Window Registration
 
-Registering a new editor type in the workbench consists of two steps:
+Registering a new editor type in Workbench Editor consists of two steps:
 
-* Register an editor input factory which is responsible for resolving resources with given `glob` patterns. Here we register an `InteractiveEditorInput` for all resources with `vscode-interactive` scheme.
-* Register an editor pane factory for the given editor input type. Here we register `InteractiveEditor` for our own editor input `InteractiveEditorInput`.
+- Register resource resolution from the `vscode-interactive` scheme to an
+  `InteractiveEditorInput` through the editor resolver contract.
+- Register `InteractiveEditor` as the EditorPane for
+  `InteractiveEditorInput` through the EditorPane registry.
 
 The workbench editor service is not aware of how models are resolved in `EditorInput`, neither how `EditorPane`s are rendered. It only cares about the common states and events on `EditorInput` or `EditorPane`, i.e., display name, capabilities (editable), content change, dirty state change. It's `EditorInput`/`EditorPane`'s responsibility to provide the right info and updates to the editor service. One major difference between Interactive Editor and other editor panes is Interactive Window is never dirty so users never see a dot on the editor title bar.
 
-![Editor Registration](./resources/interactive/interactive.editor.drawio.svg)
+```text
+vscode-interactive resource
+    → IEditorResolverService
+    → InteractiveEditorInput
+    → EditorPane registry
+    → InteractiveEditor
+```
 
 ## Interactive Window Editor Model Resolution
 
@@ -32,7 +41,13 @@ The `INotebookEditorModelResolverService` is used to resolve the notebook model.
 
 When the notebook model is resolved, the `INotebookEditorModelResolverService` uses the working copy infrastructure to create a `IResolvedNotebookEditorModel`. The content is passed through a `NotebookSerializer` from the `INotebookService` to construct a `NotebookTextModel`.
 
-![Model Resolution](./resources/interactive/interactive.model.resolution.drawio.svg)
+```text
+InteractiveEditorInput.resolve()
+    → INotebookEditorModelResolverService
+    → IResolvedNotebookEditorModel
+    → NotebookSerializer
+    → NotebookTextModel
+```
 
 The `FileSystem` provider that is registered for `vscode-interactive` schema will always return an empty buffer for any read, and will drop all write requests as nothing is stored on disk for Interactive Window resources. The `NotebookSerializer` that is registered for the `interactive` viewtype knows to return an empty notebook data model when it deserializes an empty buffer when the model is being resolved.
 
@@ -47,4 +62,10 @@ Restoring the interactive window happens through the editor serializer (`Interac
 - The `IInteractiveDocumentService` coordinates between these two parts
 - The `IInteractiveHistoryService` manages command history for the input editor
 
-![Architecture](./resources/interactive/interactive.eh.drawio.svg)
+```text
+InteractiveEditorInput
+├── NotebookEditorInput → notebook document and execution history
+├── ITextModelService → input editor model
+├── IInteractiveDocumentService → UI/extension-host coordination
+└── IInteractiveHistoryService → input history
+```

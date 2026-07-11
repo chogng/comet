@@ -5,8 +5,6 @@ applyTo: src/cs/**
 
 # Source Code Organization
 
-Canonical reference: WAITING...
-
 ## Layers
 
 The `src/cs/` core is partitioned into ordered layers — each may only import from layers below it:
