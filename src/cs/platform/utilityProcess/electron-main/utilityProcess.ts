@@ -9,26 +9,13 @@ import { Disposable } from 'cs/base/common/lifecycle';
 export class UtilityProcess extends Disposable {
 	private process: ElectronUtilityProcess | undefined;
 
-	start(entryPoint: string): Promise<void> {
+	start(entryPoint: string): ElectronUtilityProcess {
 		if (this.process) {
 			throw new Error('Utility process is already running.');
 		}
 		const process = utilityProcess.fork(entryPoint, [], { stdio: 'pipe' });
 		this.process = process;
-		return new Promise<void>((resolve, reject) => {
-			const onMessage = (message: unknown) => {
-				if (message && typeof message === 'object' && (message as { type?: unknown }).type === 'comet:shared-process-ready') {
-					process.off('exit', onExit);
-					resolve();
-				}
-			};
-			const onExit = (code: number) => {
-				process.off('message', onMessage);
-				reject(new Error(`Utility process exited before initialization (code ${code}).`));
-			};
-			process.on('message', onMessage);
-			process.once('exit', onExit);
-		});
+		return process;
 	}
 
 	postMessage(message: unknown, ports: MessagePortMain[] = []): void {
