@@ -9,6 +9,7 @@ import {
   AnchorAxisAlignment as LayoutAnchorAxisAlignment,
   AnchorPosition as LayoutAnchorPosition,
   layout2d,
+  type IAnchor,
   type IRect,
 } from 'cs/base/common/layout';
 import {
@@ -24,12 +25,13 @@ export type AnchorPosition = 'below' | 'above';
 export type AnchorAxisAlignment = 'vertical' | 'horizontal';
 export type ContextViewAlignment = 'start' | 'end' | 'center';
 export type ContextViewPosition = 'auto' | 'above' | 'below';
-export type ContextViewAnchor = HTMLElement | {
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-};
+export type ContextViewAnchor = HTMLElement | IAnchor;
+
+export enum ContextViewDOMPosition {
+  Absolute,
+  Fixed,
+  FixedShadow,
+}
 
 export type ContextViewOptions = {
   canRelayout?: boolean;
@@ -66,7 +68,11 @@ export type ContextViewDisposable = {
 };
 
 export type ContextViewProvider = {
-  showContextView: (delegate: ContextViewDelegate) => ContextViewDisposable;
+  showContextView: (
+    delegate: ContextViewDelegate,
+    container?: HTMLElement,
+    shadowRoot?: boolean,
+  ) => ContextViewDisposable;
   hideContextView: (data?: unknown) => void;
   getContextViewElement: () => HTMLElement;
   layout: () => void;
@@ -75,6 +81,7 @@ export type ContextViewProvider = {
 };
 
 export type ContextViewHandle = {
+  setContainer: (container: HTMLElement | null, domPosition: ContextViewDOMPosition) => void;
   show: (options: ContextViewOptions) => void;
   hide: (data?: unknown) => void;
   isVisible: () => boolean;
@@ -332,6 +339,10 @@ export class ContextViewController extends Disposable implements ContextViewHand
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-context-view');
   private readonly content = $<HTMLElementTagNameMap['div']>('div.comet-context-view-content');
   private readonly mountedListeners = new MutableDisposable<DisposableLike>();
+  private container: HTMLElement | null = null;
+  private domPosition = ContextViewDOMPosition.Absolute;
+  private shadowRoot: ShadowRoot | null = null;
+  private shadowRootHostElement: HTMLElement | null = null;
   private options: ContextViewOptions | null = null;
   private currentDelegate: ContextViewDelegate | null = null;
   private currentRenderDisposable: ContextViewRenderResult = undefined;
@@ -347,6 +358,47 @@ export class ContextViewController extends Disposable implements ContextViewHand
     this._register(
       addDisposableListener(this.content, 'mousedown', this.handleContentMouseDown, true),
     );
+    this.setContainer(document.body, ContextViewDOMPosition.Absolute);
+  }
+
+  setContainer(container: HTMLElement | null, domPosition: ContextViewDOMPosition): void {
+    if (container === this.container && domPosition === this.domPosition) {
+      return;
+    }
+
+    const wasVisible = this.visible;
+    this.visible = false;
+    this.mountedListeners.clear();
+    this.element.remove();
+    this.shadowRootHostElement?.remove();
+    this.shadowRootHostElement = null;
+    this.shadowRoot = null;
+    this.container = container;
+    this.domPosition = domPosition;
+
+    if (container) {
+      if (domPosition === ContextViewDOMPosition.FixedShadow) {
+        const host = $('div.comet-shadow-root-host');
+        this.shadowRootHostElement = host;
+        this.shadowRoot = host.attachShadow({ mode: 'open' });
+        const style = document.createElement('style');
+        style.textContent = `
+          :host { all: initial; }
+          .comet-context-view { position: fixed; top: 0; left: 0; z-index: 1000; }
+          .comet-context-view-content { display: inline-block; max-width: calc(100vw - 16px); pointer-events: auto; }
+        `;
+        this.shadowRoot.append(style, this.element);
+        container.append(host);
+      } else {
+        container.append(this.element);
+      }
+    }
+
+    if (wasVisible && container) {
+      this.visible = true;
+      this.mountListeners();
+      this.layout(false);
+    }
   }
 
   show(options: ContextViewOptions) {
@@ -427,6 +479,10 @@ export class ContextViewController extends Disposable implements ContextViewHand
     this.visible = false;
     this.unmount();
     this.cleanupCurrentView();
+    this.shadowRootHostElement?.remove();
+    this.shadowRootHostElement = null;
+    this.shadowRoot = null;
+    this.container = null;
     super.dispose();
   }
 
@@ -450,19 +506,31 @@ export class ContextViewController extends Disposable implements ContextViewHand
   private mount() {
     if (!this.visible) {
       this.visible = true;
-      document.body.append(this.element);
-      this.mountedListeners.value = combinedDisposable(
-        addDisposableListener(document, 'mousedown', this.handleDocumentMouseDown, true),
-        addDisposableListener(document, 'keydown', this.handleDocumentKeyDown, true),
-        addDisposableListener(document, 'scroll', this.handleDocumentScroll, true),
-        addDisposableListener(window, 'resize', this.handleWindowResize),
-      );
+      this.appendElement();
+      this.mountListeners();
       return;
     }
 
-    if (!this.element.isConnected) {
-      document.body.append(this.element);
+    this.appendElement();
+  }
+
+  private appendElement() {
+    if (!this.element.isConnected && this.container) {
+      if (this.shadowRoot) {
+        this.shadowRoot.append(this.element);
+      } else {
+        this.container.append(this.element);
+      }
     }
+  }
+
+  private mountListeners() {
+    this.mountedListeners.value = combinedDisposable(
+      addDisposableListener(document, 'mousedown', this.handleDocumentMouseDown, true),
+      addDisposableListener(document, 'keydown', this.handleDocumentKeyDown, true),
+      addDisposableListener(document, 'scroll', this.handleDocumentScroll, true),
+      addDisposableListener(window, 'resize', this.handleWindowResize),
+    );
   }
 
   private unmount() {
@@ -528,14 +596,23 @@ export class ContextViewController extends Disposable implements ContextViewHand
       offset,
     });
 
+    const containerRect = this.container?.getBoundingClientRect();
+    const left = this.domPosition === ContextViewDOMPosition.Absolute && containerRect
+      ? resolvedLayout.left - containerRect.left + (this.container?.scrollLeft ?? 0)
+      : resolvedLayout.left;
+    const top = this.domPosition === ContextViewDOMPosition.Absolute && containerRect
+      ? resolvedLayout.top - containerRect.top + (this.container?.scrollTop ?? 0)
+      : resolvedLayout.top;
+
     this.element.classList.remove('top', 'bottom', 'left', 'right');
     this.element.classList.add(
       resolvedLayout.placement === 'below' ? 'bottom' : 'top',
     );
     this.element.classList.add(resolvedLayout.alignment);
 
-    this.element.style.left = `${Math.round(resolvedLayout.left)}px`;
-    this.element.style.top = `${Math.round(resolvedLayout.top)}px`;
+    this.element.style.position = this.domPosition === ContextViewDOMPosition.Absolute ? 'absolute' : 'fixed';
+    this.element.style.left = `${Math.round(left)}px`;
+    this.element.style.top = `${Math.round(top)}px`;
   }
 
   private readonly handleContentMouseDown = () => {

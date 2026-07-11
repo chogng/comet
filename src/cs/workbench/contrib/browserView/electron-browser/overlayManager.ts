@@ -91,7 +91,7 @@ export class BrowserOverlayManager {
 				collection: this.targetWindow.document.getElementsByClassName(overlayDefinition.className),
 			});
 		}
-		this.shadowRootHostCollection = this.targetWindow.document.getElementsByClassName('shadow-root-host');
+		this.shadowRootHostCollection = this.targetWindow.document.getElementsByClassName('comet-shadow-root-host');
 
 		const MutationObserverConstructor = (this.targetWindow as Window & {
 			readonly MutationObserver: typeof MutationObserver;

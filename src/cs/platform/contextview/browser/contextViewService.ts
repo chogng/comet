@@ -1,4 +1,7 @@
-import { createContextViewController } from 'cs/base/browser/ui/contextview/contextview';
+import {
+  ContextViewDOMPosition as DOMPosition,
+  createContextViewController,
+} from 'cs/base/browser/ui/contextview/contextview';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import type {
   ContextViewDelegate,
@@ -13,20 +16,31 @@ export class PlatformContextViewService implements IContextViewService {
   private currentDelegate: ContextViewDelegate | null = null;
   private currentRenderDisposable: ContextViewDisposable | (() => void) | null = null;
 
-  showContextView(delegate: ContextViewDelegate): ContextViewDisposable {
+  showContextView(
+    delegate: ContextViewDelegate,
+    container?: HTMLElement,
+    shadowRoot = false,
+  ): ContextViewDisposable {
     this.hideContextView();
 
     this.currentDelegate = delegate;
 
-    const container = document.createElement('div');
-    const renderDisposable = delegate.render(container);
+    const domPosition = !container || container === document.body
+      ? DOMPosition.Absolute
+      : shadowRoot
+        ? DOMPosition.FixedShadow
+        : DOMPosition.Fixed;
+    this.contextView.setContainer(container ?? document.body, domPosition);
+
+    const renderContainer = document.createElement('div');
+    const renderDisposable = delegate.render(renderContainer);
     this.currentRenderDisposable = renderDisposable ?? null;
 
     this.contextView.show({
       canRelayout: delegate.canRelayout,
       anchor: delegate.getAnchor(),
       className: delegate.className,
-      render: () => container,
+      render: () => renderContainer,
       focus: delegate.focus,
       layout: delegate.layout,
       onDOMEvent: delegate.onDOMEvent,

@@ -10,11 +10,12 @@ import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestU
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createContextViewController: typeof import('cs/base/browser/ui/contextview/contextview').createContextViewController;
+let ContextViewDOMPosition: typeof import('cs/base/browser/ui/contextview/contextview').ContextViewDOMPosition;
 
 before(async () => {
 	const domEnvironment = installDomTestEnvironment();
 	cleanupDomEnvironment = domEnvironment.cleanup;
-	({ createContextViewController } = await import('cs/base/browser/ui/contextview/contextview'));
+	({ createContextViewController, ContextViewDOMPosition } = await import('cs/base/browser/ui/contextview/contextview'));
 });
 
 after(() => {
@@ -110,6 +111,26 @@ test('contextview runs delegate layout focus dom event and layer hooks', () => {
 	}
 });
 
+test('contextview can be shown again after being hidden', () => {
+	const contextView = createContextViewController();
+	const options = {
+		anchor: { x: 24, y: 48, width: 80, height: 20 },
+		render: () => document.createElement('div'),
+	};
+
+	try {
+		contextView.show(options);
+		contextView.hide();
+		contextView.show(options);
+
+		assert.equal(contextView.isVisible(), true);
+		assert.equal(contextView.getViewElement().isConnected, true);
+	} finally {
+		contextView.dispose();
+		document.body.replaceChildren();
+	}
+});
+
 test('contextview keeps canRelayout false visible for initial layout and hides on relayout', () => {
 	const contextView = createContextViewController();
 
@@ -129,6 +150,49 @@ test('contextview keeps canRelayout false visible for initial layout and hides o
 
 		contextView.layout();
 		assert.equal(contextView.isVisible(), false);
+	} finally {
+		contextView.dispose();
+		document.body.replaceChildren();
+	}
+});
+
+test('contextview supports a fixed custom container', () => {
+	const contextView = createContextViewController();
+	const container = document.createElement('div');
+	document.body.append(container);
+
+	try {
+		contextView.setContainer(container, ContextViewDOMPosition.Fixed);
+		contextView.show({
+			anchor: { x: 24, y: 48, width: 80, height: 20 },
+			render: () => document.createElement('div'),
+		});
+
+		assert.equal(contextView.getViewElement().parentElement, container);
+		assert.equal(contextView.getViewElement().style.position, 'fixed');
+	} finally {
+		contextView.dispose();
+		document.body.replaceChildren();
+	}
+});
+
+test('contextview supports a fixed shadow container', () => {
+	const contextView = createContextViewController();
+	const container = document.createElement('div');
+	document.body.append(container);
+
+	try {
+		contextView.setContainer(container, ContextViewDOMPosition.FixedShadow);
+		contextView.show({
+			anchor: { x: 24, y: 48, width: 80, height: 20 },
+			render: () => document.createElement('div'),
+		});
+
+		const host = container.querySelector('.comet-shadow-root-host');
+		assert(host instanceof HTMLElement);
+		assert(host.shadowRoot);
+		assert.equal(contextView.getViewElement().getRootNode(), host.shadowRoot);
+		assert.equal(contextView.getViewElement().style.position, 'fixed');
 	} finally {
 		contextView.dispose();
 		document.body.replaceChildren();
