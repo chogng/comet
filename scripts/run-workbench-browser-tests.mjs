@@ -61,6 +61,17 @@ const entryPoints = [
     'browser',
     'sessionsProvidersService.test.ts',
   ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'services',
+    'sessions',
+    'test',
+    'browser',
+    'sessionsManagementService.test.ts',
+  ),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'browserHistoryAndFavoritesPanel.test.ts'),
   path.join(
     rootDir,

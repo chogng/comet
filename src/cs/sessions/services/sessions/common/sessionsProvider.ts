@@ -13,6 +13,7 @@ import type {
 	SessionTypeId,
 	SessionsProviderId,
 } from 'cs/sessions/services/sessions/common/session';
+import type { IChatRequestAttachment } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
 
 /** Identifies one authoritative provider collection transition. */
@@ -50,6 +51,7 @@ export interface ISessionDraftOptions {
 /** Describes one request sent to an addressed Chat. */
 export interface ISessionChatRequest {
 	readonly prompt: string;
+	readonly attachments: readonly IChatRequestAttachment[];
 }
 
 /** Connects one backend to the provider-independent Sessions domain. */
@@ -69,7 +71,7 @@ export interface ISessionsProvider extends IDisposable {
 	forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat>;
 	renameSession(session: ISession, title: string): Promise<void>;
 	renameChat(session: ISession, chat: IChat, title: string): Promise<void>;
-	setChatModel(session: ISession, chat: IChat, modelId: string): Promise<void>;
+	setChatModel(session: ISession, chat: IChat, modelId: string | undefined): Promise<void>;
 	setSessionArchived(session: ISession, archived: boolean): Promise<void>;
 	deleteSession(session: ISession): Promise<void>;
 	deleteChat(session: ISession, chat: IChat): Promise<void>;
