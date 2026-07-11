@@ -418,7 +418,6 @@
   "desktopInvokeUnsupported": "当前运行环境不支持该命令",
   "toastLoadSettingsFailed": "加载设置失败：{error}",
   "toastEnterArticleUrl": "请先输入文章链接。",
-  "toastNavigatingTo": "正在跳转至: {url}",
   "toastDesktopDirPickerOnly": "浏览器 Web 模式不支持系统目录选择，请在桌面端运行。",
   "toastDirNotSelected": "未选择目录，保持当前设置。",
   "toastDirSelected": "已选择目录：{dir}",

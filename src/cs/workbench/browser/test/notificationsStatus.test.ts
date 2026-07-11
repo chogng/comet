@@ -20,6 +20,9 @@ test('notifications status stays hidden until there is status content', async ()
   const { NotificationsCenter } = await import(
     'cs/workbench/browser/parts/notifications/notificationsCenter'
   );
+  const { NotificationsToasts } = await import(
+    'cs/workbench/browser/parts/notifications/notificationsToasts'
+  );
   const model = new NotificationsModel();
   const container = document.createElement('div');
   const center = new NotificationsCenter(container, model);
@@ -73,6 +76,23 @@ test('notifications status stays hidden until there is status content', async ()
 
     statusMessage.close();
     assert.equal(element.classList.contains('comet-is-hidden'), true);
+
+    const toasts = new NotificationsToasts(container, model);
+    const stickyNotifications = Array.from({ length: 4 }, (_, index) =>
+      model.addNotification({
+        severity: Severity.Info,
+        message: `Sticky ${index + 1}`,
+        sticky: true,
+      }),
+    );
+    try {
+      assert.equal(toasts.getElement().childElementCount, 3);
+      assert.equal(stickyNotifications[0]?.isVisible, false);
+      assert.equal(stickyNotifications.slice(1).every(item => item.isVisible), true);
+    } finally {
+      toasts.dispose();
+    }
+    assert.equal(stickyNotifications.every(item => !item.isVisible), true);
   } finally {
     status.dispose();
     center.dispose();

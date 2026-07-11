@@ -82,19 +82,27 @@ export class NotificationsToasts {
       return;
     }
 
-    this.visibleItems = [item, ...this.visibleItems].slice(0, MAX_VISIBLE_TOASTS);
+    const nextItems = [item, ...this.visibleItems];
+    this.visibleItems = nextItems.slice(0, MAX_VISIBLE_TOASTS);
+    for (const overflowItem of nextItems.slice(MAX_VISIBLE_TOASTS)) {
+      this.releaseToast(overflowItem);
+    }
     item.updateVisibility(true);
     this.installToastTimer(item);
     this.render();
   }
 
   private removeToast(item: NotificationViewItem) {
+    this.releaseToast(item);
+    this.visibleItems = this.visibleItems.filter((candidate) => candidate !== item);
+    this.render();
+  }
+
+  private releaseToast(item: NotificationViewItem) {
     const timer = this.toastTimers.get(item);
     timer?.dispose();
     this.toastTimers.delete(item);
-    this.visibleItems = this.visibleItems.filter((candidate) => candidate !== item);
     item.updateVisibility(false);
-    this.render();
   }
 
   private installToastTimer(item: NotificationViewItem) {

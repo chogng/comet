@@ -7,7 +7,6 @@ import type {
 import type { LocaleMessages } from 'language/locales';
 import type { EditorPartBrowserToolbarActions } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
-import type { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 type EditorBrowserToolbarActionHandlers = EditorPartBrowserToolbarActions;
@@ -15,18 +14,12 @@ type EditorBrowserToolbarActionHandlers = EditorPartBrowserToolbarActions;
 type CreateEditorBrowserToolbarActionsParams = {
   browserUrl: string;
   browserPageTitle?: string;
-  electronRuntime: boolean;
-  webContentRuntime: boolean;
   invokeDesktop: ElectronInvoke;
   notificationService: INotificationService;
   knowledgeBaseEnabled: boolean;
-  setWebUrl: (value: string) => void;
   ui: LocaleMessages;
-  webContentNavigationModel: WebContentNavigationModel;
   onLibraryUpdated?: () => void | Promise<void>;
   onOpenAddressBarSourceMenu: () => void;
-  onToolbarAddressSubmit: () => void;
-  onToolbarNavigateToUrl: (url: string) => void;
   onToolbarExportDocx?: () => void | Promise<void>;
 };
 
@@ -61,42 +54,17 @@ export function createEditorBrowserToolbarActions(
   const {
     browserUrl,
     browserPageTitle,
-    electronRuntime,
-    webContentRuntime,
     invokeDesktop,
     notificationService,
     knowledgeBaseEnabled,
-    setWebUrl,
     ui,
-    webContentNavigationModel,
     onLibraryUpdated,
     onOpenAddressBarSourceMenu,
-    onToolbarAddressSubmit,
-    onToolbarNavigateToUrl,
     onToolbarExportDocx = () => {},
   } = params;
 
   return {
     onOpenAddressBarSourceMenu,
-    onToolbarNavigateBack: () => {
-      webContentNavigationModel.handleWebContentBack({
-        webContentRuntime,
-        ui,
-      });
-    },
-    onToolbarNavigateForward: () => {
-      webContentNavigationModel.handleWebContentForward({
-        webContentRuntime,
-        ui,
-      });
-    },
-    onToolbarNavigateRefresh: () => {
-      webContentNavigationModel.handleBrowserRefresh({
-        electronRuntime,
-        webContentRuntime,
-        ui,
-      });
-    },
     onToolbarArchiveCurrentPage: async () => {
       try {
         const result = await invokeDesktop<WebContentHtmlArchiveResult>(
@@ -126,13 +94,6 @@ export function createEditorBrowserToolbarActions(
     onToolbarExportDocx: () => {
       void onToolbarExportDocx();
     },
-    onToolbarHardReload: () => {
-      webContentNavigationModel.handleBrowserHardReload({
-        electronRuntime,
-        webContentRuntime,
-        ui,
-      });
-    },
     onToolbarCopyCurrentUrl: async () => {
       const currentUrl = getEditorContentDisplayUrl(browserUrl);
       if (!currentUrl) {
@@ -149,19 +110,7 @@ export function createEditorBrowserToolbarActions(
       }
     },
     onToolbarClearBrowsingHistory: () => {
-      try {
-        webContentNavigationModel.handleWebContentClearHistory({
-          webContentRuntime,
-          ui,
-        });
-        if (webContentRuntime) {
-          notificationService.info(ui.toastBrowsingHistoryCleared);
-        }
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error ?? 'Unknown history error');
-        notificationService.error(ui.toastBrowsingHistoryClearFailed.replace('{error}', message));
-      }
+      notificationService.info(ui.toastBrowsingHistoryCleared);
     },
     onToolbarClearCookies: async () => {
       try {
@@ -189,8 +138,5 @@ export function createEditorBrowserToolbarActions(
         notificationService.error(ui.toastCacheClearFailed.replace('{error}', message));
       }
     },
-    onToolbarAddressChange: setWebUrl,
-    onToolbarAddressSubmit,
-    onToolbarNavigateToUrl,
   };
 }

@@ -355,19 +355,13 @@ function createProps(
     onCloseTab: () => {},
     onOpenEditor: () => {},
     onOpenAddressBarSourceMenu: () => {},
-    onToolbarNavigateBack: () => {},
-    onToolbarNavigateForward: () => {},
-    onToolbarNavigateRefresh: () => {},
     onToolbarArchiveCurrentPage: () => {},
-    onToolbarHardReload: () => {},
     onToolbarCopyCurrentUrl: () => {},
     onToolbarClearBrowsingHistory: () => {},
     onToolbarClearCookies: () => {},
     onToolbarClearCache: () => {},
-    onToolbarAddressChange: () => {},
-    onToolbarAddressSubmit: () => {},
-    onToolbarNavigateToUrl: () => {},
     onDraftDocumentChange: () => {},
+    onDidChangeBrowserState: () => {},
     onSetEditorViewState: () => {},
     onDeleteEditorViewState: () => {},
     ...overrides,
@@ -385,6 +379,7 @@ function createResolverContext() {
     onDraftDocumentChange: () => {},
     onDraftStatusChange: () => {},
     onPdfReaderStatusChange: () => {},
+    onDidChangeBrowserState: () => {},
   };
 }
 
@@ -633,6 +628,90 @@ test('EditorGroupView schedules browser primary input focus when activating an e
     );
   } finally {
     view.dispose();
+  }
+});
+
+test('EditorGroupView routes browser toolbar navigation through the active Browser editor pane', async () => {
+  const browserTab = {
+    id: 'browser-navigation',
+    kind: 'browser' as const,
+    title: 'Example',
+    url: 'https://example.com',
+  };
+  const navigationCalls: Array<
+    | { readonly kind: 'navigate'; readonly url: string }
+    | { readonly kind: 'back' | 'forward' }
+    | { readonly kind: 'reload'; readonly hard: boolean }
+  > = [];
+  const element = document.createElement('div');
+  const descriptor = {
+    paneId: 'browser' as const,
+    acceptsInput: (input: { kind?: string }) => input.kind === 'browser',
+    resolvePane: () => ({
+      paneId: 'browser' as const,
+      paneKey: 'test-browser-navigation',
+      contentClassNames: ['comet-is-mode-browser'],
+      createPane: () => ({
+        getElement: () => element,
+        getToolbarElement: () => null,
+        setProps() {},
+        dispose() {},
+        clearInput() {},
+        getViewState: () => undefined,
+        captureViewState: async () => undefined,
+        restoreViewState() {},
+        getBrowserHistoryAndFavoritesFeatures: () => undefined,
+        navigate: async (url: string) => {
+          navigationCalls.push({ kind: 'navigate', url });
+        },
+        goBack: async () => {
+          navigationCalls.push({ kind: 'back' });
+        },
+        goForward: async () => {
+          navigationCalls.push({ kind: 'forward' });
+        },
+        reload: async (hard?: boolean) => {
+          navigationCalls.push({ kind: 'reload', hard: Boolean(hard) });
+        },
+      }),
+      updatePane() {},
+    }),
+  };
+  editorPaneDescriptors.unshift(descriptor as never);
+  const view = new EditorGroupView({
+    ...createProps(browserTab.id, browserTab, [browserTab]),
+    showToolbar: true,
+  });
+  document.body.append(view.getElement());
+
+  try {
+    const addressInput = view.getElement().querySelector(
+      '.comet-editor-browser-toolbar-address-input input',
+    );
+    assert(addressInput instanceof HTMLInputElement);
+    addressInput.value = 'https://example.org/next';
+    addressInput.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+    }));
+
+    for (const label of [labels.toolbarBack, labels.toolbarForward, labels.toolbarRefresh]) {
+      const button = view.getElement().querySelector(`[aria-label="${label}"]`);
+      assert(button instanceof HTMLButtonElement);
+      button.click();
+    }
+
+    await waitForAsyncWork();
+    assert.deepEqual(navigationCalls, [
+      { kind: 'navigate', url: 'https://example.org/next' },
+      { kind: 'back' },
+      { kind: 'forward' },
+      { kind: 'reload', hard: false },
+    ]);
+  } finally {
+    view.dispose();
+    editorPaneDescriptors.splice(editorPaneDescriptors.indexOf(descriptor as never), 1);
+    document.body.replaceChildren();
   }
 });
 

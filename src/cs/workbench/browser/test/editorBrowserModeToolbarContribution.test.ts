@@ -68,8 +68,6 @@ function createContext(): EditorModeToolbarContributionContext {
 		onClearBrowsingHistory: () => {},
 		onClearCookies: () => {},
 		onClearCache: () => {},
-		onAddressInputChange: () => {},
-		onAddressInputSubmit: () => {},
 		onNavigateToUrl: () => {},
 		onPdfHighlightSelection: () => {},
 		onPdfNoteSelection: () => {},

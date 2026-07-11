@@ -409,7 +409,6 @@
   "desktopInvokeUnsupported": "Current runtime does not support this command.",
   "toastLoadSettingsFailed": "Failed to load settings: {error}",
   "toastEnterArticleUrl": "Please enter an article URL first.",
-  "toastNavigatingTo": "Navigating to: {url}",
   "toastDesktopDirPickerOnly": "Directory picker is not available in web mode. Please run the desktop app.",
   "toastDirNotSelected": "No directory selected. Keeping current settings.",
   "toastDirSelected": "Selected directory: {dir}",

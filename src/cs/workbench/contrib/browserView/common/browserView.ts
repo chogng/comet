@@ -7,7 +7,6 @@ import { createDecorator } from 'cs/platform/instantiation/common/instantiation'
 import { Emitter, Event } from 'cs/base/common/event';
 import { structuralEquals } from 'cs/base/common/equals';
 import { Disposable, IDisposable } from 'cs/base/common/lifecycle';
-import { normalizeUrl } from 'cs/workbench/common/url';
 import { VSBuffer } from 'cs/base/common/buffer';
 import { CDPEvent, CDPRequest, CDPResponse } from 'cs/platform/browserView/common/cdp/types';
 import { ITunnelProxyInfo } from 'cs/platform/tunnel/common/tunnelProxy';
@@ -42,7 +41,6 @@ import {
 	browserZoomDefaultIndex,
 	browserZoomFactors,
 	IBrowserViewState,
-	type WebContentState,
 	IBrowserDeviceProfile,
 	IBrowserViewPermissionRequestEvent,
 } from 'cs/platform/browserView/common/browserView';
@@ -811,79 +809,4 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 
 		super.dispose();
 	}
-}
-
-export const EMPTY_WEB_CONTENT_STATE: WebContentState = {
-	targetId: null,
-	activeTargetId: null,
-	ownership: 'inactive',
-	layoutPhase: 'hidden',
-	url: '',
-	pageTitle: '',
-	faviconUrl: '',
-	canGoBack: false,
-	canGoForward: false,
-	isLoading: false,
-	visible: false,
-};
-
-export type WebContentNavigationResult =
-	| { kind: 'invalid-url' }
-	| { kind: 'content-runtime-unavailable'; normalizedUrl: string }
-	| { kind: 'webcontents-content'; normalizedUrl: string };
-
-export type WebContentRefreshMode =
-	| 'content-runtime-unavailable'
-	| 'webcontents-content';
-
-export type WebContentStateUrlUpdate = {
-	browserUrl: string;
-	webUrl: string;
-};
-
-export function resolveWebContentNavigation(
-	nextUrl: string,
-	electronRuntime: boolean,
-	webContentRuntime: boolean,
-): WebContentNavigationResult {
-	const normalizedUrl = normalizeUrl(nextUrl);
-	if (!normalizedUrl) {
-		return { kind: 'invalid-url' };
-	}
-
-	if (!electronRuntime || !webContentRuntime) {
-		return {
-			kind: 'content-runtime-unavailable',
-			normalizedUrl,
-		};
-	}
-
-	return {
-		kind: 'webcontents-content',
-		normalizedUrl,
-	};
-}
-
-export function resolveWebContentRefreshMode(
-	electronRuntime: boolean,
-	webContentRuntime: boolean,
-): WebContentRefreshMode {
-	if (!electronRuntime || !webContentRuntime) {
-		return 'content-runtime-unavailable';
-	}
-
-	return 'webcontents-content';
-}
-
-export function resolveWebContentStateUrlUpdate(
-	webContentState: WebContentState,
-): WebContentStateUrlUpdate | null {
-	if (!webContentState.url) {
-		return null;
-	}
-
-	return {
-		browserUrl: webContentState.url,
-		webUrl: webContentState.url,
-	};
 }

@@ -4,6 +4,7 @@ import {
 } from 'cs/workbench/browser/parts/editor/editorInput';
 import { generateUuid } from 'cs/base/common/uuid';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import { isReusableEmptyBrowserTab } from 'cs/workbench/browser/parts/editor/editorTabPolicy';
 import type { EditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
 import {
@@ -23,7 +24,7 @@ type BrowserEditorOpenRequest =
 
 type BrowserEditorOpenModel = Pick<
   EditorModel,
-  'activateTab' | 'createBrowserTab' | 'getSnapshot' | 'updateActiveContentTabUrl'
+  'activateTab' | 'createBrowserTab' | 'getSnapshot'
 >;
 
 export function createBrowserEditorOpenDelegate(
@@ -66,17 +67,29 @@ export function createBrowserEditorOpenDelegate(
       switch (request.disposition) {
         case 'current': {
           const { activeTab, activeTabId } = model.getSnapshot();
-          if (!activeTab || isEditorDraftTabInput(activeTab)) {
+          if (!activeTab || isEditorDraftTabInput(activeTab) || activeTab.kind !== 'browser') {
             return createUnhandledEditorOpenResult();
           }
 
-          const resolved = resolveBrowserEditor(request.resource, request.options);
-          const resolvedUrl = resolved.viewState?.url?.trim();
+          const resolvedUrl = request.options?.viewState?.url?.trim();
           if (!resolvedUrl) {
             return createUnhandledEditorOpenResult();
           }
 
-          model.updateActiveContentTabUrl(resolvedUrl, request.options);
+          const resolved = editorResolverService.resolveEditor({
+            resource: BrowserViewUri.forId(activeTab.id),
+            options: {
+              viewState: {
+                url: activeTab.url,
+                title: activeTab.title,
+                favicon: activeTab.faviconUrl,
+              },
+            },
+          });
+          if (!(resolved?.editor instanceof BrowserEditorInput)) {
+            throw new Error(`Active Browser tab '${activeTab.id}' did not resolve to a BrowserEditorInput.`);
+          }
+          resolved.editor.navigate(resolvedUrl);
           return {
             handled: true,
             activeTabId,

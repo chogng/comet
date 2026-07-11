@@ -65,9 +65,8 @@ implements EditorModeToolbarContribution {
     this.addressInput.inputElement.setAttribute('spellcheck', 'false');
     this.addressInput.inputElement.addEventListener('keydown', this.handleAddressInputKeyDown);
     this.addressInput.inputElement.addEventListener('blur', this.handleAddressInputBlur);
-    this.addressInput.onDidChange((value) => {
+    this.addressInput.onDidChange(() => {
       this.isAddressInputEdited = true;
-      this.context.onAddressInputChange(value);
     });
     this.toolbarRow.append(this.leadingHost, this.addressHost, this.trailingHost);
     this.element.append(this.toolbarRow);

@@ -115,26 +115,16 @@ function waitForNextTask() {
 
 function withBrowserToolbarActions(
   props: EditorPartBaseProps,
-  options: {
-    onNavigateToUrl?: (url: string) => void;
-  } = {},
 ): EditorPartProps {
   return {
     ...dropdownServices,
     ...props,
     onOpenAddressBarSourceMenu: () => {},
-    onToolbarNavigateBack: () => {},
-    onToolbarNavigateForward: () => {},
-    onToolbarNavigateRefresh: () => {},
     onToolbarArchiveCurrentPage: () => {},
-    onToolbarHardReload: () => {},
     onToolbarCopyCurrentUrl: () => {},
     onToolbarClearBrowsingHistory: () => {},
     onToolbarClearCookies: () => {},
     onToolbarClearCache: () => {},
-    onToolbarAddressChange: () => {},
-    onToolbarAddressSubmit: () => {},
-    onToolbarNavigateToUrl: options.onNavigateToUrl ?? (() => {}),
   };
 }
 
@@ -146,8 +136,6 @@ test('EditorPartController creates a new browser tab as an empty about:blank tab
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: 'https://example.com/articles/current',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -174,8 +162,6 @@ test('EditorPartController keeps browser tab creation empty even without an avai
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -202,8 +188,6 @@ test('EditorPartController opens the browser pane as an empty about:blank tab', 
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: 'https://example.com/articles/current',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -230,8 +214,6 @@ test('EditorPartController creates a draft tab from the empty workspace', async 
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -258,8 +240,6 @@ test('EditorPartController creates a new draft tab when the reusable draft is di
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -291,8 +271,6 @@ test('EditorPartController reuses an existing empty browser tab for explicit bro
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -323,8 +301,6 @@ test('EditorPartController opens the pdf pane as an empty tab without prompting 
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: 'https://example.com/articles/current',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -352,8 +328,6 @@ test('EditorPartController returns to the empty workspace after closing the last
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -389,8 +363,6 @@ test('EditorPartController opens a browser favorite in a new tab without reusing
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -437,8 +409,6 @@ test('EditorPartController opens a browser URL in a new tab', async () => {
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),
@@ -479,8 +449,6 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
   const navigateCalls: string[] = [];
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: favoriteUrl,
-    webUrl: favoriteUrl,
     viewPartProps: {
       ...defaultViewPartProps,
       browserUrl: favoriteUrl,
@@ -506,20 +474,10 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
   });
   const view = createEditorPartView(withBrowserToolbarActions(
     controller.getSnapshot().editorPartProps,
-    {
-      onNavigateToUrl: (url) => {
-        navigateCalls.push(url);
-      },
-    },
   ));
   const unsubscribe = controller.subscribe(() => {
     view.setProps(withBrowserToolbarActions(
       controller.getSnapshot().editorPartProps,
-      {
-        onNavigateToUrl: (url) => {
-          navigateCalls.push(url);
-        },
-      },
     ));
   });
   document.body.append(view.getElement());
@@ -585,8 +543,6 @@ test('EditorPartController serializes close requests while unsaved confirm is op
   const { EditorPartController } = await import('cs/workbench/browser/parts/editor/editorPart');
   const controller = new EditorPartController({
     ui: en,
-    browserUrl: '',
-    webUrl: '',
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
     dialogService: createDialogService(),

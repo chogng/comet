@@ -30,6 +30,7 @@ import { PdfEditorPane } from 'cs/workbench/browser/parts/editor/panes/pdfEditor
 import type { PdfEditorPaneProps } from 'cs/workbench/browser/parts/editor/panes/pdfEditorPane';
 import { toDisposable } from 'cs/base/common/lifecycle';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 
 export type EditorPaneResolverContext = DropdownContextServices & {
   labels: EditorPartLabels;
@@ -44,6 +45,7 @@ export type EditorPaneResolverContext = DropdownContextServices & {
     tabId: string,
     status: PdfReaderRuntimeStatus,
   ) => void;
+  onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
 };
 
 export type EditorPaneId = SupportedEditorPaneMode;

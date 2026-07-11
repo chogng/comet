@@ -25,8 +25,6 @@ type EditorModeToolbarSourceProps = {
   onToolbarClearBrowsingHistory: () => void;
   onToolbarClearCookies: () => void | Promise<void>;
   onToolbarClearCache: () => void | Promise<void>;
-  onToolbarAddressChange: (value: string) => void;
-  onToolbarAddressSubmit: () => void;
   onToolbarNavigateToUrl: (url: string) => void;
   onPdfHighlightSelection?: () => void;
   onPdfNoteSelection?: () => void;
@@ -151,8 +149,6 @@ export function createEditorModeToolbarContext(
     onClearBrowsingHistory: props.onToolbarClearBrowsingHistory,
     onClearCookies: props.onToolbarClearCookies,
     onClearCache: props.onToolbarClearCache,
-    onAddressInputChange: props.onToolbarAddressChange,
-    onAddressInputSubmit: props.onToolbarAddressSubmit,
     onNavigateToUrl: props.onToolbarNavigateToUrl,
     onPdfHighlightSelection: props.onPdfHighlightSelection ?? (() => {}),
     onPdfNoteSelection: props.onPdfNoteSelection ?? (() => {}),

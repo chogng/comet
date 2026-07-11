@@ -21,6 +21,7 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
 import 'cs/workbench/browser/parts/editor/media/browserHistoryAndFavoritesPanel.css';
@@ -82,19 +83,12 @@ export type EditorPartLabels = {
 
 export type EditorPartBrowserToolbarActions = {
   onOpenAddressBarSourceMenu: () => void;
-  onToolbarNavigateBack: () => void;
-  onToolbarNavigateForward: () => void;
-  onToolbarNavigateRefresh: () => void;
   onToolbarArchiveCurrentPage: () => void | Promise<void>;
   onToolbarExportDocx?: () => void | Promise<void>;
-  onToolbarHardReload: () => void;
   onToolbarCopyCurrentUrl: () => void | Promise<void>;
   onToolbarClearBrowsingHistory: () => void;
   onToolbarClearCookies: () => void | Promise<void>;
   onToolbarClearCache: () => void | Promise<void>;
-  onToolbarAddressChange: (value: string) => void;
-  onToolbarAddressSubmit: () => void;
-  onToolbarNavigateToUrl: (url: string) => void;
 };
 
 export type EditorPartBaseProps = {
@@ -120,6 +114,7 @@ export type EditorPartBaseProps = {
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
+  onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
   showTitlebarActions?: boolean;

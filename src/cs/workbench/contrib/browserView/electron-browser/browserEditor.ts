@@ -22,6 +22,10 @@ import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPaneLayout } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorWorkspaceBrowserTab } from 'cs/workbench/browser/parts/editor/editorModel';
+import type {
+	BrowserEditorPaneState,
+	IBrowserEditorPane,
+} from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
@@ -133,6 +137,7 @@ export type BrowserEditorProps = {
 	labels: EditorPartLabels;
 	browserTab: EditorWorkspaceBrowserTab;
 	nativeHost: INativeHostService;
+	onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
 };
 
 export abstract class BrowserEditorContribution extends Disposable {
@@ -180,7 +185,7 @@ export abstract class BrowserEditorContribution extends Disposable {
 export class BrowserEditor extends EditorPane<
 	BrowserEditorProps,
 	BrowserEditorViewState
-> {
+> implements IBrowserEditorPane {
 	private historyFeature: BrowserHistoryPanelFeature | undefined;
 	private favoritesFeature: BrowserFavoritesPanelFeature | undefined;
 	private static readonly contributions: BrowserEditorContributionCtor[] = [];
@@ -318,6 +323,23 @@ export class BrowserEditor extends EditorPane<
 			}
 		}
 		this.ensureBrowserFocus();
+	}
+
+	async navigate(url: string): Promise<void> {
+		const model = await this.resolveCurrentModel();
+		await model.loadURL(url, { source: 'urlInput' });
+	}
+
+	async goBack(): Promise<void> {
+		await (await this.resolveCurrentModel()).goBack();
+	}
+
+	async goForward(): Promise<void> {
+		await (await this.resolveCurrentModel()).goForward();
+	}
+
+	async reload(hard?: boolean): Promise<void> {
+		await (await this.resolveCurrentModel()).reload(hard);
 	}
 
 	override layout(_dimension?: EditorPaneLayout) {
@@ -555,10 +577,14 @@ export class BrowserEditor extends EditorPane<
 		this.inputDisposables.add(model.onDidNavigate(() => {
 			this.hasUrlContext.set(!!model.url);
 			this.ensureBrowserFocus();
+			this.emitBrowserState(model);
 		}));
 		this.inputDisposables.add(model.onDidChangeLoadingState(() => {
 			this.hasErrorContext.set(!!model.error);
+			this.emitBrowserState(model);
 		}));
+		this.inputDisposables.add(model.onDidChangeTitle(() => this.emitBrowserState(model)));
+		this.inputDisposables.add(model.onDidChangeFavicon(() => this.emitBrowserState(model)));
 		this.inputDisposables.add(model.onDidChangeFocus(({ focused }) => {
 			if (focused) {
 				this._onDidFocus.fire();
@@ -572,7 +598,30 @@ export class BrowserEditor extends EditorPane<
 			}
 		}));
 
+		queueMicrotask(() => {
+			if (this._model === model) {
+				this.emitBrowserState(model);
+			}
+		});
 		this.layout();
+	}
+
+	private async resolveCurrentModel(): Promise<IBrowserViewModel> {
+		const input = this._input;
+		if (!input) {
+			throw new Error('Browser editor has no input.');
+		}
+		return input.resolve();
+	}
+
+	private emitBrowserState(model: IBrowserViewModel): void {
+		this.props.onDidChangeBrowserState({
+			tabId: this.props.browserTab.id,
+			url: model.url,
+			title: model.title,
+			favicon: model.favicon,
+			loading: model.loading,
+		});
 	}
 
 	private setModel(model: IBrowserViewModel | undefined, isNew: boolean) {

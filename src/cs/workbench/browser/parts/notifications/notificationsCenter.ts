@@ -97,6 +97,9 @@ export class NotificationsCenter extends Disposable {
 			return;
 		}
 
+		if (this.visible) {
+			this.hide();
+		}
 		this.disposed = true;
 		this.element.remove();
 		super.dispose();

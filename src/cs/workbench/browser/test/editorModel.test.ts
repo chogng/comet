@@ -571,7 +571,13 @@ test('editor model can close other tabs, rename a tab, preserve a custom title, 
     assert.equal(snapshot.mruTabIds[0], 'browser-a');
 
     model.renameTab('browser-a', 'Pinned Article');
-    model.updateActiveContentTabUrl('https://example.com/next');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/next',
+      title: 'Pinned Article',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
 
     assert.equal(snapshot.tabs[0]?.title, 'Pinned Article');
@@ -778,20 +784,44 @@ test('editor model updates active browser tab title from page title without over
   });
 
   try {
-    model.updateActiveBrowserTabPageTitle('Article Title');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/article',
+      title: 'Article Title',
+      favicon: undefined,
+      loading: false,
+    });
     let snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'Article Title');
 
-    model.updateActiveContentTabUrl('https://example.com/next');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/next',
+      title: 'Article Title',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'Article Title');
 
-    model.updateActiveBrowserTabPageTitle('Article Title v2');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/next',
+      title: 'Article Title v2',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'Article Title v2');
 
     model.renameTab('browser-a', 'Pinned Article');
-    model.updateActiveBrowserTabPageTitle('Should Not Override');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/next',
+      title: 'Should Not Override',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'Pinned Article');
   } finally {
@@ -821,19 +851,33 @@ test('editor model keeps browser tab title stable while web content is loading r
   });
 
   try {
-    model.updateActiveContentTabUrl('https://example.com/redirect-a', {
-      isLoading: true,
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/redirect-a',
+      title: '',
+      favicon: undefined,
+      loading: true,
     });
     let snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'example.com/start');
 
-    model.updateActiveContentTabUrl('https://example.com/redirect-b', {
-      isLoading: true,
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/redirect-b',
+      title: '',
+      favicon: undefined,
+      loading: true,
     });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'example.com/start');
 
-    model.updateActiveContentTabUrl('https://example.com/final');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/final',
+      title: '',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'example.com/final');
   } finally {
@@ -863,19 +907,43 @@ test('editor model keeps auto-page browser title stable across chained url updat
   });
 
   try {
-    model.updateActiveBrowserTabPageTitle('Old Article Title');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/start',
+      title: 'Old Article Title',
+      favicon: undefined,
+      loading: false,
+    });
     let snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'Old Article Title');
 
-    model.updateActiveContentTabUrl('https://example.com/redirect-a');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/redirect-a',
+      title: 'Old Article Title',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'Old Article Title');
 
-    model.updateActiveContentTabUrl('https://example.com/final');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/final',
+      title: 'Old Article Title',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'Old Article Title');
 
-    model.updateActiveBrowserTabPageTitle('New Article Title');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/final',
+      title: 'New Article Title',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     assert.equal(snapshot.tabs[0]?.title, 'New Article Title');
   } finally {
@@ -905,8 +973,20 @@ test('editor model clears browser tab title for about:blank and ignores about:bl
   });
 
   try {
-    model.updateActiveBrowserTabPageTitle('Article Title');
-    model.updateActiveContentTabUrl('about:blank');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/article',
+      title: 'Article Title',
+      favicon: undefined,
+      loading: false,
+    });
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'about:blank',
+      title: 'about:blank',
+      favicon: undefined,
+      loading: false,
+    });
     let snapshot = model.getSnapshot();
 
     const activeTab = snapshot.tabs[0];
@@ -915,7 +995,13 @@ test('editor model clears browser tab title for about:blank and ignores about:bl
     assert.equal(activeTab.url, 'about:blank');
     assert.equal(activeTab.title, '');
 
-    model.updateActiveBrowserTabPageTitle('about:blank');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'about:blank',
+      title: 'about:blank',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     const nextTab = snapshot.tabs[0];
     assert(nextTab);
@@ -954,7 +1040,13 @@ test('editor model stores favicon per browser tab and resets favicon when url ch
   });
 
   try {
-    model.updateActiveBrowserTabFaviconUrl('https://example.com/a.ico');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/article-a',
+      title: 'example.com/article-a',
+      favicon: 'https://example.com/a.ico',
+      loading: false,
+    });
     let snapshot = model.getSnapshot();
     const tabA = snapshot.tabs.find((tab) => tab.id === 'browser-a');
     const tabB = snapshot.tabs.find((tab) => tab.id === 'browser-b');
@@ -964,7 +1056,13 @@ test('editor model stores favicon per browser tab and resets favicon when url ch
     assert.equal(tabB.faviconUrl ?? '', '');
 
     model.activateTab('browser-b');
-    model.updateActiveBrowserTabFaviconUrl('https://example.com/b.ico');
+    model.updateBrowserTabState({
+      tabId: 'browser-b',
+      url: 'https://example.com/article-b',
+      title: 'example.com/article-b',
+      favicon: 'https://example.com/b.ico',
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     const nextTabA = snapshot.tabs.find((tab) => tab.id === 'browser-a');
     const nextTabB = snapshot.tabs.find((tab) => tab.id === 'browser-b');
@@ -974,12 +1072,70 @@ test('editor model stores favicon per browser tab and resets favicon when url ch
     assert.equal(nextTabB.faviconUrl, 'https://example.com/b.ico');
 
     model.activateTab('browser-a');
-    model.updateActiveContentTabUrl('https://example.com/next');
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/next',
+      title: '',
+      favicon: undefined,
+      loading: false,
+    });
     snapshot = model.getSnapshot();
     const movedTabA = snapshot.tabs.find((tab) => tab.id === 'browser-a');
     assert(movedTabA && movedTabA.kind === 'browser');
     assert.equal(movedTabA.url, 'https://example.com/next');
     assert.equal(movedTabA.faviconUrl ?? '', '');
+  } finally {
+    model.dispose();
+  }
+});
+
+test('editor model applies delayed Browser editor state to its owning tab', () => {
+  const model = createEditorModel({
+    groups: [
+      {
+        groupId: DEFAULT_EDITOR_GROUP_ID,
+        tabs: [
+          {
+            id: 'browser-a',
+            kind: 'browser',
+            title: 'example.com/a',
+            url: 'https://example.com/a',
+          },
+          {
+            id: 'browser-b',
+            kind: 'browser',
+            title: 'example.com/b',
+            url: 'https://example.com/b',
+          },
+        ],
+        activeTabId: 'browser-b',
+        mruTabIds: ['browser-b', 'browser-a'],
+      },
+    ],
+    activeGroupId: DEFAULT_EDITOR_GROUP_ID,
+    viewStateEntries: [],
+  });
+
+  try {
+    model.updateBrowserTabState({
+      tabId: 'browser-a',
+      url: 'https://example.com/a/redirected',
+      title: 'Redirected A',
+      favicon: 'https://example.com/a.ico',
+      loading: false,
+    });
+
+    const snapshot = model.getSnapshot();
+    const tabA = snapshot.tabs.find((tab) => tab.id === 'browser-a');
+    const tabB = snapshot.tabs.find((tab) => tab.id === 'browser-b');
+    assert(tabA && tabA.kind === 'browser');
+    assert(tabB && tabB.kind === 'browser');
+    assert.equal(tabA.url, 'https://example.com/a/redirected');
+    assert.equal(tabA.title, 'Redirected A');
+    assert.equal(tabA.faviconUrl, 'https://example.com/a.ico');
+    assert.equal(tabB.url, 'https://example.com/b');
+    assert.equal(tabB.title, 'example.com/b');
+    assert.equal(snapshot.activeTabId, 'browser-b');
   } finally {
     model.dispose();
   }

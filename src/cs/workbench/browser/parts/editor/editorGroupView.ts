@@ -64,6 +64,11 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import {
+  isBrowserEditorPane,
+  type BrowserEditorPaneState,
+  type IBrowserEditorPane,
+} from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
@@ -90,20 +95,14 @@ export type EditorGroupViewProps = DropdownContextServices & {
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
   onOpenAddressBarSourceMenu: () => void;
-  onToolbarNavigateBack: () => void;
-  onToolbarNavigateForward: () => void;
-  onToolbarNavigateRefresh: () => void;
   onToolbarArchiveCurrentPage: () => void | Promise<void>;
   onToolbarExportDocx?: () => void | Promise<void>;
-  onToolbarHardReload: () => void;
   onToolbarCopyCurrentUrl: () => void | Promise<void>;
   onToolbarClearBrowsingHistory: () => void;
   onToolbarClearCookies: () => void | Promise<void>;
   onToolbarClearCache: () => void | Promise<void>;
-  onToolbarAddressChange: (value: string) => void;
-  onToolbarAddressSubmit: () => void;
-  onToolbarNavigateToUrl: (url: string) => void;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
+  onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
   showTitlebarActions?: boolean;
@@ -462,6 +461,7 @@ export class EditorGroupView {
   private activePaneViewStateKey: EditorViewStateKey | null = null;
   private activePaneKey: string | null = null;
   private readonly pendingViewStateSaveByTabId = new Map<string, Promise<void>>();
+  private readonly browserStateByTabId = new Map<string, BrowserEditorPaneState>();
   private shouldFocusBrowserPrimaryInput = false;
 
   constructor(props: EditorGroupViewProps) {
@@ -494,12 +494,7 @@ export class EditorGroupView {
       },
     );
     this.modeToolbarHost = createEditorModeToolbarHost(
-      createEditorModeToolbarContext({
-        ...props,
-        browserHistoryAndFavoritesPanel: this.browserHistoryAndFavoritesPanel,
-        onPdfHighlightSelection: this.handlePdfHighlightSelection,
-        onPdfNoteSelection: this.handlePdfNoteSelection,
-      }),
+      this.createModeToolbarContext(props),
       props,
     );
     setEditorFrameSlot(this.titlebarElement, EDITOR_FRAME_SLOTS.titlebar);
@@ -579,6 +574,7 @@ export class EditorGroupView {
       this.viewStateStore.replaceAll(props.viewStateEntries);
     }
     this.props = props;
+    this.pruneBrowserStates();
     this.controller.setContext(props);
     this.render();
   }
@@ -607,6 +603,22 @@ export class EditorGroupView {
   ) => {
     this.controller.updatePdfReaderStatus(tabId, status);
     this.props.onStatusChange?.(this.controller.getSnapshot().editorStatus);
+  };
+
+  private readonly handleBrowserStateChange = (state: BrowserEditorPaneState) => {
+    const previous = this.browserStateByTabId.get(state.tabId);
+    if (
+      previous?.url === state.url &&
+      previous.title === state.title &&
+      previous.favicon === state.favicon &&
+      previous.loading === state.loading
+    ) {
+      return;
+    }
+
+    this.browserStateByTabId.set(state.tabId, state);
+    this.props.onDidChangeBrowserState(state);
+    this.render();
   };
 
   private readonly handlePdfHighlightSelection = () => {
@@ -663,12 +675,7 @@ export class EditorGroupView {
       onToggleAgentSidebar: this.props.onToggleAgentSidebar,
     });
     this.browserHistoryAndFavoritesPanel.setContext(this.createBrowserHistoryAndFavoritesPanelContext(this.props));
-    this.modeToolbarHost.setContext(createEditorModeToolbarContext({
-      ...this.props,
-      browserHistoryAndFavoritesPanel: this.browserHistoryAndFavoritesPanel,
-      onPdfHighlightSelection: this.handlePdfHighlightSelection,
-      onPdfNoteSelection: this.handlePdfNoteSelection,
-    }));
+    this.modeToolbarHost.setContext(this.createModeToolbarContext(this.props));
     this.syncToolbarMode(group.activeTab);
     this.syncTitlebarActions(
       this.props.showTitlebarActions ? this.titlebarActionsView.getElement() : null,
@@ -749,9 +756,10 @@ const panelHost = this.contentElement.querySelector('.browser-root');
   }
 
   private createBrowserHistoryAndFavoritesPanelContext(props: EditorGroupViewProps) {
+    const viewPartProps = this.getBrowserViewPartProps(props);
     const activeBrowserMetadata = resolveActiveBrowserMetadata({
       activeTab: props.activeTab,
-      viewPartProps: props.viewPartProps,
+      viewPartProps,
     });
     const browserUrl = activeBrowserMetadata.hasActiveBrowserTab
       ? activeBrowserMetadata.browserUrl
@@ -763,7 +771,7 @@ const panelHost = this.contentElement.querySelector('.browser-root');
       ? activeBrowserMetadata.browserFaviconUrl
       : '';
     const browserIsLoading = activeBrowserMetadata.hasActiveBrowserTab
-      ? Boolean(props.viewPartProps.browserIsLoading)
+      ? Boolean(viewPartProps.browserIsLoading)
       : false;
     const browserTabTitle = activeBrowserMetadata.hasActiveBrowserTab
       ? activeBrowserMetadata.browserTabTitle
@@ -789,8 +797,40 @@ const panelHost = this.contentElement.querySelector('.browser-root');
         contextOpenInNewTab: props.labels.browserHistoryAndFavoritesPanelContextOpenInNewTab,
         contextRemoveFavorite: props.labels.browserHistoryAndFavoritesPanelContextRemoveFavorite,
       },
-      onNavigateToUrl: props.onToolbarNavigateToUrl,
+      onNavigateToUrl: this.navigateBrowserToUrl,
       onOpenEditor: props.onOpenEditor,
+    };
+  }
+
+  private createModeToolbarContext(props: EditorGroupViewProps) {
+    return createEditorModeToolbarContext({
+      ...props,
+      viewPartProps: this.getBrowserViewPartProps(props),
+      browserHistoryAndFavoritesPanel: this.browserHistoryAndFavoritesPanel,
+      onToolbarNavigateBack: this.navigateBrowserBack,
+      onToolbarNavigateForward: this.navigateBrowserForward,
+      onToolbarNavigateRefresh: this.reloadBrowser,
+      onToolbarHardReload: this.hardReloadBrowser,
+      onToolbarNavigateToUrl: this.navigateBrowserToUrl,
+      onPdfHighlightSelection: this.handlePdfHighlightSelection,
+      onPdfNoteSelection: this.handlePdfNoteSelection,
+    });
+  }
+
+  private getBrowserViewPartProps(props: EditorGroupViewProps): ViewPartProps {
+    const activeBrowserTab = props.activeTab?.kind === 'browser'
+      ? props.activeTab
+      : undefined;
+    const browserState = activeBrowserTab
+      ? this.browserStateByTabId.get(activeBrowserTab.id)
+      : undefined;
+
+    return {
+      ...props.viewPartProps,
+      browserUrl: browserState?.url ?? activeBrowserTab?.url ?? '',
+      browserPageTitle: browserState?.title ?? '',
+      browserFaviconUrl: browserState?.favicon ?? '',
+      browserIsLoading: browserState?.loading ?? false,
     };
   }
 
@@ -912,7 +952,48 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
       onDraftDocumentChange: this.props.onDraftDocumentChange,
       onDraftStatusChange: this.handleDraftStatusChange,
       onPdfReaderStatusChange: this.handlePdfReaderStatusChange,
+      onDidChangeBrowserState: this.handleBrowserStateChange,
     };
+  }
+
+  private getActiveBrowserPane(): IBrowserEditorPane {
+    if (!isBrowserEditorPane(this.activePane)) {
+      throw new Error('The active editor pane is not a Browser editor.');
+    }
+    return this.activePane;
+  }
+
+  private readonly navigateBrowserToUrl = (url: string) => {
+    void this.getActiveBrowserPane().navigate(url);
+  };
+
+  private readonly navigateBrowserBack = () => {
+    void this.getActiveBrowserPane().goBack();
+  };
+
+  private readonly navigateBrowserForward = () => {
+    void this.getActiveBrowserPane().goForward();
+  };
+
+  private readonly reloadBrowser = () => {
+    void this.getActiveBrowserPane().reload();
+  };
+
+  private readonly hardReloadBrowser = () => {
+    void this.getActiveBrowserPane().reload(true);
+  };
+
+  private pruneBrowserStates(): void {
+    const browserTabIds = new Set(
+      this.props.tabs
+        .filter(tab => tab.kind === 'browser')
+        .map(tab => tab.id),
+    );
+    for (const tabId of this.browserStateByTabId.keys()) {
+      if (!browserTabIds.has(tabId)) {
+        this.browserStateByTabId.delete(tabId);
+      }
+    }
   }
 
   private activateResolvedPane(

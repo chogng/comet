@@ -10,7 +10,7 @@ import type {
 	ElectronAPI,
 	ElectronWebContentApi,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/contrib/browserView/common/browserView';
+import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 
 type TestWindow = Window & {
@@ -43,12 +43,23 @@ function createElectronApi(overrides: Partial<ElectronAPI> = {}): ElectronAPI {
 }
 
 function createWebContentApi(): ElectronWebContentApi {
+	const emptyState: WebContentState = {
+		targetId: null,
+		activeTargetId: null,
+		ownership: 'inactive',
+		layoutPhase: 'hidden',
+		url: '',
+		canGoBack: false,
+		canGoForward: false,
+		isLoading: false,
+		visible: false,
+	};
 	return {
 		activate: () => {},
 		dispose: () => {},
 		release: () => {},
-		navigate: async () => EMPTY_WEB_CONTENT_STATE,
-		getState: async () => EMPTY_WEB_CONTENT_STATE,
+		navigate: async () => emptyState,
+		getState: async () => emptyState,
 		setBounds: () => {},
 		setVisible: () => {},
 		setLayoutPhase: () => {},

@@ -17,7 +17,6 @@ import type {
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
 import type { LibraryModel, LibraryModelContext } from 'cs/workbench/browser/libraryModel';
 
-import { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
 import { Schemas } from 'cs/base/common/network';
 import {
   getWorkbenchLayoutStateSnapshot,
@@ -84,28 +83,17 @@ import { NotificationService } from 'cs/workbench/services/notification/common/n
 import {
   localeService,
 } from 'cs/workbench/services/localization/browser/localeService';
-import {
-  getWorkbenchSessionSnapshot,
-  setWorkbenchWebUrl,
-  subscribeWorkbenchSession,
-} from 'cs/workbench/browser/session';
 import { setWorkbenchEditorCommandHandlers } from 'cs/workbench/browser/editorCommands';
 import { handleWorkbenchEditorShortcut } from 'cs/workbench/browser/workbenchEditorShortcuts';
 import {
   getWindowStateSnapshot,
   subscribeWindowState,
 } from 'cs/workbench/browser/window';
-import {
-  shouldSyncActiveContentTabFromBrowserUrl,
-  shouldSyncActiveContentTabMetadataFromWebContentState,
-} from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
-import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 
 import { getLocaleMessages } from 'language/i18n';
 import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import { normalizeBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
 import {
   getLlmProviderDefinition,
@@ -116,8 +104,6 @@ import {
 } from 'cs/workbench/services/llm/registry';
 import { resolveLlmRoute } from 'cs/workbench/services/llm/routing';
 
-import { isEditorContentTabInput } from 'cs/workbench/browser/parts/editor/editorInput';
-import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writingEditorDocument';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 import { INativeHostService } from 'cs/platform/native/common/native';
@@ -164,7 +150,6 @@ type DesktopInvokeArgs = Record<string, unknown> | undefined;
 
 let settingsController: SettingsController | null = null;
 let libraryModel: LibraryModel | null = null;
-let webContentNavigationModel: WebContentNavigationModel | null = null;
 let editorPartController: EditorPartModel | null = null;
 let articleSummaryTranslationExportController: ArticleSummaryTranslationExportController | null = null;
 let documentActionsController: DocumentActionsController | null = null;
@@ -302,14 +287,6 @@ function doesAgentChatModelSupportMaxContextWindow(
   return model ? hasLlmMaxContextWindow(model) : false;
 }
 
-function isContentTab(tab: EditorWorkspaceTab) {
-  return isEditorContentTabInput(tab);
-}
-
-function toContentTabIdSet(tabs: ReadonlyArray<EditorWorkspaceTab>) {
-  return new Set(tabs.filter(isContentTab).map((tab) => tab.id));
-}
-
 function formatStableSelectionWritingContext(
   target: WritingEditorStableSelectionTarget | null,
   fallbackDraftBody: string,
@@ -355,20 +332,15 @@ class WorkbenchHost {
   private readonly notificationsDisposables = new DisposableStore();
   private workbenchLayoutView: ReturnType<typeof createSessionWorkbenchLayoutView> | null = null;
   private workbenchContentPartViews: SessionWorkbenchContentPartViews | null = null;
-  private retiredWorkbenchContentPartViews:
-    | SessionWorkbenchContentPartViews
-    | null = null;
   private readonly collapsedEditorTitlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
   private readonly sidebarFooterActionsView: SidebarFooterActionsView;
   private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
   private editorPartController: EditorPartModel | null = null;
   private readonly globalDisposables: Array<() => void> = [];
-  private webContentStateDisposable: (() => void) | null = null;
   private servicesSubscribed = false;
   private isDisposed = false;
   private isRendering = false;
   private renderPending = false;
-  private webContentRuntime = false;
   private settingsOverlayVisible = false;
   private readonly sidebarEntryConversationIds: Record<
     WorkbenchSidebarEntry,
@@ -377,15 +349,6 @@ class WorkbenchHost {
     home: null,
     code: null,
   };
-  private previousBrowserUrl = '';
-  private previousActiveContentTabId: string | null = null;
-  private previousContentTargetId: string | null | undefined;
-  private previousContentTargetUrl: string | undefined;
-  private previousContentTabIds = new Set<string>();
-  private readonly pendingContentTargetReleaseModes = new Map<
-    string,
-    'soft' | 'dispose'
-  >();
   private appliedKnowledgeBaseModeEnabled: boolean | null = null;
   private hasAppliedStartupLayoutPreference = false;
   private appliedBrowserSettings: {
@@ -477,7 +440,6 @@ class WorkbenchHost {
     window.addEventListener('keydown', this.handleWindowKeydown);
     this.globalDisposables.push(
       localeService.subscribe(this.requestRender),
-      subscribeWorkbenchSession(this.requestRender),
       subscribeWorkbenchLayoutState(this.requestRender),
       subscribeWindowState(this.requestRender),
       editorDraftStyleService.subscribe(this.requestRender),
@@ -493,8 +455,6 @@ class WorkbenchHost {
     }
 
     this.isDisposed = true;
-    this.webContentStateDisposable?.();
-    this.webContentStateDisposable = null;
     window.removeEventListener('keydown', this.handleWindowKeydown);
     while (this.globalDisposables.length > 0) {
       this.globalDisposables.pop()?.();
@@ -508,7 +468,6 @@ class WorkbenchHost {
     this.workbenchLayoutView = null;
     this.workbenchContentPartViews?.dispose();
     this.workbenchContentPartViews = null;
-    this.retiredWorkbenchContentPartViews = null;
     this.collapsedEditorTitlebarActionsView.dispose();
     this.sidebarFooterActionsView.dispose();
     this.settingsView?.dispose();
@@ -535,45 +494,6 @@ class WorkbenchHost {
     this.notificationsDisposables.add(
       new NotificationsAlerts(this.containerElement, this.notificationService.model),
     );
-  }
-
-  private releaseContentTarget(
-    webContentNavigationModel: WebContentNavigationModel,
-    targetId: string | null,
-    mode: 'soft' | 'dispose' = 'soft',
-  ) {
-    if (!targetId) {
-      return;
-    }
-
-    const pendingMode = this.pendingContentTargetReleaseModes.get(targetId);
-    if (pendingMode) {
-      if (pendingMode === 'soft' && mode === 'dispose') {
-        this.pendingContentTargetReleaseModes.set(targetId, 'dispose');
-      }
-      return;
-    }
-
-    this.pendingContentTargetReleaseModes.set(targetId, mode);
-    const pendingViewStateSave =
-      (
-        this.workbenchContentPartViews ?? this.retiredWorkbenchContentPartViews
-      )?.whenEditorTabViewStateSettled(targetId) ?? Promise.resolve();
-
-    void pendingViewStateSave.finally(() => {
-      const resolvedMode = this.pendingContentTargetReleaseModes.get(targetId) ?? mode;
-      this.pendingContentTargetReleaseModes.delete(targetId);
-      if (this.previousActiveContentTabId === targetId) {
-        return;
-      }
-
-      if (resolvedMode === 'dispose') {
-        webContentNavigationModel.disposeTarget(targetId);
-        return;
-      }
-
-      webContentNavigationModel.releaseTarget(targetId);
-    });
   }
 
   private readonly requestRender = () => {
@@ -629,7 +549,6 @@ class WorkbenchHost {
   private ensureServiceSubscriptions(services: {
     settingsController: SettingsController;
     libraryModel: LibraryModel;
-    webContentNavigationModel: WebContentNavigationModel;
     editorPartController: EditorPartModel;
     chatService: IChatService;
     articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
@@ -643,7 +562,6 @@ class WorkbenchHost {
     this.globalDisposables.push(
       services.settingsController.subscribe(this.requestRender),
       services.libraryModel.subscribe(this.requestRender),
-      services.webContentNavigationModel.subscribe(this.requestRender),
       services.editorPartController.subscribe(this.handleEditorPartChange),
       services.chatService.subscribe(this.requestRender),
       services.articleSummaryTranslationExportController.subscribe(this.requestRender),
@@ -730,22 +648,6 @@ class WorkbenchHost {
     return codeConversationId;
   }
 
-  private syncWebContentRuntime(
-    webContentNavigationModelInstance: WebContentNavigationModel,
-    webContentRuntime: boolean,
-  ) {
-    if (this.webContentStateDisposable && this.webContentRuntime === webContentRuntime) {
-      return;
-    }
-
-    this.webContentStateDisposable?.();
-    this.webContentRuntime = webContentRuntime;
-    this.webContentStateDisposable = webContentNavigationModelInstance.connectWebContentState({
-      webContentRuntime,
-      setWebUrl: setWorkbenchWebUrl,
-    });
-  }
-
   private syncKnowledgeBaseLayout(isKnowledgeBaseModeEnabled: boolean) {
     if (
       this.appliedKnowledgeBaseModeEnabled === isKnowledgeBaseModeEnabled
@@ -756,122 +658,6 @@ class WorkbenchHost {
     this.appliedKnowledgeBaseModeEnabled = isKnowledgeBaseModeEnabled;
     setPrimarySidebarVisible(isKnowledgeBaseModeEnabled);
     setAgentSidebarVisible(true);
-  }
-
-  private syncWebContentSurfaceState(params: {
-    browserUrl: string;
-    browserPageTitle: string;
-    browserFaviconUrl: string;
-    webContentState: WebContentState;
-    tabs: EditorWorkspaceTab[];
-    webContentNavigationModel: WebContentNavigationModel;
-    webContentSurfaceSnapshot: WebContentSurfaceSnapshot;
-    navigateToAddressBarUrl: (nextUrl: string, showToast?: boolean) => boolean;
-    updateActiveContentTabUrl: (
-      url: string,
-      options?: {
-        isLoading?: boolean;
-      },
-    ) => void;
-    updateActiveBrowserTabPageTitle: (pageTitle: string) => void;
-    updateActiveBrowserTabFaviconUrl: (faviconUrl: string) => void;
-  }) {
-    const {
-      browserUrl,
-      browserPageTitle,
-      browserFaviconUrl,
-      webContentState,
-      tabs,
-      webContentNavigationModel,
-      webContentSurfaceSnapshot,
-      navigateToAddressBarUrl,
-      updateActiveContentTabUrl,
-      updateActiveBrowserTabPageTitle,
-      updateActiveBrowserTabFaviconUrl,
-    } = params;
-    const activeContentTabId = webContentSurfaceSnapshot.activeContentTabId;
-
-    const syncContentTarget = (targetId: string | null, targetUrl: string) => {
-      void webContentNavigationModel
-        .activateTarget(targetId, {
-          setWebUrl: setWorkbenchWebUrl,
-        })
-        .then((state) => {
-          if (
-            !targetId ||
-            !state ||
-            state.ownership !== 'active' ||
-            state.activeTargetId !== targetId ||
-            state.url ||
-            !targetUrl
-          ) {
-            return;
-          }
-
-          navigateToAddressBarUrl(targetUrl, false);
-        });
-    };
-
-    if (
-      this.previousContentTargetId !== activeContentTabId ||
-      this.previousContentTargetUrl !== webContentSurfaceSnapshot.activeContentTabUrl
-    ) {
-      syncContentTarget(
-        activeContentTabId,
-        webContentSurfaceSnapshot.activeContentTabUrl,
-      );
-      this.previousContentTargetId = activeContentTabId;
-      this.previousContentTargetUrl = webContentSurfaceSnapshot.activeContentTabUrl;
-    }
-
-    if (
-      this.previousActiveContentTabId &&
-      this.previousActiveContentTabId !== activeContentTabId
-    ) {
-      this.releaseContentTarget(
-        webContentNavigationModel,
-        this.previousActiveContentTabId,
-        'soft',
-      );
-    }
-
-    const nextContentTabIds = toContentTabIdSet(tabs);
-    for (const previousTabId of this.previousContentTabIds) {
-      if (!nextContentTabIds.has(previousTabId)) {
-        this.releaseContentTarget(
-          webContentNavigationModel,
-          previousTabId,
-          'dispose',
-        );
-      }
-    }
-    this.previousContentTabIds = nextContentTabIds;
-
-    if (
-      shouldSyncActiveContentTabFromBrowserUrl(
-        webContentSurfaceSnapshot,
-        browserUrl,
-        this.previousBrowserUrl,
-        this.previousActiveContentTabId,
-      )
-    ) {
-      updateActiveContentTabUrl(browserUrl, {
-        isLoading: webContentState.isLoading,
-      });
-    }
-
-    if (
-      shouldSyncActiveContentTabMetadataFromWebContentState(
-        webContentSurfaceSnapshot,
-        webContentState,
-      )
-    ) {
-      updateActiveBrowserTabPageTitle(browserPageTitle);
-      updateActiveBrowserTabFaviconUrl(browserFaviconUrl);
-    }
-
-    this.previousBrowserUrl = browserUrl;
-    this.previousActiveContentTabId = activeContentTabId;
   }
 
   private syncEditorCommandHandlers() {
@@ -897,53 +683,6 @@ class WorkbenchHost {
     });
   }
 
-  private syncPostRenderState(params: {
-    browserUrl: string;
-    browserPageTitle: string;
-    browserFaviconUrl: string;
-    webContentState: WebContentState;
-    editorTabs: EditorWorkspaceTab[];
-    webContentNavigationModel: WebContentNavigationModel;
-    webContentSurfaceSnapshot: WebContentSurfaceSnapshot;
-    navigateToAddressBarUrl: (nextUrl: string, showToast?: boolean) => boolean;
-    updateActiveContentTabUrl: (
-      url: string,
-      options?: {
-        isLoading?: boolean;
-      },
-    ) => void;
-    updateActiveBrowserTabPageTitle: (pageTitle: string) => void;
-    updateActiveBrowserTabFaviconUrl: (faviconUrl: string) => void;
-  }) {
-    const {
-      browserUrl,
-      browserPageTitle,
-      browserFaviconUrl,
-      webContentState,
-      editorTabs,
-      webContentNavigationModel,
-      webContentSurfaceSnapshot,
-      navigateToAddressBarUrl,
-      updateActiveContentTabUrl,
-      updateActiveBrowserTabPageTitle,
-      updateActiveBrowserTabFaviconUrl,
-    } = params;
-
-    this.syncWebContentSurfaceState({
-      browserUrl,
-      browserPageTitle,
-      browserFaviconUrl,
-      webContentState,
-      tabs: editorTabs,
-      webContentNavigationModel,
-      webContentSurfaceSnapshot,
-      navigateToAddressBarUrl,
-      updateActiveContentTabUrl,
-      updateActiveBrowserTabPageTitle,
-      updateActiveBrowserTabFaviconUrl,
-    });
-  }
-
   private renderWorkbenchContentPage(props: {
     isPrimarySidebarVisible: boolean;
     isLayoutEdgeSnappingEnabled: boolean;
@@ -958,7 +697,6 @@ class WorkbenchHost {
     collapsedEditorTitlebarActionsElement: HTMLElement;
     editorPartProps: EditorPartProps;
   }) {
-    this.retiredWorkbenchContentPartViews = null;
     this.sidebarFooterActionsView.setProps(
       props.sidebarFooterActionsProps,
     );
@@ -1079,7 +817,6 @@ class WorkbenchHost {
   private performRender() {
     const locale = localeService.getLocale();
     const ui = getLocaleMessages(locale);
-    const { webUrl } = getWorkbenchSessionSnapshot();
     const {
       isPrimarySidebarVisible,
       isAgentSidebarVisible,
@@ -1219,20 +956,11 @@ class WorkbenchHost {
       retrievalTopK,
     };
 
-    const webContentNavigationModelInstance = getWorkbenchWebContentNavigationModel(
-      nativeHost,
-      this.notificationService,
-    );
-    this.syncWebContentRuntime(webContentNavigationModelInstance, webContentRuntime);
-    const { browserUrl, webContentState } =
-      webContentNavigationModelInstance.getSnapshot();
-    const { pageTitle: browserPageTitle = '', faviconUrl: browserFaviconUrl = '' } =
-      webContentState;
     const viewPartProps = {
-      browserUrl,
-      browserPageTitle,
-      browserFaviconUrl,
-      browserIsLoading: webContentState.isLoading,
+      browserUrl: '',
+      browserPageTitle: '',
+      browserFaviconUrl: '',
+      browserIsLoading: false,
       electronRuntime,
       webContentRuntime,
       labels: {
@@ -1249,29 +977,20 @@ class WorkbenchHost {
       dialogService: this.dialogService,
       instantiationService: this.instantiationService,
       editorResolverService: this.editorResolverService,
-      browserUrl,
-      webUrl,
     });
     this.editorPartController = editorPartControllerInstance;
     const editorPartSnapshot = editorPartControllerInstance.getSnapshot();
     const {
-      tabs: editorTabs,
       activeTab: activeEditorTab,
       draftBody,
-      webContentSurfaceSnapshot,
-      updateActiveContentTabUrl,
-      updateActiveBrowserTabPageTitle,
-      updateActiveBrowserTabFaviconUrl,
       editorPartProps,
-    } = {
-      ...editorPartSnapshot,
-      updateActiveContentTabUrl:
-        editorPartControllerInstance.updateActiveContentTabUrl,
-      updateActiveBrowserTabPageTitle:
-        editorPartControllerInstance.updateActiveBrowserTabPageTitle,
-      updateActiveBrowserTabFaviconUrl:
-        editorPartControllerInstance.updateActiveBrowserTabFaviconUrl,
-    };
+    } = editorPartSnapshot;
+    const browserUrl = activeEditorTab?.kind === 'browser'
+      ? activeEditorTab.url
+      : '';
+    const browserPageTitle = activeEditorTab?.kind === 'browser'
+      ? activeEditorTab.title
+      : '';
     const handleOpenEditor: EditorPartProps['onOpenEditor'] = request => {
       if (isEditorCollapsed) {
         setEditorCollapsed(false, expandedEditorSize);
@@ -1321,18 +1040,6 @@ class WorkbenchHost {
           }
         : null;
 
-    const navigateToAddressBarUrl = (
-      nextUrl: string,
-      showToast: boolean = true,
-    ) =>
-      webContentNavigationModelInstance.navigateToAddressBarUrl({
-        nextUrl,
-        showToast,
-        electronRuntime,
-        webContentRuntime,
-        ui,
-        setWebUrl: setWorkbenchWebUrl,
-      });
     this.openerService.setDefaultExternalOpener({
       openExternal: async (href, { sourceUri }) => {
         if (sourceUri.scheme !== Schemas.http && sourceUri.scheme !== Schemas.https) {
@@ -1409,25 +1116,14 @@ class WorkbenchHost {
     const editorBrowserToolbarActions = createEditorBrowserToolbarActions({
       browserUrl,
       browserPageTitle,
-      electronRuntime,
-      webContentRuntime,
       invokeDesktop,
       notificationService: this.notificationService,
       knowledgeBaseEnabled,
-      setWebUrl: setWorkbenchWebUrl,
       ui,
-      webContentNavigationModel: webContentNavigationModelInstance,
       onLibraryUpdated: refreshLibrary,
       onOpenAddressBarSourceMenu: focusWorkbenchWebUrlInput,
       onToolbarExportDocx: () => {
         void documentActionsControllerInstance.handleExportDocx();
-      },
-      onToolbarAddressSubmit: () => {
-        const { webUrl: latestWebUrl } = getWorkbenchSessionSnapshot();
-        navigateToAddressBarUrl(latestWebUrl, true);
-      },
-      onToolbarNavigateToUrl: (url) => {
-        navigateToAddressBarUrl(url, true);
       },
     });
     const contentAwareEditorPartProps: EditorPartProps = {
@@ -1486,8 +1182,6 @@ class WorkbenchHost {
         dialogService: this.dialogService,
         instantiationService: this.instantiationService,
         editorResolverService: this.editorResolverService,
-        browserUrl,
-        webUrl,
       },
       chatService: chatServiceInstance,
       chatContext: {
@@ -1547,7 +1241,6 @@ class WorkbenchHost {
     this.ensureServiceSubscriptions({
       settingsController: settingsControllerInstance,
       libraryModel: libraryModelInstance,
-      webContentNavigationModel: webContentNavigationModelInstance,
       editorPartController: editorPartControllerInstance,
       chatService: chatServiceInstance,
       articleSummaryTranslationExportController:
@@ -1895,20 +1588,6 @@ class WorkbenchHost {
       leadingActions: titlebarLeadingActionsProps,
     });
 
-    this.syncPostRenderState({
-      browserUrl,
-      browserPageTitle,
-      browserFaviconUrl,
-      webContentState,
-      editorTabs,
-      webContentNavigationModel: webContentNavigationModelInstance,
-      webContentSurfaceSnapshot,
-      navigateToAddressBarUrl,
-      updateActiveContentTabUrl,
-      updateActiveBrowserTabPageTitle,
-      updateActiveBrowserTabFaviconUrl,
-    });
-
     this.lifecycleService.setPhase(LifecyclePhase.Restored);
 
   }
@@ -1930,7 +1609,6 @@ export function disposeWorkbenchServices() {
   documentActionsController?.dispose();
   documentActionsController = null;
 
-  webContentNavigationModel = null;
 }
 
 export function getWorkbenchSettingsController(
@@ -1949,17 +1627,6 @@ export function getWorkbenchLibraryModel(context: LibraryModelContext) {
     libraryModel.start();
   }
   return libraryModel;
-}
-
-export function getWorkbenchWebContentNavigationModel(
-  nativeHost: INativeHostService,
-  notificationService: INotificationService,
-) {
-  webContentNavigationModel ??= new WebContentNavigationModel(
-    nativeHost,
-    notificationService,
-  );
-  return webContentNavigationModel;
 }
 
 export function getWorkbenchEditorPartController(

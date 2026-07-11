@@ -45,6 +45,7 @@ import type {
   SerializedEditorViewStateEntry,
 } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
 import { getEditorContentTabTitle } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
+import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 
 export type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 
@@ -685,10 +686,6 @@ export function toEditorWorkspaceTabInput(tab: EditorWorkspaceTab): EditorTabInp
   return toEditorTabInput(tab);
 }
 
-function hasDerivedContentTabTitle(tab: EditorWorkspaceContentTab) {
-  return tab.title.trim() === getEditorContentTabTitle(tab.url);
-}
-
 function inferBrowserTabTitleSource(
   tab: EditorWorkspaceBrowserTab,
 ): BrowserTabTitleSource {
@@ -1107,179 +1104,78 @@ export class EditorModel {
     );
   };
 
-  readonly updateActiveContentTabUrl = (
-    url: string,
-    options: {
-      isLoading?: boolean;
-    } = {},
-  ) => {
-    const normalizedUrl = url.trim();
-    const isLoading = Boolean(options.isLoading);
-    const activeGroup = resolveActiveGroup(this.workspaceState);
-    const activeTab = resolveActiveTab(activeGroup);
-    if (!activeTab || isEditorDraftTabInput(activeTab)) {
-      return;
-    }
-
-    const nextTitle = isEditorBrowserTabInput(activeTab)
-      ? (() => {
-          const metadata = this.getBrowserTabMetadata(activeTab);
-          const nextTitleSource: BrowserTabTitleSource =
-            normalizedUrl === EMPTY_BROWSER_TAB_URL
-              ? 'empty'
-              : metadata.titleSource === 'custom'
-                ? 'custom'
-                : 'auto-url';
-          const nextTab = {
-            ...activeTab,
-            url: normalizedUrl,
-          } as EditorWorkspaceBrowserTab;
-          // Prevent label jitter while native webview navigates/redirects: keep the
-          // current tab title until loading settles or a new page-title arrives.
-          const shouldKeepCurrentTitleDuringNavigation =
-            nextTitleSource === 'auto-url' &&
-            Boolean(activeTab.title.trim()) &&
-            (metadata.titleSource === 'auto-page' || isLoading);
-          const nextMetadataTitleSource = shouldKeepCurrentTitleDuringNavigation
-            ? metadata.titleSource
-            : nextTitleSource;
-          const resolvedTitle = shouldKeepCurrentTitleDuringNavigation
-            ? activeTab.title
-            : resolveBrowserTabTitleFromSource(nextTab, nextTitleSource);
-
-          this.browserTabMetadataById.set(activeTab.id, {
-            // Keep the prior source while we're intentionally pinning the visible
-            // title, so chained URL updates don't bounce the tab label.
-            titleSource: nextMetadataTitleSource,
-            lastPageTitle: shouldKeepCurrentTitleDuringNavigation
-              ? sanitizeBrowserTabPageTitle(activeTab.title, normalizedUrl)
-              : '',
-          });
-          return resolvedTitle;
-        })()
-      : hasDerivedContentTabTitle(activeTab)
-        ? getEditorContentTabTitle(normalizedUrl)
-        : activeTab.title;
-    const hasFaviconToReset =
-      isEditorBrowserTabInput(activeTab) &&
-      activeTab.url !== normalizedUrl &&
-      Boolean(sanitizeBrowserTabFaviconUrl(activeTab.faviconUrl));
-    if (
-      activeTab.url === normalizedUrl &&
-      activeTab.title === nextTitle &&
-      !hasFaviconToReset
-    ) {
-      return;
-    }
-
-    this.updateActiveGroupState((group) => ({
-      ...group,
-      tabs: group.tabs.map((tab) =>
-        // When the shared web content view navigates while a content tab owns it, update that tab's
-        // input so the tab title/url stay consistent with the visible editor content.
-        tab.id === group.activeTabId && !isEditorDraftTabInput(tab)
-          ? isEditorBrowserTabInput(tab)
-            ? (() => {
-                const nextBrowserTab: EditorWorkspaceBrowserTab = {
-                  ...tab,
-                  url: normalizedUrl,
-                  title: nextTitle,
-                };
-                if (tab.url === normalizedUrl) {
-                  return nextBrowserTab;
-                }
-                const { faviconUrl: _ignoredFavicon, ...tabWithoutFavicon } =
-                  nextBrowserTab;
-                return tabWithoutFavicon;
-              })()
-            : {
-                ...tab,
-                url: normalizedUrl,
-                title: nextTitle,
-              }
-          : tab,
-      ),
-    }));
-  };
-
-  readonly updateActiveBrowserTabPageTitle = (pageTitle: string) => {
-    const activeGroup = resolveActiveGroup(this.workspaceState);
-    const activeTab = resolveActiveTab(activeGroup);
-    if (!activeTab || !isEditorBrowserTabInput(activeTab)) {
-      return;
-    }
-
-    const normalizedPageTitle = sanitizeBrowserTabPageTitle(
-      pageTitle,
-      activeTab.url,
+  readonly updateBrowserTabState = (state: BrowserEditorPaneState) => {
+    const targetGroup = this.workspaceState.groups.find((group) =>
+      group.tabs.some((tab) => tab.id === state.tabId),
     );
-    if (!normalizedPageTitle) {
+    const targetTab = targetGroup?.tabs.find((tab) => tab.id === state.tabId);
+    if (!targetGroup || !targetTab || !isEditorBrowserTabInput(targetTab)) {
       return;
     }
 
-    const metadata = this.getBrowserTabMetadata(activeTab);
-    if (metadata.titleSource === 'custom') {
-      return;
-    }
+    const normalizedUrl = state.url.trim();
+    const metadata = this.getBrowserTabMetadata(targetTab);
+    const nextTitleSource: BrowserTabTitleSource =
+      normalizedUrl === EMPTY_BROWSER_TAB_URL
+        ? 'empty'
+        : metadata.titleSource === 'custom'
+          ? 'custom'
+          : 'auto-url';
+    const shouldKeepCurrentTitleDuringNavigation =
+      nextTitleSource === 'auto-url' &&
+      Boolean(targetTab.title.trim()) &&
+      (metadata.titleSource === 'auto-page' || state.loading);
+    const urlTitle = shouldKeepCurrentTitleDuringNavigation
+      ? targetTab.title
+      : resolveBrowserTabTitleFromSource(
+          { ...targetTab, url: normalizedUrl },
+          nextTitleSource,
+        );
+    const normalizedPageTitle = sanitizeBrowserTabPageTitle(
+      state.title,
+      normalizedUrl,
+    );
+    const acceptsPageTitle =
+      metadata.titleSource !== 'custom' && Boolean(normalizedPageTitle);
+    const nextTitle = acceptsPageTitle ? normalizedPageTitle : urlTitle;
+    const normalizedFaviconUrl = sanitizeBrowserTabFaviconUrl(state.favicon);
 
-    if (activeTab.title.trim() === normalizedPageTitle) {
-      this.browserTabMetadataById.set(activeTab.id, {
-        titleSource: 'auto-page',
-        lastPageTitle: normalizedPageTitle,
-      });
-      return;
-    }
-
-    this.browserTabMetadataById.set(activeTab.id, {
-      titleSource: 'auto-page',
-      lastPageTitle: normalizedPageTitle,
+    this.browserTabMetadataById.set(state.tabId, {
+      titleSource: acceptsPageTitle
+        ? 'auto-page'
+        : shouldKeepCurrentTitleDuringNavigation
+          ? metadata.titleSource
+          : nextTitleSource,
+      lastPageTitle: acceptsPageTitle
+        ? normalizedPageTitle
+        : shouldKeepCurrentTitleDuringNavigation
+          ? sanitizeBrowserTabPageTitle(targetTab.title, normalizedUrl)
+          : '',
     });
-    this.updateActiveGroupState((group) => ({
-      ...group,
-      tabs: group.tabs.map((tab) =>
-        tab.id === group.activeTabId && isEditorBrowserTabInput(tab)
-          ? {
-              ...tab,
-              title: normalizedPageTitle,
-            }
-          : tab,
-      ),
-    }));
-  };
 
-  readonly updateActiveBrowserTabFaviconUrl = (faviconUrl: string) => {
-    const activeGroup = resolveActiveGroup(this.workspaceState);
-    const activeTab = resolveActiveTab(activeGroup);
-    if (!activeTab || !isEditorBrowserTabInput(activeTab)) {
-      return;
-    }
+    this.updateTargetGroupState(
+      { groupId: targetGroup.groupId, activateGroup: false },
+      (group) => ({
+        ...group,
+        tabs: group.tabs.map((tab) => {
+          if (tab.id !== state.tabId || !isEditorBrowserTabInput(tab)) {
+            return tab;
+          }
 
-    if (activeTab.url.trim() === EMPTY_BROWSER_TAB_URL) {
-      return;
-    }
-
-    const normalizedFaviconUrl = sanitizeBrowserTabFaviconUrl(faviconUrl);
-    if (!normalizedFaviconUrl) {
-      return;
-    }
-
-    if (
-      sanitizeBrowserTabFaviconUrl(activeTab.faviconUrl) === normalizedFaviconUrl
-    ) {
-      return;
-    }
-
-    this.updateActiveGroupState((group) => ({
-      ...group,
-      tabs: group.tabs.map((tab) =>
-        tab.id === group.activeTabId && isEditorBrowserTabInput(tab)
-          ? {
-              ...tab,
-              faviconUrl: normalizedFaviconUrl,
-            }
-          : tab,
-      ),
-    }));
+          const nextTab: EditorWorkspaceBrowserTab = {
+            ...tab,
+            url: normalizedUrl,
+            title: nextTitle,
+          };
+          if (normalizedUrl !== EMPTY_BROWSER_TAB_URL && normalizedFaviconUrl) {
+            nextTab.faviconUrl = normalizedFaviconUrl;
+          } else if (tab.url !== normalizedUrl) {
+            delete nextTab.faviconUrl;
+          }
+          return nextTab;
+        }),
+      }),
+    );
   };
 
   readonly renameTab = (tabId: string, title: string) => {

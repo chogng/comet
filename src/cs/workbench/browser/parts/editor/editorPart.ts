@@ -1,12 +1,5 @@
 import type { LocaleMessages } from 'language/locales';
-import {
-  isEditorBrowserTabInput,
-  toEditorTabInput,
-} from 'cs/workbench/browser/parts/editor/editorInput';
-import { generateUuid } from 'cs/base/common/uuid';
-import { createWebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
-import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
-import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { toEditorTabInput } from 'cs/workbench/browser/parts/editor/editorInput';
 
 import { createEditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { EditorModelSnapshot, EditorWorkspaceTab, WritingEditorDocument } from 'cs/workbench/browser/parts/editor/editorModel';
@@ -25,6 +18,7 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import { createEditorBrowserToolbarTitlebarLabels } from 'cs/workbench/browser/parts/titlebar/titlebarActions';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 
 export type EditorPartState = {
   ui: LocaleMessages;
@@ -52,6 +46,7 @@ export type EditorPartActions = {
   onRenameTab: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
+  onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
 };
@@ -63,8 +58,6 @@ export type EditorPartControllerContext = {
   dialogService: IDialogService;
   instantiationService: IInstantiationService;
   editorResolverService: IEditorResolverService;
-  browserUrl: string;
-  webUrl: string;
 };
 
 export type EditorPartControllerSnapshot = Pick<
@@ -77,7 +70,6 @@ export type EditorPartControllerSnapshot = Pick<
   | 'viewStateEntries'
 > & {
   draftBody: string;
-  webContentSurfaceSnapshot: WebContentSurfaceSnapshot;
   editorPartProps: EditorPartBaseProps;
 };
 
@@ -100,7 +92,6 @@ function createEditorPartStructureKey(snapshot: EditorPartControllerSnapshot) {
     dirtyDraftTabIds: [...snapshot.dirtyDraftTabIds].sort(),
     activeTabId: snapshot.activeTabId,
     activeTab: snapshot.activeTab ? toStructuralWorkspaceTab(snapshot.activeTab) : null,
-    webContentSurfaceSnapshot: snapshot.webContentSurfaceSnapshot,
   });
 }
 
@@ -127,6 +118,7 @@ export function createEditorPartProps({
     onRenameTab,
     onOpenEditor,
     onDraftDocumentChange,
+    onDidChangeBrowserState,
     onSetEditorViewState,
     onDeleteEditorViewState,
   },
@@ -244,6 +236,7 @@ export function createEditorPartProps({
     onRenameTab,
     onOpenEditor,
     onDraftDocumentChange,
+    onDidChangeBrowserState,
     onSetEditorViewState,
     onDeleteEditorViewState,
     showTitlebarActions: true,
@@ -269,8 +262,6 @@ function createEditorPartControllerSnapshot(
     viewStateEntries,
   } = editorSnapshot;
   const draftBody = editorModel.getDraftBody();
-  const webContentSurfaceSnapshot = createWebContentSurfaceSnapshot(activeTab);
-
   return {
     groupId,
     tabs,
@@ -279,7 +270,6 @@ function createEditorPartControllerSnapshot(
     activeTab,
     viewStateEntries,
     draftBody,
-    webContentSurfaceSnapshot,
     editorPartProps: createEditorPartProps({
       state: {
         ui,
@@ -308,8 +298,6 @@ function areEditorPartControllerContextsEqual(
     previous.nativeHost === next.nativeHost &&
     previous.dialogService === next.dialogService &&
     previous.instantiationService === next.instantiationService &&
-    previous.browserUrl === next.browserUrl &&
-    previous.webUrl === next.webUrl &&
     previous.viewPartProps.browserUrl === next.viewPartProps.browserUrl &&
     (previous.viewPartProps.browserPageTitle ?? '') ===
       (next.viewPartProps.browserPageTitle ?? '') &&
@@ -356,6 +344,7 @@ export class EditorPartController {
       onRenameTab: this.onRenameTab,
       onOpenEditor: this.openEditor,
       onDraftDocumentChange: this.setDraftDocument,
+      onDidChangeBrowserState: this.updateBrowserState,
       onSetEditorViewState: this.setEditorViewState,
       onDeleteEditorViewState: this.deleteEditorViewState,
     };
@@ -414,35 +403,8 @@ export class EditorPartController {
 
   readonly saveActiveDraft = () => this.editorModel.saveActiveDraft();
 
-  readonly updateActiveContentTabUrl = (
-    url: string,
-    options: {
-      isLoading?: boolean;
-    } = {},
-  ) => {
-    const { activeTab } = this.editorModel.getSnapshot();
-    this.openEditor({
-      kind: 'browser',
-      disposition: 'current',
-      resource: BrowserViewUri.forId(
-        isEditorBrowserTabInput(activeTab)
-          ? activeTab.id
-          : generateUuid(),
-      ),
-      options: {
-        viewState: {
-          url,
-        },
-        ...options,
-      },
-    });
-  };
-
-  readonly updateActiveBrowserTabPageTitle = (pageTitle: string) => {
-    this.editorModel.updateActiveBrowserTabPageTitle(pageTitle);
-  };
-  readonly updateActiveBrowserTabFaviconUrl = (faviconUrl: string) => {
-    this.editorModel.updateActiveBrowserTabFaviconUrl(faviconUrl);
+  readonly updateBrowserState = (state: BrowserEditorPaneState) => {
+    this.editorModel.updateBrowserTabState(state);
   };
 
   readonly getDraftBody = () => this.editorModel.getDraftBody();

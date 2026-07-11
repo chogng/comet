@@ -66,6 +66,7 @@ function createContentPaneProps(
 		labels: context.labels,
 		browserTab: tab,
 		nativeHost: context.nativeHost,
+		onDidChangeBrowserState: context.onDidChangeBrowserState,
 	};
 }
 

@@ -3,22 +3,13 @@ import test, { after, afterEach, before } from 'node:test';
 
 import type { LibraryDocumentSummary } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
-  ElectronAPI,
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
-import { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
-import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/contrib/browserView/common/browserView';
 import { localeService } from 'cs/workbench/services/localization/browser/localeService';
-import {
-  getWorkbenchSessionSnapshot,
-  setWorkbenchWebUrl,
-  subscribeWorkbenchSession,
-} from 'cs/workbench/browser/session';
 import {
   getWorkbenchLayoutStateSnapshot,
   getWorkbenchPartDomSnapshot,
@@ -37,7 +28,6 @@ import {
   subscribeStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
 import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
-import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import {
   getPdfDownloadStatus,
   markPdfDownloadFailed,
@@ -50,71 +40,14 @@ import { locales } from 'language/locales';
 let cleanupDomEnvironment: (() => void) | null = null;
 let originalDocumentLanguage = '';
 let originalLocale: 'zh' | 'en';
-let originalWorkbenchSession = getWorkbenchSessionSnapshot();
 let originalWorkbenchLayoutState = getWorkbenchLayoutStateSnapshot();
 let originalWorkbenchPartDomSnapshot = getWorkbenchPartDomSnapshot();
 let originalStatusbarState = getStatusbarStateSnapshot();
-
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return (
-    (typeof value === 'object' || typeof value === 'function') &&
-    value !== null &&
-    'then' in value &&
-    typeof (value as { then?: unknown }).then === 'function'
-  );
-}
-
-function createElectronApi(overrides: Partial<ElectronAPI>): ElectronAPI {
-  return {
-    invoke: (async () => {
-      throw new Error('Unexpected invoke in model subscriptions test.');
-    }) as ElectronAPI['invoke'],
-    ...overrides,
-  };
-}
-
-function withElectronApi<T>(electronAPI: ElectronAPI | undefined, run: () => T): T {
-  const testWindow = window as typeof window & {
-    electronAPI?: ElectronAPI;
-  };
-  const previousElectronApi = testWindow.electronAPI;
-  testWindow.electronAPI = electronAPI;
-
-  try {
-    const result = run();
-    if (isPromiseLike(result)) {
-      return Promise.resolve(result).finally(() => {
-        testWindow.electronAPI = previousElectronApi;
-      }) as T;
-    }
-
-    testWindow.electronAPI = previousElectronApi;
-    return result;
-  } catch (error) {
-    testWindow.electronAPI = previousElectronApi;
-    throw error;
-  }
-}
 
 function createInvokeDesktop(): ElectronInvoke {
   return (async (command: string) => {
     throw new Error(`Unexpected desktop command in model subscriptions test: ${command}`);
   }) as ElectronInvoke;
-}
-
-function createNativeHostService(
-  overrides: Partial<INativeHostService> = {},
-): INativeHostService {
-  return {
-    _serviceBrand: undefined,
-    canInvoke: () => true,
-    invoke: createInvokeDesktop(),
-    ipc: undefined,
-    windowControls: undefined,
-    webContent: undefined,
-    document: undefined,
-    ...overrides,
-  };
 }
 
 function createLibraryDocumentSummary(
@@ -141,23 +74,6 @@ function createLibraryDocumentSummary(
   };
 }
 
-function createWebContentState(
-  overrides: Partial<WebContentState> = {},
-): WebContentState {
-  return {
-    targetId: 'target-1',
-    activeTargetId: 'target-1',
-    ownership: 'active',
-    layoutPhase: 'visible',
-    url: 'https://example.com/active',
-    canGoBack: false,
-    canGoForward: false,
-    isLoading: false,
-    visible: true,
-    ...overrides,
-  };
-}
-
 function restoreWorkbenchLayoutState() {
   setPrimarySidebarVisible(originalWorkbenchLayoutState.isPrimarySidebarVisible);
   setAgentSidebarVisible(originalWorkbenchLayoutState.isAgentSidebarVisible);
@@ -178,17 +94,11 @@ function restoreWorkbenchPartDomSnapshot() {
   }
 }
 
-async function flushMicrotasks() {
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
 before(() => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   originalDocumentLanguage = document.documentElement.lang;
   originalLocale = localeService.getLocale();
-  originalWorkbenchSession = getWorkbenchSessionSnapshot();
   originalWorkbenchLayoutState = getWorkbenchLayoutStateSnapshot();
   originalWorkbenchPartDomSnapshot = getWorkbenchPartDomSnapshot();
   originalStatusbarState = getStatusbarStateSnapshot();
@@ -202,7 +112,6 @@ after(() => {
 afterEach(() => {
   localeService.applyLocale(originalLocale);
   document.documentElement.lang = originalDocumentLanguage;
-  setWorkbenchWebUrl(originalWorkbenchSession.webUrl);
   restoreWorkbenchLayoutState();
   restoreWorkbenchPartDomSnapshot();
   setStatusbarState(originalStatusbarState);
@@ -220,20 +129,6 @@ test('localeService subscriptions can be disposed independently', () => {
   localeService.applyLocale(originalLocale);
 
   assert.equal(receivedLocales.length, 1);
-});
-
-test('workbenchSession subscriptions stop after disposal', () => {
-  let notificationCount = 0;
-  const disposeListener = subscribeWorkbenchSession(() => {
-    notificationCount += 1;
-  });
-
-  setWorkbenchWebUrl('https://example.com');
-  disposeListener();
-  setWorkbenchWebUrl('');
-
-  assert.equal(notificationCount, 1);
-  assert.equal(getWorkbenchSessionSnapshot().webUrl, '');
 });
 
 test('DocumentActionsController subscriptions stop after disposal', () => {
@@ -326,105 +221,6 @@ test('LibraryModel subscriptions stop after listener disposal and model dispose'
 
   assert.deepEqual(itemCounts, [1]);
   assert.equal(model.getSnapshot().librarySnapshot.items.length, 1);
-});
-
-test('WebContentNavigationModel subscriptions stop after listener disposal', async () => {
-  let webContentStateListener: ((state: WebContentState) => void) | undefined;
-  const nativeHost = createNativeHostService({
-    webContent: {
-      activate() {},
-      async getState() {
-        return createWebContentState({
-          url: 'https://example.com/initial',
-        });
-      },
-      onStateChange(listener) {
-        webContentStateListener = listener;
-        return () => {
-          if (webContentStateListener === listener) {
-            webContentStateListener = undefined;
-          }
-        };
-      },
-    } as NonNullable<ElectronAPI['webContent']>,
-  });
-
-  await withElectronApi(createElectronApi({}), async () => {
-    const model = new WebContentNavigationModel(
-      nativeHost,
-      new NoOpNotificationService(),
-    );
-    const browserUrls: string[] = [];
-    let webUrl = '';
-    const disposeListener = model.subscribe(() => {
-      browserUrls.push(model.getSnapshot().browserUrl);
-    });
-
-    await model.activateTarget('target-1');
-    const disconnect = model.connectWebContentState({
-      webContentRuntime: true,
-      setWebUrl: (value) => {
-        webUrl = value;
-      },
-    });
-
-    await flushMicrotasks();
-    disposeListener();
-    assert(webContentStateListener);
-
-    webContentStateListener(
-      createWebContentState({
-        url: 'https://example.com/next',
-        canGoBack: true,
-      }),
-    );
-
-    assert.deepEqual(browserUrls, ['', 'https://example.com/initial']);
-    assert.equal(model.getSnapshot().browserUrl, 'https://example.com/next');
-    assert.equal(webUrl, 'https://example.com/next');
-
-    disconnect();
-  });
-});
-
-test('WebContentNavigationModel does not activate a default web content target for null tabs', async () => {
-  const activatedTargetIds: Array<string | null | undefined> = [];
-  const visibilityWrites: boolean[] = [];
-  let setWebUrlCalls = 0;
-  const nativeHost = createNativeHostService({
-    webContent: {
-      activate(targetId?: string | null) {
-        activatedTargetIds.push(targetId);
-      },
-      async getState() {
-        return createWebContentState();
-      },
-      setVisible(visible: boolean) {
-        visibilityWrites.push(visible);
-      },
-      onStateChange() {
-        return () => {};
-      },
-    } as unknown as NonNullable<ElectronAPI['webContent']>,
-  });
-
-  await withElectronApi(createElectronApi({}), async () => {
-    const model = new WebContentNavigationModel(
-      nativeHost,
-      new NoOpNotificationService(),
-    );
-
-    await model.activateTarget(null, {
-      setWebUrl: () => {
-        setWebUrlCalls += 1;
-      },
-    });
-
-    assert.deepEqual(activatedTargetIds, []);
-    assert.deepEqual(visibilityWrites, [false]);
-    assert.equal(setWebUrlCalls, 0);
-    assert.deepEqual(model.getSnapshot().webContentState, EMPTY_WEB_CONTENT_STATE);
-  });
 });
 
 test('SettingsModel subscriptions stop after disposal', () => {
