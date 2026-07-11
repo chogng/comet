@@ -17,7 +17,10 @@ The `src/cs/` core is partitioned into ordered layers — each may only import f
 4. **`workbench`** — Full VS Code workbench, panels, views, and framework
 5. **`code`** — Desktop app entry point (Electron main, shared process, CLI)
 6. **`server`** — Server app entry point for remote development
-7. **`sessions`** — Agent Sessions window (may import from `workbench` and below; `workbench` must never import from `sessions`)
+
+`sessions` is not a top-level Comet source layer. Comet ships one agent-first
+Workbench, and session support belongs to a Workbench Part, Workbench services,
+and provider contributions.
 
 ## Target Environments
 
@@ -38,6 +41,9 @@ Within each layer, code is organized by runtime environment:
 - `cs/workbench/api` — `vscode.d.ts` API provider
 - `cs/workbench/services` — core services (not contrib-specific)
 - `cs/workbench/contrib` — feature contributions
+- `cs/workbench/browser/parts/sessions` — Sessions Part presentation
+- `cs/workbench/services/sessions` — provider-agnostic session contracts and services
+- `cs/workbench/contrib/sessionProviders` — backend-specific session providers
 
 ### Contribution Rules
 
