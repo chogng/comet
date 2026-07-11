@@ -32,7 +32,8 @@ import { ILogService } from 'cs/platform/log/common/log';
 import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
 import { IThemeService } from 'cs/platform/theme/common/themeService';
 import { ITunnelProxyInfo } from 'cs/platform/tunnel/common/tunnelProxy';
-import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
+import { BrowserEditorInput, BrowserEditorSerializer } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
+import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import {
 	BrowserViewModel,
 	IBrowserEditorViewState,
@@ -86,6 +87,10 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		@IStorageService private readonly storageService: IStorageService,
 	) {
 		super();
+		this._register(editorInputSerializerRegistry.register(
+			BrowserEditorInput.ID,
+			new BrowserEditorSerializer(this),
+		));
 		this.browserHistory = this._register(new BrowserHistoryStore(
 			this.configurationService.getValue<number>(BrowserMaxHistoryEntriesSettingId),
 		));

@@ -13,7 +13,7 @@ import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestU
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import type { DocumentActionsControllerContext } from 'cs/workbench/browser/documentActionsModel';
-import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { IUntypedEditorInput } from 'cs/workbench/common/editor';
 import type { ArticleDetail, ArticleId, ArticleRecord, IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
@@ -107,7 +107,7 @@ function createDocumentActionsContext(
 
 test('DocumentActionsController opens an ArticleId in a browser tab', async () => {
 	const articleId = 'article.open';
-	const openRequests: EditorOpenRequest[] = [];
+	const openRequests: IUntypedEditorInput[] = [];
 	const controller = createDocumentActionsController(
 		createDocumentActionsContext({ onOpenEditor: request => { openRequests.push(request); } }),
 		createFetchService([createArticleDetail(articleId, {
@@ -120,10 +120,8 @@ test('DocumentActionsController opens an ArticleId in a browser tab', async () =
 
 	assert.equal(openRequests.length, 1);
 	const [request] = openRequests;
-	assert.equal(request?.kind, 'browser');
-	assert.equal(request?.disposition, 'reveal-or-open');
 	assert.equal(request?.options?.viewState?.url, 'https://www.nature.com/articles/example');
-	assert.ok(request?.resource && BrowserViewUri.getId(request.resource));
+	assert.ok(request && 'resource' in request && request.resource && BrowserViewUri.getId(request.resource));
 });
 
 test('DocumentActionsController delegates checked ArticleIds to DOCX export', async () => {

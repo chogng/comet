@@ -1,12 +1,12 @@
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import { getEditorPaneMode, isEditorBrowserTabInput } from 'cs/workbench/browser/parts/editor/editorInput';
-import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import type { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import type { EditorModeToolbarContributionContext } from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
-import { getEditorContentTabTitle } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
+import { Verbosity } from 'cs/workbench/common/editor';
 
 type EditorModeToolbarSourceProps = {
-  activeTab: EditorWorkspaceTab | null;
+  activeTab: EditorInput | null;
+  activePaneId: string | null;
   labels: EditorPartLabels;
   viewPartProps: {
     browserUrl: string;
@@ -46,7 +46,7 @@ function normalizeBrowserMetadataValue(value: unknown) {
 }
 
 export function resolveActiveBrowserMetadata(
-  props: Pick<EditorModeToolbarSourceProps, 'activeTab' | 'viewPartProps'>,
+  props: Pick<EditorModeToolbarSourceProps, 'activeTab' | 'activePaneId' | 'viewPartProps'>,
 ): ResolvedActiveBrowserMetadata {
   const viewPartBrowserUrl = normalizeBrowserMetadataValue(props.viewPartProps.browserUrl);
   const viewPartBrowserPageTitle = normalizeBrowserMetadataValue(
@@ -56,7 +56,7 @@ export function resolveActiveBrowserMetadata(
     props.viewPartProps.browserFaviconUrl,
   );
 
-  if (!isEditorBrowserTabInput(props.activeTab)) {
+  if (!props.activeTab || props.activePaneId !== 'browser') {
     return {
       browserUrl: viewPartBrowserUrl,
       browserPageTitle: viewPartBrowserPageTitle,
@@ -66,14 +66,16 @@ export function resolveActiveBrowserMetadata(
     };
   }
 
-  const activeTabBrowserUrl = normalizeBrowserMetadataValue(props.activeTab.url);
+  const activeTabBrowserUrl = normalizeBrowserMetadataValue(
+    props.activeTab.getDescription(Verbosity.LONG),
+  );
   const browserUrl = viewPartBrowserUrl || activeTabBrowserUrl;
-  const activeTabTitle = normalizeBrowserMetadataValue(props.activeTab.title);
+  const activeTabTitle = normalizeBrowserMetadataValue(props.activeTab.getName());
   const derivedTitle = normalizeBrowserMetadataValue(
-    getEditorContentTabTitle(browserUrl),
+    props.activeTab.getDescription(),
   );
   const activeTabFaviconUrl = normalizeBrowserMetadataValue(
-    props.activeTab.faviconUrl,
+    props.activeTab.getIcon()?.toString(),
   );
   const isViewPartUrlAligned = viewPartBrowserUrl === activeTabBrowserUrl;
   const isUsingViewPartUrl = Boolean(viewPartBrowserUrl);
@@ -98,11 +100,13 @@ export function resolveActiveBrowserMetadata(
 export function createEditorModeToolbarContext(
   props: EditorModeToolbarSourceProps,
 ): EditorModeToolbarContext {
-  const mode = props.activeTab ? getEditorPaneMode(props.activeTab) : null;
+  const mode = props.activePaneId === 'browser' || props.activePaneId === 'pdf'
+    ? props.activePaneId
+    : null;
   const activeBrowserMetadata = resolveActiveBrowserMetadata(props);
 
   return {
-    mode: mode === 'browser' || mode === 'pdf' ? mode : null,
+    mode,
     browserUrl: activeBrowserMetadata.browserUrl,
     browserPageTitle: activeBrowserMetadata.browserPageTitle,
     browserFaviconUrl: activeBrowserMetadata.browserFaviconUrl,

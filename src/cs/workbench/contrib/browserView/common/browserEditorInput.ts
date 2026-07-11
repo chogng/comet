@@ -37,20 +37,17 @@ const LOADING_SPINNER_SVG = (color: string | undefined) => `
  * Maximum length for browser page titles before truncation
  */
 const MAX_TITLE_LENGTH = 30;
+export const EMPTY_BROWSER_EDITOR_URL = 'about:blank';
+
+export function hasBrowserEditorPage(url: string | null | undefined): boolean {
+	return Boolean(url && url.trim() !== EMPTY_BROWSER_EDITOR_URL);
+}
 
 /**
  * JSON-serializable type used during browser state serialization/deserialization
  */
 export interface IBrowserEditorInputData extends IBrowserEditorViewState {
 	readonly id: string;
-}
-
-/**
- * Fired before a {@link BrowserEditorInput} is disposed. Listeners may call
- * {@link veto} to prevent disposal and keep the input and its model alive.
- */
-export interface IBeforeDisposeBrowserEditorEvent {
-	veto(): void;
 }
 
 /**
@@ -84,9 +81,6 @@ export class BrowserEditorInput extends EditorInput {
 	private _model: IBrowserViewModel | undefined;
 	private _modelPromise: Promise<IBrowserViewModel> | undefined;
 	private _modelStore = this._register(new DisposableStore());
-
-	private readonly _onBeforeDispose = this._register(new Emitter<IBeforeDisposeBrowserEditorEvent>());
-	readonly onBeforeDispose: Event<IBeforeDisposeBrowserEditorEvent> = this._onBeforeDispose.event;
 
 	private readonly _onDidResolveModel = this._register(new Emitter<IBrowserViewModel>());
 	readonly onDidResolveModel: Event<IBrowserViewModel> = this._onDidResolveModel.event;
@@ -124,7 +118,7 @@ export class BrowserEditorInput extends EditorInput {
 
 		// Auto-close editor when webcontents closes
 		this._modelStore.add(this._model.onDidClose(() => {
-			this.dispose(true);
+			this.dispose();
 		}));
 
 		// Listen for label-relevant changes to fire onDidChangeLabel
@@ -194,13 +188,16 @@ export class BrowserEditorInput extends EditorInput {
 	override async resolve(): Promise<IBrowserViewModel> {
 		if (!this._model && !this._modelPromise) {
 			this._modelPromise = (async () => {
-				this._model = await this._resolveModel();
-				this._modelPromise = undefined;
-
-				return this._model;
+				const model = await this._resolveModel();
+				this.model = model;
+				return model;
 			})();
 		}
-		return this._model || this._modelPromise!;
+		try {
+			return this._model || await this._modelPromise!;
+		} finally {
+			this._modelPromise = undefined;
+		}
 	}
 
 	override get typeId(): string {
@@ -243,6 +240,16 @@ export class BrowserEditorInput extends EditorInput {
 		const hasTitle = this._model ? !!this._model.title : !!this._initialData.title;
 		const name = hasTitle ? this.title! : this.getDescription(Verbosity.SHORT) || BrowserEditorInput.DEFAULT_LABEL;
 		return truncate(name, MAX_TITLE_LENGTH);
+	}
+
+	override rename(name: string): boolean {
+		const nextTitle = name.trim();
+		if (!nextTitle || nextTitle === this.title) {
+			return false;
+		}
+		this._initialData = { ...this._initialData, title: nextTitle };
+		this._onDidChangeLabel.fire();
+		return true;
 	}
 
 	override getTitle(verbosity = Verbosity.MEDIUM): string {
@@ -346,15 +353,7 @@ export class BrowserEditorInput extends EditorInput {
 		};
 	}
 
-	override dispose(force?: boolean): void {
-		if (!force) {
-			let vetoed = false;
-			this._onBeforeDispose.fire({ veto: () => { vetoed = true; } });
-			if (vetoed) {
-				return;
-			}
-		}
-
+	override dispose(): void {
 		super.dispose(); // Emit `onWillDispose` event first, then clean up the model.
 		if (this._model) {
 			// `toUntyped()` is called after disposal. Store the latest data in `_initialData` so we can still get them there.
@@ -380,6 +379,8 @@ export class BrowserEditorInput extends EditorInput {
 }
 
 export class BrowserEditorSerializer implements IEditorSerializer {
+	constructor(private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService) {}
+
 	canSerialize(editorInput: EditorInput): editorInput is BrowserEditorInput {
 		return editorInput instanceof BrowserEditorInput;
 	}
@@ -392,15 +393,8 @@ export class BrowserEditorSerializer implements IEditorSerializer {
 		return JSON.stringify(editorInput.serialize());
 	}
 
-	deserialize(instantiationService: IInstantiationService, serializedEditor: string): EditorInput | undefined {
-		try {
-			const data: IBrowserEditorInputData = JSON.parse(serializedEditor);
-			return instantiationService.invokeFunction((accessor) => {
-				const browserViewWorkbenchService = accessor.get(IBrowserViewWorkbenchService);
-				return browserViewWorkbenchService.getOrCreateLazy(data.id, data);
-			});
-		} catch {
-			return undefined;
-		}
+	deserialize(_instantiationService: IInstantiationService, serializedEditor: string): EditorInput | undefined {
+		const data: IBrowserEditorInputData = JSON.parse(serializedEditor);
+		return this.browserViewWorkbenchService.getOrCreateLazy(data.id, data);
 	}
 }

@@ -21,14 +21,13 @@ import { ServiceCollection } from 'cs/platform/instantiation/common/serviceColle
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPaneLayout } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { EditorWorkspaceBrowserTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import type {
 	BrowserEditorPaneState,
 	IBrowserEditorPane,
 } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
-import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import type { ThemeIcon } from 'cs/base/common/themables';
 import type { URI } from 'cs/base/common/uri';
 import type { IQuickInputButton } from 'cs/platform/quickinput/common/quickInput';
@@ -135,7 +134,6 @@ export interface IBrowserUrlPickerActionProvider {
 
 export type BrowserEditorProps = {
 	labels: EditorPartLabels;
-	browserTab: EditorWorkspaceBrowserTab;
 	nativeHost: INativeHostService;
 	onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
 };
@@ -183,7 +181,7 @@ export abstract class BrowserEditorContribution extends Disposable {
 }
 
 export class BrowserEditor extends EditorPane<
-	BrowserEditorProps,
+	BrowserEditorInput,
 	BrowserEditorViewState
 > implements IBrowserEditorPane {
 	private historyFeature: BrowserHistoryPanelFeature | undefined;
@@ -260,9 +258,9 @@ export class BrowserEditor extends EditorPane<
 	}
 
 	constructor(
+		input: BrowserEditorInput,
 		props: BrowserEditorProps,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@IBrowserViewWorkbenchService private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService,
 	) {
 		super();
 		this.props = props;
@@ -270,7 +268,7 @@ export class BrowserEditor extends EditorPane<
 		this.hasUrlContext = CONTEXT_BROWSER_HAS_URL.bindTo(this.browserContextKeyService);
 		this.hasErrorContext = CONTEXT_BROWSER_HAS_ERROR.bindTo(this.browserContextKeyService);
 		this.createEditor();
-		this.setProps(props);
+		this.setInput(input);
 	}
 
 	static registerContribution(ctor: BrowserEditorContributionCtor): void {
@@ -301,19 +299,12 @@ export class BrowserEditor extends EditorPane<
 		return this.rootElement;
 	}
 
-	override setProps(props: BrowserEditorProps) {
-		const previousTabId = this.props.browserTab.id;
-		this.props = props;
-		if (previousTabId !== props.browserTab.id) {
+	override setInput(input: BrowserEditorInput) {
+		const previousInputId = this._input?.id;
+		if (previousInputId !== input.id) {
 			this.cancelRestoreSequence();
 		}
-		this.setInput(this.browserViewWorkbenchService.getOrCreateLazy(
-			props.browserTab.id,
-			{
-				url: props.browserTab.url,
-				title: props.browserTab.title,
-			},
-		));
+		this.attachInput(input);
 	}
 
 	override focus() {
@@ -357,7 +348,7 @@ export class BrowserEditor extends EditorPane<
 
 	override async captureViewState() {
 		const capturedViewState = await captureBrowserEditorViewState(
-			this.props.browserTab.id,
+			this.getCurrentInput().id,
 			this.props.nativeHost,
 		);
 		if (capturedViewState) {
@@ -531,7 +522,7 @@ export class BrowserEditor extends EditorPane<
 		}
 	}
 
-	private setInput(input: BrowserEditorInput) {
+	private attachInput(input: BrowserEditorInput) {
 		if (this._input === input) {
 			this.layout();
 			return;
@@ -616,12 +607,19 @@ export class BrowserEditor extends EditorPane<
 
 	private emitBrowserState(model: IBrowserViewModel): void {
 		this.props.onDidChangeBrowserState({
-			tabId: this.props.browserTab.id,
+			tabId: this.getCurrentInput().resource.toString(),
 			url: model.url,
 			title: model.title,
 			favicon: model.favicon,
 			loading: model.loading,
 		});
+	}
+
+	private getCurrentInput(): BrowserEditorInput {
+		if (!this._input) {
+			throw new Error('Browser editor has no input.');
+		}
+		return this._input;
 	}
 
 	private setModel(model: IBrowserViewModel | undefined, isNew: boolean) {
@@ -641,7 +639,10 @@ export class BrowserEditor extends EditorPane<
 		}
 
 		const restoreSequence = ++this.restoreSequence;
-		this.scheduleRestoreAttempt(restoreSequence, this.props.browserTab.id, viewState, 0);
+		const input = this._input;
+		if (input) {
+			this.scheduleRestoreAttempt(restoreSequence, input.id, viewState, 0);
+		}
 	}
 
 	private scheduleRestoreAttempt(

@@ -1,8 +1,4 @@
 import type {
-  EditorWorkspaceTab,
-  WritingEditorDocument,
-} from 'cs/workbench/browser/parts/editor/editorModel';
-import type {
   EditorViewStateKey,
   SerializedEditorViewStateEntry,
 } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
@@ -16,12 +12,14 @@ import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/edit
 import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import { EditorGroupView } from 'cs/workbench/browser/parts/editor/editorGroupView';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
+import type { EditorGroup } from 'cs/workbench/browser/parts/editor/editorGroup';
+import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
 import 'cs/workbench/browser/parts/editor/media/browserHistoryAndFavoritesPanel.css';
@@ -97,11 +95,8 @@ export type EditorPartBaseProps = {
   nativeHost: INativeHostService;
   dialogService: IDialogService;
   instantiationService: IInstantiationService;
-  groupId: string;
-  tabs: EditorWorkspaceTab[];
-  dirtyDraftTabIds: readonly string[];
-  activeTabId: string | null;
-  activeTab: EditorWorkspaceTab | null;
+  group: EditorGroup;
+  commandService: IWorkbenchCommandService;
   viewStateEntries: SerializedEditorViewStateEntry[];
   onActivateTab: (tabId: string) => void;
   onReorderTab?: (
@@ -113,7 +108,6 @@ export type EditorPartBaseProps = {
   onCloseAllTabs?: () => Promise<boolean> | boolean | void;
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
-  onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;

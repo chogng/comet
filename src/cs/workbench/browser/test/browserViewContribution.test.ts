@@ -22,7 +22,7 @@ import {
 	BrowserSearchEngineSettingId,
 } from 'cs/base/parts/sandbox/common/browserSettings';
 import { configurationRegistry, ConfigurationScope } from 'cs/platform/configuration/common/configurationRegistry';
-import { IContextViewService, type IContextViewService as IContextViewServiceType } from 'cs/platform/contextview/browser/contextView';
+import { IContextMenuService, IContextViewService, type IContextMenuService as IContextMenuServiceType, type IContextViewService as IContextViewServiceType } from 'cs/platform/contextview/browser/contextView';
 import type { IContextKeyService } from 'cs/platform/contextkey/common/contextkey';
 import { contextKeyService, IContextKeyService as IContextKeyServiceDecorator } from 'cs/platform/contextkey/common/contextkey';
 import type { HoverHandle, HoverInput } from 'cs/base/browser/ui/hover/hover';
@@ -65,7 +65,9 @@ import {
 	type PreferredGroup,
 } from 'cs/workbench/services/editor/common/editorService';
 import { IChatService, type ChatServiceContext, type ChatServiceSnapshot } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import type { EditorOpenRequest } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { IUntypedEditorInput } from 'cs/workbench/common/editor';
+import { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import { URI } from 'cs/base/common/uri';
 
 const BrowserRemoteProxyEnabledSettingId = 'workbench.browser.enableRemoteProxy';
 
@@ -284,19 +286,62 @@ function createTestQuickInputService(): IQuickInputServiceType {
 }
 
 function createTestEditorService(
-	openRequests: EditorOpenRequest[],
+	openRequests: Array<EditorInput | IUntypedEditorInput>,
 ): IEditorServiceType {
 	return {
 		_serviceBrand: undefined,
-		openEditor: request => {
+		openEditor: async request => {
 			openRequests.push(request);
-			return { handled: true, activeTabId: null };
+			if (request instanceof EditorInput) {
+				return request;
+			}
+			if (!('resource' in request) || !request.resource) {
+				throw new Error('Test editor request has no resource.');
+			}
+			return new TestEditorInput(request.resource);
 		},
 		activateEditor() {},
 		closeEditor: async () => false,
 		getEditors: () => [],
 		getActiveGroupId: () => 'editor-group-main',
 	};
+}
+
+class TestEditorInput extends EditorInput {
+	constructor(readonly resource: URI) {
+		super();
+	}
+
+	get typeId(): string {
+		return 'test.editorInput';
+	}
+}
+
+function createTestBrowserEditor(
+	serviceCollection: ServiceCollection,
+	instantiationService: IInstantiationService,
+	browserViewWorkbenchService: TestBrowserViewWorkbenchService,
+	options: { id: string; title: string; url: string },
+) {
+	serviceCollection.set(IContextMenuService, {
+		_serviceBrand: undefined,
+		showContextMenu() {},
+		hideContextMenu() {},
+		isVisible: () => false,
+		onDidShowContextMenu: () => toDisposable(() => {}),
+		onDidHideContextMenu: () => toDisposable(() => {}),
+		dispose() {},
+	} as IContextMenuServiceType);
+	const input = browserViewWorkbenchService.getOrCreateLazy(options.id, options);
+	return instantiationService.createInstance(
+		BrowserEditor,
+		input,
+		{
+			labels: {},
+			nativeHost: createTestNativeHostService(),
+			onDidChangeBrowserState: () => {},
+		} as unknown as ConstructorParameters<typeof BrowserEditorType>[1],
+	);
 }
 
 type ChatContextInsert = {
@@ -665,7 +710,7 @@ test('browser contribution registers tab management actions in browser menus', (
 });
 
 test('browser tab management commands open through the editor service', async () => {
-	const openRequests: EditorOpenRequest[] = [];
+	const openRequests: Array<EditorInput | IUntypedEditorInput> = [];
 	const instantiationService = new InstantiationService(new ServiceCollection(
 		[IEditorService, createTestEditorService(openRequests)],
 	), true);
@@ -680,14 +725,12 @@ test('browser tab management commands open through the editor service', async ()
 	}
 
 	assert.equal(openRequests.length, 2);
-	assert.deepEqual(openRequests.map(request => request.kind), ['browser', 'browser']);
-	assert.deepEqual(openRequests.map(request => request.disposition), ['new-tab', 'new-tab']);
 	const firstRequest = openRequests[0];
 	const secondRequest = openRequests[1];
-	assert(firstRequest?.kind === 'browser' && firstRequest.disposition === 'new-tab');
-	assert(secondRequest?.kind === 'browser' && secondRequest.disposition === 'new-tab');
-	assert.equal(firstRequest.options.viewState.url, 'https://example.com/article');
-	assert.equal(secondRequest.options.viewState.url, 'about:blank');
+	assert(firstRequest && !(firstRequest instanceof EditorInput) && 'resource' in firstRequest && firstRequest.resource);
+	assert(secondRequest && !(secondRequest instanceof EditorInput) && 'resource' in secondRequest && secondRequest.resource);
+	assert.equal(firstRequest.options?.viewState?.url, 'https://example.com/article');
+	assert.equal(secondRequest.options?.viewState?.url, 'about:blank');
 	assert.equal(isUUID(BrowserViewUri.getId(firstRequest.resource) ?? ''), true);
 	assert.equal(isUUID(BrowserViewUri.getId(secondRequest.resource) ?? ''), true);
 });
@@ -865,16 +908,11 @@ test('browser chat actions insert console logs and screenshot context into chat'
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 	const commandServiceInstantiationService = setCommandServiceInstantiationService(instantiationService);
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'chat-browser',
-			kind: 'browser',
-			title: 'Example',
-			url: 'https://example.com',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'chat-browser',
+		title: 'Example',
+		url: 'https://example.com',
+	});
 
 	try {
 		await editor.input?.resolve();
@@ -1012,16 +1050,11 @@ test('browser emulation contribution toggles the model device profile', async ()
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'emulation-browser',
-			kind: 'browser',
-			title: 'Example',
-			url: 'https://example.com',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'emulation-browser',
+		title: 'Example',
+		url: 'https://example.com',
+	});
 
 	try {
 		await editor.input?.resolve();
@@ -1068,16 +1101,11 @@ test('browser editor renders welcome content for an empty browser tab', () => {
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(instantiationService);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'welcome-browser',
-			kind: 'browser',
-			title: '',
-			url: 'about:blank',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'welcome-browser',
+		title: '',
+		url: 'about:blank',
+	});
 
 	try {
 		const element = editor.getElement();
@@ -1149,16 +1177,11 @@ test('browser editor error contribution renders certificate errors and trusts on
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'cert-error-browser',
-			kind: 'browser',
-			title: 'Example',
-			url: 'https://example.com',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'cert-error-browser',
+		title: 'Example',
+		url: 'https://example.com',
+	});
 
 	try {
 		await editor.input?.resolve();
@@ -1221,16 +1244,11 @@ test('browser editor find contribution searches selected text in the model', asy
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'find-browser',
-			kind: 'browser',
-			title: 'Example',
-			url: 'https://example.com',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'find-browser',
+		title: 'Example',
+		url: 'https://example.com',
+	});
 
 	try {
 		await editor.input?.resolve();
@@ -1279,16 +1297,11 @@ test('browser favorites contribution persists the current URL without mounting t
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'favorite-browser',
-			kind: 'browser',
-			title: 'Example',
-			url: 'https://example.com/article',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'favorite-browser',
+		title: 'Example',
+		url: 'https://example.com/article',
+	});
 
 	try {
 		await editor.input?.resolve();
@@ -1336,16 +1349,11 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 	browserViewWorkbenchService.browserHistory.add('https://example.net/c', 'Example C', undefined, true);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'history-browser',
-			kind: 'browser',
-			title: 'Example',
-			url: 'https://current.example',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'history-browser',
+		title: 'Example',
+		url: 'https://current.example',
+	});
 
 	try {
 		await editor.input?.resolve();
@@ -1431,16 +1439,11 @@ test('browser welcome contribution renders recents and opens the selected entry'
 	}
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'welcome-browser',
-			kind: 'browser',
-			title: 'Browser',
-			url: '',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'welcome-browser',
+		title: 'Browser',
+		url: '',
+	});
 
 	try {
 		await editor.input?.resolve();
@@ -1513,16 +1516,11 @@ test('browser permissions contribution prompts and records permission decisions'
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = instantiationService.createInstance(BrowserEditor, {
-		labels: {},
-		browserTab: {
-			id: 'permissions-browser',
-			kind: 'browser',
-			title: 'Example',
-			url: 'https://example.com',
-		},
-		nativeHost: createTestNativeHostService(),
-	} as ConstructorParameters<typeof BrowserEditorType>[0]);
+	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+		id: 'permissions-browser',
+		title: 'Example',
+		url: 'https://example.com',
+	});
 
 	try {
 		await editor.input?.resolve();

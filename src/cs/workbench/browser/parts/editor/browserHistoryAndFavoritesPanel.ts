@@ -2,7 +2,7 @@ import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon, createLxLoadingIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import { $ } from 'cs/base/browser/dom';
 import { toAction } from 'cs/base/common/actions';
 import type { Event } from 'cs/base/common/event';
@@ -421,8 +421,6 @@ export class BrowserHistoryAndFavoritesPanel {
     }
 
     void this.context.onOpenEditor({
-      kind: 'browser',
-      disposition: 'new-tab',
       resource: BrowserViewUri.forId(generateUuid()),
       options: {
         viewState: {

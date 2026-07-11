@@ -97,7 +97,7 @@ export function createEditorTitlebarActionsProps(params: {
       expandEditor: editorPartProps.labels.expandEditor,
       collapseEditor: editorPartProps.labels.collapseEditor,
     },
-    onOpenEditor: editorPartProps.onOpenEditor,
+    commandService: editorPartProps.commandService,
     onToggleEditorCollapse,
     onToggleAgentSidebar,
   };

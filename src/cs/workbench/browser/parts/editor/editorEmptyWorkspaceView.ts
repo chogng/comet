@@ -1,7 +1,9 @@
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 import { $ } from 'cs/base/browser/dom';
 import { createLxIcon, type LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
+import { CreateDraftEditorCommandId, CreatePdfEditorCommandId } from 'cs/workbench/common/editor/editorResources';
+import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
+import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 
 export type EditorEmptyWorkspaceViewProps = {
   labels: Pick<
@@ -10,16 +12,16 @@ export type EditorEmptyWorkspaceViewProps = {
     | 'createBrowser'
     | 'createFile'
   >;
-  onOpenEditor: EditorOpenHandler;
+  commandService: IWorkbenchCommandService;
 };
 
 export class EditorEmptyWorkspaceView {
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-editor-empty-workspace');
   private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-empty-workspace-actions');
-  private onOpenEditor: EditorOpenHandler;
+  private commandService: IWorkbenchCommandService;
 
   constructor(props: EditorEmptyWorkspaceViewProps) {
-    this.onOpenEditor = props.onOpenEditor;
+    this.commandService = props.commandService;
     this.element.append(this.actionsElement);
     this.setProps(props);
   }
@@ -29,36 +31,27 @@ export class EditorEmptyWorkspaceView {
   }
 
   setProps(props: EditorEmptyWorkspaceViewProps) {
-    this.onOpenEditor = props.onOpenEditor;
+    this.commandService = props.commandService;
     this.actionsElement.replaceChildren(
       this.createActionCard({
         label: props.labels.createDraft,
         icon: 'draft',
         onRun: () => {
-          void this.onOpenEditor({
-            kind: 'draft',
-            disposition: 'new-tab',
-          });
+          void this.commandService.executeCommand(CreateDraftEditorCommandId);
         },
       }),
       this.createActionCard({
         label: props.labels.createBrowser,
         icon: 'browser',
         onRun: () => {
-          void this.onOpenEditor({
-            kind: 'browser',
-            disposition: 'reveal-or-open',
-          });
+          void this.commandService.executeCommand(BrowserViewCommandId.NewTab);
         },
       }),
       this.createActionCard({
         label: props.labels.createFile,
         icon: 'file-text',
         onRun: () => {
-          void this.onOpenEditor({
-            kind: 'pdf',
-            disposition: 'reveal-or-open',
-          });
+          void this.commandService.executeCommand(CreatePdfEditorCommandId);
         },
       }),
     );

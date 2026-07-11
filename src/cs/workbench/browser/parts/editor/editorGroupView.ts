@@ -1,14 +1,3 @@
-import {
-  isEmptyBrowserTabInput,
-  getEditorPaneMode,
-  getEditorTabInputResourceKey,
-  isEditorDraftTabInput,
-} from 'cs/workbench/browser/parts/editor/editorInput';
-import type {
-  EditorWorkspaceTab,
-  WritingEditorDocument,
-} from 'cs/workbench/browser/parts/editor/editorModel';
-import { toEditorWorkspaceTabInput } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import { areDraftEditorStatusStatesEqual } from 'cs/editor/browser/text/draftEditorStatusState';
 import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
@@ -39,8 +28,12 @@ import {
 } from 'cs/workbench/browser/parts/editor/editorModeToolbarModel';
 import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarHost';
 import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
-import { createEditorGroupModel } from 'cs/workbench/browser/parts/editor/editorGroupModel';
+import { createEditorGroupModel, getEditorInputId } from 'cs/workbench/browser/parts/editor/editorGroupModel';
 import type { EditorGroupModel } from 'cs/workbench/browser/parts/editor/editorGroupModel';
+import type { EditorGroup } from 'cs/workbench/browser/parts/editor/editorGroup';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import { Verbosity } from 'cs/workbench/common/editor';
+import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import {
   EDITOR_FRAME_SLOTS,
   setEditorFrameSlot,
@@ -56,10 +49,7 @@ import type {
 import { TabsTitleControl } from 'cs/workbench/browser/parts/editor/tabsTitleControl';
 import type { TitleControl, TitleControlProps } from 'cs/workbench/browser/parts/editor/titleControl';
 import { getWindowChromeLayout } from 'cs/platform/window/common/window';
-import type {
-  EditorOpenHandler,
-  EditorOpenRequest,
-} from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
@@ -78,11 +68,7 @@ export type EditorGroupViewProps = DropdownContextServices & {
   nativeHost: INativeHostService;
   dialogService: IDialogService;
   instantiationService: IInstantiationService;
-  groupId: string;
-  tabs: EditorWorkspaceTab[];
-  dirtyDraftTabIds: readonly string[];
-  activeTabId: string | null;
-  activeTab: EditorWorkspaceTab | null;
+  group: EditorGroup;
   viewStateEntries: SerializedEditorViewStateEntry[];
   onActivateTab: (tabId: string) => void;
   onReorderTab?: (
@@ -94,6 +80,7 @@ export type EditorGroupViewProps = DropdownContextServices & {
   onCloseAllTabs?: () => Promise<boolean> | boolean | void;
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
+  commandService: IWorkbenchCommandService;
   onOpenAddressBarSourceMenu: () => void;
   onToolbarArchiveCurrentPage: () => void | Promise<void>;
   onToolbarExportDocx?: () => void | Promise<void>;
@@ -101,7 +88,6 @@ export type EditorGroupViewProps = DropdownContextServices & {
   onToolbarClearBrowsingHistory: () => void;
   onToolbarClearCookies: () => void | Promise<void>;
   onToolbarClearCache: () => void | Promise<void>;
-  onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
@@ -127,16 +113,13 @@ function createTitleControlProps(
   props: Pick<
     EditorGroupViewProps,
     | 'labels'
-    | 'tabs'
-    | 'activeTabId'
-    | 'activeTab'
+    | 'group'
     | 'onActivateTab'
     | 'onReorderTab'
     | 'onCloseTab'
     | 'onCloseOtherTabs'
     | 'onCloseAllTabs'
     | 'onRenameTab'
-    | 'onOpenEditor'
   >,
   group: EditorGroupModel,
   requestBrowserPrimaryInputFocus: () => void,
@@ -146,10 +129,10 @@ function createTitleControlProps(
       return false;
     }
 
-const targetTab = group.activeTabId === tabId
+    const targetTab = group.activeTabId === tabId
       ? group.activeTab
-      : props.tabs.find((tab) => tab.id === tabId) ?? null;
-    return isEmptyBrowserTabInput(targetTab);
+      : props.group.getEditors().find(editor => getEditorInputId(editor) === tabId) ?? null;
+    return Boolean(targetTab && !targetTab.getDescription());
   };
 
   return {
@@ -178,16 +161,13 @@ function createTitleControl(
   props: Pick<
     EditorGroupViewProps,
     | 'labels'
-    | 'tabs'
-    | 'activeTabId'
-    | 'activeTab'
+    | 'group'
     | 'onActivateTab'
     | 'onReorderTab'
     | 'onCloseTab'
     | 'onCloseOtherTabs'
     | 'onCloseAllTabs'
     | 'onRenameTab'
-    | 'onOpenEditor'
   >,
   group: EditorGroupModel,
   requestBrowserPrimaryInputFocus: () => void,
@@ -231,20 +211,17 @@ function createEditorGroupControllerSnapshot(
   pdfReaderStatusByTabId: Record<string, PdfReaderRuntimeStatus>,
 ): EditorGroupControllerSnapshot {
   const group = createEditorGroupModel({
-    tabs: context.tabs,
-    activeTabId: context.activeTabId,
-    activeTab: context.activeTab,
-    labels: context.labels,
-    draftStatusByTabId,
-    dirtyDraftTabIds: context.dirtyDraftTabIds,
+    editors: context.group.getEditors(),
+    activeEditor: context.group.active,
+    draftStatusByEditorId: draftStatusByTabId,
   });
   const activeDraftStatus =
-    isEditorDraftTabInput(group.activeTab)
-      ? draftStatusByTabId[group.activeTab.id]
+    group.activeTab
+      ? draftStatusByTabId[getEditorInputId(group.activeTab)]
       : undefined;
   const activeContentStatus =
-    group.activeTab?.kind === 'pdf'
-      ? createPdfContentStatus(pdfReaderStatusByTabId[group.activeTab.id])
+    group.activeTab
+      ? createPdfContentStatus(pdfReaderStatusByTabId[getEditorInputId(group.activeTab)])
       : undefined;
 
   return {
@@ -305,11 +282,7 @@ function createEditorGroupSnapshotKey(snapshot: EditorGroupControllerSnapshot) {
     tabs: snapshot.group.tabs,
     activeTabId: snapshot.group.activeTabId,
     activeTab: snapshot.group.activeTab
-      ? {
-          id: snapshot.group.activeTab.id,
-          kind: snapshot.group.activeTab.kind,
-          paneMode: getEditorPaneMode(snapshot.group.activeTab),
-        }
+      ? getEditorInputId(snapshot.group.activeTab)
       : null,
     editorStatus: snapshot.editorStatus,
   });
@@ -377,11 +350,7 @@ class EditorGroupController {
   };
 
   private pruneDraftStatuses() {
-    const draftTabIds = new Set(
-      this.context.tabs
-        .filter((tab) => isEditorDraftTabInput(tab))
-        .map((tab) => tab.id),
-    );
+    const draftTabIds = new Set(this.context.group.getEditors().map(getEditorInputId));
     const nextDraftStatusByTabId = Object.fromEntries(
       Object.entries(this.draftStatusByTabId).filter(([tabId]) =>
         draftTabIds.has(tabId),
@@ -399,11 +368,7 @@ class EditorGroupController {
   }
 
   private prunePdfReaderStatuses() {
-    const pdfTabIds = new Set(
-      this.context.tabs
-        .filter((tab) => tab.kind === 'pdf')
-        .map((tab) => tab.id),
-    );
+    const pdfTabIds = new Set(this.context.group.getEditors().map(getEditorInputId));
     const nextPdfReaderStatusByTabId = Object.fromEntries(
       Object.entries(this.pdfReaderStatusByTabId).filter(([tabId]) =>
         pdfTabIds.has(tabId),
@@ -481,7 +446,7 @@ export class EditorGroupView {
         expandEditor: '',
         collapseEditor: '',
       },
-      onOpenEditor: () => {},
+      commandService: props.commandService,
       onToggleEditorCollapse: () => {},
       onToggleAgentSidebar: () => {},
     });
@@ -494,7 +459,7 @@ export class EditorGroupView {
       },
     );
     this.modeToolbarHost = createEditorModeToolbarHost(
-      this.createModeToolbarContext(props),
+      this.createModeToolbarContext(props, null),
       props,
     );
     setEditorFrameSlot(this.titlebarElement, EDITOR_FRAME_SLOTS.titlebar);
@@ -513,7 +478,7 @@ export class EditorGroupView {
     );
     this.emptyWorkspaceView = new EditorEmptyWorkspaceView({
       labels: props.labels,
-      onOpenEditor: this.openEditorFromEmptyWorkspace,
+      commandService: props.commandService,
     });
     this.tabsElement.append(this.titleAreaControl.getElement());
     this.titlebarElement.append(
@@ -568,7 +533,7 @@ export class EditorGroupView {
   }
 
   setProps(props: EditorGroupViewProps) {
-    if (props.groupId !== this.props.groupId) {
+    if (props.group.id !== this.props.group.id) {
       this.saveActivePaneViewState();
       this.disposeAllPaneInstances();
       this.viewStateStore.replaceAll(props.viewStateEntries);
@@ -670,13 +635,12 @@ export class EditorGroupView {
         expandEditor: this.props.labels.expandEditor,
         collapseEditor: this.props.labels.collapseEditor,
       },
-      onOpenEditor: this.props.onOpenEditor,
+      commandService: this.props.commandService,
       onToggleEditorCollapse: this.props.onToggleEditorCollapse ?? (() => {}),
       onToggleAgentSidebar: this.props.onToggleAgentSidebar,
     });
     this.browserHistoryAndFavoritesPanel.setContext(this.createBrowserHistoryAndFavoritesPanelContext(this.props));
-    this.modeToolbarHost.setContext(this.createModeToolbarContext(this.props));
-    this.syncToolbarMode(group.activeTab);
+    this.modeToolbarHost.setContext(this.createModeToolbarContext(this.props, null));
     this.syncTitlebarActions(
       this.props.showTitlebarActions ? this.titlebarActionsView.getElement() : null,
       this.props.titlebarAuxiliaryActionsElements ?? [],
@@ -688,9 +652,10 @@ export class EditorGroupView {
     if (!group.activeTab) {
       this.releaseActivePane();
       this.syncToolbar(null);
+      this.syncToolbarMode(null);
       this.emptyWorkspaceView.setProps({
         labels: this.props.labels,
-        onOpenEditor: this.openEditorFromEmptyWorkspace,
+        commandService: this.props.commandService,
       });
       this.contentElement.replaceChildren(this.emptyWorkspaceView.getElement());
       this.browserHistoryAndFavoritesPanel.close();
@@ -698,7 +663,9 @@ export class EditorGroupView {
       return;
     }
 
-const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
+    const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
+    this.modeToolbarHost.setContext(this.createModeToolbarContext(this.props, resolvedPane.paneId));
+    this.syncToolbarMode(resolvedPane.paneId);
 
     this.contentElement.className = [
       'comet-editor-content',
@@ -715,17 +682,18 @@ const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
       this.releaseActivePane();
       this.activateResolvedPane(
         resolvedPane,
-        group.activeTab.id,
+        getEditorInputId(group.activeTab),
         nextPaneViewStateKey,
       );
     } else {
-      const didSwitchActivePaneTab = this.activePaneTabId !== group.activeTab.id;
+      const activeEditorId = getEditorInputId(group.activeTab);
+      const didSwitchActivePaneTab = this.activePaneTabId !== activeEditorId;
       if (didSwitchActivePaneTab) {
         this.saveActivePaneViewState();
       }
 
-      resolvedPane.updatePane(this.activePane);
-      this.activePaneTabId = group.activeTab.id;
+      resolvedPane.setInput(this.activePane);
+      this.activePaneTabId = activeEditorId;
       this.activePaneViewStateKey = nextPaneViewStateKey;
       if (didSwitchActivePaneTab) {
         this.restorePaneViewState(this.activePane, nextPaneViewStateKey);
@@ -758,7 +726,8 @@ const panelHost = this.contentElement.querySelector('.browser-root');
   private createBrowserHistoryAndFavoritesPanelContext(props: EditorGroupViewProps) {
     const viewPartProps = this.getBrowserViewPartProps(props);
     const activeBrowserMetadata = resolveActiveBrowserMetadata({
-      activeTab: props.activeTab,
+      activeTab: props.group.active,
+      activePaneId: this.contentElement.dataset.editorPane ?? null,
       viewPartProps,
     });
     const browserUrl = activeBrowserMetadata.hasActiveBrowserTab
@@ -802,9 +771,11 @@ const panelHost = this.contentElement.querySelector('.browser-root');
     };
   }
 
-  private createModeToolbarContext(props: EditorGroupViewProps) {
+  private createModeToolbarContext(props: EditorGroupViewProps, activePaneId: string | null) {
     return createEditorModeToolbarContext({
       ...props,
+      activeTab: props.group.active,
+      activePaneId,
       viewPartProps: this.getBrowserViewPartProps(props),
       browserHistoryAndFavoritesPanel: this.browserHistoryAndFavoritesPanel,
       onToolbarNavigateBack: this.navigateBrowserBack,
@@ -818,16 +789,15 @@ const panelHost = this.contentElement.querySelector('.browser-root');
   }
 
   private getBrowserViewPartProps(props: EditorGroupViewProps): ViewPartProps {
-    const activeBrowserTab = props.activeTab?.kind === 'browser'
-      ? props.activeTab
-      : undefined;
-    const browserState = activeBrowserTab
-      ? this.browserStateByTabId.get(activeBrowserTab.id)
+    const activeEditor = props.group.active;
+    const activeEditorId = activeEditor ? getEditorInputId(activeEditor) : undefined;
+    const browserState = activeEditorId
+      ? this.browserStateByTabId.get(activeEditorId)
       : undefined;
 
     return {
       ...props.viewPartProps,
-      browserUrl: browserState?.url ?? activeBrowserTab?.url ?? '',
+      browserUrl: browserState?.url ?? activeEditor?.getDescription(Verbosity.LONG) ?? '',
       browserPageTitle: browserState?.title ?? '',
       browserFaviconUrl: browserState?.favicon ?? '',
       browserIsLoading: browserState?.loading ?? false,
@@ -838,20 +808,8 @@ const panelHost = this.contentElement.querySelector('.browser-root');
     this.shouldFocusBrowserPrimaryInput = true;
   };
 
-  private readonly openEditorFromEmptyWorkspace = (request: EditorOpenRequest) => {
-    const result = this.props.onOpenEditor(request);
-    if (
-      request.kind === 'browser' &&
-      request.disposition === 'reveal-or-open' &&
-      !request.options?.viewState?.url
-    ) {
-      this.requestBrowserPrimaryInputFocus();
-    }
-    return result;
-  };
-
-  private flushBrowserPrimaryInputFocus(activeTab: EditorWorkspaceTab | null) {
-    if (!this.shouldFocusBrowserPrimaryInput || !isEmptyBrowserTabInput(activeTab)) {
+  private flushBrowserPrimaryInputFocus(activeTab: EditorInput | null) {
+    if (!this.shouldFocusBrowserPrimaryInput || !activeTab || activeTab.getDescription()) {
       return;
     }
 
@@ -906,13 +864,13 @@ const currentTitlebarActionsElements = Array.from(this.actionsElement.children);
     this.toolbarElement.hidden = true;
   }
 
-  private syncToolbarMode(activeTab: EditorWorkspaceTab | null) {
-    if (!activeTab) {
+  private syncToolbarMode(paneId: string | null) {
+    if (!paneId) {
       this.toolbarElement.removeAttribute('data-toolbar-mode');
       return;
     }
 
-    this.toolbarElement.dataset.toolbarMode = getEditorPaneMode(activeTab);
+    this.toolbarElement.dataset.toolbarMode = paneId;
   }
 
   private resolveToolbarElement() {
@@ -930,12 +888,12 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
 
   private createPaneViewStateKey(
     paneId: string,
-    tab: EditorWorkspaceTab,
+    input: EditorInput,
   ): EditorViewStateKey {
     return {
-      groupId: this.props.groupId,
+      groupId: this.props.group.id,
       paneId,
-      resourceKey: getEditorTabInputResourceKey(toEditorWorkspaceTabInput(tab)),
+      resourceKey: getEditorInputId(input),
     };
   }
 
@@ -949,7 +907,6 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
       dialogService: this.props.dialogService,
       instantiationService: this.props.instantiationService,
       onOpenEditor: this.props.onOpenEditor,
-      onDraftDocumentChange: this.props.onDraftDocumentChange,
       onDraftStatusChange: this.handleDraftStatusChange,
       onPdfReaderStatusChange: this.handlePdfReaderStatusChange,
       onDidChangeBrowserState: this.handleBrowserStateChange,
@@ -984,11 +941,7 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
   };
 
   private pruneBrowserStates(): void {
-    const browserTabIds = new Set(
-      this.props.tabs
-        .filter(tab => tab.kind === 'browser')
-        .map(tab => tab.id),
-    );
+    const browserTabIds = new Set(this.props.group.getEditors().map(getEditorInputId));
     for (const tabId of this.browserStateByTabId.keys()) {
       if (!browserTabIds.has(tabId)) {
         this.browserStateByTabId.delete(tabId);

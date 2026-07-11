@@ -19,11 +19,14 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'assistantModel.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'agentbar.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'modelSubscriptions.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorInput.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorModel.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorOpenService.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorGroup.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorGroups.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'draftEditorInput.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'pdfEditorInput.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorInputSerializerRegistry.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorCreateActions.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorPartLifecycle.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'browserHistoryAndFavoritesPanel.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorTitlebarActionsView.test.ts'),
   path.join(
     rootDir,
     'src',
@@ -308,7 +311,12 @@ const outputFiles = entryPoints.map((entryPoint) =>
   ),
 );
 
-const result = spawnSync(process.execPath, ['--test', ...outputFiles], {
+const result = spawnSync(process.execPath, [
+  '--import',
+  path.join(rootDir, 'scripts', 'workbench-browser-test-bootstrap.mjs'),
+  '--test',
+  ...outputFiles,
+], {
   stdio: 'inherit',
 });
 

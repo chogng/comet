@@ -1,737 +1,487 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { LocaleMessages } from 'language/locales';
-import { toEditorTabInput } from 'cs/workbench/browser/parts/editor/editorInput';
-
-import { createEditorModel } from 'cs/workbench/browser/parts/editor/editorModel';
-import type { EditorModelSnapshot, EditorWorkspaceTab, WritingEditorDocument } from 'cs/workbench/browser/parts/editor/editorModel';
-import { createEditorOpenService } from 'cs/workbench/services/editor/browser/editorOpenService';
-import type { EditorOpenService } from 'cs/workbench/services/editor/common/editorOpenService';
-import type { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
-import type {
-  EditorOpenHandler,
-  EditorOpenRequest,
-} from 'cs/workbench/services/editor/common/editorOpenTypes';
-import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import type { EditorPartBaseProps } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { EditorViewStateKey } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
-import type { SerializedEditorViewStateEntry } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
+import {
+	writingEditorDocumentToPlainText,
+	type WritingEditorDocument,
+} from 'cs/editor/common/writingEditorDocument';
 import type { INativeHostService } from 'cs/platform/native/common/native';
-import { createEditorBrowserToolbarTitlebarLabels } from 'cs/workbench/browser/parts/titlebar/titlebarActions';
-import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import { EditorGroup } from 'cs/workbench/browser/parts/editor/editorGroup';
+import { getEditorInputId } from 'cs/workbench/browser/parts/editor/editorGroupModel';
+import { EditorGroups } from 'cs/workbench/browser/parts/editor/editorGroups';
+import type { EditorPartBaseProps } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
-import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
-import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import type { IDisposable } from 'cs/base/common/lifecycle';
 import type {
-  IEditorService,
-  IEditorServiceEntry,
-} from 'cs/workbench/services/editor/common/editorService';
+	EditorViewStateKey,
+	SerializedEditorViewStateEntry,
+} from 'cs/workbench/browser/parts/editor/editorViewStateStore';
+import { createEditorBrowserToolbarTitlebarLabels } from 'cs/workbench/browser/parts/titlebar/titlebarActions';
+import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
+import type { IUntypedEditorInput } from 'cs/workbench/common/editor';
+import { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import type { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
+import type { IEditorOpenOptions, IEditorService } from 'cs/workbench/services/editor/common/editorService';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
+import { deserializeEditorGroups, serializeEditorGroups, type SerializedEditorGroups } from 'cs/workbench/browser/parts/editor/editorGroupSerialization';
+import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
+import type { IDisposable } from 'cs/base/common/lifecycle';
+import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 
-export type EditorPartState = {
-  ui: LocaleMessages;
-  viewPartProps: ViewPartProps;
-  nativeHost: INativeHostService;
-  dialogService: IDialogService;
-  instantiationService: IInstantiationService;
-  groupId: string;
-  tabs: EditorWorkspaceTab[];
-  dirtyDraftTabIds: readonly string[];
-  activeTabId: string | null;
-  activeTab: EditorWorkspaceTab | null;
-  viewStateEntries: SerializedEditorViewStateEntry[];
-};
+const EditorPartStorageKey = 'workbench.editor.groups';
 
-export type EditorPartActions = {
-  onActivateTab: (tabId: string) => void;
-  onReorderTab: (
-    tabId: string,
-    targetSlotIndex: number,
-  ) => void;
-  onCloseTab: (tabId: string) => Promise<boolean>;
-  onCloseOtherTabs: (tabId: string) => Promise<boolean>;
-  onCloseAllTabs: () => Promise<boolean>;
-  onRenameTab: (tabId: string) => void | Promise<void>;
-  onOpenEditor: EditorOpenHandler;
-  onDraftDocumentChange: (value: WritingEditorDocument) => void;
-  onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
-  onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
-  onDeleteEditorViewState: (key: EditorViewStateKey) => void;
+type StoredEditorPart = {
+	readonly editorGroups: SerializedEditorGroups;
+	readonly viewStateEntries: SerializedEditorViewStateEntry[];
 };
 
 export type EditorPartControllerContext = {
-  ui: LocaleMessages;
-  viewPartProps: ViewPartProps;
-  nativeHost: INativeHostService;
-  dialogService: IDialogService;
-  instantiationService: IInstantiationService;
-  editorResolverService: IEditorResolverService;
-  ensureEditorPartVisible: () => void;
+	ui: LocaleMessages;
+	viewPartProps: ViewPartProps;
+	nativeHost: INativeHostService;
+	dialogService: IDialogService;
+	instantiationService: IInstantiationService;
+	editorResolverService: IEditorResolverService;
+	storageService: IStorageService;
+	commandService: IWorkbenchCommandService;
+	ensureEditorPartVisible: () => void;
 };
 
-export type EditorPartControllerSnapshot = Pick<
-  EditorModelSnapshot,
-  | 'groupId'
-  | 'tabs'
-  | 'dirtyDraftTabIds'
-  | 'activeTabId'
-  | 'activeTab'
-  | 'viewStateEntries'
-> & {
-  draftBody: string;
-  editorPartProps: EditorPartBaseProps;
+export type EditorPartControllerSnapshot = {
+	group: EditorGroup;
+	viewStateEntries: SerializedEditorViewStateEntry[];
+	draftBody: string;
+	editorPartProps: EditorPartBaseProps;
 };
 
 export type EditorPartModel = EditorPartController;
 export type EditorPartChangeReason = 'structure' | 'context';
 
-type CreateEditorPartPropsParams = {
-  state: EditorPartState;
-  actions: EditorPartActions;
+type EditorPartActions = {
+	onActivateTab: (editorId: string) => void;
+	onReorderTab: (editorId: string, targetSlotIndex: number) => void;
+	onCloseTab: (editorId: string) => Promise<boolean>;
+	onCloseOtherTabs: (editorId: string) => Promise<boolean>;
+	onCloseAllTabs: () => Promise<boolean>;
+	onRenameTab: (editorId: string) => Promise<void>;
+	onOpenEditor: EditorOpenHandler;
+	onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
+	onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
+	onDeleteEditorViewState: (key: EditorViewStateKey) => void;
 };
 
-function toStructuralWorkspaceTab(tab: EditorWorkspaceTab) {
-  return toEditorTabInput(tab);
+function createEditorPartStructureKey(snapshot: EditorPartControllerSnapshot): string {
+	return JSON.stringify({
+		groupId: snapshot.group.id,
+		editors: snapshot.group.getEditors().map(editor => ({
+			id: getEditorInputId(editor),
+			name: editor.getName(),
+			dirty: editor.isDirty(),
+		})),
+		activeEditor: snapshot.group.active
+			? getEditorInputId(snapshot.group.active)
+			: null,
+	});
 }
 
-function createEditorPartStructureKey(snapshot: EditorPartControllerSnapshot) {
-  return JSON.stringify({
-    groupId: snapshot.groupId,
-    tabs: snapshot.tabs.map(toStructuralWorkspaceTab),
-    dirtyDraftTabIds: [...snapshot.dirtyDraftTabIds].sort(),
-    activeTabId: snapshot.activeTabId,
-    activeTab: snapshot.activeTab ? toStructuralWorkspaceTab(snapshot.activeTab) : null,
-  });
-}
-
-export function createEditorPartProps({
-  state: {
-    ui,
-    viewPartProps,
-    nativeHost,
-    dialogService,
-    instantiationService,
-    groupId,
-    tabs,
-    dirtyDraftTabIds,
-    activeTabId,
-    activeTab,
-    viewStateEntries,
-  },
-  actions: {
-    onActivateTab,
-    onReorderTab,
-    onCloseTab,
-    onCloseOtherTabs,
-    onCloseAllTabs,
-    onRenameTab,
-    onOpenEditor,
-    onDraftDocumentChange,
-    onDidChangeBrowserState,
-    onSetEditorViewState,
-    onDeleteEditorViewState,
-  },
-}: CreateEditorPartPropsParams): EditorPartBaseProps {
-  return {
-    labels: {
-      headerAddAction: ui.editorHeaderAddAction,
-      createDraft: ui.editorCreateDraft,
-      createBrowser: ui.editorCreateBrowser,
-      createFile: ui.editorCreateFile,
-      newTab: ui.editorNewTab,
-      toolbarSources: ui.agentbarToolbarSources,
-      toolbarFavorite: ui.agentbarToolbarFavorite,
-      toolbarArchivePage: ui.editorToolbarArchivePage,
-      ...createEditorBrowserToolbarTitlebarLabels(ui),
-      toolbarMore: ui.agentbarToolbarMore,
-      toolbarHardReload: ui.editorToolbarHardReload,
-      toolbarCopyCurrentUrl: ui.editorToolbarCopyCurrentUrl,
-      toolbarClearBrowsingHistory: ui.editorToolbarClearBrowsingHistory,
-      toolbarClearCookies: ui.editorToolbarClearCookies,
-      toolbarClearCache: ui.editorToolbarClearCache,
-      toolbarAddressBar: ui.agentbarToolbarAddressBar,
-      toolbarAddressPlaceholder: ui.editorToolbarAddressPlaceholder,
-      browserHistoryAndFavoritesPanelTitle: ui.agentbarToolbarSources,
-      browserHistoryAndFavoritesPanelRecentTitle: ui.editorToolbarSourcesRecent,
-      browserHistoryAndFavoritesPanelRecentTodayTitle: ui.editorToolbarSourcesToday,
-      browserHistoryAndFavoritesPanelRecentYesterdayTitle: ui.editorToolbarSourcesYesterday,
-      browserHistoryAndFavoritesPanelRecentLast7DaysTitle: ui.editorToolbarSourcesLast7Days,
-      browserHistoryAndFavoritesPanelRecentLast30DaysTitle: ui.editorToolbarSourcesLast30Days,
-      browserHistoryAndFavoritesPanelRecentOlderTitle: ui.editorToolbarSourcesOlder,
-      browserHistoryAndFavoritesPanelFavoritesTitle: ui.editorToolbarSourcesFavorites,
-      browserHistoryAndFavoritesPanelEmptyState: ui.editorToolbarSourcesEmpty,
-      browserHistoryAndFavoritesPanelContextOpen: ui.editorFavoriteContextOpen,
-      browserHistoryAndFavoritesPanelContextOpenInNewTab: ui.editorFavoriteContextOpenInNewTab,
-      browserHistoryAndFavoritesPanelContextRemoveFavorite: ui.editorFavoriteContextRemove,
-      draftMode: ui.editorDraftMode,
-      sourceMode: ui.editorSourceMode,
-      pdfMode: ui.editorPdfMode,
-      close: ui.toastClose,
-      closeOthers: ui.editorTabContextCloseOthers,
-      closeAll: ui.editorTabContextCloseAll,
-      rename: ui.editorTabContextRename,
-      editorModalConfirm: ui.editorModalConfirm,
-      editorModalCancel: ui.editorModalCancel,
-      expandEditor: ui.editorExpand,
-      collapseEditor: ui.editorCollapse,
-      emptyWorkspaceTitle: ui.editorEmptyWorkspaceTitle,
-      emptyWorkspaceBody: ui.editorEmptyWorkspaceBody,
-      draftBodyPlaceholder: ui.editorDraftBodyPlaceholder,
-      pdfTitle: ui.editorPdfTitle,
-      pdfOpenFile: ui.editorPdfOpenFile,
-      renameTabTitle: ui.editorTabRenameTitle,
-      renameTabLabel: ui.editorTabRenameLabel,
-      status: {
-        statusbarAriaLabel: ui.editorStatusbarAriaLabel,
-        words: ui.editorStatusWords,
-        characters: ui.editorStatusCharacters,
-        paragraphs: ui.editorStatusParagraphs,
-        selection: ui.editorStatusSelection,
-        block: ui.editorStatusBlock,
-        line: ui.editorStatusLine,
-        column: ui.editorStatusColumn,
-        url: ui.editorStatusUrl,
-        blockFigure: ui.editorStatusFigure,
-        ready: ui.statusReady,
-      },
-      textGroup: ui.editorRibbonText,
-      formatGroup: ui.editorRibbonFormat,
-      insertGroup: ui.editorRibbonInsert,
-      historyGroup: ui.editorRibbonHistory,
-      paragraph: ui.editorParagraph,
-      heading1: ui.editorHeading1,
-      heading2: ui.editorHeading2,
-      heading3: ui.editorHeading3,
-      bold: ui.editorBold,
-      italic: ui.editorItalic,
-      underline: ui.editorUnderline,
-      fontFamily: ui.editorFontFamily,
-      fontSize: ui.editorFontSize,
-      defaultTextStyle: ui.editorDefaultTextStyle,
-      alignLeft: ui.editorAlignLeft,
-      alignCenter: ui.editorAlignCenter,
-      alignRight: ui.editorAlignRight,
-      clearInlineStyles: ui.editorClearInlineStyles,
-      bulletList: ui.editorBulletList,
-      orderedList: ui.editorOrderedList,
-      blockquote: ui.editorBlockquote,
-      undo: ui.editorUndo,
-      redo: ui.editorRedo,
-      insertCitation: ui.editorInsertCitation,
-      insertFigure: ui.editorInsertFigure,
-      insertFigureRef: ui.editorInsertFigureRef,
-      citationPrompt: ui.editorCitationPrompt,
-      figureUrlPrompt: ui.editorFigureUrlPrompt,
-      figureCaptionPrompt: ui.editorFigureCaptionPrompt,
-      figureRefPrompt: ui.editorFigureRefPrompt,
-      fontFamilyPrompt: ui.editorFontFamilyPrompt,
-      fontSizePrompt: ui.editorFontSizePrompt,
-    },
-    viewPartProps,
-    nativeHost,
-    dialogService,
-    instantiationService,
-    groupId,
-    tabs,
-    dirtyDraftTabIds,
-    activeTabId,
-    activeTab,
-    viewStateEntries,
-    onActivateTab,
-    onReorderTab,
-    onCloseTab,
-    onCloseOtherTabs,
-    onCloseAllTabs,
-    onRenameTab,
-    onOpenEditor,
-    onDraftDocumentChange,
-    onDidChangeBrowserState,
-    onSetEditorViewState,
-    onDeleteEditorViewState,
-    showTitlebarActions: true,
-    showToolbar: true,
-    isEditorCollapsed: false,
-    onToggleEditorCollapse: () => {},
-  };
-}
-
-function createEditorPartControllerSnapshot(
-  context: EditorPartControllerContext,
-  editorModel: ReturnType<typeof createEditorModel>,
-  actions: EditorPartActions,
-): EditorPartControllerSnapshot {
-  const editorSnapshot = editorModel.getSnapshot();
-  const { ui, viewPartProps, nativeHost, dialogService, instantiationService } = context;
-  const {
-    groupId,
-    tabs,
-    dirtyDraftTabIds,
-    activeTabId,
-    activeTab,
-    viewStateEntries,
-  } = editorSnapshot;
-  const draftBody = editorModel.getDraftBody();
-  return {
-    groupId,
-    tabs,
-    dirtyDraftTabIds,
-    activeTabId,
-    activeTab,
-    viewStateEntries,
-    draftBody,
-    editorPartProps: createEditorPartProps({
-      state: {
-        ui,
-        viewPartProps,
-        nativeHost,
-        dialogService,
-        instantiationService,
-        groupId,
-        tabs,
-        dirtyDraftTabIds,
-        activeTabId,
-        activeTab,
-        viewStateEntries,
-      },
-      actions,
-    }),
-  };
+function createEditorPartProps(
+	context: EditorPartControllerContext,
+	group: EditorGroup,
+	viewStateEntries: SerializedEditorViewStateEntry[],
+	actions: EditorPartActions,
+): EditorPartBaseProps {
+	const { ui } = context;
+	return {
+		labels: {
+			headerAddAction: ui.editorHeaderAddAction,
+			createDraft: ui.editorCreateDraft,
+			createBrowser: ui.editorCreateBrowser,
+			createFile: ui.editorCreateFile,
+			newTab: ui.editorNewTab,
+			toolbarSources: ui.agentbarToolbarSources,
+			toolbarFavorite: ui.agentbarToolbarFavorite,
+			toolbarArchivePage: ui.editorToolbarArchivePage,
+			...createEditorBrowserToolbarTitlebarLabels(ui),
+			toolbarMore: ui.agentbarToolbarMore,
+			toolbarHardReload: ui.editorToolbarHardReload,
+			toolbarCopyCurrentUrl: ui.editorToolbarCopyCurrentUrl,
+			toolbarClearBrowsingHistory: ui.editorToolbarClearBrowsingHistory,
+			toolbarClearCookies: ui.editorToolbarClearCookies,
+			toolbarClearCache: ui.editorToolbarClearCache,
+			toolbarAddressBar: ui.agentbarToolbarAddressBar,
+			toolbarAddressPlaceholder: ui.editorToolbarAddressPlaceholder,
+			browserHistoryAndFavoritesPanelTitle: ui.agentbarToolbarSources,
+			browserHistoryAndFavoritesPanelRecentTitle: ui.editorToolbarSourcesRecent,
+			browserHistoryAndFavoritesPanelRecentTodayTitle: ui.editorToolbarSourcesToday,
+			browserHistoryAndFavoritesPanelRecentYesterdayTitle: ui.editorToolbarSourcesYesterday,
+			browserHistoryAndFavoritesPanelRecentLast7DaysTitle: ui.editorToolbarSourcesLast7Days,
+			browserHistoryAndFavoritesPanelRecentLast30DaysTitle: ui.editorToolbarSourcesLast30Days,
+			browserHistoryAndFavoritesPanelRecentOlderTitle: ui.editorToolbarSourcesOlder,
+			browserHistoryAndFavoritesPanelFavoritesTitle: ui.editorToolbarSourcesFavorites,
+			browserHistoryAndFavoritesPanelEmptyState: ui.editorToolbarSourcesEmpty,
+			browserHistoryAndFavoritesPanelContextOpen: ui.editorFavoriteContextOpen,
+			browserHistoryAndFavoritesPanelContextOpenInNewTab: ui.editorFavoriteContextOpenInNewTab,
+			browserHistoryAndFavoritesPanelContextRemoveFavorite: ui.editorFavoriteContextRemove,
+			draftMode: ui.editorDraftMode,
+			sourceMode: ui.editorSourceMode,
+			pdfMode: ui.editorPdfMode,
+			close: ui.toastClose,
+			closeOthers: ui.editorTabContextCloseOthers,
+			closeAll: ui.editorTabContextCloseAll,
+			rename: ui.editorTabContextRename,
+			editorModalConfirm: ui.editorModalConfirm,
+			editorModalCancel: ui.editorModalCancel,
+			expandEditor: ui.editorExpand,
+			collapseEditor: ui.editorCollapse,
+			emptyWorkspaceTitle: ui.editorEmptyWorkspaceTitle,
+			emptyWorkspaceBody: ui.editorEmptyWorkspaceBody,
+			draftBodyPlaceholder: ui.editorDraftBodyPlaceholder,
+			pdfTitle: ui.editorPdfTitle,
+			pdfOpenFile: ui.editorPdfOpenFile,
+			renameTabTitle: ui.editorTabRenameTitle,
+			renameTabLabel: ui.editorTabRenameLabel,
+			status: {
+				statusbarAriaLabel: ui.editorStatusbarAriaLabel,
+				words: ui.editorStatusWords,
+				characters: ui.editorStatusCharacters,
+				paragraphs: ui.editorStatusParagraphs,
+				selection: ui.editorStatusSelection,
+				block: ui.editorStatusBlock,
+				line: ui.editorStatusLine,
+				column: ui.editorStatusColumn,
+				url: ui.editorStatusUrl,
+				blockFigure: ui.editorStatusFigure,
+				ready: ui.statusReady,
+			},
+			textGroup: ui.editorRibbonText,
+			formatGroup: ui.editorRibbonFormat,
+			insertGroup: ui.editorRibbonInsert,
+			historyGroup: ui.editorRibbonHistory,
+			paragraph: ui.editorParagraph,
+			heading1: ui.editorHeading1,
+			heading2: ui.editorHeading2,
+			heading3: ui.editorHeading3,
+			bold: ui.editorBold,
+			italic: ui.editorItalic,
+			underline: ui.editorUnderline,
+			fontFamily: ui.editorFontFamily,
+			fontSize: ui.editorFontSize,
+			defaultTextStyle: ui.editorDefaultTextStyle,
+			alignLeft: ui.editorAlignLeft,
+			alignCenter: ui.editorAlignCenter,
+			alignRight: ui.editorAlignRight,
+			clearInlineStyles: ui.editorClearInlineStyles,
+			bulletList: ui.editorBulletList,
+			orderedList: ui.editorOrderedList,
+			blockquote: ui.editorBlockquote,
+			undo: ui.editorUndo,
+			redo: ui.editorRedo,
+			insertCitation: ui.editorInsertCitation,
+			insertFigure: ui.editorInsertFigure,
+			insertFigureRef: ui.editorInsertFigureRef,
+			citationPrompt: ui.editorCitationPrompt,
+			figureUrlPrompt: ui.editorFigureUrlPrompt,
+			figureCaptionPrompt: ui.editorFigureCaptionPrompt,
+			figureRefPrompt: ui.editorFigureRefPrompt,
+			fontFamilyPrompt: ui.editorFontFamilyPrompt,
+			fontSizePrompt: ui.editorFontSizePrompt,
+		},
+		viewPartProps: context.viewPartProps,
+		nativeHost: context.nativeHost,
+		dialogService: context.dialogService,
+		instantiationService: context.instantiationService,
+		group,
+		commandService: context.commandService,
+		viewStateEntries,
+		...actions,
+		showTitlebarActions: true,
+		showToolbar: true,
+		isEditorCollapsed: false,
+		onToggleEditorCollapse: () => {},
+	};
 }
 
 function areEditorPartControllerContextsEqual(
-  previous: EditorPartControllerContext,
-  next: EditorPartControllerContext,
-) {
-  return (
-    previous.ui === next.ui &&
-    previous.nativeHost === next.nativeHost &&
-    previous.dialogService === next.dialogService &&
-    previous.instantiationService === next.instantiationService &&
-    previous.ensureEditorPartVisible === next.ensureEditorPartVisible &&
-    previous.viewPartProps.browserUrl === next.viewPartProps.browserUrl &&
-    (previous.viewPartProps.browserPageTitle ?? '') ===
-      (next.viewPartProps.browserPageTitle ?? '') &&
-    (previous.viewPartProps.browserFaviconUrl ?? '') ===
-      (next.viewPartProps.browserFaviconUrl ?? '') &&
-    Boolean(previous.viewPartProps.browserIsLoading) ===
-      Boolean(next.viewPartProps.browserIsLoading) &&
-    previous.viewPartProps.electronRuntime === next.viewPartProps.electronRuntime &&
-    previous.viewPartProps.webContentRuntime === next.viewPartProps.webContentRuntime &&
-    previous.viewPartProps.labels.emptyState === next.viewPartProps.labels.emptyState &&
-    previous.viewPartProps.labels.contentUnavailable ===
-      next.viewPartProps.labels.contentUnavailable &&
-    previous.viewPartProps.labels.overlayPauseHeading ===
-      next.viewPartProps.labels.overlayPauseHeading &&
-    previous.viewPartProps.labels.overlayPauseDetail ===
-      next.viewPartProps.labels.overlayPauseDetail
-  );
+	previous: EditorPartControllerContext,
+	next: EditorPartControllerContext,
+): boolean {
+	return previous.ui === next.ui
+		&& previous.nativeHost === next.nativeHost
+		&& previous.dialogService === next.dialogService
+		&& previous.instantiationService === next.instantiationService
+		&& previous.storageService === next.storageService
+		&& previous.commandService === next.commandService
+		&& previous.ensureEditorPartVisible === next.ensureEditorPartVisible
+		&& previous.viewPartProps === next.viewPartProps;
 }
 
 export class EditorPartController implements IEditorService {
-  declare readonly _serviceBrand: undefined;
-  private context: EditorPartControllerContext;
-  private readonly editorModel = createEditorModel();
-  private readonly editorOpenService: EditorOpenService;
-  private snapshot: EditorPartControllerSnapshot;
-  private closeOperationQueue: Promise<void> = Promise.resolve();
-  private readonly listeners = new Set<
-    (reason: EditorPartChangeReason) => void
-  >();
-  private readonly browserInputBindings = new Map<string, {
-    readonly input: EditorInput;
-    readonly listener: IDisposable;
-  }>();
-  private readonly actions: EditorPartActions;
-  private readonly unsubscribeWritingModel: () => void;
+	declare readonly _serviceBrand: undefined;
+	private context: EditorPartControllerContext;
+	private readonly groups: EditorGroups;
+	private readonly viewStateEntries = new Map<string, SerializedEditorViewStateEntry>();
+	private readonly listeners = new Set<(reason: EditorPartChangeReason) => void>();
+	private snapshot: EditorPartControllerSnapshot;
+	private readonly actions: EditorPartActions;
+	private readonly groupsListener: IDisposable;
 
-  constructor(context: EditorPartControllerContext) {
-    this.context = context;
-    this.editorOpenService = createEditorOpenService(
-      this.editorModel,
-      this.context.editorResolverService,
-    );
-    this.actions = {
-      onActivateTab: this.onActivateTab,
-      onReorderTab: this.onReorderTab,
-      onCloseTab: this.onCloseTab,
-      onCloseOtherTabs: this.onCloseOtherTabs,
-      onCloseAllTabs: this.onCloseAllTabs,
-      onRenameTab: this.onRenameTab,
-      onOpenEditor: this.openEditor,
-      onDraftDocumentChange: this.setDraftDocument,
-      onDidChangeBrowserState: this.updateBrowserState,
-      onSetEditorViewState: this.setEditorViewState,
-      onDeleteEditorViewState: this.deleteEditorViewState,
-    };
-    this.snapshot = createEditorPartControllerSnapshot(
-      this.context,
-      this.editorModel,
-      this.actions,
-    );
-    this.unsubscribeWritingModel = this.editorModel.subscribe(() => {
-      this.refreshSnapshot('model');
-    });
-  }
+	constructor(context: EditorPartControllerContext) {
+		this.context = context;
+		const stored = context.storageService.get(EditorPartStorageKey, StorageScope.WORKSPACE);
+		if (stored) {
+			const parsed = JSON.parse(stored) as StoredEditorPart;
+			this.groups = deserializeEditorGroups(
+				parsed.editorGroups,
+				editorInputSerializerRegistry,
+				context.instantiationService,
+			);
+			for (const entry of parsed.viewStateEntries) {
+				this.viewStateEntries.set(JSON.stringify(entry.key), entry);
+			}
+		} else {
+			this.groups = new EditorGroups();
+		}
+		this.actions = {
+			onActivateTab: this.onActivateTab,
+			onReorderTab: this.onReorderTab,
+			onCloseTab: this.onCloseTab,
+			onCloseOtherTabs: this.onCloseOtherTabs,
+			onCloseAllTabs: this.onCloseAllTabs,
+			onRenameTab: this.onRenameTab,
+			onOpenEditor: this.openEditor,
+			onDidChangeBrowserState: () => {},
+			onSetEditorViewState: this.setEditorViewState,
+			onDeleteEditorViewState: this.deleteEditorViewState,
+		};
+		this.snapshot = this.createSnapshot();
+		this.groupsListener = this.groups.onDidChange(() => {
+			this.persist();
+			this.refreshSnapshot('structure');
+		});
+	}
 
-  readonly subscribe = (listener: (reason: EditorPartChangeReason) => void) => {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  };
+	readonly subscribe = (listener: (reason: EditorPartChangeReason) => void) => {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	};
 
-  readonly getSnapshot = () => this.snapshot;
+	readonly getSnapshot = () => this.snapshot;
 
-  readonly setContext = (context: EditorPartControllerContext) => {
-    if (areEditorPartControllerContextsEqual(this.context, context)) {
-      return;
-    }
+	readonly setContext = (context: EditorPartControllerContext) => {
+		if (areEditorPartControllerContextsEqual(this.context, context)) {
+			return;
+		}
+		this.context = context;
+		this.refreshSnapshot('context');
+	};
 
-    this.context = context;
-    this.refreshSnapshot('context');
-  };
+	readonly openEditor = async (
+		input: EditorInput | IUntypedEditorInput,
+		options: IEditorOpenOptions = {},
+	): Promise<EditorInput> => {
+		this.context.ensureEditorPartVisible();
+		const typedInput = input instanceof EditorInput
+			? input
+			: this.resolveEditorInput(input, options);
+		return this.groups.openEditor(typedInput, options);
+	};
 
-  readonly dispose = () => {
-    this.unsubscribeWritingModel();
-    const browserInputBindings = [...this.browserInputBindings.values()];
-    this.browserInputBindings.clear();
-    for (const binding of browserInputBindings) {
-      binding.listener.dispose();
-      binding.input.dispose();
-    }
-    this.editorModel.dispose();
-    this.listeners.clear();
-  };
+	readonly activateEditor = (editor: EditorInput) => {
+		const match = this.groups.findEditor(editor);
+		if (!match) {
+			return;
+		}
+		match.group.setActive(match.editor);
+		this.groups.activateGroup(match.group);
+	};
 
-  readonly openEditor = (request: EditorOpenRequest) => {
-    this.context.ensureEditorPartVisible();
-    if (request.kind !== 'pdf' || request.options?.viewState?.url?.trim()) {
-      return this.openResolvedEditor(request);
-    }
+	readonly closeEditor = (editor: EditorInput) => this.groups.closeEditor(editor);
 
-    return this.resolveOpenEditorRequest(request).then((resolvedRequest) => {
-      if (!resolvedRequest) {
-        return {
-          handled: false,
-          activeTabId: null,
-        };
-      }
+	readonly getEditors = () => this.groups.getGroups().flatMap(group =>
+		group.getEditors().map(editor => ({ groupId: group.id, editor })),
+	);
 
-      return this.openResolvedEditor(resolvedRequest);
-    });
-  };
+	readonly getActiveGroupId = () => this.groups.active.id;
 
-  readonly canSaveActiveDraft = () => this.editorModel.canSaveActiveDraft();
+	readonly canSaveActiveDraft = () => this.getActiveDraft()?.isDirty() ?? false;
 
-  readonly saveActiveDraft = () => this.editorModel.saveActiveDraft();
+	readonly saveActiveDraft = () => {
+		const draft = this.getActiveDraft();
+		if (!draft) {
+			return false;
+		}
+		void draft.save();
+		return true;
+	};
 
-  readonly updateBrowserState = (state: BrowserEditorPaneState) => {
-    this.bindBrowserInput(state.tabId);
-    this.editorModel.updateBrowserTabState(state);
-  };
+	readonly getDraftBody = () => {
+		const draft = this.getActiveDraft();
+		return draft ? writingEditorDocumentToPlainText(draft.document) : '';
+	};
 
-  readonly getDraftBody = () => this.editorModel.getDraftBody();
-  readonly getDraftDocument = () => this.editorModel.getDraftDocument();
-  readonly setDraftDocument = (value: WritingEditorDocument) => {
-    this.editorModel.setDraftDocument(value);
-  };
-  readonly setEditorViewState = (
-    key: EditorViewStateKey,
-    state: unknown,
-  ) => {
-    this.editorModel.setEditorViewState(key, state);
-  };
-  readonly deleteEditorViewState = (key: EditorViewStateKey) => {
-    this.editorModel.deleteEditorViewState(key);
-  };
+	readonly getDraftDocument = () => this.getActiveDraft()?.document ?? null;
 
-  readonly onActivateTab = (tabId: string) => {
-    this.editorModel.activateTab(tabId);
-  };
+	readonly setDraftDocument = (value: WritingEditorDocument) => {
+		this.getActiveDraft()?.setDocument(value);
+	};
 
-  readonly activateEditor = (editorId: string) => {
-    this.onActivateTab(editorId);
-  };
+	readonly setEditorViewState = (key: EditorViewStateKey, state: unknown) => {
+		this.viewStateEntries.set(JSON.stringify(key), { key, state });
+		this.persist();
+		this.refreshSnapshot('structure');
+	};
 
-  readonly getEditors = (): readonly IEditorServiceEntry[] =>
-    this.editorModel.getSnapshot().groups.flatMap(group =>
-      group.tabs.map(tab => ({
-        groupId: group.groupId,
-        id: tab.id,
-        kind: tab.kind,
-        title: tab.title,
-        url: tab.kind === 'draft' ? undefined : tab.url,
-      })),
-    );
+	readonly deleteEditorViewState = (key: EditorViewStateKey) => {
+		this.viewStateEntries.delete(JSON.stringify(key));
+		this.persist();
+		this.refreshSnapshot('structure');
+	};
 
-  readonly getActiveGroupId = () => this.editorModel.getSnapshot().activeGroupId;
+	readonly dispose = () => {
+		this.groupsListener.dispose();
+		this.groups.dispose();
+		this.listeners.clear();
+	};
 
-  readonly onReorderTab = (
-    tabId: string,
-    targetSlotIndex: number,
-  ) => {
-    this.editorModel.reorderTab(tabId, targetSlotIndex);
-  };
+	private resolveEditorInput(
+		input: IUntypedEditorInput,
+		options: IEditorOpenOptions,
+	): EditorInput {
+		if (!('resource' in input) || !input.resource) {
+			throw new Error('Cannot resolve an editor input without a resource.');
+		}
+		const resolved = this.context.editorResolverService.resolveEditor({
+			resource: input.resource,
+			options: options.editorOptions ?? input.options,
+		});
+		if (!resolved) {
+			throw new Error(`No editor resolver is registered for '${input.resource.toString()}'.`);
+		}
+		return resolved.editor;
+	}
 
-  readonly onCloseTab = (tabId: string) =>
-    this.enqueueCloseOperation(async () => {
-      if (!this.hasTab(tabId)) {
-        return false;
-      }
+	private readonly onActivateTab = (editorId: string) => {
+		const editor = this.findEditorById(editorId);
+		if (editor) {
+			this.activateEditor(editor);
+		}
+	};
 
-      const didConfirm = await this.confirmCloseForTabIds([tabId]);
-      if (!didConfirm) {
-        return false;
-      }
+	private readonly onReorderTab = (editorId: string, targetSlotIndex: number) => {
+		const editor = this.findEditorById(editorId);
+		if (editor) {
+			this.groups.active.moveEditor(editor, targetSlotIndex);
+		}
+	};
 
-      return this.closeTabAfterConfirmation(tabId);
-    });
+	private readonly onCloseTab = async (editorId: string) => {
+		const editor = this.findEditorById(editorId);
+		return editor ? this.closeEditor(editor) : false;
+	};
 
-  readonly closeEditor = (editorId: string) => this.onCloseTab(editorId);
+	private readonly onCloseOtherTabs = async (editorId: string) => {
+		const group = this.groups.active;
+		for (const editor of group.getEditors()) {
+			if (getEditorInputId(editor) !== editorId && !(await group.closeEditor(editor))) {
+				return false;
+			}
+		}
+		return true;
+	};
 
-  readonly onCloseOtherTabs = (tabId: string) =>
-    this.enqueueCloseOperation(async () => {
-      if (!this.hasTab(tabId)) {
-        return false;
-      }
+	private readonly onCloseAllTabs = async () => {
+		for (const editor of this.groups.active.getEditors()) {
+			if (!(await this.groups.active.closeEditor(editor))) {
+				return false;
+			}
+		}
+		return true;
+	};
 
-      const tabsToClose = this.editorModel
-        .getSnapshot()
-        .tabs.filter((tab) => tab.id !== tabId)
-        .map((tab) => tab.id);
-      const didConfirm = await this.confirmCloseForTabIds(tabsToClose);
-      if (!didConfirm) {
-        return false;
-      }
+	private readonly onRenameTab = async (editorId: string) => {
+		const editor = this.findEditorById(editorId);
+		if (!editor) {
+			return;
+		}
+		const result = await this.context.dialogService.input({
+			title: this.context.ui.editorTabRenameTitle,
+			message: this.context.ui.editorTabRenameLabel,
+			value: editor.getName(),
+			primaryButton: this.context.ui.editorModalConfirm,
+			cancelButton: this.context.ui.editorModalCancel,
+		});
+		if (result.value) {
+			editor.rename(result.value);
+		}
+	};
 
-      for (const tabToClose of tabsToClose) {
-        if (!this.closeTabAfterConfirmation(tabToClose)) {
-          return false;
-        }
-      }
-      return true;
-    });
+	private findEditorById(editorId: string): EditorInput | undefined {
+		return this.groups.active.getEditors().find(editor => getEditorInputId(editor) === editorId);
+	}
 
-  readonly onCloseAllTabs = () =>
-    this.enqueueCloseOperation(async () => {
-      const tabsToClose = this.editorModel.getSnapshot().tabs.map((tab) => tab.id);
-      const didConfirm = await this.confirmCloseForTabIds(tabsToClose);
-      if (!didConfirm) {
-        return false;
-      }
+	private getActiveDraft(): (EditorInput & {
+		readonly document: WritingEditorDocument;
+		setDocument(value: WritingEditorDocument): void;
+	}) | undefined {
+		const active = this.groups.active.active;
+		if (!active) {
+			return undefined;
+		}
+		const candidate = active as EditorInput & {
+			readonly document?: WritingEditorDocument;
+			setDocument?: (value: WritingEditorDocument) => void;
+		};
+		return candidate.document && candidate.setDocument
+			? candidate as EditorInput & {
+				readonly document: WritingEditorDocument;
+				setDocument(value: WritingEditorDocument): void;
+			}
+			: undefined;
+	}
 
-      for (const tabToClose of tabsToClose) {
-        if (!this.closeTabAfterConfirmation(tabToClose)) {
-          return false;
-        }
-      }
-      return true;
-    });
+	private createSnapshot(): EditorPartControllerSnapshot {
+		const group = this.groups.active;
+		const viewStateEntries = [...this.viewStateEntries.values()];
+		const draftBody = this.getDraftBody();
+		return {
+			group,
+			viewStateEntries,
+			draftBody,
+			editorPartProps: createEditorPartProps(this.context, group, viewStateEntries, this.actions),
+		};
+	}
 
-  readonly onRenameTab = async (tabId: string) => {
-    const targetTab = this.editorModel
-      .getSnapshot()
-      .tabs.find((tab) => tab.id === tabId);
-    if (!targetTab) {
-      return;
-    }
+	private refreshSnapshot(reason: EditorPartChangeReason): void {
+		const next = this.createSnapshot();
+		const previous = this.snapshot;
+		this.snapshot = next;
+		if (reason === 'structure' && createEditorPartStructureKey(previous) === createEditorPartStructureKey(next)) {
+			return;
+		}
+		for (const listener of this.listeners) {
+			listener(reason);
+		}
+	}
 
-    const { ui } = this.context;
-    const nextTitle =
-      (await this.context.dialogService.input({
-        title: ui.editorTabRenameTitle,
-        message: ui.editorTabRenameLabel,
-        value: targetTab.title.trim(),
-        primaryButton: ui.editorModalConfirm,
-        cancelButton: ui.editorModalCancel,
-      })).value ?? '';
-    if (!nextTitle) {
-      return;
-    }
-
-    this.editorModel.renameTab(tabId, nextTitle);
-  };
-
-  private readonly confirmCloseForTabIds = async (tabIds: readonly string[]) => {
-    if (tabIds.length === 0) {
-      return true;
-    }
-
-    const dirtyDraftTabIds = this.editorModel.getDirtyDraftTabIds(tabIds);
-    if (dirtyDraftTabIds.length === 0) {
-      return true;
-    }
-
-    const { ui } = this.context;
-    const dirtyTabs = this.editorModel
-      .getSnapshot()
-      .groups.flatMap(group => group.tabs)
-      .filter(
-        (tab): tab is Extract<EditorWorkspaceTab, { kind: 'draft' }> =>
-          tab.kind === 'draft' && dirtyDraftTabIds.includes(tab.id),
-      );
-    const firstDirtyTitle =
-      dirtyTabs[0]?.title.trim() || ui.editorDraftMode;
-    const confirmation = await this.context.dialogService.prompt<'save' | 'discard'>({
-      title: ui.editorUnsavedChangesTitle,
-      message:
-        dirtyDraftTabIds.length === 1
-          ? ui.editorUnsavedChangesMessageSingle.replace('{title}', firstDirtyTitle)
-          : ui.editorUnsavedChangesMessageMultiple.replace(
-              '{count}',
-              String(dirtyDraftTabIds.length),
-            ),
-      buttons: [
-        {
-          label: ui.editorUnsavedChangesSave,
-          result: 'save',
-          primary: true,
-        },
-        {
-          label: ui.editorUnsavedChangesDiscard,
-          result: 'discard',
-        },
-      ],
-      cancelButton: ui.editorModalCancel,
-    });
-
-    switch (confirmation.result) {
-      case 'save':
-        for (const dirtyTabId of dirtyDraftTabIds) {
-          this.editorModel.saveDraftTab(dirtyTabId);
-        }
-        return true;
-      case 'discard':
-        return true;
-      default:
-        return false;
-    }
-  };
-
-  private hasTab(tabId: string) {
-    return this.editorModel
-      .getSnapshot()
-      .groups.some(group => group.tabs.some(tab => tab.id === tabId));
-  }
-
-  private openResolvedEditor(request: EditorOpenRequest) {
-    const result = this.editorOpenService.open(request);
-    if (request.kind === 'browser' && result.handled && result.activeTabId) {
-      this.bindBrowserInput(result.activeTabId);
-    }
-    return result;
-  }
-
-  private bindBrowserInput(tabId: string): EditorInput {
-    const resolved = this.context.editorResolverService.resolveEditor({
-      resource: BrowserViewUri.forId(tabId),
-    });
-    if (!resolved) {
-      throw new Error(`No Browser editor input is registered for tab '${tabId}'.`);
-    }
-
-    const existing = this.browserInputBindings.get(tabId);
-    if (existing?.input === resolved.editor) {
-      return existing.input;
-    }
-    existing?.listener.dispose();
-
-    const listener = resolved.editor.onWillDispose(() => {
-      const binding = this.browserInputBindings.get(tabId);
-      if (binding?.input !== resolved.editor) {
-        return;
-      }
-      binding.listener.dispose();
-      this.browserInputBindings.delete(tabId);
-      this.editorModel.closeTab(tabId);
-    });
-    this.browserInputBindings.set(tabId, {
-      input: resolved.editor,
-      listener,
-    });
-    return resolved.editor;
-  }
-
-  private closeTabAfterConfirmation(tabId: string): boolean {
-    const tab = this.editorModel
-      .getSnapshot()
-      .groups.flatMap(group => group.tabs)
-      .find(candidate => candidate.id === tabId);
-    if (!tab) {
-      return true;
-    }
-    if (tab.kind !== 'browser') {
-      this.editorModel.closeTab(tabId);
-      return true;
-    }
-
-    this.bindBrowserInput(tabId).dispose();
-    return !this.hasTab(tabId);
-  }
-
-  private enqueueCloseOperation<T>(operation: () => Promise<T>) {
-    const scheduledOperation = this.closeOperationQueue.then(
-      operation,
-      operation,
-    );
-    this.closeOperationQueue = scheduledOperation.then(
-      () => undefined,
-      () => undefined,
-    );
-    return scheduledOperation;
-  }
-
-  private emitChange(reason: EditorPartChangeReason) {
-    for (const listener of this.listeners) {
-      listener(reason);
-    }
-  }
-
-  private refreshSnapshot(reason: 'model' | 'context') {
-    this.setSnapshot(
-      createEditorPartControllerSnapshot(
-        this.context,
-        this.editorModel,
-        this.actions,
-      ),
-      reason,
-    );
-  }
-
-  private setSnapshot(
-    nextSnapshot: EditorPartControllerSnapshot,
-    reason: 'model' | 'context',
-  ) {
-    if (Object.is(this.snapshot, nextSnapshot)) {
-      return;
-    }
-
-    const previousSnapshot = this.snapshot;
-    this.snapshot = nextSnapshot;
-
-    if (
-      reason === 'model' &&
-      createEditorPartStructureKey(previousSnapshot) ===
-        createEditorPartStructureKey(nextSnapshot)
-    ) {
-      return;
-    }
-
-    this.emitChange(reason === 'context' ? 'context' : 'structure');
-  }
-
-  private readonly resolveOpenEditorRequest = async (
-    request: EditorOpenRequest,
-  ): Promise<EditorOpenRequest | null> => {
-    if (request.kind !== 'pdf' || request.options?.viewState?.url?.trim()) {
-      return request;
-    }
-
-    return request;
-  };
+	private persist(): void {
+		const stored: StoredEditorPart = {
+			editorGroups: serializeEditorGroups(this.groups, editorInputSerializerRegistry),
+			viewStateEntries: [...this.viewStateEntries.values()],
+		};
+		this.context.storageService.store(
+			EditorPartStorageKey,
+			JSON.stringify(stored),
+			StorageScope.WORKSPACE,
+			StorageTarget.MACHINE,
+		);
+	}
 }
 
-export function createEditorPartController(
-  context: EditorPartControllerContext,
-) {
-  return new EditorPartController(context);
+export function createEditorPartController(context: EditorPartControllerContext) {
+	return new EditorPartController(context);
 }

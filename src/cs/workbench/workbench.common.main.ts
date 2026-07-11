@@ -60,6 +60,9 @@ import 'cs/workbench/services/quickInput/browser/quickInputService';
 import 'cs/workbench/services/views/browser/viewsService';
 import 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 import 'cs/workbench/contrib/chat/browser/chat.contribution';
+import 'cs/workbench/contrib/draftEditor/browser/draftEditorCloseService';
+import 'cs/workbench/contrib/draftEditor/browser/draftEditor.contribution';
+import 'cs/workbench/contrib/pdfEditor/browser/pdfEditor.contribution';
 
 registerWorkbenchService(INativeHostService, nativeHostService);
 registerWorkbenchService(IContextKeyService, contextKeyService);

@@ -122,6 +122,7 @@ import {
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import { IStorageService } from 'cs/platform/storage/common/storage';
 import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import {
   IWorkbenchSidebarEntryService,
@@ -386,6 +387,7 @@ class WorkbenchHost {
     @IFetchService private readonly fetchService: IFetchService,
     @IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
     @ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
+	@IStorageService private readonly storageService: IStorageService,
   ) {
     const dropdownServices = {
       contextMenuService: this.contextMenuService,
@@ -405,7 +407,7 @@ class WorkbenchHost {
         expandEditor: '',
         collapseEditor: '',
       },
-      onOpenEditor: () => {},
+      commandService: this.commandService,
       onToggleEditorCollapse: () => {},
     });
     this.sidebarFooterActionsView = new SidebarFooterActionsView(dropdownServices);
@@ -979,25 +981,22 @@ class WorkbenchHost {
       dialogService: this.dialogService,
       instantiationService: this.instantiationService,
       editorResolverService: this.editorResolverService,
+      storageService: this.storageService,
+      commandService: this.commandService,
       ensureEditorPartVisible: this.ensureEditorPartVisible,
     });
     this.editorPartController = editorPartControllerInstance;
     registerWorkbenchService(IEditorService, editorPartControllerInstance);
     const editorPartSnapshot = editorPartControllerInstance.getSnapshot();
     const {
-      activeTab: activeEditorTab,
+      group: editorGroup,
       draftBody,
       editorPartProps,
     } = editorPartSnapshot;
-    const browserUrl = activeEditorTab?.kind === 'browser'
-      ? activeEditorTab.url
-      : '';
-    const browserPageTitle = activeEditorTab?.kind === 'browser'
-      ? activeEditorTab.title
-      : '';
-    const handleOpenEditor: EditorPartProps['onOpenEditor'] = request => {
-      return editorPartControllerInstance.openEditor(request);
-    };
+    const activeEditor = editorGroup.active;
+    const browserUrl = activeEditor?.getDescription() ?? '';
+    const browserPageTitle = activeEditor?.getName() ?? '';
+    const handleOpenEditor: EditorPartProps['onOpenEditor'] = editorPartProps.onOpenEditor;
 
     const chatServiceInstance = this.chatService;
     chatServiceInstance.setContext({
@@ -1025,11 +1024,12 @@ class WorkbenchHost {
     const handleAssistantApplyPatch =
       chatServiceInstance.applyPatch;
 
+    const activeDraftDocument = editorPartControllerInstance.getDraftDocument();
     const activeDraftExport =
-      activeEditorTab?.kind === 'draft'
+      activeDraftDocument
         ? {
-            title: activeEditorTab.title,
-            document: activeEditorTab.document,
+            title: activeEditor?.getName() ?? '',
+            document: activeDraftDocument,
             editorDraftStyle: {
               defaultBodyStyle: {
                 ...editorDraftStyleSnapshot.defaultBodyStyle,
@@ -1053,8 +1053,6 @@ class WorkbenchHost {
         }
 
         handleOpenEditor({
-          kind: 'browser',
-          disposition: 'new-tab',
           resource: BrowserViewUri.forId(generateUuid()),
           options: {
             viewState: {
@@ -1109,8 +1107,7 @@ class WorkbenchHost {
     const baseEditorPartProps = editorPartProps;
     const focusWorkbenchWebUrlInput = () => {
       handleOpenEditor({
-        kind: 'browser',
-        disposition: 'reveal-or-open',
+        resource: BrowserViewUri.forId(generateUuid()),
       });
       this.workbenchContentPartViews?.focusActiveEditorPrimaryInput();
     };
@@ -1150,7 +1147,7 @@ class WorkbenchHost {
         expandEditor: contentAwareEditorPartProps.labels.expandEditor,
         collapseEditor: contentAwareEditorPartProps.labels.collapseEditor,
       },
-      onOpenEditor: contentAwareEditorPartProps.onOpenEditor,
+      commandService: contentAwareEditorPartProps.commandService,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     });
 
@@ -1183,6 +1180,8 @@ class WorkbenchHost {
         dialogService: this.dialogService,
         instantiationService: this.instantiationService,
         editorResolverService: this.editorResolverService,
+        storageService: this.storageService,
+        commandService: this.commandService,
         ensureEditorPartVisible: this.ensureEditorPartVisible,
       },
       chatService: chatServiceInstance,
@@ -1552,7 +1551,7 @@ class WorkbenchHost {
 
     syncWorkbenchWindowTitle({
       appName: ui.appName,
-      activeEditorTab,
+      activeEditor,
       browserPageTitle,
     });
 

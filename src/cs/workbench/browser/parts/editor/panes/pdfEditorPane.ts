@@ -22,27 +22,31 @@ import type {
   PdfReaderSnapshot,
   PdfReaderViewState,
 } from 'cs/editor/browser/pdf/pdfReaderState';
-import { EMPTY_PDF_TAB_URL } from 'cs/workbench/browser/parts/editor/editorInput';
-import type { EditorWorkspacePdfTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { URI } from 'cs/base/common/uri';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import { EmptyEditorUrl } from 'cs/workbench/common/editor/editorResources';
+
+export interface PdfEditorPaneInput extends EditorInput {
+  readonly id: string;
+  readonly url: string;
+}
 
 export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
   reader: PdfReaderViewState;
 };
 
-export type PdfEditorPaneProps = {
+export type PdfEditorPaneContext = {
   labels: EditorPartLabels;
-  pdfTab: EditorWorkspacePdfTab;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   onOpenEditor?: EditorOpenHandler;
   onReaderStatusChange?: (
-    tabId: string,
+    input: PdfEditorPaneInput,
     status: PdfReaderRuntimeStatus,
   ) => void;
 };
@@ -89,20 +93,20 @@ class PdfEditorPaneStateController {
 }
 
 export class PdfEditorPane extends EditorPane<
-  PdfEditorPaneProps,
+  PdfEditorPaneInput,
   PdfEditorPaneViewState
 > {
-  private props: PdfEditorPaneProps;
+  private input: PdfEditorPaneInput;
   private readonly element = document.createElement('div');
   private readonly bodyElement = document.createElement('div');
   private readonly editor = new PdfEditorPaneStateController();
   private readerSnapshot: PdfReaderSnapshot;
   private documentReader: ReturnType<typeof createPdfDocumentReader> | null = null;
 
-  constructor(props: PdfEditorPaneProps) {
+  constructor(input: PdfEditorPaneInput, private readonly context: PdfEditorPaneContext) {
     super();
-    this.props = props;
-    this.readerSnapshot = this.createReaderSnapshot(props);
+    this.input = input;
+    this.readerSnapshot = this.createReaderSnapshot(input);
     this.element.className = 'comet-editor-pdf-pane';
     this.bodyElement.className = 'comet-editor-pdf-body';
     this.element.append(this.bodyElement);
@@ -113,9 +117,9 @@ export class PdfEditorPane extends EditorPane<
     return this.element;
   }
 
-  override setProps(props: PdfEditorPaneProps) {
-    this.props = props;
-    this.readerSnapshot = this.createReaderSnapshot(props);
+  override setInput(input: PdfEditorPaneInput) {
+    this.input = input;
+    this.readerSnapshot = this.createReaderSnapshot(input);
     this.render();
   }
 
@@ -163,21 +167,21 @@ export class PdfEditorPane extends EditorPane<
     this.element.replaceChildren();
   }
 
-  private createReaderSnapshot(props: PdfEditorPaneProps) {
+  private createReaderSnapshot(input: PdfEditorPaneInput) {
     return createPdfReaderSnapshot({
       source: createPdfReaderDocumentSource({
-        url: props.pdfTab.url,
-        title: props.pdfTab.title,
-        emptyUrl: EMPTY_PDF_TAB_URL,
+        url: input.url,
+        title: input.getName(),
+        emptyUrl: EmptyEditorUrl,
       }),
       viewState: this.editor.getViewState().reader,
     });
   }
 
-  private createReaderViewPartProps(props: PdfEditorPaneProps): ViewPartProps {
+  private createReaderViewPartProps(): ViewPartProps {
     const { source } = this.readerSnapshot;
     return {
-      ...props.viewPartProps,
+      ...this.context.viewPartProps,
       browserUrl: source.kind === 'url' ? source.url : '',
       browserPageTitle: source.kind === 'url' ? source.title : undefined,
       browserFaviconUrl: '',
@@ -187,7 +191,7 @@ export class PdfEditorPane extends EditorPane<
   private getAnnotationTargetId() {
     return this.readerSnapshot.source.kind === 'url'
       ? this.readerSnapshot.source.url
-      : this.props.pdfTab.id;
+      : this.input.id;
   }
 
   private addAnnotationFromSelection(mode: NonNullable<Annotation['mode']>) {
@@ -225,15 +229,15 @@ export class PdfEditorPane extends EditorPane<
       url: this.readerSnapshot.source.kind === 'url'
         ? this.readerSnapshot.source.url
         : '',
-      targetId: this.props.pdfTab.id,
+      targetId: this.input.id,
       annotationTargetId: this.getAnnotationTargetId(),
       labels: {
-        title: this.props.labels.pdfTitle,
-        emptyState: this.props.labels.emptyWorkspaceBody,
-        openPdfFile: this.props.labels.pdfOpenFile,
+        title: this.context.labels.pdfTitle,
+        emptyState: this.context.labels.emptyWorkspaceBody,
+        openPdfFile: this.context.labels.pdfOpenFile,
       },
-      viewPartProps: this.createReaderViewPartProps(this.props),
-      nativeHost: this.props.nativeHost,
+      viewPartProps: this.createReaderViewPartProps(),
+      nativeHost: this.context.nativeHost,
       annotations,
       selection: this.editor.getViewState().selection,
       onViewStateChange: (viewState: PdfDocumentReaderViewState) => {
@@ -246,7 +250,7 @@ export class PdfEditorPane extends EditorPane<
         this.deletePdfAnnotation(annotationId);
       },
       onReaderStatusChange: (status: PdfReaderRuntimeStatus) => {
-        this.props.onReaderStatusChange?.(this.props.pdfTab.id, status);
+        this.context.onReaderStatusChange?.(this.input, status);
       },
       onOpenPdfFile: this.handleOpenPdfFile,
     };
@@ -262,15 +266,13 @@ export class PdfEditorPane extends EditorPane<
 
   private readonly handleOpenPdfFile = async () => {
     try {
-      const resource = await this.props.nativeHost.invoke('pick_pdf_file');
+      const resource = await this.context.nativeHost.invoke('pick_pdf_file');
       if (!resource) {
         return;
       }
       const uri = URI.revive(resource);
 
-      await this.props.onOpenEditor?.({
-        kind: 'pdf',
-        disposition: 'reveal-or-open',
+      await this.context.onOpenEditor?.({
         resource: uri,
         options: {
           viewState: {
@@ -284,8 +286,8 @@ export class PdfEditorPane extends EditorPane<
   };
 }
 
-export function createPdfEditorPane(props: PdfEditorPaneProps) {
-  return new PdfEditorPane(props);
+export function createPdfEditorPane(input: PdfEditorPaneInput, context: PdfEditorPaneContext) {
+  return new PdfEditorPane(input, context);
 }
 
 export default PdfEditorPane;

@@ -1,8 +1,8 @@
-import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 
 export type WorkbenchWindowTitleSource = {
   appName: string;
-  activeEditorTab: Pick<EditorWorkspaceTab, 'kind' | 'title'> | null;
+  activeEditor: EditorInput | null;
   browserPageTitle: string;
 };
 
@@ -13,10 +13,8 @@ function normalizeTitlePart(value: string | null | undefined) {
 export function resolveWorkbenchWindowTitle(source: WorkbenchWindowTitleSource) {
   const appName = normalizeTitlePart(source.appName) || 'Comet Studio';
   const activeTitle =
-    source.activeEditorTab?.kind === 'browser'
-        ? normalizeTitlePart(source.browserPageTitle) ||
-          normalizeTitlePart(source.activeEditorTab.title)
-        : normalizeTitlePart(source.activeEditorTab?.title);
+    normalizeTitlePart(source.browserPageTitle)
+      || normalizeTitlePart(source.activeEditor?.getName());
 
   return activeTitle && activeTitle !== appName
     ? `${activeTitle} - ${appName}`

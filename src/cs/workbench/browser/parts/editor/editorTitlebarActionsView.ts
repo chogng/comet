@@ -6,7 +6,9 @@ import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dr
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import { CreateDraftEditorCommandId, CreatePdfEditorCommandId } from 'cs/workbench/common/editor/editorResources';
+import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
+import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 
 export type EditorTitlebarActionsViewProps = DropdownContextServices & {
   isEditorCollapsed: boolean;
@@ -22,7 +24,7 @@ export type EditorTitlebarActionsViewProps = DropdownContextServices & {
     | 'expandEditor'
     | 'collapseEditor'
   >;
-  onOpenEditor: EditorOpenHandler;
+  commandService: IWorkbenchCommandService;
   onToggleEditorCollapse: () => void;
   onToggleAgentSidebar?: () => void;
 };
@@ -68,30 +70,21 @@ export class EditorTitlebarActionsView {
             label: this.props.labels.createDraft,
             icon: 'draft',
             onClick: () => {
-              void this.props.onOpenEditor({
-                kind: 'draft',
-                disposition: 'reveal-or-open',
-              });
+              void this.props.commandService.executeCommand(CreateDraftEditorCommandId);
             },
           },
           {
             label: this.props.labels.createBrowser,
             icon: 'link-external',
             onClick: () => {
-              void this.props.onOpenEditor({
-                kind: 'browser',
-                disposition: 'reveal-or-open',
-              });
+              void this.props.commandService.executeCommand(BrowserViewCommandId.NewTab);
             },
           },
           {
             label: this.props.labels.createFile,
             icon: 'file-text',
             onClick: () => {
-              void this.props.onOpenEditor({
-                kind: 'pdf',
-                disposition: 'reveal-or-open',
-              });
+              void this.props.commandService.executeCommand(CreatePdfEditorCommandId);
             },
           },
         ],

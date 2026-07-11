@@ -1,7 +1,3 @@
-import type {
-  EditorWorkspaceDraftTab,
-  WritingEditorDocument,
-} from 'cs/workbench/browser/parts/editor/editorModel';
 import { isDraftEditorCommandEnabled } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
 import { ProseMirrorEditor } from 'cs/editor/browser/text/editor';
@@ -13,28 +9,33 @@ import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/edit
 import type { WritingEditorSurfaceViewState } from 'cs/editor/browser/text/editor';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 
-export type DraftEditorPaneProps = DropdownContextServices & {
+export interface DraftEditorPaneInput extends EditorInput {
+  readonly document: WritingEditorDocument;
+  setDocument(value: WritingEditorDocument): void;
+}
+
+export type DraftEditorPaneContext = DropdownContextServices & {
   labels: EditorPartLabels;
-  draftTab: EditorWorkspaceDraftTab;
   dialogService: IDialogService;
-  onDraftDocumentChange: (value: WritingEditorDocument) => void;
-  onStatusChange?: (status: DraftEditorStatusState) => void;
+  onStatusChange?: (input: DraftEditorPaneInput, status: DraftEditorStatusState) => void;
 };
 
 export class DraftEditorPane extends EditorPane<
-  DraftEditorPaneProps,
+  DraftEditorPaneInput,
   WritingEditorSurfaceViewState
 > {
-  private props: DraftEditorPaneProps;
+  private input: DraftEditorPaneInput;
   private readonly element = document.createElement('div');
   private readonly editor: ProseMirrorEditor;
 
-  constructor(props: DraftEditorPaneProps) {
+  constructor(input: DraftEditorPaneInput, private readonly context: DraftEditorPaneContext) {
     super();
-    this.props = props;
+    this.input = input;
     this.element.className = 'comet-editor-draft-pane';
-    this.editor = new ProseMirrorEditor(this.toEditorProps(props));
+    this.editor = new ProseMirrorEditor(this.toEditorProps());
     this.element.append(this.editor.getElement());
   }
 
@@ -83,9 +84,9 @@ export class DraftEditorPane extends EditorPane<
     }
   }
 
-  override setProps(props: DraftEditorPaneProps) {
-    this.props = props;
-    this.editor.setProps(this.toEditorProps(props));
+  override setInput(input: DraftEditorPaneInput) {
+    this.input = input;
+    this.editor.setProps(this.toEditorProps());
   }
 
   override focus() {
@@ -108,18 +109,18 @@ export class DraftEditorPane extends EditorPane<
   private createCommandContext = () => ({
     editor: this.editor,
     labels: {
-      citationPrompt: this.props.labels.citationPrompt,
-      figureUrlPrompt: this.props.labels.figureUrlPrompt,
-      figureCaptionPrompt: this.props.labels.figureCaptionPrompt,
-      figureRefPrompt: this.props.labels.figureRefPrompt,
+      citationPrompt: this.context.labels.citationPrompt,
+      figureUrlPrompt: this.context.labels.figureUrlPrompt,
+      figureCaptionPrompt: this.context.labels.figureCaptionPrompt,
+      figureRefPrompt: this.context.labels.figureRefPrompt,
     },
     prompt: (message: string, defaultValue: string) =>
-      this.props.dialogService.input({
-        title: this.props.labels.draftMode,
+      this.context.dialogService.input({
+        title: this.context.labels.draftMode,
         message,
         value: defaultValue,
-        primaryButton: this.props.labels.editorModalConfirm,
-        cancelButton: this.props.labels.editorModalCancel,
+        primaryButton: this.context.labels.editorModalConfirm,
+        cancelButton: this.context.labels.editorModalCancel,
       }).then(result => result.value ?? null),
   });
 
@@ -138,61 +139,65 @@ export class DraftEditorPane extends EditorPane<
     this.createCommandContext,
   );
 
-  private toEditorProps(props: DraftEditorPaneProps) {
+  private toEditorProps() {
+    const input = this.input;
+    const { labels } = this.context;
     return {
-      contextMenuService: props.contextMenuService,
-      contextViewProvider: props.contextViewProvider,
-      document: props.draftTab.document,
-      placeholder: props.labels.draftBodyPlaceholder,
+      contextMenuService: this.context.contextMenuService,
+      contextViewProvider: this.context.contextViewProvider,
+      document: input.document,
+      placeholder: labels.draftBodyPlaceholder,
       statusLabels: {
-        blockFigure: props.labels.status.blockFigure,
+        blockFigure: labels.status.blockFigure,
       },
       labels: {
-        toolbarMore: props.labels.toolbarMore,
-        textGroup: props.labels.textGroup,
-        formatGroup: props.labels.formatGroup,
-        insertGroup: props.labels.insertGroup,
-        historyGroup: props.labels.historyGroup,
-        paragraph: props.labels.paragraph,
-        heading1: props.labels.heading1,
-        heading2: props.labels.heading2,
-        heading3: props.labels.heading3,
-        bold: props.labels.bold,
-        italic: props.labels.italic,
-        underline: props.labels.underline,
-        fontFamily: props.labels.fontFamily,
-        fontSize: props.labels.fontSize,
-        defaultTextStyle: props.labels.defaultTextStyle,
-        alignLeft: props.labels.alignLeft,
-        alignCenter: props.labels.alignCenter,
-        alignRight: props.labels.alignRight,
-        clearInlineStyles: props.labels.clearInlineStyles,
-        bulletList: props.labels.bulletList,
-        orderedList: props.labels.orderedList,
-        blockquote: props.labels.blockquote,
-        undo: props.labels.undo,
-        redo: props.labels.redo,
-        insertCitation: props.labels.insertCitation,
-        insertFigure: props.labels.insertFigure,
-        insertFigureRef: props.labels.insertFigureRef,
-        citationPrompt: props.labels.citationPrompt,
-        figureUrlPrompt: props.labels.figureUrlPrompt,
-        figureCaptionPrompt: props.labels.figureCaptionPrompt,
-        figureRefPrompt: props.labels.figureRefPrompt,
-        fontFamilyPrompt: props.labels.fontFamilyPrompt,
-        fontSizePrompt: props.labels.fontSizePrompt,
+        toolbarMore: labels.toolbarMore,
+        textGroup: labels.textGroup,
+        formatGroup: labels.formatGroup,
+        insertGroup: labels.insertGroup,
+        historyGroup: labels.historyGroup,
+        paragraph: labels.paragraph,
+        heading1: labels.heading1,
+        heading2: labels.heading2,
+        heading3: labels.heading3,
+        bold: labels.bold,
+        italic: labels.italic,
+        underline: labels.underline,
+        fontFamily: labels.fontFamily,
+        fontSize: labels.fontSize,
+        defaultTextStyle: labels.defaultTextStyle,
+        alignLeft: labels.alignLeft,
+        alignCenter: labels.alignCenter,
+        alignRight: labels.alignRight,
+        clearInlineStyles: labels.clearInlineStyles,
+        bulletList: labels.bulletList,
+        orderedList: labels.orderedList,
+        blockquote: labels.blockquote,
+        undo: labels.undo,
+        redo: labels.redo,
+        insertCitation: labels.insertCitation,
+        insertFigure: labels.insertFigure,
+        insertFigureRef: labels.insertFigureRef,
+        citationPrompt: labels.citationPrompt,
+        figureUrlPrompt: labels.figureUrlPrompt,
+        figureCaptionPrompt: labels.figureCaptionPrompt,
+        figureRefPrompt: labels.figureRefPrompt,
+        fontFamilyPrompt: labels.fontFamilyPrompt,
+        fontSizePrompt: labels.fontSizePrompt,
       },
       onInsertCitation: this.handleInsertCitation,
       onInsertFigure: this.handleInsertFigure,
       onInsertFigureRef: this.handleInsertFigureRef,
-      onDocumentChange: props.onDraftDocumentChange,
-      onStatusChange: props.onStatusChange,
+      onDocumentChange: (value: WritingEditorDocument) => input.setDocument(value),
+      onStatusChange: (status: DraftEditorStatusState) => {
+        this.context.onStatusChange?.(input, status);
+      },
     };
   }
 }
 
-export function createDraftEditorPane(props: DraftEditorPaneProps) {
-  return new DraftEditorPane(props);
+export function createDraftEditorPane(input: DraftEditorPaneInput, context: DraftEditorPaneContext) {
+  return new DraftEditorPane(input, context);
 }
 
 export default DraftEditorPane;

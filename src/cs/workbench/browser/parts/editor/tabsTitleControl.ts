@@ -25,6 +25,7 @@ import {
   type WorkbenchContextMenuService,
 } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 import { $ } from 'cs/base/browser/dom';
+import { renderIcon } from 'cs/base/browser/ui/iconLabel/iconLabels';
 
 type TabView = {
   element: HTMLDivElement;
@@ -323,12 +324,10 @@ const nextTabElements: HTMLDivElement[] = [];
       this.props.onActivateTab(tab.id);
     };
 
-    const createFallbackPaneIcon = () =>
-      createLxIcon(getTabPaneModeIconName(tab.paneMode));
-    const faviconUrl =
-      tab.paneMode === 'browser'
-        ? normalizeTabFaviconUrl(tab.faviconUrl)
-        : '';
+    const createFallbackPaneIcon = () => tab.icon
+      ? renderIcon(tab.icon)
+      : createLxIcon(getTabPaneModeIconName(tab.paneMode));
+    const faviconUrl = normalizeTabFaviconUrl(tab.faviconUrl);
 
     if (faviconUrl) {
       const faviconImage = createTabFaviconImageElement(faviconUrl, () => {

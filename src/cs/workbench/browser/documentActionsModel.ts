@@ -15,7 +15,7 @@ import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import { formatLocaleMessage, localizeAppError } from 'cs/workbench/common/errorMessages';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import {
 	canExportArticlesDocx,
 	preparePdfDownload,
@@ -301,8 +301,6 @@ export class DocumentActionsController {
 		}
 
 		this.context.onOpenEditor({
-			kind: 'browser',
-			disposition: 'reveal-or-open',
 			resource: BrowserViewUri.forId(generateUuid()),
 			options: { viewState: { url: article.url.toString(true) } },
 		});

@@ -16,12 +16,21 @@ import {
 	Verbosity,
 } from 'cs/workbench/common/editor';
 
+export interface IEditorCloseHandler {
+	confirmClose(): Promise<boolean>;
+}
+
 export abstract class EditorInput extends Disposable {
+	protected readonly _onDidChangeDirty = this._register(new Emitter<void>());
 	protected readonly _onDidChangeLabel = this._register(new Emitter<void>());
+	protected readonly _onDidChangeCapabilities = this._register(new Emitter<void>());
 	private readonly _onWillDispose = this._register(new Emitter<void>());
 
+	readonly onDidChangeDirty = this._onDidChangeDirty.event;
 	readonly onDidChangeLabel = this._onDidChangeLabel.event;
+	readonly onDidChangeCapabilities = this._onDidChangeCapabilities.event;
 	readonly onWillDispose = this._onWillDispose.event;
+	readonly closeHandler?: IEditorCloseHandler;
 
 	abstract get typeId(): string;
 	abstract get resource(): URI | undefined;
@@ -32,6 +41,14 @@ export abstract class EditorInput extends Disposable {
 
 	get capabilities(): EditorInputCapabilities {
 		return EditorInputCapabilities.Readonly;
+	}
+
+	hasCapability(capability: EditorInputCapabilities): boolean {
+		if (capability === EditorInputCapabilities.None) {
+			return this.capabilities === EditorInputCapabilities.None;
+		}
+
+		return (this.capabilities & capability) !== 0;
 	}
 
 	getName(): string {
@@ -49,6 +66,20 @@ export abstract class EditorInput extends Disposable {
 	getIcon(): ThemeIcon | URI | undefined {
 		return undefined;
 	}
+
+	isDirty(): boolean {
+		return false;
+	}
+
+	rename(_name: string): boolean {
+		return false;
+	}
+
+	async save(): Promise<boolean> {
+		return true;
+	}
+
+	async revert(): Promise<void> {}
 
 	async resolve(): Promise<IDisposable | null> {
 		return null;

@@ -16,10 +16,8 @@ import { type ServicesAccessor } from 'cs/platform/instantiation/common/instanti
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
-import {
-	EMPTY_BROWSER_TAB_URL,
-} from 'cs/workbench/browser/parts/editor/editorInput';
 import { IBrowserViewWorkbenchService } from 'cs/workbench/contrib/browserView/common/browserView';
+import { BrowserEditorInput, EMPTY_BROWSER_EDITOR_URL } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	BrowserActionCategory,
@@ -35,6 +33,7 @@ interface IBrowserQuickPickItem extends IQuickPickItem {
 	readonly tabId: string;
 	readonly open: boolean;
 	readonly url: string;
+	readonly input: BrowserEditorInput;
 }
 
 function createBrowserResource(): URI {
@@ -42,7 +41,17 @@ function createBrowserResource(): URI {
 }
 
 function getBrowserTabs(editorService: IEditorService) {
-	return editorService.getEditors().filter(editor => editor.kind === 'browser');
+	return editorService.getEditors().filter(
+		(identifier): identifier is typeof identifier & { editor: BrowserEditorInput } =>
+			identifier.editor instanceof BrowserEditorInput,
+	);
+}
+
+function openBrowserResource(editorService: IEditorService, resource: URI, url: string) {
+	return editorService.openEditor({
+		resource,
+		options: { viewState: { url } },
+	});
 }
 
 function matchesGlob(value: string, pattern: string): boolean {
@@ -96,7 +105,7 @@ function getBrowserTabLabel(title: string, url: string) {
 		return normalizedTitle;
 	}
 
-	return url === EMPTY_BROWSER_TAB_URL
+	return url === EMPTY_BROWSER_EDITOR_URL
 		? localize('browser.emptyTabLabel', "New Tab")
 		: url;
 }
@@ -127,27 +136,29 @@ class QuickOpenBrowserAction extends Action2 {
 			alwaysShow: true,
 		};
 		const openTabs = getBrowserTabs(editorService);
-		const openTabIds = new Set(openTabs.map(tab => tab.id));
+		const openTabIds = new Set(openTabs.map(tab => tab.editor.id));
 		const tabItems: IBrowserQuickPickItem[] = openTabs.map(tab => ({
-			id: tab.id,
-			tabId: tab.id,
+			id: tab.editor.id,
+			tabId: tab.editor.id,
 			open: true,
-			url: tab.url ?? EMPTY_BROWSER_TAB_URL,
-			label: getBrowserTabLabel(tab.title, tab.url ?? EMPTY_BROWSER_TAB_URL),
-			description: tab.url === EMPTY_BROWSER_TAB_URL ? undefined : tab.url,
+			url: tab.editor.url ?? EMPTY_BROWSER_EDITOR_URL,
+			input: tab.editor,
+			label: getBrowserTabLabel(tab.editor.getName(), tab.editor.url ?? EMPTY_BROWSER_EDITOR_URL),
+			description: tab.editor.url === EMPTY_BROWSER_EDITOR_URL ? undefined : tab.editor.url,
 		}));
 		for (const input of browserViewService.getContextualBrowserViews().values()) {
 			if (openTabIds.has(input.id)) {
 				continue;
 			}
-			const url = input.url || EMPTY_BROWSER_TAB_URL;
+			const url = input.url || EMPTY_BROWSER_EDITOR_URL;
 			tabItems.push({
 				id: input.id,
 				tabId: input.id,
 				open: false,
 				url,
+				input,
 				label: getBrowserTabLabel(input.title ?? '', url),
-				description: url === EMPTY_BROWSER_TAB_URL ? undefined : url,
+				description: url === EMPTY_BROWSER_EDITOR_URL ? undefined : url,
 			});
 		}
 		const selection = await accessor.get(IQuickInputService).pick(
@@ -167,30 +178,16 @@ class QuickOpenBrowserAction extends Action2 {
 		}
 
 		if (selection.id === newTabItem.id) {
-			await editorService.openEditor({
-				kind: 'browser',
-				disposition: 'new-tab',
-				resource: createBrowserResource(),
-				options: {
-					viewState: {
-						url: EMPTY_BROWSER_TAB_URL,
-					},
-				},
-			});
+			await openBrowserResource(editorService, createBrowserResource(), EMPTY_BROWSER_EDITOR_URL);
 			return;
 		}
 
 		const selectedBrowser = selection as IBrowserQuickPickItem;
 		if (selectedBrowser.open) {
-			editorService.activateEditor(selectedBrowser.tabId);
+			editorService.activateEditor(selectedBrowser.input);
 			return;
 		}
-		await editorService.openEditor({
-			kind: 'browser',
-			disposition: 'reveal-or-open',
-			resource: BrowserViewUri.forId(selectedBrowser.tabId),
-			options: { viewState: { url: selectedBrowser.url } },
-		});
+		await editorService.openEditor(selectedBrowser.input);
 	}
 }
 
@@ -221,29 +218,15 @@ class OpenIntegratedBrowserAction extends Action2 {
 			if (options.url?.trim()) {
 				reusableInput.navigate(options.url);
 			}
-			await editorService.openEditor({
-				kind: 'browser',
-				disposition: 'reveal-or-open',
-				resource: BrowserViewUri.forId(reusableInput.id),
-				options: {
-					viewState: {
-						url: options.url?.trim() || reusableInput.url || EMPTY_BROWSER_TAB_URL,
-					},
-				},
-			});
+			await editorService.openEditor(reusableInput);
 			return;
 		}
 
-		await editorService.openEditor({
-			kind: 'browser',
-			disposition: 'new-tab',
-			resource: createBrowserResource(),
-			options: {
-				viewState: {
-					url: options.url?.trim() || EMPTY_BROWSER_TAB_URL,
-				},
-			},
-		});
+		await openBrowserResource(
+			editorService,
+			createBrowserResource(),
+			options.url?.trim() || EMPTY_BROWSER_EDITOR_URL,
+		);
 	}
 }
 
@@ -263,16 +246,7 @@ class OpenFileInIntegratedBrowserAction extends Action2 {
 			return;
 		}
 
-		await accessor.get(IEditorService).openEditor({
-			kind: 'browser',
-			disposition: 'new-tab',
-			resource: createBrowserResource(),
-			options: {
-				viewState: {
-					url: resource.toString(),
-				},
-			},
-		});
+		await openBrowserResource(accessor.get(IEditorService), createBrowserResource(), resource.toString());
 	}
 }
 
@@ -324,16 +298,7 @@ class NewTabAction extends Action2 {
 	}
 
 	async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IEditorService).openEditor({
-			kind: 'browser',
-			disposition: 'new-tab',
-			resource: createBrowserResource(),
-			options: {
-				viewState: {
-					url: EMPTY_BROWSER_TAB_URL,
-				},
-			},
-		});
+		await openBrowserResource(accessor.get(IEditorService), createBrowserResource(), EMPTY_BROWSER_EDITOR_URL);
 	}
 }
 
@@ -350,7 +315,7 @@ class CloseAllBrowserTabsAction extends Action2 {
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const editorService = accessor.get(IEditorService);
 		for (const tab of getBrowserTabs(editorService)) {
-			await editorService.closeEditor(tab.id);
+			await editorService.closeEditor(tab.editor);
 		}
 	}
 }
@@ -370,7 +335,7 @@ class CloseAllBrowserTabsInGroupAction extends Action2 {
 		const editorService = accessor.get(IEditorService);
 		const activeGroupId = editorService.getActiveGroupId();
 		for (const tab of getBrowserTabs(editorService).filter(tab => tab.groupId === activeGroupId)) {
-			await editorService.closeEditor(tab.id);
+			await editorService.closeEditor(tab.editor);
 		}
 	}
 }

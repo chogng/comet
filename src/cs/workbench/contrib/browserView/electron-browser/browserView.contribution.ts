@@ -29,10 +29,6 @@ import {
 	registerEditorPaneDescriptor,
 	type EditorPaneResolverContext,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
-import type {
-	EditorWorkspaceBrowserTab,
-	EditorWorkspaceTab,
-} from 'cs/workbench/browser/parts/editor/editorModel';
 
 import 'cs/workbench/contrib/browserView/electron-browser/features/webContentsViewRendererFeature';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature';
@@ -52,19 +48,11 @@ import 'cs/workbench/contrib/browserView/electron-browser/features/browserRemote
 
 registerSingleton(IPlaywrightService, PlaywrightWorkbenchService, InstantiationType.Delayed);
 
-function isBrowserWorkspaceTab(
-	input: EditorWorkspaceTab,
-): input is EditorWorkspaceBrowserTab {
-	return input.kind === 'browser';
-}
-
-function createContentPaneProps(
-	tab: EditorWorkspaceBrowserTab,
+function createBrowserEditorProps(
 	context: EditorPaneResolverContext,
 ): BrowserEditorProps {
 	return {
 		labels: context.labels,
-		browserTab: tab,
 		nativeHost: context.nativeHost,
 		onDidChangeBrowserState: context.onDidChangeBrowserState,
 	};
@@ -73,10 +61,12 @@ function createContentPaneProps(
 registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	paneId: 'browser',
 	contentClassNames: ['comet-is-mode-browser'] as const,
-	acceptsInput: isBrowserWorkspaceTab,
-	createPaneKey: () => 'browser',
-	createPaneProps: createContentPaneProps,
-	createPane: (props, context) => context.instantiationService.createInstance(BrowserEditor, props),
+	acceptsInput: (input): input is BrowserEditorInput => input instanceof BrowserEditorInput,
+	createPane: (input, context) => context.instantiationService.createInstance(
+		BrowserEditor,
+		input,
+		createBrowserEditorProps(context),
+	),
 }));
 
 export class BrowserEditorResolverContribution extends Disposable {
@@ -87,7 +77,6 @@ export class BrowserEditorResolverContribution extends Disposable {
 		@IBrowserViewWorkbenchService browserViewWorkbenchService: IBrowserViewWorkbenchService,
 	) {
 		super();
-
 		this._register(editorResolverService.registerEditor(
 			`${Schemas.vscodeBrowser}:/**`,
 			{

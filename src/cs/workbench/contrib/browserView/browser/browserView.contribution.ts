@@ -12,13 +12,12 @@ import { BrowserHistoryStore } from 'cs/platform/browserView/common/browserHisto
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import type { ITunnelProxyInfo } from 'cs/platform/tunnel/common/tunnelProxy';
-import type { EditorWorkspaceBrowserTab, EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import {
 	createEditorPaneDescriptor,
 	registerEditorPaneDescriptor,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
-import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
+import { BrowserEditorInput, BrowserEditorSerializer } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {
 	IBrowserViewCDPService,
 	IBrowserViewWorkbenchService,
@@ -33,6 +32,7 @@ import {
 	registerWorkbenchDisposable,
 } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { localize } from 'cs/nls';
+import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 
 const unavailableMessage = 'Integrated Browser is not available in web.';
 
@@ -49,6 +49,10 @@ class WebBrowserViewWorkbenchService extends Disposable implements IBrowserViewW
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
+		this._register(editorInputSerializerRegistry.register(
+			BrowserEditorInput.ID,
+			new BrowserEditorSerializer(this),
+		));
 	}
 
 	willUseRemoteProxy(): boolean {
@@ -124,7 +128,7 @@ class WebBrowserViewCDPService implements IBrowserViewCDPService {
 	}
 }
 
-class WebBrowserEditorPane extends EditorPane<EditorWorkspaceBrowserTab> {
+class WebBrowserEditorPane extends EditorPane<BrowserEditorInput> {
 	private readonly element = document.createElement('div');
 
 	constructor() {
@@ -136,23 +140,17 @@ class WebBrowserEditorPane extends EditorPane<EditorWorkspaceBrowserTab> {
 		return this.element;
 	}
 
-	override setProps(_props: EditorWorkspaceBrowserTab): void {}
+	override setInput(_input: BrowserEditorInput): void {}
 
 	override dispose(): void {
 		this.element.replaceChildren();
 	}
 }
 
-function isBrowserWorkspaceTab(input: EditorWorkspaceTab): input is EditorWorkspaceBrowserTab {
-	return input.kind === 'browser';
-}
-
 registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	paneId: 'browser',
 	contentClassNames: ['comet-is-mode-browser'],
-	acceptsInput: isBrowserWorkspaceTab,
-	createPaneKey: () => 'browser',
-	createPaneProps: tab => tab,
+	acceptsInput: (input): input is BrowserEditorInput => input instanceof BrowserEditorInput,
 	createPane: () => new WebBrowserEditorPane(),
 }));
 

@@ -12,7 +12,7 @@ import { IBrowserViewKeyDownEvent } from 'cs/platform/browserView/common/browser
 import { IKeybindingService } from 'cs/platform/keybinding/common/keybinding';
 import { ILogService } from 'cs/platform/log/common/log';
 import { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
-import { hasBrowserTabPage } from 'cs/workbench/browser/parts/editor/editorInput';
+import { hasBrowserEditorPage } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {
 	BrowserEditor,
 	BrowserEditorContribution,
@@ -147,7 +147,7 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	private shouldShowPage(): boolean {
 		return this.editorVisible
 			&& !this.overlayObscured
-			&& hasBrowserTabPage(this.model?.url)
+			&& hasBrowserEditorPage(this.model?.url)
 			&& !this.model?.error;
 	}
 
@@ -160,7 +160,7 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 			return;
 		}
 
-		const placeholderActive = hasBrowserTabPage(this.model.url) && !this.model.error;
+		const placeholderActive = hasBrowserEditorPage(this.model.url) && !this.model.error;
 		const show = this.shouldShowPage();
 		if (show && this.model.visible) {
 			this.setPlaceholderVisible(false);

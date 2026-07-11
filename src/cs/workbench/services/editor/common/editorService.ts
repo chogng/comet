@@ -4,28 +4,34 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
-import type {
-	EditorOpenRequest,
-	EditorOpenResult,
-} from 'cs/workbench/services/editor/common/editorOpenTypes';
+import type { IEditorOptions, IUntypedEditorInput } from 'cs/workbench/common/editor';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 
 export type PreferredGroup = number | 'active' | 'side' | 'auxiliary' | 'modal';
 
-export interface IEditorServiceEntry {
+export interface IEditorIdentifier {
 	readonly groupId: string;
-	readonly id: string;
-	readonly kind: 'draft' | 'browser' | 'pdf';
-	readonly title: string;
-	readonly url?: string;
+	readonly editor: EditorInput;
 }
+
+export interface IEditorOpenOptions {
+	readonly groupId?: string;
+	readonly active?: boolean;
+	readonly editorOptions?: IEditorOptions;
+}
+
+export type EditorOpenHandler = (
+	input: EditorInput | IUntypedEditorInput,
+	options?: IEditorOpenOptions,
+) => Promise<EditorInput> | void;
 
 export const IEditorService = createDecorator<IEditorService>('editorService');
 
 export interface IEditorService {
 	readonly _serviceBrand: undefined;
-	openEditor(request: EditorOpenRequest): EditorOpenResult | Promise<EditorOpenResult>;
-	activateEditor(editorId: string): void;
-	closeEditor(editorId: string): Promise<boolean>;
-	getEditors(): readonly IEditorServiceEntry[];
+	openEditor(input: EditorInput | IUntypedEditorInput, options?: IEditorOpenOptions): Promise<EditorInput>;
+	activateEditor(editor: EditorInput): void;
+	closeEditor(editor: EditorInput): Promise<boolean>;
+	getEditors(): readonly IEditorIdentifier[];
 	getActiveGroupId(): string;
 }
