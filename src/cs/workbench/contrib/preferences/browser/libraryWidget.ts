@@ -2,7 +2,7 @@ import type {
   LibraryDocumentSummary,
   LibraryStorageMode,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import {
   NumberStepper,
   numberStepperDecrementAriaLabel,
@@ -32,7 +32,7 @@ function resolveLibraryDocumentStatusLabel(labels: SettingsPartLabels, document:
 
 export type LibrarySettingsSectionProps = {
   labels: SettingsPartLabels;
-  contextViewProvider: ContextViewProvider;
+  contextViewProvider: IContextViewProvider;
   knowledgeBaseEnabled: boolean;
   autoIndexDownloadedPdf: boolean;
   knowledgeBasePdfDownloadDir: string;

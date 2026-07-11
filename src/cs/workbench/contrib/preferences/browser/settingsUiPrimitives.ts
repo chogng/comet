@@ -1,5 +1,5 @@
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
-import { DEFAULT_CONTEXT_VIEW_Z_INDEX, type ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
@@ -8,7 +8,7 @@ import { createSwitchView } from 'cs/base/browser/ui/switch/switch';
 import { ZIndex } from 'cs/platform/layout/browser/zIndexRegistry';
 
 const hoverService = getHoverService();
-export const settingsPopupContextViewLayer = ZIndex.ModalDialog - DEFAULT_CONTEXT_VIEW_Z_INDEX;
+export const settingsPopupContextViewLayer = ZIndex.ModalDialog - 2575;
 
 type SettingsSelectOption = {
   value: string;
@@ -172,7 +172,7 @@ export function buildSettingsSelect(
   value: string,
   focusKey: string,
   onChange: (value: string) => void,
-  contextViewProvider: ContextViewProvider,
+  contextViewProvider: IContextViewProvider,
   className: string,
 ) {
   const selectBox = new SelectBox(

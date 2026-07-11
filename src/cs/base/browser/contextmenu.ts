@@ -4,10 +4,10 @@ import type {
   IAction,
   IActionRunner,
 } from 'cs/base/common/actions';
-import type { ContextViewAnchor } from 'cs/base/browser/ui/contextview/contextview';
+import type { IAnchor } from 'cs/base/browser/ui/contextview/contextview';
 import type { MenuHeaderOptions } from 'cs/base/browser/ui/menu/menu';
 
-export type ContextMenuAnchor = ContextViewAnchor;
+export type ContextMenuAnchor = HTMLElement | IAnchor;
 
 export type ContextMenuAlignment = 'start' | 'end';
 export type ContextMenuPosition = 'auto' | 'above' | 'below';

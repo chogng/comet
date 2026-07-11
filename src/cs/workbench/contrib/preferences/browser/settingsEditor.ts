@@ -17,7 +17,7 @@ import {
   type RagSettingsSectionProps,
 } from 'cs/workbench/contrib/preferences/browser/ragWidget';
 import type { SettingsPageId } from 'cs/workbench/contrib/preferences/common/settings';
-import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import { SettingsTree } from 'cs/workbench/contrib/preferences/browser/settingsTree';
 import type { SettingsSectionRenderers } from 'cs/workbench/contrib/preferences/browser/settingsTree';
 import { SettingsTreeModel } from 'cs/workbench/contrib/preferences/browser/settingsTreeModel';
@@ -133,7 +133,7 @@ export class SettingsPartView {
 
   constructor(
     props: SettingsPartProps,
-    private readonly contextViewProvider: ContextViewProvider,
+    private readonly contextViewProvider: IContextViewProvider,
   ) {
     this.props = props;
     this.settingsTreeModel = new SettingsTreeModel(this.props.labels, this.searchQuery);
@@ -481,7 +481,7 @@ export class SettingsPartView {
 
 export function createSettingsPartView(
   props: SettingsPartProps,
-  contextViewProvider: ContextViewProvider,
+  contextViewProvider: IContextViewProvider,
 ) {
   return new SettingsPartView(props, contextViewProvider);
 }

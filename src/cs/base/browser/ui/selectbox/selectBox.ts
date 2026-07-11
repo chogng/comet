@@ -3,7 +3,7 @@ import { EventEmitter, type Event as LsEvent } from 'cs/base/common/event';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import { SelectBoxCustom } from 'cs/base/browser/ui/selectbox/selectBoxCustom';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
-import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 
 export interface ISelectBoxOptions {
   useCustomDrawn?: boolean;
@@ -92,7 +92,7 @@ export class SelectBox extends Disposable {
   constructor(
     options: ISelectOptionItem[],
     selected: number,
-    contextViewProvider: ContextViewProvider | undefined,
+    contextViewProvider: IContextViewProvider | undefined,
     styles: ISelectBoxStyles = {},
     selectBoxOptions: ISelectBoxOptions = {},
   ) {

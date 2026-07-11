@@ -3,7 +3,7 @@ import type {
   TranslationProviderId,
   TranslationProviderSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 import {
   createSettingsSection,
@@ -24,7 +24,7 @@ import {
 
 export type TranslationSettingsSectionProps = {
   labels: SettingsPartLabels;
-  contextViewProvider: ContextViewProvider;
+  contextViewProvider: IContextViewProvider;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;
   llmProviders: Record<'glm', LlmProviderSettings>;

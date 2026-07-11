@@ -1,9 +1,5 @@
 import 'cs/base/browser/ui/selectbox/selectBoxCustom.css';
-import {
-  createContextViewController,
-  type ContextViewDisposable,
-  type ContextViewProvider,
-} from 'cs/base/browser/ui/contextview/contextview';
+import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import { Menu } from 'cs/base/browser/ui/menu/menu';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import type {
@@ -12,7 +8,7 @@ import type {
 
 type SelectBoxCustomOptions = {
   selectElement: HTMLSelectElement;
-  contextViewProvider: ContextViewProvider | undefined;
+  contextViewProvider: IContextViewProvider | undefined;
   getOptions: () => readonly ISelectOptionItem[];
   getSelectedIndex: () => number;
   onSelectIndex: (index: number) => void;
@@ -37,9 +33,9 @@ export class SelectBoxCustom extends Disposable {
   private readonly getSelectedIndex: () => number;
   private readonly onSelectIndex: (index: number) => void;
   private readonly contextViewLayer: number | undefined;
-  private readonly contextViewProvider: ContextViewProvider;
+  private readonly contextViewProvider: IContextViewProvider | undefined;
   private readonly ownsContextView: boolean;
-  private openContextView: ContextViewDisposable | null = null;
+  private openContextView: { close: () => void } | null = null;
   private menu: Menu | null = null;
   private isMenuVisible = false;
   private activeOptionIndex = -1;
@@ -52,8 +48,8 @@ export class SelectBoxCustom extends Disposable {
     this.getSelectedIndex = options.getSelectedIndex;
     this.onSelectIndex = options.onSelectIndex;
     this.contextViewLayer = options.contextViewLayer;
-    this.contextViewProvider = options.contextViewProvider ?? createContextViewController();
-    this.ownsContextView = !options.contextViewProvider;
+    this.contextViewProvider = options.contextViewProvider;
+    this.ownsContextView = false;
 
     this._register(addDisposableListener(this.selectElement, 'click', this.handleClick));
     this._register(addDisposableListener(this.selectElement, 'mousedown', this.handleMouseDown));
@@ -185,20 +181,14 @@ export class SelectBoxCustom extends Disposable {
       event.preventDefault();
     });
     this.isMenuVisible = true;
-    this.openContextView = this.contextViewProvider.showContextView({
+    this.openContextView = this.contextViewProvider?.showContextView({
       getAnchor: () => this.selectElement,
       className: 'comet-select-box-context-view',
       render: (container) => {
         container.append(menuElement);
       },
       onHide: this.handleMenuHide,
-      alignment: 'start',
-      offset: 4,
       layer: this.contextViewLayer,
-      // Keep the popup on the same width contract as the trigger. Together with
-      // the root-menu 100% sizing in selectBoxCustom.css, the popup and trigger
-      // share the same content floor instead of drifting apart.
-      matchAnchorWidth: true,
     });
     this.syncMenuState();
   }
@@ -208,7 +198,7 @@ export class SelectBoxCustom extends Disposable {
       return;
     }
 
-    this.openContextView?.dispose();
+    this.openContextView?.close();
   }
 
   private resolveInitialActiveOptionIndex() {

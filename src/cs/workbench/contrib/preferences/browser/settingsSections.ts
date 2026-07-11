@@ -14,7 +14,7 @@ import {
   maxBrowserMaxHistoryEntries,
   minBrowserMaxHistoryEntries,
 } from 'cs/base/parts/sandbox/common/browserSettings';
-import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import {
   NumberStepper,
   numberStepperDecrementAriaLabel,
@@ -229,7 +229,7 @@ function toColorPickerValue(colorValue: string) {
     ?? '#000000';
 }
 
-export function renderLocaleSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
+export function renderLocaleSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
   const language = createSettingsSection({
     sectionClassName: 'comet-settings-language-section',
     panelClassName: 'comet-settings-language-panel',
@@ -305,7 +305,7 @@ export function renderSupportedSourcesSection(
   return supportedSources.element;
 }
 
-export function renderLayoutSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
+export function renderLayoutSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
   const layout = createSettingsSection({
     title: props.labels.settingsLayoutTitle,
     sectionClassName: 'comet-settings-layout-section',
@@ -362,7 +362,7 @@ export function renderLayoutSection(props: SettingsPartProps, contextViewProvide
   return layout.element;
 }
 
-export function renderBrowserSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
+export function renderBrowserSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
   const browser = createSettingsSection({
     title: props.labels.settingsBrowserTitle,
     sectionClassName: 'comet-settings-browser-section',
@@ -426,7 +426,7 @@ export function renderBrowserSection(props: SettingsPartProps, contextViewProvid
   return browser.element;
 }
 
-export function renderAppearanceSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
+export function renderAppearanceSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
   const field = el('div', 'comet-settings-appearance-settings');
   const themeSelect = buildSelect(
     createThemeOptions(props),
@@ -603,7 +603,7 @@ export function renderConfigPathSection(props: SettingsPartProps) {
   return configPath.element;
 }
 
-export function renderTextEditorSection(props: SettingsPartProps, contextViewProvider: ContextViewProvider) {
+export function renderTextEditorSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
   const defaultBodyStyle = props.editorDraftStyle.value.defaultBodyStyle;
   const isDisabled = props.isSettingsSaving;
   const textEditorPanel = createSettingsSection({

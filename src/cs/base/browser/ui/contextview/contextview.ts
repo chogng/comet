@@ -1,706 +1,337 @@
-import 'cs/base/browser/ui/contextview/contextview.css';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { BrowserFeatures } from 'cs/base/browser/canIUse';
 import * as DOM from 'cs/base/browser/dom';
-import {
-  AnchorAlignment as LayoutAnchorAlignment,
-  AnchorAxisAlignment as LayoutAnchorAxisAlignment,
-  AnchorPosition as LayoutAnchorPosition,
-  layout2d,
-  type IAnchor,
-  type IRect,
-} from 'cs/base/common/layout';
-import {
-  Disposable,
-  MutableDisposable,
-  combinedDisposable,
-  toDisposable,
-  type DisposableLike,
-} from 'cs/base/common/lifecycle';
+import { StandardMouseEvent } from 'cs/base/browser/mouseEvent';
+import { Disposable, DisposableStore, IDisposable, toDisposable } from 'cs/base/common/lifecycle';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, IRect, layout2d } from 'cs/base/common/layout';
+import * as platform from 'cs/base/common/platform';
+import { OmitOptional } from 'cs/base/common/types';
+import 'cs/base/browser/ui/contextview/contextview.css';
 
-export type AnchorAlignment = 'left' | 'right';
-export type AnchorPosition = 'below' | 'above';
-export type AnchorAxisAlignment = 'vertical' | 'horizontal';
-export type ContextViewAlignment = 'start' | 'end' | 'center';
-export type ContextViewPosition = 'auto' | 'above' | 'below';
-export type ContextViewAnchor = HTMLElement | IAnchor;
+export { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from 'cs/base/common/layout';
 
-export enum ContextViewDOMPosition {
-  Absolute,
-  Fixed,
-  FixedShadow,
+export const enum ContextViewDOMPosition {
+	ABSOLUTE = 1,
+	FIXED,
+	FIXED_SHADOW
 }
 
-export type ContextViewOptions = {
-  canRelayout?: boolean;
-  anchor: ContextViewAnchor;
-  render: () => Node;
-  focus?: () => void;
-  layout?: () => void;
-  onDOMEvent?: (event: Event, activeElement: HTMLElement | null) => void;
-  className?: string;
-  onHide?: (data?: unknown) => void;
-  anchorAlignment?: AnchorAlignment;
-  anchorPosition?: AnchorPosition;
-  anchorAxisAlignment?: AnchorAxisAlignment;
-  alignment?: ContextViewAlignment;
-  position?: ContextViewPosition;
-  offset?: number;
-  matchAnchorWidth?: boolean;
-  minWidth?: number;
-  layer?: number;
-};
-
-export type ContextViewRenderResult =
-  | void
-  | (() => void)
-  | DisposableLike;
-
-export type ContextViewDelegate = Omit<ContextViewOptions, 'anchor' | 'render'> & {
-  getAnchor: () => ContextViewAnchor;
-  render: (container: HTMLElement) => ContextViewRenderResult;
-};
-
-export type ContextViewDisposable = {
-  dispose: () => void;
-};
-
-export type ContextViewProvider = {
-  showContextView: (
-    delegate: ContextViewDelegate,
-    container?: HTMLElement,
-    shadowRoot?: boolean,
-  ) => ContextViewDisposable;
-  hideContextView: (data?: unknown) => void;
-  getContextViewElement: () => HTMLElement;
-  layout: () => void;
-  isVisible: () => boolean;
-  dispose: () => void;
-};
-
-export type ContextViewHandle = {
-  setContainer: (container: HTMLElement | null, domPosition: ContextViewDOMPosition) => void;
-  show: (options: ContextViewOptions) => void;
-  hide: (data?: unknown) => void;
-  isVisible: () => boolean;
-  getViewElement: () => HTMLElement;
-  dispose: () => void;
-};
-
-type ViewportRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
-
-type ViewportSize = {
-  width: number;
-  height: number;
-};
-
-type LayoutResult = {
-  left: number;
-  top: number;
-  placement: 'above' | 'below';
-  alignment: AnchorAlignment;
-};
-
-const VIEWPORT_MARGIN_PX = 8;
-const DEFAULT_OFFSET_PX = 0;
-export const DEFAULT_CONTEXT_VIEW_Z_INDEX = 1000;
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
+export interface IAnchor {
+	x: number;
+	y: number;
+	width?: number;
+	height?: number;
 }
 
-function resolveAnchorAlignment(
-  options: Pick<ContextViewOptions, 'anchorAlignment' | 'alignment'>,
-) {
-  if (options.anchorAlignment) {
-    return options.anchorAlignment;
-  }
+export function isAnchor(obj: unknown): obj is IAnchor | OmitOptional<IAnchor> {
+	const anchor = obj as IAnchor | OmitOptional<IAnchor> | undefined;
 
-  return options.alignment === 'end' ? 'right' : 'left';
+	return !!anchor && typeof anchor.x === 'number' && typeof anchor.y === 'number';
 }
 
-function resolveAnchorPositionPreference(
-  options: Pick<ContextViewOptions, 'anchorPosition' | 'position'>,
-): ContextViewPosition {
-  if (options.anchorPosition) {
-    return options.anchorPosition;
-  }
+export interface IDelegate {
+	/**
+	 * The anchor where to position the context view.
+	 * Use a `HTMLElement` to position the view at the element,
+	 * a `StandardMouseEvent` to position it at the mouse position
+	 * or an `IAnchor` to position it at a specific location.
+	 */
+	getAnchor(): HTMLElement | StandardMouseEvent | IAnchor;
+	render(container: HTMLElement): IDisposable | null;
+	focus?(): void;
+	layout?(): void;
+	anchorAlignment?: AnchorAlignment; // default: left
+	anchorPosition?: AnchorPosition; // default: below
+	anchorAxisAlignment?: AnchorAxisAlignment; // default: vertical
+	canRelayout?: boolean; // default: true
+	onDOMEvent?(e: Event, activeElement: HTMLElement): void;
+	onHide?(data?: unknown): void;
 
-  return options.position ?? 'auto';
+	/**
+	 * context views with higher layers are rendered higher in z-index order
+	 */
+	layer?: number; // Default: 0
 }
 
-function toLayoutAnchorAlignment(anchorAlignment: AnchorAlignment) {
-  return anchorAlignment === 'left'
-    ? LayoutAnchorAlignment.LEFT
-    : LayoutAnchorAlignment.RIGHT;
+export interface IContextViewProvider {
+	showContextView(delegate: IDelegate, container?: HTMLElement): void;
+	hideContextView(): void;
+	layout(): void;
 }
 
-function toLayoutAnchorPosition(position: ContextViewPosition) {
-  return position === 'above'
-    ? LayoutAnchorPosition.ABOVE
-    : LayoutAnchorPosition.BELOW;
+export function getAnchorRect(anchor: HTMLElement | StandardMouseEvent | IAnchor): IRect {
+	// Get the element's position and size (to anchor the view)
+	if (DOM.isHTMLElement(anchor)) {
+		const elementPosition = DOM.getDomNodePagePosition(anchor);
+
+		// In areas where zoom is applied to the element or its ancestors, we need to adjust the size of the element
+		// e.g. The title bar has counter zoom behavior meaning it applies the inverse of zoom level.
+		// Window Zoom Level: 1.5, Title Bar Zoom: 1/1.5, Size Multiplier: 1.5
+		const zoom = DOM.getDomNodeZoomLevel(anchor);
+
+		return {
+			top: elementPosition.top * zoom,
+			left: elementPosition.left * zoom,
+			width: elementPosition.width * zoom,
+			height: elementPosition.height * zoom
+		};
+	} else if (isAnchor(anchor)) {
+		return {
+			top: anchor.y,
+			left: anchor.x,
+			width: anchor.width || 1,
+			height: anchor.height || 2
+		};
+	} else {
+		return {
+			top: anchor.posy,
+			left: anchor.posx,
+			// We are about to position the context view where the mouse
+			// cursor is. To prevent the view being exactly under the mouse
+			// when showing and thus potentially triggering an action within,
+			// we treat the mouse location like a small sized block element.
+			width: 2,
+			height: 2
+		};
+	}
 }
 
-function toLayoutAnchorAxisAlignment(anchorAxisAlignment: AnchorAxisAlignment) {
-  return anchorAxisAlignment === 'horizontal'
-    ? LayoutAnchorAxisAlignment.HORIZONTAL
-    : LayoutAnchorAxisAlignment.VERTICAL;
+export class ContextView extends Disposable {
+
+	private static readonly BUBBLE_UP_EVENTS = ['click', 'keydown', 'focus', 'blur'];
+	private static readonly BUBBLE_DOWN_EVENTS = ['click'];
+
+	private container: HTMLElement | null = null;
+	private view: HTMLElement;
+	private useFixedPosition = false;
+	private useShadowDOM = false;
+	private delegate: IDelegate | null = null;
+	private toDisposeOnClean: IDisposable = Disposable.None;
+	private toDisposeOnSetContainer: IDisposable = Disposable.None;
+	private shadowRoot: ShadowRoot | null = null;
+	private shadowRootHostElement: HTMLElement | null = null;
+
+	constructor(container: HTMLElement, domPosition: ContextViewDOMPosition) {
+		super();
+
+		this.view = DOM.$('.context-view');
+		DOM.hide(this.view);
+
+		this.setContainer(container, domPosition);
+		this._register(toDisposable(() => this.setContainer(null, ContextViewDOMPosition.ABSOLUTE)));
+	}
+
+	setContainer(container: HTMLElement | null, domPosition: ContextViewDOMPosition): void {
+		this.useFixedPosition = domPosition !== ContextViewDOMPosition.ABSOLUTE;
+		const usedShadowDOM = this.useShadowDOM;
+		this.useShadowDOM = domPosition === ContextViewDOMPosition.FIXED_SHADOW;
+
+		if (container === this.container && usedShadowDOM === this.useShadowDOM) {
+			return; // container is the same and no shadow DOM usage has changed
+		}
+
+		if (this.container) {
+			this.toDisposeOnSetContainer.dispose();
+
+			this.view.remove();
+			if (this.shadowRoot) {
+				this.shadowRoot = null;
+				this.shadowRootHostElement?.remove();
+				this.shadowRootHostElement = null;
+			}
+
+			this.container = null;
+		}
+
+		if (container) {
+			this.container = container;
+
+			if (this.useShadowDOM) {
+				this.shadowRootHostElement = DOM.$('.shadow-root-host');
+				this.container.appendChild(this.shadowRootHostElement);
+				this.shadowRoot = this.shadowRootHostElement.attachShadow({ mode: 'open' });
+				const style = document.createElement('style');
+				style.textContent = SHADOW_ROOT_CSS;
+				this.shadowRoot.appendChild(style);
+				this.shadowRoot.appendChild(this.view);
+				this.shadowRoot.appendChild(DOM.$('slot'));
+			} else {
+				this.container.appendChild(this.view);
+			}
+
+			const toDisposeOnSetContainer = new DisposableStore();
+
+			ContextView.BUBBLE_UP_EVENTS.forEach(event => {
+				toDisposeOnSetContainer.add(DOM.addStandardDisposableListener(this.container!, event, e => {
+					this.onDOMEvent(e, false);
+				}));
+			});
+
+			ContextView.BUBBLE_DOWN_EVENTS.forEach(event => {
+				toDisposeOnSetContainer.add(DOM.addStandardDisposableListener(this.container!, event, e => {
+					this.onDOMEvent(e, true);
+				}, true));
+			});
+
+			this.toDisposeOnSetContainer = toDisposeOnSetContainer;
+		}
+	}
+
+	show(delegate: IDelegate): void {
+		if (this.isVisible()) {
+			this.hide();
+		}
+
+		// Show static box
+		DOM.clearNode(this.view);
+		this.view.className = 'context-view monaco-component';
+		this.view.style.top = '0px';
+		this.view.style.left = '0px';
+		this.view.style.zIndex = `${2575 + (delegate.layer ?? 0)}`;
+		this.view.style.position = this.useFixedPosition ? 'fixed' : 'absolute';
+		DOM.show(this.view);
+
+		// Render content
+		this.toDisposeOnClean = delegate.render(this.view) || Disposable.None;
+
+		// Set active delegate
+		this.delegate = delegate;
+
+		// Layout
+		this.doLayout();
+
+		// Focus
+		this.delegate.focus?.();
+	}
+
+	getViewElement(): HTMLElement {
+		return this.view;
+	}
+
+	layout(): void {
+		if (!this.isVisible()) {
+			return;
+		}
+
+		if (this.delegate!.canRelayout === false && !(platform.isIOS && BrowserFeatures.pointerEvents)) {
+			this.hide();
+			return;
+		}
+
+		this.delegate?.layout?.();
+
+		this.doLayout();
+	}
+
+	private doLayout(): void {
+		// Check that we still have a delegate - this.delegate.layout may have hidden
+		if (!this.isVisible()) {
+			return;
+		}
+
+		// Get anchor
+		const anchor = getAnchorRect(this.delegate!.getAnchor());
+		const containerWindow = this.container ? DOM.getWindow(this.container) : DOM.getActiveWindow();
+		const viewport = { top: containerWindow.pageYOffset, left: containerWindow.pageXOffset, width: containerWindow.innerWidth, height: containerWindow.innerHeight };
+		const view = { width: DOM.getTotalWidth(this.view), height: DOM.getTotalHeight(this.view) };
+		const anchorPosition = this.delegate!.anchorPosition;
+		const anchorAlignment = this.delegate!.anchorAlignment;
+		const anchorAxisAlignment = this.delegate!.anchorAxisAlignment;
+		const { top, left } = layout2d(viewport, view, anchor, { anchorAlignment, anchorPosition, anchorAxisAlignment });
+
+		this.view.classList.remove('top', 'bottom', 'left', 'right');
+		this.view.classList.add(anchorPosition === AnchorPosition.BELOW ? 'bottom' : 'top');
+		this.view.classList.add(anchorAlignment === AnchorAlignment.LEFT ? 'left' : 'right');
+		this.view.classList.toggle('fixed', this.useFixedPosition);
+
+		const containerPosition = DOM.getDomNodePagePosition(this.container!);
+
+		// Account for container scroll when positioning the context view
+		const containerScrollTop = this.container!.scrollTop || 0;
+		const containerScrollLeft = this.container!.scrollLeft || 0;
+
+		this.view.style.top = `${top - (this.useFixedPosition ? DOM.getDomNodePagePosition(this.view).top : containerPosition.top) + containerScrollTop}px`;
+		this.view.style.left = `${left - (this.useFixedPosition ? DOM.getDomNodePagePosition(this.view).left : containerPosition.left) + containerScrollLeft}px`;
+		this.view.style.width = 'initial';
+	}
+
+	hide(data?: unknown): void {
+		const delegate = this.delegate;
+		this.delegate = null;
+
+		if (delegate?.onHide) {
+			delegate.onHide(data);
+		}
+
+		const toDispose = this.toDisposeOnClean;
+		this.toDisposeOnClean = Disposable.None;
+		toDispose.dispose();
+
+		DOM.hide(this.view);
+	}
+
+	private isVisible(): boolean {
+		return !!this.delegate;
+	}
+
+	private onDOMEvent(e: UIEvent, onCapture: boolean): void {
+		if (this.delegate) {
+			if (this.delegate.onDOMEvent) {
+				this.delegate.onDOMEvent(e, <HTMLElement>DOM.getWindow(e).document.activeElement);
+			} else if (onCapture && !DOM.isAncestor(<HTMLElement>e.target, this.container)) {
+				this.hide();
+			}
+		}
+	}
+
+	override dispose(): void {
+		this.hide();
+
+		super.dispose();
+	}
 }
 
-function fromLayoutAnchorAlignment(anchorAlignment: LayoutAnchorAlignment) {
-  return anchorAlignment === LayoutAnchorAlignment.LEFT ? 'left' : 'right';
-}
-
-function fromLayoutAnchorPosition(anchorPosition: LayoutAnchorPosition) {
-  return anchorPosition === LayoutAnchorPosition.BELOW ? 'below' : 'above';
-}
-
-function resolveViewportAnchorRect(anchor: ContextViewAnchor): ViewportRect {
-  if (!(anchor instanceof HTMLElement)) {
-    return {
-      left: anchor.x,
-      top: anchor.y,
-      width: anchor.width ?? 1,
-      height: anchor.height ?? 2,
-    };
-  }
-
-  const pagePosition = DOM.getDomNodePagePosition(anchor);
-  const zoom = DOM.getDomNodeZoomLevel(anchor);
-
-  return {
-    left: pagePosition.left * zoom - window.scrollX,
-    top: pagePosition.top * zoom - window.scrollY,
-    width: pagePosition.width * zoom,
-    height: pagePosition.height * zoom,
-  };
-}
-
-function resolveViewportSize(): ViewportSize {
-  return {
-    width: window.innerWidth || document.documentElement.clientWidth || 0,
-    height: window.innerHeight || document.documentElement.clientHeight || 0,
-  };
-}
-
-function resolveAvailableHeight(options: {
-  anchorRect: ViewportRect;
-  viewportSize: ViewportSize;
-  requestedPosition: ContextViewPosition;
-  offset: number;
-}) {
-  const {
-    anchorRect,
-    viewportSize,
-    requestedPosition,
-    offset,
-  } = options;
-  const spaceAbove = anchorRect.top - VIEWPORT_MARGIN_PX - offset;
-  const spaceBelow =
-    viewportSize.height - (anchorRect.top + anchorRect.height) - VIEWPORT_MARGIN_PX - offset;
-
-  if (requestedPosition === 'above') {
-    return Math.max(0, spaceAbove);
-  }
-
-  if (requestedPosition === 'below') {
-    return Math.max(0, spaceBelow);
-  }
-
-  return Math.max(0, Math.max(spaceAbove, spaceBelow));
-}
-
-function resolveOffsetAnchorRect(anchorRect: ViewportRect, offset: number): IRect {
-  return {
-    top: anchorRect.top - offset,
-    left: anchorRect.left,
-    width: anchorRect.width,
-    height: anchorRect.height + offset * 2,
-  };
-}
-
-function resolveCenteredLeft(options: {
-  anchorRect: ViewportRect;
-  overlayWidth: number;
-  viewportWidth: number;
-}) {
-  const {
-    anchorRect,
-    overlayWidth,
-    viewportWidth,
-  } = options;
-
-  return clamp(
-    anchorRect.left + (anchorRect.width - overlayWidth) / 2,
-    0,
-    Math.max(0, viewportWidth - overlayWidth),
-  );
-}
-
-function resolveContextViewLayout(options: {
-  anchorRect: ViewportRect;
-  overlaySize: {
-    width: number;
-    height: number;
-  };
-  viewportSize: ViewportSize;
-  requestedPosition: ContextViewPosition;
-  anchorAlignment: AnchorAlignment;
-  anchorAxisAlignment: AnchorAxisAlignment;
-  hasExplicitAnchorAlignment: boolean;
-  alignment?: ContextViewAlignment;
-  offset: number;
-}) {
-  const {
-    anchorRect,
-    overlaySize,
-    viewportSize,
-    requestedPosition,
-    anchorAlignment,
-    anchorAxisAlignment,
-    hasExplicitAnchorAlignment,
-    alignment,
-    offset,
-  } = options;
-  const viewport = {
-    top: 0,
-    left: 0,
-    width: viewportSize.width,
-    height: viewportSize.height,
-  };
-  const layoutResult = layout2d(
-    viewport,
-    overlaySize,
-    resolveOffsetAnchorRect(anchorRect, offset),
-    {
-      anchorAlignment: toLayoutAnchorAlignment(anchorAlignment),
-      anchorPosition: toLayoutAnchorPosition(requestedPosition),
-      anchorAxisAlignment: toLayoutAnchorAxisAlignment(anchorAxisAlignment),
-    },
-  );
-  const usesCenteredAlignment =
-    anchorAxisAlignment === 'vertical'
-    && alignment === 'center'
-    && !hasExplicitAnchorAlignment;
-  const left = usesCenteredAlignment
-    ? resolveCenteredLeft({
-      anchorRect,
-      overlayWidth: overlaySize.width,
-      viewportWidth: viewportSize.width,
-    })
-    : layoutResult.left;
-
-  return {
-    left,
-    top: layoutResult.top,
-    placement: fromLayoutAnchorPosition(layoutResult.anchorPosition),
-    alignment: fromLayoutAnchorAlignment(layoutResult.anchorAlignment),
-  } as LayoutResult;
-}
-
-function addDisposableListener<K extends keyof DocumentEventMap>(
-  target: Document,
-  type: K,
-  listener: (event: DocumentEventMap[K]) => void,
-  options?: boolean | AddEventListenerOptions,
-): DisposableLike;
-function addDisposableListener<K extends keyof HTMLElementEventMap>(
-  target: HTMLElement,
-  type: K,
-  listener: (event: HTMLElementEventMap[K]) => void,
-  options?: boolean | AddEventListenerOptions,
-): DisposableLike;
-function addDisposableListener<K extends keyof WindowEventMap>(
-  target: Window,
-  type: K,
-  listener: (event: WindowEventMap[K]) => void,
-  options?: boolean | AddEventListenerOptions,
-): DisposableLike;
-function addDisposableListener(
-  target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>,
-  type: string,
-  listener: EventListenerOrEventListenerObject,
-  options?: boolean | AddEventListenerOptions,
-) {
-  target.addEventListener(type, listener, options);
-  return toDisposable(() => {
-    target.removeEventListener(type, listener, options);
-  });
-}
-
-export class ContextViewController extends Disposable implements ContextViewHandle, ContextViewProvider {
-  private readonly element = DOM.$<HTMLElementTagNameMap['div']>('div.comet-context-view');
-  private readonly content = DOM.$<HTMLElementTagNameMap['div']>('div.comet-context-view-content');
-  private readonly mountedListeners = new MutableDisposable<DisposableLike>();
-  private container: HTMLElement | null = null;
-  private domPosition = ContextViewDOMPosition.Fixed;
-  private shadowRoot: ShadowRoot | null = null;
-  private shadowRootHostElement: HTMLElement | null = null;
-  private options: ContextViewOptions | null = null;
-  private currentDelegate: ContextViewDelegate | null = null;
-  private currentRenderDisposable: ContextViewRenderResult = undefined;
-  private visible = false;
-  private disposed = false;
-  private suppressHide = false;
-  private pendingRelayout = false;
-
-  constructor() {
-    super();
-    this.element.append(this.content);
-    this._register(this.mountedListeners);
-    this._register(
-      addDisposableListener(this.content, 'mousedown', this.handleContentMouseDown, true),
-    );
-    this.setContainer(document.body, ContextViewDOMPosition.Fixed);
-  }
-
-  setContainer(container: HTMLElement | null, domPosition: ContextViewDOMPosition): void {
-    if (container === this.container && domPosition === this.domPosition) {
-      return;
-    }
-
-    const wasVisible = this.visible;
-    this.visible = false;
-    this.mountedListeners.clear();
-    this.element.remove();
-    this.shadowRootHostElement?.remove();
-    this.shadowRootHostElement = null;
-    this.shadowRoot = null;
-    this.container = container;
-    this.domPosition = domPosition;
-
-    if (container) {
-      if (domPosition === ContextViewDOMPosition.FixedShadow) {
-        const host = DOM.$('div.comet-shadow-root-host');
-        this.shadowRootHostElement = host;
-        this.shadowRoot = host.attachShadow({ mode: 'open' });
-        const style = document.createElement('style');
-        style.textContent = `
-          :host { all: initial; }
-          .comet-context-view { position: fixed; top: 0; left: 0; z-index: 1000; }
-          .comet-context-view-content { display: inline-block; max-width: calc(100vw - 16px); pointer-events: auto; }
-        `;
-        this.shadowRoot.append(style);
-        container.append(host);
-      }
-    }
-
-    if (wasVisible && container) {
-      this.visible = true;
-      this.appendElement();
-      this.mountListeners();
-      this.layout(false);
-    }
-  }
-
-  show(options: ContextViewOptions) {
-    if (this.disposed) {
-      return;
-    }
-
-    this.options = options;
-    this.content.className = 'comet-context-view-content';
-    if (options.className) {
-      this.content.classList.add(...options.className.split(/\s+/).filter(Boolean));
-    }
-    this.element.style.zIndex = `${DEFAULT_CONTEXT_VIEW_Z_INDEX + (options.layer ?? 0)}`;
-    this.content.replaceChildren(options.render());
-    this.mount();
-    this.layout(false);
-    options.focus?.();
-    this.scheduleRelayout(false);
-  }
-
-  showContextView(delegate: ContextViewDelegate): ContextViewDisposable {
-    this.hideContextView();
-    this.currentDelegate = delegate;
-
-    const container = document.createElement('div');
-    this.currentRenderDisposable = delegate.render(container);
-    this.show({
-      ...delegate,
-      anchor: delegate.getAnchor(),
-      render: () => container,
-      onHide: this.handleProviderHide,
-    });
-
-    return {
-      dispose: () => {
-        if (this.currentDelegate === delegate) {
-          this.hideContextView();
-        }
-      },
-    };
-  }
-
-  hideContextView = (data?: unknown) => {
-    if (!this.visible) {
-      this.cleanupCurrentView();
-      return;
-    }
-
-    this.hide(data);
-  };
-
-  hide = (data?: unknown) => {
-    if (!this.visible) {
-      this.options = null;
-      return;
-    }
-
-    const onHide = this.options?.onHide;
-    this.visible = false;
-    this.options = null;
-    this.unmount();
-    onHide?.(data);
-  };
-
-  isVisible = () => this.visible;
-
-  getViewElement = () => this.element;
-
-  getContextViewElement = () => this.element;
-
-  dispose() {
-    if (this.disposed) {
-      return;
-    }
-
-    this.disposed = true;
-    this.options = null;
-    this.visible = false;
-    this.unmount();
-    this.cleanupCurrentView();
-    this.shadowRootHostElement?.remove();
-    this.shadowRootHostElement = null;
-    this.shadowRoot = null;
-    this.container = null;
-    super.dispose();
-  }
-
-  private cleanupCurrentView() {
-    const renderDisposable = this.currentRenderDisposable;
-    this.currentRenderDisposable = undefined;
-    if (typeof renderDisposable === 'function') {
-      renderDisposable();
-    } else {
-      renderDisposable?.dispose();
-    }
-    this.currentDelegate = null;
-  }
-
-  private readonly handleProviderHide = (data?: unknown) => {
-    const delegate = this.currentDelegate;
-    this.cleanupCurrentView();
-    delegate?.onHide?.(data);
-  };
-
-  private mount() {
-    if (!this.visible) {
-      this.visible = true;
-      this.appendElement();
-      this.mountListeners();
-      return;
-    }
-
-    this.appendElement();
-  }
-
-  private appendElement() {
-    if (!this.element.isConnected && this.container) {
-      if (this.shadowRoot) {
-        this.shadowRoot.append(this.element);
-      } else {
-        this.container.append(this.element);
-      }
-    }
-  }
-
-  private mountListeners() {
-    this.mountedListeners.value = combinedDisposable(
-      addDisposableListener(document, 'mousedown', this.handleDocumentMouseDown, true),
-      addDisposableListener(document, 'keydown', this.handleDocumentKeyDown, true),
-      addDisposableListener(document, 'scroll', this.handleDocumentScroll, true),
-      addDisposableListener(window, 'resize', this.handleWindowResize),
-    );
-  }
-
-  private unmount() {
-    this.element.remove();
-    this.mountedListeners.clear();
-    this.pendingRelayout = false;
-  }
-
-  layout(allowHide = true) {
-    if (!this.options) {
-      return;
-    }
-
-    if (allowHide && this.options.canRelayout === false) {
-      this.hide();
-      return;
-    }
-
-    this.options.layout?.();
-
-    const {
-      anchor,
-      offset = DEFAULT_OFFSET_PX,
-      matchAnchorWidth = false,
-      minWidth,
-    } = this.options;
-    const anchorRect = resolveViewportAnchorRect(anchor);
-    const viewportSize = resolveViewportSize();
-    const anchorAlignment = resolveAnchorAlignment(this.options);
-    const requestedPosition = resolveAnchorPositionPreference(this.options);
-    const anchorAxisAlignment = this.options.anchorAxisAlignment ?? 'vertical';
-
-    this.element.style.left = `${VIEWPORT_MARGIN_PX}px`;
-    this.element.style.top = `${VIEWPORT_MARGIN_PX}px`;
-    this.content.style.minWidth = `${Math.max(
-      minWidth ?? 0,
-      matchAnchorWidth ? anchorRect.width : 0,
-    )}px`;
-    this.content.style.setProperty(
-      '--comet-context-view-available-height',
-      `${Math.floor(resolveAvailableHeight({
-        anchorRect,
-        viewportSize,
-        requestedPosition,
-        offset,
-      }))}px`,
-    );
-
-    const overlayRect = this.content.getBoundingClientRect();
-    const overlaySize = {
-      width: overlayRect.width,
-      height: overlayRect.height,
-    };
-    const resolvedLayout = resolveContextViewLayout({
-      anchorRect,
-      overlaySize,
-      viewportSize,
-      requestedPosition,
-      anchorAlignment,
-      anchorAxisAlignment,
-      hasExplicitAnchorAlignment: Boolean(this.options.anchorAlignment),
-      alignment: this.options.alignment,
-      offset,
-    });
-
-    const containerRect = this.container?.getBoundingClientRect();
-    const left = this.domPosition === ContextViewDOMPosition.Absolute && containerRect
-      ? resolvedLayout.left - containerRect.left + (this.container?.scrollLeft ?? 0)
-      : resolvedLayout.left;
-    const top = this.domPosition === ContextViewDOMPosition.Absolute && containerRect
-      ? resolvedLayout.top - containerRect.top + (this.container?.scrollTop ?? 0)
-      : resolvedLayout.top;
-
-    this.element.classList.remove('top', 'bottom', 'left', 'right');
-    this.element.classList.add(
-      resolvedLayout.placement === 'below' ? 'bottom' : 'top',
-    );
-    this.element.classList.add(resolvedLayout.alignment);
-
-    this.element.style.position = this.domPosition === ContextViewDOMPosition.Absolute ? 'absolute' : 'fixed';
-    this.element.style.left = `${Math.round(left)}px`;
-    this.element.style.top = `${Math.round(top)}px`;
-  }
-
-  private readonly handleContentMouseDown = () => {
-    this.suppressHide = true;
-    queueMicrotask(() => {
-      this.suppressHide = false;
-    });
-  };
-
-  private readonly handleDocumentMouseDown = (event: MouseEvent) => {
-    if (this.suppressHide) {
-      return;
-    }
-
-    if (this.delegateDOMEvent(event)) {
-      return;
-    }
-
-    const targetNode = event.target;
-    if (!(targetNode instanceof Node)) {
-      this.hide();
-      return;
-    }
-
-    if (this.element.contains(targetNode)) {
-      return;
-    }
-
-    if (
-      this.options?.anchor instanceof HTMLElement
-      && this.options.anchor.contains(targetNode)
-    ) {
-      return;
-    }
-
-    this.hide();
-  };
-
-  private readonly handleDocumentKeyDown = (event: KeyboardEvent) => {
-    if (this.delegateDOMEvent(event)) {
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      this.hide();
-    }
-  };
-
-  private readonly handleDocumentScroll = (event: Event) => {
-    if (this.delegateDOMEvent(event)) {
-      return;
-    }
-
-    const targetNode = event.target;
-    if (targetNode instanceof Node && this.element.contains(targetNode)) {
-      return;
-    }
-
-    this.hide();
-  };
-
-  private readonly handleWindowResize = () => {
-    this.layout();
-  };
-
-  private delegateDOMEvent(event: Event) {
-    if (!this.options?.onDOMEvent) {
-      return false;
-    }
-
-    const activeElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    this.options.onDOMEvent(event, activeElement);
-    return true;
-  }
-
-  private scheduleRelayout(allowHide = true) {
-    if (this.pendingRelayout || !this.visible) {
-      return;
-    }
-
-    this.pendingRelayout = true;
-    requestAnimationFrame(() => {
-      this.pendingRelayout = false;
-      if (!this.visible || this.disposed) {
-        return;
-      }
-      this.layout(allowHide);
-    });
-  }
-}
-
-export function createContextViewController() {
-  return new ContextViewController();
-}
+const SHADOW_ROOT_CSS = /* css */ `
+	:host {
+		all: initial; /* 1st rule so subsequent properties are reset. */
+	}
+
+	.codicon[class*='codicon-'] {
+		font: normal normal normal 16px/1 codicon;
+		display: inline-block;
+		text-decoration: none;
+		text-rendering: auto;
+		text-align: center;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		user-select: none;
+		-webkit-user-select: none;
+		-ms-user-select: none;
+	}
+
+	:host {
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "HelveticaNeue-Light", system-ui, "Ubuntu", "Droid Sans", sans-serif;
+	}
+
+	:host-context(.mac) { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+	:host-context(.mac:lang(zh-Hans)) { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif; }
+	:host-context(.mac:lang(zh-Hant)) { font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif; }
+	:host-context(.mac:lang(ja)) { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic Pro", sans-serif; }
+	:host-context(.mac:lang(ko)) { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Nanum Gothic", "AppleGothic", sans-serif; }
+
+	:host-context(.windows) { font-family: "Segoe WPC", "Segoe UI", sans-serif; }
+	:host-context(.windows:lang(zh-Hans)) { font-family: "Segoe WPC", "Segoe UI", "Microsoft YaHei", sans-serif; }
+	:host-context(.windows:lang(zh-Hant)) { font-family: "Segoe WPC", "Segoe UI", "Microsoft Jhenghei", sans-serif; }
+	:host-context(.windows:lang(ja)) { font-family: "Segoe WPC", "Segoe UI", "Yu Gothic UI", "Meiryo UI", sans-serif; }
+	:host-context(.windows:lang(ko)) { font-family: "Segoe WPC", "Segoe UI", "Malgun Gothic", "Dotom", sans-serif; }
+
+	:host-context(.linux) { font-family: system-ui, "Ubuntu", "Droid Sans", sans-serif; }
+	:host-context(.linux:lang(zh-Hans)) { font-family: system-ui, "Ubuntu", "Droid Sans", "Source Han Sans SC", "Source Han Sans CN", "Source Han Sans", sans-serif; }
+	:host-context(.linux:lang(zh-Hant)) { font-family: system-ui, "Ubuntu", "Droid Sans", "Source Han Sans TC", "Source Han Sans TW", "Source Han Sans", sans-serif; }
+	:host-context(.linux:lang(ja)) { font-family: system-ui, "Ubuntu", "Droid Sans", "Source Han Sans J", "Source Han Sans JP", "Source Han Sans", sans-serif; }
+	:host-context(.linux:lang(ko)) { font-family: system-ui, "Ubuntu", "Droid Sans", "Source Han Sans K", "Source Han Sans JR", "Source Han Sans", "UnDotum", "FBaekmuk Gulim", sans-serif; }
+`;
