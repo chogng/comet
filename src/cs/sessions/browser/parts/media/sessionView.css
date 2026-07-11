@@ -58,6 +58,9 @@
 .comet-session-titlebar-trailing {
 	flex: 0 0 auto;
 	margin-left: auto;
+	position: relative;
+	z-index: 2;
+	-webkit-app-region: no-drag;
 }
 
 .comet-session-header {

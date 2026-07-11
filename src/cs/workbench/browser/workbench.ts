@@ -855,6 +855,7 @@ class WorkbenchHost {
     }
     const editorDraftStyleSnapshot = editorDraftStyleService.getSnapshot();
     const {
+      hasLoadedSettings,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1576,7 +1577,8 @@ class WorkbenchHost {
     this.titlebarPart.sync({
       electronRuntime,
       useMica,
-      statusbarVisible,
+      statusbarVisible: hasLoadedSettings && statusbarVisible,
+      isEditorVisible: !isEditorCollapsed,
       leadingActions: titlebarLeadingActionsProps,
     });
 

@@ -25,13 +25,17 @@ export type TitlebarPartSyncParams = {
   electronRuntime: boolean;
   useMica: boolean;
   statusbarVisible: boolean;
+  isEditorVisible: boolean;
   leadingActions: TitlebarLeadingActionsProps;
 };
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
-export function resolveWorkbenchStatusbarVisibility(statusbarVisible: boolean) {
-  return statusbarVisible;
+export function resolveWorkbenchStatusbarVisibility(
+  statusbarVisible: boolean,
+  isEditorVisible: boolean,
+) {
+  return statusbarVisible && isEditorVisible;
 }
 
 function shouldRenderTitlebarMenuAction() {
@@ -73,9 +77,9 @@ export class TitlebarPart {
   }
 
   sync(params: TitlebarPartSyncParams) {
-    const { electronRuntime, useMica, statusbarVisible } = params;
+    const { electronRuntime, useMica, statusbarVisible, isEditorVisible } = params;
     const isStatusbarVisible =
-      resolveWorkbenchStatusbarVisibility(statusbarVisible);
+      resolveWorkbenchStatusbarVisibility(statusbarVisible, isEditorVisible);
     const hasNativeWindowControlsOverlay =
       electronRuntime && WINDOW_CHROME_LAYOUT.nativeWindowControlsOverlay;
     const hasLeadingWindowControls =

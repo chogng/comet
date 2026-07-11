@@ -312,13 +312,14 @@ test('workbenchPartDom subscriptions stop after disposal', () => {
   assert.equal(getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.editor], null);
 });
 
-test('resolveWorkbenchStatusbarVisibility returns the toggle state directly', async () => {
+test('resolveWorkbenchStatusbarVisibility requires the editor to be visible', async () => {
   const { resolveWorkbenchStatusbarVisibility } = await import(
     'cs/workbench/browser/parts/titlebar/titlebarPart'
   );
 
-  assert.equal(resolveWorkbenchStatusbarVisibility(true), true);
-  assert.equal(resolveWorkbenchStatusbarVisibility(false), false);
+  assert.equal(resolveWorkbenchStatusbarVisibility(true, true), true);
+  assert.equal(resolveWorkbenchStatusbarVisibility(true, false), false);
+  assert.equal(resolveWorkbenchStatusbarVisibility(false, true), false);
 });
 
 test('TitlebarPart syncs headless chrome before the shell and statusbar', async () => {
@@ -340,6 +341,7 @@ test('TitlebarPart syncs headless chrome before the shell and statusbar', async 
       electronRuntime: false,
       useMica: false,
       statusbarVisible: true,
+      isEditorVisible: true,
       leadingActions: {
         menuLabel: 'Menu',
         isPrimarySidebarVisible: true,
