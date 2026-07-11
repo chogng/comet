@@ -14,7 +14,6 @@ export type SettingsSectionId =
 	| 'llmModel'
 	| 'llmApiKey'
 	| 'translation'
-	| 'batchOptions'
 	| 'supportedSources'
 	| 'knowledgeBaseLibrary'
 	| 'knowledgeBaseRag'
@@ -61,7 +60,6 @@ export const SettingsId = {
 	TranslationProviderBaseUrl: 'translation.providers.baseUrl',
 	TranslationProviderApiKey: 'translation.providers.apiKey',
 	TranslationProviderModel: 'translation.providers.model',
-	DefaultBatchLimit: 'defaultBatchLimit',
 	FetchStartDate: 'fetch.startDate',
 	FetchEndDate: 'fetch.endDate',
 	DefaultDownloadDir: 'defaultDownloadDir',

@@ -14,14 +14,22 @@ import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
-import { DisposableStore } from 'cs/base/common/lifecycle';
+import { CancellationTokenSource, isCancellationError } from 'cs/base/common/cancellation';
+import { DisposableStore, MutableDisposable } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import {
 	IContextViewService,
 	type ContextViewDisposable,
 } from 'cs/platform/contextview/browser/contextView';
+import { INotificationService } from 'cs/platform/notification/common/notification';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
-import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
+import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import {
+	IFetchService,
+	type ArticleListItem,
+	type ArticleListSource,
+	type JournalDescriptor,
+} from 'cs/workbench/services/fetch/common/fetch';
 import {
 	ChatInputModelPickerActionViewItem,
 	type ChatInputModelPickerProps,
@@ -46,9 +54,6 @@ export type ChatInputPartProps = Pick<
 	| 'onSelectLlmModel'
 	| 'onToggleMaxContextWindow'
 	| 'onOpenModelSettings'
-	| 'articleQuickSources'
-	| 'isArticleSourceFetching'
-	| 'onFetchArticleSource'
 > & {
 	readonly isEmpty: boolean;
 	readonly inputToolbarActions: readonly ChatInputToolbarActionItem[];
@@ -66,10 +71,6 @@ function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerPro
 		onToggleMaxContextWindow: props.onToggleMaxContextWindow,
 		onOpenModelSettings: props.onOpenModelSettings,
 	};
-}
-
-function getArticleSourceLabel(source: JournalDescriptor) {
-	return source.title;
 }
 
 function createChatInputAddActionItem() {
@@ -119,20 +120,37 @@ function createChatInputAddActionItem() {
 export class ChatInputPart {
 	private props: ChatInputPartProps;
 	private readonly element = $<HTMLElementTagNameMap['div']>('div');
+	private readonly disposables = new DisposableStore();
 	private readonly renderDisposables = new DisposableStore();
+	private readonly articleFetchCancellation = this.disposables.add(new MutableDisposable<CancellationTokenSource>());
 	private readonly modelPicker: ChatInputModelPickerActionViewItem;
 	private articleMenuContextView: ContextViewDisposable | null = null;
 	private articleMenuAnchor: HTMLElement | null = null;
 	private isReplacingArticleMenuContextView = false;
 	private isArticleMenuOpen = false;
+	private activeJournalId: string | undefined;
+	private activeSourceId: string | undefined;
 	private disposed = false;
 
 	constructor(
 		props: ChatInputPartProps,
 		@IContextViewService private readonly contextViewService: IContextViewService,
+		@IFetchService private readonly fetchService: IFetchService,
+		@IChatService private readonly chatService: IChatService,
+		@INotificationService private readonly notificationService: INotificationService,
 	) {
 		this.props = props;
 		this.modelPicker = new ChatInputModelPickerActionViewItem(getModelPickerProps(props));
+		this.disposables.add(this.fetchService.onDidChangeCatalog(journalId => {
+			if (journalId === this.activeJournalId) {
+				this.render();
+			}
+		}));
+		this.disposables.add(this.fetchService.onDidChangeSource(sourceId => {
+			if (sourceId === this.activeSourceId) {
+				this.render();
+			}
+		}));
 		this.render();
 	}
 
@@ -160,6 +178,7 @@ export class ChatInputPart {
 		}
 
 		this.disposed = true;
+		this.disposables.dispose();
 		this.renderDisposables.dispose();
 		this.closeArticleMenuContextView();
 		this.element.replaceChildren();
@@ -330,21 +349,55 @@ export class ChatInputPart {
 		header.append(title, closeActionsView.getElement());
 
 		const list = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-source-list');
-		for (const source of this.props.articleQuickSources) {
-			const sourceButton = $<HTMLElementTagNameMap['button']>('button.comet-chat-composer-article-source');
-			const sourceLabel = getArticleSourceLabel(source);
-			sourceButton.type = 'button';
-			sourceButton.disabled = this.props.isArticleSourceFetching;
-			sourceButton.textContent = sourceLabel;
-			sourceButton.title = source.homeUrl.toString(true);
-			this.renderDisposables.add(
-				addDisposableListener(sourceButton, EventType.CLICK, () => {
-					this.isArticleMenuOpen = false;
-					this.render();
-					void this.props.onFetchArticleSource(source);
-				}),
-			);
-			list.append(sourceButton);
+		if (!this.activeJournalId) {
+			for (const journal of this.fetchService.getJournals()) {
+				list.append(this.createArticleMenuButton(
+					journal.title,
+					journal.homeUrl.toString(true),
+					false,
+					() => void this.selectJournal(journal),
+				));
+			}
+		} else {
+			const journal = this.fetchService.getJournal(this.activeJournalId);
+			if (journal) {
+				list.append(this.createArticleMenuButton(
+					localize('chatArticleMenuBackToJournals', "Back to Journals"),
+					journal.title,
+					false,
+					() => this.clearActiveJournal(),
+				));
+			}
+			const catalog = this.fetchService.getArticleListCatalog(this.activeJournalId);
+			if (!catalog) {
+				const loading = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-source');
+				loading.textContent = localize('chatArticleMenuLoadingSources', "Loading article sources...");
+				list.append(loading);
+			} else {
+				for (const entry of catalog.entries) {
+					if (entry.kind === 'group') {
+						const groupLabel = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-menu-title');
+						groupLabel.textContent = entry.label;
+						list.append(groupLabel);
+						for (const source of entry.sources) {
+							list.append(this.createArticleSourceButton(source));
+						}
+					} else {
+						list.append(this.createArticleSourceButton(entry));
+					}
+				}
+				const activeSourceId = this.activeSourceId;
+				const pages = activeSourceId ? this.fetchService.getArticlePages(activeSourceId) : [];
+				const lastPage = pages.at(-1);
+				if (activeSourceId && lastPage?.nextPageUrl) {
+					list.append(this.createArticleMenuButton(
+						localize('chatArticleMenuLoadMore', "Load More"),
+						lastPage.nextPageUrl.toString(true),
+						this.fetchService.getSourceLoadState(activeSourceId).status === 'loading',
+						() => void this.fetchNextPage(activeSourceId),
+					));
+				}
+			}
 		}
 
 		const scrollableList = new DomScrollableElement(list, {
@@ -358,6 +411,113 @@ export class ChatInputPart {
 		menu.append(header, scrollableList.getDomNode());
 		scrollableList.scanDomNode();
 		return menu;
+	}
+
+	private createArticleSourceButton(source: ArticleListSource): HTMLElement {
+		return this.createArticleMenuButton(
+			source.label,
+			source.url.toString(true),
+			this.fetchService.getSourceLoadState(source.id).status === 'loading',
+			() => void this.selectArticleSource(source),
+		);
+	}
+
+	private createArticleMenuButton(label: string, title: string, disabled: boolean, onClick: () => void): HTMLElement {
+		const button = $<HTMLElementTagNameMap['button']>('button.comet-chat-composer-article-source');
+		button.type = 'button';
+		button.disabled = disabled;
+		button.textContent = label;
+		button.title = title;
+		this.renderDisposables.add(addDisposableListener(button, EventType.CLICK, onClick));
+		return button;
+	}
+
+	private async selectJournal(journal: JournalDescriptor): Promise<void> {
+		this.activeJournalId = journal.id;
+		this.activeSourceId = undefined;
+		this.render();
+		await this.runArticleFetch(token => this.fetchService.discoverArticleListSources(journal.id, token));
+	}
+
+	private clearActiveJournal(): void {
+		this.articleFetchCancellation.clear();
+		this.activeJournalId = undefined;
+		this.activeSourceId = undefined;
+		this.render();
+	}
+
+	private async selectArticleSource(source: ArticleListSource): Promise<void> {
+		this.activeSourceId = source.id;
+		this.render();
+		const completed = await this.runArticleFetch(token => this.fetchService.fetchArticleListSource(source.id, token));
+		if (completed) {
+			this.insertArticlePage(source.label, this.fetchService.getArticlePages(source.id).at(-1));
+		}
+	}
+
+	private async fetchNextPage(sourceId: string): Promise<void> {
+		const source = this.getArticleSource(sourceId);
+		if (!source) {
+			return;
+		}
+		const completed = await this.runArticleFetch(token => this.fetchService.fetchNextPage(sourceId, token));
+		if (completed) {
+			this.insertArticlePage(source.label, this.fetchService.getArticlePages(sourceId).at(-1));
+		}
+	}
+
+	private getArticleSource(sourceId: string): ArticleListSource | undefined {
+		const journalId = this.activeJournalId;
+		const catalog = journalId ? this.fetchService.getArticleListCatalog(journalId) : undefined;
+		return catalog?.entries.flatMap(entry => entry.kind === 'group' ? entry.sources : [entry]).find(source => source.id === sourceId);
+	}
+
+	private insertArticlePage(sourceLabel: string, page: ReturnType<IFetchService['getArticlePage']>): void {
+		if (!page) {
+			return;
+		}
+		const items = [...page.groups.flatMap(group => group.itemIds), ...page.ungroupedItemIds]
+			.map(itemId => this.fetchService.getArticleListItem(itemId))
+			.filter((item): item is ArticleListItem => !!item);
+		if (items.length === 0) {
+			this.chatService.insertArticleFetchEmptyResult(
+				sourceLabel,
+				localize('chatArticleMenuEmptySource', "No articles are available from this source."),
+			);
+			return;
+		}
+		const content = [sourceLabel, ...items.map(item => this.formatArticleListItem(item))].join('\n');
+		this.chatService.insertArticleList(sourceLabel, items.map(item => item.articleId), content);
+	}
+
+	private formatArticleListItem(item: ArticleListItem): string {
+		const article = this.fetchService.getArticle(item.articleId);
+		if (!article) {
+			throw new Error(`Article "${item.articleId}" is unavailable.`);
+		}
+		const metadata = [item.publishedAt, item.articleType].filter((value): value is string => !!value).join(' | ');
+		const title = item.title.replace(/\]/g, ')');
+		const link = `[${title}](${article.url.toString(true)})`;
+		return metadata ? `- ${link} - ${metadata}` : `- ${link}`;
+	}
+
+	private async runArticleFetch(operation: (token: CancellationTokenSource['token']) => Promise<void>): Promise<boolean> {
+		const cancellation = new CancellationTokenSource();
+		this.articleFetchCancellation.value = cancellation;
+		try {
+			await operation(cancellation.token);
+			return !cancellation.token.isCancellationRequested;
+		} catch (error) {
+			if (isCancellationError(error)) {
+				return false;
+			}
+			this.notificationService.error(error instanceof Error ? error.message : String(error));
+			return false;
+		} finally {
+			if (this.articleFetchCancellation.value === cancellation) {
+				this.articleFetchCancellation.clear();
+			}
+		}
 	}
 
 	private syncArticleMenuContextView() {
@@ -401,6 +561,7 @@ export class ChatInputPart {
 			return;
 		}
 		if (!this.isArticleMenuOpen) {
+			this.articleFetchCancellation.clear();
 			return;
 		}
 
@@ -415,6 +576,9 @@ export class ChatInputPart {
 
 	private toggleArticleMenu() {
 		this.isArticleMenuOpen = !this.isArticleMenuOpen;
+		if (!this.isArticleMenuOpen) {
+			this.articleFetchCancellation.clear();
+		}
 		this.render();
 	}
 
@@ -424,6 +588,7 @@ export class ChatInputPart {
 		}
 
 		this.isArticleMenuOpen = false;
+		this.articleFetchCancellation.clear();
 		this.render();
 	}
 }

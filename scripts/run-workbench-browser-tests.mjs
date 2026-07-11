@@ -15,8 +15,10 @@ const outputDir = path.join(rootDir, '.tmp', 'workbench-browser-tests');
 const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'splitview.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'gridview.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'articleFetch.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'documentActionsModel.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'assistantModel.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'agentbar.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'modelSubscriptions.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorInput.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorModel.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorOpenService.test.ts'),

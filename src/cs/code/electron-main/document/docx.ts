@@ -6,9 +6,8 @@ import type {
   DocumentTranslationProgress,
   DocxExportResult,
   ExportArticlesDocxPayload,
+  ArticleSummaryExportInput,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { getFetchArticleBodyText } from 'cs/base/parts/sandbox/common/fetchArticle';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import { defaultDocxExportConfig } from 'cs/code/electron-main/document/docxConfig';
 import { CancellationError, isCancellationError } from 'cs/base/common/errors';
@@ -20,7 +19,7 @@ import { buildDocxBuffer as buildDocxArchiveBuffer, escapeXml, normalizeDocxPath
 
 import { cleanText } from 'cs/base/common/strings';
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
-import { translateArticlesToChinese } from 'cs/code/electron-main/translation/articleTranslation';
+import { translateArticleSummariesToChinese } from 'cs/code/electron-main/translation/articleTranslation';
 
 const docxConfig = defaultDocxExportConfig;
 
@@ -107,16 +106,16 @@ function pageBreakXml() {
 type JournalArticleGroup = {
   journalTitle: string;
   articles: Array<{
-    article: FetchArticle;
+    article: ArticleSummaryExportInput;
     exportOrder: number;
   }>;
 };
 
-function resolveJournalTitle(article: FetchArticle) {
-  return cleanText(article.publication.title);
+function resolveJournalTitle(article: ArticleSummaryExportInput) {
+  return cleanText(article.journalTitle);
 }
 
-function groupArticlesByJournal(articles: FetchArticle[]): JournalArticleGroup[] {
+function groupArticlesByJournal(articles: ArticleSummaryExportInput[]): JournalArticleGroup[] {
   const groups: JournalArticleGroup[] = [];
   const groupIndexByTitle = new Map<string, number>();
 
@@ -188,21 +187,16 @@ function createDocxTranslationFailedError(error: unknown, filePath: string) {
 }
 
 function articleParagraphsXml(
-  article: FetchArticle,
+  article: ArticleSummaryExportInput,
   indexInJournal: number,
   exportOrder: number,
   locale: SupportedLocale,
 ) {
   const copy = resolveDocxExportCopy(locale);
   const title = cleanText(article.title) || copy.untitled;
-  const descriptionLines = normalizeLines(getFetchArticleBodyText(article));
   const abstractLines = normalizeLines(article.abstract);
   const contentLines =
-    descriptionLines.length > 0
-      ? descriptionLines
-      : abstractLines.length > 0
-        ? abstractLines
-        : [copy.unknown];
+    abstractLines.length > 0 ? abstractLines : [copy.unknown];
 
   const paragraphs = [
     paragraphXml(`${exportOrder}. ${title}`, {
@@ -230,7 +224,7 @@ function articleParagraphsXml(
   return paragraphs.join('');
 }
 
-function buildDocumentXml(articles: FetchArticle[], locale: SupportedLocale) {
+function buildDocumentXml(articles: ArticleSummaryExportInput[], locale: SupportedLocale) {
   const page = docxConfig.page;
   const journalGroups = groupArticlesByJournal(articles);
   const bodyParts: string[] = [];
@@ -277,7 +271,7 @@ function buildDocumentXml(articles: FetchArticle[], locale: SupportedLocale) {
 }
 
 
-function buildDocxBuffer(articles: FetchArticle[], locale: SupportedLocale) {
+function buildDocxBuffer(articles: ArticleSummaryExportInput[], locale: SupportedLocale) {
   return buildDocxArchiveBuffer({
     documentXml: buildDocumentXml(articles, locale),
     coreTitle: 'Comet Studio Batch Export',
@@ -288,7 +282,7 @@ function pad(value: number) {
   return String(value).padStart(2, '0');
 }
 
-function resolveSingleJournalDocxFileStem(articles: FetchArticle[], locale: SupportedLocale) {
+function resolveSingleJournalDocxFileStem(articles: ArticleSummaryExportInput[], locale: SupportedLocale) {
   if (articles.length === 0) {
     return '';
   }
@@ -322,7 +316,7 @@ export function buildBatchDocxFileName(
     locale = 'en',
     referenceDate = new Date(),
   }: {
-    articles?: FetchArticle[];
+    articles?: ArticleSummaryExportInput[];
     locale?: SupportedLocale;
     referenceDate?: Date;
   } = {},
@@ -398,7 +392,7 @@ export async function exportArticlesDocx(
   let exportArticles = articles;
   if (shouldTranslateSummaries) {
     try {
-      exportArticles = await translateArticlesToChinese(
+      exportArticles = await translateArticleSummariesToChinese(
         articles,
         storage,
         options.onTranslationProgress,
@@ -424,7 +418,7 @@ export async function exportArticlesToDocxFile({
   locale = 'en',
   signal,
 }: {
-  articles: FetchArticle[];
+  articles: ArticleSummaryExportInput[];
   filePath: string;
   locale?: SupportedLocale;
   signal?: AbortSignal;

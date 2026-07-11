@@ -4,16 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { EventEmitter } from 'cs/base/common/event';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import type {
   AgentMessagePayload,
+  ArticleContextInput,
   MainAgentPatchProposal,
   RagAnswerResult,
   RunMainAgentTurnResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import {
-  getFetchArticleSourceUrl,
-} from 'cs/base/parts/sandbox/common/fetchArticle';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import {
   applyWritingEditorEdits,
   collectWritingEditorTextUnits,
@@ -34,14 +32,14 @@ import {
 } from 'cs/workbench/common/chatErrorMessages';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
-import { parseLinkedText } from 'cs/base/common/linkedText';
-import { normalizeUrl } from 'cs/workbench/common/url';
+import type { ArticleId } from 'cs/workbench/services/fetch/common/fetch';
+import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import type { LocaleMessages } from 'language/locales';
 
 type ChatServiceState = {
   conversations: ChatConversation[];
   activeConversationId: string;
-  selectedArticleUrlsInOrder: string[];
+  checkedArticleIds: readonly ArticleId[];
 };
 
 function toAgentMessage(
@@ -118,29 +116,6 @@ function isAgentTextMessage(
   );
 }
 
-function createLinkedTextLabel(label: string): string {
-  return label.replace(/\]/g, ')');
-}
-
-function createArticleMessageLine(article: FetchArticle): string {
-  const description = [
-    article.publishedAt,
-    article.sourceArticleType,
-  ].filter(Boolean).join(' | ');
-  const linkedTitle = `[${createLinkedTextLabel(article.title)}](${getFetchArticleSourceUrl(article)})`;
-  return description ? `- ${linkedTitle} - ${description}` : `- ${linkedTitle}`;
-}
-
-function createArticleMessageContent(
-  sourceLabel: string,
-  articles: readonly FetchArticle[],
-): string {
-  return [
-    sourceLabel,
-    ...articles.map(createArticleMessageLine),
-  ].join('\n');
-}
-
 function createArticleFetchEmptyMessageContent(
   sourceLabel: string,
   message: string,
@@ -215,44 +190,20 @@ function createSnapshot(state: ChatServiceState): ChatServiceSnapshot {
   };
 }
 
-function areStringArraysEqual(
-  first: readonly string[],
-  second: readonly string[],
-) {
-  return (
-    first.length === second.length &&
-    first.every((value, index) => value === second[index])
-  );
-}
-
-function appendSelectedArticleUrls(
-  previousUrls: string[],
-  articles: readonly FetchArticle[],
-) {
-  const nextUrls = [...previousUrls];
-  for (const article of articles) {
-    const sourceUrl = normalizeUrl(getFetchArticleSourceUrl(article));
-    if (sourceUrl && !nextUrls.includes(sourceUrl)) {
-      nextUrls.push(sourceUrl);
-    }
-  }
-
-  return areStringArraysEqual(previousUrls, nextUrls) ? previousUrls : nextUrls;
-}
-
 export class ChatService implements IChatService {
   declare readonly _serviceBrand: undefined;
   private context: ChatServiceContext | null = null;
   private state: ChatServiceState = {
     conversations: [],
     activeConversationId: '',
-    selectedArticleUrlsInOrder: [],
+    checkedArticleIds: [],
   };
   private snapshot: ChatServiceSnapshot = createSnapshot(this.state);
   private readonly onDidChangeEmitter = new EventEmitter<void>();
 
   constructor(
     @INotificationService private readonly notificationService: INotificationService,
+    @IFetchService private readonly fetchService: IFetchService,
   ) {}
 
   readonly subscribe = (listener: () => void) => {
@@ -419,11 +370,12 @@ export class ChatService implements IChatService {
     });
   };
 
-  readonly insertArticles = (
-    articles: readonly FetchArticle[],
+  readonly insertArticleList = (
     sourceLabel: string,
+    articleIds: readonly ArticleId[],
+    content: string,
   ) => {
-    if (articles.length === 0) {
+    if (articleIds.length === 0 || !content.trim()) {
       return;
     }
 
@@ -434,35 +386,27 @@ export class ChatService implements IChatService {
     }
 
     this.updateState((state) => {
-      const nextSelectedArticleUrlsInOrder = appendSelectedArticleUrls(
-        state.selectedArticleUrlsInOrder,
-        articles,
-      );
       const insertedMessage: ChatMessage = {
         id: createMessageId(),
         role: "assistant",
-        content: createArticleMessageContent(sourceLabel, articles),
+        content,
         includeInAgentHistory: false,
+        articleList: { articleIds: [...articleIds] },
       };
-      let changed = !Object.is(
-        nextSelectedArticleUrlsInOrder,
-        state.selectedArticleUrlsInOrder,
-      );
+      let changed = false;
       const nextConversations = state.conversations.map((conversation) => {
         if (conversation.id !== activeConversation.id) {
           return conversation;
         }
 
         const isFirstMessage = conversation.messages.length === 0;
-        const articleTitle = articles[0].title.trim().slice(0, 18);
         const sourceTitle = sourceLabel.trim().slice(0, 18);
 
         changed = true;
         return {
           ...conversation,
           title: isFirstMessage
-            ? articleTitle ||
-              sourceTitle ||
+            ? sourceTitle ||
               createDefaultConversationTitle(
                 context.ui,
                 conversation.autoTitleIndex ?? 0,
@@ -484,7 +428,6 @@ export class ChatService implements IChatService {
       return {
         ...state,
         conversations: nextConversations,
-        selectedArticleUrlsInOrder: nextSelectedArticleUrlsInOrder,
       };
     });
   };
@@ -673,9 +616,7 @@ export class ChatService implements IChatService {
     }));
 
     try {
-      const retrievalArticles = context.isKnowledgeBaseModeEnabled
-        ? context.articles
-        : [];
+      const articleContexts = await this.resolveCheckedArticleContexts();
       const fallbackWritingContext =
         context.getFallbackWritingContext?.() ?? context.fallbackWritingContext ?? '';
       const draftBody = context.getDraftBody?.() ?? '';
@@ -693,14 +634,14 @@ export class ChatService implements IChatService {
         editorTextUnits: draftDocument
           ? collectWritingEditorTextUnits(draftDocument)
           : [],
-        articles: retrievalArticles,
+        articleContexts,
         llm: context.llmSettings,
         rag: context.ragSettings,
         availableTools: [
           "get_selection_context",
           "list_text_units",
           ...(draftDocument ? ["apply_editor_patch" as const] : []),
-          ...(retrievalArticles.length > 0 ? ["retrieve_evidence" as const] : []),
+          ...(articleContexts.length > 0 ? ["retrieve_evidence" as const] : []),
         ],
       });
       const assistantResult = createChatResultFromAgentTurn(
@@ -745,76 +686,40 @@ export class ChatService implements IChatService {
     }
   };
 
-  readonly collectArticleBatch = (articles: readonly FetchArticle[]): FetchArticle[] => {
-    const articlesByUrl = new Map(
-      articles.map((article) => [normalizeUrl(getFetchArticleSourceUrl(article)), article] as const),
-    );
-    const result: FetchArticle[] = [];
-    const seenUrls = new Set<string>();
+  readonly isArticleChecked = (articleId: ArticleId) => {
+    return this.snapshot.checkedArticleIds.includes(articleId);
+  };
 
-    for (const message of this.snapshot.messages) {
-      if (message.role !== 'assistant' || message.includeInAgentHistory !== false) {
-        continue;
+  readonly setArticleChecked = (articleId: ArticleId, checked: boolean) => {
+    this.updateState((state) => {
+      const isChecked = state.checkedArticleIds.includes(articleId);
+      if (isChecked === checked) {
+        return state;
       }
 
-      for (const node of parseLinkedText(message.content).nodes) {
-        if (typeof node === 'string') {
-          continue;
-        }
-
-        const normalizedUrl = normalizeUrl(node.href);
-        if (!normalizedUrl || seenUrls.has(normalizedUrl)) {
-          continue;
-        }
-
-        const article = articlesByUrl.get(normalizedUrl);
-        if (!article) {
-          continue;
-        }
-
-        seenUrls.add(normalizedUrl);
-        result.push(article);
-      }
-    }
-
-    return result;
+      return {
+        ...state,
+        checkedArticleIds: checked
+          ? [...state.checkedArticleIds, articleId]
+          : state.checkedArticleIds.filter(id => id !== articleId),
+      };
+    });
   };
 
-  readonly collectSelectedArticleBatch = (
-    articles: readonly FetchArticle[],
-  ): FetchArticle[] => {
-    const articleBatch = this.collectArticleBatch(articles);
-    const articlesByUrl = new Map(
-      articleBatch.map((article) => [normalizeUrl(getFetchArticleSourceUrl(article)), article] as const),
-    );
-
-    return this.snapshot.selectedArticleUrlsInOrder
-      .map((sourceUrl) => articlesByUrl.get(sourceUrl))
-      .filter((article): article is FetchArticle => Boolean(article));
-  };
-
-  readonly isArticleSelected = (href: string) => {
-    const sourceUrl = normalizeUrl(href);
-    return Boolean(
-      sourceUrl &&
-        this.snapshot.selectedArticleUrlsInOrder.includes(sourceUrl),
-    );
-  };
-
-  readonly toggleArticleSelected = (href: string) => {
-    const sourceUrl = normalizeUrl(href);
-    if (!sourceUrl) {
+  readonly removeArticleChecks = (articleIds: readonly ArticleId[]) => {
+    if (articleIds.length === 0) {
       return;
     }
 
-    this.updateState((state) => ({
-      ...state,
-      selectedArticleUrlsInOrder: state.selectedArticleUrlsInOrder.includes(sourceUrl)
-        ? state.selectedArticleUrlsInOrder.filter(
-            (selectedUrl) => selectedUrl !== sourceUrl,
-          )
-        : [...state.selectedArticleUrlsInOrder, sourceUrl],
-    }));
+    const removedArticleIds = new Set(articleIds);
+    this.updateState((state) => {
+      const checkedArticleIds = state.checkedArticleIds.filter(
+        (articleId) => !removedArticleIds.has(articleId),
+      );
+      return checkedArticleIds.length === state.checkedArticleIds.length
+        ? state
+        : { ...state, checkedArticleIds };
+    });
   };
 
   private getContext() {
@@ -823,6 +728,46 @@ export class ChatService implements IChatService {
     }
 
     return this.context;
+  }
+
+  private async resolveCheckedArticleContexts(): Promise<ArticleContextInput[]> {
+    const cancellation = new CancellationTokenSource();
+    const unavailableIds: ArticleId[] = [];
+    const contexts: ArticleContextInput[] = [];
+
+    try {
+      for (const articleId of this.snapshot.checkedArticleIds) {
+        const article = this.fetchService.getArticle(articleId);
+        if (!article) {
+          unavailableIds.push(articleId);
+          continue;
+        }
+
+        const detail = this.fetchService.getArticleDetail(articleId)
+          ?? await this.fetchService.fetchArticle(articleId, cancellation.token);
+        contexts.push({
+          sourceUrl: detail.url.toString(true),
+          doi: detail.doi,
+          title: detail.title,
+          authors: detail.authors.map(author => author.name),
+          abstract: detail.abstract,
+          journalTitle: detail.publication.title,
+          publishedAt: detail.publishedAt,
+        });
+      }
+    } finally {
+      cancellation.dispose();
+    }
+
+    if (unavailableIds.length > 0) {
+      this.updateState(state => ({
+        ...state,
+        checkedArticleIds: state.checkedArticleIds.filter(articleId => !unavailableIds.includes(articleId)),
+      }));
+      this.notificationService.info(this.getContext().ui.articleDetailsUnavailable);
+    }
+
+    return contexts;
   }
 
   private emitChange() {

@@ -27,8 +27,6 @@ export function shouldUpdateSettingsSection(
       return shouldUpdateLlmApiKeySection(previousProps, currentProps);
     case 'translation':
       return shouldUpdateTranslationSection(previousProps, currentProps);
-    case 'batchOptions':
-      return shouldUpdateBatchOptionsSection(previousProps, currentProps);
     case 'supportedSources':
       return shouldUpdateSupportedSourcesSection(previousProps, currentProps);
     case 'knowledgeBaseLibrary':
@@ -51,25 +49,6 @@ function shouldUpdateLocaleSection(
     previousProps.labels.languageChinese !== currentProps.labels.languageChinese ||
     previousProps.labels.languageEnglish !== currentProps.labels.languageEnglish ||
     previousProps.labels.settingsLanguageHint !== currentProps.labels.settingsLanguageHint
-  );
-}
-
-function shouldUpdateBatchOptionsSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
-) {
-  return (
-    !previousProps ||
-    previousProps.batchLimit !== currentProps.batchLimit ||
-    previousProps.fetchStartDate !== currentProps.fetchStartDate ||
-    previousProps.fetchEndDate !== currentProps.fetchEndDate ||
-    previousProps.labels.settingsBatchOptions !== currentProps.labels.settingsBatchOptions ||
-    previousProps.labels.batchCount !== currentProps.labels.batchCount ||
-    previousProps.labels.startDate !== currentProps.labels.startDate ||
-    previousProps.labels.endDate !== currentProps.labels.endDate ||
-    previousProps.labels.clearDate !== currentProps.labels.clearDate ||
-    previousProps.labels.today !== currentProps.labels.today ||
-    previousProps.labels.settingsBatchHint !== currentProps.labels.settingsBatchHint
   );
 }
 

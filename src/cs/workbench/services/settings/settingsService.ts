@@ -27,7 +27,6 @@ import {
   type EditorDraftStyleSettings,
 } from 'cs/base/common/editorDraftStyle';
 import type { Locale } from 'language/i18n';
-import { defaultBatchLimit, normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
 import {
   createSettingValue,
   type SettingValue,
@@ -56,7 +55,6 @@ export type ResolvedSettingsState = {
   browserMaxHistoryEntries: number;
   browserPageZoom: string;
   browserSearchEngine: string;
-  batchLimit: number;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -84,7 +82,6 @@ export type SaveSettingsDraft = {
   browserMaxHistoryEntries: number;
   browserPageZoom: string;
   browserSearchEngine: string;
-  batchLimit: number;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -105,7 +102,6 @@ export type SaveSettingsDraft = {
 
 export type SaveSettingsPayloadBuild = {
   nextDir: string;
-  nextBatchLimit: number;
   payload: PartialSettingsPayload;
 };
 
@@ -165,7 +161,6 @@ export function resolveSettingsState(
       typeof loaded.browserSearchEngine === 'string' && loaded.browserSearchEngine.trim()
         ? loaded.browserSearchEngine.trim()
         : defaultBrowserSearchEngine,
-    batchLimit: normalizeBatchLimit(loaded.defaultBatchLimit, defaultBatchLimit),
     systemNotificationsEnabled:
       typeof loaded.systemNotificationsEnabled === 'boolean'
         ? loaded.systemNotificationsEnabled
@@ -209,7 +204,6 @@ export function resolveSettingsState(
 export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettingsPayloadBuild {
   const nextDir = draft.pdfDownloadDir.trim();
   const nextKnowledgeBaseDir = draft.knowledgeBasePdfDownloadDir.trim();
-  const nextBatchLimit = normalizeBatchLimit(draft.batchLimit, defaultBatchLimit);
   const nextBrowserTabKeepAliveLimit = normalizeBrowserTabKeepAliveLimit(
     draft.browserTabKeepAliveLimit,
     defaultBrowserTabKeepAliveLimit,
@@ -230,7 +224,6 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
 
   return {
     nextDir,
-    nextBatchLimit,
     payload: {
       defaultDownloadDir: nextDir || null,
       pdfFileNameUseSelectionOrder: draft.pdfFileNameUseSelectionOrder,
@@ -238,7 +231,6 @@ export function buildSaveSettingsPayload(draft: SaveSettingsDraft): SaveSettings
       browserMaxHistoryEntries: nextBrowserMaxHistoryEntries,
       browserPageZoom: draft.browserPageZoom,
       browserSearchEngine: draft.browserSearchEngine,
-      defaultBatchLimit: nextBatchLimit,
       systemNotificationsEnabled: draft.systemNotificationsEnabled,
       warningNotificationsEnabled: draft.warningNotificationsEnabled,
       menuBarIconEnabled: draft.menuBarIconEnabled,

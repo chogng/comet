@@ -7,6 +7,10 @@ import { getDomNodePagePosition, type IDomNodePagePosition } from 'cs/base/brows
 import { Emitter, type Event } from 'cs/base/common/event';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 
+/**
+ * 
+ * 
+ */
 export enum BrowserOverlayType {
 	Menu = 'menu',
 	QuickInput = 'quickInput',
@@ -33,6 +37,7 @@ const OVERLAY_DEFINITIONS: readonly OverlayDefinition[] = [
 	{ className: 'comet-dialog-modal-block', type: BrowserOverlayType.Dialog },
 	{ className: 'comet-notifications-center', type: BrowserOverlayType.Notification },
 	{ className: 'comet-notifications-toasts', type: BrowserOverlayType.Notification },
+	// Context view is very generic, so treat the content as unknown
 	{ className: 'comet-context-view', type: BrowserOverlayType.Unknown },
 ];
 

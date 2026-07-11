@@ -6,10 +6,13 @@ import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestU
 import type { HorizontalScrollbar as HorizontalScrollbarType } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
 import type { IRenderedMarkdown, MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
 import type { IMarkdownString } from 'cs/base/common/htmlContent';
-import { URI } from 'cs/base/common/uri';
 import type { RagAnswerResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
+import { toDisposable } from 'cs/base/common/lifecycle';
+import type { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import type { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
+import type { INotificationService } from 'cs/platform/notification/common/notification';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let ChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').ChatWidget;
@@ -17,6 +20,9 @@ let ChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/v
 let getWorkbenchInstantiationService: typeof import('cs/workbench/services/instantiation/browser/workbenchInstantiationService').getWorkbenchInstantiationService;
 let registerWorkbenchService: typeof import('cs/workbench/services/instantiation/browser/workbenchInstantiationService').registerWorkbenchService;
 let IMarkdownRendererServiceId: typeof import('cs/platform/markdown/browser/markdownRenderer').IMarkdownRendererService;
+let IChatServiceId: typeof import('cs/workbench/contrib/chat/common/chatService/chatService').IChatService;
+let IFetchServiceId: typeof import('cs/workbench/services/fetch/common/fetch').IFetchService;
+let INotificationServiceId: typeof import('cs/platform/notification/common/notification').INotificationService;
 let HorizontalScrollbar: typeof HorizontalScrollbarType;
 let renderMarkdown: typeof import('cs/base/browser/markdownRenderer').renderMarkdown;
 
@@ -51,17 +57,6 @@ function createProps(): ChatWidgetProps {
     errorMessage: null,
     onAsk: () => {},
     onApplyPatch: () => {},
-    articleQuickSources: [],
-    isArticleSourceFetching: false,
-    onFetchArticleSource: () => {},
-    showArticleBatchActions: false,
-    downloadAllProgress: null,
-    translationExportProgress: null,
-    onDownloadAllArticles: () => {},
-    onExportArticleSummaries: () => {},
-    isArticleSelected: () => false,
-    onToggleArticleSelected: () => {},
-    availableArticleCount: 1,
     llmModelOptions: [
       { value: 'auto', label: 'Auto' },
       { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
@@ -105,12 +100,82 @@ function createChatViewPane(
   return getWorkbenchInstantiationService().createInstance(ChatViewPane, props);
 }
 
+function registerChatTestServices() {
+	registerWorkbenchService(IChatServiceId, {
+		_serviceBrand: undefined,
+		subscribe: () => toDisposable(() => {}),
+		getSnapshot: () => ({
+			conversations: [],
+			activeConversationId: '',
+			checkedArticleIds: [],
+			activeConversation: null,
+			question: '',
+			messages: [],
+			result: null,
+			isAsking: false,
+			errorMessage: null,
+		}),
+		setContext() {},
+		setQuestion() {},
+		createConversation: () => '',
+		activateConversation() {},
+		closeConversation() {},
+		insertContextMessage() {},
+		insertArticleList() {},
+		insertArticleFetchEmptyResult() {},
+		applyPatch() {},
+		ask: async () => {},
+		isArticleChecked: () => false,
+		setArticleChecked() {},
+		removeArticleChecks() {},
+	} as unknown as IChatService);
+	registerWorkbenchService(IFetchServiceId, {
+		_serviceBrand: undefined,
+		onDidChangeCatalog: () => toDisposable(() => {}),
+		onDidChangeSource: () => toDisposable(() => {}),
+		onDidChangeArticle: () => toDisposable(() => {}),
+		getJournals: () => [],
+		getJournal: () => undefined,
+		getArticleListCatalog: () => undefined,
+		getArticlePage: () => undefined,
+		getArticlePages: () => [],
+		getArticleListItem: () => undefined,
+		getArticle: () => undefined,
+		getArticleDetail: () => undefined,
+		getCatalogLoadState: () => ({ status: 'idle' as const }),
+		getSourceLoadState: () => ({ status: 'idle' as const }),
+		getArticleLoadState: () => ({ status: 'idle' as const }),
+		discoverArticleListSources: async () => {},
+		fetchArticleListSource: async () => {},
+		fetchNextPage: async () => {},
+		fetchArticle: async () => { throw new Error('No article is available in this test.'); },
+		refreshJournal: async () => {},
+		refreshArticleListSource: async () => {},
+	} as unknown as IFetchService);
+	registerWorkbenchService(INotificationServiceId, {
+		_serviceBrand: undefined,
+		info() {},
+		warn() {},
+		error() {},
+		prompt() { return { onDidClose: () => ({ dispose() {} }), close() {}, updateSeverity() {} }; },
+		status() { return { dispose() {} }; },
+		getNotifications: () => [],
+		onDidAddNotification: () => ({ dispose() {} }),
+		onDidRemoveNotification: () => ({ dispose() {} }),
+		onDidChangeNotification: () => ({ dispose() {} }),
+	} as unknown as INotificationService);
+}
+
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   await import('cs/platform/contextview/browser/contextViewService');
   ({ IMarkdownRendererService: IMarkdownRendererServiceId } = await import('cs/platform/markdown/browser/markdownRenderer'));
+  ({ IChatService: IChatServiceId } = await import('cs/workbench/contrib/chat/common/chatService/chatService'));
+  ({ IFetchService: IFetchServiceId } = await import('cs/workbench/services/fetch/common/fetch'));
+  ({ INotificationService: INotificationServiceId } = await import('cs/platform/notification/common/notification'));
   ({ getWorkbenchInstantiationService, registerWorkbenchService } = await import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'));
+	registerChatTestServices();
   ({ HorizontalScrollbar } = await import('cs/base/browser/ui/scrollbar/horizontalScrollbar'));
   ({ renderMarkdown } = await import('cs/base/browser/markdownRenderer'));
   ({ ChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
@@ -166,41 +231,6 @@ test('chat thread uses the shared scrollable transcript container', () => {
     assert.equal(thread.querySelectorAll('.comet-chat-message').length, 2);
   } finally {
     chatSurface.dispose();
-  }
-});
-
-test('session chat view uses compact layout for fetched article batches only', () => {
-  const articleMessage: ChatWidgetProps['messages'][number] = {
-    id: 'article-1',
-    role: 'assistant',
-    content: 'Science\n- [Example article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
-    includeInAgentHistory: false,
-  };
-  const chatWidget = createChatWidget({
-    ...createProps(),
-    messages: [articleMessage],
-  });
-  const element = chatWidget.getElement();
-  document.body.append(element);
-
-  try {
-    const articleBody = element.querySelector('.comet-session-chat-view-body');
-    assert(articleBody instanceof HTMLElement);
-    assert.equal(articleBody.classList.contains('comet-is-article-batch-state'), true);
-
-    chatWidget.setProps({
-      ...createProps(),
-      messages: [
-        articleMessage,
-        { id: 'user-1', role: 'user', content: 'Summarize this.' },
-      ],
-    });
-
-    const conversationBody = element.querySelector('.comet-session-chat-view-body');
-    assert(conversationBody instanceof HTMLElement);
-    assert.equal(conversationBody.classList.contains('comet-is-article-batch-state'), false);
-  } finally {
-    chatWidget.dispose();
   }
 });
 
@@ -525,275 +555,6 @@ test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', a
     addModels.click();
 
     assert.equal(openedModelSettings, 1);
-  } finally {
-    chatSurface.dispose();
-  }
-});
-
-test('composer article quick comet-hover-action opens source menu and runs selected journal', async () => {
-	let selectedJournalId = '';
-  const chatSurface = createChatWidget({
-    ...createProps(),
-	articleQuickSources: [
-		{
-			id: 'journal.science.science',
-			title: 'Science',
-			homeUrl: URI.parse('https://www.science.org/journal/science'),
-			discoveryUrl: URI.parse('https://www.science.org/toc/science/current'),
-			providerId: 'publisher.science',
-		},
-	],
-	onFetchArticleSource: (source) => {
-		selectedJournalId = source.id;
-    },
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
-
-  try {
-    const quickButtons = Array.from(
-      element.querySelectorAll('.comet-chat-composer-quick-action'),
-    );
-    assert.deepEqual(
-      quickButtons.map((button) => button.textContent?.trim()),
-      ['Write', 'Learn', 'Code', 'Article'],
-    );
-
-    const articleButton = quickButtons[3];
-    assert(articleButton instanceof HTMLButtonElement);
-    articleButton.click();
-    await delay(0);
-
-    const contextView = document.body.querySelector('.comet-chat-composer-article-context-view');
-    assert(contextView instanceof HTMLElement);
-    const menu = contextView.querySelector('.comet-chat-composer-article-menu');
-    assert(menu instanceof HTMLElement);
-    const closeAction = menu.querySelector(
-      '.comet-chat-composer-article-menu-actions.comet-actionbar .comet-actionbar-actions-container > .comet-actionbar-item > .comet-chat-composer-article-menu-close.comet-actionbar-action',
-    );
-    assert(closeAction instanceof HTMLButtonElement);
-    const scrollableRoot = menu.querySelector(
-      '.comet-scrollable-element-root.comet-chat-composer-article-source-scrollable',
-    );
-    assert(scrollableRoot instanceof HTMLElement);
-    const list = scrollableRoot.querySelector(
-      '.comet-chat-composer-article-source-list.comet-scrollable-content',
-    );
-    assert(list instanceof HTMLElement);
-    const sourceButton = list.querySelector('.comet-chat-composer-article-source');
-    assert(sourceButton instanceof HTMLButtonElement);
-    assert.equal(sourceButton.textContent, 'Science');
-    sourceButton.click();
-
-	assert.equal(selectedJournalId, 'journal.science.science');
-    assert.equal(document.body.querySelector('.comet-chat-composer-article-menu'), null);
-  } finally {
-    chatSurface.dispose();
-  }
-});
-
-test('composer article quick menu is disposed with the chat widget', async () => {
-  const chatSurface = createChatWidget({
-    ...createProps(),
-	articleQuickSources: [
-		{
-			id: 'journal.science.science',
-			title: 'Science',
-			homeUrl: URI.parse('https://www.science.org/journal/science'),
-			discoveryUrl: URI.parse('https://www.science.org/toc/science/current'),
-			providerId: 'publisher.science',
-		},
-    ],
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
-
-  const articleButton = Array.from(
-    element.querySelectorAll('.comet-chat-composer-quick-action'),
-  )[3];
-  assert(articleButton instanceof HTMLButtonElement);
-  articleButton.click();
-  await delay(0);
-
-  assert(document.body.querySelector('.comet-chat-composer-article-menu') instanceof HTMLElement);
-  chatSurface.dispose();
-  assert.equal(document.body.querySelector('.comet-chat-composer-article-menu'), null);
-});
-
-test('composer input toolbar hosts article batch actions', async () => {
-  let downloadAllCount = 0;
-  const exportSummaryChoices: boolean[] = [];
-  const chatSurface = createChatWidget({
-    ...createProps(),
-    showArticleBatchActions: true,
-    onDownloadAllArticles: () => {
-      downloadAllCount += 1;
-    },
-    onExportArticleSummaries: (translateSummaries) => {
-      exportSummaryChoices.push(translateSummaries);
-    },
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
-
-  try {
-    const quickButtons = Array.from(
-      element.querySelectorAll('.comet-chat-composer-quick-action'),
-    );
-    assert.deepEqual(
-      quickButtons.map((button) => button.textContent?.trim()),
-      ['Write', 'Learn', 'Code', 'Article'],
-    );
-    const inputToolbar = element.querySelector('.comet-chat-composer-input-toolbar');
-    const composer = element.querySelector('.comet-chat-composer');
-    assert(inputToolbar instanceof HTMLElement);
-    assert(composer instanceof HTMLElement);
-    assert.equal(inputToolbar.nextElementSibling, composer);
-
-    const inputToolbarButtons = Array.from(
-      inputToolbar.querySelectorAll('.comet-chat-composer-input-toolbar-action'),
-    );
-    assert.equal(inputToolbarButtons[0].textContent?.trim(), '下载全部');
-    assert.equal(inputToolbarButtons[1].textContent?.trim(), '导出摘要');
-    assert.deepEqual(
-      inputToolbarButtons.map((button) => button.classList.contains('comet-is-text')),
-      [true, true],
-    );
-
-    const downloadAllButton = inputToolbarButtons[0];
-    const exportSummariesButton = inputToolbarButtons[1];
-    assert(downloadAllButton instanceof HTMLButtonElement);
-    assert(exportSummariesButton instanceof HTMLButtonElement);
-    downloadAllButton.click();
-    exportSummariesButton.click();
-    await delay(0);
-
-    assert.equal(downloadAllCount, 1);
-    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-article-summary-export"]');
-    assert(menu instanceof HTMLElement);
-    assert.equal(exportSummariesButton.getAttribute('aria-expanded'), 'true');
-    const originalExportItem = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('直接导出摘要'),
-    );
-    assert(originalExportItem instanceof HTMLElement);
-    originalExportItem.click();
-    await delay(0);
-
-    exportSummariesButton.click();
-    await delay(0);
-    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-article-summary-export"]');
-    assert(reopenedMenu instanceof HTMLElement);
-    const translatedExportItem = Array.from(reopenedMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('翻译并导出摘要'),
-    );
-    assert(translatedExportItem instanceof HTMLElement);
-    translatedExportItem.click();
-    await delay(0);
-
-    assert.deepEqual(exportSummaryChoices, [false, true]);
-  } finally {
-    chatSurface.dispose();
-  }
-});
-
-test('composer input toolbar renders inline article batch progress', async () => {
-  let downloadAllCount = 0;
-  const exportSummaryChoices: boolean[] = [];
-  const chatSurface = createChatWidget({
-    ...createProps(),
-    showArticleBatchActions: true,
-    downloadAllProgress: { phase: 'running', current: 1, total: 3 },
-    translationExportProgress: { phase: 'running', current: 2, total: 5 },
-    onDownloadAllArticles: () => {
-      downloadAllCount += 1;
-    },
-    onExportArticleSummaries: (translateSummaries) => {
-      exportSummaryChoices.push(translateSummaries);
-    },
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
-
-  try {
-    const inputToolbarButtons = Array.from(
-      element.querySelectorAll('.comet-chat-composer-input-toolbar-action'),
-    );
-    assert.equal(inputToolbarButtons.length, 2);
-    assert.equal(inputToolbarButtons[0].textContent?.trim(), '1/3');
-    assert.equal(inputToolbarButtons[1].textContent?.trim(), '2/5');
-    assert.equal(
-      inputToolbarButtons[0]
-        .querySelector('.comet-chat-composer-input-toolbar-action-progress-fill')
-        ?.getAttribute('style'),
-      'width: 33%;',
-    );
-    assert.equal(
-      inputToolbarButtons[1]
-        .querySelector('.comet-chat-composer-input-toolbar-action-progress-fill')
-        ?.getAttribute('style'),
-      'width: 40%;',
-    );
-
-    const downloadAllButton = inputToolbarButtons[0];
-    const exportSummariesButton = inputToolbarButtons[1];
-    assert(downloadAllButton instanceof HTMLButtonElement);
-    assert(exportSummariesButton instanceof HTMLButtonElement);
-    downloadAllButton.click();
-    exportSummariesButton.click();
-    await delay(0);
-
-    assert.equal(downloadAllCount, 1);
-    assert.deepEqual(exportSummaryChoices, [true]);
-  } finally {
-    chatSurface.dispose();
-  }
-});
-
-test('chat renders fetched article linked text and opens links through markdown renderer service', async () => {
-  let openedSourceUrl = '';
-  let toggledSourceUrl = '';
-  const chatSurface = createChatWidget(
-    {
-      ...createProps(),
-      messages: [
-        {
-          id: 'article-1',
-          role: 'assistant',
-          content: 'Science\n- [Example article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
-          includeInAgentHistory: false,
-        },
-      ],
-      isArticleSelected: href => href === 'https://www.science.org/doi/example',
-      onToggleArticleSelected: href => {
-        toggledSourceUrl = href;
-      },
-    },
-    createMarkdownRendererService(href => {
-      openedSourceUrl = href;
-    }),
-  );
-  const element = chatSurface.getElement();
-  document.body.append(element);
-
-  try {
-    const markdown = element.querySelector('.comet-chat-answer > .rendered-markdown');
-    assert(markdown instanceof HTMLElement);
-    assert.equal(
-      markdown.textContent?.replace(/\s+/g, ' ').trim(),
-      'Science Example article - 2026-07-03 | Research Article',
-    );
-
-    const link = markdown.querySelector('a[data-href]');
-    assert(link instanceof HTMLElement);
-    assert.equal(link.textContent, 'Example article');
-    const checkbox = markdown.querySelector('.comet-chat-article-checkbox');
-    assert(checkbox instanceof HTMLElement);
-    assert.equal(checkbox.getAttribute('role'), 'checkbox');
-    assert.equal(checkbox.getAttribute('aria-checked'), 'true');
-    checkbox.click();
-    assert.equal(toggledSourceUrl, 'https://www.science.org/doi/example');
-    link.click();
-    assert.equal(openedSourceUrl, 'https://www.science.org/doi/example');
   } finally {
     chatSurface.dispose();
   }

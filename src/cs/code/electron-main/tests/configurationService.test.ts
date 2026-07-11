@@ -139,7 +139,6 @@ test('configuration service saves editor draft style into user settings json', a
     const nextEditorDraftStyle = createTestEditorDraftStyle('"Saved Sans", sans-serif');
 
     await service.saveSettings({
-      defaultBatchLimit: 12,
       editorDraftStyle: nextEditorDraftStyle,
     });
 

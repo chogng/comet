@@ -14,7 +14,6 @@ import {
   maxBrowserMaxHistoryEntries,
   minBrowserMaxHistoryEntries,
 } from 'cs/base/parts/sandbox/common/browserSettings';
-import { createDateInput } from 'cs/base/browser/ui/dateInput/dateInput';
 import type { ContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import {
   NumberStepper,
@@ -31,7 +30,6 @@ import {
   buildSettingsSelect as buildSelect,
   buildSettingsSwitch as buildSwitch,
   createSettingsElement as el,
-  settingsPopupContextViewLayer,
   setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import type {
@@ -42,7 +40,6 @@ import {
   createDisplayLanguageOptions,
   requestSetDisplayLanguage,
 } from 'cs/workbench/contrib/localization/browser/localizationsActions';
-import { batchLimitMax, batchLimitMin } from 'cs/workbench/services/config/configSchema';
 import {
   maxBrowserTabKeepAliveLimit,
   minBrowserTabKeepAliveLimit,
@@ -254,87 +251,6 @@ export function renderLocaleSection(props: SettingsPartProps, contextViewProvide
     }),
   );
   return language.element;
-}
-
-export function renderBatchOptionsSection(props: SettingsPartProps) {
-  const field = el('div', 'comet-settings-batch-settings');
-  const batchOptions = createSettingsSection({
-    sectionClassName: 'comet-settings-batch-options-section',
-    panelClassName: 'comet-settings-batch-options-panel',
-    listClassName: 'comet-settings-batch-options-list',
-  });
-  const wrap = el('div', 'comet-settings-limit-input-wrap');
-  const batchLimitInput = new NumberStepper({
-    value: props.batchLimit,
-    className: 'comet-settings-number-stepper comet-settings-limit-input',
-    min: String(batchLimitMin),
-    max: String(batchLimitMax),
-    inputMode: 'numeric',
-    step: '1',
-    decrementAriaLabel: numberStepperDecrementAriaLabel,
-    incrementAriaLabel: numberStepperIncrementAriaLabel,
-    onDidChange: props.onBatchLimitChange,
-    disabled: props.isSettingsSaving,
-  });
-  setSettingsFocusKey(batchLimitInput.inputElement, 'settings.batch.limit');
-  wrap.append(batchLimitInput.element);
-
-  const dateOptions = createSettingsSection({
-    sectionClassName: 'comet-settings-batch-date-section',
-    panelClassName: 'comet-settings-batch-date-panel',
-    listClassName: 'comet-settings-batch-date-list',
-  });
-  const startDateInput = createDateInput({
-    value: props.fetchStartDate,
-    labels: {
-      calendar: props.labels.startDate,
-      clear: props.labels.clearDate,
-      today: props.labels.today,
-    },
-    className: 'comet-settings-date-input',
-    inputClassName: 'comet-settings-inputbox comet-settings-input-control comet-settings-date-input-field',
-    focusKey: 'settings.batch.startDate',
-    contextViewLayer: settingsPopupContextViewLayer,
-    onInput: props.onFetchStartDateChange,
-  }).getElement();
-  const endDateInput = createDateInput({
-    value: props.fetchEndDate,
-    labels: {
-      calendar: props.labels.endDate,
-      clear: props.labels.clearDate,
-      today: props.labels.today,
-    },
-    className: 'comet-settings-date-input',
-    inputClassName: 'comet-settings-inputbox comet-settings-input-control comet-settings-date-input-field',
-    focusKey: 'settings.batch.endDate',
-    contextViewLayer: settingsPopupContextViewLayer,
-    onInput: props.onFetchEndDateChange,
-  }).getElement();
-  batchOptions.list.append(
-    createSettingsRow({
-      title: props.labels.settingsBatchOptions,
-      description: props.labels.settingsBatchHint,
-      control: wrap,
-      itemClassName: 'comet-settings-batch-options-item',
-      controlClassName: 'comet-settings-batch-options-control',
-    }),
-  );
-  dateOptions.list.append(
-    createSettingsRow({
-      title: props.labels.startDate,
-      control: startDateInput,
-      itemClassName: 'comet-settings-batch-date-item',
-      controlClassName: 'comet-settings-batch-date-control',
-    }),
-    createSettingsRow({
-      title: props.labels.endDate,
-      control: endDateInput,
-      itemClassName: 'comet-settings-batch-date-item',
-      controlClassName: 'comet-settings-batch-date-control',
-    }),
-  );
-  field.append(batchOptions.element, dateOptions.element);
-  return field;
 }
 
 export function renderSupportedSourcesSection(

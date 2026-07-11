@@ -27,11 +27,6 @@ import type {
   ProviderApiKeyScope,
 } from 'cs/platform/secrets/common/secret';
 import {
-  defaultFetchLimit as defaultBatchLimit,
-  fetchLimitMax as batchLimitMax,
-  fetchLimitMin as batchLimitMin,
-} from 'cs/platform/configuration/common/fetchLimits';
-import {
   createDefaultLlmSettings,
   defaultLlmProviderSettings,
 } from 'cs/workbench/services/llm/config';
@@ -406,10 +401,6 @@ function normalizeSettings(
   defaultUserSettingsFile?: string,
 ): StoredAppSettings {
   const downloadDir = typeof payload.defaultDownloadDir === 'string' ? cleanText(payload.defaultDownloadDir) : '';
-  const parsedLimit = Number.parseInt(String(payload.defaultBatchLimit), 10);
-  const normalizedLimit = Number.isNaN(parsedLimit)
-    ? defaultBatchLimit
-    : Math.min(batchLimitMax, Math.max(batchLimitMin, parsedLimit));
   const parsedBrowserHistoryEntries = Number.parseInt(
     String(payload.browserMaxHistoryEntries),
     10,
@@ -442,7 +433,6 @@ function normalizeSettings(
     browserMaxHistoryEntries: normalizedBrowserHistoryEntries,
     browserPageZoom,
     browserSearchEngine,
-    defaultBatchLimit: normalizedLimit,
     systemNotificationsEnabled:
       typeof payload.systemNotificationsEnabled === 'boolean'
         ? payload.systemNotificationsEnabled

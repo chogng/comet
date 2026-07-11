@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CancellationError, CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
+import { CancellationError, CancellationTokenNone, CancellationTokenSource, type CancellationToken } from 'cs/base/common/cancellation';
 import { URI } from 'cs/base/common/uri';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
@@ -20,6 +20,11 @@ import { FetchService } from 'cs/workbench/services/fetch/electron-browser/fetch
 class TestFetchProvider implements IFetchProvider {
 	readonly id = 'provider.test';
 	private listRequestCount = 0;
+	private detailRequestCount = 0;
+
+	getDetailRequestCount(): number {
+		return this.detailRequestCount;
+	}
 
 	canonicalizeSourceUri(uri: URI): URI {
 		return uri.with({ fragment: null });
@@ -63,6 +68,7 @@ class TestFetchProvider implements IFetchProvider {
 	}
 
 	async fetchArticleDetail(_journal: JournalDescriptor, article: ArticleRecord, _token: CancellationToken): Promise<ParsedArticleDetail> {
+		this.detailRequestCount++;
 		return {
 			url: article.url,
 			doi: '10.1000/test',
@@ -92,12 +98,12 @@ function createFetchService(provider: typeof TestFetchProvider = TestFetchProvid
 
 test('FetchService keeps source, list item, article record, and detail state distinct', async () => {
 	const service = createFetchService();
-	const catalogChanges: string[] = [];
-	const sourceChanges: string[] = [];
-	const articleChanges: string[] = [];
-	service.onDidChangeCatalog(id => catalogChanges.push(id));
-	service.onDidChangeSource(id => sourceChanges.push(id));
-	service.onDidChangeArticle(id => articleChanges.push(id));
+	const catalogStates: string[] = [];
+	const sourceStates: string[] = [];
+	const articleStates: string[] = [];
+	service.onDidChangeCatalog(id => catalogStates.push(service.getCatalogLoadState(id).status));
+	service.onDidChangeSource(id => sourceStates.push(service.getSourceLoadState(id).status));
+	service.onDidChangeArticle(id => articleStates.push(service.getArticleLoadState(id).status));
 
 	await service.discoverArticleListSources(journal.id, CancellationTokenNone);
 	const sourceId = createArticleListSourceId(journal.id, URI.parse('https://example.com/articles'));
@@ -114,14 +120,16 @@ test('FetchService keeps source, list item, article record, and detail state dis
 	const detail = await service.fetchArticle(firstArticleId, CancellationTokenNone);
 	assert.equal(detail.articleId, firstArticleId);
 	assert.equal(service.getArticle(firstArticleId)?.doi, '10.1000/test');
+	const cachedDetail = await service.fetchArticle(firstArticleId, CancellationTokenNone);
+	assert.equal(cachedDetail, detail);
 
 	await service.fetchNextPage(sourceId, CancellationTokenNone);
 	const secondArticleId = createArticleId(journal.id, URI.parse('https://example.com/articles/two'));
 	assert.notEqual(firstArticleId, secondArticleId);
 	assert.ok(service.getArticle(secondArticleId));
-	assert.deepEqual(catalogChanges, [journal.id]);
-	assert.deepEqual(sourceChanges, [sourceId, sourceId]);
-	assert.deepEqual(articleChanges, [firstArticleId]);
+	assert.deepEqual(catalogStates, ['loading', 'ready']);
+	assert.deepEqual(sourceStates, ['loading', 'ready', 'loading', 'ready']);
+	assert.deepEqual(articleStates, ['loading', 'ready']);
 	assert.equal(service.getSourceLoadState(sourceId).status, 'ready');
 
 	await service.refreshArticleListSource(sourceId, CancellationTokenNone);
@@ -132,6 +140,57 @@ test('FetchService keeps source, list item, article record, and detail state dis
 	await service.refreshJournal(journal.id, CancellationTokenNone);
 	assert.equal(service.getArticlePages(sourceId).length, 1);
 	assert.equal(service.getCatalogLoadState(journal.id).status, 'ready');
+});
+
+class DeferredArticleFetchProvider extends TestFetchProvider {
+	static readonly details: Array<(detail: ParsedArticleDetail) => void> = [];
+
+	static reset(): void {
+		this.details.length = 0;
+	}
+
+	override fetchArticleDetail(_journal: JournalDescriptor, article: ArticleRecord, _token: CancellationToken): Promise<ParsedArticleDetail> {
+		return new Promise(resolve => {
+			DeferredArticleFetchProvider.details.push(() => resolve({
+				url: article.url,
+				title: 'Deferred detail',
+				subjects: [],
+				authors: [],
+				publication: { title: 'Test Journal' },
+			}));
+		});
+	}
+}
+
+test('FetchService keeps a shared detail request alive until every waiter cancels', async () => {
+	DeferredArticleFetchProvider.reset();
+	const service = createFetchService(DeferredArticleFetchProvider);
+	const sourceId = createArticleListSourceId(journal.id, URI.parse('https://example.com/articles'));
+	await service.discoverArticleListSources(journal.id, CancellationTokenNone);
+	await service.fetchArticleListSource(sourceId, CancellationTokenNone);
+	const articleId = createArticleId(journal.id, URI.parse('https://example.com/articles/one'));
+	const firstCancellation = new CancellationTokenSource();
+	const secondCancellation = new CancellationTokenSource();
+	const first = service.fetchArticle(articleId, firstCancellation.token);
+	const second = service.fetchArticle(articleId, secondCancellation.token);
+	assert.equal(DeferredArticleFetchProvider.details.length, 1);
+
+	firstCancellation.cancel();
+	await assert.rejects(first, CancellationError);
+	assert.equal(service.getArticleLoadState(articleId).status, 'loading');
+
+	DeferredArticleFetchProvider.details[0]({
+		url: URI.parse('https://example.com/articles/one'),
+		title: 'Deferred detail',
+		subjects: [],
+		authors: [],
+		publication: { title: 'Test Journal' },
+	});
+	const detail = await second;
+	assert.equal(detail.title, 'Deferred detail');
+	assert.equal(service.getArticleLoadState(articleId).status, 'ready');
+	firstCancellation.dispose();
+	secondCancellation.dispose();
 });
 
 class DeferredCatalogFetchProvider extends TestFetchProvider {

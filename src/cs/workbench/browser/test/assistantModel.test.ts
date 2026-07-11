@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 import { JSDOM } from 'jsdom';
 
-import { URI } from 'cs/base/common/uri';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type {
   AgentMessagePayload,
   LlmSettings,
@@ -23,6 +21,7 @@ import type {
 } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { ChatService } from 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
+import type { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { locales } from 'language/locales';
 
 let domEnvironment: JSDOM | null = null;
@@ -137,7 +136,6 @@ function createAssistantContext(
     invokeDesktop: createInvokeDesktop(capture),
     ui: locales[locale],
     isKnowledgeBaseModeEnabled: false,
-    articles: [] as FetchArticle[],
     llmSettings: {
       activeProvider: 'glm',
       providers: {
@@ -206,7 +204,10 @@ function createAssistantContext(
 }
 
 function createChatService(context: ChatServiceContext) {
-  const chatService = new ChatService(new NoOpNotificationService());
+  const fetchService = {
+    getArticle: () => undefined,
+  } as unknown as IFetchService;
+  const chatService = new ChatService(new NoOpNotificationService(), fetchService);
   chatService.setContext(context);
   return chatService;
 }
@@ -310,7 +311,7 @@ test('assistant asks through run_main_agent_turn and stores the returned answer'
         ],
       },
     ],
-    articles: [],
+    articleContexts: [],
     llm: {
       activeProvider: 'glm',
       providers: {
@@ -377,74 +378,29 @@ test('assistant asks through run_main_agent_turn and stores the returned answer'
   assert.equal(snapshot.result?.llmModel, 'test-model');
 });
 
-test('assistant inserts fetched article links without sending them as agent text turns', async () => {
+test('assistant stores article checkbox state by ArticleId without sending article lists as agent text turns', async () => {
   const capture: InvokeCapture = {
     commands: [],
     payloads: [],
   };
   const assistantModel = createChatService(createAssistantContext('en', capture));
-  const articles: FetchArticle[] = [
-    {
-      sourceUri: URI.parse('https://www.science.org/doi/example').toJSON(),
-      title: 'Fetched article',
-      doi: '10.1126/example',
-      publication: {
-        id: 'science',
-        title: 'Science',
-        publisherId: 'science',
-        publisherTitle: 'AAAS',
-      },
-      articleKind: 'researchArticle',
-      sourceArticleType: 'Research Article',
-      authors: [{ name: 'Ada Lovelace' }],
-      abstract: 'Abstract',
-      sections: [{ content: 'Description' }],
-      figures: [],
-      references: [],
-      publishedAt: '2026-07-03',
-      fetchedAt: '2026-07-04T00:00:00.000Z',
-      fetchOrder: 1,
-      articleListSourceId: 'science.current',
-    },
-    {
-      sourceUri: URI.parse('https://www.science.org/doi/example-2').toJSON(),
-      title: 'Second fetched article',
-      doi: '10.1126/example-2',
-      publication: {
-        id: 'science',
-        title: 'Science',
-        publisherId: 'science',
-        publisherTitle: 'AAAS',
-      },
-      articleKind: 'researchArticle',
-      sourceArticleType: 'Research Article',
-      authors: [{ name: 'Grace Hopper' }],
-      abstract: 'Second abstract',
-      sections: [{ content: 'Second description' }],
-      figures: [],
-      references: [],
-      publishedAt: '2026-07-04',
-      fetchedAt: '2026-07-04T00:00:01.000Z',
-      fetchOrder: 2,
-      articleListSourceId: 'science.current',
-    },
-  ];
-
-  assistantModel.insertArticles(
-    articles,
+  const articleIds = ['article.science.example', 'article.science.example-2'];
+  assistantModel.insertArticleList(
     'Science',
+    articleIds,
+    [
+      'Science',
+      '- [Fetched article](https://www.science.org/doi/example) - 2026-07-03 | Research Article',
+      '- [Second fetched article](https://www.science.org/doi/example-2) - 2026-07-04 | Research Article',
+    ].join('\n'),
   );
-  assert.deepEqual(assistantModel.collectArticleBatch(articles), articles);
-  assert.deepEqual(assistantModel.collectSelectedArticleBatch(articles), articles);
-  assert.equal(
-    assistantModel.isArticleSelected('https://www.science.org/doi/example'),
-    true,
-  );
-  assistantModel.toggleArticleSelected('https://www.science.org/doi/example');
-  assert.deepEqual(assistantModel.collectSelectedArticleBatch(articles), [
-    articles[1],
-  ]);
-  assistantModel.toggleArticleSelected('https://www.science.org/doi/example');
+  assert.equal(assistantModel.isArticleChecked(articleIds[0]), false);
+  assistantModel.setArticleChecked(articleIds[1], true);
+  assistantModel.setArticleChecked(articleIds[0], true);
+  assistantModel.setArticleChecked(articleIds[1], true);
+  assert.deepEqual(assistantModel.getSnapshot().checkedArticleIds, [articleIds[1], articleIds[0]]);
+  assistantModel.setArticleChecked(articleIds[1], false);
+  assert.deepEqual(assistantModel.getSnapshot().checkedArticleIds, [articleIds[0]]);
   assistantModel.setQuestion('Summarize the article.');
   await assistantModel.ask();
 
@@ -460,6 +416,7 @@ test('assistant inserts fetched article links without sending them as agent text
     ].join('\n'),
   );
   assert.equal(articlesMessage?.includeInAgentHistory, false);
+  assert.deepEqual(articlesMessage?.role === 'assistant' ? articlesMessage.articleList?.articleIds : undefined, articleIds);
   assert.equal(snapshot.messages[1]?.role, 'user');
   assert.deepEqual((capture.payloads[0] as { messages: unknown[] }).messages, [
     {

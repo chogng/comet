@@ -14,17 +14,7 @@ import { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/brow
 import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/contrib/browserView/common/browserView';
 import { localeService } from 'cs/workbench/services/localization/browser/localeService';
 import {
-  getWorkbenchContentStateSnapshot,
-  setBatchEndDate,
-  setBatchStartDate,
-  setFilterJournal,
-  subscribeWorkbenchContentState,
-} from 'cs/workbench/browser/workbenchContentState';
-import {
   getWorkbenchSessionSnapshot,
-  setWorkbenchArticles,
-  setWorkbenchSelectedArticleKeysInOrder,
-  setWorkbenchSelectionModePhase,
   setWorkbenchWebUrl,
   subscribeWorkbenchSession,
 } from 'cs/workbench/browser/session';
@@ -59,7 +49,6 @@ import { locales } from 'language/locales';
 let cleanupDomEnvironment: (() => void) | null = null;
 let originalDocumentLanguage = '';
 let originalLocale: 'zh' | 'en';
-let originalWorkbenchContentState = getWorkbenchContentStateSnapshot();
 let originalWorkbenchSession = getWorkbenchSessionSnapshot();
 let originalWorkbenchLayoutState = getWorkbenchLayoutStateSnapshot();
 let originalWorkbenchPartDomSnapshot = getWorkbenchPartDomSnapshot();
@@ -198,7 +187,6 @@ before(() => {
   cleanupDomEnvironment = domEnvironment.cleanup;
   originalDocumentLanguage = document.documentElement.lang;
   originalLocale = localeService.getLocale();
-  originalWorkbenchContentState = getWorkbenchContentStateSnapshot();
   originalWorkbenchSession = getWorkbenchSessionSnapshot();
   originalWorkbenchLayoutState = getWorkbenchLayoutStateSnapshot();
   originalWorkbenchPartDomSnapshot = getWorkbenchPartDomSnapshot();
@@ -213,15 +201,7 @@ after(() => {
 afterEach(() => {
   localeService.applyLocale(originalLocale);
   document.documentElement.lang = originalDocumentLanguage;
-  setBatchStartDate(originalWorkbenchContentState.batchStartDate);
-  setBatchEndDate(originalWorkbenchContentState.batchEndDate);
-  setFilterJournal(originalWorkbenchContentState.filterJournal);
   setWorkbenchWebUrl(originalWorkbenchSession.webUrl);
-  setWorkbenchArticles(originalWorkbenchSession.articles);
-  setWorkbenchSelectionModePhase(originalWorkbenchSession.selectionModePhase);
-  setWorkbenchSelectedArticleKeysInOrder(
-    originalWorkbenchSession.selectedArticleKeysInOrder,
-  );
   restoreWorkbenchLayoutState();
   restoreWorkbenchPartDomSnapshot();
   setStatusbarState(originalStatusbarState);
@@ -239,20 +219,6 @@ test('localeService subscriptions can be disposed independently', () => {
   localeService.applyLocale(originalLocale);
 
   assert.equal(receivedLocales.length, 1);
-});
-
-test('workbenchContentState subscriptions stop after disposal', () => {
-  let notificationCount = 0;
-  const disposeListener = subscribeWorkbenchContentState(() => {
-    notificationCount += 1;
-  });
-
-  setFilterJournal('nature');
-  disposeListener();
-  setFilterJournal('');
-
-  assert.equal(notificationCount, 1);
-  assert.equal(getWorkbenchContentStateSnapshot().filterJournal, '');
 });
 
 test('workbenchSession subscriptions stop after disposal', () => {
@@ -280,13 +246,12 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     pdfDownloadDir: '',
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
-    isSelectionModeEnabled: false,
-    selectedArticleOrderLookup: new Map(),
-    exportableArticles: [],
+		getExportableArticleIds: () => [],
+    onUnavailableArticleIds: () => {},
     onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
     activeDraftExport: null,
-  });
+  }, {} as never);
   const snapshotValues: boolean[] = [];
   const disposeListener = controller.subscribe(() => {
     snapshotValues.push(controller.getSnapshot().canExportDocx);
@@ -302,9 +267,8 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     pdfDownloadDir: '',
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
-    isSelectionModeEnabled: false,
-    selectedArticleOrderLookup: new Map(),
-    exportableArticles: [],
+		getExportableArticleIds: () => [],
+    onUnavailableArticleIds: () => {},
     onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
     activeDraftExport: {
@@ -327,9 +291,8 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     pdfDownloadDir: '',
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
-    isSelectionModeEnabled: false,
-    selectedArticleOrderLookup: new Map(),
-    exportableArticles: [],
+		getExportableArticleIds: () => [],
+    onUnavailableArticleIds: () => {},
     onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
     activeDraftExport: null,

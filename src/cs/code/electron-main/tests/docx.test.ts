@@ -4,32 +4,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { URI } from 'cs/base/common/uri';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
+import type { ArticleSummaryExportInput } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { exportArticlesToDocxFile } from 'cs/code/electron-main/document/docx';
 import { buildDocxBuffer } from 'cs/code/electron-main/document/docxPackage';
 
-function createArticle(fetchOrder: number, title: string): FetchArticle {
+function createArticle(title: string): ArticleSummaryExportInput {
 	return {
-		sourceUri: URI.parse(`https://example.com/articles/${fetchOrder}`).toJSON(),
 		title,
-		publication: {
-			id: 'exampleJournal',
-			title: 'Example Journal',
-			publisherId: 'example',
-			publisherTitle: 'Example Publisher',
-		},
-		articleKind: 'researchArticle',
-		sourceArticleType: 'Research Article',
 		authors: [],
 		abstract: 'Abstract',
-		sections: [],
-		figures: [],
-		references: [],
+		journalTitle: 'Example Journal',
 		publishedAt: '2026-07-04',
-		fetchedAt: `2026-07-04T00:00:0${fetchOrder}.000Z`,
-		fetchOrder,
-		articleListSourceId: 'example',
 	};
 }
 
@@ -69,8 +54,8 @@ test('article docx export numbers summaries with export order', async () => {
 	try {
 		await exportArticlesToDocxFile({
 			articles: [
-				createArticle(7, 'First article'),
-				createArticle(8, 'Second article'),
+				createArticle('First article'),
+				createArticle('Second article'),
 			],
 			filePath,
 			locale: 'en',

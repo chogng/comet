@@ -29,7 +29,6 @@ import {
 import {
   renderAppearanceSection,
   renderBrowserSection,
-  renderBatchOptionsSection,
   renderConfigPathSection,
   renderDownloadDirectorySection,
   renderLayoutSection,
@@ -358,7 +357,6 @@ export class SettingsPartView {
         this.updateTranslationSection();
         return this.translationSection.getElement();
       },
-      batchOptions: renderBatchOptionsSection,
 		supportedSources: props => renderSupportedSourcesSection(props),
       knowledgeBaseLibrary: () => renderLibrarySettingsSection(this.getLibrarySectionProps()),
       knowledgeBaseRag: () => renderRagSettingsSection(this.getRagSectionProps()),

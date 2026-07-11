@@ -1,6 +1,5 @@
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import type { UriComponents } from 'cs/base/common/uri';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 
 export type Locale = 'zh' | 'en';
 export type AppTheme = 'light' | 'dark' | 'system';
@@ -87,7 +86,6 @@ export interface StoredAppSettings {
   browserMaxHistoryEntries: number;
   browserPageZoom: string;
   browserSearchEngine: string;
-  defaultBatchLimit: number;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -164,9 +162,27 @@ export interface WebContentHtmlArchiveResult {
   extractedText: string;
 }
 
+export interface ArticleSummaryExportInput {
+  title: string;
+  authors: string[];
+  abstract?: string;
+  journalTitle: string;
+  publishedAt?: string;
+}
+
+export interface ArticleContextInput {
+  sourceUrl: string;
+  doi?: string;
+  title: string;
+  authors: string[];
+  abstract?: string;
+  journalTitle: string;
+  publishedAt?: string;
+}
+
 export interface ExportArticlesDocxPayload {
   taskId?: string;
-  articles?: FetchArticle[];
+  articles?: ArticleSummaryExportInput[];
   preferredDirectory?: string | null;
   targetFilePath?: string | null;
   translateSummaries?: boolean;
@@ -206,10 +222,6 @@ export interface ExportEditorDocxPayload {
 
 export interface SaveSettingsPayload {
   settings?: Partial<StoredAppSettings>;
-}
-
-export interface SaveFetchedArticlesPayload {
-  items?: FetchArticle[];
 }
 
 export interface LoadTranslationCachePayload {
@@ -473,7 +485,7 @@ export interface RagEvidenceItem {
 export interface RagAnswerArticlesPayload {
   question?: string;
   writingContext?: string | null;
-  articles?: FetchArticle[];
+  articleContexts?: ArticleContextInput[];
   llm?: LlmSettings;
   rag?: RagSettings;
 }
@@ -520,7 +532,7 @@ export interface RunMainAgentTurnPayload {
   editorSelection?: WritingEditorStableSelectionTargetPayload | null;
   editorDocument?: WritingEditorDocumentPayload | null;
   editorTextUnits?: WritingEditorTextUnitPayload[];
-  articles?: FetchArticle[];
+  articleContexts?: ArticleContextInput[];
   llm?: LlmSettings;
   rag?: RagSettings;
   availableTools?: MainAgentAvailableToolId[];
@@ -549,7 +561,6 @@ export interface AppCommandPayloadMap {
   clear_web_cookies: undefined;
   load_settings: undefined;
   save_settings: SaveSettingsPayload;
-  save_fetched_articles: SaveFetchedArticlesPayload;
   load_translation_cache: LoadTranslationCachePayload;
   save_translation_cache: SaveTranslationCachePayload;
   test_llm_connection: TestLlmConnectionPayload;
@@ -583,7 +594,6 @@ export interface AppCommandResultMap {
   clear_web_cookies: boolean;
   load_settings: AppSettings;
   save_settings: AppSettings;
-  save_fetched_articles: void;
   load_translation_cache: Record<string, string>;
   save_translation_cache: void;
   test_llm_connection: LlmConnectionTestResult;

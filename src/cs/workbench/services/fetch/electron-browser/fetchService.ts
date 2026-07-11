@@ -8,7 +8,7 @@ import {
 	CancellationToken,
 	CancellationTokenSource,
 } from 'cs/base/common/cancellation';
-import { Event, EventEmitter } from 'cs/base/common/event';
+import { EventEmitter } from 'cs/base/common/event';
 import { Disposable } from 'cs/base/common/lifecycle';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import {
@@ -43,16 +43,11 @@ import {
 } from 'cs/workbench/services/fetch/common/fetchProvider';
 import { IFetchRegistry } from 'cs/workbench/services/fetch/common/fetchRegistry';
 
-interface IFetchTask {
+interface IFetchTask<T> {
 	readonly generation: number;
 	readonly cancellationSource: CancellationTokenSource;
-	readonly promise: Promise<void>;
-}
-
-interface IArticleTask {
-	readonly generation: number;
-	readonly cancellationSource: CancellationTokenSource;
-	readonly promise: Promise<ArticleDetail>;
+	promise: Promise<T>;
+	waiterCount: number;
 }
 
 export class FetchService extends Disposable implements IFetchService {
@@ -76,9 +71,9 @@ export class FetchService extends Disposable implements IFetchService {
 	private readonly catalogLoadStates = new Map<JournalId, FetchLoadState>();
 	private readonly sourceLoadStates = new Map<ArticleListSourceId, FetchLoadState>();
 	private readonly articleLoadStates = new Map<ArticleId, FetchLoadState>();
-	private readonly catalogTasks = new Map<JournalId, IFetchTask>();
-	private readonly sourceTasks = new Map<ArticleListSourceId, IFetchTask>();
-	private readonly articleTasks = new Map<ArticleId, IArticleTask>();
+	private readonly catalogTasks = new Map<JournalId, IFetchTask<void>>();
+	private readonly sourceTasks = new Map<ArticleListSourceId, IFetchTask<void>>();
+	private readonly articleTasks = new Map<ArticleId, IFetchTask<ArticleDetail>>();
 	private readonly providers = new Map<FetchProviderId, IFetchProvider>();
 	private nextTaskGeneration = 0;
 
@@ -87,6 +82,22 @@ export class FetchService extends Disposable implements IFetchService {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
+	}
+
+	override dispose(): void {
+		for (const task of this.catalogTasks.values()) {
+			task.cancellationSource.cancel();
+		}
+		for (const task of this.sourceTasks.values()) {
+			task.cancellationSource.cancel();
+		}
+		for (const task of this.articleTasks.values()) {
+			task.cancellationSource.cancel();
+		}
+		this.catalogTasks.clear();
+		this.sourceTasks.clear();
+		this.articleTasks.clear();
+		super.dispose();
 	}
 
 	getJournals(): readonly JournalDescriptor[] {
@@ -142,20 +153,23 @@ export class FetchService extends Disposable implements IFetchService {
 	}
 
 	private _discoverArticleListSources(journalId: JournalId, token: CancellationToken, replace: boolean): Promise<void> {
+		if (token.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
 		const existing = this.catalogTasks.get(journalId);
 		if (existing && !replace) {
-			return existing.promise;
+			return this._joinTask(existing, token);
 		}
 		existing?.cancellationSource.cancel();
 		const journal = this._requireJournal(journalId);
-		this._setLoadState(this.catalogLoadStates, journalId, 'loading');
-		const task = this._startTask(this.catalogTasks, journalId, token, async taskToken => {
+		this._setLoadStateAndNotify(this.catalogLoadStates, journalId, 'loading', () => this.onDidChangeCatalogEmitter.fire(journalId));
+		const task = this._startTask(this.catalogTasks, journalId, async taskToken => {
 			const provider = this._getProvider(journal.providerId);
 			const parsed = await provider.discoverArticleListSources(journal, taskToken);
 			this._throwIfCancelled(taskToken);
 			this._replaceCatalog(journal, provider, parsed);
-		}, this.catalogLoadStates);
-		return task.promise;
+		}, this.catalogLoadStates, () => this.onDidChangeCatalogEmitter.fire(journalId));
+		return this._joinTask(task, token);
 	}
 
 	fetchArticleListSource(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void> {
@@ -167,29 +181,34 @@ export class FetchService extends Disposable implements IFetchService {
 	}
 
 	private _fetchArticleListSource(sourceId: ArticleListSourceId, token: CancellationToken, replace: boolean): Promise<void> {
+		if (token.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
 		const existing = this.sourceTasks.get(sourceId);
 		if (existing && !replace) {
-			return existing.promise;
+			return this._joinTask(existing, token);
 		}
 		existing?.cancellationSource.cancel();
 		const source = this._requireSource(sourceId);
 		const journal = this._requireJournal(source.journalId);
-		this._setLoadState(this.sourceLoadStates, sourceId, 'loading');
-		const task = this._startTask(this.sourceTasks, sourceId, token, async taskToken => {
+		this._setLoadStateAndNotify(this.sourceLoadStates, sourceId, 'loading', () => this.onDidChangeSourceEmitter.fire(sourceId));
+		const task = this._startTask(this.sourceTasks, sourceId, async taskToken => {
 			const provider = this._getProvider(journal.providerId);
 			const parsed = await provider.fetchArticleListPage(journal, source, source.url, taskToken);
 			this._throwIfCancelled(taskToken);
 			this._replaceSourcePages(sourceId);
 			this._commitPage(journal, source, provider, parsed, false);
-			this.onDidChangeSourceEmitter.fire(sourceId);
-		}, this.sourceLoadStates);
-		return task.promise;
+		}, this.sourceLoadStates, () => this.onDidChangeSourceEmitter.fire(sourceId));
+		return this._joinTask(task, token);
 	}
 
 	fetchNextPage(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void> {
+		if (token.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
 		const existing = this.sourceTasks.get(sourceId);
 		if (existing) {
-			return existing.promise;
+			return this._joinTask(existing, token);
 		}
 		const source = this._requireSource(sourceId);
 		const pageIds = this.sourcePageIds.get(sourceId);
@@ -199,63 +218,48 @@ export class FetchService extends Disposable implements IFetchService {
 			throw new Error(`Article list source "${sourceId}" has no next page.`);
 		}
 		const journal = this._requireJournal(source.journalId);
-		this._setLoadState(this.sourceLoadStates, sourceId, 'loading');
-		const task = this._startTask(this.sourceTasks, sourceId, token, async taskToken => {
+		this._setLoadStateAndNotify(this.sourceLoadStates, sourceId, 'loading', () => this.onDidChangeSourceEmitter.fire(sourceId));
+		const task = this._startTask(this.sourceTasks, sourceId, async taskToken => {
 			const provider = this._getProvider(journal.providerId);
 			const parsed = await provider.fetchArticleListPage(journal, source, nextPageUrl, taskToken);
 			this._throwIfCancelled(taskToken);
 			this._commitPage(journal, source, provider, parsed, true);
-			this.onDidChangeSourceEmitter.fire(sourceId);
-		}, this.sourceLoadStates);
-		return task.promise;
+		}, this.sourceLoadStates, () => this.onDidChangeSourceEmitter.fire(sourceId));
+		return this._joinTask(task, token);
 	}
 
 	fetchArticle(articleId: ArticleId, token: CancellationToken): Promise<ArticleDetail> {
+		if (token.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
+		const cached = this.details.get(articleId);
+		if (cached) {
+			return this._resolveForToken(cached, token);
+		}
 		const existing = this.articleTasks.get(articleId);
 		if (existing) {
-			return existing.promise;
+			return this._joinTask(existing, token);
 		}
 		const article = this._requireArticle(articleId);
 		const journal = this._requireJournal(article.journalId);
-		const cancellationSource = new CancellationTokenSource();
-		const generation = ++this.nextTaskGeneration;
-		const taskToken = this._combineTokens(token, cancellationSource.token);
-		this._setLoadState(this.articleLoadStates, articleId, 'loading');
-		const promise = (async () => {
-			try {
-				const provider = this._getProvider(journal.providerId);
-				const parsed = await provider.fetchArticleDetail(journal, article, taskToken);
-				this._throwIfCancelled(taskToken);
-				const detail: ArticleDetail = {
-					...parsed,
-					articleId,
-					journalId: journal.id,
-					url: provider.canonicalizeArticleUri(parsed.url),
-				};
-				if (this.articleTasks.get(articleId)?.generation !== generation) {
-					throw new CancellationError();
-				}
-				this.details.set(articleId, detail);
-				if (detail.doi && this.articles.get(articleId) === article) {
-					this.articles.set(articleId, { ...article, doi: detail.doi });
-				}
-				this.onDidChangeArticleEmitter.fire(articleId);
-				this._setLoadState(this.articleLoadStates, articleId, 'ready');
-				return detail;
-			} catch (error) {
-				if (this.articleTasks.get(articleId)?.generation === generation) {
-					this._setLoadState(this.articleLoadStates, articleId, error instanceof CancellationError ? 'idle' : 'error', error);
-				}
-				throw error;
-			} finally {
-				if (this.articleTasks.get(articleId)?.generation === generation) {
-					this.articleTasks.delete(articleId);
-				}
-				cancellationSource.dispose();
+		this._setLoadStateAndNotify(this.articleLoadStates, articleId, 'loading', () => this.onDidChangeArticleEmitter.fire(articleId));
+		const task = this._startTask(this.articleTasks, articleId, async taskToken => {
+			const provider = this._getProvider(journal.providerId);
+			const parsed = await provider.fetchArticleDetail(journal, article, taskToken);
+			this._throwIfCancelled(taskToken);
+			const detail: ArticleDetail = {
+				...parsed,
+				articleId,
+				journalId: journal.id,
+				url: provider.canonicalizeArticleUri(parsed.url),
+			};
+			this.details.set(articleId, detail);
+			if (detail.doi && this.articles.get(articleId) === article) {
+				this.articles.set(articleId, { ...article, doi: detail.doi });
 			}
-		})();
-		this.articleTasks.set(articleId, { generation, cancellationSource, promise });
-		return promise;
+			return detail;
+		}, this.articleLoadStates, () => this.onDidChangeArticleEmitter.fire(articleId));
+		return this._joinTask(task, token);
 	}
 
 	private _replaceCatalog(journal: JournalDescriptor, provider: IFetchProvider, parsed: ParsedArticleListCatalog): void {
@@ -289,7 +293,6 @@ export class FetchService extends Disposable implements IFetchService {
 			}
 		}
 		this.catalogs.set(journal.id, nextCatalog);
-		this.onDidChangeCatalogEmitter.fire(journal.id);
 	}
 
 	private _createSource(journal: JournalDescriptor, provider: IFetchProvider, label: string, url: ArticleListSource['url']): ArticleListSource {
@@ -393,19 +396,32 @@ export class FetchService extends Disposable implements IFetchService {
 		return provider;
 	}
 
-	private _startTask(tasks: Map<string, IFetchTask>, key: string, token: CancellationToken, operation: (token: CancellationToken) => Promise<void>, loadStates: Map<string, FetchLoadState>): IFetchTask {
+	private _startTask<T>(
+		tasks: Map<string, IFetchTask<T>>,
+		key: string,
+		operation: (token: CancellationToken) => Promise<T>,
+		loadStates: Map<string, FetchLoadState>,
+		notify: () => void,
+	): IFetchTask<T> {
 		const cancellationSource = new CancellationTokenSource();
 		const generation = ++this.nextTaskGeneration;
-		const taskToken = this._combineTokens(token, cancellationSource.token);
-		const promise = (async () => {
+		const task: IFetchTask<T> = {
+			generation,
+			cancellationSource,
+			promise: undefined!,
+			waiterCount: 0,
+		};
+		const promise = (async (): Promise<T> => {
 			try {
-				await operation(taskToken);
+				const result = await operation(cancellationSource.token);
+				this._throwIfCancelled(cancellationSource.token);
 				if (tasks.get(key)?.generation === generation) {
-					this._setLoadState(loadStates, key, 'ready');
+					this._setLoadStateAndNotify(loadStates, key, 'ready', notify);
 				}
+				return result;
 			} catch (error) {
 				if (tasks.get(key)?.generation === generation) {
-					this._setLoadState(loadStates, key, error instanceof CancellationError ? 'idle' : 'error', error);
+					this._setLoadStateAndNotify(loadStates, key, error instanceof CancellationError ? 'idle' : 'error', notify, error);
 				}
 				throw error;
 			} finally {
@@ -415,18 +431,47 @@ export class FetchService extends Disposable implements IFetchService {
 				cancellationSource.dispose();
 			}
 		})();
-		const task = { generation, cancellationSource, promise };
+		task.promise = promise;
 		tasks.set(key, task);
 		return task;
 	}
 
-	private _combineTokens(...tokens: readonly CancellationToken[]): CancellationToken {
-		return {
-			get isCancellationRequested() {
-				return tokens.some(token => token.isCancellationRequested);
-			},
-			onCancellationRequested: Event.any(...tokens.map(token => token.onCancellationRequested)),
-		};
+	private _joinTask<T>(task: IFetchTask<T>, token: CancellationToken): Promise<T> {
+		if (token.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
+
+		task.waiterCount++;
+		return new Promise<T>((resolve, reject) => {
+			let settled = false;
+			let cancellationListener: ReturnType<CancellationToken['onCancellationRequested']> | undefined;
+			const complete = (callback: () => void) => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				cancellationListener?.dispose();
+				task.waiterCount--;
+				callback();
+			};
+
+			cancellationListener = token.onCancellationRequested(() => {
+				complete(() => reject(new CancellationError()));
+				if (task.waiterCount === 0) {
+					task.cancellationSource.cancel();
+				}
+			});
+			task.promise.then(
+				result => complete(() => resolve(result)),
+				error => complete(() => reject(error)),
+			);
+		});
+	}
+
+	private _resolveForToken<T>(value: T, token: CancellationToken): Promise<T> {
+		return token.isCancellationRequested
+			? Promise.reject(new CancellationError())
+			: Promise.resolve(value);
 	}
 
 	private _throwIfCancelled(token: CancellationToken): void {
@@ -435,12 +480,19 @@ export class FetchService extends Disposable implements IFetchService {
 		}
 	}
 
-	private _setLoadState(states: Map<string, FetchLoadState>, key: string, status: FetchLoadState['status'], error?: unknown): void {
+	private _setLoadStateAndNotify(
+		states: Map<string, FetchLoadState>,
+		key: string,
+		status: FetchLoadState['status'],
+		notify: () => void,
+		error?: unknown,
+	): void {
 		states.set(key, {
 			status,
 			error: status === 'error' ? error instanceof Error ? error.message : 'Fetch failed.' : undefined,
 			updatedAt: new Date().toISOString(),
 		});
+		notify();
 	}
 
 	private _requireJournal(journalId: JournalId): JournalDescriptor {

@@ -24,7 +24,6 @@ import type {
   ReindexLibraryDocumentPayload,
   RagAnswerArticlesPayload,
   LoadTranslationCachePayload,
-  SaveFetchedArticlesPayload,
   SaveSettingsPayload,
   SaveTranslationCachePayload,
   TestLlmConnectionPayload,
@@ -205,9 +204,6 @@ async function invokeCommand<TCommand extends AppCommand>(
         }
         return saved as AppCommandResultMap[TCommand];
       }
-    case 'save_fetched_articles':
-      await storage.saveFetchedArticles((payload as SaveFetchedArticlesPayload)?.items ?? []);
-      return undefined as AppCommandResultMap[TCommand];
     case 'load_translation_cache':
       return await storage.loadTranslationCache(
         (payload as LoadTranslationCachePayload)?.keys ?? [],

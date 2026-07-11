@@ -4,11 +4,16 @@ import type {
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import {
-  getFetchArticleAuthorNames,
-  getFetchArticleSourceUrl,
-} from 'cs/base/parts/sandbox/common/fetchArticle';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
+
+export type LibraryArticleMetadataInput = {
+	title: string;
+	doi?: string;
+	authors: readonly string[];
+	journalTitle: string;
+	publishedAt?: string;
+	sourceUrl: string;
+	sourceId: string | null;
+};
 
 export async function syncLibraryMetadataFromArticle({
   enabled,
@@ -18,10 +23,7 @@ export async function syncLibraryMetadataFromArticle({
 }: {
   enabled: boolean;
   invokeDesktop: ElectronInvoke;
-  article: Pick<
-	FetchArticle,
-	'title' | 'doi' | 'authors' | 'publication' | 'publishedAt' | 'sourceUri' | 'articleListSourceId'
-  >;
+  article: LibraryArticleMetadataInput;
   onDocumentUpserted?: (document: LibraryDocumentSummary) => void;
 }) {
   if (!enabled) {
@@ -33,12 +35,11 @@ export async function syncLibraryMetadataFromArticle({
     {
       articleTitle: article.title,
       doi: typeof article.doi === 'string' ? article.doi : null,
-      authors: getFetchArticleAuthorNames(article),
-      journalTitle: article.publication.title,
-      publishedAt:
-        typeof article.publishedAt === 'string' ? article.publishedAt : null,
-      sourceUrl: getFetchArticleSourceUrl(article),
-      sourceId: article.articleListSourceId ?? null,
+      authors: [...article.authors],
+      journalTitle: article.journalTitle,
+      publishedAt: article.publishedAt ?? null,
+      sourceUrl: article.sourceUrl,
+      sourceId: article.sourceId,
     },
   );
 

@@ -6,20 +6,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-
 import { URI } from 'cs/base/common/uri';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
-import type {
-  DocumentTranslationProgress,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { DocumentTranslationProgress } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
-import {
-  NoOpNotificationService,
-  type NotificationMessage,
-} from 'cs/platform/notification/common/notification';
+import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
+import type { ArticleDetail, ArticleId, ArticleRecord, IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createArticleSummaryTranslationExportController: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').createArticleSummaryTranslationExportController;
@@ -29,444 +23,193 @@ let locales: typeof import('language/locales').locales;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 test.before(async () => {
-  const domEnvironment = installDomTestEnvironment();
-  cleanupDomEnvironment = domEnvironment.cleanup;
-  ({ createArticleSummaryTranslationExportController } = await import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport'));
-  ({ getStatusbarStateSnapshot, setStatusbarState } = await import('cs/workbench/browser/parts/statusbar/statusbarModel'));
-  ({ locales } = await import('language/locales'));
-  ({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
+	const domEnvironment = installDomTestEnvironment();
+	cleanupDomEnvironment = domEnvironment.cleanup;
+	({ createArticleSummaryTranslationExportController } = await import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport'));
+	({ getStatusbarStateSnapshot, setStatusbarState } = await import('cs/workbench/browser/parts/statusbar/statusbarModel'));
+	({ locales } = await import('language/locales'));
+	({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
 });
 
 test.after(() => {
-  cleanupDomEnvironment?.();
-  cleanupDomEnvironment = null;
+	cleanupDomEnvironment?.();
+	cleanupDomEnvironment = null;
 });
 
-function createArticle(overrides: Partial<FetchArticle> = {}): FetchArticle {
-  return {
-    title: 'Example article',
-    publication: {
-      id: 'example-journal',
-      title: 'Example Journal',
-      publisherId: 'example-publisher',
-      publisherTitle: 'Example Publisher',
-    },
-    articleKind: 'news',
-    sourceArticleType: 'News',
-    authors: [{ name: 'Example Author' }],
-    abstract: 'An abstract',
-    sections: [],
-    figures: [],
-    references: [],
-    sourceUri: URI.parse('https://example.com/article').toJSON(),
-    fetchedAt: '2026-07-04T00:00:00.000Z',
-    fetchOrder: 1,
-    ...overrides,
-  };
+function createArticleDetail(articleId: ArticleId): ArticleDetail {
+	return {
+		articleId,
+		journalId: 'journal.example',
+		url: URI.parse(`https://example.com/articles/${articleId}`),
+		doi: `10.1000/${articleId}`,
+		title: 'Example article',
+		abstract: 'An abstract',
+		subjects: [],
+		authors: [{ name: 'Example Author' }],
+		publishedAt: '2026-07-04',
+		publication: { title: 'Example Journal' },
+	};
+}
+
+function createFetchService(details: readonly ArticleDetail[]): IFetchService {
+	const detailById = new Map(details.map(detail => [detail.articleId, detail]));
+	return {
+		getArticle: (articleId: ArticleId) => {
+			const detail = detailById.get(articleId);
+			return detail
+				? { id: articleId, journalId: detail.journalId, url: detail.url, doi: detail.doi } satisfies ArticleRecord
+				: undefined;
+		},
+		getArticleDetail: (articleId: ArticleId) => detailById.get(articleId),
+		fetchArticle: async (articleId: ArticleId) => {
+			const detail = detailById.get(articleId);
+			if (!detail) {
+				throw new Error(`Unknown article: ${articleId}`);
+			}
+			return detail;
+		},
+	} as unknown as IFetchService;
 }
 
 function createNativeHostService(
-  documentApi: NonNullable<INativeHostService['document']>,
-  invoke: ElectronInvoke,
+	documentApi: NonNullable<INativeHostService['document']>,
+	invoke: ElectronInvoke,
 ): INativeHostService {
-  return {
-    _serviceBrand: undefined,
-    canInvoke: () => true,
-    invoke,
-    ipc: undefined,
-    windowControls: undefined,
-    webContent: undefined,
-    document: documentApi,
-  };
-}
-
-function createDesktopInvokeError(
-  code: string,
-  details: Record<string, unknown>,
-) {
-  const error = new Error(code) as Error & {
-    code?: string;
-    details?: Record<string, unknown>;
-  };
-  error.code = code;
-  error.details = details;
-  return error;
-}
-
-async function waitForModalButton(label: string) {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const buttons = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('.comet-dialog-buttons button'),
-    );
-    const button = buttons.find(item => item.textContent === label);
-    if (button) {
-      return button;
-    }
-
-    await delay(0);
-  }
-
-  assert.fail(`Expected modal button "${label}" to be rendered.`);
+	return {
+		_serviceBrand: undefined,
+		canInvoke: () => true,
+		invoke,
+		ipc: undefined,
+		windowControls: undefined,
+		webContent: undefined,
+		document: documentApi,
+	};
 }
 
 function createDialogService() {
-  return new BrowserDialogService();
+	return new BrowserDialogService();
 }
 
-type CapturedNotification = {
-  severity: 'info' | 'warning' | 'error';
-  message: NotificationMessage;
-};
+test('ArticleSummaryTranslationExportController resolves ArticleIds to DOCX DTOs and restores progress', async () => {
+	const articleId = 'article.export';
+	const previousStatus: EditorStatusState = {
+		ariaLabel: 'Status',
+		paneMode: 'browser',
+		summary: 'Ready',
+		leftItems: [{ id: 'existing', label: 'Mode', value: 'PDF' }],
+		rightItems: [],
+	};
+	setStatusbarState(previousStatus);
+	let progressListener: ((progress: DocumentTranslationProgress) => void) | null = null;
+	let unsubscribed = false;
+	const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
+	const invoke = (async (command: string, args?: Record<string, unknown>) => {
+		invoked.push({ command, args });
+		progressListener?.({
+			phase: 'batch', current: 1, total: 1,
+			provider: 'translation:deepl', model: 'translate-to-zh-hans', message: null,
+		});
+		assert.equal(getStatusbarStateSnapshot().summary, 'Translating 1/1');
+		return { articleCount: 1, filePath: '/tmp/articles.docx' };
+	}) as ElectronInvoke;
+	const controller = createArticleSummaryTranslationExportController({
+		desktopRuntime: true,
+		invokeDesktop: invoke,
+		nativeHost: createNativeHostService({
+			onTranslationProgress: listener => {
+				progressListener = listener;
+				return () => { unsubscribed = true; progressListener = null; };
+			},
+		}, invoke),
+		notificationService: new NoOpNotificationService(),
+		dialogService: createDialogService(),
+		locale: 'en',
+		ui: locales.en,
+		pdfDownloadDir: '/tmp',
+		onUnavailableArticleIds: () => {},
+	}, createFetchService([createArticleDetail(articleId)]));
 
-class CapturingNotificationService extends NoOpNotificationService {
-  constructor(private readonly notifications: CapturedNotification[]) {
-    super();
-  }
+	await controller.handleExportArticleSummaries([articleId], true);
+	controller.dispose();
 
-  override info(message: NotificationMessage | NotificationMessage[]): void {
-    for (const item of Array.isArray(message) ? message : [message]) {
-      this.notifications.push({ severity: 'info', message: item });
-    }
-  }
-
-  override warn(message: NotificationMessage | NotificationMessage[]): void {
-    for (const item of Array.isArray(message) ? message : [message]) {
-      this.notifications.push({ severity: 'warning', message: item });
-    }
-  }
-
-  override error(message: NotificationMessage | NotificationMessage[]): void {
-    for (const item of Array.isArray(message) ? message : [message]) {
-      this.notifications.push({ severity: 'error', message: item });
-    }
-  }
-}
-
-test('ArticleSummaryTranslationExportController exports summaries and restores translation progress', async () => {
-  const previousStatus: EditorStatusState = {
-    ariaLabel: 'Status',
-    paneMode: 'browser',
-    summary: 'Ready',
-    leftItems: [{ id: 'existing', label: 'Mode', value: 'PDF' }],
-    rightItems: [],
-  };
-  setStatusbarState(previousStatus);
-
-  const notifications: CapturedNotification[] = [];
-  const notificationService = new CapturingNotificationService(notifications);
-  let progressListener: ((progress: DocumentTranslationProgress) => void) | null = null;
-  let unsubscribed = false;
-  const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
-  const invoke = (async (command: string, args?: Record<string, unknown>) => {
-    invoked.push({ command, args });
-    progressListener?.({
-      phase: 'batch',
-      current: 1,
-      total: 2,
-      provider: 'translation:deepl',
-      model: 'translate-to-zh-hans',
-      message: null,
-    });
-    assert.equal(getStatusbarStateSnapshot().summary, 'Translating 1/2');
-    return {
-      articleCount: 1,
-      filePath: '/tmp/articles.docx',
-    };
-  }) as ElectronInvoke;
-  const controller = createArticleSummaryTranslationExportController({
-    desktopRuntime: true,
-    invokeDesktop: invoke,
-    nativeHost: createNativeHostService({
-      onTranslationProgress: (listener) => {
-        progressListener = listener;
-        return () => {
-          unsubscribed = true;
-          progressListener = null;
-        };
-      },
-    }, invoke),
-    notificationService,
-    dialogService: createDialogService(),
-    locale: 'en',
-    ui: locales.en,
-    pdfDownloadDir: '/tmp',
-  });
-
-  await controller.handleExportArticleSummaries([createArticle()], true);
-
-  assert.equal(unsubscribed, true);
-  assert.deepEqual(getStatusbarStateSnapshot(), previousStatus);
-  assert.equal(invoked.length, 1);
-  assert.equal(invoked[0].command, 'export_articles_docx');
-  assert.equal(typeof invoked[0].args?.taskId, 'string');
-  assert.deepEqual(invoked[0].args, {
-    taskId: invoked[0].args?.taskId,
-    articles: [createArticle()],
-    preferredDirectory: '/tmp',
-    targetFilePath: null,
-    translateSummaries: true,
-    locale: 'en',
-  });
-  assert.equal(notifications.at(-1)?.severity, 'info');
+	assert.equal(unsubscribed, true);
+	assert.deepEqual(getStatusbarStateSnapshot(), previousStatus);
+	assert.deepEqual(invoked[0]?.args, {
+		taskId: invoked[0]?.args?.taskId,
+		articles: [{
+			title: 'Example article',
+			authors: ['Example Author'],
+			abstract: 'An abstract',
+			journalTitle: 'Example Journal',
+			publishedAt: '2026-07-04',
+		}],
+		preferredDirectory: '/tmp',
+		targetFilePath: null,
+		translateSummaries: true,
+		locale: 'en',
+	});
 });
 
-test('ArticleSummaryTranslationExportController exports original summaries directly', async () => {
-  const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
-  const invoke = (async (command: string, args?: Record<string, unknown>) => {
-    invoked.push({ command, args });
-    return {
-      articleCount: 1,
-      filePath: '/tmp/articles.docx',
-    };
-  }) as ElectronInvoke;
-  const controller = createArticleSummaryTranslationExportController({
-    desktopRuntime: true,
-    invokeDesktop: invoke,
-    nativeHost: createNativeHostService({
-      onTranslationProgress: () => () => {},
-    }, invoke),
-    notificationService: new NoOpNotificationService(),
-    dialogService: createDialogService(),
-    locale: 'en',
-    ui: locales.en,
-    pdfDownloadDir: '/tmp',
-  });
+test('ArticleSummaryTranslationExportController removes unavailable ArticleIds before export', async () => {
+	const unavailable: ArticleId[][] = [];
+	let invoked = false;
+	const invoke = (async () => {
+		invoked = true;
+		return null;
+	}) as ElectronInvoke;
+	const controller = createArticleSummaryTranslationExportController({
+		desktopRuntime: true,
+		invokeDesktop: invoke,
+		nativeHost: createNativeHostService({ onTranslationProgress: () => () => {} }, invoke),
+		notificationService: new NoOpNotificationService(),
+		dialogService: createDialogService(),
+		locale: 'en',
+		ui: locales.en,
+		pdfDownloadDir: '/tmp',
+		onUnavailableArticleIds: ids => unavailable.push([...ids]),
+	}, createFetchService([]));
 
-  await controller.handleExportArticleSummaries([createArticle()], false);
-
-  assert.equal(invoked.length, 1);
-  assert.deepEqual(invoked[0].args, {
-    taskId: invoked[0].args?.taskId,
-    articles: [createArticle()],
-    preferredDirectory: '/tmp',
-    targetFilePath: null,
-    translateSummaries: false,
-    locale: 'en',
-  });
-});
-
-test('ArticleSummaryTranslationExportController exports original summaries after translation failure confirmation', async () => {
-  const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
-  let exportCallCount = 0;
-  const invoke = (async (command: string, args?: Record<string, unknown>) => {
-    invoked.push({ command, args });
-    if (command === 'export_articles_docx') {
-      exportCallCount += 1;
-      if (exportCallCount === 1) {
-        throw createDesktopInvokeError('DOCX_TRANSLATION_FAILED', {
-          filePath: '/tmp/articles.docx',
-          message: 'Bad Gateway',
-          translationCode: 'LLM_CONNECTION_FAILED',
-          translationDetails: {
-            provider: 'translation:glm',
-            status: 502,
-            statusText: 'Bad Gateway',
-          },
-        });
-      }
-
-      return {
-        articleCount: 1,
-        filePath: '/tmp/articles.docx',
-      };
-    }
-
-    throw new Error(`Unexpected desktop command in translation failure confirmation test: ${command}`);
-  }) as ElectronInvoke;
-  const controller = createArticleSummaryTranslationExportController({
-    desktopRuntime: true,
-    invokeDesktop: invoke,
-    nativeHost: createNativeHostService({
-      onTranslationProgress: () => () => {},
-    }, invoke),
-    notificationService: new NoOpNotificationService(),
-    dialogService: createDialogService(),
-    locale: 'en',
-    ui: locales.en,
-    pdfDownloadDir: '/tmp',
-  });
-
-  const running = controller.handleExportArticleSummaries([createArticle()], true);
-  (await waitForModalButton(locales.en.translationFailureDialogExportOriginal)).click();
-  await running;
-
-  const exportCalls = invoked.filter(entry => entry.command === 'export_articles_docx');
-  assert.equal(exportCalls.length, 2);
-  assert.equal(exportCalls[0].args?.taskId, exportCalls[1].args?.taskId);
-  assert.deepEqual(exportCalls[0].args, {
-    taskId: exportCalls[0].args?.taskId,
-    articles: [createArticle()],
-    preferredDirectory: '/tmp',
-    targetFilePath: null,
-    translateSummaries: true,
-    locale: 'en',
-  });
-  assert.deepEqual(exportCalls[1].args, {
-    taskId: exportCalls[0].args?.taskId,
-    articles: [createArticle()],
-    preferredDirectory: '/tmp',
-    targetFilePath: '/tmp/articles.docx',
-    translateSummaries: false,
-    locale: 'en',
-  });
-  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
-});
-
-test('ArticleSummaryTranslationExportController retries translation after translation failure confirmation', async () => {
-  const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
-  let exportCallCount = 0;
-  const invoke = (async (command: string, args?: Record<string, unknown>) => {
-    invoked.push({ command, args });
-    if (command === 'export_articles_docx') {
-      exportCallCount += 1;
-      if (exportCallCount === 1) {
-        throw createDesktopInvokeError('DOCX_TRANSLATION_FAILED', {
-          filePath: '/tmp/articles.docx',
-          message: 'Gateway Timeout',
-          translationCode: 'LLM_CONNECTION_FAILED',
-          translationDetails: {
-            provider: 'translation:glm',
-            status: 504,
-            statusText: 'Gateway Timeout',
-          },
-        });
-      }
-
-      return {
-        articleCount: 1,
-        filePath: '/tmp/articles.docx',
-      };
-    }
-
-    throw new Error(`Unexpected desktop command in translation retry confirmation test: ${command}`);
-  }) as ElectronInvoke;
-  const controller = createArticleSummaryTranslationExportController({
-    desktopRuntime: true,
-    invokeDesktop: invoke,
-    nativeHost: createNativeHostService({
-      onTranslationProgress: () => () => {},
-    }, invoke),
-    notificationService: new NoOpNotificationService(),
-    dialogService: createDialogService(),
-    locale: 'en',
-    ui: locales.en,
-    pdfDownloadDir: '/tmp',
-  });
-
-  const running = controller.handleExportArticleSummaries([createArticle()], true);
-  (await waitForModalButton(locales.en.translationFailureDialogRetry)).click();
-  await running;
-
-  const exportCalls = invoked.filter(entry => entry.command === 'export_articles_docx');
-  assert.equal(exportCalls.length, 2);
-  assert.equal(exportCalls[0].args?.taskId, exportCalls[1].args?.taskId);
-  assert.deepEqual(exportCalls[1].args, {
-    taskId: exportCalls[0].args?.taskId,
-    articles: [createArticle()],
-    preferredDirectory: '/tmp',
-    targetFilePath: '/tmp/articles.docx',
-    translateSummaries: true,
-    locale: 'en',
-  });
-  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
-});
-
-test('ArticleSummaryTranslationExportController cancels while translation failure confirmation is open', async () => {
-  const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
-  const invoke = (async (command: string, args?: Record<string, unknown>) => {
-    invoked.push({ command, args });
-    if (command === 'export_articles_docx') {
-      throw createDesktopInvokeError('DOCX_TRANSLATION_FAILED', {
-        filePath: '/tmp/articles.docx',
-        message: 'Gateway Timeout',
-        translationCode: 'LLM_CONNECTION_FAILED',
-        translationDetails: {
-          provider: 'translation:glm',
-          status: 504,
-          statusText: 'Gateway Timeout',
-        },
-      });
-    }
-
-    if (command === 'cancel_document_task') {
-      return true;
-    }
-
-    throw new Error(`Unexpected desktop command in translation confirmation cancellation test: ${command}`);
-  }) as ElectronInvoke;
-  const controller = createArticleSummaryTranslationExportController({
-    desktopRuntime: true,
-    invokeDesktop: invoke,
-    nativeHost: createNativeHostService({
-      onTranslationProgress: () => () => {},
-    }, invoke),
-    notificationService: new NoOpNotificationService(),
-    dialogService: createDialogService(),
-    locale: 'en',
-    ui: locales.en,
-    pdfDownloadDir: '/tmp',
-  });
-
-  const running = controller.handleExportArticleSummaries([createArticle()], true);
-  await waitForModalButton(locales.en.translationFailureDialogRetry);
-  await controller.handleExportArticleSummaries([createArticle()], true);
-  await running;
-
-  const exportArgs = invoked.find(entry => entry.command === 'export_articles_docx')?.args;
-  const cancelArgs = invoked.find(entry => entry.command === 'cancel_document_task')?.args;
-  assert.deepEqual(cancelArgs, { taskId: exportArgs?.taskId });
-  assert.equal(document.querySelectorAll('.comet-dialog-box').length, 0);
-  assert.equal(controller.getSnapshot().translationExportProgress, null);
+	await controller.handleExportArticleSummaries(['article.missing'], false);
+	controller.dispose();
+	assert.deepEqual(unavailable, [['article.missing']]);
+	assert.equal(invoked, false);
 });
 
 test('ArticleSummaryTranslationExportController cancels an active export task', async () => {
-  const previousStatus: EditorStatusState = {
-    ariaLabel: 'Status',
-    paneMode: 'browser',
-    summary: 'Ready',
-    leftItems: [],
-    rightItems: [],
-  };
-  setStatusbarState(previousStatus);
+	const articleId = 'article.cancel';
+	let rejectExport: ((error: unknown) => void) | null = null;
+	const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
+	const invoke = (async (command: string, args?: Record<string, unknown>) => {
+		invoked.push({ command, args });
+		if (command === 'export_articles_docx') {
+			return new Promise((_resolve, reject) => { rejectExport = reject; });
+		}
+		if (command === 'cancel_document_task') {
+			rejectExport?.(new Error('Canceled'));
+			return true;
+		}
+		throw new Error(`Unexpected desktop command: ${command}`);
+	}) as ElectronInvoke;
+	const controller = createArticleSummaryTranslationExportController({
+		desktopRuntime: true,
+		invokeDesktop: invoke,
+		nativeHost: createNativeHostService({ onTranslationProgress: () => () => {} }, invoke),
+		notificationService: new NoOpNotificationService(),
+		dialogService: createDialogService(),
+		locale: 'en',
+		ui: locales.en,
+		pdfDownloadDir: '/tmp',
+		onUnavailableArticleIds: () => {},
+	}, createFetchService([createArticleDetail(articleId)]));
 
-  let rejectExport: ((error: unknown) => void) | null = null;
-  const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
-  const invoke = (async (command: string, args?: Record<string, unknown>) => {
-    invoked.push({ command, args });
-    if (command === 'export_articles_docx') {
-      return await new Promise((_resolve, reject) => {
-        rejectExport = reject;
-      });
-    }
-    if (command === 'cancel_document_task') {
-      rejectExport?.(new Error('Canceled'));
-      return true;
-    }
-    throw new Error(`Unexpected desktop command in article summary cancellation test: ${command}`);
-  }) as ElectronInvoke;
-  const controller = createArticleSummaryTranslationExportController({
-    desktopRuntime: true,
-    invokeDesktop: invoke,
-    nativeHost: createNativeHostService({
-      onTranslationProgress: () => () => {},
-    }, invoke),
-    notificationService: new NoOpNotificationService(),
-    dialogService: createDialogService(),
-    locale: 'en',
-    ui: locales.en,
-    pdfDownloadDir: '/tmp',
-  });
+	const running = controller.handleExportArticleSummaries([articleId], true);
+	await delay(0);
+	await controller.handleExportArticleSummaries([articleId], true);
+	await running;
+	controller.dispose();
 
-  const running = controller.handleExportArticleSummaries([createArticle()], true);
-  await delay(0);
-  await controller.handleExportArticleSummaries([createArticle()], true);
-  await running;
-
-  controller.dispose();
-  const exportArgs = invoked.find((entry) => entry.command === 'export_articles_docx')?.args;
-  const cancelArgs = invoked.find((entry) => entry.command === 'cancel_document_task')?.args;
-  assert.equal(typeof exportArgs?.taskId, 'string');
-  assert.deepEqual(cancelArgs, { taskId: exportArgs?.taskId });
-  assert.equal(controller.getSnapshot().translationExportProgress, null);
-  assert.deepEqual(getStatusbarStateSnapshot(), previousStatus);
+	const exportArgs = invoked.find(entry => entry.command === 'export_articles_docx')?.args;
+	const cancelArgs = invoked.find(entry => entry.command === 'cancel_document_task')?.args;
+	assert.deepEqual(cancelArgs, { taskId: exportArgs?.taskId });
+	assert.equal(controller.getSnapshot().translationExportProgress, null);
 });

@@ -2,9 +2,7 @@ import type { ChatServiceSnapshot } from 'cs/workbench/contrib/chat/common/chatS
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
-import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import { $ } from 'cs/base/browser/dom';
-import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
 import 'cs/sessions/browser/parts/media/sessionView.css';
@@ -18,27 +16,16 @@ type CreateSessionChatViewPropsParams = {
 		messages: ChatServiceSnapshot['messages'];
 		isAsking: boolean;
 		errorMessage: string | null;
-		availableArticleCount: number;
 		llmModelOptions: DropdownOption[];
 		activeLlmModelOptionValue: string;
 		activeLlmModelLabel: string;
 		isMaxContextWindowEnabled: boolean;
 		activeLlmModelSupportsMaxContextWindow: boolean;
-		articleQuickSources: readonly JournalDescriptor[];
-		isArticleSourceFetching: boolean;
-		showArticleBatchActions: boolean;
-		downloadAllProgress: ArticleBatchTaskProgress | null;
-		translationExportProgress: ArticleBatchTaskProgress | null;
-		isArticleSelected: (href: string) => boolean;
 	};
 	actions: {
 		onQuestionChange: (value: string) => void;
 		onAsk: () => void;
 		onApplyPatch: (messageId: string) => void;
-		onFetchArticleSource: (source: JournalDescriptor) => void | Promise<void>;
-		onDownloadAllArticles: () => void | Promise<void>;
-		onExportArticleSummaries: (translateSummaries: boolean) => void | Promise<void>;
-		onToggleArticleSelected: (href: string) => void;
 		onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
 		onSelectLlmModel: (value: string) => void;
 		onToggleMaxContextWindow: (options?: { suppressRender?: boolean }) => void;
@@ -53,27 +40,16 @@ export function createSessionChatViewProps({
 		messages,
 		isAsking,
 		errorMessage,
-		availableArticleCount,
 		llmModelOptions,
 		activeLlmModelOptionValue,
 		activeLlmModelLabel,
 		isMaxContextWindowEnabled,
 		activeLlmModelSupportsMaxContextWindow,
-		articleQuickSources,
-		isArticleSourceFetching,
-		showArticleBatchActions,
-		downloadAllProgress,
-		translationExportProgress,
-		isArticleSelected,
 	},
 	actions: {
 		onQuestionChange,
 		onAsk,
 		onApplyPatch,
-		onFetchArticleSource,
-		onDownloadAllArticles,
-		onExportArticleSummaries,
-		onToggleArticleSelected,
 		onToggleAutoModelRouting,
 		onSelectLlmModel,
 		onToggleMaxContextWindow,
@@ -89,17 +65,6 @@ export function createSessionChatViewProps({
 		errorMessage,
 		onAsk,
 		onApplyPatch,
-		articleQuickSources,
-		isArticleSourceFetching,
-		onFetchArticleSource,
-		showArticleBatchActions,
-		downloadAllProgress,
-		translationExportProgress,
-		onDownloadAllArticles,
-		onExportArticleSummaries,
-		isArticleSelected,
-		onToggleArticleSelected,
-		availableArticleCount,
 		llmModelOptions,
 		activeLlmModelOptionValue,
 		activeLlmModelLabel,

@@ -310,7 +310,7 @@ function createTestChatService(inserts: ChatContextInsert[]): IChatService {
 	const emptySnapshot: ChatServiceSnapshot = {
 		conversations: [],
 		activeConversationId: '',
-		selectedArticleUrlsInOrder: [],
+		checkedArticleIds: [],
 		activeConversation: null,
 		question: '',
 		messages: [],
@@ -331,14 +331,13 @@ function createTestChatService(inserts: ChatContextInsert[]): IChatService {
 		insertContextMessage: (title, content) => {
 			inserts.push({ title, content });
 		},
-		insertArticles() {},
+		insertArticleList() {},
 		insertArticleFetchEmptyResult() {},
 		applyPatch() {},
 		ask: async () => {},
-		collectArticleBatch: articles => [...articles],
-		collectSelectedArticleBatch: articles => [...articles],
-		isArticleSelected: () => false,
-		toggleArticleSelected() {},
+		isArticleChecked: () => false,
+		setArticleChecked() {},
+		removeArticleChecks() {},
 	};
 }
 
@@ -388,7 +387,6 @@ function createTestStorageService(values = new Map<string, string>()): IStorageS
 		log() {},
 		optimize: async () => {},
 		flush: async () => {},
-		saveFetchedArticles: async () => {},
 		loadTranslationCache: async () => ({}),
 		saveTranslationCache: async () => {},
 		upsertLibraryDocumentMetadata: async () => {

@@ -29,7 +29,6 @@ app.whenReady().then(async () => {
 
   const storage = createStorageService(
     {
-      historyFile: environmentMainPaths.historyFile,
       stateDbFile: environmentMainPaths.stateDbFile,
       configFile: environmentMainPaths.configFile,
       userSettingsFile: environmentMainPaths.userSettingsFile,

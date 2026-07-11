@@ -6,13 +6,11 @@ import {
   BaseSecretStorageService,
   ProviderApiKeySecretStorage,
 } from 'cs/platform/secrets/common/secret';
-import { createHistoryStore, type HistoryStore } from 'cs/platform/storage/electron-main/historyStore';
 import { createLibraryStore, type LibraryStore } from 'cs/platform/storage/electron-main/libraryStore';
 import { createTranslationCacheStore, type TranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
 import { createStorageMainService } from 'cs/platform/storage/electron-main/storageMainService';
 
 interface StoragePaths {
-  historyFile: string;
   stateDbFile: string;
   configFile: string;
   userSettingsFile: string;
@@ -29,7 +27,6 @@ interface StorageOptions {
 export type AppStorageService =
   IStorageService &
   AppSettingsConfigurationService &
-  HistoryStore &
   TranslationCacheStore &
   Omit<LibraryStore, 'dispose'>;
 
@@ -39,7 +36,6 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
   });
   const secretStorageService = new BaseSecretStorageService(storageMainService);
   const providerApiKeySecretStorage = new ProviderApiKeySecretStorage(secretStorageService);
-  const historyStore = createHistoryStore(paths.historyFile);
   const configurationService = createConfigurationMainService(paths.configFile, paths.userSettingsFile, {
     defaultLocale: options.defaultLocale,
     providerApiKeySecretStorage,
@@ -81,10 +77,6 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
     log: storageMainService.log.bind(storageMainService),
     optimize: storageMainService.optimize.bind(storageMainService),
     flush: storageMainService.flush.bind(storageMainService),
-
-    async saveFetchedArticles(items) {
-      await historyStore.saveFetchedArticles(items);
-    },
 
     async loadTranslationCache(keys) {
       return translationCacheStore.loadTranslationCache(keys);

@@ -8,12 +8,10 @@ import type { LlmProviderId } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
 	ChatMessage,
 } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import type {
 	LlmReasoningEffort,
 	LlmServiceTier,
 } from 'cs/workbench/services/llm/registry';
-import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 
 export type ChatModelDropdownOption = DropdownOption & {
 	readonly providerId?: LlmProviderId;
@@ -35,17 +33,6 @@ export type ChatWidgetProps = {
 	readonly errorMessage: string | null;
 	readonly onAsk: () => void;
 	readonly onApplyPatch: (messageId: string) => void;
-	readonly articleQuickSources: readonly JournalDescriptor[];
-	readonly isArticleSourceFetching: boolean;
-	readonly onFetchArticleSource: (source: JournalDescriptor) => void | Promise<void>;
-	readonly showArticleBatchActions: boolean;
-	readonly downloadAllProgress: ArticleBatchTaskProgress | null;
-	readonly translationExportProgress: ArticleBatchTaskProgress | null;
-	readonly onDownloadAllArticles: () => void | Promise<void>;
-	readonly onExportArticleSummaries: (translateSummaries: boolean) => void | Promise<void>;
-	readonly isArticleSelected: (href: string) => boolean;
-	readonly onToggleArticleSelected: (href: string) => void;
-	readonly availableArticleCount: number;
 	readonly llmModelOptions: ChatModelDropdownOption[];
 	readonly activeLlmModelOptionValue: string;
 	readonly onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;

@@ -7,6 +7,7 @@ import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { EventEmitter } from 'cs/base/common/event';
 import type {
+  ArticleSummaryExportInput,
   DocumentTranslationProgress,
   DocxExportResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -16,7 +17,6 @@ import type {
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import {
   canExportArticlesDocx,
@@ -37,6 +37,11 @@ import {
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
+import {
+  IFetchService,
+  type ArticleDetail,
+  type ArticleId,
+} from 'cs/workbench/services/fetch/common/fetch';
 
 export type ArticleSummaryTranslationExportControllerContext = {
   desktopRuntime: boolean;
@@ -47,6 +52,7 @@ export type ArticleSummaryTranslationExportControllerContext = {
   locale: Locale;
   ui: LocaleMessages;
   pdfDownloadDir: string;
+  onUnavailableArticleIds: (articleIds: readonly ArticleId[]) => void;
 };
 
 export type ArticleSummaryTranslationExportControllerSnapshot = {
@@ -104,7 +110,10 @@ export class ArticleSummaryTranslationExportController {
   private currentTask: ArticleSummaryTranslationExportTask | null = null;
   private readonly onDidChangeEmitter = new EventEmitter<void>();
 
-  constructor(context: ArticleSummaryTranslationExportControllerContext) {
+  constructor(
+    context: ArticleSummaryTranslationExportControllerContext,
+    @IFetchService private readonly fetchService: IFetchService,
+  ) {
     this.context = context;
   }
 
@@ -127,7 +136,7 @@ export class ArticleSummaryTranslationExportController {
   };
 
   readonly handleExportArticleSummaries = async (
-    articles: readonly FetchArticle[],
+    articleIds: readonly ArticleId[],
     translateSummaries: boolean,
   ) => {
     if (this.currentTask) {
@@ -148,14 +157,48 @@ export class ArticleSummaryTranslationExportController {
       return;
     }
 
-    const exportArticles = [...articles];
-    if (!canExportArticlesDocx(exportArticles.length)) {
-      notificationService.info(ui.toastNoExportableArticles);
+    const source = new CancellationTokenSource();
+    const taskId = createArticleSummaryTranslationExportTaskId();
+    this.currentTask = {
+      taskId,
+      source,
+      restoreStatusbar: () => {},
+    };
+
+    let exportArticles: ArticleSummaryExportInput[];
+    try {
+      exportArticles = await this.resolveArticleSummaries(articleIds, source.token);
+    } catch (error) {
+      if (!source.token.isCancellationRequested) {
+        const localizedError = localizeAppError(ui, parseAppErrorData(error));
+        notificationService.error(
+          formatLocaleMessage(ui.toastDocxExportFailed, { error: localizedError }),
+        );
+      }
+      if (this.currentTask?.taskId === taskId) {
+        this.currentTask = null;
+      }
+      source.dispose();
       return;
     }
 
-    const source = new CancellationTokenSource();
-    const taskId = createArticleSummaryTranslationExportTaskId();
+    if (source.token.isCancellationRequested) {
+      if (this.currentTask?.taskId === taskId) {
+        this.currentTask = null;
+      }
+      source.dispose();
+      return;
+    }
+
+    if (!canExportArticlesDocx(exportArticles.length)) {
+      notificationService.info(ui.toastNoExportableArticles);
+      if (this.currentTask?.taskId === taskId) {
+        this.currentTask = null;
+      }
+      source.dispose();
+      return;
+    }
+
     const restoreTranslationStatus = this.beginTranslationStatusbarProgress(
       source.token,
       exportArticles.length,
@@ -266,6 +309,50 @@ export class ArticleSummaryTranslationExportController {
       .catch((error) => {
         console.warn('Failed to cancel article summary translation task.', error);
       });
+  }
+
+  private async resolveArticleSummaries(
+    articleIds: readonly ArticleId[],
+    token: CancellationToken,
+  ): Promise<ArticleSummaryExportInput[]> {
+    const unavailableArticleIds: ArticleId[] = [];
+    const summaries: ArticleSummaryExportInput[] = [];
+    for (const articleId of articleIds) {
+      if (token.isCancellationRequested) {
+        return [];
+      }
+
+      const detail = await this.resolveArticleDetail(articleId, token);
+      if (!detail) {
+        unavailableArticleIds.push(articleId);
+        continue;
+      }
+      summaries.push(this.toArticleSummary(detail));
+    }
+
+    if (unavailableArticleIds.length > 0) {
+      this.context.onUnavailableArticleIds(unavailableArticleIds);
+      this.context.notificationService.info(this.context.ui.articleDetailsUnavailable);
+    }
+    return summaries;
+  }
+
+  private async resolveArticleDetail(articleId: ArticleId, token: CancellationToken) {
+    if (!this.fetchService.getArticle(articleId)) {
+      return null;
+    }
+    return this.fetchService.getArticleDetail(articleId)
+      ?? this.fetchService.fetchArticle(articleId, token);
+  }
+
+  private toArticleSummary(article: ArticleDetail): ArticleSummaryExportInput {
+    return {
+      title: article.title,
+      authors: article.authors.map(author => author.name),
+      abstract: article.abstract,
+      journalTitle: article.publication.title,
+      publishedAt: article.publishedAt,
+    };
   }
 
   private async promptTranslationFailure(
@@ -403,6 +490,7 @@ export class ArticleSummaryTranslationExportController {
 
 export function createArticleSummaryTranslationExportController(
   context: ArticleSummaryTranslationExportControllerContext,
+  fetchService: IFetchService,
 ) {
-  return new ArticleSummaryTranslationExportController(context);
+  return new ArticleSummaryTranslationExportController(context, fetchService);
 }

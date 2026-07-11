@@ -18,7 +18,6 @@ export type AppEnvironmentPaths = {
   logsDir: string;
   userSettingsFile: string;
   configFile: string;
-  historyFile: string;
   stateDbFile: string;
   translationCacheFile: string;
   libraryDbFile: string;
@@ -67,7 +66,6 @@ export function resolveEnvironmentMainPaths(): AppEnvironmentPaths {
     logsDir,
     userSettingsFile: path.join(userSettingsDir, 'settings.json'),
     configFile: path.join(configDir, 'config.json'),
-    historyFile: path.join(dataDir, 'fetch-article-history.json'),
     stateDbFile: path.join(dataDir, 'state.vscdb'),
     translationCacheFile: path.join(dataDir, 'translation-cache.json'),
     libraryDbFile: path.join(dataDir, 'library.sqlite'),

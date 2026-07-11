@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  ArticleContextInput,
   RagAnswerArticlesPayload,
   RagAnswerResult,
   RagEvidenceItem,
@@ -7,12 +8,6 @@ import type {
   TestRagConnectionPayload,
   LlmSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import {
-  getFetchArticleAuthorNames,
-  getFetchArticleBodyText,
-  getFetchArticleSourceUrl,
-} from 'cs/base/parts/sandbox/common/fetchArticle';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import { RagErrorCode, ragError } from 'cs/workbench/services/rag/ragErrors';
 import { cleanText } from 'cs/base/common/strings';
 import { resolveLlmRoute } from 'cs/workbench/services/llm/routing';
@@ -36,7 +31,7 @@ const maxArticleTextLength = 2400;
 
 type RetrievalCandidate = {
   retrievalIndex: number;
-  article: FetchArticle;
+  article: ArticleContextInput;
   articleText: string;
   excerpt: string;
   score: number;
@@ -80,30 +75,26 @@ function truncateText(value: string, maxLength: number): string {
   return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
-function buildArticleText(article: FetchArticle): string {
-	const authorNames = getFetchArticleAuthorNames(article);
-	const body = getFetchArticleBodyText(article);
-  const sections = [
+function buildArticleText(article: ArticleContextInput): string {
+	const sections = [
     cleanText(article.title) ? `Title: ${cleanText(article.title)}` : '',
-    cleanText(article.publication.title) ? `Journal: ${cleanText(article.publication.title)}` : '',
+    cleanText(article.journalTitle) ? `Journal: ${cleanText(article.journalTitle)}` : '',
     cleanText(article.publishedAt) ? `Published: ${cleanText(article.publishedAt)}` : '',
-    authorNames.length > 0
-      ? `Authors: ${authorNames.map((author) => cleanText(author)).filter(Boolean).join(', ')}`
+    article.authors.length > 0
+      ? `Authors: ${article.authors.map(author => cleanText(author)).filter(Boolean).join(', ')}`
       : '',
     cleanText(article.doi) ? `DOI: ${cleanText(article.doi)}` : '',
     cleanText(article.abstract) ? `Abstract: ${cleanText(article.abstract)}` : '',
-    cleanText(body) ? `Body: ${cleanText(body)}` : '',
   ].filter(Boolean);
 
   return truncateText(sections.join('\n'), maxArticleTextLength);
 }
 
-function buildEvidenceExcerpt(article: FetchArticle): string {
+function buildEvidenceExcerpt(article: ArticleContextInput): string {
   const sourceText =
     cleanText(article.abstract) ||
-    cleanText(getFetchArticleBodyText(article)) ||
     cleanText(article.title) ||
-    cleanText(getFetchArticleSourceUrl(article));
+    cleanText(article.sourceUrl);
 
   return truncateText(sourceText, maxEvidenceExcerptLength);
 }
@@ -122,9 +113,9 @@ function resolveLlmSettings(
   return payload.llm ?? appSettings.llm;
 }
 
-function resolveRelevantArticles(articles: FetchArticle[]): FetchArticle[] {
+function resolveRelevantArticles(articles: ArticleContextInput[]): ArticleContextInput[] {
   return articles
-    .filter((article) => Boolean(cleanText(article.title) || cleanText(article.abstract) || cleanText(getFetchArticleBodyText(article))))
+    .filter(article => Boolean(cleanText(article.title) || cleanText(article.abstract)))
     .slice(0, maxArticlesForRetrieval);
 }
 
@@ -202,7 +193,7 @@ export async function answerQuestionFromArticles(
 ): Promise<RagAnswerResult> {
   const question = normalizeQuestion(payload.question);
   const writingContext = cleanText(payload.writingContext);
-  const articles = resolveRelevantArticles(Array.isArray(payload.articles) ? payload.articles : []);
+  const articles = resolveRelevantArticles(Array.isArray(payload.articleContexts) ? payload.articleContexts : []);
   const ragSettings = resolveRagSettings(payload, appSettings);
   const llmSettings = resolveLlmSettings(payload, appSettings);
   const ragRoute = resolveRagRoute(ragSettings);
@@ -288,10 +279,10 @@ export async function answerQuestionFromArticles(
       .slice(0, Math.min(ragRoute.retrievalTopK, rerankedCandidates.length))
       .map((candidate, index) => ({
         rank: index + 1,
-        title: cleanText(candidate.article.title) || getFetchArticleSourceUrl(candidate.article),
-        journalTitle: cleanText(candidate.article.publication.title) || null,
+        title: cleanText(candidate.article.title) || candidate.article.sourceUrl,
+        journalTitle: cleanText(candidate.article.journalTitle) || null,
         publishedAt: cleanText(candidate.article.publishedAt) || null,
-        sourceUrl: getFetchArticleSourceUrl(candidate.article),
+        sourceUrl: candidate.article.sourceUrl,
         score: Number.isFinite(candidate.score) ? candidate.score : null,
         excerpt: candidate.excerpt,
       })) satisfies RagEvidenceItem[];

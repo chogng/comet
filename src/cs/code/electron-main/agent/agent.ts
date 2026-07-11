@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  ArticleContextInput,
   LlmSettings,
   MainAgentAvailableToolId,
   MainAgentPatchProposal,
@@ -12,8 +13,6 @@ import type {
   WritingEditorStableSelectionTargetPayload,
   WritingEditorTextUnitPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
 import type {
   AgentMessage,
   AgentMessagePart,
@@ -73,7 +72,7 @@ type MainAgentContext = {
   editorSelection: WritingEditorStableSelectionTargetPayload | null;
   editorDocument: WritingEditorDocumentPayload | null;
   editorTextUnits: WritingEditorTextUnitPayload[];
-  articles: FetchArticle[];
+  articleContexts: ArticleContextInput[];
   llmSettings: LlmSettings;
   ragSettings: RagSettings;
 };
@@ -442,12 +441,12 @@ function normalizeAvailableTools(
   return Array.from(new Set(normalized));
 }
 
-function resolveToolArticles(
-  allArticles: FetchArticle[],
+function resolveToolArticleContexts(
+  articleContexts: ArticleContextInput[],
   selectedSourceUrls?: string[],
 ) {
   if (!Array.isArray(selectedSourceUrls) || selectedSourceUrls.length === 0) {
-    return allArticles;
+    return articleContexts;
   }
 
   const selectedUrlSet = new Set(
@@ -456,7 +455,7 @@ function resolveToolArticles(
       .filter(Boolean),
   );
 
-  return allArticles.filter((article) => selectedUrlSet.has(cleanText(getFetchArticleSourceUrl(article))));
+  return articleContexts.filter(article => selectedUrlSet.has(cleanText(article.sourceUrl)));
 }
 
 function createGetSelectionContextTool(
@@ -585,8 +584,8 @@ function createRetrieveEvidenceTool(
         throw ragError(RagErrorCode.QueryEmpty);
       }
 
-      const articles = resolveToolArticles(
-        context.articles,
+      const articleContexts = resolveToolArticleContexts(
+        context.articleContexts,
         Array.isArray(normalizedInput.selectedSourceUrls)
           ? normalizedInput.selectedSourceUrls
           : undefined,
@@ -598,7 +597,7 @@ function createRetrieveEvidenceTool(
             normalizedInput.includeWritingContext === false
               ? null
               : context.writingContext || null,
-          articles,
+          articleContexts,
           llm: context.llmSettings,
           rag: context.ragSettings,
         },
@@ -894,7 +893,7 @@ export async function runMainAgentTurn(
       editorTextUnits: Array.isArray(payload.editorTextUnits)
         ? payload.editorTextUnits
         : [],
-      articles: Array.isArray(payload.articles) ? payload.articles : [],
+      articleContexts: Array.isArray(payload.articleContexts) ? payload.articleContexts : [],
       llmSettings,
       ragSettings,
     },

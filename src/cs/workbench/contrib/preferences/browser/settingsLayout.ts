@@ -61,7 +61,7 @@ export const settingsPageLayout: readonly SettingsPageDefinition[] = [
     id: 'literature',
     label: (labels) => labels.settingsNavigationLiterature,
     icon: 'book',
-    sections: ['batchOptions', 'supportedSources', 'downloadDirectory', 'translation'],
+    sections: ['supportedSources', 'downloadDirectory', 'translation'],
   },
 ] as const;
 
@@ -239,21 +239,6 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsTranslationProviderOpenAICompatibleHint,
       labels.settingsTranslationBaseUrl,
       labels.settingsTranslationApiKey,
-    ],
-  },
-  batchOptions: {
-    id: 'batchOptions',
-    settingIds: [
-      SettingsId.DefaultBatchLimit,
-      SettingsId.FetchStartDate,
-      SettingsId.FetchEndDate,
-    ],
-    searchLabels: labels => [
-      labels.settingsBatchOptions,
-      labels.settingsBatchHint,
-      labels.batchCount,
-      labels.startDate,
-      labels.endDate,
     ],
   },
   supportedSources: {

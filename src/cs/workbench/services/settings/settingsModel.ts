@@ -22,7 +22,6 @@ import {
 import { LatestAsyncOperation } from 'cs/base/common/async';
 import { EventEmitter } from 'cs/base/common/event';
 import type { Locale } from 'language/i18n';
-import { defaultBatchLimit } from 'cs/workbench/services/config/configSchema';
 import {
   areSettingValuesEqual,
   cloneSettingValue,
@@ -70,7 +69,6 @@ export type SettingsModelSnapshot = {
   browserMaxHistoryEntries: number;
   browserPageZoom: string;
   browserSearchEngine: string;
-  batchLimit: number;
   systemNotificationsEnabled: boolean;
   warningNotificationsEnabled: boolean;
   menuBarIconEnabled: boolean;
@@ -155,7 +153,6 @@ function areSettingsModelSnapshotsEqual(
     previous.browserMaxHistoryEntries === next.browserMaxHistoryEntries &&
     previous.browserPageZoom === next.browserPageZoom &&
     previous.browserSearchEngine === next.browserSearchEngine &&
-    previous.batchLimit === next.batchLimit &&
     previous.systemNotificationsEnabled === next.systemNotificationsEnabled &&
     previous.warningNotificationsEnabled === next.warningNotificationsEnabled &&
     previous.menuBarIconEnabled === next.menuBarIconEnabled &&
@@ -209,7 +206,6 @@ function createInitialSettingsModelSnapshot(): SettingsModelSnapshot {
     browserMaxHistoryEntries: defaultBrowserMaxHistoryEntries,
     browserPageZoom: defaultBrowserPageZoom,
     browserSearchEngine: defaultBrowserSearchEngine,
-    batchLimit: defaultBatchLimit,
     systemNotificationsEnabled: true,
     warningNotificationsEnabled: true,
     menuBarIconEnabled: false,
@@ -286,18 +282,6 @@ export class SettingsModel {
   };
 
   readonly getSnapshot = () => this.snapshot;
-
-  readonly setBatchLimit = (batchLimit: number) => {
-    if (this.snapshot.batchLimit === batchLimit) {
-      return;
-    }
-
-    this.updateSnapshot((snapshot) => ({
-      ...snapshot,
-      batchLimit,
-    }));
-  };
-
 
   readonly setSystemNotificationsEnabled = (systemNotificationsEnabled: boolean) => {
     if (this.snapshot.systemNotificationsEnabled === systemNotificationsEnabled) {
@@ -1028,7 +1012,6 @@ export class SettingsModel {
         browserMaxHistoryEntries: resolved.browserMaxHistoryEntries,
         browserPageZoom: resolved.browserPageZoom,
         browserSearchEngine: resolved.browserSearchEngine,
-        batchLimit: resolved.batchLimit,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,
@@ -1191,7 +1174,6 @@ export class SettingsModel {
       browserMaxHistoryEntries,
       browserPageZoom,
       browserSearchEngine,
-      batchLimit,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1226,7 +1208,6 @@ export class SettingsModel {
       browserMaxHistoryEntries,
       browserPageZoom,
       browserSearchEngine,
-      batchLimit,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1306,7 +1287,6 @@ export class SettingsModel {
       browserMaxHistoryEntries,
       browserPageZoom,
       browserSearchEngine,
-      batchLimit,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1341,7 +1321,6 @@ export class SettingsModel {
       browserMaxHistoryEntries,
       browserPageZoom,
       browserSearchEngine,
-      batchLimit,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1447,7 +1426,6 @@ export class SettingsModel {
         browserMaxHistoryEntries: resolved.browserMaxHistoryEntries,
         browserPageZoom: resolved.browserPageZoom,
         browserSearchEngine: resolved.browserSearchEngine,
-        batchLimit: resolved.batchLimit,
         systemNotificationsEnabled: resolved.systemNotificationsEnabled,
         warningNotificationsEnabled: resolved.warningNotificationsEnabled,
         menuBarIconEnabled: resolved.menuBarIconEnabled,

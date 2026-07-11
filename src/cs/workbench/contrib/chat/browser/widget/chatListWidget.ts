@@ -10,12 +10,12 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { localize } from 'cs/nls';
 import { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatListRenderer';
+import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { $ } from 'cs/base/browser/dom';
 
 export type ChatListWidgetOptions = {
 	readonly onApplyPatch: (messageId: string) => void;
-	readonly isArticleSelected: (href: string) => boolean;
-	readonly onToggleArticleSelected: (href: string) => void;
 };
 
 export class ChatListWidget {
@@ -31,12 +31,14 @@ export class ChatListWidget {
 	constructor(
 		options: ChatListWidgetOptions,
 		@IMarkdownRendererService markdownRendererService: IMarkdownRendererService,
+		@IChatService private readonly chatService: IChatService,
+		@IFetchService fetchService: IFetchService,
 	) {
 		this.renderer = new ChatListRenderer({
 			markdownRendererService,
 			onApplyPatch: options.onApplyPatch,
-			isArticleSelected: options.isArticleSelected,
-			onToggleArticleSelected: options.onToggleArticleSelected,
+			isArticleChecked: articleId => this.chatService.isArticleChecked(articleId),
+			onSetArticleChecked: (articleId, checked) => this.chatService.setArticleChecked(articleId, checked),
 		});
 		this.scrollableElement = new DomScrollableElement(this.contentElement, {
 			className: 'comet-chat-thread-scrollable',
@@ -47,6 +49,16 @@ export class ChatListWidget {
 		this.disposables.add(this.scrollableElement);
 		this.disposables.add(this.scrollableElement.onScroll(() => {
 			this.updateScrollDownButtonVisibility();
+		}));
+		this.disposables.add(this.chatService.subscribe(() => {
+			this.setMessages(this.chatService.getSnapshot().messages);
+		}));
+		this.disposables.add(fetchService.onDidChangeArticle(articleId => {
+			if (this.messages.some(message =>
+				message.role === 'assistant' && message.articleList?.articleIds.includes(articleId),
+			)) {
+				this.setMessages(this.messages);
+			}
 		}));
 
 		this.scrollDownButton.type = 'button';

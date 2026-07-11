@@ -86,8 +86,6 @@ import {
 } from 'cs/workbench/services/localization/browser/localeService';
 import {
   getWorkbenchSessionSnapshot,
-  setWorkbenchArticles,
-  setWorkbenchSelectedArticleKeysInOrder,
   setWorkbenchWebUrl,
   subscribeWorkbenchSession,
 } from 'cs/workbench/browser/session';
@@ -98,27 +96,15 @@ import {
   subscribeWindowState,
 } from 'cs/workbench/browser/window';
 import {
-  getWorkbenchContentStateSnapshot,
-  selectWorkbenchContentDerivedState,
-  setBatchEndDate,
-  setBatchStartDate,
-  subscribeWorkbenchContentState,
-} from 'cs/workbench/browser/workbenchContentState';
-import {
   shouldSyncActiveContentTabFromBrowserUrl,
   shouldSyncActiveContentTabMetadataFromWebContentState,
 } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 import type { WebContentSurfaceSnapshot } from 'cs/workbench/contrib/browserView/browser/browserSurfaceState';
 
 import { getLocaleMessages } from 'language/i18n';
-import { getFetchArticleSourceUrl } from 'cs/base/parts/sandbox/common/fetchArticle';
-import type { FetchArticle } from 'cs/base/parts/sandbox/common/fetchArticle';
-import { CancellationTokenNone } from 'cs/base/common/cancellation';
 import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
-import type { ArticleDetail, ArticleListCatalog, ArticleListItem, ArticleListSource, ArticlePage, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout, LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { normalizeBatchLimit } from 'cs/workbench/services/config/configSchema';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
 import { normalizeBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
 import {
@@ -196,78 +182,6 @@ const llmProviderIconMap: Record<LlmProviderId, LxIconName> = {
 };
 
 const AGENT_CHAT_AUTO_MODEL_OPTION_VALUE = 'auto';
-function getArticleSelectionKey(article: Pick<FetchArticle, 'sourceUri' | 'fetchedAt'>) {
-  return `${getFetchArticleSourceUrl(article)}::${article.fetchedAt}`;
-}
-
-function getCatalogSources(catalog: ArticleListCatalog | undefined): readonly ArticleListSource[] {
-  return catalog?.entries.flatMap(entry => entry.kind === 'group' ? entry.sources : [entry]) ?? [];
-}
-
-function getPageItems(page: ArticlePage, fetchService: IFetchService): ArticleListItem[] {
-  return [...page.groups.flatMap(group => group.itemIds), ...page.ungroupedItemIds]
-    .map(itemId => fetchService.getArticleListItem(itemId))
-    .filter((item): item is ArticleListItem => !!item);
-}
-
-function toFetchedArticle(detail: ArticleDetail, journal: JournalDescriptor, articleListSourceId: string, fetchOrder: number): FetchArticle {
-  return {
-    sourceUri: detail.url.toJSON(),
-    canonicalUri: detail.url.toJSON(),
-    doi: detail.doi,
-    title: detail.title,
-    publication: {
-      id: detail.publication.journalId ?? journal.id,
-      title: detail.publication.title,
-      publisherId: journal.providerId,
-      publisherTitle: journal.providerId,
-    },
-    articleKind: 'other',
-    sourceArticleType: detail.articleType,
-    authors: detail.authors.map(author => ({ name: author.name })),
-    abstract: detail.abstract,
-    sections: [],
-    figures: [],
-    references: [],
-    publishedAt: detail.publishedAt,
-    fetchedAt: new Date().toISOString(),
-    fetchOrder,
-    articleListSourceId,
-  };
-}
-
-async function fetchJournalArticles(fetchService: IFetchService, journalId: string): Promise<FetchArticle[]> {
-  const journal = fetchService.getJournal(journalId);
-  if (!journal) {
-    throw new Error(`Journal "${journalId}" is not registered.`);
-  }
-  await fetchService.discoverArticleListSources(journalId, CancellationTokenNone);
-  const sources = getCatalogSources(fetchService.getArticleListCatalog(journalId));
-  const articles: FetchArticle[] = [];
-  const seenArticleIds = new Set<string>();
-  for (const source of sources) {
-    await fetchService.fetchArticleListSource(source.id, CancellationTokenNone);
-    for (const page of fetchService.getArticlePages(source.id)) {
-      for (const item of getPageItems(page, fetchService)) {
-        if (seenArticleIds.has(item.articleId)) {
-          continue;
-        }
-        const detail = await fetchService.fetchArticle(item.articleId, CancellationTokenNone);
-        seenArticleIds.add(item.articleId);
-        articles.push(toFetchedArticle(detail, journal, source.id, articles.length + 1));
-      }
-    }
-  }
-  return articles;
-}
-
-function buildSelectedArticleOrderLookup(
-  selectedArticleKeysInOrder: readonly string[],
-) {
-  return new Map(
-    selectedArticleKeysInOrder.map((key, index) => [key, index + 1]),
-  );
-}
 
 function resolveRuntimeState(nativeHost: INativeHostService) {
   const electronRuntime = nativeHost.canInvoke();
@@ -396,16 +310,6 @@ function toContentTabIdSet(tabs: ReadonlyArray<EditorWorkspaceTab>) {
   return new Set(tabs.filter(isContentTab).map((tab) => tab.id));
 }
 
-function areStringArraysEqual(
-  previous: readonly string[],
-  next: readonly string[],
-) {
-  return (
-    previous.length === next.length &&
-    previous.every((value, index) => value === next[index])
-  );
-}
-
 function formatStableSelectionWritingContext(
   target: WritingEditorStableSelectionTarget | null,
   fallbackDraftBody: string,
@@ -481,7 +385,6 @@ class WorkbenchHost {
   private renderPending = false;
   private webContentRuntime = false;
   private settingsOverlayVisible = false;
-  private isArticleSourceFetching = false;
   private readonly sidebarEntryConversationIds: Record<
     WorkbenchSidebarEntry,
     string | null
@@ -568,7 +471,6 @@ class WorkbenchHost {
       subscribeWorkbenchSession(this.requestRender),
       subscribeWorkbenchLayoutState(this.requestRender),
       subscribeWindowState(this.requestRender),
-      subscribeWorkbenchContentState(this.requestRender),
       editorDraftStyleService.subscribe(this.requestRender),
       this.sidebarEntryService.onDidChangeActiveEntry(this.requestRender),
     );
@@ -847,37 +749,6 @@ class WorkbenchHost {
     setAgentSidebarVisible(true);
   }
 
-  private syncSelectionState(
-    filteredArticleKeysInOrder: string[],
-    selectionModePhase: ReturnType<
-      typeof getWorkbenchSessionSnapshot
-    >['selectionModePhase'],
-  ) {
-    setWorkbenchSelectedArticleKeysInOrder((previousKeys) => {
-      if (selectionModePhase === 'all') {
-        if (
-          previousKeys.length === filteredArticleKeysInOrder.length &&
-          previousKeys.every(
-            (key, index) => key === filteredArticleKeysInOrder[index],
-          )
-        ) {
-          return previousKeys;
-        }
-
-        return filteredArticleKeysInOrder;
-      }
-
-      if (previousKeys.length === 0) {
-        return previousKeys;
-      }
-
-      const visibleKeys = new Set(filteredArticleKeysInOrder);
-      const nextKeys = previousKeys.filter((key) => visibleKeys.has(key));
-
-      return nextKeys.length === previousKeys.length ? previousKeys : nextKeys;
-    });
-  }
-
   private syncWebContentSurfaceState(params: {
     browserUrl: string;
     browserPageTitle: string;
@@ -1018,11 +889,6 @@ class WorkbenchHost {
   }
 
   private syncPostRenderState(params: {
-    selectionModePhase: ReturnType<
-      typeof getWorkbenchSessionSnapshot
-    >['selectionModePhase'];
-    selectedArticleKeysInOrder: readonly string[];
-    filteredArticleKeysInOrder: string[];
     browserUrl: string;
     browserPageTitle: string;
     browserFaviconUrl: string;
@@ -1041,9 +907,6 @@ class WorkbenchHost {
     updateActiveBrowserTabFaviconUrl: (faviconUrl: string) => void;
   }) {
     const {
-      selectionModePhase,
-      selectedArticleKeysInOrder,
-      filteredArticleKeysInOrder,
       browserUrl,
       browserPageTitle,
       browserFaviconUrl,
@@ -1056,20 +919,6 @@ class WorkbenchHost {
       updateActiveBrowserTabPageTitle,
       updateActiveBrowserTabFaviconUrl,
     } = params;
-
-    const needsSelectionSync =
-      selectionModePhase === 'all'
-        ? !areStringArraysEqual(
-            selectedArticleKeysInOrder,
-            filteredArticleKeysInOrder,
-          )
-        : selectedArticleKeysInOrder.length > 0 &&
-          selectedArticleKeysInOrder.some(
-            (key) => !filteredArticleKeysInOrder.includes(key),
-          );
-    if (needsSelectionSync) {
-      this.syncSelectionState(filteredArticleKeysInOrder, selectionModePhase);
-    }
 
     this.syncWebContentSurfaceState({
       browserUrl,
@@ -1221,12 +1070,7 @@ class WorkbenchHost {
   private performRender() {
     const locale = localeService.getLocale();
     const ui = getLocaleMessages(locale);
-    const {
-      webUrl,
-      articles,
-      selectionModePhase,
-      selectedArticleKeysInOrder,
-    } = getWorkbenchSessionSnapshot();
+    const { webUrl } = getWorkbenchSessionSnapshot();
     const {
       isPrimarySidebarVisible,
       isAgentSidebarVisible,
@@ -1267,7 +1111,6 @@ class WorkbenchHost {
     }
     const editorDraftStyleSnapshot = editorDraftStyleService.getSnapshot();
     const {
-      batchLimit,
       systemNotificationsEnabled,
       warningNotificationsEnabled,
       menuBarIconEnabled,
@@ -1326,16 +1169,6 @@ class WorkbenchHost {
       void libraryModelInstance.refresh();
     };
 
-    const workbenchContentStateSnapshot = getWorkbenchContentStateSnapshot();
-    const {
-      batchStartDate,
-      batchEndDate,
-      filteredArticles,
-    } = {
-      batchStartDate: workbenchContentStateSnapshot.batchStartDate,
-      batchEndDate: workbenchContentStateSnapshot.batchEndDate,
-      ...selectWorkbenchContentDerivedState(workbenchContentStateSnapshot, articles),
-    };
     const currentLlmSettings = createAgentChatLlmSettings(
       activeLlmProvider,
       llmProviders,
@@ -1443,7 +1276,6 @@ class WorkbenchHost {
       invokeDesktop,
       ui,
       isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
-      articles: filteredArticles,
       llmSettings: currentLlmSettings,
       ragSettings: currentRagSettings,
       fallbackWritingContext: draftBody,
@@ -1464,24 +1296,6 @@ class WorkbenchHost {
     const handleAssistantApplyPatch =
       chatServiceInstance.applyPatch;
 
-    const filteredArticleKeysInOrder = filteredArticles.map((article) =>
-      getArticleSelectionKey(article),
-    );
-
-    const selectedArticleOrderLookup = buildSelectedArticleOrderLookup(
-      selectedArticleKeysInOrder,
-    );
-    const filteredArticleMap = new Map(
-      filteredArticles.map(
-        (article) => [getArticleSelectionKey(article), article] as const,
-      ),
-    );
-    const exportableArticles =
-      selectedArticleKeysInOrder.length === 0
-        ? []
-        : selectedArticleKeysInOrder
-            .map((key) => filteredArticleMap.get(key))
-            .filter((article): article is FetchArticle => Boolean(article));
     const activeDraftExport =
       activeEditorTab?.kind === 'draft'
         ? {
@@ -1535,39 +1349,45 @@ class WorkbenchHost {
       },
     });
     const articleSummaryTranslationExportControllerInstance =
-      getWorkbenchArticleSummaryTranslationExportController({
-      desktopRuntime,
-      invokeDesktop,
-      nativeHost,
-      notificationService: this.notificationService,
-      dialogService: this.dialogService,
-      locale,
-      ui,
-      pdfDownloadDir,
-      });
+      getWorkbenchArticleSummaryTranslationExportController(
+        {
+          desktopRuntime,
+          invokeDesktop,
+          nativeHost,
+          notificationService: this.notificationService,
+          dialogService: this.dialogService,
+          locale,
+          ui,
+          pdfDownloadDir,
+          onUnavailableArticleIds: chatServiceInstance.removeArticleChecks,
+        },
+        this.fetchService,
+      );
 
     const documentActionsControllerInstance =
-      getWorkbenchDocumentActionsController({
-        desktopRuntime,
-        invokeDesktop,
-        notificationService: this.notificationService,
-        locale,
-        ui,
-        knowledgeBaseEnabled,
-        pdfDownloadDir,
-        knowledgeBasePdfDownloadDir,
-        pdfFileNameUseSelectionOrder,
-        isSelectionModeEnabled: selectionModePhase !== 'off',
-        selectedArticleOrderLookup,
-        exportableArticles,
-        onOpenEditor: handleOpenEditor,
-        onExportArticleSummaries:
-          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
-        activeDraftExport,
-        onLibraryDocumentUpserted:
-          libraryModelInstance.upsertDocumentSummary,
-        onLibraryUpdated: refreshLibrary,
-      });
+      getWorkbenchDocumentActionsController(
+        {
+          desktopRuntime,
+          invokeDesktop,
+          notificationService: this.notificationService,
+          locale,
+          ui,
+          knowledgeBaseEnabled,
+          pdfDownloadDir,
+          knowledgeBasePdfDownloadDir,
+          pdfFileNameUseSelectionOrder,
+			getExportableArticleIds: () => chatServiceInstance.getSnapshot().checkedArticleIds,
+          onUnavailableArticleIds: chatServiceInstance.removeArticleChecks,
+          onOpenEditor: handleOpenEditor,
+          onExportArticleSummaries:
+            articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
+          activeDraftExport,
+          onLibraryDocumentUpserted:
+            libraryModelInstance.upsertDocumentSummary,
+          onLibraryUpdated: refreshLibrary,
+        },
+        this.fetchService,
+      );
 
     const baseEditorPartProps = editorPartProps;
     const focusWorkbenchWebUrlInput = () => {
@@ -1624,30 +1444,6 @@ class WorkbenchHost {
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     });
 
-    const chatArticleBatch = chatServiceInstance.collectArticleBatch(filteredArticles);
-    const selectedChatArticleBatch =
-      chatServiceInstance.collectSelectedArticleBatch(filteredArticles);
-    const articleQuickSources = this.fetchService.getJournals();
-    const handleFetchArticleSource = async (source: JournalDescriptor) => {
-      this.isArticleSourceFetching = true;
-      this.requestRender();
-      try {
-        const articles = await fetchJournalArticles(this.fetchService, source.id);
-        if (articles.length === 0) {
-          chatServiceInstance.insertArticleFetchEmptyResult(source.title, ui.errorBatchNoValidArticles);
-          return;
-        }
-        setWorkbenchArticles(articles);
-        chatServiceInstance.insertArticles(articles, source.title);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        this.notificationService.error(errorMessage || ui.errorUnknown);
-      } finally {
-        this.isArticleSourceFetching = false;
-        this.requestRender();
-      }
-    };
-
     const activeDraftStableSelectionTarget =
       this.workbenchContentPartViews?.getActiveDraftStableSelectionTarget() ?? null;
     const assistantWritingContext = formatStableSelectionWritingContext(
@@ -1686,7 +1482,6 @@ class WorkbenchHost {
         invokeDesktop,
         ui,
         isKnowledgeBaseModeEnabled: knowledgeBaseModeEnabled,
-        articles: filteredArticles,
         llmSettings: currentLlmSettings,
         ragSettings: currentRagSettings,
         fallbackWritingContext: assistantWritingContext,
@@ -1713,6 +1508,7 @@ class WorkbenchHost {
         locale,
         ui,
         pdfDownloadDir,
+        onUnavailableArticleIds: chatServiceInstance.removeArticleChecks,
       },
       documentActionsController: documentActionsControllerInstance,
       documentActionsContext: {
@@ -1725,9 +1521,8 @@ class WorkbenchHost {
         pdfDownloadDir,
         knowledgeBasePdfDownloadDir,
         pdfFileNameUseSelectionOrder,
-        isSelectionModeEnabled: selectionModePhase !== 'off',
-        selectedArticleOrderLookup,
-        exportableArticles,
+		getExportableArticleIds: () => chatServiceInstance.getSnapshot().checkedArticleIds,
+        onUnavailableArticleIds: chatServiceInstance.removeArticleChecks,
         onOpenEditor: handleOpenEditor,
         onExportArticleSummaries:
           articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
@@ -1772,7 +1567,6 @@ class WorkbenchHost {
         messages: assistantMessages,
         isAsking: isAssistantAsking,
         errorMessage: assistantErrorMessage,
-        availableArticleCount: filteredArticles.length,
         llmModelOptions: agentLlmModelOptions,
         activeLlmModelOptionValue,
         activeLlmModelLabel: createAgentChatModelDisplayLabel(currentLlmSettings),
@@ -1785,31 +1579,11 @@ class WorkbenchHost {
           ].useMaxContextWindow ?? false,
         activeLlmModelSupportsMaxContextWindow:
           doesAgentChatModelSupportMaxContextWindow(currentLlmSettings),
-        articleQuickSources,
-        isArticleSourceFetching: this.isArticleSourceFetching,
-        showArticleBatchActions:
-          chatArticleBatch.length > 0 &&
-          (!this.isArticleSourceFetching ||
-            Boolean(documentActionsSnapshot.downloadAllProgress) ||
-            Boolean(articleSummaryTranslationExportSnapshot.translationExportProgress)),
-        downloadAllProgress: documentActionsSnapshot.downloadAllProgress,
-        translationExportProgress:
-          articleSummaryTranslationExportSnapshot.translationExportProgress,
-        isArticleSelected: chatServiceInstance.isArticleSelected,
       },
       actions: {
         onQuestionChange: setAssistantQuestion,
         onAsk: () => void handleAssistantAsk(),
         onApplyPatch: handleAssistantApplyPatch,
-        onFetchArticleSource: (source) => void handleFetchArticleSource(source),
-        onDownloadAllArticles: () =>
-          documentActionsControllerInstance.handleDownloadAllArticles(selectedChatArticleBatch),
-        onExportArticleSummaries: (translateSummaries) =>
-          articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries(
-            selectedChatArticleBatch,
-            translateSummaries,
-          ),
-        onToggleArticleSelected: chatServiceInstance.toggleArticleSelected,
         onToggleAutoModelRouting: (options) => {
           activeAgentChatModelOptionValue = activeAgentChatModelOptionValue
             ? null
@@ -1868,10 +1642,7 @@ class WorkbenchHost {
         ui,
         isSettingsLoading,
         locale,
-        batchLimit,
         supportedSources: this.fetchService.getJournals(),
-        fetchStartDate: batchStartDate,
-        fetchEndDate: batchEndDate,
         systemNotificationsEnabled,
         warningNotificationsEnabled,
         menuBarIconEnabled,
@@ -1948,10 +1719,6 @@ class WorkbenchHost {
         isLoadingTranslationModels,
       },
       actions: {
-        onBatchLimitChange: (value) =>
-          settingsControllerInstance.setBatchLimit(normalizeBatchLimit(value, 1)),
-        onFetchStartDateChange: setBatchStartDate,
-        onFetchEndDateChange: setBatchEndDate,
         onSystemNotificationsEnabledChange:
           settingsControllerInstance.setSystemNotificationsEnabled,
         onWarningNotificationsEnabledChange:
@@ -2116,9 +1883,6 @@ class WorkbenchHost {
     });
 
     this.syncPostRenderState({
-      selectionModePhase,
-      selectedArticleKeysInOrder,
-      filteredArticleKeysInOrder,
       browserUrl,
       browserPageTitle,
       browserFaviconUrl,
@@ -2194,16 +1958,18 @@ export function getWorkbenchEditorPartController(
 
 export function getWorkbenchArticleSummaryTranslationExportController(
   context: ArticleSummaryTranslationExportControllerContext,
+  fetchService: IFetchService,
 ) {
   articleSummaryTranslationExportController ??=
-    createArticleSummaryTranslationExportController(context);
+    createArticleSummaryTranslationExportController(context, fetchService);
   return articleSummaryTranslationExportController;
 }
 
 export function getWorkbenchDocumentActionsController(
   context: DocumentActionsControllerContext,
+  fetchService: IFetchService,
 ) {
-  documentActionsController ??= createDocumentActionsController(context);
+  documentActionsController ??= createDocumentActionsController(context, fetchService);
   return documentActionsController;
 }
 

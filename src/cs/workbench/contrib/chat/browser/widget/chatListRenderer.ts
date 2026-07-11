@@ -10,12 +10,13 @@ import { ChatContentMarkdownRenderer } from 'cs/workbench/contrib/chat/browser/w
 import { $ } from 'cs/base/browser/dom';
 import { Checkbox } from 'cs/base/browser/ui/toggle/toggle';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
+import type { ArticleId } from 'cs/workbench/services/fetch/common/fetch';
 
 export type ChatListRendererOptions = {
 	readonly markdownRendererService: IMarkdownRendererService;
 	readonly onApplyPatch: (messageId: string) => void;
-	readonly isArticleSelected: (href: string) => boolean;
-	readonly onToggleArticleSelected: (href: string) => void;
+	readonly isArticleChecked: (articleId: ArticleId) => boolean;
+	readonly onSetArticleChecked: (articleId: ArticleId, checked: boolean) => void;
 };
 
 type AssistantMessage = Extract<ChatMessage, { role: 'assistant' }>;
@@ -91,8 +92,8 @@ export class ChatListRenderer {
 			const rendered = disposables.add(this.markdownRenderer.render(
 				new MarkdownString(message.content),
 			));
-			if (message.includeInAgentHistory === false) {
-				this.renderArticleSelectionControls(rendered.element, disposables);
+			if (message.articleList) {
+				this.renderArticleSelectionControls(rendered.element, message.articleList.articleIds, disposables);
 			}
 			content.append(rendered.element);
 		}
@@ -102,21 +103,23 @@ export class ChatListRenderer {
 
 	private renderArticleSelectionControls(
 		root: HTMLElement,
+		articleIds: readonly ArticleId[],
 		disposables: DisposableStore,
 	) {
-		for (const item of Array.from(root.querySelectorAll('li'))) {
-			const link = item.querySelector('a[data-href]');
-			const href = link?.getAttribute('data-href') ?? '';
-			if (!href) {
-				continue;
-			}
+		const items = Array.from(root.querySelectorAll('li'));
+		if (items.length !== articleIds.length) {
+			throw new Error('Article message items do not match their ArticleId references.');
+		}
 
+		for (let index = 0; index < items.length; index++) {
+			const item = items[index];
+			const articleId = articleIds[index];
 			const checkbox = disposables.add(new Checkbox(
 				localize(
 					'chatArticleExportCheckbox',
 					"Include Article in Export",
 				),
-				this.options.isArticleSelected(href),
+				this.options.isArticleChecked(articleId),
 			));
 			checkbox.domNode.classList.add('comet-chat-article-checkbox');
 
@@ -126,7 +129,7 @@ export class ChatListRenderer {
 			item.append(checkbox.domNode, content);
 
 			disposables.add(checkbox.onChange(() => {
-				this.options.onToggleArticleSelected(href);
+				this.options.onSetArticleChecked(articleId, checkbox.checked);
 			}));
 		}
 	}

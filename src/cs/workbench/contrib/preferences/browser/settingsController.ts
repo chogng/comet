@@ -165,11 +165,6 @@ export class SettingsController {
     this.scheduleImmediateAutoSave();
   };
 
-  readonly setBatchLimit = (nextBatchLimit: number) => {
-    this.settingsModel.setBatchLimit(nextBatchLimit);
-    this.scheduleImmediateAutoSave();
-  };
-
   readonly setSystemNotificationsEnabled = (
     nextSystemNotificationsEnabled: boolean,
   ) => {
