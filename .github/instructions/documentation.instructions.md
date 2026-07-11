@@ -36,7 +36,7 @@ behavior rules before writing a durable project document.
 
 When a durable target differs from the current repository, keep the target
 architecture in the durable documents and put the transition in a dedicated
-`MIGRATION.md`.
+`<subject>.migration.md`.
 
 A migration document must contain:
 
@@ -53,19 +53,16 @@ the migration document, only when they directly guide the transition. They must
 not leak into the final README, architecture, layout, layering, or normal
 instruction documents.
 
-If migration rules must be loaded automatically, create a separately named
-`*-migration.instructions.md` with the narrowest applicable path scope. It must
-point to the migration document, contain no permanent architecture, and be
-deleted with the migration document.
-
 ## Instruction documents
 
 Normal `.instructions.md` files contain durable rules only. Their `applyTo`
 scope must cover the final project locations and must not include old paths only
 to carry a migration.
 
-Migration instructions own transitional paths and one-time constraints. Do not
-duplicate migration guidance in the normal instructions.
+Do not create a separate migration instruction file. `AGENTS.md` requires
+agents to discover applicable `*.migration.md` documents by their declared
+scope. Keep all transitional guidance in that single migration document and do
+not duplicate it in normal instructions.
 
 ## Documentation ownership
 

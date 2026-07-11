@@ -10,5 +10,7 @@
   temporary structure, or upstream comparisons in README, architecture, layout,
   layering, or normal instruction documents.
 - Put temporary migration information only in an explicitly scoped
-  `MIGRATION.md` and matching migration instructions. Migration documents must
-  define completion and deletion conditions and must be deleted when complete.
+  `<subject>.migration.md`. Before changing files, search for `*.migration.md`
+  and read every migration document whose declared scope includes the target
+  files. Migration documents must define completion and deletion conditions and
+  must be deleted when complete.

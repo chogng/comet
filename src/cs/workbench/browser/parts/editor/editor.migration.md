@@ -7,9 +7,20 @@ Editor implementation to the target Editor ownership and rendering model. The
 permanent architecture rules are defined in
 `.github/instructions/editor.instructions.md`.
 
-Delete this document and
-`.github/instructions/editor-migration.instructions.md` when the migration is
-complete.
+Delete this document when the migration is complete.
+
+## Scope
+
+This migration applies to:
+
+```text
+src/cs/workbench/common/editor/**
+src/cs/workbench/browser/parts/editor/**
+src/cs/workbench/services/editor/**
+src/cs/workbench/contrib/draftEditor/**
+src/cs/workbench/contrib/pdfEditor/**
+src/cs/workbench/contrib/browserView/**
+```
 
 ## Current problem
 
@@ -181,4 +192,4 @@ fallback path remains.
 - No parallel registry, compatibility layer, wrapper, alias, adapter, facade,
   re-export, or fallback behavior remains.
 - Relevant unit tests, TypeScript, ESLint, and the Comet UI smoke test pass.
-- This document and `editor-migration.instructions.md` are deleted.
+- This document is deleted.

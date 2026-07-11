@@ -7,6 +7,12 @@ This document tracks the one-time migration from the current
 Workbench. It is not an architecture document and must be deleted with the old
 directory when the migration is complete.
 
+## Scope
+
+This migration applies to all files under `src/cs/sessions/**` and to affected
+call sites, entry points, styles, tests, and import rules changed specifically
+to remove a dependency on that old boundary.
+
 The final architecture is defined by:
 
 - [`README.md`](../workbench/browser/parts/sessions/README.md)
