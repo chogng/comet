@@ -20,6 +20,7 @@ src/cs/workbench/services/editor/**
 src/cs/workbench/contrib/draftEditor/**
 src/cs/workbench/contrib/pdfEditor/**
 src/cs/workbench/contrib/browserView/**
+src/cs/sessions/browser/parts/editor/**
 ```
 
 ## Current problem
@@ -49,11 +50,19 @@ established Editor architecture:
 - the local Pane contract does not carry the complete input options and open
   context through the normal input application boundary;
 - documentation can accidentally treat resource resolution priority as pane
-  selection priority or assign group state to the Editor Part.
+  selection priority or assign group state to the Editor Part;
+- `SessionEditorPartView` is a thin wrapper around Workbench group
+  presentation while Sessions-specific layout remains in Workbench modules,
+  obscuring the final application-to-foundation dependency direction.
 
 Do not preserve these differences through renamed declarations or forwarding
 layers. A migrated responsibility replaces the current implementation and all
 affected call sites directly.
+
+The shell and source-layer inversion is tracked by
+`src/cs/sessions/sessions.migration.md`. Editor migration keeps reusable editor
+models and registries in Workbench while moving only the mounted product Part
+and Sessions layout integration to the Sessions application.
 
 ## Reference architecture
 
@@ -63,15 +72,19 @@ Compare the current upstream implementation before each migration step:
 ../vscode/src/vs/workbench/services/editor/browser/editorService.ts
 ../vscode/src/vs/workbench/services/editor/browser/editorResolverService.ts
 ../vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
+../vscode/src/vs/workbench/browser/parts/editor/editorParts.ts
 ../vscode/src/vs/workbench/browser/parts/editor/editorPanes.ts
 ../vscode/src/vs/workbench/browser/parts/editor/editorPane.ts
 ../vscode/src/vs/workbench/browser/editor.ts
 ../vscode/src/vs/workbench/services/editor/common/editorPaneService.ts
+../vscode/src/vs/sessions/browser/parts/editorParts.ts
+../vscode/src/vs/sessions/browser/parts/editorPart.ts
 ```
 
 The reference establishes responsibilities, not Comet product composition.
-Comet retains one Workbench, its collapsible Editor layout, its titlebar and
-toolbar presentation, and its Draft, PDF, and Browser editor types.
+Workbench remains the reusable Editor foundation. The top-level Sessions
+application owns Comet's mounted, collapsible Editor Part, titlebar and toolbar
+presentation, and layout integration for Draft, PDF, and Browser editor types.
 
 One distinction is mandatory: upstream `IEditorPaneService` reports Pane
 instantiation state and events. It does not select an EditorPane for an input.
@@ -102,10 +115,13 @@ group-owned Pane host
 EditorPane
     concrete DOM, focus, layout, options, open context, and view state
 
-Editor Part
-    group presentation, titlebar, toolbar, status, and Workbench layout integration
+Sessions Editor Part
+    mounted group placement, outer chrome, focus, and application layout integration
 
-Workbench layout owner
+Workbench EditorParts construction extension
+    creates the one concrete main Editor Part selected by application composition
+
+Sessions layout owner
     collapsed state, visibility, size, and deterministic reveal
 ```
 
@@ -116,7 +132,7 @@ input.
 
 ## Behavior to preserve
 
-- Comet has one Workbench and one Editor Part.
+- Comet has one Sessions product shell and one mounted Sessions Editor Part.
 - Collapsing the Editor changes layout only.
 - Draft, PDF, and Browser inputs remain open across collapse and expansion.
 - Opening content through `IEditorService` deterministically reveals the Editor.
@@ -125,7 +141,7 @@ input.
 - Reopening a matching Browser resource reuses its `BrowserEditorInput` and
   BrowserView without navigating or recreating the page.
 - Editor titlebar, toolbar, status, focus, and layout behavior remain owned by
-  the Editor presentation layer.
+  the Sessions Editor presentation layer.
 
 ## Migration sequence
 
@@ -159,14 +175,25 @@ resolver and EditorPane registration contracts. Pass editor options, open
 context, and cancellation through the normal Pane input boundary. Delete the
 old descriptor factories and registrations in the same change.
 
-### 5. Reduce the Editor Part to presentation ownership
+### 5. Establish the Sessions Editor Part as the presentation owner
 
-Keep group and input state in Editor group services and models. The Editor Part
-observes group state and owns only titlebar, tabs presentation, toolbar, status,
-Pane hosting, focus, view state, and layout integration.
+Keep group and input state in Workbench Editor services and models. The
+Sessions Editor Part directly hosts the Workbench group presentation and owns
+only outer titlebar, application toolbar/status, group placement, focus, and
+Sessions layout integration. Workbench group presentation owns group tabs, its
+Pane host, and Pane view state.
 
-Keep collapsed state and deterministic reveal in the Workbench layout owner.
-Neither the Part nor a Pane may create a second source of group or layout state.
+Expose a real Workbench EditorParts/MainEditorPart construction extension and
+register exactly one concrete EditorParts implementation for Comet. That
+implementation creates the concrete Sessions MainEditorPart subclass directly.
+Delete the existing `SessionEditorPartView` wrapper; do not retain it around a
+separately created Workbench Part and do not register parallel editor group
+services.
+
+Keep collapsed state and deterministic reveal in the Sessions layout owner,
+reached from Workbench Editor through a narrow editor-host contract implemented
+by the Sessions Editor Part. Workbench Editor must not import Sessions. Neither
+the Part nor a Pane may create a second source of group or layout state.
 
 ### 6. Remove the parallel implementation
 
@@ -186,7 +213,14 @@ fallback path remains.
 - `IEditorPaneService`, if present, has only its instantiation-observation role.
 - Draft, PDF, and Browser contributions use the target registration contracts.
 - Editor options, open context, and cancellation reach the Pane input boundary.
-- The Editor Part does not own duplicate group, input, or layout state.
+- The Sessions Editor Part does not own duplicate group, input, or layout
+  state.
+- The mounted Editor Part lives in Sessions and imports Workbench Editor through
+  public contracts; Workbench does not import Sessions.
+- The thin `SessionEditorPartView` forwarding wrapper is gone; the final
+  Sessions Editor Part owns real presentation and layout responsibilities.
+- Application composition registers one editor-group service and creates the
+  mounted Sessions Editor Part through the Workbench construction extension.
 - Collapsing the Editor preserves inputs, active state, and view state.
 - Browser editor resource reuse preserves the BrowserView and page state.
 - No parallel registry, compatibility layer, wrapper, alias, adapter, facade,
