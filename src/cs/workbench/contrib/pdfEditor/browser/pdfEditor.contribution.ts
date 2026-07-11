@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PdfEditorPane } from 'cs/workbench/browser/parts/editor/panes/pdfEditorPane';
+import { PdfEditorPane } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPane';
 import {
 	createEditorPaneDescriptor,
 	registerEditorPaneDescriptor,
@@ -16,9 +16,9 @@ import { registerWorkbenchContribution } from 'cs/workbench/common/contributions
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { localize } from 'cs/nls';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
-import { getEditorInputId } from 'cs/workbench/browser/parts/editor/editorGroupModel';
 import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
+import { createPdfEditorPaneState } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPaneState';
 
 editorInputSerializerRegistry.register(PdfEditorInput.ID, new PdfEditorInputSerializer());
 
@@ -27,11 +27,17 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	contentClassNames: ['comet-is-mode-pdf'],
 	acceptsInput: (input): input is PdfEditorInput => input instanceof PdfEditorInput,
 	createPane: (input, context) => new PdfEditorPane(input, {
+		contextMenuService: context.contextMenuService,
+		contextViewProvider: context.contextViewProvider,
 		labels: context.labels,
 		viewPartProps: context.viewPartProps,
 		nativeHost: context.nativeHost,
 		onOpenEditor: context.onOpenEditor,
-		onReaderStatusChange: (pdfInput, status) => context.onPdfReaderStatusChange(getEditorInputId(pdfInput), status),
+		onOpenSources: context.onOpenSources,
+		onReaderStatusChange: (pdfInput, status) => context.onDidChangePaneState(
+			pdfInput,
+			createPdfEditorPaneState(pdfInput, context.labels, status),
+		),
 	}),
 }));
 

@@ -8,8 +8,9 @@ import type {
 } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { WritingEditorSurfaceLabels } from 'cs/editor/browser/text/editor';
 import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
-import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
-import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
+import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
+import { createActiveDraftEditorCommandExecutor } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
+import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import { EditorGroupView } from 'cs/workbench/browser/parts/editor/editorGroupView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
@@ -17,8 +18,7 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
-import type { EditorGroup } from 'cs/workbench/browser/parts/editor/editorGroup';
+import type { IEditorGroup } from 'cs/workbench/services/editor/common/editorGroupsService';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
@@ -95,7 +95,7 @@ export type EditorPartBaseProps = {
   nativeHost: INativeHostService;
   dialogService: IDialogService;
   instantiationService: IInstantiationService;
-  group: EditorGroup;
+  group: IEditorGroup;
   commandService: IWorkbenchCommandService;
   viewStateEntries: SerializedEditorViewStateEntry[];
   onActivateTab: (tabId: string) => void;
@@ -108,7 +108,6 @@ export type EditorPartBaseProps = {
   onCloseAllTabs?: () => Promise<boolean> | boolean | void;
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
-  onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
   showTitlebarActions?: boolean;
@@ -131,11 +130,13 @@ export type EditorPartProps = EditorPartBaseProps &
 export class EditorPartView {
   private readonly element = document.createElement('section');
   private readonly groupView: EditorGroupView;
+  private readonly draftCommandExecutor: ReturnType<typeof createActiveDraftEditorCommandExecutor>;
 
   constructor(props: EditorPartProps) {
     this.element.className = 'comet-panel comet-editor-panel';
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, this.element);
     this.groupView = new EditorGroupView(props);
+    this.draftCommandExecutor = createActiveDraftEditorCommandExecutor(() => this.groupView.getActivePane());
     this.element.append(this.groupView.getElement());
   }
 
@@ -152,19 +153,19 @@ export class EditorPartView {
   }
 
   executeActiveDraftCommand(commandId: DraftEditorCommandId) {
-    return this.groupView.executeActiveDraftCommand(commandId);
+    return this.draftCommandExecutor.execute(commandId);
   }
 
   canExecuteActiveDraftCommand(commandId: DraftEditorCommandId) {
-    return this.groupView.canExecuteActiveDraftCommand(commandId);
+    return this.draftCommandExecutor.canExecute(commandId);
   }
 
   runActiveDraftEditorAction(actionId: DraftEditorSurfaceActionId) {
-    return this.groupView.runActiveDraftEditorAction(actionId);
+    return this.draftCommandExecutor.runAction(actionId);
   }
 
   getActiveDraftStableSelectionTarget() {
-    return this.groupView.getActiveDraftStableSelectionTarget();
+    return this.draftCommandExecutor.getStableSelectionTarget();
   }
 
   whenEditorTabViewStateSettled(tabId: string) {

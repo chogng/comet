@@ -263,6 +263,10 @@ export class BrowserEditorInput extends EditorInput {
 		return this.url && this.getURLTitles.get(this.url)[verbosity];
 	}
 
+	override prefersPrimaryInputFocus(): boolean {
+		return !hasBrowserEditorPage(this.url);
+	}
+
 	private readonly getURLTitles = new LRUCachedFunction((url: string) => {
 		let _short: string | undefined = undefined;
 		let _medium: string | undefined = undefined;

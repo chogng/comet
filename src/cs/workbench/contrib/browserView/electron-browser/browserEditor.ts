@@ -24,7 +24,7 @@ import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorP
 import type {
 	BrowserEditorPaneState,
 	IBrowserEditorPane,
-} from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
+} from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
 import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
@@ -247,7 +247,7 @@ export class BrowserEditor extends EditorPane<
 		this.favoritesFeature = feature;
 	}
 
-	override getBrowserHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined {
+	getHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined {
 		return this.historyFeature && this.favoritesFeature
 			? { history: this.historyFeature, favorites: this.favoritesFeature }
 			: undefined;

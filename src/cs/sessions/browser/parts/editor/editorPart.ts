@@ -1,5 +1,6 @@
-import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
-import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
+import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
+import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
+import { createActiveDraftEditorCommandExecutor } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
 import {
 	EditorGroupView,
 } from 'cs/workbench/browser/parts/editor/editorGroupView';
@@ -22,11 +23,13 @@ export class SessionEditorPartView {
 
 	private readonly element = document.createElement('section');
 	private readonly groupView: EditorGroupView;
+	private readonly draftCommandExecutor: ReturnType<typeof createActiveDraftEditorCommandExecutor>;
 
 	constructor(props: SessionEditorPartProps) {
 		this.element.className = 'comet-panel comet-editor-panel comet-session-editor-panel';
 		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, this.element);
 		this.groupView = new EditorGroupView(props);
+		this.draftCommandExecutor = createActiveDraftEditorCommandExecutor(() => this.groupView.getActivePane());
 		this.element.append(this.groupView.getElement());
 	}
 
@@ -39,19 +42,19 @@ export class SessionEditorPartView {
 	}
 
 	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
-		return this.groupView.executeActiveDraftCommand(commandId);
+		return this.draftCommandExecutor.execute(commandId);
 	}
 
 	canExecuteActiveDraftCommand(commandId: DraftEditorCommandId) {
-		return this.groupView.canExecuteActiveDraftCommand(commandId);
+		return this.draftCommandExecutor.canExecute(commandId);
 	}
 
 	runActiveDraftEditorAction(actionId: DraftEditorSurfaceActionId) {
-		return this.groupView.runActiveDraftEditorAction(actionId);
+		return this.draftCommandExecutor.runAction(actionId);
 	}
 
 	getActiveDraftStableSelectionTarget() {
-		return this.groupView.getActiveDraftStableSelectionTarget();
+		return this.draftCommandExecutor.getStableSelectionTarget();
 	}
 
 	whenEditorTabViewStateSettled(tabId: string) {

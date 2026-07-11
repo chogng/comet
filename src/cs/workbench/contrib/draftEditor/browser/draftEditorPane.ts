@@ -3,9 +3,9 @@ import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorS
 import { ProseMirrorEditor } from 'cs/editor/browser/text/editor';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import { createDraftEditorCommandAction } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
-import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
-import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
+import { createDraftEditorCommandAction } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
+import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
+import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
 import type { WritingEditorSurfaceViewState } from 'cs/editor/browser/text/editor';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';

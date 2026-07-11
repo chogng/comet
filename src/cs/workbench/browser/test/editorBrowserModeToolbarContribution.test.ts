@@ -55,7 +55,6 @@ function createContext(): EditorModeToolbarContributionContext {
 			browserHistoryAndFavoritesPanelRecentOlderTitle: 'Older',
 			browserHistoryAndFavoritesPanelFavoritesTitle: 'Favorites',
 			browserHistoryAndFavoritesPanelEmptyState: 'No links yet',
-			pdfTitle: 'PDF',
 		},
 		onOpenSources: () => {},
 		onNavigateBack: () => {},
@@ -69,8 +68,6 @@ function createContext(): EditorModeToolbarContributionContext {
 		onClearCookies: () => {},
 		onClearCache: () => {},
 		onNavigateToUrl: () => {},
-		onPdfHighlightSelection: () => {},
-		onPdfNoteSelection: () => {},
 		browserHistoryAndFavoritesPanel: null,
 	};
 }

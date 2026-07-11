@@ -29,6 +29,7 @@ import {
 	registerEditorPaneDescriptor,
 	type EditorPaneResolverContext,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
+import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
 
 import 'cs/workbench/contrib/browserView/electron-browser/features/webContentsViewRendererFeature';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserWelcomeFeature';
@@ -50,11 +51,14 @@ registerSingleton(IPlaywrightService, PlaywrightWorkbenchService, InstantiationT
 
 function createBrowserEditorProps(
 	context: EditorPaneResolverContext,
+	input: BrowserEditorInput,
 ): BrowserEditorProps {
 	return {
 		labels: context.labels,
 		nativeHost: context.nativeHost,
-		onDidChangeBrowserState: context.onDidChangeBrowserState,
+		onDidChangeBrowserState: state => {
+			context.onDidChangePaneState(input, createBrowserEditorPaneState(input, context.labels, state));
+		},
 	};
 }
 
@@ -65,7 +69,7 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	createPane: (input, context) => context.instantiationService.createInstance(
 		BrowserEditor,
 		input,
-		createBrowserEditorProps(context),
+		createBrowserEditorProps(context, input),
 	),
 }));
 

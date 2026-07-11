@@ -26,8 +26,6 @@ type EditorModeToolbarSourceProps = {
   onToolbarClearCookies: () => void | Promise<void>;
   onToolbarClearCache: () => void | Promise<void>;
   onToolbarNavigateToUrl: (url: string) => void;
-  onPdfHighlightSelection?: () => void;
-  onPdfNoteSelection?: () => void;
   browserHistoryAndFavoritesPanel?: BrowserHistoryAndFavoritesPanel | null;
 };
 
@@ -100,9 +98,7 @@ export function resolveActiveBrowserMetadata(
 export function createEditorModeToolbarContext(
   props: EditorModeToolbarSourceProps,
 ): EditorModeToolbarContext {
-  const mode = props.activePaneId === 'browser' || props.activePaneId === 'pdf'
-    ? props.activePaneId
-    : null;
+  const mode = props.activePaneId === 'browser' ? 'browser' : null;
   const activeBrowserMetadata = resolveActiveBrowserMetadata(props);
 
   return {
@@ -140,7 +136,6 @@ export function createEditorModeToolbarContext(
       browserHistoryAndFavoritesPanelRecentOlderTitle: props.labels.browserHistoryAndFavoritesPanelRecentOlderTitle,
       browserHistoryAndFavoritesPanelFavoritesTitle: props.labels.browserHistoryAndFavoritesPanelFavoritesTitle,
       browserHistoryAndFavoritesPanelEmptyState: props.labels.browserHistoryAndFavoritesPanelEmptyState,
-      pdfTitle: props.labels.pdfTitle,
     },
     onOpenSources: props.onOpenAddressBarSourceMenu,
     onNavigateBack: props.onToolbarNavigateBack,
@@ -154,8 +149,6 @@ export function createEditorModeToolbarContext(
     onClearCookies: props.onToolbarClearCookies,
     onClearCache: props.onToolbarClearCache,
     onNavigateToUrl: props.onToolbarNavigateToUrl,
-    onPdfHighlightSelection: props.onPdfHighlightSelection ?? (() => {}),
-    onPdfNoteSelection: props.onPdfNoteSelection ?? (() => {}),
     browserHistoryAndFavoritesPanel: props.browserHistoryAndFavoritesPanel ?? null,
   };
 }

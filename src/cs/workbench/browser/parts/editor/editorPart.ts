@@ -10,11 +10,8 @@ import {
 } from 'cs/editor/common/writingEditorDocument';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import { EditorGroup } from 'cs/workbench/browser/parts/editor/editorGroup';
-import { getEditorInputId } from 'cs/workbench/browser/parts/editor/editorGroupModel';
-import { EditorGroups } from 'cs/workbench/browser/parts/editor/editorGroups';
+import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
 import type { EditorPartBaseProps } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 import type {
 	EditorViewStateKey,
 	SerializedEditorViewStateEntry,
@@ -24,21 +21,15 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import type { IUntypedEditorInput } from 'cs/workbench/common/editor';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import type { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
+import type { IEditorGroup, IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import type { IEditorOpenOptions, IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
-import { deserializeEditorGroups, serializeEditorGroups, type SerializedEditorGroups } from 'cs/workbench/browser/parts/editor/editorGroupSerialization';
-import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import type { IDisposable } from 'cs/base/common/lifecycle';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 
-const EditorPartStorageKey = 'workbench.editor.groups';
-
-type StoredEditorPart = {
-	readonly editorGroups: SerializedEditorGroups;
-	readonly viewStateEntries: SerializedEditorViewStateEntry[];
-};
+const EditorViewStateStorageKey = 'workbench.editor.viewState';
 
 export type EditorPartControllerContext = {
 	ui: LocaleMessages;
@@ -47,13 +38,14 @@ export type EditorPartControllerContext = {
 	dialogService: IDialogService;
 	instantiationService: IInstantiationService;
 	editorResolverService: IEditorResolverService;
+	editorGroupsService: IEditorGroupsService;
 	storageService: IStorageService;
 	commandService: IWorkbenchCommandService;
 	ensureEditorPartVisible: () => void;
 };
 
 export type EditorPartControllerSnapshot = {
-	group: EditorGroup;
+	group: IEditorGroup;
 	viewStateEntries: SerializedEditorViewStateEntry[];
 	draftBody: string;
 	editorPartProps: EditorPartBaseProps;
@@ -70,7 +62,6 @@ type EditorPartActions = {
 	onCloseAllTabs: () => Promise<boolean>;
 	onRenameTab: (editorId: string) => Promise<void>;
 	onOpenEditor: EditorOpenHandler;
-	onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
 	onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
 	onDeleteEditorViewState: (key: EditorViewStateKey) => void;
 };
@@ -83,15 +74,15 @@ function createEditorPartStructureKey(snapshot: EditorPartControllerSnapshot): s
 			name: editor.getName(),
 			dirty: editor.isDirty(),
 		})),
-		activeEditor: snapshot.group.active
-			? getEditorInputId(snapshot.group.active)
+		activeEditor: snapshot.group.activeEditor
+			? getEditorInputId(snapshot.group.activeEditor)
 			: null,
 	});
 }
 
 function createEditorPartProps(
 	context: EditorPartControllerContext,
-	group: EditorGroup,
+	group: IEditorGroup,
 	viewStateEntries: SerializedEditorViewStateEntry[],
 	actions: EditorPartActions,
 ): EditorPartBaseProps {
@@ -214,6 +205,7 @@ function areEditorPartControllerContextsEqual(
 		&& previous.nativeHost === next.nativeHost
 		&& previous.dialogService === next.dialogService
 		&& previous.instantiationService === next.instantiationService
+		&& previous.editorGroupsService === next.editorGroupsService
 		&& previous.storageService === next.storageService
 		&& previous.commandService === next.commandService
 		&& previous.ensureEditorPartVisible === next.ensureEditorPartVisible
@@ -223,7 +215,7 @@ function areEditorPartControllerContextsEqual(
 export class EditorPartController implements IEditorService {
 	declare readonly _serviceBrand: undefined;
 	private context: EditorPartControllerContext;
-	private readonly groups: EditorGroups;
+	private readonly editorGroupsService: IEditorGroupsService;
 	private readonly viewStateEntries = new Map<string, SerializedEditorViewStateEntry>();
 	private readonly listeners = new Set<(reason: EditorPartChangeReason) => void>();
 	private snapshot: EditorPartControllerSnapshot;
@@ -232,19 +224,13 @@ export class EditorPartController implements IEditorService {
 
 	constructor(context: EditorPartControllerContext) {
 		this.context = context;
-		const stored = context.storageService.get(EditorPartStorageKey, StorageScope.WORKSPACE);
+		this.editorGroupsService = context.editorGroupsService;
+		const stored = context.storageService.get(EditorViewStateStorageKey, StorageScope.WORKSPACE);
 		if (stored) {
-			const parsed = JSON.parse(stored) as StoredEditorPart;
-			this.groups = deserializeEditorGroups(
-				parsed.editorGroups,
-				editorInputSerializerRegistry,
-				context.instantiationService,
-			);
-			for (const entry of parsed.viewStateEntries) {
+			const parsed = JSON.parse(stored) as SerializedEditorViewStateEntry[];
+			for (const entry of parsed) {
 				this.viewStateEntries.set(JSON.stringify(entry.key), entry);
 			}
-		} else {
-			this.groups = new EditorGroups();
 		}
 		this.actions = {
 			onActivateTab: this.onActivateTab,
@@ -254,13 +240,11 @@ export class EditorPartController implements IEditorService {
 			onCloseAllTabs: this.onCloseAllTabs,
 			onRenameTab: this.onRenameTab,
 			onOpenEditor: this.openEditor,
-			onDidChangeBrowserState: () => {},
 			onSetEditorViewState: this.setEditorViewState,
 			onDeleteEditorViewState: this.deleteEditorViewState,
 		};
 		this.snapshot = this.createSnapshot();
-		this.groupsListener = this.groups.onDidChange(() => {
-			this.persist();
+		this.groupsListener = this.editorGroupsService.onDidChange(() => {
 			this.refreshSnapshot('structure');
 		});
 	}
@@ -273,6 +257,9 @@ export class EditorPartController implements IEditorService {
 	readonly getSnapshot = () => this.snapshot;
 
 	readonly setContext = (context: EditorPartControllerContext) => {
+		if (context.editorGroupsService !== this.editorGroupsService) {
+			throw new Error('EditorPartController cannot change editor groups service.');
+		}
 		if (areEditorPartControllerContextsEqual(this.context, context)) {
 			return;
 		}
@@ -288,25 +275,25 @@ export class EditorPartController implements IEditorService {
 		const typedInput = input instanceof EditorInput
 			? input
 			: this.resolveEditorInput(input, options);
-		return this.groups.openEditor(typedInput, options);
+		return this.editorGroupsService.openEditor(typedInput, options);
 	};
 
 	readonly activateEditor = (editor: EditorInput) => {
-		const match = this.groups.findEditor(editor);
+		const match = this.editorGroupsService.findEditor(editor);
 		if (!match) {
 			return;
 		}
 		match.group.setActive(match.editor);
-		this.groups.activateGroup(match.group);
+		this.editorGroupsService.activateGroup(match.group);
 	};
 
-	readonly closeEditor = (editor: EditorInput) => this.groups.closeEditor(editor);
+	readonly closeEditor = (editor: EditorInput) => this.editorGroupsService.closeEditor(editor);
 
-	readonly getEditors = () => this.groups.getGroups().flatMap(group =>
+	readonly getEditors = () => this.editorGroupsService.getGroups().flatMap(group =>
 		group.getEditors().map(editor => ({ groupId: group.id, editor })),
 	);
 
-	readonly getActiveGroupId = () => this.groups.active.id;
+	readonly getActiveGroupId = () => this.editorGroupsService.activeGroup.id;
 
 	readonly canSaveActiveDraft = () => this.getActiveDraft()?.isDirty() ?? false;
 
@@ -344,7 +331,6 @@ export class EditorPartController implements IEditorService {
 
 	readonly dispose = () => {
 		this.groupsListener.dispose();
-		this.groups.dispose();
 		this.listeners.clear();
 	};
 
@@ -375,7 +361,7 @@ export class EditorPartController implements IEditorService {
 	private readonly onReorderTab = (editorId: string, targetSlotIndex: number) => {
 		const editor = this.findEditorById(editorId);
 		if (editor) {
-			this.groups.active.moveEditor(editor, targetSlotIndex);
+			this.editorGroupsService.activeGroup.moveEditor(editor, targetSlotIndex);
 		}
 	};
 
@@ -385,7 +371,7 @@ export class EditorPartController implements IEditorService {
 	};
 
 	private readonly onCloseOtherTabs = async (editorId: string) => {
-		const group = this.groups.active;
+		const group = this.editorGroupsService.activeGroup;
 		for (const editor of group.getEditors()) {
 			if (getEditorInputId(editor) !== editorId && !(await group.closeEditor(editor))) {
 				return false;
@@ -395,8 +381,8 @@ export class EditorPartController implements IEditorService {
 	};
 
 	private readonly onCloseAllTabs = async () => {
-		for (const editor of this.groups.active.getEditors()) {
-			if (!(await this.groups.active.closeEditor(editor))) {
+		for (const editor of this.editorGroupsService.activeGroup.getEditors()) {
+			if (!(await this.editorGroupsService.activeGroup.closeEditor(editor))) {
 				return false;
 			}
 		}
@@ -421,14 +407,14 @@ export class EditorPartController implements IEditorService {
 	};
 
 	private findEditorById(editorId: string): EditorInput | undefined {
-		return this.groups.active.getEditors().find(editor => getEditorInputId(editor) === editorId);
+		return this.editorGroupsService.activeGroup.getEditors().find(editor => getEditorInputId(editor) === editorId);
 	}
 
 	private getActiveDraft(): (EditorInput & {
 		readonly document: WritingEditorDocument;
 		setDocument(value: WritingEditorDocument): void;
 	}) | undefined {
-		const active = this.groups.active.active;
+		const active = this.editorGroupsService.activeGroup.activeEditor;
 		if (!active) {
 			return undefined;
 		}
@@ -445,7 +431,7 @@ export class EditorPartController implements IEditorService {
 	}
 
 	private createSnapshot(): EditorPartControllerSnapshot {
-		const group = this.groups.active;
+		const group = this.editorGroupsService.activeGroup;
 		const viewStateEntries = [...this.viewStateEntries.values()];
 		const draftBody = this.getDraftBody();
 		return {
@@ -469,13 +455,9 @@ export class EditorPartController implements IEditorService {
 	}
 
 	private persist(): void {
-		const stored: StoredEditorPart = {
-			editorGroups: serializeEditorGroups(this.groups, editorInputSerializerRegistry),
-			viewStateEntries: [...this.viewStateEntries.values()],
-		};
 		this.context.storageService.store(
-			EditorPartStorageKey,
-			JSON.stringify(stored),
+			EditorViewStateStorageKey,
+			JSON.stringify([...this.viewStateEntries.values()]),
 			StorageScope.WORKSPACE,
 			StorageTarget.MACHINE,
 		);

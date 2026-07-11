@@ -1,6 +1,6 @@
-import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
+import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writingEditorDocument';
-import { DraftEditorPane } from 'cs/workbench/browser/parts/editor/panes/draftEditorPane';
+import { DraftEditorPane } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
 import type { AnyEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 
 export type DraftEditorSurfaceActionId = 'undo' | 'redo';

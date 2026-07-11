@@ -7,7 +7,7 @@ import { Emitter, type Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 
-export const enum EditorGroupChangeKind {
+export const enum EditorGroupModelChangeKind {
 	EditorOpen,
 	EditorClose,
 	EditorMove,
@@ -16,26 +16,26 @@ export const enum EditorGroupChangeKind {
 	EditorDirty,
 }
 
-export interface EditorGroupChangeEvent {
-	readonly kind: EditorGroupChangeKind;
+export interface EditorGroupModelChangeEvent {
+	readonly kind: EditorGroupModelChangeKind;
 	readonly editor: EditorInput;
 	readonly editorIndex: number;
 	readonly oldEditorIndex?: number;
 }
 
-export interface EditorGroupOpenOptions {
+export interface EditorGroupModelOpenOptions {
 	readonly active?: boolean;
 	readonly index?: number;
 }
 
-export class EditorGroup extends Disposable {
+export class EditorGroupModel extends Disposable {
 	private readonly editors: EditorInput[] = [];
 	private readonly mostRecentlyActiveEditors: EditorInput[] = [];
 	private readonly editorListeners = new Map<EditorInput, DisposableStore>();
-	private activeEditor: EditorInput | null = null;
-	private readonly changeEmitter = this._register(new Emitter<EditorGroupChangeEvent>());
+	private activeInput: EditorInput | null = null;
+	private readonly modelChangeEmitter = this._register(new Emitter<EditorGroupModelChangeEvent>());
 
-	readonly onDidChange: Event<EditorGroupChangeEvent> = this.changeEmitter.event;
+	readonly onDidModelChange: Event<EditorGroupModelChangeEvent> = this.modelChangeEmitter.event;
 
 	constructor(readonly id: string) {
 		super();
@@ -45,8 +45,8 @@ export class EditorGroup extends Disposable {
 		return this.editors.length;
 	}
 
-	get active(): EditorInput | null {
-		return this.activeEditor;
+	get activeEditor(): EditorInput | null {
+		return this.activeInput;
 	}
 
 	getEditors(): readonly EditorInput[] {
@@ -61,7 +61,7 @@ export class EditorGroup extends Disposable {
 		return this.findEditorIndex(editor) >= 0;
 	}
 
-	openEditor(editor: EditorInput, options: EditorGroupOpenOptions = {}): EditorInput {
+	openEditor(editor: EditorInput, options: EditorGroupModelOpenOptions = {}): EditorInput {
 		const existingIndex = this.findEditorIndex(editor);
 		if (existingIndex >= 0) {
 			const existing = this.editors[existingIndex]!;
@@ -74,8 +74,8 @@ export class EditorGroup extends Disposable {
 		const editorIndex = this.resolveOpenIndex(options.index);
 		this.editors.splice(editorIndex, 0, editor);
 		this.registerEditorListeners(editor);
-		this.changeEmitter.fire({
-			kind: EditorGroupChangeKind.EditorOpen,
+		this.modelChangeEmitter.fire({
+			kind: EditorGroupModelChangeKind.EditorOpen,
 			editor,
 			editorIndex,
 		});
@@ -94,7 +94,6 @@ export class EditorGroup extends Disposable {
 		if (target.closeHandler && !(await target.closeHandler.confirmClose())) {
 			return false;
 		}
-
 		this.removeEditor(target, true);
 		return true;
 	}
@@ -108,11 +107,10 @@ export class EditorGroup extends Disposable {
 		if (editorIndex === oldEditorIndex) {
 			return;
 		}
-
 		const [target] = this.editors.splice(oldEditorIndex, 1);
 		this.editors.splice(editorIndex, 0, target!);
-		this.changeEmitter.fire({
-			kind: EditorGroupChangeKind.EditorMove,
+		this.modelChangeEmitter.fire({
+			kind: EditorGroupModelChangeKind.EditorMove,
 			editor: target!,
 			editorIndex,
 			oldEditorIndex,
@@ -121,22 +119,20 @@ export class EditorGroup extends Disposable {
 
 	setActive(editor: EditorInput): void {
 		const editorIndex = this.findEditorIndex(editor);
-		if (editorIndex < 0 || this.activeEditor === this.editors[editorIndex]) {
+		if (editorIndex < 0 || this.activeInput === this.editors[editorIndex]) {
 			return;
 		}
-
-		this.activeEditor = this.editors[editorIndex]!;
-		this.touchMostRecentlyActive(this.activeEditor);
-		this.changeEmitter.fire({
-			kind: EditorGroupChangeKind.EditorActivate,
-			editor: this.activeEditor,
+		this.activeInput = this.editors[editorIndex]!;
+		this.touchMostRecentlyActive(this.activeInput);
+		this.modelChangeEmitter.fire({
+			kind: EditorGroupModelChangeKind.EditorActivate,
+			editor: this.activeInput,
 			editorIndex,
 		});
 	}
 
 	override dispose(): void {
-		const editors = [...this.editors];
-		for (const editor of editors) {
+		for (const editor of [...this.editors]) {
 			this.removeEditor(editor, true);
 		}
 		super.dispose();
@@ -147,26 +143,24 @@ export class EditorGroup extends Disposable {
 	}
 
 	private resolveOpenIndex(index: number | undefined): number {
-		if (index === undefined) {
-			return this.editors.length;
-		}
-		return Math.max(0, Math.min(index, this.editors.length));
+		return index === undefined
+			? this.editors.length
+			: Math.max(0, Math.min(index, this.editors.length));
 	}
 
 	private registerEditorListeners(editor: EditorInput): void {
 		const listeners = new DisposableStore();
 		listeners.add(editor.onWillDispose(() => this.removeEditor(editor, false)));
-		listeners.add(editor.onDidChangeLabel(() => this.emitEditorChange(EditorGroupChangeKind.EditorLabel, editor)));
-		listeners.add(editor.onDidChangeDirty(() => this.emitEditorChange(EditorGroupChangeKind.EditorDirty, editor)));
+		listeners.add(editor.onDidChangeLabel(() => this.emitEditorChange(EditorGroupModelChangeKind.EditorLabel, editor)));
+		listeners.add(editor.onDidChangeDirty(() => this.emitEditorChange(EditorGroupModelChangeKind.EditorDirty, editor)));
 		this.editorListeners.set(editor, listeners);
 	}
 
-	private emitEditorChange(kind: EditorGroupChangeKind, editor: EditorInput): void {
+	private emitEditorChange(kind: EditorGroupModelChangeKind, editor: EditorInput): void {
 		const editorIndex = this.editors.indexOf(editor);
-		if (editorIndex < 0) {
-			return;
+		if (editorIndex >= 0) {
+			this.modelChangeEmitter.fire({ kind, editor, editorIndex });
 		}
-		this.changeEmitter.fire({ kind, editor, editorIndex });
 	}
 
 	private removeEditor(editor: EditorInput, disposeEditor: boolean): void {
@@ -174,7 +168,6 @@ export class EditorGroup extends Disposable {
 		if (editorIndex < 0) {
 			return;
 		}
-
 		this.editorListeners.get(editor)?.dispose();
 		this.editorListeners.delete(editor);
 		this.editors.splice(editorIndex, 1);
@@ -182,13 +175,13 @@ export class EditorGroup extends Disposable {
 		if (mostRecentlyActiveIndex >= 0) {
 			this.mostRecentlyActiveEditors.splice(mostRecentlyActiveIndex, 1);
 		}
-		if (this.activeEditor === editor) {
-			this.activeEditor = this.mostRecentlyActiveEditors[0]
+		if (this.activeInput === editor) {
+			this.activeInput = this.mostRecentlyActiveEditors[0]
 				?? this.editors[Math.min(editorIndex, this.editors.length - 1)]
 				?? null;
 		}
-		this.changeEmitter.fire({
-			kind: EditorGroupChangeKind.EditorClose,
+		this.modelChangeEmitter.fire({
+			kind: EditorGroupModelChangeKind.EditorClose,
 			editor,
 			editorIndex,
 		});

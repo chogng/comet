@@ -1,5 +1,20 @@
-import type { BrowserHistoryAndFavoritesPanelFeatures } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
+
+export type EditorPaneTabState = {
+	readonly hasLocalHistory: boolean;
+	readonly canUndo: boolean;
+	readonly canRedo: boolean;
+};
+
+export type EditorPaneRuntimeState = {
+	readonly status: EditorStatusState;
+	readonly tab?: EditorPaneTabState;
+	readonly metadata?: {
+		readonly kind: string;
+		readonly value: unknown;
+	};
+};
 
 export type EditorPaneLayout = {
   width: number;
@@ -15,13 +30,13 @@ export abstract class EditorPane<TInput extends EditorInput = EditorInput, TView
     return null;
   }
 
-	getBrowserHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined {
-		return undefined;
-	}
-
   clearInput() {}
 
   focus() {}
+
+	focusPrimaryInput() {
+		this.focus();
+	}
 
   layout(_layout: EditorPaneLayout) {}
 

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DraftEditorPane } from 'cs/workbench/browser/parts/editor/panes/draftEditorPane';
+import { DraftEditorPane } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
 import {
 	createEditorPaneDescriptor,
 	registerEditorPaneDescriptor,
@@ -18,9 +18,9 @@ import { getWorkbenchInstantiationService } from 'cs/workbench/services/instanti
 import { localize } from 'cs/nls';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
-import { getEditorInputId } from 'cs/workbench/browser/parts/editor/editorGroupModel';
 import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
+import { createDraftEditorPaneState } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPaneState';
 
 editorInputSerializerRegistry.register(DraftEditorInput.ID, new DraftEditorInputSerializer());
 
@@ -33,7 +33,10 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 		contextViewProvider: context.contextViewProvider,
 		labels: context.labels,
 		dialogService: context.dialogService,
-		onStatusChange: (draftInput, status) => context.onDraftStatusChange(getEditorInputId(draftInput), status),
+		onStatusChange: (draftInput, status) => context.onDidChangePaneState(
+			draftInput,
+			createDraftEditorPaneState(context.labels, status),
+		),
 	}),
 }));
 

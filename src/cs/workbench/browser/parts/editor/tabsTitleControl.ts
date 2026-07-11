@@ -15,7 +15,7 @@ import {
   toDisposable,
   type DisposableLike,
 } from 'cs/base/common/lifecycle';
-import type { EditorGroupTabItem } from 'cs/workbench/browser/parts/editor/editorGroupModel';
+import type { EditorGroupTabItem } from 'cs/workbench/browser/parts/editor/editorTabsModel';
 import {
   TitleControl,
   type TitleControlProps,

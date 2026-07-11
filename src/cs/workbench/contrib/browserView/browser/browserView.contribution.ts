@@ -33,6 +33,7 @@ import {
 } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { localize } from 'cs/nls';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
+import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
 
 const unavailableMessage = 'Integrated Browser is not available in web.';
 
@@ -151,7 +152,10 @@ registerEditorPaneDescriptor(createEditorPaneDescriptor({
 	paneId: 'browser',
 	contentClassNames: ['comet-is-mode-browser'],
 	acceptsInput: (input): input is BrowserEditorInput => input instanceof BrowserEditorInput,
-	createPane: () => new WebBrowserEditorPane(),
+	createPane: (input, context) => {
+		context.onDidChangePaneState(input, createBrowserEditorPaneState(input, context.labels));
+		return new WebBrowserEditorPane();
+	},
 }));
 
 class WebBrowserEditorResolverContribution extends Disposable {

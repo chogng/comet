@@ -30,6 +30,8 @@ import type { INativeHostService } from 'cs/platform/native/common/native';
 import { URI } from 'cs/base/common/uri';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { EmptyEditorUrl } from 'cs/workbench/common/editor/editorResources';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import { createEditorPdfModeToolbarContribution } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorToolbar';
 
 export interface PdfEditorPaneInput extends EditorInput {
   readonly id: string;
@@ -40,11 +42,12 @@ export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
   reader: PdfReaderViewState;
 };
 
-export type PdfEditorPaneContext = {
+export type PdfEditorPaneContext = DropdownContextServices & {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
   onOpenEditor?: EditorOpenHandler;
+  onOpenSources: () => void;
   onReaderStatusChange?: (
     input: PdfEditorPaneInput,
     status: PdfReaderRuntimeStatus,
@@ -102,6 +105,7 @@ export class PdfEditorPane extends EditorPane<
   private readonly editor = new PdfEditorPaneStateController();
   private readerSnapshot: PdfReaderSnapshot;
   private documentReader: ReturnType<typeof createPdfDocumentReader> | null = null;
+  private readonly toolbar: ReturnType<typeof createEditorPdfModeToolbarContribution>;
 
   constructor(input: PdfEditorPaneInput, private readonly context: PdfEditorPaneContext) {
     super();
@@ -110,6 +114,7 @@ export class PdfEditorPane extends EditorPane<
     this.element.className = 'comet-editor-pdf-pane';
     this.bodyElement.className = 'comet-editor-pdf-body';
     this.element.append(this.bodyElement);
+    this.toolbar = createEditorPdfModeToolbarContribution(this.createToolbarContext(), context);
     this.render();
   }
 
@@ -117,9 +122,14 @@ export class PdfEditorPane extends EditorPane<
     return this.element;
   }
 
+  override getToolbarElement() {
+    return this.toolbar.getElement();
+  }
+
   override setInput(input: PdfEditorPaneInput) {
     this.input = input;
     this.readerSnapshot = this.createReaderSnapshot(input);
+    this.toolbar.setContext(this.createToolbarContext());
     this.render();
   }
 
@@ -164,7 +174,21 @@ export class PdfEditorPane extends EditorPane<
   override dispose() {
     this.documentReader?.dispose();
     this.documentReader = null;
+    this.toolbar.dispose();
     this.element.replaceChildren();
+  }
+
+  private createToolbarContext() {
+    return {
+      labels: {
+        toolbarSources: this.context.labels.toolbarSources,
+        toolbarMore: this.context.labels.toolbarMore,
+        pdfTitle: this.context.labels.pdfTitle,
+      },
+      onOpenSources: this.context.onOpenSources,
+      onHighlightSelection: () => this.addHighlightFromSelection(),
+      onNoteSelection: () => this.addNoteFromSelection(),
+    };
   }
 
   private createReaderSnapshot(input: PdfEditorPaneInput) {

@@ -1,7 +1,5 @@
-import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { PdfReaderRuntimeStatus } from 'cs/editor/browser/pdf/pdfDocumentReader';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
@@ -11,10 +9,10 @@ import type {
   EditorPaneDescriptor,
   EditorPaneResolution,
   EditorPane,
+  EditorPaneRuntimeState,
 } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { toDisposable } from 'cs/base/common/lifecycle';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
-import type { BrowserEditorPaneState } from 'cs/workbench/browser/parts/editor/panes/browserEditorPane';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 
 export type EditorPaneResolverContext = DropdownContextServices & {
@@ -24,12 +22,8 @@ export type EditorPaneResolverContext = DropdownContextServices & {
   dialogService: IDialogService;
   instantiationService: IInstantiationService;
   onOpenEditor?: EditorOpenHandler;
-  onDraftStatusChange: (tabId: string, status: DraftEditorStatusState) => void;
-  onPdfReaderStatusChange: (
-    tabId: string,
-    status: PdfReaderRuntimeStatus,
-  ) => void;
-  onDidChangeBrowserState: (state: BrowserEditorPaneState) => void;
+  onOpenSources: () => void;
+  onDidChangePaneState: (input: EditorInput, state: EditorPaneRuntimeState) => void;
 };
 
 export type EditorPaneId = string;

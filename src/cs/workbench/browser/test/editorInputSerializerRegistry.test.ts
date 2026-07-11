@@ -15,9 +15,9 @@ import {
 	deserializeEditorGroups,
 	serializeEditorGroup,
 	serializeEditorGroups,
-} from 'cs/workbench/browser/parts/editor/editorGroupSerialization';
-import { EditorGroup } from 'cs/workbench/browser/parts/editor/editorGroup';
-import { EditorGroups } from 'cs/workbench/browser/parts/editor/editorGroups';
+} from 'cs/workbench/services/editor/common/editorGroupSerialization';
+import { EditorGroupModel } from 'cs/workbench/common/editor/editorGroupModel';
+import type { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import {
 	DraftEditorInput,
 	DraftEditorInputSerializer,
@@ -69,7 +69,7 @@ test('EditorGroup serialization restores input order, active editor, and MRU by 
 	const registry = new EditorInputSerializerRegistry();
 	registry.register(PdfEditorInput.ID, new PdfEditorInputSerializer());
 	const instantiationService = new InstantiationService(new ServiceCollection());
-	const group = new EditorGroup('group-a');
+	const group = new EditorGroupModel('group-a');
 	const first = new PdfEditorInput({ id: 'pdf-a', url: 'https://example.com/a.pdf' });
 	const second = new PdfEditorInput({ id: 'pdf-b', url: 'https://example.com/b.pdf' });
 	group.openEditor(first);
@@ -82,7 +82,7 @@ test('EditorGroup serialization restores input order, active editor, and MRU by 
 		instantiationService,
 	);
 	assert.deepEqual(restored.getEditors().map(editor => editor.resource?.path), ['pdf-a', 'pdf-b']);
-	assert.equal(restored.active?.resource?.path, 'pdf-a');
+	assert.equal(restored.activeEditor?.resource?.path, 'pdf-a');
 	assert.deepEqual(
 		restored.getMostRecentlyActiveEditors().map(editor => editor.resource?.path),
 		['pdf-a', 'pdf-b'],
@@ -96,22 +96,29 @@ test('EditorGroups serialization restores group ownership and the active group',
 	const registry = new EditorInputSerializerRegistry();
 	registry.register(PdfEditorInput.ID, new PdfEditorInputSerializer());
 	const instantiationService = new InstantiationService(new ServiceCollection());
-	const groups = new EditorGroups();
-	const secondGroup = groups.createGroup('group-b');
-	groups.openEditor(new PdfEditorInput({ id: 'pdf-a' }));
-	groups.openEditor(new PdfEditorInput({ id: 'pdf-b' }), { groupId: secondGroup.id });
+	const firstGroup = new EditorGroupModel('editor-group-default');
+	const secondGroup = new EditorGroupModel('group-b');
+	firstGroup.openEditor(new PdfEditorInput({ id: 'pdf-a' }));
+	secondGroup.openEditor(new PdfEditorInput({ id: 'pdf-b' }));
+	const groups = {
+		activeGroup: secondGroup,
+		getGroups: () => [firstGroup, secondGroup],
+	} as unknown as IEditorGroupsService;
 
 	const restored = deserializeEditorGroups(
 		serializeEditorGroups(groups, registry),
 		registry,
 		instantiationService,
 	);
-	assert.equal(restored.active.id, 'group-b');
+	assert.equal(restored.activeGroupId, 'group-b');
 	assert.deepEqual(
-		restored.getGroups().map(group => group.getEditors().map(editor => editor.resource?.path)),
+		restored.groups.map(group => group.getEditors().map(editor => editor.resource?.path)),
 		[['pdf-a'], ['pdf-b']],
 	);
-	groups.dispose();
-	restored.dispose();
+	firstGroup.dispose();
+	secondGroup.dispose();
+	for (const group of restored.groups) {
+		group.dispose();
+	}
 	instantiationService.dispose();
 });

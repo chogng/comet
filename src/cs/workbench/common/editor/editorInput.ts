@@ -67,6 +67,10 @@ export abstract class EditorInput extends Disposable {
 		return undefined;
 	}
 
+	prefersPrimaryInputFocus(): boolean {
+		return false;
+	}
+
 	isDirty(): boolean {
 		return false;
 	}

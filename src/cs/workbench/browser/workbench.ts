@@ -77,6 +77,7 @@ import {
 } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
+import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
@@ -383,6 +384,7 @@ class WorkbenchHost {
     @IChatServiceDecorator private readonly chatService: IChatService,
     @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
     @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
+    @IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
     @IInstantiationService private readonly instantiationService: IInstantiationService,
     @IFetchService private readonly fetchService: IFetchService,
     @IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
@@ -981,6 +983,7 @@ class WorkbenchHost {
       dialogService: this.dialogService,
       instantiationService: this.instantiationService,
       editorResolverService: this.editorResolverService,
+      editorGroupsService: this.editorGroupsService,
       storageService: this.storageService,
       commandService: this.commandService,
       ensureEditorPartVisible: this.ensureEditorPartVisible,
@@ -993,7 +996,7 @@ class WorkbenchHost {
       draftBody,
       editorPartProps,
     } = editorPartSnapshot;
-    const activeEditor = editorGroup.active;
+    const activeEditor = editorGroup.activeEditor;
     const browserUrl = activeEditor?.getDescription() ?? '';
     const browserPageTitle = activeEditor?.getName() ?? '';
     const handleOpenEditor: EditorPartProps['onOpenEditor'] = editorPartProps.onOpenEditor;
@@ -1180,6 +1183,7 @@ class WorkbenchHost {
         dialogService: this.dialogService,
         instantiationService: this.instantiationService,
         editorResolverService: this.editorResolverService,
+        editorGroupsService: this.editorGroupsService,
         storageService: this.storageService,
         commandService: this.commandService,
         ensureEditorPartVisible: this.ensureEditorPartVisible,

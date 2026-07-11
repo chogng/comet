@@ -4,22 +4,28 @@ import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dr
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
-import type {
-  EditorModeToolbarContribution,
-  EditorModeToolbarContributionContext,
-} from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';const EDITOR_PDF_TOOLBAR_MORE_MENU_DATA = 'editor-pdf-toolbar-more';
 import { $ } from 'cs/base/browser/dom';
+const EDITOR_PDF_TOOLBAR_MORE_MENU_DATA = 'editor-pdf-toolbar-more';
 const PDF_PAGINATION_LABEL = 'Pagination';
 const PDF_HIGHLIGHT_LABEL = 'Highlight';
 const PDF_TRANSLATE_LABEL = 'Translate';
 const PDF_ERASE_LABEL = 'Erase';
 const PDF_NOTE_LABEL = 'Note';
 
-export class EditorPdfModeToolbarContribution
-implements EditorModeToolbarContribution {
-  readonly mode = 'pdf' as const;
+export type PdfEditorToolbarContext = {
+  readonly labels: {
+    readonly toolbarSources: string;
+    readonly toolbarMore: string;
+    readonly pdfTitle: string;
+  };
+  readonly onOpenSources: () => void;
+  readonly onHighlightSelection: () => void;
+  readonly onNoteSelection: () => void;
+};
 
-  private context: EditorModeToolbarContributionContext;
+export class EditorPdfModeToolbarContribution {
+
+  private context: PdfEditorToolbarContext;
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-editor-mode-toolbar.comet-editor-pdf-toolbar');
   private readonly rowElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-pdf-toolbar-row');
   private readonly leadingHost = $<HTMLElementTagNameMap['div']>('div.comet-editor-pdf-toolbar-leading');
@@ -34,7 +40,7 @@ implements EditorModeToolbarContribution {
   });
 
   constructor(
-    context: EditorModeToolbarContributionContext,
+    context: PdfEditorToolbarContext,
     private readonly dropdownServices: DropdownContextServices,
   ) {
     this.context = context;
@@ -49,7 +55,7 @@ implements EditorModeToolbarContribution {
     return this.element;
   }
 
-  setContext(context: EditorModeToolbarContributionContext) {
+  setContext(context: PdfEditorToolbarContext) {
     this.context = context;
     this.render();
   }
@@ -113,7 +119,7 @@ implements EditorModeToolbarContribution {
         mode: 'icon',
         buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfHighlight),
-        onClick: this.context.onPdfHighlightSelection,
+        onClick: this.context.onHighlightSelection,
       },
       {
         label: PDF_TRANSLATE_LABEL,
@@ -137,7 +143,7 @@ implements EditorModeToolbarContribution {
         mode: 'icon',
         buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon(lxIconSemanticMap.editor.pdfNote),
-        onClick: this.context.onPdfNoteSelection,
+        onClick: this.context.onNoteSelection,
       },
     ];
   }
@@ -173,7 +179,7 @@ implements EditorModeToolbarContribution {
 }
 
 export function createEditorPdfModeToolbarContribution(
-  context: EditorModeToolbarContributionContext,
+  context: PdfEditorToolbarContext,
   dropdownServices: DropdownContextServices,
 ) {
   return new EditorPdfModeToolbarContribution(context, dropdownServices);

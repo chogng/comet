@@ -16,6 +16,7 @@ export interface IBrowserEditorPane {
 	goBack(): Promise<void>;
 	goForward(): Promise<void>;
 	reload(hard?: boolean): Promise<void>;
+	getHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined;
 }
 
 export function isBrowserEditorPane(value: unknown): value is IBrowserEditorPane {
@@ -25,6 +26,8 @@ export function isBrowserEditorPane(value: unknown): value is IBrowserEditorPane
 		typeof candidate.navigate === 'function' &&
 		typeof candidate.goBack === 'function' &&
 		typeof candidate.goForward === 'function' &&
-		typeof candidate.reload === 'function',
+		typeof candidate.reload === 'function' &&
+		typeof candidate.getHistoryAndFavoritesFeatures === 'function',
 	);
 }
+import type { BrowserHistoryAndFavoritesPanelFeatures } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';

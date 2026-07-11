@@ -13,6 +13,7 @@ import type { IStorageService } from 'cs/platform/storage/common/storage';
 import { createEditorPartController, type EditorPartControllerContext } from 'cs/workbench/browser/parts/editor/editorPart';
 import { PdfEditorInput, PdfEditorInputSerializer } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorInput';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
+import { EditorGroupsService } from 'cs/workbench/services/editor/browser/editorGroupsService';
 
 function createStorageService(): IStorageService {
 	return {
@@ -43,19 +44,23 @@ test('EditorPart starts with an empty generic group and resolves inputs only whe
 		PdfEditorInput.ID,
 		new PdfEditorInputSerializer(),
 	);
+	const instantiationService = new InstantiationService(new ServiceCollection());
+	const storageService = createStorageService();
+	const editorGroupsService = new EditorGroupsService(storageService, instantiationService);
 	const context = {
 		ui: {},
 		viewPartProps: {},
 		nativeHost: {},
 		dialogService: {},
-		instantiationService: new InstantiationService(new ServiceCollection()),
+		instantiationService,
 		editorResolverService: {
 			resolveEditor: ({ resource }: { resource: URI }) => {
 				resolveCount += 1;
 				return { editor: new PdfEditorInput({ resource }) };
 			},
 		},
-		storageService: createStorageService(),
+		editorGroupsService,
+		storageService,
 		commandService: {},
 		ensureEditorPartVisible() {},
 	} as unknown as EditorPartControllerContext;
@@ -65,8 +70,9 @@ test('EditorPart starts with an empty generic group and resolves inputs only whe
 	assert.equal(resolveCount, 0);
 	const opened = await controller.openEditor({ resource: URI.parse('test:/editor-a') });
 	assert.equal(resolveCount, 1);
-	assert.equal(controller.getSnapshot().group.active, opened);
+	assert.equal(controller.getSnapshot().group.activeEditor, opened);
 	controller.dispose();
+	editorGroupsService.dispose();
 	serializerRegistration.dispose();
-	context.instantiationService.dispose();
+	instantiationService.dispose();
 });

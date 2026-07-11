@@ -19,7 +19,7 @@ import {
   toggleOrderedListCommand,
   undoCommand,
 } from 'cs/editor/browser/text/commands';
-import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
+import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 
 type WritingEditorKeybindingId =
   | 'undo'

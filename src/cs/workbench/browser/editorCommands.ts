@@ -6,7 +6,7 @@ import {
   getDraftEditorShortcutLabel,
 } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { WritingEditorStableSelectionTarget } from 'cs/editor/common/writingEditorDocument';
-import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
+import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 
 export type WorkbenchEditorCommandId = DraftEditorCommandId | 'saveDraft';
 

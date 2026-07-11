@@ -1,6 +1,6 @@
 import type { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 
-export type EditorModeToolbarKind = 'browser' | 'pdf';
+export type EditorModeToolbarKind = 'browser';
 
 export type EditorModeToolbarContributionContext = {
   mode: EditorModeToolbarKind | null;
@@ -34,7 +34,6 @@ export type EditorModeToolbarContributionContext = {
     browserHistoryAndFavoritesPanelRecentOlderTitle: string;
     browserHistoryAndFavoritesPanelFavoritesTitle: string;
     browserHistoryAndFavoritesPanelEmptyState: string;
-    pdfTitle: string;
   };
   onOpenSources: () => void;
   onNavigateBack: () => void;
@@ -48,8 +47,6 @@ export type EditorModeToolbarContributionContext = {
   onClearCookies: () => void | Promise<void>;
   onClearCache: () => void | Promise<void>;
   onNavigateToUrl: (url: string) => void;
-  onPdfHighlightSelection: () => void;
-  onPdfNoteSelection: () => void;
   browserHistoryAndFavoritesPanel: BrowserHistoryAndFavoritesPanel | null;
 };
 

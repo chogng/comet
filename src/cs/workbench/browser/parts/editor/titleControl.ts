@@ -1,4 +1,4 @@
-import type { EditorGroupModel } from 'cs/workbench/browser/parts/editor/editorGroupModel';
+import type { EditorTabsModel } from 'cs/workbench/browser/parts/editor/editorTabsModel';
 
 export type TitleControlCallbacks = {
   onActivateTab: (tabId: string) => void;
@@ -20,7 +20,7 @@ export type TitleControlLabels = {
 };
 
 export type TitleControlProps = {
-  group: EditorGroupModel;
+  group: EditorTabsModel;
   labels: TitleControlLabels;
 } & TitleControlCallbacks;
 
