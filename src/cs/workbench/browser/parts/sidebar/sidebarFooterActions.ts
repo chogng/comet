@@ -1,5 +1,6 @@
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { $ } from 'cs/base/browser/dom';
 
@@ -33,7 +34,10 @@ export class SidebarFooterActionsView {
     ariaRole: 'group',
   });
 
-  constructor(props?: SidebarFooterActionsProps) {
+  constructor(
+    private readonly dropdownServices: DropdownContextServices,
+    props?: SidebarFooterActionsProps,
+  ) {
     this.avatarElement.append(createLxIcon('account'));
     this.accountElement.append(this.avatarElement, this.accountLabelElement);
     this.hostElement.append(this.accountElement, this.actionBarView.getElement());
@@ -54,6 +58,7 @@ export class SidebarFooterActionsView {
       ariaRole: 'group',
       items: [
         createDropdownMenuActionViewItem({
+          ...this.dropdownServices,
           label: moreLabel,
           title: moreLabel,
           mode: 'icon',

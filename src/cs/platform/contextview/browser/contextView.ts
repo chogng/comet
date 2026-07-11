@@ -48,7 +48,10 @@ export interface ContextMenuListenerDisposable {
   dispose: () => void;
 }
 
-export interface ContextMenuService extends BaseContextMenuService {
+export const IContextMenuService = createDecorator<IContextMenuService>('contextMenuService');
+
+export interface IContextMenuService extends BaseContextMenuService {
+  readonly _serviceBrand: undefined;
   onDidShowContextMenu: (listener: ContextMenuListener) => ContextMenuListenerDisposable;
   onDidHideContextMenu: (listener: ContextMenuListener) => ContextMenuListenerDisposable;
   dispose: () => void;

@@ -83,6 +83,10 @@ export const PLANNED_EDITOR_PANE_MODES = [
 export const EMPTY_BROWSER_TAB_URL = 'about:blank';
 export const EMPTY_PDF_TAB_URL = EMPTY_BROWSER_TAB_URL;
 
+export function hasBrowserTabPage(url: string | null | undefined): boolean {
+  return Boolean(url && url.trim() !== EMPTY_BROWSER_TAB_URL);
+}
+
 export type EditorFileTabInput = {
   id: string;
   kind: 'file';

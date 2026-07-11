@@ -245,7 +245,7 @@ export const editorSourceSubheadingForeground = registerColor('editor.sourceSubh
   light: '#698099',
 });
 
-export const editorBrowserLibraryEmptyForeground = registerColor('editor.browserLibraryEmptyForeground', {
+export const editorBrowserHistoryAndFavoritesEmptyForeground = registerColor('editor.browserHistoryAndFavoritesEmptyForeground', {
   dark: '#505050',
   light: '#505050',
 });

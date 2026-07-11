@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { SidebarProps } from 'cs/workbench/browser/parts/sidebar/sidebar';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createSidebar: typeof import('cs/workbench/browser/parts/sidebar/sidebar').createSidebar;
 let SidebarFooterActionsView: typeof import('cs/workbench/browser/parts/sidebar/sidebarFooterActions').SidebarFooterActionsView;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 function delay(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,6 +40,14 @@ before(async () => {
 after(() => {
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
+});
+
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
 });
 
 test('sidebar renders without a topbar', () => {
@@ -80,7 +91,7 @@ test('sidebar renders home without fetch tab', () => {
 });
 
 test('sidebar renders a footer at the bottom and mounts footer content', () => {
-  const footerActionsView = new SidebarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView(dropdownServices, {
     accountLabel: 'Comet Studio',
     settingsLabel: 'Settings',
   });
@@ -111,7 +122,7 @@ test('sidebar renders a footer at the bottom and mounts footer content', () => {
 
 test('sidebar footer settings action dispatches the provided handler', () => {
   let triggered = false;
-  const footerActionsView = new SidebarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView(dropdownServices, {
     accountLabel: 'Comet Studio',
     settingsLabel: 'Settings',
     onOpenSettings: () => {
@@ -140,7 +151,7 @@ test('sidebar footer settings action dispatches the provided handler', () => {
 });
 
 test('sidebar footer renders more action to the left of settings', () => {
-  const footerActionsView = new SidebarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView(dropdownServices, {
     accountLabel: 'Comet Studio',
     settingsLabel: 'Settings',
   });
@@ -171,7 +182,7 @@ test('sidebar footer renders more action to the left of settings', () => {
 test('sidebar footer more action exposes agent and flow layout actions', async () => {
   let appliedAgentLayoutCount = 0;
   let appliedFlowLayoutCount = 0;
-  const footerActionsView = new SidebarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView(dropdownServices, {
     accountLabel: 'Comet Studio',
     settingsLabel: 'Settings',
     onApplyLayoutAgent: () => {
@@ -267,7 +278,7 @@ test('sidebar footer more action exposes agent and flow layout actions', async (
 });
 
 test('sidebar footer layout submenu marks the active layout', async () => {
-  const footerActionsView = new SidebarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView(dropdownServices, {
     accountLabel: 'Comet Studio',
     settingsLabel: 'Settings',
     activeLayoutMode: 'agent',
@@ -328,7 +339,7 @@ test('sidebar footer layout submenu marks the active layout', async () => {
 });
 
 test('sidebar footer settings action keeps active styling when settings is active', () => {
-  const footerActionsView = new SidebarFooterActionsView({
+  const footerActionsView = new SidebarFooterActionsView(dropdownServices, {
     accountLabel: 'Comet Studio',
     settingsLabel: 'Settings',
     isSettingsActive: true,

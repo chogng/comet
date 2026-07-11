@@ -132,7 +132,7 @@ import {
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
-import { IContextViewService } from 'cs/platform/contextview/browser/contextView';
+import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import {
   IWorkbenchSidebarEntryService,
   type WorkbenchSidebarEntry,
@@ -358,23 +358,8 @@ class WorkbenchHost {
   private retiredWorkbenchContentPartViews:
     | SessionWorkbenchContentPartViews
     | null = null;
-  private readonly collapsedEditorTitlebarActionsView = createEditorTitlebarActionsView({
-    isEditorCollapsed: true,
-    isAgentSidebarVisible: false,
-    showAgentSidebarToggle: false,
-    agentSidebarToggleLabel: '',
-    labels: {
-      headerAddAction: '',
-      createDraft: '',
-      createBrowser: '',
-      createFile: '',
-      expandEditor: '',
-      collapseEditor: '',
-    },
-    onOpenEditor: () => {},
-    onToggleEditorCollapse: () => {},
-  });
-  private readonly sidebarFooterActionsView = new SidebarFooterActionsView();
+  private readonly collapsedEditorTitlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
+  private readonly sidebarFooterActionsView: SidebarFooterActionsView;
   private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
   private editorPartController: EditorPartModel | null = null;
   private readonly globalDisposables: Array<() => void> = [];
@@ -394,8 +379,8 @@ class WorkbenchHost {
   };
   private previousBrowserUrl = '';
   private previousActiveContentTabId: string | null = null;
-  private previousContentTargetId: string | null = null;
-  private previousContentTargetUrl = '';
+  private previousContentTargetId: string | null | undefined;
+  private previousContentTargetUrl: string | undefined;
   private previousContentTabIds = new Set<string>();
   private readonly pendingContentTargetReleaseModes = new Map<
     string,
@@ -420,6 +405,7 @@ class WorkbenchHost {
     @IDialogService private readonly dialogService: IDialogService,
     @IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
     @IContextViewService private readonly contextViewService: IContextViewService,
+    @IContextMenuService private readonly contextMenuService: IContextMenuService,
     @IChatServiceDecorator private readonly chatService: IChatService,
     @IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
     @IEditorResolverService private readonly editorResolverService: IEditorResolverService,
@@ -428,6 +414,28 @@ class WorkbenchHost {
     @IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
     @ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
   ) {
+    const dropdownServices = {
+      contextMenuService: this.contextMenuService,
+      contextViewProvider: this.contextViewService,
+    };
+    this.collapsedEditorTitlebarActionsView = createEditorTitlebarActionsView({
+      ...dropdownServices,
+      isEditorCollapsed: true,
+      isAgentSidebarVisible: false,
+      showAgentSidebarToggle: false,
+      agentSidebarToggleLabel: '',
+      labels: {
+        headerAddAction: '',
+        createDraft: '',
+        createBrowser: '',
+        createFile: '',
+        expandEditor: '',
+        collapseEditor: '',
+      },
+      onOpenEditor: () => {},
+      onToggleEditorCollapse: () => {},
+    });
+    this.sidebarFooterActionsView = new SidebarFooterActionsView(dropdownServices);
     this.rootElement = rootElement;
     this.containerElement = document.createElement('div');
     this.shellElement = document.createElement('div');
@@ -448,6 +456,7 @@ class WorkbenchHost {
       this.containerElement,
       this.shellElement,
       this.statusbarElement,
+      dropdownServices,
     );
 
     this.rootElement.replaceChildren(this.containerElement);
@@ -1423,12 +1432,16 @@ class WorkbenchHost {
     });
     const contentAwareEditorPartProps: EditorPartProps = {
       ...baseEditorPartProps,
+      contextMenuService: this.contextMenuService,
+      contextViewProvider: this.contextViewService,
       nativeHost,
       ...editorBrowserToolbarActions,
       onOpenEditor: handleOpenEditor,
       onToggleEditorCollapse: this.toggleEditorCollapsed,
     };
     this.collapsedEditorTitlebarActionsView.setProps({
+      contextMenuService: this.contextMenuService,
+      contextViewProvider: this.contextViewService,
       isEditorCollapsed: true,
       isAgentSidebarVisible: false,
       showAgentSidebarToggle: false,

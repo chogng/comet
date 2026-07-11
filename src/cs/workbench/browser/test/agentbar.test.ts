@@ -170,6 +170,7 @@ before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   await import('cs/platform/contextview/browser/contextViewService');
+  await import('cs/platform/contextview/browser/contextMenuService');
   ({ IMarkdownRendererService: IMarkdownRendererServiceId } = await import('cs/platform/markdown/browser/markdownRenderer'));
   ({ IChatService: IChatServiceId } = await import('cs/workbench/contrib/chat/common/chatService/chatService'));
   ({ IFetchService: IFetchServiceId } = await import('cs/workbench/services/fetch/common/fetch'));

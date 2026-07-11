@@ -7,6 +7,7 @@ import { getWindowChromeLayout } from 'cs/platform/window/common/window';
 import { $, append } from 'cs/base/browser/dom';
 import { createActionBarView, type ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { isMacintosh, isWeb } from 'cs/base/common/platform';
 import 'cs/workbench/browser/parts/titlebar/media/titlebarpart.css';
@@ -58,6 +59,7 @@ export class TitlebarPart {
     private readonly containerElement: HTMLElement,
     private readonly shellElement: HTMLElement,
     private readonly statusbarElement: HTMLElement,
+    private readonly dropdownServices: DropdownContextServices,
   ) {
     append(this.leadingActionsHostElement, this.leadingActionBarView.getElement());
   }
@@ -138,6 +140,7 @@ export class TitlebarPart {
     const headerItems: ActionBarItem[] = [];
     if (shouldRenderTitlebarMenuAction() && props.menuLabel) {
       headerItems.push(createDropdownMenuActionViewItem({
+        ...this.dropdownServices,
         label: props.menuLabel,
         title: props.menuLabel,
         mode: 'icon',
@@ -208,10 +211,12 @@ export function createTitlebarPart(
   containerElement: HTMLElement,
   shellElement: HTMLElement,
   statusbarElement: HTMLElement,
+  dropdownServices: DropdownContextServices,
 ) {
   return new TitlebarPart(
     containerElement,
     shellElement,
     statusbarElement,
+    dropdownServices,
   );
 }

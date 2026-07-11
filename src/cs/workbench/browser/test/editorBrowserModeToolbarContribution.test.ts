@@ -4,14 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'node:assert/strict';
-import test, { after, beforeEach } from 'node:test';
+import test, { after, afterEach, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { EditorModeToolbarContributionContext } from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
 
 const domEnvironment = installDomTestEnvironment();
+let dropdownServices: Awaited<ReturnType<typeof createDropdownTestServices>>;
 
-beforeEach(() => {
+beforeEach(async () => {
 	document.body.replaceChildren();
+	dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+	dropdownServices.dispose();
 });
 
 after(() => {
@@ -39,15 +46,15 @@ function createContext(): EditorModeToolbarContributionContext {
 			toolbarClearCache: 'Clear Cache',
 			toolbarAddressBar: 'Address Bar',
 			toolbarAddressPlaceholder: 'Search or enter URL',
-			browserLibraryPanelTitle: 'Sources',
-			browserLibraryPanelRecentTitle: 'Recent',
-			browserLibraryPanelRecentTodayTitle: 'Today',
-			browserLibraryPanelRecentYesterdayTitle: 'Yesterday',
-			browserLibraryPanelRecentLast7DaysTitle: 'Last 7 Days',
-			browserLibraryPanelRecentLast30DaysTitle: 'Last 30 Days',
-			browserLibraryPanelRecentOlderTitle: 'Older',
-			browserLibraryPanelFavoritesTitle: 'Favorites',
-			browserLibraryPanelEmptyState: 'No links yet',
+			browserHistoryAndFavoritesPanelTitle: 'Sources',
+			browserHistoryAndFavoritesPanelRecentTitle: 'Recent',
+			browserHistoryAndFavoritesPanelRecentTodayTitle: 'Today',
+			browserHistoryAndFavoritesPanelRecentYesterdayTitle: 'Yesterday',
+			browserHistoryAndFavoritesPanelRecentLast7DaysTitle: 'Last 7 Days',
+			browserHistoryAndFavoritesPanelRecentLast30DaysTitle: 'Last 30 Days',
+			browserHistoryAndFavoritesPanelRecentOlderTitle: 'Older',
+			browserHistoryAndFavoritesPanelFavoritesTitle: 'Favorites',
+			browserHistoryAndFavoritesPanelEmptyState: 'No links yet',
 			pdfTitle: 'PDF',
 		},
 		onOpenSources: () => {},
@@ -66,7 +73,7 @@ function createContext(): EditorModeToolbarContributionContext {
 		onNavigateToUrl: () => {},
 		onPdfHighlightSelection: () => {},
 		onPdfNoteSelection: () => {},
-		browserLibraryPanel: null,
+		browserHistoryAndFavoritesPanel: null,
 	};
 }
 
@@ -74,7 +81,7 @@ test('browser More menu stays open across context updates', async () => {
 	const { createEditorBrowserModeToolbarContribution } = await import(
 		'cs/workbench/browser/parts/editor/editorBrowserModeToolbarContribution'
 	);
-	const contribution = createEditorBrowserModeToolbarContribution(createContext());
+	const contribution = createEditorBrowserModeToolbarContribution(createContext(), dropdownServices);
 	document.body.append(contribution.getElement());
 
 	try {

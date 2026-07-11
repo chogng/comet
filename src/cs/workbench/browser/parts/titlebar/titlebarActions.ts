@@ -80,6 +80,8 @@ export function createEditorTitlebarActionsProps(params: {
   } = params;
 
   return {
+    contextMenuService: editorPartProps.contextMenuService,
+    contextViewProvider: editorPartProps.contextViewProvider,
     isEditorCollapsed,
     isAgentSidebarVisible,
     showAgentSidebarToggle,

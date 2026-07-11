@@ -3,11 +3,12 @@ import {
   type ActionBarItem,
 } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorOpenTypes';
 
-export type EditorTitlebarActionsViewProps = {
+export type EditorTitlebarActionsViewProps = DropdownContextServices & {
   isEditorCollapsed: boolean;
   isAgentSidebarVisible?: boolean;
   showAgentSidebarToggle?: boolean;
@@ -54,6 +55,8 @@ export class EditorTitlebarActionsView {
   private render() {
     const actionItems: ActionBarItem[] = [
       createDropdownMenuActionViewItem({
+        contextMenuService: this.props.contextMenuService,
+        contextViewProvider: this.props.contextViewProvider,
         label: this.props.labels.headerAddAction,
         title: this.props.labels.headerAddAction,
         content: createLxIcon('add'),

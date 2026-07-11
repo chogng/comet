@@ -4,7 +4,7 @@ import {
   ActionViewItem,
   BaseActionViewItem,
 } from 'cs/base/browser/ui/actionbar/actionViewItems';
-import { AnchorAlignment, AnchorPosition, ContextView, ContextViewDOMPosition } from 'cs/base/browser/ui/contextview/contextview';
+import { AnchorAlignment, AnchorPosition, type IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import type {
   ActionBarActionItem,
   ActionBarActionMode,
@@ -12,7 +12,6 @@ import type {
   ActionBarRenderable,
 } from 'cs/base/browser/ui/actionbar/actionbar';
 import type { HoverInput, IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
-import { createPlatformContextMenuService } from 'cs/platform/contextview/browser/contextMenuService';
 import {
   ActionRunner,
   SubmenuAction,
@@ -35,6 +34,10 @@ type ResolvedDropdownMenuActionAlignment = DropdownMenuActionAlignment;
 
 export type DropdownMenuActionOverlayContext = {
   hide: () => void;
+};
+
+export type DropdownContextViewProvider = IContextViewProvider & {
+  getContextViewElement(): HTMLElement;
 };
 
 export type DropdownMenuHeaderContext = {
@@ -69,13 +72,19 @@ export type DropdownMenuActionViewItemOptions = {
   menuData?: string;
   minWidth?: number;
   hoverService?: IHoverDelegate;
-  contextMenuService?: ContextMenuService;
+  contextMenuService: ContextMenuService;
+  contextViewProvider: DropdownContextViewProvider;
   overlayAlignment?: DropdownMenuActionAlignment;
   overlayAlignmentPolicy?: DropdownMenuActionAlignmentPolicy;
   overlayAlignmentProvider?: DropdownMenuActionAlignmentProvider;
   overlayPosition?: DropdownMenuActionPosition;
   offset?: number;
 };
+
+export type DropdownContextServices = Pick<
+  DropdownMenuActionViewItemOptions,
+  'contextMenuService' | 'contextViewProvider'
+>;
 
 export type ActionWithDropdownActionViewItemOptions = {
   primary: Omit<
@@ -254,10 +263,11 @@ function toMenuActions(
 }
 
 class DomDropdownActionOverlayPresenter {
-  private readonly contextView = new ContextView(document.body, ContextViewDOMPosition.FIXED);
   private overlayView: HTMLElement | null = null;
   private currentRequest: DropdownActionOverlayRequest | null = null;
   private placementSyncFrame: number | null = null;
+
+  constructor(private readonly contextView: DropdownContextViewProvider) {}
 
   show(request: DropdownActionOverlayRequest) {
     this.currentRequest = request;
@@ -266,7 +276,7 @@ class DomDropdownActionOverlayPresenter {
     });
     this.overlayView?.remove();
     this.overlayView = overlay;
-    this.contextView.show({
+    this.contextView.showContextView({
       getAnchor: () => request.anchor,
       render: container => {
         if (request.className) {
@@ -284,7 +294,9 @@ class DomDropdownActionOverlayPresenter {
   }
 
   hide = () => {
-    this.contextView.hide();
+    if (this.currentRequest) {
+      this.contextView.hideContextView();
+    }
   };
 
   dispose() {
@@ -295,7 +307,6 @@ class DomDropdownActionOverlayPresenter {
     this.overlayView?.remove();
     this.overlayView = null;
     this.currentRequest = null;
-    this.contextView.dispose();
   }
 
   private readonly handleHide = () => {
@@ -326,15 +337,13 @@ class DomDropdownActionOverlayPresenter {
       return;
     }
 
-    const contextViewElement = this.contextView.getViewElement();
+    const contextViewElement = this.contextView.getContextViewElement();
     overlay.classList.toggle('comet-dropdown-menu-top', contextViewElement.classList.contains('top'));
     overlay.classList.toggle('comet-dropdown-menu-bottom', contextViewElement.classList.contains('bottom'));
   }
 }
 
 class ContextMenuDropdownActionPresenter {
-  private defaultContextMenuService: ContextMenuService | null = null;
-
   constructor(
     private readonly getOptions: () => DropdownMenuActionViewItemOptions,
     private readonly getAnchor: () => HTMLElement,
@@ -365,7 +374,7 @@ class ContextMenuDropdownActionPresenter {
       }
     }();
 
-    this.getOrCreateContextMenuService().showContextMenu({
+    options.contextMenuService.showContextMenu({
       getAnchor: () => anchor,
       getActions: () => menuActions,
       getMenuHeader: menuHeader
@@ -400,40 +409,13 @@ class ContextMenuDropdownActionPresenter {
   };
 
   hide = () => {
-    this.resolveContextMenuService(this.getOptions())?.hideContextMenu();
+    this.getOptions().contextMenuService.hideContextMenu();
   };
 
-  dispose = () => {
-    this.hide();
-    this.defaultContextMenuService?.dispose?.();
-    this.defaultContextMenuService = null;
-  };
-
-  syncOptions(previousOptions: DropdownMenuActionViewItemOptions) {
-    const previousContextMenuService = this.resolveContextMenuService(previousOptions);
-    const nextContextMenuService = this.resolveContextMenuService(this.getOptions());
-    if (previousContextMenuService && previousContextMenuService !== nextContextMenuService) {
-      previousContextMenuService.hideContextMenu();
-    }
-  }
-
-  private getOrCreateContextMenuService() {
-    const options = this.getOptions();
-    if (options.contextMenuService) {
-      return options.contextMenuService;
-    }
-
-    this.defaultContextMenuService ??= createPlatformContextMenuService();
-    return this.defaultContextMenuService!;
-  }
-
-  private resolveContextMenuService(options: DropdownMenuActionViewItemOptions) {
-    return options.contextMenuService ?? this.defaultContextMenuService;
-  }
 }
 
 export class DropdownMenuActionViewItem extends ActionViewItem {
-  private readonly overlayPresenter = new DomDropdownActionOverlayPresenter();
+  private overlayPresenter: DomDropdownActionOverlayPresenter;
   private readonly menuPresenter = new ContextMenuDropdownActionPresenter(
     () => this.options,
     () => this.anchorElement ?? this.button,
@@ -450,6 +432,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
   constructor(options: DropdownMenuActionViewItemOptions) {
     super(options, options.hoverService);
+    this.overlayPresenter = new DomDropdownActionOverlayPresenter(options.contextViewProvider);
     this._register(DOM.addDisposableListener(this.button, 'keydown', this.handleKeyDown));
     this.render();
   }
@@ -457,11 +440,20 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
   setOptions(options: DropdownMenuActionViewItemOptions) {
     const previousOptions = this.options;
     const usedCustomOverlay = Boolean(previousOptions.renderOverlay);
-    this.setItem(options);
-    this.menuPresenter.syncOptions(previousOptions);
-    if (usedCustomOverlay || this.options.renderOverlay) {
-      this.overlayPresenter.hide();
+    const usesCustomOverlay = Boolean(options.renderOverlay);
+    const contextMenuServiceChanged = previousOptions.contextMenuService !== options.contextMenuService;
+    const contextViewProviderChanged = previousOptions.contextViewProvider !== options.contextViewProvider;
+    if (
+      this.isOpen &&
+      (usedCustomOverlay || usesCustomOverlay || contextMenuServiceChanged || contextViewProviderChanged)
+    ) {
+      this.hide();
     }
+    if (contextViewProviderChanged) {
+      this.overlayPresenter.dispose();
+      this.overlayPresenter = new DomDropdownActionOverlayPresenter(options.contextViewProvider);
+    }
+    this.setItem(options);
     this.render();
   }
 
@@ -501,6 +493,10 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
   }
 
   hide() {
+    if (!this.isOpen) {
+      return;
+    }
+
     if (this.options.renderOverlay) {
       this.overlayPresenter.hide();
       return;
@@ -516,7 +512,6 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
     this.hide();
     this.overlayPresenter.dispose();
-    this.menuPresenter.dispose();
     super.dispose();
   }
 

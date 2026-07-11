@@ -45,6 +45,7 @@ const MAX_HISTORY = 6;
 
 export class BrowserHistoryFeature extends BrowserEditorContribution {
 	private readonly onDidChangeEmitter = this._register(new Emitter<void>());
+	readonly onDidChange = this.onDidChangeEmitter.event;
 	private model: IBrowserViewModel | undefined;
 
 	constructor(
@@ -53,7 +54,24 @@ export class BrowserHistoryFeature extends BrowserEditorContribution {
 		@IBrowserViewWorkbenchService private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService,
 	) {
 		super(editor);
+		editor.setHistoryFeature(this);
 		this._register(this.browserViewWorkbenchService.browserHistory.onDidChange(() => this.onDidChangeEmitter.fire()));
+	}
+
+	get entries(): readonly IBrowserHistoryEntry[] {
+		return this.browserViewWorkbenchService.browserHistory.entries.items;
+	}
+
+	getFavicon(entry: IBrowserHistoryEntry): string {
+		return entry.icon ? this.browserViewWorkbenchService.browserHistory.favicons.get(entry.icon) ?? '' : '';
+	}
+
+	removeEntry(entryId: number): boolean {
+		return this.browserViewWorkbenchService.browserHistory.entries.delete(entryId);
+	}
+
+	clear(): void {
+		this.browserViewWorkbenchService.browserHistory.clear();
 	}
 
 	override get urlSuggestionProviders(): readonly IBrowserUrlSuggestionProvider[] {

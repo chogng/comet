@@ -4,6 +4,7 @@ import {
   type ActionView,
 } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import {
   createDomDropdownMenuPresenter,
   createDropdownView,
@@ -27,7 +28,7 @@ import type { WritingEditorSurfaceLabels } from 'cs/editor/browser/text/editor';
 
 export type DraftEditorToolbarActions = WritingEditorToolbarActions;
 
-export type DraftEditorToolbarProps = {
+export type DraftEditorToolbarProps = DropdownContextServices & {
   labels: WritingEditorSurfaceLabels;
   toolbarState: WritingEditorToolbarState;
   actions: DraftEditorToolbarActions;
@@ -361,6 +362,8 @@ const trailingMarginLeft = this.trailingElement.childElementCount > 0
       ariaRole: 'group',
       items: [
         createDropdownMenuActionViewItem({
+          contextMenuService: this.props.contextMenuService,
+          contextViewProvider: this.props.contextViewProvider,
           label: this.props.labels.toolbarMore,
           title: this.props.labels.toolbarMore,
           mode: 'icon',
@@ -459,6 +462,8 @@ const trailingMarginLeft = this.trailingElement.childElementCount > 0
         hoverService,
       },
       dropdown: {
+        contextMenuService: this.props.contextMenuService,
+        contextViewProvider: this.props.contextViewProvider,
         label: splitButtonConfig.label,
         title: splitButtonConfig.title,
         content: createLxIcon('chevron-down'),

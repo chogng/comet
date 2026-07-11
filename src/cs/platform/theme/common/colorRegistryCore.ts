@@ -58,7 +58,7 @@ export type ColorIdentifier =
   | 'editor.sourceHeaderBorder'
   | 'editor.sourceHeaderForeground'
   | 'editor.sourceSubheadingForeground'
-  | 'editor.browserLibraryEmptyForeground'
+  | 'editor.browserHistoryAndFavoritesEmptyForeground'
   | 'editor.modeEnabledForeground'
   | 'editor.modeEnabledBorder'
   | 'editor.modeEnabledBackground'

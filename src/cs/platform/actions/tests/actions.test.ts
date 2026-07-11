@@ -3,6 +3,7 @@ import test from 'node:test';
 import { SubmenuAction } from 'cs/base/common/actions';
 import { KeyCode, KeyMod } from 'cs/base/common/keyCodes';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import {
   Action2,
   MenuId,
@@ -128,10 +129,11 @@ test('menu workbench toolbar keeps an open submenu through unrelated context cha
     title: 'Submenu',
   });
   const host = document.createElement('div');
+  const dropdownServices = await createDropdownTestServices();
   document.body.append(host);
   const toolbar = new MenuWorkbenchToolBar(host, menu, {
     toolbarOptions: { primaryGroup: () => true },
-  }, contextKeyService);
+  }, contextKeyService, dropdownServices.contextMenuService, dropdownServices.contextViewProvider);
 
   try {
     const button = host.querySelector('button');
@@ -145,6 +147,7 @@ test('menu workbench toolbar keeps an open submenu through unrelated context cha
     assert(document.body.querySelector('.comet-dropdown-menu'));
   } finally {
     toolbar.dispose();
+    dropdownServices.dispose();
     menuItem.dispose();
     submenuItem.dispose();
     domEnvironment.cleanup();

@@ -68,7 +68,7 @@
     "editor.sourceHeaderBorder": "#e1e1e1",
     "editor.sourceHeaderForeground": "#203040",
     "editor.sourceSubheadingForeground": "#698099",
-    "editor.browserLibraryEmptyForeground": "#505050",
+    "editor.browserHistoryAndFavoritesEmptyForeground": "#505050",
     "editor.modeEnabledForeground": "#1f6a3a",
     "editor.modeEnabledBorder": "#b5dfc2",
     "editor.modeEnabledBackground": "#eaf6ef",

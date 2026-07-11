@@ -16,9 +16,9 @@ export { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from 'cs/base/co
 
 /**
  * contextview DOM position policy
- * 1. ABSOLUTE: positioned in container, scroll with the container
- * 2. FIXED:  positioned in windows
- * 3. FIXED_SHADOW: contextview in windows, with solo css
+ * 1. ABSOLUTE: 定位在 Workbench 容器内部。随容器布局、滚动。适合普通 DOM 浮层。
+ * 2. FIXED:  定位在窗口坐标系。适合跨容器边界的菜单、下拉框。
+ * 3. FIXED_SHADOW: 同样使用窗口坐标系。额外挂载 Shadow Root，并注入独立样式适合需要样式隔离的外部容器或 Shadow DOM 场景
  */
 export const enum ContextViewDOMPosition {
 	ABSOLUTE = 1,
@@ -247,11 +247,16 @@ export class ContextView extends Disposable {
 		const anchorPosition = this.delegate!.anchorPosition;
 		const anchorAlignment = this.delegate!.anchorAlignment;
 		const anchorAxisAlignment = this.delegate!.anchorAxisAlignment;
-		const { top, left } = layout2d(viewport, view, anchor, { anchorAlignment, anchorPosition, anchorAxisAlignment });
+		const {
+			top,
+			left,
+			anchorAlignment: resolvedAnchorAlignment,
+			anchorPosition: resolvedAnchorPosition,
+		} = layout2d(viewport, view, anchor, { anchorAlignment, anchorPosition, anchorAxisAlignment });
 
 		this.view.classList.remove('top', 'bottom', 'left', 'right');
-		this.view.classList.add(anchorPosition === AnchorPosition.BELOW ? 'bottom' : 'top');
-		this.view.classList.add(anchorAlignment === AnchorAlignment.LEFT ? 'left' : 'right');
+		this.view.classList.add(resolvedAnchorPosition === AnchorPosition.BELOW ? 'bottom' : 'top');
+		this.view.classList.add(resolvedAnchorAlignment === AnchorAlignment.LEFT ? 'left' : 'right');
 		this.view.classList.toggle('fixed', this.useFixedPosition);
 
 		const containerPosition = DOM.getDomNodePagePosition(this.container!);

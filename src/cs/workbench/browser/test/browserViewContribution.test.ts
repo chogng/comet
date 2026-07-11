@@ -1074,7 +1074,7 @@ test('browser editor renders welcome content for an empty browser tab', () => {
 			id: 'welcome-browser',
 			kind: 'browser',
 			title: '',
-			url: '',
+			url: 'about:blank',
 		},
 		nativeHost: createTestNativeHostService(),
 	} as ConstructorParameters<typeof BrowserEditorType>[0]);

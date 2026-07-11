@@ -9,6 +9,7 @@ import type {
   EditorModeToolbarContributionContext,
   EditorModeToolbarKind,
 } from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 export class EditorModeToolbarHost {
   private context: EditorModeToolbarContributionContext;
@@ -17,15 +18,18 @@ export class EditorModeToolbarHost {
     EditorModeToolbarContribution
   >();
 
-  constructor(context: EditorModeToolbarContributionContext) {
+  constructor(
+    context: EditorModeToolbarContributionContext,
+    dropdownServices: DropdownContextServices,
+  ) {
     this.context = context;
     this.contributionsByMode.set(
       'browser',
-      createEditorBrowserModeToolbarContribution(context),
+      createEditorBrowserModeToolbarContribution(context, dropdownServices),
     );
     this.contributionsByMode.set(
       'pdf',
-      createEditorPdfModeToolbarContribution(context),
+      createEditorPdfModeToolbarContribution(context, dropdownServices),
     );
   }
 
@@ -62,6 +66,7 @@ export class EditorModeToolbarHost {
 
 export function createEditorModeToolbarHost(
   context: EditorModeToolbarContributionContext,
+  dropdownServices: DropdownContextServices,
 ) {
-  return new EditorModeToolbarHost(context);
+  return new EditorModeToolbarHost(context, dropdownServices);
 }

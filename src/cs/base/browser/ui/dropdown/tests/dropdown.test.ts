@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let restoreComputedStyle: (() => void) | null = null;
 let createDropdownView: typeof import('cs/base/browser/ui/dropdown/dropdown').createDropdownView;
 let createDomDropdownMenuPresenter: typeof import('cs/base/browser/ui/dropdown/dropdown').createDomDropdownMenuPresenter;
 let DropdownMenuActionViewItem: typeof import('cs/base/browser/ui/dropdown/dropdownActionViewItem').DropdownMenuActionViewItem;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 type RectInit = {
   x: number;
@@ -73,6 +76,14 @@ after(() => {
   restoreComputedStyle = null;
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
+});
+
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
 });
 
 test('dropdown portal menu renders in document.body and follows the trigger rect', () => {
@@ -411,6 +422,7 @@ test('dropdown exposes basic aria metadata and keyboard selection for DOM menus'
 test('dropdown menu actions fall back to run when onClick is omitted', async () => {
   let runs = 0;
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     menu: [

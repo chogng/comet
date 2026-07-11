@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import type { IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let createActionBarView: typeof import('cs/base/browser/ui/actionbar/actionbar').createActionBarView;
 let createLxIcon: typeof import('cs/base/browser/ui/lxicons/lxicons').createLxIcon;
 let DropdownMenuActionViewItem: typeof import('cs/base/browser/ui/dropdown/dropdownActionViewItem').DropdownMenuActionViewItem;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 before(async () => {
   const domEnvironment = installDomTestEnvironment();
@@ -21,6 +24,14 @@ before(async () => {
 after(() => {
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
+});
+
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
 });
 
 test('comet-actionbar renders actions and separators without relying on button base classes', () => {
@@ -227,6 +238,7 @@ test('comet-actionbar forwards custom button attributes', () => {
 test('comet-actionbar can render a dropdown action view item instance', async () => {
   let selected = '';
   const dropdownItem = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: createLxIcon('more'),
     menu: [
@@ -275,6 +287,7 @@ test('comet-actionbar can render a custom overlay action view item instance', as
   const actionBarView = createActionBarView({
     items: [
       new DropdownMenuActionViewItem({
+    ...dropdownServices,
         label: 'History',
         content: createLxIcon('history'),
         overlayRole: 'dialog',
@@ -341,6 +354,7 @@ test('comet-actionbar can render a split action item with primary and dropdown c
           },
         },
         dropdown: {
+          ...dropdownServices,
           label: 'Text styles',
           content: createLxIcon('chevron-down'),
           mode: 'custom',

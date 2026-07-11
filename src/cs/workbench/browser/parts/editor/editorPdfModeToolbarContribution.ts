@@ -1,6 +1,7 @@
 import type { ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import type {
@@ -32,7 +33,10 @@ implements EditorModeToolbarContribution {
     ariaRole: 'group',
   });
 
-  constructor(context: EditorModeToolbarContributionContext) {
+  constructor(
+    context: EditorModeToolbarContributionContext,
+    private readonly dropdownServices: DropdownContextServices,
+  ) {
     this.context = context;
     this.leadingHost.append(this.leadingActionsView.getElement());
     this.trailingHost.append(this.trailingActionsView.getElement());
@@ -149,6 +153,7 @@ implements EditorModeToolbarContribution {
         onClick: () => {},
       },
       createDropdownMenuActionViewItem({
+        ...this.dropdownServices,
         label: this.context.labels.toolbarMore,
         title: this.context.labels.toolbarMore,
         mode: 'icon',
@@ -169,6 +174,7 @@ implements EditorModeToolbarContribution {
 
 export function createEditorPdfModeToolbarContribution(
   context: EditorModeToolbarContributionContext,
+  dropdownServices: DropdownContextServices,
 ) {
-  return new EditorPdfModeToolbarContribution(context);
+  return new EditorPdfModeToolbarContribution(context, dropdownServices);
 }

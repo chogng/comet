@@ -12,7 +12,7 @@ import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/sessions/browser/parts/editor/media/editorPart.css';
 import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
-import 'cs/workbench/browser/parts/editor/media/editorBrowserLibraryPanel.css';
+import 'cs/workbench/browser/parts/editor/media/browserHistoryAndFavoritesPanel.css';
 import 'cs/workbench/browser/parts/editor/media/tabsTitleControl.css';
 
 export type SessionEditorPartProps = EditorPartProps;

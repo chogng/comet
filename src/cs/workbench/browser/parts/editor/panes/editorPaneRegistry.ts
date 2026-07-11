@@ -29,8 +29,9 @@ import type { DraftEditorPaneProps } from 'cs/workbench/browser/parts/editor/pan
 import { PdfEditorPane } from 'cs/workbench/browser/parts/editor/panes/pdfEditorPane';
 import type { PdfEditorPaneProps } from 'cs/workbench/browser/parts/editor/panes/pdfEditorPane';
 import { toDisposable } from 'cs/base/common/lifecycle';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
-export type EditorPaneResolverContext = {
+export type EditorPaneResolverContext = DropdownContextServices & {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
@@ -118,6 +119,8 @@ function createDraftPaneProps(
   context: EditorPaneResolverContext,
 ): DraftEditorPaneProps {
   return {
+    contextMenuService: context.contextMenuService,
+    contextViewProvider: context.contextViewProvider,
     labels: context.labels,
     draftTab: tab,
     dialogService: context.dialogService,

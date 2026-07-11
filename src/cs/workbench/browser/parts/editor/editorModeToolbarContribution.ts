@@ -1,4 +1,4 @@
-import type { EditorBrowserLibraryPanel } from 'cs/workbench/browser/parts/editor/editorBrowserLibraryPanel';
+import type { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 
 export type EditorModeToolbarKind = 'browser' | 'pdf';
 
@@ -25,15 +25,15 @@ export type EditorModeToolbarContributionContext = {
     toolbarClearCache: string;
     toolbarAddressBar: string;
     toolbarAddressPlaceholder: string;
-    browserLibraryPanelTitle: string;
-    browserLibraryPanelRecentTitle: string;
-    browserLibraryPanelRecentTodayTitle: string;
-    browserLibraryPanelRecentYesterdayTitle: string;
-    browserLibraryPanelRecentLast7DaysTitle: string;
-    browserLibraryPanelRecentLast30DaysTitle: string;
-    browserLibraryPanelRecentOlderTitle: string;
-    browserLibraryPanelFavoritesTitle: string;
-    browserLibraryPanelEmptyState: string;
+    browserHistoryAndFavoritesPanelTitle: string;
+    browserHistoryAndFavoritesPanelRecentTitle: string;
+    browserHistoryAndFavoritesPanelRecentTodayTitle: string;
+    browserHistoryAndFavoritesPanelRecentYesterdayTitle: string;
+    browserHistoryAndFavoritesPanelRecentLast7DaysTitle: string;
+    browserHistoryAndFavoritesPanelRecentLast30DaysTitle: string;
+    browserHistoryAndFavoritesPanelRecentOlderTitle: string;
+    browserHistoryAndFavoritesPanelFavoritesTitle: string;
+    browserHistoryAndFavoritesPanelEmptyState: string;
     pdfTitle: string;
   };
   onOpenSources: () => void;
@@ -52,7 +52,7 @@ export type EditorModeToolbarContributionContext = {
   onNavigateToUrl: (url: string) => void;
   onPdfHighlightSelection: () => void;
   onPdfNoteSelection: () => void;
-  browserLibraryPanel: EditorBrowserLibraryPanel | null;
+  browserHistoryAndFavoritesPanel: BrowserHistoryAndFavoritesPanel | null;
 };
 
 export interface EditorModeToolbarContribution {

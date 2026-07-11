@@ -1,11 +1,13 @@
 import { ContextMenuHandler } from 'cs/platform/contextview/browser/contextMenuHandler';
 import type { ContextMenuDelegate } from 'cs/base/browser/contextmenu';
-import type {
-  ContextMenuListener,
-  ContextMenuListenerDisposable,
-  ContextMenuService,
+import {
+  IContextMenuService,
+  IContextViewService,
+  type IContextMenuService as IContextMenuServiceShape,
+  type ContextMenuListener,
+  type ContextMenuListenerDisposable,
 } from 'cs/platform/contextview/browser/contextView';
-import { PlatformContextViewService } from 'cs/platform/contextview/browser/contextViewService';
+import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 
 class ListenerEmitter {
   private readonly listeners = new Set<ContextMenuListener>();
@@ -30,14 +32,21 @@ class ListenerEmitter {
   }
 }
 
-class PlatformContextMenuService implements ContextMenuService {
-  private readonly contextViewService = new PlatformContextViewService();
-  private readonly contextMenuHandler = new ContextMenuHandler(this.contextViewService);
+export class PlatformContextMenuService implements IContextMenuServiceShape {
+  declare readonly _serviceBrand: undefined;
+
+  private readonly contextMenuHandler: ContextMenuHandler;
   private readonly didShowEmitter = new ListenerEmitter();
   private readonly didHideEmitter = new ListenerEmitter();
 
   readonly onDidShowContextMenu = this.didShowEmitter.event;
   readonly onDidHideContextMenu = this.didHideEmitter.event;
+
+  constructor(
+    @IContextViewService contextViewService: IContextViewService,
+  ) {
+    this.contextMenuHandler = new ContextMenuHandler(contextViewService);
+  }
 
   showContextMenu(delegate: ContextMenuDelegate) {
     this.contextMenuHandler.showContextMenu({
@@ -58,12 +67,9 @@ class PlatformContextMenuService implements ContextMenuService {
 
   dispose = () => {
     this.contextMenuHandler.dispose();
-    this.contextViewService.dispose();
     this.didShowEmitter.dispose();
     this.didHideEmitter.dispose();
   };
 }
 
-export function createPlatformContextMenuService(): ContextMenuService {
-  return new PlatformContextMenuService();
-}
+registerSingleton(IContextMenuService, PlatformContextMenuService, InstantiationType.Delayed);

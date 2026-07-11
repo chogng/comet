@@ -9,6 +9,7 @@ import type {
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
 import { WebContentNavigationModel } from 'cs/workbench/contrib/browserView/browser/browserNavigationModel';
 import { EMPTY_WEB_CONTENT_STATE } from 'cs/workbench/contrib/browserView/common/browserView';
@@ -388,6 +389,7 @@ test('WebContentNavigationModel subscriptions stop after listener disposal', asy
 
 test('WebContentNavigationModel does not activate a default web content target for null tabs', async () => {
   const activatedTargetIds: Array<string | null | undefined> = [];
+  const visibilityWrites: boolean[] = [];
   let setWebUrlCalls = 0;
   const nativeHost = createNativeHostService({
     webContent: {
@@ -396,6 +398,9 @@ test('WebContentNavigationModel does not activate a default web content target f
       },
       async getState() {
         return createWebContentState();
+      },
+      setVisible(visible: boolean) {
+        visibilityWrites.push(visible);
       },
       onStateChange() {
         return () => {};
@@ -416,6 +421,7 @@ test('WebContentNavigationModel does not activate a default web content target f
     });
 
     assert.deepEqual(activatedTargetIds, []);
+    assert.deepEqual(visibilityWrites, [false]);
     assert.equal(setWebUrlCalls, 0);
     assert.deepEqual(model.getSnapshot().webContentState, EMPTY_WEB_CONTENT_STATE);
   });
@@ -528,8 +534,9 @@ test('TitlebarPart syncs headless chrome before the shell and statusbar', async 
   const statusbar = document.createElement('section');
   let toggleCount = 0;
   let focusAddressBarCount = 0;
+  const dropdownServices = await createDropdownTestServices();
 
-  const titlebarPart = createTitlebarPart(container, shell, statusbar);
+  const titlebarPart = createTitlebarPart(container, shell, statusbar, dropdownServices);
   container.append(titlebarPart.getElement(), shell);
 
   try {
@@ -588,5 +595,6 @@ test('TitlebarPart syncs headless chrome before the shell and statusbar', async 
     );
   } finally {
     titlebarPart.dispose();
+    dropdownServices.dispose();
   }
 });

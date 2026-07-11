@@ -51,12 +51,6 @@ export type EditorPartActions = {
   onCloseAllTabs: () => Promise<boolean>;
   onRenameTab: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
-  onPromptRenameBrowserFavorite: (
-    params: { url: string; title: string },
-  ) => Promise<string | null>;
-  onPromptCreateBrowserFavoriteFolder: (
-    params: { url: string; title: string },
-  ) => Promise<string | null>;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
@@ -132,8 +126,6 @@ export function createEditorPartProps({
     onCloseAllTabs,
     onRenameTab,
     onOpenEditor,
-    onPromptRenameBrowserFavorite,
-    onPromptCreateBrowserFavoriteFolder,
     onDraftDocumentChange,
     onSetEditorViewState,
     onDeleteEditorViewState,
@@ -158,20 +150,18 @@ export function createEditorPartProps({
       toolbarClearCache: ui.editorToolbarClearCache,
       toolbarAddressBar: ui.agentbarToolbarAddressBar,
       toolbarAddressPlaceholder: ui.editorToolbarAddressPlaceholder,
-      browserLibraryPanelTitle: ui.agentbarToolbarSources,
-      browserLibraryPanelRecentTitle: ui.editorToolbarSourcesRecent,
-      browserLibraryPanelRecentTodayTitle: ui.editorToolbarSourcesToday,
-      browserLibraryPanelRecentYesterdayTitle: ui.editorToolbarSourcesYesterday,
-      browserLibraryPanelRecentLast7DaysTitle: ui.editorToolbarSourcesLast7Days,
-      browserLibraryPanelRecentLast30DaysTitle: ui.editorToolbarSourcesLast30Days,
-      browserLibraryPanelRecentOlderTitle: ui.editorToolbarSourcesOlder,
-      browserLibraryPanelFavoritesTitle: ui.editorToolbarSourcesFavorites,
-      browserLibraryPanelEmptyState: ui.editorToolbarSourcesEmpty,
-      browserLibraryPanelContextOpen: ui.editorFavoriteContextOpen,
-      browserLibraryPanelContextOpenInNewTab: ui.editorFavoriteContextOpenInNewTab,
-      browserLibraryPanelContextNewFolder: ui.editorFavoriteContextNewFolder,
-      browserLibraryPanelContextRename: ui.editorFavoriteContextRename,
-      browserLibraryPanelContextRemoveFavorite: ui.editorFavoriteContextRemove,
+      browserHistoryAndFavoritesPanelTitle: ui.agentbarToolbarSources,
+      browserHistoryAndFavoritesPanelRecentTitle: ui.editorToolbarSourcesRecent,
+      browserHistoryAndFavoritesPanelRecentTodayTitle: ui.editorToolbarSourcesToday,
+      browserHistoryAndFavoritesPanelRecentYesterdayTitle: ui.editorToolbarSourcesYesterday,
+      browserHistoryAndFavoritesPanelRecentLast7DaysTitle: ui.editorToolbarSourcesLast7Days,
+      browserHistoryAndFavoritesPanelRecentLast30DaysTitle: ui.editorToolbarSourcesLast30Days,
+      browserHistoryAndFavoritesPanelRecentOlderTitle: ui.editorToolbarSourcesOlder,
+      browserHistoryAndFavoritesPanelFavoritesTitle: ui.editorToolbarSourcesFavorites,
+      browserHistoryAndFavoritesPanelEmptyState: ui.editorToolbarSourcesEmpty,
+      browserHistoryAndFavoritesPanelContextOpen: ui.editorFavoriteContextOpen,
+      browserHistoryAndFavoritesPanelContextOpenInNewTab: ui.editorFavoriteContextOpenInNewTab,
+      browserHistoryAndFavoritesPanelContextRemoveFavorite: ui.editorFavoriteContextRemove,
       draftMode: ui.editorDraftMode,
       sourceMode: ui.editorSourceMode,
       pdfMode: ui.editorPdfMode,
@@ -181,10 +171,6 @@ export function createEditorPartProps({
       rename: ui.editorTabContextRename,
       editorModalConfirm: ui.editorModalConfirm,
       editorModalCancel: ui.editorModalCancel,
-      renameFavoriteTitle: ui.editorFavoriteRenameTitle,
-      renameFavoriteLabel: ui.editorFavoriteRenameLabel,
-      newFavoriteFolderTitle: ui.editorFavoriteNewFolderTitle,
-      newFavoriteFolderLabel: ui.editorFavoriteNewFolderLabel,
       expandEditor: ui.editorExpand,
       collapseEditor: ui.editorCollapse,
       emptyWorkspaceTitle: ui.editorEmptyWorkspaceTitle,
@@ -257,8 +243,6 @@ export function createEditorPartProps({
     onCloseAllTabs,
     onRenameTab,
     onOpenEditor,
-    onPromptRenameBrowserFavorite,
-    onPromptCreateBrowserFavoriteFolder,
     onDraftDocumentChange,
     onSetEditorViewState,
     onDeleteEditorViewState,
@@ -371,8 +355,6 @@ export class EditorPartController {
       onCloseAllTabs: this.onCloseAllTabs,
       onRenameTab: this.onRenameTab,
       onOpenEditor: this.openEditor,
-      onPromptRenameBrowserFavorite: this.promptRenameBrowserFavorite,
-      onPromptCreateBrowserFavoriteFolder: this.promptCreateBrowserFavoriteFolder,
       onDraftDocumentChange: this.setDraftDocument,
       onSetEditorViewState: this.setEditorViewState,
       onDeleteEditorViewState: this.deleteEditorViewState,
@@ -557,43 +539,6 @@ export class EditorPartController {
     }
 
     this.editorModel.renameTab(tabId, nextTitle);
-  };
-
-  readonly promptRenameBrowserFavorite = async ({
-    title,
-  }: {
-    url: string;
-    title: string;
-  }) => {
-    const { ui } = this.context;
-    const nextTitle =
-      (await this.context.dialogService.input({
-        title: ui.editorFavoriteRenameTitle,
-        message: ui.editorFavoriteRenameLabel,
-        value: title.trim(),
-        primaryButton: ui.editorModalConfirm,
-        cancelButton: ui.editorModalCancel,
-      })).value ?? '';
-    return nextTitle.trim() || null;
-  };
-
-  readonly promptCreateBrowserFavoriteFolder = async ({
-    title,
-  }: {
-    url: string;
-    title: string;
-  }) => {
-    const { ui } = this.context;
-    const nextFolderName =
-      (await this.context.dialogService.input({
-        title: ui.editorFavoriteNewFolderTitle,
-        message: ui.editorFavoriteNewFolderLabel,
-        value: '',
-        placeholder: title.trim(),
-        primaryButton: ui.editorModalConfirm,
-        cancelButton: ui.editorModalCancel,
-      })).value ?? '';
-    return nextFolderName.trim() || null;
   };
 
   private readonly confirmCloseForTabIds = async (tabIds: readonly string[]) => {

@@ -3,11 +3,6 @@ import type {
 } from 'cs/base/browser/contextmenu';
 import { addDisposableListener, EventType, getWindow } from 'cs/base/browser/dom';
 import {
-  LayoutAnchorPosition,
-  layout,
-  type ILayoutAnchor,
-} from 'cs/base/common/layout';
-import {
   Menu,
   type MenuAction,
   type MenuHeaderOptions,
@@ -20,7 +15,13 @@ import {
   type IActionRunner,
 } from 'cs/base/common/actions';
 import type { IContextViewService } from 'cs/platform/contextview/browser/contextView';
-import { AnchorAlignment, AnchorAxisAlignment } from 'cs/base/browser/ui/contextview/contextview';
+import {
+  AnchorAlignment,
+  AnchorAxisAlignment,
+  AnchorPosition,
+  getAnchorRect,
+  type IAnchor,
+} from 'cs/base/browser/ui/contextview/contextview';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 
 type ContextMenuHidePayload = {
@@ -40,49 +41,20 @@ function resolveContextMenuOffset(delegate: ContextMenuDelegate) {
     : 0;
 }
 
-function resolveAnchorRect(delegate: ContextMenuDelegate) {
+function resolveContextViewAnchor(delegate: ContextMenuDelegate): HTMLElement | IAnchor {
   const anchor = delegate.getAnchor();
-  if (anchor instanceof HTMLElement) {
-    const rect = anchor.getBoundingClientRect();
-    return {
-      x: rect.left,
-      y: rect.top,
-      width: rect.width,
-      height: rect.height,
-    };
+  if (!(anchor instanceof HTMLElement)) {
+    return anchor;
   }
 
+  const rect = getAnchorRect(anchor);
+  const offset = resolveContextMenuOffset(delegate);
   return {
-    x: anchor.x,
-    y: anchor.y,
-    width: anchor.width ?? 0,
-    height: anchor.height ?? 0,
+    x: rect.left,
+    y: rect.top - offset,
+    width: rect.width,
+    height: rect.height + offset * 2,
   };
-}
-
-function resolveVerticalAnchor(
-  delegate: ContextMenuDelegate,
-  offset: number,
-): ILayoutAnchor {
-  const anchorRect = resolveAnchorRect(delegate);
-  return {
-    offset: anchorRect.y - offset,
-    size: anchorRect.height + offset * 2,
-    position: delegate.position === 'above'
-      ? LayoutAnchorPosition.After
-      : LayoutAnchorPosition.Before,
-  };
-}
-
-function resolveMenuPlacement(
-  delegate: ContextMenuDelegate,
-  menuHeight: number,
-): 'top' | 'bottom' {
-  const viewportHeight =
-    window.innerHeight || document.documentElement.clientHeight || 0;
-  const anchor = resolveVerticalAnchor(delegate, resolveContextMenuOffset(delegate));
-  const result = layout(viewportHeight, menuHeight, anchor);
-  return result.position + menuHeight <= anchor.offset ? 'top' : 'bottom';
 }
 
 export class ContextMenuHandler {
@@ -105,11 +77,10 @@ export class ContextMenuHandler {
         ? document.activeElement
         : null;
     const actionRunner = delegate.actionRunner ?? new ActionRunner();
-    let menu: Menu | null = null;
+    const menu = this.renderMenu(options, delegate, header, actionRunner);
 
-    this.visible = true;
     this.contextViewService.showContextView({
-      getAnchor: delegate.getAnchor,
+      getAnchor: () => resolveContextViewAnchor(delegate),
       canRelayout: false,
       anchorAlignment: delegate.anchorAlignment === 'right' || delegate.alignment === 'end'
         ? AnchorAlignment.RIGHT
@@ -117,9 +88,11 @@ export class ContextMenuHandler {
       anchorAxisAlignment: delegate.anchorAxisAlignment === 'horizontal'
         ? AnchorAxisAlignment.HORIZONTAL
         : AnchorAxisAlignment.VERTICAL,
+      anchorPosition: delegate.position === 'above'
+        ? AnchorPosition.ABOVE
+        : AnchorPosition.BELOW,
       render: (container) => {
         const menuDisposables = new DisposableStore();
-        menu = this.renderMenu(options, delegate, header, actionRunner);
         container.classList.add('comet-actionbar-context-view');
         const menuClassName = delegate.getMenuClassName?.();
         if (menuClassName) {
@@ -127,9 +100,6 @@ export class ContextMenuHandler {
         }
         container.append(menu.getElement());
         const targetWindow = getWindow(container);
-        menuDisposables.add(addDisposableListener(targetWindow, EventType.BLUR, () => {
-          this.contextViewService.hideContextView({ didCancel: true });
-        }));
         menuDisposables.add(addDisposableListener(targetWindow, EventType.MOUSE_DOWN, (browserEvent: MouseEvent) => {
           if (browserEvent.defaultPrevented) {
             return;
@@ -143,16 +113,15 @@ export class ContextMenuHandler {
           this.contextViewService.hideContextView({ didCancel: true });
         }));
         menuDisposables.add(toDisposable(() => {
-          menu?.dispose();
+          menu.dispose();
           if (!delegate.actionRunner) {
             actionRunner.dispose();
           }
-          menu = null;
         }));
         return menuDisposables;
       },
       focus: () => {
-        if (!menu || header?.autoFocusOnShow) {
+        if (header?.autoFocusOnShow) {
           return;
         }
 
@@ -173,6 +142,16 @@ export class ContextMenuHandler {
         this.focusToReturn = null;
       },
     });
+    this.visible = true;
+
+    menu.setOptions(this.createMenuOptions(
+      () => menu,
+      options,
+      delegate,
+      header,
+      actionRunner,
+      this.contextViewService.getContextViewElement().classList.contains('top') ? 'top' : 'bottom',
+    ));
   }
 
   hideContextMenu(didCancel = true) {
@@ -192,16 +171,29 @@ export class ContextMenuHandler {
     header: MenuHeaderOptions | undefined,
     actionRunner: IActionRunner,
   ) {
-    const dataMenu = delegate.getMenuData?.();
     let menu: Menu;
-    const resolveCurrentPlacement = (): 'top' | 'bottom' =>
-      menu.getElement().classList.contains('dropdown-menu-top')
-        ? 'top'
-        : 'bottom';
-    const createMenuOptions = (
-      items: readonly IAction[],
-      placement: 'top' | 'bottom',
-    ): MenuOptions => ({
+    menu = new Menu(this.createMenuOptions(
+      () => menu,
+      options,
+      delegate,
+      header,
+      actionRunner,
+      delegate.position === 'above' ? 'top' : 'bottom',
+    ));
+
+    return menu;
+  }
+
+  private createMenuOptions(
+    getMenu: () => Menu,
+    items: readonly IAction[],
+    delegate: ContextMenuDelegate,
+    header: MenuHeaderOptions | undefined,
+    actionRunner: IActionRunner,
+    placement: 'top' | 'bottom',
+  ): MenuOptions {
+    const dataMenu = delegate.getMenuData?.();
+    return {
       items,
       dataMenu,
       role: 'menu',
@@ -211,9 +203,16 @@ export class ContextMenuHandler {
         const runResult = actionRunner.run(action, delegate.getActionsContext?.());
         if ((action as MenuAction).keepOpenOnClick) {
           void Promise.resolve(runResult).then(() => {
-            menu.setOptions(createMenuOptions(
+            const menu = getMenu();
+            menu.setOptions(this.createMenuOptions(
+              getMenu,
               delegate.getActions(),
-              resolveCurrentPlacement(),
+              delegate,
+              header,
+              actionRunner,
+              menu.getElement().classList.contains('comet-dropdown-menu-top')
+                ? 'top'
+                : 'bottom',
             ));
           });
           return;
@@ -226,20 +225,6 @@ export class ContextMenuHandler {
       onCancel: () => {
         this.contextViewService.hideContextView({ didCancel: true });
       },
-    });
-    menu = new Menu(createMenuOptions(
-      options,
-      delegate.position === 'above' ? 'top' : 'bottom',
-    ));
-
-    queueMicrotask(() => {
-      const placement = resolveMenuPlacement(
-        delegate,
-        menu.getElement().getBoundingClientRect().height,
-      );
-      menu.setOptions(createMenuOptions(options, placement));
-    });
-
-    return menu;
+    };
   }
 }

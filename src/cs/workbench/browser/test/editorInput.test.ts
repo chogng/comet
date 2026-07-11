@@ -13,6 +13,7 @@ import {
   getEditorContentTabInputResource,
   getEditorContentTabInputOpenKey,
   getEditorTabInputResourceKey,
+  hasBrowserTabPage,
   isEmptyBrowserTabInput,
   isEmptyPdfTabInput,
   normalizeEditorTabInput,
@@ -134,6 +135,15 @@ test('getEditorContentTabTitle treats about:blank as an empty browser tab title'
 test('getEditorContentDisplayUrl hides about:blank from url displays', () => {
   assert.equal(getEditorContentDisplayUrl(EMPTY_BROWSER_TAB_URL), '');
   assert.equal(getEditorContentDisplayUrl(' https://example.com/paper '), 'https://example.com/paper');
+});
+
+test('hasBrowserTabPage excludes empty and about:blank browser URLs', () => {
+  assert.deepEqual([
+    hasBrowserTabPage(undefined),
+    hasBrowserTabPage(''),
+    hasBrowserTabPage(EMPTY_BROWSER_TAB_URL),
+    hasBrowserTabPage('https://example.com'),
+  ], [false, false, false, true]);
 });
 
 test('isEmptyBrowserTabInput matches only browser about:blank tabs', () => {

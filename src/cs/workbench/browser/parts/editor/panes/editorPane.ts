@@ -1,3 +1,5 @@
+import type { BrowserHistoryAndFavoritesPanelFeatures } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
+
 export type EditorPaneLayout = {
   width: number;
   height: number;
@@ -11,6 +13,10 @@ export abstract class EditorPane<TProps, TViewState = unknown> {
   getToolbarElement(): HTMLElement | null {
     return null;
   }
+
+	getBrowserHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined {
+		return undefined;
+	}
 
   clearInput() {}
 

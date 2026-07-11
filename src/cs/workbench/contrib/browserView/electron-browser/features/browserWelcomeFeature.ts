@@ -14,6 +14,7 @@ import type { IBrowserHistoryEntry } from 'cs/platform/browserView/common/browse
 import { BrowserViewStorageScope } from 'cs/platform/browserView/common/browserView';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { hasBrowserTabPage } from 'cs/workbench/browser/parts/editor/editorInput';
 import {
 	BrowserEditor,
 	BrowserEditorContribution,
@@ -46,13 +47,13 @@ export class BrowserWelcomeFeature extends BrowserEditorContribution {
 	}
 
 	override prerenderInput(input: BrowserEditorInput): void {
-		this.setVisible(!input.url);
+		this.setVisible(!hasBrowserTabPage(input.url));
 	}
 
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
-		this.setVisible(!model.url);
+		this.setVisible(!hasBrowserTabPage(model.url));
 		this.render(model);
-		store.add(model.onDidNavigate(event => this.setVisible(!event.url)));
+		store.add(model.onDidNavigate(event => this.setVisible(!hasBrowserTabPage(event.url))));
 		store.add(this.browserViewWorkbenchService.browserHistory.onDidChange(() => this.render(model)));
 	}
 

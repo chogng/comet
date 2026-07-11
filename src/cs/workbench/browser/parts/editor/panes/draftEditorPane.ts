@@ -12,8 +12,9 @@ import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/pan
 import type { DraftEditorSurfaceActionId } from 'cs/workbench/browser/parts/editor/activeDraftEditorCommandExecutor';
 import type { WritingEditorSurfaceViewState } from 'cs/editor/browser/text/editor';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
-export type DraftEditorPaneProps = {
+export type DraftEditorPaneProps = DropdownContextServices & {
   labels: EditorPartLabels;
   draftTab: EditorWorkspaceDraftTab;
   dialogService: IDialogService;
@@ -139,6 +140,8 @@ export class DraftEditorPane extends EditorPane<
 
   private toEditorProps(props: DraftEditorPaneProps) {
     return {
+      contextMenuService: props.contextMenuService,
+      contextViewProvider: props.contextViewProvider,
       document: props.draftTab.document,
       placeholder: props.labels.draftBodyPlaceholder,
       statusLabels: {

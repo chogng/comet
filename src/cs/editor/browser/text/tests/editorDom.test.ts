@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { createEmptyWritingEditorDocument, createWritingEditorDocumentFromPlainText, writingEditorDocumentToPlainText } from 'cs/editor/common/writingEditorDocument';
@@ -8,12 +8,15 @@ import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/text/edito
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 let ProseMirrorEditor: typeof import('cs/editor/browser/text/editor').ProseMirrorEditor;
 let DraftEditorToolbar: typeof import('cs/editor/browser/text/editorToolbar').DraftEditorToolbar;
 let TextSelection: typeof import('prosemirror-state').TextSelection;
 let DomScrollableElement: typeof import('cs/base/browser/ui/scrollbar/scrollableElement').DomScrollableElement;
 let cleanupDomEnvironment: (() => void) | null = null;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 const labels = {
   toolbarMore: 'More',
@@ -65,11 +68,20 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
+});
+
 function createProps(
   document: WritingEditorDocument,
   onDocumentChange: (nextDocument: WritingEditorDocument) => void,
 ): import('cs/editor/browser/text/editor').WritingEditorSurfaceProps {
   return {
+    ...dropdownServices,
     document,
     placeholder: 'Write here',
     labels,
@@ -294,6 +306,7 @@ test('ProseMirrorEditor updates placeholder text without emitting a document cha
 
 test('DraftEditorToolbar shows preset font labels for normalized browser font-family values', () => {
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -350,6 +363,7 @@ test('DraftEditorToolbar shows preset font labels for normalized browser font-fa
 
 test('DraftEditorToolbar shows Chinese named font-size presets for matching px values', () => {
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -406,6 +420,7 @@ test('DraftEditorToolbar shows Chinese named font-size presets for matching px v
 
 test('DraftEditorToolbar orders Chinese named font-size presets from large to small', () => {
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -583,6 +598,7 @@ test('ProseMirrorEditor syncs default body style from editorDraftStyleService', 
 
 test('DraftEditorToolbar uses DengXian as the implicit default font and hides Default menu item', () => {
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -669,6 +685,7 @@ test('DraftEditorToolbar marks unavailable preset fonts in the dropdown', () => 
   });
 
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -734,6 +751,7 @@ test('DraftEditorToolbar marks unavailable preset fonts in the dropdown', () => 
 
 test('DraftEditorToolbar disables figure-ref action when no figures are available', () => {
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -799,6 +817,7 @@ test('DraftEditorToolbar disables figure-ref action when no figures are availabl
 test('DraftEditorToolbar opens the more menu and dispatches overflow actions', async () => {
   const calls: string[] = [];
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -885,6 +904,7 @@ test('DraftEditorToolbar opens the more menu and dispatches overflow actions', a
 
 test('DraftEditorToolbar renders draft-specific toolbar content classes', () => {
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,
@@ -981,6 +1001,7 @@ test('DraftEditorToolbar renders draft-specific toolbar content classes', () => 
 test('DraftEditorToolbar moves overflowing action buttons into the more menu', async () => {
   const alignCalls: Array<'left' | 'center' | 'right'> = [];
   const toolbar = new DraftEditorToolbar({
+    ...dropdownServices,
     labels,
     toolbarState: {
       isParagraphActive: true,

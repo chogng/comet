@@ -86,6 +86,7 @@ export class BrowserFavoritesFeature extends BrowserEditorContribution {
 	private static readonly StorageKey = 'workbench.browser.favorites';
 
 	private readonly onDidChangeStateEmitter = this._register(new Emitter<void>());
+	readonly onDidChange = this.onDidChangeStateEmitter.event;
 	private readonly isFavoriteContext: ContextKey<boolean>;
 	private readonly indicator: FavoriteIndicator;
 	private readonly storageListenerStore = this._register(new DisposableStore());
@@ -98,6 +99,7 @@ export class BrowserFavoritesFeature extends BrowserEditorContribution {
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 	) {
 		super(editor);
+		editor.setFavoritesFeature(this);
 		this.load();
 		this.isFavoriteContext = CONTEXT_BROWSER_URL_IS_FAVORITED.bindTo(contextKeyService);
 		this.indicator = new FavoriteIndicator(keybindingService, () => this.toggleCurrent());
@@ -141,6 +143,10 @@ export class BrowserFavoritesFeature extends BrowserEditorContribution {
 
 	isFavorite(url: string): boolean {
 		return this.urls.has(url);
+	}
+
+	get favorites(): readonly string[] {
+		return [...this.urls];
 	}
 
 	toggleCurrent(): void {
@@ -238,7 +244,7 @@ export class BrowserFavoritesFeature extends BrowserEditorContribution {
 		this.onDidChangeStateEmitter.fire();
 	}
 
-	private toggle(url: string): void {
+	toggle(url: string): void {
 		if (this.urls.has(url)) {
 			this.urls.delete(url);
 		} else {
@@ -247,7 +253,7 @@ export class BrowserFavoritesFeature extends BrowserEditorContribution {
 		this.save();
 	}
 
-	private remove(url: string): void {
+	remove(url: string): void {
 		if (!this.urls.delete(url)) {
 			return;
 		}

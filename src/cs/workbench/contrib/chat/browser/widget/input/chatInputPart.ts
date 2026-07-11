@@ -19,6 +19,7 @@ import { CancellationTokenSource, isCancellationError } from 'cs/base/common/can
 import { DisposableStore, MutableDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import {
+  IContextMenuService,
 	IContextViewService,
 	type IOpenContextView,
 } from 'cs/platform/contextview/browser/contextView';
@@ -74,7 +75,10 @@ function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerPro
 	};
 }
 
-function createChatInputAddActionItem() {
+function createChatInputAddActionItem(
+	contextMenuService: IContextMenuService,
+	contextViewProvider: IContextViewService,
+) {
 	const addLabel = localize('chatInputAdd', "Add");
 	const menu: ActionBarMenuItem[] = [
 		{
@@ -105,6 +109,8 @@ function createChatInputAddActionItem() {
 	];
 
 	return createDropdownMenuActionViewItem({
+		contextMenuService,
+		contextViewProvider,
 		label: addLabel,
 		title: addLabel,
 		content: createLxIcon('add'),
@@ -136,12 +142,17 @@ export class ChatInputPart {
 	constructor(
 		props: ChatInputPartProps,
 		@IContextViewService private readonly contextViewService: IContextViewService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IFetchService private readonly fetchService: IFetchService,
 		@IChatService private readonly chatService: IChatService,
 		@INotificationService private readonly notificationService: INotificationService,
 	) {
 		this.props = props;
-		this.modelPicker = new ChatInputModelPickerActionViewItem(getModelPickerProps(props));
+		this.modelPicker = new ChatInputModelPickerActionViewItem(
+			getModelPickerProps(props),
+			this.contextMenuService,
+			this.contextViewService,
+		);
 		this.disposables.add(this.fetchService.onDidChangeCatalog(journalId => {
 			if (journalId === this.activeJournalId) {
 				this.render();
@@ -236,7 +247,7 @@ export class ChatInputPart {
 		const addMenuActions = createActionBarView({
 			className: 'comet-chat-composer-add-menu-actions',
 			ariaRole: 'group',
-			items: [createChatInputAddActionItem()],
+			items: [createChatInputAddActionItem(this.contextMenuService, this.contextViewService)],
 		});
 		this.renderDisposables.add(addMenuActions);
 		composerTools.append(addMenuActions.getElement());

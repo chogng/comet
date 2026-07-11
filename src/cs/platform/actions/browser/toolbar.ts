@@ -18,6 +18,7 @@ import { getActionBarActions } from 'cs/platform/actions/browser/menuEntryAction
 import { getMenuActions, MenuId, MenuRegistry } from 'cs/platform/actions/common/actions';
 import type { IMenuActionOptions } from 'cs/platform/actions/common/actions';
 import { IContextKeyService } from 'cs/platform/contextkey/common/contextkey';
+import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 
 export interface IToolBarRenderOptions {
 	primaryGroup?: string | ((actionGroup: string) => boolean);
@@ -45,6 +46,8 @@ export class MenuWorkbenchToolBar extends Disposable {
 		private readonly menuId: MenuId,
 		options: IMenuWorkbenchToolBarOptions | undefined,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
 	) {
 		super();
 
@@ -103,6 +106,8 @@ export class MenuWorkbenchToolBar extends Disposable {
 		if (action instanceof SubmenuAction) {
 			const icon = action.class ? $('span', { class: action.class }) : undefined;
 			return createDropdownMenuActionViewItem({
+				contextMenuService: this.contextMenuService,
+				contextViewProvider: this.contextViewService,
 				id: action.id,
 				label: action.label,
 				title: action.tooltip || action.label,

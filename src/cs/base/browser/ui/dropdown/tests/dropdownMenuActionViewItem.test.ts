@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let restoreComputedStyle: (() => void) | null = null;
+let restoreElementDimensions: (() => void) | null = null;
 let ActionWithDropdownActionViewItem:
   typeof import('cs/base/browser/ui/dropdown/dropdownActionViewItem').ActionWithDropdownActionViewItem;
 let createDropdownMenuActionViewItem:
   typeof import('cs/base/browser/ui/dropdown/dropdownActionViewItem').createDropdownMenuActionViewItem;
 let DropdownMenuActionViewItem:
   typeof import('cs/base/browser/ui/dropdown/dropdownActionViewItem').DropdownMenuActionViewItem;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 function installStableComputedStyleZoom() {
   const originalGetComputedStyle = window.getComputedStyle;
@@ -37,9 +41,38 @@ function installStableComputedStyleZoom() {
   };
 }
 
+function installElementDimensionsFromClientRect() {
+  const originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+  const originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+  Object.defineProperties(HTMLElement.prototype, {
+    offsetWidth: {
+      configurable: true,
+      get() {
+        return this.getBoundingClientRect().width;
+      },
+    },
+    offsetHeight: {
+      configurable: true,
+      get() {
+        return this.getBoundingClientRect().height;
+      },
+    },
+  });
+
+  return () => {
+    if (originalOffsetWidth) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth);
+    }
+    if (originalOffsetHeight) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', originalOffsetHeight);
+    }
+  };
+}
+
 before(async () => {
   if (typeof document !== 'undefined') {
     restoreComputedStyle = installStableComputedStyleZoom();
+    restoreElementDimensions = installElementDimensionsFromClientRect();
     ({
       ActionWithDropdownActionViewItem,
       createDropdownMenuActionViewItem,
@@ -51,6 +84,7 @@ before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   restoreComputedStyle = installStableComputedStyleZoom();
+  restoreElementDimensions = installElementDimensionsFromClientRect();
   ({
     ActionWithDropdownActionViewItem,
     createDropdownMenuActionViewItem,
@@ -61,12 +95,23 @@ before(async () => {
 after(() => {
   restoreComputedStyle?.();
   restoreComputedStyle = null;
+  restoreElementDimensions?.();
+  restoreElementDimensions = null;
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
 });
 
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
+});
+
 test('createDropdownMenuActionViewItem returns a dropdown action view item', () => {
   const item = createDropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     buttonClassName: 'example-action',
     menuClassName: 'example-menu',
@@ -82,6 +127,7 @@ test('createDropdownMenuActionViewItem returns a dropdown action view item', () 
 test('DropdownMenuActionViewItem renders and opens a menu overlay', async () => {
   let selected = '';
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     menu: [
@@ -127,9 +173,52 @@ test('DropdownMenuActionViewItem renders and opens a menu overlay', async () => 
   }
 });
 
+test('shared context services transfer dropdown ownership without cross-closing', async () => {
+  const firstItem = new DropdownMenuActionViewItem({
+    ...dropdownServices,
+    label: 'First',
+    menu: [{ label: 'First action' }],
+  });
+  const secondItem = new DropdownMenuActionViewItem({
+    ...dropdownServices,
+    label: 'Second',
+    menu: [{ label: 'Second action' }],
+  });
+  const firstHost = document.body.appendChild(document.createElement('div'));
+  const secondHost = document.body.appendChild(document.createElement('div'));
+
+  try {
+    firstItem.render(firstHost);
+    secondItem.render(secondHost);
+    const firstButton = firstHost.querySelector('button');
+    const secondButton = secondHost.querySelector('button');
+    assert(firstButton instanceof HTMLButtonElement);
+    assert(secondButton instanceof HTMLButtonElement);
+
+    firstButton.click();
+    assert.equal(firstButton.getAttribute('aria-expanded'), 'true');
+
+    secondButton.click();
+    assert.equal(firstButton.getAttribute('aria-expanded'), 'false');
+    assert.equal(secondButton.getAttribute('aria-expanded'), 'true');
+    assert.equal(dropdownServices.contextMenuService.isVisible(), true);
+    assert.match(document.body.querySelector('.comet-dropdown-menu')?.textContent ?? '', /Second action/);
+
+    firstItem.dispose();
+    assert.equal(secondButton.getAttribute('aria-expanded'), 'true');
+    assert.equal(dropdownServices.contextMenuService.isVisible(), true);
+    assert.match(document.body.querySelector('.comet-dropdown-menu')?.textContent ?? '', /Second action/);
+  } finally {
+    firstItem.dispose();
+    secondItem.dispose();
+    document.body.replaceChildren();
+  }
+});
+
 test('DropdownMenuActionViewItem can render a custom overlay', async () => {
   let closed = 0;
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'History',
     content: 'History',
     overlayRole: 'dialog',
@@ -162,11 +251,11 @@ test('DropdownMenuActionViewItem can render a custom overlay', async () => {
 
     const overlay = document.body.querySelector('.custom-history-overlay');
     assert(overlay instanceof HTMLElement);
-    const contextViewContent = document.body.querySelector('.comet-context-view-content');
+    const contextViewContent = document.body.querySelector('.context-view');
     assert(contextViewContent instanceof HTMLElement);
     assert.equal(trigger.getAttribute('aria-haspopup'), 'dialog');
     assert.equal(trigger.getAttribute('aria-expanded'), 'true');
-    assert.equal(contextViewContent.style.minWidth, '0px');
+    assert.equal(contextViewContent.style.minWidth, '');
     assert.equal(actionItem.classList.contains('comet-is-active'), true);
 
     const closeButton = overlay.querySelector('button');
@@ -198,7 +287,7 @@ test('DropdownMenuActionViewItem syncs custom overlay placement class from the r
   });
 
   HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.classList.contains('comet-context-view')) {
+    if (this.classList.contains('context-view')) {
       return {
         x: 8,
         y: 8,
@@ -234,6 +323,7 @@ test('DropdownMenuActionViewItem syncs custom overlay placement class from the r
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'History',
     content: 'History',
     overlayRole: 'dialog',
@@ -255,12 +345,12 @@ test('DropdownMenuActionViewItem syncs custom overlay placement class from the r
     await delay(0);
     await delay(0);
 
-    const contextView = document.body.querySelector('.comet-context-view');
+    const contextView = document.body.querySelector('.context-view');
     const overlay = document.body.querySelector('.custom-history-overlay');
     assert(contextView instanceof HTMLElement);
     assert(overlay instanceof HTMLElement);
-    assert.equal(contextView.classList.contains('top'), true);
-    assert.equal(overlay.classList.contains('comet-dropdown-menu-top'), true);
+    assert.equal(contextView.classList.contains('top'), true, contextView.outerHTML);
+    assert.equal(overlay.classList.contains('comet-dropdown-menu-top'), true, overlay.outerHTML);
     assert.equal(overlay.classList.contains('comet-dropdown-menu-bottom'), false);
   } finally {
     item.dispose();
@@ -300,6 +390,7 @@ test('DropdownMenuActionViewItem delegates menu lifecycle to an injected context
     },
   };
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     contextMenuService,
@@ -356,6 +447,7 @@ test('DropdownMenuActionViewItem requests focus restoration when opened from key
     dispose() {},
   };
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     contextMenuService,
@@ -394,6 +486,7 @@ test('DropdownMenuActionViewItem forwards a custom offset to the context menu se
     dispose() {},
   };
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     contextMenuService,
@@ -432,6 +525,7 @@ test('DropdownMenuActionViewItem forwards requested menu position to the context
     dispose() {},
   };
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     contextMenuService,
@@ -471,6 +565,7 @@ test('DropdownMenuActionViewItem forwards menu header and supports dynamic menu 
   };
   let selected = '';
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'History',
     content: 'History',
     contextMenuService,
@@ -556,7 +651,7 @@ test('DropdownMenuActionViewItem syncs menu placement class from the resolved co
   });
 
   HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.classList.contains('comet-context-view')) {
+    if (this.classList.contains('context-view')) {
       return {
         x: 8,
         y: 8,
@@ -592,6 +687,7 @@ test('DropdownMenuActionViewItem syncs menu placement class from the resolved co
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     overlayPosition: 'above',
@@ -609,7 +705,7 @@ test('DropdownMenuActionViewItem syncs menu placement class from the resolved co
     await delay(0);
     await delay(0);
 
-    const contextView = document.body.querySelector('.comet-context-view');
+    const contextView = document.body.querySelector('.context-view');
     const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(contextView instanceof HTMLElement);
     assert(menu instanceof HTMLElement);
@@ -643,7 +739,7 @@ test('DropdownMenuActionViewItem falls back to below placement when above cannot
   });
 
   HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.classList.contains('comet-context-view-content')) {
+    if (this.classList.contains('context-view')) {
       return {
         x: 8,
         y: 8,
@@ -679,6 +775,7 @@ test('DropdownMenuActionViewItem falls back to below placement when above cannot
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     overlayPosition: 'above',
@@ -696,13 +793,13 @@ test('DropdownMenuActionViewItem falls back to below placement when above cannot
     await delay(0);
     await delay(0);
 
-    const contextView = document.body.querySelector('.comet-context-view');
+    const contextView = document.body.querySelector('.context-view');
     const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(contextView instanceof HTMLElement);
     assert(menu instanceof HTMLElement);
-    assert.equal(contextView.classList.contains('bottom'), true);
+    assert.equal(contextView.classList.contains('bottom'), true, contextView.outerHTML);
     assert.equal(contextView.classList.contains('top'), false);
-    assert.equal(menu.classList.contains('comet-dropdown-menu-bottom'), true);
+    assert.equal(menu.classList.contains('comet-dropdown-menu-bottom'), true, menu.outerHTML);
     assert.equal(menu.classList.contains('comet-dropdown-menu-top'), false);
   } finally {
     item.dispose();
@@ -732,7 +829,7 @@ test('DropdownMenuActionViewItem flips above when the default below placement ca
   });
 
   HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.classList.contains('comet-context-view-content')) {
+    if (this.classList.contains('context-view')) {
       return {
         x: 8,
         y: 8,
@@ -768,6 +865,7 @@ test('DropdownMenuActionViewItem flips above when the default below placement ca
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     menu: [{ label: 'Archive' }],
@@ -784,14 +882,14 @@ test('DropdownMenuActionViewItem flips above when the default below placement ca
     await delay(0);
     await delay(0);
 
-    const contextView = document.body.querySelector('.comet-context-view');
+    const contextView = document.body.querySelector('.context-view');
     const menu = document.body.querySelector('.comet-dropdown-menu');
     assert(contextView instanceof HTMLElement);
     assert(menu instanceof HTMLElement);
-    assert.equal(contextView.classList.contains('top'), true);
+    assert.equal(contextView.classList.contains('top'), true, contextView.outerHTML);
     assert.equal(contextView.classList.contains('bottom'), false);
     assert.equal(contextView.style.top, '136px');
-    assert.equal(menu.classList.contains('comet-dropdown-menu-top'), true);
+    assert.equal(menu.classList.contains('comet-dropdown-menu-top'), true, menu.outerHTML);
     assert.equal(menu.classList.contains('comet-dropdown-menu-bottom'), false);
   } finally {
     item.dispose();
@@ -830,7 +928,7 @@ test('DropdownMenuActionViewItem uses zoom-adjusted anchor geometry for menu pla
   }) as typeof window.getComputedStyle;
 
   HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.classList.contains('comet-context-view-content')) {
+    if (this.classList.contains('context-view')) {
       return {
         x: 8,
         y: 8,
@@ -866,6 +964,7 @@ test('DropdownMenuActionViewItem uses zoom-adjusted anchor geometry for menu pla
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     menu: [{ label: 'Archive' }],
@@ -882,7 +981,7 @@ test('DropdownMenuActionViewItem uses zoom-adjusted anchor geometry for menu pla
     await delay(0);
     await delay(0);
 
-    const contextView = document.body.querySelector('.comet-context-view');
+    const contextView = document.body.querySelector('.context-view');
     assert(contextView instanceof HTMLElement);
     assert.equal(contextView.style.left, '200px');
   } finally {
@@ -923,7 +1022,7 @@ test('DropdownMenuActionViewItem can opt into end alignment for menu placement',
   }) as typeof window.getComputedStyle;
 
   HTMLElement.prototype.getBoundingClientRect = function () {
-    if (this.classList.contains('comet-context-view-content')) {
+    if (this.classList.contains('context-view')) {
       return {
         x: 8,
         y: 8,
@@ -959,6 +1058,7 @@ test('DropdownMenuActionViewItem can opt into end alignment for menu placement',
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     overlayAlignment: 'end',
@@ -976,7 +1076,7 @@ test('DropdownMenuActionViewItem can opt into end alignment for menu placement',
     await delay(0);
     await delay(0);
 
-    const contextView = document.body.querySelector('.comet-context-view');
+    const contextView = document.body.querySelector('.context-view');
     assert(contextView instanceof HTMLElement);
     assert.equal(contextView.style.left, '120px');
   } finally {
@@ -1034,6 +1134,7 @@ test('DropdownMenuActionViewItem uses edge-aware policy near viewport edge', asy
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     contextMenuService,
@@ -1106,6 +1207,7 @@ test('DropdownMenuActionViewItem uses prefer-start policy to flip when start can
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     contextMenuService,
@@ -1151,6 +1253,7 @@ test('DropdownMenuActionViewItem allows alignment provider to override static al
   };
 
   const item = new DropdownMenuActionViewItem({
+    ...dropdownServices,
     label: 'More',
     content: 'More',
     contextMenuService,
@@ -1190,6 +1293,7 @@ test('ActionWithDropdownActionViewItem renders primary and dropdown controls', a
       },
     },
     dropdown: {
+      ...dropdownServices,
       label: 'More',
       content: 'More',
       menu: [

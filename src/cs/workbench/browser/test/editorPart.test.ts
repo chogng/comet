@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { after, before, beforeEach } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
@@ -20,8 +20,10 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 
 const domEnvironment = installDomTestEnvironment();
+let dropdownServices: Awaited<ReturnType<typeof createDropdownTestServices>>;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 class TestBrowserEditorInput extends EditorInput {
@@ -91,9 +93,14 @@ function createBrowserEditorResolverService() {
   return editorResolverService;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   window.localStorage.clear();
   document.body.replaceChildren();
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
 });
 
 before(async () => {
@@ -113,6 +120,7 @@ function withBrowserToolbarActions(
   } = {},
 ): EditorPartProps {
   return {
+    ...dropdownServices,
     ...props,
     onOpenAddressBarSourceMenu: () => {},
     onToolbarNavigateBack: () => {},
@@ -531,10 +539,10 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
     await waitForNextTask();
     await waitForNextTask();
 
-    const panel = document.body.querySelector('.comet-editor-browser-library-panel');
+    const panel = document.body.querySelector('.comet-browser-history-and-favorites-panel');
     assert(panel instanceof HTMLElement);
     const favoriteItem = panel.querySelector(
-      `.comet-editor-browser-library-item.comet-is-favorite[title="${favoriteUrl}"]`,
+      `.comet-browser-history-and-favorites-item.comet-is-favorite[title="${favoriteUrl}"]`,
     );
     assert(favoriteItem instanceof HTMLButtonElement);
     favoriteItem.dispatchEvent(new MouseEvent('contextmenu', {
@@ -546,7 +554,7 @@ test('EditorPartView favorite context menu opens a fresh browser tab instead of 
     await waitForNextTask();
 
     const menu = document.body.querySelector(
-      '.dropdown-menu[data-menu="editor-browser-library-favorite-item"]',
+      '.dropdown-menu[data-menu="browser-history-and-favorites-favorite-item"]',
     );
     assert(menu instanceof HTMLElement);
     const openInNewTabItem = Array.from(menu.querySelectorAll('.dropdown-menu-item')).find(

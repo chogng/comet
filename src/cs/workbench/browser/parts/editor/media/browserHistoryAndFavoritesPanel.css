@@ -1,36 +1,36 @@
-.comet-editor-browser-library-panel-overlay {
+.comet-browser-history-and-favorites-panel-overlay {
   position: fixed;
   z-index: 2;
   overflow: hidden;
   pointer-events: none;
 }
 
-.comet-editor-browser-library-panel-backdrop {
+.comet-browser-history-and-favorites-panel-backdrop {
   position: absolute;
   inset: 0;
   margin: 0;
   border: 0;
   padding: 0;
-  background: var(--vscode-editor-browserLibraryMaskBackground, rgba(14, 23, 33, 0.24));
+  background: var(--vscode-editor-browserHistoryAndFavoritesMaskBackground, rgba(14, 23, 33, 0.24));
   opacity: 0;
   pointer-events: none;
   transition: opacity 160ms ease;
 }
 
-.comet-editor-browser-library-panel-backdrop.comet-is-open {
+.comet-browser-history-and-favorites-panel-backdrop.comet-is-open {
   opacity: 1;
   pointer-events: auto;
 }
 
-.comet-editor-browser-library-panel {
-  --editor-browser-library-panel-width: 220px;
-  --editor-browser-library-panel-closed-offset: calc(-100% - 14px);
-  --editor-browser-library-item-height: 26px;
+.comet-browser-history-and-favorites-panel {
+  --browser-history-and-favorites-panel-width: 220px;
+  --browser-history-and-favorites-panel-closed-offset: calc(-100% - 14px);
+  --browser-history-and-favorites-item-height: 26px;
   position: absolute;
   top: 0;
   left: 0;
   z-index: 12;
-  width: var(--editor-browser-library-panel-width);
+  width: var(--browser-history-and-favorites-panel-width);
   height: 100%;
   max-height: 100%;
   display: grid;
@@ -44,7 +44,7 @@
   box-shadow: none;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(var(--editor-browser-library-panel-closed-offset));
+  transform: translateX(var(--browser-history-and-favorites-panel-closed-offset));
   transform-origin: left top;
   transition:
     opacity 140ms ease,
@@ -52,27 +52,27 @@
   overflow: hidden;
 }
 
-.comet-editor-browser-library-panel.comet-is-desktop-overlay {
-  --editor-browser-library-panel-closed-offset: -100%;
+.comet-browser-history-and-favorites-panel.comet-is-desktop-overlay {
+  --browser-history-and-favorites-panel-closed-offset: -100%;
 }
 
-.comet-editor-browser-library-panel.comet-is-open {
+.comet-browser-history-and-favorites-panel.comet-is-open {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
 }
 
-.comet-editor-browser-library-header {
+.comet-browser-history-and-favorites-header {
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.comet-editor-browser-library-search-host {
+.comet-browser-history-and-favorites-search-host {
   min-width: 0;
 }
 
-.comet-editor-browser-library-search-input.comet-inputbox {
+.comet-browser-history-and-favorites-search-input.comet-inputbox {
   --comet-inputbox-height: 26px;
   --comet-inputbox-border-radius: 7px;
   --comet-inputbox-border: 1px solid #e6e6e6;
@@ -81,31 +81,31 @@
   width: 100%;
 }
 
-.comet-editor-browser-library-body {
+.comet-browser-history-and-favorites-body {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.comet-editor-browser-library-list {
+.comet-browser-history-and-favorites-list {
   display: grid;
   gap: 10px;
   min-width: 0;
   padding-right: 2px;
 }
 
-.comet-editor-browser-library-section {
+.comet-browser-history-and-favorites-section {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.comet-editor-browser-library-section-title {
+.comet-browser-history-and-favorites-section-title {
   margin: 0;
   min-width: 0;
   padding: 0 2px;
-  min-height: var(--editor-browser-library-item-height);
+  min-height: var(--browser-history-and-favorites-item-height);
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -118,22 +118,22 @@
   text-transform: none;
 }
 
-.comet-editor-browser-library-section-list {
+.comet-browser-history-and-favorites-section-list {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.comet-editor-browser-library-folder-group {
+.comet-browser-history-and-favorites-folder-group {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.comet-editor-browser-library-folder-title {
+.comet-browser-history-and-favorites-folder-title {
   margin: 0;
   min-width: 0;
-  min-height: var(--editor-browser-library-item-height);
+  min-height: var(--browser-history-and-favorites-item-height);
   display: flex;
   align-items: center;
   padding: 0 8px 0 22px;
@@ -145,13 +145,13 @@
   white-space: nowrap;
 }
 
-.comet-editor-browser-library-folder-list {
+.comet-browser-history-and-favorites-folder-list {
   display: grid;
   gap: 0;
   min-width: 0;
 }
 
-.comet-editor-browser-library-empty {
+.comet-browser-history-and-favorites-empty {
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -163,30 +163,30 @@
   text-align: center;
 }
 
-.comet-editor-browser-library-empty-icon.lx-icon {
+.comet-browser-history-and-favorites-empty-icon.lx-icon {
   font-size: 22px;
-  color: var(--comet-editor-browserLibraryEmptyForeground, #505050);
+  color: var(--comet-editor-browserHistoryAndFavoritesEmptyForeground, #505050);
 }
 
-.comet-editor-browser-library-empty-label {
+.comet-browser-history-and-favorites-empty-label {
   margin: 0;
-  color: var(--comet-editor-browserLibraryEmptyForeground, #505050);
+  color: var(--comet-editor-browserHistoryAndFavoritesEmptyForeground, #505050);
   font-size: 12px;
   line-height: 1.4;
 }
 
-.comet-editor-browser-library-item-row {
+.comet-browser-history-and-favorites-item-row {
   position: relative;
   min-width: 0;
-  min-height: var(--editor-browser-library-item-height);
+  min-height: var(--browser-history-and-favorites-item-height);
   display: flex;
   align-items: stretch;
 }
 
-.comet-editor-browser-library-item {
+.comet-browser-history-and-favorites-item {
   width: 100%;
   min-width: 0;
-  min-height: var(--editor-browser-library-item-height);
+  min-height: var(--browser-history-and-favorites-item-height);
   display: inline-flex;
   align-items: center;
   margin: 0;
@@ -205,15 +205,15 @@
   overflow: hidden;
 }
 
-.comet-editor-browser-library-item-row:hover .comet-editor-browser-library-item,
-.comet-editor-browser-library-item-row:focus-within .comet-editor-browser-library-item,
-.comet-editor-browser-library-item:focus-visible {
+.comet-browser-history-and-favorites-item-row:hover .comet-browser-history-and-favorites-item,
+.comet-browser-history-and-favorites-item-row:focus-within .comet-browser-history-and-favorites-item,
+.comet-browser-history-and-favorites-item:focus-visible {
   background: #ebebeb;
   color: var(--comet-agentBar-inputForeground, #1f2d3a);
   outline: none;
 }
 
-.comet-editor-browser-library-item-delete-btn.comet-btn-base.comet-btn-md {
+.comet-browser-history-and-favorites-item-delete-btn.comet-btn-base.comet-btn-md {
   position: absolute;
   top: 50%;
   right: 3px;
@@ -235,27 +235,27 @@
   transition: opacity 120ms ease;
 }
 
-.comet-editor-browser-library-item-delete-btn.comet-btn-base.comet-btn-md .lx-icon {
+.comet-browser-history-and-favorites-item-delete-btn.comet-btn-base.comet-btn-md .lx-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;
 }
 
-.comet-editor-browser-library-item-row.comet-is-deletable:hover .comet-editor-browser-library-item-delete-btn.comet-btn-base.comet-btn-md,
-.comet-editor-browser-library-item-row.comet-is-deletable:focus-within .comet-editor-browser-library-item-delete-btn.comet-btn-base.comet-btn-md {
+.comet-browser-history-and-favorites-item-row.comet-is-deletable:hover .comet-browser-history-and-favorites-item-delete-btn.comet-btn-base.comet-btn-md,
+.comet-browser-history-and-favorites-item-row.comet-is-deletable:focus-within .comet-browser-history-and-favorites-item-delete-btn.comet-btn-base.comet-btn-md {
   opacity: 1;
   pointer-events: auto;
 }
 
-.comet-editor-browser-library-item-row.comet-is-deletable:hover .comet-editor-browser-library-item-delete-btn.comet-btn-base.comet-btn-md:hover,
-.comet-editor-browser-library-item-row.comet-is-deletable:focus-within .comet-editor-browser-library-item-delete-btn.comet-btn-base.comet-btn-md:focus-visible {
+.comet-browser-history-and-favorites-item-row.comet-is-deletable:hover .comet-browser-history-and-favorites-item-delete-btn.comet-btn-base.comet-btn-md:hover,
+.comet-browser-history-and-favorites-item-row.comet-is-deletable:focus-within .comet-browser-history-and-favorites-item-delete-btn.comet-btn-base.comet-btn-md:focus-visible {
   background: var(--comet-editor-tabCloseHoverBackground, #e9e9e9);
   color: var(--comet-editor-tabCloseHoverForeground, #1f2d3a);
   outline: none;
 }
 
-.comet-editor-browser-library-item-row.comet-is-deletable:hover .comet-editor-browser-library-item-title,
-.comet-editor-browser-library-item-row.comet-is-deletable:focus-within .comet-editor-browser-library-item-title {
+.comet-browser-history-and-favorites-item-row.comet-is-deletable:hover .comet-browser-history-and-favorites-item-title,
+.comet-browser-history-and-favorites-item-row.comet-is-deletable:focus-within .comet-browser-history-and-favorites-item-title {
   mask-image: linear-gradient(
     to right,
     black calc(100% - 36px),
@@ -268,7 +268,7 @@
   );
 }
 
-.comet-editor-browser-library-item-title {
+.comet-browser-history-and-favorites-item-title {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
@@ -279,7 +279,7 @@
   font-weight: 500;
 }
 
-.comet-editor-browser-library-item-header {
+.comet-browser-history-and-favorites-item-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -287,7 +287,7 @@
   width: 100%;
 }
 
-.comet-editor-browser-library-item-favicon {
+.comet-browser-history-and-favorites-item-favicon {
   flex: 0 0 auto;
   width: 14px;
   height: 14px;
@@ -295,12 +295,12 @@
   object-fit: contain;
 }
 
-.comet-editor-browser-library-item-favicon.comet-is-fallback {
+.comet-browser-history-and-favorites-item-favicon.comet-is-fallback {
   color: var(--comet-editor-sourceSubheadingForeground, #7a8ca0);
   font-size: 12px;
 }
 
-.comet-editor-browser-library-item-favicon.comet-is-loading {
+.comet-browser-history-and-favorites-item-favicon.comet-is-loading {
   color: var(--vscode-editor-sourceForeground, #111827);
   font-size: 14px;
 }

@@ -8,6 +8,7 @@ import { gapCursor } from 'prosemirror-gapcursor';
 import { dropCursor } from 'prosemirror-dropcursor';
 import { createDraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
 import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { clearFontFamilyCommand, clearFontSizeCommand, clearInlineStylesCommand, getWritingEditorToolbarState, insertCitationCommand, insertFigureCommand, insertFigureRefCommand, insertPlainTextCommand, redoCommand, runWritingEditorCommand, setFontFamilyCommand, setFontSizeCommand, setParagraphCommand, setTextAlignCommand, toggleBlockquoteCommand, toggleBoldCommand, toggleBulletListCommand, toggleHeadingCommand, toggleItalicCommand, toggleOrderedListCommand, toggleUnderlineCommand, undoCommand } from 'cs/editor/browser/text/commands';
 import type { InsertFigurePayload, WritingEditorCommand, WritingEditorToolbarState } from 'cs/editor/browser/text/commands';
 import { createWritingEditorKeymapBindings } from 'cs/editor/browser/text/editorCommandRegistry';
@@ -90,7 +91,7 @@ type WritingEditorSurfaceStatusLabels = {
   blockFigure: string;
 };
 
-export type WritingEditorSurfaceProps = {
+export type WritingEditorSurfaceProps = DropdownContextServices & {
   document: WritingEditorDocument;
   placeholder: string;
   labels: WritingEditorSurfaceLabels;
@@ -548,6 +549,8 @@ const derivedLabels = collectWritingEditorDerivedLabels(state.doc);
 
   private createToolbarProps() {
     return {
+      contextMenuService: this.props.contextMenuService,
+      contextViewProvider: this.props.contextViewProvider,
       labels: this.props.labels,
       toolbarState: this.snapshot.toolbarState,
       actions: {

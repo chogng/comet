@@ -22,6 +22,7 @@ import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPaneLayout } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import type { EditorWorkspaceBrowserTab } from 'cs/workbench/browser/parts/editor/editorModel';
+import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import type { ThemeIcon } from 'cs/base/common/themables';
@@ -180,6 +181,8 @@ export class BrowserEditor extends EditorPane<
 	BrowserEditorProps,
 	BrowserEditorViewState
 > {
+	private historyFeature: BrowserHistoryPanelFeature | undefined;
+	private favoritesFeature: BrowserFavoritesPanelFeature | undefined;
 	private static readonly contributions: BrowserEditorContributionCtor[] = [];
 	private readonly contributionInstances = new Map<BrowserEditorContributionCtor, BrowserEditorContribution>();
 	private readonly disposables = new DisposableStore();
@@ -231,6 +234,20 @@ export class BrowserEditor extends EditorPane<
 
 	get browserContainer(): HTMLElement {
 		return this.browserContainerElement;
+	}
+
+	setHistoryFeature(feature: BrowserHistoryPanelFeature): void {
+		this.historyFeature = feature;
+	}
+
+	setFavoritesFeature(feature: BrowserFavoritesPanelFeature): void {
+		this.favoritesFeature = feature;
+	}
+
+	override getBrowserHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined {
+		return this.historyFeature && this.favoritesFeature
+			? { history: this.historyFeature, favorites: this.favoritesFeature }
+			: undefined;
 	}
 
 	get window(): Window & { vscodeWindowId: number } {

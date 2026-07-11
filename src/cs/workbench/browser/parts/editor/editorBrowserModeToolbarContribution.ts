@@ -3,6 +3,7 @@ import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { ActionViewItem } from 'cs/base/browser/ui/actionbar/actionViewItems';
 import {
   createDropdownMenuActionViewItem,
+  type DropdownContextServices,
   type DropdownMenuActionViewItemOptions,
 } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
@@ -42,7 +43,10 @@ implements EditorModeToolbarContribution {
   });
   private isAddressInputEdited = false;
 
-  constructor(context: EditorModeToolbarContributionContext) {
+  constructor(
+    context: EditorModeToolbarContributionContext,
+    private readonly dropdownServices: DropdownContextServices,
+  ) {
     this.context = context;
     this.exportDocxActionViewItem = new ActionViewItem(this.createExportDocxAction());
     this.archivePageActionViewItem = new ActionViewItem(this.createArchivePageAction());
@@ -77,7 +81,7 @@ implements EditorModeToolbarContribution {
   setContext(context: EditorModeToolbarContributionContext) {
     this.context = context;
     if (context.mode !== this.mode) {
-      this.getLibraryPanelView()?.close();
+      this.getHistoryAndFavoritesPanel()?.close();
     }
     this.render();
   }
@@ -88,8 +92,8 @@ implements EditorModeToolbarContribution {
   }
 
   dispose() {
-    this.getLibraryPanelView()?.setOnDidChangeOpenState(undefined);
-    this.getLibraryPanelView()?.setOnDidChangeState(undefined);
+    this.getHistoryAndFavoritesPanel()?.setOnDidChangeOpenState(undefined);
+    this.getHistoryAndFavoritesPanel()?.setOnDidChangeState(undefined);
     this.addressInput.inputElement.removeEventListener('keydown', this.handleAddressInputKeyDown);
     this.addressInput.inputElement.removeEventListener('blur', this.handleAddressInputBlur);
     this.addressInput.dispose();
@@ -99,7 +103,7 @@ implements EditorModeToolbarContribution {
   }
 
   private render() {
-    this.bindLibraryPanelView();
+    this.bindHistoryAndFavoritesPanel();
     this.updateLeadingActions();
     this.exportDocxActionViewItem.setItem(this.createExportDocxAction());
     this.archivePageActionViewItem.setItem(this.createArchivePageAction());
@@ -113,14 +117,14 @@ implements EditorModeToolbarContribution {
     this.addressInput.setPlaceHolder(this.context.labels.toolbarAddressPlaceholder);
   }
 
-  private bindLibraryPanelView() {
-    const panel = this.getLibraryPanelView();
+  private bindHistoryAndFavoritesPanel() {
+    const panel = this.getHistoryAndFavoritesPanel();
     if (!panel) {
       return;
     }
 
-    panel.setOnDidChangeOpenState(this.handleLibraryPanelOpenStateChange);
-    panel.setOnDidChangeState(this.handleLibraryPanelStateChange);
+    panel.setOnDidChangeOpenState(this.handleHistoryAndFavoritesPanelOpenStateChange);
+    panel.setOnDidChangeState(this.handleHistoryAndFavoritesPanelStateChange);
   }
 
   private updateLeadingActions() {
@@ -131,12 +135,12 @@ implements EditorModeToolbarContribution {
     });
   }
 
-  private getLibraryPanelView() {
-    return this.context.browserLibraryPanel;
+  private getHistoryAndFavoritesPanel() {
+    return this.context.browserHistoryAndFavoritesPanel;
   }
 
-  private getLibraryButtonAttributes() {
-    return this.getLibraryPanelView()?.getToggleButtonAttributes() ?? {
+  private getHistoryAndFavoritesButtonAttributes() {
+    return this.getHistoryAndFavoritesPanel()?.getToggleButtonAttributes() ?? {
       'aria-haspopup': 'dialog',
       'aria-expanded': 'false',
     };
@@ -162,11 +166,11 @@ implements EditorModeToolbarContribution {
     this.syncAddressInputFromContext(true);
   };
 
-  private readonly handleLibraryPanelOpenStateChange = () => {
+  private readonly handleHistoryAndFavoritesPanelOpenStateChange = () => {
     this.updateLeadingActions();
   };
 
-  private readonly handleLibraryPanelStateChange = () => {
+  private readonly handleHistoryAndFavoritesPanelStateChange = () => {
     this.updateLeadingActions();
   };
 
@@ -182,8 +186,8 @@ implements EditorModeToolbarContribution {
     }
   }
 
-  private readonly handleLibraryButtonClick = () => {
-    const panel = this.getLibraryPanelView();
+  private readonly handleHistoryAndFavoritesButtonClick = () => {
+    const panel = this.getHistoryAndFavoritesPanel();
     if (!panel) {
       return;
     }
@@ -193,7 +197,7 @@ implements EditorModeToolbarContribution {
   };
 
   private readonly handleFavoriteButtonClick = () => {
-    const panel = this.getLibraryPanelView();
+    const panel = this.getHistoryAndFavoritesPanel();
     if (!panel) {
       return;
     }
@@ -207,7 +211,7 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
   };
 
   private createLeadingItems(): ActionBarItem[] {
-    const panel = this.getLibraryPanelView();
+    const panel = this.getHistoryAndFavoritesPanel();
     const isCurrentUrlFavorited =
       panel?.isBrowserUrlFavorited(this.context.browserUrl) ?? false;
 
@@ -219,8 +223,8 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
         buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('list-unordered'),
         active: panel?.getIsOpen() ?? false,
-        buttonAttributes: this.getLibraryButtonAttributes(),
-        onClick: this.handleLibraryButtonClick,
+        buttonAttributes: this.getHistoryAndFavoritesButtonAttributes(),
+        onClick: this.handleHistoryAndFavoritesButtonClick,
       },
       {
         label: this.context.labels.toolbarBack,
@@ -296,6 +300,7 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
 
   private createMoreActionOptions(): DropdownMenuActionViewItemOptions {
     return {
+      ...this.dropdownServices,
       label: this.context.labels.toolbarMore,
       title: this.context.labels.toolbarMore,
       mode: 'icon',
@@ -319,7 +324,7 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
         {
           label: this.context.labels.toolbarClearBrowsingHistory,
           onClick: () => {
-            this.getLibraryPanelView()?.clearRecentLibraryEntries();
+            this.getHistoryAndFavoritesPanel()?.clearRecentEntries();
             this.context.onClearBrowsingHistory();
           },
           disabled: !this.context.browserUrl,
@@ -345,6 +350,7 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
 
 export function createEditorBrowserModeToolbarContribution(
   context: EditorModeToolbarContributionContext,
+  dropdownServices: DropdownContextServices,
 ) {
-  return new EditorBrowserModeToolbarContribution(context);
+  return new EditorBrowserModeToolbarContribution(context, dropdownServices);
 }

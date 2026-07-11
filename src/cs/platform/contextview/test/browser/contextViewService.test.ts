@@ -44,7 +44,7 @@ test('context view uses stable document coordinates when no container is provide
 	}
 });
 
-test('context menu closes when focus moves out of the workbench window', async () => {
+test('context menu remains open across window blur and closes on outside press', async () => {
 	const { PlatformContextViewService } = await import('cs/platform/contextview/browser/contextViewService');
 	const { ContextMenuHandler } = await import('cs/platform/contextview/browser/contextMenuHandler');
 	const contextViewService = new PlatformContextViewService();
@@ -68,6 +68,10 @@ test('context menu closes when focus moves out of the workbench window', async (
 		});
 
 		window.dispatchEvent(new Event('blur'));
+		assert.equal(contextMenuHandler.isVisible(), true);
+
+		const outside = document.body.appendChild(document.createElement('button'));
+		outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
 
 		assert.equal(didCancel, true);
 		assert.equal(contextMenuHandler.isVisible(), false);

@@ -4,12 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'node:assert/strict';
-import test, { after, beforeEach } from 'node:test';
+import test, { after, afterEach, beforeEach } from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import en from 'language/locales/en.json';
 
 const domEnvironment = installDomTestEnvironment();
+let dropdownServices: Awaited<ReturnType<typeof createDropdownTestServices>>;
 
 const labels = {
 	headerAddAction: 'Add editor',
@@ -20,12 +22,17 @@ const labels = {
 	collapseEditor: 'Collapse editor',
 };
 
-beforeEach(() => {
+beforeEach(async () => {
 	document.body.replaceChildren();
+	dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+	dropdownServices.dispose();
 });
 
 after(() => {
-	domEnvironment.cleanup();
+  domEnvironment.cleanup();
 });
 
 test('editor titlebar actions open editors and toggle the editor layout', async () => {
@@ -35,6 +42,7 @@ test('editor titlebar actions open editors and toggle the editor layout', async 
 	const openRequests: object[] = [];
 	let toggleCount = 0;
 	const view = createEditorTitlebarActionsView({
+    ...dropdownServices,
 		isEditorCollapsed: true,
 		labels,
 		onOpenEditor: request => {
@@ -68,6 +76,42 @@ test('editor titlebar actions open editors and toggle the editor layout', async 
 				disposition: 'reveal-or-open',
 			},
 		]);
+	} finally {
+		view.dispose();
+	}
+});
+
+test('editor titlebar add action closes and clears its active state outside the workbench', async () => {
+	const { createEditorTitlebarActionsView } = await import(
+		'cs/workbench/browser/parts/editor/editorTitlebarActionsView'
+	);
+	const view = createEditorTitlebarActionsView({
+    ...dropdownServices,
+		isEditorCollapsed: false,
+		labels,
+		onOpenEditor: () => {},
+		onToggleEditorCollapse: () => {},
+	});
+	document.body.append(view.getElement());
+	const outside = document.body.appendChild(document.createElement('div'));
+
+	try {
+		const addButton = document.body.querySelector('[aria-label="Add editor"]');
+		assert(addButton instanceof HTMLButtonElement);
+		const actionItem = addButton.closest('.comet-actionbar-item');
+		assert(actionItem instanceof HTMLElement);
+
+		addButton.click();
+		assert.equal(addButton.getAttribute('aria-expanded'), 'true');
+		assert.equal(actionItem.classList.contains('comet-is-active'), true);
+
+		window.dispatchEvent(new Event('blur'));
+		assert.equal(addButton.getAttribute('aria-expanded'), 'true');
+		assert.equal(actionItem.classList.contains('comet-is-active'), true);
+
+		outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+		assert.equal(addButton.getAttribute('aria-expanded'), 'false');
+		assert.equal(actionItem.classList.contains('comet-is-active'), false);
 	} finally {
 		view.dispose();
 	}
@@ -166,6 +210,7 @@ test('session workbench keeps titlebar actions through editor collapse cycles', 
 	const initialLayoutState = getWorkbenchLayoutStateSnapshot();
 	let setEditorVisible = (_isEditorVisible: boolean) => {};
 	const collapsedActionsView = createEditorTitlebarActionsView({
+    ...dropdownServices,
 		isEditorCollapsed: true,
 		labels,
 		onOpenEditor: () => {},
@@ -173,6 +218,7 @@ test('session workbench keeps titlebar actions through editor collapse cycles', 
 	});
 	const collapsedActionsElement = collapsedActionsView.getElement();
 	const editorPartProps = {
+		...dropdownServices,
 		...createEditorPartProps({
 			state: {
 				ui: en,
@@ -205,8 +251,6 @@ test('session workbench keeps titlebar actions through editor collapse cycles', 
 				onCloseAllTabs: async () => true,
 				onRenameTab: () => {},
 				onOpenEditor: () => {},
-				onPromptRenameBrowserFavorite: async () => null,
-				onPromptCreateBrowserFavoriteFolder: async () => null,
 				onDraftDocumentChange: () => {},
 				onSetEditorViewState: () => {},
 				onDeleteEditorViewState: () => {},

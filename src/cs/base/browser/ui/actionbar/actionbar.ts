@@ -8,6 +8,8 @@ import {
   type ActionViewItemOptions,
 } from 'cs/base/browser/ui/actionbar/actionViewItems';
 import { createActionWithDropdownActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { DropdownContextViewProvider } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { ContextMenuService } from 'cs/base/browser/contextmenu';
 import type { HoverInput, IHoverDelegate } from 'cs/base/browser/ui/hover/hover';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 
@@ -57,6 +59,8 @@ export type ActionBarSplitItem = {
   className?: string;
   primary: ActionBarActionItem;
   dropdown: ActionBarActionItem & {
+    contextMenuService: ContextMenuService;
+    contextViewProvider: DropdownContextViewProvider;
     menu?: readonly ActionBarMenuItem[];
     renderOverlay?: (context: { hide: () => void }) => HTMLElement;
     overlayRole?: string;

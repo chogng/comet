@@ -170,6 +170,7 @@ export class WebContentNavigationModel {
     }
 
     if (!targetId) {
+      webContent.setVisible(false);
       this.setWebContentState(EMPTY_WEB_CONTENT_STATE);
       return null;
     }

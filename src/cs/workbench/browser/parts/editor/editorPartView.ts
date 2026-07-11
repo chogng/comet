@@ -20,9 +20,10 @@ import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/edit
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/workbench/browser/parts/editor/media/editorToolbar.css';
-import 'cs/workbench/browser/parts/editor/media/editorBrowserLibraryPanel.css';
+import 'cs/workbench/browser/parts/editor/media/browserHistoryAndFavoritesPanel.css';
 import 'cs/workbench/browser/parts/editor/media/tabsTitleControl.css';
 
 export type EditorPartLabels = {
@@ -46,20 +47,18 @@ export type EditorPartLabels = {
   toolbarClearCache: string;
   toolbarAddressBar: string;
   toolbarAddressPlaceholder: string;
-  browserLibraryPanelTitle: string;
-  browserLibraryPanelRecentTitle: string;
-  browserLibraryPanelRecentTodayTitle: string;
-  browserLibraryPanelRecentYesterdayTitle: string;
-  browserLibraryPanelRecentLast7DaysTitle: string;
-  browserLibraryPanelRecentLast30DaysTitle: string;
-  browserLibraryPanelRecentOlderTitle: string;
-  browserLibraryPanelFavoritesTitle: string;
-  browserLibraryPanelEmptyState: string;
-  browserLibraryPanelContextOpen: string;
-  browserLibraryPanelContextOpenInNewTab: string;
-  browserLibraryPanelContextNewFolder: string;
-  browserLibraryPanelContextRename: string;
-  browserLibraryPanelContextRemoveFavorite: string;
+  browserHistoryAndFavoritesPanelTitle: string;
+  browserHistoryAndFavoritesPanelRecentTitle: string;
+  browserHistoryAndFavoritesPanelRecentTodayTitle: string;
+  browserHistoryAndFavoritesPanelRecentYesterdayTitle: string;
+  browserHistoryAndFavoritesPanelRecentLast7DaysTitle: string;
+  browserHistoryAndFavoritesPanelRecentLast30DaysTitle: string;
+  browserHistoryAndFavoritesPanelRecentOlderTitle: string;
+  browserHistoryAndFavoritesPanelFavoritesTitle: string;
+  browserHistoryAndFavoritesPanelEmptyState: string;
+  browserHistoryAndFavoritesPanelContextOpen: string;
+  browserHistoryAndFavoritesPanelContextOpenInNewTab: string;
+  browserHistoryAndFavoritesPanelContextRemoveFavorite: string;
   draftMode: string;
   sourceMode: string;
   pdfMode: string;
@@ -69,10 +68,6 @@ export type EditorPartLabels = {
   rename?: string;
   editorModalConfirm: string;
   editorModalCancel: string;
-  renameFavoriteTitle?: string;
-  renameFavoriteLabel?: string;
-  newFavoriteFolderTitle?: string;
-  newFavoriteFolderLabel?: string;
   expandEditor: string;
   collapseEditor: string;
   emptyWorkspaceTitle: string;
@@ -124,12 +119,6 @@ export type EditorPartBaseProps = {
   onCloseAllTabs?: () => Promise<boolean> | boolean | void;
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
-  onPromptRenameBrowserFavorite?: (
-    params: { url: string; title: string },
-  ) => Promise<string | null> | string | null;
-  onPromptCreateBrowserFavoriteFolder?: (
-    params: { url: string; title: string },
-  ) => Promise<string | null> | string | null;
   onDraftDocumentChange: (value: WritingEditorDocument) => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
@@ -147,7 +136,8 @@ export type EditorPartBaseProps = {
 };
 
 export type EditorPartProps = EditorPartBaseProps &
-  EditorPartBrowserToolbarActions;
+  EditorPartBrowserToolbarActions &
+  DropdownContextServices;
 
 export class EditorPartView {
   private readonly element = document.createElement('section');

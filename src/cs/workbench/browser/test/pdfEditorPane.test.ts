@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
@@ -8,10 +8,13 @@ import type { Annotation } from 'cs/editor/common/annotation';
 import { readStoredPdfAnnotations } from 'cs/editor/browser/pdf/pdfAnnotationPersistence';
 import { createPdfSelection } from 'cs/editor/browser/pdf/pdfSelection';
 import { DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/browser/editorGroupIdentity';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let EditorGroupView: typeof import('cs/workbench/browser/parts/editor/editorGroupView').EditorGroupView;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 type TestViewPartProps = {
   browserUrl: string;
@@ -46,20 +49,18 @@ const labels = {
   toolbarClearCache: 'Clear cache',
   toolbarAddressBar: 'Address bar',
   toolbarAddressPlaceholder: 'Search or enter URL',
-  browserLibraryPanelTitle: 'Source menu',
-  browserLibraryPanelRecentTitle: 'Recent',
-  browserLibraryPanelRecentTodayTitle: 'Today',
-  browserLibraryPanelRecentYesterdayTitle: 'Yesterday',
-  browserLibraryPanelRecentLast7DaysTitle: 'Last 7 Days',
-  browserLibraryPanelRecentLast30DaysTitle: 'Last 30 Days',
-  browserLibraryPanelRecentOlderTitle: 'Older',
-  browserLibraryPanelFavoritesTitle: 'Favorites',
-  browserLibraryPanelEmptyState: 'No links yet',
-  browserLibraryPanelContextOpen: 'Open',
-  browserLibraryPanelContextOpenInNewTab: 'Open in New Tab',
-  browserLibraryPanelContextNewFolder: 'New Folder',
-  browserLibraryPanelContextRename: 'Rename',
-  browserLibraryPanelContextRemoveFavorite: 'Remove Favorite',
+  browserHistoryAndFavoritesPanelTitle: 'Source menu',
+  browserHistoryAndFavoritesPanelRecentTitle: 'Recent',
+  browserHistoryAndFavoritesPanelRecentTodayTitle: 'Today',
+  browserHistoryAndFavoritesPanelRecentYesterdayTitle: 'Yesterday',
+  browserHistoryAndFavoritesPanelRecentLast7DaysTitle: 'Last 7 Days',
+  browserHistoryAndFavoritesPanelRecentLast30DaysTitle: 'Last 30 Days',
+  browserHistoryAndFavoritesPanelRecentOlderTitle: 'Older',
+  browserHistoryAndFavoritesPanelFavoritesTitle: 'Favorites',
+  browserHistoryAndFavoritesPanelEmptyState: 'No links yet',
+  browserHistoryAndFavoritesPanelContextOpen: 'Open',
+  browserHistoryAndFavoritesPanelContextOpenInNewTab: 'Open in New Tab',
+  browserHistoryAndFavoritesPanelContextRemoveFavorite: 'Remove Favorite',
   draftMode: 'Draft',
   sourceMode: 'Source',
   pdfMode: 'PDF',
@@ -68,10 +69,6 @@ const labels = {
   editorModalCancel: 'Cancel',
   expandEditor: 'Expand editor',
   collapseEditor: 'Collapse editor',
-  renameFavoriteTitle: 'Rename Favorite',
-  renameFavoriteLabel: 'Favorite name',
-  newFavoriteFolderTitle: 'New Folder',
-  newFavoriteFolderLabel: 'Folder name',
   emptyWorkspaceTitle: 'Empty workspace',
   emptyWorkspaceBody: 'Create a draft to start.',
   draftBodyPlaceholder: 'Start writing',
@@ -155,6 +152,14 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
+});
+
 function createProps(
   activeTabId: string | null,
   activeTab: import('cs/workbench/browser/parts/editor/editorModel').EditorWorkspaceTab | null,
@@ -162,6 +167,7 @@ function createProps(
   viewPartProps?: Partial<TestViewPartProps>,
 ) {
   return {
+    ...dropdownServices,
     labels,
     viewPartProps: {
       browserUrl: '',

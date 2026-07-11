@@ -47,6 +47,7 @@ import {
   IContextKeyService,
 } from 'cs/platform/contextkey/common/contextkey';
 import 'cs/platform/contextview/browser/contextViewService';
+import 'cs/platform/contextview/browser/contextMenuService';
 import 'cs/platform/hover/browser/hoverService';
 import 'cs/editor/browser/services/openerService';
 import 'cs/workbench/services/keybinding/browser/keybindingService';

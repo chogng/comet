@@ -30,7 +30,7 @@ import {
 import type { AnyEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 
 import type { DraftEditorCommandId } from 'cs/workbench/browser/parts/editor/panes/draftEditorCommands';
-import { EditorBrowserLibraryPanel } from 'cs/workbench/browser/parts/editor/editorBrowserLibraryPanel';
+import { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import { EditorEmptyWorkspaceView } from 'cs/workbench/browser/parts/editor/editorEmptyWorkspaceView';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import {
@@ -63,10 +63,11 @@ import type {
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
-export type EditorGroupViewProps = {
+export type EditorGroupViewProps = DropdownContextServices & {
   labels: EditorPartLabels;
   viewPartProps: ViewPartProps;
   nativeHost: INativeHostService;
@@ -88,12 +89,6 @@ export type EditorGroupViewProps = {
   onCloseAllTabs?: () => Promise<boolean> | boolean | void;
   onRenameTab?: (tabId: string) => void | Promise<void>;
   onOpenEditor: EditorOpenHandler;
-  onPromptRenameBrowserFavorite?: (
-    params: { url: string; title: string },
-  ) => Promise<string | null> | string | null;
-  onPromptCreateBrowserFavoriteFolder?: (
-    params: { url: string; title: string },
-  ) => Promise<string | null> | string | null;
   onOpenAddressBarSourceMenu: () => void;
   onToolbarNavigateBack: () => void;
   onToolbarNavigateForward: () => void;
@@ -452,27 +447,11 @@ export class EditorGroupView {
   private readonly tabsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar-tabs');
   private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar-actions');
   private readonly windowControlsSpacerElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-window-controls-spacer');
-  private readonly titlebarActionsView = createEditorTitlebarActionsView({
-    isEditorCollapsed: false,
-    isAgentSidebarVisible: false,
-    showAgentSidebarToggle: false,
-    agentSidebarToggleLabel: '',
-    labels: {
-      headerAddAction: '',
-      createDraft: '',
-      createBrowser: '',
-      createFile: '',
-      expandEditor: '',
-      collapseEditor: '',
-    },
-    onOpenEditor: () => {},
-    onToggleEditorCollapse: () => {},
-    onToggleAgentSidebar: () => {},
-  });
+  private readonly titlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
   private readonly modeToolbarHost: ReturnType<typeof createEditorModeToolbarHost>;
   private readonly titleAreaControl: TitleControl;
   private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-content');
-  private readonly browserLibraryPanel: EditorBrowserLibraryPanel;
+  private readonly browserHistoryAndFavoritesPanel: BrowserHistoryAndFavoritesPanel;
   private readonly emptyWorkspaceView: EditorEmptyWorkspaceView;
   private readonly viewStateStore: ReturnType<typeof createEditorViewStateStore>;
   private readonly draftCommandExecutor = createActiveDraftEditorCommandExecutor(
@@ -487,10 +466,29 @@ export class EditorGroupView {
 
   constructor(props: EditorGroupViewProps) {
     this.props = props;
+    this.titlebarActionsView = createEditorTitlebarActionsView({
+      contextMenuService: props.contextMenuService,
+      contextViewProvider: props.contextViewProvider,
+      isEditorCollapsed: false,
+      isAgentSidebarVisible: false,
+      showAgentSidebarToggle: false,
+      agentSidebarToggleLabel: '',
+      labels: {
+        headerAddAction: '',
+        createDraft: '',
+        createBrowser: '',
+        createFile: '',
+        expandEditor: '',
+        collapseEditor: '',
+      },
+      onOpenEditor: () => {},
+      onToggleEditorCollapse: () => {},
+      onToggleAgentSidebar: () => {},
+    });
     this.controller = new EditorGroupController(props);
     this.viewStateStore = createEditorViewStateStore(props.viewStateEntries);
-    this.browserLibraryPanel = new EditorBrowserLibraryPanel(
-      this.createBrowserLibraryPanelContext(props),
+    this.browserHistoryAndFavoritesPanel = new BrowserHistoryAndFavoritesPanel(
+      this.createBrowserHistoryAndFavoritesPanelContext(props),
       {
         isInteractionWithin: (target) => this.toolbarElement.contains(target),
       },
@@ -498,10 +496,11 @@ export class EditorGroupView {
     this.modeToolbarHost = createEditorModeToolbarHost(
       createEditorModeToolbarContext({
         ...props,
-        browserLibraryPanel: this.browserLibraryPanel,
+        browserHistoryAndFavoritesPanel: this.browserHistoryAndFavoritesPanel,
         onPdfHighlightSelection: this.handlePdfHighlightSelection,
         onPdfNoteSelection: this.handlePdfNoteSelection,
       }),
+      props,
     );
     setEditorFrameSlot(this.titlebarElement, EDITOR_FRAME_SLOTS.titlebar);
     setEditorFrameSlot(this.toolbarElement, EDITOR_FRAME_SLOTS.toolbar);
@@ -585,7 +584,7 @@ export class EditorGroupView {
   }
 
   dispose() {
-    this.browserLibraryPanel.dispose();
+    this.browserHistoryAndFavoritesPanel.dispose();
     this.titleAreaControl.dispose();
     this.titlebarActionsView.dispose();
     this.modeToolbarHost.dispose();
@@ -645,6 +644,8 @@ export class EditorGroupView {
       Boolean(this.props.hasLeadingTitlebarWindowControlsInset),
     );
     this.titlebarActionsView.setProps({
+      contextMenuService: this.props.contextMenuService,
+      contextViewProvider: this.props.contextViewProvider,
       isEditorCollapsed: Boolean(this.props.isEditorCollapsed),
       isAgentSidebarVisible: Boolean(this.props.isAgentSidebarVisible),
       showAgentSidebarToggle: Boolean(this.props.showAgentSidebarToggle),
@@ -661,10 +662,10 @@ export class EditorGroupView {
       onToggleEditorCollapse: this.props.onToggleEditorCollapse ?? (() => {}),
       onToggleAgentSidebar: this.props.onToggleAgentSidebar,
     });
-    this.browserLibraryPanel.setContext(this.createBrowserLibraryPanelContext(this.props));
+    this.browserHistoryAndFavoritesPanel.setContext(this.createBrowserHistoryAndFavoritesPanelContext(this.props));
     this.modeToolbarHost.setContext(createEditorModeToolbarContext({
       ...this.props,
-      browserLibraryPanel: this.browserLibraryPanel,
+      browserHistoryAndFavoritesPanel: this.browserHistoryAndFavoritesPanel,
       onPdfHighlightSelection: this.handlePdfHighlightSelection,
       onPdfNoteSelection: this.handlePdfNoteSelection,
     }));
@@ -685,8 +686,8 @@ export class EditorGroupView {
         onOpenEditor: this.openEditorFromEmptyWorkspace,
       });
       this.contentElement.replaceChildren(this.emptyWorkspaceView.getElement());
-      this.browserLibraryPanel.close();
-      this.browserLibraryPanel.mountTo(null);
+      this.browserHistoryAndFavoritesPanel.close();
+      this.browserHistoryAndFavoritesPanel.mountTo(null);
       return;
     }
 
@@ -729,21 +730,25 @@ const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
 
     this.syncToolbar(this.resolveToolbarElement());
     this.flushBrowserPrimaryInputFocus(group.activeTab);
-    this.mountBrowserLibraryPanelForResolvedPane(resolvedPane.paneId);
+    this.browserHistoryAndFavoritesPanel.setFeatures(
+      this.activePane?.getBrowserHistoryAndFavoritesFeatures(),
+    );
+    this.mountBrowserHistoryAndFavoritesPanelForResolvedPane(resolvedPane.paneId);
   }
 
-  private mountBrowserLibraryPanelForResolvedPane(paneId: string) {
+  private mountBrowserHistoryAndFavoritesPanelForResolvedPane(paneId: string) {
     if (paneId !== 'browser') {
-      this.browserLibraryPanel.close();
-      this.browserLibraryPanel.mountTo(null);
+      this.browserHistoryAndFavoritesPanel.setFeatures(undefined);
+      this.browserHistoryAndFavoritesPanel.close();
+      this.browserHistoryAndFavoritesPanel.mountTo(null);
       return;
     }
 
 const panelHost = this.contentElement.querySelector('.browser-root');
-    this.browserLibraryPanel.mountTo(panelHost instanceof HTMLElement ? panelHost : null);
+    this.browserHistoryAndFavoritesPanel.mountTo(panelHost instanceof HTMLElement ? panelHost : null);
   }
 
-  private createBrowserLibraryPanelContext(props: EditorGroupViewProps) {
+  private createBrowserHistoryAndFavoritesPanelContext(props: EditorGroupViewProps) {
     const activeBrowserMetadata = resolveActiveBrowserMetadata({
       activeTab: props.activeTab,
       viewPartProps: props.viewPartProps,
@@ -771,25 +776,21 @@ const panelHost = this.contentElement.querySelector('.browser-root');
       browserIsLoading,
       browserTabTitle,
       labels: {
-        title: props.labels.browserLibraryPanelTitle,
-        recentTitle: props.labels.browserLibraryPanelRecentTitle,
-        recentTodayTitle: props.labels.browserLibraryPanelRecentTodayTitle,
-        recentYesterdayTitle: props.labels.browserLibraryPanelRecentYesterdayTitle,
-        recentLast7DaysTitle: props.labels.browserLibraryPanelRecentLast7DaysTitle,
-        recentLast30DaysTitle: props.labels.browserLibraryPanelRecentLast30DaysTitle,
-        recentOlderTitle: props.labels.browserLibraryPanelRecentOlderTitle,
-        favoritesTitle: props.labels.browserLibraryPanelFavoritesTitle,
-        emptyState: props.labels.browserLibraryPanelEmptyState,
-        contextOpen: props.labels.browserLibraryPanelContextOpen,
-        contextOpenInNewTab: props.labels.browserLibraryPanelContextOpenInNewTab,
-        contextNewFolder: props.labels.browserLibraryPanelContextNewFolder,
-        contextRename: props.labels.browserLibraryPanelContextRename,
-        contextRemoveFavorite: props.labels.browserLibraryPanelContextRemoveFavorite,
+        title: props.labels.browserHistoryAndFavoritesPanelTitle,
+        recentTitle: props.labels.browserHistoryAndFavoritesPanelRecentTitle,
+        recentTodayTitle: props.labels.browserHistoryAndFavoritesPanelRecentTodayTitle,
+        recentYesterdayTitle: props.labels.browserHistoryAndFavoritesPanelRecentYesterdayTitle,
+        recentLast7DaysTitle: props.labels.browserHistoryAndFavoritesPanelRecentLast7DaysTitle,
+        recentLast30DaysTitle: props.labels.browserHistoryAndFavoritesPanelRecentLast30DaysTitle,
+        recentOlderTitle: props.labels.browserHistoryAndFavoritesPanelRecentOlderTitle,
+        favoritesTitle: props.labels.browserHistoryAndFavoritesPanelFavoritesTitle,
+        emptyState: props.labels.browserHistoryAndFavoritesPanelEmptyState,
+        contextOpen: props.labels.browserHistoryAndFavoritesPanelContextOpen,
+        contextOpenInNewTab: props.labels.browserHistoryAndFavoritesPanelContextOpenInNewTab,
+        contextRemoveFavorite: props.labels.browserHistoryAndFavoritesPanelContextRemoveFavorite,
       },
       onNavigateToUrl: props.onToolbarNavigateToUrl,
       onOpenEditor: props.onOpenEditor,
-      onRequestRenameFavorite: props.onPromptRenameBrowserFavorite,
-      onRequestCreateFavoriteFolder: props.onPromptCreateBrowserFavoriteFolder,
     };
   }
 
@@ -900,6 +901,8 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
 
   private createPaneResolverContext(): EditorPaneResolverContext {
     return {
+      contextMenuService: this.props.contextMenuService,
+      contextViewProvider: this.props.contextViewProvider,
       labels: this.props.labels,
       viewPartProps: this.props.viewPartProps,
       nativeHost: this.props.nativeHost,

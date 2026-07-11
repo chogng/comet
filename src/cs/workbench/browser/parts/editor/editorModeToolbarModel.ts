@@ -1,7 +1,7 @@
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
 import { getEditorPaneMode, isEditorBrowserTabInput } from 'cs/workbench/browser/parts/editor/editorInput';
 import type { EditorWorkspaceTab } from 'cs/workbench/browser/parts/editor/editorModel';
-import type { EditorBrowserLibraryPanel } from 'cs/workbench/browser/parts/editor/editorBrowserLibraryPanel';
+import type { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/browser/parts/editor/browserHistoryAndFavoritesPanel';
 import type { EditorModeToolbarContributionContext } from 'cs/workbench/browser/parts/editor/editorModeToolbarContribution';
 import { getEditorContentTabTitle } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
 
@@ -30,7 +30,7 @@ type EditorModeToolbarSourceProps = {
   onToolbarNavigateToUrl: (url: string) => void;
   onPdfHighlightSelection?: () => void;
   onPdfNoteSelection?: () => void;
-  browserLibraryPanel?: EditorBrowserLibraryPanel | null;
+  browserHistoryAndFavoritesPanel?: BrowserHistoryAndFavoritesPanel | null;
 };
 
 export type EditorModeToolbarContext = EditorModeToolbarContributionContext;
@@ -126,18 +126,18 @@ export function createEditorModeToolbarContext(
       toolbarClearCache: props.labels.toolbarClearCache,
       toolbarAddressBar: props.labels.toolbarAddressBar,
       toolbarAddressPlaceholder: props.labels.toolbarAddressPlaceholder,
-      browserLibraryPanelTitle: props.labels.browserLibraryPanelTitle,
-      browserLibraryPanelRecentTitle: props.labels.browserLibraryPanelRecentTitle,
-      browserLibraryPanelRecentTodayTitle: props.labels.browserLibraryPanelRecentTodayTitle,
-      browserLibraryPanelRecentYesterdayTitle:
-        props.labels.browserLibraryPanelRecentYesterdayTitle,
-      browserLibraryPanelRecentLast7DaysTitle:
-        props.labels.browserLibraryPanelRecentLast7DaysTitle,
-      browserLibraryPanelRecentLast30DaysTitle:
-        props.labels.browserLibraryPanelRecentLast30DaysTitle,
-      browserLibraryPanelRecentOlderTitle: props.labels.browserLibraryPanelRecentOlderTitle,
-      browserLibraryPanelFavoritesTitle: props.labels.browserLibraryPanelFavoritesTitle,
-      browserLibraryPanelEmptyState: props.labels.browserLibraryPanelEmptyState,
+      browserHistoryAndFavoritesPanelTitle: props.labels.browserHistoryAndFavoritesPanelTitle,
+      browserHistoryAndFavoritesPanelRecentTitle: props.labels.browserHistoryAndFavoritesPanelRecentTitle,
+      browserHistoryAndFavoritesPanelRecentTodayTitle: props.labels.browserHistoryAndFavoritesPanelRecentTodayTitle,
+      browserHistoryAndFavoritesPanelRecentYesterdayTitle:
+        props.labels.browserHistoryAndFavoritesPanelRecentYesterdayTitle,
+      browserHistoryAndFavoritesPanelRecentLast7DaysTitle:
+        props.labels.browserHistoryAndFavoritesPanelRecentLast7DaysTitle,
+      browserHistoryAndFavoritesPanelRecentLast30DaysTitle:
+        props.labels.browserHistoryAndFavoritesPanelRecentLast30DaysTitle,
+      browserHistoryAndFavoritesPanelRecentOlderTitle: props.labels.browserHistoryAndFavoritesPanelRecentOlderTitle,
+      browserHistoryAndFavoritesPanelFavoritesTitle: props.labels.browserHistoryAndFavoritesPanelFavoritesTitle,
+      browserHistoryAndFavoritesPanelEmptyState: props.labels.browserHistoryAndFavoritesPanelEmptyState,
       pdfTitle: props.labels.pdfTitle,
     },
     onOpenSources: props.onOpenAddressBarSourceMenu,
@@ -156,6 +156,6 @@ export function createEditorModeToolbarContext(
     onNavigateToUrl: props.onToolbarNavigateToUrl,
     onPdfHighlightSelection: props.onPdfHighlightSelection ?? (() => {}),
     onPdfNoteSelection: props.onPdfNoteSelection ?? (() => {}),
-    browserLibraryPanel: props.browserLibraryPanel ?? null,
+    browserHistoryAndFavoritesPanel: props.browserHistoryAndFavoritesPanel ?? null,
   };
 }

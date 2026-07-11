@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 import type {
   ElectronAPI,
 } from 'cs/base/parts/sandbox/common/electronTypes';
@@ -11,6 +11,8 @@ import { BrowserViewStorageScope } from 'cs/platform/browserView/common/browserV
 import { BrowserHistoryStore } from 'cs/platform/browserView/common/browserHistory';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/browser/editorGroupIdentity';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import {
@@ -30,6 +32,7 @@ let resolveEditorPane: typeof import('cs/workbench/browser/parts/editor/panes/ed
 let editorPaneDescriptors: typeof import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').editorPaneDescriptors;
 let TextSelection: typeof import('prosemirror-state').TextSelection;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 const labels = {
   headerAddAction: 'Add',
@@ -51,20 +54,18 @@ const labels = {
   toolbarClearCache: 'Clear cache',
   toolbarAddressBar: 'Address bar',
   toolbarAddressPlaceholder: 'Search or enter URL',
-  browserLibraryPanelTitle: 'Source menu',
-  browserLibraryPanelRecentTitle: 'Recent',
-  browserLibraryPanelRecentTodayTitle: 'Today',
-  browserLibraryPanelRecentYesterdayTitle: 'Yesterday',
-  browserLibraryPanelRecentLast7DaysTitle: 'Last 7 Days',
-  browserLibraryPanelRecentLast30DaysTitle: 'Last 30 Days',
-  browserLibraryPanelRecentOlderTitle: 'Older',
-  browserLibraryPanelFavoritesTitle: 'Favorites',
-  browserLibraryPanelEmptyState: 'No links yet',
-  browserLibraryPanelContextOpen: 'Open',
-  browserLibraryPanelContextOpenInNewTab: 'Open in New Tab',
-  browserLibraryPanelContextNewFolder: 'New Folder',
-  browserLibraryPanelContextRename: 'Rename',
-  browserLibraryPanelContextRemoveFavorite: 'Remove Favorite',
+  browserHistoryAndFavoritesPanelTitle: 'Source menu',
+  browserHistoryAndFavoritesPanelRecentTitle: 'Recent',
+  browserHistoryAndFavoritesPanelRecentTodayTitle: 'Today',
+  browserHistoryAndFavoritesPanelRecentYesterdayTitle: 'Yesterday',
+  browserHistoryAndFavoritesPanelRecentLast7DaysTitle: 'Last 7 Days',
+  browserHistoryAndFavoritesPanelRecentLast30DaysTitle: 'Last 30 Days',
+  browserHistoryAndFavoritesPanelRecentOlderTitle: 'Older',
+  browserHistoryAndFavoritesPanelFavoritesTitle: 'Favorites',
+  browserHistoryAndFavoritesPanelEmptyState: 'No links yet',
+  browserHistoryAndFavoritesPanelContextOpen: 'Open',
+  browserHistoryAndFavoritesPanelContextOpenInNewTab: 'Open in New Tab',
+  browserHistoryAndFavoritesPanelContextRemoveFavorite: 'Remove Favorite',
   draftMode: 'Draft',
   sourceMode: 'Source',
   pdfMode: 'PDF',
@@ -74,10 +75,6 @@ const labels = {
   editorModalCancel: 'Cancel',
   expandEditor: 'Expand editor',
   collapseEditor: 'Collapse editor',
-  renameFavoriteTitle: 'Rename Favorite',
-  renameFavoriteLabel: 'Favorite name',
-  newFavoriteFolderTitle: 'New Folder',
-  newFavoriteFolderLabel: 'Folder name',
   emptyWorkspaceTitle: 'Empty workspace',
   emptyWorkspaceBody: 'Create a draft to start.',
   draftBodyPlaceholder: 'Start writing',
@@ -316,6 +313,14 @@ after(() => {
   cleanupDomEnvironment = null;
 });
 
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
+});
+
 function createProps(
   activeTabId: string | null,
   activeTab: import('cs/workbench/browser/parts/editor/editorModel').EditorWorkspaceTab | null,
@@ -334,6 +339,7 @@ function createProps(
   }> = {},
 ) {
   return {
+    ...dropdownServices,
     labels,
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),
@@ -370,6 +376,7 @@ function createProps(
 
 function createResolverContext() {
   return {
+    ...dropdownServices,
     labels,
     viewPartProps: defaultViewPartProps,
     nativeHost: createNativeHostService(),

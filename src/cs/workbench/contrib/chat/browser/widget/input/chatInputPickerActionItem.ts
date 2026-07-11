@@ -26,6 +26,8 @@ import {
 	type LlmServiceTier,
 } from 'cs/workbench/services/llm/registry';
 import { $ } from 'cs/base/browser/dom';
+import type { ContextMenuService } from 'cs/base/browser/contextmenu';
+import type { DropdownContextViewProvider } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 export type ChatInputModelPickerProps = {
 	readonly activeLlmModelLabel: string;
@@ -56,7 +58,11 @@ export class ChatInputModelPickerActionViewItem {
 	private transientActiveLlmModelOptionValue: string | null = null;
 	private transientMaxContextWindowEnabled: boolean | null = null;
 
-	constructor(props: ChatInputModelPickerProps) {
+	constructor(
+		props: ChatInputModelPickerProps,
+		private readonly contextMenuService: ContextMenuService,
+		private readonly contextViewProvider: DropdownContextViewProvider,
+	) {
 		this.props = props;
 	}
 
@@ -85,6 +91,8 @@ export class ChatInputModelPickerActionViewItem {
 		const currentLabel = this.getModelDropdownTriggerLabel(currentOption);
 
 		return {
+			contextMenuService: this.contextMenuService,
+			contextViewProvider: this.contextViewProvider,
 			label: currentLabel,
 			title: currentLabel,
 			mode: 'custom',
@@ -563,4 +571,3 @@ const base = serializeLlmModelOptionValue(group.providerId, group.modelId);
 		}
 	}
 }
-
