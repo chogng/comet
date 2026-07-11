@@ -1,5 +1,11 @@
-import { clearNode } from 'cs/base/browser/dom';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { $, append, clearNode } from 'cs/base/browser/dom';
 import { DisposableStore } from 'cs/base/common/lifecycle';
+import { localize } from 'cs/nls';
 import { renderNotificationItem } from 'cs/workbench/browser/parts/notifications/notificationsViewer';
 import type {
   INotificationChangeEvent,
@@ -14,6 +20,7 @@ export type NotificationsListOptions = {
 
 export class NotificationsList {
   private readonly listElement: HTMLDivElement;
+  private readonly disposables = new DisposableStore();
   private readonly renderDisposables = new DisposableStore();
   private items: NotificationViewItem[] = [];
   private disposed = false;
@@ -24,10 +31,9 @@ export class NotificationsList {
     private readonly options: NotificationsListOptions = {},
   ) {
     this.container.classList.add('comet-notifications-list-container');
-    this.listElement = document.createElement('div');
-    this.listElement.className = 'comet-notifications-list';
-    this.container.append(this.listElement);
-    this.renderDisposables.add(
+    this.listElement = $<HTMLDivElement>('div.comet-notifications-list');
+    append(this.container, this.listElement);
+    this.disposables.add(
       this.model.onDidChangeNotification(this.handleNotificationChange),
     );
     this.setNotifications(this.model.notifications);
@@ -58,6 +64,7 @@ export class NotificationsList {
 
     this.disposed = true;
     this.renderDisposables.dispose();
+    this.disposables.dispose();
     this.container.classList.remove('comet-notifications-list-container');
     this.container.replaceChildren();
   }
@@ -80,26 +87,26 @@ export class NotificationsList {
   };
 
   private render() {
+    this.renderDisposables.clear();
     clearNode(this.listElement);
     if (this.items.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'comet-notifications-list-empty';
-      empty.textContent = this.options.emptyMessage ?? 'No notifications';
-      this.listElement.append(empty);
+      const empty = $('div.comet-notifications-list-empty');
+      empty.textContent = this.options.emptyMessage ?? localize('noNotifications', "No notifications");
+      append(this.listElement, empty);
       return;
     }
 
     for (const item of this.items) {
-      const element = document.createElement('article');
-      renderNotificationItem(item, element, {
+      const element = $('article');
+      this.renderDisposables.add(renderNotificationItem(item, element, {
         compact: this.options.compact,
         onDidRunAction: () => {
           if (!item.hasProgress) {
             item.close();
           }
         },
-      });
-      this.listElement.append(element);
+      }));
+      append(this.listElement, element);
     }
   }
 }

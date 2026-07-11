@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 @import './notificationsList.css';
 
 .comet-notifications-toasts {
@@ -21,6 +26,12 @@
 }
 
 .comet-notification-toast {
+  overflow: hidden;
+  color: var(--vscode-notifications-foreground, var(--vscode-foreground, #1f1f1f));
+  background: var(--vscode-notifications-background, var(--vscode-editorWidget-background, #ffffff));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, rgba(0, 0, 0, 0.16)));
+  border-radius: var(--vscode-cornerRadius-small, 4px);
+  box-shadow: var(--vscode-widget-shadow, 0 5px 16px rgba(0, 0, 0, 0.24));
   animation: notification-toast-enter 140ms ease-out;
 }
 

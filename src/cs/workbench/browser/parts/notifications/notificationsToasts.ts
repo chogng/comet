@@ -1,4 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import 'cs/workbench/browser/parts/notifications/media/notificationsToasts.css';
+import { $, append } from 'cs/base/browser/dom';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { NotificationPriority } from 'cs/platform/notification/common/notification';
 import { renderNotificationItem } from 'cs/workbench/browser/parts/notifications/notificationsViewer';
@@ -12,8 +18,9 @@ const DEFAULT_TOAST_DURATION = 8000;
 const MAX_VISIBLE_TOASTS = 3;
 
 export class NotificationsToasts {
-  private readonly element = document.createElement('div');
+  private readonly element = $('div.comet-notifications-toasts.bottom-right');
   private readonly disposables = new DisposableStore();
+  private readonly renderDisposables = new DisposableStore();
   private readonly toastTimers = new Map<NotificationViewItem, DisposableStore>();
   private visibleItems: NotificationViewItem[] = [];
   private disposed = false;
@@ -22,8 +29,7 @@ export class NotificationsToasts {
     private readonly container: HTMLElement,
     private readonly model: NotificationsModel,
   ) {
-    this.element.className = 'comet-notifications-toasts bottom-right';
-    this.container.append(this.element);
+    append(this.container, this.element);
     this.disposables.add(
       this.model.onDidChangeNotification(this.handleNotificationChange),
     );
@@ -49,6 +55,7 @@ export class NotificationsToasts {
 
     this.disposed = true;
     this.hide();
+    this.renderDisposables.dispose();
     this.disposables.dispose();
     this.element.remove();
   }
@@ -102,17 +109,17 @@ export class NotificationsToasts {
   }
 
   private render() {
+    this.renderDisposables.clear();
     this.element.replaceChildren();
     this.element.classList.toggle('visible', this.visibleItems.length > 0);
     for (const item of this.visibleItems) {
-      const toast = document.createElement('section');
-      toast.className = 'comet-notification-toast';
-      renderNotificationItem(item, toast, {
+      const toast = $('section.comet-notification-toast');
+      this.renderDisposables.add(renderNotificationItem(item, toast, {
         compact: true,
         onDidClose: () => this.removeToast(item),
         onDidRunAction: () => this.removeToast(item),
-      });
-      this.element.append(toast);
+      }));
+      append(this.element, toast);
     }
   }
 }

@@ -1,26 +1,28 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { Severity } from 'cs/platform/notification/common/notification';
-import type { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
-import {
-  NotificationsStatus,
-} from 'cs/workbench/browser/parts/notifications/notificationsStatus';
 import {
   NotificationsModel,
 } from 'cs/workbench/common/notifications';
 
-test('notifications status stays hidden until there is status content', () => {
+test('notifications status stays hidden until there is status content', async () => {
   const dom = installDomTestEnvironment();
+  const { NotificationsStatus } = await import(
+    'cs/workbench/browser/parts/notifications/notificationsStatus'
+  );
+  const { NotificationsCenter } = await import(
+    'cs/workbench/browser/parts/notifications/notificationsCenter'
+  );
   const model = new NotificationsModel();
   const container = document.createElement('div');
-  let toggleCount = 0;
-  const center = {
-    toggle() {
-      toggleCount += 1;
-    },
-  } as NotificationsCenter;
+  const center = new NotificationsCenter(container, model);
   const status = new NotificationsStatus(container, model, center);
 
   try {
@@ -39,9 +41,27 @@ test('notifications status stays hidden until there is status content', () => {
     assert.equal(button.textContent, 'Notifications (1)');
 
     button.click();
-    assert.equal(toggleCount, 1);
+    assert.equal(center.isVisible, true);
 
-    notification.close();
+    const centerElement = center.getElement();
+    assert.equal(
+      centerElement.querySelector('.comet-notifications-center-header-title')?.textContent,
+      'Notifications',
+    );
+    const clearButton = centerElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Clear All Notifications"]',
+    );
+    const hideButton = centerElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide Notifications"]',
+    );
+    assert(clearButton);
+    assert(hideButton);
+    assert.equal(clearButton.textContent, '');
+    assert.equal(hideButton.textContent, '');
+
+    clearButton.click();
+    assert.equal(notification.isClosed, true);
+    assert.equal(center.isVisible, false);
     assert.equal(element.classList.contains('comet-is-hidden'), true);
 
     const statusMessage = model.showStatusMessage('Indexing');
@@ -55,6 +75,7 @@ test('notifications status stays hidden until there is status content', () => {
     assert.equal(element.classList.contains('comet-is-hidden'), true);
   } finally {
     status.dispose();
+    center.dispose();
     model.dispose();
     dom.cleanup();
   }

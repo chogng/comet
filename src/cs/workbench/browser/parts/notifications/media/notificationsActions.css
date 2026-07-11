@@ -1,18 +1,7 @@
-.comet-notifications-action,
-.comet-notifications-status-button {
-  border: 1px solid var(--cs-border-muted, rgba(0, 0, 0, 0.14));
-  background: var(--cs-surface, #fff);
-  color: var(--cs-foreground, #1f1f1f);
-  border-radius: 4px;
-  font: inherit;
-  padding: 4px 8px;
-  cursor: pointer;
-}
-
-.comet-notifications-action:hover,
-.comet-notifications-status-button:hover {
-  background: var(--cs-surface-hover, rgba(0, 0, 0, 0.06));
-}
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
 .comet-notifications-status {
   position: absolute;
@@ -38,12 +27,19 @@
 }
 
 .comet-notifications-status-message {
-  color: var(--cs-descriptionForeground, #666);
+  color: var(--vscode-descriptionForeground, #666);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.comet-notifications-status-button.comet-has-notifications {
-  font-weight: 600;
+.comet-notifications-status-button {
+  color: var(--vscode-foreground, #1f1f1f);
+  background: var(--vscode-notifications-background, var(--vscode-editorWidget-background, #fff));
+  border: 1px solid var(--vscode-widget-border, rgba(0, 0, 0, 0.14));
+  box-shadow: var(--vscode-widget-shadow, 0 2px 8px rgba(0, 0, 0, 0.12));
+}
+
+.comet-notifications-status-button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, rgba(0, 0, 0, 0.06));
 }

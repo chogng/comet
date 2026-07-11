@@ -1,125 +1,146 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import 'cs/workbench/browser/parts/notifications/media/notificationsCenter.css';
 import 'cs/workbench/browser/parts/notifications/media/notificationsActions.css';
+import { $, append } from 'cs/base/browser/dom';
+import { createActionBarView, type ActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
+import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import { Disposable } from 'cs/base/common/lifecycle';
+import { localize } from 'cs/nls';
 import { NotificationsList } from 'cs/workbench/browser/parts/notifications/notificationsList';
+import {
+	CLEAR_ALL_NOTIFICATIONS,
+	HIDE_NOTIFICATIONS_CENTER,
+} from 'cs/workbench/browser/parts/notifications/notificationsCommands';
 import type {
-  INotificationChangeEvent,
-  NotificationsModel,
+	INotificationChangeEvent,
+	NotificationsModel,
 } from 'cs/workbench/common/notifications';
 
-export class NotificationsCenter {
-  private readonly element = document.createElement('section');
-  private readonly titleElement = document.createElement('strong');
-  private readonly toolbarElement = document.createElement('div');
-  private readonly listHost = document.createElement('div');
-  private readonly list: NotificationsList;
-  private visible = false;
-  private disposed = false;
-  private readonly modelDisposable;
+export class NotificationsCenter extends Disposable {
+	private readonly element = $('section.comet-notifications-center.bottom-right');
+	private readonly titleElement = $('span.comet-notifications-center-header-title');
+	private readonly toolbar: ActionBarView;
+	private readonly list: NotificationsList;
+	private visible = false;
+	private disposed = false;
 
-  constructor(
-    private readonly container: HTMLElement,
-    private readonly model: NotificationsModel,
-  ) {
-    this.element.className = 'comet-notifications-center bottom-right';
-    const header = document.createElement('header');
-    header.className = 'comet-notifications-center-header';
-    this.titleElement.className = 'comet-notifications-center-header-title';
-    this.toolbarElement.className = 'comet-notifications-center-header-toolbar';
+	constructor(
+		private readonly container: HTMLElement,
+		private readonly model: NotificationsModel,
+	) {
+		super();
 
-    const clearButton = document.createElement('button');
-    clearButton.type = 'button';
-    clearButton.className = 'comet-notifications-action';
-    clearButton.textContent = 'Clear All';
-    clearButton.addEventListener('click', () => this.model.clearAll());
+		const header = $('header.comet-notifications-center-header');
+		const toolbarElement = $('div.comet-notifications-center-header-toolbar');
+		this.toolbar = this._register(createActionBarView());
+		append(toolbarElement, this.toolbar.getElement());
+		append(header, this.titleElement, toolbarElement);
 
-    const hideButton = document.createElement('button');
-    hideButton.type = 'button';
-    hideButton.className = 'comet-notifications-action';
-    hideButton.textContent = 'Hide';
-    hideButton.addEventListener('click', () => this.hide());
+		const listHost = $('div.comet-notifications-center-list-host');
+		append(this.element, header, listHost);
+		append(this.container, this.element);
 
-    this.toolbarElement.append(clearButton, hideButton);
-    header.append(this.titleElement, this.toolbarElement);
-    this.element.append(header, this.listHost);
-    this.container.append(this.element);
-    this.list = new NotificationsList(this.listHost, this.model, {
-      emptyMessage: 'No new notifications',
-    });
-    this.modelDisposable = this.model.onDidChangeNotification(
-      this.handleNotificationChange,
-    );
-    this.updateTitle();
-  }
+		this.list = this._register(new NotificationsList(listHost, this.model, {
+			emptyMessage: localize('notificationsEmpty', "No new notifications"),
+		}));
+		this._register(this.model.onDidChangeNotification(this.handleNotificationChange));
+		this.updateHeader();
+	}
 
-  get isVisible() {
-    return this.visible;
-  }
+	get isVisible() {
+		return this.visible;
+	}
 
-  getElement() {
-    return this.element;
-  }
+	getElement() {
+		return this.element;
+	}
 
-  show() {
-    if (this.disposed) {
-      return;
-    }
+	show() {
+		if (this.disposed) {
+			return;
+		}
 
-    this.visible = true;
-    this.element.classList.add('visible');
-    for (const item of this.model.notifications) {
-      item.updateVisibility(true);
-    }
-    this.list.focusFirst();
-  }
+		this.visible = true;
+		this.element.classList.add('visible');
+		for (const item of this.model.notifications) {
+			item.updateVisibility(true);
+		}
+		this.list.focusFirst();
+	}
 
-  hide() {
-    if (this.disposed) {
-      return;
-    }
+	hide() {
+		if (this.disposed) {
+			return;
+		}
 
-    this.visible = false;
-    this.element.classList.remove('visible');
-    for (const item of this.model.notifications) {
-      item.updateVisibility(false);
-    }
-  }
+		this.visible = false;
+		this.element.classList.remove('visible');
+		for (const item of this.model.notifications) {
+			item.updateVisibility(false);
+		}
+	}
 
-  toggle() {
-    if (this.visible) {
-      this.hide();
-    } else {
-      this.show();
-    }
-  }
+	toggle() {
+		if (this.visible) {
+			this.hide();
+		} else {
+			this.show();
+		}
+	}
 
-  dispose() {
-    if (this.disposed) {
-      return;
-    }
+	override dispose() {
+		if (this.disposed) {
+			return;
+		}
 
-    this.disposed = true;
-    this.modelDisposable.dispose();
-    this.list.dispose();
-    this.element.remove();
-  }
+		this.disposed = true;
+		this.element.remove();
+		super.dispose();
+	}
 
-  private readonly handleNotificationChange = (_event: INotificationChangeEvent) => {
-    this.updateTitle();
-    if (this.visible && this.model.notifications.length === 0) {
-      this.hide();
-    }
-  };
+	private readonly handleNotificationChange = (_event: INotificationChangeEvent) => {
+		this.updateHeader();
+		if (this.visible && this.model.notifications.length === 0) {
+			this.hide();
+		}
+	};
 
-  private updateTitle() {
-    const count = this.model.notifications.length;
-    this.titleElement.textContent =
-      count === 0 ? 'No new notifications' : `Notifications (${count})`;
-  }
+	private updateHeader() {
+		const notificationsLabel = localize('notifications', "Notifications");
+		const clearAllLabel = localize('clearAllNotifications', "Clear All Notifications");
+		const hideLabel = localize('hideNotifications', "Hide Notifications");
+		this.titleElement.textContent = this.model.notifications.length === 0
+			? localize('notificationsEmpty', "No new notifications")
+			: notificationsLabel;
+		this.toolbar.setProps({
+			ariaLabel: localize('notificationsToolbar', "Notification Center Actions"),
+			className: 'comet-notifications-center-actions',
+			items: [
+				{
+					id: CLEAR_ALL_NOTIFICATIONS,
+					label: clearAllLabel,
+					disabled: !this.model.notifications.some(item => !item.hasProgress),
+					content: createLxIcon('trash'),
+					run: () => this.model.clearAll(),
+				},
+				{
+					id: HIDE_NOTIFICATIONS_CENTER,
+					label: hideLabel,
+					content: createLxIcon('close'),
+					run: () => this.hide(),
+				},
+			],
+		});
+	}
 }
 
 export function createNotificationsCenter(
-  container: HTMLElement,
-  model: NotificationsModel,
+	container: HTMLElement,
+	model: NotificationsModel,
 ) {
-  return new NotificationsCenter(container, model);
+	return new NotificationsCenter(container, model);
 }

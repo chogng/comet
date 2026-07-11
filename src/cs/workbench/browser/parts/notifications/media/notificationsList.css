@@ -1,120 +1,148 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 .comet-notifications-list-container {
-  min-width: 0;
+	min-width: 0;
+	color: var(--vscode-notifications-foreground, var(--vscode-foreground, #1f1f1f));
+	background: var(--vscode-notifications-background, var(--vscode-editorWidget-background, #ffffff));
 }
 
 .comet-notifications-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+	display: flex;
+	flex-direction: column;
 }
 
 .comet-notifications-list-empty {
-  color: var(--cs-descriptionForeground, #666);
-  padding: 12px;
+	padding: 12px;
+	color: var(--vscode-descriptionForeground, #666666);
 }
 
 .comet-notification-list-item {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border: 1px solid var(--cs-border-muted, rgba(0, 0, 0, 0.12));
-  border-radius: 6px;
-  background: var(--cs-surface, #fff);
-  color: var(--cs-foreground, #1f1f1f);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	padding: 10px 5px;
+	color: inherit;
+	background: inherit;
 }
 
-.comet-notification-list-item.comet-is-compact {
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+.comet-notifications-center .comet-notification-list-item:not(:last-child) {
+	border-bottom: 1px solid var(--vscode-notifications-border, var(--vscode-widget-border, rgba(0, 0, 0, 0.12)));
 }
 
 .comet-notification-list-item-main-row {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 24px;
-  align-items: start;
-  gap: 8px;
+	display: grid;
+	grid-template-columns: 20px minmax(0, 1fr) 22px;
+	align-items: start;
+	min-width: 0;
 }
 
 .comet-notification-list-item-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--cs-descriptionForeground, #666);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 22px;
+	margin: 0 4px;
+	color: var(--vscode-notificationsInfoIcon-foreground, var(--vscode-foreground, #666666));
 }
 
 .comet-notification-severity-warning .comet-notification-list-item-icon {
-  color: #9a6700;
+	color: var(--vscode-notificationsWarningIcon-foreground, #b89500);
 }
 
 .comet-notification-severity-error .comet-notification-list-item-icon {
-  color: #cf222e;
+	color: var(--vscode-notificationsErrorIcon-foreground, #f14c4c);
 }
 
 .comet-notification-list-item-message {
-  min-width: 0;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
+	min-width: 0;
+	min-height: 22px;
+	overflow-wrap: anywhere;
+	line-height: 22px;
+	user-select: text;
 }
 
 .comet-notification-list-item-close {
-  justify-self: end;
-  --cs-actionbar-foreground: var(--cs-descriptionForeground, #666);
-  --cs-actionbar-hover-foreground: var(--cs-foreground, #1f1f1f);
-  --cs-actionbar-hover-background: rgba(0, 0, 0, 0.06);
-  --cs-actionbar-radius: 4px;
+	--cs-actionbar-foreground: var(--vscode-foreground, #666666);
+	--cs-actionbar-hover-foreground: var(--vscode-foreground, #1f1f1f);
+	--cs-actionbar-hover-background: var(--vscode-toolbar-hoverBackground, rgba(0, 0, 0, 0.06));
+	--cs-actionbar-focus-outline: var(--vscode-focusBorder, #0a5fbf);
+	opacity: 0;
+}
+
+.comet-notification-list-item:hover .comet-notification-list-item-close,
+.comet-notification-list-item:focus-within .comet-notification-list-item-close,
+.comet-notification-list-item.comet-is-compact .comet-notification-list-item-close {
+	opacity: 1;
 }
 
 .comet-notification-list-item-close .comet-actionbar-action {
-  width: 22px;
-  height: 22px;
+	width: 22px;
+	height: 22px;
 }
 
 .comet-notification-list-item-close .lx-icon {
-  font-size: 14px;
+	font-size: 14px;
 }
 
 .comet-notification-list-item-source {
-  color: var(--cs-descriptionForeground, #666);
-  font-size: 12px;
-  padding-left: 28px;
+	min-width: 0;
+	overflow: hidden;
+	padding: 2px 27px 0 28px;
+	color: var(--vscode-descriptionForeground, #666666);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .comet-notification-list-item-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-left: 28px;
+	--cs-actionbar-gap: 8px;
+	margin: 4px 27px 0 28px;
 }
 
-.comet-notification-list-item-action {
-  border: 1px solid var(--cs-border-muted, rgba(0, 0, 0, 0.14));
-  border-radius: 4px;
-  background: var(--cs-surface, #fff);
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 4px 8px;
+.comet-actionbar-action.comet-notification-list-item-action {
+	width: auto;
+	min-height: 28px;
+	padding: 0 10px !important;
+	border: 1px solid var(--vscode-button-secondaryBorder, transparent);
+	border-radius: 2px;
+	font-size: 13px;
 }
 
-.comet-notification-list-item-action.comet-is-primary {
-  background: var(--cs-accent, #0969da);
-  border-color: var(--cs-accent, #0969da);
-  color: #fff;
+.comet-actionbar-action.comet-notification-list-item-action.comet-is-primary {
+	color: var(--vscode-button-foreground, #ffffff);
+	background: var(--vscode-button-background, #0e639c);
+	border-color: var(--vscode-button-border, transparent);
+}
+
+.comet-actionbar-action.comet-notification-list-item-action.comet-is-primary:hover:not(:disabled) {
+	color: var(--vscode-button-foreground, #ffffff);
+	background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.comet-actionbar-action.comet-notification-list-item-action.comet-is-secondary {
+	color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #1f1f1f));
+	background: var(--vscode-button-secondaryBackground, #f3f3f3);
+}
+
+.comet-actionbar-action.comet-notification-list-item-action.comet-is-secondary:hover:not(:disabled) {
+	color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #1f1f1f));
+	background: var(--vscode-button-secondaryHoverBackground, #e5e5e5);
 }
 
 .comet-notification-list-item-progress {
-  height: 2px;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.08);
-  border-radius: 999px;
+	height: 2px;
+	margin: 8px -5px -10px;
+	overflow: hidden;
+	background: var(--vscode-progressBar-background, rgba(0, 0, 0, 0.08));
 }
 
 .comet-notification-list-item-progress-bar {
-  width: 100%;
-  height: 100%;
-  background: var(--cs-accent, #0969da);
+	width: 100%;
+	height: 100%;
+	background: var(--vscode-progressBar-background, #0e70c0);
 }

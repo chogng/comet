@@ -1,53 +1,78 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 @import './notificationsList.css';
 
 .comet-notifications-center {
-  position: absolute;
-  z-index: 2600;
-  right: 12px;
-  bottom: 12px;
-  display: none;
-  width: min(460px, calc(100vw - 24px));
-  max-height: min(520px, calc(100vh - 24px));
-  pointer-events: auto;
-  border: 1px solid var(--cs-border-muted, rgba(0, 0, 0, 0.14));
-  border-radius: 6px;
-  background: var(--cs-surface, #fff);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
+	position: absolute;
+	z-index: 2600;
+	right: 7px;
+	bottom: 11px;
+	display: none;
+	width: min(450px, calc(100vw - 14px));
+	max-height: min(520px, calc(100vh - 22px));
+	pointer-events: auto;
+	overflow: hidden;
+	color: var(--vscode-notifications-foreground, var(--vscode-foreground, #1f1f1f));
+	background: var(--vscode-notifications-background, var(--vscode-editorWidget-background, #ffffff));
+	border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, rgba(0, 0, 0, 0.16)));
+	border-radius: var(--vscode-cornerRadius-small, 4px);
+	box-shadow: var(--vscode-widget-shadow, 0 5px 16px rgba(0, 0, 0, 0.24));
 }
 
 .comet-app-window.comet-has-statusbar .comet-notifications-center {
-  bottom: 34px;
+	bottom: 29px;
 }
 
 .comet-notifications-center.visible {
-  display: flex;
-  flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 
 .comet-notifications-center-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--cs-border-muted, rgba(0, 0, 0, 0.12));
+	display: flex;
+	height: 35px;
+	align-items: center;
+	padding: 0 5px 0 8px;
+	background: var(--vscode-notifications-background, var(--vscode-editorWidget-background, #ffffff));
 }
 
 .comet-notifications-center-header-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	font-size: 11px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	text-transform: uppercase;
+	white-space: nowrap;
 }
 
 .comet-notifications-center-header-toolbar {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+	display: flex;
+	flex: 1;
+	justify-content: flex-end;
+	min-width: 0;
 }
 
-.comet-notifications-center .comet-notifications-list-container {
-  overflow: auto;
-  padding: 10px;
+.comet-notifications-center-actions {
+	--cs-actionbar-foreground: var(--vscode-foreground, #425468);
+	--cs-actionbar-hover-foreground: var(--vscode-foreground, #1a2530);
+	--cs-actionbar-hover-background: var(--vscode-toolbar-hoverBackground, rgba(0, 0, 0, 0.06));
+	--cs-actionbar-focus-outline: var(--vscode-focusBorder, #0a5fbf);
+}
+
+.comet-notifications-center-actions .comet-actionbar-action {
+	width: 22px;
+	height: 22px;
+}
+
+.comet-notifications-center-actions .lx-icon {
+	font-size: 16px;
+}
+
+.comet-notifications-center-list-host {
+	min-height: 0;
+	overflow: auto;
 }

@@ -1,188 +1,171 @@
-import { clearNode } from 'cs/base/browser/dom';
-import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
-import type { IAction } from 'cs/base/common/actions';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { $, append, clearNode } from 'cs/base/browser/dom';
+import { createActionBarView, type ActionBarActionItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import {
-  createLxIcon,
-  type LxIconName,
+	createLxIcon,
+	type LxIconName,
 } from 'cs/base/browser/ui/lxicons/lxicons';
+import type { IAction } from 'cs/base/common/actions';
+import { DisposableStore } from 'cs/base/common/lifecycle';
+import { localize } from 'cs/nls';
 import {
-  Severity,
-  type NotificationMessage,
+	Severity,
 } from 'cs/platform/notification/common/notification';
 import type { NotificationViewItem } from 'cs/workbench/common/notifications';
 
-export function notificationMessageToString(message: NotificationMessage) {
-  return typeof message === 'string' ? message : message.message;
-}
-
 export function getNotificationSeverityClassName(severity: Severity) {
-  switch (severity) {
-    case Severity.Error:
-      return 'comet-notification-severity-error';
-    case Severity.Warning:
-      return 'comet-notification-severity-warning';
-    case Severity.Info:
-      return 'comet-notification-severity-info';
-    default:
-      return 'comet-notification-severity-ignore';
-  }
+	switch (severity) {
+		case Severity.Error:
+			return 'comet-notification-severity-error';
+		case Severity.Warning:
+			return 'comet-notification-severity-warning';
+		case Severity.Info:
+			return 'comet-notification-severity-info';
+		default:
+			return 'comet-notification-severity-ignore';
+	}
 }
 
 export function getNotificationSeverityLabel(severity: Severity) {
-  switch (severity) {
-    case Severity.Error:
-      return 'Error';
-    case Severity.Warning:
-      return 'Warning';
-    case Severity.Info:
-      return 'Info';
-    default:
-      return 'Notification';
-  }
+	switch (severity) {
+		case Severity.Error:
+			return localize('notificationError', "Error");
+		case Severity.Warning:
+			return localize('notificationWarning', "Warning");
+		case Severity.Info:
+			return localize('notificationInfo', "Info");
+		default:
+			return localize('notification', "Notification");
+	}
 }
 
 function getNotificationSeverityIconName(severity: Severity): LxIconName {
-  switch (severity) {
-    case Severity.Error:
-      return 'error';
-    case Severity.Warning:
-      return 'warning';
-    case Severity.Info:
-      return 'info';
-    default:
-      return 'bell';
-  }
+	switch (severity) {
+		case Severity.Error:
+			return 'error';
+		case Severity.Warning:
+			return 'warning';
+		case Severity.Info:
+			return 'info';
+		default:
+			return 'bell';
+	}
 }
 
 export function getNotificationSourceLabel(item: NotificationViewItem) {
-  if (!item.source) {
-    return '';
-  }
+	if (!item.source) {
+		return '';
+	}
 
-  return typeof item.source === 'string' ? item.source : item.source.label;
+	return typeof item.source === 'string' ? item.source : item.source.label;
 }
 
-function createActionButton(
-  action: IAction,
-  className: string,
-  onDidRunAction?: (action: IAction) => void,
-) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = className;
-  button.textContent = action.label;
-  button.title = action.tooltip || action.label;
-  button.disabled = !action.enabled;
-  button.addEventListener('click', () => {
-    void Promise.resolve(action.run()).finally(() => {
-      onDidRunAction?.(action);
-    });
-  });
-  return button;
+function createNotificationActionItem(
+	action: IAction,
+	primary: boolean,
+	onDidRunAction?: (action: IAction) => void,
+): ActionBarActionItem {
+	return {
+		id: action.id,
+		label: action.tooltip || action.label,
+		disabled: !action.enabled,
+		mode: 'text',
+		content: action.label,
+		buttonClassName: primary
+			? 'comet-notification-list-item-action comet-is-primary'
+			: 'comet-notification-list-item-action comet-is-secondary',
+		run: async () => {
+			try {
+				await action.run();
+			} finally {
+				onDidRunAction?.(action);
+			}
+		},
+	};
 }
 
 export type NotificationRenderOptions = {
-  compact?: boolean;
-  onDidRunAction?: (action: IAction) => void;
-  onDidClose?: () => void;
+	compact?: boolean;
+	onDidRunAction?: (action: IAction) => void;
+	onDidClose?: () => void;
 };
 
 export function renderNotificationItem(
-  item: NotificationViewItem,
-  container: HTMLElement,
-  options: NotificationRenderOptions = {},
+	item: NotificationViewItem,
+	container: HTMLElement,
+	options: NotificationRenderOptions = {},
 ) {
-  clearNode(container);
-  container.className = [
-    'comet-notification-list-item',
-    getNotificationSeverityClassName(item.severity),
-    options.compact ? 'comet-is-compact' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+	const disposables = new DisposableStore();
+	clearNode(container);
+	container.className = [
+		'comet-notification-list-item',
+		getNotificationSeverityClassName(item.severity),
+		options.compact ? 'comet-is-compact' : '',
+	]
+		.filter(Boolean)
+		.join(' ');
 
-  const mainRow = document.createElement('div');
-  mainRow.className = 'comet-notification-list-item-main-row';
+	const mainRow = $('div.comet-notification-list-item-main-row');
+	const icon = $('span.comet-notification-list-item-icon');
+	icon.setAttribute('aria-label', getNotificationSeverityLabel(item.severity));
+	append(icon, createLxIcon(getNotificationSeverityIconName(item.severity)));
 
-  const icon = document.createElement('span');
-  icon.className = 'comet-notification-list-item-icon';
-  icon.title = getNotificationSeverityLabel(item.severity);
-  icon.append(createLxIcon(getNotificationSeverityIconName(item.severity)));
+	const message = $('div.comet-notification-list-item-message');
+	message.textContent = item.messageText;
 
-  const message = document.createElement('div');
-  message.className = 'comet-notification-list-item-message';
-  message.textContent = item.messageText;
+	const closeLabel = localize('closeNotification', "Close Notification");
+	const closeActionBar = disposables.add(createActionBarView({
+		ariaLabel: localize('notificationActions', "Notification Actions"),
+		className: 'comet-notification-list-item-close',
+		items: [{
+			id: 'close',
+			label: closeLabel,
+			content: createLxIcon('close'),
+			run: () => {
+				options.onDidClose?.();
+				item.close();
+			},
+		}],
+	}));
 
-  const closeActionBar = createActionBarView({
-    ariaLabel: 'Notification actions',
-    className: 'comet-notification-list-item-close',
-    items: [{
-      id: 'close',
-      label: 'Close',
-      title: 'Close',
-      content: createLxIcon('close'),
-      run: () => {
-        options.onDidClose?.();
-        item.close();
-      },
-    }],
-  });
+	append(mainRow, icon, message, closeActionBar.getElement());
+	append(container, mainRow);
 
-  mainRow.append(icon, message, closeActionBar.getElement());
-  container.append(mainRow);
+	const sourceLabel = getNotificationSourceLabel(item);
+	if (sourceLabel) {
+		const source = $('div.comet-notification-list-item-source');
+		source.textContent = sourceLabel;
+		append(container, source);
+	}
 
-  const sourceLabel = getNotificationSourceLabel(item);
-  if (sourceLabel) {
-    const source = document.createElement('div');
-    source.className = 'comet-notification-list-item-source';
-    source.textContent = sourceLabel;
-    container.append(source);
-  }
+	const primaryActions = item.actions?.primary ?? [];
+	const secondaryActions = options.compact ? [] : item.actions?.secondary ?? [];
+	if (primaryActions.length > 0 || secondaryActions.length > 0) {
+		const actions = disposables.add(createActionBarView({
+			ariaLabel: localize('notificationCommands', "Notification Commands"),
+			className: 'comet-notification-list-item-actions',
+			items: [
+				...primaryActions.map(action => createNotificationActionItem(action, true, options.onDidRunAction)),
+				...secondaryActions.map(action => createNotificationActionItem(action, false, options.onDidRunAction)),
+			],
+		}));
+		append(container, actions.getElement());
+	}
 
-  const primaryActions = item.actions?.primary ?? [];
-  if (primaryActions.length > 0) {
-    const actionBar = document.createElement('div');
-    actionBar.className = 'comet-notification-list-item-actions';
-    for (const action of primaryActions) {
-      actionBar.append(
-        createActionButton(
-          action,
-          'comet-notification-list-item-action comet-is-primary',
-          options.onDidRunAction,
-        ),
-      );
-    }
-    container.append(actionBar);
-  }
+	if (item.hasProgress) {
+		const progress = $('div.comet-notification-list-item-progress');
+		const bar = $('div.comet-notification-list-item-progress-bar');
+		const state = item.progress.state;
+		if (typeof state.total === 'number' && typeof state.worked === 'number') {
+			bar.style.width = `${Math.max(0, Math.min(100, (state.worked / state.total) * 100))}%`;
+		}
+		append(progress, bar);
+		append(container, progress);
+	}
 
-  const secondaryActions = item.actions?.secondary ?? [];
-  if (!options.compact && secondaryActions.length > 0) {
-    const actionBar = document.createElement('div');
-    actionBar.className = 'comet-notification-list-item-actions comet-is-secondary';
-    for (const action of secondaryActions) {
-      actionBar.append(
-        createActionButton(
-          action,
-          'comet-notification-list-item-action comet-is-secondary',
-          options.onDidRunAction,
-        ),
-      );
-    }
-    container.append(actionBar);
-  }
-
-  if (item.hasProgress) {
-    const progress = document.createElement('div');
-    progress.className = 'comet-notification-list-item-progress';
-    const bar = document.createElement('div');
-    bar.className = 'comet-notification-list-item-progress-bar';
-    const state = item.progress.state;
-    if (typeof state.total === 'number' && typeof state.worked === 'number') {
-      bar.style.width = `${Math.max(0, Math.min(100, (state.worked / state.total) * 100))}%`;
-    }
-    progress.append(bar);
-    container.append(progress);
-  }
-
-  return container;
+	return disposables;
 }
