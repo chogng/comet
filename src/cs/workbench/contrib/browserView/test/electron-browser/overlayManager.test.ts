@@ -75,7 +75,7 @@ test('browser overlay manager detects Comet overlays covering the browser host',
 		{ className: 'comet-dialog-modal-block', type: BrowserOverlayType.Dialog },
 		{ className: 'comet-notifications-center', type: BrowserOverlayType.Notification },
 		{ className: 'comet-notifications-toasts', type: BrowserOverlayType.Notification },
-		{ className: 'comet-context-view', type: BrowserOverlayType.Unknown },
+		{ className: 'context-view', type: BrowserOverlayType.Unknown },
 	];
 
 	for (const overlayDefinition of overlayDefinitions) {
@@ -113,7 +113,7 @@ test('browser overlay manager skips context-view blocker hit targets', () => {
 	const manager = new BrowserOverlayManager(window);
 	const host = addElement('comet-browser-frame-placeholder', createDomRect(0, 0, 300, 300));
 	const dialog = addElement('comet-dialog-modal-block', createDomRect(0, 0, 400, 400));
-	const contextView = addElement('comet-context-view', createDomRect(320, 320, 60, 60));
+	const contextView = addElement('context-view', createDomRect(320, 320, 60, 60));
 	const blocker = addElement('context-view-block', createDomRect(0, 0, 400, 400), contextView);
 	const restoreHitTest = installHitTest([blocker, dialog, host]);
 
