@@ -11,7 +11,6 @@ import { DisposableStore, MutableDisposable, toDisposable } from 'cs/base/common
 import { IBrowserViewKeyDownEvent } from 'cs/platform/browserView/common/browserView';
 import { IKeybindingService } from 'cs/platform/keybinding/common/keybinding';
 import { ILogService } from 'cs/platform/log/common/log';
-import { IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import {
 	BrowserEditor,
@@ -48,7 +47,6 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 		editor: BrowserEditor,
 		@ILogService private readonly logService: ILogService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
-		@IContextViewService private readonly contextViewService: IContextViewService,
 	) {
 		super(editor);
 
@@ -125,11 +123,6 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 		store.add(model.onDidKeyCommand(keyEvent => void this.handleKeyEvent(keyEvent)));
 		store.add(model.onDidNavigate(() => this.refresh()));
 		store.add(model.onDidChangeLoadingState(() => this.refresh()));
-		store.add(model.onDidChangeFocus(({ focused }) => {
-			if (focused) {
-				this.contextViewService.hideContextView();
-			}
-		}));
 		this.refresh();
 		void this.captureScreenshot();
 	}

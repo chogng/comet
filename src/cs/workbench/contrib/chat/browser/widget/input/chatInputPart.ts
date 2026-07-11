@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { $, addDisposableListener, EventType } from 'cs/base/browser/dom';
+import { $, addDisposableListener, EventType, getDomNodePagePosition, getWindow } from 'cs/base/browser/dom';
 import {
 	createActionBarView,
 	type ActionBarMenuItem,
@@ -15,7 +15,7 @@ import { lxIconSemanticMap } from 'cs/base/browser/ui/lxicons/lxiconsSemantic';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { CancellationTokenSource, isCancellationError } from 'cs/base/common/cancellation';
-import { DisposableStore, MutableDisposable } from 'cs/base/common/lifecycle';
+import { DisposableStore, MutableDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import { localize } from 'cs/nls';
 import {
 	IContextViewService,
@@ -325,8 +325,9 @@ export class ChatInputPart {
 		return button;
 	}
 
-	private renderArticleMenu() {
+	private renderArticleMenu(anchor: HTMLElement) {
 		const menu = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-menu');
+		this.layoutArticleMenu(menu, anchor);
 		const header = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-menu-header');
 		const title = $<HTMLElementTagNameMap['span']>('span.comet-chat-composer-article-menu-title');
 		title.append(
@@ -411,6 +412,10 @@ export class ChatInputPart {
 		menu.append(header, scrollableList.getDomNode());
 		scrollableList.scanDomNode();
 		return menu;
+	}
+
+	private layoutArticleMenu(menu: HTMLElement, anchor: HTMLElement): void {
+		menu.style.width = `${getDomNodePagePosition(anchor).width}px`;
 	}
 
 	private createArticleSourceButton(source: ArticleListSource): HTMLElement {
@@ -542,9 +547,20 @@ export class ChatInputPart {
 		this.articleMenuContextView = this.contextViewService.showContextView({
 			getAnchor: () => anchor,
 			render: container => {
+				const disposables = new DisposableStore();
 				container.classList.add('comet-chat-composer-article-context-view');
-				container.append(this.renderArticleMenu());
-				return null;
+				const menu = this.renderArticleMenu(anchor);
+				container.append(menu);
+				const resizeObserver = new ResizeObserver(() => {
+					this.layoutArticleMenu(menu, anchor);
+					this.contextViewService.layout();
+				});
+				resizeObserver.observe(anchor);
+				disposables.add(toDisposable(() => resizeObserver.disconnect()));
+				disposables.add(addDisposableListener(getWindow(container), EventType.BLUR, () => {
+					this.contextViewService.hideContextView();
+				}));
+				return disposables;
 			},
 			onHide: this.handleArticleMenuHide,
 		});

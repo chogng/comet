@@ -1,6 +1,10 @@
-import type { ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
+import type { ActionBarActionItem, ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
-import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import { ActionViewItem } from 'cs/base/browser/ui/actionbar/actionViewItems';
+import {
+  createDropdownMenuActionViewItem,
+  type DropdownMenuActionViewItemOptions,
+} from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { getEditorContentDisplayUrl } from 'cs/workbench/browser/parts/editor/editorUrlPresentation';
@@ -28,6 +32,9 @@ implements EditorModeToolbarContribution {
     className: 'comet-editor-browser-toolbar-actions',
     ariaRole: 'group',
   });
+  private readonly exportDocxActionViewItem: ActionViewItem;
+  private readonly archivePageActionViewItem: ActionViewItem;
+  private readonly moreActionViewItem: ReturnType<typeof createDropdownMenuActionViewItem>;
   private readonly addressInput = new InputBox(this.addressHost, undefined, {
     className: 'comet-editor-browser-toolbar-address-input',
     value: '',
@@ -37,8 +44,20 @@ implements EditorModeToolbarContribution {
 
   constructor(context: EditorModeToolbarContributionContext) {
     this.context = context;
+    this.exportDocxActionViewItem = new ActionViewItem(this.createExportDocxAction());
+    this.archivePageActionViewItem = new ActionViewItem(this.createArchivePageAction());
+    this.moreActionViewItem = createDropdownMenuActionViewItem(this.createMoreActionOptions());
     this.leadingHost.append(this.leadingActionsView.getElement());
     this.trailingHost.append(this.trailingActionsView.getElement());
+    this.trailingActionsView.setProps({
+      className: 'comet-editor-browser-toolbar-actions',
+      ariaRole: 'group',
+      items: [
+        this.exportDocxActionViewItem,
+        this.archivePageActionViewItem,
+        this.moreActionViewItem,
+      ],
+    });
     this.addressInput.inputElement.setAttribute('spellcheck', 'false');
     this.addressInput.inputElement.addEventListener('keydown', this.handleAddressInputKeyDown);
     this.addressInput.inputElement.addEventListener('blur', this.handleAddressInputBlur);
@@ -82,11 +101,9 @@ implements EditorModeToolbarContribution {
   private render() {
     this.bindLibraryPanelView();
     this.updateLeadingActions();
-    this.trailingActionsView.setProps({
-      className: 'comet-editor-browser-toolbar-actions',
-      ariaRole: 'group',
-      items: this.createTrailingItems(),
-    });
+    this.exportDocxActionViewItem.setItem(this.createExportDocxAction());
+    this.archivePageActionViewItem.setItem(this.createArchivePageAction());
+    this.moreActionViewItem.setOptions(this.createMoreActionOptions());
 
     this.syncAddressInputFromContext();
     this.addressInput.inputElement.setAttribute(
@@ -249,76 +266,80 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
     ];
   }
 
-  private createTrailingItems(): ActionBarItem[] {
-    return [
-      {
-        label: this.context.labels.toolbarExportDocx,
-        title: this.context.labels.toolbarExportDocx,
-        mode: 'icon',
-        buttonClassName: 'comet-editor-browser-toolbar-btn',
-        content: createLxIcon('docx'),
-        disabled: !this.context.electronRuntime,
-        onClick: () => {
-          void this.context.onExportDocx();
-        },
+  private createExportDocxAction(): ActionBarActionItem {
+    return {
+      label: this.context.labels.toolbarExportDocx,
+      title: this.context.labels.toolbarExportDocx,
+      mode: 'icon',
+      buttonClassName: 'comet-editor-browser-toolbar-btn',
+      content: createLxIcon('docx'),
+      disabled: !this.context.electronRuntime,
+      onClick: () => {
+        void this.context.onExportDocx();
       },
-      {
-        label: this.context.labels.toolbarArchivePage,
-        title: this.context.labels.toolbarArchivePage,
-        mode: 'icon',
-        buttonClassName: 'comet-editor-browser-toolbar-btn',
-        content: createLxIcon('download-2'),
-        disabled: !this.context.browserUrl || !this.context.electronRuntime,
-        onClick: () => {
-          void this.context.onArchiveCurrentPage();
-        },
+    };
+  }
+
+  private createArchivePageAction(): ActionBarActionItem {
+    return {
+      label: this.context.labels.toolbarArchivePage,
+      title: this.context.labels.toolbarArchivePage,
+      mode: 'icon',
+      buttonClassName: 'comet-editor-browser-toolbar-btn',
+      content: createLxIcon('download-2'),
+      disabled: !this.context.browserUrl || !this.context.electronRuntime,
+      onClick: () => {
+        void this.context.onArchiveCurrentPage();
       },
-      createDropdownMenuActionViewItem({
-        label: this.context.labels.toolbarMore,
-        title: this.context.labels.toolbarMore,
-        mode: 'icon',
-        buttonClassName: 'comet-editor-browser-toolbar-btn',
-        content: createLxIcon('more'),
-        overlayAlignment: 'end',
-        menuData: EDITOR_BROWSER_TOOLBAR_MORE_MENU_DATA,
-        menu: [
-          {
-            label: this.context.labels.toolbarHardReload,
-            onClick: () => this.context.onHardReload(),
-            disabled: !this.context.browserUrl,
+    };
+  }
+
+  private createMoreActionOptions(): DropdownMenuActionViewItemOptions {
+    return {
+      label: this.context.labels.toolbarMore,
+      title: this.context.labels.toolbarMore,
+      mode: 'icon',
+      buttonClassName: 'comet-editor-browser-toolbar-btn',
+      content: createLxIcon('more'),
+      overlayAlignment: 'end',
+      menuData: EDITOR_BROWSER_TOOLBAR_MORE_MENU_DATA,
+      menu: [
+        {
+          label: this.context.labels.toolbarHardReload,
+          onClick: () => this.context.onHardReload(),
+          disabled: !this.context.browserUrl,
+        },
+        {
+          label: this.context.labels.toolbarCopyCurrentUrl,
+          onClick: () => {
+            void this.context.onCopyCurrentUrl();
           },
-          {
-            label: this.context.labels.toolbarCopyCurrentUrl,
-            onClick: () => {
-              void this.context.onCopyCurrentUrl();
-            },
-            disabled: !this.context.browserUrl,
+          disabled: !this.context.browserUrl,
+        },
+        {
+          label: this.context.labels.toolbarClearBrowsingHistory,
+          onClick: () => {
+            this.getLibraryPanelView()?.clearRecentLibraryEntries();
+            this.context.onClearBrowsingHistory();
           },
-          {
-            label: this.context.labels.toolbarClearBrowsingHistory,
-            onClick: () => {
-              this.getLibraryPanelView()?.clearRecentLibraryEntries();
-              this.context.onClearBrowsingHistory();
-            },
-            disabled: !this.context.browserUrl,
+          disabled: !this.context.browserUrl,
+        },
+        {
+          label: this.context.labels.toolbarClearCookies,
+          onClick: () => {
+            void this.context.onClearCookies();
           },
-          {
-            label: this.context.labels.toolbarClearCookies,
-            onClick: () => {
-              void this.context.onClearCookies();
-            },
-            disabled: !this.context.electronRuntime,
+          disabled: !this.context.electronRuntime,
+        },
+        {
+          label: this.context.labels.toolbarClearCache,
+          onClick: () => {
+            void this.context.onClearCache();
           },
-          {
-            label: this.context.labels.toolbarClearCache,
-            onClick: () => {
-              void this.context.onClearCache();
-            },
-            disabled: !this.context.electronRuntime,
-          },
-        ],
-      }),
-    ];
+          disabled: !this.context.electronRuntime,
+        },
+      ],
+    };
   }
 }
 

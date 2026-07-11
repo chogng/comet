@@ -1,6 +1,7 @@
 import type {
   ContextMenuDelegate,
 } from 'cs/base/browser/contextmenu';
+import { addDisposableListener, EventType, getWindow } from 'cs/base/browser/dom';
 import {
   LayoutAnchorPosition,
   layout,
@@ -19,7 +20,7 @@ import {
 } from 'cs/base/common/actions';
 import type { IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { AnchorAlignment, AnchorAxisAlignment } from 'cs/base/browser/ui/contextview/contextview';
-import { toDisposable } from 'cs/base/common/lifecycle';
+import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 
 type ContextMenuHidePayload = {
   didCancel: boolean;
@@ -116,6 +117,7 @@ export class ContextMenuHandler {
         ? AnchorAxisAlignment.HORIZONTAL
         : AnchorAxisAlignment.VERTICAL,
       render: (container) => {
+        const menuDisposables = new DisposableStore();
         menu = this.renderMenu(options, delegate, header, actionRunner);
         container.classList.add('comet-actionbar-context-view');
         const menuClassName = delegate.getMenuClassName?.();
@@ -123,13 +125,17 @@ export class ContextMenuHandler {
           container.classList.add(menuClassName);
         }
         container.append(menu.getElement());
-        return toDisposable(() => {
+        menuDisposables.add(addDisposableListener(getWindow(container), EventType.BLUR, () => {
+          this.contextViewService.hideContextView({ didCancel: true });
+        }));
+        menuDisposables.add(toDisposable(() => {
           menu?.dispose();
           if (!delegate.actionRunner) {
             actionRunner.dispose();
           }
           menu = null;
-        });
+        }));
+        return menuDisposables;
       },
       focus: () => {
         if (!menu || header?.autoFocusOnShow) {
@@ -144,6 +150,7 @@ export class ContextMenuHandler {
         menu.getElement().focus();
       },
       onHide: (data) => {
+        this.visible = false;
         const payload = data as ContextMenuHidePayload | undefined;
         delegate.onHide?.(payload?.didCancel ?? true);
         if (shouldRestoreFocusOnHide) {

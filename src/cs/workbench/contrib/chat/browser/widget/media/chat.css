@@ -470,7 +470,6 @@
 }
 
 .comet-chat-composer-article-menu {
-  width: min(calc(100vw - 16px), 760px);
   box-sizing: border-box;
   max-height: min(340px, var(--comet-context-view-available-height, 340px));
   display: grid;

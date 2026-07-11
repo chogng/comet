@@ -8,7 +8,6 @@ import { AnchorAlignment, AnchorPosition, ContextView, ContextViewDOMPosition } 
 import type {
   ActionBarActionItem,
   ActionBarActionMode,
-  ActionView,
   ActionBarMenuItem,
   ActionBarRenderable,
 } from 'cs/base/browser/ui/actionbar/actionbar';
@@ -650,7 +649,7 @@ export class ActionWithDropdownActionViewItem extends BaseActionViewItem {
 
 export function createDropdownMenuActionViewItem(
   options: DropdownMenuActionViewItemOptions,
-): ActionView {
+): DropdownMenuActionViewItem {
   return new DropdownMenuActionViewItem({
     ...options,
     menu: options.menu ? [...options.menu] : undefined,

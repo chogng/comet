@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { getWindow } from 'cs/base/browser/dom';
 import { ContextView, ContextViewDOMPosition } from 'cs/base/browser/ui/contextview/contextview';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { IContextViewService, type IContextViewDelegate, type IOpenContextView } from 'cs/platform/contextview/browser/contextView';
@@ -11,13 +12,18 @@ export class PlatformContextViewService implements IContextViewService {
   declare readonly _serviceBrand: undefined;
 
   private openContextView: IOpenContextView | undefined;
-  private readonly contextView = new ContextView(document.body, ContextViewDOMPosition.FIXED);
+  private readonly contextView = new ContextView(document.body, ContextViewDOMPosition.ABSOLUTE);
 
   showContextView(delegate: IContextViewDelegate, container?: HTMLElement, shadowRoot?: boolean): IOpenContextView {
     const contextContainer = container ?? document.body;
+    const domPosition = contextContainer === getWindow(contextContainer).document.body
+      ? ContextViewDOMPosition.ABSOLUTE
+      : shadowRoot
+        ? ContextViewDOMPosition.FIXED_SHADOW
+        : ContextViewDOMPosition.FIXED;
     this.contextView.setContainer(
       contextContainer,
-      shadowRoot ? ContextViewDOMPosition.FIXED_SHADOW : ContextViewDOMPosition.FIXED,
+      domPosition,
     );
     this.contextView.show(delegate);
 
