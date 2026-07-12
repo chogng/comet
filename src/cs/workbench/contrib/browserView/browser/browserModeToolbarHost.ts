@@ -6,7 +6,7 @@
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import { BrowserHistoryAndFavoritesPanel } from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
-import { createEditorBrowserModeToolbarContribution } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarContribution';
+import { EditorBrowserModeToolbarContribution } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarContribution';
 import { createEditorModeToolbarContext, resolveActiveBrowserMetadata } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarModel';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
 import { Verbosity } from 'cs/workbench/common/editor';
@@ -50,7 +50,7 @@ export class EditorModeToolbarHost {
 	private context: EditorModeToolbarHostContext;
 	private readonly browserStateByTabId = new Map<string, BrowserEditorModeToolbarState>();
 	private readonly browserHistoryAndFavoritesPanel: BrowserHistoryAndFavoritesPanel;
-	private readonly browserToolbar: ReturnType<typeof createEditorBrowserModeToolbarContribution>;
+	private readonly browserToolbar: EditorBrowserModeToolbarContribution;
 	private readonly browserStateListener = new MutableDisposable();
 
 	constructor(
@@ -66,7 +66,8 @@ export class EditorModeToolbarHost {
 			this.createBrowserHistoryAndFavoritesPanelContext(),
 			{ isInteractionWithin: target => context.toolbarElement.contains(target) },
 		);
-		this.browserToolbar = createEditorBrowserModeToolbarContribution(
+		this.browserToolbar = this.instantiationService.createInstance(
+			EditorBrowserModeToolbarContribution,
 			this.createBrowserToolbarContext(),
 			dropdownServices,
 		);
@@ -138,7 +139,6 @@ export class EditorModeToolbarHost {
 			browserCanGoForward: this.getActiveBrowserState()?.canGoForward ?? false,
 			onOpenAddressBarSourceMenu: actions.onOpenSources,
 			onToolbarArchiveCurrentPage: actions.onArchiveCurrentPage,
-			onToolbarExportDocx: actions.onExportDocx,
 			onToolbarCopyCurrentUrl: actions.onCopyCurrentUrl,
 			onToolbarClearBrowsingHistory: actions.onClearBrowsingHistory,
 			onToolbarClearCookies: actions.onClearCookies,

@@ -43,6 +43,7 @@ import type {
 	IFetchService,
 	JournalDescriptor,
 } from 'cs/workbench/services/fetch/common/fetch';
+import type { IArticleSelectionSnapshot } from 'cs/workbench/services/document/common/documentActions';
 
 let cleanupDomEnvironment: (() => void) | undefined;
 let cleanupResizeObserver: (() => void) | undefined;
@@ -51,6 +52,8 @@ let chatService: ChatService;
 let fetchService: TestFetchService;
 let createWidget: () => ChatWidgetType;
 let localeService: TestWorkbenchLocaleService;
+const articleExports: IArticleSelectionSnapshot[] = [];
+let desktopRuntime = true;
 
 class TestWorkbenchLocaleService implements IWorkbenchLocaleService {
 	declare readonly _serviceBrand: undefined;
@@ -253,12 +256,14 @@ before(async () => {
 	await import('cs/platform/contextview/browser/contextViewService');
 	await import('cs/platform/contextview/browser/contextMenuService');
 
-	const [{ renderMarkdown }, markdownModule, chatModule, fetchModule, notificationModule, instantiationModule] = await Promise.all([
+	const [{ renderMarkdown }, markdownModule, chatModule, fetchModule, notificationModule, nativeHostModule, documentActionsModule, instantiationModule] = await Promise.all([
 		import('cs/base/browser/markdownRenderer'),
 		import('cs/platform/markdown/browser/markdownRenderer'),
 		import('cs/workbench/contrib/chat/common/chatService/chatService'),
 		import('cs/workbench/services/fetch/common/fetch'),
 		import('cs/platform/notification/common/notification'),
+		import('cs/platform/native/common/native'),
+		import('cs/workbench/services/document/common/documentActions'),
 		import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'),
 	]);
 
@@ -293,6 +298,19 @@ before(async () => {
 	instantiationModule.registerWorkbenchService(chatModule.IChatService, chatService);
 	instantiationModule.registerWorkbenchService(fetchModule.IFetchService, fetchService);
 	instantiationModule.registerWorkbenchService(notificationModule.INotificationService, notificationService);
+	instantiationModule.registerWorkbenchService(nativeHostModule.INativeHostService, {
+		_serviceBrand: undefined,
+		canInvoke: () => desktopRuntime,
+	} as never);
+	instantiationModule.registerWorkbenchService(documentActionsModule.IDocumentActionsService, {
+		_serviceBrand: undefined,
+		exportArticleSummaries: async (selection: IArticleSelectionSnapshot) => {
+			articleExports.push({
+				resource: selection.resource,
+				articleIds: [...selection.articleIds],
+			});
+		},
+	} as never);
 	instantiationModule.registerWorkbenchService(IWorkbenchLocaleService, localeService);
 	instantiationModule.registerWorkbenchService(IWorkbenchLanguageService, new WorkbenchLanguageService());
 	({ ChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
@@ -672,6 +690,36 @@ test('ChatWidget maps Article list checkboxes by occurrence while writing one ad
 		assert.deepEqual(checkedStates(), ['true', 'true', 'true']);
 	} finally {
 		disposeWidget(widget, first, second);
+	}
+});
+
+test('ChatWidget exports the checked Articles from its addressed Chat', async () => {
+	const reference = chatService.createModel(URI.parse('chat:/widget/article-export'));
+	chatService.setArticleChecked(reference.object.resource, 'article:first', true);
+	chatService.setArticleChecked(reference.object.resource, 'article:second', true);
+	const widget = createWidget();
+	widget.setModel(reference.object, presentation(reference.object.resource));
+	document.body.append(widget.getElement());
+	const exportCountBefore = articleExports.length;
+
+	try {
+		const exportButton = widget.getElement().querySelector('[aria-label="Export DOCX"]');
+		assert(exportButton instanceof HTMLButtonElement);
+		assert.equal(exportButton.disabled, false);
+		exportButton.click();
+		await Promise.resolve();
+		assert.deepEqual(articleExports.slice(exportCountBefore), [{
+			resource: reference.object.resource,
+			articleIds: ['article:first', 'article:second'],
+		}]);
+		desktopRuntime = false;
+		widget.setPresentation(presentation(reference.object.resource));
+		const webExportButton = widget.getElement().querySelector('[aria-label="Export DOCX"]');
+		assert(webExportButton instanceof HTMLButtonElement);
+		assert.equal(webExportButton.disabled, true);
+	} finally {
+		desktopRuntime = true;
+		disposeWidget(widget, reference);
 	}
 });
 

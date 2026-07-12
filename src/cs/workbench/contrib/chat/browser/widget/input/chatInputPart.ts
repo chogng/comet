@@ -25,6 +25,7 @@ import {
 	type IOpenContextView,
 } from 'cs/platform/contextview/browser/contextView';
 import { INotificationService } from 'cs/platform/notification/common/notification';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import type { ChatModelDropdownOption } from 'cs/workbench/contrib/chat/browser/chat';
 import {
 	IChatService,
@@ -44,6 +45,10 @@ import {
 	renderChatInputToolbar,
 	type ChatInputToolbarActionItem,
 } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar';
+import {
+	IDocumentActionsService,
+	type IDocumentActionsService as IDocumentActionsServiceContract,
+} from 'cs/workbench/services/document/common/documentActions';
 
 export interface ChatInputPartProps {
 	readonly ui: LocaleMessages;
@@ -142,6 +147,8 @@ export class ChatInputPart {
 		@IFetchService private readonly fetchService: IFetchService,
 		@IChatService private readonly chatService: IChatService,
 		@INotificationService private readonly notificationService: INotificationService,
+		@IDocumentActionsService private readonly documentActionsService: IDocumentActionsServiceContract,
+		@INativeHostService private readonly nativeHostService: INativeHostService,
 	) {
 		this.props = props;
 		this.modelPicker = new ChatInputModelPickerActionViewItem(
@@ -328,6 +335,7 @@ export class ChatInputPart {
 
 	private renderQuickActions() {
 		const ui = this.props.ui;
+		const hasCheckedArticles = this.requireChatModel().getSnapshot().checkedArticleIds.length > 0;
 		const wrapper = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions-shell');
 		const row = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions');
 		const quickActionButtons = [
@@ -340,12 +348,31 @@ export class ChatInputPart {
 				() => this.toggleArticleMenu(),
 				this.isArticleMenuOpen,
 			),
+			this.createQuickActionButton(
+				ui.titlebarExportDocx,
+				'docx',
+				() => { void this.exportCheckedArticleSummaries(); },
+				false,
+				!this.nativeHostService.canInvoke() || !hasCheckedArticles,
+			),
 		];
 		this.articleMenuAnchor = wrapper;
 		row.append(...quickActionButtons);
 		wrapper.append(row);
 
 		return wrapper;
+	}
+
+	private exportCheckedArticleSummaries(): Promise<void> {
+		const model = this.requireChatModel();
+		const articleIds = [...model.getSnapshot().checkedArticleIds];
+		if (articleIds.length === 0) {
+			throw new Error(`Chat '${model.resource.toString()}' has no checked Articles to export.`);
+		}
+		return this.documentActionsService.exportArticleSummaries({
+			resource: model.resource,
+			articleIds,
+		});
 	}
 
 	private createQuickActionButton(

@@ -38,7 +38,6 @@ implements EditorModeToolbarContribution {
     className: 'comet-editor-browser-toolbar-actions',
     ariaRole: 'group',
   });
-  private readonly exportDocxActionViewItem: ActionViewItem;
   private readonly archivePageActionViewItem: ActionViewItem;
   private readonly moreActionViewItem: ReturnType<typeof createDropdownMenuActionViewItem>;
   private readonly addressInput = new InputBox(this.addressHost, undefined, {
@@ -53,7 +52,6 @@ implements EditorModeToolbarContribution {
     private readonly dropdownServices: DropdownContextServices,
   ) {
     this.context = context;
-    this.exportDocxActionViewItem = new ActionViewItem(this.createExportDocxAction());
     this.archivePageActionViewItem = new ActionViewItem(this.createArchivePageAction());
     this.moreActionViewItem = createDropdownMenuActionViewItem(this.createMoreActionOptions());
     this.leadingHost.append(this.leadingActionsView.getElement());
@@ -62,7 +60,6 @@ implements EditorModeToolbarContribution {
       className: 'comet-editor-browser-toolbar-actions',
       ariaRole: 'group',
       items: [
-        this.exportDocxActionViewItem,
         this.archivePageActionViewItem,
         this.moreActionViewItem,
       ],
@@ -109,7 +106,6 @@ implements EditorModeToolbarContribution {
   private render() {
     this.bindHistoryAndFavoritesPanel();
     this.updateLeadingActions();
-    this.exportDocxActionViewItem.setItem(this.createExportDocxAction());
     this.archivePageActionViewItem.setItem(this.createArchivePageAction());
     this.moreActionViewItem.setOptions(this.createMoreActionOptions());
 
@@ -274,20 +270,6 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
     ];
   }
 
-  private createExportDocxAction(): ActionBarActionItem {
-    return {
-      label: this.context.labels.toolbarExportDocx,
-      title: this.context.labels.toolbarExportDocx,
-      mode: 'icon',
-      buttonClassName: 'comet-editor-browser-toolbar-btn',
-      content: createLxIcon('docx'),
-      disabled: !this.context.electronRuntime,
-      onClick: () => {
-        void this.context.onExportDocx();
-      },
-    };
-  }
-
   private createArchivePageAction(): ActionBarActionItem {
     return {
       label: this.context.labels.toolbarArchivePage,
@@ -350,11 +332,4 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
       ],
     };
   }
-}
-
-export function createEditorBrowserModeToolbarContribution(
-  context: EditorModeToolbarContributionContext,
-  dropdownServices: DropdownContextServices,
-) {
-  return new EditorBrowserModeToolbarContribution(context, dropdownServices);
 }

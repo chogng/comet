@@ -8,7 +8,6 @@ import { createDecorator } from 'cs/platform/instantiation/common/instantiation'
 export interface BrowserEditorToolbarActions {
 	onOpenSources(): void;
 	onArchiveCurrentPage(): void | Promise<void>;
-	onExportDocx(): void | Promise<void>;
 	onCopyCurrentUrl(): void | Promise<void>;
 	onClearBrowsingHistory(): void;
 	onClearCookies(): void | Promise<void>;

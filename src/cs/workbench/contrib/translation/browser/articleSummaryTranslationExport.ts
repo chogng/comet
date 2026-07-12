@@ -11,7 +11,6 @@ import type {
   DocxExportResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
-import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import type { LocaleMessages } from 'language/locales';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
@@ -41,6 +40,10 @@ import {
 import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import { ISettingsModel, SettingsModel } from 'cs/workbench/services/settings/settingsModel';
+import {
+  IArticleSummaryTranslationExportService,
+  type IArticleSummaryTranslationExportService as IArticleSummaryTranslationExportServiceContract,
+} from 'cs/workbench/contrib/translation/common/articleSummaryTranslationExport';
 
 type ArticleSummaryTranslationExportTask = {
   taskId: string;
@@ -66,7 +69,8 @@ function isDocxTranslationFailure(error: AppErrorData) {
   return error.code === 'DOCX_TRANSLATION_FAILED';
 }
 
-export class ArticleSummaryTranslationExportService {
+export class ArticleSummaryTranslationExportService
+implements IArticleSummaryTranslationExportServiceContract {
   declare readonly _serviceBrand: undefined;
 
   private currentTask: ArticleSummaryTranslationExportTask | null = null;
@@ -392,9 +396,6 @@ export class ArticleSummaryTranslationExportService {
   }
 
 }
-
-export const IArticleSummaryTranslationExportService =
-  createDecorator<ArticleSummaryTranslationExportService>('articleSummaryTranslationExportService');
 
 registerSingleton(
   IArticleSummaryTranslationExportService,

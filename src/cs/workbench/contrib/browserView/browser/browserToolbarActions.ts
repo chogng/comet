@@ -23,7 +23,6 @@ type CreateEditorBrowserToolbarActionsParams = {
 	ui: LocaleMessages;
 	onLibraryUpdated?: () => void | Promise<void>;
 	onOpenAddressBarSourceMenu: () => void;
-	onToolbarExportDocx: () => void | Promise<void>;
 };
 
 async function copyTextToClipboard(value: string) {
@@ -63,7 +62,6 @@ export function createEditorBrowserToolbarActions(
 		ui,
 		onLibraryUpdated,
 		onOpenAddressBarSourceMenu,
-		onToolbarExportDocx,
 	} = params;
 
 	return {
@@ -94,9 +92,6 @@ export function createEditorBrowserToolbarActions(
 				notificationService.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
 			}
 		},
-		onExportDocx: () => {
-      void onToolbarExportDocx();
-    },
 		onCopyCurrentUrl: async () => {
       const currentUrl = getEditorContentDisplayUrl(browserUrl);
       if (!currentUrl) {

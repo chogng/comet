@@ -26,7 +26,6 @@ type EditorModeToolbarSourceProps = {
   onToolbarNavigateForward: () => void;
   onToolbarNavigateRefresh: () => void;
   onToolbarArchiveCurrentPage: () => void | Promise<void>;
-  onToolbarExportDocx?: () => void | Promise<void>;
   onToolbarHardReload: () => void;
   onToolbarCopyCurrentUrl: () => void | Promise<void>;
   onToolbarClearBrowsingHistory: () => void;
@@ -115,8 +114,8 @@ export function createEditorModeToolbarContext(
     browserPageTitle: activeBrowserMetadata.browserPageTitle,
     browserFaviconUrl: activeBrowserMetadata.browserFaviconUrl,
     browserTabTitle: activeBrowserMetadata.browserTabTitle,
-	browserCanGoBack: props.browserCanGoBack,
-	browserCanGoForward: props.browserCanGoForward,
+		browserCanGoBack: props.browserCanGoBack,
+		browserCanGoForward: props.browserCanGoForward,
     electronRuntime: props.viewPartProps.electronRuntime,
     labels: {
 			toolbarSources: ui.agentbarToolbarSources,
@@ -125,7 +124,6 @@ export function createEditorModeToolbarContext(
 			toolbarRefresh: ui.titlebarRefresh,
 			toolbarFavorite: ui.agentbarToolbarFavorite,
 			toolbarArchivePage: ui.editorToolbarArchivePage,
-			toolbarExportDocx: ui.titlebarExportDocx,
 			toolbarMore: ui.agentbarToolbarMore,
 			toolbarHardReload: ui.editorToolbarHardReload,
 			toolbarCopyCurrentUrl: ui.editorToolbarCopyCurrentUrl,
@@ -149,7 +147,6 @@ export function createEditorModeToolbarContext(
     onNavigateForward: props.onToolbarNavigateForward,
     onNavigateRefresh: props.onToolbarNavigateRefresh,
     onArchiveCurrentPage: props.onToolbarArchiveCurrentPage,
-    onExportDocx: props.onToolbarExportDocx ?? (() => {}),
     onHardReload: props.onToolbarHardReload,
     onCopyCurrentUrl: props.onToolbarCopyCurrentUrl,
     onClearBrowsingHistory: props.onToolbarClearBrowsingHistory,

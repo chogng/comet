@@ -18,10 +18,10 @@ import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editor
 import type { ArticleDetail, ArticleId, ArticleRecord, IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
+import { IArticleSummaryTranslationExportService } from 'cs/workbench/contrib/translation/common/articleSummaryTranslationExport';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let ArticleSummaryTranslationExportService: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').ArticleSummaryTranslationExportService;
-let IArticleSummaryTranslationExportService: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').IArticleSummaryTranslationExportService;
 let getStatusbarStateSnapshot: typeof import('cs/workbench/browser/parts/statusbar/statusbarModel').getStatusbarStateSnapshot;
 let setStatusbarState: typeof import('cs/workbench/browser/parts/statusbar/statusbarModel').setStatusbarState;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
@@ -31,7 +31,6 @@ test.before(async () => {
 	cleanupDomEnvironment = domEnvironment.cleanup;
 	({
 		ArticleSummaryTranslationExportService,
-		IArticleSummaryTranslationExportService,
 	} = await import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport'));
 	({ getStatusbarStateSnapshot, setStatusbarState } = await import('cs/workbench/browser/parts/statusbar/statusbarModel'));
 	({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));

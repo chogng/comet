@@ -3,18 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { IChatService as IChatServiceDecorator } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
-import type {
-	DocumentActionsController,
-	DocumentActionsControllerContext,
-	IArticleSelectionSnapshot,
-} from 'cs/workbench/browser/documentActionsModel';
-import {
-	IArticleSummaryTranslationExportService,
-	ArticleSummaryTranslationExportService,
-} from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
 import {
 	ILibraryModel,
 	LibraryModel,
@@ -81,7 +69,6 @@ import {
 	IEditorService,
 	type EditorOpenHandler,
 } from 'cs/workbench/services/editor/common/editorService';
-import { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
 import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
@@ -127,9 +114,6 @@ import {
 	stopWorkbenchContributions,
 } from 'cs/workbench/common/contributions';
 
-type DesktopInvokeArgs = Record<string, unknown> | undefined;
-
-let documentActionsController: DocumentActionsController | null = null;
 let activeSessionsWorkbenchHost: SessionsWorkbenchHost | null = null;
 
 function resolveRuntimeState(nativeHost: INativeHostService) {
@@ -178,16 +162,12 @@ class SessionsWorkbenchHost {
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@ISettingsController private readonly settingsController: SettingsController,
 		@ILibraryModel private readonly libraryModel: LibraryModel,
-		@IArticleSummaryTranslationExportService
-		private readonly articleSummaryTranslationExportService: ArticleSummaryTranslationExportService,
-		@IChatServiceDecorator private readonly chatService: IChatService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@ISessionsPartService private readonly sessionsPart: SessionsPart,
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
 		@ISessionsLayoutService private readonly sessionsLayoutService: ISessionsLayoutService,
 		@IEditorGroupsService private readonly editorGroupsService: SessionsEditorParts,
 		@IEditorService private readonly editorService: IEditorService,
-		@IDraftEditorService private readonly draftEditorService: IDraftEditorService,
 		@IBrowserEditorToolbarService private readonly browserEditorToolbarService: IBrowserEditorToolbarService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IFetchService private readonly fetchService: IFetchService,
@@ -361,7 +341,6 @@ class SessionsWorkbenchHost {
 	private ensureServiceSubscriptions(services: {
 		settingsController: SettingsController;
 		libraryModel: LibraryModel;
-		documentActionsController: DocumentActionsController;
 	}) {
 		if (this.servicesSubscribed) {
 			return;
@@ -371,34 +350,8 @@ class SessionsWorkbenchHost {
 		this.globalDisposables.push(
 			services.settingsController.subscribe(this.requestRender),
 			services.libraryModel.subscribe(this.requestRender),
-			services.documentActionsController.subscribe(this.requestRender),
 		);
 	}
-
-	private readonly getActiveChatArticleSelection = (): IArticleSelectionSnapshot | undefined => {
-		const activeSession = this.sessionsService.activeSession.get();
-		if (!activeSession) {
-			return undefined;
-		}
-
-		const resource = activeSession.activeChat.get().resource;
-		const modelReference = this.chatService.acquireModel(resource);
-		try {
-			return {
-				resource,
-				articleIds: [...modelReference.object.getSnapshot().checkedArticleIds],
-			};
-		} finally {
-			modelReference.dispose();
-		}
-	};
-
-	private readonly removeChatArticleChecks = (
-		resource: IArticleSelectionSnapshot['resource'],
-		articleIds: IArticleSelectionSnapshot['articleIds'],
-	) => {
-		this.chatService.removeArticleChecks(resource, articleIds);
-	};
 
 	private readonly togglePrimarySidebarVisibility = () => {
 		this.commandService.executeCommand(
@@ -568,13 +521,6 @@ class SessionsWorkbenchHost {
 		const { electronRuntime, desktopRuntime } =
 			resolveRuntimeState(nativeHost);
 
-		const invokeDesktop = async <T>(
-			command: string,
-			args?: DesktopInvokeArgs,
-		): Promise<T> => {
-			return nativeHost.invoke(command as never, args as never) as Promise<T>;
-		};
-
 		const settingsControllerInstance = this.settingsController;
 		const settingsSnapshot = settingsControllerInstance.getSnapshot();
 		if (
@@ -650,26 +596,6 @@ class SessionsWorkbenchHost {
 		const handleOpenEditor: EditorOpenHandler = (input, options) =>
 			this.editorService.openEditor(input, options);
 
-		const activeDraftInput = this.draftEditorService.activeInput;
-		const activeDraftDocument = activeDraftInput
-			? this.draftEditorService.getDocument(activeDraftInput.resource)
-			: null;
-		const activeDraftExport =
-			activeDraftDocument
-				? {
-					title: activeEditor?.getName() ?? '',
-					document: activeDraftDocument,
-					editorDraftStyle: {
-						defaultBodyStyle: {
-							...editorDraftStyleSnapshot.defaultBodyStyle,
-							inlineStyleDefaults: {
-								...editorDraftStyleSnapshot.defaultBodyStyle.inlineStyleDefaults,
-							},
-						},
-					},
-				}
-				: null;
-
 		this.openerService.setDefaultExternalOpener({
 			openExternal: async (href, { sourceUri }) => {
 				if (sourceUri.scheme !== Schemas.http && sourceUri.scheme !== Schemas.https) {
@@ -692,32 +618,6 @@ class SessionsWorkbenchHost {
 				return true;
 			},
 		});
-		const documentActionsContext: DocumentActionsControllerContext = {
-			desktopRuntime,
-			invokeDesktop,
-			notificationService: this.notificationService,
-			locale,
-			ui,
-			knowledgeBaseEnabled,
-			pdfDownloadDir,
-			knowledgeBasePdfDownloadDir,
-			pdfFileNameUseSelectionOrder,
-			getExportableArticleSelection: this.getActiveChatArticleSelection,
-			onUnavailableArticleIds: this.removeChatArticleChecks,
-			onOpenEditor: handleOpenEditor,
-			onExportArticleSummaries:
-				this.articleSummaryTranslationExportService.handleExportArticleSummaries,
-			activeDraftExport,
-			onLibraryDocumentUpserted: libraryModelInstance.upsertDocumentSummary,
-			onLibraryUpdated: refreshLibrary,
-		};
-		const documentActionsControllerInstance =
-			getWorkbenchDocumentActionsController(
-				documentActionsContext,
-				this.fetchService,
-			);
-		documentActionsControllerInstance.setContext(documentActionsContext);
-
 		const focusWorkbenchWebUrlInput = () => {
 			handleOpenEditor({
 				resource: BrowserViewUri.forId(generateUuid()),
@@ -727,15 +627,12 @@ class SessionsWorkbenchHost {
 		const editorBrowserToolbarActions = createEditorBrowserToolbarActions({
 			browserViewId,
 			browserUrl,
-			invokeDesktop,
+			invokeDesktop: nativeHost.invoke,
 			notificationService: this.notificationService,
 			knowledgeBaseEnabled,
 			ui,
 			onLibraryUpdated: refreshLibrary,
 			onOpenAddressBarSourceMenu: focusWorkbenchWebUrlInput,
-			onToolbarExportDocx: () => {
-				void documentActionsControllerInstance.handleExportDocx();
-			},
 		});
 		this.browserEditorToolbarService.setActions(editorBrowserToolbarActions);
 		this.collapsedEditorTitlebarActionsView.setProps({
@@ -755,7 +652,6 @@ class SessionsWorkbenchHost {
 		this.ensureServiceSubscriptions({
 			settingsController: settingsControllerInstance,
 			libraryModel: libraryModelInstance,
-			documentActionsController: documentActionsControllerInstance,
 		});
 
 		const titlebarLeadingActionsProps = createTitlebarLeadingActionsProps({
@@ -1024,24 +920,10 @@ class SessionsWorkbenchApplication {
 	}
 }
 
-export function disposeSessionsWorkbenchServices() {
-	documentActionsController?.dispose();
-	documentActionsController = null;
-
-}
-
-export function getWorkbenchDocumentActionsController(
-	context: DocumentActionsControllerContext,
-	fetchService: IFetchService,
-) {
-	documentActionsController ??= createDocumentActionsController(context, fetchService);
-	return documentActionsController;
-}
-
 export function disposeSessionsWorkbench(): void {
 	activeSessionsWorkbenchHost?.dispose();
 	activeSessionsWorkbenchHost = null;
-	disposeSessionsWorkbenchServices();
+	stopWorkbenchContributions();
 }
 
 function renderSessionsWorkbench() {

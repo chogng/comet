@@ -68,6 +68,10 @@ test('browser and desktop bootstrap the Sessions application exactly once', () =
 		/this\.storageService\.flush\(WillSaveStateReason\.SHUTDOWN\)/,
 	);
 	assert.doesNotMatch(sessionsWorkbench, /handleWorkbenchEditorShortcut|handleWindowKeydown/);
+	assert.match(
+		sessionsWorkbench,
+		/export function disposeSessionsWorkbench\(\): void \{[\s\S]*?stopWorkbenchContributions\(\);[\s\S]*?\}/,
+	);
 	assert.ok(
 		sessionsWorkbench.lastIndexOf('this.storageService.flush(WillSaveStateReason.SHUTDOWN)')
 			< sessionsWorkbench.lastIndexOf('stopWorkbenchContributions()'),
@@ -205,13 +209,9 @@ test('Library model is a DI service without mutable shell context', () => {
 test('Article export is a DI service without mutable shell context', () => {
 	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
 	const workbenchCommon = readSource('src/cs/workbench/workbench.common.main.ts');
-	assert.match(
-		sessionsWorkbench,
-		/@IArticleSummaryTranslationExportService\s+private readonly articleSummaryTranslationExportService/,
-	);
 	assert.doesNotMatch(
 		sessionsWorkbench,
-		/createArticleSummaryTranslationExportController|ArticleSummaryTranslationExportControllerContext|getWorkbenchArticleSummaryTranslationExportController|syncWorkbenchServicesContext/,
+		/IArticleSummaryTranslationExportService|createArticleSummaryTranslationExportController|ArticleSummaryTranslationExportControllerContext|getWorkbenchArticleSummaryTranslationExportController|syncWorkbenchServicesContext/,
 	);
 	assert.match(
 		workbenchCommon,
@@ -230,4 +230,36 @@ test('Article export is a DI service without mutable shell context', () => {
 		articleExport,
 		/registerSingleton\(\s*IArticleSummaryTranslationExportService,/,
 	);
+});
+
+test('Document actions are a DI service with explicit operation targets', () => {
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/workbench/browser/documentActionsModel.ts')),
+		false,
+	);
+	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
+	const workbenchCommon = readSource('src/cs/workbench/workbench.common.main.ts');
+	const documentActions = readSource(
+		'src/cs/workbench/services/document/browser/documentActionsService.ts',
+	);
+	assert.doesNotMatch(
+		sessionsWorkbench,
+		/DocumentActionsController|DocumentActionsControllerContext|getWorkbenchDocumentActionsController|documentActionsController|setContext/,
+	);
+	assert.match(workbenchCommon, /services\/document\/browser\/documentActionsService/);
+	assert.match(documentActions, /@INativeHostService private readonly nativeHostService/);
+	assert.match(documentActions, /@ISettingsModel private readonly settingsModel/);
+	assert.match(documentActions, /@IFetchService private readonly fetchService/);
+	assert.match(documentActions, /@IArticleSummaryTranslationExportService/);
+	assert.doesNotMatch(
+		documentActions,
+		/contrib\/translation\/browser\/articleSummaryTranslationExport/,
+	);
+	assert.match(documentActions, /registerSingleton\(IDocumentActionsService, DocumentActionsService,/);
+	assert.doesNotMatch(documentActions, /ControllerContext|setContext|subscribe/);
+	const chatInput = readSource(
+		'src/cs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts',
+	);
+	assert.match(chatInput, /@IDocumentActionsService private readonly documentActionsService/);
+	assert.match(chatInput, /resource: model\.resource,[\s\S]*articleIds,/);
 });

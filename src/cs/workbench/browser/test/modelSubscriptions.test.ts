@@ -13,7 +13,6 @@ import type {
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
@@ -33,7 +32,6 @@ import {
   setStatusbarState,
   subscribeStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
-import { createDocumentActionsController } from 'cs/workbench/browser/documentActionsModel';
 import {
   getPdfDownloadStatus,
   markPdfDownloadFailed,
@@ -41,7 +39,6 @@ import {
   subscribePdfDownloadStatus,
 } from 'cs/workbench/services/document/pdfDownloadStatus';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
-import { locales } from 'language/locales';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let originalDocumentLanguage = '';
@@ -136,72 +133,6 @@ test('localeService subscriptions can be disposed independently', () => {
   localeService.applyLocale(originalLocale);
 
   assert.equal(receivedLocales.length, 1);
-});
-
-test('DocumentActionsController subscriptions stop after disposal', () => {
-  const controller = createDocumentActionsController({
-    desktopRuntime: true,
-    invokeDesktop: createInvokeDesktop(),
-    notificationService: new NoOpNotificationService(),
-    locale: 'en',
-    ui: locales.en,
-    knowledgeBaseEnabled: false,
-    pdfDownloadDir: '',
-    knowledgeBasePdfDownloadDir: '',
-    pdfFileNameUseSelectionOrder: false,
-		getExportableArticleSelection: () => undefined,
-    onUnavailableArticleIds: () => {},
-    onOpenEditor: () => {},
-    onExportArticleSummaries: () => {},
-    activeDraftExport: null,
-  }, {} as never);
-  const snapshotValues: boolean[] = [];
-  const disposeListener = controller.subscribe(() => {
-    snapshotValues.push(controller.getSnapshot().canExportDocx);
-  });
-
-  controller.setContext({
-    desktopRuntime: true,
-    invokeDesktop: createInvokeDesktop(),
-    notificationService: new NoOpNotificationService(),
-    locale: 'en',
-    ui: locales.en,
-    knowledgeBaseEnabled: false,
-    pdfDownloadDir: '',
-    knowledgeBasePdfDownloadDir: '',
-    pdfFileNameUseSelectionOrder: false,
-		getExportableArticleSelection: () => undefined,
-    onUnavailableArticleIds: () => {},
-    onOpenEditor: () => {},
-    onExportArticleSummaries: () => {},
-    activeDraftExport: {
-      title: 'Draft',
-      document: {
-        type: 'doc',
-        content: [],
-      },
-    },
-  });
-  disposeListener();
-  controller.dispose();
-  controller.setContext({
-    desktopRuntime: true,
-    invokeDesktop: createInvokeDesktop(),
-    notificationService: new NoOpNotificationService(),
-    locale: 'en',
-    ui: locales.en,
-    knowledgeBaseEnabled: false,
-    pdfDownloadDir: '',
-    knowledgeBasePdfDownloadDir: '',
-    pdfFileNameUseSelectionOrder: false,
-		getExportableArticleSelection: () => undefined,
-    onUnavailableArticleIds: () => {},
-    onOpenEditor: () => {},
-    onExportArticleSummaries: () => {},
-    activeDraftExport: null,
-  });
-
-  assert.deepEqual(snapshotValues, [true]);
 });
 
 test('LibraryModel subscriptions stop after listener disposal and model dispose', () => {

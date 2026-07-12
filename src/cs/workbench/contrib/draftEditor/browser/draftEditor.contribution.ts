@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { addDisposableListener } from 'cs/base/browser/dom';
+import { cloneEditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import { DraftEditorPane } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
 import {
 	EditorPaneDescriptor,
@@ -31,6 +32,13 @@ import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/status
 import { renderDraftStatusbarMode } from 'cs/workbench/contrib/draftEditor/browser/draftEditorStatusbarRenderer';
 import { registerEditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
+import {
+	DocumentActionsCommandId,
+	IDocumentActionsService,
+	type IDocumentActionsService as IDocumentActionsServiceContract,
+} from 'cs/workbench/services/document/common/documentActions';
+import { ISettingsModel, SettingsModel } from 'cs/workbench/services/settings/settingsModel';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import {
 	getDraftEditorCommandIds,
 	getDraftEditorShortcutLabel,
@@ -118,6 +126,9 @@ export class DraftEditorActionsContribution extends Disposable {
 	constructor(
 		@IEditorService private readonly editorService: IEditorService,
 		@IDraftEditorService private readonly draftEditorService: IDraftEditorServiceContract,
+		@ISettingsModel private readonly settingsModel: SettingsModel,
+		@IDocumentActionsService private readonly documentActionsService: IDocumentActionsServiceContract,
+		@INativeHostService private readonly nativeHostService: INativeHostService,
 	) {
 		super();
 		this._register(registerAction2(class CreateDraftEditorAction extends Action2 {
@@ -133,6 +144,22 @@ export class DraftEditorActionsContribution extends Disposable {
 				return editorService.openEditor({ resource: createDraftEditorResource() });
 			}
 		}));
+		if (this.nativeHostService.canInvoke()) {
+			const exportDraftDocument = () => this.exportActiveDraftDocument();
+			this._register(registerAction2(class ExportDraftDocumentAction extends Action2 {
+				constructor() {
+					super({
+						id: DocumentActionsCommandId.ExportDraftDocument,
+						title: localize('draft.exportDocument', "Export Draft as DOCX"),
+						f1: true,
+					});
+				}
+
+				run() {
+					return exportDraftDocument();
+				}
+			}));
+		}
 		for (const commandId of DraftEditorWorkbenchCommandIds) {
 			this._register(commandsRegistry.registerCommand(commandId, () =>
 				this.executeDraftEditorWorkbenchCommand(commandId),
@@ -154,6 +181,25 @@ export class DraftEditorActionsContribution extends Disposable {
 		}
 		const pane = this.activeDraftEditorPane;
 		return pane ? pane.executeCommand(commandId) : false;
+	}
+
+	private exportActiveDraftDocument(): Promise<void> | undefined {
+		const input = this.editorService.activeEditor;
+		if (!(input instanceof DraftEditorInput)) {
+			return undefined;
+		}
+		const document = this.draftEditorService.getDocument(input.resource);
+		if (!document) {
+			throw new Error(`Active Draft '${input.resource.toString()}' has no document.`);
+		}
+
+		return this.documentActionsService.exportDraftDocument({
+			title: input.getName(),
+			document,
+			editorDraftStyle: cloneEditorDraftStyleSettings(
+				this.settingsModel.getSnapshot().editorDraftStyle.value,
+			),
+		});
 	}
 
 	private executeDraftEditorSurfaceAction(actionId: DraftEditorSurfaceActionId): boolean {

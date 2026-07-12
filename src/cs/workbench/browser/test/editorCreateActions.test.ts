@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { URI } from 'cs/base/common/uri';
+import { createDefaultEditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import { commandService, commandsRegistry, setCommandServiceInstantiationService } from 'cs/platform/commands/common/commands';
 import type { ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
@@ -21,6 +22,11 @@ import { DraftEditorPane } from 'cs/workbench/contrib/draftEditor/browser/draftE
 import type { DraftEditorCommandId } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 import type { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
+import { DraftEditorInput } from 'cs/workbench/contrib/draftEditor/common/draftEditorInput';
+import {
+	DocumentActionsCommandId,
+	type IDraftDocumentExportSnapshot,
+} from 'cs/workbench/services/document/common/documentActions';
 import { PdfEditorActionsContribution } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditor.contribution';
 import type { IEditorPane } from 'cs/workbench/common/editor';
 import { locales } from 'language/locales';
@@ -81,7 +87,13 @@ test('Draft and PDF create Action2 commands open resources through IEditorServic
 		[IEditorService, editorService],
 	), true);
 	const commandServiceRegistration = setCommandServiceInstantiationService(instantiationService);
-	const draftActions = new DraftEditorActionsContribution(editorService, createDraftEditorService());
+	const draftActions = new DraftEditorActionsContribution(
+		editorService,
+		createDraftEditorService(),
+		{} as never,
+		{} as never,
+		{ canInvoke: () => true } as never,
+	);
 	const pdfActions = new PdfEditorActionsContribution(editorService);
 
 	try {
@@ -147,6 +159,9 @@ test('Draft contribution owns active Draft commands without a Sessions Part targ
 			saveCount += 1;
 			return true;
 		}),
+		{} as never,
+		{} as never,
+		{ canInvoke: () => true } as never,
 	);
 	const accessor = {
 		get: () => {
@@ -185,4 +200,65 @@ test('Draft contribution owns active Draft commands without a Sessions Part targ
 	assert.equal(commandsRegistry.getCommand('saveDraft'), null);
 	assert.equal(commandsRegistry.getCommand('insertCitation'), null);
 	assert.equal(commandsRegistry.getCommand('undo'), null);
+});
+
+test('Draft export command captures the explicit active Draft', async () => {
+	const resource = URI.from({ scheme: 'comet-draft', path: '/export' });
+	const document = { type: 'doc' as const, content: [] };
+	const input = new DraftEditorInput(
+		{ resource, title: 'Draft Export', document },
+		{ _serviceBrand: undefined, confirmClose: async () => true },
+	);
+	const exports: IDraftDocumentExportSnapshot[] = [];
+	const draftEditorService = {
+		...createDraftEditorService(),
+		activeInput: input,
+		getDocument: () => document,
+	} as unknown as IDraftEditorService;
+	const contribution = new DraftEditorActionsContribution(
+		{ activeEditorPane: undefined, activeEditor: input } as never,
+		draftEditorService,
+		{
+			getSnapshot: () => ({
+				editorDraftStyle: { value: createDefaultEditorDraftStyleSettings() },
+			}),
+		} as never,
+		{
+			exportDraftDocument: async (snapshot: IDraftDocumentExportSnapshot) => {
+				exports.push(snapshot);
+			},
+		} as never,
+		{ canInvoke: () => true } as never,
+	);
+
+	try {
+		const command = commandsRegistry.getCommand(DocumentActionsCommandId.ExportDraftDocument);
+		assert(command);
+		await command.handler({} as never);
+		assert.equal(exports.length, 1);
+		assert.equal(exports[0]?.title, 'Draft Export');
+		assert.deepEqual(exports[0]?.document, document);
+	} finally {
+		contribution.dispose();
+		input.dispose();
+	}
+});
+
+test('Draft export command is not registered without a desktop runtime', () => {
+	const contribution = new DraftEditorActionsContribution(
+		{ activeEditorPane: undefined, activeEditor: undefined } as never,
+		createDraftEditorService(),
+		{} as never,
+		{} as never,
+		{ canInvoke: () => false } as never,
+	);
+
+	try {
+		assert.equal(
+			commandsRegistry.getCommand(DocumentActionsCommandId.ExportDraftDocument),
+			null,
+		);
+	} finally {
+		contribution.dispose();
+	}
 });

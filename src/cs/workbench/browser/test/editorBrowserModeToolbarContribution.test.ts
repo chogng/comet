@@ -40,7 +40,6 @@ function createContext(): EditorModeToolbarContributionContext {
 			toolbarRefresh: 'Refresh',
 			toolbarFavorite: 'Favorite',
 			toolbarArchivePage: 'Archive Page',
-			toolbarExportDocx: 'Export DOCX',
 			toolbarMore: 'More',
 			toolbarHardReload: 'Hard Reload',
 			toolbarCopyCurrentUrl: 'Copy Current URL',
@@ -64,7 +63,6 @@ function createContext(): EditorModeToolbarContributionContext {
 		onNavigateForward: () => {},
 		onNavigateRefresh: () => {},
 		onArchiveCurrentPage: () => {},
-		onExportDocx: () => {},
 		onHardReload: () => {},
 		onCopyCurrentUrl: () => {},
 		onClearBrowsingHistory: () => {},
@@ -76,10 +74,13 @@ function createContext(): EditorModeToolbarContributionContext {
 }
 
 test('browser More menu stays open across context updates', async () => {
-	const { createEditorBrowserModeToolbarContribution } = await import(
+	const { EditorBrowserModeToolbarContribution } = await import(
 		'cs/workbench/contrib/browserView/browser/browserModeToolbarContribution'
 	);
-	const contribution = createEditorBrowserModeToolbarContribution(createContext(), dropdownServices);
+	const contribution = new EditorBrowserModeToolbarContribution(
+		createContext(),
+		dropdownServices,
+	);
 	document.body.append(contribution.getElement());
 
 	try {
@@ -106,10 +107,13 @@ test('browser More menu stays open across context updates', async () => {
 });
 
 test('browser history buttons follow the model navigation state', async () => {
-	const { createEditorBrowserModeToolbarContribution } = await import(
+	const { EditorBrowserModeToolbarContribution } = await import(
 		'cs/workbench/contrib/browserView/browser/browserModeToolbarContribution'
 	);
-	const contribution = createEditorBrowserModeToolbarContribution(createContext(), dropdownServices);
+	const contribution = new EditorBrowserModeToolbarContribution(
+		createContext(),
+		dropdownServices,
+	);
 	document.body.append(contribution.getElement());
 
 	try {
@@ -166,7 +170,6 @@ test('browser archive action carries the addressed BrowserView identity', async 
 			toastHtmlArchiveSaveFailed: 'Failed {error}',
 		} as never,
 		onOpenAddressBarSourceMenu: () => {},
-		onToolbarExportDocx: () => {},
 	});
 
 	await actions.onArchiveCurrentPage();
