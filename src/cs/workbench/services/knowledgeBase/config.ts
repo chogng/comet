@@ -1,5 +1,8 @@
 import type { KnowledgeBaseSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 
+export const minKnowledgeBaseConcurrentIndexJobs = 1;
+export const maxKnowledgeBaseConcurrentIndexJobs = 4;
+
 export function createDefaultKnowledgeBaseSettings(): KnowledgeBaseSettings {
   return {
     enabled: true,

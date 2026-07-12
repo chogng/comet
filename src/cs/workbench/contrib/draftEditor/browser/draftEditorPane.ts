@@ -28,6 +28,10 @@ import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/edi
 import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import type { LocaleMessages } from 'language/locales';
+import {
+	IEditorDraftStyleService,
+	type IEditorDraftStyleService as EditorDraftStyleService,
+} from 'cs/editor/browser/text/editorDraftStyleService';
 
 export interface DraftEditorPaneInput extends EditorInput {
   readonly document: WritingEditorDocument;
@@ -162,6 +166,7 @@ export class DraftEditorPane extends EditorPane<
 		@IDialogService private readonly dialogService: IDialogService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+		@IEditorDraftStyleService private readonly editorDraftStyleService: EditorDraftStyleService,
 	) {
     super();
 		this.disposables.add(toDisposable(this.localeService.subscribe(() => {
@@ -242,7 +247,7 @@ export class DraftEditorPane extends EditorPane<
 			this.updateSelectionSnapshot(input);
 			return;
 		}
-		this.editor = new ProseMirrorEditor(this.toEditorProps());
+		this.editor = new ProseMirrorEditor(this.toEditorProps(), this.editorDraftStyleService);
 		this.element.append(this.editor.getElement());
 		this.updateSelectionSnapshot(input);
   }

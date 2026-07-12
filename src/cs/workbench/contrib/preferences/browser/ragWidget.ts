@@ -16,6 +16,11 @@ import {
   createSettingsElement as el,
   setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
+import {
+	maxRagRetrievalCandidateCount,
+	minRagRetrievalCandidateCount,
+	minRagRetrievalTopK,
+} from 'cs/workbench/services/rag/config';
 
 export type RagSettingsSectionProps = {
   labels: SettingsPartLabels;
@@ -102,8 +107,8 @@ export function renderRagSettingsSection(props: RagSettingsSectionProps) {
       itemClassName: 'comet-settings-rag-provider-item',
       controlClassName: 'comet-settings-rag-provider-row-control',
     }),
-    renderRagNumberField(props, props.labels.settingsRagCandidateCount, props.retrievalCandidateCount, 'settings.rag.candidates', '3', '20', props.onRetrievalCandidateCountChange),
-    renderRagNumberField(props, props.labels.settingsRagTopK, props.retrievalTopK, 'settings.rag.topK', '1', String(props.retrievalCandidateCount), props.onRetrievalTopKChange),
+	renderRagNumberField(props, props.labels.settingsRagCandidateCount, props.retrievalCandidateCount, 'settings.rag.candidates', String(minRagRetrievalCandidateCount), String(maxRagRetrievalCandidateCount), props.onRetrievalCandidateCountChange),
+	renderRagNumberField(props, props.labels.settingsRagTopK, props.retrievalTopK, 'settings.rag.topK', String(minRagRetrievalTopK), String(props.retrievalCandidateCount), props.onRetrievalTopKChange),
     renderRagTextField(props.labels.settingsRagBaseUrl, provider.baseUrl, 'settings.rag.baseUrl', value => props.onRagProviderBaseUrlChange(props.activeRagProvider, value), 'comet-settings-field comet-settings-llm-span-2'),
     renderRagTextField(props.labels.settingsRagEmbeddingModel, provider.embeddingModel, 'settings.rag.embeddingModel', value => props.onRagProviderEmbeddingModelChange(props.activeRagProvider, value)),
     renderRagTextField(props.labels.settingsRagRerankerModel, provider.rerankerModel, 'settings.rag.rerankerModel', value => props.onRagProviderRerankerModelChange(props.activeRagProvider, value)),

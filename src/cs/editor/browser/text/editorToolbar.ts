@@ -25,12 +25,14 @@ import {
   type WritingEditorToolbarSplitButtonConfig,
 } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { WritingEditorSurfaceLabels } from 'cs/editor/browser/text/editor';
+import type { EditorDraftStyleServiceSnapshot } from 'cs/editor/browser/text/editorDraftStyleService';
 
 export type DraftEditorToolbarActions = WritingEditorToolbarActions;
 
 export type DraftEditorToolbarProps = DropdownContextServices & {
   labels: WritingEditorSurfaceLabels;
   toolbarState: WritingEditorToolbarState;
+  styleSnapshot: EditorDraftStyleServiceSnapshot;
   actions: DraftEditorToolbarActions;
 };
 
@@ -316,6 +318,7 @@ const trailingMarginLeft = this.trailingElement.childElementCount > 0
       fontFamilyValue: toolbarState.fontFamily,
       fontSizeValue: toolbarState.fontSize,
       defaultTextStyleLabel: labels.defaultTextStyle,
+		snapshot: this.props.styleSnapshot,
     });
 
     return createWritingEditorToolbarButtonGroups({
@@ -544,9 +547,3 @@ const trailingMarginLeft = this.trailingElement.childElementCount > 0
     this.scheduleOverflowSync();
   };
 }
-
-export function createDraftEditorToolbar(props: DraftEditorToolbarProps) {
-  return new DraftEditorToolbar(props);
-}
-
-export default DraftEditorToolbar;

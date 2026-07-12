@@ -8,6 +8,9 @@ import { getRagProviderDefinition } from 'cs/workbench/services/rag/registry';
 export const defaultRagProviderId: RagProviderId = 'moark';
 export const defaultRagRetrievalCandidateCount = 10;
 export const defaultRagRetrievalTopK = 4;
+export const minRagRetrievalCandidateCount = 3;
+export const maxRagRetrievalCandidateCount = 20;
+export const minRagRetrievalTopK = 1;
 
 export const defaultRagProviderSettings: Record<RagProviderId, RagProviderSettings> = {
   moark: {

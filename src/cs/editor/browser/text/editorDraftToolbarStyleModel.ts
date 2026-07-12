@@ -1,10 +1,7 @@
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import { resolvePrimaryFontFamily } from 'cs/base/common/editorFormat';
 import type { EditorDraftStyleOption } from 'cs/editor/browser/text/editorDraftStyleCatalog';
-import {
-  editorDraftStyleService,
-  type EditorDraftStyleServiceSnapshot,
-} from 'cs/editor/browser/text/editorDraftStyleService';
+import type { EditorDraftStyleServiceSnapshot } from 'cs/editor/browser/text/editorDraftStyleService';
 
 export type EditorDraftToolbarFontModel = {
   currentValue: string;
@@ -29,7 +26,7 @@ type BuildEditorDraftToolbarStyleModelParams = {
   fontFamilyValue: string | null;
   fontSizeValue: string | null;
   defaultTextStyleLabel: string;
-  snapshot?: EditorDraftStyleServiceSnapshot;
+  snapshot: EditorDraftStyleServiceSnapshot;
 };
 
 const fontAvailabilityCache = new Map<string, boolean>();
@@ -207,7 +204,7 @@ function createTextStyleOptions(
 export function createEditorDraftToolbarStyleModel(
   params: BuildEditorDraftToolbarStyleModelParams,
 ): EditorDraftToolbarStyleModel {
-  const snapshot = params.snapshot ?? editorDraftStyleService.getSnapshot();
+	const snapshot = params.snapshot;
   const defaultFontFamilyValue = snapshot.defaultBodyStyle.fontFamilyValue;
   const defaultFontSizeValue = snapshot.defaultBodyStyle.fontSizeValue;
   const fontFamilyMatch = (currentValue: string, presetValue: string) =>

@@ -6,7 +6,9 @@ import { createDefaultEditorDraftStyleSettings } from 'cs/base/common/editorDraf
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
-import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import {
+	EditorDraftStyleService,
+} from 'cs/editor/browser/text/editorDraftStyleService';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
@@ -15,6 +17,14 @@ import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/
 import type { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import { defaultBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
+import {
+	maxBrowserTabKeepAliveLimit,
+	minBrowserTabKeepAliveLimit,
+} from 'cs/workbench/services/webContent/webContentRetentionConfig';
+import {
+	maxBrowserMaxHistoryEntries,
+	minBrowserMaxHistoryEntries,
+} from 'cs/base/parts/sandbox/common/browserSettings';
 import { locales } from 'language/locales';
 
 async function flushMicrotasks() {
@@ -22,7 +32,10 @@ async function flushMicrotasks() {
   await Promise.resolve();
 }
 
-function createSettingsController(invokeDesktop: ElectronInvoke): SettingsController {
+function createSettingsController(
+	invokeDesktop: ElectronInvoke,
+	editorDraftStyleService: EditorDraftStyleService = new EditorDraftStyleService(),
+): SettingsController {
 	return new SettingsController(
 		new SettingsModel(),
 		{
@@ -34,6 +47,7 @@ function createSettingsController(invokeDesktop: ElectronInvoke): SettingsContro
 			getLocale: () => 'en',
 		} as IWorkbenchLocaleService,
 		new WorkbenchLanguageService(),
+		editorDraftStyleService,
 	);
 }
 
@@ -61,6 +75,7 @@ test('SettingsController uses the current locale for async completion notificati
 			getLocale: () => locale,
 		} as IWorkbenchLocaleService,
 		new WorkbenchLanguageService(),
+		new EditorDraftStyleService(),
 	);
 
 	const operation = controller.handleTestLlmConnection();
@@ -78,7 +93,7 @@ test('SettingsController uses the current locale for async completion notificati
 });
 
 test('SettingsController syncs editorDraftStyleService through load and autosave', async () => {
-  editorDraftStyleService.resetToCatalog();
+	const editorDraftStyleService = new EditorDraftStyleService();
   const initialSnapshot = editorDraftStyleService.getSnapshot();
   const savePayloads: unknown[] = [];
 
@@ -114,7 +129,7 @@ test('SettingsController syncs editorDraftStyleService through load and autosave
     throw new Error(`Unexpected desktop command in editor draft style settings test: ${command}`);
   }) as ElectronInvoke;
 
-  const controller = createSettingsController(invokeDesktop);
+	const controller = createSettingsController(invokeDesktop, editorDraftStyleService);
 
   try {
     controller.start();
@@ -178,12 +193,11 @@ test('SettingsController syncs editorDraftStyleService through load and autosave
     assert.equal(lastPayload.editorDraftStyle, undefined);
   } finally {
     controller.dispose();
-    editorDraftStyleService.resetToCatalog();
   }
 });
 
 test('SettingsController editorDraft style handlers update service snapshot and persist changes', async () => {
-  editorDraftStyleService.resetToCatalog();
+	const editorDraftStyleService = new EditorDraftStyleService();
   const snapshotBeforeCustomize = editorDraftStyleService.getSnapshot();
   editorDraftStyleService.setSnapshot({
     ...snapshotBeforeCustomize,
@@ -226,7 +240,7 @@ test('SettingsController editorDraft style handlers update service snapshot and 
     throw new Error(`Unexpected desktop command in editor draft style settings test: ${command}`);
   }) as ElectronInvoke;
 
-  const controller = createSettingsController(invokeDesktop);
+	const controller = createSettingsController(invokeDesktop, editorDraftStyleService);
 
   try {
     const runtimePresetsBeforeStart = editorDraftStyleService.getSnapshot();
@@ -277,8 +291,11 @@ test('SettingsController editorDraft style handlers update service snapshot and 
       '#112233',
     );
     controller.setEditorDraftLineHeightFromInput('.');
+	controller.setEditorDraftLineHeightFromInput('1foo');
     controller.setEditorDraftParagraphSpacingBeforePtFromInput('.');
+	controller.setEditorDraftParagraphSpacingBeforePtFromInput('15px');
     controller.setEditorDraftParagraphSpacingAfterPtFromInput('.');
+	controller.setEditorDraftParagraphSpacingAfterPtFromInput('1e2');
     assert.equal(editorDraftStyleService.getSnapshot().defaultBodyStyle.lineHeight, 1);
     assert.equal(editorDraftStyleService.getSnapshot().defaultBodyStyle.paragraphSpacingBeforePt, 14.5);
     assert.equal(editorDraftStyleService.getSnapshot().defaultBodyStyle.paragraphSpacingAfterPt, 9.5);
@@ -333,7 +350,6 @@ test('SettingsController editorDraft style handlers update service snapshot and 
     assert.ok(savePayloads.length > 0);
   } finally {
     controller.dispose();
-    editorDraftStyleService.resetToCatalog();
   }
 });
 
@@ -368,7 +384,7 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
 
     assert.equal(controller.getSnapshot().browserTabKeepAliveLimit, 5);
 
-    controller.setBrowserTabKeepAliveLimit(0);
+	controller.setBrowserTabKeepAliveLimit('0');
     await delay(0);
     await flushMicrotasks();
 
@@ -379,7 +395,7 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
       | undefined;
     assert.equal(lastPayload?.browserTabKeepAliveLimit, 0);
 
-    controller.setBrowserTabKeepAliveLimit(defaultBrowserTabKeepAliveLimit);
+	controller.setBrowserTabKeepAliveLimit(String(defaultBrowserTabKeepAliveLimit));
     await delay(0);
     await flushMicrotasks();
 
@@ -395,6 +411,54 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
   } finally {
     controller.dispose();
   }
+});
+
+test('SettingsController owns strict numeric input normalization', () => {
+	const controller = createSettingsController((async (command: string, args?: { settings?: unknown }) => {
+		assert.equal(command, 'save_settings');
+		return args?.settings ?? {};
+	}) as ElectronInvoke);
+	const initialSnapshot = controller.getSnapshot();
+
+	controller.setBrowserTabKeepAliveLimit('');
+	controller.setBrowserMaxHistoryEntries('12.5');
+	controller.setMaxConcurrentIndexJobs('invalid');
+	controller.setRetrievalCandidateCount('3items');
+	controller.setRetrievalTopK('.');
+	controller.setBrowserTabKeepAliveLimit('0x10');
+	controller.setBrowserMaxHistoryEntries('1e2');
+	controller.setMaxConcurrentIndexJobs('1.0');
+	controller.setRetrievalCandidateCount('0b11');
+	assert.deepEqual(controller.getSnapshot(), initialSnapshot);
+
+	controller.setBrowserTabKeepAliveLimit('-20');
+	controller.setBrowserMaxHistoryEntries('999999');
+	controller.setMaxConcurrentIndexJobs('0');
+	controller.setRetrievalCandidateCount('999');
+	controller.setRetrievalTopK('999');
+
+	assert.deepEqual(
+		{
+			browserTabKeepAliveLimit: controller.getSnapshot().browserTabKeepAliveLimit,
+			browserMaxHistoryEntries: controller.getSnapshot().browserMaxHistoryEntries,
+			maxConcurrentIndexJobs: controller.getSnapshot().maxConcurrentIndexJobs,
+			retrievalCandidateCount: controller.getSnapshot().retrievalCandidateCount,
+			retrievalTopK: controller.getSnapshot().retrievalTopK,
+		},
+		{
+			browserTabKeepAliveLimit: minBrowserTabKeepAliveLimit,
+			browserMaxHistoryEntries: maxBrowserMaxHistoryEntries,
+			maxConcurrentIndexJobs: 1,
+			retrievalCandidateCount: 20,
+			retrievalTopK: 20,
+		},
+	);
+
+	controller.setBrowserTabKeepAliveLimit('999');
+	controller.setBrowserMaxHistoryEntries('-20');
+	assert.equal(controller.getSnapshot().browserTabKeepAliveLimit, maxBrowserTabKeepAliveLimit);
+	assert.equal(controller.getSnapshot().browserMaxHistoryEntries, minBrowserMaxHistoryEntries);
+	controller.dispose();
 });
 
 test('SettingsModel ignores stale save results that resolve after newer saves', async () => {

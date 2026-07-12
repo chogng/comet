@@ -12,7 +12,7 @@ import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdo
 import { clearFontFamilyCommand, clearFontSizeCommand, clearInlineStylesCommand, getWritingEditorToolbarState, insertCitationCommand, insertFigureCommand, insertFigureRefCommand, insertPlainTextCommand, redoCommand, runWritingEditorCommand, setFontFamilyCommand, setFontSizeCommand, setParagraphCommand, setTextAlignCommand, toggleBlockquoteCommand, toggleBoldCommand, toggleBulletListCommand, toggleHeadingCommand, toggleItalicCommand, toggleOrderedListCommand, toggleUnderlineCommand, undoCommand } from 'cs/editor/browser/text/commands';
 import type { InsertFigurePayload, WritingEditorCommand, WritingEditorToolbarState } from 'cs/editor/browser/text/commands';
 import { createWritingEditorKeymapBindings } from 'cs/editor/browser/text/editorCommandRegistry';
-import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import type { IEditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 import { collectWritingEditorDerivedLabels, createWritingEditorDocumentModel, findWritingEditorNodeByBlockId, getWritingEditorNodeText, getWritingEditorTextUnitKind, isWritingEditorPlainTextEditableNode, normalizeWritingEditorDocument, syncWritingEditorDerivedLabels } from 'cs/editor/common/writingEditorDocument';
 import type { WritingEditorDocument, WritingEditorStableSelectionTarget, WritingEditorTextUnitKind } from 'cs/editor/common/writingEditorDocument';
 import { $ } from 'cs/base/browser/dom';
@@ -308,11 +308,14 @@ export class ProseMirrorEditor implements WritingEditorSurfaceHandle {
     toolbarState: EMPTY_TOOLBAR_STATE,
   };
 
-  constructor(props: WritingEditorSurfaceProps) {
+	constructor(
+		props: WritingEditorSurfaceProps,
+		private readonly editorDraftStyleService: IEditorDraftStyleService,
+	) {
     this.props = props;
     this.toolbar = new DraftEditorToolbar(this.createToolbarProps());
     this.applyDraftStyleSnapshot();
-    this.disposeDraftStyleServiceSubscription = editorDraftStyleService.subscribe(
+	this.disposeDraftStyleServiceSubscription = this.editorDraftStyleService.subscribe(
       this.handleDraftStyleServiceChange,
     );
     this.hostWrapperElement.append(this.editorRootElement);
@@ -553,6 +556,7 @@ const derivedLabels = collectWritingEditorDerivedLabels(state.doc);
       contextViewProvider: this.props.contextViewProvider,
       labels: this.props.labels,
       toolbarState: this.snapshot.toolbarState,
+		styleSnapshot: this.editorDraftStyleService.getSnapshot(),
       actions: {
         setParagraph: this.setParagraph,
         toggleHeading: this.toggleHeading,
@@ -577,7 +581,7 @@ const derivedLabels = collectWritingEditorDerivedLabels(state.doc);
   }
 
   private applyDraftStyleSnapshot() {
-    const styleSnapshot = editorDraftStyleService.getSnapshot();
+	const styleSnapshot = this.editorDraftStyleService.getSnapshot();
     const paragraphSpacingBeforePt =
       styleSnapshot.defaultBodyStyle.paragraphSpacingBeforePt;
     const paragraphSpacingAfterPt =
@@ -828,9 +832,3 @@ const nextDocument =
     this.toolbar.setProps(this.createToolbarProps());
   };
 }
-
-export function createProseMirrorEditor(props: WritingEditorSurfaceProps) {
-  return new ProseMirrorEditor(props);
-}
-
-export default ProseMirrorEditor;

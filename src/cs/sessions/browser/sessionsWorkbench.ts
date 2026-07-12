@@ -85,16 +85,16 @@ import { getLocaleMessages } from 'language/i18n';
 import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { normalizeBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
-import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import {
+	IEditorDraftStyleService,
+	type IEditorDraftStyleService as EditorDraftStyleService,
+} from 'cs/editor/browser/text/editorDraftStyleService';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { IWorkbenchConfigurationService } from 'cs/workbench/services/configuration/common/configuration';
 import {
 	BrowserMaxHistoryEntriesSettingId,
 	BrowserPageZoomSettingId,
 	BrowserSearchEngineSettingId,
-	maxBrowserMaxHistoryEntries,
-	minBrowserMaxHistoryEntries,
 } from 'cs/base/parts/sandbox/common/browserSettings';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
@@ -169,6 +169,7 @@ class SessionsWorkbenchHost {
 		@IFetchService private readonly fetchService: IFetchService,
 		@IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
 		@ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
+		@IEditorDraftStyleService private readonly editorDraftStyleService: EditorDraftStyleService,
 		) {
 			const initialUi = getLocaleMessages(localeService.getLocale());
 			const dropdownServices = {
@@ -232,7 +233,7 @@ class SessionsWorkbenchHost {
 			localeService.subscribe(this.requestRender),
 			this.sessionsLayoutService.onDidChangeLayoutState(this.requestRender),
 			subscribeWindowState(this.requestRender),
-			editorDraftStyleService.subscribe(this.requestRender),
+			this.editorDraftStyleService.subscribe(this.requestRender),
 			this.editorGroupsService.onDidChange(this.requestRender),
 		);
 
@@ -526,7 +527,7 @@ class SessionsWorkbenchHost {
 		) {
 			return;
 		}
-		const editorDraftStyleSnapshot = editorDraftStyleService.getSnapshot();
+		const editorDraftStyleSnapshot = this.editorDraftStyleService.getSnapshot();
 		const {
 			hasLoadedSettings,
 			systemNotificationsEnabled,
@@ -728,20 +729,10 @@ class SessionsWorkbenchHost {
 				onUseMicaChange: settingsControllerInstance.setUseMica,
 				onStatusbarVisibleChange: settingsControllerInstance.setStatusbarVisible,
 				onStartupLayoutChange: settingsControllerInstance.setStartupLayout,
-				onBrowserTabKeepAliveLimitChange: (value) =>
-					settingsControllerInstance.setBrowserTabKeepAliveLimit(
-						normalizeBrowserTabKeepAliveLimit(value, browserTabKeepAliveLimit),
-					),
-				onBrowserMaxHistoryEntriesChange: (value) =>
-					settingsControllerInstance.setBrowserMaxHistoryEntries(
-						Math.min(
-							maxBrowserMaxHistoryEntries,
-							Math.max(
-								minBrowserMaxHistoryEntries,
-								Number.parseInt(String(value), 10) || minBrowserMaxHistoryEntries,
-							),
-						),
-					),
+				onBrowserTabKeepAliveLimitChange:
+					settingsControllerInstance.setBrowserTabKeepAliveLimit,
+				onBrowserMaxHistoryEntriesChange:
+					settingsControllerInstance.setBrowserMaxHistoryEntries,
 				onBrowserPageZoomChange: settingsControllerInstance.setBrowserPageZoom,
 				onBrowserSearchEngineChange: settingsControllerInstance.setBrowserSearchEngine,
 				onThemeChange: settingsControllerInstance.setTheme,
@@ -768,10 +759,8 @@ class SessionsWorkbenchHost {
 				onLibraryStorageModeChange:
 					settingsControllerInstance.setLibraryStorageMode,
 				onLibraryDirectoryChange: settingsControllerInstance.setLibraryDirectory,
-				onMaxConcurrentIndexJobsChange: (value) =>
-					settingsControllerInstance.setMaxConcurrentIndexJobs(
-						Math.min(4, Math.max(1, Number.parseInt(String(value), 10) || 1)),
-					),
+				onMaxConcurrentIndexJobsChange:
+					settingsControllerInstance.setMaxConcurrentIndexJobs,
 				onRagProviderApiKeyChange: settingsControllerInstance.setRagProviderApiKey,
 				onRagProviderBaseUrlChange:
 					settingsControllerInstance.setRagProviderBaseUrl,
@@ -783,20 +772,9 @@ class SessionsWorkbenchHost {
 					settingsControllerInstance.setRagProviderEmbeddingPath,
 				onRagProviderRerankPathChange:
 					settingsControllerInstance.setRagProviderRerankPath,
-				onRetrievalCandidateCountChange: (value) =>
-					settingsControllerInstance.setRetrievalCandidateCount(
-						Math.min(
-							20,
-							Math.max(3, Number.parseInt(String(value), 10) || 10),
-						),
-					),
-				onRetrievalTopKChange: (value) =>
-					settingsControllerInstance.setRetrievalTopK(
-						Math.min(
-							retrievalCandidateCount,
-							Math.max(1, Number.parseInt(String(value), 10) || 4),
-						),
-					),
+				onRetrievalCandidateCountChange:
+					settingsControllerInstance.setRetrievalCandidateCount,
+				onRetrievalTopKChange: settingsControllerInstance.setRetrievalTopK,
 				onPdfDownloadDirChange: settingsControllerInstance.setPdfDownloadDir,
 				onPdfFileNameUseSelectionOrderChange:
 					settingsControllerInstance.setPdfFileNameUseSelectionOrder,

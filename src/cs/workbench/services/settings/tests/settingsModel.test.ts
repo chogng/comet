@@ -26,6 +26,7 @@ import {
 	ISettingsModel,
 	SettingsModel,
 } from 'cs/workbench/services/settings/settingsModel';
+import { IEditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 
 class SettingsModelConsumer {
 	constructor(@ISettingsModel readonly settingsModel: SettingsModel) {}
@@ -39,17 +40,22 @@ test('Settings model and controller are delayed DI owners shared by consumers', 
 	const registrations = getSingletonServiceDescriptors();
 	const settingsModelRegistrations = registrations.filter(([id]) => id === ISettingsModel);
 	const settingsControllerRegistrations = registrations.filter(([id]) => id === ISettingsController);
+	const editorDraftStyleRegistrations = registrations.filter(([id]) => id === IEditorDraftStyleService);
 	assert.equal(settingsModelRegistrations.length, 1);
 	assert.equal(settingsControllerRegistrations.length, 1);
+	assert.equal(editorDraftStyleRegistrations.length, 1);
 
 	const settingsModelDescriptor = settingsModelRegistrations[0][1];
 	const settingsControllerDescriptor = settingsControllerRegistrations[0][1];
+	const editorDraftStyleDescriptor = editorDraftStyleRegistrations[0][1];
 	assert.equal(settingsModelDescriptor.supportsDelayedInstantiation, true);
 	assert.equal(settingsControllerDescriptor.supportsDelayedInstantiation, true);
+	assert.equal(editorDraftStyleDescriptor.supportsDelayedInstantiation, true);
 
 	const services = new ServiceCollection(
 		[ISettingsModel, settingsModelDescriptor],
 		[ISettingsController, settingsControllerDescriptor],
+		[IEditorDraftStyleService, editorDraftStyleDescriptor],
 		[INativeHostService, {
 			canInvoke: () => false,
 			invoke: async () => {

@@ -10,7 +10,10 @@ import {
   createDefaultEditorDraftStyleSettings,
   type EditorDraftDefaultBodyStyle,
 } from 'cs/base/common/editorDraftStyle';
-import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import {
+	IEditorDraftStyleService,
+	type IEditorDraftStyleService as EditorDraftStyleService,
+} from 'cs/editor/browser/text/editorDraftStyleService';
 import type { LocaleMessages } from 'language/locales';
 import {
   parseAppErrorData,
@@ -30,12 +33,53 @@ import { createDecorator } from 'cs/platform/instantiation/common/instantiation'
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import {
+	maxBrowserMaxHistoryEntries,
+	minBrowserMaxHistoryEntries,
+} from 'cs/base/parts/sandbox/common/browserSettings';
+import {
+	maxBrowserTabKeepAliveLimit,
+	minBrowserTabKeepAliveLimit,
+} from 'cs/workbench/services/webContent/webContentRetentionConfig';
+import {
+	maxKnowledgeBaseConcurrentIndexJobs,
+	minKnowledgeBaseConcurrentIndexJobs,
+} from 'cs/workbench/services/knowledgeBase/config';
+import {
+	maxRagRetrievalCandidateCount,
+	minRagRetrievalCandidateCount,
+	minRagRetrievalTopK,
+} from 'cs/workbench/services/rag/config';
 
 const immediateAutoSaveDelayMs = 0;
 const debouncedAutoSaveDelayMs = 650;
 
 function localizeSettingsError(ui: LocaleMessages, error: unknown) {
   return localizeAppError(ui, parseAppErrorData(error));
+}
+
+function parseClampedIntegerInput(value: string, min: number, max: number): number | undefined {
+	const normalizedValue = value.trim();
+	if (!/^-?\d+$/.test(normalizedValue)) {
+		return undefined;
+	}
+
+	const parsedValue = Number(normalizedValue);
+	if (!Number.isInteger(parsedValue)) {
+		return undefined;
+	}
+
+	return Math.min(max, Math.max(min, parsedValue));
+}
+
+function parseFiniteNumberInput(value: string): number | undefined {
+	const normalizedValue = value.trim();
+	if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalizedValue)) {
+		return undefined;
+	}
+
+	const parsedValue = Number(normalizedValue);
+	return Number.isFinite(parsedValue) ? parsedValue : undefined;
 }
 
 export class SettingsController {
@@ -54,6 +98,7 @@ export class SettingsController {
     @INotificationService private readonly notificationService: INotificationService,
     @IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
     @IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+	@IEditorDraftStyleService private readonly editorDraftStyleService: EditorDraftStyleService,
   ) {}
 
   readonly subscribe = (listener: () => void) =>
@@ -68,7 +113,7 @@ export class SettingsController {
     }
 
     this.started = true;
-    this.disposeEditorDraftStyleSubscription = editorDraftStyleService.subscribe(
+	this.disposeEditorDraftStyleSubscription = this.editorDraftStyleService.subscribe(
       this.handleEditorDraftStyleChange,
     );
     void this.loadSettings();
@@ -227,13 +272,8 @@ export class SettingsController {
   };
 
   readonly setEditorDraftLineHeightFromInput = (value: string) => {
-    const normalizedLineHeightValue = value.trim();
-    if (!normalizedLineHeightValue || normalizedLineHeightValue === '.') {
-      return;
-    }
-
-    const parsedLineHeight = Number.parseFloat(normalizedLineHeightValue);
-    if (!Number.isFinite(parsedLineHeight)) {
+	const parsedLineHeight = parseFiniteNumberInput(value);
+	if (parsedLineHeight === undefined) {
       return;
     }
 
@@ -253,13 +293,8 @@ export class SettingsController {
   };
 
   readonly setEditorDraftParagraphSpacingBeforePtFromInput = (value: string) => {
-    const normalizedValue = value.trim();
-    if (!normalizedValue || normalizedValue === '.') {
-      return;
-    }
-
-    const parsedValue = Number.parseFloat(normalizedValue);
-    if (!Number.isFinite(parsedValue)) {
+	const parsedValue = parseFiniteNumberInput(value);
+	if (parsedValue === undefined) {
       return;
     }
 
@@ -279,13 +314,8 @@ export class SettingsController {
   };
 
   readonly setEditorDraftParagraphSpacingAfterPtFromInput = (value: string) => {
-    const normalizedValue = value.trim();
-    if (!normalizedValue || normalizedValue === '.') {
-      return;
-    }
-
-    const parsedValue = Number.parseFloat(normalizedValue);
-    if (!Number.isFinite(parsedValue)) {
+	const parsedValue = parseFiniteNumberInput(value);
+	if (parsedValue === undefined) {
       return;
     }
 
@@ -302,8 +332,8 @@ export class SettingsController {
   readonly handleResetEditorDraftStyle = () => {
     const defaultBodyStyle = createDefaultEditorDraftStyleSettings().defaultBodyStyle;
     const currentInlineDefaults =
-      editorDraftStyleService.getSnapshot().defaultBodyStyle.inlineStyleDefaults;
-    editorDraftStyleService.setDefaultBodyStyle(
+		this.editorDraftStyleService.getSnapshot().defaultBodyStyle.inlineStyleDefaults;
+	this.editorDraftStyleService.setDefaultBodyStyle(
       {
         fontFamilyValue: defaultBodyStyle.fontFamilyValue,
         fontSizeValue: defaultBodyStyle.fontSizeValue,
@@ -343,15 +373,33 @@ export class SettingsController {
     this.scheduleImmediateAutoSave();
   };
 
-  readonly setBrowserTabKeepAliveLimit = (nextBrowserTabKeepAliveLimit: number) => {
-    this.settingsModel.setBrowserTabKeepAliveLimit(nextBrowserTabKeepAliveLimit);
-    this.scheduleImmediateAutoSave();
-  };
+	readonly setBrowserTabKeepAliveLimit = (value: string) => {
+		const nextBrowserTabKeepAliveLimit = parseClampedIntegerInput(
+			value,
+			minBrowserTabKeepAliveLimit,
+			maxBrowserTabKeepAliveLimit,
+		);
+		if (nextBrowserTabKeepAliveLimit === undefined) {
+			return;
+		}
 
-  readonly setBrowserMaxHistoryEntries = (nextBrowserMaxHistoryEntries: number) => {
-    this.settingsModel.setBrowserMaxHistoryEntries(nextBrowserMaxHistoryEntries);
-    this.scheduleImmediateAutoSave();
-  };
+		this.settingsModel.setBrowserTabKeepAliveLimit(nextBrowserTabKeepAliveLimit);
+		this.scheduleImmediateAutoSave();
+	};
+
+	readonly setBrowserMaxHistoryEntries = (value: string) => {
+		const nextBrowserMaxHistoryEntries = parseClampedIntegerInput(
+			value,
+			minBrowserMaxHistoryEntries,
+			maxBrowserMaxHistoryEntries,
+		);
+		if (nextBrowserMaxHistoryEntries === undefined) {
+			return;
+		}
+
+		this.settingsModel.setBrowserMaxHistoryEntries(nextBrowserMaxHistoryEntries);
+		this.scheduleImmediateAutoSave();
+	};
 
   readonly setBrowserPageZoom = (nextBrowserPageZoom: string) => {
     this.settingsModel.setBrowserPageZoom(nextBrowserPageZoom);
@@ -387,10 +435,19 @@ export class SettingsController {
     this.scheduleDebouncedAutoSave();
   };
 
-  readonly setMaxConcurrentIndexJobs = (nextMaxConcurrentIndexJobs: number) => {
-    this.settingsModel.setMaxConcurrentIndexJobs(nextMaxConcurrentIndexJobs);
-    this.scheduleImmediateAutoSave();
-  };
+	readonly setMaxConcurrentIndexJobs = (value: string) => {
+		const nextMaxConcurrentIndexJobs = parseClampedIntegerInput(
+			value,
+			minKnowledgeBaseConcurrentIndexJobs,
+			maxKnowledgeBaseConcurrentIndexJobs,
+		);
+		if (nextMaxConcurrentIndexJobs === undefined) {
+			return;
+		}
+
+		this.settingsModel.setMaxConcurrentIndexJobs(nextMaxConcurrentIndexJobs);
+		this.scheduleImmediateAutoSave();
+	};
 
   readonly setRagProviderApiKey = (provider: 'moark', apiKey: string) => {
     this.settingsModel.setRagProviderApiKey(provider, apiKey);
@@ -431,15 +488,33 @@ export class SettingsController {
     this.scheduleDebouncedAutoSave();
   };
 
-  readonly setRetrievalCandidateCount = (nextRetrievalCandidateCount: number) => {
-    this.settingsModel.setRetrievalCandidateCount(nextRetrievalCandidateCount);
-    this.scheduleImmediateAutoSave();
-  };
+	readonly setRetrievalCandidateCount = (value: string) => {
+		const nextRetrievalCandidateCount = parseClampedIntegerInput(
+			value,
+			minRagRetrievalCandidateCount,
+			maxRagRetrievalCandidateCount,
+		);
+		if (nextRetrievalCandidateCount === undefined) {
+			return;
+		}
 
-  readonly setRetrievalTopK = (nextRetrievalTopK: number) => {
-    this.settingsModel.setRetrievalTopK(nextRetrievalTopK);
-    this.scheduleImmediateAutoSave();
-  };
+		this.settingsModel.setRetrievalCandidateCount(nextRetrievalCandidateCount);
+		this.scheduleImmediateAutoSave();
+	};
+
+	readonly setRetrievalTopK = (value: string) => {
+		const nextRetrievalTopK = parseClampedIntegerInput(
+			value,
+			minRagRetrievalTopK,
+			this.settingsModel.getSnapshot().retrievalCandidateCount,
+		);
+		if (nextRetrievalTopK === undefined) {
+			return;
+		}
+
+		this.settingsModel.setRetrievalTopK(nextRetrievalTopK);
+		this.scheduleImmediateAutoSave();
+	};
 
   readonly setActiveLlmProvider = (nextProvider: LlmProviderId) => {
     this.settingsModel.setActiveLlmProvider(nextProvider);
@@ -698,7 +773,7 @@ export class SettingsController {
 
       this.isApplyingLoadedEditorDraftStyle = true;
       try {
-        editorDraftStyleService.setDefaultBodyStyle(
+		this.editorDraftStyleService.setDefaultBodyStyle(
           cloneEditorDraftStyleSettings(this.settingsModel.getSnapshot().editorDraftStyle.value)
             .defaultBodyStyle,
         );
@@ -724,7 +799,7 @@ export class SettingsController {
     }
 
     const nextEditorDraftStyle = cloneEditorDraftStyleSettings(
-      editorDraftStyleService.getSnapshot(),
+		this.editorDraftStyleService.getSnapshot(),
     );
     const previousEditorDraftStyle = this.settingsModel.getSnapshot().editorDraftStyle.value;
     if (areEditorDraftStyleSettingsEqual(previousEditorDraftStyle, nextEditorDraftStyle)) {
@@ -738,7 +813,7 @@ export class SettingsController {
   private updateEditorDraftDefaultBodyStyle(
     updater: (defaultBodyStyle: EditorDraftDefaultBodyStyle) => EditorDraftDefaultBodyStyle,
   ) {
-    const snapshot = editorDraftStyleService.getSnapshot();
+	const snapshot = this.editorDraftStyleService.getSnapshot();
     const nextDefaultBodyStyle = updater({
       fontFamilyValue: snapshot.defaultBodyStyle.fontFamilyValue,
       fontSizeValue: snapshot.defaultBodyStyle.fontSizeValue,
@@ -751,7 +826,7 @@ export class SettingsController {
       },
     });
 
-    editorDraftStyleService.setDefaultBodyStyle(nextDefaultBodyStyle);
+	this.editorDraftStyleService.setDefaultBodyStyle(nextDefaultBodyStyle);
   }
 
   private flushAutoSave = () => {

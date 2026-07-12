@@ -22,6 +22,10 @@ import {
   createSettingsElement as el,
   setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
+import {
+	maxKnowledgeBaseConcurrentIndexJobs,
+	minKnowledgeBaseConcurrentIndexJobs,
+} from 'cs/workbench/services/knowledgeBase/config';
 
 function resolveLibraryDocumentStatusLabel(labels: SettingsPartLabels, document: LibraryDocumentSummary) {
   if (document.latestJobStatus === 'failed' || document.ingestStatus === 'failed') { return labels.settingsLibraryDocumentFailed; }
@@ -96,8 +100,8 @@ function renderLibraryMaxConcurrentJobsField(props: LibrarySettingsSectionProps)
   const maxConcurrentJobsInput = new NumberStepper({
     value: props.maxConcurrentIndexJobs,
     className: 'comet-settings-number-stepper comet-settings-limit-input',
-    min: '1',
-    max: '4',
+	min: String(minKnowledgeBaseConcurrentIndexJobs),
+	max: String(maxKnowledgeBaseConcurrentIndexJobs),
     inputMode: 'numeric',
     step: '1',
     decrementAriaLabel: numberStepperDecrementAriaLabel,

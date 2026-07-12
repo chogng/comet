@@ -10,7 +10,10 @@ import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElem
 import { createEmptyWritingEditorDocument, createWritingEditorDocumentFromPlainText, writingEditorDocumentToPlainText } from 'cs/editor/common/writingEditorDocument';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/text/editorDraftStyleCatalog';
-import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import {
+	EditorDraftStyleService,
+	type EditorDraftStyleServiceSnapshot,
+} from 'cs/editor/browser/text/editorDraftStyleService';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
@@ -20,7 +23,10 @@ let DraftEditorToolbar: typeof import('cs/editor/browser/text/editorToolbar').Dr
 let TextSelection: typeof import('prosemirror-state').TextSelection;
 let DomScrollableElement: typeof import('cs/base/browser/ui/scrollbar/scrollableElement').DomScrollableElement;
 let cleanupDomEnvironment: (() => void) | null = null;
-let dropdownServices: DropdownContextServices & { dispose(): void };
+let dropdownServices: DropdownContextServices & {
+	styleSnapshot: EditorDraftStyleServiceSnapshot;
+	dispose(): void;
+};
 
 const labels = {
   toolbarMore: 'More',
@@ -73,7 +79,10 @@ after(() => {
 });
 
 beforeEach(async () => {
-  dropdownServices = await createDropdownTestServices();
+	const services = await createDropdownTestServices();
+	dropdownServices = Object.assign(services, {
+		styleSnapshot: getEditorDraftStyleCatalogSnapshot(),
+	});
 });
 
 afterEach(() => {
@@ -186,20 +195,23 @@ async function withEditor(
   run: (params: {
     editor: InstanceType<typeof ProseMirrorEditor>;
     changes: WritingEditorDocument[];
+	editorDraftStyleService: EditorDraftStyleService;
   }) => Promise<void> | void,
   initialDocument = createEmptyWritingEditorDocument(),
 ) {
   const changes: WritingEditorDocument[] = [];
+	const editorDraftStyleService = new EditorDraftStyleService();
   const editor = new ProseMirrorEditor(
     createProps(initialDocument, (nextDocument) => {
       changes.push(nextDocument);
-    }),
+	}),
+	editorDraftStyleService,
   );
 
   document.body.append(editor.getElement());
 
   try {
-    await run({ editor, changes });
+	await run({ editor, changes, editorDraftStyleService });
   } finally {
     editor.dispose();
     document.body.replaceChildren();
@@ -500,7 +512,6 @@ test('DraftEditorToolbar orders Chinese named font-size presets from large to sm
 });
 
 test('ProseMirrorEditor syncs default body style from editorDraftStyleService', async () => {
-  editorDraftStyleService.resetToCatalog();
   const catalogSnapshot = getEditorDraftStyleCatalogSnapshot();
   const updatedSnapshot = {
     ...catalogSnapshot,
@@ -515,8 +526,7 @@ test('ProseMirrorEditor syncs default body style from editorDraftStyleService', 
     },
   };
 
-  try {
-    await withEditor(({ editor }) => {
+	await withEditor(({ editor, editorDraftStyleService }) => {
       const editorRoot = editor.getElement().querySelector('.comet-pm-editor-root');
       assert(editorRoot instanceof HTMLElement);
       assert.equal(
@@ -594,10 +604,7 @@ test('ProseMirrorEditor syncs default body style from editorDraftStyleService', 
       );
       assert(fontSizePrimary instanceof HTMLButtonElement);
       assert.equal(fontSizePrimary.textContent?.trim(), '小四');
-    });
-  } finally {
-    editorDraftStyleService.resetToCatalog();
-  }
+	});
 });
 
 test('DraftEditorToolbar uses DengXian as the implicit default font and hides Default menu item', () => {
