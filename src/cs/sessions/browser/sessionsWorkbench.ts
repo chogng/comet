@@ -11,10 +11,9 @@ import type {
 	DocumentActionsControllerContext,
 	IArticleSelectionSnapshot,
 } from 'cs/workbench/browser/documentActionsModel';
-import { createArticleSummaryTranslationExportController } from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
-import type {
-	ArticleSummaryTranslationExportController,
-	ArticleSummaryTranslationExportControllerContext,
+import {
+	IArticleSummaryTranslationExportService,
+	ArticleSummaryTranslationExportService,
 } from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
 import {
 	ILibraryModel,
@@ -114,7 +113,6 @@ import {
 	minBrowserMaxHistoryEntries,
 } from 'cs/base/parts/sandbox/common/browserSettings';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
-import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
@@ -129,16 +127,8 @@ import {
 	stopWorkbenchContributions,
 } from 'cs/workbench/common/contributions';
 
-export type WorkbenchServicesSyncParams = {
-	articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
-	articleSummaryTranslationExportContext: ArticleSummaryTranslationExportControllerContext;
-	documentActionsController: DocumentActionsController;
-	documentActionsContext: DocumentActionsControllerContext;
-};
-
 type DesktopInvokeArgs = Record<string, unknown> | undefined;
 
-let articleSummaryTranslationExportController: ArticleSummaryTranslationExportController | null = null;
 let documentActionsController: DocumentActionsController | null = null;
 let activeSessionsWorkbenchHost: SessionsWorkbenchHost | null = null;
 
@@ -183,12 +173,13 @@ class SessionsWorkbenchHost {
 		@INotificationService private readonly notificationService: NotificationService,
 		@INativeHostService private readonly nativeHostService: INativeHostService,
 		@IOpenerService private readonly openerService: IOpenerService,
-		@IDialogService private readonly dialogService: IDialogService,
 		@IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@ISettingsController private readonly settingsController: SettingsController,
 		@ILibraryModel private readonly libraryModel: LibraryModel,
+		@IArticleSummaryTranslationExportService
+		private readonly articleSummaryTranslationExportService: ArticleSummaryTranslationExportService,
 		@IChatServiceDecorator private readonly chatService: IChatService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@ISessionsPartService private readonly sessionsPart: SessionsPart,
@@ -370,7 +361,6 @@ class SessionsWorkbenchHost {
 	private ensureServiceSubscriptions(services: {
 		settingsController: SettingsController;
 		libraryModel: LibraryModel;
-		articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
 		documentActionsController: DocumentActionsController;
 	}) {
 		if (this.servicesSubscribed) {
@@ -381,7 +371,6 @@ class SessionsWorkbenchHost {
 		this.globalDisposables.push(
 			services.settingsController.subscribe(this.requestRender),
 			services.libraryModel.subscribe(this.requestRender),
-			services.articleSummaryTranslationExportController.subscribe(this.requestRender),
 			services.documentActionsController.subscribe(this.requestRender),
 		);
 	}
@@ -703,45 +692,31 @@ class SessionsWorkbenchHost {
 				return true;
 			},
 		});
-		const articleSummaryTranslationExportControllerInstance =
-			getWorkbenchArticleSummaryTranslationExportController(
-				{
-					desktopRuntime,
-					invokeDesktop,
-					nativeHost,
-					notificationService: this.notificationService,
-					dialogService: this.dialogService,
-					locale,
-					ui,
-					pdfDownloadDir,
-				},
-				this.fetchService,
-			);
-
+		const documentActionsContext: DocumentActionsControllerContext = {
+			desktopRuntime,
+			invokeDesktop,
+			notificationService: this.notificationService,
+			locale,
+			ui,
+			knowledgeBaseEnabled,
+			pdfDownloadDir,
+			knowledgeBasePdfDownloadDir,
+			pdfFileNameUseSelectionOrder,
+			getExportableArticleSelection: this.getActiveChatArticleSelection,
+			onUnavailableArticleIds: this.removeChatArticleChecks,
+			onOpenEditor: handleOpenEditor,
+			onExportArticleSummaries:
+				this.articleSummaryTranslationExportService.handleExportArticleSummaries,
+			activeDraftExport,
+			onLibraryDocumentUpserted: libraryModelInstance.upsertDocumentSummary,
+			onLibraryUpdated: refreshLibrary,
+		};
 		const documentActionsControllerInstance =
 			getWorkbenchDocumentActionsController(
-				{
-					desktopRuntime,
-					invokeDesktop,
-					notificationService: this.notificationService,
-					locale,
-					ui,
-					knowledgeBaseEnabled,
-					pdfDownloadDir,
-					knowledgeBasePdfDownloadDir,
-					pdfFileNameUseSelectionOrder,
-					getExportableArticleSelection: this.getActiveChatArticleSelection,
-					onUnavailableArticleIds: this.removeChatArticleChecks,
-					onOpenEditor: handleOpenEditor,
-					onExportArticleSummaries:
-						articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
-					activeDraftExport,
-					onLibraryDocumentUpserted:
-						libraryModelInstance.upsertDocumentSummary,
-					onLibraryUpdated: refreshLibrary,
-				},
+				documentActionsContext,
 				this.fetchService,
 			);
+		documentActionsControllerInstance.setContext(documentActionsContext);
 
 		const focusWorkbenchWebUrlInput = () => {
 			handleOpenEditor({
@@ -777,45 +752,9 @@ class SessionsWorkbenchHost {
 			onToggleEditorCollapse: this.toggleEditorCollapsed,
 		});
 
-		syncWorkbenchServicesContext({
-			articleSummaryTranslationExportController:
-				articleSummaryTranslationExportControllerInstance,
-			articleSummaryTranslationExportContext: {
-				desktopRuntime,
-				invokeDesktop,
-				nativeHost,
-				notificationService: this.notificationService,
-				dialogService: this.dialogService,
-				locale,
-				ui,
-				pdfDownloadDir,
-			},
-			documentActionsController: documentActionsControllerInstance,
-			documentActionsContext: {
-				desktopRuntime,
-				invokeDesktop,
-				notificationService: this.notificationService,
-				locale,
-				ui,
-				knowledgeBaseEnabled,
-				pdfDownloadDir,
-				knowledgeBasePdfDownloadDir,
-				pdfFileNameUseSelectionOrder,
-				getExportableArticleSelection: this.getActiveChatArticleSelection,
-				onUnavailableArticleIds: this.removeChatArticleChecks,
-				onOpenEditor: handleOpenEditor,
-				onExportArticleSummaries:
-					articleSummaryTranslationExportControllerInstance.handleExportArticleSummaries,
-				activeDraftExport,
-				onLibraryUpdated: refreshLibrary,
-			},
-		});
-
 		this.ensureServiceSubscriptions({
 			settingsController: settingsControllerInstance,
 			libraryModel: libraryModelInstance,
-			articleSummaryTranslationExportController:
-				articleSummaryTranslationExportControllerInstance,
 			documentActionsController: documentActionsControllerInstance,
 		});
 
@@ -1086,21 +1025,9 @@ class SessionsWorkbenchApplication {
 }
 
 export function disposeSessionsWorkbenchServices() {
-	articleSummaryTranslationExportController?.dispose();
-	articleSummaryTranslationExportController = null;
-
 	documentActionsController?.dispose();
 	documentActionsController = null;
 
-}
-
-export function getWorkbenchArticleSummaryTranslationExportController(
-	context: ArticleSummaryTranslationExportControllerContext,
-	fetchService: IFetchService,
-) {
-	articleSummaryTranslationExportController ??=
-		createArticleSummaryTranslationExportController(context, fetchService);
-	return articleSummaryTranslationExportController;
 }
 
 export function getWorkbenchDocumentActionsController(
@@ -1109,19 +1036,6 @@ export function getWorkbenchDocumentActionsController(
 ) {
 	documentActionsController ??= createDocumentActionsController(context, fetchService);
 	return documentActionsController;
-}
-
-export function syncWorkbenchServicesContext({
-	articleSummaryTranslationExportController:
-	articleSummaryTranslationExportControllerInstance,
-	articleSummaryTranslationExportContext,
-	documentActionsController: documentActionsControllerInstance,
-	documentActionsContext,
-}: WorkbenchServicesSyncParams) {
-	articleSummaryTranslationExportControllerInstance.setContext(
-		articleSummaryTranslationExportContext,
-	);
-	documentActionsControllerInstance.setContext(documentActionsContext);
 }
 
 export function disposeSessionsWorkbench(): void {

@@ -66,6 +66,7 @@ import 'cs/workbench/contrib/draftEditor/browser/draftEditorCloseService';
 import 'cs/workbench/contrib/draftEditor/browser/draftEditor.contribution';
 import 'cs/workbench/contrib/pdfEditor/browser/pdfEditor.contribution';
 import 'cs/workbench/contrib/preferences/browser/settings.contribution';
+import 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
 
 registerWorkbenchService(INativeHostService, nativeHostService);
 registerWorkbenchService(IContextKeyService, contextKeyService);

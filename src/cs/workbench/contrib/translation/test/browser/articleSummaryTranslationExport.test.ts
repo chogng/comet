@@ -11,23 +11,28 @@ import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes'
 import type { DocumentTranslationProgress } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
+import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { ArticleDetail, ArticleId, ArticleRecord, IFetchService } from 'cs/workbench/services/fetch/common/fetch';
+import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 
 let cleanupDomEnvironment: (() => void) | null = null;
-let createArticleSummaryTranslationExportController: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').createArticleSummaryTranslationExportController;
+let ArticleSummaryTranslationExportService: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').ArticleSummaryTranslationExportService;
+let IArticleSummaryTranslationExportService: typeof import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport').IArticleSummaryTranslationExportService;
 let getStatusbarStateSnapshot: typeof import('cs/workbench/browser/parts/statusbar/statusbarModel').getStatusbarStateSnapshot;
 let setStatusbarState: typeof import('cs/workbench/browser/parts/statusbar/statusbarModel').setStatusbarState;
-let locales: typeof import('language/locales').locales;
 let BrowserDialogService: typeof import('cs/workbench/services/dialogs/browser/dialogService').BrowserDialogService;
 
 test.before(async () => {
 	const domEnvironment = installDomTestEnvironment();
 	cleanupDomEnvironment = domEnvironment.cleanup;
-	({ createArticleSummaryTranslationExportController } = await import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport'));
+	({
+		ArticleSummaryTranslationExportService,
+		IArticleSummaryTranslationExportService,
+	} = await import('cs/workbench/contrib/translation/browser/articleSummaryTranslationExport'));
 	({ getStatusbarStateSnapshot, setStatusbarState } = await import('cs/workbench/browser/parts/statusbar/statusbarModel'));
-	({ locales } = await import('language/locales'));
 	({ BrowserDialogService } = await import('cs/workbench/services/dialogs/browser/dialogService'));
 });
 
@@ -90,7 +95,28 @@ function createDialogService() {
 	return new BrowserDialogService();
 }
 
-test('ArticleSummaryTranslationExportController resolves ArticleIds to DOCX DTOs and restores progress', async () => {
+function createExportService(
+	nativeHostService: INativeHostService,
+	fetchService: IFetchService,
+) {
+	const settingsModel = new SettingsModel();
+	settingsModel.setPdfDownloadDir('/tmp');
+	return new ArticleSummaryTranslationExportService(
+		nativeHostService,
+		new NoOpNotificationService(),
+		createDialogService(),
+		{ getLocale: () => 'en' } as never,
+		new WorkbenchLanguageService(),
+		settingsModel,
+		fetchService,
+	);
+}
+
+test('ArticleSummaryTranslationExportService resolves ArticleIds to DOCX DTOs and restores progress', async () => {
+	const registrations = getSingletonServiceDescriptors()
+		.filter(([id]) => id === IArticleSummaryTranslationExportService);
+	assert.equal(registrations.length, 1);
+	assert.equal(registrations[0][1].supportsDelayedInstantiation, true);
 	const articleId = 'article.export';
 	const previousStatus: EditorStatusState = {
 		ariaLabel: 'Status',
@@ -112,24 +138,18 @@ test('ArticleSummaryTranslationExportController resolves ArticleIds to DOCX DTOs
 		assert.equal(getStatusbarStateSnapshot().summary, 'Translating 1/1');
 		return { articleCount: 1, filePath: '/tmp/articles.docx' };
 	}) as ElectronInvoke;
-	const controller = createArticleSummaryTranslationExportController({
-		desktopRuntime: true,
-		invokeDesktop: invoke,
-		nativeHost: createNativeHostService({
+	const service = createExportService(
+		createNativeHostService({
 			onTranslationProgress: listener => {
 				progressListener = listener;
 				return () => { unsubscribed = true; progressListener = null; };
 			},
 		}, invoke),
-		notificationService: new NoOpNotificationService(),
-		dialogService: createDialogService(),
-		locale: 'en',
-		ui: locales.en,
-		pdfDownloadDir: '/tmp',
-	}, createFetchService([createArticleDetail(articleId)]));
+		createFetchService([createArticleDetail(articleId)]),
+	);
 
-	await controller.handleExportArticleSummaries([articleId], true, () => {});
-	controller.dispose();
+	await service.handleExportArticleSummaries([articleId], true, () => {});
+	service.dispose();
 
 	assert.equal(unsubscribed, true);
 	assert.deepEqual(getStatusbarStateSnapshot(), previousStatus);
@@ -149,35 +169,29 @@ test('ArticleSummaryTranslationExportController resolves ArticleIds to DOCX DTOs
 	});
 });
 
-test('ArticleSummaryTranslationExportController removes unavailable ArticleIds before export', async () => {
+test('ArticleSummaryTranslationExportService removes unavailable ArticleIds before export', async () => {
 	const unavailable: ArticleId[][] = [];
 	let invoked = false;
 	const invoke = (async () => {
 		invoked = true;
 		return null;
 	}) as ElectronInvoke;
-	const controller = createArticleSummaryTranslationExportController({
-		desktopRuntime: true,
-		invokeDesktop: invoke,
-		nativeHost: createNativeHostService({ onTranslationProgress: () => () => {} }, invoke),
-		notificationService: new NoOpNotificationService(),
-		dialogService: createDialogService(),
-		locale: 'en',
-		ui: locales.en,
-		pdfDownloadDir: '/tmp',
-	}, createFetchService([]));
+	const service = createExportService(
+		createNativeHostService({ onTranslationProgress: () => () => {} }, invoke),
+		createFetchService([]),
+	);
 
-	await controller.handleExportArticleSummaries(
+	await service.handleExportArticleSummaries(
 		['article.missing'],
 		false,
 		articleIds => unavailable.push([...articleIds]),
 	);
-	controller.dispose();
+	service.dispose();
 	assert.deepEqual(unavailable, [['article.missing']]);
 	assert.equal(invoked, false);
 });
 
-test('ArticleSummaryTranslationExportController cancels an active export task', async () => {
+test('ArticleSummaryTranslationExportService cancels an active export task', async () => {
 	const articleId = 'article.cancel';
 	let rejectExport: ((error: unknown) => void) | null = null;
 	const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
@@ -192,25 +206,18 @@ test('ArticleSummaryTranslationExportController cancels an active export task', 
 		}
 		throw new Error(`Unexpected desktop command: ${command}`);
 	}) as ElectronInvoke;
-	const controller = createArticleSummaryTranslationExportController({
-		desktopRuntime: true,
-		invokeDesktop: invoke,
-		nativeHost: createNativeHostService({ onTranslationProgress: () => () => {} }, invoke),
-		notificationService: new NoOpNotificationService(),
-		dialogService: createDialogService(),
-		locale: 'en',
-		ui: locales.en,
-		pdfDownloadDir: '/tmp',
-	}, createFetchService([createArticleDetail(articleId)]));
+	const service = createExportService(
+		createNativeHostService({ onTranslationProgress: () => () => {} }, invoke),
+		createFetchService([createArticleDetail(articleId)]),
+	);
 
-	const running = controller.handleExportArticleSummaries([articleId], true, () => {});
+	const running = service.handleExportArticleSummaries([articleId], true, () => {});
 	await delay(0);
-	await controller.handleExportArticleSummaries([articleId], true, () => {});
+	await service.handleExportArticleSummaries([articleId], true, () => {});
 	await running;
-	controller.dispose();
+	service.dispose();
 
 	const exportArgs = invoked.find(entry => entry.command === 'export_articles_docx')?.args;
 	const cancelArgs = invoked.find(entry => entry.command === 'cancel_document_task')?.args;
 	assert.deepEqual(cancelArgs, { taskId: exportArgs?.taskId });
-	assert.equal(controller.getSnapshot().translationExportProgress, null);
 });

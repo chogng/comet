@@ -5,19 +5,16 @@
 
 import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import type { CancellationToken } from 'cs/base/common/cancellation';
-import { EventEmitter } from 'cs/base/common/event';
 import type {
   ArticleSummaryExportInput,
   DocumentTranslationProgress,
   DocxExportResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type {
-  ElectronInvoke,
-} from 'cs/base/parts/sandbox/common/electronTypes';
-import type { INativeHostService } from 'cs/platform/native/common/native';
-import type { Locale } from 'language/i18n';
+import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import type { LocaleMessages } from 'language/locales';
-import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import {
   canExportArticlesDocx,
   resolvePreferredDirectory,
@@ -35,28 +32,15 @@ import {
   getStatusbarStateSnapshot,
   setStatusbarState,
 } from 'cs/workbench/browser/parts/statusbar/statusbarModel';
-import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
-import type { INotificationService } from 'cs/platform/notification/common/notification';
+import { INotificationService } from 'cs/platform/notification/common/notification';
 import {
   IFetchService,
   type ArticleDetail,
   type ArticleId,
 } from 'cs/workbench/services/fetch/common/fetch';
-
-export type ArticleSummaryTranslationExportControllerContext = {
-  desktopRuntime: boolean;
-  invokeDesktop: ElectronInvoke;
-  nativeHost: INativeHostService;
-  notificationService: INotificationService;
-  dialogService: IDialogService;
-  locale: Locale;
-  ui: LocaleMessages;
-  pdfDownloadDir: string;
-};
-
-export type ArticleSummaryTranslationExportControllerSnapshot = {
-  translationExportProgress: ArticleBatchTaskProgress | null;
-};
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import { ISettingsModel, SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 
 type ArticleSummaryTranslationExportTask = {
   taskId: string;
@@ -73,27 +57,6 @@ function createArticleSummaryTranslationExportTaskId() {
   return `article-summary-translation-${Date.now()}-${articleSummaryTranslationExportTaskCounter}`;
 }
 
-function createSnapshot(
-  translationExportProgress: ArticleBatchTaskProgress | null = null,
-): ArticleSummaryTranslationExportControllerSnapshot {
-  return {
-    translationExportProgress,
-  };
-}
-
-function sameArticleBatchTaskProgress(
-  left: ArticleBatchTaskProgress | null,
-  right: ArticleBatchTaskProgress | null,
-) {
-  if (left === right) {
-    return true;
-  }
-  if (!left || !right) {
-    return false;
-  }
-  return left.phase === right.phase && left.current === right.current && left.total === right.total;
-}
-
 function detailString(details: Record<string, unknown> | undefined, key: string) {
   const value = details?.[key];
   return typeof value === 'string' && value.trim() ? value.trim() : '';
@@ -103,35 +66,26 @@ function isDocxTranslationFailure(error: AppErrorData) {
   return error.code === 'DOCX_TRANSLATION_FAILED';
 }
 
-export class ArticleSummaryTranslationExportController {
-  private context: ArticleSummaryTranslationExportControllerContext;
-  private snapshot = createSnapshot();
+export class ArticleSummaryTranslationExportService {
+  declare readonly _serviceBrand: undefined;
+
   private currentTask: ArticleSummaryTranslationExportTask | null = null;
-  private readonly onDidChangeEmitter = new EventEmitter<void>();
 
   constructor(
-    context: ArticleSummaryTranslationExportControllerContext,
+    @INativeHostService private readonly nativeHostService: INativeHostService,
+    @INotificationService private readonly notificationService: INotificationService,
+    @IDialogService private readonly dialogService: IDialogService,
+    @IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+    @IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+    @ISettingsModel private readonly settingsModel: SettingsModel,
     @IFetchService private readonly fetchService: IFetchService,
-  ) {
-    this.context = context;
-  }
-
-  readonly subscribe = (listener: () => void) => {
-    return this.onDidChangeEmitter.event(listener);
-  };
-
-  readonly getSnapshot = () => this.snapshot;
-
-  readonly setContext = (context: ArticleSummaryTranslationExportControllerContext) => {
-    this.context = context;
-  };
+  ) {}
 
   readonly dispose = () => {
     this.currentTask?.source.cancel();
     this.currentTask?.source.dispose();
     this.currentTask?.restoreStatusbar(true);
     this.currentTask = null;
-    this.onDidChangeEmitter.dispose();
   };
 
   readonly handleExportArticleSummaries = async (
@@ -144,14 +98,10 @@ export class ArticleSummaryTranslationExportController {
       return;
     }
 
-    const {
-      desktopRuntime,
-      invokeDesktop,
-      locale,
-      ui,
-      pdfDownloadDir,
-      notificationService,
-    } = this.context;
+    const desktopRuntime = this.nativeHostService.canInvoke();
+    const locale = this.localeService.getLocale();
+    const ui = this.languageService.getLocaleMessages(locale);
+    const pdfDownloadDir = this.settingsModel.getSnapshot().pdfDownloadDir;
 
     if (!desktopRuntime) {
       return;
@@ -171,11 +121,12 @@ export class ArticleSummaryTranslationExportController {
         articleIds,
         source.token,
         onUnavailableArticleIds,
+        ui,
       );
     } catch (error) {
       if (!source.token.isCancellationRequested) {
         const localizedError = localizeAppError(ui, parseAppErrorData(error));
-        notificationService.error(
+        this.notificationService.error(
           formatLocaleMessage(ui.toastDocxExportFailed, { error: localizedError }),
         );
       }
@@ -195,7 +146,7 @@ export class ArticleSummaryTranslationExportController {
     }
 
     if (!canExportArticlesDocx(exportArticles.length)) {
-      notificationService.info(ui.toastNoExportableArticles);
+      this.notificationService.info(ui.toastNoExportableArticles);
       if (this.currentTask?.taskId === taskId) {
         this.currentTask = null;
       }
@@ -205,19 +156,13 @@ export class ArticleSummaryTranslationExportController {
 
     const restoreTranslationStatus = this.beginTranslationStatusbarProgress(
       source.token,
-      exportArticles.length,
+      ui,
     );
     this.currentTask = {
       taskId,
       source,
       restoreStatusbar: restoreTranslationStatus,
     };
-    this.setTranslationExportProgress({
-      phase: 'running',
-      current: 0,
-      total: exportArticles.length,
-    });
-
     let shouldTranslateSummaries = translateSummaries;
     let targetFilePath = '';
 
@@ -225,7 +170,7 @@ export class ArticleSummaryTranslationExportController {
       while (!source.token.isCancellationRequested) {
         let result: DocxExportResult | null;
         try {
-          result = await invokeDesktop('export_articles_docx', {
+          result = await this.nativeHostService.invoke('export_articles_docx', {
             taskId,
             articles: exportArticles,
             preferredDirectory: resolvePreferredDirectory(pdfDownloadDir),
@@ -242,27 +187,17 @@ export class ArticleSummaryTranslationExportController {
           }
 
           if (shouldTranslateSummaries && isDocxTranslationFailure(parsedError)) {
-            const choice = await this.promptTranslationFailure(parsedError, source.token);
+            const choice = await this.promptTranslationFailure(parsedError, source.token, ui);
             if (source.token.isCancellationRequested) {
               return;
             }
 
             if (choice === 'retry') {
-              this.setTranslationExportProgress({
-                phase: 'running',
-                current: 0,
-                total: exportArticles.length,
-              });
               continue;
             }
 
             if (choice === 'exportOriginal') {
               shouldTranslateSummaries = false;
-              this.setTranslationExportProgress({
-                phase: 'running',
-                current: exportArticles.length,
-                total: exportArticles.length,
-              });
               continue;
             }
 
@@ -270,7 +205,7 @@ export class ArticleSummaryTranslationExportController {
           }
 
           const localizedError = localizeAppError(ui, parsedError);
-          notificationService.error(
+          this.notificationService.error(
             formatLocaleMessage(ui.toastDocxExportFailed, { error: localizedError }),
           );
           return;
@@ -280,7 +215,7 @@ export class ArticleSummaryTranslationExportController {
           return;
         }
 
-        notificationService.info(
+        this.notificationService.info(
           formatLocaleMessage(ui.toastDocxExported, {
             count: result.articleCount,
             filePath: result.filePath,
@@ -293,7 +228,6 @@ export class ArticleSummaryTranslationExportController {
       restoreTranslationStatus(ownsCurrentTask || !this.currentTask);
       if (ownsCurrentTask) {
         this.currentTask = null;
-        this.setTranslationExportProgress(null);
       }
       source.dispose();
     }
@@ -308,8 +242,7 @@ export class ArticleSummaryTranslationExportController {
     task.source.cancel();
     task.restoreStatusbar(true);
     this.currentTask = null;
-    this.setTranslationExportProgress(null);
-    void this.context.invokeDesktop('cancel_document_task', { taskId: task.taskId })
+    void this.nativeHostService.invoke('cancel_document_task', { taskId: task.taskId })
       .catch((error) => {
         console.warn('Failed to cancel article summary translation task.', error);
       });
@@ -319,6 +252,7 @@ export class ArticleSummaryTranslationExportController {
     articleIds: readonly ArticleId[],
     token: CancellationToken,
     onUnavailableArticleIds: (articleIds: readonly ArticleId[]) => void,
+    ui: LocaleMessages,
   ): Promise<ArticleSummaryExportInput[]> {
     const unavailableArticleIds: ArticleId[] = [];
     const summaries: ArticleSummaryExportInput[] = [];
@@ -337,7 +271,7 @@ export class ArticleSummaryTranslationExportController {
 
     if (unavailableArticleIds.length > 0) {
       onUnavailableArticleIds(unavailableArticleIds);
-      this.context.notificationService.info(this.context.ui.articleDetailsUnavailable);
+      this.notificationService.info(ui.articleDetailsUnavailable);
     }
     return summaries;
   }
@@ -363,9 +297,9 @@ export class ArticleSummaryTranslationExportController {
   private async promptTranslationFailure(
     error: AppErrorData,
     token: CancellationToken,
+    ui: LocaleMessages,
   ): Promise<ArticleSummaryTranslationFailureChoice> {
-    const { dialogService, ui } = this.context;
-    const confirmation = await dialogService.prompt<'retry' | 'exportOriginal'>({
+    const confirmation = await this.dialogService.prompt<'retry' | 'exportOriginal'>({
       title: ui.translationFailureDialogTitle,
       message: formatLocaleMessage(ui.translationFailureDialogMessage, {
         error: localizeAppError(ui, error),
@@ -398,15 +332,14 @@ export class ArticleSummaryTranslationExportController {
 
   private beginTranslationStatusbarProgress(
     token: CancellationToken,
-    initialTotal: number,
+    ui: LocaleMessages,
   ) {
     const previousStatus = getStatusbarStateSnapshot();
-    const unsubscribe = this.context.nativeHost.document?.onTranslationProgress((progress) => {
+    const unsubscribe = this.nativeHostService.document?.onTranslationProgress((progress) => {
       if (token.isCancellationRequested) {
         return;
       }
-      this.renderTranslationStatusbarProgress(previousStatus, progress);
-      this.setTranslationExportProgress(this.resolveTranslationExportProgress(progress, initialTotal));
+      this.renderTranslationStatusbarProgress(previousStatus, progress, ui);
     });
     let disposed = false;
 
@@ -422,27 +355,11 @@ export class ArticleSummaryTranslationExportController {
     };
   }
 
-  private resolveTranslationExportProgress(
-    progress: DocumentTranslationProgress,
-    initialTotal: number,
-  ): ArticleBatchTaskProgress {
-    const total = Math.max(0, progress.total || initialTotal);
-    const current =
-      progress.phase === 'completed'
-        ? total
-        : Math.max(0, Math.min(progress.current, total));
-    return {
-      phase: 'running',
-      current,
-      total,
-    };
-  }
-
   private renderTranslationStatusbarProgress(
     previousStatus: EditorStatusState,
     progress: DocumentTranslationProgress,
+    ui: LocaleMessages,
   ) {
-    const { ui } = this.context;
     const total = Math.max(0, progress.total);
     const current = Math.max(0, Math.min(progress.current, total));
     const summary =
@@ -473,29 +390,13 @@ export class ArticleSummaryTranslationExportController {
     });
   }
 
-  private emitChange() {
-    this.onDidChangeEmitter.fire();
-  }
-
-  private setTranslationExportProgress(progress: ArticleBatchTaskProgress | null) {
-    const nextSnapshot = createSnapshot(progress);
-    if (
-      sameArticleBatchTaskProgress(
-        this.snapshot.translationExportProgress,
-        nextSnapshot.translationExportProgress,
-      )
-    ) {
-      return;
-    }
-
-    this.snapshot = nextSnapshot;
-    this.emitChange();
-  }
 }
 
-export function createArticleSummaryTranslationExportController(
-  context: ArticleSummaryTranslationExportControllerContext,
-  fetchService: IFetchService,
-) {
-  return new ArticleSummaryTranslationExportController(context, fetchService);
-}
+export const IArticleSummaryTranslationExportService =
+  createDecorator<ArticleSummaryTranslationExportService>('articleSummaryTranslationExportService');
+
+registerSingleton(
+  IArticleSummaryTranslationExportService,
+  ArticleSummaryTranslationExportService,
+  InstantiationType.Delayed,
+);

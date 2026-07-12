@@ -201,3 +201,33 @@ test('Library model is a DI service without mutable shell context', () => {
 	assert.match(libraryModel, /@INativeHostService private readonly nativeHostService/);
 	assert.match(libraryModel, /registerSingleton\(ILibraryModel, LibraryModel,/);
 });
+
+test('Article export is a DI service without mutable shell context', () => {
+	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
+	const workbenchCommon = readSource('src/cs/workbench/workbench.common.main.ts');
+	assert.match(
+		sessionsWorkbench,
+		/@IArticleSummaryTranslationExportService\s+private readonly articleSummaryTranslationExportService/,
+	);
+	assert.doesNotMatch(
+		sessionsWorkbench,
+		/createArticleSummaryTranslationExportController|ArticleSummaryTranslationExportControllerContext|getWorkbenchArticleSummaryTranslationExportController|syncWorkbenchServicesContext/,
+	);
+	assert.match(
+		workbenchCommon,
+		/contrib\/translation\/browser\/articleSummaryTranslationExport/,
+	);
+
+	const articleExport = readSource(
+		'src/cs/workbench/contrib/translation/browser/articleSummaryTranslationExport.ts',
+	);
+	assert.doesNotMatch(
+		articleExport,
+		/ArticleSummaryTranslationExportController|readonly setContext|readonly subscribe/,
+	);
+	assert.match(articleExport, /@INativeHostService private readonly nativeHostService/);
+	assert.match(
+		articleExport,
+		/registerSingleton\(\s*IArticleSummaryTranslationExportService,/,
+	);
+});
