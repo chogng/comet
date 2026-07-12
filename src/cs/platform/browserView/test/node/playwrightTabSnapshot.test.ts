@@ -24,7 +24,7 @@ import {
 	maximumPageSnapshotTimeoutMs,
 	type IPageSnapshotOptions,
 } from 'cs/platform/browserView/common/playwrightService';
-import { PlaywrightTab } from 'cs/platform/browserView/node/playwrightTab';
+import { DialogInterruptedError, PlaywrightTab } from 'cs/platform/browserView/node/playwrightTab';
 import { PlaywrightChannel } from 'cs/platform/browserView/node/playwrightChannel';
 import { PlaywrightService } from 'cs/platform/browserView/node/playwrightService';
 import {
@@ -50,6 +50,7 @@ class FakePage {
 	readonly locatorCalls: string[] = [];
 	readonly visibleIndices: number[] = [];
 	loadState: Promise<void> = Promise.resolve();
+	loadStateError: Error | undefined;
 	render: Promise<void> = Promise.resolve();
 	snapshot: SnapshotValue | TooLargeSnapshotValue | undefined = { uri: 'https://example.com/article', title: 'Example article', html: '<html><body>Example</body></html>' };
 	snapshotPromise: Promise<SnapshotValue | TooLargeSnapshotValue | undefined> | undefined;
@@ -58,8 +59,22 @@ class FakePage {
 	initialLocatorCount: Promise<number> | undefined;
 	visible = [true];
 	locatorError: Error | undefined;
+	consoleMessagesError: Error | undefined;
+	consoleMessagesValue: readonly unknown[] = [];
+	consoleMessagesCalls = 0;
+	pageErrorsError: Error | undefined;
+	pageErrorsValue: readonly Error[] = [];
+	pageErrorsCalls = 0;
 	titleValue = 'Example article';
+	titleError: Error | undefined;
+	titleCalls = 0;
 	ariaSnapshotValue = '- article "Example article"';
+	ariaSnapshotError: Error | undefined;
+	readonly ariaSnapshotCalls: unknown[] = [];
+	waitForFunctionError: Error | undefined;
+	waitForFunctionResult: Promise<void> | undefined;
+	waitForFunctionCalls = 0;
+	urlValue = 'https://example.com/article';
 	requestListenerCountDuringSnapshot = -1;
 	private locatorCountCalls = 0;
 
@@ -77,28 +92,62 @@ class FakePage {
 		return this.listeners.get(event)?.length ?? 0;
 	}
 
+	emit(event: string, ...args: readonly unknown[]): void {
+		for (const listener of this.listeners.get(event) ?? []) {
+			listener(...args);
+		}
+	}
+
 	async consoleMessages(): Promise<readonly unknown[]> {
-		return [];
+		this.consoleMessagesCalls++;
+		if (this.consoleMessagesError) {
+			throw this.consoleMessagesError;
+		}
+		return this.consoleMessagesValue;
 	}
 
 	async pageErrors(): Promise<readonly Error[]> {
-		return [];
+		this.pageErrorsCalls++;
+		if (this.pageErrorsError) {
+			throw this.pageErrorsError;
+		}
+		return this.pageErrorsValue;
 	}
 
 	url(): string {
-		return 'https://example.com/article';
+		return this.urlValue;
 	}
 
 	async title(): Promise<string> {
+		this.titleCalls++;
+		if (this.titleError) {
+			throw this.titleError;
+		}
 		return this.titleValue;
 	}
 
-	async ariaSnapshot(): Promise<string> {
+	async ariaSnapshot(options?: unknown): Promise<string> {
+		this.ariaSnapshotCalls.push(options);
+		if (this.ariaSnapshotError) {
+			throw this.ariaSnapshotError;
+		}
 		return this.ariaSnapshotValue;
 	}
 
 	mainFrame(): { waitForLoadState: () => Promise<void> } {
-		return { waitForLoadState: () => this.loadState };
+		return {
+			waitForLoadState: () => this.loadStateError
+				? Promise.reject(this.loadStateError)
+				: this.loadState,
+		};
+	}
+
+	async waitForFunction(): Promise<void> {
+		this.waitForFunctionCalls++;
+		if (this.waitForFunctionError) {
+			throw this.waitForFunctionError;
+		}
+		await this.waitForFunctionResult;
 	}
 
 	locator(selector: string): { count: () => Promise<number>; nth: (index: number) => { isVisible: () => Promise<boolean> } } {
@@ -140,6 +189,37 @@ class FakePage {
 	}
 }
 
+interface FakeResponse {
+	finished(): Promise<Error | null>;
+}
+
+interface FakeRequest {
+	isNavigationRequest(): boolean;
+	resourceType(): string;
+	response(): Promise<FakeResponse | null>;
+	timing(): { readonly responseEnd: number; readonly startTime: number };
+	method(): string;
+	url(): string;
+	failure(): { readonly errorText: string } | null;
+}
+
+function createRequest(options: {
+	readonly navigation?: boolean;
+	readonly resourceType?: string;
+	readonly response?: () => Promise<FakeResponse | null>;
+	readonly failureText?: string;
+} = {}): FakeRequest {
+	return {
+		isNavigationRequest: () => options.navigation ?? false,
+		resourceType: () => options.resourceType ?? 'fetch',
+		response: options.response ?? (async () => ({ finished: async () => null })),
+		timing: () => ({ responseEnd: 1, startTime: 1_000 }),
+		method: () => 'GET',
+		url: () => 'https://example.com/resource',
+		failure: () => options.failureText ? { errorText: options.failureText } : null,
+	};
+}
+
 function createTab(page = new FakePage()): { readonly page: FakePage; readonly tab: PlaywrightTab } {
 	const networkFilter: IAgentNetworkFilterService = {
 		_serviceBrand: undefined,
@@ -164,6 +244,13 @@ function captureSnapshot(
 		resolvedOptions,
 		createPageSnapshotDeadline(resolvedOptions),
 		token,
+	);
+}
+
+function runPageAction<T>(tab: PlaywrightTab, action: () => T | Promise<T>): Promise<T> {
+	return tab.safeRunAgainstPage(
+		async () => action(),
+		{ waitForCompletion: true, token: CancellationTokenNone },
 	);
 }
 
@@ -460,6 +547,342 @@ test('getSummary remains the read-page ARIA boundary', async () => {
 	const summary = await tab.getSummary(true);
 	assert.match(summary, /Page Title: ARIA page/);
 	assert.match(summary, /Snapshot:\s+- button "Continue"/);
+});
+
+test('getSummary lazily initializes console history and exposes a sticky failure', async () => {
+	const page = new FakePage();
+	const historyError = new Error('console history unavailable');
+	page.consoleMessagesError = historyError;
+	const { tab } = createTab(page);
+
+	assert.equal(page.consoleMessagesCalls, 0);
+	await assert.rejects(tab.getSummary(true), error => error === historyError);
+	await assert.rejects(tab.getSummary(true), error => error === historyError);
+	assert.equal(page.consoleMessagesCalls, 1);
+	assert.equal(page.pageErrorsCalls, 1);
+});
+
+test('getSummary lazily initializes page errors and exposes a sticky failure', async () => {
+	const page = new FakePage();
+	const pageErrorsError = new Error('page error history unavailable');
+	page.pageErrorsError = pageErrorsError;
+	const { tab } = createTab(page);
+
+	assert.equal(page.consoleMessagesCalls, 0);
+	assert.equal(page.pageErrorsCalls, 0);
+	await assert.rejects(tab.getSummary(true), error => error === pageErrorsError);
+	await assert.rejects(tab.getSummary(true), error => error === pageErrorsError);
+	assert.equal(page.consoleMessagesCalls, 1);
+	assert.equal(page.pageErrorsCalls, 1);
+});
+
+test('getSummary rejects a page URL that cannot be checked by network policy', async () => {
+	const page = new FakePage();
+	page.urlValue = 'missing-scheme.example.com';
+	const { tab } = createTab(page);
+
+	await assert.rejects(tab.getSummary(true), /Scheme is missing/);
+});
+
+test('getSummary merges overlapping history and live errors once in chronological groups', async () => {
+	const page = new FakePage();
+	const historicalConsole = {
+		type: () => 'warning',
+		timestamp: () => 100,
+		text: () => 'historical warning',
+	};
+	const overlappingConsole = {
+		type: () => 'error',
+		timestamp: () => 200,
+		text: () => 'overlapping error',
+	};
+	const laterConsole = {
+		type: () => 'warning',
+		timestamp: () => 300,
+		text: () => 'later warning',
+	};
+	const overlappingPageError = new Error('overlapping page error');
+	page.consoleMessagesValue = [historicalConsole, overlappingConsole];
+	page.pageErrorsValue = [overlappingPageError];
+	const { tab } = createTab(page);
+	const livePageError = new Error(overlappingPageError.message);
+	livePageError.stack = overlappingPageError.stack;
+	page.emit('console', { ...overlappingConsole });
+	page.emit('pageerror', livePageError);
+	page.emit('console', laterConsole);
+	page.emit('requestfailed', createRequest({ failureText: 'net::ERR_FAILED' }));
+	page.emit('download', { suggestedFilename: () => 'article.pdf' });
+
+	const summary = await tab.getSummary(true);
+
+	assert.equal(summary.match(/historical warning/g)?.length, 1);
+	assert.equal(summary.match(/overlapping error/g)?.length, 1);
+	assert.equal(summary.match(/overlapping page error/g)?.length, 1);
+	assert.equal(summary.match(/later warning/g)?.length, 1);
+	assert.equal(summary.match(/net::ERR_FAILED/g)?.length, 1);
+	assert.equal(summary.match(/article\.pdf/g)?.length, 1);
+	assert.ok(summary.indexOf('historical warning') < summary.indexOf('later warning'));
+	assert.ok(summary.indexOf('overlapping error') < summary.indexOf('later warning'));
+	assert.ok(summary.indexOf('historical warning') < summary.indexOf('net::ERR_FAILED'));
+	assert.ok(summary.indexOf('historical warning') < summary.indexOf('article.pdf'));
+});
+
+test('getSummary rejects an ARIA failure and retries with a full snapshot', async () => {
+	const { page, tab } = createTab();
+	const snapshotError = new Error('ARIA snapshot failed');
+	page.ariaSnapshotError = snapshotError;
+
+	await assert.rejects(tab.getSummary(false), error => error === snapshotError);
+	page.ariaSnapshotError = undefined;
+	const summary = await tab.getSummary();
+
+	assert.match(summary, /Snapshot:\s+- article "Example article"/);
+	assert.deepEqual(page.ariaSnapshotCalls, [
+		{ mode: 'ai', _track: 'response' },
+		{ mode: 'ai' },
+	]);
+});
+
+test('getSummary rejects a title failure and retries with a full snapshot', async () => {
+	const { page, tab } = createTab();
+	const titleError = new Error('title failed');
+	page.titleError = titleError;
+
+	await assert.rejects(tab.getSummary(false), error => error === titleError);
+	page.titleError = undefined;
+	const summary = await tab.getSummary();
+
+	assert.match(summary, /Page Title: Example article/);
+	assert.deepEqual(page.ariaSnapshotCalls, [
+		{ mode: 'ai', _track: 'response' },
+		{ mode: 'ai' },
+	]);
+	assert.equal(page.titleCalls, 2);
+});
+
+test('getSummary preserves valid empty title and unchanged ARIA results', async () => {
+	const { page, tab } = createTab();
+	page.titleValue = '';
+	page.ariaSnapshotValue = '';
+
+	const summary = await tab.getSummary(false);
+
+	assert.doesNotMatch(summary, /Page Title:/);
+	assert.match(summary, /Snapshot: <unchanged>/);
+});
+
+test('safeRunAgainstPage rejects navigation load failures and removes its request listener', async () => {
+	const { page, tab } = createTab();
+	const loadError = new Error('navigation load failed');
+	page.loadStateError = loadError;
+
+	await assert.rejects(
+		runPageAction(tab, () => {
+			page.emit('request', createRequest({ navigation: true }));
+			return 'completed';
+		}),
+		error => error === loadError,
+	);
+	assert.equal(page.listenerCount('request'), 0);
+});
+
+test('safeRunAgainstPage rejects request response failures for every completion branch', async t => {
+	for (const resourceType of ['fetch', 'image']) {
+		await t.test(resourceType, async () => {
+			const { page, tab } = createTab();
+			const responseError = new Error(`${resourceType} response failed`);
+
+			await assert.rejects(
+				runPageAction(tab, () => {
+					page.emit('request', createRequest({
+						resourceType,
+						response: async () => { throw responseError; },
+					}));
+					return 'completed';
+				}),
+				error => error === responseError,
+			);
+			assert.equal(page.listenerCount('request'), 0);
+		});
+	}
+});
+
+test('safeRunAgainstPage accepts a failed request without a response and reports its log', async () => {
+	const { page, tab } = createTab();
+	const request = createRequest({
+		resourceType: 'fetch',
+		response: async () => null,
+		failureText: 'net::ERR_FAILED',
+	});
+
+	const result = await runPageAction(tab, () => {
+		page.emit('request', request);
+		page.emit('requestfailed', request);
+		return 'completed';
+	});
+	const summary = await tab.getSummary(true);
+
+	assert.equal(result, 'completed');
+	assert.match(summary, /GET request to https:\/\/example\.com\/resource failed: "net::ERR_FAILED"/);
+});
+
+test('safeRunAgainstPage rejects an error returned by response.finished', async () => {
+	const { page, tab } = createTab();
+	const finishedError = new Error('response body failed');
+
+	await assert.rejects(
+		runPageAction(tab, () => {
+			page.emit('request', createRequest({
+				resourceType: 'fetch',
+				response: async () => ({ finished: async () => finishedError }),
+			}));
+			return 'completed';
+		}),
+		error => error === finishedError,
+	);
+});
+
+test('safeRunAgainstPage rejects a request completion timeout', async () => {
+	let markResponseRequested!: () => void;
+	const responseRequested = new Promise<void>(resolve => {
+		markResponseRequested = resolve;
+	});
+	const { page, tab } = createTab();
+	const operation = runPageAction(tab, () => {
+		page.emit('request', createRequest({
+			resourceType: 'fetch',
+			response: () => {
+				markResponseRequested();
+				return new Promise<FakeResponse | null>(() => {});
+			},
+		}));
+		return 'completed';
+	});
+
+	await responseRequested;
+	await assert.rejects(operation, error => error instanceof Error
+		&& /timed out/i.test(error.message)
+		&& /5000/.test(error.message));
+});
+
+test('dialog close observation handles page wait failures', async () => {
+	const page = new FakePage();
+	const observationError = new Error('dialog page closed');
+	page.waitForFunctionError = observationError;
+	const { tab } = createTab(page);
+
+	page.emit('dialog', {});
+	await new Promise<void>(resolve => setImmediate(resolve));
+
+	assert.equal(page.waitForFunctionCalls, 1);
+	await assert.rejects(tab.getSummary(), error => error === observationError);
+});
+
+test('getSummary reports an active dialog without replacing failed page reads with empty values', async () => {
+	const page = new FakePage();
+	page.waitForFunctionResult = new Promise<void>(() => {});
+	const { tab } = createTab(page);
+	page.emit('dialog', {
+		type: () => 'alert',
+		message: () => 'Confirm this action',
+	});
+
+	const summary = await tab.getSummary();
+
+	assert.match(summary, /Active alert dialog: "Confirm this action"/);
+	assert.match(summary, /Snapshot: <blocked by active dialog>/);
+	assert.equal(page.ariaSnapshotCalls.length, 0);
+	assert.equal(page.titleCalls, 0);
+});
+
+test('dialog interruption preserves a post-action request completion failure', async () => {
+	const { page, tab } = createTab();
+	let rejectResponse!: (error: Error) => void;
+	const response = new Promise<FakeResponse | null>((_resolve, reject) => {
+		rejectResponse = reject;
+	});
+	let interruption: DialogInterruptedError | undefined;
+	try {
+		await runPageAction(tab, () => {
+			page.emit('request', createRequest({ resourceType: 'fetch', response: () => response }));
+			page.emit('dialog', {});
+			return 'completed';
+		});
+		assert.fail('Expected the dialog to interrupt the action.');
+	} catch (error) {
+		assert.ok(error instanceof DialogInterruptedError);
+		interruption = error;
+	}
+
+	const completionError = new Error('request completion failed after interruption');
+	rejectResponse(completionError);
+	await assert.rejects(interruption.waitForCompletion(), error => error === completionError);
+});
+
+test('dialog interruption remains cancellable until its page action settles', async () => {
+	const { page, tab } = createTab();
+	page.waitForFunctionResult = new Promise<void>(() => {});
+	const cancellation = new CancellationTokenSource();
+	let interruption: DialogInterruptedError | undefined;
+	try {
+		await tab.safeRunAgainstPage(
+			async () => {
+				page.emit('dialog', {});
+				return new Promise<void>(() => {});
+			},
+			{ waitForCompletion: true, token: cancellation.token },
+		);
+		assert.fail('Expected the dialog to interrupt the action.');
+	} catch (error) {
+		assert.ok(error instanceof DialogInterruptedError);
+		interruption = error;
+	}
+
+	cancellation.cancel();
+	await assert.rejects(interruption.waitForCompletion(), error => isCancellationError(error));
+	cancellation.dispose();
+});
+
+test('dialog continuation reports each later dialog before the page action settles', async () => {
+	const { page, tab } = createTab();
+	let resolveAction!: (value: string) => void;
+	const actionResult = new Promise<string>(resolve => { resolveAction = resolve; });
+	let resolveFirstDialog!: () => void;
+	page.waitForFunctionResult = new Promise<void>(resolve => { resolveFirstDialog = resolve; });
+	const action = runPageAction(tab, () => actionResult);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	page.emit('dialog', {});
+
+	let firstInterruption: DialogInterruptedError | undefined;
+	try {
+		await action;
+		assert.fail('Expected the first dialog to interrupt the action.');
+	} catch (error) {
+		assert.ok(error instanceof DialogInterruptedError);
+		firstInterruption = error;
+	}
+	const firstContinuation = firstInterruption.waitForCompletion();
+	assert.equal(firstInterruption.waitForCompletion(), firstContinuation);
+
+	let resolveSecondDialog!: () => void;
+	page.waitForFunctionResult = new Promise<void>(resolve => { resolveSecondDialog = resolve; });
+	resolveFirstDialog();
+	page.emit('dialog', {});
+
+	let secondInterruption: DialogInterruptedError | undefined;
+	try {
+		await firstContinuation;
+		assert.fail('Expected the second dialog to interrupt the continuation.');
+	} catch (error) {
+		assert.ok(error instanceof DialogInterruptedError);
+		secondInterruption = error;
+	}
+	const secondContinuation = secondInterruption.waitForCompletion();
+	resolveSecondDialog();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	resolveAction('completed after dialogs');
+
+	assert.equal(await secondContinuation, 'completed after dialogs');
 });
 
 test('PlaywrightChannel forwards IPC cancellation to lease-bound navigation and capture', async () => {

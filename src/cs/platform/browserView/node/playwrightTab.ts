@@ -7,7 +7,7 @@
 import type * as playwright from 'playwright-core';
 import { Emitter, Event } from 'cs/base/common/event';
 import { CancellationError, CancellationToken, CancellationTokenNone, isCancellationError } from 'cs/base/common/cancellation';
-import { createCancelablePromise, raceCancellablePromises, timeout } from 'cs/base/common/async';
+import { createCancelablePromise, DeferredPromise, raceTimeout } from 'cs/base/common/async';
 import { URI } from 'cs/base/common/uri';
 import { IAgentNetworkFilterService } from 'cs/platform/networkFilter/common/networkFilterService';
 import {
@@ -26,6 +26,20 @@ import {
 } from 'cs/platform/browserView/node/playwrightSnapshot';
 
 type IAiAriaSnapshotOptions = NonNullable<Parameters<playwright.Locator['ariaSnapshot']>[0]> & { _track?: string };
+
+interface IPageLog {
+	readonly type: string;
+	readonly time: number;
+	readonly description: string;
+}
+
+interface IPendingInitialLog {
+	readonly key?: string;
+	readonly log: IPageLog;
+}
+
+const REQUEST_COMPLETION_TIMEOUT_MS = 5000;
+const REQUEST_COMPLETION_RESOURCE_TYPES = new Set(['document', 'stylesheet', 'script', 'xhr', 'fetch']);
 
 interface IPageSnapshotCapture {
 	readonly uri: string;
@@ -56,9 +70,15 @@ function isInvalidSelectorError(error: unknown): boolean {
  * handle the dialog before retrying.
  */
 export class DialogInterruptedError extends Error {
-	constructor() {
+	private completion: Promise<unknown> | undefined;
+
+	constructor(private readonly completionFactory: () => Promise<unknown>) {
 		super('Action was interrupted by a dialog');
 		this.name = 'DialogInterruptedError';
+	}
+
+	waitForCompletion(): Promise<unknown> {
+		return this.completion ??= this.completionFactory();
 	}
 }
 
@@ -72,11 +92,14 @@ export class PlaywrightTab {
 	private _onDialogStateChanged = new Emitter<void>();
 
 	private _dialog: playwright.Dialog | undefined;
+	private _dialogObservationError: Error | undefined;
 	private _fileChooser: playwright.FileChooser | undefined;
-	private _logs: { type: string; time: number; description: string }[] = [];
+	private _logs: IPageLog[] = [];
+	private _historyInitialized = false;
+	private readonly _pendingInitialLogs: IPendingInitialLog[] = [];
 	private _needsFullSnapshot = false;
 
-	private _initialized: Promise<void>;
+	private _initialized: Promise<void> | undefined;
 
 	constructor(
 		/**
@@ -86,35 +109,113 @@ export class PlaywrightTab {
 		private readonly page: playwright.Page,
 		private readonly agentNetworkFilterService: IAgentNetworkFilterService,
 	) {
-		page.on('console', event => this._handleConsoleMessage(event))
-			.on('pageerror', error => this._handlePageError(error))
+		page.on('console', event => this._recordConsoleMessage(event))
+			.on('pageerror', error => this._recordPageError(error))
 			.on('requestfailed', request => this._handleRequestFailed(request))
 			.on('dialog', dialog => this._handleDialog(dialog))
 			.on('download', download => this._handleDownload(download));
-
-		this._initialized = this._initialize();
 	}
 
 	private async _initialize() {
-		const messages = await this.page.consoleMessages().catch(() => []);
-		for (const message of messages) { this._handleConsoleMessage(message); }
-		const errors = await this.page.pageErrors().catch(() => []);
-		for (const error of errors) { this._handlePageError(error); }
+		const [messages, errors] = await Promise.all([
+			this.page.consoleMessages(),
+			this.page.pageErrors(),
+		]);
+		const historyOccurrences = new Map<string, number>();
+		for (const message of messages) {
+			if (!this._shouldLogConsoleMessage(message)) {
+				continue;
+			}
+			this._addHistoryOccurrence(historyOccurrences, this._consoleMessageKey(message));
+			this._handleConsoleMessage(message);
+		}
+		for (const error of errors) {
+			this._addHistoryOccurrence(historyOccurrences, this._pageErrorKey(error));
+			this._handlePageError(error);
+		}
+		this._historyInitialized = true;
+		for (const pending of this._pendingInitialLogs) {
+			if (pending.key !== undefined) {
+				const occurrenceCount = historyOccurrences.get(pending.key) ?? 0;
+				if (occurrenceCount > 0) {
+					historyOccurrences.set(pending.key, occurrenceCount - 1);
+					continue;
+				}
+			}
+			this._logs.push(pending.log);
+		}
+		this._pendingInitialLogs.length = 0;
+	}
+
+	private _addHistoryOccurrence(occurrences: Map<string, number>, key: string): void {
+		occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+	}
+
+	private _consoleMessageKey(message: playwright.ConsoleMessage): string {
+		return JSON.stringify(['console', message.type(), message.timestamp(), message.text()]);
+	}
+
+	private _pageErrorKey(error: Error): string {
+		return JSON.stringify(['pageError', error.name, error.message, error.stack]);
+	}
+
+	private _shouldLogConsoleMessage(message: playwright.ConsoleMessage): boolean {
+		return message.type() === 'error' || message.type() === 'warning';
+	}
+
+	private _recordConsoleMessage(message: playwright.ConsoleMessage): void {
+		if (!this._shouldLogConsoleMessage(message)) {
+			return;
+		}
+		if (!this._historyInitialized) {
+			this._pendingInitialLogs.push({
+				key: this._consoleMessageKey(message),
+				log: this._createConsoleLog(message),
+			});
+			return;
+		}
+		this._handleConsoleMessage(message);
+	}
+
+	private _recordPageError(error: Error): void {
+		if (!this._historyInitialized) {
+			this._pendingInitialLogs.push({
+				key: this._pageErrorKey(error),
+				log: this._createPageErrorLog(error),
+			});
+			return;
+		}
+		this._handlePageError(error);
 	}
 
 	private _handleDialog(dialog: playwright.Dialog) {
 		this._dialog = dialog;
 		// Playwright doesn't give us an event for when a dialog is closed, so we run a no-op script to know when it closes.
-		this.page.waitForFunction(() => true, undefined, { timeout: 0 }).then(() => {
-			if (this._dialog === dialog) {
-				this._dialog = undefined;
-				this._onDialogStateChanged.fire();
-			}
-		});
+		void this._waitForDialogClose(dialog);
 		this._onDialogStateChanged.fire();
 	}
 
+	private async _waitForDialogClose(dialog: playwright.Dialog): Promise<void> {
+		try {
+			await this.page.waitForFunction(() => true, undefined, { timeout: 0 });
+		} catch (error) {
+			const observationError = error instanceof Error ? error : new Error(String(error));
+			this._handlePageError(observationError);
+			if (this._dialog === dialog) {
+				this._dialog = undefined;
+				this._dialogObservationError = observationError;
+				this._onDialogStateChanged.fire();
+			}
+			return;
+		}
+		if (this._dialog === dialog) {
+			this._dialog = undefined;
+			this._onDialogStateChanged.fire();
+		}
+	}
+
 	async replyToDialog(accept?: boolean, promptText?: string) {
+		this._throwDialogObservationError();
 		if (!this._dialog) {
 			throw new Error('No active modal dialog to respond to');
 		}
@@ -146,23 +247,37 @@ export class PlaywrightTab {
 		);
 	}
 
-	private async _handleDownload(download: playwright.Download) {
-		this._logs.push({ type: 'download', time: Date.now(), description: `${download.suggestedFilename()}` });
+	private _handleDownload(download: playwright.Download): void {
+		this._recordUnmatchedLog({ type: 'download', time: Date.now(), description: `${download.suggestedFilename()}` });
 	}
 
 	private _handleRequestFailed(request: playwright.Request) {
 		const timing = request.timing();
-		this._logs.push({ type: 'requestFailed', time: timing.responseEnd + timing.startTime, description: `${request.method()} request to ${request.url()} failed: "${request.failure()?.errorText}"` });
+		this._recordUnmatchedLog({ type: 'requestFailed', time: timing.responseEnd + timing.startTime, description: `${request.method()} request to ${request.url()} failed: "${request.failure()?.errorText}"` });
+	}
+
+	private _recordUnmatchedLog(log: IPageLog): void {
+		if (!this._historyInitialized) {
+			this._pendingInitialLogs.push({ log });
+			return;
+		}
+		this._logs.push(log);
 	}
 
 	private _handleConsoleMessage(message: playwright.ConsoleMessage) {
-		if (message.type() === 'error' || message.type() === 'warning') {
-			this._logs.push({ type: 'console', time: message.timestamp(), description: `[${message.type()}] ${message.text()}` });
-		}
+		this._logs.push(this._createConsoleLog(message));
 	}
 
 	private _handlePageError(error: Error) {
-		this._logs.push({ type: 'pageError', time: Date.now(), description: error.stack ?? error.message });
+		this._logs.push(this._createPageErrorLog(error));
+	}
+
+	private _createConsoleLog(message: playwright.ConsoleMessage): IPageLog {
+		return { type: 'console', time: message.timestamp(), description: `[${message.type()}] ${message.text()}` };
+	}
+
+	private _createPageErrorLog(error: Error): IPageLog {
+		return { type: 'pageError', time: Date.now(), description: error.stack ?? error.message };
 	}
 
 	/**
@@ -174,9 +289,8 @@ export class PlaywrightTab {
 		if (!url || url === 'about:blank') {
 			return undefined;
 		}
-		let uri: URI | undefined;
-		try { uri = URI.parse(url); } catch { }
-		if (uri && !this.agentNetworkFilterService.isUriAllowed(uri)) {
+		const uri = URI.parse(url, true);
+		if (!this.agentNetworkFilterService.isUriAllowed(uri)) {
 			return this.agentNetworkFilterService.formatError(uri);
 		}
 		return undefined;
@@ -198,6 +312,7 @@ export class PlaywrightTab {
 		if (options.token.isCancellationRequested) {
 			throw new CancellationError();
 		}
+		this._throwDialogObservationError();
 		if (this._dialog) {
 			throw new Error(`Cannot perform action while a dialog is open`);
 		}
@@ -208,11 +323,7 @@ export class PlaywrightTab {
 			throw new Error(blockedError);
 		}
 
-		let actionDidComplete = false;
 		let result: T | void;
-		let resolveDialogOpened: (() => void) | undefined;
-		const dialogOpened = new Promise<void>(resolve => { resolveDialogOpened = resolve; });
-		const dialogListener = Event.once(this._onDialogStateChanged.event)(() => resolveDialogOpened?.());
 		const actionCompleted = createCancelablePromise(async (token) => {
 
 			// Whenever the page has a `filechooser` handler, the default file chooser is disabled.
@@ -228,27 +339,94 @@ export class PlaywrightTab {
 					token,
 					options.waitForCompletion,
 				);
-				actionDidComplete = true;
 			} finally {
 				this.page.off('filechooser', handleFileChooser);
 			}
 		});
 		const cancellationListener = options.token.onCancellationRequested(() => actionCompleted.cancel());
-
-		try {
-			await raceCancellablePromises([dialogOpened, actionCompleted]);
-			if (!actionDidComplete) {
-				throw new DialogInterruptedError();
-			}
-			return result!;
-		} finally {
+		type ActionSettlement =
+			| { readonly kind: 'fulfilled'; readonly result: T }
+			| { readonly kind: 'rejected'; readonly error: unknown };
+		let actionSettlement: ActionSettlement | undefined;
+		const actionSettled = new Emitter<void>();
+		const settleAction = (settlement: ActionSettlement): void => {
+			actionSettlement = settlement;
 			cancellationListener.dispose();
-			dialogListener.dispose();
-		}
+			actionSettled.fire();
+			actionSettled.dispose();
+		};
+		void actionCompleted.then(
+			() => settleAction({ kind: 'fulfilled', result: result as T }),
+			error => settleAction({ kind: 'rejected', error }),
+		);
+
+		const readActionSettlement = (): T => {
+			if (!actionSettlement) {
+				throw new Error('Page action has not settled.');
+			}
+			if (actionSettlement.kind === 'rejected') {
+				throw actionSettlement.error;
+			}
+			return actionSettlement.result;
+		};
+
+		const throwDialogObservationError = (): void => {
+			if (this._dialogObservationError) {
+				actionCompleted.cancel();
+			}
+			this._throwDialogObservationError();
+		};
+
+		const waitForStateChange = async (hasStateChanged: () => boolean): Promise<void> => {
+			const stateChanged = new DeferredPromise<void>();
+			const dialogListener = Event.once(this._onDialogStateChanged.event)(() => stateChanged.complete());
+			const actionListener = Event.once(actionSettled.event)(() => stateChanged.complete());
+			if (actionSettlement || this._dialogObservationError || hasStateChanged()) {
+				stateChanged.complete();
+			}
+			try {
+				await stateChanged.p;
+			} finally {
+				dialogListener.dispose();
+				actionListener.dispose();
+			}
+		};
+
+		let waitForActionOrDialog: () => Promise<T>;
+		const waitForDialogToChange = async (dialog: playwright.Dialog): Promise<T> => {
+			while (this._dialog === dialog && !actionSettlement) {
+				await waitForStateChange(() => this._dialog !== dialog);
+			}
+			if (actionSettlement) {
+				return readActionSettlement();
+			}
+			throwDialogObservationError();
+			return waitForActionOrDialog();
+		};
+
+		waitForActionOrDialog = async (): Promise<T> => {
+			while (true) {
+				throwDialogObservationError();
+				const dialog = this._dialog;
+				if (dialog) {
+					throw new DialogInterruptedError(() => waitForDialogToChange(dialog));
+				}
+				if (actionSettlement) {
+					return readActionSettlement();
+				}
+
+				await waitForStateChange(() => this._dialog !== undefined);
+				if (actionSettlement) {
+					return readActionSettlement();
+				}
+			}
+		};
+
+		return waitForActionOrDialog();
 	}
 
 	async getSummary(full = this._needsFullSnapshot): Promise<string> {
-		await this._initialized;
+		await (this._initialized ??= this._initialize());
 
 		// When the current page URL is blocked by network policy, return only a
 		// policy error — do not expose title, URL, console logs, or snapshot to
@@ -257,34 +435,58 @@ export class PlaywrightTab {
 		if (blockedError) {
 			return blockedError;
 		}
+		this._throwDialogObservationError();
+		if (this._dialog) {
+			this._needsFullSnapshot = true;
+			const logs = this._logs;
+			this._logs = [];
+			return [
+				`URL: ${this.page.url()}`,
+				`Active ${this._dialog.type()} dialog: "${this._dialog.message()}"`,
+				...(logs.length > 0 ? [
+					`Recent events:`,
+					...logs.map(log => `- [${new Date(log.time).toISOString()}] (${log.type}) ${log.description}`),
+				] : []),
+				`Snapshot: <blocked by active dialog>`,
+			].join('\n');
+		}
 
 		if (full && this._needsFullSnapshot) {
 			this._needsFullSnapshot = false;
 		}
 
-		const pageActionOptions = { waitForCompletion: true, token: CancellationTokenNone };
-		const snapshotFromPage = await this.safeRunAgainstPage((page) => this.getAiSnapshot(page, full), pageActionOptions).catch(() => {
+		let snapshotFromPage: string;
+		let title: string;
+		try {
+			const pageActionOptions = { waitForCompletion: true, token: CancellationTokenNone };
+			snapshotFromPage = await this.safeRunAgainstPage((page) => this.getAiSnapshot(page, full), pageActionOptions);
+			title = await this.safeRunAgainstPage((page) => page.title(), pageActionOptions);
+		} catch (error) {
 			this._needsFullSnapshot = true;
-			return undefined;
-		});
-		const title = await this.safeRunAgainstPage((page) => page.title(), pageActionOptions).catch(() => '');
+			throw error;
+		}
 
 		const logs = this._logs;
 		this._logs = [];
 
-		const snapshot = snapshotFromPage?.trim() ?? '';
+		const snapshot = snapshotFromPage.trim();
 
 		return [
 			...(title ? [`Page Title: ${title}`] : []),
 			`URL: ${this.page.url()}`,
-			...(this._dialog ? [`Active ${this._dialog.type()} dialog: "${this._dialog.message()}"`] : []),
 			...(this._fileChooser ? [`Active file chooser dialog`] : []),
 			...(logs.length > 0 ? [
 				`Recent events:`,
 				...logs.map(log => `- [${new Date(log.time).toISOString()}] (${log.type}) ${log.description}`)
 			] : []),
-			`Snapshot: ${snapshotFromPage !== undefined ? snapshot ? `\n${snapshot}` : '<unchanged>' : '<unavailable>'}`,
+			`Snapshot: ${snapshot ? `\n${snapshot}` : '<unchanged>'}`,
 		].join('\n');
+	}
+
+	private _throwDialogObservationError(): void {
+		if (this._dialogObservationError) {
+			throw this._dialogObservationError;
+		}
 	}
 
 	async captureSnapshot(
@@ -426,25 +628,29 @@ export class PlaywrightTab {
 
 		const requestedNavigation = requests.some(request => request.isNavigationRequest());
 		if (requestedNavigation) {
-			await this.page.mainFrame().waitForLoadState('load', { timeout: 10000 }).catch(() => { });
+			await this.page.mainFrame().waitForLoadState('load', { timeout: 10000 });
 			return result;
 		}
 
-		const promises: Promise<unknown>[] = [];
-		for (const request of requests) {
-			if (['document', 'stylesheet', 'script', 'xhr', 'fetch'].includes(request.resourceType())) { promises.push(request.response().then(r => r?.finished()).catch(() => { })); }
-			else { promises.push(request.response().catch(() => { })); }
-		}
-		const pageCompletion = raceCancellablePromises<unknown>([
-			Promise.all(promises),
-			timeout(5000) // Don't wait indefinitely for requests to finish
-		]);
-		try {
-			await pageCompletion;
-		} finally {
-			pageCompletion.cancel();
+		const completion = await raceTimeout(
+			Promise.all(requests.map(request => this.waitForRequestCompletion(request))),
+			REQUEST_COMPLETION_TIMEOUT_MS,
+		);
+		if (completion === undefined) {
+			throw new Error(`Timed out after ${REQUEST_COMPLETION_TIMEOUT_MS} ms waiting for page requests to finish.`);
 		}
 
 		return result;
+	}
+
+	private async waitForRequestCompletion(request: playwright.Request): Promise<void> {
+		const response = await request.response();
+		if (!response || !REQUEST_COMPLETION_RESOURCE_TYPES.has(request.resourceType())) {
+			return;
+		}
+		const completionError = await response.finished();
+		if (completionError) {
+			throw completionError;
+		}
 	}
 }
