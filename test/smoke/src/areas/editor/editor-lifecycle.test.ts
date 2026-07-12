@@ -52,6 +52,11 @@ type PlaywrightSmokeSnapshot = {
 	readonly containsHeading: boolean;
 	readonly cancellationRejected: boolean;
 	readonly deferredFunctionStarted: boolean;
+	readonly deferredInitialSummaryError: boolean;
+	readonly deferredRepeatedSameId: boolean;
+	readonly deferredConcurrentWaitRejected: boolean;
+	readonly deferredTerminalCompleted: boolean;
+	readonly deferredResultDeleted: boolean;
 	readonly lifecycleCommandRejected: boolean;
 };
 
@@ -317,11 +322,38 @@ async function captureAndBlockPlaywrightSnapshot(
 	code: Code,
 	targetId: string,
 ): Promise<PlaywrightSmokeSnapshot> {
+	const deferredResolverProperty = '__cometSmokeDeferredResolver';
+	const deferredSummaryError = 'Comet smoke controlled summary failure.';
+	const deferredResult = 'Comet smoke controlled deferred result.';
+	const controlledDeferredFunction = `async page => {
+		Object.defineProperty(page, 'ariaSnapshot', {
+			configurable: true,
+			value: async () => { throw new Error(${JSON.stringify(deferredSummaryError)}); },
+		});
+		return new Promise(resolve => {
+			Object.defineProperty(page, ${JSON.stringify(deferredResolverProperty)}, {
+				configurable: true,
+				value: resolve,
+			});
+		});
+	}`;
+	const releaseDeferredFunction = `async page => {
+		const resolveDeferred = page[${JSON.stringify(deferredResolverProperty)}];
+		if (typeof resolveDeferred !== 'function') {
+			throw new Error('Comet smoke deferred resolver is unavailable.');
+		}
+		delete page[${JSON.stringify(deferredResolverProperty)}];
+		delete page.ariaSnapshot;
+		resolveDeferred(${JSON.stringify(deferredResult)});
+	}`;
 	return code.evaluate<PlaywrightSmokeSnapshot>(`(async () => {
 		const ipc = window.electronAPI.ipc;
 		if (!ipc) {
 			throw new Error('Electron IPC is unavailable.');
 		}
+		const errorMessage = error => error instanceof Error
+			? error.message
+			: typeof error?.message === 'string' ? error.message : String(error);
 		const lifecycleCommandRejected = await ipc.call('playwright', 'shutdown').then(
 			() => false,
 			() => true,
@@ -351,10 +383,57 @@ async function captureAndBlockPlaywrightSnapshot(
 		const deferredFunction = await ipc.call('playwright', 'invokeFunction', [
 			'editor-lifecycle-smoke',
 			${JSON.stringify(targetId)},
-			'async page => page.evaluate(() => new Promise(() => {}))',
+			${JSON.stringify(controlledDeferredFunction)},
 			[],
 			10,
 		]);
+		const deferredResultId = deferredFunction.deferredResultId;
+		if (typeof deferredResultId !== 'string') {
+			throw new Error('Controlled Playwright function was not deferred.');
+		}
+		const deferredInitialSummaryError = deferredFunction.summary === undefined
+			&& typeof deferredFunction.summaryError === 'string'
+			&& deferredFunction.summaryError.includes(${JSON.stringify(deferredSummaryError)});
+		const repeatedDeferred = await ipc.call('playwright', 'waitForDeferredResult', [
+			'editor-lifecycle-smoke',
+			deferredResultId,
+			10,
+		]);
+		const deferredRepeatedSameId = repeatedDeferred.deferredResultId === deferredResultId
+			&& repeatedDeferred.summary === undefined
+			&& typeof repeatedDeferred.summaryError === 'string'
+			&& repeatedDeferred.summaryError.includes(${JSON.stringify(deferredSummaryError)});
+		const concurrentWaits = [0, 1].map(() => ipc.call('playwright', 'waitForDeferredResult', [
+			'editor-lifecycle-smoke',
+			deferredResultId,
+			5000,
+		]).then(
+			value => ({ status: 'fulfilled', value }),
+			error => ({ status: 'rejected', message: errorMessage(error) }),
+		));
+		const firstConcurrentOutcome = await Promise.race(concurrentWaits);
+		const deferredConcurrentWaitRejected = firstConcurrentOutcome.status === 'rejected'
+			&& firstConcurrentOutcome.message.includes('already being awaited');
+		await ipc.call('playwright', 'invokeFunctionRaw', [
+			'editor-lifecycle-smoke',
+			${JSON.stringify(targetId)},
+			${JSON.stringify(releaseDeferredFunction)},
+		]);
+		const concurrentOutcomes = await Promise.all(concurrentWaits);
+		const terminalOutcome = concurrentOutcomes.find(outcome => outcome.status === 'fulfilled');
+		const deferredTerminalCompleted = terminalOutcome?.status === 'fulfilled'
+			&& terminalOutcome.value.result === ${JSON.stringify(deferredResult)}
+			&& terminalOutcome.value.deferredResultId === undefined
+			&& typeof terminalOutcome.value.summary === 'string'
+			&& terminalOutcome.value.summaryError === undefined;
+		const deferredResultDeleted = await ipc.call('playwright', 'waitForDeferredResult', [
+			'editor-lifecycle-smoke',
+			deferredResultId,
+			10,
+		]).then(
+			() => false,
+			error => errorMessage(error).includes('No deferred result found'),
+		);
 		globalThis.__cometBlockedPlaywrightSnapshot = ipc.call(
 			'playwright',
 			'captureSnapshot',
@@ -366,13 +445,18 @@ async function captureAndBlockPlaywrightSnapshot(
 			'editor-lifecycle-blocked-snapshot',
 		).then(
 			() => ({ status: 'fulfilled' }),
-			error => ({ status: 'rejected', message: error instanceof Error ? error.message : String(error) }),
+			error => ({ status: 'rejected', message: errorMessage(error) }),
 		);
 		return {
 			title: snapshot.title,
 			containsHeading: snapshot.html.includes('Editor Lifecycle Smoke'),
 			cancellationRejected,
 			deferredFunctionStarted: typeof deferredFunction.deferredResultId === 'string',
+			deferredInitialSummaryError,
+			deferredRepeatedSameId,
+			deferredConcurrentWaitRejected,
+			deferredTerminalCompleted,
+			deferredResultDeleted,
 			lifecycleCommandRejected,
 		};
 	})()`);
@@ -678,6 +762,11 @@ suite('Editor lifecycle smoke', function() {
 		assert.equal(playwrightSnapshot.containsHeading, true);
 		assert.equal(playwrightSnapshot.cancellationRejected, true);
 		assert.equal(playwrightSnapshot.deferredFunctionStarted, true);
+		assert.equal(playwrightSnapshot.deferredInitialSummaryError, true);
+		assert.equal(playwrightSnapshot.deferredRepeatedSameId, true);
+		assert.equal(playwrightSnapshot.deferredConcurrentWaitRejected, true);
+		assert.equal(playwrightSnapshot.deferredTerminalCompleted, true);
+		assert.equal(playwrightSnapshot.deferredResultDeleted, true);
 		assert.equal(playwrightSnapshot.lifecycleCommandRejected, true);
 		await code.wait(300);
 

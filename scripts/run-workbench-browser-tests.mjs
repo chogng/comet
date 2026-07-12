@@ -501,6 +501,16 @@ const entryPoints = [
     'browserView',
     'test',
     'node',
+    'playwrightServiceDeferral.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'platform',
+    'browserView',
+    'test',
+    'node',
     'playwrightServiceLifecycle.test.ts',
   ),
   path.join(
