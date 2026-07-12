@@ -220,17 +220,17 @@ function createTestKeybindingService(): IKeybindingServiceType {
 
 function createTestMainProcessService(): IMainProcessService {
 	const browserViewChannel: IChannel = {
-		async call(command) {
+		async call<T>(command: string): Promise<T> {
 			switch (command) {
 				case 'getBrowserViews':
-					return [];
+					return [] as T;
 				case 'updateWindowConfiguration':
-					return undefined;
+					return undefined as T;
 				default:
 					throw new Error(`Unexpected BrowserView channel call '${command}'.`);
 			}
 		},
-		listen(event) {
+		listen<T>(event: string): BaseEvent<T> {
 			if (event !== 'onDidCreateBrowserView') {
 				throw new Error(`Unexpected BrowserView channel event '${event}'.`);
 			}
@@ -935,19 +935,19 @@ test('browser history service restores, limits, persists, and disables global hi
 test('BrowserView service subscribes during construction and opens created views in the addressed editor group', async () => {
 	const onDidCreateBrowserView = new Emitter<IBrowserViewCreatedEvent>();
 	const browserViewChannel: IChannel = {
-		async call(command) {
+		async call<T>(command: string): Promise<T> {
 			switch (command) {
 				case 'getBrowserViews':
-					return [];
+					return [] as T;
 				case 'updateWindowConfiguration':
-					return undefined;
+					return undefined as T;
 				default:
 					throw new Error(`Unexpected BrowserView channel call '${command}'.`);
 			}
 		},
-		listen(event) {
+		listen<T>(event: string): BaseEvent<T> {
 			if (event === 'onDidCreateBrowserView') {
-				return onDidCreateBrowserView.event;
+				return onDidCreateBrowserView.event as BaseEvent<T>;
 			}
 			if (event.startsWith('onDynamicDid')) {
 				return BaseEvent.None;
@@ -955,7 +955,17 @@ test('BrowserView service subscribes during construction and opens created views
 			throw new Error(`Unexpected BrowserView channel event '${event}'.`);
 		},
 	};
-	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const configurationService = new ConfigurationService();
+	const keybindingService = createTestKeybindingService();
+	const themeService = createTestThemeService();
+	const logService = createTestLogService();
+	const storageService = createTestStorageService();
+	const serviceCollection = new ServiceCollection(
+		[IThemeService, themeService],
+		[ITelemetryService, createTestTelemetryService()],
+		[ILogService, logService],
+		[IBrowserZoomService, createTestBrowserZoomService()],
+	);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const opened: Array<{
 		readonly editor: BrowserEditorInput;
@@ -984,11 +994,11 @@ test('BrowserView service subscribes during construction and opens created views
 			registerChannel() {},
 		},
 		instantiationService,
-		serviceCollection.get(IConfigurationService)!,
-		serviceCollection.get(IKeybindingService)!,
-		serviceCollection.get(IThemeService)!,
-		serviceCollection.get(ILogService)!,
-		serviceCollection.get(IStorageService)!,
+		configurationService,
+		keybindingService,
+		themeService,
+		logService,
+		storageService,
 		editorService,
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, service);
@@ -1264,19 +1274,23 @@ test('browser editor publishes BrowserView scroll state through the Pane view-st
 test('browser editor retries unreachable view state when the page reports unchanged scroll coordinates', async () => {
 	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);
-	const viewState = {
+	const restoredViewState = {
 		url: 'https://example.com/delayed-content',
 		scrollX: 0,
 		scrollY: 930,
 	};
-	const viewStateEmitter = new Emitter<typeof viewState>();
-	const restoreRequests: Array<typeof viewState> = [];
+	const observedViewState = {
+		...restoredViewState,
+		scrollY: 0,
+	};
+	const viewStateEmitter = new Emitter<typeof restoredViewState>();
+	const restoreRequests: Array<typeof restoredViewState> = [];
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,
 		(id, state) => ({
 			...createTestBrowserViewModel(id, state),
 			visible: true,
-			viewState,
+			viewState: observedViewState,
 			onDidChangeViewState: viewStateEmitter.event,
 			restoreViewState: async restoredViewState => {
 				restoreRequests.push(restoredViewState);
@@ -1289,7 +1303,7 @@ test('browser editor retries unreachable view state when the page reports unchan
 		serviceCollection,
 		instantiationService,
 		browserViewWorkbenchService,
-		{ id: 'delayed-view-state-browser', title: 'Delayed View State', url: viewState.url },
+		{ id: 'delayed-view-state-browser', title: 'Delayed View State', url: restoredViewState.url },
 	);
 
 	try {
@@ -1306,18 +1320,18 @@ test('browser editor retries unreachable view state when the page reports unchan
 			left: 0,
 			toJSON: () => ({}),
 		});
-		editor.restoreViewState(viewState);
+		editor.restoreViewState(restoredViewState);
 		editor.setVisible(true);
 		await editor.layoutBrowserContainer();
 		await Promise.resolve();
-		assert.deepEqual(restoreRequests, [viewState]);
+		assert.deepEqual(restoreRequests, [restoredViewState]);
 
-		viewStateEmitter.fire(viewState);
+		viewStateEmitter.fire(observedViewState);
 		await Promise.resolve();
-		assert.deepEqual(restoreRequests, [viewState, viewState]);
+		assert.deepEqual(restoreRequests, [restoredViewState, restoredViewState]);
 
-		viewStateEmitter.fire(viewState);
-		assert.deepEqual(restoreRequests, [viewState, viewState]);
+		viewStateEmitter.fire(observedViewState);
+		assert.deepEqual(restoreRequests, [restoredViewState, restoredViewState]);
 	} finally {
 		editor.dispose();
 		instantiationService.dispose();
