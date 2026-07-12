@@ -12,7 +12,9 @@ interface IMessagePortLike {
 	postMessage(message: unknown): void;
 	start(): void;
 	close(): void;
+	on(event: 'close', listener: () => void): void;
 	on(event: 'message', listener: (event: { data: unknown }) => void): void;
+	off(event: 'close', listener: () => void): void;
 	off(event: 'message', listener: (event: { data: unknown }) => void): void;
 }
 
@@ -56,6 +58,7 @@ export class MessagePortChannel extends Disposable {
 	private readonly pendingCalls = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
 	private readonly eventEmitters = new Map<number, EventEmitter<unknown>>();
 	private nextRequestId = 0;
+	private disconnected = false;
 
 	constructor(
 		private readonly port: IMessagePortLike,
@@ -63,10 +66,12 @@ export class MessagePortChannel extends Disposable {
 	) {
 		super();
 		this.port.on('message', this.onMessage);
+		this.port.on('close', this.onClose);
 		this.port.start();
 	}
 
 	registerChannel(channelName: string, channel: IServerChannel<string>): void {
+		this.assertConnected();
 		if (this.channels.has(channelName)) {
 			throw new Error(`IPC channel "${channelName}" is already registered.`);
 		}
@@ -83,6 +88,7 @@ export class MessagePortChannel extends Disposable {
 	}
 
 	private call<T>(channelName: string, name: string, arg: unknown, token: CancellationToken): Promise<T> {
+		this.assertConnected();
 		const id = this.nextRequestId++;
 		return new Promise<T>((resolve, reject) => {
 			const cancellation = token.onCancellationRequested(() => {
@@ -105,6 +111,7 @@ export class MessagePortChannel extends Disposable {
 				this.port.postMessage({ type: 'call', id, channelName, name, arg } satisfies Request);
 			} catch (error) {
 				this.pendingCalls.delete(id);
+				cancellation.dispose();
 				reject(asError(error));
 			}
 		});
@@ -112,20 +119,34 @@ export class MessagePortChannel extends Disposable {
 
 	private listen<T>(channelName: string, name: string, arg: unknown): Event<T> {
 		return listener => {
+			this.assertConnected();
 			const id = this.nextRequestId++;
 			const emitter = new EventEmitter<unknown>();
 			this.eventEmitters.set(id, emitter);
 			const subscription = emitter.event(value => listener(value as T));
-			this.port.postMessage({ type: 'listen', id, channelName, name, arg } satisfies Request);
+			try {
+				this.port.postMessage({ type: 'listen', id, channelName, name, arg } satisfies Request);
+			} catch (error) {
+				subscription.dispose();
+				this.eventEmitters.delete(id);
+				emitter.dispose();
+				throw asError(error);
+			}
 			return toDisposable(() => {
 				subscription.dispose();
 				const removedEmitter = this.eventEmitters.get(id);
 				this.eventEmitters.delete(id);
 				removedEmitter?.dispose();
-				this.port.postMessage({ type: 'dispose', id } satisfies Request);
+				if (!this.disconnected) {
+					this.port.postMessage({ type: 'dispose', id } satisfies Request);
+				}
 			});
 		};
 	}
+
+	private readonly onClose = () => {
+		this.disconnect(new Error('Message port closed by the remote endpoint.'));
+	};
 
 	private readonly onMessage = (event: { data: unknown }) => {
 		const message = event.data;
@@ -140,6 +161,9 @@ export class MessagePortChannel extends Disposable {
 	};
 
 	private async handleRequest(request: Request): Promise<void> {
+		if (this.disconnected) {
+			return;
+		}
 		if (request.type === 'dispose') {
 			const activeListener = this.activeListeners.get(request.id);
 			this.activeListeners.delete(request.id);
@@ -162,17 +186,23 @@ export class MessagePortChannel extends Disposable {
 				const value = await channel.call(this.context, request.name, request.arg, cancellation.token);
 				this.activeCalls.delete(request.id);
 				cancellation.dispose();
-				this.port.postMessage({ type: 'result', id: request.id, value } satisfies Response);
+				if (!this.disconnected) {
+					this.port.postMessage({ type: 'result', id: request.id, value } satisfies Response);
+				}
 				return;
 			}
 			this.activeListeners.set(request.id, channel.listen(this.context, request.name, request.arg)(value => {
-				this.port.postMessage({ type: 'event', id: request.id, value } satisfies Response);
+				if (!this.disconnected) {
+					this.port.postMessage({ type: 'event', id: request.id, value } satisfies Response);
+				}
 			}));
 		} catch (error) {
 			const activeCall = this.activeCalls.get(request.id);
 			this.activeCalls.delete(request.id);
 			activeCall?.dispose();
-			this.postError(request.id, asError(error));
+			if (!this.disconnected) {
+				this.postError(request.id, asError(error));
+			}
 		}
 	}
 
@@ -204,25 +234,87 @@ export class MessagePortChannel extends Disposable {
 		} satisfies Response);
 	}
 
-	override dispose(): void {
+	disconnect(error: Error): void {
+		this.terminate(error, false);
+	}
+
+	private assertConnected(): void {
+		if (this.disconnected) {
+			throw new Error('Message port is disconnected.');
+		}
+	}
+
+	private terminate(error: Error, closePort: boolean): void {
+		if (this.disconnected) {
+			return;
+		}
+		this.disconnected = true;
+		const cleanupErrors: unknown[] = [];
 		for (const pending of this.pendingCalls.values()) {
-			pending.reject(new Error('Message port was disposed.'));
+			try {
+				pending.reject(error);
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
 		}
 		this.pendingCalls.clear();
 		for (const listener of this.activeListeners.values()) {
-			listener.dispose();
+			try {
+				listener.dispose();
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
 		}
 		this.activeListeners.clear();
 		for (const cancellation of this.activeCalls.values()) {
-			cancellation.dispose();
+			try {
+				cancellation.cancel();
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
+			try {
+				cancellation.dispose();
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
 		}
 		this.activeCalls.clear();
+		this.channels.clear();
 		for (const emitter of this.eventEmitters.values()) {
-			emitter.dispose();
+			try {
+				emitter.dispose();
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
 		}
 		this.eventEmitters.clear();
-		this.port.off('message', this.onMessage);
-		this.port.close();
-		super.dispose();
+		try {
+			this.port.off('message', this.onMessage);
+			this.port.off('close', this.onClose);
+		} catch (cleanupError) {
+			cleanupErrors.push(cleanupError);
+		}
+		if (closePort) {
+			try {
+				this.port.close();
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
+		}
+		try {
+			super.dispose();
+		} catch (cleanupError) {
+			cleanupErrors.push(cleanupError);
+		}
+		if (cleanupErrors.length === 1) {
+			throw cleanupErrors[0];
+		}
+		if (cleanupErrors.length > 1) {
+			throw new AggregateError(cleanupErrors, 'Failed to terminate message port IPC resources.');
+		}
+	}
+
+	override dispose(): void {
+		this.terminate(new Error('Message port was disposed.'), true);
 	}
 }

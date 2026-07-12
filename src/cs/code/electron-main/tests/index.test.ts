@@ -1,4 +1,5 @@
 import './configurationService.test';
+import '../../../base/parts/ipc/test/common/messagePortIpc.test';
 import '../../../platform/browserView/test/common/cdpProxy.test';
 import '../../../platform/browserView/test/electron-main/browserViewDebugger.test';
 import '../../../platform/browserView/test/electron-main/browserViewViewState.test';
