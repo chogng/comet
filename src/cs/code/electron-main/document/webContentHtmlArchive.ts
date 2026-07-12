@@ -1,19 +1,26 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { load } from 'cheerio';
 
 import type {
-  WebContentHtmlArchivePayload,
-  WebContentHtmlArchiveResult,
+	WebContentHtmlArchivePayload,
+	WebContentHtmlArchiveResult,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type { CancellationToken } from 'cs/base/common/cancellation';
 import { cleanText } from 'cs/base/common/strings';
-import { normalizeUrl } from 'cs/base/common/url';
-import { appError } from 'cs/base/parts/sandbox/common/appError';
 import { buildPdfDirectoryName } from 'cs/platform/download/common/pdfFileName';
-import { BrowserViewErrorCode } from 'cs/platform/browserView/common/browserView';
+import type { IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
-import { resolveActiveWebContentSnapshotHtml } from 'cs/code/electron-main/pdf/webContentSnapshot';
+import {
+	canonicalizeWebContentArchiveUrl,
+	captureWebContentArchiveSnapshot,
+} from 'cs/code/electron-main/document/webContentArchiveSnapshot';
 
 function resolveSourceHostLabel(sourceUrl: string) {
   try {
@@ -142,12 +149,12 @@ function buildArchiveTextContent(page: ArchivePageMetadata, extractedText: strin
 }
 
 function resolveArchivePageMetadata(
-  sourceUrl: string,
-  snapshotHtml: string,
-  pageTitle: string | null | undefined,
+	sourceUrl: string,
+	snapshotHtml: string,
+	snapshotTitle: string,
 ): ArchivePageMetadata {
-  const $ = load(snapshotHtml);
-  const title = cleanText(pageTitle) ||
+	const $ = load(snapshotHtml);
+	const title = cleanText(snapshotTitle) ||
     cleanText($('title').first().text()) ||
     cleanText($('h1').first().text()) ||
     resolveSourceHostLabel(sourceUrl) ||
@@ -160,19 +167,23 @@ function resolveArchivePageMetadata(
 }
 
 export async function archiveWebContentHtml(
-  payload: WebContentHtmlArchivePayload,
-  defaultDownloadDirectory: string,
-  storage: AppStorageService,
+	payload: WebContentHtmlArchivePayload,
+	defaultDownloadDirectory: string,
+	storage: AppStorageService,
+	playwrightService: IPlaywrightService,
+	token: CancellationToken,
 ): Promise<WebContentHtmlArchiveResult> {
-  const sourceUrl = normalizeUrl(payload.pageUrl ?? '');
-	const snapshotHtml = await resolveActiveWebContentSnapshotHtml({
-    pageUrl: sourceUrl,
-  });
-  if (!snapshotHtml) {
-    throw appError(BrowserViewErrorCode.PreviewNotReady);
-  }
+	const requestedUrl = canonicalizeWebContentArchiveUrl(payload.pageUrl);
+	const snapshot = await captureWebContentArchiveSnapshot(
+		payload.browserViewId.trim(),
+		requestedUrl,
+		playwrightService,
+		token,
+	);
+	const sourceUrl = canonicalizeWebContentArchiveUrl(snapshot.uri.toString(true));
+	const snapshotHtml = snapshot.html;
 
-  const page = resolveArchivePageMetadata(sourceUrl, snapshotHtml, payload.pageTitle);
+	const page = resolveArchivePageMetadata(sourceUrl, snapshotHtml, snapshot.title);
   const archiveRootDirectory = path.join(
     defaultDownloadDirectory,
     'Comet Studio Archive',
@@ -202,15 +213,15 @@ export async function archiveWebContentHtml(
   let pdfPath: string | null = null;
   let pdfSourceUrl: string | null = null;
   try {
-    const pdfResult = await previewDownloadPdf(
-      {
-        pageUrl: sourceUrl,
-        articleTitle: page.title,
-        customDownloadDir: archiveEntry.directoryPath,
-      },
-      defaultDownloadDirectory,
-      snapshotHtml,
-    );
+    const pdfResult = await previewDownloadPdf({
+		payload: {
+			pageUrl: sourceUrl,
+			articleTitle: page.title,
+			customDownloadDir: archiveEntry.directoryPath,
+		},
+		defaultDownloadDir: defaultDownloadDirectory,
+		webContentHtmlSnapshot: snapshotHtml,
+	});
     pdfPath = cleanText(pdfResult.filePath) || null;
     pdfSourceUrl = cleanText(pdfResult.sourceUrl) || null;
     if (pdfPath) {

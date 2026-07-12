@@ -8,7 +8,9 @@ import { test } from 'node:test';
 import { CancellationError, CancellationTokenNone, CancellationTokenSource, isCancellationError } from 'cs/base/common/cancellation';
 import { Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
+import type { IChannel } from 'cs/base/parts/ipc/common/ipc';
 import type { IAgentNetworkFilterService } from 'cs/platform/networkFilter/common/networkFilterService';
+import { PlaywrightChannelClient } from 'cs/platform/browserView/common/playwrightChannelClient';
 import {
 	BrowserPageClosedError,
 	BrowserPageNavigationInterruptedError,
@@ -139,7 +141,6 @@ class FakePage {
 }
 
 function createTab(page = new FakePage()): { readonly page: FakePage; readonly tab: PlaywrightTab } {
-	const actionScope = { activeCalls: 0 };
 	const networkFilter: IAgentNetworkFilterService = {
 		_serviceBrand: undefined,
 		isUriAllowed: () => true,
@@ -148,7 +149,7 @@ function createTab(page = new FakePage()): { readonly page: FakePage; readonly t
 	};
 	return {
 		page,
-		tab: new PlaywrightTab(page as unknown as ConstructorParameters<typeof PlaywrightTab>[0], actionScope, networkFilter),
+		tab: new PlaywrightTab(page as unknown as ConstructorParameters<typeof PlaywrightTab>[0], networkFilter),
 	};
 }
 
@@ -167,7 +168,11 @@ function captureSnapshot(
 }
 
 interface TestPlaywrightSession {
-	readonly group: { addView(viewId: string): Promise<void>; removeView(viewId: string): Promise<void> };
+	readonly group: {
+		addView(viewId: string): Promise<{ viewId: string; targetId: string }>;
+		removeView(viewId: string): Promise<void>;
+	};
+	navigatePage?: (...args: readonly unknown[]) => Promise<void>;
 	captureSnapshot?: (...args: readonly unknown[]) => Promise<unknown>;
 	getSummary?: (pageId: string) => Promise<string>;
 	invokeFunctionRaw?: (pageId: string, fnDef: string, ...args: readonly unknown[]) => Promise<unknown>;
@@ -175,7 +180,6 @@ interface TestPlaywrightSession {
 }
 
 interface TestPlaywrightServiceState {
-	readonly _trackedPages: Set<string>;
 	readonly _pendingInits: Map<string, Promise<TestPlaywrightSession>>;
 	readonly _sessions: { set(key: string, value: TestPlaywrightSession): void };
 }
@@ -187,12 +191,44 @@ function getServiceState(service: PlaywrightService): TestPlaywrightServiceState
 function createTestSession(overrides: Partial<TestPlaywrightSession> = {}): TestPlaywrightSession {
 	return {
 		group: {
-			addView: async () => {},
+			addView: async viewId => ({ viewId, targetId: `target-${viewId}` }),
 			removeView: async () => {},
 		},
+		navigatePage: async () => {},
 		dispose: () => {},
 		...overrides,
 	};
+}
+
+interface TestTrackingGroupOptions {
+	readonly addView?: (viewId: string) => Promise<{ viewId: string; targetId: string }>;
+	readonly removeView?: (viewId: string) => Promise<void>;
+	readonly logService?: unknown;
+	readonly telemetryService?: unknown;
+}
+
+function createPlaywrightServiceWithTrackingGroup(options: TestTrackingGroupOptions = {}): PlaywrightService {
+	const trackingGroup = {
+		id: 'tracking-group',
+		onDidAddView: Event.None,
+		onDidRemoveView: Event.None,
+		onDidDestroy: Event.None,
+		onCDPMessage: Event.None,
+		addView: options.addView ?? (async (viewId: string) => ({ viewId, targetId: `target-${viewId}` })),
+		removeView: options.removeView ?? (async () => {}),
+		sendCDPMessage: async () => {},
+		dispose: () => {},
+	};
+	const remoteService = {
+		createGroup: async () => trackingGroup,
+	};
+	return new PlaywrightService(
+		1,
+		remoteService as never,
+		options.logService as never,
+		undefined as never,
+		options.telemetryService as never,
+	);
 }
 
 test('captureSnapshot returns an atomic main-frame HTML snapshot after readiness', async () => {
@@ -423,42 +459,102 @@ test('getSummary remains the read-page ARIA boundary', async () => {
 	assert.match(summary, /Snapshot:\s+- button "Continue"/);
 });
 
-test('PlaywrightChannel forwards the IPC cancellation token to captureSnapshot', async () => {
-	let receivedArguments: readonly unknown[] = [];
+test('PlaywrightChannel forwards IPC cancellation to lease-bound navigation and capture', async () => {
+	let captureArguments: readonly unknown[] = [];
+	let navigationArguments: readonly unknown[] = [];
 	const channel = new PlaywrightChannel(undefined as never, undefined as never, undefined as never, undefined as never);
 	const instances = (channel as unknown as {
 		instances: { set(windowId: number, service: TestPlaywrightSession): void };
 	}).instances;
 	instances.set(7, createTestSession({
 		captureSnapshot: async (...args) => {
-			receivedArguments = args;
+			captureArguments = args;
 			return undefined;
+		},
+		navigatePage: async (...args) => {
+			navigationArguments = args;
 		},
 	}));
 	const cancellationSource = new CancellationTokenSource();
+	const trackingLease = { viewId: 'page-1', leaseId: 'lease-1' };
 
-	await channel.call('test', 'captureSnapshot', [7, ['session-1', 'page-1', undefined]], cancellationSource.token);
-	assert.equal(receivedArguments[3], cancellationSource.token);
+	await channel.call('test', 'navigatePage', [7, ['session-1', trackingLease, 'https://example.com']], cancellationSource.token);
+	assert.equal(navigationArguments[3], cancellationSource.token);
+	await channel.call('test', 'captureSnapshot', [7, ['session-1', trackingLease, undefined]], cancellationSource.token);
+	assert.equal(captureArguments[3], cancellationSource.token);
 	cancellationSource.dispose();
 	channel.dispose();
+});
+
+test('PlaywrightChannelClient addresses main-process requests and forwards snapshot cancellation', async () => {
+	const calls: Array<{
+		readonly command: string;
+		readonly argument: unknown;
+		readonly token: unknown;
+	}> = [];
+	const listens: Array<{ readonly event: string; readonly argument: unknown }> = [];
+	const channel = {
+		call: async <T>(command: string, argument: unknown, token: unknown): Promise<T> => {
+			calls.push({ command, argument, token });
+			if (command === 'captureSnapshot') {
+				return {
+					pageId: 'page-1',
+					uri: URI.parse('https://example.com/article').toJSON(),
+					title: 'Example article',
+					html: '<html><body>Example</body></html>',
+					capturedAt: 1,
+				} as T;
+			}
+			return { viewId: 'page-2', leaseId: 'lease-1' } as T;
+		},
+		listen: <T>(event: string, argument: unknown): Event<T> => {
+			listens.push({ event, argument });
+			return Event.None;
+		},
+	} satisfies IChannel;
+	const cancellationSource = new CancellationTokenSource();
+	const mainClient = new PlaywrightChannelClient(channel, 7);
+	const trackingLease = { viewId: 'page-1', leaseId: 'lease-1' };
+
+	const snapshot = await mainClient.captureSnapshot(
+		'session-1',
+		trackingLease,
+		{ timeoutMs: 500 },
+		cancellationSource.token,
+	);
+	assert.deepEqual(listens, [{ event: 'onDidChangeTrackedPages', argument: [7, undefined] }]);
+	assert.deepEqual(calls[0]?.argument, [7, ['session-1', trackingLease, { timeoutMs: 500 }]]);
+	assert.equal(calls[0]?.token, cancellationSource.token);
+	assert.equal(snapshot.uri.toString(), 'https://example.com/article');
+
+	const workbenchClient = new PlaywrightChannelClient(channel);
+	await workbenchClient.acquirePageTracking('page-2');
+	assert.deepEqual(listens[1], { event: 'onDidChangeTrackedPages', argument: undefined });
+	assert.deepEqual(calls[1]?.argument, ['page-2']);
+	cancellationSource.dispose();
 });
 
 test('PlaywrightService rejects snapshot requests for untracked pages before creating a session', async () => {
 	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
 	await assert.rejects(
-		service.captureSnapshot('session-1', 'untracked-page', undefined, CancellationTokenNone),
+		service.captureSnapshot(
+			'session-1',
+			{ viewId: 'untracked-page', leaseId: 'missing-lease' },
+			undefined,
+			CancellationTokenNone,
+		),
 		BrowserPageNotTrackedError,
 	);
 	service.dispose();
 });
 
 test('PlaywrightService cancellation races pending session creation', async () => {
-	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
+	const service = createPlaywrightServiceWithTrackingGroup();
+	const trackingLease = await service.acquirePageTracking('page-1');
 	const state = getServiceState(service);
-	state._trackedPages.add('page-1');
 	state._pendingInits.set('session-1', new Promise(() => {}));
 	const cancellationSource = new CancellationTokenSource();
-	const capture = service.captureSnapshot('session-1', 'page-1', undefined, cancellationSource.token);
+	const capture = service.captureSnapshot('session-1', trackingLease, undefined, cancellationSource.token);
 	cancellationSource.cancel();
 
 	await assert.rejects(capture, error => error instanceof CancellationError);
@@ -467,9 +563,9 @@ test('PlaywrightService cancellation races pending session creation', async () =
 });
 
 test('PlaywrightService does not start snapshot work for an already-cancelled request', async () => {
-	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
+	const service = createPlaywrightServiceWithTrackingGroup();
+	const trackingLease = await service.acquirePageTracking('page-1');
 	const state = getServiceState(service);
-	state._trackedPages.add('page-1');
 	let captureCalls = 0;
 	state._sessions.set('session-1', createTestSession({
 		captureSnapshot: async () => {
@@ -481,7 +577,7 @@ test('PlaywrightService does not start snapshot work for an already-cancelled re
 	cancellationSource.cancel();
 
 	await assert.rejects(
-		service.captureSnapshot('session-1', 'page-1', undefined, cancellationSource.token),
+		service.captureSnapshot('session-1', trackingLease, undefined, cancellationSource.token),
 		error => error instanceof CancellationError,
 	);
 	assert.equal(captureCalls, 0);
@@ -490,27 +586,27 @@ test('PlaywrightService does not start snapshot work for an already-cancelled re
 });
 
 test('PlaywrightService applies the snapshot deadline while creating a session', async () => {
-	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
+	const service = createPlaywrightServiceWithTrackingGroup();
+	const trackingLease = await service.acquirePageTracking('page-1');
 	const state = getServiceState(service);
-	state._trackedPages.add('page-1');
 	state._pendingInits.set('session-1', new Promise(() => {}));
 
 	await assert.rejects(
-		service.captureSnapshot('session-1', 'page-1', { timeoutMs: 5 }, CancellationTokenNone),
+		service.captureSnapshot('session-1', trackingLease, { timeoutMs: 5 }, CancellationTokenNone),
 		BrowserPageReadinessTimeoutError,
 	);
 	service.dispose();
 });
 
 test('PlaywrightService cancellation races pending page resolution and evaluate work', async () => {
-	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
+	const service = createPlaywrightServiceWithTrackingGroup();
+	const trackingLease = await service.acquirePageTracking('page-1');
 	const state = getServiceState(service);
-	state._trackedPages.add('page-1');
 	state._sessions.set('session-1', createTestSession({
 		captureSnapshot: async () => new Promise(() => {}),
 	}));
 	const cancellationSource = new CancellationTokenSource();
-	const capture = service.captureSnapshot('session-1', 'page-1', undefined, cancellationSource.token);
+	const capture = service.captureSnapshot('session-1', trackingLease, undefined, cancellationSource.token);
 	cancellationSource.cancel();
 
 	await assert.rejects(capture, error => error instanceof CancellationError);
@@ -530,15 +626,9 @@ test('PlaywrightService keeps getSummary and invokeFunctionRaw unchanged without
 	const telemetryService = {
 		publicLog2: (eventName: string) => { telemetryEvents.push(eventName); },
 	};
-	const service = new PlaywrightService(
-		1,
-		undefined as never,
-		logService as never,
-		undefined as never,
-		telemetryService as never,
-	);
+	const service = createPlaywrightServiceWithTrackingGroup({ logService, telemetryService });
+	const trackingLease = await service.acquirePageTracking('page-1');
 	const state = getServiceState(service);
-	state._trackedPages.add('page-1');
 	state._sessions.set('session-1', createTestSession({
 		captureSnapshot: async () => ({
 			pageId: 'page-1',
@@ -551,7 +641,7 @@ test('PlaywrightService keeps getSummary and invokeFunctionRaw unchanged without
 		invokeFunctionRaw: async (_pageId, _fnDef, ...args) => args,
 	}));
 
-	const snapshot = await service.captureSnapshot('session-1', 'page-1', undefined, CancellationTokenNone);
+	const snapshot = await service.captureSnapshot('session-1', trackingLease, undefined, CancellationTokenNone);
 	assert.equal(snapshot.html, secretHtml);
 	assert.equal(await service.getSummary('session-1', 'page-1'), 'ARIA summary');
 	assert.deepEqual(await service.invokeFunctionRaw('session-1', 'page-1', 'async page => page', 'argument'), ['argument']);
@@ -560,20 +650,23 @@ test('PlaywrightService keeps getSummary and invokeFunctionRaw unchanged without
 	service.dispose();
 });
 
-test('PlaywrightService serializes page tracking acquisition and reports which caller acquired it', async () => {
+test('PlaywrightService serializes page tracking leases and keeps tracking until the final lease is released', async () => {
 	let resolveAdd: (() => void) | undefined;
 	const add = new Promise<void>(resolve => {
 		resolveAdd = resolve;
 	});
 	const group = {
-		addView: async () => add,
+		addView: async (viewId: string) => {
+			await add;
+			return { viewId, targetId: `target-${viewId}` };
+		},
 		removeView: async () => {},
 	};
 	const session = {
 		group,
 		dispose: () => {},
 	};
-	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
+	const service = createPlaywrightServiceWithTrackingGroup();
 	(service as unknown as { _sessions: { set(key: string, value: typeof session): void } })._sessions.set('session', session);
 
 	try {
@@ -588,9 +681,78 @@ test('PlaywrightService serializes page tracking acquisition and reports which c
 		assert.equal(completed, false);
 
 		resolveAdd?.();
-		assert.deepEqual(await firstAcquisition, { acquired: true });
-		assert.deepEqual(await secondAcquisition, { acquired: false });
+		const firstLease = await firstAcquisition;
+		const secondLease = await secondAcquisition;
+		assert.notEqual(firstLease.leaseId, secondLease.leaseId);
+		assert.equal(firstLease.viewId, 'page-1');
+		assert.equal(secondLease.viewId, 'page-1');
 		assert.equal(completed, true);
+
+		await service.releasePageTracking(firstLease);
+		assert.equal(await service.isPageTracked('page-1'), true);
+		await service.releasePageTracking(secondLease);
+		assert.equal(await service.isPageTracked('page-1'), false);
+	} finally {
+		service.dispose();
+	}
+});
+
+test('PlaywrightService prevents an old lease from operating on a recreated target with the same view ID', async () => {
+	let targetGeneration = 1;
+	const service = createPlaywrightServiceWithTrackingGroup({
+		addView: async viewId => ({ viewId, targetId: `target-${targetGeneration}` }),
+	});
+
+	try {
+		const oldLease = await service.acquirePageTracking('page-1');
+		targetGeneration = 2;
+		const currentLease = await service.acquirePageTracking('page-1');
+		let navigateCalls = 0;
+		let captureCalls = 0;
+		getServiceState(service)._sessions.set('session', createTestSession({
+			navigatePage: async () => {
+				navigateCalls += 1;
+			},
+			captureSnapshot: async () => {
+				captureCalls += 1;
+				return {
+					pageId: 'page-1',
+					uri: URI.parse('https://example.com/recreated'),
+					title: 'Recreated',
+					html: '<html></html>',
+					capturedAt: 1,
+				};
+			},
+		}));
+
+		await assert.rejects(
+			service.navigatePage('session', oldLease, 'https://example.com/stale-navigation', CancellationTokenNone),
+			BrowserPageNotTrackedError,
+		);
+		await assert.rejects(
+			service.captureSnapshot('session', oldLease, undefined, CancellationTokenNone),
+			BrowserPageNotTrackedError,
+		);
+		assert.equal(navigateCalls, 0);
+		assert.equal(captureCalls, 0);
+
+		await service.navigatePage('session', currentLease, 'https://example.com/recreated', CancellationTokenNone);
+		const snapshot = await service.captureSnapshot('session', currentLease, undefined, CancellationTokenNone);
+		assert.equal(snapshot.uri.toString(), 'https://example.com/recreated');
+		assert.equal(navigateCalls, 1);
+		assert.equal(captureCalls, 1);
+
+		await service.releasePageTracking(oldLease);
+		assert.equal(await service.isPageTracked('page-1'), true);
+
+		await assert.rejects(
+			service.releasePageTracking({ viewId: 'another-page', leaseId: currentLease.leaseId }),
+			/does not belong/,
+		);
+		assert.equal(await service.isPageTracked('page-1'), true);
+
+		await service.releasePageTracking(currentLease);
+		assert.equal(await service.isPageTracked('page-1'), false);
 	} finally {
 		service.dispose();
 	}
@@ -600,11 +762,12 @@ test('PlaywrightService rolls back tracking ownership when page registration fai
 	let addAttempts = 0;
 	let removeCalls = 0;
 	const group = {
-		addView: async () => {
+		addView: async (viewId: string) => {
 			addAttempts += 1;
 			if (addAttempts === 1) {
 				throw new Error('Registration failed');
 			}
+			return { viewId, targetId: `target-${viewId}` };
 		},
 		removeView: async () => { removeCalls += 1; },
 	};
@@ -612,7 +775,7 @@ test('PlaywrightService rolls back tracking ownership when page registration fai
 		group,
 		dispose: () => {},
 	};
-	const service = new PlaywrightService(1, undefined as never, undefined as never, undefined as never, undefined as never);
+	const service = createPlaywrightServiceWithTrackingGroup();
 	(service as unknown as { _sessions: { set(key: string, value: typeof session): void } })._sessions.set('session', session);
 
 	try {
@@ -620,9 +783,106 @@ test('PlaywrightService rolls back tracking ownership when page registration fai
 		assert.equal(await service.isPageTracked('page-1'), false);
 		assert.equal(removeCalls, 1);
 
-		assert.deepEqual(await service.acquirePageTracking('page-1'), { acquired: true });
+		const lease = await service.acquirePageTracking('page-1');
+		assert.equal(lease.viewId, 'page-1');
 		assert.equal(await service.isPageTracked('page-1'), true);
-		await service.releasePageTracking('page-1');
+		await service.releasePageTracking(lease);
+		assert.equal(await service.isPageTracked('page-1'), false);
+	} finally {
+		service.dispose();
+	}
+});
+
+test('PlaywrightService repairs partial session membership before issuing another lease', async () => {
+	let firstSessionAddCalls = 0;
+	let secondSessionAddCalls = 0;
+	let firstSessionRemoveCalls = 0;
+	const firstSession = {
+		group: {
+			addView: async (viewId: string) => {
+				firstSessionAddCalls += 1;
+				return { viewId, targetId: `target-${viewId}` };
+			},
+			removeView: async () => {
+				firstSessionRemoveCalls += 1;
+				if (firstSessionRemoveCalls === 1) {
+					throw new Error('Removal failed');
+				}
+			},
+		},
+		dispose: () => {},
+	};
+	const secondSession = {
+		group: {
+			addView: async (viewId: string) => {
+				secondSessionAddCalls += 1;
+				return { viewId, targetId: `target-${viewId}` };
+			},
+			removeView: async () => {},
+		},
+		dispose: () => {},
+	};
+	const service = createPlaywrightServiceWithTrackingGroup();
+	const sessions = (service as unknown as {
+		_sessions: { set(key: string, value: TestPlaywrightSession): void };
+	})._sessions;
+	sessions.set('first', firstSession);
+	sessions.set('second', secondSession);
+
+	try {
+		const firstLease = await service.acquirePageTracking('page-1');
+		await assert.rejects(service.releasePageTracking(firstLease), /Removal failed/);
+		assert.equal(await service.isPageTracked('page-1'), true);
+
+		const secondLease = await service.acquirePageTracking('page-1');
+		assert.equal(firstSessionAddCalls, 2);
+		assert.equal(secondSessionAddCalls, 2);
+		await service.releasePageTracking(firstLease);
+		assert.equal(await service.isPageTracked('page-1'), true);
+		await service.releasePageTracking(secondLease);
+		assert.equal(await service.isPageTracked('page-1'), false);
+	} finally {
+		service.dispose();
+	}
+});
+
+test('PlaywrightService clears local ownership when acquisition rollback also fails', async () => {
+	let addCalls = 0;
+	let removeCalls = 0;
+	const session = {
+		group: {
+			addView: async (viewId: string) => {
+				addCalls += 1;
+				if (addCalls === 1) {
+					throw new Error('Registration failed');
+				}
+				return { viewId, targetId: `target-${viewId}` };
+			},
+			removeView: async () => {
+				removeCalls += 1;
+				if (removeCalls === 1) {
+					throw new Error('Rollback failed');
+				}
+			},
+		},
+		dispose: () => {},
+	};
+	const service = createPlaywrightServiceWithTrackingGroup();
+	(service as unknown as {
+		_sessions: { set(key: string, value: TestPlaywrightSession): void };
+	})._sessions.set('session', session);
+
+	try {
+		await assert.rejects(
+			service.acquirePageTracking('page-1'),
+			error => error instanceof AggregateError
+				&& error.errors.some(candidate => String(candidate).includes('Registration failed'))
+				&& error.errors.some(candidate => String(candidate).includes('Rollback failed')),
+		);
+		assert.equal(await service.isPageTracked('page-1'), false);
+
+		const lease = await service.acquirePageTracking('page-1');
+		await service.releasePageTracking(lease);
 		assert.equal(await service.isPageTracked('page-1'), false);
 	} finally {
 		service.dispose();

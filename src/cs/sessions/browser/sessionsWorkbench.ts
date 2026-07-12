@@ -33,6 +33,7 @@ import {
 	type SettingsControllerContext,
 } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import { generateUuid } from 'cs/base/common/uuid';
 
 import { createEditorBrowserToolbarActions } from 'cs/workbench/contrib/browserView/browser/browserToolbarActions';
@@ -630,7 +631,11 @@ class SessionsWorkbenchHost {
 		};
 
 		const activeEditor = this.editorGroupsService.activeGroup.activeEditor;
-		const browserUrl = activeEditor?.getDescription() ?? '';
+		const activeBrowserEditor = activeEditor instanceof BrowserEditorInput
+			? activeEditor
+			: undefined;
+		const browserViewId = activeBrowserEditor?.id ?? '';
+		const browserUrl = activeBrowserEditor?.url ?? '';
 		const browserPageTitle = activeEditor?.getName() ?? '';
 		const handleOpenEditor: EditorOpenHandler = (input, options) =>
 			this.editorService.openEditor(input, options);
@@ -724,8 +729,8 @@ class SessionsWorkbenchHost {
 			this.editorGroupsService.mainPart.focusPrimaryInput();
 		};
 		const editorBrowserToolbarActions = createEditorBrowserToolbarActions({
+			browserViewId,
 			browserUrl,
-			browserPageTitle,
 			invokeDesktop,
 			notificationService: this.notificationService,
 			knowledgeBaseEnabled,

@@ -89,17 +89,25 @@ export interface IBrowserEditorWidget {
 	readonly order: number;
 }
 
+export type BrowserEditorModelDetachReason = 'modelChanged' | 'modelDisposed';
+
 export abstract class BrowserEditorContribution extends Disposable {
 	private readonly modelStore = this._register(new DisposableStore());
+	private attachedModel: IBrowserViewModel | undefined;
 
 	constructor(protected readonly editor: BrowserEditor) {
 		super();
-		this._register(editor.onDidChangeModel(({ model, isNew }) => {
-			this.modelStore.clear();
+		this._register(editor.onDidChangeModel(({ model, isNew, detachReason }) => {
+			if (this.attachedModel) {
+				this.modelStore.clear();
+				this.attachedModel = undefined;
+				this.onModelDetached(detachReason);
+			}
 			if (model) {
+				this.attachedModel = model;
 				this.onModelAttached(model, this.modelStore, isNew);
 			} else {
-				this.onModelDetached();
+				this.modelStore.clear();
 			}
 		}));
 	}
@@ -110,7 +118,7 @@ export abstract class BrowserEditorContribution extends Disposable {
 
 	prerenderInput(_input: BrowserEditorInput): void { }
 	protected onModelAttached(_model: IBrowserViewModel, _store: DisposableStore, _isNew: boolean): void { }
-	onModelDetached(): void { }
+	onModelDetached(_reason: BrowserEditorModelDetachReason): void { }
 	onPaneResized(_width: number): void { }
 	afterContainerLayout(): void { }
 	onPaneVisibilityChanged(_visible: boolean): void { }
@@ -133,6 +141,7 @@ export class BrowserEditor extends EditorPane<
 	private readonly _onDidChangeModel = this.disposables.add(new Emitter<{
 		model: IBrowserViewModel | undefined;
 		isNew: boolean;
+		detachReason: BrowserEditorModelDetachReason;
 	}>());
 	private readonly browserStateEmitter = this.disposables.add(new Emitter<BrowserEditorModeToolbarState>());
 	private readonly runtimeStateEmitter = this.disposables.add(new Emitter<EditorPaneRuntimeState>());
@@ -158,7 +167,7 @@ export class BrowserEditor extends EditorPane<
 	private readonly restoreDeadline = this.disposables.add(new MutableDisposable());
 	private visible = false;
 	private hasVisibleLayout = false;
-	private layoutRequestSequence = 0;
+	private layoutGeneration = 0;
 
 	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 	readonly onDidChangeModel = this._onDidChangeModel.event;
@@ -187,7 +196,7 @@ export class BrowserEditor extends EditorPane<
 			return;
 		}
 		this._model = model;
-		this._onDidChangeModel.fire({ model, isNew: false });
+		this._onDidChangeModel.fire({ model, isNew: false, detachReason: 'modelChanged' });
 	}
 
 	get browserContainer(): HTMLElement {
@@ -293,17 +302,16 @@ export class BrowserEditor extends EditorPane<
 	}
 
 	override setVisible(visible: boolean) {
+		if (this.visible !== visible) {
+			this.layoutGeneration += 1;
+		}
 		this.visible = visible;
 		if (!visible) {
 			this.activeEditorFocusedContext.reset();
 			this.hasVisibleLayout = false;
-			this.layoutRequestSequence += 1;
 		}
 		for (const contribution of this.contributionInstances.values()) {
 			contribution.onPaneVisibilityChanged(visible);
-		}
-		if (visible) {
-			this.layout();
 		}
 	}
 
@@ -370,8 +378,7 @@ export class BrowserEditor extends EditorPane<
 		this.disposables.dispose();
 	}
 
-	async layoutBrowserContainer(retries = 2, requestSequence?: number): Promise<boolean> {
-		const layoutRequest = requestSequence ?? ++this.layoutRequestSequence;
+	async layoutBrowserContainer(retries = 2, generation = this.layoutGeneration): Promise<boolean> {
 		const visibleLayout = this.visible;
 		if (visibleLayout && retries === 2) {
 			this.hasVisibleLayout = false;
@@ -403,7 +410,7 @@ export class BrowserEditor extends EditorPane<
 			await new Promise<void>(resolve => {
 				this.window.requestAnimationFrame(() => resolve());
 			});
-			return this.layoutBrowserContainer(retries - 1, layoutRequest);
+			return this.layoutBrowserContainer(retries - 1, generation);
 		}
 		if (wrapperRect.width === 0 || wrapperRect.height === 0) {
 			return false;
@@ -444,7 +451,7 @@ export class BrowserEditor extends EditorPane<
 			cornerRadius: parseFloat(this.window.getComputedStyle(this.browserContainerElement).borderTopLeftRadius ?? '0'),
 			emulation: containerLayout.emulation,
 		});
-		if (this._model !== model || layoutRequest !== this.layoutRequestSequence) {
+		if (this._model !== model || generation !== this.layoutGeneration) {
 			return false;
 		}
 
@@ -551,7 +558,7 @@ export class BrowserEditor extends EditorPane<
 		this.setModel(model, isNew);
 		this.inputDisposables.add(model.onWillDispose(() => {
 			if (this._model === model) {
-				this.setModel(undefined, false);
+				this.setModel(undefined, false, 'modelDisposed');
 			}
 		}));
 		this.inputDisposables.add(model.onWillNavigate(() => this.ensureBrowserFocus()));
@@ -664,17 +671,22 @@ export class BrowserEditor extends EditorPane<
 		return this._input;
 	}
 
-	private setModel(model: IBrowserViewModel | undefined, isNew: boolean) {
+	private setModel(
+		model: IBrowserViewModel | undefined,
+		isNew: boolean,
+		detachReason: BrowserEditorModelDetachReason = 'modelChanged',
+	) {
 		if (this._model === model) {
 			return;
 		}
+		this.layoutGeneration += 1;
 		this._model = model;
 		this.hasVisibleLayout = false;
 		this.hasUrlContext.set(!!model?.url);
 		this.hasErrorContext.set(!!model?.error);
 		this.canGoBackContext.set(model?.canGoBack ?? false);
 		this.canGoForwardContext.set(model?.canGoForward ?? false);
-		this._onDidChangeModel.fire({ model, isNew });
+		this._onDidChangeModel.fire({ model, isNew, detachReason });
 	}
 
 	private requestViewStateRestore(model = this._model): void {

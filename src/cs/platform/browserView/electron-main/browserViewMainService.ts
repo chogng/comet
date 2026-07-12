@@ -166,6 +166,7 @@ type RetainedWebContentTarget = {
 };
 
 let webContentWindow: BrowserWindow | null = null;
+let webContentWindowClosing = false;
 let activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
 let lastReportedWebContentState: WebContentState = createDefaultWebContentState();
 let disposeWebContentWindowListeners: (() => void) | null = null;
@@ -266,7 +267,9 @@ function disposeBrowserViewTargetMetadata(targetId: string) {
     return;
   }
 
-  metadata.events.onDidClose.fire();
+	if (!webContentWindowClosing) {
+		metadata.events.onDidClose.fire();
+	}
   metadata.events.disposables.dispose();
   browserViewTargetMetadata.delete(targetId);
 }
@@ -446,20 +449,11 @@ function areWebContentStatesEqual(previous: WebContentState, next: WebContentSta
   );
 }
 
-export type WebContentDocumentSnapshot = {
-  url: string;
-  html: string;
-  statusCode: number | null;
-  captureMs: number;
-  isLoading: boolean;
-	documentReadyState: string;
-};
-
-type WebContentDocumentSnapshotOptions = {
+type WebContentScriptOptions = {
   timeoutMs?: number;
 };
 
-const webContentDocumentSnapshotTimedOut = Symbol('webContentDocumentSnapshotTimedOut');
+const webContentScriptTimedOut = Symbol('webContentScriptTimedOut');
 
 type WebContentExecutionTimeoutResult = {
   __csTimedOut: true;
@@ -541,12 +535,12 @@ function normalizeWebContentTimeoutMs(value: unknown) {
 async function executeWebContentScriptForTarget<T>(
   targetId: string | null | undefined,
   script: string,
-  options: WebContentDocumentSnapshotOptions = {},
-): Promise<T | typeof webContentDocumentSnapshotTimedOut> {
+  options: WebContentScriptOptions = {},
+): Promise<T | typeof webContentScriptTimedOut> {
   const timeoutMs = normalizeWebContentTimeoutMs(options.timeoutMs);
   const entry = webContentTargets.get(normalizeWebContentTargetId(targetId));
   if (!entry || entry.view.webContents.isDestroyed()) {
-    return webContentDocumentSnapshotTimedOut;
+    return webContentScriptTimedOut;
   }
 
   try {
@@ -560,18 +554,18 @@ async function executeWebContentScriptForTarget<T>(
         ])
       : await execution;
     if (isWebContentExecutionTimeoutResult(result) || result === null) {
-      return webContentDocumentSnapshotTimedOut;
+      return webContentScriptTimedOut;
     }
     return result as T;
   } catch {
-    return webContentDocumentSnapshotTimedOut;
+    return webContentScriptTimedOut;
   }
 }
 
 async function executeWebContentScript<T>(
   script: string,
-  options: WebContentDocumentSnapshotOptions = {},
-): Promise<T | typeof webContentDocumentSnapshotTimedOut> {
+  options: WebContentScriptOptions = {},
+): Promise<T | typeof webContentScriptTimedOut> {
   return await executeWebContentScriptForTarget<T>(
     getActiveWebContentTargetId(),
     script,
@@ -582,10 +576,10 @@ async function executeWebContentScript<T>(
 export async function executeWebContentTargetScript<T>(
   targetId: string | null | undefined,
   script: string,
-  options: WebContentDocumentSnapshotOptions = {},
+  options: WebContentScriptOptions = {},
 ): Promise<T | null> {
   const result = await executeWebContentScriptForTarget<T>(targetId, script, options);
-  return result === webContentDocumentSnapshotTimedOut ? null : result;
+  return result === webContentScriptTimedOut ? null : result;
 }
 
 function describeWebContentError(error: unknown) {
@@ -599,6 +593,7 @@ export function ensureWebContentView(window: BrowserWindow) {
 
   disposeWebContentWindowListeners?.();
   webContentWindow = window;
+	webContentWindowClosing = false;
 
   const handleDestroyed = () => {
     disposeWebContentView(window);
@@ -623,6 +618,12 @@ export function ensureWebContentView(window: BrowserWindow) {
   applyWebContentLayout();
 }
 
+export function beginWebContentWindowClose(window: BrowserWindow): void {
+	if (webContentWindow === window) {
+		webContentWindowClosing = true;
+	}
+}
+
 export function disposeWebContentView(window?: BrowserWindow | null) {
   if (window && webContentWindow && webContentWindow !== window) return;
 
@@ -638,6 +639,7 @@ export function disposeWebContentView(window?: BrowserWindow | null) {
   activeWebContentTargetId = DEFAULT_WEB_CONTENT_TARGET_ID;
   lastReportedWebContentState = createDefaultWebContentState();
   webContentWindow = null;
+	webContentWindowClosing = false;
 }
 
 function clearRetentionSweepTimer() {
@@ -1467,59 +1469,6 @@ export async function captureWebContentScreenshot(targetId?: string | null) {
   return `data:image/jpeg;base64,${image.toJPEG(80).toString('base64')}`;
 }
 
-export async function getWebContentDocumentSnapshot(
-	targetId: string,
-  options: WebContentDocumentSnapshotOptions = {},
-): Promise<WebContentDocumentSnapshot | null> {
-  const startedAt = Date.now();
-
-  try {
-    const snapshot = await executeWebContentScriptForTarget<{
-		url?: unknown;
-		html?: unknown;
-		documentReadyState?: unknown;
-	}>(
-		targetId,
-      `(() => {
-        try {
-          return {
-			url: location.href,
-			html: document.documentElement ? document.documentElement.outerHTML : '',
-			documentReadyState: document.readyState,
-		  };
-        } catch {
-		  return null;
-        }
-      })()`,
-      options,
-    );
-
-    if (snapshot === webContentDocumentSnapshotTimedOut || !isRecord(snapshot)) {
-      return null;
-    }
-
-	const url = typeof snapshot.url === 'string' ? snapshot.url.trim() : '';
-	const html = typeof snapshot.html === 'string' ? snapshot.html : '';
-	const documentReadyState = typeof snapshot.documentReadyState === 'string'
-		? snapshot.documentReadyState
-		: '';
-    if (typeof html !== 'string' || !html.trim()) {
-      return null;
-    }
-
-    return {
-		  url,
-	      html,
-	      statusCode: webContentTargets.get(normalizeWebContentTargetId(targetId))?.statusCode ?? null,
-      captureMs: Date.now() - startedAt,
-	  isLoading: documentReadyState !== 'complete',
-	  documentReadyState,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function getWebContentSelection(
   targetId?: string | null,
 ): Promise<WebContentSelectionSnapshot | null> {
@@ -1587,7 +1536,7 @@ export async function getWebContentSelection(
   );
 
   if (
-    selection === webContentDocumentSnapshotTimedOut ||
+    selection === webContentScriptTimedOut ||
     !selection ||
     !isRecord(selection) ||
     typeof selection.text !== 'string' ||
@@ -1609,11 +1558,6 @@ export async function getWebContentSelection(
     text: selection.text,
     rects,
   };
-}
-
-export async function getWebContentDocumentHtml(targetId: string) {
-  const snapshot = await getWebContentDocumentSnapshot(targetId);
-  return snapshot?.html ?? null;
 }
 
 export async function navigateWebContent(
@@ -1815,7 +1759,7 @@ export async function waitForWebContentPrintLayout(stabilizeMs = 1200) {
     { timeoutMs: Math.max(1800, Math.max(0, Math.trunc(stabilizeMs)) + 2400) },
   );
 
-  if (result === webContentDocumentSnapshotTimedOut) {
+  if (result === webContentScriptTimedOut) {
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.trunc(stabilizeMs))));
   }
 }

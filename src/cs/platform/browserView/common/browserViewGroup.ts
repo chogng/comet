@@ -16,6 +16,13 @@ export const ipcBrowserViewGroupChannelName = 'browserViewGroup';
 export interface IBrowserViewGroupViewEvent {
 	/** The ID of the browser view that was added or removed. */
 	readonly viewId: string;
+	/** The Chromium target instance currently backing the browser view. */
+	readonly targetId: string;
+}
+
+export interface IBrowserViewGroupViewRemovalEvent extends IBrowserViewGroupViewEvent {
+	/** Whether the view only left this group or its underlying target closed. */
+	readonly reason: 'detached' | 'closed';
 }
 
 /**
@@ -27,11 +34,11 @@ export interface IBrowserViewGroup extends IDisposable {
 	readonly id: string;
 
 	readonly onDidAddView: Event<IBrowserViewGroupViewEvent>;
-	readonly onDidRemoveView: Event<IBrowserViewGroupViewEvent>;
+	readonly onDidRemoveView: Event<IBrowserViewGroupViewRemovalEvent>;
 	readonly onDidDestroy: Event<void>;
 	readonly onCDPMessage: Event<CDPResponse | CDPEvent>;
 
-	addView(viewId: string): Promise<void>;
+	addView(viewId: string): Promise<IBrowserViewGroupViewEvent>;
 	removeView(viewId: string): Promise<void>;
 	sendCDPMessage(msg: CDPRequest): Promise<void>;
 }
@@ -49,7 +56,7 @@ export interface IBrowserViewGroupService {
 
 	// Dynamic events - one per group instance, keyed by group ID.
 	onDynamicDidAddView(groupId: string): Event<IBrowserViewGroupViewEvent>;
-	onDynamicDidRemoveView(groupId: string): Event<IBrowserViewGroupViewEvent>;
+	onDynamicDidRemoveView(groupId: string): Event<IBrowserViewGroupViewRemovalEvent>;
 	onDynamicDidDestroy(groupId: string): Event<void>;
 	onDynamicCDPMessage(groupId: string): Event<CDPResponse | CDPEvent>;
 
@@ -73,7 +80,7 @@ export interface IBrowserViewGroupService {
 	 * @param groupId The group identifier.
 	 * @param viewId The browser view identifier.
 	 */
-	addViewToGroup(groupId: string, viewId: string): Promise<void>;
+	addViewToGroup(groupId: string, viewId: string): Promise<IBrowserViewGroupViewEvent>;
 
 	/**
 	 * Remove a browser view from a group.

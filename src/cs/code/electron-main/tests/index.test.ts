@@ -8,4 +8,5 @@ import './docx.test';
 import './llm.test';
 import './storageService.test';
 import './translationRouter.test';
+import './webContentHtmlArchive.test';
 import './windowOpenPolicy.test';

@@ -7,7 +7,7 @@ import { Event } from 'cs/base/common/event';
 import { Disposable, DisposableMap } from 'cs/base/common/lifecycle';
 import { generateUuid } from 'cs/base/common/uuid';
 import type { IBrowserViewOwner } from 'cs/platform/browserView/common/browserView';
-import type { IBrowserViewGroupService, IBrowserViewGroupViewEvent } from 'cs/platform/browserView/common/browserViewGroup';
+import type { IBrowserViewGroupService, IBrowserViewGroupViewEvent, IBrowserViewGroupViewRemovalEvent } from 'cs/platform/browserView/common/browserViewGroup';
 import type { CDPEvent, CDPRequest, CDPResponse } from 'cs/platform/browserView/common/cdp/types';
 import { BrowserViewGroup } from 'cs/platform/browserView/electron-main/browserViewGroup';
 import { BrowserViewMainService } from 'cs/platform/browserView/electron-main/browserViewMainService';
@@ -44,8 +44,8 @@ export class BrowserViewGroupMainService extends Disposable implements IBrowserV
 		this.groups.deleteAndDispose(groupId);
 	}
 
-	async addViewToGroup(groupId: string, viewId: string): Promise<void> {
-		await this.getGroup(groupId).addView(viewId);
+	async addViewToGroup(groupId: string, viewId: string): Promise<IBrowserViewGroupViewEvent> {
+		return this.getGroup(groupId).addView(viewId);
 	}
 
 	async removeViewFromGroup(groupId: string, viewId: string): Promise<void> {
@@ -60,7 +60,7 @@ export class BrowserViewGroupMainService extends Disposable implements IBrowserV
 		return this.getGroup(groupId).onDidAddView;
 	}
 
-	onDynamicDidRemoveView(groupId: string): Event<IBrowserViewGroupViewEvent> {
+	onDynamicDidRemoveView(groupId: string): Event<IBrowserViewGroupViewRemovalEvent> {
 		return this.getGroup(groupId).onDidRemoveView;
 	}
 

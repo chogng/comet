@@ -8,6 +8,7 @@ import type { ThemeIcon } from 'cs/base/common/themables';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import { editorPaneRegistry } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 
 export type EditorGroupTabState = {
 	isActive: boolean;
@@ -35,7 +36,7 @@ export type EditorTabsModel = {
 };
 
 export function getEditorPaneMode(input: EditorInput): string {
-	return input.editorId ?? input.typeId;
+	return editorPaneRegistry.getEditorPane(input).modeId;
 }
 
 export function createEditorTabsModel({

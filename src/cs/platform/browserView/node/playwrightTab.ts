@@ -17,7 +17,6 @@ import {
 	BrowserPageSnapshotEmptyError,
 	BrowserPageSnapshotTooLargeError,
 } from 'cs/platform/browserView/common/playwrightService';
-import { IPlaywrightActionScope } from 'cs/platform/browserView/node/playwrightService';
 import {
 	type IResolvedPageSnapshotOptions,
 	isNavigationInterruptedError,
@@ -85,7 +84,6 @@ export class PlaywrightTab {
 		 * Only use this directly if you are sure it cannot be blocked by dialogs.
 		 */
 		private readonly page: playwright.Page,
-		private readonly actionScope: IPlaywrightActionScope,
 		private readonly agentNetworkFilterService: IAgentNetworkFilterService,
 	) {
 		page.on('console', event => this._handleConsoleMessage(event))
@@ -225,7 +223,6 @@ export class PlaywrightTab {
 			this.page.on('filechooser', handleFileChooser);
 
 			try {
-				this.actionScope.activeCalls++;
 				result = await this.runAndWaitForCompletion(
 					token => action(this.page, token),
 					token,
@@ -234,7 +231,6 @@ export class PlaywrightTab {
 				actionDidComplete = true;
 			} finally {
 				this.page.off('filechooser', handleFileChooser);
-				this.actionScope.activeCalls--;
 			}
 		});
 		const cancellationListener = options.token.onCancellationRequested(() => actionCompleted.cancel());

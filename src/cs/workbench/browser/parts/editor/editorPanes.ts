@@ -71,7 +71,11 @@ export class EditorPanes extends Disposable {
 		}
 		this.context = context;
 		if (this.activePane && this.activeInput) {
-			this.bindActivePaneRuntimeState(this.activePane, this.activeInput);
+			if (this.activePaneInputSource) {
+				this.unbindActivePaneState();
+			} else {
+				this.bindActivePaneRuntimeState(this.activePane, this.activeInput);
+			}
 			this.setPaneVisible(this.activePane, context.visible && !this.activePaneInputSource);
 		}
 	}
@@ -195,7 +199,7 @@ export class EditorPanes extends Disposable {
 
 		this.activeInput = input;
 		this.activePaneViewStateKey = viewStateKey;
-		this.bindActivePaneRuntimeState(pane, input);
+		this.unbindActivePaneState();
 		this.applyContentPresentation(descriptor, pane);
 		this.activeEditorContext.reset();
 		pane.clearInput();
@@ -214,6 +218,7 @@ export class EditorPanes extends Disposable {
 			}
 			this.assertCurrentOperation(operation, source);
 			this.restorePaneViewState(pane, viewStateKey);
+			this.bindActivePaneRuntimeState(pane, input);
 			this.activeEditorContext.set(activeEditorId);
 			this.setPaneVisible(pane, this.context.visible);
 		} finally {
@@ -258,10 +263,7 @@ export class EditorPanes extends Disposable {
 		}
 		this.saveActivePaneViewState();
 		this.cancelActiveInput();
-		this.activePaneRuntimeStateListener.dispose();
-		this.activePaneRuntimeStateListener = Disposable.None;
-		this.activePaneViewStateListener.dispose();
-		this.activePaneViewStateListener = Disposable.None;
+		this.unbindActivePaneState();
 		this.activePane.clearInput();
 		this.setPaneVisible(this.activePane, false);
 		this.activePane = null;
@@ -272,8 +274,7 @@ export class EditorPanes extends Disposable {
 	}
 
 	private bindActivePaneRuntimeState(pane: AnyEditorPane, input: EditorInput): void {
-		this.activePaneRuntimeStateListener.dispose();
-		this.activePaneViewStateListener.dispose();
+		this.unbindActivePaneState();
 		this.activePaneRuntimeStateListener = pane.onDidChangeRuntimeState(state => {
 			this.context.onDidChangeRuntimeState(input, state);
 		});
@@ -286,6 +287,13 @@ export class EditorPanes extends Disposable {
 		if (state) {
 			this.context.onDidChangeRuntimeState(input, state);
 		}
+	}
+
+	private unbindActivePaneState(): void {
+		this.activePaneRuntimeStateListener.dispose();
+		this.activePaneRuntimeStateListener = Disposable.None;
+		this.activePaneViewStateListener.dispose();
+		this.activePaneViewStateListener = Disposable.None;
 	}
 
 	private applyContentPresentation(descriptor: IEditorPaneDescriptor, pane: AnyEditorPane): void {

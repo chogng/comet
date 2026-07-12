@@ -18,7 +18,11 @@ import {
 	WindowMode,
 } from 'cs/platform/window/electron-main/window';
 import { setTrayMainWindow } from 'cs/platform/window/electron-main/trayIcon';
-import { disposeWebContentView, ensureWebContentView } from 'cs/platform/browserView/electron-main/browserViewMainService';
+import {
+	beginWebContentWindowClose,
+	disposeWebContentView,
+	ensureWebContentView,
+} from 'cs/platform/browserView/electron-main/browserViewMainService';
 import {
 	resolvePreloadScriptPath,
 	resolveWorkbenchRendererFilePath,
@@ -395,11 +399,12 @@ export function createMainWindow(options: ICreateMainWindowOptions) {
 	}
 
 	window.on('close', () => {
+		beginWebContentWindowClose(window);
 		closeAuxiliaryWindows();
-		disposeWebContentView(window);
 	});
 
 	window.on('closed', () => {
+		disposeWebContentView(window);
 		setTrayMainWindow(null);
 		mainWindow = null;
 	});

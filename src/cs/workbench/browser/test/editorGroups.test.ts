@@ -6,11 +6,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { Event } from 'cs/base/common/event';
+import { Emitter, Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
-import type { IStorageService } from 'cs/platform/storage/common/storage';
+import {
+	type IStorageService,
+	type IWillSaveStateEvent,
+	WillSaveStateReason,
+} from 'cs/platform/storage/common/storage';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { EditorGroupsService } from 'cs/workbench/services/editor/browser/editorGroupsService';
@@ -52,13 +56,16 @@ editorInputSerializerRegistry.register('test.editorInput', {
 	deserialize: (_instantiationService, value) => new TestEditorInput(URI.parse(value)),
 });
 
-function createStorageService(values = new Map<string, string>()): IStorageService {
+function createStorageService(
+	values = new Map<string, string>(),
+	onWillSaveState: Event<IWillSaveStateEvent> = Event.None,
+): IStorageService {
 	return {
 		_serviceBrand: undefined,
 		applicationStorage: undefined,
 		onDidChangeValue: Event.None,
 		onDidChangeTarget: Event.None,
-		onWillSaveState: Event.None,
+		onWillSaveState,
 		init: async () => {},
 		close: async () => {},
 		get: (key: string) => values.get(key),
@@ -140,6 +147,33 @@ test('EditorGroupsService restores group ownership and active group from storage
 	assert.deepEqual(
 		restored.getGroups().map(group => group.getEditors().map(editor => editor.resource?.path)),
 		[['/first'], ['/second']],
+	);
+	restored.dispose();
+});
+
+test('EditorGroupsService preserves the shutdown snapshot against teardown disposal', () => {
+	const values = new Map<string, string>();
+	const willSaveStateEmitter = new Emitter<IWillSaveStateEvent>();
+	const groups = new TestEditorGroupsService(
+		createStorageService(values, willSaveStateEmitter.event),
+		new InstantiationService(new ServiceCollection()),
+	);
+	groups.initialize();
+	const input = new TestEditorInput(URI.parse('test:/shutdown-editor'));
+	groups.openEditor(input);
+
+	willSaveStateEmitter.fire({
+		reason: WillSaveStateReason.SHUTDOWN,
+		join() {},
+	});
+	input.dispose();
+	groups.dispose();
+	willSaveStateEmitter.dispose();
+
+	const restored = createPersistedEditorGroupsService(values);
+	assert.deepEqual(
+		restored.activeGroup.getEditors().map(editor => editor.resource?.toString()),
+		['test:/shutdown-editor'],
 	);
 	restored.dispose();
 });

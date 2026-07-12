@@ -1230,6 +1230,149 @@ test('browser editor setInput cancellation cannot attach a stale resolved model'
 	}
 });
 
+test('browser editor activates its BrowserView after the visible Pane layout completes', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const operations: string[] = [];
+	let resolveActivationLayout!: () => void;
+	let layoutCount = 0;
+	let visible = false;
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => ({
+			...createTestBrowserViewModel(id, state),
+			get visible() { return visible; },
+			layout: async () => {
+				operations.push('layout');
+				layoutCount += 1;
+				if (layoutCount === 1) {
+					await new Promise<void>(resolve => {
+						resolveActivationLayout = resolve;
+					});
+				}
+			},
+			setVisible: async nextVisible => {
+				visible = nextVisible;
+				operations.push(`visible:${nextVisible}`);
+			},
+		} as IBrowserViewModel),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const editor = await createTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'visible-browser', title: 'Visible', url: 'https://example.com/visible' },
+	);
+
+	try {
+		for (let frame = 0; frame < 3; frame += 1) {
+			await new Promise<void>(resolve => mainWindow.requestAnimationFrame(() => resolve()));
+		}
+		const wrapper = editor.getElement().querySelector<HTMLElement>('.browser-container-wrapper');
+		assert.ok(wrapper);
+		wrapper.getBoundingClientRect = () => ({
+			x: 0,
+			y: 0,
+			width: 800,
+			height: 600,
+			top: 0,
+			right: 800,
+			bottom: 600,
+			left: 0,
+			toJSON: () => ({}),
+		});
+
+		editor.setVisible(true);
+		editor.layout();
+		await Promise.resolve();
+		resolveActivationLayout();
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		assert.ok(operations.length >= 3);
+		assert.equal(operations.at(-1), 'visible:true');
+		assert.ok(operations.slice(0, -1).every(operation => operation === 'layout'));
+		assert.equal(visible, true);
+	} finally {
+		editor.dispose();
+		instantiationService.dispose();
+	}
+});
+
+test('browser editor hides the previous BrowserView without releasing its page when the Pane switches models', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const hiddenIds: string[] = [];
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => ({
+			...createTestBrowserViewModel(id, state),
+			setVisible: async visible => {
+				if (!visible) {
+					hiddenIds.push(id);
+				}
+			},
+		} as IBrowserViewModel),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const editor = await createTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'first-visible-browser', title: 'First', url: 'https://example.com/first' },
+	);
+	const secondInput = browserViewWorkbenchService.getOrCreateLazy('second-visible-browser', {
+		title: 'Second',
+		url: 'https://example.com/second',
+	});
+
+	try {
+		await editor.setInput(secondInput, undefined, {}, CancellationTokenNone);
+		await Promise.resolve();
+		assert.deepEqual(hiddenIds, ['first-visible-browser']);
+	} finally {
+		editor.dispose();
+		instantiationService.dispose();
+	}
+});
+
+test('browser editor does not hide a BrowserView after its model starts disposal', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const modelWillDispose = new Emitter<void>();
+	const visibilityChanges: boolean[] = [];
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => ({
+			...createTestBrowserViewModel(id, state),
+			onWillDispose: modelWillDispose.event,
+			setVisible: async visible => {
+				visibilityChanges.push(visible);
+			},
+		} as IBrowserViewModel),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const editor = await createTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'disposing-browser', title: 'Disposing', url: 'https://example.com/disposing' },
+	);
+
+	try {
+		modelWillDispose.fire();
+		await Promise.resolve();
+		assert.equal(editor.model, undefined);
+		assert.deepEqual(visibilityChanges, []);
+	} finally {
+		modelWillDispose.dispose();
+		editor.dispose();
+		instantiationService.dispose();
+	}
+});
+
 test('browser editor publishes BrowserView scroll state through the Pane view-state event', async () => {
 	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);

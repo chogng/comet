@@ -18,11 +18,18 @@ import { ThemeMainService } from 'cs/platform/theme/electron-main/themeMainServi
 import { createNativeHostMainService } from 'cs/platform/native/electron-main/nativeHostMainService';
 import { registerWindowOpenPolicy } from 'cs/platform/window/electron-main/windowOpenPolicy';
 import { WindowsMainService } from 'cs/platform/windows/electron-main/windowsMainService';
+import { beginWebContentWindowClose } from 'cs/platform/browserView/electron-main/browserViewMainService';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
 configureEnvironmentMainPaths(environmentMainPaths);
 registerWindowOpenPolicy(app);
+app.once('before-quit', () => {
+	const window = getMainWindow();
+	if (window) {
+		beginWebContentWindowClose(window);
+	}
+});
 
 app.whenReady().then(async () => {
   await prepareEnvironmentMain(environmentMainPaths);

@@ -69,7 +69,6 @@ export abstract class MainEditorPart extends Disposable implements IEditorPartHo
 		private readonly languageService: IWorkbenchLanguageService,
 	) {
 		super();
-		this.restoreViewState();
 		this._register(this.storageService.onWillSaveState(event => {
 			event.join(this.captureAndPersistViewState());
 		}));
@@ -95,6 +94,7 @@ export abstract class MainEditorPart extends Disposable implements IEditorPartHo
 			return;
 		}
 
+		this.restoreViewState();
 		const groupView = this._register(this.instantiationService.createInstance(
 			EditorGroupView,
 			this.createGroupViewProps(),

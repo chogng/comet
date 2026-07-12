@@ -18,6 +18,7 @@ import {
 	BrowserEditorContribution,
 	BrowserWidgetLocation,
 	IBrowserEditorWidget,
+	type BrowserEditorModelDetachReason,
 } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
 import { BrowserOverlayManager, BrowserOverlayType } from 'cs/workbench/contrib/browserView/electron-browser/overlayManager';
 
@@ -128,15 +129,18 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 		void this.captureScreenshot();
 	}
 
-	override onModelDetached(): void {
-		if (this.model) {
-			void this.model.setVisible(false);
-		}
+	override onModelDetached(reason: BrowserEditorModelDetachReason): void {
+		const model = this.model;
 		this.model = undefined;
 		this.screenshotHandle.clear();
 		this.cancelFocusTimeout();
 		this.setBackgroundImage(undefined);
 		this.refresh();
+		if (model && reason === 'modelChanged') {
+			void model.setVisible(false).catch(error => {
+				this.logService.error(`Failed to hide BrowserView '${model.id}' after editor detachment.`, error);
+			});
+		}
 	}
 
 	override dispose(): void {

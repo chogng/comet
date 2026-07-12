@@ -583,7 +583,6 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	}
 
 	async setVisible(visible: boolean): Promise<void> {
-		this._visible = visible; // Set optimistically so model is in sync immediately
 		return this.browserViewService.setVisible(this.id, visible);
 	}
 

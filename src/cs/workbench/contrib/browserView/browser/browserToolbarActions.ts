@@ -15,15 +15,15 @@ import type { INotificationService } from 'cs/platform/notification/common/notif
 import type { BrowserEditorToolbarActions } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
 
 type CreateEditorBrowserToolbarActionsParams = {
-  browserUrl: string;
-  browserPageTitle?: string;
-  invokeDesktop: ElectronInvoke;
-  notificationService: INotificationService;
-  knowledgeBaseEnabled: boolean;
-  ui: LocaleMessages;
-  onLibraryUpdated?: () => void | Promise<void>;
-  onOpenAddressBarSourceMenu: () => void;
-  onToolbarExportDocx: () => void | Promise<void>;
+	browserViewId: string;
+	browserUrl: string;
+	invokeDesktop: ElectronInvoke;
+	notificationService: INotificationService;
+	knowledgeBaseEnabled: boolean;
+	ui: LocaleMessages;
+	onLibraryUpdated?: () => void | Promise<void>;
+	onOpenAddressBarSourceMenu: () => void;
+	onToolbarExportDocx: () => void | Promise<void>;
 };
 
 async function copyTextToClipboard(value: string) {
@@ -52,48 +52,48 @@ async function copyTextToClipboard(value: string) {
 }
 
 export function createEditorBrowserToolbarActions(
-  params: CreateEditorBrowserToolbarActionsParams,
+	params: CreateEditorBrowserToolbarActionsParams,
 ): BrowserEditorToolbarActions {
-  const {
-    browserUrl,
-    browserPageTitle,
-    invokeDesktop,
-    notificationService,
-    knowledgeBaseEnabled,
-    ui,
-    onLibraryUpdated,
-    onOpenAddressBarSourceMenu,
-    onToolbarExportDocx,
-  } = params;
+	const {
+		browserViewId,
+		browserUrl,
+		invokeDesktop,
+		notificationService,
+		knowledgeBaseEnabled,
+		ui,
+		onLibraryUpdated,
+		onOpenAddressBarSourceMenu,
+		onToolbarExportDocx,
+	} = params;
 
-  return {
+	return {
 		onOpenSources: onOpenAddressBarSourceMenu,
 		onArchiveCurrentPage: async () => {
-      try {
-        const result = await invokeDesktop<WebContentHtmlArchiveResult>(
-          'web_content_archive_html',
-          {
-            pageUrl: browserUrl,
-            pageTitle: browserPageTitle || null,
-          },
-        );
-        if (knowledgeBaseEnabled && result.pdfPath) {
-          void onLibraryUpdated?.();
-        }
+			try {
+				const result = await invokeDesktop<WebContentHtmlArchiveResult>(
+					'web_content_archive_html',
+					{
+						browserViewId,
+						pageUrl: browserUrl,
+					},
+				);
+				if (knowledgeBaseEnabled && result.pdfPath) {
+					void onLibraryUpdated?.();
+				}
 
-        notificationService.info(
-          (result.pdfPath
-            ? ui.toastHtmlArchiveSavedWithPdf
-            : ui.toastHtmlArchiveSavedWithoutPdf)
-            .replace('{filePath}', result.filePath)
-            .replace('{sourceUrl}', result.sourceUrl),
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error ?? 'Unknown archive error');
-        notificationService.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
-      }
-    },
+				notificationService.info(
+					(result.pdfPath
+						? ui.toastHtmlArchiveSavedWithPdf
+						: ui.toastHtmlArchiveSavedWithoutPdf)
+						.replace('{filePath}', result.filePath)
+						.replace('{sourceUrl}', result.sourceUrl),
+				);
+			} catch (error) {
+				const message =
+					error instanceof Error ? error.message : String(error ?? 'Unknown archive error');
+				notificationService.error(ui.toastHtmlArchiveSaveFailed.replace('{error}', message));
+			}
+		},
 		onExportDocx: () => {
       void onToolbarExportDocx();
     },

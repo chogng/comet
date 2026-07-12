@@ -238,6 +238,13 @@ async function getEditorViewStateStorage(code: Code): Promise<EditorViewStateSto
 	})()`);
 }
 
+async function getEditorGroupsStorage(code: Code): Promise<unknown> {
+	return code.evaluate(`(() => {
+		const stored = window.localStorage.getItem(${JSON.stringify(editorGroupsLocalStorageKey)});
+		return stored ? JSON.parse(stored) : null;
+	})()`);
+}
+
 function hasAlignedBrowserBounds(
 	renderer: RendererSnapshot,
 	nativeBounds: Awaited<ReturnType<Code['getVisibleWebContentsViewBounds']>>,
@@ -446,8 +453,8 @@ suite('Editor lifecycle smoke', function() {
 				result.renderer.rendererWebviewCount === 0 &&
 				result.renderer.browserContainer === null &&
 				result.nativeBounds.length === 0 &&
-				result.state.activeTargetId === null &&
-				result.state.ownership === 'inactive' &&
+				result.state.activeTargetId === 'browser-a' &&
+				result.state.ownership === 'active' &&
 				!result.state.visible &&
 				result.state.layoutPhase === 'hidden' &&
 				result.browser.heading === 'Editor Lifecycle Smoke',
@@ -490,7 +497,8 @@ suite('Editor lifecycle smoke', function() {
 				state: await getContentState(code, 'browser-a'),
 			}),
 			result =>
-				result.renderer.browserContainer === null &&
+				result.renderer.browserContainer?.bounds.width === 0 &&
+				result.renderer.browserContainer.bounds.height === 0 &&
 				result.nativeBounds.length === 0 &&
 				result.state.activeTargetId === 'browser-a' &&
 				result.state.ownership === 'active' &&
@@ -525,7 +533,7 @@ suite('Editor lifecycle smoke', function() {
 		await application.start();
 		const code = application.code;
 
-		await code.click('.comet-sidebar-home-nav-item');
+		await code.page.getByRole('button', { name: 'New chat', exact: true }).click();
 		const beforeReload = await code.waitForCondition(
 			'active draft Session before reload',
 			() => getSessionsReloadSnapshot(code),
@@ -577,15 +585,21 @@ suite('Editor lifecycle smoke', function() {
 			() => getRendererSnapshot(code),
 			snapshot => snapshot.activeTabKind === 'browser' && snapshot.tabCount === 1,
 		);
-			const delayedScroll = await code.waitForCondition(
-				'Browser view state restores after delayed document growth',
-			() => getBrowserScroll(code, 'browser-a'),
-			value => value >= 900,
+		const delayedRestore = await code.waitForCondition(
+			'Browser view state restores after delayed document growth',
+			async () => ({
+				scrollTop: await getBrowserScroll(code, 'browser-a'),
+				storedViewState: await getEditorViewStateStorage(code),
+				contentState: await getContentState(code, 'browser-a'),
+			}),
+			result => result.scrollTop >= 900,
 			{ timeoutMs: 30_000, intervalMs: 100 },
 		);
-			assert.ok(delayedScroll >= 900, `Expected Browser scroll, got ${delayedScroll}.`);
+		assert.ok(delayedRestore.scrollTop >= 900, `Expected Browser scroll, got ${delayedRestore.scrollTop}.`);
 		const scrolledTo = await setBrowserScroll(code, 'browser-a', 1440);
 		assert.ok(scrolledTo >= 1400, `Expected browser target to scroll, got ${scrolledTo}.`);
+		const editorGroupsBeforeRestart = await getEditorGroupsStorage(code);
+		assert.ok(editorGroupsBeforeRestart);
 
 		await application.stop();
 		await application.start();
@@ -593,26 +607,27 @@ suite('Editor lifecycle smoke', function() {
 		code = application.code;
 		const restored = await code.waitForCondition(
 			'active Browser scroll restoration after cold restart',
-				async () => ({
-					renderer: await getRendererSnapshot(code),
-					browser: await getBrowserDomSnapshot(code, 'browser-a'),
-					scrollTop: await getBrowserScroll(code, 'browser-a'),
-					storedViewState: await getEditorViewStateStorage(code),
-				}),
+			async () => ({
+				renderer: await getRendererSnapshot(code),
+				browser: await getBrowserDomSnapshot(code, 'browser-a'),
+				scrollTop: await getBrowserScroll(code, 'browser-a'),
+				storedViewState: await getEditorViewStateStorage(code),
+				storedEditorGroups: await getEditorGroupsStorage(code),
+			}),
 			result =>
 				result.renderer.activeTabKind === 'browser' &&
 				result.browser.href === delayedBrowserUrl &&
-					result.browser.heading === 'Editor Lifecycle Smoke' &&
-					result.scrollTop >= 1400 &&
-					result.storedViewState?.version === 2 &&
-					result.storedViewState.entries[0]?.key.paneId === 'workbench.editor.browser' &&
-					result.storedViewState.entries[0]?.state.scrollY >= 1400,
+				result.browser.heading === 'Editor Lifecycle Smoke' &&
+				result.scrollTop >= 1400 &&
+				result.storedViewState?.version === 2 &&
+				result.storedViewState.entries[0]?.key.paneId === 'workbench.editor.browser' &&
+				result.storedViewState.entries[0]?.state.scrollY >= 1400,
 			{ timeoutMs: 30_000, intervalMs: 150 },
 		);
-			assert.ok(restored.scrollTop >= 1400);
-			assert.equal(restored.storedViewState?.version, 2);
-			assert.equal(restored.storedViewState?.entries[0]?.key.paneId, 'workbench.editor.browser');
-			assert.ok((restored.storedViewState?.entries[0]?.state.scrollY ?? 0) >= 1400);
+		assert.ok(restored.scrollTop >= 1400);
+		assert.equal(restored.storedViewState?.version, 2);
+		assert.equal(restored.storedViewState?.entries[0]?.key.paneId, 'workbench.editor.browser');
+		assert.ok((restored.storedViewState?.entries[0]?.state.scrollY ?? 0) >= 1400);
 	});
 
 	test('hides the active browser target after closing its last tab', async () => {
@@ -647,15 +662,9 @@ suite('Editor lifecycle smoke', function() {
 			{ timeoutMs: 30_000, intervalMs: 150 },
 		);
 
-		await code.evaluate(`(() => {
-			const closeButton = document.querySelector(
-				'.comet-editor-tab[data-tab-id="browser-a"] .comet-editor-tab-close-btn'
-			);
-			if (!(closeButton instanceof HTMLButtonElement)) {
-				throw new Error('Browser tab close button was not found.');
-			}
-			closeButton.click();
-		})()`);
+		const activeTab = code.page.locator('.comet-editor-tab.comet-is-active');
+		await activeTab.hover();
+		await activeTab.locator('.comet-editor-tab-close-btn').click();
 
 		await code.waitForCondition(
 			'browser target release after closing the last tab',

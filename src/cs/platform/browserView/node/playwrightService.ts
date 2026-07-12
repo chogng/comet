@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable, DisposableMap, IDisposable } from 'cs/base/common/lifecycle';
-import { DeferredPromise, disposableTimeout, raceTimeout } from 'cs/base/common/async';
+import { DeferredPromise, disposableTimeout, raceCancellationError, raceTimeout } from 'cs/base/common/async';
 import { CancellationError, CancellationToken, CancellationTokenNone, isCancellationError } from 'cs/base/common/cancellation';
 import { Emitter, Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
@@ -18,14 +18,14 @@ import {
 	BrowserPageReadinessTimeoutError,
 	IBrowserPageSnapshot,
 	IInvokeFunctionResult,
-	IPageTrackingAcquireResult,
+	IPageTrackingLease,
 	IPageSnapshotOptions,
 	IPlaywrightService,
 } from 'cs/platform/browserView/common/playwrightService';
 import { IBrowserViewGroupRemoteService } from 'cs/platform/browserView/node/browserViewGroupRemoteService';
-import { IBrowserViewGroup } from 'cs/platform/browserView/common/browserViewGroup';
+import { IBrowserViewGroup, type IBrowserViewGroupViewEvent } from 'cs/platform/browserView/common/browserViewGroup';
 import { PlaywrightTab, DialogInterruptedError } from 'cs/platform/browserView/node/playwrightTab';
-import { CDPRequest, CDPResponse } from 'cs/platform/browserView/common/cdp/types';
+import { CDPRequest } from 'cs/platform/browserView/common/cdp/types';
 import { generateUuid } from 'cs/base/common/uuid';
 import {
 	createPageSnapshotDeadline,
@@ -39,16 +39,16 @@ import {
 // eslint-disable-next-line local/code-import-patterns
 import type { Browser, BrowserContext, ConnectOverCDPTransport, Page } from 'playwright-core';
 
-/**
- * Tracks whether a caller-initiated Playwright action is currently in flight.
- */
-export interface IPlaywrightActionScope {
-	activeCalls: number;
-}
-
 const DEFERRED_RESULT_CLEANUP_MS = 5 * 60_000; // 5 minutes
 const SESSION_INACTIVITY_MS = 30 * 60_000; // 30 minutes
 const OPEN_PAGE_NAVIGATION_TIMEOUT_MS = 30_000;
+
+interface PageTrackingEntry {
+	readonly viewId: string;
+	readonly leases: Set<string>;
+	targetId: string | undefined;
+	lifetimeOwned: boolean;
+}
 
 /**
  * Narrow a raw Playwright transport payload to a {@link CDPRequest}.
@@ -91,7 +91,11 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	/** Global set of tracked page IDs (shared across all sessions). */
 	private readonly _trackedPages = new Set<string>();
+	private readonly _trackingEntriesByView = new Map<string, PageTrackingEntry>();
+	private readonly _trackingEntriesByLease = new Map<string, PageTrackingEntry>();
 	private readonly _pageTrackingOperations = new Map<string, Promise<unknown>>();
+	private _trackingGroup: IBrowserViewGroup | undefined;
+	private _pendingTrackingGroup: Promise<IBrowserViewGroup> | undefined;
 
 	private readonly _onDidChangeTrackedPages = this._register(new Emitter<readonly string[]>());
 	readonly onDidChangeTrackedPages: Event<readonly string[]> = this._onDidChangeTrackedPages.event;
@@ -142,8 +146,6 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 		const group = await this.browserViewGroupRemoteService.createGroup({ mainWindowId: this.windowId, sessionId });
 
-		const actionScope: IPlaywrightActionScope = { activeCalls: 0 };
-
 		let browser: Browser;
 		try {
 			const playwright = await import('playwright-core');
@@ -169,23 +171,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 						// waiting for a response and surface later as an opaque hang.
 						throw new Error(`[PlaywrightService] Unexpected CDP transport payload for session ${sessionId} (type: ${typeof rawMessage})`);
 					}
-					const message = rawMessage;
-					// Block Playwright's automatic / default emulation traffic. We
-					// only forward `Emulation.*` to the view while a caller-initiated
-					// action is running (see IPlaywrightActionScope) so the workbench
-					// stays in control of device emulation. Other traffic — e.g. the
-					// setup Playwright issues on its own when connecting or creating
-					// pages — is acknowledged with a synthetic success response and
-					// never hits the view.
-					if (actionScope.activeCalls === 0 && message.method.startsWith('Emulation.')) {
-						setTimeout(() => {
-							if (!transportClosed) {
-								transport.onmessage?.({ id: message.id, result: {}, sessionId: message.sessionId } satisfies CDPResponse);
-							}
-						}, 1);
-						return;
-					}
-					void group.sendCDPMessage(message).catch(error => {
+					void group.sendCDPMessage(rawMessage).catch(error => {
 						this.logService.error(`[PlaywrightService] CDP transport send failed for session ${sessionId}`, error);
 						closeTransport();
 					});
@@ -210,23 +196,17 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			sessionId,
 			browser,
 			group,
-			actionScope,
 			this.logService,
 			this.agentNetworkFilterService,
 			this.telemetryService,
-			async viewId => {
-				await this.acquirePageTracking(viewId);
-			},
+			viewId => this._acquirePageLifetimeTracking(viewId),
 		);
 
-		session.registerDisposable(group.onDidAddView(e => {
-			void this.acquirePageTracking(e.viewId).catch(error => {
-				this.logService.error(`[PlaywrightService] Failed to track page ${e.viewId}`, error);
-			});
-		}));
 		session.registerDisposable(group.onDidRemoveView(e => {
-			if (this._trackedPages.delete(e.viewId)) {
-				this._fireTrackedPages();
+			if (e.reason === 'closed') {
+				void this._enqueuePageTrackingOperation(e.viewId, async () => {
+					this._deactivateTrackingEntry(e.viewId, e.targetId);
+				});
 			}
 		}));
 
@@ -241,16 +221,19 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		this._sessions.set(sessionId, session);
 
 		// Replay globally tracked pages into the new session's group.
-		// Pages may have been removed since they were tracked — catch and
-		// evict stale entries so they don't accumulate.
-		for (const viewId of [...this._trackedPages]) {
-			try {
-				await session.group.addView(viewId);
-			} catch {
-				this.logService.debug(`[PlaywrightService] Stale tracked page ${viewId} removed during replay`);
-				this._trackedPages.delete(viewId);
-				this._fireTrackedPages();
+		try {
+			for (const viewId of [...this._trackedPages]) {
+				await this._enqueuePageTrackingOperation(viewId, async () => {
+					const entry = this._trackingEntriesByView.get(viewId);
+					if (!entry) {
+						return;
+					}
+					this._acceptTrackingTarget(entry, await session.group.addView(viewId));
+				});
 			}
+		} catch (error) {
+			this._sessions.deleteAndDispose(sessionId);
+			throw error;
 		}
 
 		this._touchSession(sessionId);
@@ -259,40 +242,73 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	// --- Page tracking (global) ---
 
-	acquirePageTracking(viewId: string): Promise<IPageTrackingAcquireResult> {
+	acquirePageTracking(viewId: string): Promise<IPageTrackingLease> {
+		const lease: IPageTrackingLease = { viewId, leaseId: generateUuid() };
 		return this._enqueuePageTrackingOperation(viewId, async () => {
-			if (this._trackedPages.has(viewId)) {
-				return { acquired: false };
+			const trackingGroup = await this._getOrCreateTrackingGroup();
+			const target = await trackingGroup.addView(viewId);
+			let existing = this._trackingEntriesByView.get(viewId);
+			if (existing?.targetId !== undefined && existing.targetId !== target.targetId) {
+				this._deactivateTrackingEntry(viewId, existing.targetId);
+				existing = undefined;
+			}
+			if (existing) {
+				this._acceptTrackingTarget(existing, target);
+				await this._addTrackingEntryToSessions(existing);
+				existing.leases.add(lease.leaseId);
+				this._trackingEntriesByLease.set(lease.leaseId, existing);
+				return lease;
 			}
 
-			const sessions = [...this._sessions.values()];
-			this._trackedPages.add(viewId);
-			this._fireTrackedPages();
-
-			const additions = await Promise.allSettled(sessions.map(session => session.group.addView(viewId)));
-			const rejected = additions.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-			if (!rejected) {
-				return { acquired: true };
+			const entry = this._createTrackingEntry(viewId);
+			this._acceptTrackingTarget(entry, target);
+			entry.leases.add(lease.leaseId);
+			this._trackingEntriesByLease.set(lease.leaseId, entry);
+			try {
+				await this._addTrackingEntryToSessions(entry);
+				return lease;
+			} catch (error) {
+				let cleanupError: unknown;
+				try {
+					await this._removeTrackingEntryFromGroups(entry);
+				} catch (candidate) {
+					cleanupError = candidate;
+				}
+				this._trackingEntriesByLease.delete(lease.leaseId);
+				entry.leases.delete(lease.leaseId);
+				this._deactivateTrackingEntry(viewId, entry.targetId);
+				if (cleanupError !== undefined) {
+					throw new AggregateError(
+						[error, cleanupError],
+						`Failed to acquire and roll back tracking for Browser view "${viewId}".`,
+					);
+				}
+				throw error;
 			}
-
-			await Promise.allSettled(sessions.map(session => session.group.removeView(viewId)));
-			if (this._trackedPages.delete(viewId)) {
-				this._fireTrackedPages();
-			}
-			throw rejected.reason;
 		});
 	}
 
-	releasePageTracking(viewId: string): Promise<void> {
-		return this._enqueuePageTrackingOperation(viewId, async () => {
-			if (!this._trackedPages.has(viewId)) {
+	releasePageTracking(lease: IPageTrackingLease): Promise<void> {
+		return this._enqueuePageTrackingOperation(lease.viewId, async () => {
+			const entry = this._trackingEntriesByLease.get(lease.leaseId);
+			if (!entry) {
 				return;
 			}
-
-			await Promise.all([...this._sessions.values()].map(session => session.group.removeView(viewId)));
-			if (this._trackedPages.delete(viewId)) {
-				this._fireTrackedPages();
+			if (entry.viewId !== lease.viewId) {
+				throw new Error(`Page tracking lease "${lease.leaseId}" does not belong to view "${lease.viewId}".`);
 			}
+
+			if (
+				this._trackingEntriesByView.get(entry.viewId) === entry
+				&& !entry.lifetimeOwned
+				&& entry.leases.size === 1
+			) {
+				await this._removeTrackingEntryFromGroups(entry);
+				this._deactivateTrackingEntry(entry.viewId, entry.targetId);
+			}
+
+			entry.leases.delete(lease.leaseId);
+			this._trackingEntriesByLease.delete(lease.leaseId);
 		});
 	}
 
@@ -302,6 +318,174 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	async getTrackedPages(): Promise<readonly string[]> {
 		return [...this._trackedPages];
+	}
+
+	private _assertActivePageTrackingLease(lease: IPageTrackingLease): PageTrackingEntry {
+		const entry = this._trackingEntriesByLease.get(lease.leaseId);
+		if (
+			!entry
+			|| entry.viewId !== lease.viewId
+			|| this._trackingEntriesByView.get(lease.viewId) !== entry
+		) {
+			throw new BrowserPageNotTrackedError(lease.viewId);
+		}
+		return entry;
+	}
+
+	private async _getOrCreateTrackingGroup(): Promise<IBrowserViewGroup> {
+		if (this._trackingGroup) {
+			return this._trackingGroup;
+		}
+		if (this._pendingTrackingGroup) {
+			return this._pendingTrackingGroup;
+		}
+
+		const pending = this.browserViewGroupRemoteService.createGroup({
+			mainWindowId: this.windowId,
+			sessionId: 'playwright:page-tracking',
+		}).then(group => {
+			if (this._store.isDisposed) {
+				group.dispose();
+				throw new Error('PlaywrightService was disposed while creating its page-tracking group.');
+			}
+
+			this._trackingGroup = this._register(group);
+			this._register(group.onDidRemoveView(event => {
+				if (event.reason === 'closed') {
+					void this._enqueuePageTrackingOperation(event.viewId, async () => {
+						this._deactivateTrackingEntry(event.viewId, event.targetId);
+					});
+				}
+			}));
+			this._register(Event.once(group.onDidDestroy)(() => {
+				if (this._trackingGroup === group) {
+					this._trackingGroup = undefined;
+				}
+			}));
+			return group;
+		});
+		this._pendingTrackingGroup = pending;
+		try {
+			return await pending;
+		} finally {
+			if (this._pendingTrackingGroup === pending) {
+				this._pendingTrackingGroup = undefined;
+			}
+		}
+	}
+
+	private _acquirePageLifetimeTracking(viewId: string): Promise<void> {
+		return this._enqueuePageTrackingOperation(viewId, async () => {
+			const trackingGroup = await this._getOrCreateTrackingGroup();
+			const target = await trackingGroup.addView(viewId);
+			let existing = this._trackingEntriesByView.get(viewId);
+			if (existing?.targetId !== undefined && existing.targetId !== target.targetId) {
+				this._deactivateTrackingEntry(viewId, existing.targetId);
+				existing = undefined;
+			}
+			const entry = existing ?? this._createTrackingEntry(viewId);
+			this._acceptTrackingTarget(entry, target);
+			const wasLifetimeOwned = entry.lifetimeOwned;
+			entry.lifetimeOwned = true;
+			try {
+				await this._addTrackingEntryToSessions(entry);
+			} catch (error) {
+				entry.lifetimeOwned = wasLifetimeOwned;
+				if (!existing) {
+					let cleanupError: unknown;
+					try {
+						await this._removeTrackingEntryFromGroups(entry);
+					} catch (candidate) {
+						cleanupError = candidate;
+					}
+					this._deactivateTrackingEntry(viewId, entry.targetId);
+					if (cleanupError !== undefined) {
+						throw new AggregateError(
+							[error, cleanupError],
+							`Failed to acquire and roll back lifetime tracking for Browser view "${viewId}".`,
+						);
+					}
+				}
+				throw error;
+			}
+		});
+	}
+
+	private _createTrackingEntry(viewId: string): PageTrackingEntry {
+		const entry: PageTrackingEntry = {
+			viewId,
+			leases: new Set(),
+			targetId: undefined,
+			lifetimeOwned: false,
+		};
+		this._trackingEntriesByView.set(viewId, entry);
+		this._trackedPages.add(viewId);
+		this._fireTrackedPages();
+		return entry;
+	}
+
+	private async _addTrackingEntryToSessions(entry: PageTrackingEntry): Promise<void> {
+		const additions = await Promise.allSettled(
+			[...this._sessions.values()].map(session => session.group.addView(entry.viewId)),
+		);
+		const errors: unknown[] = [];
+		for (const addition of additions) {
+			if (addition.status === 'rejected') {
+				errors.push(addition.reason);
+				continue;
+			}
+			try {
+				this._acceptTrackingTarget(entry, addition.value);
+			} catch (error) {
+				errors.push(error);
+			}
+		}
+		if (errors.length === 1) {
+			throw errors[0];
+		}
+		if (errors.length > 1) {
+			throw new AggregateError(errors, `Failed to add Browser view "${entry.viewId}" to Playwright sessions.`);
+		}
+	}
+
+	private async _removeTrackingEntryFromGroups(entry: PageTrackingEntry): Promise<void> {
+		const groups = [
+			...[...this._sessions.values()].map(session => session.group),
+			...(this._trackingGroup ? [this._trackingGroup] : []),
+		];
+		const removals = await Promise.allSettled(groups.map(group => group.removeView(entry.viewId)));
+		const errors = removals
+			.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+			.map(result => result.reason);
+		if (errors.length === 1) {
+			throw errors[0];
+		}
+		if (errors.length > 1) {
+			throw new AggregateError(errors, `Failed to remove Browser view "${entry.viewId}" from Playwright groups.`);
+		}
+	}
+
+	private _acceptTrackingTarget(entry: PageTrackingEntry, target: IBrowserViewGroupViewEvent): void {
+		if (target.viewId !== entry.viewId) {
+			throw new Error(`Browser view group returned view "${target.viewId}" while tracking "${entry.viewId}".`);
+		}
+		if (entry.targetId !== undefined && entry.targetId !== target.targetId) {
+			throw new Error(`Browser view "${entry.viewId}" changed target while its tracking entry was active.`);
+		}
+		entry.targetId = target.targetId;
+	}
+
+	private _deactivateTrackingEntry(viewId: string, targetId?: string): void {
+		const entry = this._trackingEntriesByView.get(viewId);
+		if (!entry || (targetId !== undefined && entry.targetId !== undefined && entry.targetId !== targetId)) {
+			return;
+		}
+
+		this._trackingEntriesByView.delete(viewId);
+		entry.lifetimeOwned = false;
+		if (this._trackedPages.delete(viewId)) {
+			this._fireTrackedPages();
+		}
 	}
 
 	private _enqueuePageTrackingOperation<T>(viewId: string, operation: () => Promise<T>): Promise<T> {
@@ -329,12 +513,29 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		return session.getSummary(pageId);
 	}
 
-	async captureSnapshot(sessionId: string, pageId: string, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IBrowserPageSnapshot> {
+	async navigatePage(sessionId: string, trackingLease: IPageTrackingLease, url: string, token: CancellationToken): Promise<void> {
+		if (token.isCancellationRequested) {
+			throw new CancellationError();
+		}
+		this._assertActivePageTrackingLease(trackingLease);
+		const session = await raceCancellationError(this._getOrCreateSession(sessionId), token);
+		const navigation = this._enqueuePageTrackingOperation(trackingLease.viewId, async () => {
+			if (token.isCancellationRequested) {
+				throw new CancellationError();
+			}
+			this._assertActivePageTrackingLease(trackingLease);
+			await session.navigatePage(trackingLease.viewId, url);
+		});
+		await raceCancellationError(navigation, token);
+	}
+
+	async captureSnapshot(sessionId: string, trackingLease: IPageTrackingLease, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IBrowserPageSnapshot> {
 		const resolvedOptions = resolvePageSnapshotOptions(options);
 		const deadline = createPageSnapshotDeadline(resolvedOptions);
-		if (!this._trackedPages.has(pageId)) {
-			throw new BrowserPageNotTrackedError(pageId);
+		if (token.isCancellationRequested) {
+			throw new CancellationError();
 		}
+		this._assertActivePageTrackingLease(trackingLease);
 		const session = await waitForPageSnapshotStage(
 			() => this._getOrCreateSession(sessionId),
 			deadline,
@@ -342,8 +543,12 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			token,
 			false,
 		);
+		const capture = this._enqueuePageTrackingOperation(trackingLease.viewId, async () => {
+			this._assertActivePageTrackingLease(trackingLease);
+			return session.captureSnapshot(trackingLease.viewId, resolvedOptions, deadline, token);
+		});
 		return waitForPageSnapshotStage(
-			() => session.captureSnapshot(pageId, resolvedOptions, deadline, token),
+			() => capture,
 			deadline,
 			resolvedOptions,
 			token,
@@ -449,7 +654,6 @@ class PlaywrightSession extends Disposable {
 		readonly sessionId: string,
 		private _browser: Browser,
 		readonly group: IBrowserViewGroup,
-		private readonly actionScope: IPlaywrightActionScope,
 		private readonly logService: ILogService,
 		private readonly agentNetworkFilterService: IAgentNetworkFilterService,
 		private readonly telemetryService: ITelemetryService,
@@ -499,6 +703,19 @@ class PlaywrightSession extends Disposable {
 
 	async getSummary(pageId: string): Promise<string> {
 		return this._getSummary(pageId, true);
+	}
+
+	async navigatePage(pageId: string, url: string): Promise<void> {
+		await this._runAgainstPage(pageId, async page => {
+			try {
+				await page.goto(url, { waitUntil: 'domcontentloaded', timeout: OPEN_PAGE_NAVIGATION_TIMEOUT_MS });
+			} catch (error) {
+				if (!isNavigationTimeoutError(error)) {
+					throw error;
+				}
+				throw new Error(`Navigation to ${url} timed out after ${OPEN_PAGE_NAVIGATION_TIMEOUT_MS} ms for page "${pageId}".`);
+			}
+		});
 	}
 
 	async captureSnapshot(
@@ -798,7 +1015,7 @@ class PlaywrightSession extends Disposable {
 		this._onContextAdded(page.context());
 		page.once('close', () => this._onPageRemoved(page));
 		page.setDefaultTimeout(10000);
-		this._tabs.set(page, new PlaywrightTab(page, this.actionScope, this.agentNetworkFilterService));
+		this._tabs.set(page, new PlaywrightTab(page, this.agentNetworkFilterService));
 
 		const deferred = new DeferredPromise<string>();
 		const timeout = setTimeout(() => deferred.error(new Error(`Timed out waiting for browser view`)), timeoutMs);

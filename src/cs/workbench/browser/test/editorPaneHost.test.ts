@@ -19,6 +19,7 @@ import {
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
+import { getEditorPaneMode } from 'cs/workbench/browser/parts/editor/editorTabsModel';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
@@ -156,6 +157,25 @@ class EventedViewStateEditorPane extends ImmediateTestEditorPane {
 	}
 }
 
+class InitializingViewStateEditorPane extends EventedViewStateEditorPane {
+	readonly restoreCalls: Array<TestViewState | undefined> = [];
+
+	override async setInput(
+		input: TestEditorInput,
+		options: IEditorOptions | undefined,
+		context: IEditorOpenContext,
+		token: CancellationToken,
+	): Promise<void> {
+		super.setInput(input, options, context, token);
+		await Promise.resolve();
+		this.setViewState({ cursor: 99 });
+	}
+
+	override restoreViewState(state: TestViewState | undefined): void {
+		this.restoreCalls.push(state);
+	}
+}
+
 function createHostContext(params: {
 	readonly groupId?: string;
 	readonly entries?: EditorPanesContext['viewStateEntries'];
@@ -205,6 +225,7 @@ test('group-owned EditorPanes reuses Panes and passes options, context, and canc
 	const firstContext = { newInGroup: true } satisfies IEditorOpenContext;
 
 	try {
+		assert.equal(getEditorPaneMode(first), 'test');
 		const firstOpen = host.openEditor(first, firstOptions, firstContext);
 		await Promise.resolve();
 		assert.ok(pane);
@@ -280,6 +301,54 @@ test('EditorPanes persists active Pane view-state events synchronously', async (
 			},
 			state: { cursor: 37 },
 		});
+	} finally {
+		host.dispose();
+		registration.dispose();
+		input.dispose();
+	}
+});
+
+test('EditorPanes restores persisted state before subscribing to Pane initialization events', async () => {
+	const paneId = 'test.initializingViewStatePane';
+	const input = new TestEditorInput(URI.parse('test:/initializing-view-state'), paneId);
+	const savedStates: Array<{ key: unknown; state: unknown }> = [];
+	const key = {
+		groupId: 'pane-host-group',
+		paneId,
+		resourceKey: getEditorInputId(input),
+	};
+	const host = createHost(document.createElement('div'), createHostContext({
+		savedStates,
+		entries: [{ key, state: { cursor: 11 } }],
+	}));
+	let pane: InitializingViewStateEditorPane | undefined;
+	class RegisteredInitializingViewStateEditorPane extends InitializingViewStateEditorPane {
+		constructor() {
+			super();
+			pane = this;
+		}
+	}
+	const registration = editorPaneRegistry.registerEditorPane(new EditorPaneDescriptor({
+		paneId,
+		modeId: 'test',
+		contentClassNames: [],
+		inputConstructor: TestEditorInput,
+		paneConstructor: RegisteredInitializingViewStateEditorPane,
+	}));
+
+	try {
+		const opening = host.openEditor(input, undefined, { newInGroup: true });
+		await Promise.resolve();
+		host.setContext(createHostContext({
+			savedStates,
+			entries: [{ key, state: { cursor: 11 } }],
+		}));
+		await opening;
+		assert.deepEqual(pane?.restoreCalls, [{ cursor: 11 }]);
+		assert.deepEqual(savedStates, []);
+
+		pane?.setViewState({ cursor: 22 });
+		assert.deepEqual(savedStates, [{ key, state: { cursor: 22 } }]);
 	} finally {
 		host.dispose();
 		registration.dispose();

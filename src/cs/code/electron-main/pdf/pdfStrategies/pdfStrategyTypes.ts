@@ -7,7 +7,7 @@ export type PdfDownloadContext = {
   articleTitle: string;
   journalTitle: string;
   downloadDir: string;
-  webContentHtmlSnapshot: string | null;
+  webContentHtmlSnapshot: string | undefined;
   abortSignal?: AbortSignal;
   sciencePdfCandidateUrls: string[];
   naturePdfCandidateUrls: string[];
@@ -21,4 +21,3 @@ export interface PdfDownloadStrategy {
   matches(request: PdfDownloadContext): boolean;
   download(request: PdfDownloadContext): Promise<PdfDownloadResult | null>;
 }
-

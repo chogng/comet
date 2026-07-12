@@ -29,8 +29,7 @@ export type ScienceValidationResult = {
   sectionCount: number;
   title: string;
   readyMs: number;
-  navigationMode: 'web-content-existing' | 'reuse-existing' | 'dom-ready' | 'load-finished' | 'boot-timeout';
-  source: 'web-content' | 'window';
+  navigationMode: 'reuse-existing' | 'dom-ready' | 'load-finished' | 'boot-timeout';
 };
 
 export type ScienceValidationWindowState = {

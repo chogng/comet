@@ -93,8 +93,11 @@ export interface IInvokeFunctionResult {
 	deferredResultId?: string;
 }
 
-export interface IPageTrackingAcquireResult {
-	readonly acquired: boolean;
+export interface IPageTrackingLease {
+	/** Stable BrowserView identity addressed by this lease. */
+	readonly viewId: string;
+	/** Opaque ownership token bound to the target generation active at acquisition. */
+	readonly leaseId: string;
 }
 
 /**
@@ -118,17 +121,17 @@ export interface IPlaywrightService {
 
 	/**
 	 * Acquire tracking for an existing browser view so that agent tools can interact
-	 * with it. The result reports whether this call added the page to the shared
-	 * tracked-page set. Callers must only release tracking they acquired.
+	 * with it. Every successful call returns an independent, target-generation-bound
+	 * lease that must be released.
 	 * @param viewId The browser view identifier.
 	 */
-	acquirePageTracking(viewId: string): Promise<IPageTrackingAcquireResult>;
+	acquirePageTracking(viewId: string): Promise<IPageTrackingLease>;
 
 	/**
-	 * Release tracking acquired by the caller for a browser view.
-	 * @param viewId The browser view identifier.
+	 * Release one tracking lease. Other leases and page-lifetime ownership remain active.
+	 * @param lease The exact lease returned by {@link acquirePageTracking}.
 	 */
-	releasePageTracking(viewId: string): Promise<void>;
+	releasePageTracking(lease: IPageTrackingLease): Promise<void>;
 
 	/**
 	 * Whether the given page is currently tracked by the service.
@@ -157,7 +160,10 @@ export interface IPlaywrightService {
 	 */
 	getSummary(sessionId: string, pageId: string): Promise<string>;
 
-	captureSnapshot(sessionId: string, pageId: string, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IBrowserPageSnapshot>;
+	/** Navigate the exact page generation owned by a tracking lease. */
+	navigatePage(sessionId: string, trackingLease: IPageTrackingLease, url: string, token: CancellationToken): Promise<void>;
+
+	captureSnapshot(sessionId: string, trackingLease: IPageTrackingLease, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IBrowserPageSnapshot>;
 
 	/**
 	 * Run a function with access to a Playwright page and return its raw result, or throw an error.

@@ -7,7 +7,7 @@ import { app, session } from 'electron';
 import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, DisposableMap, DisposableStore, type IDisposable } from 'cs/base/common/lifecycle';
 import { generateUuid } from 'cs/base/common/uuid';
-import type { IBrowserViewGroup, IBrowserViewGroupViewEvent } from 'cs/platform/browserView/common/browserViewGroup';
+import type { IBrowserViewGroup, IBrowserViewGroupViewEvent, IBrowserViewGroupViewRemovalEvent } from 'cs/platform/browserView/common/browserViewGroup';
 import { BrowserViewStorageScope, type IBrowserViewOwner } from 'cs/platform/browserView/common/browserView';
 import { CDPBrowserProxy } from 'cs/platform/browserView/common/cdp/proxy';
 import type {
@@ -53,7 +53,7 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 	private readonly _onDidAddView = this._register(new Emitter<IBrowserViewGroupViewEvent>());
 	readonly onDidAddView = this._onDidAddView.event;
 
-	private readonly _onDidRemoveView = this._register(new Emitter<IBrowserViewGroupViewEvent>());
+	private readonly _onDidRemoveView = this._register(new Emitter<IBrowserViewGroupViewRemovalEvent>());
 	readonly onDidRemoveView = this._onDidRemoveView.event;
 
 	private readonly _onDidDestroy = this._register(new Emitter<void>());
@@ -77,9 +77,10 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 		await this.debugger.sendMessage(message);
 	}
 
-	async addView(viewId: string): Promise<void> {
-		if (this.views.has(viewId)) {
-			return;
+	async addView(viewId: string): Promise<IBrowserViewGroupViewEvent> {
+		const existingView = this.views.get(viewId);
+		if (existingView) {
+			return { viewId, targetId: existingView.debuggerTransport.targetId };
 		}
 
 		const view = this.browserViewMainService.tryGetTarget(viewId);
@@ -101,13 +102,13 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 		const resources = new BrowserViewGroupViewResources();
 		this.viewResources.set(viewId, resources);
 		resources.add(Event.once(view.onDidClose)(() => {
-			void this.removeView(viewId);
+			void this.removeView(viewId, 'closed');
 		}));
 
 		try {
 			const targetInfo = await view.debuggerTransport.getTargetInfo();
 			if (this.views.get(viewId) !== view) {
-				return;
+				throw new Error(`Browser view ${viewId} closed while it was being added to group ${this.id}`);
 			}
 
 			const target = new BrowserViewCDPTarget(
@@ -130,14 +131,16 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 				this.debugger.notifySessionCreated(session, waitingForDebugger);
 			}));
 
-			this._onDidAddView.fire({ viewId });
+			const event = { viewId, targetId: view.debuggerTransport.targetId };
+			this._onDidAddView.fire(event);
+			return event;
 		} catch (error) {
 			await this.removeView(viewId);
 			throw error;
 		}
 	}
 
-	async removeView(viewId: string): Promise<void> {
+	async removeView(viewId: string, reason: IBrowserViewGroupViewRemovalEvent['reason'] = 'detached'): Promise<void> {
 		const view = this.views.get(viewId);
 		if (!view || !this.views.delete(viewId)) {
 			return;
@@ -151,7 +154,7 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 		if (this.defaultContextId === view.context.id && !this.hasViewInContext(view.context.id)) {
 			this.defaultContextId = this.views.values().next().value?.context.id;
 		}
-		this._onDidRemoveView.fire({ viewId });
+		this._onDidRemoveView.fire({ viewId, targetId: view.debuggerTransport.targetId, reason });
 	}
 
 	private registerChildTarget(view: BrowserViewMainTarget, targetInfo: CDPTargetInfo): void {
@@ -277,7 +280,7 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 		if (!(target instanceof BrowserViewCDPTarget)) {
 			throw new Error('Target is not backed by an integrated browser view');
 		}
-		await this.removeView(target.viewId);
+		await this.removeView(target.viewId, 'closed');
 		await this.browserViewMainService.destroyBrowserView(target.viewId);
 		return true;
 	}
@@ -309,7 +312,7 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 			.filter(view => view.context.id === browserContextId)
 			.map(view => view.targetId);
 		for (const viewId of viewIds) {
-			await this.removeView(viewId);
+			await this.removeView(viewId, 'closed');
 			await this.browserViewMainService.destroyBrowserView(viewId);
 		}
 		await entry.context.session.closeAllConnections();

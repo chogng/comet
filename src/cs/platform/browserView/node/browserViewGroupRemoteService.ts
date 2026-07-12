@@ -7,7 +7,7 @@ import { Event } from 'cs/base/common/event';
 import { Disposable } from 'cs/base/common/lifecycle';
 import { ProxyChannel } from 'cs/base/parts/ipc/common/ipc';
 import { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
-import { IBrowserViewGroup, IBrowserViewGroupService, IBrowserViewGroupViewEvent, ipcBrowserViewGroupChannelName } from 'cs/platform/browserView/common/browserViewGroup';
+import { IBrowserViewGroup, IBrowserViewGroupService, IBrowserViewGroupViewEvent, IBrowserViewGroupViewRemovalEvent, ipcBrowserViewGroupChannelName } from 'cs/platform/browserView/common/browserViewGroup';
 import { IBrowserViewOwner } from 'cs/platform/browserView/common/browserView';
 import { CDPEvent, CDPRequest, CDPResponse } from 'cs/platform/browserView/common/cdp/types';
 
@@ -48,7 +48,7 @@ class RemoteBrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		return this.groupService.onDynamicDidAddView(this.id);
 	}
 
-	get onDidRemoveView(): Event<IBrowserViewGroupViewEvent> {
+	get onDidRemoveView(): Event<IBrowserViewGroupViewRemovalEvent> {
 		return this.groupService.onDynamicDidRemoveView(this.id);
 	}
 
@@ -56,7 +56,7 @@ class RemoteBrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		return this.groupService.onDynamicDidDestroy(this.id);
 	}
 
-	async addView(viewId: string): Promise<void> {
+	async addView(viewId: string): Promise<IBrowserViewGroupViewEvent> {
 		return this.groupService.addViewToGroup(this.id, viewId);
 	}
 

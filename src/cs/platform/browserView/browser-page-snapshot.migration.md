@@ -151,7 +151,7 @@ IPlaywrightService 增加：
 ~~~ts
 captureSnapshot(
 	sessionId: string,
-	pageId: string,
+	trackingLease: IPageTrackingLease,
 	options: IPageSnapshotOptions | undefined,
 	token: CancellationToken
 ): Promise<IBrowserPageSnapshot>;
@@ -159,7 +159,7 @@ captureSnapshot(
 
 规则：
 
-1. pageId 使用现有 BrowserView page identity。
+1. trackingLease 使用现有 BrowserView page identity，并绑定 acquire 时的 Chromium target generation；旧 lease 不得读取同 ID 的 replacement Page。
 2. sessionId 使用现有 Playwright session routing。
 3. captureSnapshot 不负责导航。
 4. 调用方必须先通过 openPage、现有 BrowserView 导航或 PageSession 完成目标页面加载。
@@ -412,7 +412,7 @@ Comet 当前已有公共接口：
 src/cs/platform/browserView/common/playwrightService.ts
 ~~~
 
-当前 Comet 只有 common contract，尚未包含上游 shared-process PlaywrightService、PlaywrightSession、PlaywrightTab、PlaywrightChannel 和 electron-browser remote service 注册。因此 Snapshot 不是只增加一个方法，而是先完整补齐上游 Playwright runtime 基线，再在该基线上扩展类型化 Snapshot。
+迁移启动时 Comet 只有 common contract，尚未包含上游 shared-process PlaywrightService、PlaywrightSession、PlaywrightTab、PlaywrightChannel 和 electron-browser remote service 注册。因此 Snapshot 不是只增加一个方法，而是先完整补齐上游 Playwright runtime 基线，再在该基线上扩展类型化 Snapshot。
 
 需要对齐或移植上游运行时实现：
 
@@ -432,6 +432,21 @@ unit tests
 ~~~
 
 不要只修改 common interface 而遗漏运行时实现和服务注册。
+
+### 当前迁移状态
+
+已完成：
+
+1. shared-process Playwright runtime、BrowserViewGroup remote service 和 electron-browser channel 注册。
+2. 类型化 Snapshot、单一 deadline、CancellationToken、readiness、原子读取、大小限制和错误映射。
+3. Article Fetch 与 Page Archive 直接调用 Snapshot 契约。
+4. Page tracking 使用绑定具体 Chromium target generation 的独立 lease；Fetch 与 Archive 不再维护本地兼容所有权。
+
+尚未完成：
+
+1. BrowserViewGroup、PlaywrightSession、PlaywrightService 和 window teardown 的异步销毁链必须完整 await，pending initialization 不得越过 service/window shutdown。
+2. PlaywrightTab 中吞掉真实页面错误并返回空集合、空标题或成功结果的分支必须删除，调用方直接接收真实失败。
+3. 增加 BrowserView → shared process → Playwright Page 的真实进程集成测试，覆盖 Snapshot、关闭与取消；不能只依赖结构化 mock。
 
 ---
 
@@ -526,7 +541,7 @@ Article Fetch PageSession 作为第一个类型化调用方。调用方只接收
 
 ~~~text
 BrowserView
-    ↓ tracked by pageId
+    ↓ tracked by target-generation lease
 IPlaywrightService
     ↓
 PlaywrightSession
@@ -549,5 +564,5 @@ typed consumers
 
 ## 17. 删除条件
 
-第 15 节全部验收条件通过、Playwright runtime 和 Snapshot 契约只保留最终
-实现且所有直接调用点完成迁移后，删除本文档。
+第 15 节全部验收条件通过、当前迁移状态中的未完成项清零、Playwright
+runtime 和 Snapshot 契约只保留最终实现且所有直接调用点完成迁移后，删除本文档。

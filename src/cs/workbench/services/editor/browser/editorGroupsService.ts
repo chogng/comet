@@ -6,7 +6,7 @@
 import { Emitter, type Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
+import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from 'cs/platform/storage/common/storage';
 import { createEditorGroupId, DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/common/editor/editorGroupIdentity';
 import { EditorGroupModel, EditorGroupModelChangeKind } from 'cs/workbench/common/editor/editorGroupModel';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
@@ -37,6 +37,7 @@ export abstract class EditorGroupsService extends Disposable implements IEditorG
 	private active!: EditorGroupModel;
 	private readonly changeEmitter = this._register(new Emitter<IEditorGroupsChangeEvent>());
 	private initialized = false;
+	private shutdownStarted = false;
 
 	readonly onDidChange: Event<IEditorGroupsChangeEvent> = this.changeEmitter.event;
 
@@ -45,6 +46,16 @@ export abstract class EditorGroupsService extends Disposable implements IEditorG
 		@IInstantiationService protected readonly instantiationService: IInstantiationService,
 	) {
 		super();
+		this._register(this.storageService.onWillSaveState(event => {
+			if (!this.initialized || this.shutdownStarted) {
+				return;
+			}
+			if (event.reason === WillSaveStateReason.SHUTDOWN) {
+				this.shutdownStarted = true;
+				return;
+			}
+			this.persist();
+		}));
 	}
 
 	initialize(): void {
@@ -263,6 +274,9 @@ export abstract class EditorGroupsService extends Disposable implements IEditorG
 	}
 
 	private persist(): void {
+		if (this.shutdownStarted) {
+			return;
+		}
 		this.storageService.store(
 			EditorGroupsStorageKey,
 			JSON.stringify(serializeEditorGroups(this, editorInputSerializerRegistry)),

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after, afterEach, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { EditorModeToolbarContributionContext } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarTypes';
 
 const domEnvironment = installDomTestEnvironment();
@@ -133,4 +134,47 @@ test('browser history buttons follow the model navigation state', async () => {
 	} finally {
 		contribution.dispose();
 	}
+});
+
+test('browser archive action carries the addressed BrowserView identity', async () => {
+	const invocations: Array<{ readonly command: string; readonly payload: unknown }> = [];
+	const invokeDesktop = (async (command: string, payload: unknown) => {
+		invocations.push({ command, payload });
+		return {
+			filePath: '/tmp/archive',
+			htmlPath: '/tmp/archive/page.html',
+			textPath: '/tmp/archive/page.txt',
+			pdfPath: null,
+			title: 'Article',
+			sourceUrl: 'https://example.com/article',
+			pdfSourceUrl: null,
+			extractedText: 'Article',
+		};
+	}) as ElectronInvoke;
+	const { createEditorBrowserToolbarActions } = await import(
+		'cs/workbench/contrib/browserView/browser/browserToolbarActions'
+	);
+	const actions = createEditorBrowserToolbarActions({
+		browserViewId: 'browser-view-1',
+		browserUrl: 'https://example.com/article?issue=7#/document/2!',
+		invokeDesktop,
+		notificationService: { info: () => {}, error: () => {} } as never,
+		knowledgeBaseEnabled: false,
+		ui: {
+			toastHtmlArchiveSavedWithPdf: 'Saved {filePath} {sourceUrl}',
+			toastHtmlArchiveSavedWithoutPdf: 'Saved {filePath} {sourceUrl}',
+			toastHtmlArchiveSaveFailed: 'Failed {error}',
+		} as never,
+		onOpenAddressBarSourceMenu: () => {},
+		onToolbarExportDocx: () => {},
+	});
+
+	await actions.onArchiveCurrentPage();
+	assert.deepEqual(invocations, [{
+		command: 'web_content_archive_html',
+		payload: {
+			browserViewId: 'browser-view-1',
+			pageUrl: 'https://example.com/article?issue=7#/document/2!',
+		},
+	}]);
 });

@@ -79,6 +79,7 @@ class TestEditorPane extends EditorPane<TestEditorInput> {
 	disposeCount = 0;
 	setInputCount = 0;
 	readonly visibility: boolean[] = [];
+	readonly restoredViewStates: unknown[] = [];
 	viewState: unknown;
 
 	constructor() {
@@ -105,6 +106,11 @@ class TestEditorPane extends EditorPane<TestEditorInput> {
 
 	override getViewState(): unknown {
 		return this.viewState;
+	}
+
+	override restoreViewState(viewState: unknown): void {
+		this.restoredViewStates.push(viewState);
+		this.viewState = viewState;
 	}
 
 	dispose(): void {
@@ -175,6 +181,7 @@ class TestSessionsLayoutService implements ISessionsLayoutService {
 function createStorageService(
 	onWillSaveState: Event<IWillSaveStateEvent> = Event.None,
 	onStore: (key: string, value: string) => void = () => {},
+	onGet: (key: string) => string | undefined = () => undefined,
 ): StorageService {
 	return {
 		_serviceBrand: undefined,
@@ -184,7 +191,7 @@ function createStorageService(
 		onWillSaveState,
 		init: async () => {},
 		close: async () => {},
-		get: () => undefined,
+		get: (key: string) => onGet(key),
 		getBoolean: () => undefined,
 		getNumber: () => undefined,
 		getObject: () => undefined,
@@ -262,6 +269,73 @@ test('Sessions registers one EditorParts service with one concrete main Part', (
 		editorPartsRegistrations.map(([, descriptor]) => descriptor.ctor),
 		[SessionsEditorParts],
 	);
+});
+
+test('Sessions Editor Part restores view state during explicit initialization', async () => {
+	const layoutService = new TestSessionsLayoutService();
+	let storedViewState: string | undefined;
+	let viewStateReadCount = 0;
+	const storageService = createStorageService(
+		Event.None,
+		() => {},
+		key => {
+			if (key !== 'workbench.editor.viewState') {
+				return undefined;
+			}
+			viewStateReadCount += 1;
+			return storedViewState;
+		},
+	);
+	const instantiationService = createInstantiationService(layoutService, storageService);
+	const editorParts = instantiationService.createInstance(SessionsEditorParts);
+	assert.equal(viewStateReadCount, 0);
+
+	editorParts.initialize();
+	const input = new TestEditorInput();
+	const restoredViewState = { cursor: 71 };
+	storedViewState = JSON.stringify({
+		version: 2,
+		entries: [{
+			key: {
+				groupId: editorParts.activeGroup.id,
+				paneId: input.editorId,
+				resourceKey: input.resource.toString(),
+			},
+			state: restoredViewState,
+		}],
+	});
+
+	let pane: TestEditorPane | undefined;
+	class RegisteredRestoringEditorPane extends TestEditorPane {
+		constructor() {
+			super();
+			pane = this;
+		}
+	}
+	const paneRegistration = editorPaneRegistry.registerEditorPane(new EditorPaneDescriptor({
+		paneId: input.editorId,
+		modeId: 'test',
+		contentClassNames: [],
+		inputConstructor: TestEditorInput,
+		paneConstructor: RegisteredRestoringEditorPane,
+	}));
+	const serializerRegistration = editorInputSerializerRegistry.register(
+		input.typeId,
+		new TestEditorInputSerializer(),
+	);
+
+	try {
+		editorParts.mainPart.initialize();
+		assert.equal(viewStateReadCount, 1);
+		const openResult = editorParts.openEditor(input);
+		await editorParts.mainPart.openEditor(openResult.editor, undefined, { newInGroup: true });
+		assert.deepEqual(pane?.restoredViewStates, [restoredViewState]);
+	} finally {
+		paneRegistration.dispose();
+		serializerRegistration.dispose();
+		editorParts.dispose();
+		instantiationService.dispose();
+	}
 });
 
 test('Sessions Editor Part preserves its Pane across collapse and expansion', async () => {

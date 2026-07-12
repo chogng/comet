@@ -356,7 +356,7 @@ async function previewDownloadPdfWithResolvedRequest(request: PdfDownloadContext
 function createPdfDownloadContext(
   payload: WebContentPdfDownloadPayload,
   defaultDownloadDir: string,
-  webContentHtmlSnapshot: string | null,
+  webContentHtmlSnapshot: string | undefined,
   abortSignal?: AbortSignal,
 ): PdfDownloadContext {
   const pageUrl = normalizeUrl(payload.pageUrl ?? '');
@@ -404,12 +404,13 @@ function createPdfDownloadContext(
   };
 }
 
-export async function previewDownloadPdf(
-  payload: WebContentPdfDownloadPayload = {},
-  defaultDownloadDir: string,
-  webContentHtmlSnapshot: string | null = null,
-  abortSignal?: AbortSignal,
-) {
+export async function previewDownloadPdf(options: {
+	readonly payload: WebContentPdfDownloadPayload;
+	readonly defaultDownloadDir: string;
+	readonly webContentHtmlSnapshot?: string;
+	readonly abortSignal?: AbortSignal;
+}) {
+	const { payload, defaultDownloadDir, webContentHtmlSnapshot, abortSignal } = options;
   const request = createPdfDownloadContext(payload, defaultDownloadDir, webContentHtmlSnapshot, abortSignal);
   throwIfAborted(request.abortSignal);
   await fs.mkdir(request.downloadDir, { recursive: true });

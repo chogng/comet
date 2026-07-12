@@ -5,6 +5,7 @@
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
+import { CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
 
 import type {
   AppCommand,
@@ -37,6 +38,8 @@ import type {
 } from 'cs/platform/browserView/common/browserView';
 import { ipcBrowserViewChannelName } from 'cs/platform/browserView/common/browserView';
 import { ipcBrowserViewGroupChannelName } from 'cs/platform/browserView/common/browserViewGroup';
+import { PlaywrightChannelClient } from 'cs/platform/browserView/common/playwrightChannelClient';
+import type { IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
 import type { AppStorageService } from 'cs/code/electron-main/storageService';
 import {
   captureWebContentScreenshot,
@@ -67,7 +70,6 @@ import { exportArticlesDocx } from 'cs/code/electron-main/document/docx';
 import { exportEditorDocx } from 'cs/code/electron-main/document/editorDocx';
 import { archiveWebContentHtml } from 'cs/code/electron-main/document/webContentHtmlArchive';
 import { previewDownloadPdf } from 'cs/code/electron-main/pdf/pdf';
-import { resolveActiveWebContentSnapshotHtml } from 'cs/code/electron-main/pdf/webContentSnapshot';
 import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
 import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import {
@@ -111,6 +113,7 @@ const browserViewGroupMainService = browserViewIpcDisposables.add(
 );
 const sharedProcess = new SharedProcess();
 const sharedProcessWindowCleanup = new Set<number>();
+const playwrightServices = new Map<number, IPlaywrightService>();
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -123,10 +126,21 @@ function getSharedProcessWindowId(event: IpcMainInvokeEvent): number {
 		sharedProcessWindowCleanup.add(window.id);
 		event.sender.once('destroyed', () => {
 			sharedProcessWindowCleanup.delete(window.id);
+			playwrightServices.delete(window.id);
 			void sharedProcess.getChannel('playwright').call('disposeWindow', [window.id, undefined]);
 		});
 	}
 	return window.id;
+}
+
+function getPlaywrightService(event: IpcMainInvokeEvent): IPlaywrightService {
+	const windowId = getSharedProcessWindowId(event);
+	let service = playwrightServices.get(windowId);
+	if (!service) {
+		service = new PlaywrightChannelClient(sharedProcess.getChannel('playwright'), windowId);
+		playwrightServices.set(windowId, service);
+	}
+	return service;
 }
 
 function getDocumentTaskId(payload: { taskId?: string } | undefined) {
@@ -174,6 +188,8 @@ async function invokeCommand<TCommand extends AppCommand>(
   storage: AppStorageService,
   nativeHostMainService: NativeHostMainService,
   themeMainService: IThemeMainService,
+	playwrightService: IPlaywrightService,
+	cancellationToken: CancellationToken,
   emitToRenderer?: (channel: string, payload: unknown) => void,
 ): Promise<AppCommandResultMap[TCommand]> {
   switch (command) {
@@ -262,12 +278,12 @@ async function invokeCommand<TCommand extends AppCommand>(
       const downloadPayload = payload as WebContentPdfDownloadPayload;
       const taskAbortController = startDocumentTaskAbortController(downloadPayload);
       try {
-				const previewHtml = await resolveActiveWebContentSnapshotHtml(downloadPayload);
         const downloadResult = await previewDownloadPdf(
-          downloadPayload,
-          app.getPath('downloads'),
-          previewHtml,
-          taskAbortController?.abortController.signal,
+			{
+				payload: downloadPayload,
+				defaultDownloadDir: app.getPath('downloads'),
+				abortSignal: taskAbortController?.abortController.signal,
+			},
         );
 
         try {
@@ -300,6 +316,8 @@ async function invokeCommand<TCommand extends AppCommand>(
         payload as WebContentHtmlArchivePayload,
         app.getPath('downloads'),
         storage,
+		playwrightService,
+		cancellationToken,
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'cancel_document_task':
       return cancelDocumentTask(
@@ -420,6 +438,7 @@ export function registerAppIpc(
 	} satisfies IServerChannel<IpcMainInvokeEvent>);
   app.once('before-quit', () => {
     browserViewIpcDisposables.dispose();
+		playwrightServices.clear();
 		sharedProcess.dispose();
   });
   registerContextMenuListener();
@@ -438,7 +457,12 @@ export function registerAppIpc(
   }
 
   electronMainChannelServer.registerChannel('app', {
-    async call<T = unknown>(event: IpcMainInvokeEvent, command: string, payload?: unknown) {
+	async call<T = unknown>(
+		event: IpcMainInvokeEvent,
+		command: string,
+		payload: unknown,
+		cancellationToken: CancellationToken = CancellationTokenNone,
+	) {
       const appCommand = command as AppCommand;
       return await invokeCommand(
         appCommand,
@@ -446,6 +470,8 @@ export function registerAppIpc(
         storage,
         nativeHostMainService,
         themeMainService,
+		getPlaywrightService(event),
+		cancellationToken,
         (channel, eventPayload) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send(channel, eventPayload);
@@ -470,6 +496,8 @@ export function registerAppIpc(
           storage,
           nativeHostMainService,
           themeMainService,
+		  getPlaywrightService(_event),
+		  CancellationTokenNone,
           (channel, eventPayload) => {
             if (!_event.sender.isDestroyed()) {
               _event.sender.send(channel, eventPayload);

@@ -5,12 +5,11 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DeferredPromise } from 'cs/base/common/async';
 import { CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/cancellation';
 import { Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import type { IChannel } from 'cs/base/parts/ipc/common/ipc';
-import type { IPageSnapshotOptions, IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
+import type { IPageSnapshotOptions, IPageTrackingLease, IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
 import type { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
 
 const { FetchPageSession, FetchPageSessionFactory } = await import('cs/workbench/services/fetch/electron-browser/fetchPageSession');
@@ -18,7 +17,6 @@ const { FetchPageSession, FetchPageSessionFactory } = await import('cs/workbench
 type BrowserViewCall = { command: string; args: unknown[] };
 
 interface BrowserViewChannelOptions {
-	readonly loadError?: Error;
 	readonly destroyErrors?: readonly Error[];
 }
 
@@ -28,9 +26,6 @@ function createBrowserViewChannel(calls: BrowserViewCall[], options: BrowserView
 		call: async <T>(command: string, arg: unknown) => {
 			const args = Array.isArray(arg) ? arg : [];
 			calls.push({ command, args });
-			if (command === 'loadURL' && options.loadError) {
-				throw options.loadError;
-			}
 			if (command === 'destroyBrowserView' && destroyErrors.length > 0) {
 				throw destroyErrors.shift();
 			}
@@ -44,6 +39,7 @@ interface PlaywrightServiceOptions {
 	readonly tracked?: boolean;
 	readonly snapshot?: { uri: URI; title: string; html: string };
 	readonly acquireErrors?: readonly Error[];
+	readonly navigateErrors?: readonly Error[];
 	readonly releaseErrors?: readonly Error[];
 	readonly disposeErrors?: readonly Error[];
 }
@@ -52,37 +48,44 @@ function createPlaywrightService(options: PlaywrightServiceOptions = {}) {
 	const calls: string[] = [];
 	const captureOptions: Array<IPageSnapshotOptions | undefined> = [];
 	const acquireErrors = [...(options.acquireErrors ?? [])];
+	const navigateErrors = [...(options.navigateErrors ?? [])];
 	const releaseErrors = [...(options.releaseErrors ?? [])];
 	const disposeErrors = [...(options.disposeErrors ?? [])];
-	let tracked = options.tracked ?? false;
+	const externalTracking = options.tracked ?? false;
+	const leases = new Set<string>();
+	let leaseSequence = 0;
 	const service = {
-		acquirePageTracking: async () => {
+		acquirePageTracking: async (viewId: string) => {
 			calls.push('acquirePageTracking');
 			if (acquireErrors.length > 0) {
 				throw acquireErrors.shift();
 			}
-			if (tracked) {
-				return { acquired: false };
-			}
-			tracked = true;
-			return { acquired: true };
+			const lease = { viewId, leaseId: `lease-${++leaseSequence}` };
+			leases.add(lease.leaseId);
+			return lease;
 		},
-		releasePageTracking: async () => {
+		releasePageTracking: async (lease: IPageTrackingLease) => {
 			calls.push('releasePageTracking');
 			if (releaseErrors.length > 0) {
 				throw releaseErrors.shift();
 			}
-			tracked = false;
+			leases.delete(lease.leaseId);
 		},
-		isPageTracked: async () => tracked,
-		captureSnapshot: async (_sessionId: string, _pageId: string, snapshotOptions: IPageSnapshotOptions | undefined) => {
+		isPageTracked: async () => externalTracking || leases.size > 0,
+		navigatePage: async () => {
+			calls.push('navigatePage');
+			if (navigateErrors.length > 0) {
+				throw navigateErrors.shift();
+			}
+		},
+		captureSnapshot: async (_sessionId: string, trackingLease: IPageTrackingLease, snapshotOptions: IPageSnapshotOptions | undefined) => {
 			calls.push('captureSnapshot');
-			if (!tracked) {
+			if (!externalTracking && leases.size === 0) {
 				throw new Error('Page is not tracked.');
 			}
 			captureOptions.push(snapshotOptions);
 			const snapshot = options.snapshot ?? { uri: URI.parse('https://example.com/loaded'), title: 'Loaded', html: '<html></html>' };
-			return { pageId: 'page', ...snapshot, capturedAt: Date.now() };
+			return { pageId: trackingLease.viewId, ...snapshot, capturedAt: Date.now() };
 		},
 		disposeSession: async () => {
 			calls.push('disposeSession');
@@ -96,9 +99,11 @@ function createPlaywrightService(options: PlaywrightServiceOptions = {}) {
 
 test('owned FetchPageSession does not capture after navigation fails and releases its BrowserView', async () => {
 	const calls: BrowserViewCall[] = [];
-	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService();
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService({
+		navigateErrors: [new Error('Navigation failed')],
+	});
 	const mainProcessService = {
-		getChannel: () => createBrowserViewChannel(calls, { loadError: new Error('Navigation failed') }),
+		getChannel: () => createBrowserViewChannel(calls),
 	} as unknown as IMainProcessService;
 	const session = await FetchPageSession.createOwned(mainProcessService, playwrightService, () => true, 1);
 
@@ -106,11 +111,11 @@ test('owned FetchPageSession does not capture after navigation fails and release
 		session.navigateAndCapture(URI.parse('https://example.com/target'), undefined, CancellationTokenNone),
 		/Navigation failed/,
 	);
-	assert.deepEqual(playwrightCalls, ['acquirePageTracking']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'navigatePage']);
 
 	await session.dispose();
-	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'releasePageTracking', 'disposeSession']);
-	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'loadURL', 'destroyBrowserView']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'navigatePage', 'releasePageTracking', 'disposeSession']);
+	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'destroyBrowserView']);
 });
 
 test('borrowed FetchPageSession leaves an already tracked BrowserView alive and rejects an inadmissible snapshot', async () => {
@@ -131,43 +136,25 @@ test('borrowed FetchPageSession leaves an already tracked BrowserView alive and 
 	);
 	await session.dispose();
 
-	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'captureSnapshot', 'disposeSession']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'navigatePage', 'captureSnapshot', 'releasePageTracking', 'disposeSession']);
 	assert.deepEqual(captureOptions, [{ readiness: undefined, maximumBytes: 2 * 1024 * 1024 }]);
-	assert.deepEqual(calls.map(call => call.command), ['loadURL']);
+	assert.deepEqual(calls, []);
 });
 
 test('borrowed FetchPageSession does not release tracking acquired by a competing external caller', async () => {
 	const calls: string[] = [];
-	const firstAcquisitionStarted = new DeferredPromise<void>();
-	const secondAcquisitionQueued = new DeferredPromise<void>();
-	const continueFirstAcquisition = new DeferredPromise<void>();
-	let acquisitionCount = 0;
-	let tracked = false;
-	let operationQueue: Promise<unknown> = Promise.resolve();
+	const activeLeases = new Set<string>();
+	let leaseSequence = 0;
 	const playwrightService = {
-		acquirePageTracking: () => {
-			const acquisitionIndex = acquisitionCount++;
+		acquirePageTracking: async (viewId: string) => {
 			calls.push('acquirePageTracking');
-			if (acquisitionIndex === 1) {
-				secondAcquisitionQueued.complete();
-			}
-			const operation = operationQueue.catch(() => undefined).then(async () => {
-				if (acquisitionIndex === 0) {
-					firstAcquisitionStarted.complete();
-					await continueFirstAcquisition.p;
-				}
-				if (tracked) {
-					return { acquired: false };
-				}
-				tracked = true;
-				return { acquired: true };
-			});
-			operationQueue = operation;
-			return operation;
+			const lease = { viewId, leaseId: `lease-${++leaseSequence}` };
+			activeLeases.add(lease.leaseId);
+			return lease;
 		},
-		releasePageTracking: async () => {
+		releasePageTracking: async (lease: IPageTrackingLease) => {
 			calls.push('releasePageTracking');
-			tracked = false;
+			activeLeases.delete(lease.leaseId);
 		},
 		disposeSession: async () => { calls.push('disposeSession'); },
 	} as unknown as IPlaywrightService;
@@ -176,18 +163,12 @@ test('borrowed FetchPageSession does not release tracking acquired by a competin
 	} as unknown as IMainProcessService;
 	const factory = new FetchPageSessionFactory(mainProcessService, playwrightService);
 
-	const externalAcquisition = playwrightService.acquirePageTracking('existing-page');
-	await firstAcquisitionStarted.p;
-	const borrowedSession = factory.borrow('existing-page', () => true);
-	await secondAcquisitionQueued.p;
-	continueFirstAcquisition.complete();
-
-	assert.deepEqual(await externalAcquisition, { acquired: true });
-	const session = await borrowedSession;
+	const externalLease = await playwrightService.acquirePageTracking('existing-page');
+	const session = await factory.borrow('existing-page', () => true);
 	await session.dispose();
 
-	assert.equal(tracked, true);
-	assert.deepEqual(calls, ['acquirePageTracking', 'acquirePageTracking', 'disposeSession']);
+	assert.deepEqual([...activeLeases], [externalLease.leaseId]);
+	assert.deepEqual(calls, ['acquirePageTracking', 'acquirePageTracking', 'releasePageTracking', 'disposeSession']);
 });
 
 test('concurrent borrowed FetchPageSessions share tracking until the final lease is released', async () => {
@@ -202,9 +183,14 @@ test('concurrent borrowed FetchPageSessions share tracking until the final lease
 		factory.borrow('shared-page', () => true),
 	]);
 
-	assert.deepEqual(playwrightCalls, ['acquirePageTracking']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'acquirePageTracking']);
 	await first.dispose();
-	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'disposeSession']);
+	assert.deepEqual(playwrightCalls, [
+		'acquirePageTracking',
+		'acquirePageTracking',
+		'releasePageTracking',
+		'disposeSession',
+	]);
 	const snapshot = await second.navigateAndCapture(
 		URI.parse('https://example.com/loaded'),
 		undefined,
@@ -215,12 +201,15 @@ test('concurrent borrowed FetchPageSessions share tracking until the final lease
 
 	assert.deepEqual(playwrightCalls, [
 		'acquirePageTracking',
+		'acquirePageTracking',
+		'releasePageTracking',
 		'disposeSession',
+		'navigatePage',
 		'captureSnapshot',
 		'releasePageTracking',
 		'disposeSession',
 	]);
-	assert.deepEqual(calls.map(call => call.command), ['loadURL']);
+	assert.deepEqual(calls, []);
 });
 
 test('FetchPageSession rejects cancellation before navigation and releases owned resources', async () => {

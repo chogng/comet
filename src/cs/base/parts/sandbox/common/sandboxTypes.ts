@@ -152,8 +152,8 @@ export interface WebContentPdfDownloadPayload {
 }
 
 export interface WebContentHtmlArchivePayload {
-	pageUrl?: string;
-	pageTitle?: string | null;
+	browserViewId: string;
+	pageUrl: string;
 }
 
 export interface WebContentHtmlArchiveResult {

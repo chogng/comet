@@ -50,7 +50,7 @@ export class PlaywrightChannel implements IServerChannel<string> {
 			throw new Error(`Method not found: ${command}`);
 		}
 		const methodArgs = Array.isArray(payload) ? [...payload] : [];
-		if (command === 'captureSnapshot') {
+		if (command === 'captureSnapshot' || command === 'navigatePage') {
 			methodArgs.push(cancellationToken);
 		}
 		return Promise.resolve(target.apply(instance, methodArgs)) as Promise<T>;
