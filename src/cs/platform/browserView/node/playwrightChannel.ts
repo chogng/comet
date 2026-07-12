@@ -14,6 +14,23 @@ import { PlaywrightService } from 'cs/platform/browserView/node/playwrightServic
 
 type WindowRequest = readonly [number, unknown];
 
+const playwrightServiceCommands = new Set([
+	'acquirePageTracking',
+	'releasePageTracking',
+	'isPageTracked',
+	'getTrackedPages',
+	'openPage',
+	'getSummary',
+	'navigatePage',
+	'captureSnapshot',
+	'invokeFunctionRaw',
+	'invokeFunction',
+	'waitForDeferredResult',
+	'replyToFileChooser',
+	'replyToDialog',
+	'disposeSession',
+]);
+
 function parseWindowRequest(value: unknown): WindowRequest {
 	if (!Array.isArray(value) || typeof value[0] !== 'number') {
 		throw new Error('Shared process request did not include a window ID.');
@@ -49,6 +66,9 @@ export class PlaywrightChannel implements IServerChannel<string> {
 		if (command === 'disposeWindow') {
 			return this.disposeWindow(windowId).then(() => undefined as T);
 		}
+		if (!playwrightServiceCommands.has(command)) {
+			throw new Error(`Method not found: ${command}`);
+		}
 		const instance = this.getOrCreate(windowId);
 		const target = (instance as unknown as Record<string, unknown>)[command];
 		if (typeof target !== 'function') {
@@ -63,6 +83,9 @@ export class PlaywrightChannel implements IServerChannel<string> {
 
 	listen<T>(_context: string, event: string, arg: unknown): Event<T> {
 		const [windowId] = parseWindowRequest(arg);
+		if (event !== 'onDidChangeTrackedPages') {
+			throw new Error(`Event not found: ${event}`);
+		}
 		const source = (this.getOrCreate(windowId) as unknown as Record<string, unknown>)[event];
 		if (typeof source !== 'function') {
 			throw new Error(`Event not found: ${event}`);

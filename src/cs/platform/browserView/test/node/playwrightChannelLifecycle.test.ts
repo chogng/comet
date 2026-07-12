@@ -19,6 +19,7 @@ function createDeferred(): { readonly promise: Promise<void>; resolve(): void } 
 interface TestSession {
 	readonly sessionId: string;
 	shutdown(): Promise<void>;
+	_shutdown?(): Promise<void>;
 }
 
 function createTestSession(overrides: Partial<TestSession> = {}): TestSession {
@@ -59,6 +60,24 @@ test('PlaywrightChannel waits for window shutdown, gates work, and releases fina
 	assert.equal(completed, true);
 	assert.equal((channel as unknown as { windowShutdowns: Map<number, unknown> }).windowShutdowns.size, 0);
 	assert.equal((channel as unknown as { disposedWindows: Set<number> }).disposedWindows.size, 0);
+});
+
+test('PlaywrightChannel does not expose private service methods or events', () => {
+	let privateShutdownCalls = 0;
+	const channel = new PlaywrightChannel(undefined as never, undefined as never, undefined as never, undefined as never);
+	const instances = (channel as unknown as { instances: Map<number, TestSession> }).instances;
+	instances.set(7, createTestSession({
+		_shutdown: async () => {
+			privateShutdownCalls++;
+		},
+	}));
+
+	assert.throws(
+		() => channel.call('test', '_shutdown', [7, undefined], CancellationTokenNone),
+		/Method not found/,
+	);
+	assert.throws(() => channel.listen('test', 'constructor', [7, undefined]), /Event not found/);
+	assert.equal(privateShutdownCalls, 0);
 });
 
 test('PlaywrightChannel global shutdown waits for every window and rejects new calls', async () => {
