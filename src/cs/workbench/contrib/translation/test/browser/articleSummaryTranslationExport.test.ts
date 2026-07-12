@@ -126,10 +126,9 @@ test('ArticleSummaryTranslationExportController resolves ArticleIds to DOCX DTOs
 		locale: 'en',
 		ui: locales.en,
 		pdfDownloadDir: '/tmp',
-		onUnavailableArticleIds: () => {},
 	}, createFetchService([createArticleDetail(articleId)]));
 
-	await controller.handleExportArticleSummaries([articleId], true);
+	await controller.handleExportArticleSummaries([articleId], true, () => {});
 	controller.dispose();
 
 	assert.equal(unsubscribed, true);
@@ -166,10 +165,13 @@ test('ArticleSummaryTranslationExportController removes unavailable ArticleIds b
 		locale: 'en',
 		ui: locales.en,
 		pdfDownloadDir: '/tmp',
-		onUnavailableArticleIds: ids => unavailable.push([...ids]),
 	}, createFetchService([]));
 
-	await controller.handleExportArticleSummaries(['article.missing'], false);
+	await controller.handleExportArticleSummaries(
+		['article.missing'],
+		false,
+		articleIds => unavailable.push([...articleIds]),
+	);
 	controller.dispose();
 	assert.deepEqual(unavailable, [['article.missing']]);
 	assert.equal(invoked, false);
@@ -199,12 +201,11 @@ test('ArticleSummaryTranslationExportController cancels an active export task', 
 		locale: 'en',
 		ui: locales.en,
 		pdfDownloadDir: '/tmp',
-		onUnavailableArticleIds: () => {},
 	}, createFetchService([createArticleDetail(articleId)]));
 
-	const running = controller.handleExportArticleSummaries([articleId], true);
+	const running = controller.handleExportArticleSummaries([articleId], true, () => {});
 	await delay(0);
-	await controller.handleExportArticleSummaries([articleId], true);
+	await controller.handleExportArticleSummaries([articleId], true, () => {});
 	await running;
 	controller.dispose();
 

@@ -1,997 +1,798 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
-import { setTimeout as delay } from 'node:timers/promises';
 
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
-import type { HorizontalScrollbar as HorizontalScrollbarType } from 'cs/base/browser/ui/scrollbar/horizontalScrollbar';
+import { DeferredPromise } from 'cs/base/common/async';
+import { VSBuffer } from 'cs/base/common/buffer';
+import type { CancellationToken } from 'cs/base/common/cancellation';
+import { Event as BaseEvent, EventEmitter } from 'cs/base/common/event';
 import type { IRenderedMarkdown, MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
 import type { IMarkdownString } from 'cs/base/common/htmlContent';
-import type { RagAnswerResult } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
+import { URI } from 'cs/base/common/uri';
+import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
-import { toDisposable } from 'cs/base/common/lifecycle';
-import type { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import type { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
+import type { LanguagePackLocale } from 'cs/platform/languagePacks/common/languagePacks';
+import type { IChatWidgetPresentation } from 'cs/workbench/contrib/chat/browser/chat';
+import type { ChatWidget as ChatWidgetType } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
+import type { IChatModelReference } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { ChatService } from 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
+import {
+	createChatImageAttachment,
+	toChatImageDataUrl,
+} from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
+import type { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
+import {
+	IWorkbenchLanguageService,
+	WorkbenchLanguageService,
+} from 'cs/workbench/services/language/common/languageService';
+import {
+	IWorkbenchLocaleService,
+	type LocaleServiceContext,
+} from 'cs/workbench/services/localization/common/locale';
+import type {
+	ArticleListCatalog,
+	ArticleListItem,
+	ArticleListSource,
+	ArticlePage,
+	ArticleRecord,
+	IFetchService,
+	JournalDescriptor,
+} from 'cs/workbench/services/fetch/common/fetch';
 
-let cleanupDomEnvironment: (() => void) | null = null;
-let ChatWidget: typeof import('cs/workbench/contrib/chat/browser/widget/chatWidget').ChatWidget;
-let ChatViewPane: typeof import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').ChatViewPane;
-let getWorkbenchInstantiationService: typeof import('cs/workbench/services/instantiation/browser/workbenchInstantiationService').getWorkbenchInstantiationService;
-let registerWorkbenchService: typeof import('cs/workbench/services/instantiation/browser/workbenchInstantiationService').registerWorkbenchService;
-let IMarkdownRendererServiceId: typeof import('cs/platform/markdown/browser/markdownRenderer').IMarkdownRendererService;
-let IChatServiceId: typeof import('cs/workbench/contrib/chat/common/chatService/chatService').IChatService;
-let IFetchServiceId: typeof import('cs/workbench/services/fetch/common/fetch').IFetchService;
-let INotificationServiceId: typeof import('cs/platform/notification/common/notification').INotificationService;
-let HorizontalScrollbar: typeof HorizontalScrollbarType;
-let renderMarkdown: typeof import('cs/base/browser/markdownRenderer').renderMarkdown;
+let cleanupDomEnvironment: (() => void) | undefined;
+let cleanupResizeObserver: (() => void) | undefined;
+let ChatWidget: typeof ChatWidgetType;
+let chatService: ChatService;
+let fetchService: TestFetchService;
+let createWidget: () => ChatWidgetType;
+let localeService: TestWorkbenchLocaleService;
 
-function createMarkdownRendererService(
-  onOpenLink: (href: string) => void = () => {},
-): IMarkdownRendererService {
-  return {
-    _serviceBrand: undefined,
-    render(
-      markdown: IMarkdownString,
-      options?: MarkdownRenderOptions,
-      outElement?: HTMLElement,
-    ): IRenderedMarkdown {
-      const resolvedOptions = { ...options };
-      if (!resolvedOptions.actionHandler) {
-        resolvedOptions.actionHandler = href => onOpenLink(href);
-      }
-      const rendered = renderMarkdown(markdown, resolvedOptions, outElement);
-      rendered.element.classList.add('rendered-markdown');
-      return rendered;
-    },
-  };
+class TestWorkbenchLocaleService implements IWorkbenchLocaleService {
+	declare readonly _serviceBrand: undefined;
+
+	private readonly listeners = new Set<() => void>();
+
+	constructor(private locale: LanguagePackLocale = 'en') {}
+
+	subscribe(listener: () => void): () => void {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	}
+
+	getLocale(): LanguagePackLocale {
+		return this.locale;
+	}
+
+	applyLocale(locale: LanguagePackLocale): void {
+		if (this.locale === locale) {
+			return;
+		}
+		this.locale = locale;
+		for (const listener of this.listeners) {
+			listener();
+		}
+	}
+
+	async updateLocalePreference(locale: LanguagePackLocale, _context: LocaleServiceContext): Promise<void> {
+		this.applyLocale(locale);
+	}
+
+	syncDocumentLanguage(): void {}
+
+	async initialize(_context: LocaleServiceContext): Promise<LanguagePackLocale> {
+		return this.locale;
+	}
 }
 
-function createProps(): ChatWidgetProps {
-  return {
-    isKnowledgeBaseModeEnabled: true,
-    messages: [],
-    question: '',
-    onQuestionChange: () => {},
-    isAsking: false,
-    errorMessage: null,
-    onAsk: () => {},
-    onApplyPatch: () => {},
-    llmModelOptions: [
-      { value: 'auto', label: 'Auto' },
-      { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
-    ],
-    activeLlmModelOptionValue: 'auto',
-    activeLlmModelLabel: 'GLM-4.7-Flash',
-    isMaxContextWindowEnabled: false,
-    activeLlmModelSupportsMaxContextWindow: false,
-    onToggleAutoModelRouting: () => {},
-    onSelectLlmModel: () => {},
-    onToggleMaxContextWindow: () => {},
-    onOpenModelSettings: () => {},
-  };
+class TestFetchService implements IFetchService {
+	declare readonly _serviceBrand: undefined;
+	private readonly catalogChange = new EventEmitter<string>();
+	readonly onDidChangeCatalog = this.catalogChange.event;
+	readonly onDidChangeSource = BaseEvent.None;
+	readonly onDidChangeArticle = BaseEvent.None;
+
+	private journals: readonly JournalDescriptor[] = [];
+	private catalog: ArticleListCatalog | undefined;
+	private pages: readonly ArticlePage[] = [];
+	private readonly items = new Map<string, ArticleListItem>();
+	private readonly articles = new Map<string, ArticleRecord>();
+	private sourceFetch: DeferredPromise<void> | undefined;
+	sourceFetchToken: CancellationToken | undefined;
+
+	configureArticleSource(): DeferredPromise<void> {
+		const journal: JournalDescriptor = {
+			id: 'journal:test',
+			title: 'Test Journal',
+			homeUrl: URI.parse('https://example.com/journal'),
+			discoveryUrl: URI.parse('https://example.com/journal/sources'),
+			providerId: 'provider:test',
+		};
+		const source: ArticleListSource = {
+			kind: 'source',
+			id: 'source:test',
+			journalId: journal.id,
+			label: 'Latest Articles',
+			url: URI.parse('https://example.com/journal/latest'),
+		};
+		const item: ArticleListItem = {
+			id: 'item:test',
+			articleId: 'article:test',
+			title: 'Test Article',
+			authors: [],
+			relatedArticles: [],
+		};
+		const article: ArticleRecord = {
+			id: item.articleId,
+			journalId: journal.id,
+			url: URI.parse('https://example.com/article'),
+		};
+		this.journals = [journal];
+		this.catalog = { journalId: journal.id, entries: [source] };
+		this.pages = [{
+			id: 'page:test',
+			sourceId: source.id,
+			url: source.url,
+			groups: [],
+			ungroupedItemIds: [item.id],
+		}];
+		this.items.set(item.id, item);
+		this.articles.set(article.id, article);
+		this.sourceFetch = new DeferredPromise<void>();
+		this.sourceFetchToken = undefined;
+		return this.sourceFetch;
+	}
+
+	removeActiveSource(): void {
+		const journalId = this.catalog?.journalId;
+		if (!journalId) {
+			throw new Error('The test Article source was not configured.');
+		}
+		this.catalog = { journalId, entries: [] };
+		this.pages = [];
+		this.catalogChange.fire(journalId);
+	}
+
+	reset(): void {
+		if (this.sourceFetch && !this.sourceFetch.isSettled) {
+			this.sourceFetch.complete();
+		}
+		this.journals = [];
+		this.catalog = undefined;
+		this.pages = [];
+		this.items.clear();
+		this.articles.clear();
+		this.sourceFetch = undefined;
+		this.sourceFetchToken = undefined;
+	}
+
+	getJournals(): readonly JournalDescriptor[] { return this.journals; }
+	getJournal(journalId: string): JournalDescriptor | undefined { return this.journals.find(journal => journal.id === journalId); }
+	getArticleListCatalog(journalId: string): ArticleListCatalog | undefined { return this.catalog?.journalId === journalId ? this.catalog : undefined; }
+	getArticlePage(pageId: string): ArticlePage | undefined { return this.pages.find(page => page.id === pageId); }
+	getArticlePages(sourceId: string): readonly ArticlePage[] { return this.pages.filter(page => page.sourceId === sourceId); }
+	getArticleListItem(itemId: string): ArticleListItem | undefined { return this.items.get(itemId); }
+	getArticle(articleId: string): ArticleRecord | undefined { return this.articles.get(articleId); }
+	getArticleDetail(): undefined { return undefined; }
+	getCatalogLoadState() { return { status: 'idle' as const }; }
+	getSourceLoadState() { return { status: 'idle' as const }; }
+	getArticleLoadState() { return { status: 'idle' as const }; }
+	async discoverArticleListSources(): Promise<void> {}
+	async fetchArticleListSource(_sourceId: string, token: CancellationToken): Promise<void> {
+		this.sourceFetchToken = token;
+		const sourceFetch = this.sourceFetch;
+		if (!sourceFetch) {
+			throw new Error('The test Article source was not configured.');
+		}
+		await sourceFetch.p;
+	}
+	async fetchNextPage(): Promise<void> {}
+	async fetchArticle(): Promise<never> { throw new Error('No Article detail is available in this test.'); }
+	async refreshJournal(): Promise<void> {}
+	async refreshArticleListSource(): Promise<void> {}
 }
 
-function createResult(overrides: Partial<RagAnswerResult> = {}): RagAnswerResult {
-  return {
-    answer: 'Answer',
-    evidence: [],
-    provider: 'moark',
-    llmProvider: 'glm',
-    llmModel: 'test-model',
-    embeddingModel: 'test-embedding',
-    rerankerModel: 'test-reranker',
-    rerankApplied: false,
-    ...overrides,
-  };
+function installResizeObserverStub(): () => void {
+	const previousGlobal = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver');
+	const previousWindow = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+	class TestResizeObserver implements ResizeObserver {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+		takeRecords(): ResizeObserverEntry[] { return []; }
+	}
+	Object.defineProperty(globalThis, 'ResizeObserver', {
+		configurable: true,
+		value: TestResizeObserver,
+	});
+	Object.defineProperty(window, 'ResizeObserver', {
+		configurable: true,
+		value: TestResizeObserver,
+	});
+	return () => {
+		if (previousGlobal) {
+			Object.defineProperty(globalThis, 'ResizeObserver', previousGlobal);
+		} else {
+			Reflect.deleteProperty(globalThis, 'ResizeObserver');
+		}
+		if (previousWindow) {
+			Object.defineProperty(window, 'ResizeObserver', previousWindow);
+		} else {
+			Reflect.deleteProperty(window, 'ResizeObserver');
+		}
+	};
 }
 
-function createChatWidget(
-  props: ChatWidgetProps,
-  markdownRendererService: IMarkdownRendererService = createMarkdownRendererService(),
-) {
-  registerWorkbenchService(IMarkdownRendererServiceId, markdownRendererService);
-  return getWorkbenchInstantiationService().createInstance(ChatWidget, props);
+function presentation(resource: URI, readOnly = false): IChatWidgetPresentation {
+	return {
+		chatResource: resource,
+		readOnly,
+		modelOptions: [
+			{ value: 'glm:model-a', label: 'Model A' },
+			{ value: 'openai:model-b', label: 'Model B' },
+		],
+		selectedModelId: 'glm:model-a',
+		activeModelLabel: 'Model A',
+	};
 }
 
-function createChatViewPane(
-  props: import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane').ChatViewPaneProps,
-) {
-  return getWorkbenchInstantiationService().createInstance(ChatViewPane, props);
+function disposeWidget(widget: ChatWidgetType, ...references: IChatModelReference[]) {
+	widget.dispose();
+	for (const reference of references) {
+		reference.dispose();
+	}
 }
 
-function registerChatTestServices() {
-	registerWorkbenchService(IChatServiceId, {
-		_serviceBrand: undefined,
-		subscribe: () => toDisposable(() => {}),
-		getSnapshot: () => ({
-			conversations: [],
-			activeConversationId: '',
-			checkedArticleIds: [],
-			activeConversation: null,
-			question: '',
-			messages: [],
-			result: null,
-			isAsking: false,
-			errorMessage: null,
-		}),
-		setContext() {},
-		setQuestion() {},
-		createConversation: () => '',
-		activateConversation() {},
-		closeConversation() {},
-		insertContextMessage() {},
-		insertArticleList() {},
-		insertArticleFetchEmptyResult() {},
-		applyPatch() {},
-		ask: async () => {},
-		isArticleChecked: () => false,
-		setArticleChecked() {},
-		removeArticleChecks() {},
-	} as unknown as IChatService);
-	registerWorkbenchService(IFetchServiceId, {
-		_serviceBrand: undefined,
-		onDidChangeCatalog: () => toDisposable(() => {}),
-		onDidChangeSource: () => toDisposable(() => {}),
-		onDidChangeArticle: () => toDisposable(() => {}),
-		getJournals: () => [],
-		getJournal: () => undefined,
-		getArticleListCatalog: () => undefined,
-		getArticlePage: () => undefined,
-		getArticlePages: () => [],
-		getArticleListItem: () => undefined,
-		getArticle: () => undefined,
-		getArticleDetail: () => undefined,
-		getCatalogLoadState: () => ({ status: 'idle' as const }),
-		getSourceLoadState: () => ({ status: 'idle' as const }),
-		getArticleLoadState: () => ({ status: 'idle' as const }),
-		discoverArticleListSources: async () => {},
-		fetchArticleListSource: async () => {},
-		fetchNextPage: async () => {},
-		fetchArticle: async () => { throw new Error('No article is available in this test.'); },
-		refreshJournal: async () => {},
-		refreshArticleListSource: async () => {},
-	} as unknown as IFetchService);
-	registerWorkbenchService(INotificationServiceId, {
+before(async () => {
+	cleanupDomEnvironment = installDomTestEnvironment().cleanup;
+	cleanupResizeObserver = installResizeObserverStub();
+	await import('cs/platform/contextview/browser/contextViewService');
+	await import('cs/platform/contextview/browser/contextMenuService');
+
+	const [{ renderMarkdown }, markdownModule, chatModule, fetchModule, notificationModule, instantiationModule] = await Promise.all([
+		import('cs/base/browser/markdownRenderer'),
+		import('cs/platform/markdown/browser/markdownRenderer'),
+		import('cs/workbench/contrib/chat/common/chatService/chatService'),
+		import('cs/workbench/services/fetch/common/fetch'),
+		import('cs/platform/notification/common/notification'),
+		import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'),
+	]);
+
+	const notificationService = {
 		_serviceBrand: undefined,
 		info() {},
 		warn() {},
 		error() {},
-		prompt() { return { onDidClose: () => ({ dispose() {} }), close() {}, updateSeverity() {} }; },
-		status() { return { dispose() {} }; },
-		getNotifications: () => [],
-		onDidAddNotification: () => ({ dispose() {} }),
-		onDidRemoveNotification: () => ({ dispose() {} }),
-		onDidChangeNotification: () => ({ dispose() {} }),
-	} as unknown as INotificationService);
-}
+	} as unknown as INotificationService;
+	const draftEditorService = {
+		_serviceBrand: undefined,
+		activeInput: null,
+		getDocument: () => null,
+		setDocument() {},
+	} as unknown as IDraftEditorService;
+	chatService = new ChatService(notificationService, draftEditorService);
 
-before(async () => {
-  const domEnvironment = installDomTestEnvironment();
-  cleanupDomEnvironment = domEnvironment.cleanup;
-  await import('cs/platform/contextview/browser/contextViewService');
-  await import('cs/platform/contextview/browser/contextMenuService');
-  ({ IMarkdownRendererService: IMarkdownRendererServiceId } = await import('cs/platform/markdown/browser/markdownRenderer'));
-  ({ IChatService: IChatServiceId } = await import('cs/workbench/contrib/chat/common/chatService/chatService'));
-  ({ IFetchService: IFetchServiceId } = await import('cs/workbench/services/fetch/common/fetch'));
-  ({ INotificationService: INotificationServiceId } = await import('cs/platform/notification/common/notification'));
-  ({ getWorkbenchInstantiationService, registerWorkbenchService } = await import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'));
-	registerChatTestServices();
-  ({ HorizontalScrollbar } = await import('cs/base/browser/ui/scrollbar/horizontalScrollbar'));
-  ({ renderMarkdown } = await import('cs/base/browser/markdownRenderer'));
-  ({ ChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
-  ({ ChatViewPane } = await import('cs/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane'));
+	const markdownRendererService: IMarkdownRendererService = {
+		_serviceBrand: undefined,
+		render(
+			markdown: IMarkdownString,
+			options?: MarkdownRenderOptions,
+			outElement?: HTMLElement,
+		): IRenderedMarkdown {
+			return renderMarkdown(markdown, options, outElement);
+		},
+	};
+	fetchService = new TestFetchService();
+	localeService = new TestWorkbenchLocaleService();
+
+	instantiationModule.registerWorkbenchService(markdownModule.IMarkdownRendererService, markdownRendererService);
+	instantiationModule.registerWorkbenchService(chatModule.IChatService, chatService);
+	instantiationModule.registerWorkbenchService(fetchModule.IFetchService, fetchService);
+	instantiationModule.registerWorkbenchService(notificationModule.INotificationService, notificationService);
+	instantiationModule.registerWorkbenchService(IWorkbenchLocaleService, localeService);
+	instantiationModule.registerWorkbenchService(IWorkbenchLanguageService, new WorkbenchLanguageService());
+	({ ChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
+	createWidget = () => instantiationModule.getWorkbenchInstantiationService().createInstance(ChatWidget);
 });
 
 after(() => {
-  cleanupDomEnvironment?.();
-  cleanupDomEnvironment = null;
+	cleanupResizeObserver?.();
+	cleanupDomEnvironment?.();
 });
 
-test('chat widget does not render chat tabs header actions', () => {
-  const chatSurface = createChatWidget(createProps());
-  const element = chatSurface.getElement();
-  document.body.append(element);
+test('ChatWidget renders and follows exactly its addressed model', () => {
+	const first = chatService.createModel(URI.parse('chat:/widget/first'));
+	const second = chatService.createModel(URI.parse('chat:/widget/second'));
+	chatService.insertContextMessage(first.object.resource, 'First message', []);
+	chatService.insertContextMessage(second.object.resource, 'Second message', []);
+	const widget = createWidget();
+	document.body.append(widget.getElement());
 
-  try {
-    assert.equal(element.querySelector('.comet-chat-tabs-header'), null);
-    assert.equal(
-      element.querySelector('.comet-sidebar-action-bar .comet-sidebar-action-btn'),
-      null,
-    );
-  } finally {
-    chatSurface.dispose();
-  }
+	try {
+		widget.setModel(first.object, presentation(first.object.resource));
+		assert.match(widget.getElement().textContent ?? '', /First message/);
+		assert.doesNotMatch(widget.getElement().textContent ?? '', /Second message/);
+
+		chatService.insertContextMessage(second.object.resource, 'Still isolated', []);
+		assert.doesNotMatch(widget.getElement().textContent ?? '', /Still isolated/);
+
+		chatService.insertContextMessage(first.object.resource, 'First update', []);
+		assert.match(widget.getElement().textContent ?? '', /First update/);
+	} finally {
+		disposeWidget(widget, first, second);
+	}
 });
 
-test('chat thread uses the shared scrollable transcript container', () => {
-  const chatSurface = createChatWidget({
-    ...createProps(),
-    messages: [
-      { id: 'user-1', role: 'user', content: 'Explain this result' },
-      {
-        id: 'assistant-1',
-        role: 'assistant',
-        content: 'The result is evidence-backed.',
-        result: createResult(),
-      },
-    ],
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
+test('ChatWidget refreshes transcript, composer, and model-picker labels on the same instance', () => {
+	const reference = chatService.createModel(URI.parse('chat:/widget/locale'), {
+		messages: [{
+			id: 'localized-answer',
+			role: 'assistant',
+			content: 'Localized response',
+			imageAttachments: [],
+			result: {
+				answer: 'Localized response',
+				evidence: [{
+					rank: 1,
+					title: 'Evidence title',
+					journalTitle: null,
+					publishedAt: null,
+					sourceUrl: 'https://example.com/evidence',
+					score: null,
+					excerpt: 'Evidence excerpt',
+				}],
+				provider: 'moark',
+				llmProvider: 'openai',
+				llmModel: 'model-a',
+				embeddingModel: 'embedding-a',
+				rerankerModel: 'reranker-a',
+				rerankApplied: true,
+			},
+		}],
+	});
+	const widget = createWidget();
+	const modelPresentation = {
+		...presentation(reference.object.resource),
+		selectedModelId: undefined,
+		activeModelLabel: 'Auto',
+	};
+	widget.setModel(reference.object, modelPresentation);
+	document.body.append(widget.getElement());
 
-  try {
-    const threadWidget = element.querySelector('.comet-chat-thread-widget');
-    assert(threadWidget instanceof HTMLElement);
-    const scrollableRoot = threadWidget.querySelector(
-      '.comet-scrollable-element-root.comet-chat-thread-scrollable',
-    );
-    assert(scrollableRoot instanceof HTMLElement);
-    const thread = scrollableRoot.querySelector('.comet-chat-thread.comet-scrollable-content');
-    assert(thread instanceof HTMLElement);
-    assert.equal(thread.querySelectorAll('.comet-chat-message').length, 2);
-  } finally {
-    chatSurface.dispose();
-  }
+	try {
+		assert.match(widget.getElement().textContent ?? '', /Answer/);
+		assert.equal(
+			widget.getElement().querySelector<HTMLTextAreaElement>('textarea')?.placeholder,
+			'Ask about the fetched literature, compare findings, or draft a short evidence-backed answer.',
+		);
+		assert.equal(
+			widget.getElement().querySelector('.comet-chat-model-switch-label')?.textContent,
+			'Auto',
+		);
+		assert.equal(
+			widget.getElement().querySelector('.comet-chat-thread-scroll-down')?.getAttribute('aria-label'),
+			'Scroll to Bottom',
+		);
+
+		localeService.applyLocale('zh');
+
+		assert.match(widget.getElement().textContent ?? '', /回答/);
+		assert.match(widget.getElement().textContent ?? '', /已启用重排/);
+		assert.match(widget.getElement().textContent ?? '', /证据/);
+		assert.equal(
+			widget.getElement().querySelector<HTMLTextAreaElement>('textarea')?.placeholder,
+			'可以提问某个主题、比较几篇文献的结论，或者让它生成一段带证据的短回答。',
+		);
+		assert.equal(
+			widget.getElement().querySelector('.comet-chat-model-switch-label')?.textContent,
+			'自动',
+		);
+		assert.equal(
+			widget.getElement().querySelector('.comet-chat-thread-scroll-down')?.getAttribute('aria-label'),
+			'滚动到底部',
+		);
+		assert(widget.getElement().querySelector('button[aria-label="文献"]'));
+	} finally {
+		localeService.applyLocale('en');
+		disposeWidget(widget, reference);
+	}
 });
 
-test('chat thread follows new content only when scrolled to the comet-is-bottom', () => {
-  const firstMessages: ChatWidgetProps['messages'] = [
-    { id: 'user-1', role: 'user', content: 'First question' },
-  ];
-  const secondMessages: ChatWidgetProps['messages'] = [
-    ...firstMessages,
-    {
-      id: 'assistant-1',
-      role: 'assistant',
-      content: 'First answer',
-      result: createResult(),
-    },
-  ];
-  const chatSurface = createChatWidget({
-    ...createProps(),
-    messages: firstMessages,
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
+test('ChatWidget keeps transcript scroll positions isolated by Chat resource', () => {
+	const first = chatService.createModel(URI.parse('chat:/widget/scroll-first'));
+	const second = chatService.createModel(URI.parse('chat:/widget/scroll-second'));
+	chatService.insertContextMessage(first.object.resource, 'First long transcript', []);
+	chatService.insertContextMessage(second.object.resource, 'Second long transcript', []);
+	const widget = createWidget();
+	document.body.append(widget.getElement());
 
-  try {
-    const thread = element.querySelector('.comet-chat-thread');
-    assert(thread instanceof HTMLElement);
-    Object.defineProperty(thread, 'clientHeight', {
-      configurable: true,
-      value: 100,
-    });
-    Object.defineProperty(thread, 'scrollHeight', {
-      configurable: true,
-      get: () => thread.childElementCount > firstMessages.length ? 420 : 300,
-    });
-    Object.defineProperty(thread, 'scrollTop', {
-      configurable: true,
-      writable: true,
-      value: 200,
-    });
+	try {
+		widget.setModel(first.object, presentation(first.object.resource));
+		const thread = widget.getElement().querySelector<HTMLElement>('.comet-chat-thread');
+		assert(thread);
+		Object.defineProperties(thread, {
+			clientHeight: { configurable: true, value: 200 },
+			scrollHeight: { configurable: true, value: 1000 },
+		});
+		thread.scrollTop = 250;
+		thread.dispatchEvent(new Event('scroll'));
 
-    chatSurface.setProps({
-      ...createProps(),
-      messages: secondMessages,
-    });
+		widget.setModel(second.object, presentation(second.object.resource));
+		assert.equal(thread.scrollTop, 800);
+		thread.scrollTop = 600;
+		thread.dispatchEvent(new Event('scroll'));
 
-    assert.equal(thread.scrollTop, 320);
-
-    thread.scrollTop = 20;
-    chatSurface.setProps({
-      ...createProps(),
-      messages: [
-        ...secondMessages,
-        { id: 'user-2', role: 'user', content: 'Second question' },
-      ],
-    });
-
-    assert.equal(thread.scrollTop, 20);
-    assert.equal(
-      element.querySelector('.comet-chat-thread-widget')?.classList.contains('comet-show-scroll-down'),
-      true,
-    );
-  } finally {
-    chatSurface.dispose();
-  }
+		widget.setModel(first.object, presentation(first.object.resource));
+		assert.equal(thread.scrollTop, 250);
+	} finally {
+		disposeWidget(widget, first, second);
+	}
 });
 
-function createHeaderActionsElement() {
-  const host = document.createElement('div');
-  host.className = 'comet-header-actions-host';
-  const actionbar = document.createElement('div');
-  actionbar.className = 'comet-header-actions comet-actionbar comet-is-horizontal';
-  const actions = document.createElement('div');
-  actions.className = 'comet-actionbar-actions-container';
-  const button = document.createElement('button');
-  button.className = 'comet-actionbar-action comet-titlebar-primary-sidebar-toggle-btn';
-  button.setAttribute('aria-label', 'Header comet-hover-action');
-  actions.append(button);
-  actionbar.append(actions);
-  host.append(actionbar);
-  return host;
+test('ChatWidget composer mutations and submission carry the bound resource', () => {
+	const reference = chatService.createModel(URI.parse('chat:/widget/composer'));
+	const widget = createWidget();
+	widget.setModel(reference.object, presentation(reference.object.resource));
+	document.body.append(widget.getElement());
+	let submittedResource: URI | undefined;
+	const listener = widget.onDidSubmitRequest(event => submittedResource = event.chatResource);
+
+	try {
+		const textarea = widget.getElement().querySelector('textarea');
+		assert(textarea instanceof HTMLTextAreaElement);
+		textarea.value = 'Addressed prompt';
+		textarea.focus();
+		textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		assert.equal(reference.object.getSnapshot().input, 'Addressed prompt');
+		assert.strictEqual(widget.getElement().querySelector('textarea'), textarea);
+		assert.strictEqual(document.activeElement, textarea);
+		assert.equal(textarea.selectionStart, 'Addressed prompt'.length);
+
+		const currentTextarea = widget.getElement().querySelector('textarea');
+		assert(currentTextarea instanceof HTMLTextAreaElement);
+		currentTextarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		assert.equal(submittedResource?.toString(), reference.object.resource.toString());
+	} finally {
+		listener.dispose();
+		disposeWidget(widget, reference);
+	}
+});
+
+test('ChatWidget send action enforces the same prompt and request guard as Enter', () => {
+	const reference = chatService.createModel(URI.parse('chat:/widget/send-guard'));
+	const widget = createWidget();
+	widget.setModel(reference.object, presentation(reference.object.resource));
+	document.body.append(widget.getElement());
+	let submitCount = 0;
+	const listener = widget.onDidSubmitRequest(() => submitCount += 1);
+
+	try {
+		let sendButton = widget.getElement().querySelector<HTMLButtonElement>('.comet-chat-composer-send-action');
+		assert(sendButton);
+		assert.equal(sendButton.disabled, true);
+		sendButton.click();
+		assert.equal(submitCount, 0);
+
+		const textarea = widget.getElement().querySelector<HTMLTextAreaElement>('textarea');
+		assert(textarea);
+		textarea.value = 'Ready prompt';
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		sendButton = widget.getElement().querySelector<HTMLButtonElement>('.comet-chat-composer-send-action');
+		assert(sendButton);
+		assert.equal(sendButton.disabled, false);
+		sendButton.click();
+		assert.equal(submitCount, 1);
+
+		chatService.startRequest(reference.object.resource, 'active-request', 'Ready prompt', []);
+		sendButton = widget.getElement().querySelector<HTMLButtonElement>('.comet-chat-composer-send-action');
+		assert(sendButton);
+		assert.equal(sendButton.disabled, true);
+		sendButton.click();
+		assert.equal(submitCount, 1);
+	} finally {
+		listener.dispose();
+		disposeWidget(widget, reference);
+	}
+});
+
+test('ChatWidget rebind disposes old composer handlers and prevents cross-resource writes', () => {
+	const first = chatService.createModel(URI.parse('chat:/widget/rebind-first'));
+	const second = chatService.createModel(URI.parse('chat:/widget/rebind-second'));
+	const widget = createWidget();
+	widget.setModel(first.object, presentation(first.object.resource));
+	const detachedTextarea = widget.getElement().querySelector('textarea');
+	assert(detachedTextarea instanceof HTMLTextAreaElement);
+
+	try {
+		widget.setModel(second.object, presentation(second.object.resource));
+		detachedTextarea.value = 'stale write';
+		detachedTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+		assert.equal(first.object.getSnapshot().input, '');
+		assert.equal(second.object.getSnapshot().input, '');
+
+		const activeTextarea = widget.getElement().querySelector('textarea');
+		assert(activeTextarea instanceof HTMLTextAreaElement);
+		activeTextarea.value = 'current write';
+		activeTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+		assert.equal(second.object.getSnapshot().input, 'current write');
+	} finally {
+		disposeWidget(widget, first, second);
+	}
+});
+
+test('ChatWidget rejects a presentation for another resource', () => {
+	const reference = chatService.createModel(URI.parse('chat:/widget/model'));
+	const widget = createWidget();
+
+	try {
+		assert.throws(
+			() => widget.setModel(reference.object, presentation(URI.parse('chat:/widget/other'))),
+			/must address its bound Chat model/,
+		);
+	} finally {
+		disposeWidget(widget, reference);
+	}
+});
+
+test('ChatWidget read-only presentation omits the composer', () => {
+	const reference = chatService.createModel(URI.parse('chat:/widget/read-only'));
+	chatService.insertContextMessage(reference.object.resource, 'Archived transcript', []);
+	const widget = createWidget();
+	widget.setModel(reference.object, presentation(reference.object.resource, true));
+
+	try {
+		assert.match(widget.getElement().textContent ?? '', /Archived transcript/);
+		assert.equal(widget.getElement().querySelector('textarea'), null);
+	} finally {
+		disposeWidget(widget, reference);
+	}
+});
+
+test('ChatWidget renders the actual image bytes attached to a Chat message', () => {
+	const image = createChatImageAttachment(
+		'browser-image',
+		'Browser.jpeg',
+		'image/jpeg',
+		VSBuffer.fromString('browser-image-bytes'),
+	);
+	const reference = chatService.createModel(URI.parse('chat:/widget/image'), {
+		messages: [{
+			id: 'browser-context',
+			role: 'user',
+			content: 'Browser screenshot',
+			imageAttachments: [image],
+		}],
+	});
+	const widget = createWidget();
+
+	try {
+		widget.setModel(reference.object, presentation(reference.object.resource));
+		const renderedImage = widget.getElement().querySelector<HTMLImageElement>(
+			'.comet-chat-message-image img',
+		);
+		assert(renderedImage);
+		assert.equal(renderedImage.alt, image.name);
+		assert.equal(renderedImage.src, toChatImageDataUrl(image));
+	} finally {
+		disposeWidget(widget, reference);
+	}
+});
+
+function clickArticleSource(widget: ChatWidgetType): void {
+	const articleAction = widget.getElement().querySelector<HTMLButtonElement>(
+		'button[aria-label="Article"]',
+	);
+	assert(articleAction);
+	articleAction.click();
+
+	const journal = [...document.body.querySelectorAll<HTMLButtonElement>(
+		'.comet-chat-composer-article-source',
+	)].find(button => button.textContent === 'Test Journal');
+	assert(journal);
+	journal.click();
+
+	const source = [...document.body.querySelectorAll<HTMLButtonElement>(
+		'.comet-chat-composer-article-source',
+	)].find(button => button.textContent === 'Latest Articles');
+	assert(source);
+	source.click();
 }
 
-test('chat view pane header mounts the provided leading comet-hover-actions element', () => {
-  let toggleCount = 0;
-  const headerActionsElement = createHeaderActionsElement();
-  headerActionsElement
-    .querySelector('.comet-titlebar-primary-sidebar-toggle-btn')
-    ?.addEventListener('click', () => {
-      toggleCount += 1;
-  });
-  const chatSurface = createChatViewPane({
-    ...createProps(),
-    isPrimarySidebarVisible: false,
-    headerActionsElement,
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
+test('ChatWidget inserts a fetched Article page only into its addressed model', async () => {
+	const sourceFetch = fetchService.configureArticleSource();
+	const first = chatService.createModel(URI.parse('chat:/widget/article-first'));
+	const second = chatService.createModel(URI.parse('chat:/widget/article-second'));
+	const widget = createWidget();
+	widget.setModel(first.object, presentation(first.object.resource));
+	document.body.append(widget.getElement());
 
-  try {
-    const toggleButton = element.querySelector(
-      '.comet-chat-header .comet-titlebar-primary-sidebar-toggle-btn',
-    );
-    assert(toggleButton instanceof HTMLButtonElement);
-    assert.equal(toggleButton.getAttribute('aria-label'), 'Header comet-hover-action');
+	try {
+		clickArticleSource(widget);
+		sourceFetch.complete();
+		await sourceFetch.p;
+		await Promise.resolve();
 
-    toggleButton.click();
-    assert.equal(toggleCount, 1);
-  } finally {
-    chatSurface.dispose();
-  }
+		assert.match(first.object.getSnapshot().messages.at(-1)?.content ?? '', /Test Article/);
+		assert.equal(second.object.getSnapshot().messages.length, 0);
+	} finally {
+		fetchService.reset();
+		disposeWidget(widget, first, second);
+	}
 });
 
-test('composer toolbar uses comet-actionbar comet-hover-action-icon controls', async () => {
-  let askCount = 0;
-  let autoModelRoutingToggleCount = 0;
-  let selectedModelValue: string | null = null;
-  let maxContextWindowToggleCount = 0;
-  let openedModelSettings = 0;
-  const chatSurface = createChatWidget({
-    ...createProps(),
-    question: 'Explain this selection',
-    activeLlmModelOptionValue: 'glm:glm-4.7-flash',
-    activeLlmModelSupportsMaxContextWindow: true,
-    llmModelOptions: [
-      { value: 'auto', label: 'Auto' },
-      { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
-      { value: 'openai:gpt-5.4:medium', label: 'GPT-5.4 · medium' },
-      { value: 'openai:gpt-5.4:medium:priority', label: 'GPT-5.4 · medium · fast' },
-    ],
-    onAsk: () => {
-      askCount += 1;
-    },
-    onToggleAutoModelRouting: () => {
-      autoModelRoutingToggleCount += 1;
-      return autoModelRoutingToggleCount % 2 === 1 ? 'auto' : 'glm:glm-4.7-flash';
-    },
-    onSelectLlmModel: (value) => {
-      selectedModelValue = value;
-    },
-    onToggleMaxContextWindow: () => {
-      maxContextWindowToggleCount += 1;
-    },
-    onOpenModelSettings: () => {
-      openedModelSettings += 1;
-    },
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
+test('ChatWidget maps Article list checkboxes by occurrence while writing one addressed Article selection', () => {
+	const first = chatService.createModel(URI.parse('chat:/widget/article-checkbox-first'));
+	const second = chatService.createModel(URI.parse('chat:/widget/article-checkbox-second'));
+	chatService.insertArticleList(
+		first.object.resource,
+		'First source',
+		['article:first', 'article:shared', 'article:shared'],
+		'- First Article\n- Shared Article featured\n- Shared Article in section',
+	);
+	chatService.insertArticleList(
+		second.object.resource,
+		'Second source',
+		['article:second'],
+		'- Second Article',
+	);
+	const widget = createWidget();
+	widget.setModel(first.object, presentation(first.object.resource));
+	document.body.append(widget.getElement());
+	const checkboxes = () => [...widget.getElement().querySelectorAll<HTMLElement>(
+		'.comet-chat-article-checkbox[role="checkbox"]',
+	)];
+	const checkedStates = () => checkboxes().map(checkbox => checkbox.getAttribute('aria-checked'));
 
-  try {
-    const composerActions = Array.from(
-      element.querySelectorAll(
-        '.comet-chat-composer-actions .comet-actionbar-action',
-      ),
-    );
-    assert.equal(composerActions.length, 1);
-    assert.equal(
-      composerActions.some(button => button.getAttribute('aria-label') === 'Image'),
-      false,
-    );
+	try {
+		assert.deepEqual(checkedStates(), ['false', 'false', 'false']);
+		checkboxes()[1].click();
+		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared']);
+		assert.deepEqual(second.object.getSnapshot().checkedArticleIds, []);
+		assert.deepEqual(checkedStates(), ['false', 'true', 'true']);
 
-    const sendButton = element.querySelector(
-      '.comet-chat-composer-actions .comet-chat-composer-send-action',
-    );
-    assert(sendButton instanceof HTMLButtonElement);
-    assert.equal(sendButton.getAttribute('aria-label'), 'Send');
-    assert.equal(sendButton.disabled, false);
-    assert(sendButton.querySelector('.lx-icon-mic') instanceof HTMLElement);
+		checkboxes()[0].click();
+		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared', 'article:first']);
+		assert.deepEqual(checkedStates(), ['true', 'true', 'true']);
 
-    sendButton.click();
-    assert.equal(askCount, 1);
+		const staleFirstCheckbox = checkboxes()[2];
+		widget.setModel(second.object, presentation(second.object.resource));
+		staleFirstCheckbox.click();
+		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared', 'article:first']);
+		assert.deepEqual(second.object.getSnapshot().checkedArticleIds, []);
 
-    const dropdownButton = element.querySelector('.comet-chat-model-switch-btn');
-    assert(dropdownButton instanceof HTMLButtonElement);
-		const modelPickerContainer = dropdownButton.parentElement;
-		const composerTools = modelPickerContainer?.parentElement;
-		const composerToolbar = composerTools?.parentElement;
-		assert(modelPickerContainer instanceof HTMLDivElement);
-		assert(composerTools instanceof HTMLDivElement);
-		assert(composerToolbar instanceof HTMLDivElement);
-		assert.equal(modelPickerContainer.classList.contains('comet-chat-model-switch'), true);
-		assert.equal(composerTools.classList.contains('comet-chat-composer-tools'), true);
+		checkboxes()[0].click();
+		assert.deepEqual(second.object.getSnapshot().checkedArticleIds, ['article:second']);
+		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared', 'article:first']);
+		widget.setModel(first.object, presentation(first.object.resource));
+		assert.deepEqual(checkedStates(), ['true', 'true', 'true']);
+	} finally {
+		disposeWidget(widget, first, second);
+	}
+});
+
+test('ChatWidget rejects Article messages whose rendered items do not match their ArticleId references', () => {
+	const reference = chatService.createModel(URI.parse('chat:/widget/article-checkbox-mismatch'), {
+		messages: [{
+			id: 'article-checkbox-mismatch',
+			role: 'assistant',
+			content: '- One rendered Article',
+			imageAttachments: [],
+			articleList: { articleIds: ['article:first', 'article:second'] },
+		}],
+	});
+	const widget = createWidget();
+
+	try {
+		assert.throws(
+			() => widget.setModel(reference.object, presentation(reference.object.resource)),
+			/Article message items do not match their ArticleId references/,
+		);
+	} finally {
+		disposeWidget(widget, reference);
+	}
+});
+
+test('ChatWidget cancels an Article fetch when rebound and never cross-routes its result', async () => {
+	const sourceFetch = fetchService.configureArticleSource();
+	const first = chatService.createModel(URI.parse('chat:/widget/article-rebind-first'));
+	const second = chatService.createModel(URI.parse('chat:/widget/article-rebind-second'));
+	const widget = createWidget();
+	widget.setModel(first.object, presentation(first.object.resource));
+	document.body.append(widget.getElement());
+
+	try {
+		clickArticleSource(widget);
+		const token = fetchService.sourceFetchToken;
+		assert(token);
+		widget.setModel(second.object, presentation(second.object.resource));
+		assert.equal(token.isCancellationRequested, true);
+		sourceFetch.complete();
+		await sourceFetch.p;
+		await Promise.resolve();
+
+		assert.equal(first.object.getSnapshot().messages.length, 0);
+		assert.equal(second.object.getSnapshot().messages.length, 0);
+	} finally {
+		fetchService.reset();
+		disposeWidget(widget, first, second);
+	}
+});
+
+test('ChatWidget cancels an Article fetch when disposed', async () => {
+	const sourceFetch = fetchService.configureArticleSource();
+	const reference = chatService.createModel(URI.parse('chat:/widget/article-dispose'));
+	const widget = createWidget();
+	widget.setModel(reference.object, presentation(reference.object.resource));
+	document.body.append(widget.getElement());
+
+	try {
+		clickArticleSource(widget);
+		const token = fetchService.sourceFetchToken;
+		assert(token);
+		widget.dispose();
+		assert.equal(token.isCancellationRequested, true);
+		sourceFetch.complete();
+		await sourceFetch.p;
+		await Promise.resolve();
+		assert.equal(reference.object.getSnapshot().messages.length, 0);
+	} finally {
+		fetchService.reset();
+		disposeWidget(widget, reference);
+	}
+});
+
+test('ChatWidget cancels an Article fetch when its context view is externally hidden', async () => {
+	const sourceFetch = fetchService.configureArticleSource();
+	const reference = chatService.createModel(URI.parse('chat:/widget/article-context-hide'));
+	const widget = createWidget();
+	widget.setModel(reference.object, presentation(reference.object.resource));
+	document.body.append(widget.getElement());
+
+	try {
+		clickArticleSource(widget);
+		const token = fetchService.sourceFetchToken;
+		assert(token);
+		window.dispatchEvent(new Event('blur'));
+		assert.equal(token.isCancellationRequested, true);
+		sourceFetch.complete();
+		await sourceFetch.p;
+		await Promise.resolve();
+		assert.equal(reference.object.getSnapshot().messages.length, 0);
+	} finally {
+		fetchService.reset();
+		disposeWidget(widget, reference);
+	}
+});
+
+test('ChatWidget clears an active Article source when its Catalog no longer contains that source', async () => {
+	const sourceFetch = fetchService.configureArticleSource();
+	const reference = chatService.createModel(URI.parse('chat:/widget/article-reconcile'));
+	const widget = createWidget();
+	widget.setModel(reference.object, presentation(reference.object.resource));
+	document.body.append(widget.getElement());
+
+	try {
+		clickArticleSource(widget);
+		const token = fetchService.sourceFetchToken;
+		assert(token);
+		fetchService.removeActiveSource();
+		assert.equal(token.isCancellationRequested, true);
 		assert.equal(
-			composerTools.firstElementChild?.classList.contains('comet-chat-composer-add-menu-actions'),
-			true,
+			[...document.body.querySelectorAll<HTMLButtonElement>('.comet-chat-composer-article-source')]
+				.some(button => button.textContent === 'Latest Articles'),
+			false,
 		);
-		assert.equal(composerTools.lastElementChild, modelPickerContainer);
-		assert.equal(composerToolbar.classList.contains('comet-chat-composer-toolbar'), true);
-
-		const addButton = element.querySelector('.comet-chat-add-menu-btn');
-		assert(addButton instanceof HTMLButtonElement);
-		addButton.click();
-		const addMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-add-menu"]');
-		assert(addMenu instanceof HTMLElement);
-		assert.deepEqual(
-			Array.from(addMenu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'))
-				.map(node => node.textContent?.trim()),
-			['Agents', 'Image', 'Skills', 'MCP', 'Plugins'],
-		);
-		addButton.click();
-		await delay(0);
-    assert.equal(
-      dropdownButton.querySelector('.comet-chat-model-switch-label')?.textContent,
-      'GLM-4.7-Flash',
-    );
-    assert.equal(
-      dropdownButton.querySelector('.comet-chat-model-switch-icon'),
-      null,
-    );
-    dropdownButton.click();
-
-    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(menu instanceof HTMLElement);
-    assert.equal(menu.getAttribute('data-menu'), 'chat-model-menu');
-
-    const autoMode = Array.from(menu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) =>
-        node.querySelector('.comet-dropdown-menu-item-content')?.textContent?.trim()
-        === 'Auto',
-    );
-    assert(autoMode instanceof HTMLElement);
-    assert.equal(autoMode.classList.contains('selected'), false);
-    assert.equal(autoMode.querySelector('.lx-icon'), null);
-    assert(autoMode.querySelector('.comet-dropdown-menu-item-switch') instanceof HTMLElement);
-    assert.equal(autoMode.querySelector('.comet-dropdown-menu-item-description'), null);
-    autoMode.click();
-    assert.equal(autoModelRoutingToggleCount, 1);
-    assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
-    assert.equal(
-      dropdownButton.querySelector('.comet-chat-model-switch-label')?.textContent,
-      'Auto',
-    );
-    dropdownButton.click();
-    await delay(0);
-    dropdownButton.click();
-    await delay(0);
-
-    const autoMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(autoMenu instanceof HTMLElement);
-    assert.deepEqual(
-      Array.from(autoMenu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'))
-        .map((node) => node.textContent?.trim()),
-      ['Auto'],
-    );
-
-    const autoToggle = Array.from(autoMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) =>
-        node.querySelector('.comet-dropdown-menu-item-content')?.textContent?.trim()
-        === 'Auto',
-    );
-    assert(autoToggle instanceof HTMLElement);
-    autoToggle.click();
-    assert.equal(autoModelRoutingToggleCount, 2);
-    dropdownButton.click();
-    await delay(0);
-    dropdownButton.click();
-    await delay(0);
-
-    const switchMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(switchMenu instanceof HTMLElement);
-    assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
-    assert.equal(
-      dropdownButton.querySelector('.comet-chat-model-switch-label')?.textContent,
-      'GLM-4.7-Flash',
-    );
-
-    const maxMode = Array.from(switchMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) =>
-        node.querySelector('.comet-dropdown-menu-item-content')?.textContent?.trim()
-        === 'Max mode',
-    );
-    assert(maxMode instanceof HTMLElement);
-    assert.equal(maxMode.querySelector('.lx-icon'), null);
-    assert(maxMode.querySelector('.comet-dropdown-menu-item-switch') instanceof HTMLElement);
-    maxMode.click();
-    assert.equal(maxContextWindowToggleCount, 1);
-    assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
-
-    const modelMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(modelMenu instanceof HTMLElement);
-    const option = Array.from(modelMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('GPT-5.4'),
-    );
-    assert(option instanceof HTMLElement);
-    option.click();
-
-    const submenu = document.body.querySelector('.comet-menu-submenu');
-    assert(submenu instanceof HTMLElement);
-    const useModel = Array.from(submenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('Use model'),
-    );
-    assert(useModel instanceof HTMLElement);
-    useModel.click();
-
-    assert.equal(selectedModelValue, 'openai:gpt-5.4:medium');
-
-    dropdownButton.click();
-    const runtimeMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(runtimeMenu instanceof HTMLElement);
-    const runtimeOption = Array.from(runtimeMenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('GPT-5.4'),
-    );
-    assert(runtimeOption instanceof HTMLElement);
-    runtimeOption.click();
-    const runtimeSubmenu = document.body.querySelector('.comet-menu-submenu');
-    assert(runtimeSubmenu instanceof HTMLElement);
-    const fastOn = Array.from(runtimeSubmenu.querySelectorAll('.comet-dropdown-menu-item')).find(
-      (node) => node.textContent?.includes('Fast: On'),
-    );
-    assert(fastOn instanceof HTMLElement);
-    fastOn.click();
-
-    assert.equal(selectedModelValue, 'openai:gpt-5.4:medium:priority');
-
-    dropdownButton.click();
-    const reopenedMenu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(reopenedMenu instanceof HTMLElement);
-    const addModels = Array.from(
-      reopenedMenu.querySelectorAll('.comet-dropdown-menu-item'),
-    ).find((node) => node.textContent?.includes('Add models'));
-    assert(addModels instanceof HTMLElement);
-    addModels.click();
-
-    assert.equal(openedModelSettings, 1);
-  } finally {
-    chatSurface.dispose();
-  }
-});
-
-test('chat view pane model trigger and menu collapse to Auto while automatic routing is enabled', async () => {
-  const chatSurface = createChatWidget(createProps());
-  const element = chatSurface.getElement();
-  document.body.append(element);
-
-  try {
-    const dropdownButton = element.querySelector('.comet-chat-model-switch-btn');
-    assert(dropdownButton instanceof HTMLButtonElement);
-    assert.equal(
-      dropdownButton.querySelector('.comet-chat-model-switch-label')?.textContent,
-      'Auto',
-    );
-
-    dropdownButton.click();
-    await delay(0);
-
-    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(menu instanceof HTMLElement);
-
-    const menuItemLabels = Array.from(
-      menu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'),
-    ).map((node) => node.textContent?.trim());
-    assert.deepEqual(menuItemLabels, ['Auto']);
-
-    const autoDescription = menu.querySelector('.comet-dropdown-menu-item-description');
-    assert(autoDescription instanceof HTMLElement);
-    assert.equal(
-      autoDescription.textContent,
-      'Balanced quality and speed, recommended for most tasks',
-    );
-    assert(menu.querySelector('.comet-dropdown-menu-item-switch.checked') instanceof HTMLElement);
-  } finally {
-    chatSurface.dispose();
-  }
-});
-
-test('chat view pane model menu supports search filtering', async () => {
-  const chatSurface = createChatWidget({
-    ...createProps(),
-    activeLlmModelOptionValue: 'glm:glm-4.7-flash',
-    llmModelOptions: [
-      { value: 'auto', label: 'Auto' },
-      { value: 'glm:glm-4.7-flash', label: 'GLM-4.7-Flash' },
-      { value: 'openai:gpt-5.4:medium', label: 'GPT-5.4 · medium' },
-    ],
-  });
-  const element = chatSurface.getElement();
-  document.body.append(element);
-
-  try {
-    const dropdownButton = element.querySelector('.comet-chat-model-switch-btn');
-    assert(dropdownButton instanceof HTMLButtonElement);
-    dropdownButton.click();
-    await delay(0);
-
-    const menu = document.body.querySelector('.comet-dropdown-menu[data-menu="chat-model-menu"]');
-    assert(menu instanceof HTMLElement);
-    const searchInput = menu.querySelector('.comet-menu-header .comet-chat-model-menu-search-input .comet-input');
-    assert(searchInput instanceof HTMLInputElement);
-
-    searchInput.value = 'gpt';
-    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    await delay(0);
-
-    const menuItemLabels = Array.from(
-      menu.querySelectorAll('.comet-dropdown-menu-item .comet-dropdown-menu-item-content'),
-    ).map((node) => node.textContent?.trim());
-    assert.deepEqual(menuItemLabels, ['GPT-5.4']);
-  } finally {
-    chatSurface.dispose();
-  }
-});
-
-test('horizontal scrollbar handles wheel events from the strip content', async () => {
-  const host = document.createElement('div');
-  const strip = document.createElement('div');
-  const track = document.createElement('div');
-  const thumb = document.createElement('div');
-  host.append(strip, track);
-  track.append(thumb);
-  document.body.append(host);
-
-  Object.defineProperty(strip, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(strip, 'scrollWidth', {
-    configurable: true,
-    value: 320,
-  });
-  Object.defineProperty(track, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(track, 'clientHeight', {
-    configurable: true,
-    value: 4,
-  });
-
-  const scrollbar = new HorizontalScrollbar(host, strip, track, thumb);
-
-  try {
-    scrollbar.renderNow();
-    await delay(0);
-
-    const event = new window.WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaX: 48,
-    });
-    strip.dispatchEvent(event);
-
-    assert.equal(strip.scrollLeft, 48);
-    assert.equal(event.defaultPrevented, true);
-  } finally {
-    scrollbar.dispose();
-    host.remove();
-  }
-});
-
-test('horizontal scrollbar applies mouse wheel sensitivity', async () => {
-  const host = document.createElement('div');
-  const strip = document.createElement('div');
-  const track = document.createElement('div');
-  const thumb = document.createElement('div');
-  host.append(strip, track);
-  track.append(thumb);
-  document.body.append(host);
-
-  Object.defineProperty(strip, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(strip, 'scrollWidth', {
-    configurable: true,
-    value: 320,
-  });
-  Object.defineProperty(track, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(track, 'clientHeight', {
-    configurable: true,
-    value: 4,
-  });
-
-  const scrollbar = new HorizontalScrollbar(host, strip, track, thumb, {
-    mouseWheelScrollSensitivity: 2,
-  });
-
-  try {
-    scrollbar.renderNow();
-    await delay(0);
-
-    const event = new window.WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaX: 24,
-    });
-    strip.dispatchEvent(event);
-
-    assert.equal(strip.scrollLeft, 48);
-    assert.equal(event.defaultPrevented, true);
-  } finally {
-    scrollbar.dispose();
-    host.remove();
-  }
-});
-
-test('horizontal scrollbar can avoid consuming mouse wheel events', async () => {
-  const host = document.createElement('div');
-  const strip = document.createElement('div');
-  const track = document.createElement('div');
-  const thumb = document.createElement('div');
-  host.append(strip, track);
-  track.append(thumb);
-  document.body.append(host);
-
-  Object.defineProperty(strip, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(strip, 'scrollWidth', {
-    configurable: true,
-    value: 320,
-  });
-  Object.defineProperty(track, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(track, 'clientHeight', {
-    configurable: true,
-    value: 4,
-  });
-
-  const scrollbar = new HorizontalScrollbar(host, strip, track, thumb, {
-    consumeMouseWheelIfScrollbarIsNeeded: false,
-  });
-
-  try {
-    scrollbar.renderNow();
-    await delay(0);
-    strip.scrollLeft = 200;
-
-    const event = new window.WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaX: 24,
-    });
-    strip.dispatchEvent(event);
-
-    assert.equal(strip.scrollLeft, 200);
-    assert.equal(event.defaultPrevented, false);
-  } finally {
-    scrollbar.dispose();
-    host.remove();
-  }
-});
-
-test('horizontal scrollbar can use smooth mouse wheel scrolling', async () => {
-  const host = document.createElement('div');
-  const strip = document.createElement('div');
-  const track = document.createElement('div');
-  const thumb = document.createElement('div');
-  host.append(strip, track);
-  track.append(thumb);
-  document.body.append(host);
-
-  Object.defineProperty(strip, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(strip, 'scrollWidth', {
-    configurable: true,
-    value: 320,
-  });
-  Object.defineProperty(track, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(track, 'clientHeight', {
-    configurable: true,
-    value: 4,
-  });
-
-  let smoothScrollCall:
-    | {
-        left?: number;
-        behavior?: string;
-      }
-    | null = null;
-  strip.scrollTo = ((options: ScrollToOptions) => {
-    smoothScrollCall = {
-      left: options.left,
-      behavior: options.behavior,
-    };
-    if (typeof options.left === 'number') {
-      strip.scrollLeft = options.left;
-    }
-  }) as typeof strip.scrollTo;
-
-  const scrollbar = new HorizontalScrollbar(host, strip, track, thumb, {
-    mouseWheelSmoothScroll: true,
-  });
-
-  try {
-    scrollbar.renderNow();
-    await delay(0);
-
-    const event = new window.WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaX: 24,
-    });
-    strip.dispatchEvent(event);
-
-    assert.deepEqual(smoothScrollCall, {
-      left: 24,
-      behavior: 'smooth',
-    });
-    assert.equal(event.defaultPrevented, true);
-  } finally {
-    scrollbar.dispose();
-    host.remove();
-  }
-});
-
-test('horizontal scrollbar converts vertical wheel to horizontal when shift is held', async () => {
-  const host = document.createElement('div');
-  const strip = document.createElement('div');
-  const track = document.createElement('div');
-  const thumb = document.createElement('div');
-  host.append(strip, track);
-  track.append(thumb);
-  document.body.append(host);
-
-  Object.defineProperty(strip, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(strip, 'scrollWidth', {
-    configurable: true,
-    value: 320,
-  });
-  Object.defineProperty(track, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(track, 'clientHeight', {
-    configurable: true,
-    value: 4,
-  });
-
-  const scrollbar = new HorizontalScrollbar(host, strip, track, thumb);
-
-  try {
-    scrollbar.renderNow();
-    await delay(0);
-
-    const event = new window.WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaY: 24,
-      shiftKey: true,
-    });
-    strip.dispatchEvent(event);
-
-    assert.equal(strip.scrollLeft, 24);
-    assert.equal(event.defaultPrevented, true);
-  } finally {
-    scrollbar.dispose();
-    host.remove();
-  }
-});
-
-test('horizontal scrollbar converts vertical wheel to horizontal when scrollYToX is enabled', async () => {
-  const host = document.createElement('div');
-  const strip = document.createElement('div');
-  const track = document.createElement('div');
-  const thumb = document.createElement('div');
-  host.append(strip, track);
-  track.append(thumb);
-  document.body.append(host);
-
-  Object.defineProperty(strip, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(strip, 'scrollWidth', {
-    configurable: true,
-    value: 320,
-  });
-  Object.defineProperty(track, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(track, 'clientHeight', {
-    configurable: true,
-    value: 4,
-  });
-
-  const scrollbar = new HorizontalScrollbar(host, strip, track, thumb, {
-    scrollYToX: true,
-  });
-
-  try {
-    scrollbar.renderNow();
-    await delay(0);
-
-    const event = new window.WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaY: 24,
-    });
-    strip.dispatchEvent(event);
-
-    assert.equal(strip.scrollLeft, 24);
-    assert.equal(event.defaultPrevented, true);
-  } finally {
-    scrollbar.dispose();
-    host.remove();
-  }
-});
-
-test('horizontal scrollbar applies fast scroll sensitivity when alt is held', async () => {
-  const host = document.createElement('div');
-  const strip = document.createElement('div');
-  const track = document.createElement('div');
-  const thumb = document.createElement('div');
-  host.append(strip, track);
-  track.append(thumb);
-  document.body.append(host);
-
-  Object.defineProperty(strip, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(strip, 'scrollWidth', {
-    configurable: true,
-    value: 500,
-  });
-  Object.defineProperty(track, 'clientWidth', {
-    configurable: true,
-    value: 120,
-  });
-  Object.defineProperty(track, 'clientHeight', {
-    configurable: true,
-    value: 4,
-  });
-
-  const scrollbar = new HorizontalScrollbar(host, strip, track, thumb, {
-    fastScrollSensitivity: 4,
-  });
-
-  try {
-    scrollbar.renderNow();
-    await delay(0);
-
-    const event = new window.WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaY: 10,
-      altKey: true,
-      shiftKey: true,
-    });
-    strip.dispatchEvent(event);
-
-    assert.equal(strip.scrollLeft, 40);
-    assert.equal(event.defaultPrevented, true);
-  } finally {
-    scrollbar.dispose();
-    host.remove();
-  }
+		sourceFetch.complete();
+		await sourceFetch.p;
+		await Promise.resolve();
+		assert.equal(reference.object.getSnapshot().messages.length, 0);
+	} finally {
+		fetchService.reset();
+		disposeWidget(widget, reference);
+	}
 });

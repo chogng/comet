@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PdfEditorPane, type PdfEditorPaneLabels } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPane';
+import { PdfEditorPane } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPane';
 import {
-	createEditorPaneDescriptor,
-	registerEditorPaneDescriptor,
+	EditorPaneDescriptor,
+	editorPaneRegistry,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import { PdfEditorInput, PdfEditorInputSerializer } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorInput';
 import { Disposable } from 'cs/base/common/lifecycle';
@@ -32,58 +32,32 @@ registerEditorCreationAction({
 	getLabel: ui => ui.editorCreateFile,
 });
 
-function createPdfEditorPaneLabels(context: import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').EditorPaneResolverContext): PdfEditorPaneLabels {
-	const { ui } = context;
-	return {
-		toolbarSources: ui.agentbarToolbarSources,
-		toolbarMore: ui.agentbarToolbarMore,
-		pdfTitle: ui.editorPdfTitle,
-		pdfOpenFile: ui.editorPdfOpenFile,
-		emptyWorkspaceBody: ui.editorEmptyWorkspaceBody,
-		pdfMode: ui.editorPdfMode,
-		status: {
-			statusbarAriaLabel: ui.editorStatusbarAriaLabel,
-			url: ui.editorStatusUrl,
-		},
-	};
-}
-
-function createPdfEditorPaneContext(context: import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').EditorPaneResolverContext) {
-	return {
-		contextMenuService: context.contextMenuService,
-		contextViewProvider: context.contextViewProvider,
-		labels: createPdfEditorPaneLabels(context),
-		viewPartProps: context.viewPartProps,
-		nativeHost: context.nativeHost,
-		onOpenEditor: context.onOpenEditor,
-		onOpenSources: context.onOpenSources,
-	};
-}
-
-registerEditorPaneDescriptor(createEditorPaneDescriptor({
-	paneId: 'pdf',
+editorPaneRegistry.registerEditorPane(new EditorPaneDescriptor({
+	paneId: PdfEditorInput.EDITOR_ID,
+	modeId: 'pdf',
 	contentClassNames: ['comet-is-mode-pdf'],
-	acceptsInput: (input): input is PdfEditorInput => input instanceof PdfEditorInput,
-	createPane: context => context.instantiationService.createInstance(
-		PdfEditorPane,
-		createPdfEditorPaneContext(context),
-	),
-	updatePane: (pane, context) => pane.setContext(createPdfEditorPaneContext(context)),
+	inputConstructor: PdfEditorInput,
+	paneConstructor: PdfEditorPane,
 }));
 
-registerAction2(class CreatePdfEditorAction extends Action2 {
-	constructor() {
-		super({
-			id: CreatePdfEditorCommandId,
-			title: localize('pdf.createAction', "Create PDF"),
-			f1: true,
-		});
-	}
+export class PdfEditorActionsContribution extends Disposable {
+	constructor(@IEditorService editorService: IEditorService) {
+		super();
+		this._register(registerAction2(class CreatePdfEditorAction extends Action2 {
+			constructor() {
+				super({
+					id: CreatePdfEditorCommandId,
+					title: localize('pdf.createAction', "Create PDF"),
+					f1: true,
+				});
+			}
 
-	run(accessor: Parameters<Action2['run']>[0]) {
-		return accessor.get(IEditorService).openEditor({ resource: createPdfEditorResource() });
+			run() {
+				return editorService.openEditor({ resource: createPdfEditorResource() });
+			}
+		}));
 	}
-});
+}
 
 class PdfEditorResolverContribution extends Disposable {
 	constructor(@IEditorResolverService editorResolverService: IEditorResolverService) {
@@ -106,6 +80,7 @@ class PdfEditorResolverContribution extends Disposable {
 						url: options?.viewState?.url
 							?? (resource.scheme === PdfEditorInputScheme ? undefined : resource.toString()),
 					}),
+					options,
 				}),
 			},
 		));
@@ -114,4 +89,7 @@ class PdfEditorResolverContribution extends Disposable {
 
 registerWorkbenchContribution(() =>
 	getWorkbenchInstantiationService().createInstance(PdfEditorResolverContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(PdfEditorActionsContribution),
 );

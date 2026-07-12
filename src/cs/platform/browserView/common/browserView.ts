@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import { Event } from 'cs/base/common/event';
@@ -34,7 +34,6 @@ export enum BrowserViewCommandId {
 	// Editor actions
 	FocusUrlInput = `${commandPrefix}.focusUrlInput`,
 	OpenExternal = `${commandPrefix}.openExternal`,
-	OpenSettings = `${commandPrefix}.openSettings`,
 
 	// Favorites
 	ToggleFavorite = `${commandPrefix}.toggleFavorite`,
@@ -172,7 +171,7 @@ export interface IBrowserViewCaptureScreenshotOptions {
 	 * picker's dashed selection rectangle) that would otherwise still be present in
 	 * the GPU surface that `capturePage` reads.
 	 *
-	 * Adds ~1 frame of latency (bounded by a short timeout fallback), so leave off
+	 * Adds ~1 frame of latency and rejects on a bounded wait timeout, so leave off
 	 * for captures that don't follow a DOM teardown.
 	 */
 	awaitNextPaint?: boolean;
@@ -257,6 +256,12 @@ export interface IBrowserViewNavigationEvent {
 	canGoBack: boolean;
 	canGoForward: boolean;
 	certificateError: IBrowserViewCertificateError | undefined;
+}
+
+export interface IBrowserViewViewStateEvent {
+	readonly url: string;
+	readonly scrollX: number;
+	readonly scrollY: number;
 }
 
 export interface IBrowserViewLoadingEvent {
@@ -391,6 +396,7 @@ export interface IBrowserViewService {
 	 * Dynamic events that return an Event for a specific browser view ID.
 	 */
 	onDynamicDidNavigate(id: string): Event<IBrowserViewNavigationEvent>;
+	onDynamicDidChangeViewState(id: string): Event<IBrowserViewViewStateEvent>;
 	onDynamicDidChangeLoadingState(id: string): Event<IBrowserViewLoadingEvent>;
 	onDynamicDidChangeFocus(id: string): Event<IBrowserViewFocusEvent>;
 	onDynamicDidChangeVisibility(id: string): Event<IBrowserViewVisibilityEvent>;
@@ -449,6 +455,12 @@ export interface IBrowserViewService {
 	 * @param visible Whether the view should be visible
 	 */
 	setVisible(id: string, visible: boolean): Promise<void>;
+
+	/** Capture the authoritative scroll state of the current main-frame document. */
+	captureViewState(id: string): Promise<IBrowserViewViewStateEvent>;
+
+	/** Restore scroll state when the current visible document can reach the stored coordinates. */
+	restoreViewState(id: string, viewState: IBrowserViewViewStateEvent): Promise<boolean>;
 
 	/**
 	 * Navigate the browser view to a URL

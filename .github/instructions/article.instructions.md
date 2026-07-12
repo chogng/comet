@@ -1,6 +1,6 @@
 ---
 description: Durable architecture and parsing rules for Article Fetch.
-applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**}"
+applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**,src/cs/workbench/contrib/chat/**,src/cs/workbench/browser/documentActionsModel.ts,src/cs/workbench/contrib/translation/**,src/cs/sessions/browser/sessionsWorkbench.ts,src/cs/sessions/contrib/providers/default/**}"
 ---
 
 # Article Fetch
@@ -11,6 +11,9 @@ applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**}
 records, article details, load state, refresh generations, and shared request
 coordination. Views query it by stable ID and subscribe to relevant changes;
 they do not maintain synchronized article collections or detail caches.
+Fetch commits data and load state before publishing a change event. A failing
+observer is reported as an unexpected error without changing the committed
+operation result or preventing later observers from receiving the event.
 
 Navigation state such as an active journal, source, or article belongs to the
 view that renders it. Chat-specific article selection belongs to the addressed
@@ -22,12 +25,25 @@ Downstream operations receive an `ArticleId` snapshot and resolve the required
 Cross-process calls use feature-specific DTOs; `ArticleId` and Fetch domain
 objects do not move to electron-main for later lookup.
 
+Workbench Chat owns article references stored in one addressed conversation and
+its transient checked-article selection. The Sessions provider that routes a
+backend request resolves explicit Article attachments through `IFetchService`
+and constructs the backend-specific context DTO. Chat does not own backend
+routing, and Sessions core does not own a parallel article selection.
+
 ## Runtime boundary
 
-Fetch orchestration and providers run in electron-browser. Page acquisition
-uses `IPlaywrightService.captureSnapshot()` and a typed page-session ownership
-contract. Fetch does not expose a parallel BrowserView DOM API, access a raw
-Playwright Page, or implement a private Playwright facade.
+The environment-neutral `FetchService` runs in browser and owns Fetch domain
+state, load state, request coordination, and Provider resolution. Desktop
+Provider, Parser, and page-session implementations run in electron-browser,
+where they can use BrowserView and Playwright services. A target without a
+registered Provider still uses the same real domain service; an unavailable
+Provider is an explicit registry error.
+
+Page acquisition uses `IPlaywrightService.captureSnapshot()` and a typed
+page-session ownership contract. Fetch does not expose a parallel BrowserView
+DOM API, access a raw Playwright Page, or implement a private Playwright
+facade.
 
 Providers register descriptors and constructors through the Fetch registry.
 The registry rejects duplicate IDs, and registrations are disposable. Parser

@@ -3,867 +3,694 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { assertNever } from 'cs/base/common/assert';
+import { onUnexpectedError } from 'cs/base/common/errors';
 import { EventEmitter } from 'cs/base/common/event';
-import { CancellationTokenSource } from 'cs/base/common/cancellation';
-import type {
-  AgentMessagePayload,
-  ArticleContextInput,
-  MainAgentPatchProposal,
-  RagAnswerResult,
-  RunMainAgentTurnResult,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { Disposable } from 'cs/base/common/lifecycle';
+import { cloneAndChange } from 'cs/base/common/objects';
+import { getComparisonKey } from 'cs/base/common/resources';
+import type { URI } from 'cs/base/common/uri';
+import { generateUuid } from 'cs/base/common/uuid';
 import {
-  applyWritingEditorEdits,
-  collectWritingEditorTextUnits,
+	applyWritingEditorEdits,
+	type WritingEditorApplyEditFailureReason,
 } from 'cs/editor/common/writingEditorDocument';
-import type {
-	ChatConversation,
-	ChatMessage,
-	ChatPatchProposal,
-	ChatServiceContext,
-	ChatServiceSnapshot,
-	IChatService,
-} from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { IChatService as IChatServiceDecorator } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import {
-  formatChatAnswerFailedMessage,
-  formatChatPatchApplyFailedMessage,
-  localizeChatError,
-} from 'cs/workbench/common/chatErrorMessages';
-import { INotificationService } from 'cs/platform/notification/common/notification';
+import { localize } from 'cs/nls';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
+import { INotificationService } from 'cs/platform/notification/common/notification';
+import {
+	IChatService as IChatServiceDecorator,
+	type ChatMessage,
+	type ChatPatchProposal,
+	type IChatModel,
+	type IChatModelInitialState,
+	type IChatModelReference,
+	type IChatModelSnapshot,
+	type IChatRequestCompletion,
+	type IChatRequestTransaction,
+	type IPreparedChatRequestState,
+	type IChatService,
+} from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
 import type { ArticleId } from 'cs/workbench/services/fetch/common/fetch';
-import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
-import type { LocaleMessages } from 'language/locales';
+import {
+	parseChatImageAttachments,
+	type IChatImageAttachment,
+} from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
 
-type ChatServiceState = {
-  conversations: ChatConversation[];
-  activeConversationId: string;
-  checkedArticleIds: readonly ArticleId[];
-};
-
-function toAgentMessage(
-  message: Extract<ChatMessage, { role: "user" | "assistant" }>,
-): AgentMessagePayload {
-  return {
-    role: message.role,
-    parts: [
-      {
-        type: "text",
-        text: message.content,
-      },
-    ],
-  };
+interface ILiveChatModel {
+	readonly model: ChatModel;
+	referenceCount: number;
 }
 
-function createChatResultFromAgentTurn(
-  result: RunMainAgentTurnResult,
-  context: ChatServiceContext,
-): RagAnswerResult {
-  const evidenceResult = result.lastEvidenceResult;
-  const ragProvider = evidenceResult?.provider ?? context.ragSettings.activeProvider;
-  const ragProviderSettings = context.ragSettings.providers[ragProvider];
+function cloneStructuredValue<T>(value: T): T {
+	return cloneAndChange(value, () => undefined);
+}
 
-  return {
-    answer: result.finalText || evidenceResult?.answer || "",
-    evidence: evidenceResult?.evidence ?? [],
-    provider: ragProvider,
-    llmProvider: evidenceResult?.llmProvider ?? result.llmProvider,
-    llmModel: evidenceResult?.llmModel ?? result.llmModel,
-    embeddingModel:
-      evidenceResult?.embeddingModel ?? ragProviderSettings.embeddingModel,
-    rerankerModel:
-      evidenceResult?.rerankerModel ?? ragProviderSettings.rerankerModel,
-    rerankApplied: evidenceResult?.rerankApplied ?? false,
-  };
+function freezeStructuredValue<T>(value: T): T {
+	if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
+		return value;
+	}
+	if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) {
+		return value;
+	}
+	for (const child of Object.values(value)) {
+		freezeStructuredValue(child);
+	}
+	return Object.freeze(value);
+}
+
+function cloneMessage(message: ChatMessage): ChatMessage {
+	if (message.role === 'user') {
+		return {
+			...message,
+			imageAttachments: parseChatImageAttachments(message.imageAttachments),
+		};
+	}
+
+	return {
+		...message,
+		imageAttachments: parseChatImageAttachments(message.imageAttachments),
+		articleList: message.articleList
+			? { articleIds: [...message.articleList.articleIds] }
+			: undefined,
+		result: message.result ? cloneStructuredValue(message.result) : message.result,
+		patchProposal: message.patchProposal
+			? {
+				...message.patchProposal,
+				patch: cloneStructuredValue(message.patchProposal.patch),
+				target: {
+					resource: message.patchProposal.target.resource,
+					document: cloneStructuredValue(message.patchProposal.target.document),
+				},
+			}
+			: message.patchProposal,
+	};
+}
+
+function createInitialSnapshot(initialState: IChatModelInitialState | undefined): IChatModelSnapshot {
+	return {
+		input: initialState?.input ?? '',
+		messages: initialState?.messages?.map(cloneMessage) ?? [],
+		activeRequest: undefined,
+		errorMessage: initialState?.errorMessage,
+		checkedArticleIds: [...new Set(initialState?.checkedArticleIds ?? [])],
+	};
+}
+
+function createArticleFetchEmptyMessageContent(sourceLabel: string, message: string): string {
+	const normalizedSourceLabel = sourceLabel.trim();
+	return [
+		`> ${message}`,
+		normalizedSourceLabel ? `> ${normalizedSourceLabel}` : '',
+	].filter(Boolean).join('\n');
+}
+
+function canApplyChatPatch(patchProposal: ChatPatchProposal): boolean {
+	return patchProposal.accepted
+		&& !patchProposal.requiresCustomExecutor
+		&& !patchProposal.validationError
+		&& !patchProposal.isApplied;
 }
 
 function createChatPatchProposal(
-  patchProposal: MainAgentPatchProposal | null,
+	completion: IChatRequestCompletion['patchProposal'],
 ): ChatPatchProposal | null {
-  if (!patchProposal) {
-    return null;
-  }
+	if (!completion) {
+		return null;
+	}
 
-  return {
-    ...patchProposal,
-    isApplied: false,
-    applyError: null,
-  };
+	return {
+		...completion.proposal,
+		patch: cloneStructuredValue(completion.proposal.patch),
+		target: {
+			resource: completion.target.resource,
+			document: cloneStructuredValue(completion.target.document),
+		},
+		isApplied: false,
+		applyError: null,
+	};
 }
 
-function canApplyChatPatch(
-  patchProposal: ChatPatchProposal,
+function requireActiveRequest(
+	resource: URI,
+	snapshot: IChatModelSnapshot,
+	requestId: string,
 ) {
-  return (
-    patchProposal.accepted &&
-    !patchProposal.requiresCustomExecutor &&
-    !patchProposal.validationError &&
-    !patchProposal.isApplied
-  );
+	const activeRequest = snapshot.activeRequest;
+	if (!activeRequest) {
+		throw new Error(`No Chat request is active for ${resource.toString()}.`);
+	}
+
+	if (activeRequest.id !== requestId) {
+		throw new Error(
+			`Chat request ${requestId} does not match active request ${activeRequest.id} for ${resource.toString()}.`,
+		);
+	}
+
+	return activeRequest;
 }
 
-function createMessageId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+function documentKey(document: ChatPatchProposal['target']['document']): string {
+	return JSON.stringify(document);
 }
 
-function isAgentTextMessage(
-  message: ChatMessage,
-): message is Extract<ChatMessage, { role: "user" | "assistant" }> {
-  return (
-    (message.role === "user" || message.role === "assistant") &&
-    message.includeInAgentHistory !== false
-  );
-}
-
-function createArticleFetchEmptyMessageContent(
-  sourceLabel: string,
-  message: string,
+function localizePatchEditFailure(
+	reason: WritingEditorApplyEditFailureReason,
+	blockId: string,
 ): string {
-  const normalizedSourceLabel = sourceLabel.trim();
-  return [
-    `> ${message}`,
-    normalizedSourceLabel ? `> ${normalizedSourceLabel}` : '',
-  ].filter(Boolean).join('\n');
+	switch (reason) {
+		case 'unknown-block':
+			return localize('chat.patch.unknownBlock', "The patch targets a draft block that no longer exists: {0}.", blockId);
+		case 'unsupported-structured-content':
+			return localize('chat.patch.structuredContent', "The patch cannot edit structured content in draft block {0}.", blockId);
+		case 'expected-text-mismatch':
+			return localize('chat.patch.textChanged', "The text in draft block {0} changed after this patch was generated.", blockId);
+		case 'match-not-found':
+			return localize('chat.patch.matchNotFound', "The text targeted by this patch no longer exists in draft block {0}.", blockId);
+		default:
+			return assertNever(reason);
+	}
 }
 
-function createConversationId() {
-  return `conversation-${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}`;
+class ChatModel extends Disposable implements IChatModel {
+	private readonly onDidChangeEmitter = this._register(new EventEmitter<void>({
+		onListenerError: onUnexpectedError,
+	}));
+	readonly onDidChange = this.onDidChangeEmitter.event;
+	private snapshot: IChatModelSnapshot;
+	private isDisposed = false;
+
+	constructor(
+		readonly resource: URI,
+		initialState: IChatModelInitialState | undefined,
+	) {
+		super();
+		this.snapshot = freezeStructuredValue(createInitialSnapshot(initialState));
+	}
+
+	getSnapshot(): IChatModelSnapshot {
+		this.assertNotDisposed();
+		return this.snapshot;
+	}
+
+	update(updater: (snapshot: IChatModelSnapshot) => IChatModelSnapshot): void {
+		this.assertNotDisposed();
+		const nextSnapshot = updater(this.snapshot);
+		if (Object.is(nextSnapshot, this.snapshot)) {
+			return;
+		}
+
+		this.snapshot = freezeStructuredValue(nextSnapshot);
+		this.onDidChangeEmitter.fire();
+	}
+
+	commitPreparedSnapshot(
+		expectedSnapshot: IChatModelSnapshot,
+		preparedSnapshot: IChatModelSnapshot,
+	): void {
+		this.update(snapshot => {
+			if (snapshot !== expectedSnapshot) {
+				throw new Error(`Chat model changed before a prepared state was committed: ${this.resource.toString()}`);
+			}
+			return preparedSnapshot;
+		});
+	}
+
+	override dispose(): void {
+		if (this.isDisposed) {
+			return;
+		}
+
+		this.isDisposed = true;
+		super.dispose();
+	}
+
+	private assertNotDisposed(): void {
+		if (this.isDisposed) {
+			throw new Error(`Chat model has been disposed: ${this.resource.toString()}`);
+		}
+	}
 }
 
-function createDefaultConversationTitle(ui: LocaleMessages, index: number) {
-  void index;
-  return ui.assistantSidebarNewConversation;
-}
+class ChatRequestTransaction implements IChatRequestTransaction {
+	private active = true;
 
-function createConversation(
-  ui: LocaleMessages,
-  index: number,
-): ChatConversation {
-  return {
-    id: createConversationId(),
-    title: createDefaultConversationTitle(ui, index),
-    autoTitleIndex: index,
-    question: "",
-    result: null,
-    messages: [],
-    isAsking: false,
-    errorMessage: null,
-  };
-}
+	constructor(
+		private readonly model: ChatModel,
+		private readonly requestId: string,
+		private readonly initialSnapshot: IChatModelSnapshot,
+	) {}
 
-function normalizeState(state: ChatServiceState): ChatServiceState {
-  const activeConversationExists = state.conversations.some(
-    (conversation) => conversation.id === state.activeConversationId
-  );
-  const nextActiveConversationId =
-    activeConversationExists
-      ? state.activeConversationId
-      : state.conversations[0]?.id ?? "";
+	prepareCompletion(completion: IChatRequestCompletion): IPreparedChatRequestState {
+		const normalizedContent = completion.content.trim();
+		return this.prepare(snapshot => {
+			requireActiveRequest(this.model.resource, snapshot, this.requestId);
+			if (!normalizedContent) {
+				throw new Error('Chat request completion content must not be empty.');
+			}
 
-  if (nextActiveConversationId === state.activeConversationId) {
-    return state;
-  }
+			return {
+				...snapshot,
+				messages: [
+					...snapshot.messages,
+					{
+						id: generateUuid(),
+						role: 'assistant',
+						content: normalizedContent,
+						imageAttachments: [],
+						result: completion.result
+							? cloneStructuredValue(completion.result)
+							: completion.result,
+						patchProposal: createChatPatchProposal(completion.patchProposal),
+					},
+				],
+				activeRequest: undefined,
+				errorMessage: undefined,
+			};
+		});
+	}
 
-  return {
-    ...state,
-    activeConversationId: nextActiveConversationId,
-  };
-}
+	prepareFailure(errorMessage: string): IPreparedChatRequestState {
+		const normalizedErrorMessage = errorMessage.trim();
+		return this.prepare(snapshot => {
+			const activeRequest = requireActiveRequest(this.model.resource, snapshot, this.requestId);
+			if (!normalizedErrorMessage) {
+				throw new Error('Chat request error message must not be empty.');
+			}
 
-function createSnapshot(state: ChatServiceState): ChatServiceSnapshot {
-  const activeConversation =
-    state.conversations.find(
-      (conversation) => conversation.id === state.activeConversationId
-    ) ?? state.conversations[0] ?? null;
+			return {
+				...snapshot,
+				input: activeRequest.prompt,
+				activeRequest: undefined,
+				errorMessage: normalizedErrorMessage,
+			};
+		});
+	}
 
-  return {
-    ...state,
-    activeConversation,
-    question: activeConversation?.question ?? "",
-    messages: activeConversation?.messages ?? [],
-    result: activeConversation?.result ?? null,
-    isAsking: activeConversation?.isAsking ?? false,
-    errorMessage: activeConversation?.errorMessage ?? null,
-  };
+	rollback(): void {
+		this.assertActive();
+		this.model.update(snapshot => {
+			requireActiveRequest(this.model.resource, snapshot, this.requestId);
+			return this.initialSnapshot;
+		});
+		this.active = false;
+	}
+
+	private prepare(
+		prepareSnapshot: (snapshot: IChatModelSnapshot) => IChatModelSnapshot,
+	): IPreparedChatRequestState {
+		this.assertActive();
+		const expectedSnapshot = this.model.getSnapshot();
+		const preparedSnapshot = freezeStructuredValue(prepareSnapshot(expectedSnapshot));
+		let committed = false;
+		return Object.freeze({
+			snapshot: preparedSnapshot,
+			commit: () => {
+				if (committed) {
+					throw new Error(`Prepared Chat state was already committed: ${this.model.resource.toString()}`);
+				}
+				this.assertActive();
+				this.model.commitPreparedSnapshot(expectedSnapshot, preparedSnapshot);
+				this.active = false;
+				committed = true;
+			},
+		});
+	}
+
+	private assertActive(): void {
+		if (!this.active) {
+			throw new Error(`Chat request transaction is no longer active: ${this.model.resource.toString()}`);
+		}
+	}
 }
 
 export class ChatService implements IChatService {
-  declare readonly _serviceBrand: undefined;
-  private context: ChatServiceContext | null = null;
-  private state: ChatServiceState = {
-    conversations: [],
-    activeConversationId: '',
-    checkedArticleIds: [],
-  };
-  private snapshot: ChatServiceSnapshot = createSnapshot(this.state);
-  private readonly onDidChangeEmitter = new EventEmitter<void>();
-
-  constructor(
-    @INotificationService private readonly notificationService: INotificationService,
-    @IFetchService private readonly fetchService: IFetchService,
-  ) {}
-
-  readonly subscribe = (listener: () => void) => {
-    return this.onDidChangeEmitter.event(listener);
-  };
-
-  readonly getSnapshot = () => this.snapshot;
-
-  readonly setContext = (context: ChatServiceContext) => {
-    this.context = context;
-    this.updateState((state) => {
-      if (state.conversations.length === 0) {
-        const initialConversation = createConversation(context.ui, 0);
-        return {
-          ...state,
-          conversations: [initialConversation],
-          activeConversationId: initialConversation.id,
-        };
-      }
-
-      let changed = false;
-      const nextConversations = state.conversations.map((conversation) => {
-        if (conversation.autoTitleIndex === null) {
-          return conversation;
-        }
-
-        const nextTitle = createDefaultConversationTitle(
-          context.ui,
-          conversation.autoTitleIndex,
-        );
-        if (conversation.title === nextTitle) {
-          return conversation;
-        }
-
-        changed = true;
-        return {
-          ...conversation,
-          title: nextTitle,
-        };
-      });
-
-      if (!changed) {
-        return state;
-      }
-
-      return {
-        ...state,
-        conversations: nextConversations,
-      };
-    });
-  };
-
-  readonly setQuestion = (value: string) => {
-    this.updateActiveConversation((conversation) => ({
-      ...conversation,
-      question: value,
-      errorMessage: null,
-    }));
-  };
-
-  readonly createConversation = () => {
-    const context = this.getContext();
-    let nextConversationId = '';
-    this.updateState((state) => {
-      const nextConversation = createConversation(
-        context.ui,
-        state.conversations.length,
-      );
-      nextConversationId = nextConversation.id;
-      return {
-        ...state,
-        conversations: [...state.conversations, nextConversation],
-        activeConversationId: nextConversation.id,
-      };
-    });
-    return nextConversationId;
-  };
-
-  readonly activateConversation = (conversationId: string) => {
-    this.updateState((state) => {
-      if (
-        state.activeConversationId === conversationId ||
-        !state.conversations.some(
-          (conversation) => conversation.id === conversationId
-        )
-      ) {
-        return state;
-      }
-
-      return {
-        ...state,
-        activeConversationId: conversationId,
-      };
-    });
-  };
-
-  readonly closeConversation = (conversationId: string) => {
-    this.updateState((state) => {
-      if (state.conversations.length <= 1) {
-        return state;
-      }
-
-      const closedConversationIndex = state.conversations.findIndex(
-        (conversation) => conversation.id === conversationId
-      );
-      if (closedConversationIndex < 0) {
-        return state;
-      }
-
-      const nextConversations = state.conversations.filter(
-        (conversation) => conversation.id !== conversationId
-      );
-      const nextActiveConversationId =
-        state.activeConversationId === conversationId
-          ? nextConversations[
-              Math.min(closedConversationIndex, nextConversations.length - 1)
-            ]?.id ?? nextConversations[0]?.id ?? ""
-          : state.activeConversationId;
-
-      return {
-        ...state,
-        conversations: nextConversations,
-        activeConversationId: nextActiveConversationId,
-      };
-    });
-  };
-
-  readonly insertContextMessage = (
-    title: string,
-    content: string,
-  ) => {
-    const context = this.getContext();
-    const normalizedTitle = title.trim();
-    const normalizedContent = content.trim();
-    if (!normalizedContent) {
-      return;
-    }
-
-    this.updateActiveConversation((conversation) => {
-      const isFirstMessage = conversation.messages.length === 0;
-      const firstContentLine = normalizedContent.split(/\r?\n/, 1)[0] ?? '';
-      const titleContent = normalizedTitle || firstContentLine;
-
-      return {
-        ...conversation,
-        title: isFirstMessage
-          ? titleContent.slice(0, 18) ||
-            createDefaultConversationTitle(
-              context.ui,
-              conversation.autoTitleIndex ?? 0,
-            )
-          : conversation.title,
-        autoTitleIndex: isFirstMessage ? null : conversation.autoTitleIndex,
-        messages: [
-          ...conversation.messages,
-          {
-            id: createMessageId(),
-            role: "user",
-            content: normalizedContent,
-          },
-        ],
-        errorMessage: null,
-      };
-    });
-  };
-
-  readonly insertArticleList = (
-    sourceLabel: string,
-    articleIds: readonly ArticleId[],
-    content: string,
-  ) => {
-    if (articleIds.length === 0 || !content.trim()) {
-      return;
-    }
-
-    const context = this.getContext();
-    const activeConversation = this.snapshot.activeConversation;
-    if (!activeConversation) {
-      return;
-    }
-
-    this.updateState((state) => {
-      const insertedMessage: ChatMessage = {
-        id: createMessageId(),
-        role: "assistant",
-        content,
-        includeInAgentHistory: false,
-        articleList: { articleIds: [...articleIds] },
-      };
-      let changed = false;
-      const nextConversations = state.conversations.map((conversation) => {
-        if (conversation.id !== activeConversation.id) {
-          return conversation;
-        }
-
-        const isFirstMessage = conversation.messages.length === 0;
-        const sourceTitle = sourceLabel.trim().slice(0, 18);
-
-        changed = true;
-        return {
-          ...conversation,
-          title: isFirstMessage
-            ? sourceTitle ||
-              createDefaultConversationTitle(
-                context.ui,
-                conversation.autoTitleIndex ?? 0,
-              )
-            : conversation.title,
-          autoTitleIndex: isFirstMessage ? null : conversation.autoTitleIndex,
-          messages: [
-            ...conversation.messages,
-            insertedMessage,
-          ],
-          errorMessage: null,
-        };
-      });
-
-      if (!changed) {
-        return state;
-      }
-
-      return {
-        ...state,
-        conversations: nextConversations,
-      };
-    });
-  };
-
-  readonly insertArticleFetchEmptyResult = (
-    sourceLabel: string,
-    message: string,
-  ) => {
-    const context = this.getContext();
-    this.updateActiveConversation((conversation) => {
-      const isFirstMessage = conversation.messages.length === 0;
-      const sourceTitle = sourceLabel.trim().slice(0, 18);
-
-      return {
-        ...conversation,
-        title: isFirstMessage
-          ? sourceTitle ||
-            createDefaultConversationTitle(
-              context.ui,
-              conversation.autoTitleIndex ?? 0,
-            )
-          : conversation.title,
-        autoTitleIndex: isFirstMessage ? null : conversation.autoTitleIndex,
-        messages: [
-          ...conversation.messages,
-          {
-            id: createMessageId(),
-            role: "assistant",
-            content: createArticleFetchEmptyMessageContent(sourceLabel, message),
-            includeInAgentHistory: false,
-          },
-        ],
-        errorMessage: null,
-      };
-    });
-  };
-
-  readonly applyPatch = (messageId: string) => {
-    const activeConversation = this.snapshot.activeConversation;
-    if (!activeConversation) {
-      return;
-    }
-    const context = this.getContext();
-
-    const assistantMessage = activeConversation.messages.find(
-      (message): message is Extract<ChatMessage, { role: "assistant" }> =>
-        message.id === messageId && message.role === "assistant",
-    );
-    const patchProposal = assistantMessage?.patchProposal ?? null;
-    if (!patchProposal || !canApplyChatPatch(patchProposal)) {
-      return;
-    }
-
-    const unavailableMessage = context.ui.assistantSidebarPatchUnavailable;
-    const currentDocument = context.getDraftDocument?.() ?? null;
-    const setDraftDocument = context.setDraftDocument;
-    if (!currentDocument || !setDraftDocument) {
-      this.updateConversationMessageById(
-        activeConversation.id,
-        messageId,
-        (message) =>
-          message.role !== "assistant" || !message.patchProposal
-            ? message
-            : {
-                ...message,
-                patchProposal: {
-                  ...message.patchProposal,
-                  applyError: unavailableMessage,
-                },
-              },
-      );
-      this.notificationService.error(
-        formatChatPatchApplyFailedMessage(context.ui, unavailableMessage),
-      );
-      return;
-    }
-
-    const textEdits = patchProposal.patch.operations.flatMap((operation) =>
-      operation.kind === "text-edit" ? [operation.edit] : [],
-    );
-    if (textEdits.length !== patchProposal.patch.operations.length) {
-      const applyError = context.ui.assistantSidebarPatchRequiresExecutor;
-      this.updateConversationMessageById(
-        activeConversation.id,
-        messageId,
-        (message) =>
-          message.role !== "assistant" || !message.patchProposal
-            ? message
-            : {
-                ...message,
-                patchProposal: {
-                  ...message.patchProposal,
-                  applyError,
-                },
-              },
-      );
-      this.notificationService.error(
-        formatChatPatchApplyFailedMessage(context.ui, applyError),
-      );
-      return;
-    }
-
-    const applyResult = applyWritingEditorEdits(currentDocument, textEdits);
-    if (!applyResult.ok) {
-      this.updateConversationMessageById(
-        activeConversation.id,
-        messageId,
-        (message) =>
-          message.role !== "assistant" || !message.patchProposal
-            ? message
-            : {
-                ...message,
-                patchProposal: {
-                  ...message.patchProposal,
-                  applyError: applyResult.message,
-                },
-              },
-      );
-      this.notificationService.error(
-        formatChatPatchApplyFailedMessage(context.ui, applyResult.message),
-      );
-      return;
-    }
-
-    setDraftDocument(applyResult.document);
-    this.updateConversationMessageById(
-      activeConversation.id,
-      messageId,
-      (message) =>
-        message.role !== "assistant" || !message.patchProposal
-          ? message
-          : {
-              ...message,
-              patchProposal: {
-                ...message.patchProposal,
-                isApplied: true,
-                applyError: null,
-              },
-            },
-    );
-    this.notificationService.info(context.ui.toastAssistantPatchApplied);
-  };
-
-  readonly ask = async () => {
-    const activeConversation = this.snapshot.activeConversation;
-    if (!activeConversation) {
-      return;
-    }
-    const context = this.getContext();
-
-    const normalizedQuestion = activeConversation.question.trim();
-    if (!normalizedQuestion) {
-      this.updateConversationById(activeConversation.id, (conversation) => ({
-        ...conversation,
-        errorMessage: context.ui.assistantSidebarQuestionRequired,
-      }));
-      return;
-    }
-
-    if (!context.desktopRuntime) {
-      this.notificationService.info(context.ui.toastDesktopLlmTestOnly);
-      return;
-    }
-
-    const userMessage: ChatMessage = {
-      id: createMessageId(),
-      role: "user",
-      content: normalizedQuestion,
-    };
-
-    this.updateConversationById(activeConversation.id, (conversation) => ({
-      ...conversation,
-      title:
-        conversation.messages.length === 0
-          ? normalizedQuestion.slice(0, 18) ||
-            createDefaultConversationTitle(
-              context.ui,
-              conversation.autoTitleIndex ?? 0,
-            )
-          : conversation.title,
-      autoTitleIndex: null,
-      messages: [...conversation.messages, userMessage],
-      question: "",
-      isAsking: true,
-      errorMessage: null,
-    }));
-
-    try {
-      const articleContexts = await this.resolveCheckedArticleContexts();
-      const fallbackWritingContext =
-        context.getFallbackWritingContext?.() ?? context.fallbackWritingContext ?? '';
-      const draftBody = context.getDraftBody?.() ?? '';
-      const draftDocument = context.getDraftDocument?.() ?? null;
-      const activeDraftStableSelectionTarget =
-        context.getActiveDraftStableSelectionTarget?.() ?? null;
-      const nextResult = await context.invokeDesktop<RunMainAgentTurnResult>("run_main_agent_turn", {
-        messages: [...activeConversation.messages, userMessage]
-          .filter(isAgentTextMessage)
-          .map((message) => toAgentMessage(message)),
-        writingContext: fallbackWritingContext.trim() || null,
-        draftBody: draftBody.trim() || null,
-        editorSelection: activeDraftStableSelectionTarget,
-        editorDocument: draftDocument,
-        editorTextUnits: draftDocument
-          ? collectWritingEditorTextUnits(draftDocument)
-          : [],
-        articleContexts,
-        llm: context.llmSettings,
-        rag: context.ragSettings,
-        availableTools: [
-          "get_selection_context",
-          "list_text_units",
-          ...(draftDocument ? ["apply_editor_patch" as const] : []),
-          ...(articleContexts.length > 0 ? ["retrieve_evidence" as const] : []),
-        ],
-      });
-      const assistantResult = createChatResultFromAgentTurn(
-        nextResult,
-        context,
-      );
-      const assistantContent =
-        nextResult.finalText.trim() || assistantResult.answer || "No answer returned.";
-
-      this.updateConversationById(activeConversation.id, (conversation) => ({
-        ...conversation,
-        result: assistantResult,
-        messages: [
-          ...conversation.messages,
-          {
-            id: createMessageId(),
-            role: "assistant",
-            content: assistantContent,
-            result: assistantResult,
-            patchProposal: createChatPatchProposal(
-              nextResult.lastPatchProposal,
-            ),
-          },
-        ],
-      }));
-    } catch (askError) {
-      const localizedError = localizeChatError(context.ui, askError);
-
-      this.updateConversationById(activeConversation.id, (conversation) => ({
-        ...conversation,
-        errorMessage: localizedError,
-        question: normalizedQuestion,
-      }));
-      this.notificationService.error(
-        formatChatAnswerFailedMessage(context.ui, localizedError)
-      );
-    } finally {
-      this.updateConversationById(activeConversation.id, (conversation) => ({
-        ...conversation,
-        isAsking: false,
-      }));
-    }
-  };
-
-  readonly isArticleChecked = (articleId: ArticleId) => {
-    return this.snapshot.checkedArticleIds.includes(articleId);
-  };
-
-  readonly setArticleChecked = (articleId: ArticleId, checked: boolean) => {
-    this.updateState((state) => {
-      const isChecked = state.checkedArticleIds.includes(articleId);
-      if (isChecked === checked) {
-        return state;
-      }
-
-      return {
-        ...state,
-        checkedArticleIds: checked
-          ? [...state.checkedArticleIds, articleId]
-          : state.checkedArticleIds.filter(id => id !== articleId),
-      };
-    });
-  };
-
-  readonly removeArticleChecks = (articleIds: readonly ArticleId[]) => {
-    if (articleIds.length === 0) {
-      return;
-    }
-
-    const removedArticleIds = new Set(articleIds);
-    this.updateState((state) => {
-      const checkedArticleIds = state.checkedArticleIds.filter(
-        (articleId) => !removedArticleIds.has(articleId),
-      );
-      return checkedArticleIds.length === state.checkedArticleIds.length
-        ? state
-        : { ...state, checkedArticleIds };
-    });
-  };
-
-  private getContext() {
-    if (!this.context) {
-      throw new Error('Chat service context has not been set.');
-    }
-
-    return this.context;
-  }
-
-  private async resolveCheckedArticleContexts(): Promise<ArticleContextInput[]> {
-    const cancellation = new CancellationTokenSource();
-    const unavailableIds: ArticleId[] = [];
-    const contexts: ArticleContextInput[] = [];
-
-    try {
-      for (const articleId of this.snapshot.checkedArticleIds) {
-        const article = this.fetchService.getArticle(articleId);
-        if (!article) {
-          unavailableIds.push(articleId);
-          continue;
-        }
-
-        const detail = this.fetchService.getArticleDetail(articleId)
-          ?? await this.fetchService.fetchArticle(articleId, cancellation.token);
-        contexts.push({
-          sourceUrl: detail.url.toString(true),
-          doi: detail.doi,
-          title: detail.title,
-          authors: detail.authors.map(author => author.name),
-          abstract: detail.abstract,
-          journalTitle: detail.publication.title,
-          publishedAt: detail.publishedAt,
-        });
-      }
-    } finally {
-      cancellation.dispose();
-    }
-
-    if (unavailableIds.length > 0) {
-      this.updateState(state => ({
-        ...state,
-        checkedArticleIds: state.checkedArticleIds.filter(articleId => !unavailableIds.includes(articleId)),
-      }));
-      this.notificationService.info(this.getContext().ui.articleDetailsUnavailable);
-    }
-
-    return contexts;
-  }
-
-  private emitChange() {
-    this.onDidChangeEmitter.fire();
-  }
-
-  private setState(nextState: ChatServiceState) {
-    if (Object.is(this.state, nextState)) {
-      return;
-    }
-
-    this.state = nextState;
-    this.snapshot = createSnapshot(this.state);
-    this.emitChange();
-  }
-
-  private updateState(
-    updater: (state: ChatServiceState) => ChatServiceState
-  ) {
-    const nextState = normalizeState(updater(this.state));
-    this.setState(nextState);
-  }
-
-  private updateActiveConversation(
-    updater: (
-      conversation: ChatConversation
-    ) => ChatConversation
-  ) {
-    const activeConversation = this.snapshot.activeConversation;
-    if (!activeConversation) {
-      return;
-    }
-
-    this.updateConversationById(activeConversation.id, updater);
-  }
-
-  private updateConversationById(
-    conversationId: string,
-    updater: (
-      conversation: ChatConversation
-    ) => ChatConversation
-  ) {
-    this.updateState((state) => {
-      let changed = false;
-      const nextConversations = state.conversations.map((conversation) => {
-        if (conversation.id !== conversationId) {
-          return conversation;
-        }
-
-        const nextConversation = updater(conversation);
-        if (!Object.is(nextConversation, conversation)) {
-          changed = true;
-        }
-        return nextConversation;
-      });
-
-      if (!changed) {
-        return state;
-      }
-
-      return {
-        ...state,
-        conversations: nextConversations,
-      };
-    });
-  }
-
-  private updateConversationMessageById(
-    conversationId: string,
-    messageId: string,
-    updater: (message: ChatMessage) => ChatMessage,
-  ) {
-    this.updateConversationById(conversationId, (conversation) => {
-      let changed = false;
-      const nextMessages = conversation.messages.map((message) => {
-        if (message.id !== messageId) {
-          return message;
-        }
-
-        const nextMessage = updater(message);
-        if (!Object.is(nextMessage, message)) {
-          changed = true;
-        }
-        return nextMessage;
-      });
-
-      if (!changed) {
-        return conversation;
-      }
-
-      return {
-        ...conversation,
-        messages: nextMessages,
-      };
-    });
-  }
+	declare readonly _serviceBrand: undefined;
+
+	private readonly models = new Map<string, ILiveChatModel>();
+
+	constructor(
+		@INotificationService private readonly notificationService: INotificationService,
+		@IDraftEditorService private readonly draftEditorService: IDraftEditorService,
+	) {}
+
+	createModel(
+		resource: URI,
+		initialState?: IChatModelInitialState,
+	): IChatModelReference {
+		const resourceKey = getComparisonKey(resource);
+		if (this.models.has(resourceKey)) {
+			throw new Error(`Chat model already exists: ${resource.toString()}`);
+		}
+
+		const liveModel: ILiveChatModel = {
+			model: new ChatModel(resource, initialState),
+			referenceCount: 0,
+		};
+		this.models.set(resourceKey, liveModel);
+		return this.createReference(resourceKey, liveModel);
+	}
+
+	acquireModel(resource: URI): IChatModelReference {
+		const resourceKey = getComparisonKey(resource);
+		const liveModel = this.models.get(resourceKey);
+		if (!liveModel) {
+			throw new Error(`Chat model does not exist: ${resource.toString()}`);
+		}
+
+		return this.createReference(resourceKey, liveModel);
+	}
+
+	setInput(resource: URI, value: string): void {
+		this.updateModel(resource, snapshot => {
+			if (snapshot.input === value && snapshot.errorMessage === undefined) {
+				return snapshot;
+			}
+
+			return {
+				...snapshot,
+				input: value,
+				errorMessage: undefined,
+			};
+		});
+	}
+
+	insertContextMessage(
+		resource: URI,
+		content: string,
+		imageAttachments: readonly IChatImageAttachment[],
+	): void {
+		const model = this.getModel(resource);
+		const normalizedContent = content.trim();
+		if (!normalizedContent) {
+			throw new Error('A Chat context message requires non-empty content.');
+		}
+		const capturedImageAttachments = parseChatImageAttachments(imageAttachments);
+
+		model.update(snapshot => ({
+			...snapshot,
+			messages: [
+				...snapshot.messages,
+				{
+					id: generateUuid(),
+					role: 'user',
+					content: normalizedContent,
+					imageAttachments: capturedImageAttachments,
+				},
+			],
+			errorMessage: undefined,
+		}));
+	}
+
+	insertArticleList(
+		resource: URI,
+		_sourceLabel: string,
+		articleIds: readonly ArticleId[],
+		content: string,
+	): void {
+		const model = this.getModel(resource);
+		if (articleIds.length === 0 || !content.trim()) {
+			return;
+		}
+
+		model.update(snapshot => ({
+			...snapshot,
+			messages: [
+				...snapshot.messages,
+				{
+					id: generateUuid(),
+					role: 'assistant',
+					content,
+					imageAttachments: [],
+					includeInAgentHistory: false,
+					articleList: { articleIds: [...articleIds] },
+				},
+			],
+			errorMessage: undefined,
+		}));
+	}
+
+	insertArticleFetchEmptyResult(resource: URI, sourceLabel: string, message: string): void {
+		const model = this.getModel(resource);
+		if (!message.trim()) {
+			return;
+		}
+
+		model.update(snapshot => ({
+			...snapshot,
+			messages: [
+				...snapshot.messages,
+				{
+					id: generateUuid(),
+					role: 'assistant',
+					content: createArticleFetchEmptyMessageContent(sourceLabel, message),
+					imageAttachments: [],
+					includeInAgentHistory: false,
+				},
+			],
+			errorMessage: undefined,
+		}));
+	}
+
+	applyPatch(resource: URI, messageId: string): void {
+		const model = this.getModel(resource);
+		const assistantMessage = model.getSnapshot().messages.find(
+			(message): message is Extract<ChatMessage, { role: 'assistant' }> =>
+				message.id === messageId && message.role === 'assistant',
+		);
+		const patchProposal = assistantMessage?.patchProposal ?? null;
+		if (!patchProposal || !canApplyChatPatch(patchProposal)) {
+			return;
+		}
+
+		const targetDocument = this.draftEditorService.getDocument(patchProposal.target.resource);
+		if (!targetDocument) {
+			this.reportPatchApplyFailure(
+				model,
+				messageId,
+				localize('chat.patch.targetUnavailable', "The draft targeted by this patch is unavailable."),
+			);
+			return;
+		}
+
+		if (documentKey(targetDocument) !== documentKey(patchProposal.target.document)) {
+			this.reportPatchApplyFailure(
+				model,
+				messageId,
+				localize('chat.patch.targetChanged', "The draft changed after this patch was generated."),
+			);
+			return;
+		}
+
+		const textEdits = patchProposal.patch.operations.flatMap(operation =>
+			operation.kind === 'text-edit' ? [operation.edit] : [],
+		);
+		if (textEdits.length !== patchProposal.patch.operations.length) {
+			this.reportPatchApplyFailure(
+				model,
+				messageId,
+				localize('chat.patch.requiresExecutor', "This patch requires an unsupported custom executor."),
+			);
+			return;
+		}
+
+		const applyResult = applyWritingEditorEdits(patchProposal.target.document, textEdits);
+		if (!applyResult.ok) {
+			this.reportPatchApplyFailure(
+				model,
+				messageId,
+				localizePatchEditFailure(applyResult.reason, applyResult.blockId),
+			);
+			return;
+		}
+
+		this.draftEditorService.setDocument(patchProposal.target.resource, applyResult.document);
+		this.updateMessage(model, messageId, message => {
+			if (message.role !== 'assistant' || !message.patchProposal) {
+				return message;
+			}
+
+			return {
+				...message,
+				patchProposal: {
+					...message.patchProposal,
+					isApplied: true,
+					applyError: null,
+				},
+			};
+		});
+		this.notificationService.info(localize('chat.patch.applied', "Patch applied to the draft."));
+	}
+
+	isArticleChecked(resource: URI, articleId: ArticleId): boolean {
+		return this.getModel(resource).getSnapshot().checkedArticleIds.includes(articleId);
+	}
+
+	setArticleChecked(resource: URI, articleId: ArticleId, checked: boolean): void {
+		this.updateModel(resource, snapshot => {
+			const isChecked = snapshot.checkedArticleIds.includes(articleId);
+			if (isChecked === checked) {
+				return snapshot;
+			}
+
+			return {
+				...snapshot,
+				checkedArticleIds: checked
+					? [...snapshot.checkedArticleIds, articleId]
+					: snapshot.checkedArticleIds.filter(id => id !== articleId),
+			};
+		});
+	}
+
+	removeArticleChecks(resource: URI, articleIds: readonly ArticleId[]): void {
+		const model = this.getModel(resource);
+		if (articleIds.length === 0) {
+			return;
+		}
+
+		const removedArticleIds = new Set(articleIds);
+		model.update(snapshot => {
+			const checkedArticleIds = snapshot.checkedArticleIds.filter(
+				articleId => !removedArticleIds.has(articleId),
+			);
+			if (checkedArticleIds.length === snapshot.checkedArticleIds.length) {
+				return snapshot;
+			}
+
+			return { ...snapshot, checkedArticleIds };
+		});
+	}
+
+	startRequest(
+		resource: URI,
+		requestId: string,
+		prompt: string,
+		imageAttachments: readonly IChatImageAttachment[],
+	): IChatRequestTransaction {
+		const model = this.getModel(resource);
+		if (!requestId.trim()) {
+			throw new Error('Chat request id must not be empty.');
+		}
+
+		const normalizedPrompt = prompt.trim();
+		if (!normalizedPrompt) {
+			throw new Error('Chat request prompt must not be empty.');
+		}
+		const capturedImageAttachments = parseChatImageAttachments(imageAttachments);
+
+		const initialSnapshot = model.getSnapshot();
+		model.update(snapshot => {
+			if (snapshot.activeRequest) {
+				throw new Error(
+					`Chat request ${snapshot.activeRequest.id} is already active for ${resource.toString()}.`,
+				);
+			}
+
+			return {
+				...snapshot,
+				input: '',
+				messages: [
+					...snapshot.messages,
+					{
+						id: generateUuid(),
+						role: 'user',
+						content: normalizedPrompt,
+						imageAttachments: capturedImageAttachments,
+					},
+				],
+				activeRequest: {
+					id: requestId,
+					prompt: normalizedPrompt,
+				},
+				errorMessage: undefined,
+			};
+		});
+
+		return new ChatRequestTransaction(model, requestId, initialSnapshot);
+	}
+
+	private createReference(resourceKey: string, liveModel: ILiveChatModel): IChatModelReference {
+		liveModel.referenceCount += 1;
+		let isDisposed = false;
+		return {
+			object: liveModel.model,
+			dispose: () => {
+				if (isDisposed) {
+					return;
+				}
+
+				isDisposed = true;
+				liveModel.referenceCount -= 1;
+				if (liveModel.referenceCount > 0) {
+					return;
+				}
+
+				if (this.models.get(resourceKey) !== liveModel) {
+					throw new Error(`Chat model registry ownership changed: ${liveModel.model.resource.toString()}`);
+				}
+
+				this.models.delete(resourceKey);
+				liveModel.model.dispose();
+			},
+		};
+	}
+
+	private getModel(resource: URI): ChatModel {
+		const liveModel = this.models.get(getComparisonKey(resource));
+		if (!liveModel) {
+			throw new Error(`Chat model does not exist: ${resource.toString()}`);
+		}
+
+		return liveModel.model;
+	}
+
+	private updateModel(
+		resource: URI,
+		updater: (snapshot: IChatModelSnapshot) => IChatModelSnapshot,
+	): void {
+		this.getModel(resource).update(updater);
+	}
+
+	private updateMessage(
+		model: ChatModel,
+		messageId: string,
+		updater: (message: ChatMessage) => ChatMessage,
+	): void {
+		model.update(snapshot => {
+			let changed = false;
+			const messages = snapshot.messages.map(message => {
+				if (message.id !== messageId) {
+					return message;
+				}
+
+				const nextMessage = updater(message);
+				changed ||= !Object.is(nextMessage, message);
+				return nextMessage;
+			});
+
+			return changed ? { ...snapshot, messages } : snapshot;
+		});
+	}
+
+	private reportPatchApplyFailure(model: ChatModel, messageId: string, errorMessage: string): void {
+		this.updateMessage(model, messageId, message => {
+			if (message.role !== 'assistant' || !message.patchProposal) {
+				return message;
+			}
+
+			return {
+				...message,
+				patchProposal: {
+					...message.patchProposal,
+					applyError: errorMessage,
+				},
+			};
+		});
+		this.notificationService.error(
+			localize('chat.patch.applyFailed', "Failed to apply patch: {0}", errorMessage),
+		);
+	}
 }
 
 registerSingleton(IChatServiceDecorator, ChatService, InstantiationType.Delayed);

@@ -160,8 +160,8 @@ and interactivity.
 Protect these behaviors before moving ownership:
 
 - browser and desktop entry points render one product shell;
-- native auxiliary windows preserve their dedicated startup path and do not
-  instantiate the primary Sessions shell;
+- entry points contain no obsolete native-overlay bootstrap branch after the
+  native overlay backends and their callers have been deleted;
 - the shell renders one Sidebar, one Sessions Part, and one Sessions Editor
   Part;
 - Sidebar and Editor visibility and saved sizes survive rerender and reload;
@@ -365,7 +365,8 @@ The migration is complete only when:
 - `cs/sessions` is an enforced source layer above `cs/workbench`;
 - browser, desktop, and web bootstrap Comet through Sessions entry points;
 - exactly one Sessions product shell is instantiated;
-- primary and auxiliary window startup do not instantiate each other's shell;
+- browser and desktop entry points each instantiate exactly one Sessions shell
+  and contain no obsolete native-overlay startup branch;
 - Workbench and all lower layers contain no imports of `cs/sessions`;
 - the Sessions shell owns root layout, Parts, visibility, sizing, titlebars,
   persistence, and lifecycle;

@@ -33,6 +33,12 @@ function extractTextParts(parts: AgentMessagePart[]) {
     .filter((text) => typeof text === 'string' && text.trim().length > 0);
 }
 
+function extractImageParts(parts: AgentMessagePart[]) {
+  return parts.filter(
+    (part): part is Extract<AgentMessagePart, { type: 'image' }> => part.type === 'image',
+  );
+}
+
 function extractToolCallParts(parts: AgentMessagePart[]) {
   return parts.filter(
     (part): part is Extract<AgentMessagePart, { type: 'tool-call' }> => part.type === 'tool-call',
@@ -121,11 +127,21 @@ function toOpenAiCompatibleInputItems(
 
     const textParts = extractTextParts(message.parts);
     const textContent = textParts.join('\n').trim();
+    const imageParts = extractImageParts(message.parts);
 
-    if (textContent) {
+    if (textContent || imageParts.length > 0) {
       input.push({
         role: message.role,
-        content: textContent,
+        content: imageParts.length > 0
+          ? [
+            ...(textContent ? [{ type: 'input_text' as const, text: textContent }] : []),
+            ...imageParts.map(part => ({
+              type: 'input_image' as const,
+              image_url: `data:${part.mimeType};base64,${part.data}`,
+              detail: 'auto' as const,
+            })),
+          ]
+          : textContent,
       });
     }
 

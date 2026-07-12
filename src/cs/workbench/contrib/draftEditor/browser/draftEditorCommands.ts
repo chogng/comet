@@ -1,10 +1,8 @@
 import type { InsertFigurePayload } from 'cs/editor/browser/text/commands';
 import type { WritingEditorSurfaceHandle } from 'cs/editor/browser/text/editor';
+import type { DraftEditorCommandId } from 'cs/editor/browser/text/editorCommandRegistry';
 
-export type DraftEditorCommandId =
-  | 'insertCitation'
-  | 'insertFigure'
-  | 'insertFigureRef';
+export type DraftEditorSurfaceActionId = 'undo' | 'redo';
 
 export type DraftEditorCommandLabels = {
   citationPrompt: string;

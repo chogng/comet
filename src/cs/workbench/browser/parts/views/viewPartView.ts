@@ -1,8 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import {
   getWorkbenchPartDomNode,
-  WORKBENCH_PART_IDS,
   registerWorkbenchPartDomNode,
 } from 'cs/workbench/browser/layout';
+import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import 'cs/workbench/browser/parts/views/media/view.css';
 import { $ } from 'cs/base/browser/dom';
 

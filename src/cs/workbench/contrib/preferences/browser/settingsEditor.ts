@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { LocaleMessages } from 'language/locales';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
@@ -49,7 +54,8 @@ import {
   TranslationSettingsSection,
   type TranslationSettingsSectionProps,
 } from 'cs/workbench/contrib/preferences/browser/translationWidget';
-import { registerWorkbenchPartDomNode, WORKBENCH_PART_IDS } from 'cs/workbench/browser/layout';
+import { registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
+import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import 'cs/workbench/contrib/preferences/browser/media/settingsEditor.css';
 import 'cs/workbench/contrib/preferences/browser/media/settingsWidgets.css';
 

@@ -13,6 +13,8 @@ export type EditorModeToolbarContributionContext = {
   browserPageTitle?: string;
   browserFaviconUrl?: string;
   browserTabTitle?: string;
+  browserCanGoBack: boolean;
+  browserCanGoForward: boolean;
   electronRuntime: boolean;
   labels: {
     toolbarSources: string;

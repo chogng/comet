@@ -4,7 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { URI } from 'cs/base/common/uri';
-import type { ParsedArticleListCatalog } from 'cs/workbench/services/fetch/common/fetchProvider';
+import type {
+	ParsedArticleListSource,
+	ParsedArticleListSourceGroup,
+} from 'cs/workbench/services/fetch/common/fetchProvider';
 
 function text(element: Element | null): string | undefined {
 	const value = element?.textContent?.replace(/\s+/gu, ' ').trim();
@@ -15,75 +18,68 @@ function uriFromHref(href: string | null, base: URI): URI | undefined {
 	return href ? URI.parse(new URL(href, base.toString(true)).toString()) : undefined;
 }
 
-export function parseNatureCatalog(document: Document, base: URI): ParsedArticleListCatalog {
-	const entries = getNatureExploreCatalogEntries(document, base);
-	if (entries.length === 0) {
-		throw new Error(`Nature source discovery for "${base.toString(true)}" did not find an Explore content catalog.`);
+function articleTypeLabel(anchor: Element): string | undefined {
+	return text(anchor)?.replace(/\s+\([\d,]+\)$/u, '').trim() || undefined;
+}
+
+export function parseNatureExploreGroups(
+	document: Document,
+	base: URI,
+): readonly { readonly label: string; readonly url: URI }[] {
+	const links = [...document.querySelectorAll(
+		'nav[data-test="Explore-content"] a[data-test="explore-nav-item"][href]',
+	)].map(anchor => ({
+		label: text(anchor),
+		url: uriFromHref(anchor.getAttribute('href'), base),
+	})).filter((entry): entry is { label: string; url: URI } => !!entry.label && !!entry.url);
+	if (links.length === 0) {
+		throw new Error(`Nature source discovery for "${base.toString(true)}" does not contain Explore content links.`);
 	}
-	return { entries };
-}
 
-export function isNatureExploreCatalog(document: Document): boolean {
-	return getNatureExploreCatalogEntries(document, URI.parse('https://www.nature.com/')).length > 0;
-}
-
-export function isNatureArticleListCatalog(document: Document): boolean {
-	return !isNatureNewsOpinionListCatalog(document) && !!document.querySelector('main h1') && !!document.querySelector('main article, main li[data-test*="article"]');
-}
-
-export function parseNatureArticleListCatalog(document: Document, base: URI): ParsedArticleListCatalog {
-	const label = text(document.querySelector('main h1'));
-	if (!label) {
-		throw new Error(`Nature article list "${base.toString(true)}" does not contain a title.`);
-	}
-	return {
-		entries: [{
-			kind: 'group',
-			label,
-			sources: [{ kind: 'source', label, url: base }],
-		}],
-	};
-}
-
-export function isNatureNewsOpinionListCatalog(document: Document): boolean {
-	return !!document.querySelector('main [data-test="news-opinion-list"], main .news-and-views-list');
-}
-
-export function parseNatureNewsOpinionListCatalog(document: Document, base: URI): ParsedArticleListCatalog {
-	const label = text(document.querySelector('main h1'));
-	if (!label) {
-		throw new Error(`Nature news or opinion list "${base.toString(true)}" does not contain a title.`);
-	}
-	return {
-		entries: [{
-			kind: 'group',
-			label,
-			sources: [{ kind: 'source', label, url: base }],
-		}],
-	};
-}
-
-function getNatureExploreCatalogEntries(document: Document, base: URI): ParsedArticleListCatalog['entries'] {
-	return [...document.querySelectorAll('nav, aside, section')].map(container => {
-		const label = text(container.querySelector('h2, h3, [aria-level]'));
-		const sources = [...container.querySelectorAll('a[href]')]
-			.map(anchor => ({ label: text(anchor), url: uriFromHref(anchor.getAttribute('href'), base) }))
-			.filter((entry): entry is { label: string; url: URI } => !!entry.label && !!entry.url)
-			.filter(entry => /article|matter|review|commentary|correspondence|editorial|perspective|report/iu.test(entry.label));
-		if (!label || sources.length === 0) {
-			return undefined;
-		}
-		return {
-			kind: 'group' as const,
-			label,
-			sources: dedupeSources(sources).map(source => ({ kind: 'source' as const, ...source })),
-		};
-	}).filter((entry): entry is NonNullable<typeof entry> => !!entry);
-}
-
-function dedupeSources(sources: readonly { label: string; url: URI }[]): readonly { label: string; url: URI }[] {
 	const seen = new Set<string>();
-	return sources.filter(source => {
+	return links.filter(link => {
+		const key = link.url.toString(true);
+		if (seen.has(key)) {
+			return false;
+		}
+		seen.add(key);
+		return true;
+	});
+}
+
+export function isNatureArticleTypeCatalog(document: Document): boolean {
+	const catalogs = document.querySelectorAll('nav#Article-Type-target');
+	return catalogs.length === 1
+		&& !!catalogs[0].querySelector('a[href*="type="]');
+}
+
+export function parseNatureArticleTypeCatalog(
+	document: Document,
+	base: URI,
+	groupLabel: string,
+): ParsedArticleListSourceGroup {
+	const normalizedGroupLabel = groupLabel.trim();
+	if (!normalizedGroupLabel) {
+		throw new Error(`Nature Article Type discovery for "${base.toString(true)}" requires an Explore content label.`);
+	}
+	const catalogs = document.querySelectorAll('nav#Article-Type-target');
+	if (catalogs.length !== 1) {
+		throw new Error(`Nature Explore content "${base.toString(true)}" does not contain exactly one Article Type catalog.`);
+	}
+	const sources = [...catalogs[0].querySelectorAll('a[href]')].map(anchor => ({
+		label: articleTypeLabel(anchor),
+		url: uriFromHref(anchor.getAttribute('href'), base),
+	})).filter((entry): entry is { label: string; url: URI } =>
+		!!entry.label
+		&& !!entry.url
+		&& new URL(entry.url.toString(true)).searchParams.has('type')
+	);
+	if (sources.length === 0) {
+		throw new Error(`Nature Explore content "${base.toString(true)}" does not contain Article Type sources.`);
+	}
+
+	const seen = new Set<string>();
+	const uniqueSources = sources.filter(source => {
 		const key = source.url.toString(true);
 		if (seen.has(key)) {
 			return false;
@@ -91,4 +87,20 @@ function dedupeSources(sources: readonly { label: string; url: URI }[]): readonl
 		seen.add(key);
 		return true;
 	});
+	return {
+		kind: 'group',
+		label: normalizedGroupLabel,
+		sources: uniqueSources.map(source => ({ kind: 'source', ...source })),
+	};
+}
+
+export function parseNatureDirectListSource(
+	document: Document,
+	base: URI,
+): ParsedArticleListSource {
+	const label = text(document.querySelector('[role="main"] h1'));
+	if (!label) {
+		throw new Error(`Nature article list "${base.toString(true)}" does not contain a title.`);
+	}
+	return { kind: 'source', label, url: base };
 }

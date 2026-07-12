@@ -70,8 +70,20 @@ export abstract class AbstractStorageService extends Disposable {
     });
   }
 
-  protected emitWillSaveState(reason: WillSaveStateReason) {
-    this.willSaveStateEmitter.fire({ reason });
+  protected emitWillSaveState(reason: WillSaveStateReason): readonly Promise<void>[] {
+	const joins: Promise<void>[] = [];
+	let acceptingJoins = true;
+	this.willSaveStateEmitter.fire({
+		reason,
+		join: promise => {
+			if (!acceptingJoins) {
+				throw new Error('Storage save participants must join synchronously.');
+			}
+			joins.push(promise);
+		},
+	});
+	acceptingJoins = false;
+	return joins;
   }
 
   get(key: string, scope: StorageScope, fallbackValue: string): string;
@@ -176,7 +188,7 @@ export abstract class AbstractStorageService extends Disposable {
   }
 
   async flush(reason = WillSaveStateReason.NONE): Promise<void> {
-    this.emitWillSaveState(reason);
+	await Promise.all(this.emitWillSaveState(reason));
     await Promise.all([
       this.getStorage(StorageScope.APPLICATION_SHARED)?.flush() ?? Promise.resolve(),
       this.getStorage(StorageScope.APPLICATION)?.flush() ?? Promise.resolve(),

@@ -20,10 +20,15 @@ export class RequestError extends AppError {
 	}
 }
 
-export function requestError(code: RequestErrorCode, details?: Record<string, unknown>): RequestError {
+export function requestError(
+	code: RequestErrorCode,
+	details?: Record<string, unknown>,
+): RequestError {
 	return new RequestError(code, details);
 }
 
 export function isRequestError(error: unknown): error is RequestError {
-	return error instanceof RequestError || error instanceof AppError && Object.values(RequestErrorCode).includes(error.code as RequestErrorCode);
+	return error instanceof RequestError
+		|| error instanceof AppError
+			&& Object.values(RequestErrorCode).includes(error.code as RequestErrorCode);
 }

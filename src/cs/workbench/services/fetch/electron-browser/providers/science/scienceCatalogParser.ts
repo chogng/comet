@@ -16,13 +16,45 @@ function uriFromHref(href: string | null, base: URI): URI | undefined {
 }
 
 export function parseScienceCatalog(document: Document, base: URI): ParsedArticleListCatalog {
-	const entries = [...document.querySelectorAll('a[href]')]
+	const candidates = [...document.querySelectorAll('a[href]')]
 		.map(anchor => ({ label: text(anchor), url: uriFromHref(anchor.getAttribute('href'), base) }))
-		.filter((entry): entry is { label: string; url: URI } => !!entry.label && !!entry.url)
-		.filter(entry => /^(Current Issue|First Release)$/iu.test(entry.label))
-		.map(source => ({ kind: 'source' as const, ...source }));
-	if (entries.length !== 2) {
+		.filter((entry): entry is { label: string; url: URI } =>
+			!!entry.label
+			&& !!entry.url
+			&& entry.url.scheme === base.scheme
+			&& entry.url.authority === base.authority
+		)
+		.map(entry => ({
+			...entry,
+			kind: /^\/toc\/[^/]+\/current\/?$/u.test(entry.url.path)
+				? 'current-issue' as const
+				: /^\/first-release\/[^/]+\/?$/u.test(entry.url.path)
+					? 'first-release' as const
+					: undefined,
+		}))
+		.filter((entry): entry is typeof entry & { kind: 'current-issue' | 'first-release' } => !!entry.kind);
+	const currentIssues = dedupeByUrl(candidates.filter(candidate => candidate.kind === 'current-issue'));
+	const firstReleases = dedupeByUrl(candidates.filter(candidate => candidate.kind === 'first-release'));
+	if (currentIssues.length !== 1 || firstReleases.length !== 1) {
 		throw new Error(`Science source discovery for "${base.toString(true)}" did not find both Current Issue and First Release.`);
 	}
-	return { entries };
+	return {
+		entries: [currentIssues[0], firstReleases[0]].map(({ label, url }) => ({
+			kind: 'source',
+			label,
+			url,
+		})),
+	};
+}
+
+function dedupeByUrl<T extends { readonly url: URI }>(entries: readonly T[]): readonly T[] {
+	const seen = new Set<string>();
+	return entries.filter(entry => {
+		const key = entry.url.toString(true);
+		if (seen.has(key)) {
+			return false;
+		}
+		seen.add(key);
+		return true;
+	});
 }

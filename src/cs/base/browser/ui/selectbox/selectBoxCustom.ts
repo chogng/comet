@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import 'cs/base/browser/ui/selectbox/selectBoxCustom.css';
 import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
 import { Menu } from 'cs/base/browser/ui/menu/menu';
@@ -8,7 +13,7 @@ import type {
 
 type SelectBoxCustomOptions = {
   selectElement: HTMLSelectElement;
-  contextViewProvider: IContextViewProvider | undefined;
+  contextViewProvider: IContextViewProvider;
   getOptions: () => readonly ISelectOptionItem[];
   getSelectedIndex: () => number;
   onSelectIndex: (index: number) => void;
@@ -33,7 +38,7 @@ export class SelectBoxCustom extends Disposable {
   private readonly getSelectedIndex: () => number;
   private readonly onSelectIndex: (index: number) => void;
   private readonly contextViewLayer: number | undefined;
-  private readonly contextViewProvider: IContextViewProvider | undefined;
+  private readonly contextViewProvider: IContextViewProvider;
   private menu: Menu | null = null;
   private isMenuVisible = false;
   private activeOptionIndex = -1;
@@ -148,9 +153,18 @@ export class SelectBoxCustom extends Disposable {
   };
 
   private readonly handleMenuHide = () => {
+    window.removeEventListener('scroll', this.handleWindowScroll, true);
     this.isMenuVisible = false;
     this.menu?.dispose();
     this.menu = null;
+  };
+
+  private readonly handleWindowScroll = (event: Event) => {
+    if (event.target instanceof Node && this.menu?.getElement().contains(event.target)) {
+      return;
+    }
+
+    this.hideMenu();
   };
 
   private toggleMenu() {
@@ -174,16 +188,18 @@ export class SelectBoxCustom extends Disposable {
       event.preventDefault();
     });
     this.isMenuVisible = true;
-    this.contextViewProvider?.showContextView({
+    this.contextViewProvider.showContextView({
       getAnchor: () => this.selectElement,
       render: (container) => {
         container.classList.add('comet-select-box-context-view');
+        container.style.minWidth = `${this.selectElement.getBoundingClientRect().width}px`;
         container.append(menuElement);
         return null;
       },
       onHide: this.handleMenuHide,
       layer: this.contextViewLayer,
     });
+    window.addEventListener('scroll', this.handleWindowScroll, true);
     this.syncMenuState();
   }
 
@@ -192,7 +208,7 @@ export class SelectBoxCustom extends Disposable {
       return;
     }
 
-    this.contextViewProvider?.hideContextView();
+    this.contextViewProvider.hideContextView();
   }
 
   private resolveInitialActiveOptionIndex() {

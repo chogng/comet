@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DraftEditorPane, type DraftEditorPaneLabels } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
+import { addDisposableListener } from 'cs/base/browser/dom';
+import { DraftEditorPane } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
 import {
-	createEditorPaneDescriptor,
-	registerEditorPaneDescriptor,
+	EditorPaneDescriptor,
+	editorPaneRegistry,
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import { DraftEditorInput, DraftEditorInputSerializer } from 'cs/workbench/contrib/draftEditor/common/draftEditorInput';
 import { Disposable } from 'cs/base/common/lifecycle';
@@ -19,13 +20,82 @@ import { localize } from 'cs/nls';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
+import { commandService, commandsRegistry } from 'cs/platform/commands/common/commands';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
-import 'cs/workbench/contrib/draftEditor/common/draftEditorService';
+import {
+	IDraftEditorService,
+	type IDraftEditorService as IDraftEditorServiceContract,
+} from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
 import 'cs/workbench/contrib/draftEditor/browser/draftEditor.css';
 import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
 import { renderDraftStatusbarMode } from 'cs/workbench/contrib/draftEditor/browser/draftEditorStatusbarRenderer';
 import { registerEditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
-import type { LocaleMessages } from 'language/locales';
+import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
+import {
+	getDraftEditorCommandIds,
+	getDraftEditorShortcutLabel,
+	matchesShortcutLabel,
+	type DraftEditorCommandId,
+} from 'cs/editor/browser/text/editorCommandRegistry';
+
+const DraftEditorSurfaceActionIds: readonly DraftEditorSurfaceActionId[] = ['undo', 'redo'];
+type DraftEditorWorkbenchCommandId = DraftEditorCommandId | 'saveDraft';
+const DraftEditorWorkbenchCommandIds: readonly DraftEditorWorkbenchCommandId[] = [
+	'saveDraft',
+	...getDraftEditorCommandIds(),
+];
+
+function isFormControlEventTarget(target: EventTarget | null): boolean {
+	if (!(target instanceof HTMLElement)) {
+		return false;
+	}
+	const tagName = target.tagName.toLowerCase();
+	return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+}
+
+function isEditableEventTarget(target: EventTarget | null): boolean {
+	return isFormControlEventTarget(target)
+		|| target instanceof HTMLElement && target.isContentEditable;
+}
+
+function executeRegisteredDraftEditorCommand(commandId: DraftEditorWorkbenchCommandId): boolean {
+	const result = commandService.executeCommand<boolean>(commandId);
+	if (result === undefined) {
+		throw new Error(`Draft Editor command '${commandId}' is not registered.`);
+	}
+	return result;
+}
+
+function handleDraftEditorShortcut(event: KeyboardEvent): boolean {
+	if (event.defaultPrevented) {
+		return false;
+	}
+
+	const isSave = (event.metaKey || event.ctrlKey)
+		&& !event.shiftKey
+		&& !event.altKey
+		&& event.key.toLowerCase() === 's';
+	if (isSave) {
+		if (isFormControlEventTarget(event.target)
+			|| !executeRegisteredDraftEditorCommand('saveDraft')) {
+			return false;
+		}
+		event.preventDefault();
+		return true;
+	}
+
+	if (isEditableEventTarget(event.target)) {
+		return false;
+	}
+	const commandId = getDraftEditorCommandIds().find(candidate =>
+		matchesShortcutLabel(getDraftEditorShortcutLabel(candidate), event),
+	);
+	if (!commandId || !executeRegisteredDraftEditorCommand(commandId)) {
+		return false;
+	}
+	event.preventDefault();
+	return true;
+}
 
 editorInputSerializerRegistry.register(DraftEditorInput.ID, new DraftEditorInputSerializer());
 registerStatusbarModeRenderer('draft', renderDraftStatusbarMode);
@@ -36,93 +106,66 @@ registerEditorCreationAction({
 	getLabel: ui => ui.editorCreateDraft,
 });
 
-function createDraftEditorPaneLabels(ui: LocaleMessages): DraftEditorPaneLabels {
-	return {
-		toolbarMore: ui.agentbarToolbarMore,
-		draftBodyPlaceholder: ui.editorDraftBodyPlaceholder,
-		draftMode: ui.editorDraftMode,
-		editorModalConfirm: ui.editorModalConfirm,
-		editorModalCancel: ui.editorModalCancel,
-		textGroup: ui.editorRibbonText,
-		formatGroup: ui.editorRibbonFormat,
-		insertGroup: ui.editorRibbonInsert,
-		historyGroup: ui.editorRibbonHistory,
-		paragraph: ui.editorParagraph,
-		heading1: ui.editorHeading1,
-		heading2: ui.editorHeading2,
-		heading3: ui.editorHeading3,
-		bold: ui.editorBold,
-		italic: ui.editorItalic,
-		underline: ui.editorUnderline,
-		fontFamily: ui.editorFontFamily,
-		fontSize: ui.editorFontSize,
-		defaultTextStyle: ui.editorDefaultTextStyle,
-		alignLeft: ui.editorAlignLeft,
-		alignCenter: ui.editorAlignCenter,
-		alignRight: ui.editorAlignRight,
-		clearInlineStyles: ui.editorClearInlineStyles,
-		bulletList: ui.editorBulletList,
-		orderedList: ui.editorOrderedList,
-		blockquote: ui.editorBlockquote,
-		undo: ui.editorUndo,
-		redo: ui.editorRedo,
-		insertCitation: ui.editorInsertCitation,
-		insertFigure: ui.editorInsertFigure,
-		insertFigureRef: ui.editorInsertFigureRef,
-		citationPrompt: ui.editorCitationPrompt,
-		figureUrlPrompt: ui.editorFigureUrlPrompt,
-		figureCaptionPrompt: ui.editorFigureCaptionPrompt,
-		figureRefPrompt: ui.editorFigureRefPrompt,
-		fontFamilyPrompt: ui.editorFontFamilyPrompt,
-		fontSizePrompt: ui.editorFontSizePrompt,
-		status: {
-			statusbarAriaLabel: ui.editorStatusbarAriaLabel,
-			words: ui.editorStatusWords,
-			characters: ui.editorStatusCharacters,
-			paragraphs: ui.editorStatusParagraphs,
-			selection: ui.editorStatusSelection,
-			block: ui.editorStatusBlock,
-			line: ui.editorStatusLine,
-			column: ui.editorStatusColumn,
-			blockFigure: ui.editorStatusFigure,
-			ready: ui.statusReady,
-		},
-	};
-}
-
-function createDraftEditorPaneContext(context: import('cs/workbench/browser/parts/editor/panes/editorPaneRegistry').EditorPaneResolverContext) {
-	return {
-		contextMenuService: context.contextMenuService,
-		contextViewProvider: context.contextViewProvider,
-		labels: createDraftEditorPaneLabels(context.ui),
-		dialogService: context.dialogService,
-	};
-}
-
-registerEditorPaneDescriptor(createEditorPaneDescriptor({
-	paneId: 'draft',
+editorPaneRegistry.registerEditorPane(new EditorPaneDescriptor({
+	paneId: DraftEditorInput.EDITOR_ID,
+	modeId: 'draft',
 	contentClassNames: ['comet-is-mode-draft'],
-	acceptsInput: (input): input is DraftEditorInput => input instanceof DraftEditorInput,
-	createPane: context => context.instantiationService.createInstance(
-		DraftEditorPane,
-		createDraftEditorPaneContext(context),
-	),
-	updatePane: (pane, context) => pane.setContext(createDraftEditorPaneContext(context)),
+	inputConstructor: DraftEditorInput,
+	paneConstructor: DraftEditorPane,
 }));
 
-registerAction2(class CreateDraftEditorAction extends Action2 {
-	constructor() {
-		super({
-			id: CreateDraftEditorCommandId,
-			title: localize('draft.createAction', "Create Draft"),
-			f1: true,
-		});
+export class DraftEditorActionsContribution extends Disposable {
+	constructor(
+		@IEditorService private readonly editorService: IEditorService,
+		@IDraftEditorService private readonly draftEditorService: IDraftEditorServiceContract,
+	) {
+		super();
+		this._register(registerAction2(class CreateDraftEditorAction extends Action2 {
+			constructor() {
+				super({
+					id: CreateDraftEditorCommandId,
+					title: localize('draft.createAction', "Create Draft"),
+					f1: true,
+				});
+			}
+
+			run() {
+				return editorService.openEditor({ resource: createDraftEditorResource() });
+			}
+		}));
+		for (const commandId of DraftEditorWorkbenchCommandIds) {
+			this._register(commandsRegistry.registerCommand(commandId, () =>
+				this.executeDraftEditorWorkbenchCommand(commandId),
+			));
+		}
+		for (const actionId of DraftEditorSurfaceActionIds) {
+			this._register(commandsRegistry.registerCommand(actionId, () =>
+				this.executeDraftEditorSurfaceAction(actionId),
+			));
+		}
+		this._register(addDisposableListener(document, 'keydown', event => {
+			handleDraftEditorShortcut(event);
+		}));
 	}
 
-	run(accessor: Parameters<Action2['run']>[0]) {
-		return accessor.get(IEditorService).openEditor({ resource: createDraftEditorResource() });
+	private executeDraftEditorWorkbenchCommand(commandId: DraftEditorWorkbenchCommandId): boolean {
+		if (commandId === 'saveDraft') {
+			return this.draftEditorService.saveActive();
+		}
+		const pane = this.activeDraftEditorPane;
+		return pane ? pane.executeCommand(commandId) : false;
 	}
-});
+
+	private executeDraftEditorSurfaceAction(actionId: DraftEditorSurfaceActionId): boolean {
+		const pane = this.activeDraftEditorPane;
+		return pane ? pane.executeEditorAction(actionId) : false;
+	}
+
+	private get activeDraftEditorPane(): DraftEditorPane | undefined {
+		const pane = this.editorService.activeEditorPane;
+		return pane instanceof DraftEditorPane ? pane : undefined;
+	}
+}
 
 class DraftEditorResolverContribution extends Disposable {
 	constructor(
@@ -139,11 +182,12 @@ class DraftEditorResolverContribution extends Disposable {
 			},
 			{ canSupportResource: resource => resource.scheme === DraftEditorInputScheme },
 			{
-				createEditorInput: ({ resource }) => ({
+				createEditorInput: ({ resource, options }) => ({
 					editor: instantiationService.createInstance(DraftEditorInput, {
 						document: createEmptyWritingEditorDocument(),
 						resource,
 					}),
+					options,
 				}),
 			},
 		));
@@ -152,4 +196,7 @@ class DraftEditorResolverContribution extends Disposable {
 
 registerWorkbenchContribution(() =>
 	getWorkbenchInstantiationService().createInstance(DraftEditorResolverContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(DraftEditorActionsContribution),
 );

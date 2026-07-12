@@ -54,6 +54,13 @@ test('openai-compatible agent adapter sends tools and maps tool calls', async ()
               type: 'text',
               text: 'Please gather evidence.',
             },
+			{
+				type: 'image',
+				id: 'image-1',
+				name: 'browser.jpeg',
+				mimeType: 'image/jpeg',
+				data: 'aW1hZ2U=',
+			},
           ],
         },
       ],
@@ -81,7 +88,7 @@ test('openai-compatible agent adapter sends tools and maps tool calls', async ()
     assert.ok(body);
     const requestBody = body as {
       model?: string;
-      input?: Array<{ role?: string }>;
+      input?: Array<{ role?: string; content?: unknown }>;
       instructions?: string;
       tools?: Array<{ name: string }>;
     };
@@ -89,6 +96,14 @@ test('openai-compatible agent adapter sends tools and maps tool calls', async ()
     assert.equal(requestBody.model, 'glm-4.6');
     assert.equal(requestBody.instructions, 'Use tools when needed.');
     assert.equal(requestBody.input?.[0]?.role, 'user');
+	assert.deepEqual(requestBody.input?.[0]?.content, [
+		{ type: 'input_text', text: 'Please gather evidence.' },
+		{
+			type: 'input_image',
+			image_url: 'data:image/jpeg;base64,aW1hZ2U=',
+			detail: 'auto',
+		},
+	]);
     assert.equal(requestBody.tools?.[0]?.name, 'retrieve_evidence');
     assert.equal(result.stopReason, 'tool-call');
     assert.deepEqual(result.message.parts, [

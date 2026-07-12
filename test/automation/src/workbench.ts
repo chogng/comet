@@ -6,7 +6,7 @@
 import { Code } from './code';
 
 const workbenchShell = '.comet-app-shell';
-const workbenchContent = '.comet-session-workbench-content-grid';
+const workbenchContent = '.comet-sessions-content-grid';
 const visibleEditor = `${workbenchContent}.comet-is-editor-visible`;
 const toggleEditorButton = '.comet-editor-titlebar-toggle-editor-btn';
 

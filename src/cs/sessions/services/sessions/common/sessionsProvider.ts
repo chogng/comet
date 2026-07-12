@@ -13,7 +13,7 @@ import type {
 	SessionTypeId,
 	SessionsProviderId,
 } from 'cs/sessions/services/sessions/common/session';
-import type { IChatRequestAttachment } from 'cs/workbench/contrib/chat/common/chatRequest';
+import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
 
 /** Identifies one authoritative provider collection transition. */
@@ -48,11 +48,9 @@ export interface ISessionDraftOptions {
 	readonly workspace: ISessionResolvedWorkspaceState;
 }
 
-/** Describes one request sent to an addressed Chat. */
-export interface ISessionChatRequest {
-	readonly prompt: string;
-	readonly attachments: readonly IChatRequestAttachment[];
-}
+/** Hard request-boundary limits enforced before provider dispatch. */
+export const maximumSessionChatRequestAttachments = 64;
+export const maximumSessionChatRequestPayloadBytes = 16 * 1024 * 1024;
 
 /** Connects one backend to the provider-independent Sessions domain. */
 export interface ISessionsProvider extends IDisposable {
@@ -66,7 +64,7 @@ export interface ISessionsProvider extends IDisposable {
 	getModels(session: ISession, chat: IChat): readonly ILanguageModelChatMetadataAndIdentifier[];
 	createSessionDraft(options: ISessionDraftOptions): ISession;
 	discardSessionDraft(session: ISession): void;
-	sendRequest(session: ISession, chat: IChat, request: ISessionChatRequest): Promise<void>;
+	sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void>;
 	createChat(session: ISession): Promise<IChat>;
 	forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat>;
 	renameSession(session: ISession, title: string): Promise<void>;

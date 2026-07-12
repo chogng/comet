@@ -16,6 +16,7 @@ export interface FetchProviderDescriptor {
 }
 
 export interface IFetchRegistry {
+	readonly _serviceBrand: undefined;
 	registerJournal(descriptor: JournalDescriptor): IDisposable;
 	registerProvider(descriptor: FetchProviderDescriptor): IDisposable;
 	getJournal(journalId: JournalId): JournalDescriptor | undefined;
@@ -26,6 +27,8 @@ export interface IFetchRegistry {
 export const IFetchRegistry = createDecorator<IFetchRegistry>('fetchRegistry');
 
 export class FetchRegistry implements IFetchRegistry {
+	declare readonly _serviceBrand: undefined;
+
 	private readonly journals = new Map<JournalId, JournalDescriptor>();
 	private readonly providers = new Map<FetchProviderId, FetchProviderDescriptor>();
 
@@ -58,7 +61,9 @@ export class FetchRegistry implements IFetchRegistry {
 	}
 
 	getJournals(): readonly JournalDescriptor[] {
-		return [...this.journals.values()];
+		return [...this.journals.values()].sort((left, right) =>
+			left.id < right.id ? -1 : left.id > right.id ? 1 : 0
+		);
 	}
 
 	getProviderDescriptor(providerId: FetchProviderId): FetchProviderDescriptor | undefined {

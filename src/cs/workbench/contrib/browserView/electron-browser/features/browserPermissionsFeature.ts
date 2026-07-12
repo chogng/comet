@@ -7,7 +7,7 @@ import { Codicon } from 'cs/base/common/codicons';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { ThemeIcon } from 'cs/base/common/themables';
 import { localize, localize2 } from 'cs/nls';
-import { Action2, MenuId, registerAction2 } from 'cs/platform/actions/common/actions';
+import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId, type IBrowserViewDeviceRequest } from 'cs/platform/browserView/common/browserView';
 import {
 	ALL_PERMISSION_CATEGORIES,
@@ -24,11 +24,11 @@ import type { ServicesAccessor } from 'cs/platform/instantiation/common/instanti
 import { INotificationService, Severity } from 'cs/platform/notification/common/notification';
 import { IQuickInputService, type IQuickPickItem } from 'cs/platform/quickinput/common/quickInput';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	CONTEXT_BROWSER_HAS_URL,
 	BrowserActionCategory,
-	BrowserActionGroup,
 	BrowserEditor,
 	BrowserEditorContribution,
 } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
@@ -69,7 +69,7 @@ export class BrowserPermissionsFeature extends BrowserEditorContribution {
 		const model = this.model;
 		const permissions = this.permissions;
 		if (!model || !permissions) {
-			return;
+			throw new Error('The Browser permissions contribution has no attached model.');
 		}
 
 		const origin = toOriginKey(model.url);
@@ -361,20 +361,18 @@ class ManageBrowserPermissionsAction extends Action2 {
 			icon: Codicon.shield,
 			f1: true,
 			precondition: when,
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Data,
-				order: 10,
-				when,
-				isHiddenByDefault: true,
-			},
 		});
 	}
 
-	async run(_accessor: ServicesAccessor, browserEditor?: BrowserEditor): Promise<void> {
-		if (browserEditor instanceof BrowserEditor) {
-			browserEditor.getContribution(BrowserPermissionsFeature)?.showManagementPicker();
+	async run(accessor: ServicesAccessor, browserEditor = accessor.get(IEditorService).activeEditorPane): Promise<void> {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The permissions action target is not the active Browser editor.');
 		}
+		const contribution = browserEditor.getContribution(BrowserPermissionsFeature);
+		if (!contribution) {
+			throw new Error('The active Browser editor has no permissions contribution.');
+		}
+		contribution.showManagementPicker();
 	}
 }
 

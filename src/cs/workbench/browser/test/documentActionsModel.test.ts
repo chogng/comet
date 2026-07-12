@@ -37,6 +37,7 @@ function createArticleDetail(articleId: ArticleId, overrides: Partial<ArticleDet
 		articleId,
 		journalId: 'journal.example',
 		url: URI.parse(`https://example.com/articles/${articleId}`),
+		pdfUrl: URI.parse(`https://example.com/articles/${articleId}.pdf`),
 		title: 'Example article',
 		subjects: [],
 		authors: [{ name: 'Example Author' }],
@@ -96,7 +97,7 @@ function createDocumentActionsContext(
 		pdfDownloadDir: '',
 		knowledgeBasePdfDownloadDir: '',
 		pdfFileNameUseSelectionOrder: false,
-		getExportableArticleIds: () => [],
+		getExportableArticleSelection: () => undefined,
 		onUnavailableArticleIds: () => {},
 		onOpenEditor: () => {},
 		onExportArticleSummaries: () => {},
@@ -126,11 +127,15 @@ test('DocumentActionsController opens an ArticleId in a browser tab', async () =
 
 test('DocumentActionsController delegates checked ArticleIds to DOCX export', async () => {
 	const articleId = 'article.export';
+	const articleSelectionResource = URI.from({ scheme: 'chat', path: '/export' });
 	const delegatedExports: Array<{ articleIds: readonly ArticleId[]; translateSummaries: boolean }> = [];
 	const controller = createDocumentActionsController(
 		createDocumentActionsContext({
-			getExportableArticleIds: () => [articleId],
-			onExportArticleSummaries: (articleIds, translateSummaries) => {
+			getExportableArticleSelection: () => ({
+				resource: articleSelectionResource,
+				articleIds: [articleId],
+			}),
+			onExportArticleSummaries: (articleIds, translateSummaries, _onUnavailableArticleIds) => {
 				delegatedExports.push({ articleIds, translateSummaries });
 			},
 		}),
@@ -140,6 +145,63 @@ test('DocumentActionsController delegates checked ArticleIds to DOCX export', as
 	await controller.handleExportDocx();
 	controller.dispose();
 	assert.deepEqual(delegatedExports, [{ articleIds: [articleId], translateSummaries: true }]);
+});
+
+test('DocumentActionsController keeps unavailable results bound to the selection captured before an asynchronous export', async () => {
+	const initialResource = URI.from({ scheme: 'chat', path: '/initial-selection' });
+	const replacementResource = URI.from({ scheme: 'chat', path: '/replacement-selection' });
+	const unavailableEvents: Array<{ resource: URI; articleIds: readonly ArticleId[] }> = [];
+	const delegatedArticleIds: Array<readonly ArticleId[]> = [];
+	let signalExportStarted!: () => void;
+	const exportStarted = new Promise<void>(resolve => { signalExportStarted = resolve; });
+	let releaseExport!: () => void;
+	const exportRelease = new Promise<void>(resolve => { releaseExport = resolve; });
+	const onExportArticleSummaries: DocumentActionsControllerContext['onExportArticleSummaries'] = async (
+		articleIds,
+		_translateSummaries,
+		onUnavailableArticleIds,
+	) => {
+		delegatedArticleIds.push([...articleIds]);
+		signalExportStarted();
+		await exportRelease;
+		onUnavailableArticleIds(['article.initial-missing']);
+	};
+	const onUnavailableArticleIds: DocumentActionsControllerContext['onUnavailableArticleIds'] = (
+		resource,
+		articleIds,
+	) => {
+		unavailableEvents.push({ resource, articleIds: [...articleIds] });
+	};
+	const controller = createDocumentActionsController(
+		createDocumentActionsContext({
+			getExportableArticleSelection: () => ({
+				resource: initialResource,
+				articleIds: ['article.initial'],
+			}),
+			onExportArticleSummaries,
+			onUnavailableArticleIds,
+		}),
+		createFetchService([]),
+	);
+
+	const runningExport = controller.handleExportDocx();
+	await exportStarted;
+	controller.setContext(createDocumentActionsContext({
+		getExportableArticleSelection: () => ({
+			resource: replacementResource,
+			articleIds: ['article.replacement'],
+		}),
+		onExportArticleSummaries,
+		onUnavailableArticleIds,
+	}));
+	releaseExport();
+	await runningExport;
+	controller.dispose();
+
+	assert.deepEqual(delegatedArticleIds, [['article.initial']]);
+	assert.equal(unavailableEvents.length, 1);
+	assert.equal(unavailableEvents[0]?.resource, initialResource);
+	assert.deepEqual(unavailableEvents[0]?.articleIds, ['article.initial-missing']);
 });
 
 test('DocumentActionsController uses command-local order for batch PDF titles', async () => {
@@ -162,16 +224,68 @@ test('DocumentActionsController uses command-local order for batch PDF titles', 
 	assert.deepEqual(payloads.map(payload => payload.articleTitle), ['1. Checked first', '2. Checked second']);
 });
 
-test('DocumentActionsController removes unavailable ArticleIds through its owner callback', async () => {
-	const unavailableArticleIds: ArticleId[][] = [];
+test('DocumentActionsController sends only the Article Detail PDF URL to the download boundary', async () => {
+	const articleId = 'article.pdf-url';
+	const payloads: WebContentPdfDownloadPayload[] = [];
+	const detailPdfUrl = 'https://cdn.example.com/authoritative/article-file.pdf';
 	const controller = createDocumentActionsController(
-		createDocumentActionsContext({ onUnavailableArticleIds: ids => unavailableArticleIds.push([...ids]) }),
+		createDocumentActionsContext({
+			invokeDesktop: createSuccessfulDownloadInvoke(payloads),
+		}),
+		createFetchService([createArticleDetail(articleId, {
+			url: URI.parse('https://www.nature.com/articles/source-page'),
+			doi: '10.1038/source-page',
+			pdfUrl: URI.parse(detailPdfUrl),
+		})]),
+	);
+
+	await controller.handleSharedPdfDownload(articleId);
+	controller.dispose();
+	assert.equal(payloads.length, 1);
+	assert.equal(payloads[0]?.pageUrl, 'https://www.nature.com/articles/source-page');
+	assert.equal(payloads[0]?.downloadUrl, detailPdfUrl);
+});
+
+test('DocumentActionsController rejects an Article Detail without a PDF URL before the download boundary', async () => {
+	const articleId = 'article.without-pdf-url';
+	const errors: string[] = [];
+	let desktopInvocations = 0;
+	const controller = createDocumentActionsController(
+		createDocumentActionsContext({
+			invokeDesktop: (async () => {
+				desktopInvocations += 1;
+				throw new Error('The desktop boundary must not be invoked without an Article Detail PDF URL.');
+			}) as ElectronInvoke,
+			notificationService: {
+				error: (message: unknown) => { errors.push(String(message)); },
+			} as unknown as DocumentActionsControllerContext['notificationService'],
+		}),
+		createFetchService([createArticleDetail(articleId, { pdfUrl: undefined })]),
+	);
+
+	await controller.handleSharedPdfDownload(articleId);
+	controller.dispose();
+	assert.equal(desktopInvocations, 0);
+	assert.deepEqual(errors, [locales.en.errorPdfLinkNotFound]);
+});
+
+test('DocumentActionsController removes unavailable ArticleIds through its owner callback', async () => {
+	const articleSelectionResource = URI.from({ scheme: 'chat', path: '/unavailable' });
+	const unavailableEvents: Array<{ resource: URI; articleIds: readonly ArticleId[] }> = [];
+	const controller = createDocumentActionsController(
+		createDocumentActionsContext({
+			onUnavailableArticleIds: (resource, articleIds) => {
+				unavailableEvents.push({ resource, articleIds: [...articleIds] });
+			},
+		}),
 		createFetchService([]),
 	);
 
-	await controller.handleSharedPdfDownload('article.missing');
+	await controller.handleSharedPdfDownload('article.missing', { articleSelectionResource });
 	controller.dispose();
-	assert.deepEqual(unavailableArticleIds, [['article.missing']]);
+	assert.equal(unavailableEvents.length, 1);
+	assert.equal(unavailableEvents[0]?.resource, articleSelectionResource);
+	assert.deepEqual(unavailableEvents[0]?.articleIds, ['article.missing']);
 });
 
 test('DocumentActionsController cancels an active ArticleId batch download task', async () => {

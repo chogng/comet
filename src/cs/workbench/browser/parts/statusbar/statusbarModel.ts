@@ -1,4 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { EventEmitter } from 'cs/base/common/event';
+import { onUnexpectedError } from 'cs/base/common/errors';
 import type {
   EditorStatusLabels,
   EditorStatusItem,
@@ -65,7 +71,9 @@ function areStatusbarStatesEqual(previous: EditorStatusState, next: EditorStatus
 }
 
 let statusbarState: EditorStatusState = createEmptyStatusValue();
-const onDidChangeStatusbarStateEmitter = new EventEmitter<void>();
+const onDidChangeStatusbarStateEmitter = new EventEmitter<void>({
+	onListenerError: onUnexpectedError,
+});
 
 function emitStatusbarStateChange() {
   onDidChangeStatusbarStateEmitter.fire();

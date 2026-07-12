@@ -4,10 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
+import type { URI } from 'cs/base/common/uri';
 import type { LlmProviderId } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type {
-	ChatMessage,
-} from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import type {
 	LlmReasoningEffort,
 	LlmServiceTier,
@@ -21,22 +19,22 @@ export type ChatModelDropdownOption = DropdownOption & {
 	readonly serviceTier?: LlmServiceTier;
 };
 
-export type ChatWidgetProps = {
-	readonly isKnowledgeBaseModeEnabled: boolean;
-	readonly activeLlmModelLabel: string;
-	readonly isMaxContextWindowEnabled: boolean;
-	readonly activeLlmModelSupportsMaxContextWindow: boolean;
-	readonly messages: ChatMessage[];
-	readonly question: string;
-	readonly onQuestionChange: (value: string) => void;
-	readonly isAsking: boolean;
-	readonly errorMessage: string | null;
-	readonly onAsk: () => void;
-	readonly onApplyPatch: (messageId: string) => void;
-	readonly llmModelOptions: ChatModelDropdownOption[];
-	readonly activeLlmModelOptionValue: string;
-	readonly onToggleAutoModelRouting: (options?: { suppressRender?: boolean }) => string | void;
-	readonly onSelectLlmModel: (value: string) => void;
-	readonly onToggleMaxContextWindow: (options?: { suppressRender?: boolean }) => void;
-	readonly onOpenModelSettings: () => void;
-};
+/** Presentation supplied for the Chat model currently bound to a widget. */
+export interface IChatWidgetPresentation {
+	readonly chatResource: URI;
+	readonly readOnly: boolean;
+	readonly modelOptions: readonly ChatModelDropdownOption[];
+	readonly selectedModelId: string | undefined;
+	readonly activeModelLabel: string;
+}
+
+/** Identifies the addressed Chat whose composer submitted a request. */
+export interface IChatWidgetSubmitEvent {
+	readonly chatResource: URI;
+}
+
+/** Identifies an addressed Chat model-selection intent. */
+export interface IChatWidgetModelSelectionEvent {
+	readonly chatResource: URI;
+	readonly modelId: string | undefined;
+}

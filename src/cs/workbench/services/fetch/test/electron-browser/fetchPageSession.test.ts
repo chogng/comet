@@ -5,6 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { DeferredPromise } from 'cs/base/common/async';
 import { CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/cancellation';
 import { Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
@@ -12,17 +13,26 @@ import type { IChannel } from 'cs/base/parts/ipc/common/ipc';
 import type { IPageSnapshotOptions, IPlaywrightService } from 'cs/platform/browserView/common/playwrightService';
 import type { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
 
-const { FetchPageSession } = await import('cs/workbench/services/fetch/electron-browser/fetchPageSession');
+const { FetchPageSession, FetchPageSessionFactory } = await import('cs/workbench/services/fetch/electron-browser/fetchPageSession');
 
 type BrowserViewCall = { command: string; args: unknown[] };
 
-function createBrowserViewChannel(calls: BrowserViewCall[], loadError?: Error): IChannel {
+interface BrowserViewChannelOptions {
+	readonly loadError?: Error;
+	readonly destroyErrors?: readonly Error[];
+}
+
+function createBrowserViewChannel(calls: BrowserViewCall[], options: BrowserViewChannelOptions = {}): IChannel {
+	const destroyErrors = [...(options.destroyErrors ?? [])];
 	return {
 		call: async <T>(command: string, arg: unknown) => {
 			const args = Array.isArray(arg) ? arg : [];
 			calls.push({ command, args });
-			if (command === 'loadURL' && loadError) {
-				throw loadError;
+			if (command === 'loadURL' && options.loadError) {
+				throw options.loadError;
+			}
+			if (command === 'destroyBrowserView' && destroyErrors.length > 0) {
+				throw destroyErrors.shift();
 			}
 			return undefined as T;
 		},
@@ -30,20 +40,56 @@ function createBrowserViewChannel(calls: BrowserViewCall[], loadError?: Error): 
 	};
 }
 
-function createPlaywrightService(options: { tracked?: boolean; snapshot?: { uri: URI; title: string; html: string } } = {}) {
+interface PlaywrightServiceOptions {
+	readonly tracked?: boolean;
+	readonly snapshot?: { uri: URI; title: string; html: string };
+	readonly acquireErrors?: readonly Error[];
+	readonly releaseErrors?: readonly Error[];
+	readonly disposeErrors?: readonly Error[];
+}
+
+function createPlaywrightService(options: PlaywrightServiceOptions = {}) {
 	const calls: string[] = [];
 	const captureOptions: Array<IPageSnapshotOptions | undefined> = [];
+	const acquireErrors = [...(options.acquireErrors ?? [])];
+	const releaseErrors = [...(options.releaseErrors ?? [])];
+	const disposeErrors = [...(options.disposeErrors ?? [])];
+	let tracked = options.tracked ?? false;
 	const service = {
-		startTrackingPage: async () => { calls.push('startTrackingPage'); },
-		stopTrackingPage: async () => { calls.push('stopTrackingPage'); },
-		isPageTracked: async () => options.tracked ?? false,
+		acquirePageTracking: async () => {
+			calls.push('acquirePageTracking');
+			if (acquireErrors.length > 0) {
+				throw acquireErrors.shift();
+			}
+			if (tracked) {
+				return { acquired: false };
+			}
+			tracked = true;
+			return { acquired: true };
+		},
+		releasePageTracking: async () => {
+			calls.push('releasePageTracking');
+			if (releaseErrors.length > 0) {
+				throw releaseErrors.shift();
+			}
+			tracked = false;
+		},
+		isPageTracked: async () => tracked,
 		captureSnapshot: async (_sessionId: string, _pageId: string, snapshotOptions: IPageSnapshotOptions | undefined) => {
 			calls.push('captureSnapshot');
+			if (!tracked) {
+				throw new Error('Page is not tracked.');
+			}
 			captureOptions.push(snapshotOptions);
 			const snapshot = options.snapshot ?? { uri: URI.parse('https://example.com/loaded'), title: 'Loaded', html: '<html></html>' };
 			return { pageId: 'page', ...snapshot, capturedAt: Date.now() };
 		},
-		disposeSession: async () => { calls.push('disposeSession'); },
+		disposeSession: async () => {
+			calls.push('disposeSession');
+			if (disposeErrors.length > 0) {
+				throw disposeErrors.shift();
+			}
+		},
 	} as unknown as IPlaywrightService;
 	return { calls, captureOptions, service };
 }
@@ -52,7 +98,7 @@ test('owned FetchPageSession does not capture after navigation fails and release
 	const calls: BrowserViewCall[] = [];
 	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService();
 	const mainProcessService = {
-		getChannel: () => createBrowserViewChannel(calls, new Error('Navigation failed')),
+		getChannel: () => createBrowserViewChannel(calls, { loadError: new Error('Navigation failed') }),
 	} as unknown as IMainProcessService;
 	const session = await FetchPageSession.createOwned(mainProcessService, playwrightService, () => true, 1);
 
@@ -60,10 +106,10 @@ test('owned FetchPageSession does not capture after navigation fails and release
 		session.navigateAndCapture(URI.parse('https://example.com/target'), undefined, CancellationTokenNone),
 		/Navigation failed/,
 	);
-	assert.deepEqual(playwrightCalls, ['startTrackingPage']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking']);
 
 	await session.dispose();
-	assert.deepEqual(playwrightCalls, ['startTrackingPage', 'stopTrackingPage', 'disposeSession']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'releasePageTracking', 'disposeSession']);
 	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'loadURL', 'destroyBrowserView']);
 });
 
@@ -76,7 +122,8 @@ test('borrowed FetchPageSession leaves an already tracked BrowserView alive and 
 	const mainProcessService = {
 		getChannel: () => createBrowserViewChannel(calls),
 	} as unknown as IMainProcessService;
-	const session = await FetchPageSession.borrow('existing-page', mainProcessService, playwrightService, (target, snapshot) => target.authority === snapshot.authority && target.path === snapshot.path);
+	const factory = new FetchPageSessionFactory(mainProcessService, playwrightService);
+	const session = await factory.borrow('existing-page', (target, snapshot) => target.authority === snapshot.authority && target.path === snapshot.path);
 
 	await assert.rejects(
 		session.navigateAndCapture(URI.parse('https://example.com/target'), undefined, CancellationTokenNone),
@@ -84,8 +131,95 @@ test('borrowed FetchPageSession leaves an already tracked BrowserView alive and 
 	);
 	await session.dispose();
 
-	assert.deepEqual(playwrightCalls, ['captureSnapshot', 'disposeSession']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'captureSnapshot', 'disposeSession']);
 	assert.deepEqual(captureOptions, [{ readiness: undefined, maximumBytes: 2 * 1024 * 1024 }]);
+	assert.deepEqual(calls.map(call => call.command), ['loadURL']);
+});
+
+test('borrowed FetchPageSession does not release tracking acquired by a competing external caller', async () => {
+	const calls: string[] = [];
+	const firstAcquisitionStarted = new DeferredPromise<void>();
+	const secondAcquisitionQueued = new DeferredPromise<void>();
+	const continueFirstAcquisition = new DeferredPromise<void>();
+	let acquisitionCount = 0;
+	let tracked = false;
+	let operationQueue: Promise<unknown> = Promise.resolve();
+	const playwrightService = {
+		acquirePageTracking: () => {
+			const acquisitionIndex = acquisitionCount++;
+			calls.push('acquirePageTracking');
+			if (acquisitionIndex === 1) {
+				secondAcquisitionQueued.complete();
+			}
+			const operation = operationQueue.catch(() => undefined).then(async () => {
+				if (acquisitionIndex === 0) {
+					firstAcquisitionStarted.complete();
+					await continueFirstAcquisition.p;
+				}
+				if (tracked) {
+					return { acquired: false };
+				}
+				tracked = true;
+				return { acquired: true };
+			});
+			operationQueue = operation;
+			return operation;
+		},
+		releasePageTracking: async () => {
+			calls.push('releasePageTracking');
+			tracked = false;
+		},
+		disposeSession: async () => { calls.push('disposeSession'); },
+	} as unknown as IPlaywrightService;
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel([]),
+	} as unknown as IMainProcessService;
+	const factory = new FetchPageSessionFactory(mainProcessService, playwrightService);
+
+	const externalAcquisition = playwrightService.acquirePageTracking('existing-page');
+	await firstAcquisitionStarted.p;
+	const borrowedSession = factory.borrow('existing-page', () => true);
+	await secondAcquisitionQueued.p;
+	continueFirstAcquisition.complete();
+
+	assert.deepEqual(await externalAcquisition, { acquired: true });
+	const session = await borrowedSession;
+	await session.dispose();
+
+	assert.equal(tracked, true);
+	assert.deepEqual(calls, ['acquirePageTracking', 'acquirePageTracking', 'disposeSession']);
+});
+
+test('concurrent borrowed FetchPageSessions share tracking until the final lease is released', async () => {
+	const calls: BrowserViewCall[] = [];
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService();
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel(calls),
+	} as unknown as IMainProcessService;
+	const factory = new FetchPageSessionFactory(mainProcessService, playwrightService);
+	const [first, second] = await Promise.all([
+		factory.borrow('shared-page', () => true),
+		factory.borrow('shared-page', () => true),
+	]);
+
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking']);
+	await first.dispose();
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'disposeSession']);
+	const snapshot = await second.navigateAndCapture(
+		URI.parse('https://example.com/loaded'),
+		undefined,
+		CancellationTokenNone,
+	);
+	assert.equal(snapshot.uri.toString(), 'https://example.com/loaded');
+	await second.dispose();
+
+	assert.deepEqual(playwrightCalls, [
+		'acquirePageTracking',
+		'disposeSession',
+		'captureSnapshot',
+		'releasePageTracking',
+		'disposeSession',
+	]);
 	assert.deepEqual(calls.map(call => call.command), ['loadURL']);
 });
 
@@ -106,6 +240,111 @@ test('FetchPageSession rejects cancellation before navigation and releases owned
 	await session.dispose();
 	cancellationSource.dispose();
 
-	assert.deepEqual(playwrightCalls, ['startTrackingPage', 'stopTrackingPage', 'disposeSession']);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'releasePageTracking', 'disposeSession']);
+	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'destroyBrowserView']);
+});
+
+test('owned FetchPageSession releases every acquired resource when tracking startup fails', async () => {
+	const calls: BrowserViewCall[] = [];
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService({
+		acquireErrors: [new Error('Tracking failed')],
+	});
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel(calls),
+	} as unknown as IMainProcessService;
+
+	await assert.rejects(
+		FetchPageSession.createOwned(mainProcessService, playwrightService, () => true, 1),
+		/Tracking failed/,
+	);
+
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'disposeSession']);
+	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'destroyBrowserView']);
+});
+
+test('borrowed FetchPageSession releases routing without releasing tracking when acquisition fails', async () => {
+	const calls: BrowserViewCall[] = [];
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService({
+		acquireErrors: [new Error('Tracking failed')],
+	});
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel(calls),
+	} as unknown as IMainProcessService;
+	const factory = new FetchPageSessionFactory(mainProcessService, playwrightService);
+
+	await assert.rejects(
+		factory.borrow('existing-page', () => true),
+		/Tracking failed/,
+	);
+
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'disposeSession']);
+	assert.deepEqual(calls, []);
+});
+
+test('borrowed FetchPageSession can acquire a new lease after tracking startup fails', async () => {
+	const calls: BrowserViewCall[] = [];
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService({
+		acquireErrors: [new Error('Tracking failed')],
+	});
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel(calls),
+	} as unknown as IMainProcessService;
+	const factory = new FetchPageSessionFactory(mainProcessService, playwrightService);
+
+	await assert.rejects(factory.borrow('existing-page', () => true), /Tracking failed/);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'disposeSession']);
+
+	const session = await factory.borrow('existing-page', () => true);
+	await session.dispose();
+	assert.deepEqual(playwrightCalls, [
+		'acquirePageTracking',
+		'disposeSession',
+		'acquirePageTracking',
+		'releasePageTracking',
+		'disposeSession',
+	]);
+	assert.deepEqual(calls, []);
+});
+
+test('borrowed FetchPageSession retries only a failed final tracking release', async () => {
+	const calls: BrowserViewCall[] = [];
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService({
+		releaseErrors: [new Error('Release failed')],
+	});
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel(calls),
+	} as unknown as IMainProcessService;
+	const factory = new FetchPageSessionFactory(mainProcessService, playwrightService);
+	const session = await factory.borrow('existing-page', () => true);
+
+	await assert.rejects(session.dispose(), AggregateError);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'releasePageTracking', 'disposeSession']);
+
+	await session.dispose();
+	assert.deepEqual(playwrightCalls, [
+		'acquirePageTracking',
+		'releasePageTracking',
+		'disposeSession',
+		'releasePageTracking',
+	]);
+	assert.deepEqual(calls, []);
+});
+
+test('FetchPageSession completes independent cleanup steps and retries only failed resources', async () => {
+	const calls: BrowserViewCall[] = [];
+	const { calls: playwrightCalls, service: playwrightService } = createPlaywrightService({
+		releaseErrors: [new Error('Release failed')],
+	});
+	const mainProcessService = {
+		getChannel: () => createBrowserViewChannel(calls),
+	} as unknown as IMainProcessService;
+	const session = await FetchPageSession.createOwned(mainProcessService, playwrightService, () => true, 1);
+
+	await assert.rejects(session.dispose(), AggregateError);
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'releasePageTracking', 'disposeSession']);
+	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'destroyBrowserView']);
+
+	await session.dispose();
+	assert.deepEqual(playwrightCalls, ['acquirePageTracking', 'releasePageTracking', 'disposeSession', 'releasePageTracking']);
 	assert.deepEqual(calls.map(call => call.command), ['getOrCreateBrowserView', 'destroyBrowserView']);
 });

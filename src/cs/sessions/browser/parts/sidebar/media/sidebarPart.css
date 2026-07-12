@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 .comet-session-sidebar-part {
 	--sidebar-footer-height: 54px;
 	--sidebar-floating-inset: 6px;
@@ -15,6 +20,12 @@
 
 .comet-session-sidebar-part > .comet-sidebar-titlebar {
 	background: transparent;
+}
+
+.comet-app-window.comet-has-leading-window-controls .comet-session-sidebar-part > .comet-sidebar-titlebar {
+	padding-inline-start: calc(
+		var(--workbench-leading-window-controls-width, 0px) + 12px
+	);
 }
 
 .comet-session-sidebar-root {
@@ -54,4 +65,36 @@
 
 .comet-session-sidebar-part .comet-sidebar-footer {
 	border-top: 1px solid var(--comet-sideBar-border, rgba(15, 23, 42, 0.08));
+}
+
+.comet-session-sidebar-root .comet-sidebar-recents-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	overflow: auto;
+}
+
+.comet-sidebar-recent-session.comet-btn-base {
+	justify-content: flex-start;
+	flex-shrink: 1;
+	min-width: 0;
+	width: 100%;
+	color: var(--comet-sideBar-foreground, #2b2f33);
+	text-align: left;
+}
+
+.comet-sidebar-recent-session > .comet-btn-content {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.comet-sidebar-recent-session.comet-is-active {
+	background: var(--comet-toolbar-hoverBackground, rgba(0, 0, 0, 0.06));
+}
+
+.comet-sidebar-recent-session:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder, #0078d4);
+	outline-offset: -1px;
 }

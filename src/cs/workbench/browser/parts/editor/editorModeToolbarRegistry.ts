@@ -8,7 +8,6 @@ import { toDisposable } from 'cs/base/common/lifecycle';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import type { AnyEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
 import type { LocaleMessages } from 'language/locales';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 
@@ -16,12 +15,11 @@ export type EditorModeToolbarHostContext = {
 	readonly ui: LocaleMessages;
 	readonly instantiationService: IInstantiationService;
 	readonly activeTab: EditorInput | null;
-	readonly activePaneId: string | null;
+	readonly activePaneModeId: string | null;
 	readonly activePane: AnyEditorPane | null;
 	readonly contentElement: HTMLElement;
 	readonly toolbarElement: HTMLElement;
 	readonly viewPartProps: ViewPartProps;
-	readonly onOpenEditor: EditorOpenHandler;
 };
 
 export interface EditorModeToolbar {
@@ -38,17 +36,17 @@ export type EditorModeToolbarFactory = (
 
 const toolbarFactories = new Map<string, EditorModeToolbarFactory>();
 
-export function registerEditorModeToolbar(paneId: string, factory: EditorModeToolbarFactory) {
-	if (toolbarFactories.has(paneId)) {
-		throw new Error(`Editor mode toolbar '${paneId}' is already registered.`);
+export function registerEditorModeToolbar(modeId: string, factory: EditorModeToolbarFactory) {
+	if (toolbarFactories.has(modeId)) {
+		throw new Error(`Editor mode toolbar '${modeId}' is already registered.`);
 	}
-	toolbarFactories.set(paneId, factory);
-	return toDisposable(() => toolbarFactories.delete(paneId));
+	toolbarFactories.set(modeId, factory);
+	return toDisposable(() => toolbarFactories.delete(modeId));
 }
 
 export class EditorModeToolbarHost {
 	private context: EditorModeToolbarHostContext;
-	private activePaneId: string | null = null;
+	private activePaneModeId: string | null = null;
 	private activeToolbar: EditorModeToolbar | null = null;
 
 	constructor(
@@ -79,23 +77,23 @@ export class EditorModeToolbarHost {
 	dispose(): void {
 		this.activeToolbar?.dispose();
 		this.activeToolbar = null;
-		this.activePaneId = null;
+		this.activePaneModeId = null;
 	}
 
 	private updateToolbar(): void {
-		if (this.activePaneId === this.context.activePaneId) {
+		if (this.activePaneModeId === this.context.activePaneModeId) {
 			this.activeToolbar?.setContext(this.context);
 			return;
 		}
 
 		this.activeToolbar?.dispose();
 		this.activeToolbar = null;
-		this.activePaneId = this.context.activePaneId;
-		if (!this.activePaneId) {
+		this.activePaneModeId = this.context.activePaneModeId;
+		if (!this.activePaneModeId) {
 			return;
 		}
 
-		const factory = toolbarFactories.get(this.activePaneId);
+		const factory = toolbarFactories.get(this.activePaneModeId);
 		if (factory) {
 			this.activeToolbar = factory(this.context, this.dropdownServices);
 		}

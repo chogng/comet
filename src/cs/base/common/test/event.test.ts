@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -76,6 +81,23 @@ test('EventEmitter preserves duplicate listener subscriptions', () => {
 	emitter.fire(2);
 
 	assert.deepEqual(events, [1, 1, 2]);
+});
+
+test('EventEmitter reports isolated listener errors and continues dispatch', () => {
+	const listenerError = new Error('Listener failed.');
+	const errors: unknown[] = [];
+	const events: number[] = [];
+	const emitter = new EventEmitter<number>({
+		onListenerError: error => errors.push(error),
+	});
+	emitter.event(() => {
+		throw listenerError;
+	});
+	emitter.event(value => events.push(value));
+
+	assert.doesNotThrow(() => emitter.fire(7));
+	assert.deepEqual(errors, [listenerError]);
+	assert.deepEqual(events, [7]);
 });
 
 test('EventEmitter supports thisArgs and disposable stores', () => {

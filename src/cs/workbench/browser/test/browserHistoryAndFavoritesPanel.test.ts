@@ -80,6 +80,15 @@ test('history and favorites panel consumes BrowserEditor feature state', () => {
 			favoritesTitle: 'Favorites', emptyState: 'Empty',
 		},
 		onNavigateToUrl: () => { },
+	}, {}, {
+		_serviceBrand: undefined,
+		activeEditorPane: undefined,
+		activeEditor: undefined,
+		openEditor: async () => { throw new Error('Unexpected editor open.'); },
+		activateEditor: async () => {},
+		closeEditor: async () => true,
+		getEditors: () => [],
+		getActiveGroupId: () => 'test',
 	});
 	const host = document.body.appendChild(document.createElement('div'));
 	panel.mountTo(host);

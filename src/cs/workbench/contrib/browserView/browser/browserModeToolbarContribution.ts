@@ -236,7 +236,7 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
         mode: 'icon',
         buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('arrow-left'),
-        disabled: !this.context.browserUrl,
+        disabled: !this.context.browserCanGoBack,
         onClick: this.context.onNavigateBack,
       },
       {
@@ -245,7 +245,7 @@ const changed = panel.toggleCurrentBrowserUrlFavorite();
         mode: 'icon',
         buttonClassName: 'comet-editor-browser-toolbar-btn',
         content: createLxIcon('arrow-right'),
-        disabled: false,
+        disabled: !this.context.browserCanGoForward,
         onClick: this.context.onNavigateForward,
       },
       {

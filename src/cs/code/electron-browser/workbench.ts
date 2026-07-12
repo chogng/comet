@@ -27,11 +27,6 @@ function assertDesktopIpcBridge() {
 	}
 }
 
-function isNativeWorkbenchAuxiliaryWindow() {
-	const query = new URLSearchParams(window.location.search);
-	return query.has('nativeOverlay');
-}
-
 function isSmokeTestDriverEnabled() {
 	const query = new URLSearchParams(window.location.search);
 	return query.get('enableSmokeTestDriver') === 'true';
@@ -39,16 +34,10 @@ function isSmokeTestDriverEnabled() {
 
 async function main() {
 	assertDesktopIpcBridge();
-	await import('cs/workbench/workbench.desktop.main');
+	await import('cs/sessions/sessions.desktop.main');
 
-	const { startWorkbenchContributions, stopWorkbenchContributions } =
-		await import('cs/workbench/common/contributions');
-	if (!isNativeWorkbenchAuxiliaryWindow()) {
-		startWorkbenchContributions();
-		window.addEventListener('beforeunload', stopWorkbenchContributions, {
-			once: true,
-		});
-	}
+	const { startSessionsWorkbench } = await import('cs/sessions/browser/sessionsWorkbench');
+	await startSessionsWorkbench();
 
 	if (isSmokeTestDriverEnabled()) {
 		const { registerWindowDriver } = await import(
@@ -63,8 +52,6 @@ async function main() {
 		});
 	}
 
-	const { renderWorkbench } = await import('cs/workbench/browser/workbench');
-	renderWorkbench();
 }
 
 void main();

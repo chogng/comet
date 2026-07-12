@@ -5,7 +5,7 @@
 
 import { Codicon } from 'cs/base/common/codicons';
 import { DisposableStore } from 'cs/base/common/lifecycle';
-import { Action2, MenuId, registerAction2 } from 'cs/platform/actions/common/actions';
+import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId, BrowserViewStorageScope } from 'cs/platform/browserView/common/browserView';
 import {
 	configurationRegistry,
@@ -20,9 +20,9 @@ import type { ServicesAccessor } from 'cs/platform/instantiation/common/instanti
 import { localize, localize2 } from 'cs/nls';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import { IBrowserViewWorkbenchService } from 'cs/workbench/contrib/browserView/common/browserView';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
 	BrowserActionCategory,
-	BrowserActionGroup,
 	BrowserEditor,
 	BrowserEditorContribution,
 } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
@@ -61,13 +61,6 @@ class ClearGlobalBrowserStorageAction extends Action2 {
 			category: BrowserActionCategory,
 			icon: Codicon.clearAll,
 			f1: true,
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Data,
-				order: 20,
-				when: CONTEXT_BROWSER_STORAGE_SCOPE.isEqualTo(BrowserViewStorageScope.Global),
-				isHiddenByDefault: true,
-			},
 		});
 	}
 
@@ -86,13 +79,6 @@ class ClearWorkspaceBrowserStorageAction extends Action2 {
 			category: BrowserActionCategory,
 			icon: Codicon.clearAll,
 			f1: true,
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Data,
-				order: 20,
-				when: CONTEXT_BROWSER_STORAGE_SCOPE.isEqualTo(BrowserViewStorageScope.Workspace),
-				isHiddenByDefault: true,
-			},
 		});
 	}
 
@@ -112,20 +98,18 @@ class ClearEphemeralBrowserStorageAction extends Action2 {
 			icon: Codicon.clearAll,
 			f1: true,
 			precondition: CONTEXT_BROWSER_STORAGE_SCOPE.isEqualTo(BrowserViewStorageScope.Ephemeral),
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Data,
-				order: 20,
-				when: CONTEXT_BROWSER_STORAGE_SCOPE.isEqualTo(BrowserViewStorageScope.Ephemeral),
-				isHiddenByDefault: true,
-			},
 		});
 	}
 
-	async run(_accessor: ServicesAccessor, browserEditor?: BrowserEditor): Promise<void> {
-		if (browserEditor instanceof BrowserEditor) {
-			await browserEditor.model?.clearStorage();
+	async run(accessor: ServicesAccessor, browserEditor = accessor.get(IEditorService).activeEditorPane): Promise<void> {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The clear ephemeral storage action target is not the active Browser editor.');
 		}
+		const model = browserEditor.model;
+		if (!model) {
+			throw new Error('The active Browser editor has no attached model.');
+		}
+		await model.clearStorage();
 	}
 }
 

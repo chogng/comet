@@ -14,6 +14,16 @@ import type { IStorageService } from 'cs/platform/storage/common/storage';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { EditorGroupsService } from 'cs/workbench/services/editor/browser/editorGroupsService';
+import type { IEditorPartHost } from 'cs/workbench/services/editor/common/editorGroupsService';
+
+class TestEditorGroupsService extends EditorGroupsService {
+	readonly mainPart: IEditorPartHost = {
+		activeEditorPane: undefined,
+		openEditor: async () => {},
+		revealEditor() {},
+		focusPrimaryInput() {},
+	};
+}
 
 class TestEditorInput extends EditorInput {
 	disposeCount = 0;
@@ -70,18 +80,22 @@ function createStorageService(values = new Map<string, string>()): IStorageServi
 	} as unknown as IStorageService;
 }
 
-function createEditorGroupsService(): EditorGroupsService {
-	return new EditorGroupsService(
+function createEditorGroupsService(): TestEditorGroupsService {
+	const service = new TestEditorGroupsService(
 		createStorageService(),
 		new InstantiationService(new ServiceCollection()),
 	);
+	service.initialize();
+	return service;
 }
 
-function createPersistedEditorGroupsService(values: Map<string, string>): EditorGroupsService {
-	return new EditorGroupsService(
+function createPersistedEditorGroupsService(values: Map<string, string>): TestEditorGroupsService {
+	const service = new TestEditorGroupsService(
 		createStorageService(values),
 		new InstantiationService(new ServiceCollection()),
 	);
+	service.initialize();
+	return service;
 }
 
 test('EditorGroups opens inputs into groups and activates the target group', () => {
@@ -105,7 +119,7 @@ test('EditorGroups reveals matching resource identity where it already lives', (
 	groups.openEditor(first);
 	groups.activateGroup(secondGroup);
 
-	assert.equal(groups.openEditor(matching), first);
+	assert.equal(groups.openEditor(matching).editor, first);
 	assert.equal(groups.activeGroup, firstGroup);
 	assert.deepEqual(firstGroup.getEditors(), [first]);
 	assert.deepEqual(secondGroup.getEditors(), []);

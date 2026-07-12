@@ -66,6 +66,8 @@ type PdfScrollDiagnostics = {
 	readonly canvasCount: number;
 };
 
+const editorGroupsLocalStorageKey = 'comet.workbench.storage.workspace.workbench.editorGroups';
+
 function createSimplePdfBuffer(): Buffer {
 	const encoder = new TextEncoder();
 	const chunks = ['%PDF-1.7\n'];
@@ -174,22 +176,23 @@ function createSeedWorkspace(pdfUrl: string): object {
 	return {
 		groups: [
 			{
-				groupId: 'editor-group-a',
-				inputs: [
+				id: 'editor-group-a',
+				editors: [
 					{
-						id: 'pdf-smoke-a',
-						kind: 'pdf',
-						title: 'PDF Smoke',
-						url: pdfUrl,
+						typeId: 'workbench.input.pdf',
+						value: JSON.stringify({
+							id: 'pdf-smoke-a',
+							title: 'PDF Smoke',
+							url: pdfUrl,
+							resource: 'comet-pdf:pdf-smoke-a',
+						}),
 					},
 				],
-				activeTabId: 'pdf-smoke-a',
-				mruTabIds: ['pdf-smoke-a'],
+				mostRecentlyActiveEditorIndexes: [0],
+				activeEditorIndex: 0,
 			},
 		],
 		activeGroupId: 'editor-group-a',
-		draftStateByInputId: {},
-		viewStateEntries: [],
 	};
 }
 
@@ -198,7 +201,7 @@ async function reloadPdfWorkspace(
 	pdfPath: string,
 ): Promise<void> {
 	await context.application.reloadWithLocalStorage({
-		'cs.writingWorkspace.state': JSON.stringify(
+		[editorGroupsLocalStorageKey]: JSON.stringify(
 			createSeedWorkspace(pathToFileURL(pdfPath).toString()),
 		),
 	});

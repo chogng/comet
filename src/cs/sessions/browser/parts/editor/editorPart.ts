@@ -1,79 +1,98 @@
-import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
-import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
-import { createActiveDraftEditorCommandExecutor } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
-import {
-	EditorGroupView,
-} from 'cs/workbench/browser/parts/editor/editorGroupView';
-import type {
-	EditorPartProps,
-} from 'cs/workbench/browser/parts/editor/editorPartView';
-import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { $ } from 'cs/base/browser/dom';
+import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import { INativeHostService } from 'cs/platform/native/common/native';
+import { IStorageService } from 'cs/platform/storage/common/storage';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
+import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
+import {
+	getWorkbenchPartDomNode,
+	registerWorkbenchPartDomNode,
+} from 'cs/workbench/browser/layout';
+import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
+import {
+	MainEditorPart,
+	type EditorPartLabels,
+	type IEditorPartsConstructionOwner,
+} from 'cs/workbench/browser/parts/editor/editorPart';
+import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
+import {
+	resetStatusbarState,
+	setStatusbarState,
+} from 'cs/workbench/browser/parts/statusbar/statusbarModel';
+import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 
 import 'cs/workbench/browser/parts/editor/media/editor.css';
 import 'cs/sessions/browser/parts/editor/media/editorPart.css';
 import 'cs/workbench/browser/parts/editor/media/tabsTitleControl.css';
 
-export type SessionEditorPartProps = EditorPartProps;
-
-export class SessionEditorPartView {
+export class SessionsMainEditorPart extends MainEditorPart {
 	readonly id = SESSION_PART_IDS.editor;
 
-	private readonly element = document.createElement('section');
-	private readonly groupView: EditorGroupView;
-	private readonly draftCommandExecutor: ReturnType<typeof createActiveDraftEditorCommandExecutor>;
-
-	constructor(props: SessionEditorPartProps) {
-		this.element.className = 'comet-panel comet-editor-panel comet-session-editor-panel';
-		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, this.element);
-		this.groupView = new EditorGroupView(props);
-		this.draftCommandExecutor = createActiveDraftEditorCommandExecutor(() => this.groupView.getActivePane());
-		this.element.append(this.groupView.getElement());
+	constructor(
+		editorGroupsService: IEditorPartsConstructionOwner,
+		@INativeHostService nativeHostService: INativeHostService,
+		@IDialogService dialogService: IDialogService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IStorageService storageService: IStorageService,
+		@IWorkbenchCommandService commandService: IWorkbenchCommandService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+		@IContextViewService contextViewService: IContextViewService,
+		@IWorkbenchLocaleService localeService: IWorkbenchLocaleService,
+		@IWorkbenchLanguageService languageService: IWorkbenchLanguageService,
+		@ISessionsLayoutService private readonly layoutService: ISessionsLayoutService,
+	) {
+		super(
+			editorGroupsService,
+			$<HTMLElementTagNameMap['section']>('section.comet-panel.comet-editor-panel.comet-session-editor-panel'),
+			nativeHostService,
+			dialogService,
+			instantiationService,
+			storageService,
+			commandService,
+			contextMenuService,
+			contextViewService,
+			localeService,
+			languageService,
+		);
+		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, this.getElement());
+		this._register(this.layoutService.onDidChangeLayoutState(() => {
+			this.refreshPresentation();
+		}));
 	}
 
-	getElement() {
-		return this.element;
+	revealEditor(expandedEditorSize?: number): void {
+		this.layoutService.setEditorCollapsed(false, expandedEditorSize);
 	}
 
-	layout(width: number, height: number) {
-		this.groupView.layout(width, height);
+	protected get editorCollapsed(): boolean {
+		return this.layoutService.getLayoutState().isEditorCollapsed;
 	}
 
-	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
-		return this.draftCommandExecutor.execute(commandId);
+	protected toggleEditorCollapsed(): void {
+		this.layoutService.toggleEditorCollapsed();
 	}
 
-	canExecuteActiveDraftCommand(commandId: DraftEditorCommandId) {
-		return this.draftCommandExecutor.canExecute(commandId);
+	protected updateEditorStatus(status: EditorStatusState): void {
+		setStatusbarState(status);
 	}
 
-	runActiveDraftEditorAction(actionId: DraftEditorSurfaceActionId) {
-		return this.draftCommandExecutor.runAction(actionId);
+	protected override onDidResolveLabels(labels: EditorPartLabels): void {
+		resetStatusbarState(labels.status);
 	}
 
-	getActiveDraftStableSelectionTarget() {
-		return this.draftCommandExecutor.getStableSelectionTarget();
+	override dispose(): void {
+		if (getWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor) === this.getElement()) {
+			registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, null);
+		}
+		super.dispose();
 	}
-
-	whenEditorTabViewStateSettled(tabId: string) {
-		return this.groupView.whenTabViewStateSettled(tabId);
-	}
-
-	focusPrimaryInput() {
-		this.groupView.focusPrimaryInput();
-	}
-
-	setProps(props: SessionEditorPartProps) {
-		this.groupView.setProps(props);
-	}
-
-	dispose() {
-		this.groupView.dispose();
-		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor, null);
-		this.element.replaceChildren();
-	}
-}
-
-export function createSessionEditorPartView(props: SessionEditorPartProps) {
-	return new SessionEditorPartView(props);
 }

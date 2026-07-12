@@ -1,9 +1,11 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { LocaleMessages } from 'language/locales';
-import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { EditorTitlebarActionsViewProps } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import type { SidebarFooterActionsProps, SidebarFooterLayoutMode } from 'cs/workbench/browser/parts/sidebar/sidebarFooterActions';
 import type { TitlebarLeadingActionsProps } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
-
 export type SidebarFooterTitlebarLabels = Pick<
   SidebarFooterActionsProps,
   'accountLabel' | 'moreLabel' | 'settingsLabel'
@@ -53,47 +55,6 @@ export function resolveTitlebarSettingsLabel(ui: LocaleMessages) {
 
 export function resolveTitlebarCloseLabel(ui: LocaleMessages) {
   return ui.titlebarClose;
-}
-
-export function createEditorTitlebarActionsProps(params: {
-  ui: LocaleMessages;
-  editorPartProps: EditorPartProps;
-  isEditorCollapsed: boolean;
-  isAgentSidebarVisible: boolean;
-  showAgentSidebarToggle: boolean;
-  onToggleEditorCollapse: () => void;
-  onToggleAgentSidebar: () => void;
-}): EditorTitlebarActionsViewProps {
-  const {
-    ui,
-    editorPartProps,
-    isEditorCollapsed,
-    isAgentSidebarVisible,
-    showAgentSidebarToggle,
-    onToggleEditorCollapse,
-    onToggleAgentSidebar,
-  } = params;
-
-  return {
-    contextMenuService: editorPartProps.contextMenuService,
-    contextViewProvider: editorPartProps.contextViewProvider,
-    isEditorCollapsed,
-    isAgentSidebarVisible,
-    showAgentSidebarToggle,
-    agentSidebarToggleLabel: resolveTitlebarAssistantToggleLabel(
-      ui,
-      isAgentSidebarVisible,
-    ),
-    labels: {
-      headerAddAction: editorPartProps.labels.headerAddAction,
-      expandEditor: editorPartProps.labels.expandEditor,
-      collapseEditor: editorPartProps.labels.collapseEditor,
-    },
-		creationActions: editorPartProps.creationActions,
-    commandService: editorPartProps.commandService,
-    onToggleEditorCollapse,
-    onToggleAgentSidebar,
-  };
 }
 
 export function createTitlebarLeadingActionsProps(params: {

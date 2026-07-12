@@ -209,11 +209,17 @@ The provider service is a pure registry:
 
 - register and unregister providers;
 - look up a provider by stable ID;
-- expose provider registration changes;
+- coordinate one authoritative management participant for registry mutations;
+- expose committed provider registration changes to ordinary observers;
 - dispose provider registrations with their owning contribution.
 
 It does not aggregate sessions, select an active session, mutate layout, or
 render UI.
+
+Each dynamic registry mutation is prepared by the management participant,
+committed to both owners, and then published to ordinary observers. An invalid
+provider never enters the registry, and an observer failure cannot interrupt a
+committed registry or management transition.
 
 Provider implementations are contributions because they connect optional
 compute backends and session types. Only those implementations live under
@@ -378,7 +384,8 @@ inside the management service or provider registry.
 Sessions provider contribution
     → creates provider
     → ISessionsProvidersService.registerProvider(provider)
-    → management service observes the registry
+    → management service prepares and commits the aggregate transition
+    → registry publishes the committed change to ordinary observers
     → provider sessions enter the aggregate model
 ```
 
@@ -390,7 +397,7 @@ flow.
 
 ```text
 command, list, or resource opener
-    → ISessionsService.openSession(resource, options)
+    → ISessionsService.openSession(sessionId, options)
     → resolve the session through the management service
     → create or restore its IActiveSession view model
     → insert or replace it in the requested visible-session slot

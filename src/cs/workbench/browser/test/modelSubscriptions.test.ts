@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before } from 'node:test';
 
@@ -11,17 +16,11 @@ import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestSer
 import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
 import { localeService } from 'cs/workbench/services/localization/browser/localeService';
 import {
-  getWorkbenchLayoutStateSnapshot,
   getWorkbenchPartDomSnapshot,
   registerWorkbenchPartDomNode,
-  setAgentSidebarVisible,
-  setEditorCollapsed,
-  setPrimarySidebarVisible,
-  setWorkbenchSidebarSizes,
-  subscribeWorkbenchLayoutState,
   subscribeWorkbenchPartDom,
-  WORKBENCH_PART_IDS,
 } from 'cs/workbench/browser/layout';
+import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import {
   getStatusbarStateSnapshot,
   setStatusbarState,
@@ -40,7 +39,6 @@ import { locales } from 'language/locales';
 let cleanupDomEnvironment: (() => void) | null = null;
 let originalDocumentLanguage = '';
 let originalLocale: 'zh' | 'en';
-let originalWorkbenchLayoutState = getWorkbenchLayoutStateSnapshot();
 let originalWorkbenchPartDomSnapshot = getWorkbenchPartDomSnapshot();
 let originalStatusbarState = getStatusbarStateSnapshot();
 
@@ -74,16 +72,6 @@ function createLibraryDocumentSummary(
   };
 }
 
-function restoreWorkbenchLayoutState() {
-  setPrimarySidebarVisible(originalWorkbenchLayoutState.isPrimarySidebarVisible);
-  setAgentSidebarVisible(originalWorkbenchLayoutState.isAgentSidebarVisible);
-  setEditorCollapsed(originalWorkbenchLayoutState.isEditorCollapsed);
-  setWorkbenchSidebarSizes({
-    primarySidebarSize: originalWorkbenchLayoutState.primarySidebarSize,
-    agentSidebarSize: originalWorkbenchLayoutState.agentSidebarSize,
-  });
-}
-
 function restoreWorkbenchPartDomSnapshot() {
   const partIds = Array.from(
     new Set(Object.values(WORKBENCH_PART_IDS)),
@@ -99,7 +87,6 @@ before(() => {
   cleanupDomEnvironment = domEnvironment.cleanup;
   originalDocumentLanguage = document.documentElement.lang;
   originalLocale = localeService.getLocale();
-  originalWorkbenchLayoutState = getWorkbenchLayoutStateSnapshot();
   originalWorkbenchPartDomSnapshot = getWorkbenchPartDomSnapshot();
   originalStatusbarState = getStatusbarStateSnapshot();
 });
@@ -112,7 +99,6 @@ after(() => {
 afterEach(() => {
   localeService.applyLocale(originalLocale);
   document.documentElement.lang = originalDocumentLanguage;
-  restoreWorkbenchLayoutState();
   restoreWorkbenchPartDomSnapshot();
   setStatusbarState(originalStatusbarState);
   document.body.replaceChildren();
@@ -142,7 +128,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     pdfDownloadDir: '',
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
-		getExportableArticleIds: () => [],
+		getExportableArticleSelection: () => undefined,
     onUnavailableArticleIds: () => {},
     onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
@@ -163,7 +149,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     pdfDownloadDir: '',
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
-		getExportableArticleIds: () => [],
+		getExportableArticleSelection: () => undefined,
     onUnavailableArticleIds: () => {},
     onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
@@ -187,7 +173,7 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
     pdfDownloadDir: '',
     knowledgeBasePdfDownloadDir: '',
     pdfFileNameUseSelectionOrder: false,
-		getExportableArticleIds: () => [],
+		getExportableArticleSelection: () => undefined,
     onUnavailableArticleIds: () => {},
     onOpenEditor: () => {},
     onExportArticleSummaries: () => {},
@@ -278,23 +264,6 @@ test('statusbarModel subscriptions stop after disposal', () => {
 
   assert.equal(notificationCount, 1);
   assert.equal(getStatusbarStateSnapshot().summary, 'Updated');
-});
-
-test('workbenchLayout subscriptions stop after disposal', () => {
-  let notificationCount = 0;
-  const disposeListener = subscribeWorkbenchLayoutState(() => {
-    notificationCount += 1;
-  });
-
-  setPrimarySidebarVisible(!originalWorkbenchLayoutState.isPrimarySidebarVisible);
-  disposeListener();
-  setPrimarySidebarVisible(originalWorkbenchLayoutState.isPrimarySidebarVisible);
-
-  assert.equal(notificationCount, 1);
-  assert.equal(
-    getWorkbenchLayoutStateSnapshot().isPrimarySidebarVisible,
-    originalWorkbenchLayoutState.isPrimarySidebarVisible,
-  );
 });
 
 test('workbenchPartDom subscriptions stop after disposal', () => {

@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -6,7 +11,6 @@ import { createEmptyWritingEditorDocument, createWritingEditorDocumentFromPlainT
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/text/editorDraftStyleCatalog';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
-
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
@@ -1272,7 +1276,7 @@ test('ProseMirrorEditor clears undo history after an external document replaceme
   });
 });
 
-test('DomScrollableElement uses visibility controllers to reveal auto scrollbars on hover and scroll', async () => {
+test('DomScrollableElement mounts its vertical track and reveals it while scrolling', async () => {
   const content = document.createElement('div');
   Object.defineProperties(content, {
     clientHeight: { configurable: true, value: 120 },
@@ -1291,25 +1295,24 @@ test('DomScrollableElement uses visibility controllers to reveal auto scrollbars
   document.body.append(root);
 
   try {
-    assert(root.querySelector('.comet-overlay-scrollbar-vertical'));
+    const verticalTrack = root.querySelector('.comet-vertical-scrollbar-track');
+    assert(verticalTrack instanceof HTMLElement);
     assert(root.querySelector('.comet-overlay-scrollbar-horizontal'));
-    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), false);
-
-    root.dispatchEvent(new Event('mouseenter'));
-    await delay(0);
-    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), true);
-
-    root.dispatchEvent(new Event('mouseleave'));
-    await delay(550);
-    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), false);
+    Object.defineProperty(verticalTrack, 'clientHeight', {
+      configurable: true,
+      value: 120,
+    });
+    scrollable.scanDomNode();
+    assert.equal(root.classList.contains('comet-is-scrollable'), true);
+    assert.equal(root.classList.contains('comet-is-scrollbar-active'), false);
 
     content.scrollTop = 48;
     content.dispatchEvent(new Event('scroll'));
     await delay(0);
-    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), true);
+    assert.equal(root.classList.contains('comet-is-scrollbar-active'), true);
 
-    await delay(550);
-    assert.equal(root.classList.contains('comet-is-vertical-scrollbar-visible'), false);
+    await delay(950);
+    assert.equal(root.classList.contains('comet-is-scrollbar-active'), false);
   } finally {
     scrollable.dispose();
     document.body.replaceChildren();

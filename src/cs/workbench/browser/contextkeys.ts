@@ -14,9 +14,7 @@ import {
 } from 'cs/workbench/common/contributions';
 import { WorkbenchContextKeys } from 'cs/workbench/common/contextkeys';
 import {
-  getWorkbenchLayoutStateSnapshot,
   getWorkbenchPartDomSnapshot,
-  subscribeWorkbenchLayoutState,
   subscribeWorkbenchPartDom,
 } from 'cs/workbench/browser/layout';
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
@@ -32,14 +30,8 @@ export function bindWorkbenchContextKeys(
 ): WorkbenchBoundContextKeys {
   return {
     settingsVisible: WorkbenchContextKeys.settingsVisible.bindTo(service),
-    primarySidebarVisible:
-      WorkbenchContextKeys.primarySidebarVisible.bindTo(service),
-    agentSidebarVisible:
-      WorkbenchContextKeys.agentSidebarVisible.bindTo(service),
-    editorCollapsed: WorkbenchContextKeys.editorCollapsed.bindTo(service),
     hasContainer: WorkbenchContextKeys.hasContainer.bindTo(service),
     hasSidebar: WorkbenchContextKeys.hasSidebar.bindTo(service),
-    hasAgentSidebar: WorkbenchContextKeys.hasAgentSidebar.bindTo(service),
     hasStatusbar: WorkbenchContextKeys.hasStatusbar.bindTo(service),
     hasSettings: WorkbenchContextKeys.hasSettings.bindTo(service),
     hasEditor: WorkbenchContextKeys.hasEditor.bindTo(service),
@@ -51,16 +43,11 @@ export function bindWorkbenchContextKeys(
 export function syncWorkbenchContextKeys(
   keys: WorkbenchBoundContextKeys,
 ) {
-  const layoutState = getWorkbenchLayoutStateSnapshot();
   const partDom = getWorkbenchPartDomSnapshot();
 
   keys.settingsVisible.set(Boolean(partDom[WORKBENCH_PART_IDS.settings]));
-  keys.primarySidebarVisible.set(layoutState.isPrimarySidebarVisible);
-  keys.agentSidebarVisible.set(layoutState.isAgentSidebarVisible);
-  keys.editorCollapsed.set(layoutState.isEditorCollapsed);
   keys.hasContainer.set(Boolean(partDom[WORKBENCH_PART_IDS.container]));
   keys.hasSidebar.set(Boolean(partDom[WORKBENCH_PART_IDS.sidebar]));
-  keys.hasAgentSidebar.set(Boolean(partDom[WORKBENCH_PART_IDS.agentSidebar]));
   keys.hasStatusbar.set(Boolean(partDom[WORKBENCH_PART_IDS.statusbar]));
   keys.hasSettings.set(Boolean(partDom[WORKBENCH_PART_IDS.settings]));
   keys.hasEditor.set(Boolean(partDom[WORKBENCH_PART_IDS.editor]));
@@ -77,14 +64,12 @@ export function createWorkbenchContextKeysContribution(
     syncWorkbenchContextKeys(keys);
   };
 
-  const unsubscribeWorkbenchLayoutState = subscribeWorkbenchLayoutState(sync);
   const unsubscribeWorkbenchPartDom = subscribeWorkbenchPartDom(sync);
 
   sync();
 
   return {
     dispose: () => {
-      unsubscribeWorkbenchLayoutState.dispose();
       unsubscribeWorkbenchPartDom.dispose();
     },
   };

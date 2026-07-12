@@ -23,10 +23,10 @@ import { IHoverService } from 'cs/platform/hover/browser/hover';
 import { IInstantiationService, type ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { IQuickInputService, type IQuickPickItem } from 'cs/platform/quickinput/common/quickInput';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	BrowserActionCategory,
-	BrowserActionGroup,
 	BrowserEditor,
 	BrowserEditorContribution,
 	BrowserWidgetLocation,
@@ -370,14 +370,17 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 
 	setVisible(visible: boolean): void {
 		const model = this.editor.model;
+		if (!model) {
+			throw new Error('The Browser emulation contribution has no attached model.');
+		}
 		if (visible) {
-			if (model && !model.device) {
+			if (!model.device) {
 				void model.setDevice({ ...(lastSettings.device ?? {}) });
 				this.setScale(lastSettings.scale);
 			}
 			this.setToolbarVisible(true);
 		} else {
-			void model?.setDevice(undefined);
+			void model.setDevice(undefined);
 			this.setToolbarVisible(false);
 		}
 	}
@@ -393,18 +396,29 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 	}
 
 	applyPreset(preset: IBrowserDevicePreset): void {
-		void this.editor.model?.setDevice({ ...(preset.device ?? {}) });
+		const model = this.editor.model;
+		if (!model) {
+			throw new Error('The Browser emulation contribution has no attached model.');
+		}
+		void model.setDevice({ ...(preset.device ?? {}) });
 	}
 
 	resetAll(): void {
-		void this.editor.model?.setDevice({});
+		const model = this.editor.model;
+		if (!model) {
+			throw new Error('The Browser emulation contribution has no attached model.');
+		}
+		void model.setDevice({});
 		this.setScale(undefined);
 	}
 
 	swapDimensions(): void {
 		const model = this.editor.model;
-		const device = model?.device;
-		if (!model || !device || (!device.width && !device.height)) {
+		if (!model?.device) {
+			throw new Error('The Browser emulation contribution has no active device profile.');
+		}
+		const device = model.device;
+		if (!device.width && !device.height) {
 			return;
 		}
 		void model.setDevice({ ...device, width: device.height, height: device.width });
@@ -413,7 +427,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 	toggleMobile(): void {
 		const model = this.editor.model;
 		if (!model) {
-			return;
+			throw new Error('The Browser emulation contribution has no attached model.');
 		}
 		void model.setDevice({ ...(model.device ?? {}), mobile: !model.device?.mobile });
 	}
@@ -421,7 +435,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 	setDimensions(width: number | undefined, height: number | undefined): void {
 		const model = this.editor.model;
 		if (!model?.device) {
-			return;
+			throw new Error('The Browser emulation contribution has no active device profile.');
 		}
 		void model.setDevice({ ...model.device, width, height });
 	}
@@ -429,7 +443,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 	setDeviceScaleFactor(deviceScaleFactor: number | undefined): void {
 		const model = this.editor.model;
 		if (!model?.device) {
-			return;
+			throw new Error('The Browser emulation contribution has no active device profile.');
 		}
 		void model.setDevice({ ...model.device, deviceScaleFactor });
 	}
@@ -437,7 +451,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 	setUserAgent(userAgent: string | undefined): void {
 		const model = this.editor.model;
 		if (!model) {
-			return;
+			throw new Error('The Browser emulation contribution has no attached model.');
 		}
 		void model.setDevice({ ...(model.device ?? {}), userAgent });
 	}
@@ -570,7 +584,7 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 	private resetAxis(axis: 'x' | 'y'): void {
 		const model = this.editor.model;
 		if (!model?.device) {
-			return;
+			throw new Error('The Browser emulation contribution has no active device profile.');
 		}
 		const device = model.device;
 		void model.setDevice(axis === 'x'
@@ -580,10 +594,6 @@ export class BrowserEditorEmulationSupport extends BrowserEditorContribution {
 }
 
 BrowserEditor.registerContribution(BrowserEditorEmulationSupport);
-
-function getBrowserEditor(candidate: unknown): BrowserEditor | undefined {
-	return candidate instanceof BrowserEditor ? candidate : undefined;
-}
 
 class ToggleBrowserEmulationAction extends Action2 {
 	static readonly ID = 'workbench.action.browser.toggleDeviceEmulation';
@@ -597,18 +607,18 @@ class ToggleBrowserEmulationAction extends Action2 {
 			f1: true,
 			toggled: CONTEXT_BROWSER_EMULATION_TOOLBAR_VISIBLE.isEqualTo(true),
 			precondition: BROWSER_EDITOR_ACTIVE,
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Tools,
-				order: 3,
-				isHiddenByDefault: true,
-			},
 		});
 	}
 
-	override run(_accessor: ServicesAccessor, browserEditor?: unknown): void {
-		const support = getBrowserEditor(browserEditor)?.getContribution(BrowserEditorEmulationSupport);
-		support?.setVisible(!support.isVisible);
+	override run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): void {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The device emulation action target is not the active Browser editor.');
+		}
+		const support = browserEditor.getContribution(BrowserEditorEmulationSupport);
+		if (!support) {
+			throw new Error('The active Browser editor has no emulation contribution.');
+		}
+		support.setVisible(!support.isVisible);
 	}
 }
 MenuRegistry.appendMenuItem(MenuId.BrowserEmulationToolbar, {
@@ -635,8 +645,15 @@ class ToggleBrowserMobileEmulationAction extends Action2 {
 		});
 	}
 
-	override run(_accessor: ServicesAccessor, browserEditor?: unknown): void {
-		getBrowserEditor(browserEditor)?.getContribution(BrowserEditorEmulationSupport)?.toggleMobile();
+	override run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): void {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The mobile emulation action target is not the active Browser editor.');
+		}
+		const support = browserEditor.getContribution(BrowserEditorEmulationSupport);
+		if (!support) {
+			throw new Error('The active Browser editor has no emulation contribution.');
+		}
+		support.toggleMobile();
 	}
 }
 MenuRegistry.appendMenuItem(MenuId.BrowserEmulationToolbar, {
@@ -663,10 +680,16 @@ class PickBrowserDevicePresetAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, browserEditor?: unknown): Promise<void> {
-		const support = getBrowserEditor(browserEditor)?.getContribution(BrowserEditorEmulationSupport);
+	override async run(
+		accessor: ServicesAccessor,
+		browserEditor: unknown = accessor.get(IEditorService).activeEditorPane,
+	): Promise<void> {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The device preset action target is not the active Browser editor.');
+		}
+		const support = browserEditor.getContribution(BrowserEditorEmulationSupport);
 		if (!support) {
-			return;
+			throw new Error('The active Browser editor has no emulation contribution.');
 		}
 		const quickInputService = accessor.get(IQuickInputService);
 		type PresetItem = IQuickPickItem & { preset: IBrowserDevicePreset };
@@ -710,10 +733,16 @@ class SetBrowserUserAgentAction extends Action2 {
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, browserEditor?: unknown): Promise<void> {
-		const support = getBrowserEditor(browserEditor)?.getContribution(BrowserEditorEmulationSupport);
+	override async run(
+		accessor: ServicesAccessor,
+		browserEditor: unknown = accessor.get(IEditorService).activeEditorPane,
+	): Promise<void> {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The user agent action target is not the active Browser editor.');
+		}
+		const support = browserEditor.getContribution(BrowserEditorEmulationSupport);
 		if (!support) {
-			return;
+			throw new Error('The active Browser editor has no emulation contribution.');
 		}
 		const value = await accessor.get(IQuickInputService).input({
 			prompt: localize('browser.userAgent.prompt', "User agent string (leave empty for the default)"),
@@ -748,8 +777,15 @@ class ResetBrowserEmulationAction extends Action2 {
 		});
 	}
 
-	override run(_accessor: ServicesAccessor, browserEditor?: unknown): void {
-		getBrowserEditor(browserEditor)?.getContribution(BrowserEditorEmulationSupport)?.resetAll();
+	override run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): void {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The reset emulation action target is not the active Browser editor.');
+		}
+		const support = browserEditor.getContribution(BrowserEditorEmulationSupport);
+		if (!support) {
+			throw new Error('The active Browser editor has no emulation contribution.');
+		}
+		support.resetAll();
 	}
 }
 MenuRegistry.appendMenuItem(MenuId.BrowserEmulationToolbar, {

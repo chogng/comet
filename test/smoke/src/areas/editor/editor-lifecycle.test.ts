@@ -17,6 +17,7 @@ import {
 type RendererSnapshot = {
 	readonly activeTabKind: string | null;
 	readonly rendererWebviewCount: number;
+	readonly settingsOverlayVisible: boolean;
 	readonly browserContainer: {
 		readonly childCount: number;
 		readonly bounds: {
@@ -46,7 +47,36 @@ type BrowserDomSnapshot = {
 	readonly bodyTextSample: string;
 };
 
-function createSmokePageHtml(): string {
+type SessionsReloadSnapshot = {
+	readonly headerTitle: string | null;
+	readonly hasChatInput: boolean;
+	readonly storedState: {
+		readonly slots: readonly { readonly kind: string; readonly sessionId?: string }[];
+		readonly activeSlotIndex: number;
+	} | null;
+};
+
+type EditorViewStateStorageSnapshot = {
+	readonly version: number;
+	readonly entries: readonly {
+		readonly key: {
+			readonly groupId: string;
+			readonly paneId: string;
+			readonly resourceKey: string;
+		};
+		readonly state: {
+			readonly url: string;
+			readonly scrollX: number;
+			readonly scrollY: number;
+		};
+	}[];
+};
+
+const editorGroupsLocalStorageKey = 'comet.workbench.storage.workspace.workbench.editorGroups';
+const editorViewStateLocalStorageKey = 'comet.workbench.storage.workspace.workbench.editor.viewState';
+const sessionsViewStateLocalStorageKey = 'comet.workbench.storage.application.sessions.viewState';
+
+function createSmokePageHtml(delayedContent = false): string {
 	const sections = Array.from({ length: 180 }, (_, index) =>
 		`<p>Smoke section ${index + 1}: editor lifecycle hide and restore check.</p>`,
 	).join('\n');
@@ -65,14 +95,16 @@ function createSmokePageHtml(): string {
 	<body>
 		<main>
 			<h1>Editor Lifecycle Smoke</h1>
-			${sections}
+			<div id="smoke-sections"${delayedContent ? ' hidden' : ''}>${sections}</div>
 		</main>
+		${delayedContent ? `<script>
+			setTimeout(() => document.getElementById('smoke-sections').removeAttribute('hidden'), 800);
+		</script>` : ''}
 	</body>
 </html>`;
 }
 
 async function startSmokeServer(): Promise<{ server: Server; url: string }> {
-	const html = createSmokePageHtml();
 	const server = createServer((request, response) => {
 		const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
 		if (requestUrl.pathname === '/favicon.ico') {
@@ -90,7 +122,7 @@ async function startSmokeServer(): Promise<{ server: Server; url: string }> {
 			'content-type': 'text/html; charset=utf-8',
 			'cache-control': 'no-store',
 		});
-		response.end(html);
+		response.end(createSmokePageHtml(requestUrl.searchParams.get('delayed') === '1'));
 	});
 
 	await new Promise<void>((resolve, reject) => {
@@ -119,46 +151,44 @@ async function stopSmokeServer(server: Server | undefined): Promise<void> {
 }
 
 function createSeedWorkspace(smokeUrl: string, includeDraft = true): object {
+	const draftDocument = {
+		type: 'doc',
+		content: [
+			{
+				type: 'paragraph',
+				attrs: { blockId: 'block-smoke-a' },
+				content: [{ type: 'text', text: 'Draft smoke content' }],
+			},
+		],
+	};
 	return {
 		groups: [
 			{
-				groupId: 'editor-group-a',
-				inputs: [
+				id: 'editor-group-a',
+				editors: [
 					{
-						id: 'browser-a',
-						kind: 'browser',
-						title: 'Smoke Browser',
-						url: smokeUrl,
+						typeId: 'workbench.editorinputs.browser',
+						value: JSON.stringify({
+							id: 'browser-a',
+							title: 'Smoke Browser',
+							url: smokeUrl,
+						}),
 					},
 					...(includeDraft ? [{
-						id: 'draft-a',
-						kind: 'draft',
-						title: 'Smoke Draft',
-						viewMode: 'draft',
+						typeId: 'workbench.input.draft',
+						value: JSON.stringify({
+							id: 'draft-a',
+							title: 'Smoke Draft',
+							document: draftDocument,
+							resource: 'comet-draft:draft-a',
+						}),
 					}] : []),
 				],
-				activeTabId: 'browser-a',
-				mruTabIds: includeDraft ? ['browser-a', 'draft-a'] : ['browser-a'],
+				mostRecentlyActiveEditorIndexes: includeDraft ? [0, 1] : [0],
+				activeEditorIndex: 0,
 			},
 		],
 		activeGroupId: 'editor-group-a',
-		draftStateByInputId: {
-			'draft-a': {
-				title: 'Smoke Draft',
-				viewMode: 'draft',
-				document: {
-					type: 'doc',
-					content: [
-						{
-							type: 'paragraph',
-							attrs: { blockId: 'block-smoke-a' },
-							content: [{ type: 'text', text: 'Draft smoke content' }],
-						},
-					],
-				},
-			},
-		},
-		viewStateEntries: [],
 	};
 }
 
@@ -181,9 +211,31 @@ async function getRendererSnapshot(code: Code): Promise<RendererSnapshot> {
 				}
 				: null;
 		})(),
-		hasWorkbench: Boolean(document.querySelector('.comet-session-workbench-content-grid')),
+		hasWorkbench: Boolean(document.querySelector('.comet-sessions-content-grid')),
+		settingsOverlayVisible: Boolean(document.querySelector('.comet-settings-overlay:not([hidden])')),
 		tabCount: document.querySelectorAll('.comet-editor-tab').length,
 	}))()`);
+}
+
+async function getSessionsReloadSnapshot(code: Code): Promise<SessionsReloadSnapshot> {
+	return code.evaluate<SessionsReloadSnapshot>(`(() => {
+		const header = document.querySelector('.comet-session-view.comet-is-active .comet-session-header');
+		const stored = window.localStorage.getItem(${JSON.stringify(sessionsViewStateLocalStorageKey)});
+		return {
+			headerTitle: header instanceof HTMLElement && !header.hidden
+				? header.querySelector('.comet-session-header-title')?.textContent ?? null
+				: null,
+			hasChatInput: Boolean(document.querySelector('.comet-session-view.comet-is-active textarea.comet-chat-composer-input')),
+			storedState: stored ? JSON.parse(stored) : null,
+		};
+	})()`);
+}
+
+async function getEditorViewStateStorage(code: Code): Promise<EditorViewStateStorageSnapshot | null> {
+	return code.evaluate<EditorViewStateStorageSnapshot | null>(`(() => {
+		const stored = window.localStorage.getItem(${JSON.stringify(editorViewStateLocalStorageKey)});
+		return stored ? JSON.parse(stored) : null;
+	})()`);
 }
 
 function hasAlignedBrowserBounds(
@@ -293,7 +345,7 @@ suite('Editor lifecycle smoke', function() {
 		const application = context.application;
 		await application.start();
 		await application.reloadWithLocalStorage({
-			'cs.writingWorkspace.state': JSON.stringify(
+			[editorGroupsLocalStorageKey]: JSON.stringify(
 				createSeedWorkspace(smokeServer.url),
 			),
 		});
@@ -330,6 +382,53 @@ suite('Editor lifecycle smoke', function() {
 
 		const scrolledTo = await setBrowserScroll(code, 'browser-a', 960);
 		assert.ok(scrolledTo >= 900, `Expected browser target to scroll, got ${scrolledTo}.`);
+
+		await code.click('.comet-sidebar-footer-settings-btn');
+		await code.waitForCondition(
+			'browser target hide while Settings covers the editor',
+			async () => ({
+				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
+				state: await getContentState(code, 'browser-a'),
+				browser: await getBrowserDomSnapshot(code, 'browser-a'),
+				scrollTop: await getBrowserScroll(code, 'browser-a'),
+			}),
+			result =>
+				result.renderer.activeTabKind === 'browser' &&
+				result.renderer.settingsOverlayVisible &&
+				result.nativeBounds.length === 0 &&
+				result.state.activeTargetId === 'browser-a' &&
+				result.state.ownership === 'active' &&
+				!result.state.visible &&
+				result.state.layoutPhase === 'hidden' &&
+				result.browser.heading === 'Editor Lifecycle Smoke' &&
+				result.scrollTop >= 900,
+			{ timeoutMs: 30_000, intervalMs: 150 },
+		);
+
+		await code.page.locator('.comet-settings-overlay').click({ position: { x: 8, y: 8 } });
+		await code.waitForCondition(
+			'browser target restoration after closing Settings',
+			async () => ({
+				renderer: await getRendererSnapshot(code),
+				nativeBounds: await code.getVisibleWebContentsViewBounds(),
+				state: await getContentState(code, 'browser-a'),
+				browser: await getBrowserDomSnapshot(code, 'browser-a'),
+				scrollTop: await getBrowserScroll(code, 'browser-a'),
+			}),
+			result =>
+				result.renderer.activeTabKind === 'browser' &&
+				!result.renderer.settingsOverlayVisible &&
+				hasAlignedBrowserBounds(result.renderer, result.nativeBounds) &&
+				result.state.activeTargetId === 'browser-a' &&
+				result.state.ownership === 'active' &&
+				result.state.visible &&
+				result.state.layoutPhase === 'visible' &&
+				result.browser.href === smokeServer.url &&
+				result.browser.heading === 'Editor Lifecycle Smoke' &&
+				result.scrollTop >= 900,
+			{ timeoutMs: 30_000, intervalMs: 150 },
+		);
 
 		await code.click(
 			'.comet-editor-tab[data-pane-mode="draft"] .comet-editor-tab-main',
@@ -420,6 +519,102 @@ suite('Editor lifecycle smoke', function() {
 		);
 	});
 
+	test('persists the active Session view state before reload teardown', async () => {
+		context = await createSmokeTestContext('sessions-reload');
+		const application = context.application;
+		await application.start();
+		const code = application.code;
+
+		await code.click('.comet-sidebar-home-nav-item');
+		const beforeReload = await code.waitForCondition(
+			'active draft Session before reload',
+			() => getSessionsReloadSnapshot(code),
+			snapshot => Boolean(snapshot.headerTitle) && snapshot.hasChatInput,
+		);
+		assert.ok(beforeReload.headerTitle);
+
+		await code.reload();
+		const afterReload = await code.waitForCondition(
+			'active draft Session restored after reload',
+			() => getSessionsReloadSnapshot(code),
+			snapshot =>
+				snapshot.headerTitle === beforeReload.headerTitle
+				&& snapshot.hasChatInput
+				&& snapshot.storedState?.slots[snapshot.storedState.activeSlotIndex]?.kind === 'session',
+		);
+		assert.equal(afterReload.headerTitle, beforeReload.headerTitle);
+		assert.equal(
+			afterReload.storedState?.slots[afterReload.storedState.activeSlotIndex]?.kind,
+			'session',
+		);
+	});
+
+	test('restores active Browser scroll after a cold restart without switching tabs', async () => {
+		const smokeServer = await startSmokeServer();
+		server = smokeServer.server;
+		context = await createSmokeTestContext('editor-browser-cold-restart');
+		const application = context.application;
+		const delayedBrowserUrl = `${smokeServer.url}?delayed=1`;
+		await application.start();
+		await application.reloadWithLocalStorage({
+			[editorGroupsLocalStorageKey]: JSON.stringify(createSeedWorkspace(delayedBrowserUrl, false)),
+				[editorViewStateLocalStorageKey]: JSON.stringify({
+					version: 2,
+					entries: [{
+						key: {
+							groupId: 'editor-group-a',
+							paneId: 'workbench.editor.browser',
+							resourceKey: 'vscode-browser:/browser-a',
+						},
+						state: { url: delayedBrowserUrl, scrollX: 0, scrollY: 960 },
+					}],
+				}),
+		});
+		await application.workbench.ensureEditorExpanded();
+		let code = application.code;
+		await code.waitForCondition(
+			'active Browser before cold restart',
+			() => getRendererSnapshot(code),
+			snapshot => snapshot.activeTabKind === 'browser' && snapshot.tabCount === 1,
+		);
+			const delayedScroll = await code.waitForCondition(
+				'Browser view state restores after delayed document growth',
+			() => getBrowserScroll(code, 'browser-a'),
+			value => value >= 900,
+			{ timeoutMs: 30_000, intervalMs: 100 },
+		);
+			assert.ok(delayedScroll >= 900, `Expected Browser scroll, got ${delayedScroll}.`);
+		const scrolledTo = await setBrowserScroll(code, 'browser-a', 1440);
+		assert.ok(scrolledTo >= 1400, `Expected browser target to scroll, got ${scrolledTo}.`);
+
+		await application.stop();
+		await application.start();
+		await application.workbench.ensureEditorExpanded();
+		code = application.code;
+		const restored = await code.waitForCondition(
+			'active Browser scroll restoration after cold restart',
+				async () => ({
+					renderer: await getRendererSnapshot(code),
+					browser: await getBrowserDomSnapshot(code, 'browser-a'),
+					scrollTop: await getBrowserScroll(code, 'browser-a'),
+					storedViewState: await getEditorViewStateStorage(code),
+				}),
+			result =>
+				result.renderer.activeTabKind === 'browser' &&
+				result.browser.href === delayedBrowserUrl &&
+					result.browser.heading === 'Editor Lifecycle Smoke' &&
+					result.scrollTop >= 1400 &&
+					result.storedViewState?.version === 2 &&
+					result.storedViewState.entries[0]?.key.paneId === 'workbench.editor.browser' &&
+					result.storedViewState.entries[0]?.state.scrollY >= 1400,
+			{ timeoutMs: 30_000, intervalMs: 150 },
+		);
+			assert.ok(restored.scrollTop >= 1400);
+			assert.equal(restored.storedViewState?.version, 2);
+			assert.equal(restored.storedViewState?.entries[0]?.key.paneId, 'workbench.editor.browser');
+			assert.ok((restored.storedViewState?.entries[0]?.state.scrollY ?? 0) >= 1400);
+	});
+
 	test('hides the active browser target after closing its last tab', async () => {
 		const smokeServer = await startSmokeServer();
 		server = smokeServer.server;
@@ -428,7 +623,7 @@ suite('Editor lifecycle smoke', function() {
 		const application = context.application;
 		await application.start();
 		await application.reloadWithLocalStorage({
-			'cs.writingWorkspace.state': JSON.stringify(
+			[editorGroupsLocalStorageKey]: JSON.stringify(
 				createSeedWorkspace(smokeServer.url, false),
 			),
 		});

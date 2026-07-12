@@ -82,10 +82,7 @@ export class MenuId {
   static readonly SidebarTitle = new MenuId('SidebarTitle');
   static readonly ViewTitle = new MenuId('ViewTitle');
   static readonly ViewTitleContext = new MenuId('ViewTitleContext');
-  static readonly BrowserActionsToolbar = new MenuId('BrowserActionsToolbar');
-  static readonly BrowserChatActionsMenu = new MenuId('BrowserChatActionsMenu');
   static readonly BrowserEmulationToolbar = new MenuId('BrowserEmulationToolbar');
-  static readonly BrowserNavigationToolbar = new MenuId('BrowserNavigationToolbar');
 
   static for(identifier: string): MenuId {
     return MenuId.instances.get(identifier) ?? new MenuId(identifier);

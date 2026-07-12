@@ -41,6 +41,15 @@ export type IEditorOptions = {
 	};
 };
 
+export interface IEditorOpenContext {
+	readonly newInGroup?: boolean;
+}
+
+/** A mounted Editor pane exposed through the Editor service boundary. */
+export interface IEditorPane {
+	focus(): void;
+}
+
 export interface IUntypedEditorInput {
 	readonly resource?: URI;
 	readonly options?: IEditorOptions;

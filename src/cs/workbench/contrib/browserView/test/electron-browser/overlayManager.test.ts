@@ -75,6 +75,7 @@ test('browser overlay manager detects Comet overlays covering the browser host',
 		{ className: 'comet-dialog-modal-block', type: BrowserOverlayType.Dialog },
 		{ className: 'comet-notifications-center', type: BrowserOverlayType.Notification },
 		{ className: 'comet-notifications-toasts', type: BrowserOverlayType.Notification },
+		{ className: 'comet-settings-overlay', type: BrowserOverlayType.Dialog },
 		{ className: 'context-view', type: BrowserOverlayType.Unknown },
 	];
 
@@ -92,6 +93,38 @@ test('browser overlay manager detects Comet overlays covering the browser host',
 			manager.dispose();
 			document.body.replaceChildren();
 		}
+	}
+});
+
+test('browser overlay manager follows the Settings overlay hidden lifecycle', async () => {
+	const host = addElement('comet-browser-frame-placeholder', createDomRect(0, 0, 300, 300));
+	const overlay = addElement('comet-settings-overlay', createDomRect(0, 0, 400, 400));
+	overlay.hidden = true;
+	const manager = new BrowserOverlayManager(window);
+	const restoreHitTest = installHitTest([overlay, host]);
+	let stateChangeCount = 0;
+	const listener = manager.onDidChangeOverlayState(() => stateChangeCount++);
+
+	try {
+		assert.deepEqual(manager.getOverlappingOverlays(host), []);
+
+		overlay.hidden = false;
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.deepEqual(
+			manager.getOverlappingOverlays(host).map(foundOverlay => foundOverlay.type),
+			[BrowserOverlayType.Dialog],
+		);
+
+		overlay.hidden = true;
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.deepEqual({ stateChangeCount, overlays: manager.getOverlappingOverlays(host) }, {
+			stateChangeCount: 2,
+			overlays: [],
+		});
+	} finally {
+		listener.dispose();
+		restoreHitTest();
+		manager.dispose();
 	}
 });
 

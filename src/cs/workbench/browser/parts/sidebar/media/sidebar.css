@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 .comet-panel.comet-sidebar-panel {
 	--sidebar-footer-height: 54px;
 	--sidebar-floating-inset: 12px;
@@ -176,12 +181,6 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: drag;
-}
-
-.comet-app-window.comet-has-leading-window-controls .comet-session-sidebar-part .comet-sidebar-titlebar {
-  padding-inline-start: calc(
-    var(--workbench-leading-window-controls-width, 0px) + 12px
-  );
 }
 
 .comet-sidebar-titlebar[hidden],

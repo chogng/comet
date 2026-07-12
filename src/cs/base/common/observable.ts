@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { onUnexpectedError } from 'cs/base/common/errors';
 import { DisposableStore, type IDisposable } from 'cs/base/common/lifecycle';
 
 interface ObservableObserver {
@@ -16,6 +17,16 @@ interface ObservableDependency {
 
 interface TrackedObserver extends ObservableObserver {
 	addDependency(dependency: ObservableDependency): void;
+}
+
+function notifyObservers(observers: ReadonlySet<ObservableObserver>): void {
+	for (const observer of [...observers]) {
+		try {
+			observer.handleChange();
+		} catch (error) {
+			onUnexpectedError(error);
+		}
+	}
 }
 
 export interface IReader {
@@ -87,9 +98,7 @@ class ObservableValue<T> implements ISettableObservable<T>, ObservableDependency
 		}
 
 		this.value = value;
-		for (const observer of [...this.observers]) {
-			observer.handleChange();
-		}
+		notifyObservers(this.observers);
 	}
 
 	addObserver(observer: ObservableObserver): void {
@@ -142,9 +151,7 @@ class DerivedObservable<T> implements IObservable<T>, ObservableDependency, Trac
 	}
 
 	handleChange(): void {
-		for (const observer of [...this.observers]) {
-			observer.handleChange();
-		}
+		notifyObservers(this.observers);
 	}
 
 	private recompute(): T {

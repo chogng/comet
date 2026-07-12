@@ -29,6 +29,8 @@ function createContext(): EditorModeToolbarContributionContext {
 	return {
 		mode: 'browser',
 		browserUrl: 'https://example.com/article',
+		browserCanGoBack: true,
+		browserCanGoForward: false,
 		electronRuntime: true,
 		labels: {
 			toolbarSources: 'Sources',
@@ -97,6 +99,37 @@ test('browser More menu stays open across context updates', async () => {
 			document.body.querySelector('.context-view.comet-actionbar-context-view')?.textContent ?? '',
 			/Hard Reload/,
 		);
+	} finally {
+		contribution.dispose();
+	}
+});
+
+test('browser history buttons follow the model navigation state', async () => {
+	const { createEditorBrowserModeToolbarContribution } = await import(
+		'cs/workbench/contrib/browserView/browser/browserModeToolbarContribution'
+	);
+	const contribution = createEditorBrowserModeToolbarContribution(createContext(), dropdownServices);
+	document.body.append(contribution.getElement());
+
+	try {
+		const back = contribution.getElement().querySelector('[aria-label="Back"]');
+		const forward = contribution.getElement().querySelector('[aria-label="Forward"]');
+		assert(back instanceof HTMLButtonElement);
+		assert(forward instanceof HTMLButtonElement);
+		assert.equal(back.disabled, false);
+		assert.equal(forward.disabled, true);
+
+		contribution.setContext({
+			...createContext(),
+			browserCanGoBack: false,
+			browserCanGoForward: true,
+		});
+		const updatedBack = contribution.getElement().querySelector('[aria-label="Back"]');
+		const updatedForward = contribution.getElement().querySelector('[aria-label="Forward"]');
+		assert(updatedBack instanceof HTMLButtonElement);
+		assert(updatedForward instanceof HTMLButtonElement);
+		assert.equal(updatedBack.disabled, true);
+		assert.equal(updatedForward.disabled, false);
 	} finally {
 		contribution.dispose();
 	}

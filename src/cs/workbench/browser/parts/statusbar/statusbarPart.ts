@@ -1,14 +1,20 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { $ } from 'cs/base/browser/dom';
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import { createStatusbarItemElement } from 'cs/workbench/browser/parts/statusbar/statusbarItem';
 import { renderStatusbarMode } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
+import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import 'cs/workbench/browser/parts/statusbar/media/statusbar.css';
 
 const hoverService = getHoverService();
 
 function createTextElement(className: string, text: string, title?: string) {
-  const element = document.createElement('span');
-  element.className = className;
+	const element = $<HTMLSpanElement>('span', { class: className });
   element.textContent = text;
   if (title) {
     hoverService.applyHover(element, title);
@@ -23,19 +29,19 @@ export class StatusbarPart {
   private readonly primaryGroupElement: HTMLDivElement;
   private readonly secondaryGroupElement: HTMLDivElement;
 
-  constructor(container: HTMLElement) {
+  constructor(
+    container: HTMLElement,
+    private readonly commandService: IWorkbenchCommandService,
+  ) {
     this.container = container;
     this.container.classList.add('comet-statusbar-part');
 
-    this.statusbarElement = document.createElement('footer');
-    this.statusbarElement.className = 'comet-editor-statusbar comet-is-pane-mode-empty';
+		this.statusbarElement = $<HTMLElementTagNameMap['footer']>('footer.comet-editor-statusbar.comet-is-pane-mode-empty');
     this.statusbarElement.setAttribute('role', 'status');
     this.statusbarElement.setAttribute('aria-label', '');
 
-    this.primaryGroupElement = document.createElement('div');
-    this.primaryGroupElement.className = 'comet-editor-statusbar-group comet-is-primary';
-    this.secondaryGroupElement = document.createElement('div');
-    this.secondaryGroupElement.className = 'comet-editor-statusbar-group comet-is-secondary';
+		this.primaryGroupElement = $<HTMLDivElement>('div.comet-editor-statusbar-group.comet-is-primary');
+		this.secondaryGroupElement = $<HTMLDivElement>('div.comet-editor-statusbar-group.comet-is-secondary');
 
     this.statusbarElement.append(
       this.primaryGroupElement,
@@ -54,7 +60,7 @@ export class StatusbarPart {
       primaryGroupElement: this.primaryGroupElement,
       secondaryGroupElement: this.secondaryGroupElement,
       createTextElement,
-      createStatusbarItemElement,
+      createStatusbarItemElement: item => createStatusbarItemElement(item, this.commandService),
     });
   }
 

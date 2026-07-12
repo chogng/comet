@@ -1,5 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 // #######################################################################
@@ -24,7 +25,6 @@ import {
 import 'cs/workbench/contrib/browserView/electron-browser/browserView.contribution';
 import 'cs/workbench/contrib/fetch/electron-browser/fetch.contribution';
 import 'cs/workbench/contrib/window/window.contribution';
-import 'cs/workbench/contrib/splash/browser/partsSplash';
 //#endregion
 
 //#region --- workbench (desktop services)

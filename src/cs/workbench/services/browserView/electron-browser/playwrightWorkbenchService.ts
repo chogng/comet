@@ -11,6 +11,7 @@ import { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
 import {
 	type IBrowserPageSnapshot,
 	type IInvokeFunctionResult,
+	type IPageTrackingAcquireResult,
 	type IPageSnapshotOptions,
 	IPlaywrightService,
 } from 'cs/platform/browserView/common/playwrightService';
@@ -25,12 +26,12 @@ export class PlaywrightWorkbenchService implements IPlaywrightService {
 		this.onDidChangeTrackedPages = this.channel.listen('onDidChangeTrackedPages');
 	}
 
-	startTrackingPage(viewId: string): Promise<void> {
-		return this.call('startTrackingPage', [viewId]);
+	acquirePageTracking(viewId: string): Promise<IPageTrackingAcquireResult> {
+		return this.call('acquirePageTracking', [viewId]);
 	}
 
-	stopTrackingPage(viewId: string): Promise<void> {
-		return this.call('stopTrackingPage', [viewId]);
+	releasePageTracking(viewId: string): Promise<void> {
+		return this.call('releasePageTracking', [viewId]);
 	}
 
 	isPageTracked(viewId: string): Promise<boolean> {

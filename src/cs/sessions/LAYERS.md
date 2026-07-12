@@ -229,6 +229,6 @@ re-exports, adapters, facades, compatibility modules, or fallback paths.
 
 ## Enforcement
 
-ESLint import-pattern rules enforce the layer boundaries. Entry-point tests
-verify that Comet loads one Sessions shell and that Workbench has no imports
-from `cs/sessions`.
+`npm run valid-layers-check` parses source imports and enforces the layer
+boundaries. Entry-point tests verify that Comet loads one Sessions shell and
+that lower layers have no imports from `cs/sessions`.

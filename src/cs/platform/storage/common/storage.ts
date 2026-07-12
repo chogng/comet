@@ -14,6 +14,7 @@ export enum WillSaveStateReason {
 
 export interface IWillSaveStateEvent {
   readonly reason: WillSaveStateReason;
+	join(promise: Promise<void>): void;
 }
 
 export interface IStorageValueChangeEvent {

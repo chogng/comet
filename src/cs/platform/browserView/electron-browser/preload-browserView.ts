@@ -119,6 +119,39 @@ function init() {
 		});
 	});
 
+	let viewStateSizeObserver: ResizeObserver | undefined;
+	const viewStateDocumentId = crypto.randomUUID();
+	const getViewStateDocumentIdentity = () => ({
+		documentId: viewStateDocumentId,
+		url: window.location.href,
+	});
+	ipcRenderer.send('vscode:browserView:viewStateDocument', getViewStateDocumentIdentity());
+	const publishViewState = () => {
+		ipcRenderer.send('vscode:browserView:viewStateChanged', {
+			...getViewStateDocumentIdentity(),
+			scrollX: Math.max(0, Math.trunc(window.scrollX)),
+			scrollY: Math.max(0, Math.trunc(window.scrollY)),
+		});
+	};
+	window.addEventListener('scroll', publishViewState, { passive: true, capture: true });
+	window.addEventListener('resize', publishViewState, { passive: true });
+	window.addEventListener('hashchange', publishViewState);
+	window.addEventListener('pageshow', publishViewState);
+	const observeDocumentSize = () => {
+		viewStateSizeObserver = new ResizeObserver(publishViewState);
+		viewStateSizeObserver.observe(document.documentElement);
+		if (document.body) {
+			viewStateSizeObserver.observe(document.body);
+		}
+		publishViewState();
+	};
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', observeDocumentSize, { once: true });
+	} else {
+		observeDocumentSize();
+	}
+	publishViewState();
+
 	const elementPicker = new ElementPicker(
 		el => ipcRenderer.send('vscode:browserView:elementPicked', track(el)),
 		() => ipcRenderer.send('vscode:browserView:elementPickStopped')

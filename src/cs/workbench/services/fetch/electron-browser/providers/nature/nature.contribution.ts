@@ -5,11 +5,8 @@
 
 import type { FetchProviderDescriptor } from 'cs/workbench/services/fetch/common/fetchRegistry';
 import { NatureFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureFetchProvider';
-import { natureJournals } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureJournals';
 
 export const natureFetchProviderDescriptor: FetchProviderDescriptor = {
 	id: 'publisher.nature',
 	ctor: NatureFetchProvider,
 };
-
-export { natureJournals };

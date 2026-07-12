@@ -7,19 +7,12 @@ import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartVie
 import { createEmptyEditorStatus } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import { $ } from 'cs/base/browser/dom';
-import { CancellationTokenSource } from 'cs/base/common/cancellation';
-import { Disposable, type IDisposable } from 'cs/base/common/lifecycle';
-
-import { resolveEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
-import type { EditorPaneResolverContext } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
-import {
-  EditorPane,
-} from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import type { AnyEditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import { isCancellationError } from 'cs/base/common/cancellation';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import { EditorPanes, type EditorPanesContext } from 'cs/workbench/browser/parts/editor/editorPanes';
 
 import { EditorEmptyWorkspaceView } from 'cs/workbench/browser/parts/editor/editorEmptyWorkspaceView';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPart';
 import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
 import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
@@ -31,9 +24,6 @@ import {
   EDITOR_FRAME_SLOTS,
   setEditorFrameSlot,
 } from 'cs/workbench/browser/parts/editor/editorFrame';
-import {
-  createEditorViewStateStore,
-} from 'cs/workbench/browser/parts/editor/editorViewStateStore';
 import type {
   EditorViewStateKey,
   SerializedEditorViewStateEntry,
@@ -42,13 +32,13 @@ import type {
 import { TabsTitleControl } from 'cs/workbench/browser/parts/editor/tabsTitleControl';
 import type { TitleControl, TitleControlProps } from 'cs/workbench/browser/parts/editor/titleControl';
 import { getWindowChromeLayout } from 'cs/platform/window/common/window';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
-import type { INativeHostService } from 'cs/platform/native/common/native';
-import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
-import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import { IContextKeyService, type ContextKey } from 'cs/platform/contextkey/common/contextkey';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 import type { LocaleMessages } from 'language/locales';
+import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/editor';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
@@ -57,9 +47,6 @@ export type EditorGroupViewProps = DropdownContextServices & {
   labels: EditorPartLabels;
   creationActions: readonly EditorCreationAction[];
   viewPartProps: ViewPartProps;
-  nativeHost: INativeHostService;
-  dialogService: IDialogService;
-  instantiationService: IInstantiationService;
   group: IEditorGroup;
   viewStateEntries: SerializedEditorViewStateEntry[];
   onActivateTab: (tabId: string) => void;
@@ -71,19 +58,13 @@ export type EditorGroupViewProps = DropdownContextServices & {
   onCloseOtherTabs?: (tabId: string) => Promise<boolean> | boolean | void;
   onCloseAllTabs?: () => Promise<boolean> | boolean | void;
   onRenameTab?: (tabId: string) => void | Promise<void>;
-  onOpenEditor: EditorOpenHandler;
   commandService: IWorkbenchCommandService;
-  onOpenSources: () => void;
   onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
   onDeleteEditorViewState: (key: EditorViewStateKey) => void;
   showTitlebarActions?: boolean;
   showToolbar?: boolean;
   isEditorCollapsed?: boolean;
-  onToggleEditorCollapse?: () => void;
-  isAgentSidebarVisible?: boolean;
-  showAgentSidebarToggle?: boolean;
-  agentSidebarToggleLabel?: string;
-  onToggleAgentSidebar?: () => void;
+  onToggleEditorCollapse: () => void;
   titlebarAuxiliaryActionsElements?: readonly HTMLElement[];
   hasLeadingTitlebarWindowControlsInset?: boolean;
   onStatusChange?: (status: EditorStatusState) => void;
@@ -128,7 +109,7 @@ function createTitleControlProps(
       closeAll: props.labels.closeAll,
       rename: props.labels.rename,
     },
-    onActivateTab: (tabId) => {
+    onActivateTab: tabId => {
       props.onActivateTab(tabId);
       if (focusPrimaryInputIfNeeded(tabId)) {
         requestPrimaryInputFocus();
@@ -267,38 +248,38 @@ export class EditorGroupView {
   private readonly titleAreaControl: TitleControl;
   private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-content');
   private readonly emptyWorkspaceView: EditorEmptyWorkspaceView;
-  private readonly viewStateStore: ReturnType<typeof createEditorViewStateStore>;
-  private activePane: AnyEditorPane | null = null;
-  private activePaneTabId: string | null = null;
-  private activePaneViewStateKey: EditorViewStateKey | null = null;
-  private activePaneKey: string | null = null;
-  private readonly paneInstances = new Map<string, AnyEditorPane>();
-  private activePaneInputSource: CancellationTokenSource | null = null;
-  private activePaneRuntimeStateListener: IDisposable = Disposable.None;
-  private readonly pendingViewStateSaveByTabId = new Map<string, Promise<void>>();
+  private readonly editorPanes: EditorPanes;
+  private pendingAutomaticPaneOpen: Promise<void> | null = null;
+  private automaticPaneOpenError: unknown;
   private shouldFocusPrimaryInput = false;
+	private readonly activeEditorFocusedContext: ContextKey<boolean>;
 
-  constructor(props: EditorGroupViewProps) {
+  constructor(
+	props: EditorGroupViewProps,
+	@IInstantiationService private readonly instantiationService: IInstantiationService,
+	@IContextKeyService contextKeyService: IContextKeyService,
+  ) {
     this.props = props;
+	this.activeEditorFocusedContext = ActiveEditorFocusedContext.bindTo(contextKeyService);
     this.titlebarActionsView = createEditorTitlebarActionsView({
       contextMenuService: props.contextMenuService,
       contextViewProvider: props.contextViewProvider,
-      isEditorCollapsed: false,
-      isAgentSidebarVisible: false,
-      showAgentSidebarToggle: false,
-      agentSidebarToggleLabel: '',
+      isEditorCollapsed: Boolean(props.isEditorCollapsed),
       labels: {
-        headerAddAction: '',
-        expandEditor: '',
-        collapseEditor: '',
+        headerAddAction: props.labels.headerAddAction,
+        expandEditor: props.labels.expandEditor,
+        collapseEditor: props.labels.collapseEditor,
       },
-		creationActions: [],
+      creationActions: props.creationActions,
       commandService: props.commandService,
-      onToggleEditorCollapse: () => {},
-      onToggleAgentSidebar: () => {},
+      onToggleEditorCollapse: props.onToggleEditorCollapse,
     });
     this.controller = new EditorGroupController(props);
-    this.viewStateStore = createEditorViewStateStore(props.viewStateEntries);
+    this.editorPanes = this.instantiationService.createInstance(
+		EditorPanes,
+		this.contentElement,
+		this.createEditorPanesContext(props),
+	);
     this.modeToolbarHost = createEditorModeToolbarHost(
       this.createModeToolbarHostContext(props, null),
       props,
@@ -328,6 +309,8 @@ export class EditorGroupView {
       this.windowControlsSpacerElement,
     );
     this.element.append(this.titlebarElement, this.toolbarElement, this.contentElement);
+	this.element.addEventListener('focusin', this.handleEditorFocusIn);
+	this.element.addEventListener('focusout', this.handleEditorFocusOut);
     this.render();
   }
 
@@ -336,7 +319,7 @@ export class EditorGroupView {
   }
 
   layout(_width: number, _height: number) {
-    this.activePane?.layout({
+    this.editorPanes.layout({
       width: this.contentElement.clientWidth,
       height: this.contentElement.clientHeight,
     });
@@ -348,40 +331,84 @@ export class EditorGroupView {
   }
 
   getActivePane() {
-    return this.activePane;
+	const activeEditor = this.props.group.activeEditor;
+	return activeEditor && this.editorPanes.hasActiveInput(activeEditor)
+		? this.editorPanes.getActivePane()
+		: null;
   }
 
-  whenTabViewStateSettled(tabId: string) {
-    return this.pendingViewStateSaveByTabId.get(tabId) ?? Promise.resolve();
+	async captureActivePaneViewState(): Promise<void> {
+		await this.editorPanes.captureActivePaneViewState();
+	}
+
+  async whenTabViewStateSettled(tabId: string): Promise<void> {
+    await this.pendingAutomaticPaneOpen;
+    if (this.automaticPaneOpenError !== undefined) {
+      const error = this.automaticPaneOpenError;
+      this.automaticPaneOpenError = undefined;
+      throw error;
+    }
+    await this.editorPanes.whenViewStateSettled(tabId);
   }
 
   focusPrimaryInput() {
     queueMicrotask(() => {
       if (!this.modeToolbarHost.focusPrimaryInput()) {
-        this.activePane?.focusPrimaryInput();
+        this.editorPanes.focusPrimaryInput();
       }
     });
   }
 
+  async openEditor(
+    input: EditorInput,
+    options: IEditorOptions | undefined,
+    context: IEditorOpenContext,
+  ): Promise<void> {
+    this.automaticPaneOpenError = undefined;
+    this.pendingAutomaticPaneOpen = null;
+    await this.editorPanes.openEditor(input, options, context);
+    this.syncEditorPanePresentation(input);
+  }
+
   setProps(props: EditorGroupViewProps) {
     if (props.group.id !== this.props.group.id) {
-      this.saveActivePaneViewState();
-      this.disposeAllPaneInstances();
-      this.viewStateStore.replaceAll(props.viewStateEntries);
+      this.automaticPaneOpenError = undefined;
     }
     this.props = props;
+	if (props.isEditorCollapsed) {
+		this.activeEditorFocusedContext.reset();
+	} else if (this.element.contains(this.element.ownerDocument.activeElement)) {
+		this.activeEditorFocusedContext.set(true);
+	}
     this.controller.setContext(props);
+    this.editorPanes.setContext(this.createEditorPanesContext(props));
     this.render();
   }
 
   dispose() {
+	this.element.removeEventListener('focusin', this.handleEditorFocusIn);
+	this.element.removeEventListener('focusout', this.handleEditorFocusOut);
+	this.activeEditorFocusedContext.reset();
     this.titleAreaControl.dispose();
     this.titlebarActionsView.dispose();
     this.modeToolbarHost.dispose();
-    this.saveActivePaneViewState();
-    this.disposeAllPaneInstances();
+    this.editorPanes.dispose();
     this.element.replaceChildren();
   }
+
+	private readonly handleEditorFocusIn = () => {
+		if (!this.props.isEditorCollapsed) {
+			this.activeEditorFocusedContext.set(true);
+		}
+	};
+
+	private readonly handleEditorFocusOut = (event: FocusEvent) => {
+		const nextTarget = event.relatedTarget;
+		if (nextTarget instanceof Node && this.element.contains(nextTarget)) {
+			return;
+		}
+		this.activeEditorFocusedContext.reset();
+	};
 
   private readonly handlePaneStateChange = (
     input: EditorInput,
@@ -397,7 +424,6 @@ export class EditorGroupView {
 
   private render() {
     const { group, editorStatus } = this.controller.getSnapshot();
-    const resolverContext = this.createPaneResolverContext();
     this.props.onStatusChange?.(editorStatus);
     this.titleAreaControl.setProps(
       createTitleControlProps(
@@ -415,96 +441,52 @@ export class EditorGroupView {
       contextMenuService: this.props.contextMenuService,
       contextViewProvider: this.props.contextViewProvider,
       isEditorCollapsed: Boolean(this.props.isEditorCollapsed),
-      isAgentSidebarVisible: Boolean(this.props.isAgentSidebarVisible),
-      showAgentSidebarToggle: Boolean(this.props.showAgentSidebarToggle),
-      agentSidebarToggleLabel: this.props.agentSidebarToggleLabel ?? '',
       labels: {
         headerAddAction: this.props.labels.headerAddAction,
         expandEditor: this.props.labels.expandEditor,
         collapseEditor: this.props.labels.collapseEditor,
       },
-		creationActions: this.props.creationActions,
+      creationActions: this.props.creationActions,
       commandService: this.props.commandService,
-      onToggleEditorCollapse: this.props.onToggleEditorCollapse ?? (() => {}),
-      onToggleAgentSidebar: this.props.onToggleAgentSidebar,
+      onToggleEditorCollapse: this.props.onToggleEditorCollapse,
     });
-    this.modeToolbarHost.setContext(this.createModeToolbarHostContext(this.props, null));
     this.syncTitlebarActions(
       this.props.showTitlebarActions ? this.titlebarActionsView.getElement() : null,
       this.props.titlebarAuxiliaryActionsElements ?? [],
     );
 
-    this.contentElement.className = 'comet-editor-content';
-    this.contentElement.removeAttribute('data-editor-pane');
-
     if (!group.activeTab) {
-      this.releaseActivePane();
+      this.editorPanes.clearActiveEditor();
       this.syncToolbar(null);
       this.syncToolbarMode(null);
+      this.modeToolbarHost.setContext(this.createModeToolbarHostContext(this.props, null));
       this.emptyWorkspaceView.setProps({
-		creationActions: this.props.creationActions,
+			creationActions: this.props.creationActions,
         commandService: this.props.commandService,
       });
       this.contentElement.replaceChildren(this.emptyWorkspaceView.getElement());
       return;
     }
 
-    const resolvedPane = resolveEditorPane(group.activeTab, resolverContext);
-    this.syncToolbarMode(resolvedPane.paneId);
-
-    this.contentElement.className = [
-      'comet-editor-content',
-      ...resolvedPane.contentClassNames,
-    ].join(' ');
-    this.contentElement.dataset.editorPane = resolvedPane.paneId;
-
-    const nextPaneViewStateKey = this.createPaneViewStateKey(
-      resolvedPane.paneId,
-      group.activeTab,
-    );
-
-    if (this.activePaneKey !== resolvedPane.paneKey || !this.activePane) {
-      this.releaseActivePane();
-      this.activateResolvedPane(
-        resolvedPane,
+    if (!this.editorPanes.hasActiveInput(group.activeTab)) {
+      this.trackAutomaticPaneOpen(
+        this.editorPanes.openEditor(group.activeTab, undefined, { newInGroup: false }),
         group.activeTab,
-        nextPaneViewStateKey,
       );
-    } else {
-      const activeEditorId = getEditorInputId(group.activeTab);
-      const didSwitchActivePaneTab = this.activePaneTabId !== activeEditorId;
-      if (didSwitchActivePaneTab) {
-        this.saveActivePaneViewState();
-      }
-
-      this.activePaneTabId = activeEditorId;
-      this.activePaneViewStateKey = nextPaneViewStateKey;
-      this.bindActivePaneRuntimeState(this.activePane, group.activeTab);
-      resolvedPane.updatePane?.(this.activePane);
-      if (didSwitchActivePaneTab) {
-        this.setActivePaneInput(resolvedPane, this.activePane);
-        this.restorePaneViewState(this.activePane, nextPaneViewStateKey);
-      }
-      this.activePane.setVisible(!this.props.isEditorCollapsed);
-      if (this.contentElement.firstChild !== this.activePane.getElement()) {
-        this.contentElement.replaceChildren(this.activePane.getElement());
-      }
     }
-
-    this.modeToolbarHost.setContext(this.createModeToolbarHostContext(this.props, resolvedPane.paneId));
-    this.syncToolbar(this.resolveToolbarElement());
-    this.flushPrimaryInputFocus(group.activeTab);
+    this.syncEditorPanePresentation(group.activeTab);
   }
 
   private createModeToolbarHostContext(
     props: EditorGroupViewProps,
-    activePaneId: string | null,
+    activePaneModeId: string | null,
   ) {
     return {
       ...props,
+		instantiationService: this.instantiationService,
       activeTab: props.group.activeEditor,
-      activePaneId,
-      activePane: this.activePane,
+		activePaneModeId,
+      activePane: this.editorPanes.getActivePane(),
       contentElement: this.contentElement,
       toolbarElement: this.toolbarElement,
     };
@@ -584,7 +566,7 @@ const currentTitlebarActionsElements = Array.from(this.actionsElement.children);
       return null;
     }
 
-const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
+	const paneToolbarElement = this.editorPanes.getToolbarElement();
     if (paneToolbarElement) {
       return paneToolbarElement;
     }
@@ -592,201 +574,34 @@ const paneToolbarElement = this.activePane?.getToolbarElement() ?? null;
     return this.modeToolbarHost.getElement();
   }
 
-  private createPaneViewStateKey(
-    paneId: string,
-    input: EditorInput,
-  ): EditorViewStateKey {
+  private createEditorPanesContext(props: EditorGroupViewProps): EditorPanesContext {
     return {
-      groupId: this.props.group.id,
-      paneId,
-      resourceKey: getEditorInputId(input),
+			groupId: props.group.id,
+			visible: !props.isEditorCollapsed,
+			viewStateEntries: props.viewStateEntries,
+			onDidChangeRuntimeState: this.handlePaneStateChange,
+			onSetEditorViewState: props.onSetEditorViewState,
+			onDeleteEditorViewState: props.onDeleteEditorViewState,
     };
   }
 
-  private createPaneResolverContext(): EditorPaneResolverContext {
-    return {
-      contextMenuService: this.props.contextMenuService,
-      contextViewProvider: this.props.contextViewProvider,
-		ui: this.props.ui,
-      viewPartProps: this.props.viewPartProps,
-      nativeHost: this.props.nativeHost,
-      dialogService: this.props.dialogService,
-      instantiationService: this.props.instantiationService,
-      onOpenEditor: this.props.onOpenEditor,
-      onOpenSources: this.props.onOpenSources,
-    };
+  private trackAutomaticPaneOpen(pendingOpen: Promise<void>, input: EditorInput): void {
+		const trackedOpen = pendingOpen.then(
+			() => this.syncEditorPanePresentation(input),
+			error => {
+				if (!isCancellationError(error)) {
+					this.automaticPaneOpenError = error;
+				}
+			},
+		);
+		this.pendingAutomaticPaneOpen = trackedOpen;
   }
 
-  private activateResolvedPane(
-    resolvedPane: ReturnType<typeof resolveEditorPane>,
-    input: EditorInput,
-    viewStateKey: EditorViewStateKey,
-  ) {
-    const existingPane = this.paneInstances.get(resolvedPane.paneKey);
-    this.activePane = existingPane ?? resolvedPane.createPane();
-    if (!existingPane) {
-      this.paneInstances.set(resolvedPane.paneKey, this.activePane);
-    }
-    this.activePaneTabId = getEditorInputId(input);
-    this.activePaneViewStateKey = viewStateKey;
-    this.activePaneKey = resolvedPane.paneKey;
-    this.bindActivePaneRuntimeState(this.activePane, input);
-		resolvedPane.updatePane?.(this.activePane);
-		this.setActivePaneInput(resolvedPane, this.activePane);
-    this.activePane.setVisible(!this.props.isEditorCollapsed);
-    this.contentElement.replaceChildren(this.activePane.getElement());
-    this.restorePaneViewState(this.activePane, viewStateKey);
+  private syncEditorPanePresentation(activeTab: EditorInput): void {
+		const activePaneModeId = this.editorPanes.getActivePaneModeId();
+		this.syncToolbarMode(activePaneModeId);
+		this.modeToolbarHost.setContext(this.createModeToolbarHostContext(this.props, activePaneModeId));
+		this.syncToolbar(this.resolveToolbarElement());
+		this.flushPrimaryInputFocus(activeTab);
   }
-
-  private bindActivePaneRuntimeState(pane: AnyEditorPane, input: EditorInput): void {
-    this.activePaneRuntimeStateListener.dispose();
-    this.activePaneRuntimeStateListener = pane.onDidChangeRuntimeState(state => {
-      this.handlePaneStateChange(input, state);
-    });
-    const state = pane.getRuntimeState();
-    if (state) {
-      this.handlePaneStateChange(input, state);
-    }
-  }
-
-  private setActivePaneInput(
-    resolvedPane: ReturnType<typeof resolveEditorPane>,
-    pane: AnyEditorPane,
-  ): void {
-    this.activePaneInputSource?.cancel();
-    this.activePaneInputSource?.dispose();
-    const source = new CancellationTokenSource();
-    this.activePaneInputSource = source;
-		const result = resolvedPane.setInput(pane, source.token);
-		if (result) {
-			void this.completeSetActivePaneInput(result, source);
-			return;
-		}
-		this.finishSetActivePaneInput(source);
-	}
-
-	private async completeSetActivePaneInput(
-		result: Promise<void>,
-		source: CancellationTokenSource,
-	): Promise<void> {
-		try {
-			await result;
-		} finally {
-			this.finishSetActivePaneInput(source);
-		}
-	}
-
-	private finishSetActivePaneInput(source: CancellationTokenSource): void {
-		if (this.activePaneInputSource === source) {
-			this.activePaneInputSource = null;
-		}
-		source.dispose();
-	}
-
-  private releaseActivePane() {
-    if (!this.activePane) {
-      return;
-    }
-
-    this.saveActivePaneViewState();
-    this.activePaneInputSource?.cancel();
-    this.activePaneInputSource?.dispose();
-    this.activePaneInputSource = null;
-		this.activePaneRuntimeStateListener.dispose();
-		this.activePaneRuntimeStateListener = Disposable.None;
-
-    const pane = this.activePane;
-    this.activePane = null;
-    this.activePaneTabId = null;
-    this.activePaneViewStateKey = null;
-    this.activePaneKey = null;
-
-    pane.clearInput();
-    pane.setVisible(false);
-  }
-
-  private disposePane(pane: AnyEditorPane) {
-    pane.clearInput();
-    pane.dispose();
-  }
-
-  private disposeAllPaneInstances() {
-		this.activePaneInputSource?.cancel();
-		this.activePaneInputSource?.dispose();
-		this.activePaneInputSource = null;
-    this.activePaneRuntimeStateListener.dispose();
-    this.activePaneRuntimeStateListener = Disposable.None;
-    for (const pane of this.paneInstances.values()) {
-      this.disposePane(pane);
-    }
-    this.paneInstances.clear();
-    this.activePane = null;
-    this.activePaneTabId = null;
-    this.activePaneViewStateKey = null;
-    this.activePaneKey = null;
-  }
-
-  private saveActivePaneViewState() {
-    if (!this.activePane || !this.activePaneViewStateKey || !this.activePaneTabId) {
-      return;
-    }
-
-const pane = this.activePane;
-    const tabId = this.activePaneTabId;
-    const viewStateKey = this.activePaneViewStateKey;
-    const syncViewState = pane.getViewState();
-
-    if (syncViewState === undefined) {
-      if (pane.captureViewState === EditorPane.prototype.captureViewState) {
-        this.deletePaneViewState(viewStateKey);
-      }
-    } else {
-      this.setPaneViewState(viewStateKey, syncViewState);
-    }
-
-const pendingSave = pane
-      .captureViewState()
-      .then((capturedViewState) => {
-        if (capturedViewState === undefined) {
-          if (pane.captureViewState === EditorPane.prototype.captureViewState) {
-            this.deletePaneViewState(viewStateKey);
-          }
-          return;
-        }
-
-        this.setPaneViewState(viewStateKey, capturedViewState);
-      })
-      .catch(() => {});
-    this.trackPendingViewStateSave(tabId, pendingSave);
-  }
-
-  private trackPendingViewStateSave(tabId: string, pendingSave: Promise<void>) {
-    this.pendingViewStateSaveByTabId.set(tabId, pendingSave);
-    void pendingSave.finally(() => {
-      if (this.pendingViewStateSaveByTabId.get(tabId) === pendingSave) {
-        this.pendingViewStateSaveByTabId.delete(tabId);
-      }
-    });
-  }
-
-  private restorePaneViewState(
-    pane: AnyEditorPane,
-    key: EditorViewStateKey,
-  ) {
-    pane.restoreViewState(this.viewStateStore.get(key));
-  }
-
-  private setPaneViewState(key: EditorViewStateKey, state: unknown) {
-    this.viewStateStore.set(key, state);
-    this.props.onSetEditorViewState(key, state);
-  }
-
-  private deletePaneViewState(key: EditorViewStateKey) {
-    this.viewStateStore.delete(key);
-    this.props.onDeleteEditorViewState(key);
-  }
-}
-
-export function createEditorGroupView(props: EditorGroupViewProps) {
-  return new EditorGroupView(props);
 }

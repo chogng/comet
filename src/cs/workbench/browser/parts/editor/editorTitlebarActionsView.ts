@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import {
   createActionBarView,
   type ActionBarItem,
@@ -5,15 +10,12 @@ import {
 import { createDropdownMenuActionViewItem } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
-import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPart';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 
 export type EditorTitlebarActionsViewProps = DropdownContextServices & {
   isEditorCollapsed: boolean;
-  isAgentSidebarVisible?: boolean;
-  showAgentSidebarToggle?: boolean;
-  agentSidebarToggleLabel?: string;
   labels: Pick<
     EditorPartLabels,
     | 'headerAddAction'
@@ -23,7 +25,6 @@ export type EditorTitlebarActionsViewProps = DropdownContextServices & {
   creationActions: readonly EditorCreationAction[];
   commandService: IWorkbenchCommandService;
   onToggleEditorCollapse: () => void;
-  onToggleAgentSidebar?: () => void;
 };
 
 export class EditorTitlebarActionsView {
@@ -71,18 +72,6 @@ export class EditorTitlebarActionsView {
 		})),
       }),
     ];
-    if (this.props.showAgentSidebarToggle && this.props.onToggleAgentSidebar) {
-      actionItems.push({
-        label: this.props.agentSidebarToggleLabel ?? '',
-        title: this.props.agentSidebarToggleLabel ?? '',
-        mode: 'icon' as const,
-        buttonClassName: 'comet-editor-titlebar-agent-btn',
-        content: createLxIcon(
-          this.props.isAgentSidebarVisible ? 'agent-filled' : 'agent',
-        ),
-        onClick: this.props.onToggleAgentSidebar,
-      });
-    }
     actionItems.push({
       id: 'toggleEditorCollapsed',
       label: this.props.isEditorCollapsed

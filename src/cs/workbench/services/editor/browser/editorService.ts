@@ -5,8 +5,8 @@
 
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import type { IUntypedEditorInput } from 'cs/workbench/common/editor';
+import type { IEditorOptions } from 'cs/workbench/common/editor';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import { IWorkbenchLayoutService } from 'cs/workbench/services/layout/browser/layoutService';
 import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import { IEditorResolverService } from 'cs/workbench/services/editor/common/editorResolverService';
 import {
@@ -20,35 +20,57 @@ export class EditorService implements IEditorService {
 	constructor(
 		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
 		@IEditorResolverService private readonly editorResolverService: IEditorResolverService,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 	) {}
+
+	get activeEditorPane() {
+		return this.editorGroupsService.mainPart.activeEditorPane;
+	}
+
+	get activeEditor(): EditorInput | undefined {
+		return this.editorGroupsService.activeGroup.activeEditor ?? undefined;
+	}
 
 	async openEditor(
 		input: EditorInput | IUntypedEditorInput,
 		options: IEditorOpenOptions = {},
 	): Promise<EditorInput> {
 		const ownsResolvedInput = !(input instanceof EditorInput);
-		const typedInput = ownsResolvedInput ? this.resolveEditorInput(input, options) : input;
-		let openedInput: EditorInput;
+		const resolved = ownsResolvedInput
+			? this.resolveEditorInput(input, options)
+			: { editor: input, options: options.editorOptions };
+		let openResult: ReturnType<IEditorGroupsService['openEditor']>;
 		try {
-			openedInput = this.editorGroupsService.openEditor(typedInput, options);
+			openResult = this.editorGroupsService.openEditor(resolved.editor, options);
 		} catch (error) {
 			if (ownsResolvedInput) {
-				typedInput.dispose();
+				resolved.editor.dispose();
 			}
 			throw error;
 		}
-		this.ensureEditorPartVisible();
-		return openedInput;
+		if (options.active === false) {
+			return openResult.editor;
+		}
+		this.editorGroupsService.mainPart.revealEditor();
+		await this.editorGroupsService.mainPart.openEditor(
+			openResult.editor,
+			resolved.options,
+			{
+				...options.context,
+				newInGroup: openResult.newInGroup,
+			},
+		);
+		return openResult.editor;
 	}
 
-	activateEditor(editor: EditorInput): void {
+	async activateEditor(editor: EditorInput): Promise<void> {
 		const match = this.editorGroupsService.findEditor(editor);
 		if (!match) {
 			return;
 		}
 		match.group.setActive(match.editor);
 		this.editorGroupsService.activateGroup(match.group);
+		this.editorGroupsService.mainPart.revealEditor();
+		await this.editorGroupsService.mainPart.openEditor(match.editor, undefined, { newInGroup: false });
 	}
 
 	closeEditor(editor: EditorInput): Promise<boolean> {
@@ -68,7 +90,7 @@ export class EditorService implements IEditorService {
 	private resolveEditorInput(
 		input: IUntypedEditorInput,
 		options: IEditorOpenOptions,
-	): EditorInput {
+	): { editor: EditorInput; options: IEditorOptions | undefined } {
 		if (!('resource' in input) || !input.resource) {
 			throw new Error('Cannot resolve an editor input without a resource.');
 		}
@@ -79,15 +101,9 @@ export class EditorService implements IEditorService {
 		if (!resolved) {
 			throw new Error(`No editor resolver is registered for '${input.resource.toString()}'.`);
 		}
-		return resolved.editor;
+		return resolved;
 	}
 
-	private ensureEditorPartVisible(): void {
-		const { isEditorCollapsed, expandedEditorSize } = this.layoutService.getLayoutState();
-		if (isEditorCollapsed) {
-			this.layoutService.setEditorCollapsed(false, expandedEditorSize);
-		}
-	}
 }
 
 registerSingleton(IEditorService, EditorService, InstantiationType.Delayed);

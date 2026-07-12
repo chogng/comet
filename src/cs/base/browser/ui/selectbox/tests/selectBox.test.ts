@@ -1,11 +1,18 @@
-import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
+import assert from 'node:assert/strict';
+import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
+import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let restoreComputedStyle: (() => void) | null = null;
 let SelectBox: typeof import('cs/base/browser/ui/selectbox/selectBox').SelectBox;
+let dropdownServices: DropdownContextServices & { dispose(): void };
 
 function createDomRect(x: number, y: number, width: number, height: number) {
   return {
@@ -59,6 +66,14 @@ after(() => {
   restoreComputedStyle = null;
   cleanupDomEnvironment?.();
   cleanupDomEnvironment = null;
+});
+
+beforeEach(async () => {
+  dropdownServices = await createDropdownTestServices();
+});
+
+afterEach(() => {
+  dropdownServices.dispose();
 });
 
 test('selectbox renders a native select with configured options', () => {
@@ -194,7 +209,7 @@ test('selectbox custom drawn mode opens contextview menu and selects an option',
       { text: 'English', value: 'en-US' },
     ],
     0,
-    undefined,
+    dropdownServices.contextViewProvider,
     {},
     { useCustomDrawn: true },
   );
@@ -234,7 +249,7 @@ test('selectbox custom drawn mode keeps the popup overlay matched to the trigger
       { text: 'Short', value: 'font-b' },
     ],
     0,
-    undefined,
+    dropdownServices.contextViewProvider,
     {},
     { useCustomDrawn: true },
   );
@@ -245,16 +260,16 @@ test('selectbox custom drawn mode keeps the popup overlay matched to the trigger
 
     selectBox.domNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const contextViewContent = document.body.querySelector('.comet-context-view-content');
+    const contextView = document.body.querySelector('.context-view.comet-select-box-context-view');
     const menu = document.body.querySelector('.comet-menu[role="listbox"]');
-    if (!(contextViewContent instanceof HTMLElement)) {
+    if (!(contextView instanceof HTMLElement)) {
       throw new Error('Expected selectbox context view content.');
     }
     if (!(menu instanceof HTMLElement)) {
       throw new Error('Expected selectbox listbox menu.');
     }
 
-    assert.equal(contextViewContent.style.minWidth, '140px');
+    assert.equal(contextView.style.minWidth, '140px');
     assert.equal(menu.classList.contains('comet-menu-root'), true);
   } finally {
     selectBox.dispose();
@@ -335,7 +350,7 @@ test('selectbox custom drawn mode keeps contextview open on internal scroll', ()
       { text: 'English', value: 'en-US' },
     ],
     0,
-    undefined,
+    dropdownServices.contextViewProvider,
     {},
     { useCustomDrawn: true },
   );

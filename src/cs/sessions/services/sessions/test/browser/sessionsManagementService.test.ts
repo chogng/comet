@@ -6,14 +6,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { Emitter } from 'cs/base/common/event';
-import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
+import { Emitter, Event } from 'cs/base/common/event';
+import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { observableValue, type ISettableObservable } from 'cs/base/common/observable';
 import { ThemeIcon } from 'cs/base/common/themables';
 import { URI } from 'cs/base/common/uri';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
+import {
+	StorageScope,
+	StorageTarget,
+	type IStorageService,
+} from 'cs/platform/storage/common/storage';
 import { SessionsManagementService } from 'cs/sessions/services/sessions/browser/sessionsManagementService';
 import { SessionsProvidersService } from 'cs/sessions/services/sessions/browser/sessionsProvidersService';
+import { SessionsRecencyStorage } from 'cs/sessions/services/sessions/browser/sessionsRecencyStorage';
 import {
 	ChatInteractivity,
 	ChatOriginKind,
@@ -33,14 +39,16 @@ import {
 	SessionDraftChangeKind,
 } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import {
+	maximumSessionChatRequestAttachments,
+	maximumSessionChatRequestPayloadBytes,
 	SessionTransitionKind,
-	type ISessionChatRequest,
 	type ISessionDraftOptions,
 	type ISessionsChangeEvent,
 	type ISessionsProvider,
 } from 'cs/sessions/services/sessions/common/sessionsProvider';
 import {
 	ChatRequestAttachmentKind,
+	type IChatRequest,
 	type IChatRequestAttachment,
 } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
@@ -69,6 +77,7 @@ interface IChatFixture {
 interface ISessionFixture {
 	readonly model: ISession;
 	readonly title: ISettableObservable<string>;
+	readonly updatedAt: ISettableObservable<Date>;
 	readonly status: ISettableObservable<SessionStatus>;
 	readonly isArchived: ISettableObservable<boolean>;
 	readonly workspace: ISettableObservable<ISessionWorkspaceState>;
@@ -121,12 +130,14 @@ function createSession(
 		readonly sessionType?: string;
 		readonly capabilities?: Partial<ISessionCapabilities>;
 		readonly workspace?: ISessionWorkspaceState;
+		readonly updatedAt?: Date;
 	} = {},
 ): ISessionFixture {
 	const mainChat = createChat(options.chatResource ?? URI.parse(`test-chat:/${providerId}${resource.path}`), {
 		capabilities: { supportsRename: true, supportsDelete: false },
 	});
 	const title = observableValue('sessionTitle', resource.path);
+	const updatedAt = observableValue('sessionUpdatedAt', options.updatedAt ?? TestDate);
 	const status = observableValue('sessionStatus', options.status ?? SessionStatus.Completed);
 	const isArchived = observableValue('sessionIsArchived', false);
 	const workspace = observableValue<ISessionWorkspaceState>('sessionWorkspace', options.workspace ?? WorkspaceLess);
@@ -137,6 +148,7 @@ function createSession(
 	});
 	return {
 		title,
+		updatedAt,
 		status,
 		isArchived,
 		workspace,
@@ -150,7 +162,7 @@ function createSession(
 			sessionType: options.sessionType ?? `${providerId}.default`,
 			createdAt: TestDate,
 			title,
-			updatedAt: observableValue('sessionUpdatedAt', TestDate),
+			updatedAt,
 			status,
 			isRead: observableValue('sessionIsRead', true),
 			isArchived,
@@ -182,7 +194,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 
 	createSessionDraftHandler: (options: ISessionDraftOptions) => ISession = unexpectedOperation;
 	discardSessionDraftHandler: (session: ISession) => void = unexpectedOperation;
-	sendRequestHandler: (session: ISession, chat: IChat, request: ISessionChatRequest) => Promise<void> = async () => unexpectedOperation();
+	sendRequestHandler: (session: ISession, chat: IChat, request: IChatRequest) => Promise<void> = async () => unexpectedOperation();
 	createChatHandler: (session: ISession) => Promise<IChat> = async () => unexpectedOperation();
 	forkChatHandler: (session: ISession, sourceChat: IChat, turnId: string) => Promise<IChat> = async () => unexpectedOperation();
 	renameSessionHandler: (session: ISession, title: string) => Promise<void> = async () => unexpectedOperation();
@@ -222,7 +234,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 		this.discardSessionDraftHandler(session);
 	}
 
-	sendRequest(session: ISession, chat: IChat, request: ISessionChatRequest): Promise<void> {
+	sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void> {
 		return this.sendRequestHandler(session, chat, request);
 	}
 
@@ -272,10 +284,63 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 	}
 }
 
-function createHarness(providers: readonly TestSessionsProvider[]): {
+function createStorageService() {
+	const values = new Map<string, string>();
+	let nextStoreError: Error | undefined;
+	const keyFor = (key: string, scope: StorageScope) => `${scope}:${key}`;
+	const service = {
+		_serviceBrand: undefined,
+		applicationStorage: undefined,
+		onDidChangeValue: Event.None,
+		onDidChangeTarget: Event.None,
+		onWillSaveState: Event.None,
+		init: async () => {},
+		close: async () => {},
+		get: (key: string, scope: StorageScope, fallbackValue?: string) =>
+			values.get(keyFor(key, scope)) ?? fallbackValue,
+		getBoolean: (_key: string, _scope: StorageScope, fallbackValue?: boolean) => fallbackValue,
+		getNumber: (_key: string, _scope: StorageScope, fallbackValue?: number) => fallbackValue,
+		getObject: <T extends object>(_key: string, _scope: StorageScope, fallbackValue?: T) => fallbackValue,
+		store: (key: string, value: string | number | boolean | object | undefined | null, scope: StorageScope, _target: StorageTarget) => {
+			if (nextStoreError) {
+				const error = nextStoreError;
+				nextStoreError = undefined;
+				throw error;
+			}
+			if (typeof value !== 'string') {
+				throw new Error('Sessions management tests store only serialized values.');
+			}
+			values.set(keyFor(key, scope), value);
+		},
+		storeAll() {},
+		remove: (key: string, scope: StorageScope) => values.delete(keyFor(key, scope)),
+		keys: (scope: StorageScope, _target: StorageTarget) => [...values.keys()]
+			.filter(key => key.startsWith(`${scope}:`))
+			.map(key => key.slice(`${scope}:`.length)),
+		log() {},
+		optimize: async () => {},
+		flush: async () => {},
+		setRaw: (key: string, value: string) => values.set(keyFor(key, StorageScope.APPLICATION), value),
+		getRaw: (key: string) => values.get(keyFor(key, StorageScope.APPLICATION)),
+		failNextStore: (error: Error) => {
+			nextStoreError = error;
+		},
+	};
+	return service as unknown as IStorageService & {
+		readonly setRaw: (key: string, value: string) => void;
+		readonly getRaw: (key: string) => string | undefined;
+		readonly failNextStore: (error: Error) => void;
+	};
+}
+
+function createHarness(
+	providers: readonly TestSessionsProvider[],
+	storageService = createStorageService(),
+): {
 	readonly store: DisposableStore;
 	readonly registry: SessionsProvidersService;
 	readonly management: SessionsManagementService;
+	readonly storageService: ReturnType<typeof createStorageService>;
 } {
 	const store = new DisposableStore();
 	const registry = store.add(new SessionsProvidersService());
@@ -283,8 +348,8 @@ function createHarness(providers: readonly TestSessionsProvider[]): {
 		store.add(provider);
 		store.add(registry.registerProvider(provider));
 	}
-	const management = store.add(new SessionsManagementService(registry));
-	return { store, registry, management };
+	const management = store.add(new SessionsManagementService(registry, storageService));
+	return { store, registry, management, storageService };
 }
 
 function createModel(identifier: string): ILanguageModelChatMetadataAndIdentifier {
@@ -302,6 +367,57 @@ function createModel(identifier: string): ILanguageModelChatMetadataAndIdentifie
 test('Sessions management service is registered exactly once', () => {
 	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === ISessionsManagementService);
 	assert.equal(registrations.length, 1);
+});
+
+test('Sessions management initialization releases earlier provider subscriptions atomically', () => {
+	const store = new DisposableStore();
+	const registry = store.add(new SessionsProvidersService());
+	const firstProvider = store.add(new TestSessionsProvider('provider.first'));
+	const secondProvider = store.add(new TestSessionsProvider('provider.second'));
+	store.add(registry.registerProvider(firstProvider));
+	store.add(registry.registerProvider(secondProvider));
+
+	let activeFirstProviderSubscriptions = 0;
+	const firstProviderSessionsEvent = firstProvider.onDidChangeSessions;
+	const trackedFirstProviderSessionsEvent: Event<ISessionsChangeEvent> = (listener, thisArgs) => {
+		activeFirstProviderSubscriptions += 1;
+		const subscription = firstProviderSessionsEvent(listener, thisArgs);
+		return toDisposable(() => {
+				activeFirstProviderSubscriptions -= 1;
+				subscription.dispose();
+		});
+	};
+	Object.defineProperty(firstProvider, 'onDidChangeSessions', {
+		configurable: true,
+		value: trackedFirstProviderSessionsEvent,
+	});
+
+	const subscriptionFailure = new Error('provider subscription failed');
+	const failingSecondProviderSessionsEvent: Event<ISessionsChangeEvent> = () => {
+		throw subscriptionFailure;
+	};
+	Object.defineProperty(secondProvider, 'onDidChangeSessions', {
+		configurable: true,
+		value: failingSecondProviderSessionsEvent,
+	});
+
+	try {
+		assert.throws(
+			() => new SessionsManagementService(registry, createStorageService()),
+			(error: unknown) => error === subscriptionFailure,
+		);
+		assert.equal(activeFirstProviderSubscriptions, 0);
+
+		const participant = registry.registerChangeParticipant({
+			prepareProvidersChange: () => ({
+				commit: () => {},
+				dispose: () => {},
+			}),
+		});
+		participant.dispose();
+	} finally {
+		store.dispose();
+	}
 });
 
 test('Sessions management aggregates provider snapshots with provider-aware lookup and global Chat ownership', () => {
@@ -346,12 +462,167 @@ test('Sessions management aggregates provider snapshots with provider-aware look
 	const registration = registry.registerProvider(duplicateChatProvider);
 	try {
 		assert.throws(
-			() => new SessionsManagementService(registry),
+			() => new SessionsManagementService(registry, createStorageService()),
 			/Chat resource .* is owned by both Session/,
 		);
 	} finally {
 		registration.dispose();
 		duplicateChatProvider.dispose();
+		registry.dispose();
+	}
+});
+
+test('Sessions management persists authoritative cross-provider recency and removes deleted identities', () => {
+	const storageService = createStorageService();
+	const olderProvider = new TestSessionsProvider('provider.z-older');
+	const newerProvider = new TestSessionsProvider('provider.a-newer');
+	const older = createSession(olderProvider.id, URI.parse('test-session:/older'), {
+		updatedAt: new Date('2026-07-11T01:00:00.000Z'),
+	});
+	const newer = createSession(newerProvider.id, URI.parse('test-session:/newer'), {
+		updatedAt: new Date('2026-07-11T02:00:00.000Z'),
+	});
+	olderProvider.sessions.push(older.model);
+	newerProvider.sessions.push(newer.model);
+	const firstHarness = createHarness([olderProvider, newerProvider], storageService);
+	try {
+		const initialOrder = firstHarness.management.getSessions();
+		assert.deepEqual(initialOrder, [newer.model, older.model]);
+		assert.equal(Object.isFrozen(initialOrder), true);
+		assert.throws(() => (initialOrder as ISession[]).reverse(), TypeError);
+		older.updatedAt.set(new Date('2026-07-11T03:00:00.000Z'), undefined);
+		olderProvider.setSessionsAndFire([older.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: older.model }],
+		});
+		assert.deepEqual(firstHarness.management.getSessions(), [older.model, newer.model]);
+	} finally {
+		firstHarness.store.dispose();
+	}
+
+	const restoredOlderProvider = new TestSessionsProvider('provider.z-older');
+	const restoredNewerProvider = new TestSessionsProvider('provider.a-newer');
+	const equalActivity = new Date('2026-07-11T04:00:00.000Z');
+	const restoredOlder = createSession(restoredOlderProvider.id, URI.parse('test-session:/older'), {
+		updatedAt: equalActivity,
+	});
+	const restoredNewer = createSession(restoredNewerProvider.id, URI.parse('test-session:/newer'), {
+		updatedAt: equalActivity,
+	});
+	restoredOlderProvider.sessions.push(restoredOlder.model);
+	restoredNewerProvider.sessions.push(restoredNewer.model);
+	const secondHarness = createHarness(
+		[restoredNewerProvider, restoredOlderProvider],
+		storageService,
+	);
+	try {
+		assert.deepEqual(secondHarness.management.getSessions(), [restoredOlder.model, restoredNewer.model]);
+		restoredOlderProvider.setSessionsAndFire([], {
+			transitions: [{ kind: SessionTransitionKind.Removed, session: restoredOlder.model }],
+		});
+		assert.deepEqual(secondHarness.management.getSessions(), [restoredNewer.model]);
+	} finally {
+		secondHarness.store.dispose();
+	}
+
+	const finalProvider = new TestSessionsProvider('provider.a-newer');
+	const finalSession = createSession(finalProvider.id, URI.parse('test-session:/newer'), {
+		updatedAt: equalActivity,
+	});
+	finalProvider.sessions.push(finalSession.model);
+	const finalHarness = createHarness([finalProvider], storageService);
+	try {
+		assert.deepEqual(finalHarness.management.getSessions(), [finalSession.model]);
+	} finally {
+		finalHarness.store.dispose();
+	}
+});
+
+test('Sessions management accepts Added, Replaced, and Removed snapshots when recency persistence fails', () => {
+	const storageService = createStorageService();
+	const provider = new TestSessionsProvider('provider.persistence-failure');
+	const first = createSession(provider.id, URI.parse('test-session:/first'));
+	const added = createSession(provider.id, URI.parse('test-session:/added'));
+	const replacement = createSession(provider.id, URI.parse('test-session:/replacement'));
+	provider.sessions.push(first.model);
+	const { store, management, logService } = createHarness([provider], storageService);
+	const initialStoredRecency = storageService.getRaw('sessions.recency');
+	const snapshots: Array<{
+		readonly kind: SessionTransitionKind;
+		readonly sessions: readonly ISession[];
+	}> = [];
+	store.add(management.onDidChangeSessions(event => {
+		for (const transition of event.transitions) {
+			snapshots.push({ kind: transition.kind, sessions: management.getSessions() });
+		}
+	}));
+	const errors = [
+		new Error('Added recency write failed.'),
+		new Error('Replacement recency write failed.'),
+		new Error('Removal recency write failed.'),
+	];
+
+	try {
+		storageService.failNextStore(errors[0]);
+		assert.doesNotThrow(() => provider.setSessionsAndFire([first.model, added.model], {
+			transitions: [{ kind: SessionTransitionKind.Added, session: added.model }],
+		}));
+		assert.deepEqual(management.getSessions(), [added.model, first.model]);
+		assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
+
+		storageService.failNextStore(errors[1]);
+		assert.doesNotThrow(() => provider.setSessionsAndFire([first.model, replacement.model], {
+			transitions: [{
+				kind: SessionTransitionKind.Replaced,
+				from: added.model,
+				to: replacement.model,
+			}],
+		}));
+		assert.deepEqual(management.getSessions(), [replacement.model, first.model]);
+		assert.equal(management.getSession(added.model.sessionId), undefined);
+		assert.equal(management.getSession(replacement.model.sessionId), replacement.model);
+		assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
+
+		storageService.failNextStore(errors[2]);
+		assert.doesNotThrow(() => provider.setSessionsAndFire([first.model], {
+			transitions: [{ kind: SessionTransitionKind.Removed, session: replacement.model }],
+		}));
+		assert.deepEqual(management.getSessions(), [first.model]);
+		assert.equal(management.getSession(replacement.model.sessionId), undefined);
+		assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
+
+		assert.deepEqual(snapshots, [{
+			kind: SessionTransitionKind.Added,
+			sessions: [added.model, first.model],
+		}, {
+			kind: SessionTransitionKind.Replaced,
+			sessions: [replacement.model, first.model],
+		}, {
+			kind: SessionTransitionKind.Removed,
+			sessions: [first.model],
+		}]);
+		assert.deepEqual(
+			logService.errors.map(entry => entry.message),
+			Array(3).fill('Failed to persist the authoritative Sessions recency order.'),
+		);
+		assert.deepEqual(logService.errors.map(entry => entry.args), errors.map(error => [error]));
+	} finally {
+		store.dispose();
+	}
+});
+
+test('Sessions management rejects malformed persisted recency atomically', () => {
+	const storageService = createStorageService();
+	storageService.setRaw('sessions.recency', JSON.stringify({
+		version: 1,
+		sessionIds: ['duplicate', 'duplicate'],
+	}));
+	const registry = new SessionsProvidersService();
+	try {
+		assert.throws(
+			() => new SessionsManagementService(registry, storageService),
+			/duplicate Session IDs/,
+		);
+	} finally {
 		registry.dispose();
 	}
 });
@@ -401,7 +672,7 @@ test('Session draft replacement is atomic, explicit, and preserves the complete 
 	});
 	provider.createSessionDraftHandler = () => draft.model;
 	provider.discardSessionDraftHandler = () => {};
-	let receivedRequest: ISessionChatRequest | undefined;
+	let receivedRequest: IChatRequest | undefined;
 	provider.sendRequestHandler = async (_session, _chat, request) => {
 		receivedRequest = request;
 		provider.setSessionsAndFire([committed.model], {
@@ -429,7 +700,7 @@ test('Session draft replacement is atomic, explicit, and preserves the complete 
 		content: 'immutable evidence',
 		mimeType: 'text/plain',
 	};
-	const request: ISessionChatRequest = { prompt: 'Start', attachments: [attachment] };
+	const request: IChatRequest = { prompt: 'Start', attachments: [attachment] };
 
 	try {
 		assert.equal(management.createSessionDraft(provider.id, {
@@ -438,8 +709,10 @@ test('Session draft replacement is atomic, explicit, and preserves the complete 
 		}), draft.model);
 		await management.sendRequest(draft.model, draft.mainChat.model, request);
 
-		assert.equal(receivedRequest, request);
-		assert.equal(receivedRequest.attachments[0], attachment);
+		assert.notEqual(receivedRequest, request);
+		assert.deepEqual(receivedRequest, request);
+		assert.notEqual(receivedRequest.attachments, request.attachments);
+		assert.notEqual(receivedRequest.attachments[0], attachment);
 		assert.deepEqual(replacementSnapshots, [{ sessions: [committed.model], draft: undefined }]);
 		assert.deepEqual(draftEvents, [SessionDraftChangeKind.Created, SessionDraftChangeKind.Replaced]);
 		assert.equal(management.draftSession.get(), undefined);
@@ -515,7 +788,7 @@ test('Provider transitions cannot be bypassed by mutable snapshots or inconsiste
 		provider.setSessionsAndFire([first.model, second.model], {
 			transitions: [{ kind: SessionTransitionKind.Added, session: second.model }],
 		});
-		assert.deepEqual(management.sessions.get(), [first.model, second.model]);
+		assert.deepEqual(management.sessions.get(), [second.model, first.model]);
 	} finally {
 		store.dispose();
 	}
@@ -569,7 +842,7 @@ test('Committed provider snapshots reject Session drafts', () => {
 	const registration = registry.registerProvider(provider);
 	try {
 		assert.throws(
-			() => new SessionsManagementService(registry),
+			() => new SessionsManagementService(registry, createStorageService()),
 			/Committed Session snapshot .* contains a draft/,
 		);
 	} finally {
@@ -606,7 +879,7 @@ test('Provider Session type snapshots are copied, event-driven, and validate com
 	const invalidRegistration = invalidRegistry.registerProvider(invalidProvider);
 	try {
 		assert.throws(
-			() => new SessionsManagementService(invalidRegistry),
+			() => new SessionsManagementService(invalidRegistry, createStorageService()),
 			/not offered by provider/,
 		);
 	} finally {
@@ -703,7 +976,7 @@ test('Sessions management routes required operations and explicit Auto model sel
 	const session = createSession(provider.id, URI.parse('test-session:/routing'));
 	provider.sessions.push(session.model);
 	provider.models.push(createModel('model.test'));
-	const requests: ISessionChatRequest[] = [];
+	const requests: IChatRequest[] = [];
 	provider.sendRequestHandler = async (_session, _chat, request) => {
 		requests.push(request);
 	};
@@ -729,7 +1002,7 @@ test('Sessions management routes required operations and explicit Auto model sel
 		resource: URI.parse('file:///source.txt'),
 		mimeType: 'text/plain',
 	};
-	const request: ISessionChatRequest = { prompt: 'Continue', attachments: [attachment] };
+	const request: IChatRequest = { prompt: 'Continue', attachments: [attachment] };
 
 	try {
 		await management.sendRequest(session.model, session.mainChat.model, request);
@@ -741,14 +1014,133 @@ test('Sessions management routes required operations and explicit Auto model sel
 		await management.setSessionArchived(session.model, true);
 		provider.fireModelsChanged();
 
-		assert.equal(requests[0], request);
-		assert.equal(requests[0].attachments[0], attachment);
+		assert.notEqual(requests[0], request);
+		assert.equal(requests[0].prompt, request.prompt);
+		const receivedAttachment = requests[0].attachments[0];
+		assert.notEqual(receivedAttachment, attachment);
+		assert.equal(receivedAttachment.kind, ChatRequestAttachmentKind.Resource);
+		if (receivedAttachment.kind !== ChatRequestAttachmentKind.Resource
+			|| attachment.kind !== ChatRequestAttachmentKind.Resource) {
+			throw new Error('Expected a resource attachment snapshot.');
+		}
+		assert.equal(receivedAttachment.resource.toString(), attachment.resource.toString());
 		assert.deepEqual(selectedModels, ['model.test', undefined]);
 		assert.deepEqual(modelEvents, [provider.id]);
 		assert.equal(session.title.get(), 'Renamed Session');
 		assert.equal(session.mainChat.title.get(), 'Renamed Chat');
 		assert.equal(session.isArchived.get(), true);
 	} finally {
+		store.dispose();
+	}
+});
+
+test('Sessions management rejects duplicate, excessive, and oversized Chat request attachments', async () => {
+	const provider = new TestSessionsProvider('provider.request-limits');
+	const session = createSession(provider.id, URI.parse('test-session:/request-limits'));
+	provider.sessions.push(session.model);
+	provider.sendRequestHandler = async () => {};
+	const { store, management } = createHarness([provider]);
+	const createTextAttachment = (id: string, content = 'text'): IChatRequestAttachment => ({
+		kind: ChatRequestAttachmentKind.Text,
+		id,
+		name: id,
+		content,
+		mimeType: 'text/plain',
+	});
+
+	try {
+		await assert.rejects(
+			management.sendRequest(session.model, session.mainChat.model, {
+				prompt: 'Ask',
+				attachments: [createTextAttachment('duplicate'), createTextAttachment('duplicate')],
+			}),
+			/duplicated/,
+		);
+		await assert.rejects(
+			management.sendRequest(session.model, session.mainChat.model, {
+				prompt: 'Ask',
+				attachments: Array.from(
+					{ length: maximumSessionChatRequestAttachments + 1 },
+					(_, index) => createTextAttachment(`attachment-${index}`),
+				),
+			}),
+			/more than/,
+		);
+		await assert.rejects(
+			management.sendRequest(session.model, session.mainChat.model, {
+				prompt: 'Ask',
+				attachments: [createTextAttachment(
+					'oversized',
+					'x'.repeat(maximumSessionChatRequestPayloadBytes),
+				)],
+			}),
+			/serialized bytes/,
+		);
+	} finally {
+		store.dispose();
+	}
+});
+
+test('Sessions management dispatches an immutable request snapshot across an asynchronous provider call', async () => {
+	const provider = new TestSessionsProvider('provider.request-snapshot');
+	const session = createSession(provider.id, URI.parse('test-session:/request-snapshot'));
+	provider.sessions.push(session.model);
+	let releaseRequest!: () => void;
+	const requestGate = new Promise<void>(resolve => releaseRequest = resolve);
+	let receivedRequest: IChatRequest | undefined;
+	provider.sendRequestHandler = async (_session, _chat, request) => {
+		receivedRequest = request;
+		await requestGate;
+	};
+	const { store, management } = createHarness([provider]);
+	const document = {
+		type: 'doc',
+		content: [{
+			type: 'paragraph',
+			content: [{ type: 'text', text: 'original document' }],
+		}],
+	};
+	const attachment = {
+		kind: ChatRequestAttachmentKind.Editor as const,
+		id: 'editor',
+		name: 'Editor',
+		resource: URI.parse('draft:/request-snapshot'),
+		document,
+		selection: { blockId: 'block-1', startOffset: 0, endOffset: 8 },
+	};
+	const attachments: IChatRequestAttachment[] = [attachment];
+	const request = { prompt: 'Original prompt', attachments };
+
+	try {
+		const sendRequest = management.sendRequest(session.model, session.mainChat.model, request);
+		request.prompt = 'Mutated prompt';
+		document.content[0].content[0].text = 'mutated document';
+		attachments.push({
+			kind: ChatRequestAttachmentKind.Text,
+			id: 'late',
+			name: 'Late',
+			content: 'late mutation',
+			mimeType: 'text/plain',
+		});
+
+		assert.ok(receivedRequest);
+		assert.equal(receivedRequest.prompt, 'Original prompt');
+		assert.equal(receivedRequest.attachments.length, 1);
+		const receivedAttachment = receivedRequest.attachments[0];
+		assert.equal(receivedAttachment.kind, ChatRequestAttachmentKind.Editor);
+		if (receivedAttachment.kind !== ChatRequestAttachmentKind.Editor) {
+			throw new Error('Expected an editor attachment snapshot.');
+		}
+		assert.equal(receivedAttachment.document.content?.[0]?.content?.[0]?.text, 'original document');
+		assert.equal(Object.isFrozen(receivedRequest), true);
+		assert.equal(Object.isFrozen(receivedRequest.attachments), true);
+		assert.equal(Object.isFrozen(receivedAttachment), true);
+		assert.equal(Object.isFrozen(receivedAttachment.document), true);
+		assert.equal(Object.isFrozen(receivedAttachment.document.content?.[0] ?? {}), true);
+		releaseRequest();
+		await sendRequest;
+	} finally {
+		releaseRequest();
 		store.dispose();
 	}
 });

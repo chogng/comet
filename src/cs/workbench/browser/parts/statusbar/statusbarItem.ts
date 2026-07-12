@@ -1,67 +1,73 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { $ } from 'cs/base/browser/dom';
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { EditorStatusItem } from 'cs/workbench/browser/parts/editor/editorStatus';
-import {
-  canRunStatusbarCommand,
-  runStatusbarCommand,
-} from 'cs/workbench/browser/parts/statusbar/statusbarActions';
+import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 
 const hoverService = getHoverService();
 
-export function createStatusbarItemElement(item: EditorStatusItem) {
-  const itemElement = document.createElement('span');
-  const canRunCommand = canRunStatusbarCommand(item);
-  itemElement.dataset.statusbarItemId = item.id;
-  itemElement.dataset.statusbarItemValue = item.value;
-  if (item.title) {
-    itemElement.dataset.statusbarItemTitle = item.title;
-  }
-  itemElement.className = [
-    'comet-editor-statusbar-item',
-    item.tone ? `is-${item.tone}` : '',
-    canRunCommand ? 'comet-is-actionable' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+export function createStatusbarItemElement(
+	item: EditorStatusItem,
+	commandService: IWorkbenchCommandService,
+): HTMLElement {
+	const itemElement = $<HTMLSpanElement>('span.comet-editor-statusbar-item');
+	const canRunCommand = item.commandId !== undefined && item.commandEnabled !== false;
+	const runCommand = () => {
+		if (!item.commandId || item.commandEnabled === false) {
+			throw new Error(`Statusbar item '${item.id}' does not expose an enabled command.`);
+		}
+		const result = commandService.executeCommand<boolean>(item.commandId);
+		if (result === undefined) {
+			throw new Error(`Statusbar command '${item.commandId}' is not registered.`);
+		}
+		return result;
+	};
 
-  const labelElement = document.createElement('span');
-  labelElement.className = 'comet-editor-statusbar-item-label';
-  labelElement.textContent = item.label;
+	itemElement.dataset.statusbarItemId = item.id;
+	itemElement.dataset.statusbarItemValue = item.value;
+	if (item.title) {
+		itemElement.dataset.statusbarItemTitle = item.title;
+	}
+	itemElement.className = [
+		'comet-editor-statusbar-item',
+		item.tone ? `is-${item.tone}` : '',
+		canRunCommand ? 'comet-is-actionable' : '',
+	]
+		.filter(Boolean)
+		.join(' ');
 
-  const valueElement = document.createElement('span');
-  valueElement.className = 'comet-editor-statusbar-item-value';
-  valueElement.textContent = item.value;
+	const labelElement = $<HTMLSpanElement>('span.comet-editor-statusbar-item-label');
+	labelElement.textContent = item.label;
 
-  hoverService.createHover(itemElement, {
-    content: item.label,
-    subtitle: item.title ?? item.value,
-    actions: canRunCommand
-      ? [
-          {
-            label: item.label,
-            run: () => {
-              runStatusbarCommand(item);
-            },
-          },
-        ]
-      : [],
-  });
+	const valueElement = $<HTMLSpanElement>('span.comet-editor-statusbar-item-value');
+	valueElement.textContent = item.value;
 
-  if (canRunCommand) {
-    itemElement.tabIndex = 0;
-    itemElement.setAttribute('role', 'button');
-    itemElement.addEventListener('click', () => {
-      runStatusbarCommand(item);
-    });
-    itemElement.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') {
-        return;
-      }
+	hoverService.createHover(itemElement, {
+		content: item.label,
+		subtitle: item.title ?? item.value,
+		actions: canRunCommand
+			? [{ label: item.label, run: runCommand }]
+			: [],
+	});
 
-      event.preventDefault();
-      runStatusbarCommand(item);
-    });
-  }
+	if (canRunCommand) {
+		itemElement.tabIndex = 0;
+		itemElement.setAttribute('role', 'button');
+		itemElement.addEventListener('click', runCommand);
+		itemElement.addEventListener('keydown', event => {
+			if (event.key !== 'Enter' && event.key !== ' ') {
+				return;
+			}
 
-  itemElement.append(labelElement, valueElement);
-  return itemElement;
+			event.preventDefault();
+			runCommand();
+		});
+	}
+
+	itemElement.append(labelElement, valueElement);
+	return itemElement;
 }

@@ -6,7 +6,7 @@
 import { Codicon } from 'cs/base/common/codicons';
 import { KeyCode } from 'cs/base/common/keyCodes';
 import { DisposableStore } from 'cs/base/common/lifecycle';
-import { Action2, MenuId, registerAction2 } from 'cs/platform/actions/common/actions';
+import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
 import {
 	ContextKeyExpr,
@@ -18,10 +18,11 @@ import type { ServicesAccessor } from 'cs/platform/instantiation/common/instanti
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import { localize2 } from 'cs/nls';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	BrowserActionCategory,
-	BrowserActionGroup,
 	BrowserEditor,
 	BrowserEditorContribution,
 	CONTEXT_BROWSER_HAS_ERROR,
@@ -74,22 +75,23 @@ class ToggleDevToolsAction extends Action2 {
 				CONTEXT_BROWSER_HAS_ERROR.isEqualTo(false),
 			),
 			toggled: ContextKeyExpr.equals(CONTEXT_BROWSER_DEVTOOLS_OPEN.key, true),
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Tools,
-				order: 2,
-			},
 			keybinding: {
+				when: ActiveEditorFocusedContext.isEqualTo(true),
 				weight: KeybindingWeight.WorkbenchContrib,
 				primary: KeyCode.F12,
 			},
 		});
 	}
 
-	async run(_accessor: ServicesAccessor, browserEditor?: BrowserEditor): Promise<void> {
-		if (browserEditor instanceof BrowserEditor) {
-			await browserEditor.model?.toggleDevTools();
+	async run(accessor: ServicesAccessor, browserEditor = accessor.get(IEditorService).activeEditorPane): Promise<void> {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The developer tools action target is not the active Browser editor.');
 		}
+		const model = browserEditor.model;
+		if (!model) {
+			throw new Error('The active Browser editor has no attached model.');
+		}
+		await model.toggleDevTools();
 	}
 }
 

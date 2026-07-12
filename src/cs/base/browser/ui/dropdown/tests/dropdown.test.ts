@@ -1,7 +1,11 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before, beforeEach } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
@@ -140,16 +144,14 @@ test('dropdown portal menu renders in document.body and follows the trigger rect
 
     dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const contextView = document.body.querySelector('.comet-context-view');
-    const contextViewContent = document.body.querySelector('.comet-context-view-content');
+    const contextView = document.body.querySelector('.context-view.comet-dropdown-context-view');
     const menu = document.body.querySelector('.comet-dropdown-menu-portal');
     assert(contextView instanceof HTMLElement);
-    assert(contextViewContent instanceof HTMLElement);
     assert(menu instanceof HTMLElement);
     assert.equal(dropdown.contains(menu), false);
     assert.equal(contextView.style.left, '40px');
     assert.equal(contextView.style.top, '156px');
-    assert.equal(contextViewContent.style.minWidth, '96px');
+    assert.equal(contextView.style.minWidth, '96px');
     assert.equal(menu.style.minWidth, '100%');
     assert.equal(menu.classList.contains('comet-dropdown-menu-bottom'), true);
 
@@ -248,11 +250,11 @@ test('dropdown portal menu can opt out of matching the trigger width', () => {
 
     dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const contextViewContent = document.body.querySelector('.comet-context-view-content');
+    const contextView = document.body.querySelector('.context-view.comet-dropdown-context-view');
     const menu = document.body.querySelector('.comet-dropdown-menu-portal');
-    assert(contextViewContent instanceof HTMLElement);
+    assert(contextView instanceof HTMLElement);
     assert(menu instanceof HTMLElement);
-    assert.equal(contextViewContent.style.minWidth, '0px');
+    assert.equal(contextView.style.minWidth, '0px');
     assert.equal(menu.style.minWidth, '0px');
 
     menuPresenter.dispose();

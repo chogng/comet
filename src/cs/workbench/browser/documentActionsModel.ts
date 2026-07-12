@@ -36,6 +36,12 @@ import {
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 import type { EditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
+import type { URI } from 'cs/base/common/uri';
+
+export interface IArticleSelectionSnapshot {
+	readonly resource: URI;
+	readonly articleIds: readonly ArticleId[];
+}
 
 export type DocumentActionsControllerContext = {
 	desktopRuntime: boolean;
@@ -47,10 +53,14 @@ export type DocumentActionsControllerContext = {
 	pdfDownloadDir: string;
 	knowledgeBasePdfDownloadDir: string;
 	pdfFileNameUseSelectionOrder: boolean;
-	getExportableArticleIds: () => readonly ArticleId[];
-	onUnavailableArticleIds: (articleIds: readonly ArticleId[]) => void;
+	getExportableArticleSelection: () => IArticleSelectionSnapshot | undefined;
+	onUnavailableArticleIds: (resource: URI, articleIds: readonly ArticleId[]) => void;
 	onOpenEditor: EditorOpenHandler;
-	onExportArticleSummaries: (articleIds: readonly ArticleId[], translateSummaries: boolean) => void | Promise<void>;
+	onExportArticleSummaries: (
+		articleIds: readonly ArticleId[],
+		translateSummaries: boolean,
+		onUnavailableArticleIds: (articleIds: readonly ArticleId[]) => void,
+	) => void | Promise<void>;
 	activeDraftExport: {
 		title: string;
 		document: WritingEditorDocument;
@@ -74,6 +84,7 @@ type SharedPdfDownloadOptions = {
 	taskId?: string;
 	token?: CancellationToken;
 	order?: number | null;
+	articleSelectionResource?: URI;
 };
 
 function buildDownloadArticleTitle(article: ArticleDetail, order: number | null) {
@@ -108,10 +119,11 @@ function createSnapshot(
 	context: DocumentActionsControllerContext,
 	downloadAllProgress: ArticleBatchTaskProgress | null = null,
 ): DocumentActionsControllerSnapshot {
+	const articleSelection = context.getExportableArticleSelection();
 	return {
 		canExportDocx:
 			Boolean(context.activeDraftExport) ||
-			canExportArticlesDocx(context.getExportableArticleIds().length),
+			canExportArticlesDocx(articleSelection?.articleIds.length ?? 0),
 		downloadAllProgress,
 	};
 }
@@ -177,7 +189,9 @@ export class DocumentActionsController {
 			return;
 		}
 		if (!article) {
-			this.context.onUnavailableArticleIds([articleId]);
+			if (options.articleSelectionResource) {
+				this.context.onUnavailableArticleIds(options.articleSelectionResource, [articleId]);
+			}
 			this.context.notificationService.info(this.context.ui.articleDetailsUnavailable);
 			return;
 		}
@@ -194,10 +208,13 @@ export class DocumentActionsController {
 			onLibraryDocumentUpserted,
 		} = this.context;
 		const sourceUrl = article.url.toString(true);
-		const preparedPdfDownload = preparePdfDownload(sourceUrl, article.doi);
+		const preparedPdfDownload = preparePdfDownload(
+			sourceUrl,
+			article.pdfUrl?.toString(true),
+		);
 		if (!preparedPdfDownload) {
 			if (!options.token?.isCancellationRequested) {
-				notificationService.error(ui.toastEnterArticleUrl);
+				notificationService.error(ui.errorPdfLinkNotFound);
 			}
 			return;
 		}
@@ -293,10 +310,15 @@ export class DocumentActionsController {
 		}
 	};
 
-	readonly handleOpenArticleDetails = async (articleId: ArticleId) => {
+	readonly handleOpenArticleDetails = async (
+		articleId: ArticleId,
+		articleSelectionResource?: URI,
+	) => {
 		const article = this.fetchService.getArticle(articleId);
 		if (!article) {
-			this.context.onUnavailableArticleIds([articleId]);
+			if (articleSelectionResource) {
+				this.context.onUnavailableArticleIds(articleSelectionResource, [articleId]);
+			}
 			return;
 		}
 
@@ -306,14 +328,19 @@ export class DocumentActionsController {
 		});
 	};
 
-	readonly handleDownloadAllArticles = async (articleIds: readonly ArticleId[]) => {
+	readonly handleDownloadAllArticles = async (
+		articleIds: readonly ArticleId[],
+		articleSelectionResource?: URI,
+	) => {
 		if (this.currentDownloadTask) {
 			this.cancelDownloadAllArticles();
 			return;
 		}
 		const unavailableArticleIds = articleIds.filter(articleId => !this.fetchService.getArticle(articleId));
 		if (unavailableArticleIds.length > 0) {
-			this.context.onUnavailableArticleIds(unavailableArticleIds);
+			if (articleSelectionResource) {
+				this.context.onUnavailableArticleIds(articleSelectionResource, unavailableArticleIds);
+			}
 			this.context.notificationService.info(this.context.ui.articleDetailsUnavailable);
 		}
 		const availableArticleIds = articleIds.filter(articleId => this.fetchService.getArticle(articleId));
@@ -336,6 +363,7 @@ export class DocumentActionsController {
 					taskId,
 					token: source.token,
 					order: this.context.pdfFileNameUseSelectionOrder ? index + 1 : null,
+					articleSelectionResource,
 				});
 				if (source.token.isCancellationRequested) {
 					break;
@@ -361,9 +389,10 @@ export class DocumentActionsController {
 			locale,
 			ui,
 			pdfDownloadDir,
-			getExportableArticleIds,
+			getExportableArticleSelection,
 			activeDraftExport,
 			onExportArticleSummaries,
+			onUnavailableArticleIds,
 		} = this.context;
 		if (!desktopRuntime) {
 			return;
@@ -395,7 +424,15 @@ export class DocumentActionsController {
 			return;
 		}
 
-		await onExportArticleSummaries(getExportableArticleIds(), true);
+		const articleSelection = getExportableArticleSelection();
+		if (!articleSelection) {
+			return;
+		}
+		await onExportArticleSummaries(
+			articleSelection.articleIds,
+			true,
+			articleIds => onUnavailableArticleIds(articleSelection.resource, articleIds),
+		);
 	};
 
 	private async resolveArticleDetail(articleId: ArticleId, token?: CancellationToken) {

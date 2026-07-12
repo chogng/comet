@@ -5,6 +5,7 @@
 
 import { mainWindow } from 'cs/base/browser/window';
 import { BrowserMaxHistoryEntriesSettingId } from 'cs/base/parts/sandbox/common/browserSettings';
+import { onUnexpectedError } from 'cs/base/common/errors';
 import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { ProxyChannel } from 'cs/base/parts/ipc/common/ipc';
@@ -17,7 +18,7 @@ import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import {
 	BrowserViewCommandId,
 	BrowserViewStorageScope,
-	IBrowserViewOpenOptions,
+	type IBrowserViewOpenOptions,
 	IBrowserViewOwner,
 	IBrowserViewService,
 	IBrowserViewState,
@@ -32,27 +33,22 @@ import { ILogService } from 'cs/platform/log/common/log';
 import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
 import { IThemeService } from 'cs/platform/theme/common/themeService';
 import { ITunnelProxyInfo } from 'cs/platform/tunnel/common/tunnelProxy';
-import { BrowserEditorInput, BrowserEditorSerializer } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
-import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
+import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {
 	BrowserViewModel,
 	IBrowserEditorViewState,
 	IBrowserViewContextualFilter,
 	IBrowserViewFilterContext,
 	IBrowserViewModel,
-	IBrowserViewOpenHandler,
 	IBrowserViewWorkbenchService,
 } from 'cs/workbench/contrib/browserView/common/browserView';
 import { BrowserHistoryTracker } from 'cs/workbench/contrib/browserView/electron-browser/browserHistoryTracker';
-import { PreferredGroup } from 'cs/workbench/services/editor/common/editorService';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 
-export const BrowserNewTabPlacementSettingId = 'workbench.browser.newTabPlacement';
 export const BrowserRemoteProxyEnabledSettingId = 'workbench.browser.enableRemoteProxy';
 
 const BrowserHistoryEntriesStorageKey = 'workbench.browser.history.entries';
 const BrowserHistoryFaviconsStorageKey = 'workbench.browser.history.favicons';
-
-export type BrowserNewTabPlacement = 'activeGroup' | 'sideGroup' | 'window';
 
 const browserViewContextMenuCommands = [
 	BrowserViewCommandId.GoBack,
@@ -67,7 +63,6 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	readonly browserHistory: BrowserHistoryStore;
 	private readonly known = new Map<string, BrowserEditorInput>();
 	private readonly contextualFilters = new Set<IBrowserViewContextualFilter>();
-	private readonly openHandlers = new Set<IBrowserViewOpenHandler>();
 	private readonly mainWindowId = mainWindow.vscodeWindowId;
 	private readonly _onDidChangeBrowserViews = this._register(new Emitter<void>());
 	private readonly _onDidChangeSharingAvailable = this._register(new Emitter<boolean>());
@@ -85,12 +80,9 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		@IThemeService private readonly themeService: IThemeService,
 		@ILogService private readonly logService: ILogService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super();
-		this._register(editorInputSerializerRegistry.register(
-			BrowserEditorInput.ID,
-			new BrowserEditorSerializer(this),
-		));
 		this.browserHistory = this._register(new BrowserHistoryStore(
 			this.configurationService.getValue<number>(BrowserMaxHistoryEntriesSettingId),
 		));
@@ -115,6 +107,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 				this.updateWindowConfiguration();
 			}
 		}));
+		this.getBrowserViewService();
 	}
 
 	get isSharingAvailable(): boolean {
@@ -161,24 +154,6 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return result;
 	}
 
-	async getPreferredGroup(preferredGroup?: PreferredGroup): Promise<PreferredGroup | undefined> {
-		const placement = this.configurationService.getValue<BrowserNewTabPlacement>(BrowserNewTabPlacementSettingId);
-		if (preferredGroup === undefined && placement === 'sideGroup') {
-			return 'side';
-		}
-		if (preferredGroup === undefined && placement === 'window') {
-			return 'auxiliary';
-		}
-		return preferredGroup;
-	}
-
-	registerOpenHandler(handler: IBrowserViewOpenHandler) {
-		this.openHandlers.add(handler);
-		return toDisposable(() => {
-			this.openHandlers.delete(handler);
-		});
-	}
-
 	getOrCreateLazy(id: string, initialState: IBrowserEditorViewState = {}, model?: IBrowserViewModel): BrowserEditorInput {
 		const browserViewService = this.getBrowserViewService();
 		let input = this.known.get(id);
@@ -218,10 +193,6 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 
 	async clearWorkspaceStorage(): Promise<void> {
 		throw new Error('Workspace-scoped browser storage is not supported by this Comet workbench.');
-	}
-
-	shouldOpenEditor(input: BrowserEditorInput, owner: IBrowserViewOwner, openOptions: IBrowserViewOpenOptions): boolean {
-		return [...this.openHandlers].every(handler => handler.shouldOpenEditor(input, owner, openOptions));
 	}
 
 	private getDefaultOwner(): IBrowserViewOwner {
@@ -329,12 +300,45 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 				}, model);
 
 				if (event.openOptions) {
-					this.shouldOpenEditor(input, event.info.owner, event.openOptions);
+					void this.openEditorForCreatedView(input, event.openOptions).catch(error => {
+						this.logService.error('[BrowserViewWorkbenchService] Failed to open a created BrowserView.', error);
+						onUnexpectedError(error);
+					});
 				}
 			}));
 		}
 
 		return this.browserViewService;
+	}
+
+	private async openEditorForCreatedView(
+		input: BrowserEditorInput,
+		openOptions: IBrowserViewOpenOptions,
+	): Promise<void> {
+		if (openOptions.auxiliaryWindow) {
+			throw new Error('Auxiliary-window Browser Editors are not supported by the Comet Editor contract.');
+		}
+		let groupId: string | undefined;
+		if (openOptions.parentViewId) {
+			const parent = this.editorService.getEditors().find(identifier =>
+				identifier.editor instanceof BrowserEditorInput &&
+				identifier.editor.id === openOptions.parentViewId
+			);
+			if (!parent) {
+				throw new Error(`Parent BrowserView '${openOptions.parentViewId}' is not open in an Editor group.`);
+			}
+			groupId = parent.groupId;
+		}
+		try {
+			await this.editorService.openEditor(input, {
+				groupId,
+				active: openOptions.background !== true,
+				editorOptions: { pinned: openOptions.pinned },
+			});
+		} catch (error) {
+			await this.getBrowserViewService().destroyBrowserView(input.id);
+			throw error;
+		}
 	}
 
 	private updateWindowConfiguration(): void {

@@ -1,9 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { spawnSync } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-
 const scriptFilePath = fileURLToPath(import.meta.url);
 const scriptsMarker = `${path.sep}scripts${path.sep}`;
 const scriptsMarkerIndex = scriptFilePath.lastIndexOf(scriptsMarker);
@@ -16,9 +20,11 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'splitview.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'gridview.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'documentActionsModel.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'assistantModel.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'agentbar.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'modelSubscriptions.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'window.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'sidebar.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'viewPartView.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorDraftStyleSettings.test.ts'),
   path.join(
     rootDir,
@@ -30,6 +36,16 @@ const entryPoints = [
     'tests',
     'settingsModel.test.ts',
   ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'workbench',
+    'services',
+    'settings',
+    'tests',
+    'settingValue.test.ts',
+  ),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorGroup.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorGroups.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'draftEditorInput.test.ts'),
@@ -39,6 +55,76 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorPartLifecycle.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorPaneHost.test.ts'),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'editorPartLifecycle.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'entrypoints.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'sessionsPart.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'sidebarPart.test.ts'),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'contrib',
+    'browserView',
+    'test',
+    'electron-browser',
+    'browserViewChat.contribution.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'contrib',
+    'chat',
+    'test',
+    'browser',
+    'chatView.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'contrib',
+    'providers',
+    'default',
+    'test',
+    'browser',
+    'defaultSessionsProvider.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'contrib',
+    'layout',
+    'test',
+    'browser',
+    'layoutActions.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'contrib',
+    'layout',
+    'test',
+    'browser',
+    'standardSessionsLayoutPolicy.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'services',
+    'layout',
+    'test',
+    'browser',
+    'layoutService.test.ts',
+  ),
   path.join(
     rootDir,
     'src',
@@ -49,6 +135,17 @@ const entryPoints = [
     'test',
     'common',
     'session.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'services',
+    'sessions',
+    'test',
+    'common',
+    'serializedSize.test.ts',
   ),
   path.join(
     rootDir,
@@ -71,6 +168,28 @@ const entryPoints = [
     'test',
     'browser',
     'sessionsManagementService.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'services',
+    'sessions',
+    'test',
+    'browser',
+    'visibleSessions.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'services',
+    'sessions',
+    'test',
+    'browser',
+    'sessionsService.test.ts',
   ),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'browserHistoryAndFavoritesPanel.test.ts'),
   path.join(
@@ -121,6 +240,17 @@ const entryPoints = [
     'chat',
     'test',
     'common',
+    'chatService.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'workbench',
+    'contrib',
+    'chat',
+    'test',
+    'common',
     'languageModels.test.ts',
   ),
   path.join(
@@ -133,6 +263,17 @@ const entryPoints = [
     'test',
     'browser',
     'translationWidget.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'workbench',
+    'contrib',
+    'preferences',
+    'test',
+    'browser',
+    'settingsSections.test.ts',
   ),
   path.join(
     rootDir,
@@ -257,7 +398,7 @@ const entryPoints = [
     'services',
     'fetch',
     'test',
-    'electron-browser',
+    'browser',
     'fetchService.test.ts',
   ),
   path.join(
@@ -281,6 +422,19 @@ const entryPoints = [
     'test',
     'electron-browser',
     'fetchParserResolver.test.ts',
+  ),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'workbench',
+    'services',
+    'fetch',
+    'test',
+    'electron-browser',
+    'providers',
+    'nature',
+    'natureJournals.test.ts',
   ),
   path.join(
     rootDir,
@@ -346,6 +500,7 @@ await build({
   external: ['node:assert/strict', 'node:test', 'jsdom', 'playwright-core'],
   loader: {
     '.css': 'empty',
+    '.html': 'text',
     '.svg': 'text',
   },
 });

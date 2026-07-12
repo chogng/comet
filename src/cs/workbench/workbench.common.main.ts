@@ -1,5 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 //#region --- workbench core
@@ -13,7 +14,7 @@ import 'cs/workbench/contrib/workbench/workbench.contribution';
 
 //#region --- workbench actions
 
-import 'cs/workbench/browser/actions/layoutActions';
+import 'cs/workbench/browser/actions/sidebarActions';
 import 'cs/workbench/browser/actions/commandPaletteActions';
 
 //#endregion
@@ -41,7 +42,6 @@ import 'cs/workbench/services/configuration/browser/configurationService';
 import 'cs/workbench/services/environment/browser/environmentService';
 import 'cs/workbench/services/dialogs/browser/dialogService';
 import 'cs/workbench/services/editor/browser/editorResolverService';
-import 'cs/workbench/services/editor/browser/editorGroupsService';
 import 'cs/workbench/services/editor/browser/editorService';
 import 'cs/workbench/services/host/browser/host';
 import {
@@ -54,7 +54,6 @@ import 'cs/platform/hover/browser/hoverService';
 import 'cs/editor/browser/services/openerService';
 import 'cs/workbench/services/keybinding/browser/keybindingService';
 import 'cs/workbench/services/language/common/languageService';
-import 'cs/workbench/services/layout/browser/layoutService';
 import 'cs/workbench/services/lifecycle/browser/lifecycleService';
 import 'cs/workbench/services/localization/browser/localeService';
 import 'cs/workbench/services/notification/common/notificationService';

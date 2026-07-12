@@ -11,7 +11,6 @@ import {
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { DisposableStore } from 'cs/base/common/lifecycle';
-import { localize } from 'cs/nls';
 import type { ArticleBatchTaskProgress } from 'cs/workbench/browser/articleBatchTask';
 
 export type ChatInputToolbarActionItem = ActionBarItem;
@@ -96,6 +95,7 @@ export function createChatInputToolbarActionItem({
 export function renderChatInputToolbar(
 	items: readonly ChatInputToolbarActionItem[],
 	disposables: DisposableStore,
+	ariaLabel: string,
 ) {
 	if (items.length === 0) {
 		return undefined;
@@ -104,7 +104,7 @@ export function renderChatInputToolbar(
 	const toolbar = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-input-toolbar');
 	const actionsView = createActionBarView({
 		className: 'comet-chat-composer-input-toolbar-actions',
-		ariaLabel: localize('chatInputToolbar', "Chat Input Toolbar"),
+		ariaLabel,
 		items,
 	});
 	disposables.add(actionsView);

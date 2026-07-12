@@ -21,7 +21,7 @@ export const enum RegisteredEditorPriority {
 
 export interface IResolvedEditorInput {
 	readonly editor: EditorInput;
-	readonly options?: IEditorOptions;
+	readonly options: IEditorOptions | undefined;
 }
 
 export interface IEditorResolverRegistration {

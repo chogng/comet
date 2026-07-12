@@ -1,3 +1,9 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { $ } from 'cs/base/browser/dom';
 import type {
   PdfDocumentReaderViewState,
   PdfReaderRuntimeStatus,
@@ -23,17 +29,24 @@ import type {
   PdfReaderViewState,
 } from 'cs/editor/browser/pdf/pdfReaderState';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import type { INativeHostService } from 'cs/platform/native/common/native';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import { URI } from 'cs/base/common/uri';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { EmptyPdfEditorUrl } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorResources';
-import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { createEditorPdfModeToolbarContribution } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorToolbar';
 import { Emitter } from 'cs/base/common/event';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createPdfEditorPaneState } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPaneState';
+import type { CancellationToken } from 'cs/base/common/cancellation';
+import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/editor';
+import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import type { LocaleMessages } from 'language/locales';
+import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 
 export interface PdfEditorPaneInput extends EditorInput {
   readonly id: string;
@@ -57,13 +70,20 @@ export type PdfEditorPaneViewState = PdfDocumentReaderViewState & {
   reader: PdfReaderViewState;
 };
 
-export type PdfEditorPaneContext = DropdownContextServices & {
-  labels: PdfEditorPaneLabels;
-  viewPartProps: ViewPartProps;
-  nativeHost: INativeHostService;
-  onOpenEditor?: EditorOpenHandler;
-  onOpenSources: () => void;
-};
+function createPdfEditorPaneLabels(ui: LocaleMessages): PdfEditorPaneLabels {
+	return {
+		toolbarSources: ui.agentbarToolbarSources,
+		toolbarMore: ui.agentbarToolbarMore,
+		pdfTitle: ui.editorPdfTitle,
+		pdfOpenFile: ui.editorPdfOpenFile,
+		emptyWorkspaceBody: ui.editorEmptyWorkspaceBody,
+		pdfMode: ui.editorPdfMode,
+		status: {
+			statusbarAriaLabel: ui.editorStatusbarAriaLabel,
+			url: ui.editorStatusUrl,
+		},
+	};
+}
 
 class PdfEditorPaneStateController {
   private viewState: PdfEditorPaneViewState = {
@@ -110,32 +130,43 @@ export class PdfEditorPane extends EditorPane<
   PdfEditorPaneInput,
   PdfEditorPaneViewState
 > {
+	private readonly disposables = new DisposableStore();
   private input: PdfEditorPaneInput | undefined;
-  private readonly element = document.createElement('div');
-  private readonly bodyElement = document.createElement('div');
+	private readonly element = $<HTMLDivElement>('div.comet-editor-pdf-pane');
+	private readonly bodyElement = $<HTMLDivElement>('div.comet-editor-pdf-body');
   private readonly editor = new PdfEditorPaneStateController();
   private readerSnapshot: PdfReaderSnapshot | undefined;
   private documentReader: ReturnType<typeof createPdfDocumentReader> | null = null;
   private readonly toolbar: ReturnType<typeof createEditorPdfModeToolbarContribution>;
-  private runtimeState: EditorPaneRuntimeState | undefined;
+	private readerStatus: PdfReaderRuntimeStatus | undefined;
   private readonly runtimeStateEmitter = new Emitter<EditorPaneRuntimeState>();
   override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
 
-  constructor(private context: PdfEditorPaneContext) {
+	constructor(
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
+		@INativeHostService private readonly nativeHostService: INativeHostService,
+		@IEditorService private readonly editorService: IEditorService,
+		@IBrowserEditorToolbarService private readonly browserEditorToolbarService: IBrowserEditorToolbarService,
+		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+	) {
     super();
-    this.element.className = 'comet-editor-pdf-pane';
-    this.bodyElement.className = 'comet-editor-pdf-body';
     this.element.append(this.bodyElement);
-    this.toolbar = createEditorPdfModeToolbarContribution(this.createToolbarContext(), context);
+		this.toolbar = createEditorPdfModeToolbarContribution(this.createToolbarContext(), {
+			contextMenuService: this.contextMenuService,
+			contextViewProvider: this.contextViewService,
+		});
+		this.disposables.add(toDisposable(this.localeService.subscribe(() => {
+			this.toolbar.setContext(this.createToolbarContext());
+			if (this.input) {
+				this.render();
+			}
+		})));
   }
 
   override getElement() {
     return this.element;
-  }
-
-  setContext(context: PdfEditorPaneContext) {
-    this.context = context;
-    this.toolbar.setContext(this.createToolbarContext());
   }
 
   override getToolbarElement() {
@@ -143,11 +174,19 @@ export class PdfEditorPane extends EditorPane<
   }
 
   override getRuntimeState() {
-    return this.runtimeState;
+		return this.input && this.readerStatus
+			? createPdfEditorPaneState(this.input, this.labels, this.readerStatus)
+			: undefined;
   }
 
-  override setInput(input: PdfEditorPaneInput) {
+  override setInput(
+		input: PdfEditorPaneInput,
+		_options: IEditorOptions | undefined,
+		_context: IEditorOpenContext,
+		_token: CancellationToken,
+  ) {
     this.input = input;
+		this.readerStatus = undefined;
     this.readerSnapshot = this.createReaderSnapshot(input);
     this.toolbar.setContext(this.createToolbarContext());
     this.render();
@@ -195,6 +234,7 @@ export class PdfEditorPane extends EditorPane<
     this.documentReader?.dispose();
     this.documentReader = null;
     this.toolbar.dispose();
+		this.disposables.dispose();
     this.runtimeStateEmitter.dispose();
 		this.input = undefined;
 		this.readerSnapshot = undefined;
@@ -202,13 +242,14 @@ export class PdfEditorPane extends EditorPane<
   }
 
   private createToolbarContext() {
+		const labels = this.labels;
     return {
       labels: {
-        toolbarSources: this.context.labels.toolbarSources,
-        toolbarMore: this.context.labels.toolbarMore,
-        pdfTitle: this.context.labels.pdfTitle,
+				toolbarSources: labels.toolbarSources,
+				toolbarMore: labels.toolbarMore,
+				pdfTitle: labels.pdfTitle,
       },
-      onOpenSources: this.context.onOpenSources,
+			onOpenSources: () => this.browserEditorToolbarService.actions.onOpenSources(),
       onHighlightSelection: () => this.addHighlightFromSelection(),
       onNoteSelection: () => this.addNoteFromSelection(),
     };
@@ -227,11 +268,20 @@ export class PdfEditorPane extends EditorPane<
 
   private createReaderViewPartProps(): ViewPartProps {
 		const { source } = this.getReaderSnapshot();
+		const ui = this.languageService.getLocaleMessages(this.localeService.getLocale());
     return {
-      ...this.context.viewPartProps,
       browserUrl: source.kind === 'url' ? source.url : '',
       browserPageTitle: source.kind === 'url' ? source.title : undefined,
       browserFaviconUrl: '',
+			browserIsLoading: false,
+			electronRuntime: this.nativeHostService.canInvoke(),
+			webContentRuntime: typeof this.nativeHostService.webContent?.navigate === 'function',
+			labels: {
+				emptyState: ui.emptyState,
+				contentUnavailable: ui.webContentUnavailable,
+				overlayPauseHeading: ui.webContentOverlayPauseHeading,
+				overlayPauseDetail: ui.webContentOverlayPauseDetail,
+			},
     };
   }
 
@@ -274,6 +324,7 @@ export class PdfEditorPane extends EditorPane<
   private render() {
 		const input = this.getInput();
 		const snapshot = this.getReaderSnapshot();
+		const labels = this.labels;
     const annotations = readStoredPdfAnnotations(this.getAnnotationTargetId());
     const readerProps = {
 			url: snapshot.source.kind === 'url'
@@ -282,12 +333,12 @@ export class PdfEditorPane extends EditorPane<
 			targetId: input.id,
       annotationTargetId: this.getAnnotationTargetId(),
       labels: {
-        title: this.context.labels.pdfTitle,
-        emptyState: this.context.labels.emptyWorkspaceBody,
-        openPdfFile: this.context.labels.pdfOpenFile,
+			title: labels.pdfTitle,
+			emptyState: labels.emptyWorkspaceBody,
+			openPdfFile: labels.pdfOpenFile,
       },
       viewPartProps: this.createReaderViewPartProps(),
-      nativeHost: this.context.nativeHost,
+			nativeHost: this.nativeHostService,
       annotations,
       selection: this.editor.getViewState().selection,
       onViewStateChange: (viewState: PdfDocumentReaderViewState) => {
@@ -300,8 +351,8 @@ export class PdfEditorPane extends EditorPane<
         this.deletePdfAnnotation(annotationId);
       },
       onReaderStatusChange: (status: PdfReaderRuntimeStatus) => {
-				this.runtimeState = createPdfEditorPaneState(input, this.context.labels, status);
-        this.runtimeStateEmitter.fire(this.runtimeState);
+				this.readerStatus = status;
+				this.runtimeStateEmitter.fire(createPdfEditorPaneState(input, this.labels, status));
       },
       onOpenPdfFile: this.handleOpenPdfFile,
     };
@@ -331,13 +382,13 @@ export class PdfEditorPane extends EditorPane<
 
   private readonly handleOpenPdfFile = async () => {
     try {
-      const resource = await this.context.nativeHost.invoke('pick_pdf_file');
+			const resource = await this.nativeHostService.invoke('pick_pdf_file');
       if (!resource) {
         return;
       }
       const uri = URI.revive(resource);
 
-      await this.context.onOpenEditor?.({
+			await this.editorService.openEditor({
         resource: uri,
         options: {
           viewState: {
@@ -349,10 +400,10 @@ export class PdfEditorPane extends EditorPane<
       console.error('Failed to open PDF file.', error);
     }
   };
-}
 
-export function createPdfEditorPane(context: PdfEditorPaneContext) {
-  return new PdfEditorPane(context);
+	private get labels(): PdfEditorPaneLabels {
+		return createPdfEditorPaneLabels(
+			this.languageService.getLocaleMessages(this.localeService.getLocale()),
+		);
+	}
 }
-
-export default PdfEditorPane;

@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import { Codicon } from 'cs/base/common/codicons';
@@ -89,7 +89,6 @@ export class BrowserEditorInput extends EditorInput {
 		options: IBrowserEditorInputData,
 		private _resolveModel: () => Promise<IBrowserViewModel>,
 		@IThemeService private readonly themeService: IThemeService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@IBrowserViewWorkbenchService private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService,
 	) {
@@ -332,13 +331,10 @@ export class BrowserEditorInput extends EditorInput {
 	override copy(): EditorInput {
 		logBrowserOpen(this.telemetryService, 'copyToNewWindow');
 
-		return this.instantiationService.invokeFunction((accessor) => {
-			const browserViewWorkbenchService = accessor.get(IBrowserViewWorkbenchService);
-			return browserViewWorkbenchService.getOrCreateLazy(generateUuid(), {
-				url: this.url,
-				title: this.title,
-				favicon: this.favicon
-			});
+		return this.browserViewWorkbenchService.getOrCreateLazy(generateUuid(), {
+			url: this.url,
+			title: this.title,
+			favicon: this.favicon,
 		});
 	}
 
@@ -383,8 +379,6 @@ export class BrowserEditorInput extends EditorInput {
 }
 
 export class BrowserEditorSerializer implements IEditorSerializer {
-	constructor(private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService) {}
-
 	canSerialize(editorInput: EditorInput): editorInput is BrowserEditorInput {
 		return editorInput instanceof BrowserEditorInput;
 	}
@@ -397,8 +391,10 @@ export class BrowserEditorSerializer implements IEditorSerializer {
 		return JSON.stringify(editorInput.serialize());
 	}
 
-	deserialize(_instantiationService: IInstantiationService, serializedEditor: string): EditorInput | undefined {
+	deserialize(instantiationService: IInstantiationService, serializedEditor: string): EditorInput | undefined {
 		const data: IBrowserEditorInputData = JSON.parse(serializedEditor);
-		return this.browserViewWorkbenchService.getOrCreateLazy(data.id, data);
+		return instantiationService.invokeFunction(accessor =>
+			accessor.get(IBrowserViewWorkbenchService).getOrCreateLazy(data.id, data)
+		);
 	}
 }

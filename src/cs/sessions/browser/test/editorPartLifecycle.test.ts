@@ -7,20 +7,70 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { CancellationToken } from 'cs/base/common/cancellation';
+import { Emitter, Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
-import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import { SessionWorkbenchContentPartViews, type SessionWorkbenchContentPartViewsProps } from 'cs/sessions/browser/workbenchContentPartViews';
+import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
+import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
+import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
+import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
+import { ContextKeyServiceImpl, IContextKeyService } from 'cs/platform/contextkey/common/contextkey';
+import { INativeHostService } from 'cs/platform/native/common/native';
+import {
+	IStorageService,
+	type IStorageService as StorageService,
+	type IWillSaveStateEvent,
+	WillSaveStateReason,
+} from 'cs/platform/storage/common/storage';
+import { SessionsMainEditorPart } from 'cs/sessions/browser/parts/editor/editorPart';
+import { SessionsEditorParts } from 'cs/sessions/browser/parts/editor/editorParts';
+import {
+	ISessionsLayoutService,
+	type SessionsLayoutMode,
+} from 'cs/sessions/services/layout/browser/layoutService';
+import type {
+	ISessionsLayoutState,
+} from 'cs/sessions/services/layout/browser/layoutPolicy';
+import { getWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
+import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import { createEditorPaneDescriptor, registerEditorPaneDescriptor } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
-import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
-import { EditorGroupModel } from 'cs/workbench/common/editor/editorGroupModel';
+import {
+	EditorPaneDescriptor,
+	editorPaneRegistry,
+} from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import type { IEditorOpenContext, IEditorOptions, IEditorSerializer } from 'cs/workbench/common/editor';
+import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
+import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
+import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
+import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 
 class TestEditorInput extends EditorInput {
 	readonly resource = URI.parse('test:/session-editor-lifecycle');
 
 	get typeId(): string {
 		return 'test.sessionEditorInput';
+	}
+
+	override get editorId(): string {
+		return 'test.sessionEditorPane';
+	}
+}
+
+class TestEditorInputSerializer implements IEditorSerializer {
+	canSerialize(editor: EditorInput): boolean {
+		return editor instanceof TestEditorInput;
+	}
+
+	serialize(): string {
+		return '';
+	}
+
+	deserialize(): EditorInput {
+		return new TestEditorInput();
 	}
 }
 
@@ -29,7 +79,7 @@ class TestEditorPane extends EditorPane<TestEditorInput> {
 	disposeCount = 0;
 	setInputCount = 0;
 	readonly visibility: boolean[] = [];
-	input: TestEditorInput | undefined;
+	viewState: unknown;
 
 	constructor() {
 		super();
@@ -40,13 +90,21 @@ class TestEditorPane extends EditorPane<TestEditorInput> {
 		return this.element;
 	}
 
-	setInput(input: TestEditorInput, _token?: CancellationToken): void {
+	setInput(
+		_input: TestEditorInput,
+		_options: IEditorOptions | undefined,
+		_context: IEditorOpenContext,
+		_token: CancellationToken,
+	): void {
 		this.setInputCount += 1;
-		this.input = input;
 	}
 
 	setVisible(visible: boolean): void {
 		this.visibility.push(visible);
+	}
+
+	override getViewState(): unknown {
+		return this.viewState;
 	}
 
 	dispose(): void {
@@ -55,142 +113,280 @@ class TestEditorPane extends EditorPane<TestEditorInput> {
 	}
 }
 
-function createEditorPartProps(
-	group: EditorGroupModel,
-	instantiationService: IInstantiationService,
-): EditorPartProps {
+class TestSessionsLayoutService implements ISessionsLayoutService {
+	declare readonly _serviceBrand: undefined;
+
+	private readonly changeEmitter = new Emitter<ISessionsLayoutState>();
+	readonly onDidChangeLayoutState = this.changeEmitter.event;
+	private state: ISessionsLayoutState = {
+		mode: 'agent',
+		isSidebarVisible: true,
+		sidebarSize: 260,
+		isEditorCollapsed: true,
+		expandedEditorSize: 520,
+	};
+
+	getLayoutState(): ISessionsLayoutState {
+		return this.state;
+	}
+
+	setEditorCollapsed(collapsed: boolean, expandedEditorSize?: number): void {
+		this.state = {
+			...this.state,
+			isEditorCollapsed: collapsed,
+			expandedEditorSize: expandedEditorSize ?? this.state.expandedEditorSize,
+		};
+		this.changeEmitter.fire(this.state);
+	}
+
+	toggleEditorCollapsed(expandedEditorSize?: number): void {
+		this.setEditorCollapsed(!this.state.isEditorCollapsed, expandedEditorSize);
+	}
+
+	setViewport(_width: number, _height: number): void {
+		throw new Error('Unexpected viewport mutation.');
+	}
+
+	applyLayoutMode(_mode: SessionsLayoutMode): void {
+		throw new Error('Unexpected layout mode mutation.');
+	}
+
+	applyStartupLayoutMode(): boolean {
+		return false;
+	}
+
+	setPartSizes(): void {
+		throw new Error('Unexpected Part size mutation.');
+	}
+
+	setSidebarVisible(): void {
+		throw new Error('Unexpected Sidebar visibility mutation.');
+	}
+
+	setSidebarSize(): void {
+		throw new Error('Unexpected Sidebar size mutation.');
+	}
+
+	toggleSidebarVisibility(): void {
+		throw new Error('Unexpected Sidebar visibility mutation.');
+	}
+}
+
+function createStorageService(
+	onWillSaveState: Event<IWillSaveStateEvent> = Event.None,
+	onStore: (key: string, value: string) => void = () => {},
+): StorageService {
 	return {
-		ui: {} as never,
-		labels: {
-			headerAddAction: 'Add',
-			close: 'Close',
-			closeOthers: 'Close Others',
-			closeAll: 'Close All',
-			rename: 'Rename',
-			expandEditor: 'Expand Editor',
-			collapseEditor: 'Collapse Editor',
-			status: {
-				statusbarAriaLabel: 'Editor status',
-				ready: 'Ready',
-			},
+		_serviceBrand: undefined,
+		applicationStorage: undefined,
+		onDidChangeValue: Event.None,
+		onDidChangeTarget: Event.None,
+		onWillSaveState,
+		init: async () => {},
+		close: async () => {},
+		get: () => undefined,
+		getBoolean: () => undefined,
+		getNumber: () => undefined,
+		getObject: () => undefined,
+		store(key: string, value: unknown) {
+			if (typeof value !== 'string') {
+				throw new Error(`Expected string storage value for '${key}'.`);
+			}
+			onStore(key, value);
 		},
-		creationActions: [],
-		viewPartProps: {
-			browserUrl: '',
-			electronRuntime: false,
-			webContentRuntime: false,
-			labels: {
-				emptyState: 'Empty',
-				contentUnavailable: 'Unavailable',
-				overlayPauseHeading: 'Paused',
-				overlayPauseDetail: 'Paused detail',
-			},
-		},
-		nativeHost: {} as never,
-		dialogService: {} as never,
-		instantiationService,
-		group,
-		commandService: {
-			executeCommand: async () => undefined,
-		} as never,
-		viewStateEntries: [],
-		onActivateTab() {},
-		onCloseTab: () => true,
-		onOpenEditor: input => input instanceof EditorInput ? Promise.resolve(input) : undefined,
-		onSetEditorViewState() {},
-		onDeleteEditorViewState() {},
-		contextMenuService: {} as never,
-		contextViewProvider: {} as never,
+		storeAll() {},
+		remove() {},
+		keys: () => [],
+		log() {},
+		optimize: async () => {},
+		flush: async () => {},
+	} as unknown as StorageService;
+}
+
+function createInstantiationService(
+	layoutService: ISessionsLayoutService,
+	storageService: StorageService = createStorageService(),
+): InstantiationService {
+	const ui = {
+		editorHeaderAddAction: 'Add',
+		toastClose: 'Close',
+		editorTabContextCloseOthers: 'Close Others',
+		editorTabContextCloseAll: 'Close All',
+		editorTabContextRename: 'Rename',
+		editorExpand: 'Expand Editor',
+		editorCollapse: 'Collapse Editor',
+		editorStatusbarAriaLabel: 'Editor status',
+		statusReady: 'Ready',
+		emptyState: 'Empty',
+		webContentUnavailable: 'Unavailable',
+		webContentOverlayPauseHeading: 'Paused',
+		webContentOverlayPauseDetail: 'Paused detail',
+	} as never;
+	const toolbarActions = {
 		onOpenSources() {},
+		onArchiveCurrentPage() {},
+		onExportDocx() {},
+		onCopyCurrentUrl() {},
+		onClearBrowsingHistory() {},
+		onClearCookies() {},
+		onClearCache() {},
 	};
+
+	return new InstantiationService(new ServiceCollection(
+		[IStorageService, storageService],
+		[INativeHostService, { canInvoke: () => false } as never],
+		[IDialogService, {} as never],
+		[IWorkbenchCommandService, { executeCommand: async () => undefined } as never],
+		[IContextMenuService, {} as never],
+		[IContextViewService, {} as never],
+		[IContextKeyService, new ContextKeyServiceImpl()],
+		[IWorkbenchLocaleService, {
+			getLocale: () => 'en',
+			subscribe: () => () => {},
+		} as never],
+		[IWorkbenchLanguageService, { getLocaleMessages: () => ui } as never],
+		[ISessionsLayoutService, layoutService],
+		[IBrowserEditorToolbarService, {
+			_serviceBrand: undefined,
+			actions: toolbarActions,
+			setActions() {},
+		}],
+	), true);
 }
 
-function createContentPartProps(
-	group: EditorGroupModel,
-	instantiationService: IInstantiationService,
-): SessionWorkbenchContentPartViewsProps {
-	return {
-		isPrimarySidebarVisible: true,
-		isEditorVisible: true,
-		sidebarProps: {
-			labels: {
-				homeTitle: 'Home',
-				codeTitle: 'Code',
-				homeNavNewChat: 'New Chat',
-				homeNavProjects: 'Projects',
-				homeNavArtifacts: 'Artifacts',
-				homeNavCustomize: 'Customize',
-				recentsTitle: 'Recents',
-			},
-			activeEntry: 'home',
-			onActivateEntry() {},
-		},
-		sessionChatProps: {} as never,
-		editorPartProps: createEditorPartProps(group, instantiationService),
-		sidebarFooterActionsElement: document.createElement('div'),
-		collapsedEditorTitlebarActionsElement: document.createElement('div'),
-	};
-}
+test('Sessions registers one EditorParts service with one concrete main Part', () => {
+	const editorPartsRegistrations = getSingletonServiceDescriptors()
+		.filter(([id]) => id === IEditorGroupsService);
 
-test('collapsing the Sessions Editor Part preserves its Pane instance', () => {
-	const group = new EditorGroupModel('session-editor-group');
-	const input = new TestEditorInput();
-	group.openEditor(input);
+	assert.deepEqual(
+		editorPartsRegistrations.map(([, descriptor]) => descriptor.ctor),
+		[SessionsEditorParts],
+	);
+});
+
+test('Sessions Editor Part preserves its Pane across collapse and expansion', async () => {
+	const layoutService = new TestSessionsLayoutService();
+	const willSaveStateEmitter = new Emitter<IWillSaveStateEvent>();
+	const storedValues = new Map<string, string>();
+	const instantiationService = createInstantiationService(
+		layoutService,
+		createStorageService(
+			willSaveStateEmitter.event,
+			(key, value) => storedValues.set(key, value),
+		),
+	);
+	const editorParts = instantiationService.createInstance(SessionsEditorParts);
+	editorParts.initialize();
+	const mainPart = editorParts.mainPart;
+	mainPart.initialize();
 
 	let pane: TestEditorPane | undefined;
-	const paneRegistration = registerEditorPaneDescriptor(createEditorPaneDescriptor({
+	class RegisteredTestEditorPane extends TestEditorPane {
+		constructor() {
+			super();
+			pane = this;
+		}
+	}
+	const paneRegistration = editorPaneRegistry.registerEditorPane(new EditorPaneDescriptor({
 		paneId: 'test.sessionEditorPane',
+		modeId: 'test',
 		contentClassNames: [],
-		acceptsInput: (candidate): candidate is TestEditorInput => candidate instanceof TestEditorInput,
-		createPane: () => pane = new TestEditorPane(),
+		inputConstructor: TestEditorInput,
+		paneConstructor: RegisteredTestEditorPane,
 	}));
-	const sessionsPartElement = document.createElement('section');
-	const sessionsPart = {
-		getElement: () => sessionsPartElement,
-		setProps() {},
-		focus() {},
-		dispose() {
-			sessionsPartElement.remove();
-		},
-	};
-	const instantiationService = {
-		createInstance: () => sessionsPart,
-	} as unknown as IInstantiationService;
-	const props = createContentPartProps(group, instantiationService);
-	const collapsedProps = { ...props, isEditorVisible: false };
-	const partViews = new SessionWorkbenchContentPartViews(collapsedProps, instantiationService);
+	const input = new TestEditorInput();
+	const serializerRegistration = editorInputSerializerRegistry.register(
+		input.typeId,
+		new TestEditorInputSerializer(),
+	);
 
 	try {
-		const editorElement = partViews.getEditorElement();
-		assert.ok(editorElement);
+		const openResult = editorParts.openEditor(input);
+		await mainPart.openEditor(openResult.editor, undefined, { newInGroup: true });
+		const editorElement = mainPart.getElement();
+		assert.equal(getWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor), editorElement);
 		assert.equal(editorElement.querySelector('[data-test-editor-pane="true"]'), pane?.element);
-		assert.equal(pane?.setInputCount, 1);
-		assert.deepEqual(pane?.visibility, [false]);
+		const editorFrame = editorElement.querySelector<HTMLElement>('.comet-editor-frame');
+		assert.ok(editorFrame);
+		assert.deepEqual({
+			partType: mainPart instanceof SessionsMainEditorPart,
+			setInputCount: pane?.setInputCount,
+			visibility: pane?.visibility,
+		}, {
+			partType: true,
+			setInputCount: 1,
+			visibility: [false],
+		});
+		const contextKeyService = instantiationService.invokeFunction(accessor => accessor.get(IContextKeyService));
+		editorFrame.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true }));
+		assert.equal(contextKeyService.getContextKeyValue(ActiveEditorFocusedContext.key), false);
 
-		partViews.setProps(props);
-		assert.equal(partViews.getEditorElement(), editorElement);
-		assert.equal(pane?.disposeCount, 0);
-		assert.equal(pane?.setInputCount, 1);
-		assert.deepEqual(pane?.visibility, [false, true]);
+		layoutService.setEditorCollapsed(false);
+		editorFrame.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true }));
+		assert.equal(contextKeyService.getContextKeyValue(ActiveEditorFocusedContext.key), true);
+		editorFrame.dispatchEvent(new window.FocusEvent('focusout', {
+			bubbles: true,
+			relatedTarget: document.body,
+		}));
+		assert.equal(contextKeyService.getContextKeyValue(ActiveEditorFocusedContext.key), false);
+		editorFrame.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true }));
+		layoutService.setEditorCollapsed(true);
+		assert.equal(contextKeyService.getContextKeyValue(ActiveEditorFocusedContext.key), false);
+		mainPart.revealEditor(640);
+		if (!pane) {
+			throw new Error('Expected the registered Editor Pane to be active.');
+		}
+		pane.viewState = { cursor: 37 };
+		const saveParticipants: Promise<void>[] = [];
+		willSaveStateEmitter.fire({
+			reason: WillSaveStateReason.SHUTDOWN,
+			join: promise => saveParticipants.push(promise),
+		});
+		await Promise.all(saveParticipants);
+		assert.deepEqual(
+			JSON.parse(storedValues.get('workbench.editor.viewState') ?? 'null'),
+			{
+				version: 2,
+				entries: [{
+					key: {
+						groupId: editorParts.activeGroup.id,
+						paneId: 'test.sessionEditorPane',
+						resourceKey: input.resource.toString(),
+					},
+					state: { cursor: 37 },
+				}],
+			},
+		);
 
-		partViews.setProps(collapsedProps);
-		assert.equal(partViews.getEditorElement(), editorElement);
-		assert.equal(editorElement.querySelector('[data-test-editor-pane="true"]'), pane?.element);
-		assert.equal(pane?.disposeCount, 0);
-		assert.equal(pane?.setInputCount, 1);
-		assert.deepEqual(pane?.visibility, [false, true, false]);
-
-		partViews.setProps(props);
-		assert.equal(partViews.getEditorElement(), editorElement);
-		assert.equal(pane?.setInputCount, 1);
-		assert.deepEqual(pane?.visibility, [false, true, false, true]);
-
-		partViews.dispose();
-		assert.equal(pane?.disposeCount, 1);
+		assert.deepEqual({
+			sameElement: mainPart.getElement() === editorElement,
+			samePane: editorElement.querySelector('[data-test-editor-pane="true"]') === pane?.element,
+			disposeCount: pane?.disposeCount,
+			setInputCount: pane?.setInputCount,
+			visibility: pane?.visibility,
+			layoutState: layoutService.getLayoutState(),
+		}, {
+			sameElement: true,
+			samePane: true,
+			disposeCount: 0,
+			setInputCount: 1,
+			visibility: [false, true, false, true],
+			layoutState: {
+				mode: 'agent',
+				isSidebarVisible: true,
+				sidebarSize: 260,
+				isEditorCollapsed: false,
+				expandedEditorSize: 640,
+			},
+		});
 	} finally {
-		partViews.dispose();
 		paneRegistration.dispose();
-		group.dispose();
-		input.dispose();
+		serializerRegistration.dispose();
+		editorParts.dispose();
+		instantiationService.dispose();
+		willSaveStateEmitter.dispose();
 	}
+
+	assert.equal(pane?.disposeCount, 1);
+	assert.equal(getWorkbenchPartDomNode(WORKBENCH_PART_IDS.editor), null);
 });

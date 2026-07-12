@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
@@ -16,10 +16,10 @@ import {
 	IPermissionCategoryState,
 } from 'cs/platform/browserView/common/browserPermissions';
 import type { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
-import type { PreferredGroup } from 'cs/workbench/services/editor/common/editorService';
 import {
 	IBrowserViewBounds,
 	IBrowserViewNavigationEvent,
+	IBrowserViewViewStateEvent,
 	IBrowserViewLoadingEvent,
 	IBrowserViewLoadError,
 	IBrowserViewFocusEvent,
@@ -36,7 +36,6 @@ import {
 	IBrowserViewCertificateError,
 	IElementData,
 	IBrowserViewOwner,
-	IBrowserViewOpenOptions,
 	IBrowserViewRect,
 	browserZoomDefaultIndex,
 	browserZoomFactors,
@@ -97,13 +96,6 @@ type IntegratedBrowserNavigationClassification = {
 };
 
 
-type IntegratedBrowserAddElementToChatStartEvent = {};
-
-type IntegratedBrowserAddElementToChatStartClassification = {
-	owner: 'jruales';
-	comment: 'The user initiated an Add Element to Chat action in Integrated Browser.';
-};
-
 /**
  * View state stored in editor options when opening a browser view.
  */
@@ -149,20 +141,6 @@ export interface IBrowserViewFilterContext {
 	 * `ISession.sessionId` (`providerId:resource`).
 	 */
 	activeSessionId?: string;
-}
-
-/**
- * A handler that decides whether an editor should be opened for a newly
- * created browser view. Registered via
- * {@link IBrowserViewWorkbenchService.registerOpenHandler}.
- */
-export interface IBrowserViewOpenHandler {
-	/**
-	 * Called before an editor is opened for a newly created browser view.
-	 * Return `false` to prevent the editor from being opened. A view is opened
-	 * only when every registered handler allows it.
-	 */
-	shouldOpenEditor(input: BrowserEditorInput, owner: IBrowserViewOwner, openOptions: IBrowserViewOpenOptions): boolean;
 }
 
 /**
@@ -219,26 +197,6 @@ export interface IBrowserViewWorkbenchService {
 	 * @param context The filter context to use (or inferred if not provided)
 	 */
 	getContextualBrowserViews(context?: IBrowserViewFilterContext): Map<string, BrowserEditorInput>;
-
-	/**
-	 * Resolve the preferred editor group for opening an integrated browser
-	 * editor. Honors the `workbench.browser.newTabPlacement` setting, routing new
-	 * tabs into a dedicated (locked) side group or auxiliary window when
-	 * configured. When the workbench forces editors into a modal part
-	 * (`workbench.editor.useModal: 'all'`, the default in the Agents window),
-	 * browser opens that target the active group (or leave it unspecified) are
-	 * redirected to the main editor area so the browser docks instead of opening
-	 * as a modal overlay. Explicit placements (side group, auxiliary window, a
-	 * specific group) are left untouched.
-	 */
-	getPreferredGroup(preferredGroup?: PreferredGroup): Promise<PreferredGroup | undefined>;
-
-	/**
-	 * Register a handler that decides whether an editor should be opened for a
-	 * newly created browser view. The editor is opened only when every
-	 * registered handler allows it.
-	 */
-	registerOpenHandler(handler: IBrowserViewOpenHandler): IDisposable;
 
 	/**
 	 * Get an existing browser view for the given ID, or create a new one if it doesn't exist.
@@ -317,11 +275,13 @@ export interface IBrowserViewModel extends IDisposable {
 	readonly isElementSelectionActive: boolean;
 	readonly isAreaSelectionActive: boolean;
 	readonly device: IBrowserDeviceProfile | undefined;
+	readonly viewState: IBrowserViewViewStateEvent;
 
 	readonly onDidChangeSharingState: Event<BrowserViewSharingState>;
 	readonly onDidChangeZoom: Event<void>;
 	readonly onWillNavigate: Event<string>;
 	readonly onDidNavigate: Event<IBrowserViewNavigationEvent>;
+	readonly onDidChangeViewState: Event<IBrowserViewViewStateEvent>;
 	readonly onDidChangeLoadingState: Event<IBrowserViewLoadingEvent>;
 	readonly onDidChangeFocus: Event<IBrowserViewFocusEvent>;
 	readonly onDidChangeDevToolsState: Event<IBrowserViewDevToolsStateEvent>;
@@ -342,6 +302,8 @@ export interface IBrowserViewModel extends IDisposable {
 
 	layout(bounds: IBrowserViewBounds): Promise<void>;
 	setVisible(visible: boolean): Promise<void>;
+	captureViewState(): Promise<IBrowserViewViewStateEvent>;
+	restoreViewState(viewState: IBrowserViewViewStateEvent): Promise<boolean>;
 	loadURL(url: string, options?: INavigateOptions): Promise<void>;
 	goBack(): Promise<void>;
 	goForward(): Promise<void>;
@@ -388,6 +350,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	private _isElementSelectionActive: boolean = false;
 	private _isAreaSelectionActive: boolean = false;
 	private _device: IBrowserDeviceProfile | undefined;
+	private _viewState: IBrowserViewViewStateEvent;
 
 	readonly permissions = this._register(new BrowserPermissionStore());
 
@@ -405,6 +368,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 
 	private readonly _onWillNavigate = this._register(new Emitter<string>());
 	readonly onWillNavigate: Event<string> = this._onWillNavigate.event;
+	private readonly _onDidChangeViewState = this._register(new Emitter<IBrowserViewViewStateEvent>());
 
 	constructor(
 		readonly id: string,
@@ -436,6 +400,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		this._isElementSelectionActive = initialState.isElementSelectionActive;
 		this._isAreaSelectionActive = initialState.isAreaSelectionActive;
 		this._device = initialState.device;
+		this._viewState = { url: initialState.url, scrollX: 0, scrollY: 0 };
 		this._isEphemeral = this._storageScope === BrowserViewStorageScope.Ephemeral;
 		this._zoomHost = parseZoomHost(this._url);
 
@@ -473,6 +438,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 
 			this._zoomHost = parseZoomHost(e.url);
 			this._url = e.url;
+			this.acceptViewState({ url: e.url, scrollX: 0, scrollY: 0 });
 			this._title = e.title;
 			this._canGoBack = e.canGoBack;
 			this._canGoForward = e.canGoForward;
@@ -519,9 +485,6 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		}));
 
 		this._register(this.onDidChangeElementSelectionActive(active => {
-			if (active) {
-				this.telemetryService.publicLog2<IntegratedBrowserAddElementToChatStartEvent, IntegratedBrowserAddElementToChatStartClassification>('integratedBrowser.addElementToChat.start', {});
-			}
 			this._isElementSelectionActive = active;
 		}));
 
@@ -531,6 +494,10 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 
 		this._register(this.onDidChangeRemoteStatus(isRemoteSession => {
 			this._isRemoteSession = isRemoteSession;
+		}));
+
+		this._register(this.browserViewService.onDynamicDidChangeViewState(this.id)(viewState => {
+			this.acceptViewState(viewState);
 		}));
 	}
 
@@ -557,9 +524,14 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	get isElementSelectionActive(): boolean { return this._isElementSelectionActive; }
 	get isAreaSelectionActive(): boolean { return this._isAreaSelectionActive; }
 	get device(): IBrowserDeviceProfile | undefined { return this._device; }
+	get viewState(): IBrowserViewViewStateEvent { return this._viewState; }
 
 	get onDidNavigate(): Event<IBrowserViewNavigationEvent> {
 		return this.browserViewService.onDynamicDidNavigate(this.id);
+	}
+
+	get onDidChangeViewState(): Event<IBrowserViewViewStateEvent> {
+		return this._onDidChangeViewState.event;
 	}
 
 	get onDidChangeLoadingState(): Event<IBrowserViewLoadingEvent> {
@@ -615,6 +587,16 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		return this.browserViewService.setVisible(this.id, visible);
 	}
 
+	async captureViewState(): Promise<IBrowserViewViewStateEvent> {
+		const viewState = await this.browserViewService.captureViewState(this.id);
+		this.acceptViewState(viewState);
+		return viewState;
+	}
+
+	restoreViewState(viewState: IBrowserViewViewStateEvent): Promise<boolean> {
+		return this.browserViewService.restoreViewState(this.id, viewState);
+	}
+
 	async loadURL(url: string, options?: INavigateOptions): Promise<void> {
 		this.logNavigationTelemetry(options?.source ?? 'urlInput', url);
 		this._onWillNavigate.fire(url);
@@ -628,6 +610,11 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		}
 
 		return this.browserViewService.loadURL(this.id, url);
+	}
+
+	private acceptViewState(viewState: IBrowserViewViewStateEvent): void {
+		this._viewState = viewState;
+		this._onDidChangeViewState.fire(viewState);
 	}
 
 	async goBack(): Promise<void> {

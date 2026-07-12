@@ -15,10 +15,10 @@ import type {
 	SessionsProviderId,
 } from 'cs/sessions/services/sessions/common/session';
 import type {
-	ISessionChatRequest,
 	ISessionDraftOptions,
 	ISessionTransition,
 } from 'cs/sessions/services/sessions/common/sessionsProvider';
+import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
 
 /** Identifies one provider-owned Session type available for draft creation. */
@@ -78,7 +78,7 @@ export interface ISessionsManagementService {
 	createSessionDraft(providerId: SessionsProviderId, options: ISessionDraftOptions): ISession;
 	discardSessionDraft(session: ISession): void;
 	getModels(session: ISession, chat: IChat): readonly ILanguageModelChatMetadataAndIdentifier[];
-	sendRequest(session: ISession, chat: IChat, request: ISessionChatRequest): Promise<void>;
+	sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void>;
 	createChat(session: ISession): Promise<IChat>;
 	forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat>;
 	renameSession(session: ISession, title: string): Promise<void>;

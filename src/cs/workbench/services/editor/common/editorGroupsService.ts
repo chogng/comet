@@ -9,6 +9,7 @@ import type {
 	EditorGroupModelOpenOptions,
 } from 'cs/workbench/common/editor/editorGroupModel';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import type { IEditorOpenContext, IEditorOptions, IEditorPane } from 'cs/workbench/common/editor';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 
 export interface IEditorGroup {
@@ -43,18 +44,33 @@ export interface IEditorGroupsOpenOptions {
 	readonly active?: boolean;
 }
 
+export interface IEditorGroupsOpenResult {
+	readonly editor: EditorInput;
+	readonly group: IEditorGroup;
+	readonly newInGroup: boolean;
+}
+
 export const IEditorGroupsService = createDecorator<IEditorGroupsService>('editorGroupsService');
+
+export interface IEditorPartHost {
+	readonly activeEditorPane: IEditorPane | undefined;
+	openEditor(editor: EditorInput, options: IEditorOptions | undefined, context: IEditorOpenContext): Promise<void>;
+	revealEditor(expandedEditorSize?: number): void;
+	focusPrimaryInput(): void;
+}
 
 export interface IEditorGroupsService {
 	readonly _serviceBrand: undefined;
+	readonly mainPart: IEditorPartHost;
 	readonly onDidChange: Event<IEditorGroupsChangeEvent>;
 	readonly activeGroup: IEditorGroup;
+	initialize(): void;
 	getGroups(): readonly IEditorGroup[];
 	getGroup(groupId: string): IEditorGroup | undefined;
 	createGroup(groupId?: string): IEditorGroup;
 	removeGroup(group: IEditorGroup): void;
 	activateGroup(group: IEditorGroup): void;
 	findEditor(editor: EditorInput): { group: IEditorGroup; editor: EditorInput } | undefined;
-	openEditor(editor: EditorInput, options?: IEditorGroupsOpenOptions): EditorInput;
+	openEditor(editor: EditorInput, options?: IEditorGroupsOpenOptions): IEditorGroupsOpenResult;
 	closeEditor(editor: EditorInput): Promise<boolean>;
 }

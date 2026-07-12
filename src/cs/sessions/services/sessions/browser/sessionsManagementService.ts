@@ -4,15 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Emitter, type Event } from 'cs/base/common/event';
-import { Disposable, DisposableMap, DisposableStore } from 'cs/base/common/lifecycle';
+import { onUnexpectedError } from 'cs/base/common/errors';
+import { Disposable, DisposableMap, DisposableStore, type IDisposable } from 'cs/base/common/lifecycle';
 import { derived, observableValue, type IObservable } from 'cs/base/common/observable';
 import { getComparisonKey, isEqual } from 'cs/base/common/resources';
-import type { URI } from 'cs/base/common/uri';
+import { URI } from 'cs/base/common/uri';
+import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
+import { IStorageService } from 'cs/platform/storage/common/storage';
 import {
 	ISessionsProvidersService,
+	type IPreparedSessionsProvidersChange,
 	type ISessionsProvidersChangeEvent,
+	type ISessionsProvidersChangeParticipant,
 } from 'cs/sessions/services/sessions/browser/sessionsProvidersService';
+import { SessionsRecencyStorage } from 'cs/sessions/services/sessions/browser/sessionsRecencyStorage';
 import {
 	assertSessionInvariants,
 	ChatInteractivity,
@@ -26,6 +32,7 @@ import {
 	SessionWorkspaceKind,
 	type SessionsProviderId,
 } from 'cs/sessions/services/sessions/common/session';
+import { isSerializedJsonLargerThan } from 'cs/sessions/services/sessions/common/serializedSize';
 import {
 	ISessionsManagementService,
 	SessionDraftChangeKind,
@@ -36,13 +43,20 @@ import {
 	type ISessionsModelsChangeEvent,
 } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import {
+	maximumSessionChatRequestAttachments,
+	maximumSessionChatRequestPayloadBytes,
 	SessionTransitionKind,
-	type ISessionChatRequest,
 	type ISessionDraftOptions,
 	type ISessionsChangeEvent,
 	type ISessionsProvider,
 } from 'cs/sessions/services/sessions/common/sessionsProvider';
+import {
+	ChatRequestAttachmentKind,
+	type IChatRequest,
+	type IChatRequestAttachment,
+} from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import { parseChatImageAttachment } from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
 
 interface ISessionsManagementState {
 	readonly sessions: readonly ISession[];
@@ -56,8 +70,102 @@ interface IAuthoritativeChangedTransitionTracker {
 	readonly chatResourceSnapshots: string[][];
 }
 
+function freezeJsonValue<T>(value: T): T {
+	if (!value || typeof value !== 'object') {
+		return value;
+	}
+	const pending: object[] = [value];
+	const visited = new Set<object>();
+	while (pending.length > 0) {
+		const current = pending.pop()!;
+		if (visited.has(current)) {
+			continue;
+		}
+		visited.add(current);
+		const record = current as Record<string, unknown>;
+		for (const key in record) {
+			if (!Object.prototype.hasOwnProperty.call(record, key)) {
+				continue;
+			}
+			const child = record[key];
+			if (child && typeof child === 'object') {
+				pending.push(child);
+			}
+		}
+		Object.freeze(current);
+	}
+	return value;
+}
+
+function snapshotWritingEditorDocument(document: WritingEditorDocument): WritingEditorDocument {
+	const serialized = JSON.stringify(document);
+	if (typeof serialized !== 'string') {
+		throw new Error('A Session Chat editor attachment requires a serializable document.');
+	}
+	const snapshot = JSON.parse(serialized) as unknown;
+	if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+		throw new Error('A Session Chat editor attachment requires an object document.');
+	}
+	return freezeJsonValue(snapshot as WritingEditorDocument);
+}
+
+function snapshotChatRequestAttachment(attachment: IChatRequestAttachment): IChatRequestAttachment {
+	switch (attachment.kind) {
+		case ChatRequestAttachmentKind.Resource:
+			return Object.freeze({
+				kind: attachment.kind,
+				id: attachment.id,
+				name: attachment.name,
+				resource: URI.from(attachment.resource.toJSON(), true),
+				mimeType: attachment.mimeType,
+			});
+		case ChatRequestAttachmentKind.Text:
+			return Object.freeze({
+				kind: attachment.kind,
+				id: attachment.id,
+				name: attachment.name,
+				content: attachment.content,
+				mimeType: attachment.mimeType,
+			});
+		case ChatRequestAttachmentKind.Article:
+			return Object.freeze({
+				kind: attachment.kind,
+				id: attachment.id,
+				name: attachment.name,
+				articleId: attachment.articleId,
+			});
+		case ChatRequestAttachmentKind.Editor:
+			return Object.freeze({
+				kind: attachment.kind,
+				id: attachment.id,
+				name: attachment.name,
+				resource: URI.from(attachment.resource.toJSON(), true),
+				document: snapshotWritingEditorDocument(attachment.document),
+				selection: attachment.selection ? Object.freeze({ ...attachment.selection }) : null,
+			});
+		case ChatRequestAttachmentKind.Image: {
+			const image = parseChatImageAttachment({
+				id: attachment.id,
+				name: attachment.name,
+				mimeType: attachment.mimeType,
+				data: attachment.data,
+			});
+			return Object.freeze({ kind: attachment.kind, ...image });
+		}
+		default:
+			throw new Error('A Session Chat request contains an unknown attachment kind.');
+	}
+}
+
+function snapshotSessionChatRequest(request: IChatRequest): IChatRequest {
+	return Object.freeze({
+		prompt: request.prompt,
+		attachments: Object.freeze(request.attachments.map(snapshotChatRequestAttachment)),
+	});
+}
+
 /** Default provider-independent Sessions domain owner. */
-export class SessionsManagementService extends Disposable implements ISessionsManagementService {
+export class SessionsManagementService extends Disposable implements ISessionsManagementService, ISessionsProvidersChangeParticipant {
 	declare readonly _serviceBrand: undefined;
 
 	private readonly providerSessions = new Map<SessionsProviderId, readonly ISession[]>();
@@ -66,6 +174,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly providers = new Map<SessionsProviderId, ISessionsProvider>();
 	private readonly draftReplacements = new WeakMap<ISession, ISession>();
 	private readonly changedTransitionTrackers = new Set<IAuthoritativeChangedTransitionTracker>();
+	private readonly recencyStorage: SessionsRecencyStorage;
 
 	private readonly state = observableValue<ISessionsManagementState>('sessionsManagementState', {
 		sessions: [],
@@ -77,22 +186,32 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	readonly draftSession: IObservable<ISession | undefined> = derived(this, reader => this.state.read(reader).draftSession);
 	readonly sessionTypes: IObservable<readonly IProviderSessionType[]> = derived(this, reader => this.state.read(reader).sessionTypes);
 
-	private readonly sessionsChangeEmitter = this._register(new Emitter<ISessionsManagementChangeEvent>());
+	private readonly sessionsChangeEmitter = this._register(new Emitter<ISessionsManagementChangeEvent>({
+		onListenerError: onUnexpectedError,
+	}));
 	readonly onDidChangeSessions: Event<ISessionsManagementChangeEvent> = this.sessionsChangeEmitter.event;
 
-	private readonly draftSessionChangeEmitter = this._register(new Emitter<ISessionDraftChangeEvent>());
+	private readonly draftSessionChangeEmitter = this._register(new Emitter<ISessionDraftChangeEvent>({
+		onListenerError: onUnexpectedError,
+	}));
 	readonly onDidChangeDraftSession: Event<ISessionDraftChangeEvent> = this.draftSessionChangeEmitter.event;
 
-	private readonly sessionTypesChangeEmitter = this._register(new Emitter<void>());
+	private readonly sessionTypesChangeEmitter = this._register(new Emitter<void>({
+		onListenerError: onUnexpectedError,
+	}));
 	readonly onDidChangeSessionTypes: Event<void> = this.sessionTypesChangeEmitter.event;
 
-	private readonly modelsChangeEmitter = this._register(new Emitter<ISessionsModelsChangeEvent>());
+	private readonly modelsChangeEmitter = this._register(new Emitter<ISessionsModelsChangeEvent>({
+		onListenerError: onUnexpectedError,
+	}));
 	readonly onDidChangeModels: Event<ISessionsModelsChangeEvent> = this.modelsChangeEmitter.event;
 
 	constructor(
 		@ISessionsProvidersService private readonly sessionsProvidersService: ISessionsProvidersService,
+		@IStorageService storageService: IStorageService,
 	) {
 		super();
+		this.recencyStorage = new SessionsRecencyStorage(storageService);
 
 		const providers = this.sessionsProvidersService.getProviders();
 		const initialSessions = new Map<SessionsProviderId, readonly ISession[]>();
@@ -106,18 +225,55 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 		this.assertGlobalState(initialSessions, undefined);
 
-		for (const provider of providers) {
-			this.providerSessions.set(provider.id, initialSessions.get(provider.id)!);
-			this.providerSessionTypes.set(provider.id, initialSessionTypes.get(provider.id)!);
-			this.subscribeToProvider(provider);
-		}
-		this.state.set({
-			sessions: this.collectSessions(this.providerSessions),
-			draftSession: undefined,
-			sessionTypes: this.collectSessionTypes(this.providerSessionTypes),
-		}, undefined);
+		const preparedSubscriptions = new Map<SessionsProviderId, DisposableStore>();
+		let participantSubscription: IDisposable | undefined;
+		try {
+			for (const provider of providers) {
+				preparedSubscriptions.set(provider.id, this.createProviderSubscription(provider));
+			}
+			participantSubscription = this.sessionsProvidersService.registerChangeParticipant(this);
+			const initialCommittedSessions = this.commitSessions(initialSessions);
 
-		this._register(this.sessionsProvidersService.onDidChangeProviders(event => this.handleProvidersChanged(event)));
+			for (const provider of providers) {
+				this.providerSessions.set(provider.id, initialSessions.get(provider.id)!);
+				this.providerSessionTypes.set(provider.id, initialSessionTypes.get(provider.id)!);
+				this.providers.set(provider.id, provider);
+				this.providerSubscriptions.set(provider.id, preparedSubscriptions.get(provider.id)!);
+				preparedSubscriptions.delete(provider.id);
+			}
+			this.state.set({
+				sessions: initialCommittedSessions,
+				draftSession: undefined,
+				sessionTypes: this.collectSessionTypes(this.providerSessionTypes),
+			}, undefined);
+
+			this._register(participantSubscription);
+			participantSubscription = undefined;
+		} catch (error) {
+			const cleanupErrors: unknown[] = [];
+			try {
+				participantSubscription?.dispose();
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
+			try {
+				this.providerSubscriptions.dispose();
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
+			try {
+				this.disposePreparedProviderSubscriptions(preparedSubscriptions);
+			} catch (cleanupError) {
+				cleanupErrors.push(cleanupError);
+			}
+			if (cleanupErrors.length > 0) {
+				throw new AggregateError(
+					[error, ...cleanupErrors],
+					'Failed to initialize and release Sessions provider management.',
+				);
+			}
+			throw error;
+		}
 	}
 
 	getSessions(): readonly ISession[] {
@@ -236,23 +392,49 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return models;
 	}
 
-	async sendRequest(session: ISession, chat: IChat, request: ISessionChatRequest): Promise<void> {
+	async sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void> {
 		const ownership = this.requireOwnedSession(session, true);
 		this.requireChat(session, chat);
 		this.requireInteractiveChat(session, chat);
 		if (!request.prompt.trim()) {
 			throw new Error('A Session Chat request must contain a prompt.');
 		}
+		this.assertRequestPayload(request);
+		const requestSnapshot = snapshotSessionChatRequest(request);
+		this.assertRequestPayload(requestSnapshot);
 		if (ownership.isDraft && session.mainChat.get() !== chat) {
 			throw new Error(`Session draft '${session.sessionId}' accepts requests only on its main Chat.`);
 		}
 
-		await ownership.provider.sendRequest(session, chat, request);
+		await ownership.provider.sendRequest(session, chat, requestSnapshot);
 		if (ownership.isDraft) {
 			const replacement = this.draftReplacements.get(session);
 			if (!replacement || !this.state.get().sessions.includes(replacement)) {
 				throw new Error(`Session draft '${session.sessionId}' was not explicitly replaced by a committed Session.`);
 			}
+		}
+	}
+
+	private assertRequestPayload(request: IChatRequest): void {
+		if (request.attachments.length > maximumSessionChatRequestAttachments) {
+			throw new RangeError(
+				`A Session Chat request cannot contain more than ${maximumSessionChatRequestAttachments} attachments.`,
+			);
+		}
+		const attachmentIds = new Set<string>();
+		for (const attachment of request.attachments) {
+			if (!attachment.id.trim() || !attachment.name.trim()) {
+				throw new Error('Every Session Chat request attachment requires an ID and name.');
+			}
+			if (attachmentIds.has(attachment.id)) {
+				throw new Error(`Session Chat request attachment ID '${attachment.id}' is duplicated.`);
+			}
+			attachmentIds.add(attachment.id);
+		}
+		if (isSerializedJsonLargerThan(request, maximumSessionChatRequestPayloadBytes)) {
+			throw new RangeError(
+				`A Session Chat request cannot exceed ${maximumSessionChatRequestPayloadBytes} serialized bytes.`,
+			);
 		}
 	}
 
@@ -449,7 +631,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this.assertGlobalState(this.providerSessions, this.state.get().draftSession);
 	}
 
-	private handleProvidersChanged(event: ISessionsProvidersChangeEvent): void {
+	prepareProvidersChange(event: ISessionsProvidersChangeEvent): IPreparedSessionsProvidersChange {
 		const nextProviderSessions = new Map(this.providerSessions);
 		const nextProviderSessionTypes = new Map(this.providerSessionTypes);
 		let nextDraftSession = this.state.get().draftSession;
@@ -498,43 +680,120 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 		this.assertGlobalState(nextProviderSessions, nextDraftSession);
 
-		for (const provider of event.removed) {
-			this.providerSubscriptions.deleteAndDispose(provider.id);
-			this.providers.delete(provider.id);
+		const preparedSubscriptions = new Map<SessionsProviderId, DisposableStore>();
+		try {
+			for (const provider of event.added) {
+				preparedSubscriptions.set(provider.id, this.createProviderSubscription(provider));
+			}
+		} catch (error) {
+			try {
+				this.disposePreparedProviderSubscriptions(preparedSubscriptions);
+			} catch (cleanupError) {
+				throw new AggregateError(
+					[error, cleanupError],
+					'Failed to prepare and release Sessions provider subscriptions.',
+				);
+			}
+			throw error;
 		}
-		for (const provider of event.added) {
-			this.subscribeToProvider(provider);
-		}
-		this.replaceProviderSessions(nextProviderSessions);
-		this.replaceProviderSessionTypes(nextProviderSessionTypes);
 
-		this.state.set({
-			sessions: this.collectSessions(this.providerSessions),
-			draftSession: nextDraftSession,
-			sessionTypes: this.collectSessionTypes(this.providerSessionTypes),
-		}, undefined);
+		let completed = false;
+		return {
+			commit: () => {
+				if (completed) {
+					throw new Error('A prepared Sessions provider change can only be completed once.');
+				}
+				const nextSessions = this.commitSessions(nextProviderSessions);
+				const nextSessionTypes = this.collectSessionTypes(nextProviderSessionTypes);
+				completed = true;
 
-		for (const change of changes) {
-			this.sessionsChangeEmitter.fire(change);
-		}
-		if (draftChange) {
-			this.draftSessionChangeEmitter.fire(draftChange);
-		}
-		if (event.added.length > 0 || event.removed.length > 0) {
-			this.sessionTypesChangeEmitter.fire();
+				const removedSubscriptions: DisposableStore[] = [];
+				for (const provider of event.removed) {
+					const subscription = this.providerSubscriptions.deleteAndLeak(provider.id);
+					if (subscription) {
+						removedSubscriptions.push(subscription);
+					}
+					this.providers.delete(provider.id);
+				}
+				for (const provider of event.added) {
+					this.providers.set(provider.id, provider);
+					this.providerSubscriptions.set(provider.id, preparedSubscriptions.get(provider.id)!);
+					preparedSubscriptions.delete(provider.id);
+				}
+				this.replaceProviderSessions(nextProviderSessions);
+				this.replaceProviderSessionTypes(nextProviderSessionTypes);
+
+				try {
+					this.state.set({
+						sessions: nextSessions,
+						draftSession: nextDraftSession,
+						sessionTypes: nextSessionTypes,
+					}, undefined);
+				} catch (error) {
+					onUnexpectedError(error);
+				}
+
+				for (const subscription of removedSubscriptions) {
+					try {
+						subscription.dispose();
+					} catch (error) {
+						onUnexpectedError(error);
+					}
+				}
+				for (const change of changes) {
+					this.sessionsChangeEmitter.fire(change);
+				}
+				if (draftChange) {
+					this.draftSessionChangeEmitter.fire(draftChange);
+				}
+				if (event.added.length > 0 || event.removed.length > 0) {
+					this.sessionTypesChangeEmitter.fire();
+				}
+			},
+			dispose: () => {
+				if (completed) {
+					return;
+				}
+				completed = true;
+				this.disposePreparedProviderSubscriptions(preparedSubscriptions);
+			},
+		};
+	}
+
+	private createProviderSubscription(provider: ISessionsProvider): DisposableStore {
+		const store = new DisposableStore();
+		try {
+			store.add(provider.onDidChangeSessions(event => this.handleProviderSessionsChanged(provider, event)));
+			store.add(provider.onDidChangeSessionTypes(() => this.handleProviderSessionTypesChanged(provider)));
+			store.add(provider.onDidChangeModels(() => this.handleProviderModelsChanged(provider)));
+			return store;
+		} catch (error) {
+			try {
+				store.dispose();
+			} catch (cleanupError) {
+				throw new AggregateError(
+					[error, cleanupError],
+					`Failed to subscribe to and release Sessions provider '${provider.id}'.`,
+				);
+			}
+			throw error;
 		}
 	}
 
-	private subscribeToProvider(provider: ISessionsProvider): void {
-		if (this.providers.has(provider.id)) {
-			throw new Error(`Sessions provider '${provider.id}' already has a management subscription.`);
+	private disposePreparedProviderSubscriptions(
+		preparedSubscriptions: ReadonlyMap<SessionsProviderId, DisposableStore>,
+	): void {
+		const errors: unknown[] = [];
+		for (const subscription of preparedSubscriptions.values()) {
+			try {
+				subscription.dispose();
+			} catch (error) {
+				errors.push(error);
+			}
 		}
-		const store = new DisposableStore();
-		store.add(provider.onDidChangeSessions(event => this.handleProviderSessionsChanged(provider, event)));
-		store.add(provider.onDidChangeSessionTypes(() => this.handleProviderSessionTypesChanged(provider)));
-		store.add(provider.onDidChangeModels(() => this.handleProviderModelsChanged(provider)));
-		this.providers.set(provider.id, provider);
-		this.providerSubscriptions.set(provider.id, store);
+		if (errors.length > 0) {
+			throw new AggregateError(errors, 'Failed to release prepared Sessions provider subscriptions.');
+		}
 	}
 
 	private handleProviderSessionsChanged(provider: ISessionsProvider, event: ISessionsChangeEvent): void {
@@ -605,9 +864,6 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 					throw new Error(`Sessions provider '${provider.id}' emitted an unknown Session transition.`);
 			}
 
-			const intermediateProviderSessions = new Map(this.providerSessions);
-			intermediateProviderSessions.set(provider.id, workingSessions);
-			this.assertGlobalState(intermediateProviderSessions, workingDraft);
 		}
 
 		const afterSessions = [...provider.getSessions()];
@@ -622,12 +878,24 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const nextProviderSessions = new Map(this.providerSessions);
 		nextProviderSessions.set(provider.id, afterSessions);
 		this.assertGlobalState(nextProviderSessions, workingDraft);
+		const promotedSessionIds = [...new Set(event.transitions.flatMap(transition => {
+			switch (transition.kind) {
+				case SessionTransitionKind.Added:
+				case SessionTransitionKind.Changed:
+					return [transition.session.sessionId];
+				case SessionTransitionKind.Replaced:
+					return [transition.to.sessionId];
+				case SessionTransitionKind.Removed:
+					return [];
+			}
+		}))];
+		const nextSessions = this.commitSessions(nextProviderSessions, promotedSessionIds);
 		this.replaceProviderSessions(nextProviderSessions);
 
 		const previousState = this.state.get();
 		this.state.set({
 			...previousState,
-			sessions: this.collectSessions(this.providerSessions),
+			sessions: nextSessions,
 			draftSession: workingDraft,
 		}, undefined);
 		for (const tracker of this.changedTransitionTrackers) {
@@ -864,7 +1132,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return sessionTypes;
 	}
 
-	private collectSessions(providerSessions: ReadonlyMap<SessionsProviderId, readonly ISession[]>): readonly ISession[] {
+	private commitSessions(
+		providerSessions: ReadonlyMap<SessionsProviderId, readonly ISession[]>,
+		promotedSessionIds: readonly string[] = [],
+	): readonly ISession[] {
 		const sessions: ISession[] = [];
 		for (const provider of this.sessionsProvidersService.getProviders()) {
 			const snapshot = providerSessions.get(provider.id);
@@ -873,7 +1144,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			}
 			sessions.push(...snapshot);
 		}
-		return sessions;
+		return this.recencyStorage.commit(sessions, promotedSessionIds);
 	}
 
 	private collectSessionTypes(

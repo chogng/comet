@@ -1,9 +1,14 @@
-/// <reference types="vite/client" />
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-type DesktopArticle = import('cs/base/parts/sandbox/common/sandboxTypes').Article;
-type DesktopBatchSource = import('cs/base/parts/sandbox/common/sandboxTypes').BatchSource;
-type DesktopFetchBatchSource = import('cs/base/parts/sandbox/common/sandboxTypes').FetchBatchSource;
-type DesktopFetchStrategy = import('cs/base/parts/sandbox/common/sandboxTypes').FetchStrategy;
+/// <reference types="vite/client" />
+declare module '*.html' {
+	const html: string;
+	export default html;
+}
+
 type DesktopPdfDownloadResult = import('cs/base/parts/sandbox/common/sandboxTypes').PdfDownloadResult;
 type DesktopDocxExportResult = import('cs/base/parts/sandbox/common/sandboxTypes').DocxExportResult;
 type DesktopStoredAppSettings = import('cs/base/parts/sandbox/common/sandboxTypes').StoredAppSettings;
@@ -16,7 +21,6 @@ type WindowState = import('cs/base/parts/sandbox/common/sandboxTypes').WindowSta
 type WindowStateListener = import('cs/base/parts/sandbox/common/sandboxTypes').WindowStateListener;
 type DesktopWebContentBounds = import('cs/base/parts/sandbox/common/sandboxTypes').WebContentBounds;
 type DesktopWebContentState = import('cs/base/parts/sandbox/common/sandboxTypes').WebContentState;
-type DesktopFetchChannel = import('cs/base/parts/sandbox/common/sandboxTypes').FetchChannel;
 type DesktopPreviewReuseMode = import('cs/base/parts/sandbox/common/sandboxTypes').WebContentReuseMode;
 type ElectronInvoke = import('cs/base/parts/sandbox/common/sandboxTypes').ElectronInvoke;
 

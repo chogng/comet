@@ -37,6 +37,7 @@ const OVERLAY_DEFINITIONS: readonly OverlayDefinition[] = [
 	{ className: 'comet-dialog-modal-block', type: BrowserOverlayType.Dialog },
 	{ className: 'comet-notifications-center', type: BrowserOverlayType.Notification },
 	{ className: 'comet-notifications-toasts', type: BrowserOverlayType.Notification },
+	{ className: 'comet-settings-overlay', type: BrowserOverlayType.Dialog },
 	{ className: 'context-view', type: BrowserOverlayType.Unknown },
 ];
 
@@ -101,7 +102,7 @@ export class BrowserOverlayManager {
 		});
 		observer.observe(this.targetWindow.document.body, {
 			attributes: true,
-			attributeFilter: ['class', 'style'],
+			attributeFilter: ['class', 'style', 'hidden'],
 			childList: true,
 			subtree: true,
 		});
@@ -125,6 +126,10 @@ export class BrowserOverlayManager {
 		const overlappingOverlays: IBrowserOverlayInfo[] = [];
 
 		for (const overlay of this.overlays()) {
+			if (overlay.element.hidden) {
+				continue;
+			}
+
 			if (overlay.element.contains(element)) {
 				continue;
 			}
@@ -213,7 +218,7 @@ export class BrowserOverlayManager {
 			});
 			observer.observe(shadowRoot, {
 				attributes: true,
-				attributeFilter: ['class', 'style'],
+				attributeFilter: ['class', 'style', 'hidden'],
 				childList: true,
 				subtree: true,
 			});

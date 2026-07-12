@@ -1,9 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { spawnSync } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-
 const scriptFilePath = fileURLToPath(import.meta.url);
 const scriptsMarker = `${path.sep}scripts${path.sep}`;
 const scriptsMarkerIndex = scriptFilePath.lastIndexOf(scriptsMarker);
@@ -18,10 +22,10 @@ const entryPoint = path.join(
   'cs',
   'base',
   'common',
-  'tests',
+  'test',
   'index.test.ts',
 );
-const outputFile = path.join(outputDir, 'index.test.mjs');
+const outputFile = path.join(outputDir, 'index.test.cjs');
 
 await rm(outputDir, { recursive: true, force: true });
 await mkdir(outputDir, { recursive: true });
@@ -31,10 +35,10 @@ await build({
   outfile: outputFile,
   bundle: true,
   platform: 'node',
-  format: 'esm',
+  format: 'cjs',
   target: 'node20',
   sourcemap: 'inline',
-  external: ['node:assert/strict', 'node:test'],
+  external: ['node:assert/strict', 'node:test', 'jsdom'],
 });
 
 const result = spawnSync(process.execPath, ['--test', outputFile], {

@@ -141,6 +141,37 @@
   white-space: pre-wrap;
 }
 
+.comet-chat-message-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.comet-chat-message-image {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #d9e2eb;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.comet-chat-message-image img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+}
+
+.comet-chat-message-image figcaption {
+  padding: 5px 8px;
+  overflow: hidden;
+  color: #526477;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .comet-chat-message-user {
   background: #f7fafc;
   justify-self: end;

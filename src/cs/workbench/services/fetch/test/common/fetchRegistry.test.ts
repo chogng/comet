@@ -71,3 +71,22 @@ test('FetchRegistry rejects duplicate descriptor IDs', () => {
 	assert.throws(() => registry.registerJournal(journal), /already registered/);
 	assert.throws(() => registry.registerProvider({ id: 'provider.test', ctor: TestFetchProvider }), /already registered/);
 });
+
+test('FetchRegistry journal results do not depend on registration order', () => {
+	const otherJournal: JournalDescriptor = {
+		...journal,
+		id: 'journal.other',
+		title: 'Other Journal',
+	};
+	const first = new FetchRegistry();
+	first.registerJournal(journal);
+	first.registerJournal(otherJournal);
+	const second = new FetchRegistry();
+	second.registerJournal(otherJournal);
+	second.registerJournal(journal);
+
+	assert.deepEqual(
+		first.getJournals().map(candidate => candidate.id),
+		second.getJournals().map(candidate => candidate.id),
+	);
+});

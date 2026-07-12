@@ -6,21 +6,25 @@
 // eslint-disable-next-line local/code-import-patterns
 import type * as playwright from 'playwright-core';
 import { Emitter, Event } from 'cs/base/common/event';
-import { CancellationError, CancellationToken, CancellationTokenNone } from 'cs/base/common/cancellation';
+import { CancellationError, CancellationToken, CancellationTokenNone, isCancellationError } from 'cs/base/common/cancellation';
 import { createCancelablePromise, raceCancellablePromises, timeout } from 'cs/base/common/async';
 import { URI } from 'cs/base/common/uri';
 import { IAgentNetworkFilterService } from 'cs/platform/networkFilter/common/networkFilterService';
 import {
 	BrowserPageReadinessSelectorError,
-	BrowserPageReadinessTimeoutError,
+	BrowserPageClosedError,
+	BrowserPageNavigationInterruptedError,
 	BrowserPageSnapshotEmptyError,
 	BrowserPageSnapshotTooLargeError,
-	defaultPageSnapshotMaximumBytes,
-	defaultPageSnapshotTimeoutMs,
-	IPageSnapshotOptions,
-	maximumPageSnapshotTimeoutMs,
 } from 'cs/platform/browserView/common/playwrightService';
 import { IPlaywrightActionScope } from 'cs/platform/browserView/node/playwrightService';
+import {
+	type IResolvedPageSnapshotOptions,
+	isNavigationInterruptedError,
+	isPageClosedError,
+	remainingPageSnapshotTime,
+	waitForPageSnapshotStage,
+} from 'cs/platform/browserView/node/playwrightSnapshot';
 
 type IAiAriaSnapshotOptions = NonNullable<Parameters<playwright.Locator['ariaSnapshot']>[0]> & { _track?: string };
 
@@ -36,50 +40,11 @@ interface IPageSnapshotTooLarge {
 	readonly tooLarge: true;
 }
 
-interface IResolvedReadiness {
-	readonly selector: string;
-	readonly state: 'attached' | 'visible';
-	readonly minimumCount: number;
-}
-
-interface IResolvedSnapshotOptions {
-	readonly readiness: IResolvedReadiness | undefined;
-	readonly timeoutMs: number;
-	readonly maximumBytes: number;
-}
-
 declare module 'playwright-core' {
 	interface Page {
 		// We defined this here to be able to use the unofficial `_track` option
 		ariaSnapshot(options?: IAiAriaSnapshotOptions): Promise<string>;
 	}
-}
-
-function resolveSnapshotOptions(options: IPageSnapshotOptions | undefined): IResolvedSnapshotOptions {
-	const timeoutMs = options?.timeoutMs ?? defaultPageSnapshotTimeoutMs;
-	if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > maximumPageSnapshotTimeoutMs) {
-		throw new RangeError(`Snapshot timeout must be greater than zero and no greater than ${maximumPageSnapshotTimeoutMs} ms.`);
-	}
-	const maximumBytes = options?.maximumBytes ?? defaultPageSnapshotMaximumBytes;
-	if (!Number.isSafeInteger(maximumBytes) || maximumBytes <= 0 || maximumBytes > defaultPageSnapshotMaximumBytes) {
-		throw new RangeError(`Snapshot maximum bytes must be a positive integer no greater than ${defaultPageSnapshotMaximumBytes}.`);
-	}
-	if (!options?.readiness) {
-		return { timeoutMs, maximumBytes, readiness: undefined };
-	}
-	const readiness = options.readiness;
-	if (!readiness.selector.trim()) {
-		throw new BrowserPageReadinessSelectorError(readiness.selector, new Error('Readiness selector must not be empty.'));
-	}
-	const minimumCount = readiness.minimumCount ?? 1;
-	if (!Number.isSafeInteger(minimumCount) || minimumCount <= 0) {
-		throw new RangeError('Snapshot readiness minimum count must be a positive integer.');
-	}
-	return {
-		timeoutMs,
-		maximumBytes,
-		readiness: { selector: readiness.selector, state: readiness.state ?? 'attached', minimumCount },
-	};
 }
 
 function isInvalidSelectorError(error: unknown): boolean {
@@ -164,7 +129,7 @@ export class PlaywrightTab {
 			} else {
 				await dialog.dismiss();
 			}
-		});
+		}, { waitForCompletion: true, token: CancellationTokenNone });
 	}
 
 	private _handleFileChooser(chooser: playwright.FileChooser) {
@@ -177,7 +142,10 @@ export class PlaywrightTab {
 		}
 		const chooser = this._fileChooser;
 		this._fileChooser = undefined;
-		await this.safeRunAgainstPage(() => chooser.setFiles(files));
+		await this.safeRunAgainstPage(
+			() => chooser.setFiles(files),
+			{ waitForCompletion: true, token: CancellationTokenNone },
+		);
 	}
 
 	private async _handleDownload(download: playwright.Download) {
@@ -225,7 +193,13 @@ export class PlaywrightTab {
 	 * Also allows for interactions to be handled differently when triggered by agents.
 	 * E.g. file dialogs should appear when the user triggers one, but not when the agent does.
 	 */
-	async safeRunAgainstPage<T>(action: (page: playwright.Page, token: CancellationToken) => Promise<T>): Promise<T> {
+	async safeRunAgainstPage<T>(
+		action: (page: playwright.Page, token: CancellationToken) => Promise<T>,
+		options: { readonly waitForCompletion: boolean; readonly token: CancellationToken },
+	): Promise<T> {
+		if (options.token.isCancellationRequested) {
+			throw new CancellationError();
+		}
 		if (this._dialog) {
 			throw new Error(`Cannot perform action while a dialog is open`);
 		}
@@ -238,7 +212,9 @@ export class PlaywrightTab {
 
 		let actionDidComplete = false;
 		let result: T | void;
-		const dialogOpened = new Promise<void>(resolve => Event.once(this._onDialogStateChanged.event)(() => resolve()));
+		let resolveDialogOpened: (() => void) | undefined;
+		const dialogOpened = new Promise<void>(resolve => { resolveDialogOpened = resolve; });
+		const dialogListener = Event.once(this._onDialogStateChanged.event)(() => resolveDialogOpened?.());
 		const actionCompleted = createCancelablePromise(async (token) => {
 
 			// Whenever the page has a `filechooser` handler, the default file chooser is disabled.
@@ -250,21 +226,29 @@ export class PlaywrightTab {
 
 			try {
 				this.actionScope.activeCalls++;
-				result = await this.runAndWaitForCompletion((token) => action(this.page, token), token);
+				result = await this.runAndWaitForCompletion(
+					token => action(this.page, token),
+					token,
+					options.waitForCompletion,
+				);
 				actionDidComplete = true;
 			} finally {
 				this.page.off('filechooser', handleFileChooser);
 				this.actionScope.activeCalls--;
 			}
 		});
+		const cancellationListener = options.token.onCancellationRequested(() => actionCompleted.cancel());
 
-		return raceCancellablePromises([dialogOpened, actionCompleted]).then(() => {
+		try {
+			await raceCancellablePromises([dialogOpened, actionCompleted]);
 			if (!actionDidComplete) {
-				// A dialog was opened before the action completed. Note we don't cancel the action, just ignore its result.
 				throw new DialogInterruptedError();
 			}
 			return result!;
-		});
+		} finally {
+			cancellationListener.dispose();
+			dialogListener.dispose();
+		}
 	}
 
 	async getSummary(full = this._needsFullSnapshot): Promise<string> {
@@ -282,11 +266,12 @@ export class PlaywrightTab {
 			this._needsFullSnapshot = false;
 		}
 
-		const snapshotFromPage = await this.safeRunAgainstPage((page) => this.getAiSnapshot(page, full)).catch(() => {
+		const pageActionOptions = { waitForCompletion: true, token: CancellationTokenNone };
+		const snapshotFromPage = await this.safeRunAgainstPage((page) => this.getAiSnapshot(page, full), pageActionOptions).catch(() => {
 			this._needsFullSnapshot = true;
 			return undefined;
 		});
-		const title = await this.safeRunAgainstPage((page) => page.title()).catch(() => '');
+		const title = await this.safeRunAgainstPage((page) => page.title(), pageActionOptions).catch(() => '');
 
 		const logs = this._logs;
 		this._logs = [];
@@ -306,46 +291,74 @@ export class PlaywrightTab {
 		].join('\n');
 	}
 
-	async captureSnapshot(pageId: string, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IPageSnapshotCapture> {
-		const resolved = resolveSnapshotOptions(options);
-		const deadline = Date.now() + resolved.timeoutMs;
+	async captureSnapshot(
+		pageId: string,
+		options: IResolvedPageSnapshotOptions,
+		deadline: number,
+		token: CancellationToken,
+	): Promise<IPageSnapshotCapture> {
 		this._throwIfCancelled(token);
-		return this.safeRunAgainstPage(async page => {
-			await this._awaitSnapshotStage(page.mainFrame().waitForLoadState('domcontentloaded', { timeout: this._remainingTimeout(deadline, resolved) }), deadline, resolved, token);
-			if (resolved.readiness) {
-				await this._waitForReadiness(page, deadline, resolved, token);
-			}
-			await this._awaitSnapshotStage(page.evaluate(() => new Promise<void>(resolve => globalThis.requestAnimationFrame(() => resolve()))), deadline, resolved, token);
-			const snapshot = await this._awaitSnapshotStage(page.evaluate((maximumBytes: number): IPageSnapshotCapture | IPageSnapshotTooLarge | undefined => {
-				const documentElement = globalThis.document.documentElement;
-				if (!documentElement) {
-					return undefined;
+		try {
+			return await this.safeRunAgainstPage(async (page, actionToken) => {
+				await waitForPageSnapshotStage(
+					() => page.mainFrame().waitForLoadState('domcontentloaded', { timeout: remainingPageSnapshotTime(deadline, options) }),
+					deadline,
+					options,
+					actionToken,
+					true,
+				);
+				if (options.readiness) {
+					await this._waitForReadiness(page, deadline, options, actionToken);
 				}
-				const html = documentElement.outerHTML;
-				if (new TextEncoder().encode(html).byteLength > maximumBytes) {
-					return { uri: globalThis.location.href, title: globalThis.document.title, tooLarge: true };
+				await waitForPageSnapshotStage(
+					() => page.evaluate(() => new Promise<void>(resolve => globalThis.requestAnimationFrame(() => resolve()))),
+					deadline,
+					options,
+					actionToken,
+					true,
+				);
+				const snapshot = await waitForPageSnapshotStage(() => page.evaluate((maximumBytes: number): IPageSnapshotCapture | IPageSnapshotTooLarge | undefined => {
+					const documentElement = globalThis.document.documentElement;
+					if (!documentElement) {
+						return undefined;
+					}
+					const html = documentElement.outerHTML;
+					if (new TextEncoder().encode(html).byteLength > maximumBytes) {
+						return { uri: globalThis.location.href, title: globalThis.document.title, tooLarge: true };
+					}
+					return { uri: globalThis.location.href, title: globalThis.document.title, html };
+				}, options.maximumBytes), deadline, options, actionToken, true);
+				this._throwIfCancelled(actionToken);
+				if (!snapshot) {
+					throw new BrowserPageSnapshotEmptyError(pageId);
 				}
-				return { uri: globalThis.location.href, title: globalThis.document.title, html };
-			}, resolved.maximumBytes), deadline, resolved, token);
-			this._throwIfCancelled(token);
-			if (!snapshot) {
-				throw new BrowserPageSnapshotEmptyError(pageId);
+				if ('tooLarge' in snapshot) {
+					throw new BrowserPageSnapshotTooLargeError(options.maximumBytes);
+				}
+				if (Buffer.byteLength(snapshot.html, 'utf8') > options.maximumBytes) {
+					throw new BrowserPageSnapshotTooLargeError(options.maximumBytes);
+				}
+				return snapshot;
+			}, { waitForCompletion: false, token });
+		} catch (error) {
+			if (isCancellationError(error)) {
+				throw error;
 			}
-			if ('tooLarge' in snapshot) {
-				throw new BrowserPageSnapshotTooLargeError(resolved.maximumBytes);
+			if (isPageClosedError(error)) {
+				throw new BrowserPageClosedError(pageId);
 			}
-			if (Buffer.byteLength(snapshot.html, 'utf8') > resolved.maximumBytes) {
-				throw new BrowserPageSnapshotTooLargeError(resolved.maximumBytes);
+			if (isNavigationInterruptedError(error)) {
+				throw new BrowserPageNavigationInterruptedError(error);
 			}
-			return snapshot;
-		});
+			throw error;
+		}
 	}
 
-	private async _waitForReadiness(page: playwright.Page, deadline: number, options: IResolvedSnapshotOptions, token: CancellationToken): Promise<void> {
+	private async _waitForReadiness(page: playwright.Page, deadline: number, options: IResolvedPageSnapshotOptions, token: CancellationToken): Promise<void> {
 		const readiness = options.readiness!;
 		const locator = page.locator(readiness.selector);
 		try {
-			await this._awaitSnapshotStage(locator.count(), deadline, options, token);
+			await waitForPageSnapshotStage(() => locator.count(), deadline, options, token, true);
 		} catch (error) {
 			if (isInvalidSelectorError(error)) {
 				throw new BrowserPageReadinessSelectorError(readiness.selector, error);
@@ -354,52 +367,28 @@ export class PlaywrightTab {
 		}
 		while (true) {
 			this._throwIfCancelled(token);
-			const count = await this._awaitSnapshotStage(locator.count(), deadline, options, token);
+			const count = await waitForPageSnapshotStage(() => locator.count(), deadline, options, token, true);
 			let ready = count >= readiness.minimumCount;
 			if (ready && readiness.state === 'visible') {
-				for (let index = 0; index < readiness.minimumCount; index++) {
-					if (!await this._awaitSnapshotStage(locator.nth(index).isVisible(), deadline, options, token)) {
-						ready = false;
-						break;
+				let visibleCount = 0;
+				for (let index = 0; index < count && visibleCount < readiness.minimumCount; index++) {
+					if (await waitForPageSnapshotStage(() => locator.nth(index).isVisible(), deadline, options, token, true)) {
+						visibleCount++;
 					}
 				}
+				ready = visibleCount >= readiness.minimumCount;
 			}
 			if (ready) {
 				return;
 			}
-			await this._awaitSnapshotStage(new Promise<void>(resolve => setTimeout(resolve, Math.min(100, this._remainingTimeout(deadline, options)))), deadline, options, token);
+			await waitForPageSnapshotStage(
+				() => new Promise<void>(resolve => setTimeout(resolve, Math.min(100, remainingPageSnapshotTime(deadline, options)))),
+				deadline,
+				options,
+				token,
+				false,
+			);
 		}
-	}
-
-	private _awaitSnapshotStage<T>(promise: Promise<T>, deadline: number, options: IResolvedSnapshotOptions, token: CancellationToken): Promise<T> {
-		if (token.isCancellationRequested) {
-			return Promise.reject(new CancellationError());
-		}
-		const remaining = this._remainingTimeout(deadline, options);
-		return new Promise<T>((resolve, reject) => {
-			let settled = false;
-			let cancellationListener: { dispose(): void } | undefined;
-			const timeoutHandle = setTimeout(() => finish(() => reject(new BrowserPageReadinessTimeoutError(options.readiness?.selector, options.timeoutMs))), remaining);
-			const finish = (callback: () => void) => {
-				if (settled) {
-					return;
-				}
-				settled = true;
-				clearTimeout(timeoutHandle);
-				cancellationListener?.dispose();
-				callback();
-			};
-			cancellationListener = token.onCancellationRequested(() => finish(() => reject(new CancellationError())));
-			promise.then(value => finish(() => resolve(value)), error => finish(() => reject(error)));
-		});
-	}
-
-	private _remainingTimeout(deadline: number, options: IResolvedSnapshotOptions): number {
-		const remaining = deadline - Date.now();
-		if (remaining <= 0) {
-			throw new BrowserPageReadinessTimeoutError(options.readiness?.selector, options.timeoutMs);
-		}
-		return remaining;
 	}
 
 	private _throwIfCancelled(token: CancellationToken): void {
@@ -416,7 +405,14 @@ export class PlaywrightTab {
 		return page.ariaSnapshot(options);
 	}
 
-	private async runAndWaitForCompletion<T>(callback: (token: CancellationToken) => Promise<T>, token = CancellationTokenNone): Promise<T> {
+	private async runAndWaitForCompletion<T>(
+		callback: (token: CancellationToken) => Promise<T>,
+		token: CancellationToken,
+		waitForCompletion: boolean,
+	): Promise<T> {
+		if (!waitForCompletion) {
+			return callback(token);
+		}
 		const requests: playwright.Request[] = [];
 
 		const requestListener = (request: playwright.Request) => requests.push(request);
@@ -443,10 +439,15 @@ export class PlaywrightTab {
 			if (['document', 'stylesheet', 'script', 'xhr', 'fetch'].includes(request.resourceType())) { promises.push(request.response().then(r => r?.finished()).catch(() => { })); }
 			else { promises.push(request.response().catch(() => { })); }
 		}
-		await raceCancellablePromises<unknown>([
+		const pageCompletion = raceCancellablePromises<unknown>([
 			Promise.all(promises),
 			timeout(5000) // Don't wait indefinitely for requests to finish
 		]);
+		try {
+			await pageCompletion;
+		} finally {
+			pageCompletion.cancel();
+		}
 
 		return result;
 	}

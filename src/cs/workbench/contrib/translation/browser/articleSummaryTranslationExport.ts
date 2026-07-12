@@ -52,7 +52,6 @@ export type ArticleSummaryTranslationExportControllerContext = {
   locale: Locale;
   ui: LocaleMessages;
   pdfDownloadDir: string;
-  onUnavailableArticleIds: (articleIds: readonly ArticleId[]) => void;
 };
 
 export type ArticleSummaryTranslationExportControllerSnapshot = {
@@ -138,6 +137,7 @@ export class ArticleSummaryTranslationExportController {
   readonly handleExportArticleSummaries = async (
     articleIds: readonly ArticleId[],
     translateSummaries: boolean,
+    onUnavailableArticleIds: (articleIds: readonly ArticleId[]) => void,
   ) => {
     if (this.currentTask) {
       this.cancelExportArticleSummaries();
@@ -167,7 +167,11 @@ export class ArticleSummaryTranslationExportController {
 
     let exportArticles: ArticleSummaryExportInput[];
     try {
-      exportArticles = await this.resolveArticleSummaries(articleIds, source.token);
+      exportArticles = await this.resolveArticleSummaries(
+        articleIds,
+        source.token,
+        onUnavailableArticleIds,
+      );
     } catch (error) {
       if (!source.token.isCancellationRequested) {
         const localizedError = localizeAppError(ui, parseAppErrorData(error));
@@ -314,6 +318,7 @@ export class ArticleSummaryTranslationExportController {
   private async resolveArticleSummaries(
     articleIds: readonly ArticleId[],
     token: CancellationToken,
+    onUnavailableArticleIds: (articleIds: readonly ArticleId[]) => void,
   ): Promise<ArticleSummaryExportInput[]> {
     const unavailableArticleIds: ArticleId[] = [];
     const summaries: ArticleSummaryExportInput[] = [];
@@ -331,7 +336,7 @@ export class ArticleSummaryTranslationExportController {
     }
 
     if (unavailableArticleIds.length > 0) {
-      this.context.onUnavailableArticleIds(unavailableArticleIds);
+      onUnavailableArticleIds(unavailableArticleIds);
       this.context.notificationService.info(this.context.ui.articleDetailsUnavailable);
     }
     return summaries;

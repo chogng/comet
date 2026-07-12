@@ -15,10 +15,16 @@ export type OpenAiCompatibleResponseMessageRole =
   | 'user'
   | 'assistant';
 
-export type OpenAiCompatibleResponseContentPart = {
-  type: 'text';
-  text: string;
-};
+export type OpenAiCompatibleResponseContentPart =
+  | {
+    type: 'input_text';
+    text: string;
+  }
+  | {
+    type: 'input_image';
+    image_url: string;
+    detail: 'auto';
+  };
 
 export type OpenAiCompatibleResponseMessage = {
   role: OpenAiCompatibleResponseMessageRole;

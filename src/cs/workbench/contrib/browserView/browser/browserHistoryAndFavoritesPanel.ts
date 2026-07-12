@@ -7,7 +7,7 @@ import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon, createLxLoadingIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import { $ } from 'cs/base/browser/dom';
 import { toAction } from 'cs/base/common/actions';
 import type { Event } from 'cs/base/common/event';
@@ -80,7 +80,6 @@ export type BrowserHistoryAndFavoritesPanelContext = {
   browserIsLoading?: boolean;
   labels: BrowserHistoryAndFavoritesPanelLabels;
   onNavigateToUrl: (url: string) => void;
-  onOpenEditor?: EditorOpenHandler;
 };
 
 type BrowserHistoryAndFavoritesPanelOptions = {
@@ -186,11 +185,12 @@ export class BrowserHistoryAndFavoritesPanel {
 
   constructor(
     context: BrowserHistoryAndFavoritesPanelContext,
-    options: BrowserHistoryAndFavoritesPanelOptions = {},
+		options: BrowserHistoryAndFavoritesPanelOptions,
+		@IEditorService private readonly editorService: IEditorService,
   ) {
     this.context = context;
-    this.isInteractionWithin = options.isInteractionWithin;
-    this.onDidChangeOpenState = options.onDidChangeOpenState;
+		this.isInteractionWithin = options.isInteractionWithin;
+		this.onDidChangeOpenState = options.onDidChangeOpenState;
     this.searchInput = new InputBox(this.searchInputHost, undefined, {
       className: 'comet-browser-history-and-favorites-search-input',
       type: 'text',
@@ -421,11 +421,7 @@ export class BrowserHistoryAndFavoritesPanel {
   };
 
   private readonly handleFavoriteItemOpenInNewTab = (url: string) => {
-    if (!this.context.onOpenEditor) {
-      return;
-    }
-
-    void this.context.onOpenEditor({
+		void this.editorService.openEditor({
       resource: BrowserViewUri.forId(generateUuid()),
       options: {
         viewState: {
@@ -883,7 +879,6 @@ const fallback = createLxIcon(
         toAction({
           id: 'open-in-new-tab',
           label: String(this.context.labels.contextOpenInNewTab ?? 'Open in New Tab'),
-          enabled: Boolean(this.context.onOpenEditor),
           run: () => {
             this.handleFavoriteItemOpenInNewTab(itemState.url);
           },

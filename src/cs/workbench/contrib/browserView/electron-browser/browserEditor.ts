@@ -7,63 +7,53 @@ import 'cs/workbench/contrib/browserView/electron-browser/media/browser.css';
 
 import { $, getWindow } from 'cs/base/browser/dom';
 import { getZoomFactor, onDidChangeZoomLevel } from 'cs/base/browser/browser';
+import { disposableTimeout, raceCancellationError } from 'cs/base/common/async';
 import { Emitter, Event } from 'cs/base/common/event';
 import type { CancellationToken } from 'cs/base/common/cancellation';
-import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import {
 	ContextKeyExpr,
-	ContextKeyServiceImpl,
 	IContextKeyService,
 	RawContextKey,
 	type ContextKey,
 } from 'cs/platform/contextkey/common/contextkey';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPaneLayout } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { BrowserEditorPaneLabels } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
 import type {
-	BrowserEditorPaneState,
-	IBrowserEditorPane,
-} from 'cs/workbench/contrib/browserView/browser/browserEditorPane';
+	BrowserEditorModeToolbarPane,
+	BrowserEditorModeToolbarState,
+} from 'cs/workbench/contrib/browserView/browser/browserModeToolbarHost';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
 import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
+import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/editor';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
-import type { ThemeIcon } from 'cs/base/common/themables';
-import type { URI } from 'cs/base/common/uri';
-import type { IQuickInputButton } from 'cs/platform/quickinput/common/quickInput';
-import type { INativeHostService } from 'cs/platform/native/common/native';
-import {
-	captureBrowserEditorViewState,
-	restoreBrowserEditorViewState,
-	type BrowserEditorViewState,
-} from 'cs/workbench/contrib/browserView/electron-browser/browserEditorViewState';
+import type { IBrowserViewViewStateEvent } from 'cs/platform/browserView/common/browserView';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import { ILogService } from 'cs/platform/log/common/log';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 
 type BrowserEditorContributionCtor = new (editor: BrowserEditor, ...services: never[]) => BrowserEditorContribution;
+type BrowserEditorViewState = IBrowserViewViewStateEvent;
+
+const BROWSER_VIEW_STATE_RESTORE_DEADLINE_MS = 10_000;
 
 export const BROWSER_EDITOR_ACTIVE = ContextKeyExpr.equals('activeEditor', BrowserEditorInput.EDITOR_ID);
-export const CONTEXT_BROWSER_FOCUSED = new RawContextKey<boolean>('browserFocused', false);
 export const CONTEXT_BROWSER_HAS_URL = new RawContextKey<boolean>('browserHasUrl', false);
 export const CONTEXT_BROWSER_HAS_ERROR = new RawContextKey<boolean>('browserHasError', false);
+export const CONTEXT_BROWSER_CAN_GO_BACK = new RawContextKey<boolean>('browserCanGoBack', false);
+export const CONTEXT_BROWSER_CAN_GO_FORWARD = new RawContextKey<boolean>('browserCanGoForward', false);
 
 export enum BrowserWidgetLocation {
-	PreUrl = 'preUrl',
-	PostUrl = 'postUrl',
 	Toolbar = 'toolbar',
 	ContentArea = 'contentArea',
 }
 
 export const BrowserActionCategory = 'Browser';
-
-export enum BrowserActionGroup {
-	Tabs = '1_tabs',
-	Zoom = '2_zoom',
-	Tools = '3_tools',
-	Data = '4_data',
-	Settings = '5_settings',
-}
 
 export interface IContainerLayout {
 	readonly width: number;
@@ -99,47 +89,6 @@ export interface IBrowserEditorWidget {
 	readonly order: number;
 }
 
-export interface IBrowserUrlRenderer {
-	render(url: string, container: HTMLElement): boolean;
-}
-
-export interface IBrowserUrlSuggestion {
-	readonly id: string;
-	readonly label: string;
-	readonly description?: string;
-	readonly icon?: ThemeIcon;
-	readonly iconPath?: URI;
-	readonly actions?: readonly IBrowserUrlPickerAction[];
-	apply(input: BrowserEditorInput): void | Promise<void>;
-}
-
-export interface IBrowserUrlSuggestionProvider {
-	readonly onDidChange?: Event<void>;
-	readonly order?: number;
-	readonly label?: string;
-	readonly description?: string;
-	readonly actions?: readonly IBrowserUrlPickerAction[];
-	getSuggestions(input: BrowserEditorInput, value: string): readonly IBrowserUrlSuggestion[] | Promise<readonly IBrowserUrlSuggestion[]>;
-}
-
-export interface IBrowserUrlPickerAction extends IQuickInputButton {
-	readonly id: string;
-	readonly label: string;
-	readonly iconClass?: string;
-	run(input: BrowserEditorInput): void | Promise<void>;
-}
-
-export interface IBrowserUrlPickerActionProvider {
-	readonly onDidChange?: Event<void>;
-	readonly order?: number;
-	getActions(input: BrowserEditorInput): readonly IBrowserUrlPickerAction[];
-}
-
-export type BrowserEditorProps = {
-	labels: BrowserEditorPaneLabels;
-	nativeHost: INativeHostService;
-};
-
 export abstract class BrowserEditorContribution extends Disposable {
 	private readonly modelStore = this._register(new DisposableStore());
 
@@ -159,18 +108,6 @@ export abstract class BrowserEditorContribution extends Disposable {
 		return [];
 	}
 
-	get urlSuggestionProviders(): readonly IBrowserUrlSuggestionProvider[] {
-		return [];
-	}
-
-	get urlRenderers(): readonly IBrowserUrlRenderer[] {
-		return [];
-	}
-
-	get urlPickerActionProviders(): readonly IBrowserUrlPickerActionProvider[] {
-		return [];
-	}
-
 	prerenderInput(_input: BrowserEditorInput): void { }
 	protected onModelAttached(_model: IBrowserViewModel, _store: DisposableStore, _isNew: boolean): void { }
 	onModelDetached(): void { }
@@ -185,7 +122,7 @@ export abstract class BrowserEditorContribution extends Disposable {
 export class BrowserEditor extends EditorPane<
 	BrowserEditorInput,
 	BrowserEditorViewState
-> implements IBrowserEditorPane {
+> implements BrowserEditorModeToolbarPane {
 	private historyFeature: BrowserHistoryPanelFeature | undefined;
 	private favoritesFeature: BrowserFavoritesPanelFeature | undefined;
 	private static readonly contributions: BrowserEditorContributionCtor[] = [];
@@ -197,15 +134,15 @@ export class BrowserEditor extends EditorPane<
 		model: IBrowserViewModel | undefined;
 		isNew: boolean;
 	}>());
-	private readonly browserStateEmitter = this.disposables.add(new Emitter<BrowserEditorPaneState>());
+	private readonly browserStateEmitter = this.disposables.add(new Emitter<BrowserEditorModeToolbarState>());
 	private readonly runtimeStateEmitter = this.disposables.add(new Emitter<EditorPaneRuntimeState>());
-	private _browserState: BrowserEditorPaneState | undefined;
-	private runtimeState: EditorPaneRuntimeState | undefined;
-	private readonly browserContextKeyService = new ContextKeyServiceImpl();
-	private readonly browserFocusedContext: ContextKey<boolean>;
+	private readonly viewStateEmitter = this.disposables.add(new Emitter<BrowserEditorViewState>());
+	private _browserState: BrowserEditorModeToolbarState | undefined;
+	private readonly activeEditorFocusedContext: ContextKey<boolean>;
 	private readonly hasUrlContext: ContextKey<boolean>;
 	private readonly hasErrorContext: ContextKey<boolean>;
-	private props: BrowserEditorProps;
+	private readonly canGoBackContext: ContextKey<boolean>;
+	private readonly canGoForwardContext: ContextKey<boolean>;
 	private inputModelSequence = 0;
 	private _input: BrowserEditorInput | undefined;
 	private _model: IBrowserViewModel | undefined;
@@ -215,15 +152,21 @@ export class BrowserEditor extends EditorPane<
 	private readonly placeholderContents = $('div.browser-placeholder-contents');
 	private currentPadding: { top: number; right: number; bottom: number; left: number } = { top: 0, right: 0, bottom: 0, left: 0 };
 	private viewState: BrowserEditorViewState | undefined;
+	private pendingRestoredViewState: BrowserEditorViewState | undefined;
 	private restoreSequence = 0;
-	private pendingRestoreTimer: number | null = null;
+	private restoreInFlight = false;
+	private readonly restoreDeadline = this.disposables.add(new MutableDisposable());
+	private visible = false;
+	private hasVisibleLayout = false;
+	private layoutRequestSequence = 0;
 
 	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 	readonly onDidChangeModel = this._onDidChangeModel.event;
 	readonly onDidChangeBrowserState = this.browserStateEmitter.event;
 	override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
+	override readonly onDidChangeViewState = this.viewStateEmitter.event;
 
-	get browserState(): BrowserEditorPaneState | undefined {
+	get browserState(): BrowserEditorModeToolbarState | undefined {
 		return this._browserState;
 	}
 
@@ -270,14 +213,23 @@ export class BrowserEditor extends EditorPane<
 	}
 
 	constructor(
-		props: BrowserEditorProps,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+		@ILogService private readonly logService: ILogService,
 	) {
 		super();
-		this.props = props;
-		this.browserFocusedContext = CONTEXT_BROWSER_FOCUSED.bindTo(this.browserContextKeyService);
-		this.hasUrlContext = CONTEXT_BROWSER_HAS_URL.bindTo(this.browserContextKeyService);
-		this.hasErrorContext = CONTEXT_BROWSER_HAS_ERROR.bindTo(this.browserContextKeyService);
+		this.activeEditorFocusedContext = ActiveEditorFocusedContext.bindTo(contextKeyService);
+		this.hasUrlContext = CONTEXT_BROWSER_HAS_URL.bindTo(contextKeyService);
+		this.hasErrorContext = CONTEXT_BROWSER_HAS_ERROR.bindTo(contextKeyService);
+		this.canGoBackContext = CONTEXT_BROWSER_CAN_GO_BACK.bindTo(contextKeyService);
+		this.canGoForwardContext = CONTEXT_BROWSER_CAN_GO_FORWARD.bindTo(contextKeyService);
+		this.disposables.add(toDisposable(this.localeService.subscribe(() => {
+			if (this._input) {
+				this.runtimeStateEmitter.fire(createBrowserEditorPaneState(this._input, this.labels));
+			}
+		})));
 		this.createEditor();
 	}
 
@@ -309,23 +261,26 @@ export class BrowserEditor extends EditorPane<
 		return this.rootElement;
 	}
 
-	setProps(props: BrowserEditorProps) {
-		this.props = props;
-	}
-
 	override getRuntimeState() {
-		return this.runtimeState;
+		return this._input
+			? createBrowserEditorPaneState(this._input, this.labels)
+			: undefined;
 	}
 
-	override setInput(input: BrowserEditorInput, token?: CancellationToken) {
-		if (token?.isCancellationRequested) {
+	override async setInput(
+		input: BrowserEditorInput,
+		_options: IEditorOptions | undefined,
+		_context: IEditorOpenContext,
+		token: CancellationToken,
+	): Promise<void> {
+		if (token.isCancellationRequested) {
 			return;
 		}
 		const previousInputId = this._input?.id;
 		if (previousInputId !== input.id) {
 			this.cancelRestoreSequence();
 		}
-		this.attachInput(input, token);
+		await this.attachInput(input, token);
 	}
 
 	override focus() {
@@ -338,6 +293,12 @@ export class BrowserEditor extends EditorPane<
 	}
 
 	override setVisible(visible: boolean) {
+		this.visible = visible;
+		if (!visible) {
+			this.activeEditorFocusedContext.reset();
+			this.hasVisibleLayout = false;
+			this.layoutRequestSequence += 1;
+		}
 		for (const contribution of this.contributionInstances.values()) {
 			contribution.onPaneVisibilityChanged(visible);
 		}
@@ -373,27 +334,26 @@ export class BrowserEditor extends EditorPane<
 	}
 
 	override getViewState() {
-		return this.viewState;
+		return this.pendingRestoredViewState ?? this.viewState ?? this._model?.viewState;
 	}
 
-	override async captureViewState() {
-		const capturedViewState = await captureBrowserEditorViewState(
-			this.getCurrentInput().id,
-			this.props.nativeHost,
-		);
-		if (capturedViewState) {
-			this.viewState = capturedViewState;
+	override async captureViewState(): Promise<BrowserEditorViewState | undefined> {
+		if (this.pendingRestoredViewState) {
+			return this.pendingRestoredViewState;
 		}
-
-		return this.viewState;
+		const model = this._model;
+		return model ? model.captureViewState() : this.viewState;
 	}
 
 	override restoreViewState(viewState: BrowserEditorViewState | undefined) {
+		this.cancelRestoreSequence();
 		this.viewState = viewState;
-		this.scheduleRestore(viewState);
+		this.pendingRestoredViewState = viewState;
+		this.requestViewStateRestore();
 	}
 
 	override clearInput() {
+		this.cancelRestoreSequence();
 		this.inputModelSequence += 1;
 		this.inputDisposables.clear();
 		this._input = undefined;
@@ -410,7 +370,12 @@ export class BrowserEditor extends EditorPane<
 		this.disposables.dispose();
 	}
 
-	async layoutBrowserContainer(retries = 2): Promise<boolean> {
+	async layoutBrowserContainer(retries = 2, requestSequence?: number): Promise<boolean> {
+		const layoutRequest = requestSequence ?? ++this.layoutRequestSequence;
+		const visibleLayout = this.visible;
+		if (visibleLayout && retries === 2) {
+			this.hasVisibleLayout = false;
+		}
 		const model = this._model;
 		if (!model) {
 			return false;
@@ -438,7 +403,7 @@ export class BrowserEditor extends EditorPane<
 			await new Promise<void>(resolve => {
 				this.window.requestAnimationFrame(() => resolve());
 			});
-			return this.layoutBrowserContainer(retries - 1);
+			return this.layoutBrowserContainer(retries - 1, layoutRequest);
 		}
 		if (wrapperRect.width === 0 || wrapperRect.height === 0) {
 			return false;
@@ -479,12 +444,16 @@ export class BrowserEditor extends EditorPane<
 			cornerRadius: parseFloat(this.window.getComputedStyle(this.browserContainerElement).borderTopLeftRadius ?? '0'),
 			emulation: containerLayout.emulation,
 		});
-		if (this._model !== model) {
+		if (this._model !== model || layoutRequest !== this.layoutRequestSequence) {
 			return false;
 		}
 
 		for (const contribution of this.contributionInstances.values()) {
 			contribution.afterContainerLayout();
+		}
+		if (visibleLayout && this.visible) {
+			this.hasVisibleLayout = true;
+			this.requestViewStateRestore(model);
 		}
 		return true;
 	}
@@ -500,13 +469,9 @@ export class BrowserEditor extends EditorPane<
 
 	private createEditor() {
 		this.rootElement.tabIndex = -1;
-		this.browserFocusedContext.set(true);
 
-		const scopedInstantiationService = this.disposables.add(this.instantiationService.createChild(new ServiceCollection(
-			[IContextKeyService, this.browserContextKeyService],
-		)));
 		for (const ctor of BrowserEditor.contributions) {
-			const instance = this.disposables.add(scopedInstantiationService.createInstance(ctor, this));
+			const instance = this.disposables.add(this.instantiationService.createInstance(ctor, this));
 			this.contributionInstances.set(ctor, instance);
 		}
 
@@ -545,13 +510,11 @@ export class BrowserEditor extends EditorPane<
 			this.placeholderContents.append(widget.element);
 		}
 
-		for (const contribution of this.contributionInstances.values()) {
-			contribution.onPaneVisibilityChanged(true);
-		}
+		this.activeEditorFocusedContext.reset();
 	}
 
-	private attachInput(input: BrowserEditorInput, token?: CancellationToken) {
-		if (this._input === input) {
+	private async attachInput(input: BrowserEditorInput, token: CancellationToken): Promise<void> {
+		if (this._input === input && this._model) {
 			this.layout();
 			return;
 		}
@@ -565,18 +528,17 @@ export class BrowserEditor extends EditorPane<
 		if (!model) {
 			this.hasUrlContext.set(!!input.url);
 			this.hasErrorContext.set(false);
+			this.canGoBackContext.reset();
+			this.canGoForwardContext.reset();
 			for (const contribution of this.contributionInstances.values()) {
 				contribution.prerenderInput(input);
 			}
-			void input.resolve().then((resolvedModel) => {
-				if (token?.isCancellationRequested || this.inputModelSequence !== sequence || this._input !== input) {
-					return;
-				}
-				this.attachModel(resolvedModel, isNew);
-			});
-			return;
+			model = await raceCancellationError(input.resolve(), token);
 		}
 
+		if (token.isCancellationRequested || this.inputModelSequence !== sequence || this._input !== input) {
+			return;
+		}
 		this.attachModel(model, isNew);
 	}
 
@@ -593,21 +555,41 @@ export class BrowserEditor extends EditorPane<
 			}
 		}));
 		this.inputDisposables.add(model.onWillNavigate(() => this.ensureBrowserFocus()));
+		this.inputDisposables.add(model.onDidChangeViewState(viewState => {
+			this.updateViewState(viewState);
+			this.requestViewStateRestore(model);
+		}));
 		this.inputDisposables.add(model.onDidNavigate(() => {
+			if (this.pendingRestoredViewState && this.pendingRestoredViewState.url !== model.url) {
+				this.cancelRestoreSequence();
+			}
 			this.hasUrlContext.set(!!model.url);
+			if (this.viewState?.url !== model.url) {
+				this.updateViewState({ url: model.url, scrollX: 0, scrollY: 0 });
+			}
 			this.ensureBrowserFocus();
 			this.emitBrowserState(model);
 		}));
 		this.inputDisposables.add(model.onDidChangeLoadingState(() => {
 			this.hasErrorContext.set(!!model.error);
 			this.emitBrowserState(model);
+			this.requestViewStateRestore(model);
+		}));
+		this.inputDisposables.add(model.onDidChangeVisibility(({ visible }) => {
+			if (!visible) {
+				this.activeEditorFocusedContext.reset();
+			}
+			this.requestViewStateRestore(model);
 		}));
 		this.inputDisposables.add(model.onDidChangeTitle(() => this.emitBrowserState(model)));
 		this.inputDisposables.add(model.onDidChangeFavicon(() => this.emitBrowserState(model)));
 		this.inputDisposables.add(model.onDidChangeFocus(({ focused }) => {
 			if (focused) {
+				this.activeEditorFocusedContext.set(true);
 				this._onDidFocus.fire();
 				this.ensureBrowserFocus();
+			} else if (!this.rootElement.contains(this.rootElement.ownerDocument.activeElement)) {
+				this.activeEditorFocusedContext.reset();
 			}
 		}));
 		this.inputDisposables.add(onDidChangeZoomLevel(targetWindowId => {
@@ -619,7 +601,11 @@ export class BrowserEditor extends EditorPane<
 
 		queueMicrotask(() => {
 			if (this._model === model) {
+				if (!this.pendingRestoredViewState && model.viewState.url === model.url) {
+					this.updateViewState(model.viewState);
+				}
 				this.emitBrowserState(model);
+				this.requestViewStateRestore(model);
 			}
 		});
 		this.layout();
@@ -640,10 +626,35 @@ export class BrowserEditor extends EditorPane<
 			title: model.title,
 			favicon: model.favicon,
 			loading: model.loading,
+			canGoBack: model.canGoBack,
+			canGoForward: model.canGoForward,
 		};
-		this.runtimeState = createBrowserEditorPaneState(this.getCurrentInput(), this.props.labels);
+		this.canGoBackContext.set(model.canGoBack);
+		this.canGoForwardContext.set(model.canGoForward);
 		this.browserStateEmitter.fire(this._browserState);
-		this.runtimeStateEmitter.fire(this.runtimeState);
+		this.runtimeStateEmitter.fire(createBrowserEditorPaneState(this.getCurrentInput(), this.labels));
+	}
+
+	private updateViewState(viewState: BrowserEditorViewState): void {
+		const pendingViewState = this.pendingRestoredViewState;
+		if (
+			pendingViewState?.url === viewState.url &&
+			(
+				pendingViewState.scrollX !== viewState.scrollX ||
+				pendingViewState.scrollY !== viewState.scrollY
+			)
+		) {
+			return;
+		}
+		if (
+			this.viewState?.url === viewState.url &&
+			this.viewState.scrollX === viewState.scrollX &&
+			this.viewState.scrollY === viewState.scrollY
+		) {
+			return;
+		}
+		this.viewState = viewState;
+		this.viewStateEmitter.fire(viewState);
 	}
 
 	private getCurrentInput(): BrowserEditorInput {
@@ -658,76 +669,75 @@ export class BrowserEditor extends EditorPane<
 			return;
 		}
 		this._model = model;
+		this.hasVisibleLayout = false;
 		this.hasUrlContext.set(!!model?.url);
 		this.hasErrorContext.set(!!model?.error);
+		this.canGoBackContext.set(model?.canGoBack ?? false);
+		this.canGoForwardContext.set(model?.canGoForward ?? false);
 		this._onDidChangeModel.fire({ model, isNew });
 	}
 
-	private scheduleRestore(viewState: BrowserEditorViewState | undefined) {
-		this.cancelRestoreSequence();
-		if (!viewState || typeof window === 'undefined') {
-			return;
-		}
-
-		const restoreSequence = ++this.restoreSequence;
+	private requestViewStateRestore(model = this._model): void {
+		const viewState = this.pendingRestoredViewState;
 		const input = this._input;
-		if (input) {
-			this.scheduleRestoreAttempt(restoreSequence, input.id, viewState, 0);
-		}
-	}
-
-	private scheduleRestoreAttempt(
-		restoreSequence: number,
-		targetId: string,
-		viewState: BrowserEditorViewState,
-		attemptIndex: number,
-	) {
-		if (typeof window === 'undefined' || this.restoreSequence !== restoreSequence) {
+		if (
+			!viewState ||
+			!model ||
+			!input ||
+			model.loading ||
+			!model.visible ||
+			!this.visible ||
+			!this.hasVisibleLayout ||
+			this.restoreInFlight
+		) {
 			return;
 		}
-
-		const retryDelaysMs = [0, 200, 800] as const;
-		const delayMs = retryDelaysMs[attemptIndex] ?? 0;
-		const runAttempt = () => {
-			this.pendingRestoreTimer = null;
-			if (this.restoreSequence !== restoreSequence) {
+		if (!this.restoreDeadline.value) {
+			this.restoreDeadline.value = disposableTimeout(() => {
+				if (this.pendingRestoredViewState === viewState && this._model === model && this._input === input) {
+					this.pendingRestoredViewState = undefined;
+					this.restoreInFlight = false;
+					this.restoreSequence += 1;
+					this.logService.error(`Browser view state for '${input.id}' was not reachable before the restoration deadline.`);
+				}
+			}, BROWSER_VIEW_STATE_RESTORE_DEADLINE_MS);
+		}
+		this.restoreInFlight = true;
+		const restoreSequence = ++this.restoreSequence;
+		void model.restoreViewState(viewState).then(restored => {
+			if (this.restoreSequence !== restoreSequence || this._model !== model || this._input !== input) {
 				return;
 			}
-
-			void restoreBrowserEditorViewState(
-				targetId,
-				viewState,
-				this.props.nativeHost,
-			).then((restored) => {
-				if (restored || this.restoreSequence !== restoreSequence) {
-					return;
-				}
-				if (attemptIndex >= retryDelaysMs.length - 1) {
-					return;
-				}
-				this.scheduleRestoreAttempt(
-					restoreSequence,
-					targetId,
-					viewState,
-					attemptIndex + 1,
-				);
-			});
-		};
-
-		if (delayMs <= 0) {
-			runAttempt();
-			return;
-		}
-
-		this.pendingRestoreTimer = window.setTimeout(runAttempt, delayMs);
+			this.restoreInFlight = false;
+			if (restored) {
+				this.pendingRestoredViewState = undefined;
+				this.restoreDeadline.clear();
+			}
+		}).catch(error => {
+			if (this.restoreSequence === restoreSequence && this._model === model && this._input === input) {
+				this.pendingRestoredViewState = undefined;
+				this.restoreInFlight = false;
+				this.restoreDeadline.clear();
+				this.logService.error(`Browser view state restoration failed for '${input.id}'.`, error);
+			}
+		});
 	}
 
 	private cancelRestoreSequence() {
 		this.restoreSequence += 1;
-		if (this.pendingRestoreTimer !== null && typeof window !== 'undefined') {
-			window.clearTimeout(this.pendingRestoreTimer);
-		}
+		this.restoreInFlight = false;
+		this.restoreDeadline.clear();
+		this.pendingRestoredViewState = undefined;
+	}
 
-		this.pendingRestoreTimer = null;
+	private get labels(): BrowserEditorPaneLabels {
+		const ui = this.languageService.getLocaleMessages(this.localeService.getLocale());
+		return {
+			sourceMode: ui.editorSourceMode,
+			status: {
+				statusbarAriaLabel: ui.editorStatusbarAriaLabel,
+				url: ui.editorStatusUrl,
+			},
+		};
 	}
 }

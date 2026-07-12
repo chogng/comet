@@ -5,7 +5,7 @@
 
 import { Disposable, DisposableMap, IDisposable } from 'cs/base/common/lifecycle';
 import { DeferredPromise, disposableTimeout, raceTimeout } from 'cs/base/common/async';
-import { CancellationError, CancellationToken, isCancellationError } from 'cs/base/common/cancellation';
+import { CancellationError, CancellationToken, CancellationTokenNone, isCancellationError } from 'cs/base/common/cancellation';
 import { Emitter, Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import { ILogService } from 'cs/platform/log/common/log';
@@ -15,8 +15,10 @@ import {
 	BrowserPageClosedError,
 	BrowserPageNavigationInterruptedError,
 	BrowserPageNotTrackedError,
+	BrowserPageReadinessTimeoutError,
 	IBrowserPageSnapshot,
 	IInvokeFunctionResult,
+	IPageTrackingAcquireResult,
 	IPageSnapshotOptions,
 	IPlaywrightService,
 } from 'cs/platform/browserView/common/playwrightService';
@@ -25,6 +27,14 @@ import { IBrowserViewGroup } from 'cs/platform/browserView/common/browserViewGro
 import { PlaywrightTab, DialogInterruptedError } from 'cs/platform/browserView/node/playwrightTab';
 import { CDPRequest, CDPResponse } from 'cs/platform/browserView/common/cdp/types';
 import { generateUuid } from 'cs/base/common/uuid';
+import {
+	createPageSnapshotDeadline,
+	type IResolvedPageSnapshotOptions,
+	isNavigationInterruptedError,
+	isPageClosedError,
+	resolvePageSnapshotOptions,
+	waitForPageSnapshotStage,
+} from 'cs/platform/browserView/node/playwrightSnapshot';
 
 // eslint-disable-next-line local/code-import-patterns
 import type { Browser, BrowserContext, ConnectOverCDPTransport, Page } from 'playwright-core';
@@ -81,7 +91,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	/** Global set of tracked page IDs (shared across all sessions). */
 	private readonly _trackedPages = new Set<string>();
-	private readonly _pageTrackingOperations = new Map<string, Promise<void>>();
+	private readonly _pageTrackingOperations = new Map<string, Promise<unknown>>();
 
 	private readonly _onDidChangeTrackedPages = this._register(new Emitter<readonly string[]>());
 	readonly onDidChangeTrackedPages: Event<readonly string[]> = this._onDidChangeTrackedPages.event;
@@ -204,11 +214,13 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			this.logService,
 			this.agentNetworkFilterService,
 			this.telemetryService,
-			viewId => this.startTrackingPage(viewId),
+			async viewId => {
+				await this.acquirePageTracking(viewId);
+			},
 		);
 
 		session.registerDisposable(group.onDidAddView(e => {
-			void this.startTrackingPage(e.viewId).catch(error => {
+			void this.acquirePageTracking(e.viewId).catch(error => {
 				this.logService.error(`[PlaywrightService] Failed to track page ${e.viewId}`, error);
 			});
 		}));
@@ -247,10 +259,10 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	// --- Page tracking (global) ---
 
-	startTrackingPage(viewId: string): Promise<void> {
+	acquirePageTracking(viewId: string): Promise<IPageTrackingAcquireResult> {
 		return this._enqueuePageTrackingOperation(viewId, async () => {
 			if (this._trackedPages.has(viewId)) {
-				return;
+				return { acquired: false };
 			}
 
 			const sessions = [...this._sessions.values()];
@@ -260,7 +272,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			const additions = await Promise.allSettled(sessions.map(session => session.group.addView(viewId)));
 			const rejected = additions.find((result): result is PromiseRejectedResult => result.status === 'rejected');
 			if (!rejected) {
-				return;
+				return { acquired: true };
 			}
 
 			await Promise.allSettled(sessions.map(session => session.group.removeView(viewId)));
@@ -271,7 +283,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		});
 	}
 
-	stopTrackingPage(viewId: string): Promise<void> {
+	releasePageTracking(viewId: string): Promise<void> {
 		return this._enqueuePageTrackingOperation(viewId, async () => {
 			if (!this._trackedPages.has(viewId)) {
 				return;
@@ -292,7 +304,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		return [...this._trackedPages];
 	}
 
-	private _enqueuePageTrackingOperation(viewId: string, operation: () => Promise<void>): Promise<void> {
+	private _enqueuePageTrackingOperation<T>(viewId: string, operation: () => Promise<T>): Promise<T> {
 		const previous = this._pageTrackingOperations.get(viewId) ?? Promise.resolve();
 		const current = previous.catch(() => undefined).then(operation);
 		this._pageTrackingOperations.set(viewId, current);
@@ -318,10 +330,25 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 	}
 
 	async captureSnapshot(sessionId: string, pageId: string, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IBrowserPageSnapshot> {
+		const resolvedOptions = resolvePageSnapshotOptions(options);
+		const deadline = createPageSnapshotDeadline(resolvedOptions);
 		if (!this._trackedPages.has(pageId)) {
 			throw new BrowserPageNotTrackedError(pageId);
 		}
-		return (await this._getOrCreateSession(sessionId)).captureSnapshot(pageId, options, token);
+		const session = await waitForPageSnapshotStage(
+			() => this._getOrCreateSession(sessionId),
+			deadline,
+			resolvedOptions,
+			token,
+			false,
+		);
+		return waitForPageSnapshotStage(
+			() => session.captureSnapshot(pageId, resolvedOptions, deadline, token),
+			deadline,
+			resolvedOptions,
+			token,
+			false,
+		);
 	}
 
 	async invokeFunctionRaw<T>(sessionId: string, pageId: string, fnDef: string, ...args: unknown[]): Promise<T> {
@@ -474,14 +501,22 @@ class PlaywrightSession extends Disposable {
 		return this._getSummary(pageId, true);
 	}
 
-	async captureSnapshot(pageId: string, options: IPageSnapshotOptions | undefined, token: CancellationToken): Promise<IBrowserPageSnapshot> {
+	async captureSnapshot(
+		pageId: string,
+		options: IResolvedPageSnapshotOptions,
+		deadline: number,
+		token: CancellationToken,
+	): Promise<IBrowserPageSnapshot> {
 		if (token.isCancellationRequested) {
 			throw new CancellationError();
 		}
 		let page: Page;
 		try {
-			page = await this._getPage(pageId);
-		} catch {
+			page = await waitForPageSnapshotStage(() => this._getPage(pageId), deadline, options, token, false);
+		} catch (error) {
+			if (isCancellationError(error) || error instanceof BrowserPageReadinessTimeoutError) {
+				throw error;
+			}
 			throw new BrowserPageClosedError(pageId);
 		}
 		if (page.isClosed()) {
@@ -492,7 +527,7 @@ class PlaywrightSession extends Disposable {
 			throw new BrowserPageClosedError(pageId);
 		}
 		try {
-			const snapshot = await tab.captureSnapshot(pageId, options, token);
+			const snapshot = await tab.captureSnapshot(pageId, options, deadline, token);
 			if (token.isCancellationRequested) {
 				throw new CancellationError();
 			}
@@ -609,7 +644,10 @@ class PlaywrightSession extends Disposable {
 		if (!tab) {
 			throw new Error('Failed to execute function against page');
 		}
-		return tab.safeRunAgainstPage(async () => callback(page));
+		return tab.safeRunAgainstPage(
+			async () => callback(page),
+			{ waitForCompletion: true, token: CancellationTokenNone },
+		);
 	}
 
 	private async _runWithDeferral(pageId: string, callback: (page: Page) => Promise<unknown>, timeoutMs: number, existingDeferredId?: string, logCtx?: IExecutionLogContext): Promise<IInvokeFunctionResult> {
@@ -861,14 +899,6 @@ function isNavigationTimeoutError(error: unknown): boolean {
 	return error.name === 'TimeoutError'
 		|| /Timeout \d+ms exceeded/.test(error.message)
 		|| /navigation timeout/i.test(error.message);
-}
-
-function isPageClosedError(error: unknown): boolean {
-	return error instanceof Error && /Target page, context or browser has been closed|Page closed|Browser has been closed/i.test(error.message);
-}
-
-function isNavigationInterruptedError(error: unknown): boolean {
-	return error instanceof Error && /Execution context was destroyed|Cannot find context|most likely because of a navigation/i.test(error.message);
 }
 
 /**

@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import 'cs/base/browser/ui/dropdown/dropdown.css';
 import { AnchorAlignment, ContextView, ContextViewDOMPosition } from 'cs/base/browser/ui/contextview/contextview';
 import { getBaseLayerHoverDelegate } from 'cs/base/browser/ui/hover/hoverDelegate';
@@ -21,7 +26,6 @@ import {
   layout,
 } from 'cs/base/common/layout';
 import { $ } from 'cs/base/browser/dom';
-
 export type DropdownMenuAlign = 'start' | 'center' | 'end';
 export type DropdownDomMenuLayer = 'portal';
 export type DropdownMenuChangeSource = 'open' | 'props' | 'viewport';
@@ -199,24 +203,39 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
   private menuView: HTMLElement | null = null;
   private menu: Menu | null = null;
   private currentRequest: DropdownMenuRequest | null = null;
+  private isReplacingMenu = false;
 
   show = (request: DropdownMenuRequest) => {
+    const isReplacingMenu = this.menuView !== null;
     this.currentRequest = request;
     this.menu?.dispose();
     this.menu = this.createMenu(request);
     const menuElement = this.menu.getElement();
     this.menuView = menuElement;
 
-    this.contextView.show({
-      getAnchor: () => request.anchor,
-      render: container => {
-        container.classList.add('comet-dropdown-context-view');
-        container.append(menuElement);
-        return null;
-      },
-      onHide: this.handlePortalHide,
-      anchorAlignment: request.align === 'end' ? AnchorAlignment.RIGHT : AnchorAlignment.LEFT,
-    });
+    this.isReplacingMenu = isReplacingMenu;
+    try {
+      this.contextView.show({
+        getAnchor: () => ({
+          x: request.triggerRect.x,
+          y: request.triggerRect.y - 4,
+          width: request.triggerRect.width,
+          height: request.triggerRect.height + 8,
+        }),
+        render: container => {
+          container.classList.add('comet-dropdown-context-view');
+          container.style.minWidth = request.matchTriggerWidth
+            ? `${request.triggerRect.width}px`
+            : '0px';
+          container.append(menuElement);
+          return null;
+        },
+        onHide: this.handlePortalHide,
+        anchorAlignment: request.align === 'end' ? AnchorAlignment.RIGHT : AnchorAlignment.LEFT,
+      });
+    } finally {
+      this.isReplacingMenu = false;
+    }
     this.updateMenuLayout(menuElement, request);
     requestAnimationFrame(() => {
       if (this.menuView !== menuElement || this.currentRequest !== request) {
@@ -245,6 +264,10 @@ class DomDropdownMenuPresenter implements DropdownMenuPresenter {
   };
 
   private readonly handlePortalHide = () => {
+    if (this.isReplacingMenu) {
+      return;
+    }
+
     const request = this.currentRequest;
     this.menu?.dispose();
     this.menu = null;

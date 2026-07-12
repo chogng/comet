@@ -51,7 +51,7 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	) {
 		super(editor);
 
-		this.overlayManager = this._register(new BrowserOverlayManager(window));
+		this.overlayManager = this._register(new BrowserOverlayManager(editor.window));
 		const message = $('.browser-overlay-paused-message');
 		const heading = $('.browser-overlay-paused-heading');
 		const detail = $('.browser-overlay-paused-detail');

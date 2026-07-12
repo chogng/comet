@@ -17,15 +17,19 @@ import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableEle
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { CancellationTokenSource, isCancellationError } from 'cs/base/common/cancellation';
 import { DisposableStore, MutableDisposable, toDisposable } from 'cs/base/common/lifecycle';
-import { localize } from 'cs/nls';
+import { isEqual } from 'cs/base/common/resources';
+import type { LocaleMessages } from 'language/locales';
 import {
-  IContextMenuService,
+	IContextMenuService,
 	IContextViewService,
 	type IOpenContextView,
 } from 'cs/platform/contextview/browser/contextView';
 import { INotificationService } from 'cs/platform/notification/common/notification';
-import type { ChatWidgetProps } from 'cs/workbench/contrib/chat/browser/chat';
-import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import type { ChatModelDropdownOption } from 'cs/workbench/contrib/chat/browser/chat';
+import {
+	IChatService,
+	type IChatModel,
+} from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import {
 	IFetchService,
 	type ArticleListItem,
@@ -34,76 +38,68 @@ import {
 } from 'cs/workbench/services/fetch/common/fetch';
 import {
 	ChatInputModelPickerActionViewItem,
-	type ChatInputModelPickerProps,
+	type IChatInputModelPickerProps,
 } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem';
 import {
 	renderChatInputToolbar,
 	type ChatInputToolbarActionItem,
 } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar';
 
-export type ChatInputPartProps = Pick<
-	ChatWidgetProps,
-	| 'activeLlmModelLabel'
-	| 'isMaxContextWindowEnabled'
-	| 'activeLlmModelSupportsMaxContextWindow'
-	| 'question'
-	| 'onQuestionChange'
-	| 'isAsking'
-	| 'onAsk'
-	| 'llmModelOptions'
-	| 'activeLlmModelOptionValue'
-	| 'onToggleAutoModelRouting'
-	| 'onSelectLlmModel'
-	| 'onToggleMaxContextWindow'
-	| 'onOpenModelSettings'
-> & {
+export interface ChatInputPartProps {
+	readonly ui: LocaleMessages;
+	readonly chatModel: IChatModel | undefined;
+	readonly activeModelLabel: string;
+	readonly question: string;
+	readonly onQuestionChange: (value: string) => void;
+	readonly isAsking: boolean;
+	readonly onAsk: () => void;
+	readonly modelOptions: readonly ChatModelDropdownOption[];
+	readonly selectedModelId: string | undefined;
+	readonly onSelectModel: (modelId: string | undefined) => void;
 	readonly isEmpty: boolean;
 	readonly inputToolbarActions: readonly ChatInputToolbarActionItem[];
-};
+}
 
-function getModelPickerProps(props: ChatInputPartProps): ChatInputModelPickerProps {
+function getModelPickerProps(props: ChatInputPartProps): IChatInputModelPickerProps {
 	return {
-		activeLlmModelLabel: props.activeLlmModelLabel,
-		isMaxContextWindowEnabled: props.isMaxContextWindowEnabled,
-		activeLlmModelSupportsMaxContextWindow: props.activeLlmModelSupportsMaxContextWindow,
-		llmModelOptions: props.llmModelOptions,
-		activeLlmModelOptionValue: props.activeLlmModelOptionValue,
-		onToggleAutoModelRouting: props.onToggleAutoModelRouting,
-		onSelectLlmModel: props.onSelectLlmModel,
-		onToggleMaxContextWindow: props.onToggleMaxContextWindow,
-		onOpenModelSettings: props.onOpenModelSettings,
+		activeModelLabel: props.activeModelLabel,
+		modelOptions: props.modelOptions,
+		selectedModelId: props.selectedModelId,
+		onSelectModel: props.onSelectModel,
+		ui: props.ui,
 	};
 }
 
 function createChatInputAddActionItem(
 	contextMenuService: IContextMenuService,
 	contextViewProvider: IContextViewService,
+	ui: LocaleMessages,
 ) {
-	const addLabel = localize('chatInputAdd', "Add");
+	const addLabel = ui.chatInputAdd;
 	const menu: ActionBarMenuItem[] = [
 		{
 			id: 'chat-input-add-agents',
-			label: localize('chatInputAddAgents', "Agents"),
+			label: ui.chatInputAddAgents,
 			icon: 'agent',
 		},
 		{
 			id: 'chat-input-add-image',
-			label: localize('chatInputAddImage', "Image"),
+			label: ui.chatInputAddImage,
 			icon: 'image',
 		},
 		{
 			id: 'chat-input-add-skills',
-			label: localize('chatInputAddSkills', "Skills"),
+			label: ui.chatInputAddSkills,
 			icon: 'brain',
 		},
 		{
 			id: 'chat-input-add-mcp',
-			label: localize('chatInputAddMcp', "MCP"),
+			label: ui.chatInputAddMcp,
 			icon: 'database',
 		},
 		{
 			id: 'chat-input-add-plugins',
-			label: localize('chatInputAddPlugins', "Plugins"),
+			label: ui.chatInputAddPlugins,
 			icon: 'extensions',
 		},
 	];
@@ -155,6 +151,7 @@ export class ChatInputPart {
 		);
 		this.disposables.add(this.fetchService.onDidChangeCatalog(journalId => {
 			if (journalId === this.activeJournalId) {
+				this.reconcileArticleTarget();
 				this.render();
 			}
 		}));
@@ -175,9 +172,38 @@ export class ChatInputPart {
 			return;
 		}
 
+		if (!isEqual(this.props.chatModel?.resource, props.chatModel?.resource)) {
+			this.cancelArticleFetch();
+			this.closeArticleMenuContextView();
+			this.isArticleMenuOpen = false;
+			this.activeJournalId = undefined;
+			this.activeSourceId = undefined;
+		}
 		this.props = props;
 		this.modelPicker.setProps(getModelPickerProps(props));
 		this.render();
+	}
+
+	setQuestion(question: string): void {
+		if (this.disposed || this.props.question === question) {
+			return;
+		}
+
+		this.props = { ...this.props, question };
+		const textarea = this.element.querySelector<HTMLTextAreaElement>('textarea');
+		if (!textarea) {
+			throw new Error('A Chat input cannot update its question before rendering.');
+		}
+		if (textarea.value !== question) {
+			textarea.value = question;
+		}
+		const sendButton = this.element.querySelector<HTMLButtonElement>(
+			'.comet-chat-composer-send-action',
+		);
+		if (!sendButton) {
+			throw new Error('A Chat input cannot update its send action before rendering.');
+		}
+		sendButton.disabled = !this.canSend();
 	}
 
 	focus() {
@@ -190,6 +216,7 @@ export class ChatInputPart {
 		}
 
 		this.disposed = true;
+		this.cancelArticleFetch();
 		this.disposables.dispose();
 		this.renderDisposables.dispose();
 		this.closeArticleMenuContextView();
@@ -200,9 +227,15 @@ export class ChatInputPart {
 		if (this.disposed) {
 			return;
 		}
+		this.reconcileArticleTarget();
+		const ui = this.props.ui;
 
 		this.renderDisposables.clear();
 		this.articleMenuAnchor = null;
+		if (!this.props.chatModel) {
+			this.element.replaceChildren();
+			return;
+		}
 		this.element.className = [
 			'comet-chat-composer-host',
 			this.props.isEmpty ? 'comet-is-empty-state' : '',
@@ -220,15 +253,9 @@ export class ChatInputPart {
 		const textarea = $<HTMLElementTagNameMap['textarea']>('textarea.comet-chat-composer-input');
 		textarea.rows = 2;
 		textarea.value = this.props.question;
-		textarea.placeholder = localize(
-			'assistantSidebarQuestionPlaceholder',
-			"Ask about the fetched literature, compare findings, or draft a short evidence-backed answer.",
-		);
+		textarea.placeholder = ui.assistantSidebarQuestionPlaceholder;
 		textarea.disabled = this.props.isAsking;
-		textarea.setAttribute(
-			'aria-label',
-			localize('assistantSidebarQuestion', "Question"),
-		);
+		textarea.setAttribute('aria-label', ui.assistantSidebarQuestion);
 		this.renderDisposables.add(addDisposableListener(textarea, EventType.INPUT, () => {
 			this.props.onQuestionChange(textarea.value);
 		}));
@@ -247,7 +274,7 @@ export class ChatInputPart {
 		const addMenuActions = createActionBarView({
 			className: 'comet-chat-composer-add-menu-actions',
 			ariaRole: 'group',
-			items: [createChatInputAddActionItem(this.contextMenuService, this.contextViewService)],
+			items: [createChatInputAddActionItem(this.contextMenuService, this.contextViewService, ui)],
 		});
 		this.renderDisposables.add(addMenuActions);
 		composerTools.append(addMenuActions.getElement());
@@ -256,21 +283,26 @@ export class ChatInputPart {
 		composerTools.append(modelPickerContainer);
 		toolbar.append(composerTools);
 		const sendLabel = this.props.isAsking
-			? localize('assistantSidebarSendBusy', "Asking...")
-			: localize('assistantSidebarSend', "Send");
+			? ui.assistantSidebarSendBusy
+			: ui.assistantSidebarSend;
 		const actionsView = createActionBarView({
 			className: 'comet-chat-composer-actions',
 			ariaRole: 'group',
 			items: [{
 				label: sendLabel,
 				title: sendLabel,
+				disabled: !this.canSend(),
 				content: createLxIcon(
 					this.props.isAsking
 						? lxIconSemanticMap.assistant.busy
 						: 'mic',
 				),
 				buttonClassName: 'comet-chat-composer-send-action',
-				onClick: () => this.props.onAsk(),
+				onClick: () => {
+					if (this.canSend()) {
+						this.props.onAsk();
+					}
+				},
 			}],
 		});
 		this.renderDisposables.add(actionsView);
@@ -280,6 +312,7 @@ export class ChatInputPart {
 		const inputToolbar = renderChatInputToolbar(
 			this.props.inputToolbarActions,
 			this.renderDisposables,
+			ui.chatInputToolbar,
 		);
 		if (inputToolbar) {
 			content.push(inputToolbar);
@@ -294,14 +327,15 @@ export class ChatInputPart {
 	}
 
 	private renderQuickActions() {
+		const ui = this.props.ui;
 		const wrapper = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions-shell');
 		const row = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-quick-actions');
 		const quickActionButtons = [
-			this.createQuickActionButton(localize('chatQuickActionWrite', "Write"), 'write'),
-			this.createQuickActionButton(localize('chatQuickActionLearn', "Learn"), 'book'),
-			this.createQuickActionButton(localize('chatQuickActionCode', "Code"), 'code'),
+			this.createQuickActionButton(ui.chatQuickActionWrite, 'write'),
+			this.createQuickActionButton(ui.chatQuickActionLearn, 'book'),
+			this.createQuickActionButton(ui.chatQuickActionCode, 'code'),
 			this.createQuickActionButton(
-				localize('chatQuickActionArticle', "Article"),
+				ui.chatQuickActionArticle,
 				'file-text',
 				() => this.toggleArticleMenu(),
 				this.isArticleMenuOpen,
@@ -338,15 +372,16 @@ export class ChatInputPart {
 	}
 
 	private renderArticleMenu(anchor: HTMLElement) {
+		const ui = this.props.ui;
 		const menu = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-menu');
 		this.layoutArticleMenu(menu, anchor);
 		const header = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-menu-header');
 		const title = $<HTMLElementTagNameMap['span']>('span.comet-chat-composer-article-menu-title');
 		title.append(
 			createLxIcon('file-text'),
-			document.createTextNode(localize('chatArticleMenuTitle', "Article")),
+			document.createTextNode(ui.chatArticleMenuTitle),
 		);
-		const closeLabel = localize('chatArticleMenuClose', "Close Article Sources");
+		const closeLabel = ui.chatArticleMenuClose;
 		const closeActionsView = createActionBarView({
 			className: 'comet-chat-composer-article-menu-actions',
 			ariaRole: 'group',
@@ -375,7 +410,7 @@ export class ChatInputPart {
 			const journal = this.fetchService.getJournal(this.activeJournalId);
 			if (journal) {
 				list.append(this.createArticleMenuButton(
-					localize('chatArticleMenuBackToJournals', "Back to Journals"),
+					ui.chatArticleMenuBackToJournals,
 					journal.title,
 					false,
 					() => this.clearActiveJournal(),
@@ -384,7 +419,7 @@ export class ChatInputPart {
 			const catalog = this.fetchService.getArticleListCatalog(this.activeJournalId);
 			if (!catalog) {
 				const loading = $<HTMLElementTagNameMap['div']>('div.comet-chat-composer-article-source');
-				loading.textContent = localize('chatArticleMenuLoadingSources', "Loading article sources...");
+				loading.textContent = ui.chatArticleMenuLoadingSources;
 				list.append(loading);
 			} else {
 				for (const entry of catalog.entries) {
@@ -404,7 +439,7 @@ export class ChatInputPart {
 				const lastPage = pages.at(-1);
 				if (activeSourceId && lastPage?.nextPageUrl) {
 					list.append(this.createArticleMenuButton(
-						localize('chatArticleMenuLoadMore', "Load More"),
+						ui.chatArticleMenuLoadMore,
 						lastPage.nextPageUrl.toString(true),
 						this.fetchService.getSourceLoadState(activeSourceId).status === 'loading',
 						() => void this.fetchNextPage(activeSourceId),
@@ -457,30 +492,38 @@ export class ChatInputPart {
 	}
 
 	private clearActiveJournal(): void {
-		this.articleFetchCancellation.clear();
+		this.cancelArticleFetch();
 		this.activeJournalId = undefined;
 		this.activeSourceId = undefined;
 		this.render();
 	}
 
 	private async selectArticleSource(source: ArticleListSource): Promise<void> {
+		const chatResource = this.requireChatModel().resource;
 		this.activeSourceId = source.id;
 		this.render();
-		const completed = await this.runArticleFetch(token => this.fetchService.fetchArticleListSource(source.id, token));
-		if (completed) {
-			this.insertArticlePage(source.label, this.fetchService.getArticlePages(source.id).at(-1));
-		}
+		await this.runArticleFetch(async token => {
+			await this.fetchService.fetchArticleListSource(source.id, token);
+			if (token.isCancellationRequested) {
+				return;
+			}
+			this.insertArticlePage(chatResource, source.label, this.fetchService.getArticlePages(source.id).at(-1));
+		});
 	}
 
 	private async fetchNextPage(sourceId: string): Promise<void> {
-		const source = this.getArticleSource(sourceId);
-		if (!source) {
-			return;
-		}
-		const completed = await this.runArticleFetch(token => this.fetchService.fetchNextPage(sourceId, token));
-		if (completed) {
-			this.insertArticlePage(source.label, this.fetchService.getArticlePages(sourceId).at(-1));
-		}
+		const chatResource = this.requireChatModel().resource;
+		await this.runArticleFetch(async token => {
+			const source = this.getArticleSource(sourceId);
+			if (!source) {
+				throw new Error(`Article source '${sourceId}' is no longer available in the active Catalog.`);
+			}
+			await this.fetchService.fetchNextPage(sourceId, token);
+			if (token.isCancellationRequested) {
+				return;
+			}
+			this.insertArticlePage(chatResource, source.label, this.fetchService.getArticlePages(sourceId).at(-1));
+		});
 	}
 
 	private getArticleSource(sourceId: string): ArticleListSource | undefined {
@@ -489,22 +532,62 @@ export class ChatInputPart {
 		return catalog?.entries.flatMap(entry => entry.kind === 'group' ? entry.sources : [entry]).find(source => source.id === sourceId);
 	}
 
-	private insertArticlePage(sourceLabel: string, page: ReturnType<IFetchService['getArticlePage']>): void {
-		if (!page) {
+	private reconcileArticleTarget(): void {
+		const journalId = this.activeJournalId;
+		if (!journalId) {
 			return;
 		}
+		if (!this.fetchService.getJournal(journalId)) {
+			this.cancelArticleFetch();
+			this.activeJournalId = undefined;
+			this.activeSourceId = undefined;
+			return;
+		}
+
+		const sourceId = this.activeSourceId;
+		const catalog = this.fetchService.getArticleListCatalog(journalId);
+		if (sourceId && catalog && !this.getArticleSource(sourceId)) {
+			this.cancelArticleFetch();
+			this.activeSourceId = undefined;
+		}
+	}
+
+	private insertArticlePage(
+		chatResource: IChatModel['resource'],
+		sourceLabel: string,
+		page: ReturnType<IFetchService['getArticlePage']>,
+	): void {
+		if (!isEqual(this.props.chatModel?.resource, chatResource)) {
+			return;
+		}
+		if (!page) {
+			throw new Error(`Article source '${sourceLabel}' completed without an Article Page.`);
+		}
 		const items = [...page.groups.flatMap(group => group.itemIds), ...page.ungroupedItemIds]
-			.map(itemId => this.fetchService.getArticleListItem(itemId))
-			.filter((item): item is ArticleListItem => !!item);
+			.map(itemId => {
+				const item = this.fetchService.getArticleListItem(itemId);
+				if (!item) {
+					throw new Error(`Article List Item '${itemId}' is unavailable for Page '${page.id}'.`);
+				}
+				return item;
+			});
 		if (items.length === 0) {
 			this.chatService.insertArticleFetchEmptyResult(
+				chatResource,
 				sourceLabel,
-				localize('chatArticleMenuEmptySource', "No articles are available from this source."),
+				this.props.ui.chatArticleMenuEmptySource,
 			);
 			return;
 		}
 		const content = [sourceLabel, ...items.map(item => this.formatArticleListItem(item))].join('\n');
-		this.chatService.insertArticleList(sourceLabel, items.map(item => item.articleId), content);
+		this.chatService.insertArticleList(chatResource, sourceLabel, items.map(item => item.articleId), content);
+	}
+
+	private requireChatModel(): IChatModel {
+		if (!this.props.chatModel) {
+			throw new Error('A Chat input action requires a bound Chat model.');
+		}
+		return this.props.chatModel;
 	}
 
 	private formatArticleListItem(item: ArticleListItem): string {
@@ -518,23 +601,27 @@ export class ChatInputPart {
 		return metadata ? `- ${link} - ${metadata}` : `- ${link}`;
 	}
 
-	private async runArticleFetch(operation: (token: CancellationTokenSource['token']) => Promise<void>): Promise<boolean> {
+	private async runArticleFetch(operation: (token: CancellationTokenSource['token']) => Promise<void>): Promise<void> {
 		const cancellation = new CancellationTokenSource();
+		this.cancelArticleFetch();
 		this.articleFetchCancellation.value = cancellation;
 		try {
 			await operation(cancellation.token);
-			return !cancellation.token.isCancellationRequested;
 		} catch (error) {
 			if (isCancellationError(error)) {
-				return false;
+				return;
 			}
 			this.notificationService.error(error instanceof Error ? error.message : String(error));
-			return false;
 		} finally {
 			if (this.articleFetchCancellation.value === cancellation) {
 				this.articleFetchCancellation.clear();
 			}
 		}
+	}
+
+	private cancelArticleFetch(): void {
+		this.articleFetchCancellation.value?.cancel();
+		this.articleFetchCancellation.clear();
 	}
 
 	private syncArticleMenuContextView() {
@@ -600,11 +687,12 @@ export class ChatInputPart {
 			return;
 		}
 		if (!this.isArticleMenuOpen) {
-			this.articleFetchCancellation.clear();
+			this.cancelArticleFetch();
 			return;
 		}
 
 		this.isArticleMenuOpen = false;
+		this.cancelArticleFetch();
 		this.render();
 	};
 
@@ -616,7 +704,7 @@ export class ChatInputPart {
 	private toggleArticleMenu() {
 		this.isArticleMenuOpen = !this.isArticleMenuOpen;
 		if (!this.isArticleMenuOpen) {
-			this.articleFetchCancellation.clear();
+			this.cancelArticleFetch();
 		}
 		this.render();
 	}
@@ -627,7 +715,7 @@ export class ChatInputPart {
 		}
 
 		this.isArticleMenuOpen = false;
-		this.articleFetchCancellation.clear();
+		this.cancelArticleFetch();
 		this.render();
 	}
 }

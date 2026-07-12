@@ -16,7 +16,7 @@ import { DisposableStore } from 'cs/base/common/lifecycle';
 import { ThemeIcon } from 'cs/base/common/themables';
 import { URI } from 'cs/base/common/uri';
 import { localize, localize2 } from 'cs/nls';
-import { Action2, MenuId, registerAction2 } from 'cs/platform/actions/common/actions';
+import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId, BrowserViewStorageScope } from 'cs/platform/browserView/common/browserView';
 import { BrowserHistoryStore, type IBrowserHistoryEntry } from 'cs/platform/browserView/common/browserHistory';
 import {
@@ -29,19 +29,15 @@ import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegis
 import type { IQuickInputButton, IQuickInputService, IQuickPickItem, IQuickPickSeparator } from 'cs/platform/quickinput/common/quickInput';
 import { IQuickInputService as IQuickInputServiceDecorator } from 'cs/platform/quickinput/common/quickInput';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	BrowserActionCategory,
-	BrowserActionGroup,
 	BrowserEditor,
 	BrowserEditorContribution,
-	type IBrowserUrlSuggestion,
-	type IBrowserUrlSuggestionProvider,
 } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
 import { CONTEXT_BROWSER_STORAGE_SCOPE } from 'cs/workbench/contrib/browserView/electron-browser/features/browserDataStorageFeatures';
-
-const MAX_RECENTS = 3;
-const MAX_HISTORY = 6;
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 
 export class BrowserHistoryFeature extends BrowserEditorContribution {
 	private readonly onDidChangeEmitter = this._register(new Emitter<void>());
@@ -74,10 +70,6 @@ export class BrowserHistoryFeature extends BrowserEditorContribution {
 		this.browserViewWorkbenchService.browserHistory.clear();
 	}
 
-	override get urlSuggestionProviders(): readonly IBrowserUrlSuggestionProvider[] {
-		return [this.recentsProvider, this.historyProvider];
-	}
-
 	protected override onModelAttached(model: IBrowserViewModel, _store: DisposableStore): void {
 		this.model = model;
 		this.onDidChangeEmitter.fire();
@@ -91,102 +83,14 @@ export class BrowserHistoryFeature extends BrowserEditorContribution {
 	showManagementPicker(): void {
 		const model = this.model;
 		if (!model) {
-			return;
+			throw new Error('The Browser history contribution has no attached model.');
 		}
 		showHistoryPicker(this.quickInputService, model, this.browserViewWorkbenchService.browserHistory);
 	}
 
-	private readonly recentsProvider: IBrowserUrlSuggestionProvider = {
-		label: localize('browser.recents', "Recents"),
-		order: 5,
-		onDidChange: this.onDidChangeEmitter.event,
-		getSuggestions: (input, value) => this.buildRecents(input.url, value),
-	};
-
-	private readonly historyProvider: IBrowserUrlSuggestionProvider = {
-		label: localize('browser.history', "History"),
-		order: 10,
-		onDidChange: this.onDidChangeEmitter.event,
-		getSuggestions: (input, value) => this.buildHistory(input.url, value),
-	};
-
-	private buildRecents(currentUrl: string | undefined, value: string): IBrowserUrlSuggestion[] {
-		if (value.trim().length > 0) {
-			return [];
-		}
-		return this.buildList(currentUrl, '', true, MAX_RECENTS);
-	}
-
-	private buildHistory(currentUrl: string | undefined, value: string): IBrowserUrlSuggestion[] {
-		const needle = value.trim().toLowerCase();
-		if (needle.length === 0) {
-			return [];
-		}
-		return this.buildList(currentUrl, needle, false, MAX_HISTORY);
-	}
-
-	private buildList(currentUrl: string | undefined, needle: string, onlyUserInitiated: boolean, max: number): IBrowserUrlSuggestion[] {
-		if (this.model?.storageScope === BrowserViewStorageScope.Ephemeral) {
-			return [];
-		}
-		const history = this.browserViewWorkbenchService.browserHistory;
-		const seen = new Set<string>();
-		if (currentUrl) {
-			seen.add(dedupKey(currentUrl));
-		}
-
-		const suggestions: IBrowserUrlSuggestion[] = [];
-		for (let index = history.entries.items.length - 1; index >= 0 && suggestions.length < max; index--) {
-			const entry = history.entries.items[index];
-			if (onlyUserInitiated && !entry.explicit) {
-				continue;
-			}
-			const key = dedupKey(entry.url);
-			if (seen.has(key)) {
-				continue;
-			}
-			if (needle && !matches(entry, needle)) {
-				continue;
-			}
-			seen.add(key);
-			suggestions.push(toSuggestion(history, entry));
-		}
-		return suggestions;
-	}
 }
 
 BrowserEditor.registerContribution(BrowserHistoryFeature);
-
-function toSuggestion(history: BrowserHistoryStore, entry: IBrowserHistoryEntry): IBrowserUrlSuggestion {
-	const faviconUri = entry.icon ? resolveFavicon(history, entry.icon) : undefined;
-	return {
-		id: 'history:' + entry.id,
-		label: entry.title || entry.url,
-		description: entry.title ? entry.url : undefined,
-		icon: faviconUri ? undefined : Codicon.globe,
-		iconPath: faviconUri,
-		apply: input => input.navigate(entry.url),
-		actions: [{
-			id: 'browser.history.delete',
-			label: localize('browser.removeFromHistory', "Remove from History"),
-			iconClass: ThemeIcon.asClassName(Codicon.close),
-			tooltip: localize('browser.removeFromHistory', "Remove from History"),
-			run: () => {
-				history.entries.delete(entry.id);
-			},
-		}],
-	};
-}
-
-function dedupKey(url: string): string {
-	const parsed = URL.parse(url);
-	return parsed ? parsed.host + parsed.pathname : url;
-}
-
-function matches(entry: IBrowserHistoryEntry, needle: string): boolean {
-	return entry.url.toLowerCase().includes(needle)
-		|| entry.title.toLowerCase().includes(needle);
-}
 
 function resolveFavicon(history: BrowserHistoryStore, hash: string): URI | undefined {
 	const dataUri = history.favicons.get(hash);
@@ -347,14 +251,8 @@ class ShowBrowserHistoryAction extends Action2 {
 			icon: Codicon.history,
 			f1: true,
 			precondition: when,
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Data,
-				order: 1,
-				when,
-				isHiddenByDefault: true,
-			},
 			keybinding: {
+				when: ActiveEditorFocusedContext.isEqualTo(true),
 				primary: KeyMod.CtrlCmd | KeyCode.KeyH,
 				mac: { primary: KeyMod.CtrlCmd | KeyCode.KeyY },
 				weight: KeybindingWeight.WorkbenchContrib,
@@ -362,10 +260,15 @@ class ShowBrowserHistoryAction extends Action2 {
 		});
 	}
 
-	async run(_accessor: ServicesAccessor, browserEditor?: BrowserEditor): Promise<void> {
-		if (browserEditor instanceof BrowserEditor) {
-			browserEditor.getContribution(BrowserHistoryFeature)?.showManagementPicker();
+	async run(accessor: ServicesAccessor, browserEditor = accessor.get(IEditorService).activeEditorPane): Promise<void> {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The history action target is not the active Browser editor.');
 		}
+		const contribution = browserEditor.getContribution(BrowserHistoryFeature);
+		if (!contribution) {
+			throw new Error('The active Browser editor has no history contribution.');
+		}
+		contribution.showManagementPicker();
 	}
 }
 

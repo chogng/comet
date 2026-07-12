@@ -10,18 +10,19 @@ import { localize, localize2 } from 'cs/nls';
 import { Action2, MenuId, MenuRegistry, registerAction2 } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { ContextKeyExpr } from 'cs/platform/contextkey/common/contextkey';
 import { KeyCode, KeyMod } from 'cs/base/common/keyCodes';
 import { IQuickInputService, type IQuickPickItem } from 'cs/platform/quickinput/common/quickInput';
 import { type ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 import { IBrowserViewWorkbenchService } from 'cs/workbench/contrib/browserView/common/browserView';
 import { BrowserEditorInput, EMPTY_BROWSER_EDITOR_URL } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	BrowserActionCategory,
-	BrowserActionGroup,
 } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
 
 interface IOpenBrowserOptions {
@@ -121,7 +122,7 @@ class QuickOpenBrowserAction extends Action2 {
 			keybinding: {
 				weight: KeybindingWeight.WorkbenchContrib,
 				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyA,
-				when: BROWSER_EDITOR_ACTIVE,
+				when: ContextKeyExpr.and(BROWSER_EDITOR_ACTIVE, ActiveEditorFocusedContext.isEqualTo(true)),
 			},
 		});
 	}
@@ -184,7 +185,7 @@ class QuickOpenBrowserAction extends Action2 {
 
 		const selectedBrowser = selection as IBrowserQuickPickItem;
 		if (selectedBrowser.open) {
-			editorService.activateEditor(selectedBrowser.input);
+			await editorService.activateEditor(selectedBrowser.input);
 			return;
 		}
 		await editorService.openEditor(selectedBrowser.input);
@@ -284,15 +285,10 @@ class NewTabAction extends Action2 {
 			icon: Codicon.add,
 			f1: true,
 			precondition: BROWSER_EDITOR_ACTIVE,
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Tabs,
-				order: 1,
-				isHiddenByDefault: true,
-			},
 			keybinding: {
 				weight: KeybindingWeight.WorkbenchContrib + 50,
 				primary: KeyMod.CtrlCmd | KeyCode.KeyT,
+				when: ActiveEditorFocusedContext.isEqualTo(true),
 			},
 		});
 	}

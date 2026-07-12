@@ -1,7 +1,6 @@
 import type { NodeType } from 'prosemirror-model';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
 
-import type { LocaleMessages } from 'language/locales';
 import type {
   WritingEditorCommand,
   WritingEditorToolbarState,
@@ -19,7 +18,11 @@ import {
   toggleOrderedListCommand,
   undoCommand,
 } from 'cs/editor/browser/text/commands';
-import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
+
+export type DraftEditorCommandId =
+  | 'insertCitation'
+  | 'insertFigure'
+  | 'insertFigureRef';
 
 type WritingEditorKeybindingId =
   | 'undo'
@@ -239,7 +242,6 @@ type WritingEditorCommandDefinition = {
   createCommand?: (context: WritingEditorCommandContext) => WritingEditorCommand;
   toolbar?: WritingEditorToolbarDefinition;
   draftShortcutLabel?: string;
-  getWorkbenchLabel?: (ui: LocaleMessages) => string;
   isEnabledInDraft?: (context: WritingEditorDraftCommandContext) => boolean;
 };
 
@@ -524,7 +526,6 @@ const writingEditorCommandDefinitions: readonly WritingEditorCommandDefinition[]
       },
     },
     draftShortcutLabel: 'Mod+Shift+C',
-    getWorkbenchLabel: (ui) => ui.editorInsertCitation,
   }),
   registerWritingEditorCommand({
     id: 'insertFigure',
@@ -537,7 +538,6 @@ const writingEditorCommandDefinitions: readonly WritingEditorCommandDefinition[]
       },
     },
     draftShortcutLabel: 'Mod+Shift+F',
-    getWorkbenchLabel: (ui) => ui.editorInsertFigure,
   }),
   registerWritingEditorCommand({
     id: 'insertFigureRef',
@@ -552,7 +552,6 @@ const writingEditorCommandDefinitions: readonly WritingEditorCommandDefinition[]
       },
     },
     draftShortcutLabel: 'Mod+Shift+R',
-    getWorkbenchLabel: (ui) => ui.editorInsertFigureRef,
     isEnabledInDraft: (context) => context.availableFigureIds.length > 0,
   }),
 ];
@@ -756,13 +755,6 @@ export function isDraftEditorCommandEnabled(
   context: WritingEditorDraftCommandContext,
 ) {
   return getWritingEditorCommand(commandId)?.isEnabledInDraft?.(context) ?? true;
-}
-
-export function getDraftEditorWorkbenchLabel(
-  commandId: DraftEditorCommandId,
-  ui: LocaleMessages,
-) {
-  return getWritingEditorCommand(commandId)?.getWorkbenchLabel?.(ui) ?? commandId;
 }
 
 export function matchesShortcutLabel(shortcutLabel: string, event: KeyboardEvent) {

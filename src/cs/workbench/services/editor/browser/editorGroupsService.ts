@@ -5,7 +5,6 @@
 
 import { Emitter, type Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
-import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
 import { createEditorGroupId, DEFAULT_EDITOR_GROUP_ID } from 'cs/workbench/common/editor/editorGroupIdentity';
@@ -20,44 +19,59 @@ import {
 import {
 	IEditorGroupsService,
 	type IEditorGroup,
+	type IEditorPartHost,
 	type IEditorGroupsChangeEvent,
 	type IEditorGroupsOpenOptions,
+	type IEditorGroupsOpenResult,
 	EditorGroupsChangeKind,
 } from 'cs/workbench/services/editor/common/editorGroupsService';
 
 const EditorGroupsStorageKey = 'workbench.editorGroups';
 
-export class EditorGroupsService extends Disposable implements IEditorGroupsService {
+export abstract class EditorGroupsService extends Disposable implements IEditorGroupsService {
 	declare readonly _serviceBrand: undefined;
+	abstract readonly mainPart: IEditorPartHost;
 
 	private readonly groups = new Map<string, EditorGroupModel>();
 	private readonly groupListeners = new Map<string, DisposableStore>();
 	private active!: EditorGroupModel;
 	private readonly changeEmitter = this._register(new Emitter<IEditorGroupsChangeEvent>());
+	private initialized = false;
 
 	readonly onDidChange: Event<IEditorGroupsChangeEvent> = this.changeEmitter.event;
 
 	constructor(
 		@IStorageService private readonly storageService: IStorageService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IInstantiationService protected readonly instantiationService: IInstantiationService,
 	) {
 		super();
+	}
+
+	initialize(): void {
+		if (this.initialized) {
+			throw new Error('Editor groups have already been initialized.');
+		}
 		this.restore();
+		this.initialized = true;
 	}
 
 	get activeGroup(): IEditorGroup {
+		this.assertInitialized();
 		return this.active;
 	}
 
 	getGroups(): readonly IEditorGroup[] {
+		this.assertInitialized();
 		return [...this.groups.values()];
 	}
 
 	getGroup(groupId: string): IEditorGroup | undefined {
+		this.assertInitialized();
 		return this.groups.get(groupId);
 	}
 
 	createGroup(groupId = createEditorGroupId()): IEditorGroup {
+		this.assertInitialized();
 		const existing = this.groups.get(groupId);
 		if (existing) {
 			return existing;
@@ -70,6 +84,7 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 	}
 
 	activateGroup(group: IEditorGroup): void {
+		this.assertInitialized();
 		const registered = this.groups.get(group.id);
 		if (registered !== group) {
 			throw new Error(`Editor group '${group.id}' is not registered.`);
@@ -83,6 +98,7 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 	}
 
 	removeGroup(group: IEditorGroup): void {
+		this.assertInitialized();
 		const registered = this.groups.get(group.id);
 		if (registered !== group) {
 			throw new Error(`Editor group '${group.id}' is not registered.`);
@@ -111,6 +127,7 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 	}
 
 	findEditor(editor: EditorInput): { group: IEditorGroup; editor: EditorInput } | undefined {
+		this.assertInitialized();
 		for (const group of this.getGroupsByActiveOrder()) {
 			if (group.getEditors().includes(editor)) {
 				return { group, editor };
@@ -125,7 +142,8 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 		return undefined;
 	}
 
-	openEditor(editor: EditorInput, options: IEditorGroupsOpenOptions = {}): EditorInput {
+	openEditor(editor: EditorInput, options: IEditorGroupsOpenOptions = {}): IEditorGroupsOpenResult {
+		this.assertInitialized();
 		const targetGroup = options.groupId ? this.getGroup(options.groupId) : undefined;
 		const targetExisting = targetGroup?.getEditors().find(candidate => candidate.matches(editor));
 		const existing = options.groupId
@@ -139,7 +157,11 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 			if (existing.editor !== editor) {
 				editor.dispose();
 			}
-			return existing.editor;
+			return {
+				editor: existing.editor,
+				group: existing.group,
+				newInGroup: false,
+			};
 		}
 
 		editorInputSerializerRegistry.serialize(editor);
@@ -150,10 +172,15 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 		if (options.active !== false) {
 			this.activateGroup(group);
 		}
-		return opened;
+		return {
+			editor: opened,
+			group,
+			newInGroup: true,
+		};
 	}
 
 	async closeEditor(editor: EditorInput): Promise<boolean> {
+		this.assertInitialized();
 		const existing = this.findEditor(editor);
 		return existing ? existing.group.closeEditor(existing.editor) : false;
 	}
@@ -243,6 +270,10 @@ export class EditorGroupsService extends Disposable implements IEditorGroupsServ
 			StorageTarget.MACHINE,
 		);
 	}
-}
 
-registerSingleton(IEditorGroupsService, EditorGroupsService, InstantiationType.Delayed);
+	private assertInitialized(): void {
+		if (!this.initialized) {
+			throw new Error('Editor groups have not been initialized.');
+		}
+	}
+}

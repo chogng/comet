@@ -3,129 +3,85 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import type { INativeHostService } from 'cs/platform/native/common/native';
-import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
-import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import type {
-  AnyEditorPane,
-  EditorPaneDescriptor,
-  EditorPaneResolution,
-  EditorPane,
-} from 'cs/workbench/browser/parts/editor/panes/editorPane';
-import { toDisposable } from 'cs/base/common/lifecycle';
-import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import type { AnyEditorPane, EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
+import { toDisposable, type IDisposable } from 'cs/base/common/lifecycle';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import type { LocaleMessages } from 'language/locales';
 
-export type EditorPaneResolverContext = DropdownContextServices & {
-  ui: LocaleMessages;
-  viewPartProps: ViewPartProps;
-  nativeHost: INativeHostService;
-  dialogService: IDialogService;
-  instantiationService: IInstantiationService;
-  onOpenEditor?: EditorOpenHandler;
-  onOpenSources: () => void;
-};
+type EditorInputConstructor<TInput extends EditorInput> = abstract new (...args: never[]) => TInput;
+export type EditorPaneConstructor<TPane extends AnyEditorPane = AnyEditorPane> = new (...args: never[]) => TPane;
 
-export type EditorPaneId = string;
-
-export type ResolvedEditorPane = {
-} & EditorPaneResolution<AnyEditorPane, EditorPaneId>;
-
-type EditorPaneRegistryDescriptor<
-  TInput extends EditorInput,
-  TPane extends EditorPane<TInput, unknown>,
-  TPaneId extends EditorPaneId,
-> = EditorPaneDescriptor<
-  TInput,
-  EditorPaneResolverContext,
-  TPane,
-  TPaneId
->;
-
-type EditorPaneDescriptorOptions<
-  TInput extends EditorInput,
-  TPane extends EditorPane<TInput, unknown>,
-  TPaneId extends EditorPaneId,
-> = {
-  paneId: TPaneId;
-  contentClassNames: readonly string[];
-  acceptsInput: (input: EditorInput) => input is TInput;
-  createPaneKey?: (input: TInput) => string;
-  createPane: (context: EditorPaneResolverContext) => TPane;
-  updatePane?: (pane: TPane, context: EditorPaneResolverContext) => void;
-};
-
-type AnyEditorPaneRegistryDescriptor = {
-  readonly paneId: EditorPaneId;
-  acceptsInput(input: EditorInput): boolean;
-  resolvePane(input: EditorInput, context: EditorPaneResolverContext): ResolvedEditorPane;
-};
-
-export function createEditorPaneDescriptor<
-  TInput extends EditorInput,
-  TPane extends EditorPane<TInput, unknown>,
-  TPaneId extends EditorPaneId,
->(
-  options: EditorPaneDescriptorOptions<TInput, TPane, TPaneId>,
-): EditorPaneRegistryDescriptor<TInput, TPane, TPaneId> {
-	const updatePane = options.updatePane;
-  return {
-    paneId: options.paneId,
-    acceptsInput: options.acceptsInput,
-    resolvePane: (input, context) => {
-      return {
-        paneId: options.paneId,
-			paneKey: options.createPaneKey?.(input) ?? options.paneId,
-			contentClassNames: options.contentClassNames,
-			createPane: () => options.createPane(context),
-			updatePane: updatePane ? pane => updatePane(pane, context) : undefined,
-			setInput: (pane, token) => pane.setInput(input, token),
-		};
-    },
-  };
+export interface IEditorPaneDescriptor {
+	readonly paneId: string;
+	readonly modeId: string;
+	readonly contentClassNames: readonly string[];
+	readonly paneConstructor: EditorPaneConstructor;
+	acceptsInput(input: EditorInput): boolean;
 }
 
-const editorPaneDescriptors: AnyEditorPaneRegistryDescriptor[] = [];
-
-export function registerEditorPaneDescriptor<
-  TInput extends EditorInput,
-  TPane extends EditorPane<TInput, unknown>,
-  TPaneId extends EditorPaneId,
->(
-  descriptor: EditorPaneRegistryDescriptor<TInput, TPane, TPaneId>,
-) {
-  const registeredDescriptor = descriptor as unknown as AnyEditorPaneRegistryDescriptor;
-  if (editorPaneDescriptors.some(candidate => candidate.paneId === descriptor.paneId)) {
-    throw new Error(`Editor pane '${descriptor.paneId}' is already registered.`);
-  }
-  editorPaneDescriptors.push(registeredDescriptor);
-  return toDisposable(() => {
-    const index = editorPaneDescriptors.indexOf(registeredDescriptor);
-    if (index >= 0) {
-      editorPaneDescriptors.splice(index, 1);
-    }
-  });
+export interface EditorPaneDescriptorOptions<
+	TInput extends EditorInput,
+	TPane extends EditorPane<TInput, unknown>,
+> {
+	readonly paneId: string;
+	readonly modeId: string;
+	readonly contentClassNames: readonly string[];
+	readonly inputConstructor: EditorInputConstructor<TInput>;
+	readonly paneConstructor: EditorPaneConstructor<TPane>;
 }
 
-export function resolveEditorPane(
-  input: EditorInput,
-  context: EditorPaneResolverContext,
-): ResolvedEditorPane {
-  const matchingDescriptors = editorPaneDescriptors.filter(descriptor => descriptor.acceptsInput(input));
-  if (matchingDescriptors.length === 0) {
-    throw new Error(`No editor pane descriptor found for input type '${input.typeId}'.`);
-  }
-  if (matchingDescriptors.length === 1) {
-    return matchingDescriptors[0]!.resolvePane(input, context);
-  }
+export class EditorPaneDescriptor<
+	TInput extends EditorInput,
+	TPane extends EditorPane<TInput, unknown>,
+> implements IEditorPaneDescriptor {
+	readonly paneId: string;
+	readonly modeId: string;
+	readonly contentClassNames: readonly string[];
+	readonly paneConstructor: EditorPaneConstructor<TPane>;
 
-  const preferredPaneId = input.editorId;
-  const preferredDescriptors = matchingDescriptors.filter(descriptor => descriptor.paneId === preferredPaneId);
-  if (preferredDescriptors.length !== 1) {
-    throw new Error(`Multiple editor panes match '${input.typeId}' and no unique preferred pane is registered.`);
-  }
-  return preferredDescriptors[0]!.resolvePane(input, context);
+	constructor(private readonly options: EditorPaneDescriptorOptions<TInput, TPane>) {
+		this.paneId = options.paneId;
+		this.modeId = options.modeId;
+		this.contentClassNames = options.contentClassNames;
+		this.paneConstructor = options.paneConstructor;
+	}
+
+	acceptsInput(input: EditorInput): boolean {
+		return input instanceof this.options.inputConstructor;
+	}
 }
+
+export class EditorPaneRegistry {
+	private readonly descriptors = new Map<string, IEditorPaneDescriptor>();
+
+	registerEditorPane(descriptor: IEditorPaneDescriptor): IDisposable {
+		if (this.descriptors.has(descriptor.paneId)) {
+			throw new Error(`Editor pane '${descriptor.paneId}' is already registered.`);
+		}
+		this.descriptors.set(descriptor.paneId, descriptor);
+		return toDisposable(() => {
+			if (this.descriptors.get(descriptor.paneId) === descriptor) {
+				this.descriptors.delete(descriptor.paneId);
+			}
+		});
+	}
+
+	getEditorPane(input: EditorInput): IEditorPaneDescriptor {
+		const matchingDescriptors = [...this.descriptors.values()]
+			.filter(descriptor => descriptor.acceptsInput(input));
+		if (matchingDescriptors.length === 0) {
+			throw new Error(`No editor pane descriptor found for input type '${input.typeId}'.`);
+		}
+		if (matchingDescriptors.length === 1) {
+			return matchingDescriptors[0]!;
+		}
+
+		const preferredDescriptors = matchingDescriptors
+			.filter(descriptor => descriptor.paneId === input.editorId);
+		if (preferredDescriptors.length !== 1) {
+			throw new Error(`Multiple editor panes match '${input.typeId}' and no unique preferred pane is registered.`);
+		}
+		return preferredDescriptors[0]!;
+	}
+}
+
+export const editorPaneRegistry = new EditorPaneRegistry();

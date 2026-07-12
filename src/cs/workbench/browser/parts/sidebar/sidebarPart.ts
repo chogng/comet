@@ -1,4 +1,10 @@
-import { WORKBENCH_PART_IDS, registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
+import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { Sidebar } from 'cs/workbench/browser/parts/sidebar/sidebar';
 import type { SidebarProps } from 'cs/workbench/browser/parts/sidebar/sidebar';
 import { getWindowChromeLayout } from 'cs/platform/window/common/window';

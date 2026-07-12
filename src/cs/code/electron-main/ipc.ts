@@ -337,7 +337,6 @@ async function invokeCommand<TCommand extends AppCommand>(
     case 'run_main_agent_turn':
       return runMainAgentTurn(
         payload as AppCommandPayloadMap['run_main_agent_turn'],
-        await storage.loadSettings(),
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'export_articles_docx':
       {

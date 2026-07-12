@@ -1,5 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Comet Studio. All rights reserved.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import {
@@ -248,6 +249,7 @@ interface ListenerEntry<T> {
 interface EventEmitterOptions {
 	readonly onWillAddFirstListener?: () => void;
 	readonly onDidRemoveLastListener?: () => void;
+	readonly onListenerError?: (error: unknown) => void;
 }
 
 export class EventEmitter<T> implements DisposableLike {
@@ -288,7 +290,14 @@ export class EventEmitter<T> implements DisposableLike {
 		}
 
 		for (const entry of [...this.listeners]) {
-			entry.listener.call(entry.thisArgs, event);
+			try {
+				entry.listener.call(entry.thisArgs, event);
+			} catch (error) {
+				if (!this.options?.onListenerError) {
+					throw error;
+				}
+				this.options.onListenerError(error);
+			}
 		}
 	}
 

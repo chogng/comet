@@ -17,6 +17,8 @@
     "bench": "tsx scripts/bench/bench-all.ts",
     "build:electron": "tsc -p tsconfig.electron.json --noEmit && tsx build/lib/buildElectron.ts",
     "check:i18n": "node scripts/check-i18n-keys.mjs",
+    "valid-layers-check": "tsx scripts/verify/valid-layers-check.ts",
+    "test:valid-layers-check": "tsx --test scripts/verify/valid-layers-check.test.ts",
     "test:base-common": "node scripts/run-base-common-tests.mjs",
     "test:workbench-browser": "node scripts/run-workbench-browser-tests.mjs",
     "test:editor": "node scripts/run-editor-tests.mjs",

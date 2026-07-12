@@ -1,22 +1,40 @@
-import { isDraftEditorCommandEnabled } from 'cs/editor/browser/text/editorCommandRegistry';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { $ } from 'cs/base/browser/dom';
+import {
+	isDraftEditorCommandEnabled,
+	type DraftEditorCommandId,
+} from 'cs/editor/browser/text/editorCommandRegistry';
 import type { DraftEditorStatusState } from 'cs/editor/browser/text/draftEditorStatusState';
 import { ProseMirrorEditor } from 'cs/editor/browser/text/editor';
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createDraftEditorCommandAction } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
-import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
-import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/activeDraftEditorCommandExecutor';
+import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
 import type { WritingEditorSurfaceViewState } from 'cs/editor/browser/text/editor';
-import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
-import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
+import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
+import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import { Emitter } from 'cs/base/common/event';
+import { Emitter, type Event } from 'cs/base/common/event';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createDraftEditorPaneState } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPaneState';
+import { DisposableStore, MutableDisposable, toDisposable } from 'cs/base/common/lifecycle';
+import type { DraftEditorSelectionSnapshot } from 'cs/workbench/contrib/draftEditor/common/draftEditorInput';
+import type { CancellationToken } from 'cs/base/common/cancellation';
+import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/editor';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import type { LocaleMessages } from 'language/locales';
 
 export interface DraftEditorPaneInput extends EditorInput {
   readonly document: WritingEditorDocument;
+	readonly onDidChangeDocument: Event<WritingEditorDocument>;
   setDocument(value: WritingEditorDocument): void;
+	setPaneSelectionSnapshot(selection: DraftEditorSelectionSnapshot | null): void;
+	clearPaneSelectionSnapshot(): void;
 }
 
 export interface DraftEditorPaneLabels {
@@ -71,33 +89,90 @@ export interface DraftEditorPaneLabels {
 	};
 }
 
-export type DraftEditorPaneContext = DropdownContextServices & {
-  labels: DraftEditorPaneLabels;
-  dialogService: IDialogService;
-};
+function createDraftEditorPaneLabels(ui: LocaleMessages): DraftEditorPaneLabels {
+	return {
+		toolbarMore: ui.agentbarToolbarMore,
+		draftBodyPlaceholder: ui.editorDraftBodyPlaceholder,
+		draftMode: ui.editorDraftMode,
+		editorModalConfirm: ui.editorModalConfirm,
+		editorModalCancel: ui.editorModalCancel,
+		textGroup: ui.editorRibbonText,
+		formatGroup: ui.editorRibbonFormat,
+		insertGroup: ui.editorRibbonInsert,
+		historyGroup: ui.editorRibbonHistory,
+		paragraph: ui.editorParagraph,
+		heading1: ui.editorHeading1,
+		heading2: ui.editorHeading2,
+		heading3: ui.editorHeading3,
+		bold: ui.editorBold,
+		italic: ui.editorItalic,
+		underline: ui.editorUnderline,
+		fontFamily: ui.editorFontFamily,
+		fontSize: ui.editorFontSize,
+		defaultTextStyle: ui.editorDefaultTextStyle,
+		alignLeft: ui.editorAlignLeft,
+		alignCenter: ui.editorAlignCenter,
+		alignRight: ui.editorAlignRight,
+		clearInlineStyles: ui.editorClearInlineStyles,
+		bulletList: ui.editorBulletList,
+		orderedList: ui.editorOrderedList,
+		blockquote: ui.editorBlockquote,
+		undo: ui.editorUndo,
+		redo: ui.editorRedo,
+		insertCitation: ui.editorInsertCitation,
+		insertFigure: ui.editorInsertFigure,
+		insertFigureRef: ui.editorInsertFigureRef,
+		citationPrompt: ui.editorCitationPrompt,
+		figureUrlPrompt: ui.editorFigureUrlPrompt,
+		figureCaptionPrompt: ui.editorFigureCaptionPrompt,
+		figureRefPrompt: ui.editorFigureRefPrompt,
+		fontFamilyPrompt: ui.editorFontFamilyPrompt,
+		fontSizePrompt: ui.editorFontSizePrompt,
+		status: {
+			statusbarAriaLabel: ui.editorStatusbarAriaLabel,
+			words: ui.editorStatusWords,
+			characters: ui.editorStatusCharacters,
+			paragraphs: ui.editorStatusParagraphs,
+			selection: ui.editorStatusSelection,
+			block: ui.editorStatusBlock,
+			line: ui.editorStatusLine,
+			column: ui.editorStatusColumn,
+			blockFigure: ui.editorStatusFigure,
+			ready: ui.statusReady,
+		},
+	};
+}
 
 export class DraftEditorPane extends EditorPane<
   DraftEditorPaneInput,
   WritingEditorSurfaceViewState
 > {
+	private readonly disposables = new DisposableStore();
+	private readonly inputListener = this.disposables.add(new MutableDisposable());
   private input: DraftEditorPaneInput | undefined;
-  private readonly element = document.createElement('div');
+	private readonly element = $<HTMLDivElement>('div.comet-editor-draft-pane');
   private editor: ProseMirrorEditor | undefined;
-  private runtimeState: EditorPaneRuntimeState | undefined;
+	private editorStatus: DraftEditorStatusState | undefined;
   private readonly runtimeStateEmitter = new Emitter<EditorPaneRuntimeState>();
   override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
 
-  constructor(private context: DraftEditorPaneContext) {
+	constructor(
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
+		@IDialogService private readonly dialogService: IDialogService,
+		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+	) {
     super();
-    this.element.className = 'comet-editor-draft-pane';
+		this.disposables.add(toDisposable(this.localeService.subscribe(() => {
+			if (this.editor) {
+				this.editor.setProps(this.toEditorProps());
+			}
+		})));
   }
 
   override getElement() {
     return this.element;
-  }
-
-  setContext(context: DraftEditorPaneContext) {
-    this.context = context;
   }
 
   override getToolbarElement() {
@@ -105,7 +180,9 @@ export class DraftEditorPane extends EditorPane<
   }
 
   override getRuntimeState() {
-    return this.runtimeState;
+		return this.editorStatus
+			? createDraftEditorPaneState(this.labels, this.editorStatus)
+			: undefined;
   }
 
   getStableSelectionTarget() {
@@ -145,15 +222,40 @@ export class DraftEditorPane extends EditorPane<
     }
   }
 
-  override setInput(input: DraftEditorPaneInput) {
+  override setInput(
+		input: DraftEditorPaneInput,
+		_options: IEditorOptions | undefined,
+		_context: IEditorOpenContext,
+		_token: CancellationToken,
+	) {
+		this.input?.clearPaneSelectionSnapshot();
+		input.clearPaneSelectionSnapshot();
     this.input = input;
+		this.inputListener.value = input.onDidChangeDocument(() => {
+			if (this.input === input && this.editor) {
+				this.editor.setProps(this.toEditorProps());
+				this.updateSelectionSnapshot(input);
+			}
+		});
 		if (this.editor) {
 			this.editor.setProps(this.toEditorProps());
+			this.updateSelectionSnapshot(input);
 			return;
 		}
 		this.editor = new ProseMirrorEditor(this.toEditorProps());
 		this.element.append(this.editor.getElement());
+		this.updateSelectionSnapshot(input);
   }
+
+	override clearInput() {
+		this.inputListener.clear();
+		this.input?.clearPaneSelectionSnapshot();
+		this.input = undefined;
+		this.editor?.dispose();
+		this.editor = undefined;
+		this.editorStatus = undefined;
+		this.element.replaceChildren();
+	}
 
   override focus() {
     this.getEditor().focus();
@@ -168,28 +270,26 @@ export class DraftEditorPane extends EditorPane<
   }
 
   override dispose() {
-		this.editor?.dispose();
-		this.editor = undefined;
-		this.input = undefined;
+		this.clearInput();
+		this.disposables.dispose();
     this.runtimeStateEmitter.dispose();
-    this.element.replaceChildren();
   }
 
   private createCommandContext = () => ({
     editor: this.getEditor(),
     labels: {
-      citationPrompt: this.context.labels.citationPrompt,
-      figureUrlPrompt: this.context.labels.figureUrlPrompt,
-      figureCaptionPrompt: this.context.labels.figureCaptionPrompt,
-      figureRefPrompt: this.context.labels.figureRefPrompt,
+			citationPrompt: this.labels.citationPrompt,
+			figureUrlPrompt: this.labels.figureUrlPrompt,
+			figureCaptionPrompt: this.labels.figureCaptionPrompt,
+			figureRefPrompt: this.labels.figureRefPrompt,
     },
     prompt: (message: string, defaultValue: string) =>
-      this.context.dialogService.input({
-        title: this.context.labels.draftMode,
+			this.dialogService.input({
+				title: this.labels.draftMode,
         message,
         value: defaultValue,
-        primaryButton: this.context.labels.editorModalConfirm,
-        cancelButton: this.context.labels.editorModalCancel,
+				primaryButton: this.labels.editorModalConfirm,
+				cancelButton: this.labels.editorModalCancel,
       }).then(result => result.value ?? null),
   });
 
@@ -213,10 +313,10 @@ export class DraftEditorPane extends EditorPane<
 		if (!input) {
 			throw new Error('Draft editor pane requires an input before creating editor props.');
 		}
-    const { labels } = this.context;
+		const labels = this.labels;
     return {
-      contextMenuService: this.context.contextMenuService,
-      contextViewProvider: this.context.contextViewProvider,
+			contextMenuService: this.contextMenuService,
+			contextViewProvider: this.contextViewService,
       document: input.document,
       placeholder: labels.draftBodyPlaceholder,
       statusLabels: {
@@ -262,11 +362,24 @@ export class DraftEditorPane extends EditorPane<
       onInsertFigureRef: this.handleInsertFigureRef,
       onDocumentChange: (value: WritingEditorDocument) => input.setDocument(value),
       onStatusChange: (status: DraftEditorStatusState) => {
-        this.runtimeState = createDraftEditorPaneState(this.context.labels, status);
-        this.runtimeStateEmitter.fire(this.runtimeState);
+				this.updateSelectionSnapshot(input);
+				this.editorStatus = status;
+				this.runtimeStateEmitter.fire(createDraftEditorPaneState(this.labels, status));
       },
     };
   }
+
+	private updateSelectionSnapshot(input: DraftEditorPaneInput): void {
+		if (this.input !== input || !this.editor) {
+			return;
+		}
+		const selection = this.editor.getStableSelectionTarget();
+		input.setPaneSelectionSnapshot(selection ? {
+			blockId: selection.blockId,
+			startOffset: selection.startOffset,
+			endOffset: selection.endOffset,
+		} : null);
+	}
 
 	private getEditor(): ProseMirrorEditor {
 		if (!this.editor) {
@@ -274,10 +387,10 @@ export class DraftEditorPane extends EditorPane<
 		}
 		return this.editor;
 	}
-}
 
-export function createDraftEditorPane(context: DraftEditorPaneContext) {
-  return new DraftEditorPane(context);
+	private get labels(): DraftEditorPaneLabels {
+		return createDraftEditorPaneLabels(
+			this.languageService.getLocaleMessages(this.localeService.getLocale()),
+		);
+	}
 }
-
-export default DraftEditorPane;

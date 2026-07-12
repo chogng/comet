@@ -11,7 +11,7 @@ import { Verbosity } from 'cs/workbench/common/editor';
 
 type EditorModeToolbarSourceProps = {
   activeTab: EditorInput | null;
-  activePaneId: string | null;
+	activePaneModeId: string | null;
   ui: LocaleMessages;
   viewPartProps: {
     browserUrl: string;
@@ -19,6 +19,8 @@ type EditorModeToolbarSourceProps = {
     browserFaviconUrl?: string;
     electronRuntime: boolean;
   };
+	browserCanGoBack: boolean;
+	browserCanGoForward: boolean;
   onOpenAddressBarSourceMenu: () => void;
   onToolbarNavigateBack: () => void;
   onToolbarNavigateForward: () => void;
@@ -49,7 +51,7 @@ function normalizeBrowserMetadataValue(value: unknown) {
 }
 
 export function resolveActiveBrowserMetadata(
-  props: Pick<EditorModeToolbarSourceProps, 'activeTab' | 'activePaneId' | 'viewPartProps'>,
+  props: Pick<EditorModeToolbarSourceProps, 'activeTab' | 'activePaneModeId' | 'viewPartProps'>,
 ): ResolvedActiveBrowserMetadata {
   const viewPartBrowserUrl = normalizeBrowserMetadataValue(props.viewPartProps.browserUrl);
   const viewPartBrowserPageTitle = normalizeBrowserMetadataValue(
@@ -59,7 +61,7 @@ export function resolveActiveBrowserMetadata(
     props.viewPartProps.browserFaviconUrl,
   );
 
-  if (!props.activeTab || props.activePaneId !== 'browser') {
+	if (!props.activeTab || props.activePaneModeId !== 'browser') {
     return {
       browserUrl: viewPartBrowserUrl,
       browserPageTitle: viewPartBrowserPageTitle,
@@ -103,7 +105,7 @@ export function resolveActiveBrowserMetadata(
 export function createEditorModeToolbarContext(
   props: EditorModeToolbarSourceProps,
 ): EditorModeToolbarContext {
-  const mode = props.activePaneId === 'browser' ? 'browser' : null;
+	const mode = props.activePaneModeId === 'browser' ? 'browser' : null;
   const activeBrowserMetadata = resolveActiveBrowserMetadata(props);
 	const { ui } = props;
 
@@ -113,6 +115,8 @@ export function createEditorModeToolbarContext(
     browserPageTitle: activeBrowserMetadata.browserPageTitle,
     browserFaviconUrl: activeBrowserMetadata.browserFaviconUrl,
     browserTabTitle: activeBrowserMetadata.browserTabTitle,
+	browserCanGoBack: props.browserCanGoBack,
+	browserCanGoForward: props.browserCanGoForward,
     electronRuntime: props.viewPartProps.electronRuntime,
     labels: {
 			toolbarSources: ui.agentbarToolbarSources,

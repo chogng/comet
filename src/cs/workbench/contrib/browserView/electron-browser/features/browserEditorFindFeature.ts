@@ -10,16 +10,17 @@ import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { KeyCode, KeyMod } from 'cs/base/common/keyCodes';
 import { ThemeIcon } from 'cs/base/common/themables';
 import { localize, localize2 } from 'cs/nls';
-import { Action2, MenuId, registerAction2 } from 'cs/platform/actions/common/actions';
+import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
 import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
 import { ContextKeyExpr, IContextKeyService, RawContextKey, type ContextKey } from 'cs/platform/contextkey/common/contextkey';
 import { IInstantiationService, type ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
 	BROWSER_EDITOR_ACTIVE,
 	BrowserActionCategory,
-	BrowserActionGroup,
 	BrowserEditor,
 	BrowserEditorContribution,
 	BrowserWidgetLocation,
@@ -276,7 +277,11 @@ export class BrowserEditorFindContribution extends BrowserEditorContribution {
 	}
 
 	async showFind(): Promise<void> {
-		const selectedText = (await this.editor.model?.getSelectedText())?.trim();
+		const model = this.editor.model;
+		if (!model) {
+			throw new Error('The Browser find contribution has no attached model.');
+		}
+		const selectedText = (await model.getSelectedText()).trim();
 		const initialInput = selectedText && !/[\r\n]/.test(selectedText) ? selectedText : undefined;
 		this.findWidget.reveal(initialInput);
 	}
@@ -296,10 +301,6 @@ export class BrowserEditorFindContribution extends BrowserEditorContribution {
 
 BrowserEditor.registerContribution(BrowserEditorFindContribution);
 
-function getBrowserEditor(candidate: unknown): BrowserEditor | undefined {
-	return candidate instanceof BrowserEditor ? candidate : undefined;
-}
-
 const browserCanShowFindAction = ContextKeyExpr.and(
 	BROWSER_EDITOR_ACTIVE,
 	CONTEXT_BROWSER_HAS_URL.isEqualTo(true),
@@ -317,21 +318,23 @@ class ShowBrowserFindAction extends Action2 {
 			icon: Codicon.search,
 			f1: true,
 			precondition: browserCanShowFindAction,
-			menu: {
-				id: MenuId.BrowserActionsToolbar,
-				group: BrowserActionGroup.Tools,
-				order: 0,
-				isHiddenByDefault: true,
-			},
 			keybinding: {
+				when: ActiveEditorFocusedContext.isEqualTo(true),
 				weight: KeybindingWeight.EditorContrib,
 				primary: KeyMod.CtrlCmd | KeyCode.KeyF,
 			},
 		});
 	}
 
-	run(_accessor: ServicesAccessor, browserEditor?: unknown): void {
-		void getBrowserEditor(browserEditor)?.getContribution(BrowserEditorFindContribution)?.showFind();
+	async run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): Promise<void> {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The find action target is not the active Browser editor.');
+		}
+		const contribution = browserEditor.getContribution(BrowserEditorFindContribution);
+		if (!contribution) {
+			throw new Error('The active Browser editor has no find contribution.');
+		}
+		await contribution.showFind();
 	}
 }
 
@@ -349,14 +352,22 @@ class HideBrowserFindAction extends Action2 {
 				CONTEXT_BROWSER_FIND_WIDGET_VISIBLE.isEqualTo(true),
 			),
 			keybinding: {
+				when: ActiveEditorFocusedContext.isEqualTo(true),
 				weight: KeybindingWeight.EditorContrib + 5,
 				primary: KeyCode.Escape,
 			},
 		});
 	}
 
-	run(_accessor: ServicesAccessor, browserEditor?: unknown): void {
-		getBrowserEditor(browserEditor)?.getContribution(BrowserEditorFindContribution)?.hideFind();
+	run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): void {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The hide find action target is not the active Browser editor.');
+		}
+		const contribution = browserEditor.getContribution(BrowserEditorFindContribution);
+		if (!contribution) {
+			throw new Error('The active Browser editor has no find contribution.');
+		}
+		contribution.hideFind();
 	}
 }
 
@@ -371,11 +382,17 @@ class BrowserFindNextAction extends Action2 {
 			f1: false,
 			precondition: BROWSER_EDITOR_ACTIVE,
 			keybinding: [{
-				when: CONTEXT_BROWSER_FIND_WIDGET_FOCUSED.isEqualTo(true),
+				when: ContextKeyExpr.and(
+					ActiveEditorFocusedContext.isEqualTo(true),
+					CONTEXT_BROWSER_FIND_WIDGET_FOCUSED.isEqualTo(true),
+				),
 				weight: KeybindingWeight.EditorContrib,
 				primary: KeyCode.Enter,
 			}, {
-				when: CONTEXT_BROWSER_FIND_WIDGET_VISIBLE.isEqualTo(true),
+				when: ContextKeyExpr.and(
+					ActiveEditorFocusedContext.isEqualTo(true),
+					CONTEXT_BROWSER_FIND_WIDGET_VISIBLE.isEqualTo(true),
+				),
 				weight: KeybindingWeight.EditorContrib,
 				primary: KeyCode.F3,
 				mac: { primary: KeyMod.CtrlCmd | KeyCode.KeyG },
@@ -383,8 +400,15 @@ class BrowserFindNextAction extends Action2 {
 		});
 	}
 
-	run(_accessor: ServicesAccessor, browserEditor?: unknown): void {
-		getBrowserEditor(browserEditor)?.getContribution(BrowserEditorFindContribution)?.findNext();
+	run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): void {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The find next action target is not the active Browser editor.');
+		}
+		const contribution = browserEditor.getContribution(BrowserEditorFindContribution);
+		if (!contribution) {
+			throw new Error('The active Browser editor has no find contribution.');
+		}
+		contribution.findNext();
 	}
 }
 
@@ -399,11 +423,17 @@ class BrowserFindPreviousAction extends Action2 {
 			f1: false,
 			precondition: BROWSER_EDITOR_ACTIVE,
 			keybinding: [{
-				when: CONTEXT_BROWSER_FIND_WIDGET_FOCUSED.isEqualTo(true),
+				when: ContextKeyExpr.and(
+					ActiveEditorFocusedContext.isEqualTo(true),
+					CONTEXT_BROWSER_FIND_WIDGET_FOCUSED.isEqualTo(true),
+				),
 				weight: KeybindingWeight.EditorContrib,
 				primary: KeyMod.Shift | KeyCode.Enter,
 			}, {
-				when: CONTEXT_BROWSER_FIND_WIDGET_VISIBLE.isEqualTo(true),
+				when: ContextKeyExpr.and(
+					ActiveEditorFocusedContext.isEqualTo(true),
+					CONTEXT_BROWSER_FIND_WIDGET_VISIBLE.isEqualTo(true),
+				),
 				weight: KeybindingWeight.EditorContrib,
 				primary: KeyMod.Shift | KeyCode.F3,
 				mac: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyG },
@@ -411,8 +441,15 @@ class BrowserFindPreviousAction extends Action2 {
 		});
 	}
 
-	run(_accessor: ServicesAccessor, browserEditor?: unknown): void {
-		getBrowserEditor(browserEditor)?.getContribution(BrowserEditorFindContribution)?.findPrevious();
+	run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): void {
+		if (!(browserEditor instanceof BrowserEditor)) {
+			throw new Error('The find previous action target is not the active Browser editor.');
+		}
+		const contribution = browserEditor.getContribution(BrowserEditorFindContribution);
+		if (!contribution) {
+			throw new Error('The active Browser editor has no find contribution.');
+		}
+		contribution.findPrevious();
 	}
 }
 

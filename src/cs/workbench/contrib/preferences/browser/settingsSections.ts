@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { Locale } from 'language/i18n';
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'cs/base/common/editorDraftStyle';
 import {
@@ -44,7 +49,6 @@ import {
   maxBrowserTabKeepAliveLimit,
   minBrowserTabKeepAliveLimit,
 } from 'cs/workbench/services/webContent/webContentRetentionConfig';
-
 type SelectOption = SettingsDropdownOption;
 
 function setSelectHostDisabled(host: HTMLElement, disabled: boolean) {
@@ -254,7 +258,8 @@ export function renderLocaleSection(props: SettingsPartProps, contextViewProvide
 }
 
 export function renderSupportedSourcesSection(
-	props: SettingsPartProps,
+	props: Pick<SettingsPartProps,
+		'labels' | 'supportedSources' | 'showSupportedSources' | 'isSettingsSaving' | 'onToggleSupportedSources'>,
 ) {
   const supportedSources = createSettingsSection({
     title: props.labels.settingsSupportedSources,
@@ -269,8 +274,8 @@ export function renderSupportedSourcesSection(
   for (const source of props.supportedSources) {
     const row = el('div', 'comet-settings-supported-source-row');
     const url = el('div', 'comet-settings-supported-source-url');
-    url.textContent = source.discoveryUrl.toString(true);
-    url.title = `${props.labels.settingsSupportedSourceUrl}: ${source.discoveryUrl.toString(true)}`;
+    url.textContent = source.homeUrl.toString(true);
+    url.title = `${props.labels.settingsSupportedSourceUrl}: ${source.homeUrl.toString(true)}`;
 
     const journalCell = el('div', 'comet-settings-supported-source-journal-cell');
     const journalLabel = el('div', 'comet-settings-supported-source-journal');

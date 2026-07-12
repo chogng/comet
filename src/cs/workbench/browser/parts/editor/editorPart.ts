@@ -4,85 +4,179 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { LocaleMessages } from 'language/locales';
-import type { INativeHostService } from 'cs/platform/native/common/native';
+import { toDisposable, Disposable } from 'cs/base/common/lifecycle';
+import type { IEditorOpenContext, IEditorOptions, IEditorPane } from 'cs/workbench/common/editor';
+import type { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+import type { INativeHostService } from 'cs/platform/native/common/native';
+import type { IStorageService } from 'cs/platform/storage/common/storage';
+import { StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
-import type { EditorPartBaseProps } from 'cs/workbench/browser/parts/editor/editorPartView';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
+import { getEditorCreationActions } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import { EditorGroupView, type EditorGroupViewProps } from 'cs/workbench/browser/parts/editor/editorGroupView';
+import type { EditorStatusLabels, EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type {
 	EditorViewStateKey,
+	SerializedEditorViewState,
 	SerializedEditorViewStateEntry,
 } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
+import {
+	parseSerializedEditorViewState,
+	serializeEditorViewStateKey,
+} from 'cs/workbench/browser/parts/editor/editorViewStateStore';
 import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
-import { EditorInput } from 'cs/workbench/common/editor/editorInput';
-import type { IEditorGroup, IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
-import type { IEditorService } from 'cs/workbench/services/editor/common/editorService';
-import type { EditorOpenHandler } from 'cs/workbench/services/editor/common/editorService';
-import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
-import { IStorageService, StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
-import type { IDisposable } from 'cs/base/common/lifecycle';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
-import { getEditorCreationActions } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
+import type {
+	IEditorGroupsService,
+	IEditorPartHost,
+} from 'cs/workbench/services/editor/common/editorGroupsService';
+import type { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import type { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 
 const EditorViewStateStorageKey = 'workbench.editor.viewState';
 
-export type EditorPartControllerContext = {
-	ui: LocaleMessages;
-	viewPartProps: ViewPartProps;
-	nativeHost: INativeHostService;
-	dialogService: IDialogService;
-	instantiationService: IInstantiationService;
-	editorGroupsService: IEditorGroupsService;
-	editorService: IEditorService;
-	storageService: IStorageService;
-	commandService: IWorkbenchCommandService;
-};
-
-export type EditorPartControllerSnapshot = {
-	group: IEditorGroup;
-	viewStateEntries: SerializedEditorViewStateEntry[];
-	editorPartProps: EditorPartBaseProps;
-};
-
-export type EditorPartModel = EditorPartController;
-export type EditorPartChangeReason = 'structure' | 'context';
-
-type EditorPartActions = {
-	onActivateTab: (editorId: string) => void;
-	onReorderTab: (editorId: string, targetSlotIndex: number) => void;
-	onCloseTab: (editorId: string) => Promise<boolean>;
-	onCloseOtherTabs: (editorId: string) => Promise<boolean>;
-	onCloseAllTabs: () => Promise<boolean>;
-	onRenameTab: (editorId: string) => Promise<void>;
-	onOpenEditor: EditorOpenHandler;
-	onSetEditorViewState: (key: EditorViewStateKey, state: unknown) => void;
-	onDeleteEditorViewState: (key: EditorViewStateKey) => void;
-};
-
-function createEditorPartStructureKey(snapshot: EditorPartControllerSnapshot): string {
-	return JSON.stringify({
-		groupId: snapshot.group.id,
-		editors: snapshot.group.getEditors().map(editor => ({
-			id: getEditorInputId(editor),
-			name: editor.getName(),
-			dirty: editor.isDirty(),
-		})),
-		activeEditor: snapshot.group.activeEditor
-			? getEditorInputId(snapshot.group.activeEditor)
-			: null,
-	});
+export interface EditorPartLabels {
+	readonly headerAddAction: string;
+	readonly close: string;
+	readonly closeOthers: string;
+	readonly closeAll: string;
+	readonly rename: string;
+	readonly expandEditor: string;
+	readonly collapseEditor: string;
+	readonly status: EditorStatusLabels;
 }
 
-function createEditorPartProps(
-	context: EditorPartControllerContext,
-	group: IEditorGroup,
-	viewStateEntries: SerializedEditorViewStateEntry[],
-	actions: EditorPartActions,
-): EditorPartBaseProps {
-	const { ui } = context;
-	return {
-		ui,
-		creationActions: getEditorCreationActions(ui),
-		labels: {
+export type IEditorPartsConstructionOwner = Omit<IEditorGroupsService, '_serviceBrand' | 'mainPart'>;
+
+export abstract class MainEditorPart extends Disposable implements IEditorPartHost {
+	private readonly viewStateEntries = new Map<string, SerializedEditorViewStateEntry>();
+	private viewStateDirty = false;
+	private groupView: EditorGroupView | undefined;
+
+	protected constructor(
+		protected readonly editorGroupsService: IEditorPartsConstructionOwner,
+		private readonly element: HTMLElement,
+		private readonly nativeHostService: INativeHostService,
+		private readonly dialogService: IDialogService,
+		private readonly instantiationService: IInstantiationService,
+		private readonly storageService: IStorageService,
+		private readonly commandService: IWorkbenchCommandService,
+		private readonly contextMenuService: IContextMenuService,
+		private readonly contextViewService: IContextViewService,
+		private readonly localeService: IWorkbenchLocaleService,
+		private readonly languageService: IWorkbenchLanguageService,
+	) {
+		super();
+		this.restoreViewState();
+		this._register(this.storageService.onWillSaveState(event => {
+			event.join(this.captureAndPersistViewState());
+		}));
+		this._register(this.editorGroupsService.onDidChange(() => this.refreshPresentation()));
+		this._register(toDisposable(this.localeService.subscribe(() => this.refreshPresentation())));
+	}
+
+	abstract revealEditor(expandedEditorSize?: number): void;
+
+	async openEditor(
+		editor: EditorInput,
+		options: IEditorOptions | undefined,
+		context: IEditorOpenContext,
+	): Promise<void> {
+		if (this.editorGroupsService.activeGroup.activeEditor !== editor) {
+			return;
+		}
+		await this.requireGroupView().openEditor(editor, options, context);
+	}
+
+	initialize(): void {
+		if (this.groupView) {
+			return;
+		}
+
+		const groupView = this._register(this.instantiationService.createInstance(
+			EditorGroupView,
+			this.createGroupViewProps(),
+		));
+		this.groupView = groupView;
+		this.element.append(groupView.getElement());
+	}
+
+	getElement(): HTMLElement {
+		return this.element;
+	}
+
+	layout(width: number, height: number): void {
+		this.requireGroupView().layout(width, height);
+	}
+
+	whenEditorTabViewStateSettled(tabId: string): Promise<void> {
+		return this.requireGroupView().whenTabViewStateSettled(tabId);
+	}
+
+	focusPrimaryInput(): void {
+		this.requireGroupView().focusPrimaryInput();
+	}
+
+	get activeEditorPane(): IEditorPane | undefined {
+		return this.groupView?.getActivePane() ?? undefined;
+	}
+
+	protected refreshPresentation(): void {
+		this.groupView?.setProps(this.createGroupViewProps());
+	}
+
+	protected abstract onDidResolveLabels(labels: EditorPartLabels): void;
+
+	protected abstract get editorCollapsed(): boolean;
+	protected abstract toggleEditorCollapsed(): void;
+	protected abstract updateEditorStatus(status: EditorStatusState): void;
+
+	override dispose(): void {
+		super.dispose();
+		this.persistViewState();
+		this.groupView = undefined;
+		this.element.replaceChildren();
+	}
+
+	private createGroupViewProps(): EditorGroupViewProps {
+		const ui = this.languageService.getLocaleMessages(this.localeService.getLocale());
+		const labels = this.createLabels(ui);
+		this.onDidResolveLabels(labels);
+		const group = this.editorGroupsService.activeGroup;
+		const viewStateEntries = [...this.viewStateEntries.values()];
+
+		return {
+			ui,
+			labels,
+			creationActions: getEditorCreationActions(ui),
+			viewPartProps: this.createViewPartProps(ui),
+			group,
+			commandService: this.commandService,
+			viewStateEntries,
+			contextMenuService: this.contextMenuService,
+			contextViewProvider: this.contextViewService,
+			onActivateTab: editorId => this.activateEditor(editorId),
+			onReorderTab: (editorId, targetSlotIndex) => this.reorderEditor(editorId, targetSlotIndex),
+			onCloseTab: editorId => this.closeEditor(editorId),
+			onCloseOtherTabs: editorId => this.closeOtherEditors(editorId),
+			onCloseAllTabs: () => this.closeAllEditors(),
+			onRenameTab: editorId => this.renameEditor(editorId, ui),
+			onSetEditorViewState: (key, state) => this.setEditorViewState(key, state),
+			onDeleteEditorViewState: key => this.deleteEditorViewState(key),
+			showTitlebarActions: !this.editorCollapsed,
+			showToolbar: true,
+			isEditorCollapsed: this.editorCollapsed,
+			onToggleEditorCollapse: () => this.toggleEditorCollapsed(),
+			titlebarAuxiliaryActionsElements: [],
+			hasLeadingTitlebarWindowControlsInset: false,
+			onStatusChange: status => this.updateEditorStatus(status),
+		};
+	}
+
+	private createLabels(ui: LocaleMessages): EditorPartLabels {
+		return {
 			headerAddAction: ui.editorHeaderAddAction,
 			close: ui.toastClose,
 			closeOthers: ui.editorTabContextCloseOthers,
@@ -94,97 +188,31 @@ function createEditorPartProps(
 				statusbarAriaLabel: ui.editorStatusbarAriaLabel,
 				ready: ui.statusReady,
 			},
-		},
-		viewPartProps: context.viewPartProps,
-		nativeHost: context.nativeHost,
-		dialogService: context.dialogService,
-		instantiationService: context.instantiationService,
-		group,
-		commandService: context.commandService,
-		viewStateEntries,
-		...actions,
-		showTitlebarActions: true,
-		showToolbar: true,
-		isEditorCollapsed: false,
-		onToggleEditorCollapse: () => {},
-	};
-}
-
-function areEditorPartControllerContextsEqual(
-	previous: EditorPartControllerContext,
-	next: EditorPartControllerContext,
-): boolean {
-	return previous.ui === next.ui
-		&& previous.nativeHost === next.nativeHost
-		&& previous.dialogService === next.dialogService
-		&& previous.instantiationService === next.instantiationService
-		&& previous.editorGroupsService === next.editorGroupsService
-		&& previous.editorService === next.editorService
-		&& previous.storageService === next.storageService
-		&& previous.commandService === next.commandService
-		&& previous.viewPartProps === next.viewPartProps;
-}
-
-export class EditorPartController {
-	private context: EditorPartControllerContext;
-	private readonly editorGroupsService: IEditorGroupsService;
-	private readonly editorService: IEditorService;
-	private readonly viewStateEntries = new Map<string, SerializedEditorViewStateEntry>();
-	private readonly listeners = new Set<(reason: EditorPartChangeReason) => void>();
-	private snapshot: EditorPartControllerSnapshot;
-	private readonly actions: EditorPartActions;
-	private readonly groupsListener: IDisposable;
-
-	constructor(context: EditorPartControllerContext) {
-		this.context = context;
-		this.editorGroupsService = context.editorGroupsService;
-		this.editorService = context.editorService;
-		const stored = context.storageService.get(EditorViewStateStorageKey, StorageScope.WORKSPACE);
-		if (stored) {
-			const parsed = JSON.parse(stored) as SerializedEditorViewStateEntry[];
-			for (const entry of parsed) {
-				this.viewStateEntries.set(JSON.stringify(entry.key), entry);
-			}
-		}
-		this.actions = {
-			onActivateTab: this.onActivateTab,
-			onReorderTab: this.onReorderTab,
-			onCloseTab: this.onCloseTab,
-			onCloseOtherTabs: this.onCloseOtherTabs,
-			onCloseAllTabs: this.onCloseAllTabs,
-			onRenameTab: this.onRenameTab,
-			onOpenEditor: this.editorService.openEditor.bind(this.editorService),
-			onSetEditorViewState: this.setEditorViewState,
-			onDeleteEditorViewState: this.deleteEditorViewState,
 		};
-		this.snapshot = this.createSnapshot();
-		this.groupsListener = this.editorGroupsService.onDidChange(() => {
-			this.refreshSnapshot('structure');
-		});
 	}
 
-	readonly subscribe = (listener: (reason: EditorPartChangeReason) => void) => {
-		this.listeners.add(listener);
-		return () => this.listeners.delete(listener);
-	};
+	private createViewPartProps(ui: LocaleMessages): ViewPartProps {
+		return {
+			browserUrl: '',
+			browserPageTitle: '',
+			browserFaviconUrl: '',
+			browserIsLoading: false,
+			electronRuntime: this.nativeHostService.canInvoke(),
+			webContentRuntime: typeof this.nativeHostService.webContent?.navigate === 'function',
+			labels: {
+				emptyState: ui.emptyState,
+				contentUnavailable: ui.webContentUnavailable,
+				overlayPauseHeading: ui.webContentOverlayPauseHeading,
+				overlayPauseDetail: ui.webContentOverlayPauseDetail,
+			},
+		};
+	}
 
-	readonly getSnapshot = () => this.snapshot;
-
-	readonly setContext = (context: EditorPartControllerContext) => {
-		if (context.editorGroupsService !== this.editorGroupsService) {
-			throw new Error('EditorPartController cannot change editor groups service.');
-		}
-		if (context.editorService !== this.editorService) {
-			throw new Error('EditorPartController cannot change editor service.');
-		}
-		if (areEditorPartControllerContextsEqual(this.context, context)) {
+	private activateEditor(editorId: string): void {
+		const editor = this.findEditorById(editorId);
+		if (!editor) {
 			return;
 		}
-		this.context = context;
-		this.refreshSnapshot('context');
-	};
-
-	private activateEditor(editor: EditorInput): void {
 		const match = this.editorGroupsService.findEditor(editor);
 		if (!match) {
 			return;
@@ -193,43 +221,19 @@ export class EditorPartController {
 		this.editorGroupsService.activateGroup(match.group);
 	}
 
-	readonly setEditorViewState = (key: EditorViewStateKey, state: unknown) => {
-		this.viewStateEntries.set(JSON.stringify(key), { key, state });
-		this.persist();
-		this.refreshSnapshot('structure');
-	};
-
-	readonly deleteEditorViewState = (key: EditorViewStateKey) => {
-		this.viewStateEntries.delete(JSON.stringify(key));
-		this.persist();
-		this.refreshSnapshot('structure');
-	};
-
-	readonly dispose = () => {
-		this.groupsListener.dispose();
-		this.listeners.clear();
-	};
-
-	private readonly onActivateTab = (editorId: string) => {
-		const editor = this.findEditorById(editorId);
-		if (editor) {
-			this.activateEditor(editor);
-		}
-	};
-
-	private readonly onReorderTab = (editorId: string, targetSlotIndex: number) => {
+	private reorderEditor(editorId: string, targetSlotIndex: number): void {
 		const editor = this.findEditorById(editorId);
 		if (editor) {
 			this.editorGroupsService.activeGroup.moveEditor(editor, targetSlotIndex);
 		}
-	};
+	}
 
-	private readonly onCloseTab = async (editorId: string) => {
+	private async closeEditor(editorId: string): Promise<boolean> {
 		const editor = this.findEditorById(editorId);
 		return editor ? this.editorGroupsService.closeEditor(editor) : false;
-	};
+	}
 
-	private readonly onCloseOtherTabs = async (editorId: string) => {
+	private async closeOtherEditors(editorId: string): Promise<boolean> {
 		const group = this.editorGroupsService.activeGroup;
 		for (const editor of group.getEditors()) {
 			if (getEditorInputId(editor) !== editorId && !(await group.closeEditor(editor))) {
@@ -237,70 +241,91 @@ export class EditorPartController {
 			}
 		}
 		return true;
-	};
+	}
 
-	private readonly onCloseAllTabs = async () => {
+	private async closeAllEditors(): Promise<boolean> {
 		for (const editor of this.editorGroupsService.activeGroup.getEditors()) {
 			if (!(await this.editorGroupsService.activeGroup.closeEditor(editor))) {
 				return false;
 			}
 		}
 		return true;
-	};
+	}
 
-	private readonly onRenameTab = async (editorId: string) => {
+	private async renameEditor(editorId: string, ui: LocaleMessages): Promise<void> {
 		const editor = this.findEditorById(editorId);
 		if (!editor) {
 			return;
 		}
-		const result = await this.context.dialogService.input({
-			title: this.context.ui.editorTabRenameTitle,
-			message: this.context.ui.editorTabRenameLabel,
+		const result = await this.dialogService.input({
+			title: ui.editorTabRenameTitle,
+			message: ui.editorTabRenameLabel,
 			value: editor.getName(),
-			primaryButton: this.context.ui.editorModalConfirm,
-			cancelButton: this.context.ui.editorModalCancel,
+			primaryButton: ui.editorModalConfirm,
+			cancelButton: ui.editorModalCancel,
 		});
 		if (result.value) {
 			editor.rename(result.value);
 		}
-	};
+	}
 
 	private findEditorById(editorId: string): EditorInput | undefined {
-		return this.editorGroupsService.activeGroup.getEditors().find(editor => getEditorInputId(editor) === editorId);
+		return this.editorGroupsService.activeGroup.getEditors()
+			.find(editor => getEditorInputId(editor) === editorId);
 	}
 
-	private createSnapshot(): EditorPartControllerSnapshot {
-		const group = this.editorGroupsService.activeGroup;
-		const viewStateEntries = [...this.viewStateEntries.values()];
-		return {
-			group,
-			viewStateEntries,
-			editorPartProps: createEditorPartProps(this.context, group, viewStateEntries, this.actions),
-		};
+	private setEditorViewState(key: EditorViewStateKey, state: unknown): void {
+		if (state === undefined) {
+			throw new Error('Editor view state must be deleted instead of set to undefined.');
+		}
+		this.viewStateEntries.set(serializeEditorViewStateKey(key), { key, state });
+		this.viewStateDirty = true;
 	}
 
-	private refreshSnapshot(reason: EditorPartChangeReason): void {
-		const next = this.createSnapshot();
-		const previous = this.snapshot;
-		this.snapshot = next;
-		if (reason === 'structure' && createEditorPartStructureKey(previous) === createEditorPartStructureKey(next)) {
+	private deleteEditorViewState(key: EditorViewStateKey): void {
+		if (this.viewStateEntries.delete(serializeEditorViewStateKey(key))) {
+			this.viewStateDirty = true;
+		}
+	}
+
+	private restoreViewState(): void {
+		const stored = this.storageService.get(EditorViewStateStorageKey, StorageScope.WORKSPACE);
+		if (stored === undefined) {
 			return;
 		}
-		for (const listener of this.listeners) {
-			listener(reason);
+		const parsed = parseSerializedEditorViewState(JSON.parse(stored));
+		for (const entry of parsed.entries) {
+			this.viewStateEntries.set(serializeEditorViewStateKey(entry.key), entry);
 		}
 	}
 
-	private persist(): void {
-		this.context.storageService.store(
+	private persistViewState(): void {
+		if (!this.viewStateDirty) {
+			return;
+		}
+		const stored: SerializedEditorViewState = {
+			version: 2,
+			entries: [...this.viewStateEntries.values()],
+		};
+		this.storageService.store(
 			EditorViewStateStorageKey,
-			JSON.stringify([...this.viewStateEntries.values()]),
+			JSON.stringify(stored),
 			StorageScope.WORKSPACE,
 			StorageTarget.MACHINE,
 		);
+		this.viewStateDirty = false;
 	}
-}
 
-export function createEditorPartController(context: EditorPartControllerContext) {
-	return new EditorPartController(context);
+	private async captureAndPersistViewState(): Promise<void> {
+		await this.groupView?.captureActivePaneViewState();
+		this.persistViewState();
+	}
+
+	private requireGroupView(): EditorGroupView {
+		if (!this.groupView) {
+			throw new Error('The main Editor Part has not been initialized.');
+		}
+		return this.groupView;
+	}
+
 }

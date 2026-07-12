@@ -5,54 +5,57 @@
 
 import './media/style.css';
 
-import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
-import type { EditorPartProps } from 'cs/workbench/browser/parts/editor/editorPartView';
-import type { DraftEditorCommandId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
-import type { SessionChatViewProps } from 'cs/sessions/browser/parts/sessions/chatView';
+import { Disposable } from 'cs/base/common/lifecycle';
+import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import {
-	createSessionSidebarPartView,
 	SessionSidebarPartView,
 	type SessionSidebarProps,
 	type SessionSidebarViewProps,
 } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import {
-	SessionsPartView,
+	SessionsPart,
 } from 'cs/sessions/browser/parts/sessions/sessionsPart';
+import type { SessionsMainEditorPart } from 'cs/sessions/browser/parts/editor/editorPart';
+import { SessionsEditorParts } from 'cs/sessions/browser/parts/editor/editorParts';
+import { ISessionsPartService } from 'cs/sessions/services/sessions/browser/sessionsPartService';
 import {
-	createSessionEditorPartView,
-	SessionEditorPartView,
-} from 'cs/sessions/browser/parts/editor/editorPart';
-import {
-	clearStatusbarCommandHandlers,
-	initializeStatusbarState,
-	setStatusbarCommandHandlers,
-	updateStatusbarState,
-} from 'cs/workbench/browser/parts/statusbar/statusbarActions';
-import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
+	ISessionsService,
+	OpenNewSessionKind,
+} from 'cs/sessions/services/sessions/browser/sessionsService';
+import { ISessionsManagementService } from 'cs/sessions/services/sessions/common/sessionsManagement';
+import { SessionWorkspaceKind } from 'cs/sessions/services/sessions/common/session';
+import { isNewSessionSlot } from 'cs/sessions/services/sessions/common/sessionsView';
+import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
+import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
 
 export type SessionWorkbenchContentPartViewsProps = {
-	isPrimarySidebarVisible: boolean;
-	isEditorVisible: boolean;
 	sidebarProps: SessionSidebarProps;
-	sessionChatProps: SessionChatViewProps;
-	editorPartProps: EditorPartProps;
 	leadingTitlebarActionsElement?: HTMLElement | null;
 	sidebarFooterActionsElement: HTMLElement;
 	collapsedEditorTitlebarActionsElement: HTMLElement;
 };
 
-export class SessionWorkbenchContentPartViews {
+export class SessionWorkbenchContentPartViews extends Disposable {
 	private props: SessionWorkbenchContentPartViewsProps;
 	private sidebarView: SessionSidebarPartView | null = null;
-	private sessionsView: SessionsPartView | null = null;
-	private editorView: SessionEditorPartView | null = null;
+	private readonly editorPart: SessionsMainEditorPart;
 	private disposed = false;
 
 	constructor(
 		props: SessionWorkbenchContentPartViewsProps,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@ISessionsPartService private readonly sessionsView: SessionsPart,
+		@ISessionsService private readonly sessionsService: ISessionsService,
+		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
+		@IEditorGroupsService editorParts: SessionsEditorParts,
+		@ISessionsLayoutService private readonly layoutService: ISessionsLayoutService,
 	) {
+		super();
 		this.props = props;
+		this.editorPart = editorParts.mainPart;
+		this.editorPart.initialize();
+		this._register(this.layoutService.onDidChangeLayoutState(this.render, this));
+		this.openInitialDraftIfUnambiguous();
 		this.render();
 	}
 
@@ -70,147 +73,86 @@ export class SessionWorkbenchContentPartViews {
 	}
 
 	getSessionsElement() {
-		return this.sessionsView?.getElement() ?? null;
+		return this.sessionsView.getElement();
 	}
 
 	getEditorElement() {
-		return this.editorView?.getElement() ?? null;
+		return this.editorPart.getElement();
 	}
 
 	layoutEditor(width: number, height: number) {
-		this.editorView?.layout(width, height);
+		this.editorPart.layout(width, height);
 	}
 
-	executeActiveDraftCommand(commandId: DraftEditorCommandId) {
-		return this.editorView?.executeActiveDraftCommand(commandId) ?? false;
+	layoutSessions(width: number, height: number) {
+		this.sessionsView.layout(width, height);
 	}
 
-	canExecuteActiveDraftCommand(commandId: DraftEditorCommandId) {
-		return this.editorView?.canExecuteActiveDraftCommand(commandId) ?? false;
-	}
-
-	getActiveDraftStableSelectionTarget() {
-		return this.editorView?.getActiveDraftStableSelectionTarget() ?? null;
-	}
-
-	focusActiveEditorPrimaryInput() {
-		this.editorView?.focusPrimaryInput();
-	}
-
-	whenEditorTabViewStateSettled(tabId: string) {
-		return this.editorView?.whenEditorTabViewStateSettled(tabId) ?? Promise.resolve();
-	}
-
-	dispose() {
+	override dispose() {
 		if (this.disposed) {
 			return;
 		}
 
 		this.disposed = true;
-		clearStatusbarCommandHandlers();
 		this.sidebarView?.dispose();
-		this.disposeSessionsView();
-		this.editorView?.dispose();
 		this.sidebarView = null;
-		this.editorView = null;
+		super.dispose();
 	}
 
 	private render() {
-		initializeStatusbarState(this.props.editorPartProps.labels.status);
-		this.renderSidebar();
-		if (this.props.isEditorVisible) {
-			this.renderEditor();
-			this.renderSessions();
-		} else {
-			this.renderSessions();
-			this.renderEditor();
-		}
+		const state = this.layoutService.getLayoutState();
+		this.renderSidebar(state.isSidebarVisible);
+		this.renderSessions(!state.isEditorCollapsed);
 	}
 
 	//#region Column titlebar routing
 
-	private renderSidebar() {
+	private renderSidebar(isSidebarVisible: boolean) {
 		const nextProps: SessionSidebarViewProps = {
 			...this.props.sidebarProps,
-			isCollapsed: !this.props.isPrimarySidebarVisible,
+			isCollapsed: !isSidebarVisible,
 			titlebarActionsElement: this.props.leadingTitlebarActionsElement ?? null,
 			footerActionsElement: this.props.sidebarFooterActionsElement,
 		};
 
 		if (!this.sidebarView) {
-			this.sidebarView = createSessionSidebarPartView(nextProps);
+			this.sidebarView = this.instantiationService.createInstance(SessionSidebarPartView, nextProps);
 			return;
 		}
 
 		this.sidebarView.setProps(nextProps);
 	}
 
-	private renderSessions() {
-		const nextProps = {
-			chatProps: this.props.sessionChatProps,
-			titlebarLeadingActionsElement: null,
-			titlebarTrailingActionsElement:
-				this.props.isEditorVisible
-					? null
-					: this.props.collapsedEditorTitlebarActionsElement,
-		};
-
-		if (!this.sessionsView) {
-			this.sessionsView = this.instantiationService.createInstance(
-				SessionsPartView,
-				nextProps,
-			);
-			return;
-		}
-
-		this.sessionsView.setProps(nextProps);
-	}
-
-	private renderEditor() {
-		const nextProps: EditorPartProps = {
-			...this.props.editorPartProps,
-			showTitlebarActions: this.props.isEditorVisible,
-			showToolbar: true,
-			isEditorCollapsed: !this.props.isEditorVisible,
-			isAgentSidebarVisible: false,
-			showAgentSidebarToggle: false,
-			titlebarAuxiliaryActionsElements: [],
-			hasLeadingTitlebarWindowControlsInset: false,
-			onStatusChange: this.handleEditorStatusChange,
-		};
-
-		if (!this.editorView) {
-			this.editorView = createSessionEditorPartView(nextProps);
-		} else {
-			this.editorView.setProps(nextProps);
-		}
-
-		if (this.props.isEditorVisible) {
-			this.syncStatusbarCommandHandlers();
-		} else {
-			clearStatusbarCommandHandlers();
-		}
+	private renderSessions(isEditorVisible: boolean) {
+		this.sessionsView.setTitlebarActions(
+			null,
+			isEditorVisible
+				? null
+				: this.props.collapsedEditorTitlebarActionsElement,
+		);
 	}
 
 	//#endregion
 
-	private handleEditorStatusChange = (status: EditorStatusState) => {
-		updateStatusbarState(status);
-	};
-
-	private disposeSessionsView() {
-		this.sessionsView?.dispose();
-		this.sessionsView = null;
-	}
-
-	private syncStatusbarCommandHandlers() {
-		setStatusbarCommandHandlers({
-			undo: () => {
-				this.editorView?.runActiveDraftEditorAction('undo');
+	private openInitialDraftIfUnambiguous(): void {
+		if (this.sessionsManagementService.draftSession.get()
+			|| this.sessionsManagementService.getSessions().length > 0
+			|| !this.sessionsService.visibleSessions.get().some(isNewSessionSlot)) {
+			return;
+		}
+		const sessionTypes = this.sessionsManagementService.sessionTypes.get();
+		if (sessionTypes.length !== 1 || !sessionTypes[0].sessionType.supportsWorkspaceLess) {
+			return;
+		}
+		const [{ providerId, sessionType }] = sessionTypes;
+		this.sessionsService.openNewSession({
+			kind: OpenNewSessionKind.Draft,
+			providerId,
+			draft: {
+				sessionType: sessionType.id,
+				workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
 			},
-			redo: () => {
-				this.editorView?.runActiveDraftEditorAction('redo');
-			},
+			preserveFocus: true,
 		});
 	}
 }

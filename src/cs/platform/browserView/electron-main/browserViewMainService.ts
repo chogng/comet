@@ -1,8 +1,9 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Comet Studio. All rights reserved.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BrowserWindow, session, WebContentsView, type Session } from 'electron';
+import { BrowserWindow, screen, session, WebContentsView, type Session } from 'electron';
 import { VSBuffer } from 'cs/base/common/buffer';
 import { Emitter, type Event } from 'cs/base/common/event';
 import { DisposableStore } from 'cs/base/common/lifecycle';
@@ -28,6 +29,7 @@ import {
   type IBrowserViewKeyDownEvent,
   type IBrowserViewLoadingEvent,
   type IBrowserViewNavigationEvent,
+  type IBrowserViewViewStateEvent,
   type IBrowserViewOwner,
   type IBrowserViewPermissionRequestEvent,
   type IBrowserViewRect,
@@ -50,6 +52,15 @@ import type {
 } from 'cs/platform/browserView/common/browserPermissions';
 import type { ICDPConnection } from 'cs/platform/browserView/common/cdp/types';
 import { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
+import { BrowserViewInspector } from 'cs/platform/browserView/electron-main/browserViewInspector';
+import { BrowserViewScreenshot } from 'cs/platform/browserView/electron-main/browserViewScreenshot';
+import {
+  createBrowserViewStateCaptureScript,
+  createBrowserViewStateRestoreScript,
+  parseBrowserViewViewState,
+	resolveBrowserViewDocumentIpcEvent,
+  resolveBrowserViewStateIpcEvent,
+} from 'cs/platform/browserView/electron-main/browserViewViewState';
 import { WORKBENCH_SHARED_WEB_PARTITION } from 'cs/platform/native/electron-main/sharedWebSession';
 import { resolveBrowserViewPreloadScriptPath } from 'cs/platform/window/electron-main/windowPaths';
 import {
@@ -98,6 +109,8 @@ type ManagedWebContentTarget = {
   cleanup: Array<() => void>;
   context: BrowserViewMainContext;
   debuggerTransport: BrowserViewDebugger;
+	inspector: BrowserViewInspector;
+  screenshot: BrowserViewScreenshot;
   metadataMachine: WebContentTargetMetadataMachine;
   onDidClose?: Event<void>;
   owner?: IBrowserViewOwner;
@@ -110,6 +123,7 @@ type ManagedWebContentTarget = {
 type BrowserViewTargetEvents = {
   readonly disposables: DisposableStore;
   readonly onDidNavigate: Emitter<IBrowserViewNavigationEvent>;
+  readonly onDidChangeViewState: Emitter<IBrowserViewViewStateEvent>;
   readonly onDidChangeLoadingState: Emitter<IBrowserViewLoadingEvent>;
   readonly onDidChangeFocus: Emitter<IBrowserViewFocusEvent>;
   readonly onDidChangeVisibility: Emitter<IBrowserViewVisibilityEvent>;
@@ -137,12 +151,14 @@ type BrowserViewTargetMetadata = {
   permissions: ISerializedBrowserPermissionsSnapshot;
   browserZoomIndex: number;
   device: IBrowserDeviceProfile | undefined;
-  isElementSelectionActive: boolean;
-  isAreaSelectionActive: boolean;
+  emulationScaleFactor: number;
   visible: boolean;
   bounds: WebContentBounds | undefined;
   lastScreenshot: VSBuffer | undefined;
   readonly consoleLogs: string[];
+  navigationGeneration: number;
+  viewStateDocumentId: string | undefined;
+  viewState: IBrowserViewViewStateEvent | undefined;
 };
 
 type RetainedWebContentTarget = {
@@ -163,12 +179,12 @@ const retainedWebContentTargets = new Map<string, RetainedWebContentTarget>();
 const browserViewTargetMetadata = new Map<string, BrowserViewTargetMetadata>();
 const browserViewWindowConfigurations = new Map<number, IBrowserViewWindowConfiguration>();
 const browserViewCreatedEmitter = new Emitter<IBrowserViewCreatedEvent>();
-
 function createBrowserViewTargetEvents(): BrowserViewTargetEvents {
   const disposables = new DisposableStore();
   return {
     disposables,
     onDidNavigate: disposables.add(new Emitter<IBrowserViewNavigationEvent>()),
+    onDidChangeViewState: disposables.add(new Emitter<IBrowserViewViewStateEvent>()),
     onDidChangeLoadingState: disposables.add(new Emitter<IBrowserViewLoadingEvent>()),
     onDidChangeFocus: disposables.add(new Emitter<IBrowserViewFocusEvent>()),
     onDidChangeVisibility: disposables.add(new Emitter<IBrowserViewVisibilityEvent>()),
@@ -223,12 +239,16 @@ function createBrowserViewTargetMetadata(
     permissions: initialState?.permissions ?? { origins: {} },
     browserZoomIndex: normalizeBrowserZoomIndex(initialState?.browserZoomIndex),
     device: initialState?.device,
-    isElementSelectionActive: initialState?.isElementSelectionActive ?? false,
-    isAreaSelectionActive: initialState?.isAreaSelectionActive ?? false,
+    emulationScaleFactor: 1,
     visible: false,
     bounds: undefined,
     lastScreenshot: initialState?.lastScreenshot,
     consoleLogs: [],
+    navigationGeneration: 0,
+		viewStateDocumentId: undefined,
+    viewState: initialState?.url
+      ? { url: initialState.url, scrollX: 0, scrollY: 0 }
+      : undefined,
   };
 }
 
@@ -447,6 +467,12 @@ type WebContentExecutionTimeoutResult = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function publishBrowserViewViewState(targetId: string, viewState: IBrowserViewViewStateEvent): void {
+	const metadata = getBrowserViewTargetMetadata(targetId);
+	metadata.viewState = viewState;
+	metadata.events.onDidChangeViewState.fire(viewState);
 }
 
 function isWebContentLayoutPhase(value: unknown): value is WebContentLayoutPhase {
@@ -705,8 +731,9 @@ function disposeWebContentTargetEntry(targetId: string) {
   }
 
   webContentTargets.delete(normalizedTargetId);
-  disposeBrowserViewTargetMetadata(normalizedTargetId);
-  entry.debuggerTransport.dispose();
+	entry.inspector.dispose();
+	entry.debuggerTransport.dispose();
+	disposeBrowserViewTargetMetadata(normalizedTargetId);
   for (const cleanup of entry.cleanup) {
     cleanup();
   }
@@ -900,18 +927,47 @@ function createWebContentTarget(
 
   const metadata = browserViewTargetMetadata.get(targetId);
 
+	const debuggerTransport = new BrowserViewDebugger(view.webContents);
+	const inspector = new BrowserViewInspector(view.webContents, debuggerTransport);
+	const screenshot = new BrowserViewScreenshot(view, debuggerTransport, inspector);
   const entry: ManagedWebContentTarget = {
     cleanup: [],
     context,
-    debuggerTransport: new BrowserViewDebugger(view.webContents),
+    debuggerTransport,
+		inspector,
     metadataMachine: createDefaultTargetMetadataMachine(),
     onDidClose: metadata?.events.onDidClose.event,
     owner: metadata?.owner,
     state: createDefaultWebContentTargetState(),
     statusCode: null,
+		screenshot,
     targetId,
     view,
   };
+	const selectElementSubscription = inspector.onDidSelectElement(data => {
+		browserViewTargetMetadata.get(targetId)?.events.onDidSelectElement.fire(data);
+	});
+	const elementSelectionActiveSubscription = inspector.onDidChangeElementSelectionActive(active => {
+		browserViewTargetMetadata.get(targetId)?.events.onDidChangeElementSelectionActive.fire(active);
+	});
+	const pickAreaSubscription = inspector.onDidPickArea(rect => {
+		browserViewTargetMetadata.get(targetId)?.events.onDidPickArea.fire(rect);
+	});
+	const areaSelectionActiveSubscription = inspector.onDidChangeAreaSelectionActive(active => {
+		browserViewTargetMetadata.get(targetId)?.events.onDidChangeAreaSelectionActive.fire(active);
+	});
+	entry.cleanup.push(
+		() => selectElementSubscription.dispose(),
+		() => elementSelectionActiveSubscription.dispose(),
+		() => pickAreaSubscription.dispose(),
+		() => areaSelectionActiveSubscription.dispose(),
+	);
+	if (metadata) {
+		const windowConfiguration = browserViewWindowConfigurations.get(metadata.owner.mainWindowId);
+		if (windowConfiguration) {
+			inspector.setTheme(windowConfiguration.theme);
+		}
+	}
 	const cdpCommandInterceptor = entry.debuggerTransport.registerCommandInterceptor((method, params, session) =>
 		interceptBrowserViewCDPCommand(entry, method, params, session)
 	);
@@ -939,11 +995,19 @@ function createWebContentTarget(
   addWebContentTargetListener(entry, 'did-start-navigation', (
     _event,
     _url,
-    _isInPlace,
+	isInPlace,
     isMainFrame,
   ) => {
     if (isMainFrame === true) {
       entry.statusCode = null;
+      const metadata = browserViewTargetMetadata.get(targetId);
+      if (metadata) {
+		metadata.navigationGeneration += 1;
+		metadata.viewState = undefined;
+		if (isInPlace !== true) {
+			metadata.viewStateDocumentId = undefined;
+		}
+      }
     }
   });
   addWebContentTargetListener(entry, 'did-navigate', (
@@ -1005,6 +1069,55 @@ function createWebContentTarget(
       handleCommandKeydown,
     );
   });
+	const handleViewStateDocument = (
+		event: { readonly senderFrame?: unknown },
+		value: unknown,
+	) => {
+		const document = resolveBrowserViewDocumentIpcEvent(
+			event.senderFrame,
+			entry.view.webContents.mainFrame,
+			entry.view.webContents.getURL(),
+			value,
+		);
+		if (!document) {
+			return;
+		}
+		const metadata = browserViewTargetMetadata.get(targetId);
+		if (metadata) {
+			metadata.viewStateDocumentId = document.documentId;
+		}
+	};
+	entry.view.webContents.ipc.on('vscode:browserView:viewStateDocument', handleViewStateDocument);
+	entry.cleanup.push(() => {
+		entry.view.webContents.ipc.removeListener(
+			'vscode:browserView:viewStateDocument',
+			handleViewStateDocument,
+		);
+	});
+	const handleViewStateChange = (
+    event: { readonly senderFrame?: unknown },
+    value: unknown,
+  ) => {
+		const metadata = browserViewTargetMetadata.get(targetId);
+		const viewState = resolveBrowserViewStateIpcEvent(
+			event.senderFrame,
+			entry.view.webContents.mainFrame,
+			metadata?.viewStateDocumentId,
+      entry.view.webContents.getURL(),
+      value,
+    );
+    if (!viewState) {
+      return;
+    }
+    publishBrowserViewViewState(targetId, viewState);
+  };
+  entry.view.webContents.ipc.on('vscode:browserView:viewStateChanged', handleViewStateChange);
+  entry.cleanup.push(() => {
+    entry.view.webContents.ipc.removeListener(
+      'vscode:browserView:viewStateChanged',
+      handleViewStateChange,
+    );
+  });
   addWebContentTargetListener(entry, 'console-message', (...args) => {
     const metadata = browserViewTargetMetadata.get(targetId);
     if (!metadata) {
@@ -1063,7 +1176,8 @@ function createWebContentTarget(
     syncWebContentTargetState(targetId);
   });
 
-  addWebContentTargetListener(entry, 'destroyed', () => {
+	addWebContentTargetListener(entry, 'destroyed', () => {
+		entry.inspector.dispose();
     entry.debuggerTransport.dispose();
     for (const cleanup of entry.cleanup) {
       cleanup();
@@ -1836,9 +1950,9 @@ function toBrowserViewState(targetId: string): IBrowserViewState {
     storageScope: metadata.storageScope,
     permissions: metadata.permissions,
     browserZoomIndex: metadata.browserZoomIndex,
-    isElementSelectionActive: metadata.isElementSelectionActive,
+    isElementSelectionActive: entry.inspector.isElementSelectionActive,
     isRemoteSession: false,
-    isAreaSelectionActive: metadata.isAreaSelectionActive,
+    isAreaSelectionActive: entry.inspector.isAreaSelectionActive,
     device: metadata.device,
   };
 }
@@ -1855,6 +1969,10 @@ export class BrowserViewMainService implements IBrowserViewService {
 
   onDynamicDidNavigate(id: string): Event<IBrowserViewNavigationEvent> {
     return getBrowserViewTargetMetadata(id).events.onDidNavigate.event;
+  }
+
+  onDynamicDidChangeViewState(id: string): Event<IBrowserViewViewStateEvent> {
+    return getBrowserViewTargetMetadata(id).events.onDidChangeViewState.event;
   }
 
   onDynamicDidChangeLoadingState(id: string): Event<IBrowserViewLoadingEvent> {
@@ -1974,15 +2092,14 @@ export class BrowserViewMainService implements IBrowserViewService {
       if (metadata.device) {
         await this.setDeviceEmulation(id, metadata.device);
       }
-		if (initialState?.url) {
-			void navigateWebContentTarget(initialState.url, id, 'browser').catch(error => {
-				console.warn('[browser-view] initial navigation failed', describeWebContentError(error));
-			});
-		}
-		return {
-			...toBrowserViewState(id),
-			...initialState,
-		};
+			if (initialState?.url) {
+				await navigateWebContentTarget(initialState.url, id, 'browser');
+			}
+			return {
+				...toBrowserViewState(id),
+				isElementSelectionActive: entry.inspector.isElementSelectionActive,
+				isAreaSelectionActive: entry.inspector.isAreaSelectionActive,
+			};
     } catch (error) {
       disposeWebContentTargetEntry(id);
       throw error;
@@ -2026,22 +2143,20 @@ export class BrowserViewMainService implements IBrowserViewService {
       if (!isBrowserViewMainTarget(entry)) {
         throw new Error(`Browser view '${id}' has no CDP target metadata.`);
       }
-      if (url) {
-        void navigateWebContentTarget(url, id, 'browser').catch(error => {
-          console.warn('[browser-view] CDP target navigation failed', describeWebContentError(error));
-        });
-      }
+			if (url) {
+				await navigateWebContentTarget(url, id, 'browser');
+			}
 
-      const state = toBrowserViewState(id);
-      browserViewCreatedEmitter.fire({
+			const state = toBrowserViewState(id);
+			browserViewCreatedEmitter.fire({
         info: {
           id,
           owner,
-          state: url ? { ...state, url } : state,
+					state,
         },
-        openOptions: { preserveFocus: true },
-      });
-      return entry;
+				openOptions: { preserveFocus: true },
+			});
+			return entry;
     } catch (error) {
       disposeWebContentTargetEntry(id);
       throw error;
@@ -2064,6 +2179,15 @@ export class BrowserViewMainService implements IBrowserViewService {
   async layout(id: string, bounds: IBrowserViewBounds): Promise<void> {
     const metadata = getBrowserViewTargetMetadata(id);
     getBrowserViewTargetEntry(id);
+		const hostZoomFactor = bounds.zoomFactor;
+		const emulationScale = bounds.emulation?.scale ?? 1;
+		if (!Number.isFinite(hostZoomFactor) || hostZoomFactor <= 0) {
+			throw new Error('Browser view host zoom factor must be a positive finite number.');
+		}
+		if (!Number.isFinite(emulationScale) || emulationScale <= 0) {
+			throw new Error('Browser view emulation scale must be a positive finite number.');
+		}
+		metadata.emulationScaleFactor = hostZoomFactor * emulationScale;
     metadata.bounds = {
       x: Math.round(bounds.x),
       y: Math.round(bounds.y),
@@ -2097,6 +2221,61 @@ export class BrowserViewMainService implements IBrowserViewService {
       webContentLayoutPhase = 'hidden';
       applyWebContentLayout();
     }
+  }
+
+  async captureViewState(id: string): Promise<IBrowserViewViewStateEvent> {
+    const metadata = getBrowserViewTargetMetadata(id);
+    const entry = getBrowserViewTargetEntry(id);
+    const generation = metadata.navigationGeneration;
+    const result = await entry.view.webContents.executeJavaScript(
+      createBrowserViewStateCaptureScript(),
+      true,
+    );
+    if (metadata.navigationGeneration !== generation) {
+      throw new Error(`Browser view '${id}' navigated while its view state was being captured.`);
+    }
+    const viewState = parseBrowserViewViewState(result);
+    if (!viewState) {
+      throw new Error(`Browser view '${id}' returned an invalid view state.`);
+    }
+    if (viewState.url !== entry.view.webContents.getURL()) {
+      throw new Error(`Browser view '${id}' changed documents while its view state was being captured.`);
+    }
+    publishBrowserViewViewState(id, viewState);
+    return viewState;
+  }
+
+  async restoreViewState(id: string, value: IBrowserViewViewStateEvent): Promise<boolean> {
+    const viewState = parseBrowserViewViewState(value);
+    if (!viewState) {
+      throw new Error(`Browser view '${id}' received an invalid view state.`);
+    }
+    const metadata = getBrowserViewTargetMetadata(id);
+    const entry = getBrowserViewTargetEntry(id);
+    if (!metadata.visible || !metadata.bounds || metadata.bounds.width <= 1 || metadata.bounds.height <= 1) {
+      throw new Error(`Browser view '${id}' must be visible and laid out before restoring view state.`);
+    }
+    if (viewState.url !== entry.view.webContents.getURL()) {
+      throw new Error(`Browser view '${id}' cannot restore view state for a different document.`);
+    }
+    if (entry.view.webContents.isLoadingMainFrame()) {
+      throw new Error(`Browser view '${id}' cannot restore view state while its document is loading.`);
+    }
+    const generation = metadata.navigationGeneration;
+    const result = await entry.view.webContents.executeJavaScript(
+      createBrowserViewStateRestoreScript(viewState),
+      true,
+    );
+    if (metadata.navigationGeneration !== generation) {
+      throw new Error(`Browser view '${id}' navigated while its view state was being restored.`);
+    }
+    if (typeof result !== 'boolean') {
+      throw new Error(`Browser view '${id}' returned an invalid restoration result.`);
+    }
+    if (result) {
+      publishBrowserViewViewState(id, viewState);
+    }
+    return result;
   }
 
   async loadURL(id: string, url: string): Promise<void> {
@@ -2149,20 +2328,17 @@ export class BrowserViewMainService implements IBrowserViewService {
     options: IBrowserViewCaptureScreenshotOptions = {},
   ): Promise<VSBuffer> {
     const metadata = getBrowserViewTargetMetadata(id);
-    const webContents = getBrowserViewTargetEntry(id).view.webContents;
-    const captureRect = options.screenRect ?? options.pageRect;
-    const image = await webContents.capturePage(captureRect ? {
-      x: Math.round(captureRect.x),
-      y: Math.round(captureRect.y),
-      width: Math.max(1, Math.round(captureRect.width)),
-      height: Math.max(1, Math.round(captureRect.height)),
-    } : undefined);
-    const bytes = options.format === 'png'
-      ? image.toPNG()
-      : image.toJPEG(Math.max(0, Math.min(100, Math.round(options.quality ?? 80))));
-    const screenshot = VSBuffer.wrap(bytes);
-    metadata.lastScreenshot = screenshot;
-    return screenshot;
+		const entry = getBrowserViewTargetEntry(id);
+		const display = screen.getDisplayMatching(getWebContentOwnerWindow().getBounds());
+		const screenshot = await entry.screenshot.capture(
+			options,
+			metadata.emulationScaleFactor,
+			display.scaleFactor,
+		);
+		if (!options.screenRect && !options.pageRect) {
+			metadata.lastScreenshot = screenshot;
+		}
+		return screenshot;
   }
 
   async focus(id: string, force?: boolean): Promise<void> {
@@ -2261,12 +2437,12 @@ export class BrowserViewMainService implements IBrowserViewService {
     return getBrowserViewTargetMetadata(id).consoleLogs.join('\n');
   }
 
-  async toggleElementSelection(_id: string, _enabled?: boolean): Promise<void> {
-    throw new Error('Integrated browser element selection is not active.');
+  async toggleElementSelection(id: string, enabled?: boolean): Promise<void> {
+		await getBrowserViewTargetEntry(id).inspector.toggleElementSelection(enabled);
   }
 
-  async toggleAreaSelection(_id: string, _enabled?: boolean): Promise<void> {
-    throw new Error('Integrated browser area selection is not active.');
+  async toggleAreaSelection(id: string, enabled?: boolean): Promise<void> {
+		await getBrowserViewTargetEntry(id).inspector.toggleAreaSelection(enabled);
   }
 
   async updateWindowConfiguration(
@@ -2274,6 +2450,11 @@ export class BrowserViewMainService implements IBrowserViewService {
     config: IBrowserViewWindowConfiguration,
   ): Promise<void> {
     browserViewWindowConfigurations.set(windowId, config);
+		for (const [targetId, metadata] of browserViewTargetMetadata) {
+			if (metadata.owner.mainWindowId === windowId) {
+				webContentTargets.get(targetId)?.inspector.setTheme(config.theme);
+			}
+		}
   }
 
   dispose(): void {

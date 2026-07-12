@@ -1,8 +1,15 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import {
-  getWorkbenchShellClassName,
   registerWorkbenchPartDomNode,
-  WORKBENCH_PART_IDS,
 } from 'cs/workbench/browser/layout';
+import {
+  WORKBENCH_PART_IDS,
+  WORKBENCH_SHELL_CLASS_NAME,
+} from 'cs/workbench/browser/part';
 import { getWindowChromeLayout } from 'cs/platform/window/common/window';
 import { $, append } from 'cs/base/browser/dom';
 import { createActionBarView, type ActionBarItem } from 'cs/base/browser/ui/actionbar/actionbar';
@@ -118,7 +125,7 @@ export class TitlebarPart {
         '--workbench-leading-window-controls-width',
       );
     }
-    this.shellElement.className = getWorkbenchShellClassName();
+    this.shellElement.className = WORKBENCH_SHELL_CLASS_NAME;
     this.syncLeadingActions(params.leadingActions);
     this.syncStatusbarVisibility(isStatusbarVisible);
     registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.titlebar, this.titlebarElement);

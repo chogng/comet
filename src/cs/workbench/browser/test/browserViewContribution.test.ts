@@ -6,12 +6,18 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 
-import { VSBuffer } from 'cs/base/common/buffer';
 import { Emitter, Event as BaseEvent } from 'cs/base/common/event';
+import { mainWindow } from 'cs/base/browser/window';
+import {
+	CancellationTokenNone,
+	CancellationTokenSource,
+	isCancellationError,
+} from 'cs/base/common/cancellation';
 import { toDisposable } from 'cs/base/common/lifecycle';
+import type { IChannel } from 'cs/base/parts/ipc/common/ipc';
 import { isUUID } from 'cs/base/common/uuid';
 import { isIMenuItem, MenuId, MenuRegistry } from 'cs/platform/actions/common/actions';
-import { BrowserViewCommandId, BrowserViewStorageScope, browserZoomDefaultIndex, type IBrowserDeviceProfile, type IBrowserViewCertificateError, type IBrowserViewLoadError, type IBrowserViewPermissionRequestEvent } from 'cs/platform/browserView/common/browserView';
+import { BrowserViewCommandId, BrowserViewStorageScope, browserZoomDefaultIndex, type IBrowserDeviceProfile, type IBrowserViewCertificateError, type IBrowserViewCreatedEvent, type IBrowserViewLoadError, type IBrowserViewPermissionRequestEvent, type IBrowserViewState } from 'cs/platform/browserView/common/browserView';
 import { BrowserHistoryStore } from 'cs/platform/browserView/common/browserHistory';
 import { BrowserPermissionStore, PermissionCategory, type IPermissionCategoryState } from 'cs/platform/browserView/common/browserPermissions';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
@@ -25,7 +31,7 @@ import {
 import { configurationRegistry, ConfigurationScope } from 'cs/platform/configuration/common/configurationRegistry';
 import { IContextMenuService, IContextViewService, type IContextMenuService as IContextMenuServiceType, type IContextViewService as IContextViewServiceType } from 'cs/platform/contextview/browser/contextView';
 import type { IContextKeyService } from 'cs/platform/contextkey/common/contextkey';
-import { contextKeyService, IContextKeyService as IContextKeyServiceDecorator } from 'cs/platform/contextkey/common/contextkey';
+import { contextKeyService, ContextKeyServiceImpl, IContextKeyService as IContextKeyServiceDecorator } from 'cs/platform/contextkey/common/contextkey';
 import type { HoverHandle, HoverInput } from 'cs/base/browser/ui/hover/hover';
 import { IHoverService, type IHoverService as IHoverServiceType } from 'cs/platform/hover/browser/hover';
 import type { ITunnelProxyInfo } from 'cs/platform/tunnel/common/tunnelProxy';
@@ -33,9 +39,10 @@ import { ServiceCollection } from 'cs/platform/instantiation/common/serviceColle
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { IKeybindingService, type IKeybindingService as IKeybindingServiceType } from 'cs/platform/keybinding/common/keybinding';
+import { KeybindingsRegistry } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import { ILogService, type ILogService as ILogServiceType } from 'cs/platform/log/common/log';
 import type { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
-import type { INativeHostService } from 'cs/platform/native/common/native';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import { INotificationService, NoOpNotification, NoOpNotificationService, type INotificationService as INotificationServiceType } from 'cs/platform/notification/common/notification';
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceType } from 'cs/platform/quickinput/common/quickInput';
 import { IStorageService, StorageScope, StorageTarget, type IStorageEntry, type IStorageService as IStorageServiceType } from 'cs/platform/storage/common/storage';
@@ -55,20 +62,21 @@ import {
 	IBrowserViewWorkbenchService,
 	type IBrowserEditorViewState,
 	type IBrowserViewContextualFilter,
-	type IBrowserViewFilterContext,
-	type IBrowserViewModel,
-	type IBrowserViewOpenHandler,
-} from 'cs/workbench/contrib/browserView/common/browserView';
-import type { BrowserEditor as BrowserEditorType } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
+		type IBrowserViewFilterContext,
+		type IBrowserViewModel,
+	} from 'cs/workbench/contrib/browserView/common/browserView';
 import {
 	IEditorService,
 	type IEditorService as IEditorServiceType,
-	type PreferredGroup,
 } from 'cs/workbench/services/editor/common/editorService';
-import { IChatService, type ChatServiceContext, type ChatServiceSnapshot } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { IEditorGroupsService, type IEditorGroupsService as IEditorGroupsServiceType } from 'cs/workbench/services/editor/common/editorGroupsService';
 import type { IUntypedEditorInput } from 'cs/workbench/common/editor';
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { URI } from 'cs/base/common/uri';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
+import { locales } from 'language/locales';
 
 const BrowserRemoteProxyEnabledSettingId = 'workbench.browser.enableRemoteProxy';
 
@@ -211,11 +219,27 @@ function createTestKeybindingService(): IKeybindingServiceType {
 }
 
 function createTestMainProcessService(): IMainProcessService {
+	const browserViewChannel: IChannel = {
+		async call(command) {
+			switch (command) {
+				case 'getBrowserViews':
+					return [];
+				case 'updateWindowConfiguration':
+					return undefined;
+				default:
+					throw new Error(`Unexpected BrowserView channel call '${command}'.`);
+			}
+		},
+		listen(event) {
+			if (event !== 'onDidCreateBrowserView') {
+				throw new Error(`Unexpected BrowserView channel event '${event}'.`);
+			}
+			return BaseEvent.None;
+		},
+	};
 	return {
 		_serviceBrand: undefined,
-		getChannel: () => {
-			throw new Error('Unexpected main process channel access in browser contribution test');
-		},
+		getChannel: () => browserViewChannel,
 		registerChannel() {},
 	};
 }
@@ -286,11 +310,30 @@ function createTestQuickInputService(): IQuickInputServiceType {
 	} as unknown as IQuickInputServiceType;
 }
 
+function createBrowserEditorTestServiceCollection(): ServiceCollection {
+	return new ServiceCollection(
+		[IThemeService, createTestThemeService()],
+		[ITelemetryService, createTestTelemetryService()],
+		[ILogService, createTestLogService()],
+		[IKeybindingService, createTestKeybindingService()],
+		[IHoverService, createTestHoverService()],
+		[IContextViewService, createTestContextViewService()],
+		[INotificationService, createTestNotificationService()],
+		[IQuickInputService, createTestQuickInputService()],
+		[IBrowserZoomService, createTestBrowserZoomService()],
+		[IStorageService, createTestStorageService()],
+		[IConfigurationService, new ConfigurationService()],
+		[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
+	);
+}
+
 function createTestEditorService(
 	openRequests: Array<EditorInput | IUntypedEditorInput>,
 ): IEditorServiceType {
 	return {
 		_serviceBrand: undefined,
+		activeEditorPane: undefined,
+		activeEditor: undefined,
 		openEditor: async request => {
 			openRequests.push(request);
 			if (request instanceof EditorInput) {
@@ -301,7 +344,7 @@ function createTestEditorService(
 			}
 			return new TestEditorInput(request.resource);
 		},
-		activateEditor() {},
+		activateEditor: async () => {},
 		closeEditor: async () => false,
 		getEditors: () => [],
 		getActiveGroupId: () => 'editor-group-main',
@@ -318,12 +361,44 @@ class TestEditorInput extends EditorInput {
 	}
 }
 
-function createTestBrowserEditor(
+async function createTestBrowserEditor(
 	serviceCollection: ServiceCollection,
 	instantiationService: IInstantiationService,
 	browserViewWorkbenchService: TestBrowserViewWorkbenchService,
 	options: { id: string; title: string; url: string },
 ) {
+	const { editor, input } = createUnresolvedTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		options,
+	);
+	await editor.setInput(input, undefined, {}, CancellationTokenNone);
+	return editor;
+}
+
+function createUnresolvedTestBrowserEditor(
+	serviceCollection: ServiceCollection,
+	instantiationService: IInstantiationService,
+	browserViewWorkbenchService: TestBrowserViewWorkbenchService,
+	options: { id: string; title: string; url: string },
+) {
+	serviceCollection.set(INativeHostService, createTestNativeHostService());
+	serviceCollection.set(IWorkbenchLanguageService, {
+		_serviceBrand: undefined,
+		detectInitialLocale: () => 'en',
+		getLocaleMessages: () => locales.en,
+		toDocumentLang: () => 'en',
+	});
+	serviceCollection.set(IWorkbenchLocaleService, {
+		_serviceBrand: undefined,
+		getLocale: () => 'en',
+		subscribe: () => () => {},
+		applyLocale() {},
+		updateLocalePreference: async () => {},
+		syncDocumentLanguage() {},
+		initialize: async () => 'en',
+	});
 	serviceCollection.set(IContextMenuService, {
 		_serviceBrand: undefined,
 		showContextMenu() {},
@@ -334,62 +409,8 @@ function createTestBrowserEditor(
 		dispose() {},
 	} as IContextMenuServiceType);
 	const input = browserViewWorkbenchService.getOrCreateLazy(options.id, options);
-	const editor = instantiationService.createInstance(
-		BrowserEditor,
-		{
-			labels: {
-				sourceMode: 'Browser',
-				status: {
-					statusbarAriaLabel: 'Editor status',
-					url: 'URL',
-				},
-			},
-			nativeHost: createTestNativeHostService(),
-			onDidChangeBrowserState: () => {},
-		} as unknown as ConstructorParameters<typeof BrowserEditorType>[0],
-	);
-	editor.setInput(input);
-	return editor;
-}
-
-type ChatContextInsert = {
-	readonly title: string;
-	readonly content: string;
-};
-
-function createTestChatService(inserts: ChatContextInsert[]): IChatService {
-	const emptySnapshot: ChatServiceSnapshot = {
-		conversations: [],
-		activeConversationId: '',
-		checkedArticleIds: [],
-		activeConversation: null,
-		question: '',
-		messages: [],
-		result: null,
-		isAsking: false,
-		errorMessage: null,
-	};
-
-	return {
-		_serviceBrand: undefined,
-		subscribe: () => toDisposable(() => {}),
-		getSnapshot: () => emptySnapshot,
-		setContext(_context: ChatServiceContext) {},
-		setQuestion() {},
-		createConversation: () => 'conversation-test',
-		activateConversation() {},
-		closeConversation() {},
-		insertContextMessage: (title, content) => {
-			inserts.push({ title, content });
-		},
-		insertArticleList() {},
-		insertArticleFetchEmptyResult() {},
-		applyPatch() {},
-		ask: async () => {},
-		isArticleChecked: () => false,
-		setArticleChecked() {},
-		removeArticleChecks() {},
-	};
+	const editor = instantiationService.createInstance(BrowserEditor);
+	return { editor, input };
 }
 
 function createTestBrowserZoomService(): IBrowserZoomServiceType {
@@ -473,6 +494,11 @@ function createTestBrowserViewModel(id: string, state: IBrowserEditorViewState):
 		canZoomIn: true,
 		canZoomOut: true,
 		device: undefined,
+		viewState: {
+			url: state.url ?? '',
+			scrollX: 0,
+			scrollY: 0,
+		},
 		storageScope: BrowserViewStorageScope.Workspace,
 		permissions: new BrowserPermissionStore(),
 		sharingState: BrowserViewSharingState.Unavailable,
@@ -485,6 +511,7 @@ function createTestBrowserViewModel(id: string, state: IBrowserEditorViewState):
 		onDidChangeFavicon: BaseEvent.None,
 		onDidChangeLoadingState: BaseEvent.None,
 		onDidNavigate: BaseEvent.None,
+		onDidChangeViewState: BaseEvent.None,
 		onDidChangeFocus: BaseEvent.None,
 		onDidChangeVisibility: BaseEvent.None,
 		onDidKeyCommand: BaseEvent.None,
@@ -498,6 +525,12 @@ function createTestBrowserViewModel(id: string, state: IBrowserEditorViewState):
 		onDidChangeAreaSelectionActive: BaseEvent.None,
 		layout: async () => {},
 		setVisible: async () => {},
+		captureViewState: async () => ({
+			url: state.url ?? '',
+			scrollX: 0,
+			scrollY: 0,
+		}),
+		restoreViewState: async () => true,
 		captureScreenshot: async () => {
 			throw new Error('Unexpected screenshot capture in browser contribution test');
 		},
@@ -550,7 +583,10 @@ class TestBrowserViewWorkbenchService implements IBrowserViewWorkbenchService {
 
 	constructor(
 		private readonly instantiationService: IInstantiationService,
-		private readonly createModel: (id: string, state: IBrowserEditorViewState) => IBrowserViewModel = createTestBrowserViewModel,
+		private readonly createModel: (
+			id: string,
+			state: IBrowserEditorViewState,
+		) => IBrowserViewModel | Promise<IBrowserViewModel> = createTestBrowserViewModel,
 	) {}
 
 	willUseRemoteProxy(): boolean {
@@ -569,14 +605,6 @@ class TestBrowserViewWorkbenchService implements IBrowserViewWorkbenchService {
 
 	getContextualBrowserViews(_context: IBrowserViewFilterContext = {}): Map<string, BrowserEditorInput> {
 		return this.known;
-	}
-
-	async getPreferredGroup(preferredGroup?: PreferredGroup): Promise<PreferredGroup | undefined> {
-		return preferredGroup;
-	}
-
-	registerOpenHandler(_handler: IBrowserViewOpenHandler) {
-		return toDisposable(() => {});
 	}
 
 	getOrCreateLazy(id: string, initialState: IBrowserEditorViewState = {}): BrowserEditorInput {
@@ -622,15 +650,10 @@ after(() => {
 	cleanupDomEnvironment?.();
 });
 
-test('browser contribution registers devtools action in the browser toolbar menu', () => {
+test('browser contribution registers the devtools action', () => {
 	assert.equal(
 		commandsRegistry.getCommand(BrowserViewCommandId.ToggleDevTools)?.id,
 		BrowserViewCommandId.ToggleDevTools,
-	);
-	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			isIMenuItem(item) && item.command.id === BrowserViewCommandId.ToggleDevTools),
-		true,
 	);
 });
 
@@ -645,13 +668,6 @@ test('browser contribution registers storage actions and data storage setting', 
 		storageCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
 		storageCommandIds,
 	);
-	assert.deepEqual(
-		storageCommandIds.map(id =>
-			MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-				isIMenuItem(item) && item.command.id === id)),
-		[true, true, true],
-	);
-
 	const dataStorageSetting = configurationRegistry.getConfigurationProperties()['workbench.browser.dataStorage'];
 	assert.deepEqual(dataStorageSetting.enum, [
 		'default',
@@ -661,31 +677,86 @@ test('browser contribution registers storage actions and data storage setting', 
 	]);
 });
 
-test('browser contribution does not register the upstream browser navigation toolbar', () => {
+test('browser contribution registers navigation commands without mounting the upstream navbar', () => {
 	const navigationCommandIds = [
 		BrowserViewCommandId.GoBack,
 		BrowserViewCommandId.GoForward,
 		BrowserViewCommandId.Reload,
 		BrowserViewCommandId.HardReload,
+		BrowserViewCommandId.FocusUrlInput,
+		BrowserViewCommandId.OpenExternal,
 	];
 
 	assert.deepEqual(
 		navigationCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
-		[undefined, undefined, undefined, undefined],
+		navigationCommandIds,
 	);
-	assert.deepEqual(
-		navigationCommandIds.map(id =>
-			MenuRegistry.getMenuItems(MenuId.BrowserNavigationToolbar).some(item =>
-				isIMenuItem(item) && item.command.id === id)),
-		[false, false, false, false],
-	);
-	assert.equal(
-		commandsRegistry.getCommand(BrowserViewCommandId.FocusUrlInput),
-		null,
-	);
+	assert.equal(document.querySelector('.browser-navbar'), null);
 });
 
-test('browser contribution registers tab management actions in browser menus', () => {
+test('browser navigation commands target the active Pane and focus the Comet address input', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const calls = {
+		back: 0,
+		forward: 0,
+		reload: [] as boolean[],
+		focusPrimaryInput: 0,
+	};
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => ({
+			...createTestBrowserViewModel(id, state),
+			canGoBack: true,
+			canGoForward: true,
+			goBack: async () => { calls.back += 1; },
+			goForward: async () => { calls.forward += 1; },
+			reload: async hard => { calls.reload.push(Boolean(hard)); },
+		} as IBrowserViewModel),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const editor = await createTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'navigation-browser', title: 'Navigation', url: 'https://example.com' },
+	);
+	serviceCollection.set(IEditorService, {
+		...createTestEditorService([]),
+		activeEditorPane: editor,
+		activeEditor: editor.input,
+	});
+	serviceCollection.set(IEditorGroupsService, {
+		mainPart: {
+			activeEditorPane: editor,
+			openEditor: async () => {},
+			revealEditor() {},
+			focusPrimaryInput: () => { calls.focusPrimaryInput += 1; },
+		},
+	} as unknown as IEditorGroupsServiceType);
+	const commandServiceInstantiationService = setCommandServiceInstantiationService(instantiationService);
+
+	try {
+		await commandService.executeCommand(BrowserViewCommandId.GoBack);
+		await commandService.executeCommand(BrowserViewCommandId.GoForward, editor);
+		await commandService.executeCommand(BrowserViewCommandId.Reload, editor);
+		await commandService.executeCommand(BrowserViewCommandId.HardReload, editor);
+		await commandService.executeCommand(BrowserViewCommandId.FocusUrlInput);
+		assert.deepEqual(calls, {
+			back: 1,
+			forward: 1,
+			reload: [false, true],
+			focusPrimaryInput: 1,
+		});
+	} finally {
+		commandServiceInstantiationService.dispose();
+		editor.dispose();
+		instantiationService.dispose();
+		browserViewWorkbenchService.browserHistory.dispose();
+	}
+});
+
+test('browser contribution registers tab management actions in their product menus', () => {
 	const tabCommandIds = [
 		BrowserViewCommandId.Open,
 		BrowserViewCommandId.OpenFile,
@@ -701,11 +772,6 @@ test('browser contribution registers tab management actions in browser menus', (
 		tabCommandIds,
 	);
 	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			isIMenuItem(item) && item.command.id === BrowserViewCommandId.NewTab),
-		true,
-	);
-	assert.equal(
 		MenuRegistry.getMenuItems(MenuId.MenubarViewMenu).some(item =>
 			isIMenuItem(item) && item.command.id === BrowserViewCommandId.OpenOrList),
 		true,
@@ -715,6 +781,47 @@ test('browser contribution registers tab management actions in browser menus', (
 			isIMenuItem(item) && item.command.id === BrowserViewCommandId.CloseAllInGroup),
 		true,
 	);
+});
+
+test('contextual Browser shortcuts require the active Browser editor to have focus', () => {
+	const contextualCommandIds = [
+		BrowserViewCommandId.QuickOpen,
+		BrowserViewCommandId.NewTab,
+		BrowserViewCommandId.ShowFind,
+		BrowserViewCommandId.HideFind,
+		BrowserViewCommandId.FindNext,
+		BrowserViewCommandId.FindPrevious,
+		BrowserViewCommandId.ShowHistory,
+		BrowserViewCommandId.ToggleFavorite,
+		BrowserViewCommandId.ToggleDevTools,
+		'workbench.action.browser.zoomIn',
+		'workbench.action.browser.zoomOut',
+		'workbench.action.browser.resetZoom',
+	];
+	const keybindingsByCommand = contextualCommandIds.map(commandId =>
+		KeybindingsRegistry.getDefaultKeybindings().filter(keybinding => keybinding.command === commandId),
+	);
+	assert.equal(keybindingsByCommand.every(keybindings => keybindings.length > 0), true);
+
+	const contextKeyService = new ContextKeyServiceImpl();
+	contextKeyService.setContextKeyValue('activeEditor', BrowserEditorInput.EDITOR_ID);
+	contextKeyService.setContextKeyValue('browserHasUrl', true);
+	contextKeyService.setContextKeyValue('browserHasError', false);
+	contextKeyService.setContextKeyValue('browserStorageScope', BrowserViewStorageScope.Global);
+	contextKeyService.setContextKeyValue('browserFindWidgetVisible', true);
+	contextKeyService.setContextKeyValue('browserFindWidgetFocused', true);
+	contextKeyService.setContextKeyValue(ActiveEditorFocusedContext.key, false);
+
+	const matchingKeybindingCounts = () => keybindingsByCommand.map(keybindings =>
+		keybindings.filter(keybinding => contextKeyService.contextMatchesRules(keybinding.when)).length,
+	);
+	assert.deepEqual(matchingKeybindingCounts(), contextualCommandIds.map(() => 0));
+
+	contextKeyService.setContextKeyValue(ActiveEditorFocusedContext.key, true);
+	assert.deepEqual(matchingKeybindingCounts(), keybindingsByCommand.map(keybindings => keybindings.length));
+
+	contextKeyService.setContextKeyValue('activeEditor', 'workbench.editor.draft');
+	assert.deepEqual(matchingKeybindingCounts(), contextualCommandIds.map(() => 0));
 });
 
 test('browser tab management commands open through the editor service', async () => {
@@ -743,7 +850,7 @@ test('browser tab management commands open through the editor service', async ()
 	assert.equal(isUUID(BrowserViewUri.getId(secondRequest.resource) ?? ''), true);
 });
 
-test('browser contribution registers find actions in the browser toolbar menu', () => {
+test('browser contribution registers find actions', () => {
 	const findCommandIds = [
 		BrowserViewCommandId.ShowFind,
 		BrowserViewCommandId.HideFind,
@@ -755,22 +862,12 @@ test('browser contribution registers find actions in the browser toolbar menu', 
 		findCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
 		findCommandIds,
 	);
-	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			isIMenuItem(item) && item.command.id === BrowserViewCommandId.ShowFind),
-		true,
-	);
 });
 
-test('browser contribution registers favorites action in the browser toolbar menu', () => {
+test('browser contribution registers the favorites action', () => {
 	assert.equal(
 		commandsRegistry.getCommand(BrowserViewCommandId.ToggleFavorite)?.id,
 		BrowserViewCommandId.ToggleFavorite,
-	);
-	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			isIMenuItem(item) && item.command.id === BrowserViewCommandId.ToggleFavorite),
-		true,
 	);
 });
 
@@ -779,12 +876,6 @@ test('browser contribution registers history action and max history setting', ()
 		commandsRegistry.getCommand(BrowserViewCommandId.ShowHistory)?.id,
 		BrowserViewCommandId.ShowHistory,
 	);
-	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			isIMenuItem(item) && item.command.id === BrowserViewCommandId.ShowHistory),
-		true,
-	);
-
 	const historySetting = configurationRegistry.getConfigurationProperties()['workbench.browser.maxHistoryEntries'];
 	assert.equal(historySetting.default, 200);
 	assert.equal(historySetting.scope, ConfigurationScope.APPLICATION);
@@ -810,6 +901,7 @@ test('browser history service restores, limits, persists, and disables global hi
 		createTestThemeService(),
 		createTestLogService(),
 		createTestStorageService(storageValues),
+		{ getEditors: () => [], openEditor: async () => { throw new Error('Unexpected Editor open.'); } } as never,
 	);
 
 	try {
@@ -840,105 +932,139 @@ test('browser history service restores, limits, persists, and disables global hi
 	}
 });
 
-test('browser contribution registers permissions action in the browser toolbar menu', () => {
+test('BrowserView service subscribes during construction and opens created views in the addressed editor group', async () => {
+	const onDidCreateBrowserView = new Emitter<IBrowserViewCreatedEvent>();
+	const browserViewChannel: IChannel = {
+		async call(command) {
+			switch (command) {
+				case 'getBrowserViews':
+					return [];
+				case 'updateWindowConfiguration':
+					return undefined;
+				default:
+					throw new Error(`Unexpected BrowserView channel call '${command}'.`);
+			}
+		},
+		listen(event) {
+			if (event === 'onDidCreateBrowserView') {
+				return onDidCreateBrowserView.event;
+			}
+			if (event.startsWith('onDynamicDid')) {
+				return BaseEvent.None;
+			}
+			throw new Error(`Unexpected BrowserView channel event '${event}'.`);
+		},
+	};
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const opened: Array<{
+		readonly editor: BrowserEditorInput;
+		readonly options: Parameters<IEditorServiceType['openEditor']>[1];
+		readonly groupId: string;
+	}> = [];
+	const editorService: IEditorServiceType = {
+		_serviceBrand: undefined,
+		activeEditorPane: undefined,
+		activeEditor: undefined,
+		async openEditor(editor, options) {
+			assert.ok(editor instanceof BrowserEditorInput);
+			const groupId = options?.groupId ?? 'editor-group-main';
+			opened.push({ editor, options, groupId });
+			return editor;
+		},
+		activateEditor: async () => {},
+		closeEditor: async () => false,
+		getEditors: () => opened.map(({ editor, groupId }) => ({ editor, groupId })),
+		getActiveGroupId: () => 'editor-group-main',
+	};
+	const service = new BrowserViewWorkbenchService(
+		{
+			_serviceBrand: undefined,
+			getChannel: () => browserViewChannel,
+			registerChannel() {},
+		},
+		instantiationService,
+		serviceCollection.get(IConfigurationService)!,
+		serviceCollection.get(IKeybindingService)!,
+		serviceCollection.get(IThemeService)!,
+		serviceCollection.get(ILogService)!,
+		serviceCollection.get(IStorageService)!,
+		editorService,
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, service);
+
+	const createState = (url: string, title: string): IBrowserViewState => ({
+		url,
+		title,
+		canGoBack: false,
+		canGoForward: false,
+		loading: false,
+		focused: false,
+		visible: false,
+		isDevToolsOpen: false,
+		lastScreenshot: undefined,
+		lastFavicon: undefined,
+		lastError: undefined,
+		certificateError: undefined,
+		storageScope: BrowserViewStorageScope.Global,
+		permissions: { origins: {} },
+		browserZoomIndex: browserZoomDefaultIndex,
+		isElementSelectionActive: false,
+		isRemoteSession: false,
+		isAreaSelectionActive: false,
+		device: undefined,
+	});
+
+	try {
+		onDidCreateBrowserView.fire({
+			info: {
+				id: 'created-parent',
+				owner: { mainWindowId: mainWindow.vscodeWindowId },
+				state: createState('https://example.com/parent', 'Parent'),
+			},
+			openOptions: { preserveFocus: true, pinned: true },
+		});
+		onDidCreateBrowserView.fire({
+			info: {
+				id: 'created-child',
+				owner: { mainWindowId: mainWindow.vscodeWindowId },
+				state: createState('https://example.com/child', 'Child'),
+			},
+			openOptions: { background: true, parentViewId: 'created-parent' },
+		});
+		await Promise.resolve();
+
+		assert.deepEqual(opened.map(({ editor, options, groupId }) => ({
+			id: editor.id,
+			groupId,
+			active: options?.active,
+			pinned: options?.editorOptions?.pinned,
+		})), [
+			{
+				id: 'created-parent',
+				groupId: 'editor-group-main',
+				active: true,
+				pinned: true,
+			},
+			{
+				id: 'created-child',
+				groupId: 'editor-group-main',
+				active: false,
+				pinned: undefined,
+			},
+		]);
+	} finally {
+		service.dispose();
+		onDidCreateBrowserView.dispose();
+		instantiationService.dispose();
+	}
+});
+
+test('browser contribution registers the permissions action', () => {
 	assert.equal(
 		commandsRegistry.getCommand(BrowserViewCommandId.ManagePermissions)?.id,
 		BrowserViewCommandId.ManagePermissions,
 	);
-	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			isIMenuItem(item) && item.command.id === BrowserViewCommandId.ManagePermissions),
-		true,
-	);
-});
-
-test('browser contribution registers chat actions, submenu, and browser chat settings', () => {
-	const chatCommandIds = [
-		BrowserViewCommandId.AddElementToChat,
-		BrowserViewCommandId.AddConsoleLogsToChat,
-		BrowserViewCommandId.AddScreenshotToChat,
-		BrowserViewCommandId.AddAreaScreenshotToChat,
-		BrowserViewCommandId.AddFullPageScreenshotToChat,
-	];
-
-	assert.deepEqual(
-		chatCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
-		chatCommandIds,
-	);
-	assert.deepEqual(
-		chatCommandIds.map(id =>
-			MenuRegistry.getMenuItems(MenuId.BrowserChatActionsMenu).some(item =>
-				isIMenuItem(item) && item.command.id === id)),
-		[true, true, true, true, true],
-	);
-	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			'submenu' in item && item.submenu === MenuId.BrowserChatActionsMenu),
-		true,
-	);
-
-	const properties = configurationRegistry.getConfigurationProperties();
-	assert.equal(properties['workbench.browser.enableChatTools'].default, true);
-	assert.equal(properties['workbench.browser.experimentalUserTools.enabled'].default, false);
-	assert.equal(properties['workbench.browser.sendElementsToChat.attachImages'].default, true);
-});
-
-test('browser chat actions insert console logs and screenshot context into chat', async () => {
-	const inserts: ChatContextInsert[] = [];
-	const screenshotOptions: unknown[] = [];
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-		[IStorageService, createTestStorageService()],
-		[IConfigurationService, new ConfigurationService()],
-		[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		[IChatService, createTestChatService(inserts)],
-	);
-	const instantiationService = new InstantiationService(serviceCollection, true);
-	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
-		instantiationService,
-		(id, state) => ({
-			...createTestBrowserViewModel(id, state),
-			url: 'https://example.com',
-			getConsoleLogs: async () => 'console.log("hello");',
-			captureScreenshot: async options => {
-				screenshotOptions.push(options);
-				return VSBuffer.fromString('jpeg-bytes');
-			},
-		} as IBrowserViewModel),
-	);
-	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
-	const commandServiceInstantiationService = setCommandServiceInstantiationService(instantiationService);
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
-		id: 'chat-browser',
-		title: 'Example',
-		url: 'https://example.com',
-	});
-
-	try {
-		await editor.input?.resolve();
-		await new Promise(resolve => setTimeout(resolve, 0));
-		await commandService.executeCommand(BrowserViewCommandId.AddConsoleLogsToChat, editor);
-		await commandService.executeCommand(BrowserViewCommandId.AddScreenshotToChat, editor);
-	} finally {
-		commandServiceInstantiationService.dispose();
-		editor.dispose();
-		instantiationService.dispose();
-	}
-
-	assert.equal(inserts.length, 2);
-	assert.equal(inserts[0]?.title, 'Browser Console Logs');
-	assert.match(inserts[0]?.content ?? '', /console\.log\("hello"\);/);
-	assert.equal(inserts[1]?.title, 'Browser Screenshot');
-	assert.match(inserts[1]?.content ?? '', /Screenshot Size: 10 bytes/);
-	assert.deepEqual(screenshotOptions, [{ quality: 80 }]);
 });
 
 test('browser contribution registers address bar search setting', () => {
@@ -976,13 +1102,6 @@ test('browser contribution registers zoom actions and page zoom setting', () => 
 		zoomCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
 		zoomCommandIds,
 	);
-	assert.deepEqual(
-		zoomCommandIds.map(id =>
-			MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-				isIMenuItem(item) && item.command.id === id)),
-		[true, true, true],
-	);
-
 	const pageZoomSetting = configurationRegistry.getConfigurationProperties()[BrowserPageZoomSettingId];
 	assert.equal(pageZoomSetting.default, MATCH_WINDOW_ZOOM_LABEL);
 	assert.equal(pageZoomSetting.scope, ConfigurationScope.MACHINE);
@@ -1005,17 +1124,205 @@ test('browser contribution registers emulation actions in browser menus', () => 
 		emulationCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
 		emulationCommandIds,
 	);
-	assert.equal(
-		MenuRegistry.getMenuItems(MenuId.BrowserActionsToolbar).some(item =>
-			isIMenuItem(item) && item.command.id === 'workbench.action.browser.toggleDeviceEmulation'),
-		true,
-	);
 	assert.deepEqual(
 		emulationCommandIds.map(id =>
 			MenuRegistry.getMenuItems(MenuId.BrowserEmulationToolbar).some(item =>
 				isIMenuItem(item) && item.command.id === id)),
 		[true, true, true, true, true],
 	);
+});
+
+test('browser editor setInput propagates model resolution failure and supports a direct retry', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	let resolveAttempts = 0;
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => {
+			resolveAttempts += 1;
+			if (resolveAttempts === 1) {
+				throw new Error('Browser model resolution failed.');
+			}
+			return createTestBrowserViewModel(id, state);
+		},
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const { editor, input } = createUnresolvedTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'retry-browser', title: 'Retry', url: 'https://example.com/retry' },
+	);
+
+	try {
+		await assert.rejects(
+			editor.setInput(input, undefined, {}, CancellationTokenNone),
+			/Browser model resolution failed/,
+		);
+		assert.equal(editor.model, undefined);
+
+		await editor.setInput(input, undefined, {}, CancellationTokenNone);
+		assert.equal(input.model?.id, 'retry-browser');
+		assert.equal(editor.model, input.model);
+		assert.equal(resolveAttempts, 2);
+	} finally {
+		editor.dispose();
+		instantiationService.dispose();
+	}
+});
+
+test('browser editor setInput cancellation cannot attach a stale resolved model', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	let resolveFirstModel!: (model: IBrowserViewModel) => void;
+	const firstModelPromise = new Promise<IBrowserViewModel>(resolve => {
+		resolveFirstModel = resolve;
+	});
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => id === 'first-browser'
+			? firstModelPromise
+			: createTestBrowserViewModel(id, state),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const { editor, input: firstInput } = createUnresolvedTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'first-browser', title: 'First', url: 'https://example.com/first' },
+	);
+	const secondInput = browserViewWorkbenchService.getOrCreateLazy('second-browser', {
+		title: 'Second',
+		url: 'https://example.com/second',
+	});
+	const cancellationSource = new CancellationTokenSource();
+
+	try {
+		const firstSetInput = editor.setInput(firstInput, undefined, {}, cancellationSource.token);
+		await Promise.resolve();
+		cancellationSource.cancel();
+		await assert.rejects(firstSetInput, error => isCancellationError(error));
+
+		await editor.setInput(secondInput, undefined, {}, CancellationTokenNone);
+		resolveFirstModel(createTestBrowserViewModel('first-browser', {
+			title: 'First',
+			url: 'https://example.com/first',
+		}));
+		await Promise.resolve();
+		await Promise.resolve();
+
+		assert.equal(editor.input, secondInput);
+		assert.equal(editor.model?.id, 'second-browser');
+	} finally {
+		cancellationSource.dispose();
+		editor.dispose();
+		instantiationService.dispose();
+	}
+});
+
+test('browser editor publishes BrowserView scroll state through the Pane view-state event', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const viewStateEmitter = new Emitter<{ url: string; scrollX: number; scrollY: number }>();
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => ({
+			...createTestBrowserViewModel(id, state),
+			onDidChangeViewState: viewStateEmitter.event,
+		} as IBrowserViewModel),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const editor = await createTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'view-state-browser', title: 'View State', url: 'https://example.com/state' },
+	);
+	const published: Array<{ url: string; scrollX: number; scrollY: number }> = [];
+	const listener = editor.onDidChangeViewState(viewState => published.push(viewState));
+
+	try {
+		viewStateEmitter.fire({
+			url: 'https://example.com/state',
+			scrollX: 12,
+			scrollY: 930,
+		});
+		assert.deepEqual(editor.getViewState(), published[0]);
+		assert.deepEqual(published, [{
+			url: 'https://example.com/state',
+			scrollX: 12,
+			scrollY: 930,
+		}]);
+	} finally {
+		listener.dispose();
+		editor.dispose();
+		instantiationService.dispose();
+		viewStateEmitter.dispose();
+	}
+});
+
+test('browser editor retries unreachable view state when the page reports unchanged scroll coordinates', async () => {
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	const instantiationService = new InstantiationService(serviceCollection, true);
+	const viewState = {
+		url: 'https://example.com/delayed-content',
+		scrollX: 0,
+		scrollY: 930,
+	};
+	const viewStateEmitter = new Emitter<typeof viewState>();
+	const restoreRequests: Array<typeof viewState> = [];
+	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
+		instantiationService,
+		(id, state) => ({
+			...createTestBrowserViewModel(id, state),
+			visible: true,
+			viewState,
+			onDidChangeViewState: viewStateEmitter.event,
+			restoreViewState: async restoredViewState => {
+				restoreRequests.push(restoredViewState);
+				return restoreRequests.length === 2;
+			},
+		} as IBrowserViewModel),
+	);
+	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
+	const editor = await createTestBrowserEditor(
+		serviceCollection,
+		instantiationService,
+		browserViewWorkbenchService,
+		{ id: 'delayed-view-state-browser', title: 'Delayed View State', url: viewState.url },
+	);
+
+	try {
+		const wrapper = editor.getElement().querySelector<HTMLElement>('.browser-container-wrapper');
+		assert.ok(wrapper);
+		wrapper.getBoundingClientRect = () => ({
+			x: 0,
+			y: 0,
+			width: 800,
+			height: 600,
+			top: 0,
+			right: 800,
+			bottom: 600,
+			left: 0,
+			toJSON: () => ({}),
+		});
+		editor.restoreViewState(viewState);
+		editor.setVisible(true);
+		await editor.layoutBrowserContainer();
+		await Promise.resolve();
+		assert.deepEqual(restoreRequests, [viewState]);
+
+		viewStateEmitter.fire(viewState);
+		await Promise.resolve();
+		assert.deepEqual(restoreRequests, [viewState, viewState]);
+
+		viewStateEmitter.fire(viewState);
+		assert.deepEqual(restoreRequests, [viewState, viewState]);
+	} finally {
+		editor.dispose();
+		instantiationService.dispose();
+		viewStateEmitter.dispose();
+	}
 });
 
 test('browser emulation contribution toggles the model device profile', async () => {
@@ -1035,7 +1342,6 @@ test('browser emulation contribution toggles the model device profile', async ()
 			[IStorageService, createTestStorageService()],
 			[IConfigurationService, new ConfigurationService()],
 			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-			[IChatService, createTestChatService([])],
 		);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
@@ -1058,7 +1364,7 @@ test('browser emulation contribution toggles the model device profile', async ()
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'emulation-browser',
 		title: 'Example',
 		url: 'https://example.com',
@@ -1089,7 +1395,7 @@ test('browser emulation contribution toggles the model device profile', async ()
 	}
 });
 
-test('browser editor renders welcome content for an empty browser tab', () => {
+test('browser editor renders welcome content for an empty browser tab', async () => {
 	const serviceCollection = new ServiceCollection(
 		[IThemeService, createTestThemeService()],
 		[ITelemetryService, createTestTelemetryService()],
@@ -1103,13 +1409,12 @@ test('browser editor renders welcome content for an empty browser tab', () => {
 			[IStorageService, createTestStorageService()],
 			[IConfigurationService, new ConfigurationService()],
 			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-			[IChatService, createTestChatService([])],
 		);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(instantiationService);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'welcome-browser',
 		title: '',
 		url: 'about:blank',
@@ -1168,7 +1473,6 @@ test('browser editor error contribution renders certificate errors and trusts on
 			[IStorageService, createTestStorageService()],
 			[IConfigurationService, new ConfigurationService()],
 			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-			[IChatService, createTestChatService([])],
 		);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
@@ -1185,7 +1489,7 @@ test('browser editor error contribution renders certificate errors and trusts on
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'cert-error-browser',
 		title: 'Example',
 		url: 'https://example.com',
@@ -1232,7 +1536,6 @@ test('browser editor find contribution searches selected text in the model', asy
 			[IStorageService, createTestStorageService()],
 			[IConfigurationService, new ConfigurationService()],
 			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-			[IChatService, createTestChatService([])],
 		);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
@@ -1252,7 +1555,7 @@ test('browser editor find contribution searches selected text in the model', asy
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'find-browser',
 		title: 'Example',
 		url: 'https://example.com',
@@ -1293,7 +1596,6 @@ test('browser favorites contribution persists the current URL without mounting t
 			[IStorageService, createTestStorageService(storageValues)],
 			[IConfigurationService, new ConfigurationService()],
 			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-			[IChatService, createTestChatService([])],
 		);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
@@ -1305,7 +1607,7 @@ test('browser favorites contribution persists the current URL without mounting t
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'favorite-browser',
 		title: 'Example',
 		url: 'https://example.com/article',
@@ -1327,7 +1629,7 @@ test('browser favorites contribution persists the current URL without mounting t
 	}
 });
 
-test('browser history contribution surfaces recent and matching URL suggestions', async () => {
+test('browser history contribution exposes and mutates the toolbar panel history', async () => {
 	const serviceCollection = new ServiceCollection(
 		[IThemeService, createTestThemeService()],
 		[ITelemetryService, createTestTelemetryService()],
@@ -1341,7 +1643,6 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 			[IStorageService, createTestStorageService()],
 			[IConfigurationService, new ConfigurationService()],
 			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-			[IChatService, createTestChatService([])],
 		);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
@@ -1357,7 +1658,7 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 	browserViewWorkbenchService.browserHistory.add('https://example.net/c', 'Example C', undefined, true);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'history-browser',
 		title: 'Example',
 		url: 'https://current.example',
@@ -1366,31 +1667,20 @@ test('browser history contribution surfaces recent and matching URL suggestions'
 	try {
 		await editor.input?.resolve();
 		await new Promise(resolve => setTimeout(resolve, 0));
-		const providers = editor.getContribution(BrowserHistoryFeature)?.urlSuggestionProviders ?? [];
-		const recents = await providers[0].getSuggestions(editor.input!, '');
-		const matching = await providers[1].getSuggestions(editor.input!, 'example');
-		await matching[0].actions?.[0].run(editor.input!);
-		const matchingAfterDelete = await providers[1].getSuggestions(editor.input!, 'example');
-
-		assert.deepEqual({
-			recents: recents.map(suggestion => suggestion.description ?? suggestion.label),
-			matching: matching.map(suggestion => suggestion.description ?? suggestion.label),
-			matchingAfterDelete: matchingAfterDelete.map(suggestion => suggestion.description ?? suggestion.label),
-		}, {
-			recents: [
-				'https://example.net/c',
-				'https://example.com/a?new=1',
-			],
-			matching: [
-				'https://example.net/c',
-				'https://example.com/b',
-				'https://example.com/a?new=1',
-			],
-			matchingAfterDelete: [
-				'https://example.com/b',
-				'https://example.com/a?new=1',
-			],
-		});
+		const feature = editor.getContribution(BrowserHistoryFeature);
+		assert.ok(feature);
+		assert.deepEqual(feature.entries.map(entry => entry.url), [
+			'https://example.com/a?old=1',
+			'https://example.com/a?new=1',
+			'https://example.com/b',
+			'https://example.net/c',
+		]);
+		assert.equal(feature.removeEntry(feature.entries[2].id), true);
+		assert.deepEqual(feature.entries.map(entry => entry.url), [
+			'https://example.com/a?old=1',
+			'https://example.com/a?new=1',
+			'https://example.net/c',
+		]);
 	} finally {
 		editor.dispose();
 		instantiationService.dispose();
@@ -1423,7 +1713,6 @@ test('browser welcome contribution renders recents and opens the selected entry'
 		[IStorageService, createTestStorageService()],
 		[IConfigurationService, new ConfigurationService()],
 		[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		[IChatService, createTestChatService([])],
 	);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
@@ -1447,7 +1736,7 @@ test('browser welcome contribution renders recents and opens the selected entry'
 	}
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'welcome-browser',
 		title: 'Browser',
 		url: '',
@@ -1506,7 +1795,6 @@ test('browser permissions contribution prompts and records permission decisions'
 			[IStorageService, createTestStorageService()],
 			[IConfigurationService, new ConfigurationService()],
 			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-			[IChatService, createTestChatService([])],
 		);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
@@ -1524,7 +1812,7 @@ test('browser permissions contribution prompts and records permission decisions'
 	);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
 
-	const editor = createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
+	const editor = await createTestBrowserEditor(serviceCollection, instantiationService, browserViewWorkbenchService, {
 		id: 'permissions-browser',
 		title: 'Example',
 		url: 'https://example.com',
@@ -1588,7 +1876,7 @@ test('browser editor resolver creates and reuses BrowserEditorInput without navi
 		assert.deepEqual(browserViewWorkbenchService.requests, [
 			{ id: 'browser-a', state: viewState },
 		]);
-		assert.deepEqual(browserViewWorkbenchService.resolveCalls, ['browser-a']);
+		assert.deepEqual(browserViewWorkbenchService.resolveCalls, []);
 
 		const model = await resolved.editor.resolve();
 		assert.equal(model.url, 'https://example.com');

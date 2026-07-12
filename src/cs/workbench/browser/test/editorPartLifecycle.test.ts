@@ -11,12 +11,16 @@ import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import type { IStorageService } from 'cs/platform/storage/common/storage';
-import { createEditorPartController, type EditorPartControllerContext } from 'cs/workbench/browser/parts/editor/editorPart';
 import { PdfEditorInput, PdfEditorInputSerializer } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorInput';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 import { EditorGroupsService } from 'cs/workbench/services/editor/browser/editorGroupsService';
-import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
+import {
+	IEditorGroupsService,
+	type IEditorPartHost,
+} from 'cs/workbench/services/editor/common/editorGroupsService';
 import { EditorService } from 'cs/workbench/services/editor/browser/editorService';
+import type { IEditorOpenContext, IEditorOptions, IEditorPane } from 'cs/workbench/common/editor';
+import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 
 function createStorageService(): IStorageService {
 	return {
@@ -41,71 +45,131 @@ function createStorageService(): IStorageService {
 	} as unknown as IStorageService;
 }
 
-test('Workbench registers exactly one Editor groups service', () => {
+class TestEditorParts extends EditorGroupsService {
+	readonly mainPart: IEditorPartHost;
+
+	constructor(
+		storageService: IStorageService,
+		instantiationService: InstantiationService,
+		revealEditor: (expandedEditorSize?: number) => void,
+		openEditor: (
+			editor: EditorInput,
+			options: IEditorOptions | undefined,
+			context: IEditorOpenContext,
+		) => Promise<void> = async () => {},
+		activeEditorPane: IEditorPane | undefined = undefined,
+	) {
+		super(storageService, instantiationService);
+		this.mainPart = {
+			activeEditorPane,
+			openEditor,
+			revealEditor,
+			focusPrimaryInput() {},
+		};
+	}
+}
+
+test('Workbench foundation does not register a product Editor groups service', () => {
 	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IEditorGroupsService);
-	assert.equal(registrations.length, 1);
+	assert.equal(registrations.length, 0);
 });
 
 test('EditorService sends typed and untyped inputs through one group path and reveals deterministically', async () => {
 	let resolveCount = 0;
-	let isEditorCollapsed = true;
-	const revealCalls: Array<{ collapsed: boolean; expandedEditorSize: number | undefined }> = [];
+	const revealCalls: Array<number | undefined> = [];
+	const paneOpenCalls: Array<{
+		editor: EditorInput;
+		options: IEditorOptions | undefined;
+		context: IEditorOpenContext;
+	}> = [];
 	const serializerRegistration = editorInputSerializerRegistry.register(
 		PdfEditorInput.ID,
 		new PdfEditorInputSerializer(),
 	);
 	const instantiationService = new InstantiationService(new ServiceCollection());
 	const storageService = createStorageService();
-	const editorGroupsService = new EditorGroupsService(storageService, instantiationService);
+	const activeEditorPane: IEditorPane = { focus() {} };
+	const editorGroupsService = new TestEditorParts(
+		storageService,
+		instantiationService,
+		expandedEditorSize => revealCalls.push(expandedEditorSize),
+		async (editor, editorOptions, context) => {
+			paneOpenCalls.push({ editor, options: editorOptions, context });
+		},
+		activeEditorPane,
+	);
+	editorGroupsService.initialize();
 	const editorService = new EditorService(
 		editorGroupsService,
 		{
 			resolveEditor: ({ resource }: { resource: URI }) => {
 				resolveCount += 1;
-				return { editor: new PdfEditorInput({ resource }) };
-			},
-		} as never,
-		{
-			getLayoutState: () => ({ isEditorCollapsed, expandedEditorSize: 420 }),
-			setEditorCollapsed(collapsed: boolean, expandedEditorSize?: number) {
-				isEditorCollapsed = collapsed;
-				revealCalls.push({ collapsed, expandedEditorSize });
+				return {
+					editor: new PdfEditorInput({ resource }),
+					options: { pinned: true },
+				};
 			},
 		} as never,
 	);
-	const context = {
-		ui: {},
-		viewPartProps: {},
-		nativeHost: {},
-		dialogService: {},
-		instantiationService,
-		editorGroupsService,
-		editorService,
-		storageService,
-		commandService: {},
-	} as unknown as EditorPartControllerContext;
-	const controller = createEditorPartController(context);
 
-	assert.equal(controller.getSnapshot().group.count, 0);
+	assert.equal(editorGroupsService.activeGroup.count, 0);
 	assert.equal(resolveCount, 0);
 
 	const typedInput = new PdfEditorInput({ resource: URI.parse('test:/typed-editor') });
-	const openedTyped = await editorService.openEditor(typedInput);
+	const typedOptions = { viewState: { url: 'https://example.com/typed.pdf' } } satisfies IEditorOptions;
+	const openedTyped = await editorService.openEditor(typedInput, {
+		editorOptions: typedOptions,
+		context: { newInGroup: false },
+	});
 	assert.equal(openedTyped, typedInput);
+	assert.equal(editorService.activeEditor, typedInput);
+	assert.equal(editorService.activeEditorPane, activeEditorPane);
 	assert.equal(resolveCount, 0);
-	assert.deepEqual(revealCalls, [{ collapsed: false, expandedEditorSize: 420 }]);
+	assert.deepEqual(revealCalls, [undefined]);
+	assert.deepEqual(paneOpenCalls[0], {
+		editor: typedInput,
+		options: typedOptions,
+		context: { newInGroup: true },
+	});
 
-	isEditorCollapsed = true;
 	const openedUntyped = await editorService.openEditor({ resource: URI.parse('test:/untyped-editor') });
 	assert.equal(resolveCount, 1);
-	assert.equal(controller.getSnapshot().group.count, 2);
-	assert.equal(controller.getSnapshot().group.activeEditor, openedUntyped);
-	assert.deepEqual(revealCalls, [
-		{ collapsed: false, expandedEditorSize: 420 },
-		{ collapsed: false, expandedEditorSize: 420 },
-	]);
-	controller.dispose();
+	assert.equal(editorGroupsService.activeGroup.count, 2);
+	assert.equal(editorGroupsService.activeGroup.activeEditor, openedUntyped);
+	assert.deepEqual(revealCalls, [undefined, undefined]);
+	assert.deepEqual(paneOpenCalls[1], {
+		editor: openedUntyped,
+		options: { pinned: true },
+		context: { newInGroup: true },
+	});
 	editorGroupsService.dispose();
 	serializerRegistration.dispose();
 	instantiationService.dispose();
+});
+
+test('EditorService propagates asynchronous Pane input errors', async () => {
+	const expectedError = new Error('Pane input failed');
+	const serializerRegistration = editorInputSerializerRegistry.register(
+		PdfEditorInput.ID,
+		new PdfEditorInputSerializer(),
+	);
+	const instantiationService = new InstantiationService(new ServiceCollection());
+	const editorGroupsService = new TestEditorParts(
+		createStorageService(),
+		instantiationService,
+		() => {},
+		async () => { throw expectedError; },
+	);
+	editorGroupsService.initialize();
+	const editorService = new EditorService(editorGroupsService, {} as never);
+	const input = new PdfEditorInput({ resource: URI.parse('test:/pane-error') });
+
+	try {
+		await assert.rejects(editorService.openEditor(input), expectedError);
+		assert.equal(editorGroupsService.activeGroup.activeEditor, input);
+	} finally {
+		editorGroupsService.dispose();
+		serializerRegistration.dispose();
+		instantiationService.dispose();
+	}
 });

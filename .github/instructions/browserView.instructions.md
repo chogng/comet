@@ -72,19 +72,22 @@ replacement for the typed HTML snapshot.
 ## Native overlay coordination
 
 BrowserView content can be hosted by a native `WebContentsView`, which sits
-outside the ordinary DOM stacking context. When a shared Context View overlaps
-it, `BrowserOverlayManager` coordinates presentation:
+outside the ordinary DOM stacking context. When a recognized shared DOM overlay
+such as Context View, Settings, a dialog, or a notification overlaps it,
+`BrowserOverlayManager` coordinates presentation:
 
 ```text
-IContextViewService shows Context View
+shared overlay becomes visible
     → BrowserOverlayManager detects overlap
     → native WebContentsView is temporarily hidden
     → screenshot or DOM placeholder preserves page presentation
-    → Context View renders above the Browser region
+    → shared overlay renders above the Browser region
 ```
 
-The overlay manager owns this transition. Context View consumers do not hide
-native views directly or infer overlap by walking foreign component DOM.
+The overlay manager owns this transition. Overlay consumers expose their stable
+Comet overlay DOM contract and do not hide native views directly or infer
+overlap by walking foreign component DOM. Closing the overlay restores the same
+BrowserView and page state.
 
 ## Lifecycle invariants
 

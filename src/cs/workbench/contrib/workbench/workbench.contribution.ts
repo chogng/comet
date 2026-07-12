@@ -1,14 +1,18 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import {
   getWorkbenchPartDomSnapshot,
   subscribeWorkbenchPartDom,
-  WORKBENCH_PART_IDS,
-  getWorkbenchLayoutStateSnapshot,
-  subscribeWorkbenchLayoutState,
 } from 'cs/workbench/browser/layout';
+import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import {
-  disposeWorkbenchServices,
-} from 'cs/workbench/browser/workbench';
-import { disposeWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
+  disposeWorkbenchInstantiationService,
+  getWorkbenchInstantiationService,
+} from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
+import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import {
   localeService,
 } from 'cs/workbench/services/localization/browser/localeService';
@@ -30,8 +34,6 @@ export function createWorkbenchContainerStateContribution(): Disposable {
       return;
     }
 
-    delete container.dataset.primarySidebarVisible;
-    delete container.dataset.agentSidebarVisible;
     delete container.dataset.workbenchParts;
   };
 
@@ -52,24 +54,15 @@ export function createWorkbenchContainerStateContribution(): Disposable {
       .map(([partId]) => partId)
       .join(' ');
 
-    lastContainer.dataset.primarySidebarVisible = String(
-      getWorkbenchLayoutStateSnapshot().isPrimarySidebarVisible,
-    );
-    lastContainer.dataset.agentSidebarVisible = String(
-      getWorkbenchLayoutStateSnapshot().isAgentSidebarVisible,
-    );
     lastContainer.dataset.workbenchParts = registeredPartIds;
   };
 
-  const unsubscribeWorkbenchLayoutState =
-    subscribeWorkbenchLayoutState(syncContainerState);
   const unsubscribeWorkbenchPartDom = subscribeWorkbenchPartDom(syncContainerState);
 
   syncContainerState();
 
   return {
     dispose: () => {
-      unsubscribeWorkbenchLayoutState();
       unsubscribeWorkbenchPartDom();
       clearContainerState(lastContainer);
       lastContainer = null;
@@ -77,47 +70,50 @@ export function createWorkbenchContainerStateContribution(): Disposable {
   };
 }
 
-export function createWorkbenchStatusbarContribution(): Disposable {
-  let currentHost: HTMLElement | null = null;
-  let statusbarPart: StatusbarPart | null = null;
+export class WorkbenchStatusbarContribution implements Disposable {
+  private currentHost: HTMLElement | null = null;
+  private statusbarPart: StatusbarPart | null = null;
+  private readonly unsubscribeWorkbenchPartDom: () => void;
+  private readonly unsubscribeStatusbarState: () => void;
 
-  const disposeStatusbarPart = () => {
-    statusbarPart?.dispose();
-    statusbarPart = null;
-  };
+  constructor(
+    @IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
+  ) {
+    this.unsubscribeWorkbenchPartDom = subscribeWorkbenchPartDom(this.syncStatusbarPart);
+    this.unsubscribeStatusbarState = subscribeStatusbarState(this.syncStatusbarPart);
+    this.syncStatusbarPart();
+  }
 
-  const syncStatusbarPart = () => {
+  private readonly syncStatusbarPart = () => {
     const nextHost = getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.statusbar];
 
-    if (currentHost !== nextHost) {
-      disposeStatusbarPart();
-      currentHost = nextHost;
+    if (this.currentHost !== nextHost) {
+      this.disposeStatusbarPart();
+      this.currentHost = nextHost;
     }
 
-    if (!currentHost) {
+    if (!this.currentHost) {
       return;
     }
 
-    if (!statusbarPart) {
-      statusbarPart = new StatusbarPart(currentHost);
+    if (!this.statusbarPart) {
+      this.statusbarPart = new StatusbarPart(this.currentHost, this.commandService);
     }
 
-    statusbarPart.render(getStatusbarStateSnapshot());
+    this.statusbarPart.render(getStatusbarStateSnapshot());
   };
 
-  const unsubscribeWorkbenchPartDom = subscribeWorkbenchPartDom(syncStatusbarPart);
-  const unsubscribeStatusbarState = subscribeStatusbarState(syncStatusbarPart);
+  dispose(): void {
+    this.unsubscribeWorkbenchPartDom();
+    this.unsubscribeStatusbarState();
+    this.disposeStatusbarPart();
+    this.currentHost = null;
+  }
 
-  syncStatusbarPart();
-
-  return {
-    dispose: () => {
-      unsubscribeWorkbenchPartDom();
-      unsubscribeStatusbarState();
-      disposeStatusbarPart();
-      currentHost = null;
-    },
-  };
+  private disposeStatusbarPart(): void {
+    this.statusbarPart?.dispose();
+    this.statusbarPart = null;
+  }
 }
 
 export function createWorkbenchDocumentLocaleContribution(): Disposable {
@@ -139,7 +135,6 @@ export function createWorkbenchServicesLifecycleContribution(): Disposable {
   return {
     dispose: () => {
       disposeWorkbenchInstantiationService();
-      disposeWorkbenchServices();
     },
   };
 }
@@ -147,4 +142,6 @@ export function createWorkbenchServicesLifecycleContribution(): Disposable {
 registerWorkbenchContribution(createWorkbenchContainerStateContribution);
 registerWorkbenchContribution(createWorkbenchDocumentLocaleContribution);
 registerWorkbenchContribution(createWorkbenchServicesLifecycleContribution);
-registerWorkbenchContribution(createWorkbenchStatusbarContribution);
+registerWorkbenchContribution(() =>
+  getWorkbenchInstantiationService().createInstance(WorkbenchStatusbarContribution),
+);

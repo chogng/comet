@@ -66,6 +66,13 @@ export interface DraftEditorInputOptions extends Partial<Omit<DraftEditorInputDa
 	readonly resource?: URI;
 }
 
+/** Stable coordinates captured by the Draft Pane for its current selection. */
+export interface DraftEditorSelectionSnapshot {
+	readonly blockId: string;
+	readonly startOffset: number;
+	readonly endOffset: number;
+}
+
 function createDocumentKey(document: WritingEditorDocument): string {
 	return JSON.stringify(normalizeWritingEditorDocument(document));
 }
@@ -79,6 +86,7 @@ export class DraftEditorInput extends EditorInput {
 	private _document: WritingEditorDocument;
 	private savedTitle: string;
 	private savedDocumentKey: string;
+	private paneSelectionSnapshot: DraftEditorSelectionSnapshot | null | undefined;
 	private readonly documentChangeEmitter = this._register(new Emitter<WritingEditorDocument>());
 	readonly resource: URI;
 	readonly closeHandler: IEditorCloseHandler;
@@ -147,6 +155,20 @@ export class DraftEditorInput extends EditorInput {
 
 	getDocument(): WritingEditorDocument {
 		return this._document;
+	}
+
+	getPaneSelectionSnapshot(): DraftEditorSelectionSnapshot | null | undefined {
+		return this.paneSelectionSnapshot
+			? { ...this.paneSelectionSnapshot }
+			: this.paneSelectionSnapshot;
+	}
+
+	setPaneSelectionSnapshot(selection: DraftEditorSelectionSnapshot | null): void {
+		this.paneSelectionSnapshot = selection ? { ...selection } : null;
+	}
+
+	clearPaneSelectionSnapshot(): void {
+		this.paneSelectionSnapshot = undefined;
 	}
 
 	setTitle(title: string): void {

@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationToken } from 'cs/base/common/cancellation';
@@ -93,6 +93,10 @@ export interface IInvokeFunctionResult {
 	deferredResultId?: string;
 }
 
+export interface IPageTrackingAcquireResult {
+	readonly acquired: boolean;
+}
+
 /**
  * A service for using Playwright to connect to and automate the integrated browser.
  *
@@ -100,7 +104,7 @@ export interface IInvokeFunctionResult {
  * must pass a {@link sessionId} to every method so operations are routed to the
  * correct instance. Page tracking is shared globally across all sessions.
  *
- * Pages must be explicitly tracked via {@link startTrackingPage} (or implicitly via
+ * Pages must be explicitly tracked via {@link acquirePageTracking} (or implicitly via
  * {@link openPage}) before they can be interacted with.
  */
 export interface IPlaywrightService {
@@ -113,17 +117,18 @@ export interface IPlaywrightService {
 	readonly onDidChangeTrackedPages: Event<readonly string[]>;
 
 	/**
-	 * Start tracking an existing browser view so that agent
-	 * tools can interact with it.
+	 * Acquire tracking for an existing browser view so that agent tools can interact
+	 * with it. The result reports whether this call added the page to the shared
+	 * tracked-page set. Callers must only release tracking they acquired.
 	 * @param viewId The browser view identifier.
 	 */
-	startTrackingPage(viewId: string): Promise<void>;
+	acquirePageTracking(viewId: string): Promise<IPageTrackingAcquireResult>;
 
 	/**
-	 * Stop tracking a browser view.
+	 * Release tracking acquired by the caller for a browser view.
 	 * @param viewId The browser view identifier.
 	 */
-	stopTrackingPage(viewId: string): Promise<void>;
+	releasePageTracking(viewId: string): Promise<void>;
 
 	/**
 	 * Whether the given page is currently tracked by the service.

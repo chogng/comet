@@ -1,10 +1,14 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import 'cs/base/browser/ui/selectbox/selectBox.css';
 import { EventEmitter, type Event as LsEvent } from 'cs/base/common/event';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import { SelectBoxCustom } from 'cs/base/browser/ui/selectbox/selectBoxCustom';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
-
 export interface ISelectBoxOptions {
   useCustomDrawn?: boolean;
   ariaLabel?: string;
@@ -100,10 +104,13 @@ export class SelectBox extends Disposable {
     this.styles = styles;
     this.selectBoxOptions = selectBoxOptions;
     const useCustomDrawn = Boolean(selectBoxOptions.useCustomDrawn);
+    if (useCustomDrawn && !contextViewProvider) {
+      throw new Error('A custom-drawn SelectBox requires a context view provider.');
+    }
     this.customSelectBox = useCustomDrawn
       ? new SelectBoxCustom({
           selectElement: this.selectElement,
-          contextViewProvider,
+          contextViewProvider: contextViewProvider!,
           getOptions: () => this.options,
           getSelectedIndex: () => this.selected,
           onSelectIndex: (index) => this.commitCustomSelection(index),

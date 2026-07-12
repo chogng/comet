@@ -13,7 +13,11 @@ import {
 	shortenForLog,
 	timingLog,
 } from 'cs/platform/fetch/node/fetchTiming';
-import { FetchErrorCode, fetchError, getFetchErrorCode } from 'cs/workbench/services/fetch/common/fetchErrors';
+import {
+	isRequestError,
+	RequestErrorCode,
+	requestError,
+} from 'cs/platform/request/common/requestErrors';
 
 const defaultFetchTimeoutMs = 12_000;
 const htmlFetchAccept = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
@@ -65,7 +69,7 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}): Pr
 	try {
 		const { response, transport } = await requestHtml(url, controller.signal);
 		if (!response.ok) {
-			throw fetchError(FetchErrorCode.HttpRequestFailed, {
+			throw requestError(RequestErrorCode.HttpRequestFailed, {
 				status: response.status,
 				statusText: response.statusText,
 				url,
@@ -81,10 +85,10 @@ export async function fetchHtml(url: string, options: FetchHtmlOptions = {}): Pr
 		});
 		return html;
 	} catch (error) {
-		if (getFetchErrorCode(error)) {
+		if (isRequestError(error)) {
 			throw error;
 		}
-		throw fetchError(FetchErrorCode.HttpRequestFailed, {
+		throw requestError(RequestErrorCode.HttpRequestFailed, {
 			status: controller.signal.aborted ? (externalSignal?.aborted ? 'ABORTED' : 'TIMEOUT') : 'NETWORK_ERROR',
 			statusText: controller.signal.aborted
 				? (externalSignal?.aborted ? 'Request aborted' : `Request timed out after ${timeoutMs}ms`)
