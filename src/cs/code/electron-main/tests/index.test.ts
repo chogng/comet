@@ -4,6 +4,7 @@ import '../../../platform/browserView/test/common/cdpProxy.test';
 import '../../../platform/browserView/test/electron-main/browserViewDebugger.test';
 import '../../../platform/browserView/test/electron-main/browserViewViewState.test';
 import '../../../platform/ipc/test/electron-browser/mainProcessService.test';
+import '../../../platform/lifecycle/test/electron-main/applicationQuit.test';
 import '../../../platform/storage/test/storageService.test';
 import './docx.test';
 import './llm.test';

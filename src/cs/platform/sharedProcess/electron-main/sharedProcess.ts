@@ -14,8 +14,12 @@ import { UtilityProcess } from 'cs/platform/utilityProcess/electron-main/utility
 export class SharedProcess extends Disposable {
 	private readonly utilityProcess = this._register(new UtilityProcess());
 	private startup: Promise<MessagePortChannel> | undefined;
+	private shutdownPromise: Promise<void> | undefined;
 
 	start(channels: ReadonlyMap<string, IServerChannel<string>>): Promise<void> {
+		if (this.shutdownPromise) {
+			throw new Error('Shared process is shutting down.');
+		}
 		this.startup ??= this.createChannel(channels);
 		return this.startup.then(() => undefined);
 	}
@@ -27,11 +31,37 @@ export class SharedProcess extends Disposable {
 		return getDelayedChannel(this.startup.then(channel => channel.getChannel<T>(channelName)));
 	}
 
+	shutdown(): Promise<void> {
+		this.shutdownPromise ??= this.shutdownProcess();
+		return this.shutdownPromise;
+	}
+
+	private async shutdownProcess(): Promise<void> {
+		try {
+			if (this.startup) {
+				const channel = await this.startup;
+				await channel.getChannel('playwright').call('shutdown');
+			}
+		} finally {
+			this.dispose();
+		}
+	}
+
 	private async createChannel(channels: ReadonlyMap<string, IServerChannel<string>>): Promise<MessagePortChannel> {
 		const entryPoint = fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url));
-		await this.waitForReady(this.utilityProcess.start(entryPoint));
+		const process = this.utilityProcess.start(entryPoint, 'Comet Shared Process');
+		let processExitError: Error | undefined;
+		let channel: MessagePortChannel | undefined;
+		await this.waitForReady(process, error => {
+			processExitError = error;
+			channel?.disconnect(error);
+		});
 		const messageChannel = new MessageChannelMain();
-		const channel = this._register(new MessagePortChannel(messageChannel.port1, 'main'));
+		channel = this._register(new MessagePortChannel(messageChannel.port1, 'main'));
+		if (processExitError) {
+			channel.disconnect(processExitError);
+			throw processExitError;
+		}
 		for (const [channelName, serverChannel] of channels) {
 			channel.registerChannel(channelName, serverChannel);
 		}
@@ -39,18 +69,24 @@ export class SharedProcess extends Disposable {
 		return channel;
 	}
 
-	private waitForReady(process: ElectronUtilityProcess): Promise<void> {
+	private waitForReady(process: ElectronUtilityProcess, onExitAfterReady: (error: Error) => void): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
+			let ready = false;
 			const onMessage = (message: unknown) => {
 				if (message && typeof message === 'object' && (message as { type?: unknown }).type === SharedProcessLifecycle.ready) {
+					ready = true;
 					process.off('message', onMessage);
-					process.off('exit', onExit);
 					resolve();
 				}
 			};
 			const onExit = (code: number) => {
 				process.off('message', onMessage);
-				reject(new Error(`Shared process exited before initialization (code ${code}).`));
+				const error = new Error(`Shared process exited with code ${code}.`);
+				if (ready) {
+					onExitAfterReady(error);
+				} else {
+					reject(error);
+				}
 			};
 			process.on('message', onMessage);
 			process.once('exit', onExit);

@@ -9,11 +9,11 @@ import { Disposable } from 'cs/base/common/lifecycle';
 export class UtilityProcess extends Disposable {
 	private process: ElectronUtilityProcess | undefined;
 
-	start(entryPoint: string): ElectronUtilityProcess {
+	start(entryPoint: string, serviceName: string): ElectronUtilityProcess {
 		if (this.process) {
 			throw new Error('Utility process is already running.');
 		}
-		const process = utilityProcess.fork(entryPoint, [], { stdio: 'pipe' });
+		const process = utilityProcess.fork(entryPoint, [], { serviceName, stdio: 'pipe' });
 		this.process = process;
 		return process;
 	}

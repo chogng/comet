@@ -30,3 +30,9 @@ jobs:
 
       - name: Build application
         run: npm run build
+
+      - name: Compile Electron smoke tests
+        run: npm run compile:test-smoke
+
+      - name: Run Electron smoke tests
+        run: xvfb-run --auto-servernum npm --prefix test/smoke run mocha

@@ -47,6 +47,14 @@ type BrowserDomSnapshot = {
 	readonly bodyTextSample: string;
 };
 
+type PlaywrightSmokeSnapshot = {
+	readonly title: string;
+	readonly containsHeading: boolean;
+	readonly cancellationRejected: boolean;
+	readonly deferredFunctionStarted: boolean;
+	readonly lifecycleCommandRejected: boolean;
+};
+
 type SessionsReloadSnapshot = {
 	readonly headerTitle: string | null;
 	readonly hasChatInput: boolean;
@@ -303,6 +311,71 @@ async function getBrowserDomSnapshot(
 			};
 		})()`,
 	);
+}
+
+async function captureAndBlockPlaywrightSnapshot(
+	code: Code,
+	targetId: string,
+): Promise<PlaywrightSmokeSnapshot> {
+	return code.evaluate<PlaywrightSmokeSnapshot>(`(async () => {
+		const ipc = window.electronAPI.ipc;
+		if (!ipc) {
+			throw new Error('Electron IPC is unavailable.');
+		}
+		const lifecycleCommandRejected = await ipc.call('playwright', 'shutdown').then(
+			() => false,
+			() => true,
+		);
+		const lease = await ipc.call('playwright', 'acquirePageTracking', [${JSON.stringify(targetId)}]);
+		const snapshot = await ipc.call('playwright', 'captureSnapshot', [
+			'editor-lifecycle-smoke',
+			lease,
+			{ readiness: { selector: 'main h1', state: 'visible', minimumCount: 1 }, timeoutMs: 5000 },
+		]);
+		const cancellationId = 'editor-lifecycle-cancelled-snapshot';
+		const cancelledSnapshot = ipc.call(
+			'playwright',
+			'captureSnapshot',
+			[
+				'editor-lifecycle-smoke',
+				lease,
+				{ readiness: { selector: '#comet-never-ready', state: 'attached', minimumCount: 1 }, timeoutMs: 60000 },
+			],
+			cancellationId,
+		);
+		setTimeout(() => ipc.cancel(cancellationId), 50);
+		const cancellationRejected = await cancelledSnapshot.then(
+			() => false,
+			() => true,
+		);
+		const deferredFunction = await ipc.call('playwright', 'invokeFunction', [
+			'editor-lifecycle-smoke',
+			${JSON.stringify(targetId)},
+			'async page => page.evaluate(() => new Promise(() => {}))',
+			[],
+			10,
+		]);
+		globalThis.__cometBlockedPlaywrightSnapshot = ipc.call(
+			'playwright',
+			'captureSnapshot',
+			[
+				'editor-lifecycle-smoke',
+				lease,
+				{ readiness: { selector: '#comet-never-ready', state: 'attached', minimumCount: 1 }, timeoutMs: 60000 },
+			],
+			'editor-lifecycle-blocked-snapshot',
+		).then(
+			() => ({ status: 'fulfilled' }),
+			error => ({ status: 'rejected', message: error instanceof Error ? error.message : String(error) }),
+		);
+		return {
+			title: snapshot.title,
+			containsHeading: snapshot.html.includes('Editor Lifecycle Smoke'),
+			cancellationRejected,
+			deferredFunctionStarted: typeof deferredFunction.deferredResultId === 'string',
+			lifecycleCommandRejected,
+		};
+	})()`);
 }
 
 async function setBrowserScroll(
@@ -600,6 +673,13 @@ suite('Editor lifecycle smoke', function() {
 		assert.ok(scrolledTo >= 1400, `Expected browser target to scroll, got ${scrolledTo}.`);
 		const editorGroupsBeforeRestart = await getEditorGroupsStorage(code);
 		assert.ok(editorGroupsBeforeRestart);
+		const playwrightSnapshot = await captureAndBlockPlaywrightSnapshot(code, 'browser-a');
+		assert.equal(playwrightSnapshot.title, 'Electron Smoke');
+		assert.equal(playwrightSnapshot.containsHeading, true);
+		assert.equal(playwrightSnapshot.cancellationRejected, true);
+		assert.equal(playwrightSnapshot.deferredFunctionStarted, true);
+		assert.equal(playwrightSnapshot.lifecycleCommandRejected, true);
+		await code.wait(300);
 
 		await application.stop();
 		await application.start();
@@ -628,6 +708,63 @@ suite('Editor lifecycle smoke', function() {
 		assert.equal(restored.storedViewState?.version, 2);
 		assert.equal(restored.storedViewState?.entries[0]?.key.paneId, 'workbench.editor.browser');
 		assert.ok((restored.storedViewState?.entries[0]?.state.scrollY ?? 0) >= 1400);
+	});
+
+	test('closes after the ready shared process exits unexpectedly', async () => {
+		const smokeServer = await startSmokeServer();
+		server = smokeServer.server;
+		context = await createSmokeTestContext('editor-shared-process-exit');
+		const application = context.application;
+		await application.start();
+		await application.reloadWithLocalStorage({
+			[editorGroupsLocalStorageKey]: JSON.stringify(createSeedWorkspace(smokeServer.url, false)),
+		});
+		await application.workbench.ensureEditorExpanded();
+		const code = application.code;
+		await code.waitForCondition(
+			'active Browser before shared process fault injection',
+			() => getRendererSnapshot(code),
+			snapshot => snapshot.activeTabKind === 'browser' && snapshot.tabCount === 1,
+		);
+		const playwrightSnapshot = await captureAndBlockPlaywrightSnapshot(code, 'browser-a');
+		assert.equal(playwrightSnapshot.containsHeading, true);
+		const sharedProcessPid = await code.terminateSharedProcess();
+		assert.ok(sharedProcessPid > 0);
+		await code.wait(300);
+
+		await application.stop();
+	});
+
+	test('releases window automation state before macOS reopens the app', async function() {
+		if (process.platform !== 'darwin') {
+			this.skip();
+		}
+		const smokeServer = await startSmokeServer();
+		server = smokeServer.server;
+		context = await createSmokeTestContext('editor-window-reopen');
+		const application = context.application;
+		await application.start();
+		await application.reloadWithLocalStorage({
+			[editorGroupsLocalStorageKey]: JSON.stringify(createSeedWorkspace(smokeServer.url, false)),
+		});
+		await application.workbench.ensureEditorExpanded();
+		let code = application.code;
+		await code.waitForCondition(
+			'active Browser before closing the macOS window',
+			() => getRendererSnapshot(code),
+			snapshot => snapshot.activeTabKind === 'browser' && snapshot.tabCount === 1,
+		);
+		assert.equal((await captureAndBlockPlaywrightSnapshot(code, 'browser-a')).containsHeading, true);
+
+		await code.closeAndReopenMainWindow();
+		code = application.code;
+		await application.workbench.ensureEditorExpanded();
+		await code.waitForCondition(
+			'active Browser after macOS reopens the window',
+			() => getRendererSnapshot(code),
+			snapshot => snapshot.activeTabKind === 'browser' && snapshot.tabCount === 1,
+		);
+		assert.equal((await captureAndBlockPlaywrightSnapshot(code, 'browser-a')).containsHeading, true);
 	});
 
 	test('hides the active browser target after closing its last tab', async () => {

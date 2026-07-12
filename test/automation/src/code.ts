@@ -54,6 +54,15 @@ export class Code {
 		return this.driver.getVisibleWebContentsViewBounds();
 	}
 
+	async terminateSharedProcess(): Promise<number> {
+		return this.driver.terminateSharedProcess();
+	}
+
+	async closeAndReopenMainWindow(): Promise<void> {
+		await this.driver.closeAndReopenMainWindow();
+		await this.whenWorkbenchRestored();
+	}
+
 	async setLocalStorage(entries: Readonly<Record<string, string>>): Promise<void> {
 		await this.driver.setLocalStorage(entries);
 	}

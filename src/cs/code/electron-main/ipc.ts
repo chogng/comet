@@ -85,6 +85,7 @@ import { listTranslationModels, testTranslationConnection } from 'cs/code/electr
 import {
   applyMainWindowBackgroundMaterial,
   getMainWindow,
+  type IMainWindowCloseLifecycle,
 } from 'cs/platform/windows/electron-main/windows';
 import { setMenuBarIconEnabled } from 'cs/platform/window/electron-main/trayIcon';
 import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
@@ -112,8 +113,13 @@ const browserViewGroupMainService = browserViewIpcDisposables.add(
   new BrowserViewGroupMainService(browserViewMainService),
 );
 const sharedProcess = new SharedProcess();
-const sharedProcessWindowCleanup = new Set<number>();
 const playwrightServices = new Map<number, IPlaywrightService>();
+const closingBrowserAutomationWindows = new Set<number>();
+const preparedBrowserAutomationWindows = new Set<number>();
+const browserAutomationWindowShutdowns = new Map<number, Promise<void>>();
+let sharedProcessShutdownRequested = false;
+let sharedProcessShutdownPromise: Promise<void> | undefined;
+let sharedProcessShutdownCompleted = false;
 
 let micaMaterialTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -122,15 +128,92 @@ function getSharedProcessWindowId(event: IpcMainInvokeEvent): number {
 	if (!window) {
 		throw new Error('Shared process request did not originate from a workbench window.');
 	}
-	if (!sharedProcessWindowCleanup.has(window.id)) {
-		sharedProcessWindowCleanup.add(window.id);
-		event.sender.once('destroyed', () => {
-			sharedProcessWindowCleanup.delete(window.id);
-			playwrightServices.delete(window.id);
-			void sharedProcess.getChannel('playwright').call('disposeWindow', [window.id, undefined]);
-		});
+	if (sharedProcessShutdownRequested) {
+		throw new Error('Shared process is shutting down.');
+	}
+	if (closingBrowserAutomationWindows.has(window.id)) {
+		throw new Error(`Browser automation for window ${window.id} is shutting down.`);
 	}
 	return window.id;
+}
+
+export const browserAutomationWindowCloseLifecycle: IMainWindowCloseLifecycle = {
+	isPrepared(windowId: number): boolean {
+		return sharedProcessShutdownCompleted || preparedBrowserAutomationWindows.has(windowId);
+	},
+	prepare(windowId: number): Promise<void> {
+		if (sharedProcessShutdownCompleted || preparedBrowserAutomationWindows.has(windowId)) {
+			return Promise.resolve();
+		}
+		const existing = browserAutomationWindowShutdowns.get(windowId);
+		if (existing) {
+			return existing;
+		}
+		closingBrowserAutomationWindows.add(windowId);
+		playwrightServices.delete(windowId);
+		const shutdown = (sharedProcessShutdownPromise ?? shutdownSharedProcessWindow(windowId)).finally(() => {
+			preparedBrowserAutomationWindows.add(windowId);
+		});
+		browserAutomationWindowShutdowns.set(windowId, shutdown);
+		return shutdown;
+	},
+	finalize(windowId: number): void {
+		playwrightServices.delete(windowId);
+		closingBrowserAutomationWindows.delete(windowId);
+		preparedBrowserAutomationWindows.delete(windowId);
+		browserAutomationWindowShutdowns.delete(windowId);
+		browserViewGroupMainService.finalizeWindow(windowId);
+	},
+};
+
+async function shutdownSharedProcessWindow(windowId: number): Promise<void> {
+	const errors: unknown[] = [];
+	try {
+		await sharedProcess.getChannel('playwright').call('disposeWindow', [windowId, undefined]);
+	} catch (error) {
+		errors.push(error);
+	}
+	try {
+		await browserViewGroupMainService.shutdownWindow(windowId);
+	} catch (error) {
+		errors.push(error);
+	}
+	throwSharedProcessShutdownErrors(errors, `Failed to shut down Browser automation for window ${windowId}.`);
+}
+
+export function shutdownBrowserAutomation(): Promise<void> {
+	if (!sharedProcessShutdownPromise) {
+		sharedProcessShutdownRequested = true;
+		playwrightServices.clear();
+		sharedProcessShutdownPromise = shutdownSharedProcessAndGroups().finally(() => {
+			sharedProcessShutdownCompleted = true;
+		});
+	}
+	return sharedProcessShutdownPromise;
+}
+
+async function shutdownSharedProcessAndGroups(): Promise<void> {
+	const errors: unknown[] = [];
+	try {
+		await sharedProcess.shutdown();
+	} catch (error) {
+		errors.push(error);
+	}
+	try {
+		await browserViewGroupMainService.shutdown();
+	} catch (error) {
+		errors.push(error);
+	}
+	throwSharedProcessShutdownErrors(errors, 'Failed to shut down Browser automation.');
+}
+
+function throwSharedProcessShutdownErrors(errors: readonly unknown[], message: string): void {
+	if (errors.length === 1) {
+		throw errors[0];
+	}
+	if (errors.length > 1) {
+		throw new AggregateError(errors, message);
+	}
 }
 
 function getPlaywrightService(event: IpcMainInvokeEvent): IPlaywrightService {
@@ -421,6 +504,9 @@ export function registerAppIpc(
   );
 	electronMainChannelServer.registerChannel('playwright', {
 		call: (event, command, arg, cancellationToken) => {
+			if (command === 'shutdown' || command === 'disposeWindow') {
+				throw new Error(`Playwright lifecycle command "${command}" is not available to renderer processes.`);
+			}
 			const windowId = getSharedProcessWindowId(event);
 			return sharedProcess.getChannel('playwright').call(command, [windowId, arg], cancellationToken);
 		},
@@ -436,11 +522,9 @@ export function registerAppIpc(
 			throw new Error('Shared network filter does not expose events.');
 		},
 	} satisfies IServerChannel<IpcMainInvokeEvent>);
-  app.once('before-quit', () => {
-    browserViewIpcDisposables.dispose();
-		playwrightServices.clear();
-		sharedProcess.dispose();
-  });
+	app.once('will-quit', () => {
+		browserViewIpcDisposables.dispose();
+	});
   registerContextMenuListener();
   try {
     electronMainChannelServer.registerChannel(

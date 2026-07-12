@@ -9,7 +9,7 @@ import type { AppSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { AppSettingsConfigurationService } from 'cs/platform/configuration/common/configuration';
 import type { IStorageService } from 'cs/platform/storage/common/storage';
 import type { IThemeMainService } from 'cs/platform/theme/electron-main/themeMainService';
-import { createMainWindow } from 'cs/platform/windows/electron-main/windows';
+import { createMainWindow, type IMainWindowCloseLifecycle } from 'cs/platform/windows/electron-main/windows';
 import { WindowsStateHandler } from 'cs/platform/windows/electron-main/windowsStateHandler';
 
 export class WindowsMainService {
@@ -18,6 +18,7 @@ export class WindowsMainService {
 	constructor(
 		private readonly storageService: IStorageService & AppSettingsConfigurationService,
 		private readonly themeMainService: IThemeMainService,
+		private readonly closeLifecycle: IMainWindowCloseLifecycle,
 	) {
 		this.windowsStateHandler = new WindowsStateHandler(this.storageService);
 	}
@@ -28,6 +29,7 @@ export class WindowsMainService {
 			windowState: this.windowsStateHandler.getNewWindowState(),
 			useMica: resolvedSettings.useMica,
 			backgroundColor: this.themeMainService.getBackgroundColor(),
+			closeLifecycle: this.closeLifecycle,
 		});
 		this.registerWindow(window);
 		return window;

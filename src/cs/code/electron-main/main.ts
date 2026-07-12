@@ -10,7 +10,7 @@ import {
 } from 'cs/platform/environment/electron-main/environmentMainService';
 import { registerDevShortcuts } from 'cs/platform/window/electron-main/devShortcuts';
 import { registerAppLifecycleHandlers } from 'cs/platform/lifecycle/electron-main/lifecycleMain';
-import { registerAppIpc } from 'cs/code/electron-main/ipc';
+import { browserAutomationWindowCloseLifecycle, registerAppIpc, shutdownBrowserAutomation } from 'cs/code/electron-main/ipc';
 import { createStorageService } from 'cs/code/electron-main/storageService';
 import { getMainWindow } from 'cs/platform/windows/electron-main/windows';
 import { setMenuBarIconEnabled } from 'cs/platform/window/electron-main/trayIcon';
@@ -18,18 +18,11 @@ import { ThemeMainService } from 'cs/platform/theme/electron-main/themeMainServi
 import { createNativeHostMainService } from 'cs/platform/native/electron-main/nativeHostMainService';
 import { registerWindowOpenPolicy } from 'cs/platform/window/electron-main/windowOpenPolicy';
 import { WindowsMainService } from 'cs/platform/windows/electron-main/windowsMainService';
-import { beginWebContentWindowClose } from 'cs/platform/browserView/electron-main/browserViewMainService';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
 configureEnvironmentMainPaths(environmentMainPaths);
 registerWindowOpenPolicy(app);
-app.once('before-quit', () => {
-	const window = getMainWindow();
-	if (window) {
-		beginWebContentWindowClose(window);
-	}
-});
 
 app.whenReady().then(async () => {
   await prepareEnvironmentMain(environmentMainPaths);
@@ -49,21 +42,39 @@ app.whenReady().then(async () => {
     },
   );
   await storage.init();
-  app.once('before-quit', () => {
-    void storage.close();
-  });
 
   const settings = await storage.loadSettings();
   const themeMainService = new ThemeMainService(storage, settings);
-  const windowsMainService = new WindowsMainService(storage, themeMainService);
+  const windowsMainService = new WindowsMainService(storage, themeMainService, browserAutomationWindowCloseLifecycle);
   const nativeHostMainService = createNativeHostMainService(themeMainService);
-  app.once('before-quit', () => {
-    themeMainService.dispose();
-  });
   registerAppLifecycleHandlers({
     createMainWindow: () => {
       void windowsMainService.openMainWindow();
     },
+	prepareApplicationQuit: async () => {
+		const errors: unknown[] = [];
+		try {
+			await shutdownBrowserAutomation();
+		} catch (error) {
+			errors.push(error);
+		}
+		try {
+			await storage.close();
+		} catch (error) {
+			errors.push(error);
+		}
+		try {
+			themeMainService.dispose();
+		} catch (error) {
+			errors.push(error);
+		}
+		if (errors.length === 1) {
+			throw errors[0];
+		}
+		if (errors.length > 1) {
+			throw new AggregateError(errors, 'Failed to finalize application services.');
+		}
+	},
   });
   if (isDevelopmentEnvironmentMain()) {
     registerDevShortcuts({ getMainWindow });

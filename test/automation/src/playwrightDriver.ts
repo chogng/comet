@@ -28,20 +28,24 @@ export class PlaywrightDriver {
 
 	constructor(
 		private readonly application: playwright.ElectronApplication,
-		private readonly page: playwright.Page,
+		private page: playwright.Page,
 		private readonly options: LaunchOptions,
 	) {
-		this.page.on('console', message => {
+		this.registerPageListeners(page);
+	}
+
+	private registerPageListeners(page: playwright.Page): void {
+		page.on('console', message => {
 			const consoleMessage = { type: message.type(), text: message.text() };
 			this.consoleMessages.push(consoleMessage);
 			this.options.logger.log(
 				`[renderer:${consoleMessage.type}] ${consoleMessage.text}`,
 			);
 		});
-		this.page.on('pageerror', error => {
+		page.on('pageerror', error => {
 			this.options.logger.log(`[renderer:error] ${error.stack ?? error.message}`);
 		});
-		this.page.on('crash', () => {
+		page.on('crash', () => {
 			this.options.logger.log('[renderer] page crashed');
 		});
 	}
@@ -87,6 +91,39 @@ export class PlaywrightDriver {
 					.map(view => view.getBounds()),
 			),
 		);
+	}
+
+	async terminateSharedProcess(): Promise<number> {
+		return this.application.evaluate(({ app }) => {
+			const candidates = app.getAppMetrics().filter(metric =>
+				metric.type === 'Utility' && metric.name === 'Comet Shared Process'
+			);
+			if (candidates.length !== 1) {
+				throw new Error(`Expected one Comet Shared Process, found ${candidates.length}.`);
+			}
+			const [{ pid }] = candidates;
+			process.kill(pid, 'SIGKILL');
+			return pid;
+		});
+	}
+
+	async closeAndReopenMainWindow(): Promise<void> {
+		const reopenedPage = this.application.waitForEvent('window');
+		await this.application.evaluate(({ app, BrowserWindow }) => new Promise<void>((resolve, reject) => {
+			const windows = BrowserWindow.getAllWindows();
+			if (windows.length !== 1) {
+				reject(new Error(`Expected one main window, found ${windows.length}.`));
+				return;
+			}
+			windows[0].once('closed', () => {
+				app.emit('activate');
+				resolve();
+			});
+			windows[0].close();
+		}));
+		this.page = await reopenedPage;
+		this.registerPageListeners(this.page);
+		await this.waitForDriver();
 	}
 
 	async setLocalStorage(entries: Readonly<Record<string, string>>): Promise<void> {

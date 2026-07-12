@@ -43,8 +43,15 @@ interface IDefaultBrowserWindowOptions {
 	readonly backgroundColor: string;
 }
 
+export interface IMainWindowCloseLifecycle {
+	isPrepared(windowId: number): boolean;
+	prepare(windowId: number): Promise<void>;
+	finalize(windowId: number): void;
+}
+
 interface ICreateMainWindowOptions extends IDefaultBrowserWindowOptions {
 	readonly windowState: IWindowState;
+	readonly closeLifecycle: IMainWindowCloseLifecycle;
 }
 
 export function defaultBrowserWindowOptions(
@@ -398,15 +405,31 @@ export function createMainWindow(options: ICreateMainWindowOptions) {
 		});
 	}
 
-	window.on('close', () => {
+	let closePreparation: Promise<void> | undefined;
+	window.on('close', event => {
 		beginWebContentWindowClose(window);
 		closeAuxiliaryWindows();
+		if (options.closeLifecycle.isPrepared(window.id)) {
+			return;
+		}
+		event.preventDefault();
+		if (!closePreparation) {
+			closePreparation = options.closeLifecycle.prepare(window.id);
+			void closePreparation.then(
+				() => resumeMainWindowClose(window),
+				error => {
+					console.error(`Failed to prepare window ${window.id} for close.`, error);
+					resumeMainWindowClose(window);
+				},
+			);
+		}
 	});
 
 	window.on('closed', () => {
 		disposeWebContentView(window);
 		setTrayMainWindow(null);
 		mainWindow = null;
+		options.closeLifecycle.finalize(window.id);
 	});
 
 	if (typeof window.removeMenu === 'function') {
@@ -419,4 +442,10 @@ export function createMainWindow(options: ICreateMainWindowOptions) {
 	window.on('restore', () => restoreAuxiliaryWindows());
 	window.on('show', () => restoreAuxiliaryWindows());
 	return window;
+}
+
+function resumeMainWindowClose(window: BrowserWindow): void {
+	if (!window.isDestroyed()) {
+		window.close();
+	}
 }

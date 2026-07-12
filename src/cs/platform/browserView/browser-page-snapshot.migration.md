@@ -441,12 +441,12 @@ unit tests
 2. 类型化 Snapshot、单一 deadline、CancellationToken、readiness、原子读取、大小限制和错误映射。
 3. Article Fetch 与 Page Archive 直接调用 Snapshot 契约。
 4. Page tracking 使用绑定具体 Chromium target generation 的独立 lease；Fetch 与 Archive 不再维护本地兼容所有权。
+5. BrowserViewGroup、PlaywrightSession、PlaywrightService、window 与 shared process 使用可等待的异步销毁链；pending initialization 和进行中的页面操作不能越过 shutdown。
+6. 真实 Electron smoke 覆盖 BrowserView → shared process → Playwright Snapshot、Cancellation、不可完成的 deferred 调用、退出期间的进行中 Snapshot、shared process 异常退出、renderer lifecycle 命令隔离、macOS 关窗重开，以及冷启动后的 Browser 状态恢复。
 
 尚未完成：
 
-1. BrowserViewGroup、PlaywrightSession、PlaywrightService 和 window teardown 的异步销毁链必须完整 await，pending initialization 不得越过 service/window shutdown。
-2. PlaywrightTab 中吞掉真实页面错误并返回空集合、空标题或成功结果的分支必须删除，调用方直接接收真实失败。
-3. 增加 BrowserView → shared process → Playwright Page 的真实进程集成测试，覆盖 Snapshot、关闭与取消；不能只依赖结构化 mock。
+1. PlaywrightTab 中吞掉真实页面错误并返回空集合、空标题或成功结果的分支必须删除，调用方直接接收真实失败。
 
 ---
 
