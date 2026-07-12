@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { CancellationToken } from 'cs/base/common/cancellation';
+import { CancellationError, CancellationTokenCancelled, type CancellationToken } from 'cs/base/common/cancellation';
 import { Event } from 'cs/base/common/event';
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import { MessagePortChannel } from 'cs/base/parts/ipc/common/messagePortIpc';
@@ -80,6 +80,16 @@ test('MessagePortChannel rejects pending and future calls when the remote endpoi
 	assert.throws(() => remote.listen('after-close')(() => {}), /disconnected/);
 	channel.dispose();
 	assert.equal(port.closeCount, 0);
+});
+
+test('MessagePortChannel rejects an already-cancelled call before posting it', async () => {
+	const port = new TestMessagePort();
+	const channel = new MessagePortChannel(port, 'test');
+	const remote = channel.getChannel('remote');
+
+	await assert.rejects(remote.call('cancelled', undefined, CancellationTokenCancelled), CancellationError);
+	assert.equal(port.postedMessages.length, 0);
+	channel.dispose();
 });
 
 test('MessagePortChannel cancels active server calls when the remote endpoint closes', async () => {

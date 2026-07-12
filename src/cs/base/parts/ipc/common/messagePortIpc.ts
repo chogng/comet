@@ -89,6 +89,9 @@ export class MessagePortChannel extends Disposable {
 
 	private call<T>(channelName: string, name: string, arg: unknown, token: CancellationToken): Promise<T> {
 		this.assertConnected();
+		if (token.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
 		const id = this.nextRequestId++;
 		return new Promise<T>((resolve, reject) => {
 			const cancellation = token.onCancellationRequested(() => {
