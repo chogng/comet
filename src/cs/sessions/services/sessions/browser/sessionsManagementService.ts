@@ -211,7 +211,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		@IStorageService storageService: IStorageService,
 	) {
 		super();
-		this.recencyStorage = new SessionsRecencyStorage(storageService);
+		this.recencyStorage = this._register(new SessionsRecencyStorage(storageService));
 
 		const providers = this.sessionsProvidersService.getProviders();
 		const initialSessions = new Map<SessionsProviderId, readonly ISession[]>();
@@ -1144,7 +1144,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			}
 			sessions.push(...snapshot);
 		}
-		return this.recencyStorage.commit(sessions, promotedSessionIds);
+		return this.recencyStorage.update(sessions, promotedSessionIds);
 	}
 
 	private collectSessionTypes(

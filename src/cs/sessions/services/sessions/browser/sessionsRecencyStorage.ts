@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Disposable } from 'cs/base/common/lifecycle';
 import {
 	StorageScope,
 	StorageTarget,
@@ -67,14 +68,22 @@ function requireActivityTime(session: ISession): number {
 }
 
 /** Persists the authoritative cross-provider Session activity order. */
-export class SessionsRecencyStorage {
+export class SessionsRecencyStorage extends Disposable {
 	private rankBySessionId: ReadonlyMap<string, number>;
+	private sessionIdsSnapshot: readonly string[];
 
 	constructor(private readonly storageService: IStorageService) {
-		this.rankBySessionId = this.loadRanks();
+		super();
+		const storedSessionIds = this.loadSessionIds();
+		this.rankBySessionId = new Map(storedSessionIds.map((sessionId, index) => [sessionId, index]));
+		this.sessionIdsSnapshot = Object.freeze([...storedSessionIds]);
+		this._register(this.storageService.onWillSaveState(event => {
+			const sessionIdsSnapshot = this.sessionIdsSnapshot;
+			event.join(Promise.resolve().then(() => this.persist(sessionIdsSnapshot)));
+		}));
 	}
 
-	commit(
+	update(
 		sessions: readonly ISession[],
 		promotedSessionIds: readonly string[] = [],
 	): readonly ISession[] {
@@ -127,28 +136,26 @@ export class SessionsRecencyStorage {
 				: left.session.sessionId > right.session.sessionId ? 1 : 0;
 			}).map(entry => entry.session);
 		const orderedSessions = Object.freeze(ordered);
-		const stored: IStoredSessionsRecency = {
-			version: SessionsRecencyStorageVersion,
-			sessionIds: orderedSessions.map(session => session.sessionId),
-		};
-		parseStoredRecency(stored);
-		if (isSerializedJsonLargerThan(stored, MaximumSessionsRecencyStorageBytes)) {
-			throw new Error(`Sessions recency exceeds ${MaximumSessionsRecencyStorageBytes} bytes.`);
-		}
-		this.storageService.store(
-			SessionsRecencyStorageKey,
-			JSON.stringify(stored),
-			StorageScope.APPLICATION,
-			StorageTarget.MACHINE,
+		this.sessionIdsSnapshot = Object.freeze(
+			orderedSessions.map(session => session.sessionId),
 		);
 		this.rankBySessionId = new Map(orderedSessions.map((session, index) => [session.sessionId, index]));
 		return orderedSessions;
 	}
 
-	private loadRanks(): ReadonlyMap<string, number> {
+	private persist(sessionIds: readonly string[]): void {
+		this.storageService.store(
+			SessionsRecencyStorageKey,
+			serializeRecency(sessionIds),
+			StorageScope.APPLICATION,
+			StorageTarget.MACHINE,
+		);
+	}
+
+	private loadSessionIds(): readonly string[] {
 		const serialized = this.storageService.get(SessionsRecencyStorageKey, StorageScope.APPLICATION);
 		if (serialized === undefined) {
-			return new Map();
+			return [];
 		}
 		if (isUtf8StringLargerThan(serialized, MaximumSessionsRecencyStorageBytes)) {
 			throw new Error(`Stored Sessions recency exceeds ${MaximumSessionsRecencyStorageBytes} bytes.`);
@@ -159,7 +166,18 @@ export class SessionsRecencyStorage {
 		} catch {
 			throw new Error('Stored Sessions recency is not valid JSON.');
 		}
-		const sessionIds = parseStoredRecency(value);
-		return new Map(sessionIds.map((sessionId, index) => [sessionId, index]));
+		return parseStoredRecency(value);
 	}
+}
+
+function serializeRecency(sessionIds: readonly string[]): string {
+	const stored: IStoredSessionsRecency = {
+		version: SessionsRecencyStorageVersion,
+		sessionIds,
+	};
+	parseStoredRecency(stored);
+	if (isSerializedJsonLargerThan(stored, MaximumSessionsRecencyStorageBytes)) {
+		throw new Error(`Sessions recency exceeds ${MaximumSessionsRecencyStorageBytes} bytes.`);
+	}
+	return JSON.stringify(stored);
 }

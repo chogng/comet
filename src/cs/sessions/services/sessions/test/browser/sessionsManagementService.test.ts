@@ -15,6 +15,8 @@ import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common
 import {
 	StorageScope,
 	StorageTarget,
+	WillSaveStateReason,
+	type IWillSaveStateEvent,
 	type IStorageService,
 } from 'cs/platform/storage/common/storage';
 import { SessionsManagementService } from 'cs/sessions/services/sessions/browser/sessionsManagementService';
@@ -286,6 +288,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 
 function createStorageService() {
 	const values = new Map<string, string>();
+	const willSaveStateEmitter = new Emitter<IWillSaveStateEvent>();
 	let nextStoreError: Error | undefined;
 	const keyFor = (key: string, scope: StorageScope) => `${scope}:${key}`;
 	const service = {
@@ -293,7 +296,7 @@ function createStorageService() {
 		applicationStorage: undefined,
 		onDidChangeValue: Event.None,
 		onDidChangeTarget: Event.None,
-		onWillSaveState: Event.None,
+		onWillSaveState: willSaveStateEmitter.event,
 		init: async () => {},
 		close: async () => {},
 		get: (key: string, scope: StorageScope, fallbackValue?: string) =>
@@ -319,7 +322,21 @@ function createStorageService() {
 			.map(key => key.slice(`${scope}:`.length)),
 		log() {},
 		optimize: async () => {},
-		flush: async () => {},
+		flush: async (reason = WillSaveStateReason.NONE) => {
+			const joins: Promise<void>[] = [];
+			let acceptingJoins = true;
+			willSaveStateEmitter.fire({
+				reason,
+				join(promise) {
+					if (!acceptingJoins) {
+						throw new Error('Storage save participants must join synchronously.');
+					}
+					joins.push(promise);
+				},
+			});
+			acceptingJoins = false;
+			await Promise.all(joins);
+		},
 		setRaw: (key: string, value: string) => values.set(keyFor(key, StorageScope.APPLICATION), value),
 		getRaw: (key: string) => values.get(keyFor(key, StorageScope.APPLICATION)),
 		failNextStore: (error: Error) => {
@@ -331,6 +348,14 @@ function createStorageService() {
 		readonly getRaw: (key: string) => string | undefined;
 		readonly failNextStore: (error: Error) => void;
 	};
+}
+
+function getStoredRecencySessionIds(
+	storageService: ReturnType<typeof createStorageService>,
+): readonly string[] {
+	const serialized = storageService.getRaw('sessions.recency');
+	assert.ok(serialized);
+	return (JSON.parse(serialized) as { readonly sessionIds: readonly string[] }).sessionIds;
 }
 
 function createHarness(
@@ -350,6 +375,60 @@ function createHarness(
 	}
 	const management = store.add(new SessionsManagementService(registry, storageService));
 	return { store, registry, management, storageService };
+}
+
+async function assertRecencyLifecycleSaveFailure(options: {
+	readonly provider: TestSessionsProvider;
+	readonly initialSessions: readonly ISession[];
+	readonly providerSessionsAfterTransition: readonly ISession[];
+	readonly event: ISessionsChangeEvent;
+	readonly error: Error;
+	readonly beforeTransition?: () => void;
+}): Promise<void> {
+	options.provider.sessions.push(...options.initialSessions);
+	const storageService = createStorageService();
+	const { store, management } = createHarness([options.provider], storageService);
+	await storageService.flush();
+	const initialStoredRecency = storageService.getRaw('sessions.recency');
+	const publishedTransitions: Array<ISessionsChangeEvent['transitions']> = [];
+	store.add(management.onDidChangeSessions(event => publishedTransitions.push(event.transitions)));
+
+	try {
+		options.beforeTransition?.();
+		options.provider.setSessionsAndFire(options.providerSessionsAfterTransition, options.event);
+		assert.deepEqual(options.provider.getSessions(), options.providerSessionsAfterTransition);
+		assert.deepEqual(
+			new Set(management.getSessions()),
+			new Set(options.providerSessionsAfterTransition),
+		);
+		assert.deepEqual(publishedTransitions, [options.event.transitions]);
+		for (const session of options.providerSessionsAfterTransition) {
+			assert.equal(management.getSession(session.sessionId), session);
+		}
+		const nextSessionIds = new Set(options.providerSessionsAfterTransition.map(session => session.sessionId));
+		for (const session of options.initialSessions) {
+			if (!nextSessionIds.has(session.sessionId)) {
+				assert.equal(management.getSession(session.sessionId), undefined);
+			}
+		}
+
+		storageService.failNextStore(options.error);
+		await assert.rejects(
+			storageService.flush(),
+			error => error === options.error,
+		);
+		assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
+		for (const session of options.providerSessionsAfterTransition) {
+			assert.equal(management.getSession(session.sessionId), session);
+		}
+		await storageService.flush();
+		assert.deepEqual(
+			getStoredRecencySessionIds(storageService),
+			management.getSessions().map(session => session.sessionId),
+		);
+	} finally {
+		store.dispose();
+	}
 }
 
 function createModel(identifier: string): ILanguageModelChatMetadataAndIdentifier {
@@ -472,7 +551,7 @@ test('Sessions management aggregates provider snapshots with provider-aware look
 	}
 });
 
-test('Sessions management persists authoritative cross-provider recency and removes deleted identities', () => {
+test('Sessions management persists authoritative cross-provider recency and removes deleted identities', async () => {
 	const storageService = createStorageService();
 	const olderProvider = new TestSessionsProvider('provider.z-older');
 	const newerProvider = new TestSessionsProvider('provider.a-newer');
@@ -495,6 +574,7 @@ test('Sessions management persists authoritative cross-provider recency and remo
 			transitions: [{ kind: SessionTransitionKind.Changed, session: older.model }],
 		});
 		assert.deepEqual(firstHarness.management.getSessions(), [older.model, newer.model]);
+		await storageService.flush();
 	} finally {
 		firstHarness.store.dispose();
 	}
@@ -520,6 +600,7 @@ test('Sessions management persists authoritative cross-provider recency and remo
 			transitions: [{ kind: SessionTransitionKind.Removed, session: restoredOlder.model }],
 		});
 		assert.deepEqual(secondHarness.management.getSessions(), [restoredNewer.model]);
+		await storageService.flush();
 	} finally {
 		secondHarness.store.dispose();
 	}
@@ -537,77 +618,125 @@ test('Sessions management persists authoritative cross-provider recency and remo
 	}
 });
 
-test('Sessions management accepts Added, Replaced, and Removed snapshots when recency persistence fails', () => {
+test('Sessions recency updates rank before lifecycle persistence and surfaces save failures', async () => {
 	const storageService = createStorageService();
-	const provider = new TestSessionsProvider('provider.persistence-failure');
-	const first = createSession(provider.id, URI.parse('test-session:/first'));
-	const added = createSession(provider.id, URI.parse('test-session:/added'));
-	const replacement = createSession(provider.id, URI.parse('test-session:/replacement'));
-	provider.sessions.push(first.model);
-	const { store, management, logService } = createHarness([provider], storageService);
+	const recencyStorage = new SessionsRecencyStorage(storageService);
+	const first = createSession('provider.recency-rank', URI.parse('test-session:/first')).model;
+	const second = createSession('provider.recency-rank', URI.parse('test-session:/second')).model;
+	const initialOrder = recencyStorage.update([first, second]);
+	assert.equal(storageService.getRaw('sessions.recency'), undefined);
+	await storageService.flush();
 	const initialStoredRecency = storageService.getRaw('sessions.recency');
-	const snapshots: Array<{
-		readonly kind: SessionTransitionKind;
-		readonly sessions: readonly ISession[];
-	}> = [];
-	store.add(management.onDidChangeSessions(event => {
-		for (const transition of event.transitions) {
-			snapshots.push({ kind: transition.kind, sessions: management.getSessions() });
-		}
-	}));
-	const errors = [
-		new Error('Added recency write failed.'),
-		new Error('Replacement recency write failed.'),
-		new Error('Removal recency write failed.'),
-	];
+	const promotedSession = initialOrder[1];
+	const storageError = new Error('Recency rank write failed.');
+	const promotedOrder = recencyStorage.update(initialOrder, [promotedSession.sessionId]);
+	assert.equal(promotedOrder[0], promotedSession);
+
+	storageService.failNextStore(storageError);
+	await assert.rejects(
+		storageService.flush(),
+		error => error === storageError,
+	);
+	assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
+	assert.deepEqual(recencyStorage.update(initialOrder), promotedOrder);
+	await storageService.flush();
+	assert.deepEqual(
+		getStoredRecencySessionIds(storageService),
+		promotedOrder.map(session => session.sessionId),
+	);
+	recencyStorage.dispose();
+});
+
+test('Sessions recency saves the immutable snapshot captured at the lifecycle boundary', async () => {
+	const storageService = createStorageService();
+	const recencyStorage = new SessionsRecencyStorage(storageService);
+	const first = createSession('provider.recency-boundary', URI.parse('test-session:/first')).model;
+	const second = createSession('provider.recency-boundary', URI.parse('test-session:/second')).model;
 
 	try {
-		storageService.failNextStore(errors[0]);
-		assert.doesNotThrow(() => provider.setSessionsAndFire([first.model, added.model], {
-			transitions: [{ kind: SessionTransitionKind.Added, session: added.model }],
-		}));
-		assert.deepEqual(management.getSessions(), [added.model, first.model]);
-		assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
+		recencyStorage.update([first]);
+		const firstSave = storageService.flush();
+		recencyStorage.update([first, second], [second.sessionId]);
+		await firstSave;
+		assert.deepEqual(getStoredRecencySessionIds(storageService), [first.sessionId]);
 
-		storageService.failNextStore(errors[1]);
-		assert.doesNotThrow(() => provider.setSessionsAndFire([first.model, replacement.model], {
-			transitions: [{
-				kind: SessionTransitionKind.Replaced,
-				from: added.model,
-				to: replacement.model,
-			}],
-		}));
-		assert.deepEqual(management.getSessions(), [replacement.model, first.model]);
-		assert.equal(management.getSession(added.model.sessionId), undefined);
-		assert.equal(management.getSession(replacement.model.sessionId), replacement.model);
-		assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
-
-		storageService.failNextStore(errors[2]);
-		assert.doesNotThrow(() => provider.setSessionsAndFire([first.model], {
-			transitions: [{ kind: SessionTransitionKind.Removed, session: replacement.model }],
-		}));
-		assert.deepEqual(management.getSessions(), [first.model]);
-		assert.equal(management.getSession(replacement.model.sessionId), undefined);
-		assert.equal(storageService.getRaw('sessions.recency'), initialStoredRecency);
-
-		assert.deepEqual(snapshots, [{
-			kind: SessionTransitionKind.Added,
-			sessions: [added.model, first.model],
-		}, {
-			kind: SessionTransitionKind.Replaced,
-			sessions: [replacement.model, first.model],
-		}, {
-			kind: SessionTransitionKind.Removed,
-			sessions: [first.model],
-		}]);
-		assert.deepEqual(
-			logService.errors.map(entry => entry.message),
-			Array(3).fill('Failed to persist the authoritative Sessions recency order.'),
-		);
-		assert.deepEqual(logService.errors.map(entry => entry.args), errors.map(error => [error]));
+		await storageService.flush();
+		assert.deepEqual(getStoredRecencySessionIds(storageService), [second.sessionId, first.sessionId]);
 	} finally {
-		store.dispose();
+		recencyStorage.dispose();
 	}
+});
+
+test('Sessions recency defers storage capacity validation to lifecycle save', async () => {
+	const storageService = createStorageService();
+	const recencyStorage = new SessionsRecencyStorage(storageService);
+	const session = createSession(
+		'provider.recency-capacity',
+		URI.parse(`test-session:/${'x'.repeat(8_192)}`),
+	).model;
+
+	try {
+		assert.deepEqual(recencyStorage.update([session]), [session]);
+		await assert.rejects(
+			storageService.flush(),
+			/invalid Session ID/,
+		);
+	} finally {
+		recencyStorage.dispose();
+	}
+});
+
+test('Sessions management remains consistent across recency lifecycle save failures', async () => {
+	const addedProvider = new TestSessionsProvider('provider.add-persistence-failure');
+	const first = createSession(addedProvider.id, URI.parse('test-session:/first')).model;
+	const added = createSession(addedProvider.id, URI.parse('test-session:/added')).model;
+	await assertRecencyLifecycleSaveFailure({
+		provider: addedProvider,
+		initialSessions: [first],
+		providerSessionsAfterTransition: [first, added],
+		event: { transitions: [{ kind: SessionTransitionKind.Added, session: added }] },
+		error: new Error('Added recency write failed.'),
+	});
+
+	const replacedProvider = new TestSessionsProvider('provider.replace-persistence-failure');
+	const stable = createSession(replacedProvider.id, URI.parse('test-session:/stable')).model;
+	const replaced = createSession(replacedProvider.id, URI.parse('test-session:/replaced')).model;
+	const replacement = createSession(replacedProvider.id, URI.parse('test-session:/replacement')).model;
+	await assertRecencyLifecycleSaveFailure({
+		provider: replacedProvider,
+		initialSessions: [stable, replaced],
+		providerSessionsAfterTransition: [stable, replacement],
+		event: {
+			transitions: [{ kind: SessionTransitionKind.Replaced, from: replaced, to: replacement }],
+		},
+		error: new Error('Replacement recency write failed.'),
+	});
+
+	const removedProvider = new TestSessionsProvider('provider.remove-persistence-failure');
+	const retained = createSession(removedProvider.id, URI.parse('test-session:/retained')).model;
+	const removed = createSession(removedProvider.id, URI.parse('test-session:/removed')).model;
+	await assertRecencyLifecycleSaveFailure({
+		provider: removedProvider,
+		initialSessions: [retained, removed],
+		providerSessionsAfterTransition: [retained],
+		event: { transitions: [{ kind: SessionTransitionKind.Removed, session: removed }] },
+		error: new Error('Removal recency write failed.'),
+	});
+
+	const changedProvider = new TestSessionsProvider('provider.change-persistence-failure');
+	const changedFixture = createSession(changedProvider.id, URI.parse('test-session:/changed'));
+	const changed = changedFixture.model;
+	await assertRecencyLifecycleSaveFailure({
+		provider: changedProvider,
+		initialSessions: [changed],
+		providerSessionsAfterTransition: [changed],
+		event: { transitions: [{ kind: SessionTransitionKind.Changed, session: changed }] },
+		error: new Error('Changed recency write failed.'),
+		beforeTransition: () => changedFixture.updatedAt.set(
+			new Date(changedFixture.updatedAt.get().getTime() + 1_000),
+			undefined,
+		),
+	});
 });
 
 test('Sessions management rejects malformed persisted recency atomically', () => {

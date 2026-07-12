@@ -271,7 +271,7 @@ export class ApplicationStorageService extends AbstractStorageService {
   }
 
   async close(): Promise<void> {
-    this.emitWillSaveState(WillSaveStateReason.SHUTDOWN);
+	await Promise.all(this.emitWillSaveState(WillSaveStateReason.SHUTDOWN));
     await this.applicationStorageValue.close();
   }
 

@@ -41,7 +41,7 @@ export class StorageMainService extends ApplicationStorageService implements ISt
   }
 
   override async close(): Promise<void> {
-    this.emitWillSaveState(WillSaveStateReason.SHUTDOWN);
+	await Promise.all(this.emitWillSaveState(WillSaveStateReason.SHUTDOWN));
     await this.applicationStorageMain.close();
   }
 }
