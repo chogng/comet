@@ -10,11 +10,11 @@ import {
 } from 'cs/base/common/editorDraftStyle';
 import { DEFAULT_EDITOR_BODY_FONT_SIZE_VALUE } from 'cs/base/common/editorFormat';
 import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/text/editorDraftStyleCatalog';
-import { createEditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { EditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
 
 test('EditorDraftStyleService initializes from catalog and notifies on snapshot changes', () => {
   const initialSnapshot = getEditorDraftStyleCatalogSnapshot();
-  const service = createEditorDraftStyleService(initialSnapshot);
+	const service = new EditorDraftStyleService(initialSnapshot);
   let changeCount = 0;
 
   const unsubscribe = service.subscribe(() => {
@@ -40,7 +40,7 @@ test('EditorDraftStyleService initializes from catalog and notifies on snapshot 
   assert.equal(changeCount, 1);
 
   unsubscribe();
-  service.resetToCatalog();
+	service.setSnapshot(initialSnapshot);
   assert.equal(changeCount, 1);
   assert.deepEqual(service.getSnapshot(), initialSnapshot);
 });
@@ -58,7 +58,7 @@ test('EditorDraftStyleService snapshots are frozen and detached from caller-owne
     fontFamilyPresets: initialSnapshot.fontFamilyPresets.map((option) => ({ ...option })),
     fontSizePresets: initialSnapshot.fontSizePresets.map((option) => ({ ...option })),
   };
-  const service = createEditorDraftStyleService();
+	const service = new EditorDraftStyleService();
 
   service.setSnapshot(mutableSnapshot);
   const storedSnapshot = service.getSnapshot();
@@ -104,7 +104,7 @@ test('EditorDraftStyleService snapshots are frozen and detached from caller-owne
 
 test('EditorDraftStyleService setDefaultBodyStyle preserves runtime preset lists', () => {
   const initialSnapshot = getEditorDraftStyleCatalogSnapshot();
-  const service = createEditorDraftStyleService({
+	const service = new EditorDraftStyleService({
     ...initialSnapshot,
     fontFamilyPresets: [
       {
