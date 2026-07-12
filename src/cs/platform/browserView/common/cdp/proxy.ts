@@ -5,6 +5,8 @@
 
 import { Disposable, DisposableMap } from 'cs/base/common/lifecycle';
 import { Emitter, Event } from 'cs/base/common/event';
+import { raceCancellationError } from 'cs/base/common/async';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
 import { generateUuid } from 'cs/base/common/uuid';
 import { ICDPTarget, CDPRequest, CDPResponse, CDPEvent, CDPError, CDPErrorCode, CDPServerError, CDPMethodNotFoundError, CDPInvalidParamsError, ICDPConnection, ICDPBrowserTarget } from 'cs/platform/browserView/common/cdp/types';
 
@@ -33,6 +35,7 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 	private readonly _targets = this._register(new DisposableMap<string, ICDPTarget>());
 
 	private readonly _autoAttachments = new WeakMap<ICDPTarget, Promise<ICDPConnection>>();
+	private readonly operationCancellation = this._register(new CancellationTokenSource());
 	private _isDisposed = false;
 
 	// CDP method handlers map
@@ -114,7 +117,7 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 		if (existing) {
 			return existing;
 		}
-		const attachment = target.attach();
+		const attachment = raceCancellationError(target.attach(), this.operationCancellation.token);
 		this._autoAttachments.set(target, attachment);
 		void attachment.then(
 			session => {
@@ -215,7 +218,10 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 				if (!handler) {
 					throw new CDPMethodNotFoundError(method);
 				}
-				return await handler(params, sessionId);
+				return await raceCancellationError(
+					Promise.resolve(handler(params, sessionId)),
+					this.operationCancellation.token,
+				);
 			}
 
 			const connection = this._sessions.get(sessionId);
@@ -223,7 +229,10 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 				throw new CDPServerError(`Session not found: ${sessionId}`);
 			}
 
-			const result = await connection.sendCommand(method, params);
+			const result = await raceCancellationError(
+				connection.sendCommand(method, params),
+				this.operationCancellation.token,
+			);
 			return result ?? {};
 		} catch (error) {
 			if (error instanceof CDPError) {
@@ -259,8 +268,28 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 			return;
 		}
 		this._isDisposed = true;
-		this._onClose.fire();
-		super.dispose();
+		const errors: unknown[] = [];
+		try {
+			this.operationCancellation.cancel();
+		} catch (error) {
+			errors.push(error);
+		}
+		try {
+			this._onClose.fire();
+		} catch (error) {
+			errors.push(error);
+		}
+		try {
+			super.dispose();
+		} catch (error) {
+			errors.push(error);
+		}
+		if (errors.length === 1) {
+			throw errors[0];
+		}
+		if (errors.length > 1) {
+			throw new AggregateError(errors, `Failed to dispose CDP Browser proxy ${this.sessionId}.`);
+		}
 	}
 
 	// #endregion

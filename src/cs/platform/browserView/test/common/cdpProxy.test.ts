@@ -28,6 +28,7 @@ class TestConnection extends Disposable implements ICDPConnection {
 	readonly onClose = this._onClose.event;
 
 	readonly commands: Array<{ method: string; params: unknown }> = [];
+	commandBarrier: Promise<void> | undefined;
 	private disposed = false;
 
 	constructor(
@@ -44,6 +45,7 @@ class TestConnection extends Disposable implements ICDPConnection {
 
 	async sendCommand(method: string, params?: unknown): Promise<unknown> {
 		this.commands.push({ method, params });
+		await this.commandBarrier;
 		return { acknowledged: true };
 	}
 
@@ -266,6 +268,30 @@ test('CDP browser proxy waits for auto-attachment while registering a target', a
 		releaseAttachment?.();
 		proxy.dispose();
 	}
+});
+
+test('CDP browser proxy interrupts a pending session command when disposed', async () => {
+	const browser = new TestBrowserTarget();
+	const proxy = new CDPBrowserProxy(browser);
+	const page = createPageTarget();
+	await proxy.registerTarget(page);
+	const connection = await page.attach() as TestConnection;
+	connection.commandBarrier = new Promise<void>(() => {});
+	let completed = false;
+	const sending = proxy.sendMessage({
+		id: 1,
+		method: 'Runtime.evaluate',
+		params: { expression: 'new Promise(() => {})', awaitPromise: true },
+		sessionId: connection.sessionId,
+	}).then(() => {
+		completed = true;
+	});
+
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(completed, false);
+	proxy.dispose();
+	await sending;
+	assert.equal(completed, true);
 });
 
 test('Target.createTarget waits for auto-attachment before responding', async () => {

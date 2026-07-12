@@ -399,14 +399,19 @@ export class BrowserViewGroup extends Disposable implements ICDPBrowserTarget, I
 	destroy(): Promise<void> {
 		if (!this.destroyPromise) {
 			this.destroying = true;
-			this.destroyPromise = this.destroyAfterOperations([...this.activeOperations]);
+			const errors: unknown[] = [];
+			try {
+				this.debugger.dispose();
+			} catch (error) {
+				errors.push(error);
+			}
+			this.destroyPromise = this.destroyAfterOperations([...this.activeOperations], errors);
 		}
 		return this.destroyPromise;
 	}
 
-	private async destroyAfterOperations(operations: readonly Promise<unknown>[]): Promise<void> {
+	private async destroyAfterOperations(operations: readonly Promise<unknown>[], errors: unknown[]): Promise<void> {
 		await Promise.allSettled(operations);
-		const errors: unknown[] = [];
 		for (const viewId of [...this.views.keys()]) {
 			try {
 				await this.removeViewInternal(viewId);
