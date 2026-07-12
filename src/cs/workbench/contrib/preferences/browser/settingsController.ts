@@ -536,15 +536,16 @@ export class SettingsController {
     }
 
     const locale = this.localeService.getLocale();
-    const ui = this.getUi();
     try {
       await this.settingsModel.saveSettings({
         ...this.getSettingsModelContext(),
         locale,
       });
+      const ui = this.getUi();
       this.notificationService.info(ui.toastSettingsSaved);
       return true;
     } catch (saveError) {
+      const ui = this.getUi();
       const localizedError = localizeSettingsError(ui, saveError);
       this.notificationService.error(
         formatLocaleMessage(ui.toastSaveSettingsFailed, {
@@ -557,8 +558,8 @@ export class SettingsController {
 
   readonly handleTestLlmConnection = async () => {
     const desktopRuntime = this.nativeHostService.canInvoke();
-    const ui = this.getUi();
     if (!desktopRuntime) {
+      const ui = this.getUi();
       this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
@@ -567,6 +568,7 @@ export class SettingsController {
       const result = await this.settingsModel.testLlmConnection(
         this.getSettingsModelContext(),
       );
+      const ui = this.getUi();
       this.notificationService.info(
         formatLocaleMessage(ui.toastLlmConnectionSucceeded, {
           provider: result.provider,
@@ -574,6 +576,7 @@ export class SettingsController {
         }),
       );
     } catch (testError) {
+      const ui = this.getUi();
       const localizedError = localizeSettingsError(ui, testError);
       this.notificationService.error(
         formatLocaleMessage(ui.toastLlmConnectionFailed, {
@@ -585,8 +588,8 @@ export class SettingsController {
 
   readonly handleTestRagConnection = async () => {
     const desktopRuntime = this.nativeHostService.canInvoke();
-    const ui = this.getUi();
     if (!desktopRuntime) {
+      const ui = this.getUi();
       this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
@@ -595,6 +598,7 @@ export class SettingsController {
       const result = await this.settingsModel.testRagConnection(
         this.getSettingsModelContext(),
       );
+      const ui = this.getUi();
       this.notificationService.info(
         formatLocaleMessage(ui.toastRagConnectionSucceeded, {
           provider: result.provider,
@@ -603,6 +607,7 @@ export class SettingsController {
         }),
       );
     } catch (testError) {
+      const ui = this.getUi();
       const localizedError = localizeSettingsError(ui, testError);
       this.notificationService.error(
         formatLocaleMessage(ui.toastRagConnectionFailed, {
@@ -614,8 +619,8 @@ export class SettingsController {
 
   readonly handleTestTranslationConnection = async () => {
     const desktopRuntime = this.nativeHostService.canInvoke();
-    const ui = this.getUi();
     if (!desktopRuntime) {
+      const ui = this.getUi();
       this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
@@ -624,12 +629,14 @@ export class SettingsController {
       const result = await this.settingsModel.testTranslationConnection(
         this.getSettingsModelContext(),
       );
+      const ui = this.getUi();
       this.notificationService.info(
         formatLocaleMessage(ui.toastTranslationConnectionSucceeded, {
           provider: result.provider,
         }),
       );
     } catch (testError) {
+      const ui = this.getUi();
       const localizedError = localizeSettingsError(ui, testError);
       this.notificationService.error(
         formatLocaleMessage(ui.toastTranslationConnectionFailed, {
@@ -641,8 +648,8 @@ export class SettingsController {
 
   readonly handleFetchTranslationModels = async () => {
     const desktopRuntime = this.nativeHostService.canInvoke();
-    const ui = this.getUi();
     if (!desktopRuntime) {
+      const ui = this.getUi();
       this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
@@ -652,12 +659,14 @@ export class SettingsController {
         this.getSettingsModelContext(),
       );
       this.scheduleImmediateAutoSave();
+      const ui = this.getUi();
       this.notificationService.info(
         formatLocaleMessage(ui.toastTranslationModelsLoaded, {
           count: String(result.models.length),
         }),
       );
     } catch (testError) {
+      const ui = this.getUi();
       const localizedError = localizeSettingsError(ui, testError);
       this.notificationService.error(
         formatLocaleMessage(ui.toastTranslationModelsFailed, {

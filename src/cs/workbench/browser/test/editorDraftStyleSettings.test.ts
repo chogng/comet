@@ -10,10 +10,12 @@ import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyle
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
+import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';
 import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import type { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import { defaultBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
+import { locales } from 'language/locales';
 
 async function flushMicrotasks() {
   await Promise.resolve();
@@ -34,6 +36,46 @@ function createSettingsController(invokeDesktop: ElectronInvoke): SettingsContro
 		new WorkbenchLanguageService(),
 	);
 }
+
+test('SettingsController uses the current locale for async completion notifications', async () => {
+	let resolveTest!: (result: { provider: string; model: string }) => void;
+	const testResult = new Promise<{ provider: string; model: string }>((resolve) => {
+		resolveTest = resolve;
+	});
+	const invokeDesktop = (async (command: string) => {
+		assert.equal(command, 'test_llm_connection');
+		return testResult;
+	}) as ElectronInvoke;
+	let locale: 'en' | 'zh' = 'en';
+	const notifications: string[] = [];
+	const controller = new SettingsController(
+		new SettingsModel(),
+		{
+			canInvoke: () => true,
+			invoke: invokeDesktop,
+		} as INativeHostService,
+		{
+			info: (message: string) => notifications.push(message),
+		} as never,
+		{
+			getLocale: () => locale,
+		} as IWorkbenchLocaleService,
+		new WorkbenchLanguageService(),
+	);
+
+	const operation = controller.handleTestLlmConnection();
+	locale = 'zh';
+	resolveTest({ provider: 'provider.test', model: 'model.test' });
+	await operation;
+
+	assert.deepEqual(notifications, [
+		formatLocaleMessage(locales.zh.toastLlmConnectionSucceeded, {
+			provider: 'provider.test',
+			model: 'model.test',
+		}),
+	]);
+	controller.dispose();
+});
 
 test('SettingsController syncs editorDraftStyleService through load and autosave', async () => {
   editorDraftStyleService.resetToCatalog();
