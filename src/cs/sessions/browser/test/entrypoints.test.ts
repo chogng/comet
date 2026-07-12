@@ -151,3 +151,27 @@ test('Sessions host directly composes Parts without a state-forwarding wrapper',
 	assert.match(sidebar, /@IWorkbenchLocaleService private readonly localeService/);
 	assert.match(sidebar, /getLayoutState\(\)\.isSidebarVisible/);
 });
+
+test('Settings controller is a DI service without mutable shell context', () => {
+	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
+	const workbenchCommon = readSource('src/cs/workbench/workbench.common.main.ts');
+	assert.match(
+		sessionsWorkbench,
+		/@ISettingsController private readonly settingsController: SettingsController/,
+	);
+	assert.doesNotMatch(
+		sessionsWorkbench,
+		/getWorkbenchSettingsController|let settingsController|settingsControllerInstance\.setContext|this\.settingsController\.start\(/,
+	);
+	assert.match(workbenchCommon, /preferences\/browser\/settings\.contribution/);
+
+	const settingsController = readSource(
+		'src/cs/workbench/contrib/preferences/browser/settingsController.ts',
+	);
+	assert.doesNotMatch(
+		settingsController,
+		/SettingsControllerContext|CreateSettingsControllerParams|readonly setContext/,
+	);
+	assert.match(settingsController, /@INativeHostService private readonly nativeHostService/);
+	assert.match(settingsController, /registerSingleton\(\s*ISettingsController,/);
+});

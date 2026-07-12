@@ -4,9 +4,6 @@ import type {
   LlmProviderId,
   TranslationProviderId,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type {
-  ElectronInvoke,
-} from 'cs/base/parts/sandbox/common/electronTypes';
 import {
   areEditorDraftStyleSettingsEqual,
   cloneEditorDraftStyleSettings,
@@ -14,7 +11,6 @@ import {
   type EditorDraftDefaultBodyStyle,
 } from 'cs/base/common/editorDraftStyle';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
-import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import {
   parseAppErrorData,
@@ -28,22 +24,12 @@ import {
   SettingsModel,
 } from 'cs/workbench/services/settings/settingsModel';
 import type { SettingsModelSnapshot } from 'cs/workbench/services/settings/settingsModel';
-import type { INotificationService } from 'cs/platform/notification/common/notification';
-
-export type SettingsControllerContext = {
-  desktopRuntime: boolean;
-  invokeDesktop: ElectronInvoke;
-  notificationService: INotificationService;
-  ui: LocaleMessages;
-  locale: Locale;
-};
-
-type SettingsModelContext = {
-  desktopRuntime: boolean;
-  invokeDesktop: ElectronInvoke;
-};
-
-type CreateSettingsControllerParams = SettingsControllerContext;
+import { INotificationService } from 'cs/platform/notification/common/notification';
+import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
+import { INativeHostService } from 'cs/platform/native/common/native';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 
 const immediateAutoSaveDelayMs = 0;
 const debouncedAutoSaveDelayMs = 650;
@@ -53,7 +39,8 @@ function localizeSettingsError(ui: LocaleMessages, error: unknown) {
 }
 
 export class SettingsController {
-  private context: SettingsControllerContext;
+  declare readonly _serviceBrand: undefined;
+
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private disposeEditorDraftStyleSubscription: (() => void) | null = null;
   private isApplyingLoadedEditorDraftStyle = false;
@@ -62,21 +49,18 @@ export class SettingsController {
   private loadSequence = 0;
 
   constructor(
-    context: CreateSettingsControllerParams,
     @ISettingsModel private readonly settingsModel: SettingsModel,
-  ) {
-    this.context = context;
-  }
+    @INativeHostService private readonly nativeHostService: INativeHostService,
+    @INotificationService private readonly notificationService: INotificationService,
+    @IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+    @IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+  ) {}
 
   readonly subscribe = (listener: () => void) =>
     this.settingsModel.subscribe(listener);
 
   readonly getSnapshot = (): SettingsModelSnapshot =>
     this.settingsModel.getSnapshot();
-
-  readonly setContext = (context: SettingsControllerContext) => {
-    this.context = context;
-  };
 
   readonly start = () => {
     if (this.started || this.disposed) {
@@ -150,9 +134,10 @@ export class SettingsController {
         this.scheduleImmediateAutoSave();
       }
     } catch (pickError) {
-      const localizedError = localizeSettingsError(this.context.ui, pickError);
-      this.context.notificationService.error(
-        formatLocaleMessage(this.context.ui.toastChangeConfigLocationFailed, {
+      const ui = this.getUi();
+      const localizedError = localizeSettingsError(ui, pickError);
+      this.notificationService.error(
+        formatLocaleMessage(ui.toastChangeConfigLocationFailed, {
           error: localizedError,
         }),
       );
@@ -550,17 +535,18 @@ export class SettingsController {
       this.autoSaveTimer = null;
     }
 
-    const { locale, ui } = this.context;
+    const locale = this.localeService.getLocale();
+    const ui = this.getUi();
     try {
       await this.settingsModel.saveSettings({
         ...this.getSettingsModelContext(),
         locale,
       });
-      this.context.notificationService.info(ui.toastSettingsSaved);
+      this.notificationService.info(ui.toastSettingsSaved);
       return true;
     } catch (saveError) {
       const localizedError = localizeSettingsError(ui, saveError);
-      this.context.notificationService.error(
+      this.notificationService.error(
         formatLocaleMessage(ui.toastSaveSettingsFailed, {
           error: localizedError,
         }),
@@ -570,9 +556,10 @@ export class SettingsController {
   };
 
   readonly handleTestLlmConnection = async () => {
-    const { desktopRuntime, ui } = this.context;
+    const desktopRuntime = this.nativeHostService.canInvoke();
+    const ui = this.getUi();
     if (!desktopRuntime) {
-      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
+      this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -580,7 +567,7 @@ export class SettingsController {
       const result = await this.settingsModel.testLlmConnection(
         this.getSettingsModelContext(),
       );
-      this.context.notificationService.info(
+      this.notificationService.info(
         formatLocaleMessage(ui.toastLlmConnectionSucceeded, {
           provider: result.provider,
           model: result.model,
@@ -588,7 +575,7 @@ export class SettingsController {
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      this.context.notificationService.error(
+      this.notificationService.error(
         formatLocaleMessage(ui.toastLlmConnectionFailed, {
           error: localizedError,
         }),
@@ -597,9 +584,10 @@ export class SettingsController {
   };
 
   readonly handleTestRagConnection = async () => {
-    const { desktopRuntime, ui } = this.context;
+    const desktopRuntime = this.nativeHostService.canInvoke();
+    const ui = this.getUi();
     if (!desktopRuntime) {
-      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
+      this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -607,7 +595,7 @@ export class SettingsController {
       const result = await this.settingsModel.testRagConnection(
         this.getSettingsModelContext(),
       );
-      this.context.notificationService.info(
+      this.notificationService.info(
         formatLocaleMessage(ui.toastRagConnectionSucceeded, {
           provider: result.provider,
           embeddingModel: result.embeddingModel,
@@ -616,7 +604,7 @@ export class SettingsController {
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      this.context.notificationService.error(
+      this.notificationService.error(
         formatLocaleMessage(ui.toastRagConnectionFailed, {
           error: localizedError,
         }),
@@ -625,9 +613,10 @@ export class SettingsController {
   };
 
   readonly handleTestTranslationConnection = async () => {
-    const { desktopRuntime, ui } = this.context;
+    const desktopRuntime = this.nativeHostService.canInvoke();
+    const ui = this.getUi();
     if (!desktopRuntime) {
-      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
+      this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -635,14 +624,14 @@ export class SettingsController {
       const result = await this.settingsModel.testTranslationConnection(
         this.getSettingsModelContext(),
       );
-      this.context.notificationService.info(
+      this.notificationService.info(
         formatLocaleMessage(ui.toastTranslationConnectionSucceeded, {
           provider: result.provider,
         }),
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      this.context.notificationService.error(
+      this.notificationService.error(
         formatLocaleMessage(ui.toastTranslationConnectionFailed, {
           error: localizedError,
         }),
@@ -651,9 +640,10 @@ export class SettingsController {
   };
 
   readonly handleFetchTranslationModels = async () => {
-    const { desktopRuntime, ui } = this.context;
+    const desktopRuntime = this.nativeHostService.canInvoke();
+    const ui = this.getUi();
     if (!desktopRuntime) {
-      this.context.notificationService.info(ui.toastDesktopLlmTestOnly);
+      this.notificationService.info(ui.toastDesktopLlmTestOnly);
       return;
     }
 
@@ -662,14 +652,14 @@ export class SettingsController {
         this.getSettingsModelContext(),
       );
       this.scheduleImmediateAutoSave();
-      this.context.notificationService.info(
+      this.notificationService.info(
         formatLocaleMessage(ui.toastTranslationModelsLoaded, {
           count: String(result.models.length),
         }),
       );
     } catch (testError) {
       const localizedError = localizeSettingsError(ui, testError);
-      this.context.notificationService.error(
+      this.notificationService.error(
         formatLocaleMessage(ui.toastTranslationModelsFailed, {
           error: localizedError,
         }),
@@ -677,11 +667,15 @@ export class SettingsController {
     }
   };
 
-  private getSettingsModelContext(): SettingsModelContext {
+  private getSettingsModelContext() {
     return {
-      desktopRuntime: this.context.desktopRuntime,
-      invokeDesktop: this.context.invokeDesktop,
+      desktopRuntime: this.nativeHostService.canInvoke(),
+      invokeDesktop: this.nativeHostService.invoke,
     };
+  }
+
+  private getUi(): LocaleMessages {
+    return this.languageService.getLocaleMessages(this.localeService.getLocale());
   }
 
   private loadSettings = async () => {
@@ -707,9 +701,9 @@ export class SettingsController {
         return;
       }
 
-      const { ui } = this.context;
+      const ui = this.getUi();
       const localizedError = localizeSettingsError(ui, loadError);
-      this.context.notificationService.error(
+      this.notificationService.error(
         formatLocaleMessage(ui.toastLoadSettingsFailed, { error: localizedError }),
       );
     }
@@ -752,7 +746,7 @@ export class SettingsController {
   }
 
   private flushAutoSave = () => {
-    const { locale } = this.context;
+    const locale = this.localeService.getLocale();
 
     void this.settingsModel
       .saveSettingsDraft({
@@ -783,3 +777,11 @@ export class SettingsController {
     this.scheduleAutoSave(debouncedAutoSaveDelayMs);
   }
 }
+
+export const ISettingsController = createDecorator<SettingsController>('settingsController');
+
+registerSingleton(
+  ISettingsController,
+  SettingsController,
+  InstantiationType.Delayed,
+);

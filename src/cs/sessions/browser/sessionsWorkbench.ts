@@ -29,8 +29,8 @@ import { SessionsLayoutView } from 'cs/sessions/browser/layout';
 import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
 import { SessionsLayoutCommandIds } from 'cs/sessions/common/layoutCommands';
 import {
+	ISettingsController,
 	SettingsController,
-	type SettingsControllerContext,
 } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
@@ -128,8 +128,6 @@ import {
 } from 'cs/workbench/common/contributions';
 
 export type WorkbenchServicesSyncParams = {
-	settingsController: SettingsController;
-	settingsContext: SettingsControllerContext;
 	libraryModel: LibraryModel;
 	libraryContext: LibraryModelContext;
 	articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
@@ -140,7 +138,6 @@ export type WorkbenchServicesSyncParams = {
 
 type DesktopInvokeArgs = Record<string, unknown> | undefined;
 
-let settingsController: SettingsController | null = null;
 let libraryModel: LibraryModel | null = null;
 let articleSummaryTranslationExportController: ArticleSummaryTranslationExportController | null = null;
 let documentActionsController: DocumentActionsController | null = null;
@@ -191,6 +188,7 @@ class SessionsWorkbenchHost {
 		@IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@ISettingsController private readonly settingsController: SettingsController,
 		@IChatServiceDecorator private readonly chatService: IChatService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@ISessionsPartService private readonly sessionsPart: SessionsPart,
@@ -588,16 +586,7 @@ class SessionsWorkbenchHost {
 			return nativeHost.invoke(command as never, args as never) as Promise<T>;
 		};
 
-		const settingsControllerInstance = getWorkbenchSettingsController(
-			this.instantiationService,
-			{
-				desktopRuntime,
-				invokeDesktop,
-				notificationService: this.notificationService,
-				ui,
-				locale,
-			},
-		);
+		const settingsControllerInstance = this.settingsController;
 		const settingsSnapshot = settingsControllerInstance.getSnapshot();
 		if (
 			this.applyStartupLayoutPreferenceIfNeeded({
@@ -792,14 +781,6 @@ class SessionsWorkbenchHost {
 		});
 
 		syncWorkbenchServicesContext({
-			settingsController: settingsControllerInstance,
-			settingsContext: {
-				desktopRuntime,
-				invokeDesktop,
-				notificationService: this.notificationService,
-				ui,
-				locale,
-			},
 			libraryModel: libraryModelInstance,
 			libraryContext: {
 				desktopRuntime,
@@ -1113,9 +1094,6 @@ class SessionsWorkbenchApplication {
 }
 
 export function disposeSessionsWorkbenchServices() {
-	settingsController?.dispose();
-	settingsController = null;
-
 	libraryModel?.dispose();
 	libraryModel = null;
 
@@ -1125,20 +1103,6 @@ export function disposeSessionsWorkbenchServices() {
 	documentActionsController?.dispose();
 	documentActionsController = null;
 
-}
-
-export function getWorkbenchSettingsController(
-	instantiationService: IInstantiationService,
-	context: SettingsControllerContext,
-) {
-	if (!settingsController) {
-		settingsController = instantiationService.createInstance(
-			SettingsController,
-			context,
-		);
-		settingsController.start();
-	}
-	return settingsController;
 }
 
 export function getWorkbenchLibraryModel(context: LibraryModelContext) {
@@ -1167,8 +1131,6 @@ export function getWorkbenchDocumentActionsController(
 }
 
 export function syncWorkbenchServicesContext({
-	settingsController: settingsControllerInstance,
-	settingsContext,
 	libraryModel: libraryModelInstance,
 	libraryContext,
 	articleSummaryTranslationExportController:
@@ -1177,7 +1139,6 @@ export function syncWorkbenchServicesContext({
 	documentActionsController: documentActionsControllerInstance,
 	documentActionsContext,
 }: WorkbenchServicesSyncParams) {
-	settingsControllerInstance.setContext(settingsContext);
 	libraryModelInstance.setContext(libraryContext);
 	articleSummaryTranslationExportControllerInstance.setContext(
 		articleSummaryTranslationExportContext,

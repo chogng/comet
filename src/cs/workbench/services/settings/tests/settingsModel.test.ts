@@ -8,54 +8,83 @@ import test from 'node:test';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
-import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
+import { INativeHostService } from 'cs/platform/native/common/native';
 import {
+	INotificationService,
+	NoOpNotificationService,
+} from 'cs/platform/notification/common/notification';
+import {
+	ISettingsController,
 	SettingsController,
 } from 'cs/workbench/contrib/preferences/browser/settingsController';
+import {
+	IWorkbenchLanguageService,
+	WorkbenchLanguageService,
+} from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import {
 	ISettingsModel,
 	SettingsModel,
 } from 'cs/workbench/services/settings/settingsModel';
-import { locales } from 'language/locales';
 
 class SettingsModelConsumer {
 	constructor(@ISettingsModel readonly settingsModel: SettingsModel) {}
 }
 
-test('SettingsModel is one delayed DI owner shared by SettingsController and consumers', () => {
-	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === ISettingsModel);
-	assert.equal(registrations.length, 1);
+class SettingsControllerConsumer {
+	constructor(@ISettingsController readonly settingsController: SettingsController) {}
+}
 
-	const descriptor = registrations[0][1];
-	assert.equal(descriptor.supportsDelayedInstantiation, true);
+test('Settings model and controller are delayed DI owners shared by consumers', () => {
+	const registrations = getSingletonServiceDescriptors();
+	const settingsModelRegistrations = registrations.filter(([id]) => id === ISettingsModel);
+	const settingsControllerRegistrations = registrations.filter(([id]) => id === ISettingsController);
+	assert.equal(settingsModelRegistrations.length, 1);
+	assert.equal(settingsControllerRegistrations.length, 1);
 
-	const services = new ServiceCollection([ISettingsModel, descriptor]);
-	const instantiationService = new InstantiationService(services, true);
-	let controller: SettingsController | undefined;
+	const settingsModelDescriptor = settingsModelRegistrations[0][1];
+	const settingsControllerDescriptor = settingsControllerRegistrations[0][1];
+	assert.equal(settingsModelDescriptor.supportsDelayedInstantiation, true);
+	assert.equal(settingsControllerDescriptor.supportsDelayedInstantiation, true);
 
-	try {
-		assert.equal(services.get(ISettingsModel), descriptor);
-
-		controller = instantiationService.createInstance(SettingsController, {
-			desktopRuntime: false,
-			invokeDesktop: async () => {
+	const services = new ServiceCollection(
+		[ISettingsModel, settingsModelDescriptor],
+		[ISettingsController, settingsControllerDescriptor],
+		[INativeHostService, {
+			canInvoke: () => false,
+			invoke: async () => {
 				throw new Error('Desktop invocation is unavailable in this test.');
 			},
-			notificationService: new NoOpNotificationService(),
-			ui: locales.en,
-			locale: 'en',
-		});
+		} as unknown as INativeHostService],
+		[INotificationService, new NoOpNotificationService()],
+		[IWorkbenchLocaleService, {
+			getLocale: () => 'en',
+		} as never],
+		[IWorkbenchLanguageService, new WorkbenchLanguageService()],
+	);
+	const instantiationService = new InstantiationService(services, true);
+
+	try {
+		assert.equal(services.get(ISettingsModel), settingsModelDescriptor);
+		assert.equal(services.get(ISettingsController), settingsControllerDescriptor);
+
 		const firstConsumer = instantiationService.createInstance(SettingsModelConsumer);
 		const secondConsumer = instantiationService.createInstance(SettingsModelConsumer);
+		const firstControllerConsumer = instantiationService.createInstance(SettingsControllerConsumer);
+		const secondControllerConsumer = instantiationService.createInstance(SettingsControllerConsumer);
 
 		assert(firstConsumer.settingsModel instanceof SettingsModel);
 		assert.equal(firstConsumer.settingsModel, secondConsumer.settingsModel);
+		assert.equal(
+			firstControllerConsumer.settingsController,
+			secondControllerConsumer.settingsController,
+		);
 		assert.equal(services.get(ISettingsModel), firstConsumer.settingsModel);
+		assert.equal(services.get(ISettingsController), firstControllerConsumer.settingsController);
 
 		firstConsumer.settingsModel.setUseMica(false);
-		assert.equal(controller.getSnapshot().useMica, false);
+		assert.equal(firstControllerConsumer.settingsController.getSnapshot().useMica, false);
 	} finally {
-		controller?.dispose();
 		instantiationService.dispose();
 	}
 });

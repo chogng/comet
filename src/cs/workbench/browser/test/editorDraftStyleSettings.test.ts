@@ -7,15 +7,32 @@ import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import { editorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
+import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import type { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
-import { locales } from 'language/locales';
 import { defaultBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
 
 async function flushMicrotasks() {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function createSettingsController(invokeDesktop: ElectronInvoke): SettingsController {
+	return new SettingsController(
+		new SettingsModel(),
+		{
+			canInvoke: () => true,
+			invoke: invokeDesktop,
+		} as INativeHostService,
+		new NoOpNotificationService(),
+		{
+			getLocale: () => 'en',
+		} as IWorkbenchLocaleService,
+		new WorkbenchLanguageService(),
+	);
 }
 
 test('SettingsController syncs editorDraftStyleService through load and autosave', async () => {
@@ -55,13 +72,7 @@ test('SettingsController syncs editorDraftStyleService through load and autosave
     throw new Error(`Unexpected desktop command in editor draft style settings test: ${command}`);
   }) as ElectronInvoke;
 
-  const controller = new SettingsController({
-    desktopRuntime: true,
-    invokeDesktop,
-    notificationService: new NoOpNotificationService(),
-    ui: locales.en,
-    locale: 'en',
-  }, new SettingsModel());
+  const controller = createSettingsController(invokeDesktop);
 
   try {
     controller.start();
@@ -173,13 +184,7 @@ test('SettingsController editorDraft style handlers update service snapshot and 
     throw new Error(`Unexpected desktop command in editor draft style settings test: ${command}`);
   }) as ElectronInvoke;
 
-  const controller = new SettingsController({
-    desktopRuntime: true,
-    invokeDesktop,
-    notificationService: new NoOpNotificationService(),
-    ui: locales.en,
-    locale: 'en',
-  }, new SettingsModel());
+  const controller = createSettingsController(invokeDesktop);
 
   try {
     const runtimePresetsBeforeStart = editorDraftStyleService.getSnapshot();
@@ -311,13 +316,7 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
     throw new Error(`Unexpected desktop command in browser tab keep-alive test: ${command}`);
   }) as ElectronInvoke;
 
-  const controller = new SettingsController({
-    desktopRuntime: true,
-    invokeDesktop,
-    notificationService: new NoOpNotificationService(),
-    ui: locales.en,
-    locale: 'en',
-  }, new SettingsModel());
+  const controller = createSettingsController(invokeDesktop);
 
   try {
     controller.start();
