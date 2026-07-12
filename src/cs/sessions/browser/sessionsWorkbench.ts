@@ -51,10 +51,17 @@ import {
 	createSettingsPartProps,
 } from 'cs/workbench/contrib/preferences/browser/settingsEditor';
 
-import type { SessionSidebarProps as SidebarProps } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
+import { SessionSidebarPartView } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import { SessionsEditorParts } from 'cs/sessions/browser/parts/editor/editorParts';
-import { SessionWorkbenchContentPartViews } from 'cs/sessions/browser/workbenchContentPartViews';
-import { ISessionsService } from 'cs/sessions/services/sessions/browser/sessionsService';
+import { SessionsPart } from 'cs/sessions/browser/parts/sessions/sessionsPart';
+import { ISessionsPartService } from 'cs/sessions/services/sessions/browser/sessionsPartService';
+import {
+	ISessionsService,
+	OpenNewSessionKind,
+} from 'cs/sessions/services/sessions/browser/sessionsService';
+import { ISessionsManagementService } from 'cs/sessions/services/sessions/common/sessionsManagement';
+import { SessionWorkspaceKind } from 'cs/sessions/services/sessions/common/session';
+import { isNewSessionSlot } from 'cs/sessions/services/sessions/common/sessionsView';
 
 import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
@@ -159,7 +166,7 @@ class SessionsWorkbenchHost {
 	private readonly titlebarPart: TitlebarPart;
 	private readonly notificationsDisposables = new DisposableStore();
 	private sessionsLayoutView: SessionsLayoutView | null = null;
-	private workbenchContentPartViews: SessionWorkbenchContentPartViews | null = null;
+	private sidebarPart: SessionSidebarPartView | null = null;
 	private readonly collapsedEditorTitlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
 	private readonly sidebarFooterActionsView: SidebarFooterActionsView;
 	private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
@@ -186,6 +193,8 @@ class SessionsWorkbenchHost {
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IChatServiceDecorator private readonly chatService: IChatService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
+		@ISessionsPartService private readonly sessionsPart: SessionsPart,
+		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
 		@ISessionsLayoutService private readonly sessionsLayoutService: ISessionsLayoutService,
 		@IEditorGroupsService private readonly editorGroupsService: SessionsEditorParts,
 		@IEditorService private readonly editorService: IEditorService,
@@ -252,6 +261,8 @@ class SessionsWorkbenchHost {
 	}
 
 	start() {
+		this.editorGroupsService.mainPart.initialize();
+		this.openInitialDraftIfUnambiguous();
 		this.globalDisposables.push(
 			localeService.subscribe(this.requestRender),
 			this.sessionsLayoutService.onDidChangeLayoutState(this.requestRender),
@@ -279,8 +290,8 @@ class SessionsWorkbenchHost {
 
 		this.sessionsLayoutView?.dispose();
 		this.sessionsLayoutView = null;
-		this.workbenchContentPartViews?.dispose();
-		this.workbenchContentPartViews = null;
+		this.sidebarPart?.dispose();
+		this.sidebarPart = null;
 		this.collapsedEditorTitlebarActionsView.dispose();
 		this.sidebarFooterActionsView.dispose();
 		this.settingsView?.dispose();
@@ -435,9 +446,32 @@ class SessionsWorkbenchHost {
 		this.requestRender();
 	};
 
+	private openInitialDraftIfUnambiguous(): void {
+		if (this.sessionsManagementService.draftSession.get()
+			|| this.sessionsManagementService.getSessions().length > 0
+			|| !this.sessionsService.visibleSessions.get().some(isNewSessionSlot)) {
+			return;
+		}
+
+		const sessionTypes = this.sessionsManagementService.sessionTypes.get();
+		if (sessionTypes.length !== 1 || !sessionTypes[0].sessionType.supportsWorkspaceLess) {
+			return;
+		}
+
+		const [{ providerId, sessionType }] = sessionTypes;
+		this.sessionsService.openNewSession({
+			kind: OpenNewSessionKind.Draft,
+			providerId,
+			draft: {
+				sessionType: sessionType.id,
+				workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
+			},
+			preserveFocus: true,
+		});
+	}
+
 	private renderWorkbenchContentPage(props: {
 		isLayoutEdgeSnappingEnabled: boolean;
-		sidebarProps: SidebarProps;
 		sidebarFooterActionsProps: ReturnType<
 			typeof createSidebarFooterTitlebarActionsProps
 		>;
@@ -449,35 +483,36 @@ class SessionsWorkbenchHost {
 
 		//#region Column titlebar routing
 
-		const partViewProps = {
-			sidebarProps: props.sidebarProps,
-			leadingTitlebarActionsElement:
+		if (!this.sidebarPart) {
+			this.sidebarPart = this.instantiationService.createInstance(
+				SessionSidebarPartView,
 				this.titlebarPart.getLeadingActionsElement(),
-			sidebarFooterActionsElement: this.sidebarFooterActionsView.getElement(),
-			collapsedEditorTitlebarActionsElement:
-				props.collapsedEditorTitlebarActionsElement,
-		};
+				this.sidebarFooterActionsView.getElement(),
+			);
+		}
 
 		//#endregion
 
-		if (!this.workbenchContentPartViews) {
-			this.workbenchContentPartViews = this.instantiationService.createInstance(
-				SessionWorkbenchContentPartViews,
-				partViewProps,
+		const { isEditorCollapsed } = this.sessionsLayoutService.getLayoutState();
+		this.sessionsPart.setTitlebarActions(
+			null,
+			isEditorCollapsed
+				? props.collapsedEditorTitlebarActionsElement
+				: null,
+		);
+
+		if (!this.sessionsLayoutView) {
+			this.sessionsLayoutView = this.instantiationService.createInstance(
+				SessionsLayoutView,
+				props.isLayoutEdgeSnappingEnabled,
+				this.sidebarPart,
+				this.sessionsPart,
+				this.editorGroupsService.mainPart,
 			);
 		} else {
-			this.workbenchContentPartViews.setProps(partViewProps);
-		}
-		if (!this.sessionsLayoutView) {
-			this.sessionsLayoutView = this.instantiationService.createInstance(SessionsLayoutView, {
-				isEdgeSnappingEnabled: props.isLayoutEdgeSnappingEnabled,
-				partViews: this.workbenchContentPartViews,
-			});
-		} else {
-			this.sessionsLayoutView.setProps({
-				isEdgeSnappingEnabled: props.isLayoutEdgeSnappingEnabled,
-				partViews: this.workbenchContentPartViews,
-			});
+			this.sessionsLayoutView.setEdgeSnappingEnabled(
+				props.isLayoutEdgeSnappingEnabled,
+			);
 		}
 
 		const workbenchContentElement = this.sessionsLayoutView.getElement();
@@ -811,18 +846,6 @@ class SessionsWorkbenchHost {
 			documentActionsController: documentActionsControllerInstance,
 		});
 
-		const sidebarProps: SidebarProps = {
-			labels: {
-				homeTitle: ui.sidebarHomeTitle,
-				codeTitle: ui.sidebarCodeTitle,
-				homeNavNewChat: ui.sidebarHomeNavNewChat,
-				homeNavProjects: ui.sidebarHomeNavProjects,
-				homeNavArtifacts: ui.sidebarHomeNavArtifacts,
-				homeNavCustomize: ui.sidebarHomeNavCustomize,
-				recentsTitle: ui.sidebarRecentsTitle,
-			},
-		};
-
 		const titlebarLeadingActionsProps = createTitlebarLeadingActionsProps({
 			ui,
 			isPrimarySidebarVisible: isSidebarVisible,
@@ -1042,7 +1065,6 @@ class SessionsWorkbenchHost {
 
 		this.renderWorkbenchContentPage({
 			isLayoutEdgeSnappingEnabled: isWindowFullscreen,
-			sidebarProps,
 			sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
 				ui,
 				isSettingsActive: this.settingsOverlayVisible,

@@ -119,3 +119,35 @@ test('Lower source layers do not import Sessions and Workbench has no product ho
 		'src/cs/sessions/browser/sessionsWorkbench.ts',
 	]);
 });
+
+test('Sessions host directly composes Parts without a state-forwarding wrapper', () => {
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/sessions/browser/workbenchContentPartViews.ts')),
+		false,
+	);
+
+	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
+	assert.doesNotMatch(
+		sessionsWorkbench,
+		/SessionWorkbenchContentPartViews|workbenchContentPartViews|partViewProps/,
+	);
+	assert.match(sessionsWorkbench, /createInstance\(\s*SessionSidebarPartView,/);
+	assert.match(sessionsWorkbench, /createInstance\(\s*SessionsLayoutView,/);
+	assert.match(
+		sessionsWorkbench,
+		/@ISessionsPartService private readonly sessionsPart: SessionsPart/,
+	);
+	assert.match(sessionsWorkbench, /this\.sessionsPart\.setTitlebarActions\(/);
+
+	const layout = readSource('src/cs/sessions/browser/layout.ts');
+	assert.doesNotMatch(layout, /ISessionsLayoutPartViews|partViews/);
+	assert.match(layout, /private readonly sidebarPart: SessionSidebarPartView/);
+	assert.match(layout, /private readonly sessionsPart: SessionsPart/);
+	assert.match(layout, /private readonly editorPart: SessionsMainEditorPart/);
+
+	const sidebar = readSource('src/cs/sessions/browser/parts/sidebar/sidebarPart.ts');
+	assert.doesNotMatch(sidebar, /SessionSidebar(?:View)?Props|\bisCollapsed\b|setProps\(/);
+	assert.match(sidebar, /@ISessionsLayoutService private readonly layoutService/);
+	assert.match(sidebar, /@IWorkbenchLocaleService private readonly localeService/);
+	assert.match(sidebar, /getLayoutState\(\)\.isSidebarVisible/);
+});

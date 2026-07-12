@@ -6,8 +6,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { Event } from 'cs/base/common/event';
-import { DisposableStore } from 'cs/base/common/lifecycle';
+import { Emitter, Event } from 'cs/base/common/event';
+import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { observableValue } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
@@ -16,6 +16,14 @@ import { ServiceCollection } from 'cs/platform/instantiation/common/serviceColle
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { IQuickInputService } from 'cs/platform/quickinput/common/quickInput';
 import { SessionSidebarPartView } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
+import {
+	ISessionsLayoutService,
+	type ISessionsPartSizes,
+	type SessionsLayoutMode,
+} from 'cs/sessions/services/layout/browser/layoutService';
+import type {
+	ISessionsLayoutState,
+} from 'cs/sessions/services/layout/browser/layoutPolicy';
 import {
 	ISessionsService,
 	OpenNewSessionKind,
@@ -47,6 +55,11 @@ import {
 } from 'cs/sessions/services/sessions/common/sessionsView';
 import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import {
+	IWorkbenchLanguageService,
+	WorkbenchLanguageService,
+} from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import {
 	IWorkbenchSidebarEntryService,
 	WorkbenchSidebarEntryService,
@@ -112,6 +125,65 @@ class TestSessionsService implements ISessionsService {
 	focusSession(): void { throw new Error('Unexpected Session focus.'); }
 }
 
+class TestSessionsLayoutService extends Disposable implements ISessionsLayoutService {
+	declare readonly _serviceBrand: undefined;
+
+	private readonly changeEmitter = this._register(new Emitter<ISessionsLayoutState>());
+	readonly onDidChangeLayoutState = this.changeEmitter.event;
+
+	private state: ISessionsLayoutState = {
+		mode: 'agent',
+		isSidebarVisible: true,
+		sidebarSize: 320,
+		isEditorCollapsed: false,
+		expandedEditorSize: 640,
+	};
+
+	getLayoutState(): ISessionsLayoutState {
+		return this.state;
+	}
+
+	setSidebarVisible(visible: boolean): void {
+		if (this.state.isSidebarVisible === visible) {
+			return;
+		}
+		this.state = { ...this.state, isSidebarVisible: visible };
+		this.changeEmitter.fire(this.state);
+	}
+
+	setViewport(_width: number, _height: number): void {
+		throw new Error('Unexpected viewport change.');
+	}
+
+	applyStartupLayoutMode(_mode: SessionsLayoutMode): boolean {
+		throw new Error('Unexpected startup layout change.');
+	}
+
+	applyLayoutMode(_mode: SessionsLayoutMode): void {
+		throw new Error('Unexpected layout mode change.');
+	}
+
+	setPartSizes(_sizes: ISessionsPartSizes): void {
+		throw new Error('Unexpected Part size change.');
+	}
+
+	setSidebarSize(_size: number): void {
+		throw new Error('Unexpected Sidebar size change.');
+	}
+
+	toggleSidebarVisibility(): void {
+		throw new Error('Unexpected Sidebar visibility toggle.');
+	}
+
+	setEditorCollapsed(_collapsed: boolean, _expandedEditorSize?: number): void {
+		throw new Error('Unexpected Editor collapse change.');
+	}
+
+	toggleEditorCollapsed(_expandedEditorSize?: number): void {
+		throw new Error('Unexpected Editor collapse toggle.');
+	}
+}
+
 function createSession(name: string): { readonly model: ISession; readonly title: ReturnType<typeof observableValue<string>> } {
 	const resource = URI.parse(`test-session:/${name}`);
 	const chatResource = URI.parse(`test-chat:/${name}/main`);
@@ -161,10 +233,11 @@ function createSession(name: string): { readonly model: ISession; readonly title
 	};
 }
 
-test('Session Sidebar routes New Chat and authoritative Recents directly through Sessions services', () => {
+test('Session Sidebar consumes authoritative layout and Sessions services directly', () => {
 	const store = new DisposableStore();
 	const managementService = new TestSessionsManagementService();
 	const sessionsService = new TestSessionsService();
+	const layoutService = store.add(new TestSessionsLayoutService());
 	managementService.sessionTypes.set([{
 		providerId: 'provider.test',
 		sessionType: {
@@ -178,30 +251,36 @@ test('Session Sidebar routes New Chat and authoritative Recents directly through
 	const instantiationService = store.add(new InstantiationService(new ServiceCollection(
 		[ISessionsManagementService, managementService],
 		[ISessionsService, sessionsService],
+		[ISessionsLayoutService, layoutService],
 		[IWorkbenchSidebarEntryService, sidebarEntryService],
 		[IQuickInputService, { pick: async () => undefined } as never],
 		[INotificationService, { error: () => {} } as never],
+		[IWorkbenchLocaleService, {
+			getLocale: () => 'en',
+			subscribe: () => () => {},
+		} as never],
+		[IWorkbenchLanguageService, new WorkbenchLanguageService()],
 	), true));
 	const first = createSession('first');
 	const second = createSession('second');
 	managementService.sessions.set([second.model, first.model], undefined);
-	const part = store.add(instantiationService.createInstance(SessionSidebarPartView, {
-		labels: {
-			homeTitle: 'Home',
-			codeTitle: 'Code',
-			homeNavNewChat: 'New Chat',
-			homeNavProjects: 'Projects',
-			homeNavArtifacts: 'Artifacts',
-			homeNavCustomize: 'Customize',
-			recentsTitle: 'Recents',
-		},
-		isCollapsed: false,
-	}));
+	const part = store.add(instantiationService.createInstance(
+		SessionSidebarPartView,
+		null,
+		null,
+	));
 
 	try {
 		const element = part.getElement();
-		const newChatButton = [...element.querySelectorAll<HTMLButtonElement>('.comet-sidebar-home-nav-item')]
-			.find(button => button.textContent === 'New Chat');
+		assert.equal(element.classList.contains('comet-is-collapsed'), false);
+		layoutService.setSidebarVisible(false);
+		assert.equal(element.classList.contains('comet-is-collapsed'), true);
+		layoutService.setSidebarVisible(true);
+		assert.equal(element.classList.contains('comet-is-collapsed'), false);
+
+		const [newChatButton] = element.querySelectorAll<HTMLButtonElement>(
+			'.comet-sidebar-home-nav-item',
+		);
 		assert.ok(newChatButton);
 		newChatButton.click();
 		assert.deepEqual(sessionsService.openNewSessionOptions, [{

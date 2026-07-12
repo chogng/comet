@@ -7,7 +7,12 @@ import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { createButtonView } from 'cs/base/browser/ui/button/button';
 import { $, addDisposableListener, EventType } from 'cs/base/browser/dom';
-import { Disposable, DisposableStore, MutableDisposable } from 'cs/base/common/lifecycle';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+} from 'cs/base/common/lifecycle';
 import { autorun } from 'cs/base/common/observable';
 import { localize } from 'cs/nls';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
@@ -19,6 +24,7 @@ import {
 import { registerWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
+import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
 import {
 	ISessionsService,
 	OpenNewSessionKind,
@@ -30,11 +36,13 @@ import {
 import type { ISession } from 'cs/sessions/services/sessions/common/session';
 import { SessionWorkspaceKind } from 'cs/sessions/services/sessions/common/session';
 import { IWorkbenchSidebarEntryService } from 'cs/workbench/services/sidebar/common/sidebarEntryService';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 
 import 'cs/workbench/browser/parts/sidebar/media/sidebar.css';
 import 'cs/sessions/browser/parts/sidebar/media/sidebarPart.css';
 
-export type SessionSidebarLabels = {
+type SessionSidebarLabels = {
 	homeTitle: string;
 	codeTitle: string;
 	homeNavNewChat: string;
@@ -42,16 +50,6 @@ export type SessionSidebarLabels = {
 	homeNavArtifacts: string;
 	homeNavCustomize: string;
 	recentsTitle: string;
-};
-
-export type SessionSidebarProps = {
-	labels: SessionSidebarLabels;
-};
-
-export type SessionSidebarViewProps = SessionSidebarProps & {
-	isCollapsed: boolean;
-	titlebarActionsElement?: HTMLElement | null;
-	footerActionsElement?: HTMLElement | null;
 };
 
 interface IRecentSessionRow {
@@ -67,7 +65,6 @@ interface ISessionTypeQuickPickItem extends IQuickPickItem {
 let panelIdPool = 0;
 
 class SessionSidebar extends Disposable {
-	private props: SessionSidebarViewProps;
 	private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-session-sidebar-root.comet-sidebar-root');
 	private readonly titlebarElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-titlebar');
 	private readonly titlebarActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-titlebar-actions');
@@ -103,17 +100,18 @@ class SessionSidebar extends Disposable {
 	private recentSessionRows: readonly IRecentSessionRow[] = [];
 
 	constructor(
-		props: SessionSidebarViewProps,
+		titlebarActionsElement: HTMLElement | null,
+		footerActionsElement: HTMLElement | null,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
 		@IWorkbenchSidebarEntryService private readonly sidebarEntryService: IWorkbenchSidebarEntryService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@INotificationService private readonly notificationService: INotificationService,
+		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 	) {
 		super();
-		this.props = props;
 		this.tabListElement.setAttribute('role', 'tablist');
-		this.tabListElement.setAttribute('aria-label', props.labels.homeTitle);
 		this.homeTabButton.type = 'button';
 		this.homeTabButton.setAttribute('role', 'tab');
 		this.homeTabButton.classList.add('comet-sidebar-home-tab');
@@ -149,8 +147,11 @@ class SessionSidebar extends Disposable {
 			this.footerElement,
 		);
 		this.element.append(this.contentElement);
+		this.syncTitlebarActions(titlebarActionsElement);
+		this.syncFooterActions(footerActionsElement);
 		this._register(addDisposableListener(this.newChatButton, EventType.CLICK, this.handleNewChatClick));
 		this._register(this.sidebarEntryService.onDidChangeActiveEntry(() => this.syncTabs()));
+		this._register(toDisposable(this.localeService.subscribe(() => this.render())));
 		this._register(autorun(reader => {
 			const activeSessionId = this.sessionsService.activeSession.read(reader)?.sessionId;
 			this.recentSessionRows = this.sessionsManagementService.sessions.read(reader).map(session => ({
@@ -227,28 +228,17 @@ class SessionSidebar extends Disposable {
 		return this.titlebarElement;
 	}
 
-	setProps(props: SessionSidebarViewProps) {
-		this.props = props;
-		this.render();
-	}
-
 	override dispose() {
 		this.element.replaceChildren();
 		super.dispose();
 	}
 
 	private render() {
-		const { labels } = this.props;
-		const isCollapsed = this.props.isCollapsed;
-		this.element.classList.toggle('comet-is-collapsed', isCollapsed);
-		this.contentElement.hidden = isCollapsed;
-		this.footerElement.hidden = isCollapsed;
+		const labels = this.getLabels();
 		this.tabListElement.setAttribute('aria-label', labels.homeTitle);
 		this.codeSection.setAttribute('aria-label', labels.codeTitle);
 		this.renderHomeNav();
 		this.renderRecents();
-		this.syncTitlebarActions(this.props.titlebarActionsElement ?? null);
-		this.syncFooterActions(this.props.footerActionsElement ?? null);
 		this.syncTabs();
 	}
 
@@ -294,7 +284,7 @@ class SessionSidebar extends Disposable {
 			this.contentHostElement.replaceChildren(activeSection);
 		}
 
-		const { labels } = this.props;
+		const labels = this.getLabels();
 		this.renderTabButton(
 			this.homeTabButton,
 			labels.homeTitle,
@@ -320,7 +310,7 @@ class SessionSidebar extends Disposable {
 	}
 
 	private renderHomeNav() {
-		const { labels } = this.props;
+		const labels = this.getLabels();
 		this.homeNavElement.setAttribute('aria-label', labels.homeTitle);
 		this.renderHomeNavigationButton(this.newChatButton, this.newChatLabelElement, labels.homeNavNewChat);
 		this.renderHomeNavigationButton(this.projectsButton, this.projectsLabelElement, labels.homeNavProjects);
@@ -329,7 +319,7 @@ class SessionSidebar extends Disposable {
 	}
 
 	private renderRecents() {
-		const { labels } = this.props;
+		const labels = this.getLabels();
 		this.recentsTitleElement.textContent = labels.recentsTitle;
 		this.recentsElement.setAttribute('aria-label', labels.recentsTitle);
 		const buttons = new DisposableStore();
@@ -384,6 +374,19 @@ class SessionSidebar extends Disposable {
 		button.replaceChildren(createLxIcon(iconName, 'comet-sidebar-tab-icon'), labelElement);
 		button.title = label;
 	}
+
+	private getLabels(): SessionSidebarLabels {
+		const ui = this.languageService.getLocaleMessages(this.localeService.getLocale());
+		return {
+			homeTitle: ui.sidebarHomeTitle,
+			codeTitle: ui.sidebarCodeTitle,
+			homeNavNewChat: ui.sidebarHomeNavNewChat,
+			homeNavProjects: ui.sidebarHomeNavProjects,
+			homeNavArtifacts: ui.sidebarHomeNavArtifacts,
+			homeNavCustomize: ui.sidebarHomeNavCustomize,
+			recentsTitle: ui.sidebarRecentsTitle,
+		};
+	}
 }
 
 export class SessionSidebarPartView extends Disposable {
@@ -393,26 +396,28 @@ export class SessionSidebarPartView extends Disposable {
 	private readonly sidebar: SessionSidebar;
 
 	constructor(
-		props: SessionSidebarViewProps,
+		titlebarActionsElement: HTMLElement | null,
+		footerActionsElement: HTMLElement | null,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@ISessionsLayoutService private readonly layoutService: ISessionsLayoutService,
 	) {
 		super();
-		this.sidebar = this._register(instantiationService.createInstance(SessionSidebar, props));
+		this.sidebar = this._register(instantiationService.createInstance(
+			SessionSidebar,
+			titlebarActionsElement,
+			footerActionsElement,
+		));
 		this.element.append(
 			this.sidebar.getTitlebarElement(),
 			this.sidebar.getElement(),
 		);
-		this.syncCollapsedState(props);
+		this._register(this.layoutService.onDidChangeLayoutState(this.syncCollapsedState, this));
+		this.syncCollapsedState();
 		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.sidebar, this.element);
 	}
 
 	getElement() {
 		return this.element;
-	}
-
-	setProps(props: SessionSidebarViewProps) {
-		this.syncCollapsedState(props);
-		this.sidebar.setProps(props);
 	}
 
 	override dispose() {
@@ -421,7 +426,10 @@ export class SessionSidebarPartView extends Disposable {
 		super.dispose();
 	}
 
-	private syncCollapsedState(props: SessionSidebarViewProps) {
-		this.element.classList.toggle('comet-is-collapsed', props.isCollapsed);
+	private syncCollapsedState() {
+		this.element.classList.toggle(
+			'comet-is-collapsed',
+			!this.layoutService.getLayoutState().isSidebarVisible,
+		);
 	}
 }

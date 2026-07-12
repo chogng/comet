@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import './media/style.css';
+
 import { $ } from 'cs/base/browser/dom';
 import type { GridSashSnapEvent, IGridView } from 'cs/base/browser/ui/grid/gridview';
 import { GridBranchView, GridView, Orientation } from 'cs/base/browser/ui/grid/gridview';
@@ -14,24 +16,14 @@ import {
 	type IDisposable,
 } from 'cs/base/common/lifecycle';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
+import type { SessionsMainEditorPart } from 'cs/sessions/browser/parts/editor/editorPart';
+import type { SessionSidebarPartView } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
+import type { SessionsPart } from 'cs/sessions/browser/parts/sessions/sessionsPart';
 import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
 import {
 	getWorkbenchPartDomNode,
 	registerWorkbenchPartDomNode,
 } from 'cs/workbench/browser/layout';
-
-export interface ISessionsLayoutPartViews {
-	getSidebarElement(): HTMLElement | null;
-	getSessionsElement(): HTMLElement | null;
-	getEditorElement(): HTMLElement | null;
-	layoutSessions(width: number, height: number): void;
-	layoutEditor(width: number, height: number): void;
-}
-
-export interface ISessionsLayoutViewProps {
-	readonly isEdgeSnappingEnabled: boolean;
-	readonly partViews: ISessionsLayoutPartViews;
-}
 
 interface ILayoutAxisLimits {
 	readonly minimum: number;
@@ -300,7 +292,6 @@ class SessionsLayoutController extends Disposable {
 }
 
 export class SessionsLayoutView extends Disposable {
-	private props: ISessionsLayoutViewProps;
 	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-sessions-layout');
 	private readonly mainElement = $<HTMLElementTagNameMap['main']>('main.comet-sessions-content-grid');
 	private readonly sidebarPartView = new SessionsLayoutPartView(
@@ -310,21 +301,23 @@ export class SessionsLayoutView extends Disposable {
 	private readonly sessionsPartView = new SessionsLayoutPartView(
 		'comet-sessions-layout-part-sessions',
 		false,
-		(width, height) => this.props.partViews.layoutSessions(width, height),
+		(width, height) => this.sessionsPart.layout(width, height),
 	);
 	private readonly editorPartView = new SessionsLayoutPartView(
 		'comet-sessions-layout-part-editor',
 		false,
-		(width, height) => this.props.partViews.layoutEditor(width, height),
+		(width, height) => this.editorPart.layout(width, height),
 	);
 	private readonly layoutController: SessionsLayoutController;
 
 	constructor(
-		props: ISessionsLayoutViewProps,
+		private isEdgeSnappingEnabled: boolean,
+		private readonly sidebarPart: SessionSidebarPartView,
+		private readonly sessionsPart: SessionsPart,
+		private readonly editorPart: SessionsMainEditorPart,
 		@ISessionsLayoutService private readonly layoutService: ISessionsLayoutService,
 	) {
 		super();
-		this.props = props;
 		this.element.append(this.mainElement);
 		this.layoutController = this._register(new SessionsLayoutController(
 			this.element,
@@ -332,7 +325,7 @@ export class SessionsLayoutView extends Disposable {
 			this.sidebarPartView,
 			this.sessionsPartView,
 			this.editorPartView,
-			() => this.props.isEdgeSnappingEnabled,
+			() => this.isEdgeSnappingEnabled,
 			this.layoutService,
 		));
 		this._register(this.layoutService.onDidChangeLayoutState(this.render, this));
@@ -343,9 +336,13 @@ export class SessionsLayoutView extends Disposable {
 		return this.element;
 	}
 
-	setProps(props: ISessionsLayoutViewProps): void {
-		this.props = props;
-		this.render();
+	setEdgeSnappingEnabled(enabled: boolean): void {
+		if (this.isEdgeSnappingEnabled === enabled) {
+			return;
+		}
+
+		this.isEdgeSnappingEnabled = enabled;
+		this.layoutController.sync();
 	}
 
 	layout(): void {
@@ -353,7 +350,7 @@ export class SessionsLayoutView extends Disposable {
 	}
 
 	override dispose(): void {
-		const sessionsElement = this.props.partViews.getSessionsElement();
+		const sessionsElement = this.sessionsPart.getElement();
 		if (sessionsElement && getWorkbenchPartDomNode(SESSION_PART_IDS.sessions) === sessionsElement) {
 			registerWorkbenchPartDomNode(SESSION_PART_IDS.sessions, null);
 		}
@@ -370,11 +367,11 @@ export class SessionsLayoutView extends Disposable {
 			isEditorVisible ? 'comet-is-editor-visible' : '',
 		].filter(Boolean).join(' ');
 
-		this.sidebarPartView.setContent(this.props.partViews.getSidebarElement());
-		const sessionsElement = this.props.partViews.getSessionsElement();
+		this.sidebarPartView.setContent(this.sidebarPart.getElement());
+		const sessionsElement = this.sessionsPart.getElement();
 		this.sessionsPartView.setContent(sessionsElement);
 		registerWorkbenchPartDomNode(SESSION_PART_IDS.sessions, sessionsElement);
-		this.editorPartView.setContent(this.props.partViews.getEditorElement());
+		this.editorPartView.setContent(this.editorPart.getElement());
 		this.layoutController.sync();
 	}
 }

@@ -59,10 +59,6 @@
 	);
 }
 
-.comet-session-sidebar-root.comet-is-collapsed > .comet-sidebar-content {
-	display: none;
-}
-
 .comet-session-sidebar-part .comet-sidebar-footer {
 	border-top: 1px solid var(--comet-sideBar-border, rgba(15, 23, 42, 0.08));
 }
