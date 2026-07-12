@@ -175,3 +175,29 @@ test('Settings controller is a DI service without mutable shell context', () => 
 	assert.match(settingsController, /@INativeHostService private readonly nativeHostService/);
 	assert.match(settingsController, /registerSingleton\(\s*ISettingsController,/);
 });
+
+test('Library model is a DI service without mutable shell context', () => {
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/workbench/browser/libraryModel.ts')),
+		false,
+	);
+
+	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
+	const workbenchCommon = readSource('src/cs/workbench/workbench.common.main.ts');
+	assert.match(
+		sessionsWorkbench,
+		/@ILibraryModel private readonly libraryModel: LibraryModel/,
+	);
+	assert.doesNotMatch(
+		sessionsWorkbench,
+		/createLibraryModel|LibraryModelContext|getWorkbenchLibraryModel|libraryModelInstance\.setContext/,
+	);
+	assert.match(workbenchCommon, /services\/knowledgeBase\/libraryModel/);
+
+	const libraryModel = readSource(
+		'src/cs/workbench/services/knowledgeBase/libraryModel.ts',
+	);
+	assert.doesNotMatch(libraryModel, /LibraryModelContext|readonly setContext|readonly start/);
+	assert.match(libraryModel, /@INativeHostService private readonly nativeHostService/);
+	assert.match(libraryModel, /registerSingleton\(ILibraryModel, LibraryModel,/);
+});

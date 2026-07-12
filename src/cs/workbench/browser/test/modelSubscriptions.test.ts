@@ -6,14 +6,21 @@
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before } from 'node:test';
 
-import type { LibraryDocumentSummary } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import type {
+  LibraryDocumentSummary,
+  LibraryDocumentsResult,
+} from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
+import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
-import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
+import {
+	ILibraryModel,
+	LibraryModel,
+} from 'cs/workbench/services/knowledgeBase/libraryModel';
 import { localeService } from 'cs/workbench/services/localization/browser/localeService';
 import {
   getWorkbenchPartDomSnapshot,
@@ -69,6 +76,20 @@ function createLibraryDocumentSummary(
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-02T00:00:00.000Z',
     ...overrides,
+  };
+}
+
+function createLibraryDocumentsResult(
+  items: readonly LibraryDocumentSummary[],
+): LibraryDocumentsResult {
+  return {
+    items: [...items],
+    totalCount: items.length,
+    fileCount: items.reduce((count, item) => count + item.fileCount, 0),
+    queuedJobCount: 0,
+    libraryDbFile: '/tmp/library.db',
+    defaultManagedDirectory: '/tmp/library',
+    ragCacheDir: '/tmp/rag-cache',
   };
 }
 
@@ -184,10 +205,14 @@ test('DocumentActionsController subscriptions stop after disposal', () => {
 });
 
 test('LibraryModel subscriptions stop after listener disposal and model dispose', () => {
-  const model = createLibraryModel({
-    desktopRuntime: false,
-    invokeDesktop: createInvokeDesktop(),
-  });
+  const registrations = getSingletonServiceDescriptors().filter(([id]) => id === ILibraryModel);
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0][1].supportsDelayedInstantiation, true);
+
+  const model = new LibraryModel({
+    canInvoke: () => false,
+    invoke: createInvokeDesktop(),
+  } as never);
   const itemCounts: number[] = [];
   const disposeListener = model.subscribe(() => {
     itemCounts.push(model.getSnapshot().librarySnapshot.items.length);
@@ -207,6 +232,66 @@ test('LibraryModel subscriptions stop after listener disposal and model dispose'
 
   assert.deepEqual(itemCounts, [1]);
   assert.equal(model.getSnapshot().librarySnapshot.items.length, 1);
+});
+
+test('LibraryModel starts once and commits only the latest refresh', async () => {
+  const requests: Array<{
+    resolve: (result: LibraryDocumentsResult) => void;
+  }> = [];
+  const model = new LibraryModel({
+    canInvoke: () => true,
+    invoke: (async (command: string) => {
+      assert.equal(command, 'list_library_documents');
+      return new Promise<LibraryDocumentsResult>((resolve) => {
+        requests.push({ resolve });
+      });
+    }) as ElectronInvoke,
+  } as never);
+  assert.equal(requests.length, 1);
+
+  const latestRefresh = model.refresh();
+  assert.equal(requests.length, 2);
+  const latest = createLibraryDocumentSummary({
+    documentId: 'latest',
+    sourceUrl: 'https://example.com/latest',
+  });
+  requests[1]!.resolve(createLibraryDocumentsResult([latest]));
+  await latestRefresh;
+
+  const stale = createLibraryDocumentSummary({
+    documentId: 'stale',
+    sourceUrl: 'https://example.com/stale',
+  });
+  requests[0]!.resolve(createLibraryDocumentsResult([stale]));
+  await Promise.resolve();
+
+  assert.deepEqual(
+    model.getSnapshot().librarySnapshot.items.map(item => item.documentId),
+    ['latest'],
+  );
+  model.dispose();
+});
+
+test('LibraryModel does not publish a pending refresh after disposal', async () => {
+  let resolveRefresh!: (result: LibraryDocumentsResult) => void;
+  const refreshPromise = new Promise<LibraryDocumentsResult>((resolve) => {
+    resolveRefresh = resolve;
+  });
+  const model = new LibraryModel({
+    canInvoke: () => true,
+    invoke: (async () => refreshPromise) as ElectronInvoke,
+  } as never);
+  let changes = 0;
+  model.subscribe(() => {
+    changes += 1;
+  });
+
+  model.dispose();
+  resolveRefresh(createLibraryDocumentsResult([createLibraryDocumentSummary()]));
+  await refreshPromise;
+  await Promise.resolve();
+
+  assert.equal(changes, 0);
 });
 
 test('SettingsModel subscriptions stop after disposal', () => {

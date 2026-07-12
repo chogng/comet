@@ -56,6 +56,7 @@ import 'cs/workbench/services/keybinding/browser/keybindingService';
 import 'cs/workbench/services/language/common/languageService';
 import 'cs/workbench/services/lifecycle/browser/lifecycleService';
 import 'cs/workbench/services/localization/browser/localeService';
+import 'cs/workbench/services/knowledgeBase/libraryModel';
 import 'cs/workbench/services/notification/common/notificationService';
 import 'cs/workbench/services/quickInput/browser/quickInputService';
 import 'cs/workbench/services/views/browser/viewsService';

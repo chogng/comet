@@ -16,8 +16,10 @@ import type {
 	ArticleSummaryTranslationExportController,
 	ArticleSummaryTranslationExportControllerContext,
 } from 'cs/workbench/contrib/translation/browser/articleSummaryTranslationExport';
-import { createLibraryModel } from 'cs/workbench/browser/libraryModel';
-import type { LibraryModel, LibraryModelContext } from 'cs/workbench/browser/libraryModel';
+import {
+	ILibraryModel,
+	LibraryModel,
+} from 'cs/workbench/services/knowledgeBase/libraryModel';
 
 import { Schemas } from 'cs/base/common/network';
 import { $ } from 'cs/base/browser/dom';
@@ -128,8 +130,6 @@ import {
 } from 'cs/workbench/common/contributions';
 
 export type WorkbenchServicesSyncParams = {
-	libraryModel: LibraryModel;
-	libraryContext: LibraryModelContext;
 	articleSummaryTranslationExportController: ArticleSummaryTranslationExportController;
 	articleSummaryTranslationExportContext: ArticleSummaryTranslationExportControllerContext;
 	documentActionsController: DocumentActionsController;
@@ -138,7 +138,6 @@ export type WorkbenchServicesSyncParams = {
 
 type DesktopInvokeArgs = Record<string, unknown> | undefined;
 
-let libraryModel: LibraryModel | null = null;
 let articleSummaryTranslationExportController: ArticleSummaryTranslationExportController | null = null;
 let documentActionsController: DocumentActionsController | null = null;
 let activeSessionsWorkbenchHost: SessionsWorkbenchHost | null = null;
@@ -189,6 +188,7 @@ class SessionsWorkbenchHost {
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@ISettingsController private readonly settingsController: SettingsController,
+		@ILibraryModel private readonly libraryModel: LibraryModel,
 		@IChatServiceDecorator private readonly chatService: IChatService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@ISessionsPartService private readonly sessionsPart: SessionsPart,
@@ -644,10 +644,7 @@ class SessionsWorkbenchHost {
 		});
 		applyWorkbenchTheme(theme, workbenchColorCustomizations);
 		applyWorkbenchBrowserStyles();
-		const libraryModelInstance = getWorkbenchLibraryModel({
-			desktopRuntime,
-			invokeDesktop,
-		});
+		const libraryModelInstance = this.libraryModel;
 		const { librarySnapshot, isLibraryLoading } =
 			libraryModelInstance.getSnapshot();
 		const refreshLibrary = () => {
@@ -781,11 +778,6 @@ class SessionsWorkbenchHost {
 		});
 
 		syncWorkbenchServicesContext({
-			libraryModel: libraryModelInstance,
-			libraryContext: {
-				desktopRuntime,
-				invokeDesktop,
-			},
 			articleSummaryTranslationExportController:
 				articleSummaryTranslationExportControllerInstance,
 			articleSummaryTranslationExportContext: {
@@ -1094,23 +1086,12 @@ class SessionsWorkbenchApplication {
 }
 
 export function disposeSessionsWorkbenchServices() {
-	libraryModel?.dispose();
-	libraryModel = null;
-
 	articleSummaryTranslationExportController?.dispose();
 	articleSummaryTranslationExportController = null;
 
 	documentActionsController?.dispose();
 	documentActionsController = null;
 
-}
-
-export function getWorkbenchLibraryModel(context: LibraryModelContext) {
-	if (!libraryModel) {
-		libraryModel = createLibraryModel(context);
-		libraryModel.start();
-	}
-	return libraryModel;
 }
 
 export function getWorkbenchArticleSummaryTranslationExportController(
@@ -1131,15 +1112,12 @@ export function getWorkbenchDocumentActionsController(
 }
 
 export function syncWorkbenchServicesContext({
-	libraryModel: libraryModelInstance,
-	libraryContext,
 	articleSummaryTranslationExportController:
 	articleSummaryTranslationExportControllerInstance,
 	articleSummaryTranslationExportContext,
 	documentActionsController: documentActionsControllerInstance,
 	documentActionsContext,
 }: WorkbenchServicesSyncParams) {
-	libraryModelInstance.setContext(libraryContext);
 	articleSummaryTranslationExportControllerInstance.setContext(
 		articleSummaryTranslationExportContext,
 	);
