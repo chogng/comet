@@ -263,3 +263,46 @@ test('Document actions are a DI service with explicit operation targets', () => 
 	assert.match(chatInput, /@IDocumentActionsService private readonly documentActionsService/);
 	assert.match(chatInput, /resource: model\.resource,[\s\S]*articleIds,/);
 });
+
+test('Browser toolbar is owned by the addressed Browser editor without shell actions', () => {
+	const removedFiles = [
+		'src/cs/workbench/browser/parts/editor/editorModeToolbarRegistry.ts',
+		'src/cs/workbench/contrib/browserView/common/browserEditorToolbarService.ts',
+		'src/cs/workbench/contrib/browserView/browser/browserEditorToolbarService.ts',
+		'src/cs/workbench/contrib/browserView/browser/browserToolbarActions.ts',
+		'src/cs/workbench/contrib/browserView/browser/browserModeToolbarHost.ts',
+		'src/cs/workbench/contrib/browserView/browser/browserModeToolbarContribution.ts',
+		'src/cs/workbench/contrib/browserView/browser/browserModeToolbarModel.ts',
+		'src/cs/workbench/contrib/browserView/browser/browserModeToolbarTypes.ts',
+	];
+	for (const relativePath of removedFiles) {
+		assert.equal(existsSync(path.join(Root, relativePath)), false, relativePath);
+	}
+
+	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
+	assert.doesNotMatch(
+		sessionsWorkbench,
+		/IBrowserEditorToolbarService|createEditorBrowserToolbarActions|setActions\(|browserViewId|activeBrowserEditor/,
+	);
+	const editorGroup = readSource('src/cs/workbench/browser/parts/editor/editorGroupView.ts');
+	assert.doesNotMatch(editorGroup, /modeToolbarHost|viewPartProps|EditorModeToolbar/);
+	const browserEditor = readSource(
+		'src/cs/workbench/contrib/browserView/electron-browser/browserEditor.ts',
+	);
+	assert.match(browserEditor, /override getToolbarElement\(\): HTMLElement/);
+	assert.match(browserEditor, /requires one toolbar contribution/);
+	assert.match(browserEditor, /getToolbarContribution\(\)/);
+	assert.doesNotMatch(browserEditor, /browserStateByTabId|onDidChangeBrowserState|setHistoryFeature|setFavoritesFeature/);
+	const browserToolbar = readSource(
+		'src/cs/workbench/contrib/browserView/electron-browser/browserModeToolbar.ts',
+	);
+	assert.match(browserToolbar, /class BrowserModeToolbar extends BrowserEditorToolbarContribution/);
+	assert.match(browserToolbar, /executeCommand\(commandId, this\.editor\)/);
+	const browserToolbarActions = readSource(
+		'src/cs/workbench/contrib/browserView/electron-browser/features/browserToolbarActions.ts',
+	);
+	assert.doesNotMatch(browserToolbarActions, /execCommand|activeEditorPane/);
+	const pdfPane = readSource('src/cs/workbench/contrib/pdfEditor/browser/pdfEditorPane.ts');
+	assert.doesNotMatch(pdfPane, /IBrowserEditorToolbarService|browserEditorToolbarService/);
+	assert.match(pdfPane, /this\.editorService\.openEditor\(\{[\s\S]*BrowserViewUri\.forId/);
+});

@@ -8,7 +8,6 @@ import { toDisposable, Disposable } from 'cs/base/common/lifecycle';
 import type { IEditorOpenContext, IEditorOptions, IEditorPane } from 'cs/workbench/common/editor';
 import type { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import type { INativeHostService } from 'cs/platform/native/common/native';
 import type { IStorageService } from 'cs/platform/storage/common/storage';
 import { StorageScope, StorageTarget } from 'cs/platform/storage/common/storage';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
@@ -25,7 +24,6 @@ import {
 	parseSerializedEditorViewState,
 	serializeEditorViewStateKey,
 } from 'cs/workbench/browser/parts/editor/editorViewStateStore';
-import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import type { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import type {
@@ -58,7 +56,6 @@ export abstract class MainEditorPart extends Disposable implements IEditorPartHo
 	protected constructor(
 		protected readonly editorGroupsService: IEditorPartsConstructionOwner,
 		private readonly element: HTMLElement,
-		private readonly nativeHostService: INativeHostService,
 		private readonly dialogService: IDialogService,
 		private readonly instantiationService: IInstantiationService,
 		private readonly storageService: IStorageService,
@@ -148,10 +145,8 @@ export abstract class MainEditorPart extends Disposable implements IEditorPartHo
 		const viewStateEntries = [...this.viewStateEntries.values()];
 
 		return {
-			ui,
 			labels,
 			creationActions: getEditorCreationActions(ui),
-			viewPartProps: this.createViewPartProps(ui),
 			group,
 			commandService: this.commandService,
 			viewStateEntries,
@@ -187,23 +182,6 @@ export abstract class MainEditorPart extends Disposable implements IEditorPartHo
 			status: {
 				statusbarAriaLabel: ui.editorStatusbarAriaLabel,
 				ready: ui.statusReady,
-			},
-		};
-	}
-
-	private createViewPartProps(ui: LocaleMessages): ViewPartProps {
-		return {
-			browserUrl: '',
-			browserPageTitle: '',
-			browserFaviconUrl: '',
-			browserIsLoading: false,
-			electronRuntime: this.nativeHostService.canInvoke(),
-			webContentRuntime: typeof this.nativeHostService.webContent?.navigate === 'function',
-			labels: {
-				emptyState: ui.emptyState,
-				contentUnavailable: ui.webContentUnavailable,
-				overlayPauseHeading: ui.webContentOverlayPauseHeading,
-				overlayPauseDetail: ui.webContentOverlayPauseDetail,
 			},
 		};
 	}

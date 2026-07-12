@@ -33,6 +33,7 @@ import { IEditorService } from 'cs/workbench/services/editor/common/editorServic
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { URI } from 'cs/base/common/uri';
+import { generateUuid } from 'cs/base/common/uuid';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { EmptyPdfEditorUrl } from 'cs/workbench/contrib/pdfEditor/common/pdfEditorResources';
 import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
@@ -42,7 +43,8 @@ import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/p
 import { createPdfEditorPaneState } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorPaneState';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/editor';
-import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
+import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
+import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import type { LocaleMessages } from 'language/locales';
@@ -147,7 +149,7 @@ export class PdfEditorPane extends EditorPane<
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@INativeHostService private readonly nativeHostService: INativeHostService,
 		@IEditorService private readonly editorService: IEditorService,
-		@IBrowserEditorToolbarService private readonly browserEditorToolbarService: IBrowserEditorToolbarService,
+		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 	) {
@@ -249,11 +251,22 @@ export class PdfEditorPane extends EditorPane<
 				toolbarMore: labels.toolbarMore,
 				pdfTitle: labels.pdfTitle,
       },
-			onOpenSources: () => this.browserEditorToolbarService.actions.onOpenSources(),
+			sourcesDisabled: !this.nativeHostService.canInvoke(),
+			onOpenSources: () => { void this.openBrowserSources(); },
       onHighlightSelection: () => this.addHighlightFromSelection(),
       onNoteSelection: () => this.addNoteFromSelection(),
     };
   }
+
+	private async openBrowserSources(): Promise<void> {
+		if (!this.nativeHostService.canInvoke()) {
+			throw new Error('Browser Sources require the desktop runtime.');
+		}
+		await this.editorService.openEditor({
+			resource: BrowserViewUri.forId(generateUuid()),
+		});
+		this.editorGroupsService.mainPart.focusPrimaryInput();
+	}
 
   private createReaderSnapshot(input: PdfEditorPaneInput) {
     return createPdfReaderSnapshot({

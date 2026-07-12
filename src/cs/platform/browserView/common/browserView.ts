@@ -30,6 +30,11 @@ export enum BrowserViewCommandId {
 	GoForward = `${commandPrefix}.goForward`,
 	Reload = `${commandPrefix}.reload`,
 	HardReload = `${commandPrefix}.hardReload`,
+	ArchivePage = `${commandPrefix}.archivePage`,
+	CopyCurrentUrl = `${commandPrefix}.copyCurrentUrl`,
+	ClearBrowsingHistory = `${commandPrefix}.clearBrowsingHistory`,
+	ClearCookies = `${commandPrefix}.clearCookies`,
+	ClearCache = `${commandPrefix}.clearCache`,
 
 	// Editor actions
 	FocusUrlInput = `${commandPrefix}.focusUrlInput`,

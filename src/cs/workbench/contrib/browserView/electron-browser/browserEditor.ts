@@ -21,13 +21,8 @@ import { IInstantiationService } from 'cs/platform/instantiation/common/instanti
 import { EditorPane } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { EditorPaneLayout } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import type { BrowserEditorPaneLabels } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
-import type {
-	BrowserEditorModeToolbarPane,
-	BrowserEditorModeToolbarState,
-} from 'cs/workbench/contrib/browserView/browser/browserModeToolbarHost';
 import type { EditorPaneRuntimeState } from 'cs/workbench/browser/parts/editor/panes/editorPane';
 import { createBrowserEditorPaneState } from 'cs/workbench/contrib/browserView/browser/browserEditorPaneState';
-import type { BrowserHistoryAndFavoritesPanelFeatures, BrowserHistoryPanelFeature, BrowserFavoritesPanelFeature } from 'cs/workbench/contrib/browserView/browser/browserHistoryAndFavoritesPanel';
 import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/editor';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
@@ -127,12 +122,15 @@ export abstract class BrowserEditorContribution extends Disposable {
 	beforeContainerLayout(): IContainerLayoutOverride | undefined { return undefined; }
 }
 
+export abstract class BrowserEditorToolbarContribution extends BrowserEditorContribution {
+	abstract getEditorToolbarElement(): HTMLElement;
+	abstract focusPrimaryInput(): void;
+}
+
 export class BrowserEditor extends EditorPane<
 	BrowserEditorInput,
 	BrowserEditorViewState
-> implements BrowserEditorModeToolbarPane {
-	private historyFeature: BrowserHistoryPanelFeature | undefined;
-	private favoritesFeature: BrowserFavoritesPanelFeature | undefined;
+> {
 	private static readonly contributions: BrowserEditorContributionCtor[] = [];
 	private readonly contributionInstances = new Map<BrowserEditorContributionCtor, BrowserEditorContribution>();
 	private readonly disposables = new DisposableStore();
@@ -143,10 +141,8 @@ export class BrowserEditor extends EditorPane<
 		isNew: boolean;
 		detachReason: BrowserEditorModelDetachReason;
 	}>());
-	private readonly browserStateEmitter = this.disposables.add(new Emitter<BrowserEditorModeToolbarState>());
 	private readonly runtimeStateEmitter = this.disposables.add(new Emitter<EditorPaneRuntimeState>());
 	private readonly viewStateEmitter = this.disposables.add(new Emitter<BrowserEditorViewState>());
-	private _browserState: BrowserEditorModeToolbarState | undefined;
 	private readonly activeEditorFocusedContext: ContextKey<boolean>;
 	private readonly hasUrlContext: ContextKey<boolean>;
 	private readonly hasErrorContext: ContextKey<boolean>;
@@ -171,13 +167,8 @@ export class BrowserEditor extends EditorPane<
 
 	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 	readonly onDidChangeModel = this._onDidChangeModel.event;
-	readonly onDidChangeBrowserState = this.browserStateEmitter.event;
 	override readonly onDidChangeRuntimeState = this.runtimeStateEmitter.event;
 	override readonly onDidChangeViewState = this.viewStateEmitter.event;
-
-	get browserState(): BrowserEditorModeToolbarState | undefined {
-		return this._browserState;
-	}
 
 	get input(): BrowserEditorInput | undefined {
 		return this._input;
@@ -201,20 +192,6 @@ export class BrowserEditor extends EditorPane<
 
 	get browserContainer(): HTMLElement {
 		return this.browserContainerElement;
-	}
-
-	setHistoryFeature(feature: BrowserHistoryPanelFeature): void {
-		this.historyFeature = feature;
-	}
-
-	setFavoritesFeature(feature: BrowserFavoritesPanelFeature): void {
-		this.favoritesFeature = feature;
-	}
-
-	getHistoryAndFavoritesFeatures(): BrowserHistoryAndFavoritesPanelFeatures | undefined {
-		return this.historyFeature && this.favoritesFeature
-			? { history: this.historyFeature, favorites: this.favoritesFeature }
-			: undefined;
 	}
 
 	get window(): Window & { vscodeWindowId: number } {
@@ -270,6 +247,10 @@ export class BrowserEditor extends EditorPane<
 		return this.rootElement;
 	}
 
+	override getToolbarElement(): HTMLElement {
+		return this.getToolbarContribution().getEditorToolbarElement();
+	}
+
 	override getRuntimeState() {
 		return this._input
 			? createBrowserEditorPaneState(this._input, this.labels)
@@ -299,6 +280,10 @@ export class BrowserEditor extends EditorPane<
 			}
 		}
 		this.ensureBrowserFocus();
+	}
+
+	override focusPrimaryInput(): void {
+		this.getToolbarContribution().focusPrimaryInput();
 	}
 
 	override setVisible(visible: boolean) {
@@ -527,8 +512,17 @@ export class BrowserEditor extends EditorPane<
 		}
 
 		const sequence = ++this.inputModelSequence;
+		const inputChanged = this._input !== input;
+		if (inputChanged && this._input && this._model) {
+			this.setModel(undefined, false);
+		}
 		this.inputDisposables.clear();
 		this._input = input;
+		if (inputChanged) {
+			for (const contribution of this.contributionInstances.values()) {
+				contribution.prerenderInput(input);
+			}
+		}
 
 		let model = input.model;
 		const isNew = !model;
@@ -537,9 +531,6 @@ export class BrowserEditor extends EditorPane<
 			this.hasErrorContext.set(false);
 			this.canGoBackContext.reset();
 			this.canGoForwardContext.reset();
-			for (const contribution of this.contributionInstances.values()) {
-				contribution.prerenderInput(input);
-			}
 			model = await raceCancellationError(input.resolve(), token);
 		}
 
@@ -575,11 +566,11 @@ export class BrowserEditor extends EditorPane<
 				this.updateViewState({ url: model.url, scrollX: 0, scrollY: 0 });
 			}
 			this.ensureBrowserFocus();
-			this.emitBrowserState(model);
+			this.emitRuntimeState();
 		}));
 		this.inputDisposables.add(model.onDidChangeLoadingState(() => {
 			this.hasErrorContext.set(!!model.error);
-			this.emitBrowserState(model);
+			this.emitRuntimeState();
 			this.requestViewStateRestore(model);
 		}));
 		this.inputDisposables.add(model.onDidChangeVisibility(({ visible }) => {
@@ -588,8 +579,8 @@ export class BrowserEditor extends EditorPane<
 			}
 			this.requestViewStateRestore(model);
 		}));
-		this.inputDisposables.add(model.onDidChangeTitle(() => this.emitBrowserState(model)));
-		this.inputDisposables.add(model.onDidChangeFavicon(() => this.emitBrowserState(model)));
+		this.inputDisposables.add(model.onDidChangeTitle(() => this.emitRuntimeState()));
+		this.inputDisposables.add(model.onDidChangeFavicon(() => this.emitRuntimeState()));
 		this.inputDisposables.add(model.onDidChangeFocus(({ focused }) => {
 			if (focused) {
 				this.activeEditorFocusedContext.set(true);
@@ -611,7 +602,7 @@ export class BrowserEditor extends EditorPane<
 				if (!this.pendingRestoredViewState && model.viewState.url === model.url) {
 					this.updateViewState(model.viewState);
 				}
-				this.emitBrowserState(model);
+				this.emitRuntimeState();
 				this.requestViewStateRestore(model);
 			}
 		});
@@ -626,20 +617,31 @@ export class BrowserEditor extends EditorPane<
 		return input.resolve();
 	}
 
-	private emitBrowserState(model: IBrowserViewModel): void {
-		this._browserState = {
-			tabId: this.getCurrentInput().resource.toString(),
-			url: model.url,
-			title: model.title,
-			favicon: model.favicon,
-			loading: model.loading,
-			canGoBack: model.canGoBack,
-			canGoForward: model.canGoForward,
-		};
+	private emitRuntimeState(): void {
+		const model = this._model;
+		if (!model) {
+			return;
+		}
 		this.canGoBackContext.set(model.canGoBack);
 		this.canGoForwardContext.set(model.canGoForward);
-		this.browserStateEmitter.fire(this._browserState);
 		this.runtimeStateEmitter.fire(createBrowserEditorPaneState(this.getCurrentInput(), this.labels));
+	}
+
+	private getToolbarContribution(): BrowserEditorToolbarContribution {
+		let toolbarContribution: BrowserEditorToolbarContribution | undefined;
+		for (const contribution of this.contributionInstances.values()) {
+			if (!(contribution instanceof BrowserEditorToolbarContribution)) {
+				continue;
+			}
+			if (toolbarContribution) {
+				throw new Error('The Browser editor has more than one toolbar contribution.');
+			}
+			toolbarContribution = contribution;
+		}
+		if (!toolbarContribution) {
+			throw new Error('The Browser editor requires one toolbar contribution.');
+		}
+		return toolbarContribution;
 	}
 
 	private updateViewState(viewState: BrowserEditorViewState): void {

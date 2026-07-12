@@ -50,7 +50,6 @@ export class BrowserHistoryFeature extends BrowserEditorContribution {
 		@IBrowserViewWorkbenchService private readonly browserViewWorkbenchService: IBrowserViewWorkbenchService,
 	) {
 		super(editor);
-		editor.setHistoryFeature(this);
 		this._register(this.browserViewWorkbenchService.browserHistory.onDidChange(() => this.onDidChangeEmitter.fire()));
 	}
 

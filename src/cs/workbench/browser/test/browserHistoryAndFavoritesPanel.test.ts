@@ -74,13 +74,16 @@ test('history and favorites panel consumes BrowserEditor feature state', () => {
 	const panel = new BrowserHistoryAndFavoritesPanel({
 		browserUrl: 'https://favorite.example',
 		labels: {
-			title: 'History and favorites', recentTitle: 'Recent', recentTodayTitle: 'Today',
+			title: 'History and favorites', recentTodayTitle: 'Today',
 			recentYesterdayTitle: 'Yesterday', recentLast7DaysTitle: 'Last 7 days',
 			recentLast30DaysTitle: 'Last 30 days', recentOlderTitle: 'Older',
 			favoritesTitle: 'Favorites', emptyState: 'Empty',
+			search: 'Search', noMatches: 'No matches for "{query}"',
+			contextOpen: 'Open', contextOpenInNewTab: 'Open in new tab',
+			contextRemoveFavorite: 'Remove favorite', deleteHistoryEntry: 'Delete history entry',
 		},
 		onNavigateToUrl: () => { },
-	}, {}, {
+	}, features, {}, {
 		_serviceBrand: undefined,
 		activeEditorPane: undefined,
 		activeEditor: undefined,
@@ -89,17 +92,16 @@ test('history and favorites panel consumes BrowserEditor feature state', () => {
 		closeEditor: async () => true,
 		getEditors: () => [],
 		getActiveGroupId: () => 'test',
-	});
+	}, { hideContextMenu() {} } as never);
 	const host = document.body.appendChild(document.createElement('div'));
 	panel.mountTo(host);
-	panel.setFeatures(features);
 
 	try {
-		assert.equal(panel.toggleCurrentBrowserUrlFavorite(), true);
+		favorites.toggle('https://favorite.example');
 		assert.equal(favorites.isFavorite('https://favorite.example'), true);
 		panel.setOpen(true);
 		assert(document.querySelector('[title="https://favorite.example"]'));
-		panel.clearRecentEntries();
+		history.clear();
 		assert.equal(historyEntries.length, 0);
 	} finally {
 		panel.dispose();

@@ -42,7 +42,6 @@ export class BrowserFavoritesFeature extends BrowserEditorContribution {
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super(editor);
-		editor.setFavoritesFeature(this);
 		this.load();
 		this.isFavoriteContext = CONTEXT_BROWSER_URL_IS_FAVORITED.bindTo(contextKeyService);
 		this._register(this.storageService.onDidChangeValue(

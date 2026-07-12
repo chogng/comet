@@ -18,6 +18,7 @@ export type PdfEditorToolbarContext = {
     readonly toolbarMore: string;
     readonly pdfTitle: string;
   };
+  readonly sourcesDisabled: boolean;
   readonly onOpenSources: () => void;
   readonly onHighlightSelection: () => void;
   readonly onNoteSelection: () => void;
@@ -87,6 +88,7 @@ export class EditorPdfModeToolbarContribution {
         mode: 'icon',
         buttonClassName: 'comet-editor-pdf-toolbar-btn',
         content: createLxIcon('list-unordered'),
+		disabled: this.context.sourcesDisabled,
         onClick: this.context.onOpenSources,
       },
       {

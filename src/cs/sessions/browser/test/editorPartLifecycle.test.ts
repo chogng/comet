@@ -40,7 +40,6 @@ import {
 import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import type { IEditorOpenContext, IEditorOptions, IEditorSerializer } from 'cs/workbench/common/editor';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
-import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
@@ -229,16 +228,6 @@ function createInstantiationService(
 		webContentOverlayPauseHeading: 'Paused',
 		webContentOverlayPauseDetail: 'Paused detail',
 	} as never;
-	const toolbarActions = {
-		onOpenSources() {},
-		onArchiveCurrentPage() {},
-		onExportDocx() {},
-		onCopyCurrentUrl() {},
-		onClearBrowsingHistory() {},
-		onClearCookies() {},
-		onClearCache() {},
-	};
-
 	return new InstantiationService(new ServiceCollection(
 		[IStorageService, storageService],
 		[INativeHostService, { canInvoke: () => false } as never],
@@ -253,11 +242,6 @@ function createInstantiationService(
 		} as never],
 		[IWorkbenchLanguageService, { getLocaleMessages: () => ui } as never],
 		[ISessionsLayoutService, layoutService],
-		[IBrowserEditorToolbarService, {
-			_serviceBrand: undefined,
-			actions: toolbarActions,
-			setActions() {},
-		}],
 	), true);
 }
 

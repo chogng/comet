@@ -6,8 +6,8 @@
 import { createMouseContextMenuAnchor } from 'cs/base/browser/contextmenu';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon, createLxLoadingIcon } from 'cs/base/browser/ui/lxicons/lxicons';
-import { createContextMenuService } from 'app/cs/workbench/services/contextmenu/electron-browser/contextmenuService';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
+import { IContextMenuService } from 'cs/platform/contextview/browser/contextView';
 import { $ } from 'cs/base/browser/dom';
 import { toAction } from 'cs/base/common/actions';
 import type { Event } from 'cs/base/common/event';
@@ -61,7 +61,6 @@ type BrowserHistoryAndFavoritesListItem = {
 
 export type BrowserHistoryAndFavoritesPanelLabels = {
   title: string;
-  recentTitle: string;
   recentTodayTitle: string;
   recentYesterdayTitle: string;
   recentLast7DaysTitle: string;
@@ -69,10 +68,12 @@ export type BrowserHistoryAndFavoritesPanelLabels = {
   recentOlderTitle: string;
   favoritesTitle: string;
   emptyState: string;
-  contextOpen?: string;
-  contextOpenInNewTab?: string;
-  contextRemoveFavorite?: string;
-  deleteHistoryEntry?: string;
+  search: string;
+  noMatches: string;
+  contextOpen: string;
+  contextOpenInNewTab: string;
+  contextRemoveFavorite: string;
+  deleteHistoryEntry: string;
 };
 
 export type BrowserHistoryAndFavoritesPanelContext = {
@@ -85,6 +86,7 @@ export type BrowserHistoryAndFavoritesPanelContext = {
 type BrowserHistoryAndFavoritesPanelOptions = {
   isInteractionWithin?: (target: Node) => boolean;
   onDidChangeOpenState?: (isOpen: boolean) => void;
+  onDidChangeState?: () => void;
 };
 
 function sanitizeBrowserHistoryAndFavoritesPageTitle(value: unknown) {
@@ -159,12 +161,10 @@ function normalizeSearchQuery(query: string) {
 
 export class BrowserHistoryAndFavoritesPanel {
   private context: BrowserHistoryAndFavoritesPanelContext;
-  private isInteractionWithin?: (target: Node) => boolean;
-  private onDidChangeOpenState?: (isOpen: boolean) => void;
-  private onDidChangeState?: () => void;
-  private readonly contextMenuService = createContextMenuService();
+  private readonly isInteractionWithin?: (target: Node) => boolean;
+  private readonly onDidChangeOpenState?: (isOpen: boolean) => void;
+  private readonly onDidChangeState?: () => void;
   private readonly featureListeners = new DisposableStore();
-  private features: BrowserHistoryAndFavoritesPanelFeatures | undefined;
   private readonly backdropElement = $<HTMLElementTagNameMap['div']>('div.comet-browser-history-and-favorites-panel-backdrop');
   private readonly element = $<HTMLElementTagNameMap['div']>('div.comet-browser-history-and-favorites-panel');
   private readonly desktopOverlayContainer = $<HTMLElementTagNameMap['div']>('div.comet-browser-history-and-favorites-panel-overlay');
@@ -185,18 +185,21 @@ export class BrowserHistoryAndFavoritesPanel {
 
   constructor(
     context: BrowserHistoryAndFavoritesPanelContext,
+		private readonly features: BrowserHistoryAndFavoritesPanelFeatures,
 		options: BrowserHistoryAndFavoritesPanelOptions,
 		@IEditorService private readonly editorService: IEditorService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
   ) {
     this.context = context;
 		this.isInteractionWithin = options.isInteractionWithin;
 		this.onDidChangeOpenState = options.onDidChangeOpenState;
+		this.onDidChangeState = options.onDidChangeState;
     this.searchInput = new InputBox(this.searchInputHost, undefined, {
       className: 'comet-browser-history-and-favorites-search-input',
       type: 'text',
       value: '',
-      placeholder: 'Search',
-      ariaLabel: '',
+      placeholder: this.context.labels.search,
+			ariaLabel: this.context.labels.search,
     });
     this.searchInput.onDidChange(this.handleSearchInputChange);
     this.backdropElement.setAttribute('aria-hidden', 'true');
@@ -206,25 +209,9 @@ export class BrowserHistoryAndFavoritesPanel {
     this.element.setAttribute('aria-label', this.context.labels.title);
     this.headerElement.append(this.searchInputHost);
     this.element.append(this.headerElement, this.bodyElement);
+		this.featureListeners.add(this.features.history.onDidChange(() => this.handleFeatureChange()));
+		this.featureListeners.add(this.features.favorites.onDidChange(() => this.handleFeatureChange()));
     this.render();
-  }
-
-  setFeatures(features: BrowserHistoryAndFavoritesPanelFeatures | undefined) {
-    if (this.features === features) {
-      return;
-    }
-    this.featureListeners.clear();
-    this.features = features;
-    if (features) {
-      this.featureListeners.add(features.history.onDidChange(() => this.handleFeatureChange()));
-      this.featureListeners.add(features.favorites.onDidChange(() => this.handleFeatureChange()));
-    }
-    this.render();
-    this.onDidChangeState?.();
-  }
-
-  getElement() {
-    return this.element;
   }
 
   mountTo(hostElement: HTMLElement | null) {
@@ -235,20 +222,6 @@ export class BrowserHistoryAndFavoritesPanel {
 
     this.hostElement = hostElement;
     this.mountElementToHost();
-  }
-
-  setInteractionBoundaryResolver(
-    resolver: ((target: Node) => boolean) | undefined,
-  ) {
-    this.isInteractionWithin = resolver;
-  }
-
-  setOnDidChangeOpenState(listener: ((isOpen: boolean) => void) | undefined) {
-    this.onDidChangeOpenState = listener;
-  }
-
-  setOnDidChangeState(listener: (() => void) | undefined) {
-    this.onDidChangeState = listener;
   }
 
   getPanelId() {
@@ -303,37 +276,9 @@ export class BrowserHistoryAndFavoritesPanel {
     this.setOpen(false);
   }
 
-  canToggleCurrentBrowserUrlFavorite() {
-    return Boolean(this.features && this.context.browserUrl && this.context.browserUrl !== 'about:blank');
-  }
-
-  isCurrentBrowserUrlFavorited() {
-    return this.isBrowserUrlFavorited(this.context.browserUrl);
-  }
-
-  isBrowserUrlFavorited(url: string) {
-    return this.features?.favorites.isFavorite(url) ?? false;
-  }
-
-  toggleCurrentBrowserUrlFavorite() {
-    if (!this.features || !this.canToggleCurrentBrowserUrlFavorite()) {
-      return false;
-    }
-
-    this.features.favorites.toggle(this.context.browserUrl);
-    return true;
-  }
-
-  clearRecentEntries() {
-    if (!this.features) {
-      return false;
-    }
-    this.features.history.clear();
-    return true;
-  }
-
   dispose() {
-    this.contextMenuService.dispose();
+    this.close();
+    this.contextMenuService.hideContextMenu();
     this.featureListeners.dispose();
     this.unbindGlobalListeners();
     this.stopOverlayPositionSync();
@@ -412,7 +357,7 @@ export class BrowserHistoryAndFavoritesPanel {
   };
 
   private readonly handleEntryDelete = (entryId: number) => {
-    const changed = this.features?.history.removeEntry(entryId) ?? false;
+    const changed = this.features.history.removeEntry(entryId);
     if (!changed) {
       return;
     }
@@ -433,7 +378,7 @@ export class BrowserHistoryAndFavoritesPanel {
   };
 
   private readonly handleFavoriteItemRemove = (url: string) => {
-    if (!this.features?.favorites.isFavorite(url)) {
+    if (!this.features.favorites.isFavorite(url)) {
       return;
     }
 
@@ -446,8 +391,7 @@ export class BrowserHistoryAndFavoritesPanel {
   };
 
   private getDeleteHistoryEntryLabel() {
-    const configuredLabel = String(this.context.labels.deleteHistoryEntry ?? '').trim();
-    return configuredLabel || 'Delete history entry';
+    return this.context.labels.deleteHistoryEntry;
   }
 
   private resetSearchQuery() {
@@ -460,9 +404,6 @@ export class BrowserHistoryAndFavoritesPanel {
   }
 
   private createEntries(): BrowserHistoryAndFavoritesListItem[] {
-    if (!this.features) {
-      return [];
-    }
     const historyByUrl = new Map<string, BrowserHistoryPanelEntry>();
     for (const entry of this.features.history.entries) {
       historyByUrl.set(entry.url, entry);
@@ -518,7 +459,8 @@ export class BrowserHistoryAndFavoritesPanel {
     this.element.setAttribute('aria-hidden', String(!this.isOpen));
     this.element.setAttribute('aria-label', this.context.labels.title);
     this.searchInput.inputElement.setAttribute('aria-label', this.context.labels.title);
-    this.searchInput.setPlaceHolder('Search');
+		this.searchInput.setPlaceHolder(this.context.labels.search);
+		this.searchInput.inputElement.setAttribute('aria-label', this.context.labels.search);
     if (this.isOpen) {
       this.startOverlayPositionSync();
     } else {
@@ -871,23 +813,21 @@ const fallback = createLxIcon(
       getActions: () => [
         toAction({
           id: 'open',
-          label: String(this.context.labels.contextOpen ?? 'Open'),
+          label: this.context.labels.contextOpen,
           run: () => {
             this.handleEntryClick(itemState.url);
           },
         }),
         toAction({
           id: 'open-in-new-tab',
-          label: String(this.context.labels.contextOpenInNewTab ?? 'Open in New Tab'),
+          label: this.context.labels.contextOpenInNewTab,
           run: () => {
             this.handleFavoriteItemOpenInNewTab(itemState.url);
           },
         }),
         toAction({
           id: 'remove-favorite',
-          label: String(
-            this.context.labels.contextRemoveFavorite ?? 'Remove Favorite',
-          ),
+          label: this.context.labels.contextRemoveFavorite,
           run: () => {
             this.handleFavoriteItemRemove(itemState.url);
           },
@@ -924,7 +864,7 @@ const listElement = $<HTMLElementTagNameMap['div']>('div.comet-browser-history-a
     const query = this.searchQuery.trim();
     const iconName = isNoMatch ? 'search' : 'favorite';
     const label = isNoMatch
-      ? `No matches for "${query}"`
+      ? this.context.labels.noMatches.replace('{query}', query)
       : this.context.labels.emptyState;
 
     const nextStateSignature = `${iconName}:${label}`;

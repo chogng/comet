@@ -6,7 +6,6 @@
 import { $ } from 'cs/base/browser/dom';
 import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
-import { INativeHostService } from 'cs/platform/native/common/native';
 import { IStorageService } from 'cs/platform/storage/common/storage';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
@@ -39,7 +38,6 @@ export class SessionsMainEditorPart extends MainEditorPart {
 
 	constructor(
 		editorGroupsService: IEditorPartsConstructionOwner,
-		@INativeHostService nativeHostService: INativeHostService,
 		@IDialogService dialogService: IDialogService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IStorageService storageService: IStorageService,
@@ -53,7 +51,6 @@ export class SessionsMainEditorPart extends MainEditorPart {
 		super(
 			editorGroupsService,
 			$<HTMLElementTagNameMap['section']>('section.comet-panel.comet-editor-panel.comet-session-editor-panel'),
-			nativeHostService,
 			dialogService,
 			instantiationService,
 			storageService,

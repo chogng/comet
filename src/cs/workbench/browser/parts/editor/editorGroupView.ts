@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ViewPartProps } from 'cs/workbench/browser/parts/views/viewPartView';
 import { createEmptyEditorStatus } from 'cs/workbench/browser/parts/editor/editorStatus';
 import type { EditorStatusState } from 'cs/workbench/browser/parts/editor/editorStatus';
 import { $ } from 'cs/base/browser/dom';
@@ -13,7 +12,6 @@ import { EditorPanes, type EditorPanesContext } from 'cs/workbench/browser/parts
 
 import { EditorEmptyWorkspaceView } from 'cs/workbench/browser/parts/editor/editorEmptyWorkspaceView';
 import type { EditorPartLabels } from 'cs/workbench/browser/parts/editor/editorPart';
-import { createEditorModeToolbarHost } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
 import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import { getEditorInputId } from 'cs/workbench/common/editor/editorInputIdentity';
 import { createEditorTabsModel, type EditorTabsModel } from 'cs/workbench/browser/parts/editor/editorTabsModel';
@@ -37,16 +35,13 @@ import { IContextKeyService, type ContextKey } from 'cs/platform/contextkey/comm
 import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
-import type { LocaleMessages } from 'language/locales';
 import type { IEditorOpenContext, IEditorOptions } from 'cs/workbench/common/editor';
 
 const WINDOW_CHROME_LAYOUT = getWindowChromeLayout();
 
 export type EditorGroupViewProps = DropdownContextServices & {
-  ui: LocaleMessages;
   labels: EditorPartLabels;
   creationActions: readonly EditorCreationAction[];
-  viewPartProps: ViewPartProps;
   group: IEditorGroup;
   viewStateEntries: SerializedEditorViewStateEntry[];
   onActivateTab: (tabId: string) => void;
@@ -244,7 +239,6 @@ export class EditorGroupView {
   private readonly actionsElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-titlebar-actions');
   private readonly windowControlsSpacerElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-window-controls-spacer');
   private readonly titlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
-  private readonly modeToolbarHost: ReturnType<typeof createEditorModeToolbarHost>;
   private readonly titleAreaControl: TitleControl;
   private readonly contentElement = $<HTMLElementTagNameMap['div']>('div.comet-editor-content');
   private readonly emptyWorkspaceView: EditorEmptyWorkspaceView;
@@ -280,10 +274,6 @@ export class EditorGroupView {
 		this.contentElement,
 		this.createEditorPanesContext(props),
 	);
-    this.modeToolbarHost = createEditorModeToolbarHost(
-      this.createModeToolbarHostContext(props, null),
-      props,
-    );
     setEditorFrameSlot(this.titlebarElement, EDITOR_FRAME_SLOTS.titlebar);
     setEditorFrameSlot(this.toolbarElement, EDITOR_FRAME_SLOTS.toolbar);
     setEditorFrameSlot(this.contentElement, EDITOR_FRAME_SLOTS.content);
@@ -353,9 +343,7 @@ export class EditorGroupView {
 
   focusPrimaryInput() {
     queueMicrotask(() => {
-      if (!this.modeToolbarHost.focusPrimaryInput()) {
-        this.editorPanes.focusPrimaryInput();
-      }
+		this.editorPanes.focusPrimaryInput();
     });
   }
 
@@ -391,7 +379,6 @@ export class EditorGroupView {
 	this.activeEditorFocusedContext.reset();
     this.titleAreaControl.dispose();
     this.titlebarActionsView.dispose();
-    this.modeToolbarHost.dispose();
     this.editorPanes.dispose();
     this.element.replaceChildren();
   }
@@ -459,7 +446,6 @@ export class EditorGroupView {
       this.editorPanes.clearActiveEditor();
       this.syncToolbar(null);
       this.syncToolbarMode(null);
-      this.modeToolbarHost.setContext(this.createModeToolbarHostContext(this.props, null));
       this.emptyWorkspaceView.setProps({
 			creationActions: this.props.creationActions,
         commandService: this.props.commandService,
@@ -475,21 +461,6 @@ export class EditorGroupView {
       );
     }
     this.syncEditorPanePresentation(group.activeTab);
-  }
-
-  private createModeToolbarHostContext(
-    props: EditorGroupViewProps,
-    activePaneModeId: string | null,
-  ) {
-    return {
-      ...props,
-		instantiationService: this.instantiationService,
-      activeTab: props.group.activeEditor,
-		activePaneModeId,
-      activePane: this.editorPanes.getActivePane(),
-      contentElement: this.contentElement,
-      toolbarElement: this.toolbarElement,
-    };
   }
 
   private readonly requestPrimaryInputFocus = () => {
@@ -566,12 +537,7 @@ const currentTitlebarActionsElements = Array.from(this.actionsElement.children);
       return null;
     }
 
-	const paneToolbarElement = this.editorPanes.getToolbarElement();
-    if (paneToolbarElement) {
-      return paneToolbarElement;
-    }
-
-    return this.modeToolbarHost.getElement();
+	return this.editorPanes.getToolbarElement();
   }
 
   private createEditorPanesContext(props: EditorGroupViewProps): EditorPanesContext {
@@ -597,10 +563,9 @@ const currentTitlebarActionsElements = Array.from(this.actionsElement.children);
 		this.pendingAutomaticPaneOpen = trackedOpen;
   }
 
-  private syncEditorPanePresentation(activeTab: EditorInput): void {
+	private syncEditorPanePresentation(activeTab: EditorInput): void {
 		const activePaneModeId = this.editorPanes.getActivePaneModeId();
 		this.syncToolbarMode(activePaneModeId);
-		this.modeToolbarHost.setContext(this.createModeToolbarHostContext(this.props, activePaneModeId));
 		this.syncToolbar(this.resolveToolbarElement());
 		this.flushPrimaryInputFocus(activeTab);
   }

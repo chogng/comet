@@ -75,6 +75,7 @@ import { EditorInput } from 'cs/workbench/common/editor/editorInput';
 import { URI } from 'cs/base/common/uri';
 import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 import { locales } from 'language/locales';
 
@@ -319,6 +320,11 @@ function createBrowserEditorTestServiceCollection(): ServiceCollection {
 		[IHoverService, createTestHoverService()],
 		[IContextViewService, createTestContextViewService()],
 		[INotificationService, createTestNotificationService()],
+		[IEditorService, createTestEditorService([])],
+		[IWorkbenchCommandService, {
+			_serviceBrand: undefined,
+			executeCommand: async () => undefined,
+		}],
 		[IQuickInputService, createTestQuickInputService()],
 		[IBrowserZoomService, createTestBrowserZoomService()],
 		[IStorageService, createTestStorageService()],
@@ -692,6 +698,20 @@ test('browser contribution registers navigation commands without mounting the up
 		navigationCommandIds,
 	);
 	assert.equal(document.querySelector('.browser-navbar'), null);
+});
+
+test('browser contribution registers toolbar commands as semantic actions', () => {
+	const toolbarCommandIds = [
+		BrowserViewCommandId.ArchivePage,
+		BrowserViewCommandId.CopyCurrentUrl,
+		BrowserViewCommandId.ClearBrowsingHistory,
+		BrowserViewCommandId.ClearCookies,
+		BrowserViewCommandId.ClearCache,
+	];
+	assert.deepEqual(
+		toolbarCommandIds.map(id => commandsRegistry.getCommand(id)?.id),
+		toolbarCommandIds,
+	);
 });
 
 test('browser navigation commands target the active Pane and focus the Comet address input', async () => {
@@ -1486,20 +1506,7 @@ test('browser emulation contribution toggles the model device profile', async ()
 	const deviceEmitter = new Emitter<IBrowserDeviceProfile | undefined>();
 	let currentDevice: IBrowserDeviceProfile | undefined;
 	const deviceWrites: Array<IBrowserDeviceProfile | undefined> = [];
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-			[IStorageService, createTestStorageService()],
-			[IConfigurationService, new ConfigurationService()],
-			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,
@@ -1553,20 +1560,7 @@ test('browser emulation contribution toggles the model device profile', async ()
 });
 
 test('browser editor renders welcome content for an empty browser tab', async () => {
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-			[IStorageService, createTestStorageService()],
-			[IConfigurationService, new ConfigurationService()],
-			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(instantiationService);
 	serviceCollection.set(IBrowserViewWorkbenchService, browserViewWorkbenchService);
@@ -1617,20 +1611,7 @@ test('browser editor error contribution renders certificate errors and trusts on
 		errorDescription: 'Certificate authority invalid',
 		certificateError: certError,
 	};
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-			[IStorageService, createTestStorageService()],
-			[IConfigurationService, new ConfigurationService()],
-			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,
@@ -1680,20 +1661,7 @@ test('browser editor error contribution renders certificate errors and trusts on
 
 test('browser editor find contribution searches selected text in the model', async () => {
 	const findCalls: Array<{ readonly text: string; readonly matchCase?: boolean; readonly recompute?: boolean }> = [];
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-			[IStorageService, createTestStorageService()],
-			[IConfigurationService, new ConfigurationService()],
-			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,
@@ -1740,20 +1708,8 @@ test('browser editor find contribution searches selected text in the model', asy
 
 test('browser favorites contribution persists the current URL without mounting the upstream indicator', async () => {
 	const storageValues = new Map<string, string>();
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-			[IStorageService, createTestStorageService(storageValues)],
-			[IConfigurationService, new ConfigurationService()],
-			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	serviceCollection.set(IStorageService, createTestStorageService(storageValues));
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,
@@ -1787,20 +1743,7 @@ test('browser favorites contribution persists the current URL without mounting t
 });
 
 test('browser history contribution exposes and mutates the toolbar panel history', async () => {
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-			[IStorageService, createTestStorageService()],
-			[IConfigurationService, new ConfigurationService()],
-			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,
@@ -1857,20 +1800,7 @@ test('browser welcome contribution renders recents and opens the selected entry'
 		'https://example.com/background',
 	];
 	const loadedUrls: string[] = [];
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, createTestNotificationService()],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-		[IStorageService, createTestStorageService()],
-		[IConfigurationService, new ConfigurationService()],
-		[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-	);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,
@@ -1939,20 +1869,8 @@ test('browser permissions contribution prompts and records permission decisions'
 	const permissionRequests = new Emitter<IBrowserViewPermissionRequestEvent>();
 	const permissionWrites: Array<{ readonly origin: string; readonly grants: readonly IPermissionCategoryState[] }> = [];
 	const permissions = new BrowserPermissionStore();
-	const serviceCollection = new ServiceCollection(
-		[IThemeService, createTestThemeService()],
-		[ITelemetryService, createTestTelemetryService()],
-		[ILogService, createTestLogService()],
-		[IKeybindingService, createTestKeybindingService()],
-		[IHoverService, createTestHoverService()],
-		[IContextViewService, createTestContextViewService()],
-		[INotificationService, notificationService],
-		[IQuickInputService, createTestQuickInputService()],
-		[IBrowserZoomService, createTestBrowserZoomService()],
-			[IStorageService, createTestStorageService()],
-			[IConfigurationService, new ConfigurationService()],
-			[IContextKeyServiceDecorator, contextKeyService as IContextKeyService],
-		);
+	const serviceCollection = createBrowserEditorTestServiceCollection();
+	serviceCollection.set(INotificationService, notificationService);
 	const instantiationService = new InstantiationService(serviceCollection, true);
 	const browserViewWorkbenchService = new TestBrowserViewWorkbenchService(
 		instantiationService,

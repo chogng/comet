@@ -22,10 +22,8 @@ import {
 	SettingsController,
 } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
-import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import { generateUuid } from 'cs/base/common/uuid';
 
-import { createEditorBrowserToolbarActions } from 'cs/workbench/contrib/browserView/browser/browserToolbarActions';
 import { getEditorCreationActions } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 import { SidebarFooterActionsView } from 'cs/workbench/browser/parts/sidebar/sidebarFooterActions';
 import {
@@ -69,7 +67,6 @@ import {
 	IEditorService,
 	type EditorOpenHandler,
 } from 'cs/workbench/services/editor/common/editorService';
-import { IBrowserEditorToolbarService } from 'cs/workbench/contrib/browserView/common/browserEditorToolbarService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
 import { NotificationsStatus } from 'cs/workbench/browser/parts/notifications/notificationsStatus';
@@ -168,7 +165,6 @@ class SessionsWorkbenchHost {
 		@ISessionsLayoutService private readonly sessionsLayoutService: ISessionsLayoutService,
 		@IEditorGroupsService private readonly editorGroupsService: SessionsEditorParts,
 		@IEditorService private readonly editorService: IEditorService,
-		@IBrowserEditorToolbarService private readonly browserEditorToolbarService: IBrowserEditorToolbarService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IFetchService private readonly fetchService: IFetchService,
 		@IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
@@ -253,7 +249,6 @@ class SessionsWorkbenchHost {
 			this.globalDisposables.pop()?.();
 		}
 
-		this.browserEditorToolbarService.setActions(null);
 		this.titlebarPart.dispose();
 		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, null);
 
@@ -582,16 +577,7 @@ class SessionsWorkbenchHost {
 		const libraryModelInstance = this.libraryModel;
 		const { librarySnapshot, isLibraryLoading } =
 			libraryModelInstance.getSnapshot();
-		const refreshLibrary = () => {
-			void libraryModelInstance.refresh();
-		};
-
 		const activeEditor = this.editorGroupsService.activeGroup.activeEditor;
-		const activeBrowserEditor = activeEditor instanceof BrowserEditorInput
-			? activeEditor
-			: undefined;
-		const browserViewId = activeBrowserEditor?.id ?? '';
-		const browserUrl = activeBrowserEditor?.url ?? '';
 		const browserPageTitle = activeEditor?.getName() ?? '';
 		const handleOpenEditor: EditorOpenHandler = (input, options) =>
 			this.editorService.openEditor(input, options);
@@ -624,17 +610,6 @@ class SessionsWorkbenchHost {
 			});
 			this.editorGroupsService.mainPart.focusPrimaryInput();
 		};
-		const editorBrowserToolbarActions = createEditorBrowserToolbarActions({
-			browserViewId,
-			browserUrl,
-			invokeDesktop: nativeHost.invoke,
-			notificationService: this.notificationService,
-			knowledgeBaseEnabled,
-			ui,
-			onLibraryUpdated: refreshLibrary,
-			onOpenAddressBarSourceMenu: focusWorkbenchWebUrlInput,
-		});
-		this.browserEditorToolbarService.setActions(editorBrowserToolbarActions);
 		this.collapsedEditorTitlebarActionsView.setProps({
 			contextMenuService: this.contextMenuService,
 				contextViewProvider: this.contextViewService,

@@ -30,14 +30,11 @@ import {
 } from 'cs/workbench/browser/parts/editor/panes/editorPaneRegistry';
 import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
 import { renderBrowserStatusbarMode } from 'cs/workbench/contrib/browserView/browser/browserStatusbarRenderer';
-import { registerEditorModeToolbar } from 'cs/workbench/browser/parts/editor/editorModeToolbarRegistry';
-import { createEditorModeToolbarHost } from 'cs/workbench/contrib/browserView/browser/browserModeToolbarHost';
 import 'cs/workbench/contrib/browserView/browser/media/browserHistoryAndFavoritesPanel.css';
 import 'cs/workbench/contrib/browserView/browser/media/browserEditorTab.css';
 import 'cs/workbench/contrib/browserView/browser/media/browserModeToolbar.css';
 import { registerEditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
-import 'cs/workbench/contrib/browserView/browser/browserEditorToolbarService';
 import { editorInputSerializerRegistry } from 'cs/workbench/common/editor/editorInputSerializerRegistry';
 
 import 'cs/workbench/contrib/browserView/electron-browser/features/webContentsViewRendererFeature';
@@ -55,10 +52,11 @@ import 'cs/workbench/contrib/browserView/electron-browser/features/browserSearch
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserTabManagementFeatures';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserRemoteFeatures';
 import 'cs/workbench/contrib/browserView/electron-browser/features/browserNavigationFeatures';
+import 'cs/workbench/contrib/browserView/electron-browser/features/browserToolbarActions';
+import 'cs/workbench/contrib/browserView/electron-browser/browserModeToolbar';
 
 registerSingleton(IPlaywrightService, PlaywrightWorkbenchService, InstantiationType.Delayed);
 registerStatusbarModeRenderer('browser', renderBrowserStatusbarMode);
-registerEditorModeToolbar('browser', createEditorModeToolbarHost);
 registerEditorCreationAction({
 	commandId: BrowserViewCommandId.NewTab,
 	icon: 'link-external',
