@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { LocaleMessages } from 'language/locales';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
@@ -45,7 +44,6 @@ import {
 
 import type {
   SettingsPartActions,
-  SettingsPartLabels,
   SettingsPartProps,
   SettingsPartState,
 } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
@@ -59,40 +57,11 @@ import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import 'cs/workbench/contrib/preferences/browser/media/settingsEditor.css';
 import 'cs/workbench/contrib/preferences/browser/media/settingsWidgets.css';
 
-type CreateSettingsPartLabelsParams = { ui: LocaleMessages };
 type CreateSettingsPartPropsParams = { state: SettingsPartState; actions: SettingsPartActions };
-
-export function createSettingsPartLabels({ ui }: CreateSettingsPartLabelsParams): SettingsPartLabels {
-  return {
-    settingsTitle: ui.settingsTitle, settingsLoading: ui.settingsLoading, settingsSearchPlaceholder: ui.settingsSearchPlaceholder, settingsSearchNoResults: ui.settingsSearchNoResults, settingsLanguage: ui.settingsLanguage, languageChinese: ui.languageChinese, languageEnglish: ui.languageEnglish, settingsLanguageHint: ui.settingsLanguageHint,
-    settingsNavigationGeneral: ui.settingsNavigationGeneral, settingsNavigationAppearance: ui.settingsNavigationAppearance, settingsNavigationBrowser: ui.settingsNavigationBrowser, settingsNavigationTextEditor: ui.settingsNavigationTextEditor, settingsNavigationKnowledgeBase: ui.settingsNavigationKnowledgeBase, settingsNavigationLiterature: ui.settingsNavigationLiterature, settingsTextEditorTitle: ui.settingsTextEditorTitle, settingsTextEditorHint: ui.settingsTextEditorHint,
-    settingsTextEditorDefaultBodyStyle: ui.settingsTextEditorDefaultBodyStyle, settingsTextEditorFontFamily: ui.settingsTextEditorFontFamily, settingsTextEditorFontSize: ui.settingsTextEditorFontSize, settingsTextEditorLineHeight: ui.settingsTextEditorLineHeight, settingsTextEditorParagraphSpacingBefore: ui.settingsTextEditorParagraphSpacingBefore, settingsTextEditorParagraphSpacingAfter: ui.settingsTextEditorParagraphSpacingAfter, settingsTextEditorColor: ui.settingsTextEditorColor,
-    settingsBatchOptions: ui.settingsBatchOptions, batchCount: ui.batchCount, startDate: ui.startDate, endDate: ui.endDate, clearDate: ui.clearDate, today: ui.today,
-    settingsSupportedSources: ui.settingsSupportedSources, settingsSupportedSourcesHint: ui.settingsSupportedSourcesHint, settingsSupportedSourceUrl: ui.settingsSupportedSourceUrl, settingsSupportedSourceJournalTitle: ui.settingsSupportedSourceJournalTitle, settingsSupportedSourceFetchTarget: ui.settingsSupportedSourceFetchTarget, settingsFetchTargetBackground: ui.settingsFetchTargetBackground, settingsFetchTargetWebContentsView: ui.settingsFetchTargetWebContentsView, settingsSupportedSourcesShow: ui.settingsSupportedSourcesShow, settingsSupportedSourcesHide: ui.settingsSupportedSourcesHide,
-    settingsAppearanceTitle: ui.settingsAppearanceTitle, settingsTheme: ui.settingsTheme, settingsThemeHint: ui.settingsThemeHint, settingsThemeLight: ui.settingsThemeLight, settingsThemeDark: ui.settingsThemeDark, settingsThemeSystem: ui.settingsThemeSystem, settingsUseMica: ui.settingsUseMica, settingsUseMicaHint: ui.settingsUseMicaHint, settingsLibraryTitle: ui.settingsLibraryTitle, settingsKnowledgeBaseTitle: ui.settingsKnowledgeBaseTitle, settingsKnowledgeBaseHint: ui.settingsKnowledgeBaseHint, settingsKnowledgeBaseMode: ui.settingsKnowledgeBaseMode,
-    settingsKnowledgeBaseModeHint: ui.settingsKnowledgeBaseModeHint, settingsKnowledgeBaseModeDisabledHint: ui.settingsKnowledgeBaseModeDisabledHint, settingsKnowledgeBaseAutoIndex: ui.settingsKnowledgeBaseAutoIndex, settingsKnowledgeBaseAutoIndexHint: ui.settingsKnowledgeBaseAutoIndexHint,
-    settingsKnowledgeBasePdfDownloadDir: ui.settingsKnowledgeBasePdfDownloadDir, settingsKnowledgeBasePdfDownloadDirPlaceholder: ui.settingsKnowledgeBasePdfDownloadDirPlaceholder, settingsKnowledgeBasePdfDownloadDirHint: ui.settingsKnowledgeBasePdfDownloadDirHint,
-    settingsLibraryStorageMode: ui.settingsLibraryStorageMode, settingsLibraryStorageModeLinkedOriginal: ui.settingsLibraryStorageModeLinkedOriginal, settingsLibraryStorageModeManagedCopy: ui.settingsLibraryStorageModeManagedCopy, settingsLibraryDirectory: ui.settingsLibraryDirectory,
-    settingsLibraryDirectoryPlaceholder: ui.settingsLibraryDirectoryPlaceholder, settingsLibraryDirectoryHint: ui.settingsLibraryDirectoryHint, settingsLibraryDirectoryInactiveHint: ui.settingsLibraryDirectoryInactiveHint, settingsLibraryDbFile: ui.settingsLibraryDbFile, settingsLibraryFilesDir: ui.settingsLibraryFilesDir, settingsLibraryCacheDir: ui.settingsLibraryCacheDir,
-    settingsLibraryStatusDocuments: ui.settingsLibraryStatusDocuments, settingsLibraryStatusFiles: ui.settingsLibraryStatusFiles, settingsLibraryStatusQueuedJobs: ui.settingsLibraryStatusQueuedJobs, settingsLibraryStatusEmpty: ui.settingsLibraryStatusEmpty, settingsLibraryRecentDocuments: ui.settingsLibraryRecentDocuments,
-    settingsLibraryDocumentRegistered: ui.settingsLibraryDocumentRegistered, settingsLibraryDocumentQueued: ui.settingsLibraryDocumentQueued, settingsLibraryDocumentRunning: ui.settingsLibraryDocumentRunning, settingsLibraryDocumentFailed: ui.settingsLibraryDocumentFailed,
-    settingsLibraryMaxConcurrentJobs: ui.settingsLibraryMaxConcurrentJobs, settingsLibraryMaxConcurrentJobsHint: ui.settingsLibraryMaxConcurrentJobsHint, settingsRagTitle: ui.settingsRagTitle, settingsRagProvider: ui.settingsRagProvider, settingsRagProviderHint: ui.settingsRagProviderHint,
-    settingsRagProviderMoark: ui.settingsRagProviderMoark, settingsRagApiKey: ui.settingsRagApiKey, settingsRagApiKeyPlaceholder: ui.settingsRagApiKeyPlaceholder, settingsRagBaseUrl: ui.settingsRagBaseUrl, settingsRagEmbeddingModel: ui.settingsRagEmbeddingModel,
-    settingsRagRerankerModel: ui.settingsRagRerankerModel, settingsRagEmbeddingPath: ui.settingsRagEmbeddingPath, settingsRagRerankPath: ui.settingsRagRerankPath, settingsRagCandidateCount: ui.settingsRagCandidateCount, settingsRagTopK: ui.settingsRagTopK,
-    settingsRagTestConnection: ui.settingsRagTestConnection, settingsRagHint: ui.settingsRagHint, settingsBatchHint: ui.settingsBatchHint, defaultPdfDir: ui.defaultPdfDir, settingsLayoutTitle: ui.settingsLayoutTitle, settingsStatusbar: ui.settingsStatusbar, settingsStatusbarHint: ui.settingsStatusbarHint, settingsStartupLayout: ui.settingsStartupLayout, settingsStartupLayoutHint: ui.settingsStartupLayoutHint, settingsStartupLayoutAgent: ui.settingsStartupLayoutAgent, settingsStartupLayoutFlow: ui.settingsStartupLayoutFlow, settingsBrowserTabKeepAliveLimit: ui.settingsBrowserTabKeepAliveLimit, settingsBrowserTabKeepAliveLimitHint: ui.settingsBrowserTabKeepAliveLimitHint, settingsBrowserTitle: ui.settingsBrowserTitle, settingsBrowserMaxHistoryEntries: ui.settingsBrowserMaxHistoryEntries, settingsBrowserMaxHistoryEntriesHint: ui.settingsBrowserMaxHistoryEntriesHint, settingsBrowserPageZoom: ui.settingsBrowserPageZoom, settingsBrowserPageZoomHint: ui.settingsBrowserPageZoomHint, settingsBrowserPageZoomMatchWindow: ui.settingsBrowserPageZoomMatchWindow, settingsBrowserSearchEngine: ui.settingsBrowserSearchEngine, settingsBrowserSearchEngineHint: ui.settingsBrowserSearchEngineHint, settingsBrowserSearchEngineNone: ui.settingsBrowserSearchEngineNone, settingsBrowserSearchEngineBing: ui.settingsBrowserSearchEngineBing, settingsBrowserSearchEngineGoogle: ui.settingsBrowserSearchEngineGoogle, settingsBrowserSearchEngineYahoo: ui.settingsBrowserSearchEngineYahoo, settingsBrowserSearchEngineDuckDuckGo: ui.settingsBrowserSearchEngineDuckDuckGo, settingsNotificationsTitle: ui.settingsNotificationsTitle, settingsNotificationsHint: ui.settingsNotificationsHint, settingsSystemNotifications: ui.settingsSystemNotifications, settingsSystemNotificationsHint: ui.settingsSystemNotificationsHint, settingsWarningNotifications: ui.settingsWarningNotifications, settingsWarningNotificationsHint: ui.settingsWarningNotificationsHint, settingsMenuBarIcon: ui.settingsMenuBarIcon, settingsMenuBarIconHint: ui.settingsMenuBarIconHint, settingsCompletionNotifications: ui.settingsCompletionNotifications, settingsCompletionNotificationsHint: ui.settingsCompletionNotificationsHint,
-    pdfFileNameUseSelectionOrder: ui.pdfFileNameUseSelectionOrder, pdfFileNameUseSelectionOrderHint: ui.pdfFileNameUseSelectionOrderHint, downloadDirPlaceholder: ui.downloadDirPlaceholder, change: ui.change, open: ui.open, chooseDirectory: ui.chooseDirectory, changeConfigLocation: ui.changeConfigLocation,
-    resetDefault: ui.resetDefault, settingsHintPath: ui.settingsHintPath, settingsConfigPath: ui.settingsConfigPath, currentDir: ui.currentDir, systemDownloads: ui.systemDownloads, settingsLlmTitle: ui.settingsLlmTitle, settingsLlmProvider: ui.settingsLlmProvider,
-    settingsLlmProviderHint: ui.settingsLlmProviderHint, settingsLlmProviderGlm: ui.settingsLlmProviderGlm, settingsLlmProviderKimi: ui.settingsLlmProviderKimi, settingsLlmProviderDeepSeek: ui.settingsLlmProviderDeepSeek, settingsLlmProviderGemini: ui.settingsLlmProviderGemini, settingsLlmApiKey: ui.settingsLlmApiKey,
-    settingsApiKeyConfigured: ui.settingsApiKeyConfigured, settingsApiKeyNotConfigured: ui.settingsApiKeyNotConfigured, settingsApiKeySet: ui.settingsApiKeySet, settingsApiKeyUpdate: ui.settingsApiKeyUpdate, settingsApiKeyClear: ui.settingsApiKeyClear,
-    settingsLlmApiKeyPlaceholder: ui.settingsLlmApiKeyPlaceholder, settingsLlmModel: ui.settingsLlmModel, settingsLlmSearchPlaceholder: ui.settingsLlmSearchPlaceholder, settingsLlmNoResults: ui.settingsLlmNoResults, settingsLlmMaxContext: ui.settingsLlmMaxContext, settingsLlmMaxContextHint: ui.settingsLlmMaxContextHint, settingsLlmTestConnection: ui.settingsLlmTestConnection,
-    settingsTranslationTitle: ui.settingsTranslationTitle, settingsTranslationProvider: ui.settingsTranslationProvider, settingsTranslationProviderHint: ui.settingsTranslationProviderHint, settingsTranslationProviderDeepL: ui.settingsTranslationProviderDeepL, settingsTranslationProviderGlm: ui.settingsTranslationProviderGlm, settingsTranslationProviderOpenAICompatible: ui.settingsTranslationProviderOpenAICompatible, settingsTranslationProviderCustom: ui.settingsTranslationProviderCustom, settingsTranslationProviderOpenAICompatibleHint: ui.settingsTranslationProviderOpenAICompatibleHint, settingsTranslationBaseUrl: ui.settingsTranslationBaseUrl,
-    settingsTranslationApiKey: ui.settingsTranslationApiKey, settingsTranslationApiKeyPlaceholder: ui.settingsTranslationApiKeyPlaceholder, settingsTranslationFetchModels: ui.settingsTranslationFetchModels, settingsTranslationTestConnection: ui.settingsTranslationTestConnection,
-  };
-}
 
 export function createSettingsPartProps({ state, actions }: CreateSettingsPartPropsParams): SettingsPartProps {
   return {
-    labels: createSettingsPartLabels({ ui: state.ui }),
+	labels: state.ui,
     showSupportedSources: false,
     onToggleSupportedSources: () => {},
     ...state,

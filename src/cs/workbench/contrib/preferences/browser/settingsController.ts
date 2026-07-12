@@ -50,6 +50,7 @@ import {
 	minRagRetrievalCandidateCount,
 	minRagRetrievalTopK,
 } from 'cs/workbench/services/rag/config';
+import { isSupportedLanguagePackLocale } from 'cs/platform/languagePacks/common/languagePacks';
 
 const immediateAutoSaveDelayMs = 0;
 const debouncedAutoSaveDelayMs = 650;
@@ -205,6 +206,18 @@ export class SettingsController {
     this.settingsModel.setSystemNotificationsEnabled(nextSystemNotificationsEnabled);
     this.scheduleImmediateAutoSave();
   };
+
+	readonly setLocale = (value: string) => {
+		if (!isSupportedLanguagePackLocale(value)) {
+			return;
+		}
+
+		void this.localeService
+			.updateLocalePreference(value, this.getSettingsModelContext())
+			.catch(error => {
+				console.error('Failed to update display language.', error);
+			});
+	};
 
   readonly setWarningNotificationsEnabled = (
     nextWarningNotificationsEnabled: boolean,

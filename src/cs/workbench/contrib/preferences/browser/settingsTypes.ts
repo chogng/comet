@@ -23,37 +23,8 @@ export type SettingsDropdownOption = {
   isDisabled?: boolean;
 };
 
-// Keep preferences types separate from the editor implementation so field views
-// can depend on stable contracts without importing the editor host module.
-export type SettingsPartLabels = {
-  settingsTitle: string; settingsLoading: string; settingsSearchPlaceholder: string; settingsSearchNoResults: string; settingsLanguage: string; languageChinese: string; languageEnglish: string; settingsLanguageHint: string;
-  settingsNavigationGeneral: string; settingsNavigationAppearance: string; settingsNavigationBrowser: string; settingsNavigationTextEditor: string; settingsNavigationKnowledgeBase: string; settingsNavigationLiterature: string; settingsTextEditorTitle: string; settingsTextEditorHint: string;
-  settingsTextEditorDefaultBodyStyle: string; settingsTextEditorFontFamily: string; settingsTextEditorFontSize: string; settingsTextEditorLineHeight: string; settingsTextEditorParagraphSpacingBefore: string; settingsTextEditorParagraphSpacingAfter: string; settingsTextEditorColor: string;
-  settingsBatchOptions: string; batchCount: string; startDate: string; endDate: string; clearDate: string; today: string;
-  settingsSupportedSources: string; settingsSupportedSourcesHint: string; settingsSupportedSourceUrl: string; settingsSupportedSourceJournalTitle: string; settingsSupportedSourceFetchTarget: string; settingsFetchTargetBackground: string; settingsFetchTargetWebContentsView: string; settingsSupportedSourcesShow: string; settingsSupportedSourcesHide: string;
-  settingsAppearanceTitle: string; settingsTheme: string; settingsThemeHint: string; settingsThemeLight: string; settingsThemeDark: string; settingsThemeSystem: string; settingsUseMica: string; settingsUseMicaHint: string; settingsLibraryTitle: string; settingsKnowledgeBaseMode: string;
-  settingsKnowledgeBaseTitle: string; settingsKnowledgeBaseHint: string; settingsKnowledgeBaseModeHint: string; settingsKnowledgeBaseModeDisabledHint: string; settingsKnowledgeBaseAutoIndex: string; settingsKnowledgeBaseAutoIndexHint: string;
-  settingsKnowledgeBasePdfDownloadDir: string; settingsKnowledgeBasePdfDownloadDirPlaceholder: string; settingsKnowledgeBasePdfDownloadDirHint: string;
-  settingsLibraryStorageMode: string; settingsLibraryStorageModeLinkedOriginal: string; settingsLibraryStorageModeManagedCopy: string; settingsLibraryDirectory: string;
-  settingsLibraryDirectoryPlaceholder: string; settingsLibraryDirectoryHint: string; settingsLibraryDirectoryInactiveHint: string; settingsLibraryDbFile: string; settingsLibraryFilesDir: string; settingsLibraryCacheDir: string;
-  settingsLibraryStatusDocuments: string; settingsLibraryStatusFiles: string; settingsLibraryStatusQueuedJobs: string; settingsLibraryStatusEmpty: string; settingsLibraryRecentDocuments: string;
-  settingsLibraryDocumentRegistered: string; settingsLibraryDocumentQueued: string; settingsLibraryDocumentRunning: string; settingsLibraryDocumentFailed: string;
-  settingsLibraryMaxConcurrentJobs: string; settingsLibraryMaxConcurrentJobsHint: string; settingsRagTitle: string; settingsRagProvider: string; settingsRagProviderHint: string;
-  settingsRagProviderMoark: string; settingsRagApiKey: string; settingsRagApiKeyPlaceholder: string; settingsRagBaseUrl: string; settingsRagEmbeddingModel: string;
-  settingsRagRerankerModel: string; settingsRagEmbeddingPath: string; settingsRagRerankPath: string; settingsRagCandidateCount: string; settingsRagTopK: string;
-  settingsRagTestConnection: string; settingsRagHint: string; settingsBatchHint: string; defaultPdfDir: string;
-  settingsLayoutTitle: string; settingsStatusbar: string; settingsStatusbarHint: string; settingsStartupLayout: string; settingsStartupLayoutHint: string; settingsStartupLayoutAgent: string; settingsStartupLayoutFlow: string; settingsBrowserTabKeepAliveLimit: string; settingsBrowserTabKeepAliveLimitHint: string; settingsBrowserTitle: string; settingsBrowserMaxHistoryEntries: string; settingsBrowserMaxHistoryEntriesHint: string; settingsBrowserPageZoom: string; settingsBrowserPageZoomHint: string; settingsBrowserPageZoomMatchWindow: string; settingsBrowserSearchEngine: string; settingsBrowserSearchEngineHint: string; settingsBrowserSearchEngineNone: string; settingsBrowserSearchEngineBing: string; settingsBrowserSearchEngineGoogle: string; settingsBrowserSearchEngineYahoo: string; settingsBrowserSearchEngineDuckDuckGo: string; settingsNotificationsTitle: string; settingsNotificationsHint: string; settingsSystemNotifications: string; settingsSystemNotificationsHint: string; settingsWarningNotifications: string; settingsWarningNotificationsHint: string; settingsMenuBarIcon: string; settingsMenuBarIconHint: string; settingsCompletionNotifications: string; settingsCompletionNotificationsHint: string;
-  pdfFileNameUseSelectionOrder: string; pdfFileNameUseSelectionOrderHint: string; downloadDirPlaceholder: string; change: string; open: string; chooseDirectory: string; changeConfigLocation: string;
-  resetDefault: string; settingsHintPath: string; settingsConfigPath: string; currentDir: string; systemDownloads: string; settingsLlmTitle: string; settingsLlmProvider: string;
-  settingsLlmProviderHint: string; settingsLlmProviderGlm: string; settingsLlmProviderKimi: string; settingsLlmProviderDeepSeek: string; settingsLlmProviderGemini: string; settingsLlmApiKey: string;
-  settingsApiKeyConfigured: string; settingsApiKeyNotConfigured: string; settingsApiKeySet: string; settingsApiKeyUpdate: string; settingsApiKeyClear: string;
-  settingsLlmApiKeyPlaceholder: string; settingsLlmModel: string; settingsLlmSearchPlaceholder: string; settingsLlmNoResults: string; settingsLlmMaxContext: string; settingsLlmMaxContextHint: string; settingsLlmTestConnection: string;
-  settingsTranslationTitle: string; settingsTranslationProvider: string; settingsTranslationProviderHint: string; settingsTranslationProviderDeepL: string; settingsTranslationProviderGlm: string; settingsTranslationProviderOpenAICompatible: string; settingsTranslationProviderCustom: string; settingsTranslationProviderOpenAICompatibleHint: string; settingsTranslationBaseUrl: string;
-  settingsTranslationApiKey: string; settingsTranslationApiKeyPlaceholder: string; settingsTranslationFetchModels: string; settingsTranslationTestConnection: string;
-};
-
 export type SettingsPartProps = {
-  labels: SettingsPartLabels; isSettingsLoading: boolean; locale: Locale;
+  labels: LocaleMessages; isSettingsLoading: boolean; locale: Locale; onLocaleChange: (value: string) => void;
   editorDraftStyle: SettingValue<EditorDraftStyleSettings>;
   editorDraftFontFamilyOptions: readonly SettingsDropdownOption[];
   editorDraftFontSizeOptions: readonly SettingsDropdownOption[];
@@ -90,7 +61,7 @@ export type SettingsPartState = {
 };
 
 export type SettingsPartActions = {
-  onSystemNotificationsEnabledChange: (checked: boolean) => void; onWarningNotificationsEnabledChange: (checked: boolean) => void; onMenuBarIconEnabledChange: (checked: boolean) => void; onCompletionNotificationsEnabledChange: (checked: boolean) => void; onUseMicaChange: (checked: boolean) => void; onStatusbarVisibleChange: (checked: boolean) => void; onStartupLayoutChange: (value: AppStartupLayout) => void; onBrowserTabKeepAliveLimitChange: (value: string) => void; onBrowserMaxHistoryEntriesChange: (value: string) => void; onBrowserPageZoomChange: (value: string) => void; onBrowserSearchEngineChange: (value: string) => void; onThemeChange: (value: AppTheme) => void; onKnowledgeBaseEnabledChange: (checked: boolean) => void; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void;
+  onLocaleChange: (value: string) => void; onSystemNotificationsEnabledChange: (checked: boolean) => void; onWarningNotificationsEnabledChange: (checked: boolean) => void; onMenuBarIconEnabledChange: (checked: boolean) => void; onCompletionNotificationsEnabledChange: (checked: boolean) => void; onUseMicaChange: (checked: boolean) => void; onStatusbarVisibleChange: (checked: boolean) => void; onStartupLayoutChange: (value: AppStartupLayout) => void; onBrowserTabKeepAliveLimitChange: (value: string) => void; onBrowserMaxHistoryEntriesChange: (value: string) => void; onBrowserPageZoomChange: (value: string) => void; onBrowserSearchEngineChange: (value: string) => void; onThemeChange: (value: AppTheme) => void; onKnowledgeBaseEnabledChange: (checked: boolean) => void; onAutoIndexDownloadedPdfChange: (checked: boolean) => void; onKnowledgeBasePdfDownloadDirChange: (value: string) => void; onChooseKnowledgeBasePdfDownloadDir: () => void;
   onLibraryStorageModeChange: (value: LibraryStorageMode) => void; onLibraryDirectoryChange: (value: string) => void; onChooseLibraryDirectory: () => void; onMaxConcurrentIndexJobsChange: (value: string) => void;
   onRagProviderApiKeyChange: (provider: RagProviderId, apiKey: string) => void; onRagProviderBaseUrlChange: (provider: RagProviderId, baseUrl: string) => void; onRagProviderEmbeddingModelChange: (provider: RagProviderId, model: string) => void;
   onRagProviderRerankerModelChange: (provider: RagProviderId, model: string) => void; onRagProviderEmbeddingPathChange: (provider: RagProviderId, path: string) => void; onRagProviderRerankPathChange: (provider: RagProviderId, path: string) => void;

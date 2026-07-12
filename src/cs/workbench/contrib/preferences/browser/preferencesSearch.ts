@@ -13,7 +13,7 @@ import {
 	type SettingsSearchId,
 	type SettingsSectionId,
 } from 'cs/workbench/contrib/preferences/common/settings';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 
 type PreferencesSearchItem = {
 	readonly labels: readonly string[];
@@ -127,7 +127,7 @@ function createEmptySectionIdsByPage() {
 	) as Record<SettingsPageId, SettingsSectionId[]>;
 }
 
-export function createPreferencesSearchIndex(labels: SettingsPartLabels): PreferencesSearchIndex {
+export function createPreferencesSearchIndex(labels: LocaleMessages): PreferencesSearchIndex {
 	const entries: PreferencesSearchIndexEntry[] = [];
 
 	for (const page of settingsPageLayout) {

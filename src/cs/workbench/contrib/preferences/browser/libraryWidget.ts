@@ -8,7 +8,7 @@ import {
   numberStepperDecrementAriaLabel,
   numberStepperIncrementAriaLabel,
 } from 'cs/base/browser/ui/numberStepper/numberStepper';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 import {
   createSettingsSection,
   createSettingsRow,
@@ -27,7 +27,7 @@ import {
 	minKnowledgeBaseConcurrentIndexJobs,
 } from 'cs/workbench/services/knowledgeBase/config';
 
-function resolveLibraryDocumentStatusLabel(labels: SettingsPartLabels, document: LibraryDocumentSummary) {
+function resolveLibraryDocumentStatusLabel(labels: LocaleMessages, document: LibraryDocumentSummary) {
   if (document.latestJobStatus === 'failed' || document.ingestStatus === 'failed') { return labels.settingsLibraryDocumentFailed; }
   if (document.latestJobStatus === 'running' || document.ingestStatus === 'indexing') { return labels.settingsLibraryDocumentRunning; }
   if (document.latestJobStatus === 'queued' || document.ingestStatus === 'queued') { return labels.settingsLibraryDocumentQueued; }
@@ -35,7 +35,7 @@ function resolveLibraryDocumentStatusLabel(labels: SettingsPartLabels, document:
 }
 
 export type LibrarySettingsSectionProps = {
-  labels: SettingsPartLabels;
+  labels: LocaleMessages;
   contextViewProvider: IContextViewProvider;
   knowledgeBaseEnabled: boolean;
   autoIndexDownloadedPdf: boolean;

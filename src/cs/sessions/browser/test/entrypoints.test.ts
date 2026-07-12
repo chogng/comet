@@ -177,7 +177,16 @@ test('Settings controller is a DI service without mutable shell context', () => 
 		/SettingsControllerContext|CreateSettingsControllerParams|readonly setContext/,
 	);
 	assert.match(settingsController, /@INativeHostService private readonly nativeHostService/);
+	assert.match(settingsController, /updateLocalePreference\(value, this\.getSettingsModelContext\(\)\)/);
 	assert.match(settingsController, /registerSingleton\(\s*ISettingsController,/);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/workbench/contrib/localization/browser/localizationsActions.ts')),
+		false,
+	);
+	const settingsEditor = readSource(
+		'src/cs/workbench/contrib/preferences/browser/settingsEditor.ts',
+	);
+	assert.doesNotMatch(settingsEditor, /createSettingsPartLabels/);
 });
 
 test('Library model is a DI service without mutable shell context', () => {

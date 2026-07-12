@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Locale } from 'language/i18n';
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'cs/base/common/editorDraftStyle';
 import {
   BrowserSearchEngineId,
@@ -41,10 +40,7 @@ import type {
   SettingsDropdownOption,
   SettingsPartProps,
 } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
-import {
-  createDisplayLanguageOptions,
-  requestSetDisplayLanguage,
-} from 'cs/workbench/contrib/localization/browser/localizationsActions';
+import { createBuiltInLanguagePackItems } from 'cs/platform/languagePacks/common/languagePacks';
 import {
   maxBrowserTabKeepAliveLimit,
   minBrowserTabKeepAliveLimit,
@@ -240,10 +236,13 @@ export function renderLocaleSection(props: SettingsPartProps, contextViewProvide
     listClassName: 'comet-settings-language-list',
   });
   const select = buildSelect(
-    createDisplayLanguageOptions(props.labels),
+	createBuiltInLanguagePackItems(props.labels).map(item => ({
+		value: item.id,
+		label: item.label,
+	})),
     props.locale,
     'settings.locale',
-    (value) => requestSetDisplayLanguage(value as Locale),
+	props.onLocaleChange,
     contextViewProvider,
     'comet-settings-language-toggle',
   );

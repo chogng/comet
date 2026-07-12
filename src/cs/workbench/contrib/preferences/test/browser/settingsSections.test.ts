@@ -11,13 +11,11 @@ import { locales } from 'language/locales';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 
 let cleanupDomEnvironment: (() => void) | undefined;
-let createSettingsPartLabels: typeof import('cs/workbench/contrib/preferences/browser/settingsEditor').createSettingsPartLabels;
 let renderSupportedSourcesSection: typeof import('cs/workbench/contrib/preferences/browser/settingsSections').renderSupportedSourcesSection;
 
 test.before(async () => {
 	const domEnvironment = installDomTestEnvironment();
 	cleanupDomEnvironment = domEnvironment.cleanup;
-	({ createSettingsPartLabels } = await import('cs/workbench/contrib/preferences/browser/settingsEditor'));
 	({ renderSupportedSourcesSection } = await import('cs/workbench/contrib/preferences/browser/settingsSections'));
 });
 
@@ -34,7 +32,7 @@ test('Supported Sources exposes the Journal home without leaking its discovery U
 		discoveryUrl: URI.parse('https://example.com/internal-discovery'),
 		providerId: 'provider.test',
 	};
-	const labels = createSettingsPartLabels({ ui: locales.en });
+	const labels = locales.en;
 	const section = renderSupportedSourcesSection({
 		labels,
 		supportedSources: [journal],
@@ -53,4 +51,8 @@ test('Supported Sources exposes the Journal home without leaking its discovery U
 		title: `${labels.settingsSupportedSourceUrl}: ${journal.homeUrl.toString(true)}`,
 		containsDiscoveryUrl: false,
 	});
+});
+
+test('Chinese Settings navigation localizes the Appearance page', () => {
+	assert.equal(locales.zh.settingsNavigationAppearance, '外观');
 });

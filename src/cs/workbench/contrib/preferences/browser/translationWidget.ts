@@ -4,7 +4,7 @@ import type {
   TranslationProviderSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 import {
   createSettingsSection,
   createSettingsRow,
@@ -23,7 +23,7 @@ import {
 } from 'cs/workbench/services/llm/registry';
 
 export type TranslationSettingsSectionProps = {
-  labels: SettingsPartLabels;
+  labels: LocaleMessages;
   contextViewProvider: IContextViewProvider;
   activeTranslationProvider: TranslationProviderId;
   translationProviders: Record<TranslationProviderId, TranslationProviderSettings>;

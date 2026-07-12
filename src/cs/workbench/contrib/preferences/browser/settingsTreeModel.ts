@@ -15,7 +15,7 @@ import type {
 	SettingsPageId,
 	SettingsSectionId,
 } from 'cs/workbench/contrib/preferences/common/settings';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 
 abstract class SettingsTreeElement {
 	constructor(readonly id: string) {}
@@ -67,7 +67,7 @@ export class SettingsTreeModel {
 	private searchResultModel!: SearchResultModel;
 
 	constructor(
-		labels: SettingsPartLabels,
+		labels: LocaleMessages,
 		query: string,
 	) {
 		this.update(labels, query);
@@ -78,7 +78,7 @@ export class SettingsTreeModel {
 	}
 
 	update(
-		labels: SettingsPartLabels,
+		labels: LocaleMessages,
 		query: string,
 	) {
 		this.pages = settingsPageLayout.map(page => new SettingsTreePageElement(

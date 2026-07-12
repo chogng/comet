@@ -4,7 +4,7 @@ import {
   numberStepperDecrementAriaLabel,
   numberStepperIncrementAriaLabel,
 } from 'cs/base/browser/ui/numberStepper/numberStepper';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 import {
   createSettingsSection,
   createSettingsRow,
@@ -23,7 +23,7 @@ import {
 } from 'cs/workbench/services/rag/config';
 
 export type RagSettingsSectionProps = {
-  labels: SettingsPartLabels;
+  labels: LocaleMessages;
   activeRagProvider: RagProviderId;
   ragProviders: Record<RagProviderId, RagProviderSettings>;
   retrievalCandidateCount: number;

@@ -4,63 +4,32 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-  localeService,
-} from 'cs/workbench/services/localization/browser/localeService';
-import {
-  subscribeLocalizationUiActions,
-} from 'cs/workbench/contrib/localization/browser/localizationsActions';
-import {
   registerWorkbenchContribution,
-  type Disposable,
 } from 'cs/workbench/common/contributions';
 
-import { hasDesktopRuntime } from 'cs/base/common/platform';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 
 function createLocaleServiceContext(nativeHostService: INativeHostService) {
   return {
-    desktopRuntime: hasDesktopRuntime(),
-    invokeDesktop: async <T>(
-      command: string,
-      args?: Record<string, unknown>,
-    ): Promise<T> => {
-      return nativeHostService.invoke(command as never, args as never) as Promise<T>;
-    },
+	desktopRuntime: nativeHostService.canInvoke(),
+	invokeDesktop: nativeHostService.invoke,
   };
 }
 
-export class WorkbenchLocalizationContribution implements Disposable {
-  private readonly unsubscribeLocalizationUiActions: () => void;
-
+class WorkbenchLocalizationContribution {
   constructor(
     @INativeHostService nativeHostService: INativeHostService,
+	@IWorkbenchLocaleService localeService: IWorkbenchLocaleService,
   ) {
     const context = createLocaleServiceContext(nativeHostService);
     void localeService.initialize(context).catch((error) => {
       console.error('Failed to initialize locale service.', error);
     });
-
-    this.unsubscribeLocalizationUiActions = subscribeLocalizationUiActions(
-      (action) => {
-        if (action.type !== 'SET_DISPLAY_LANGUAGE') {
-          return;
-        }
-
-        void localeService
-          .updateLocalePreference(action.locale, context)
-          .catch((error) => {
-            console.error('Failed to update display language.', error);
-          });
-      },
-    );
-  }
-
-  dispose() {
-    this.unsubscribeLocalizationUiActions();
   }
 }
 
-registerWorkbenchContribution(() =>
-  getWorkbenchInstantiationService().createInstance(WorkbenchLocalizationContribution),
-);
+registerWorkbenchContribution(() => {
+	getWorkbenchInstantiationService().createInstance(WorkbenchLocalizationContribution);
+});

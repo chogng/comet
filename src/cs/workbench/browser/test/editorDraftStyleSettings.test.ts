@@ -15,6 +15,7 @@ import { SettingsController } from 'cs/workbench/contrib/preferences/browser/set
 import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';
 import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import type { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import type { LanguagePackLocale, LocaleServiceContext } from 'cs/workbench/services/localization/common/locale';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import { defaultBrowserTabKeepAliveLimit } from 'cs/workbench/services/webContent/webContentRetentionConfig';
 import {
@@ -32,6 +33,24 @@ async function flushMicrotasks() {
   await Promise.resolve();
 }
 
+function createTestLocaleService(
+	getLocale: () => LanguagePackLocale = () => 'en',
+	updateLocalePreference: (
+		locale: LanguagePackLocale,
+		context: LocaleServiceContext,
+	) => Promise<void> = async () => {},
+) {
+	return {
+		_serviceBrand: undefined,
+		subscribe: () => () => {},
+		getLocale,
+		applyLocale: () => {},
+		updateLocalePreference,
+		syncDocumentLanguage: () => {},
+		initialize: async () => getLocale(),
+	} satisfies IWorkbenchLocaleService;
+}
+
 function createSettingsController(
 	invokeDesktop: ElectronInvoke,
 	editorDraftStyleService: EditorDraftStyleService = new EditorDraftStyleService(),
@@ -43,9 +62,7 @@ function createSettingsController(
 			invoke: invokeDesktop,
 		} as INativeHostService,
 		new NoOpNotificationService(),
-		{
-			getLocale: () => 'en',
-		} as IWorkbenchLocaleService,
+		createTestLocaleService(),
 		new WorkbenchLanguageService(),
 		editorDraftStyleService,
 	);
@@ -71,9 +88,7 @@ test('SettingsController uses the current locale for async completion notificati
 		{
 			info: (message: string) => notifications.push(message),
 		} as never,
-		{
-			getLocale: () => locale,
-		} as IWorkbenchLocaleService,
+		createTestLocaleService(() => locale),
 		new WorkbenchLanguageService(),
 		new EditorDraftStyleService(),
 	);
@@ -89,6 +104,38 @@ test('SettingsController uses the current locale for async completion notificati
 			model: 'model.test',
 		}),
 	]);
+	controller.dispose();
+});
+
+test('SettingsController updates supported locales through the locale service', async () => {
+	const updates: Array<{ locale: string; desktopRuntime: boolean }> = [];
+	const controller = new SettingsController(
+		new SettingsModel(),
+		{
+			_serviceBrand: undefined,
+			canInvoke: () => true,
+			invoke: (async () => ({})) as ElectronInvoke,
+			ipc: undefined,
+			windowControls: undefined,
+			webContent: undefined,
+			document: undefined,
+		} satisfies INativeHostService,
+		new NoOpNotificationService(),
+		createTestLocaleService(
+			() => 'en',
+			async (locale, context) => {
+				updates.push({ locale, desktopRuntime: context.desktopRuntime });
+			},
+		),
+		new WorkbenchLanguageService(),
+		new EditorDraftStyleService(),
+	);
+
+	controller.setLocale('unsupported');
+	controller.setLocale('zh');
+	await flushMicrotasks();
+
+	assert.deepEqual(updates, [{ locale: 'zh', desktopRuntime: true }]);
 	controller.dispose();
 });
 

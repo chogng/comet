@@ -5,11 +5,11 @@ import {
 	type SettingsSearchId,
 	type SettingsSectionId,
 } from 'cs/workbench/contrib/preferences/common/settings';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 
 type SettingsPageDefinition = {
   id: SettingsPageId;
-  label: (labels: SettingsPartLabels) => string;
+  label: (labels: LocaleMessages) => string;
   icon?: LxIconName;
   sections: SettingsSectionId[];
 };
@@ -17,7 +17,7 @@ type SettingsPageDefinition = {
 export type SettingsSectionDefinition = {
   id: SettingsSectionId;
   settingIds: readonly SettingsSearchId[];
-  searchLabels: (labels: SettingsPartLabels) => readonly string[];
+  searchLabels: (labels: LocaleMessages) => readonly string[];
 };
 
 export const settingsPageLayout: readonly SettingsPageDefinition[] = [
@@ -346,7 +346,7 @@ export function createSettingsSectionMap(factory: () => HTMLElement): SettingsSe
 }
 
 export function getSettingsPageNavigationItems(
-  labels: SettingsPartLabels,
+  labels: LocaleMessages,
 ): SettingsNavigationItem[] {
   return settingsPageLayout.map((page) => ({
     id: page.id,

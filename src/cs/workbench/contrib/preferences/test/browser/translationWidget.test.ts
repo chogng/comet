@@ -14,13 +14,11 @@ import { locales } from 'language/locales';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let TranslationSettingsSection: typeof import('cs/workbench/contrib/preferences/browser/translationWidget').TranslationSettingsSection;
-let createSettingsPartLabels: typeof import('cs/workbench/contrib/preferences/browser/settingsEditor').createSettingsPartLabels;
 
 test.before(async () => {
   const domEnvironment = installDomTestEnvironment();
   cleanupDomEnvironment = domEnvironment.cleanup;
   ({ TranslationSettingsSection } = await import('cs/workbench/contrib/preferences/browser/translationWidget'));
-  ({ createSettingsPartLabels } = await import('cs/workbench/contrib/preferences/browser/settingsEditor'));
 });
 
 test.after(() => {
@@ -32,7 +30,7 @@ function createTranslationWidgetProps(
   overrides: Partial<TranslationSettingsSectionProps> = {},
 ): TranslationSettingsSectionProps {
   return {
-    labels: createSettingsPartLabels({ ui: locales.en }),
+	labels: locales.en,
     contextViewProvider: {
       showContextView: () => {},
       hideContextView: () => {},

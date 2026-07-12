@@ -102,15 +102,4 @@ class BrowserWorkbenchLocaleService implements IWorkbenchLocaleService {
 
 export const localeService = new BrowserWorkbenchLocaleService();
 
-export function createWorkbenchLocaleService(): IWorkbenchLocaleService {
-  return localeService;
-}
-
 registerWorkbenchService(IWorkbenchLocaleService, localeService);
-
-export {
-  IWorkbenchLocaleService,
-} from 'cs/workbench/services/localization/common/locale';
-export type {
-  LocaleServiceContext,
-} from 'cs/workbench/services/localization/common/locale';

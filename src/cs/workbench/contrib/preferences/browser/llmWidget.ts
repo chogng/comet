@@ -4,7 +4,7 @@ import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 import {
   createSettingsSection,
   createSettingsRow,
@@ -30,7 +30,7 @@ function normalizeModelLabel(value: string) {
 }
 
 export type LlmSettingsSectionProps = {
-  labels: SettingsPartLabels;
+  labels: LocaleMessages;
   activeLlmProvider: LlmProviderId;
   llmProviders: Record<LlmProviderId, LlmProviderSettings>;
   isSettingsSaving: boolean;
@@ -55,7 +55,7 @@ export type LlmSettingsSectionProps = {
   onTestLlmConnection: () => void;
 };
 
-function getLlmProviderLabel(labels: SettingsPartLabels, providerId: LlmProviderId) {
+function getLlmProviderLabel(labels: LocaleMessages, providerId: LlmProviderId) {
   switch (providerId) {
     case 'glm':
       return labels.settingsLlmProviderGlm;

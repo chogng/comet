@@ -13,7 +13,7 @@ import type { SettingsTreeModel } from 'cs/workbench/contrib/preferences/browser
 import {
 	createSettingsElement,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
-import type { SettingsPartLabels } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { LocaleMessages } from 'language/locales';
 
 type TOCTreeItem = {
 	readonly kind: 'item';
@@ -41,14 +41,14 @@ export class TOCTreeModel {
 	private elements: readonly TOCTreeElement[] = [];
 
 	constructor(
-		labels: SettingsPartLabels,
+		labels: LocaleMessages,
 		settingsTreeModel: SettingsTreeModel,
 	) {
 		this.update(labels, settingsTreeModel);
 	}
 
 	update(
-		labels: SettingsPartLabels,
+		labels: LocaleMessages,
 		settingsTreeModel: SettingsTreeModel,
 	) {
 		const visiblePageIds = settingsTreeModel.getVisiblePageIds();

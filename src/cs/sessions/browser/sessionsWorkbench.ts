@@ -718,6 +718,7 @@ class SessionsWorkbenchHost {
 				isLoadingTranslationModels,
 			},
 			actions: {
+				onLocaleChange: settingsControllerInstance.setLocale,
 				onSystemNotificationsEnabledChange:
 					settingsControllerInstance.setSystemNotificationsEnabled,
 				onWarningNotificationsEnabledChange:
