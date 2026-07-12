@@ -35,9 +35,6 @@ The durable target is defined by:
 - [LAYERS.md](LAYERS.md)
 - [Editor architecture](../../../.github/instructions/editor.instructions.md)
 
-The detailed Editor contract migration remains tracked by
-`src/cs/workbench/browser/parts/editor/editor.migration.md`.
-
 ## Current boundary being removed
 
 The repository currently starts the product through Workbench and then reaches
@@ -321,7 +318,6 @@ imports.
   MainEditorPart subclass directly.
 - Route all opens through `IEditorService` and deterministic reveal through the
   narrow editor-host contract implemented by the Sessions Editor Part.
-- Complete the direct contract migration in `editor.migration.md`.
 
 Workbench Editor must not import Sessions.
 
