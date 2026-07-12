@@ -24,8 +24,31 @@ class TestElectronDebugger extends EventEmitter {
 	readonly commands: RecordedCommand[] = [];
 	private attached = false;
 	private sessionCounter = 0;
+	private attachTargetGate: { readonly promise: Promise<void>; notifyRequested(): void } | undefined;
 	private outerHTMLGate: { readonly promise: Promise<void>; notifyRequested(): void } | undefined;
 	private inspectModeGate: { readonly promise: Promise<void>; notifyRequested(): void } | undefined;
+
+	deferNextTargetAttachment(): { readonly requested: Promise<void>; release(): void } {
+		let releaseRequest!: () => void;
+		let notifyRequested!: () => void;
+		const promise = new Promise<void>(resolve => {
+			releaseRequest = resolve;
+		});
+		const requested = new Promise<void>(resolve => {
+			notifyRequested = resolve;
+		});
+		const gate = { promise, notifyRequested };
+		this.attachTargetGate = gate;
+		return {
+			requested,
+			release: () => {
+				if (this.attachTargetGate === gate) {
+					this.attachTargetGate = undefined;
+				}
+				releaseRequest();
+			},
+		};
+	}
 
 	deferNextOuterHTML(): { readonly requested: Promise<void>; release(): void } {
 		let releaseRequest!: () => void;
@@ -99,6 +122,11 @@ class TestElectronDebugger extends EventEmitter {
 			};
 		}
 		if (method === 'Target.attachToTarget') {
+			const gate = this.attachTargetGate;
+			if (gate) {
+				gate.notifyRequested();
+				await gate.promise;
+			}
 			this.sessionCounter += 1;
 			const attachedSessionId = `electron-session-${this.sessionCounter}`;
 			const targetId = (params as { targetId: string }).targetId;
@@ -498,6 +526,39 @@ test('BrowserViewCDPTarget updates attachment state and closes with its view', a
 		viewClose.fire();
 		assert.equal(closed, true);
 	} finally {
+		target.dispose();
+		viewClose.dispose();
+		browserViewDebugger.dispose();
+	}
+});
+
+test('BrowserViewCDPTarget disposes an attachment completed after its view closes', async () => {
+	const { browserViewDebugger, electronDebugger } = createDebugger();
+	const viewClose = new Emitter<void>();
+	const targetInfo = await browserViewDebugger.getTargetInfo();
+	const target = new BrowserViewCDPTarget(
+		'view',
+		'context',
+		browserViewDebugger,
+		targetInfo,
+		viewClose.event,
+	);
+	const gate = electronDebugger.deferNextTargetAttachment();
+
+	try {
+		const attachment = target.attach();
+		await gate.requested;
+		viewClose.fire();
+		gate.release();
+
+		await assert.rejects(attachment, /closed while it was being attached/);
+		assert.equal(target.sessions.size, 0);
+		assert.equal(
+			electronDebugger.commands.some(command => command.method === 'Target.detachFromTarget'),
+			true,
+		);
+	} finally {
+		gate.release();
 		target.dispose();
 		viewClose.dispose();
 		browserViewDebugger.dispose();

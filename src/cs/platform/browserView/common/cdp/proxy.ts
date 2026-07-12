@@ -68,7 +68,7 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 		super();
 	}
 
-	registerTarget(target: ICDPTarget): void {
+	async registerTarget(target: ICDPTarget): Promise<void> {
 		const targetInfo = target.targetInfo;
 		const existing = this._targets.get(targetInfo.targetId);
 		if (existing) {
@@ -84,10 +84,6 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 				targetInfo: target.targetInfo,
 			});
 		}
-		if (this._autoAttach) {
-			void this.autoAttach(target);
-		}
-
 		target.onClose(() => {
 			this._targets.deleteAndDispose(targetInfo.targetId);
 			if (this._discover) {
@@ -107,6 +103,10 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 		target.onSessionCreated(({ session, waitingForDebugger }) => {
 			this.registerSession(session, waitingForDebugger);
 		});
+
+		if (this._autoAttach) {
+			await this.autoAttach(target);
+		}
 	}
 
 	private autoAttach(target: ICDPTarget): Promise<ICDPConnection> {
@@ -391,11 +391,7 @@ export class CDPBrowserProxy extends Disposable implements ICDPConnection {
 
 	private async handleTargetCreateTarget({ url, browserContextId }: { url?: string; browserContextId?: string }) {
 		const target = await this.browserTarget.createTarget(url || 'about:blank', browserContextId);
-		this.registerTarget(target);
-
-		if (this._autoAttach) {
-			await this.autoAttach(target);
-		}
+		await this.registerTarget(target);
 
 		return { targetId: target.targetInfo.targetId };
 	}

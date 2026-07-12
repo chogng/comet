@@ -61,6 +61,10 @@ export class BrowserViewCDPTarget extends Disposable implements ICDPTarget {
 
 	async attach(): Promise<ICDPConnection> {
 		const session = await this.debuggerTransport.attachToTarget(this.currentTargetInfo.targetId);
+		if (this.disposed) {
+			session.dispose();
+			throw new Error(`CDP target ${this.currentTargetInfo.targetId} closed while it was being attached.`);
+		}
 		this.notifySessionCreated(session, false);
 		return session;
 	}

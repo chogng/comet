@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable, DisposableMap, IDisposable } from 'cs/base/common/lifecycle';
-import { DeferredPromise, disposableTimeout, raceCancellationError, raceTimeout } from 'cs/base/common/async';
-import { CancellationError, CancellationToken, CancellationTokenNone, isCancellationError } from 'cs/base/common/cancellation';
+import { DisposableMap, DisposableStore, IDisposable, toDisposable } from 'cs/base/common/lifecycle';
+import { DeferredPromise, disposableTimeout, raceCancellation, raceCancellationError, raceTimeout } from 'cs/base/common/async';
+import { CancellationError, CancellationToken, CancellationTokenSource, isCancellationError } from 'cs/base/common/cancellation';
 import { Emitter, Event } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import { ILogService } from 'cs/platform/log/common/log';
@@ -43,6 +43,61 @@ const DEFERRED_RESULT_CLEANUP_MS = 5 * 60_000; // 5 minutes
 const SESSION_INACTIVITY_MS = 30 * 60_000; // 30 minutes
 const OPEN_PAGE_NAVIGATION_TIMEOUT_MS = 30_000;
 
+class PlaywrightServiceShuttingDownError extends Error {
+	constructor() {
+		super('PlaywrightService is shutting down.');
+		this.name = 'PlaywrightServiceShuttingDownError';
+	}
+}
+
+class PlaywrightSessionDisposingError extends Error {
+	constructor(sessionId: string) {
+		super(`Playwright session "${sessionId}" is being disposed.`);
+		this.name = 'PlaywrightSessionDisposingError';
+	}
+}
+
+class PlaywrightSessionShuttingDownError extends Error {
+	constructor(sessionId: string) {
+		super(`Playwright session ${sessionId} is shutting down.`);
+		this.name = 'PlaywrightSessionShuttingDownError';
+	}
+}
+
+function throwLifecycleErrors(errors: readonly unknown[], message: string): void {
+	if (errors.length === 1) {
+		throw errors[0];
+	}
+	if (errors.length > 1) {
+		throw new AggregateError(errors, message);
+	}
+}
+
+async function rethrowAfterCleanup(error: unknown, cleanup: () => Promise<void>, message: string): Promise<never> {
+	try {
+		await cleanup();
+	} catch (cleanupError) {
+		throw new AggregateError([error, cleanupError], message);
+	}
+	throw error;
+}
+
+function collectLifecycleError(errors: unknown[], seen: Set<unknown>, error: unknown): void {
+	if (error instanceof PlaywrightServiceShuttingDownError || error instanceof PlaywrightSessionDisposingError) {
+		return;
+	}
+	if (error instanceof AggregateError) {
+		for (const nestedError of error.errors) {
+			collectLifecycleError(errors, seen, nestedError);
+		}
+		return;
+	}
+	if (!seen.has(error)) {
+		seen.add(error);
+		errors.push(error);
+	}
+}
+
 interface PageTrackingEntry {
 	readonly viewId: string;
 	readonly leases: Set<string>;
@@ -78,16 +133,21 @@ function isCDPRequest(message: object): message is CDPRequest {
  * Page tracking is currently global: tracked pages are shared across all
  * sessions so every session can interact with every tracked page.
  */
-export class PlaywrightService extends Disposable implements IPlaywrightService {
+export class PlaywrightService implements IPlaywrightService {
 	declare readonly _serviceBrand: undefined;
 
-	private readonly _sessions = this._register(new DisposableMap<string, PlaywrightSession>());
+	private readonly _resources = new DisposableStore();
+	private readonly _sessions = new Map<string, PlaywrightSession>();
 
 	/** In-flight session initializations keyed by session ID. */
 	private readonly _pendingInits = new Map<string, Promise<PlaywrightSession>>();
+	private readonly _pendingInitGroups = new Map<string, IBrowserViewGroup>();
 
 	/** Inactivity timers keyed by session ID. */
-	private readonly _inactivityTimers = this._register(new DisposableMap<string, IDisposable>());
+	private readonly _inactivityTimers = this._resources.add(new DisposableMap<string, IDisposable>());
+	private readonly _sessionShutdowns = new Map<PlaywrightSession, Promise<void>>();
+	private readonly _sessionDisposals = new Map<string, Promise<void>>();
+	private readonly _disposingSessionIds = new Set<string>();
 
 	/** Global set of tracked page IDs (shared across all sessions). */
 	private readonly _trackedPages = new Set<string>();
@@ -96,8 +156,11 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 	private readonly _pageTrackingOperations = new Map<string, Promise<unknown>>();
 	private _trackingGroup: IBrowserViewGroup | undefined;
 	private _pendingTrackingGroup: Promise<IBrowserViewGroup> | undefined;
+	private readonly _trackingGroupResources = new DisposableStore();
+	private shutdownRequested = false;
+	private shutdownPromise: Promise<void> | undefined;
 
-	private readonly _onDidChangeTrackedPages = this._register(new Emitter<readonly string[]>());
+	private readonly _onDidChangeTrackedPages = this._resources.add(new Emitter<readonly string[]>());
 	readonly onDidChangeTrackedPages: Event<readonly string[]> = this._onDidChangeTrackedPages.event;
 
 	constructor(
@@ -106,9 +169,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		private readonly logService: ILogService,
 		private readonly agentNetworkFilterService: IAgentNetworkFilterService,
 		private readonly telemetryService: ITelemetryService,
-	) {
-		super();
-	}
+	) {}
 
 	/**
 	 * Get or create a fully-initialized {@link PlaywrightSession} for the
@@ -116,6 +177,8 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 	 * connection if the session does not already exist.
 	 */
 	private async _getOrCreateSession(sessionId: string): Promise<PlaywrightSession> {
+		this._assertRunning();
+		this._assertSessionAvailable(sessionId);
 		const existing = this._sessions.get(sessionId);
 		if (existing) {
 			this._touchSession(sessionId);
@@ -125,15 +188,24 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		// De-duplicate concurrent initialization for the same session.
 		const pending = this._pendingInits.get(sessionId);
 		if (pending) {
-			return pending;
+			const session = await pending;
+			this._assertRunning();
+			this._assertSessionAvailable(sessionId);
+			return session;
 		}
 
 		const initPromise = this._initSession(sessionId);
 		this._pendingInits.set(sessionId, initPromise);
 		try {
-			return await initPromise;
+			const session = await initPromise;
+			this._assertRunning();
+			this._assertSessionAvailable(sessionId);
+			return session;
 		} finally {
-			this._pendingInits.delete(sessionId);
+			if (this._pendingInits.get(sessionId) === initPromise) {
+				this._pendingInits.delete(sessionId);
+			}
+			this._pendingInitGroups.delete(sessionId);
 		}
 	}
 
@@ -142,9 +214,27 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 	 * Playwright CDP connection, and page replay.
 	 */
 	private async _initSession(sessionId: string): Promise<PlaywrightSession> {
+		this._assertRunning();
+		this._assertSessionAvailable(sessionId);
 		this.logService.debug(`[PlaywrightService] Initializing session ${sessionId}`);
 
 		const group = await this.browserViewGroupRemoteService.createGroup({ mainWindowId: this.windowId, sessionId });
+		this._pendingInitGroups.set(sessionId, group);
+		try {
+			this._assertRunning();
+			this._assertSessionAvailable(sessionId);
+		} catch (error) {
+			const initializationError = this.shutdownRequested
+				? new PlaywrightServiceShuttingDownError()
+				: this._disposingSessionIds.has(sessionId)
+					? new PlaywrightSessionDisposingError(sessionId)
+					: error;
+			return rethrowAfterCleanup(
+				initializationError,
+				() => group.destroy(),
+				`Failed to destroy Browser view group after session ${sessionId} initialization was interrupted.`,
+			);
+		}
 
 		let browser: Browser;
 		try {
@@ -178,19 +268,20 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 				}
 			};
 			browser = await playwright.chromium.connectOverCDP(transport);
-		} catch (e) {
-			group.dispose();
-			throw e;
+		} catch (error) {
+			const initializationError = this.shutdownRequested
+				? new PlaywrightServiceShuttingDownError()
+				: this._disposingSessionIds.has(sessionId)
+					? new PlaywrightSessionDisposingError(sessionId)
+					: error;
+			return rethrowAfterCleanup(
+				initializationError,
+				() => group.destroy(),
+				`Failed to destroy Browser view group after session ${sessionId} connection failed.`,
+			);
 		}
 
 		this.logService.debug(`[PlaywrightService] Connected to browser for session ${sessionId}`);
-
-		// If the service was disposed while we were connecting, clean up.
-		if (this._store.isDisposed) {
-			browser.close().catch(() => { /* ignore */ });
-			group.dispose();
-			throw new Error('PlaywrightService was disposed during initialization');
-		}
 
 		const session = new PlaywrightSession(
 			sessionId,
@@ -204,20 +295,33 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 		session.registerDisposable(group.onDidRemoveView(e => {
 			if (e.reason === 'closed') {
-				void this._enqueuePageTrackingOperation(e.viewId, async () => {
+				this._observePageTrackingEvent(e.viewId, async () => {
 					this._deactivateTrackingEntry(e.viewId, e.targetId);
 				});
 			}
 		}));
 
-		// On browser disconnect, dispose the session so it will be
-		// recreated fresh on the next tool call.
-		browser.on('disconnected', () => {
+		const handleDisconnected = () => {
 			this.logService.debug(`[PlaywrightService] Browser disconnected for session ${sessionId}`);
-			this._sessions.deleteAndDispose(sessionId);
-			this._inactivityTimers.deleteAndDispose(sessionId);
-		});
+			void this._shutdownSession(sessionId, session).catch(error => {
+				this.logService.error(`[PlaywrightService] Failed to shut down disconnected session ${sessionId}`, error);
+			});
+		};
+		browser.on('disconnected', handleDisconnected);
+		session.registerDisposable(toDisposable(() => browser.off('disconnected', handleDisconnected)));
 
+		try {
+			this._assertRunning();
+			this._assertSessionAvailable(sessionId);
+		} catch (error) {
+			return rethrowAfterCleanup(
+				error,
+				() => session.shutdown(),
+				`Failed to shut down session ${sessionId} after initialization was interrupted.`,
+			);
+		}
+
+		this._pendingInitGroups.delete(sessionId);
 		this._sessions.set(sessionId, session);
 
 		// Replay globally tracked pages into the new session's group.
@@ -232,12 +336,42 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 				});
 			}
 		} catch (error) {
-			this._sessions.deleteAndDispose(sessionId);
-			throw error;
+			return rethrowAfterCleanup(
+				error,
+				() => this._shutdownSession(sessionId, session),
+				`Failed to shut down session ${sessionId} after tracked-page replay failed.`,
+			);
 		}
 
+		this._assertRunning();
+		this._assertSessionAvailable(sessionId);
+		if (this._sessions.get(sessionId) !== session) {
+			throw new Error(`Playwright session ${sessionId} disconnected during initialization.`);
+		}
 		this._touchSession(sessionId);
 		return session;
+	}
+
+	private _assertRunning(): void {
+		if (this.shutdownRequested) {
+			throw new PlaywrightServiceShuttingDownError();
+		}
+	}
+
+	private _assertSessionAvailable(sessionId: string): void {
+		if (this._disposingSessionIds.has(sessionId)) {
+			throw new PlaywrightSessionDisposingError(sessionId);
+		}
+	}
+
+	private _observePageTrackingEvent(viewId: string, operation: () => Promise<void>): void {
+		void this._enqueuePageTrackingOperation(viewId, operation).catch(error => {
+			if (error instanceof PlaywrightServiceShuttingDownError) {
+				this.logService.debug(`[PlaywrightService] Ignored page tracking event for Browser view ${viewId} during shutdown`);
+				return;
+			}
+			this.logService.error(`[PlaywrightService] Page tracking event failed for Browser view ${viewId}`, error);
+		});
 	}
 
 	// --- Page tracking (global) ---
@@ -313,10 +447,12 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 	}
 
 	async isPageTracked(viewId: string): Promise<boolean> {
+		this._assertRunning();
 		return this._trackedPages.has(viewId);
 	}
 
 	async getTrackedPages(): Promise<readonly string[]> {
+		this._assertRunning();
 		return [...this._trackedPages];
 	}
 
@@ -333,6 +469,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 	}
 
 	private async _getOrCreateTrackingGroup(): Promise<IBrowserViewGroup> {
+		this._assertRunning();
 		if (this._trackingGroup) {
 			return this._trackingGroup;
 		}
@@ -340,30 +477,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			return this._pendingTrackingGroup;
 		}
 
-		const pending = this.browserViewGroupRemoteService.createGroup({
-			mainWindowId: this.windowId,
-			sessionId: 'playwright:page-tracking',
-		}).then(group => {
-			if (this._store.isDisposed) {
-				group.dispose();
-				throw new Error('PlaywrightService was disposed while creating its page-tracking group.');
-			}
-
-			this._trackingGroup = this._register(group);
-			this._register(group.onDidRemoveView(event => {
-				if (event.reason === 'closed') {
-					void this._enqueuePageTrackingOperation(event.viewId, async () => {
-						this._deactivateTrackingEntry(event.viewId, event.targetId);
-					});
-				}
-			}));
-			this._register(Event.once(group.onDidDestroy)(() => {
-				if (this._trackingGroup === group) {
-					this._trackingGroup = undefined;
-				}
-			}));
-			return group;
-		});
+		const pending = this._createTrackingGroup();
 		this._pendingTrackingGroup = pending;
 		try {
 			return await pending;
@@ -372,6 +486,38 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 				this._pendingTrackingGroup = undefined;
 			}
 		}
+	}
+
+	private async _createTrackingGroup(): Promise<IBrowserViewGroup> {
+		const group = await this.browserViewGroupRemoteService.createGroup({
+			mainWindowId: this.windowId,
+			sessionId: 'playwright:page-tracking',
+		});
+		try {
+			this._assertRunning();
+		} catch (error) {
+			return rethrowAfterCleanup(
+				error,
+				() => group.destroy(),
+				'Failed to destroy the page-tracking group after PlaywrightService shutdown began.',
+			);
+		}
+
+		this._trackingGroup = group;
+		this._trackingGroupResources.add(group.onDidRemoveView(event => {
+			if (event.reason === 'closed') {
+				this._observePageTrackingEvent(event.viewId, async () => {
+					this._deactivateTrackingEntry(event.viewId, event.targetId);
+				});
+			}
+		}));
+		this._trackingGroupResources.add(Event.once(group.onDidDestroy)(() => {
+			if (this._trackingGroup === group) {
+				this._trackingGroup = undefined;
+				this._trackingGroupResources.clear();
+			}
+		}));
+		return group;
 	}
 
 	private _acquirePageLifetimeTracking(viewId: string): Promise<void> {
@@ -490,7 +636,10 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	private _enqueuePageTrackingOperation<T>(viewId: string, operation: () => Promise<T>): Promise<T> {
 		const previous = this._pageTrackingOperations.get(viewId) ?? Promise.resolve();
-		const current = previous.catch(() => undefined).then(operation);
+		const current = previous.catch(() => undefined).then(() => {
+			this._assertRunning();
+			return operation();
+		});
 		this._pageTrackingOperations.set(viewId, current);
 		const clear = () => {
 			if (this._pageTrackingOperations.get(viewId) === current) {
@@ -583,12 +732,157 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 
 	// --- Session lifecycle ---
 
-	async disposeSession(sessionId: string): Promise<void> {
-		if (this._sessions.has(sessionId)) {
-			this.logService.debug(`[PlaywrightService] Disposing session ${sessionId}`);
-			this._sessions.deleteAndDispose(sessionId);
-			this._inactivityTimers.deleteAndDispose(sessionId);
+	disposeSession(sessionId: string): Promise<void> {
+		if (this.shutdownRequested) {
+			return this.shutdown();
 		}
+		const existing = this._sessionDisposals.get(sessionId);
+		if (existing) {
+			return existing;
+		}
+
+		this.logService.debug(`[PlaywrightService] Disposing session ${sessionId}`);
+		this._disposingSessionIds.add(sessionId);
+		const disposal = this._disposeSession(sessionId).finally(() => {
+			this._disposingSessionIds.delete(sessionId);
+			if (this._sessionDisposals.get(sessionId) === disposal) {
+				this._sessionDisposals.delete(sessionId);
+			}
+		});
+		this._sessionDisposals.set(sessionId, disposal);
+		return disposal;
+	}
+
+	shutdown(): Promise<void> {
+		if (!this.shutdownPromise) {
+			this.shutdownRequested = true;
+			this.shutdownPromise = this._shutdown();
+		}
+		return this.shutdownPromise;
+	}
+
+	private async _disposeSession(sessionId: string): Promise<void> {
+		this._inactivityTimers.deleteAndDispose(sessionId);
+		const errors: unknown[] = [];
+		const seenErrors = new Set<unknown>();
+		let session: PlaywrightSession | undefined;
+		const pending = this._pendingInits.get(sessionId);
+		if (pending) {
+			const pendingGroup = this._pendingInitGroups.get(sessionId);
+			if (pendingGroup) {
+				try {
+					await pendingGroup.destroy();
+				} catch (error) {
+					collectLifecycleError(errors, seenErrors, error);
+				}
+			}
+			try {
+				session = await pending;
+			} catch (error) {
+				collectLifecycleError(errors, seenErrors, error);
+			}
+		}
+		session ??= this._sessions.get(sessionId);
+		if (session) {
+			try {
+				await this._shutdownSession(sessionId, session);
+			} catch (error) {
+				collectLifecycleError(errors, seenErrors, error);
+			}
+		}
+		throwLifecycleErrors(errors, `Failed to dispose Playwright session ${sessionId}.`);
+	}
+
+	private _shutdownSession(sessionId: string, session: PlaywrightSession): Promise<void> {
+		if (this._sessions.get(sessionId) === session) {
+			this._sessions.delete(sessionId);
+		}
+		this._inactivityTimers.deleteAndDispose(sessionId);
+		const existing = this._sessionShutdowns.get(session);
+		if (existing) {
+			return existing;
+		}
+		const shutdown = Promise.resolve().then(() => session.shutdown()).finally(() => {
+			if (this._sessionShutdowns.get(session) === shutdown) {
+				this._sessionShutdowns.delete(session);
+			}
+		});
+		this._sessionShutdowns.set(session, shutdown);
+		return shutdown;
+	}
+
+	private async _shutdown(): Promise<void> {
+		this._inactivityTimers.clearAndDisposeAll();
+		const errors: unknown[] = [];
+		const seenErrors = new Set<unknown>();
+		const initializedSessions = new Set<PlaywrightSession>(this._sessions.values());
+		const pendingGroupResults = await Promise.allSettled([...this._pendingInitGroups.values()].map(group => group.destroy()));
+		for (const result of pendingGroupResults) {
+			if (result.status === 'rejected') {
+				collectLifecycleError(errors, seenErrors, result.reason);
+			}
+		}
+		const pendingInitializations = [...this._pendingInits.values()];
+		const initializationResults = await Promise.allSettled(pendingInitializations);
+		for (const result of initializationResults) {
+			if (result.status === 'fulfilled') {
+				initializedSessions.add(result.value);
+			} else {
+				collectLifecycleError(errors, seenErrors, result.reason);
+			}
+		}
+
+		if (this._pendingTrackingGroup) {
+			try {
+				await this._pendingTrackingGroup;
+			} catch (error) {
+				collectLifecycleError(errors, seenErrors, error);
+			}
+		}
+
+		const disposingSessionIds = new Set(this._sessionDisposals.keys());
+		const sessionLifecycles = new Set<Promise<void>>([
+			...this._sessionDisposals.values(),
+			...[...this._sessionShutdowns.entries()]
+				.filter(([session]) => !disposingSessionIds.has(session.sessionId))
+				.map(([, shutdown]) => shutdown),
+		]);
+		for (const session of initializedSessions) {
+			if (!disposingSessionIds.has(session.sessionId)) {
+				sessionLifecycles.add(this._shutdownSession(session.sessionId, session));
+			}
+		}
+		const sessionResults = await Promise.allSettled(sessionLifecycles);
+		for (const result of sessionResults) {
+			if (result.status === 'rejected') {
+				collectLifecycleError(errors, seenErrors, result.reason);
+			}
+		}
+
+		const trackingGroup = this._trackingGroup;
+		this._trackingGroup = undefined;
+		this._trackingGroupResources.clear();
+		if (trackingGroup) {
+			try {
+				await trackingGroup.destroy();
+			} catch (error) {
+				collectLifecycleError(errors, seenErrors, error);
+			}
+		}
+
+		while (this._pageTrackingOperations.size > 0) {
+			await Promise.allSettled([...this._pageTrackingOperations.values()]);
+		}
+		this._trackedPages.clear();
+		this._trackingEntriesByView.clear();
+		this._trackingEntriesByLease.clear();
+
+		try {
+			this._resources.dispose();
+		} catch (error) {
+			collectLifecycleError(errors, seenErrors, error);
+		}
+		throwLifecycleErrors(errors, `Failed to shut down PlaywrightService for window ${this.windowId}.`);
 	}
 
 	// --- Private helpers ---
@@ -603,12 +897,14 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 	 * automatically disposed.
 	 */
 	private _touchSession(sessionId: string): void {
+		this._assertRunning();
 		this._inactivityTimers.deleteAndDispose(sessionId);
 		const timer = disposableTimeout(
 			() => {
 				this.logService.debug(`[PlaywrightService] Session ${sessionId} inactive for ${SESSION_INACTIVITY_MS / 60_000}m, disposing`);
-				this._sessions.deleteAndDispose(sessionId);
-				this._inactivityTimers.deleteAndDispose(sessionId);
+				void this.disposeSession(sessionId).catch(error => {
+					this.logService.error(`[PlaywrightService] Failed to dispose inactive session ${sessionId}`, error);
+				});
 			},
 			SESSION_INACTIVITY_MS,
 		);
@@ -625,7 +921,12 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
  * Playwright {@link Page} instances via FIFO matching of group IPC events and
  * Playwright CDP events.
  */
-class PlaywrightSession extends Disposable {
+class PlaywrightSession {
+	private readonly resources = new DisposableStore();
+	private readonly shutdownCancellation = this.resources.add(new CancellationTokenSource());
+	private shutdownRequested = false;
+	private shutdownPromise: Promise<void> | undefined;
+	private readonly activeOperations = new Set<Promise<unknown>>();
 
 	// --- Page matching ---
 
@@ -644,7 +945,7 @@ class PlaywrightSession extends Disposable {
 	private _openContext: BrowserContext | undefined = undefined;
 
 	/** In-flight deferred results keyed by their generated ID. */
-	private readonly _deferredResults = this._register(new DisposableMap<string, {
+	private readonly _deferredResults = this.resources.add(new DisposableMap<string, {
 		pageId: string;
 		promise: Promise<unknown>;
 		logCtx?: IExecutionLogContext;
@@ -659,23 +960,24 @@ class PlaywrightSession extends Disposable {
 		private readonly telemetryService: ITelemetryService,
 		private readonly onDidCreatePage: (viewId: string) => Promise<void>,
 	) {
-		super();
-
-		this._register(this.group);
-		this._register(this.group.onDidAddView(e => this._onViewAdded(e.viewId)));
-		this._register(this.group.onDidRemoveView(e => this._onViewRemoved(e.viewId)));
+		this.resources.add(this.group.onDidAddView(e => this._onViewAdded(e.viewId)));
+		this.resources.add(this.group.onDidRemoveView(e => this._onViewRemoved(e.viewId)));
 
 		this._scanForNewContexts();
 	}
 
-	/** Register a disposable to be cleaned up when this session is disposed. */
+	/** Register a disposable to be cleaned up when this session shuts down. */
 	registerDisposable(d: IDisposable): void {
-		this._register(d);
+		this.resources.add(d);
 	}
 
 	// --- Page operations ---
 
-	async openPage(url: string): Promise<{ pageId: string; summary: string }> {
+	openPage(url: string): Promise<{ pageId: string; summary: string }> {
+		return this._runOperation(() => this._openPage(url));
+	}
+
+	private async _openPage(url: string): Promise<{ pageId: string; summary: string }> {
 		if (!this._openContext) {
 			this._openContext = await this._browser.newContext();
 			this._onContextAdded(this._openContext);
@@ -701,11 +1003,15 @@ class PlaywrightSession extends Disposable {
 		return { pageId: viewId, summary };
 	}
 
-	async getSummary(pageId: string): Promise<string> {
-		return this._getSummary(pageId, true);
+	getSummary(pageId: string): Promise<string> {
+		return this._runOperation(() => this._getSummary(pageId, true));
 	}
 
-	async navigatePage(pageId: string, url: string): Promise<void> {
+	navigatePage(pageId: string, url: string): Promise<void> {
+		return this._runOperation(() => this._navigatePage(pageId, url));
+	}
+
+	private async _navigatePage(pageId: string, url: string): Promise<void> {
 		await this._runAgainstPage(pageId, async page => {
 			try {
 				await page.goto(url, { waitUntil: 'domcontentloaded', timeout: OPEN_PAGE_NAVIGATION_TIMEOUT_MS });
@@ -718,7 +1024,16 @@ class PlaywrightSession extends Disposable {
 		});
 	}
 
-	async captureSnapshot(
+	captureSnapshot(
+		pageId: string,
+		options: IResolvedPageSnapshotOptions,
+		deadline: number,
+		token: CancellationToken,
+	): Promise<IBrowserPageSnapshot> {
+		return this._runOperation(() => this._captureSnapshot(pageId, options, deadline, token));
+	}
+
+	private async _captureSnapshot(
 		pageId: string,
 		options: IResolvedPageSnapshotOptions,
 		deadline: number,
@@ -763,12 +1078,18 @@ class PlaywrightSession extends Disposable {
 		}
 	}
 
-	async invokeFunctionRaw<T>(pageId: string, fnDef: string, ...args: unknown[]): Promise<T> {
-		const fn = await this._compileFunction(fnDef);
-		return this._runAgainstPage(pageId, (page) => fn(page, args) as T);
+	invokeFunctionRaw<T>(pageId: string, fnDef: string, ...args: unknown[]): Promise<T> {
+		return this._runOperation(async () => {
+			const fn = await this._compileFunction(fnDef);
+			return this._runAgainstPage(pageId, (page) => fn(page, args) as T);
+		});
 	}
 
-	async invokeFunction(pageId: string, fnDef: string, args: unknown[] = [], timeoutMs?: number): Promise<IInvokeFunctionResult> {
+	invokeFunction(pageId: string, fnDef: string, args: unknown[] = [], timeoutMs?: number): Promise<IInvokeFunctionResult> {
+		return this._runOperation(() => this._invokeFunction(pageId, fnDef, args, timeoutMs));
+	}
+
+	private async _invokeFunction(pageId: string, fnDef: string, args: unknown[], timeoutMs?: number): Promise<IInvokeFunctionResult> {
 		this.logService.info(`[PlaywrightSession] Invoking function on view ${pageId}`);
 
 		const logCtx: IExecutionLogContext = {
@@ -808,7 +1129,11 @@ class PlaywrightSession extends Disposable {
 		return { result, error, summary };
 	}
 
-	async waitForDeferredResult(deferredResultId: string, timeoutMs: number): Promise<IInvokeFunctionResult> {
+	waitForDeferredResult(deferredResultId: string, timeoutMs: number): Promise<IInvokeFunctionResult> {
+		return this._runOperation(() => this._waitForDeferredResult(deferredResultId, timeoutMs));
+	}
+
+	private async _waitForDeferredResult(deferredResultId: string, timeoutMs: number): Promise<IInvokeFunctionResult> {
 		const entry = this._deferredResults.get(deferredResultId);
 		if (!entry) {
 			throw new Error(`No deferred result found with ID "${deferredResultId}". It may have been cleaned up or already consumed.`);
@@ -822,7 +1147,11 @@ class PlaywrightSession extends Disposable {
 		return this._runWithDeferral(pageId, () => promise, timeoutMs, deferredResultId, logCtx);
 	}
 
-	async replyToFileChooser(pageId: string, files: string[]): Promise<{ summary: string }> {
+	replyToFileChooser(pageId: string, files: string[]): Promise<{ summary: string }> {
+		return this._runOperation(() => this._replyToFileChooser(pageId, files));
+	}
+
+	private async _replyToFileChooser(pageId: string, files: string[]): Promise<{ summary: string }> {
 		const page = await this._getPage(pageId);
 		const tab = this._tabs.get(page);
 		if (!tab) {
@@ -833,7 +1162,11 @@ class PlaywrightSession extends Disposable {
 		return { summary };
 	}
 
-	async replyToDialog(pageId: string, accept: boolean, promptText?: string): Promise<{ summary: string }> {
+	replyToDialog(pageId: string, accept: boolean, promptText?: string): Promise<{ summary: string }> {
+		return this._runOperation(() => this._replyToDialog(pageId, accept, promptText));
+	}
+
+	private async _replyToDialog(pageId: string, accept: boolean, promptText?: string): Promise<{ summary: string }> {
 		const page = await this._getPage(pageId);
 		const tab = this._tabs.get(page);
 		if (!tab) {
@@ -863,7 +1196,7 @@ class PlaywrightSession extends Disposable {
 		}
 		return tab.safeRunAgainstPage(
 			async () => callback(page),
-			{ waitForCompletion: true, token: CancellationTokenNone },
+			{ waitForCompletion: true, token: this.shutdownCancellation.token },
 		);
 	}
 
@@ -881,10 +1214,10 @@ class PlaywrightSession extends Disposable {
 
 		const wrappedPromise = this._runAgainstPage(pageId, async (page) => {
 			const promise = callback(page);
-			promise.catch(() => { /* prevent unhandled rejection if deferred */ });
 			deferred.complete(promise);
 			return promise;
 		});
+		this._trackBackgroundOperation(wrappedPromise);
 
 		let result, error;
 		let interrupted = false;
@@ -954,6 +1287,7 @@ class PlaywrightSession extends Disposable {
 	// --- Private: page matching (view ↔ page pairing) ---
 
 	private async _getPage(viewId: string): Promise<Page> {
+		this._assertRunning();
 		const resolved = this._viewIdToPage.get(viewId);
 		if (resolved) {
 			return resolved;
@@ -978,13 +1312,14 @@ class PlaywrightSession extends Disposable {
 		const deferred = new DeferredPromise<Page>();
 		const timeout = setTimeout(() => deferred.error(new Error(`Timed out waiting for page`)), timeoutMs);
 
-		deferred.p.finally(() => {
+		const clear = () => {
 			clearTimeout(timeout);
 			this._viewIdQueue = this._viewIdQueue.filter(item => item.viewId !== viewId);
 			if (this._viewIdQueue.length === 0) {
 				this._stopScanning();
 			}
-		});
+		};
+		void deferred.p.then(clear, clear);
 
 		this._viewIdQueue.push({ viewId, page: deferred });
 		this._tryMatch();
@@ -1019,10 +1354,11 @@ class PlaywrightSession extends Disposable {
 
 		const deferred = new DeferredPromise<string>();
 		const timeout = setTimeout(() => deferred.error(new Error(`Timed out waiting for browser view`)), timeoutMs);
-		deferred.p.finally(() => {
+		const clear = () => {
 			clearTimeout(timeout);
 			this._pageQueue = this._pageQueue.filter(item => item.page !== page);
-		});
+		};
+		void deferred.p.then(clear, clear);
 
 		this._pageQueue.push({ page, viewId: deferred });
 		this._tryMatch();
@@ -1040,15 +1376,35 @@ class PlaywrightSession extends Disposable {
 	}
 
 	private _onContextAdded(context: BrowserContext): void {
+		if (this.shutdownRequested) {
+			return;
+		}
 		if (this._watchedContexts.has(context)) {
 			return;
 		}
 		this._watchedContexts.add(context);
-		context.on('page', (page: Page) => this._onPageAdded(page));
-		context.on('close', () => this._watchedContexts.delete(context));
+		const onPage = (page: Page) => this._observePageAdded(page);
+		const onClose = () => this._watchedContexts.delete(context);
+		context.on('page', onPage);
+		context.on('close', onClose);
+		this.resources.add(toDisposable(() => {
+			context.off('page', onPage);
+			context.off('close', onClose);
+			this._watchedContexts.delete(context);
+		}));
 		for (const page of context.pages()) {
-			this._onPageAdded(page);
+			this._observePageAdded(page);
 		}
+	}
+
+	private _observePageAdded(page: Page): void {
+		void this._onPageAdded(page).catch(error => {
+			if (error instanceof PlaywrightSessionShuttingDownError) {
+				this.logService.debug(`[PlaywrightSession] Page matching stopped for session ${this.sessionId} during shutdown`);
+				return;
+			}
+			this.logService.error('[PlaywrightSession] Failed to match Playwright page to a Browser view', error);
+		});
 	}
 
 	// --- Private: matching ---
@@ -1075,6 +1431,9 @@ class PlaywrightSession extends Disposable {
 	// --- Private: context scanning ---
 
 	private _scanForNewContexts(): void {
+		if (this.shutdownRequested) {
+			return;
+		}
 		for (const context of this._browser.contexts()) {
 			this._onContextAdded(context);
 		}
@@ -1093,18 +1452,68 @@ class PlaywrightSession extends Disposable {
 		}
 	}
 
-	override dispose(): void {
+	shutdown(): Promise<void> {
+		if (!this.shutdownPromise) {
+			this.shutdownRequested = true;
+			this.shutdownPromise = this._shutdown();
+		}
+		return this.shutdownPromise;
+	}
+
+	private async _shutdown(): Promise<void> {
 		this._stopScanning();
-		this._browser?.close().catch(() => { /* ignore */ });
+		this.shutdownCancellation.cancel();
 		for (const { page } of this._viewIdQueue) {
-			page.error(new Error('PlaywrightSession disposed'));
+			page.error(new PlaywrightSessionShuttingDownError(this.sessionId));
 		}
 		for (const { viewId } of this._pageQueue) {
-			viewId.error(new Error('PlaywrightSession disposed'));
+			viewId.error(new PlaywrightSessionShuttingDownError(this.sessionId));
 		}
 		this._viewIdQueue = [];
 		this._pageQueue = [];
-		super.dispose();
+		const errors: unknown[] = [];
+		try {
+			this.resources.dispose();
+		} catch (error) {
+			errors.push(error);
+		}
+		try {
+			await this._browser.close();
+		} catch (error) {
+			errors.push(error);
+		}
+		while (this.activeOperations.size > 0) {
+			await Promise.all([...this.activeOperations].map(operation => operation.then(
+				() => undefined,
+				() => undefined,
+			)));
+		}
+		try {
+			await this.group.destroy();
+		} catch (error) {
+			errors.push(error);
+		}
+		throwLifecycleErrors(errors, `Failed to shut down Playwright session ${this.sessionId}.`);
+	}
+
+	private _runOperation<T>(operation: () => Promise<T>): Promise<T> {
+		this._assertRunning();
+		const pending = Promise.resolve().then(operation);
+		this.activeOperations.add(pending);
+		return pending.finally(() => this.activeOperations.delete(pending));
+	}
+
+	private _trackBackgroundOperation(operation: Promise<unknown>): void {
+		const trackedOperation = raceCancellation(operation, this.shutdownCancellation.token);
+		this.activeOperations.add(trackedOperation);
+		const clear = () => this.activeOperations.delete(trackedOperation);
+		void trackedOperation.then(clear, clear);
+	}
+
+	private _assertRunning(): void {
+		if (this.shutdownRequested) {
+			throw new PlaywrightSessionShuttingDownError(this.sessionId);
+		}
 	}
 }
 

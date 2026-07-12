@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Event } from 'cs/base/common/event';
-import { IDisposable } from 'cs/base/common/lifecycle';
 import { IBrowserViewOwner } from 'cs/platform/browserView/common/browserView';
 import { CDPEvent, CDPRequest, CDPResponse } from 'cs/platform/browserView/common/cdp/types';
 
@@ -30,7 +29,7 @@ export interface IBrowserViewGroupViewRemovalEvent extends IBrowserViewGroupView
  *
  * This interface is shared between the main-process entity and remote proxies.
  */
-export interface IBrowserViewGroup extends IDisposable {
+export interface IBrowserViewGroup {
 	readonly id: string;
 
 	readonly onDidAddView: Event<IBrowserViewGroupViewEvent>;
@@ -41,6 +40,7 @@ export interface IBrowserViewGroup extends IDisposable {
 	addView(viewId: string): Promise<IBrowserViewGroupViewEvent>;
 	removeView(viewId: string): Promise<void>;
 	sendCDPMessage(msg: CDPRequest): Promise<void>;
+	destroy(): Promise<void>;
 }
 
 /**

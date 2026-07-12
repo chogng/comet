@@ -208,7 +208,7 @@ test('CDP browser proxy discovers, attaches, and routes page commands', async ()
 	const page = createPageTarget();
 	const messages: Array<CDPEvent | { id: number; result?: unknown }> = [];
 	const listener = proxy.onMessage(message => messages.push(message));
-	proxy.registerTarget(page);
+	await proxy.registerTarget(page);
 
 	try {
 		await proxy.sendCommand('Target.setDiscoverTargets', { discover: true });
@@ -235,6 +235,35 @@ test('CDP browser proxy discovers, attaches, and routes page commands', async ()
 		assert.equal(messages.some(message => 'id' in message && message.id === 7), true);
 	} finally {
 		listener.dispose();
+		proxy.dispose();
+	}
+});
+
+test('CDP browser proxy waits for auto-attachment while registering a target', async () => {
+	const browser = new TestBrowserTarget();
+	const proxy = new CDPBrowserProxy(browser);
+	const page = createPageTarget();
+	let releaseAttachment: (() => void) | undefined;
+	page.attachBarrier = new Promise<void>(resolve => {
+		releaseAttachment = resolve;
+	});
+
+	try {
+		await proxy.sendCommand('Target.setAutoAttach', { autoAttach: true, flatten: true });
+		let completed = false;
+		const registration = proxy.registerTarget(page).then(() => {
+			completed = true;
+		});
+
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(page.attachCount, 1);
+		assert.equal(completed, false);
+		releaseAttachment?.();
+
+		await registration;
+		assert.equal(completed, true);
+	} finally {
+		releaseAttachment?.();
 		proxy.dispose();
 	}
 });

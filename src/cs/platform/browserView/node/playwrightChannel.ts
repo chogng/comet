@@ -5,7 +5,6 @@
 
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import type { Event } from 'cs/base/common/event';
-import { DisposableMap } from 'cs/base/common/lifecycle';
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import type { IAgentNetworkFilterService } from 'cs/platform/networkFilter/common/networkFilterService';
 import type { ILogService } from 'cs/platform/log/common/log';
@@ -24,7 +23,11 @@ function parseWindowRequest(value: unknown): WindowRequest {
 
 /** Hosts one Playwright service per workbench window in the shared process. */
 export class PlaywrightChannel implements IServerChannel<string> {
-	private readonly instances = new DisposableMap<number, PlaywrightService>();
+	private readonly instances = new Map<number, PlaywrightService>();
+	private readonly disposedWindows = new Set<number>();
+	private readonly windowShutdowns = new Map<number, Promise<void>>();
+	private shutdownRequested = false;
+	private shutdownPromise: Promise<void> | undefined;
 
 	constructor(
 		private readonly browserViewGroupRemoteService: BrowserViewGroupRemoteService,
@@ -39,10 +42,12 @@ export class PlaywrightChannel implements IServerChannel<string> {
 		arg: unknown,
 		cancellationToken: CancellationToken,
 	): Promise<T> {
+		if (command === 'shutdown') {
+			return this.shutdown().then(() => undefined as T);
+		}
 		const [windowId, payload] = parseWindowRequest(arg);
 		if (command === 'disposeWindow') {
-			this.instances.deleteAndDispose(windowId);
-			return Promise.resolve(undefined as T);
+			return this.disposeWindow(windowId).then(() => undefined as T);
 		}
 		const instance = this.getOrCreate(windowId);
 		const target = (instance as unknown as Record<string, unknown>)[command];
@@ -65,11 +70,67 @@ export class PlaywrightChannel implements IServerChannel<string> {
 		return source as Event<T>;
 	}
 
-	dispose(): void {
-		this.instances.dispose();
+	private disposeWindow(windowId: number): Promise<void> {
+		const existing = this.windowShutdowns.get(windowId);
+		if (existing) {
+			return existing;
+		}
+		if (this.shutdownPromise) {
+			return this.shutdownPromise;
+		}
+		this.disposedWindows.add(windowId);
+		const instance = this.instances.get(windowId);
+		this.instances.delete(windowId);
+		const shutdown = instance
+			? Promise.resolve().then(() => instance.shutdown())
+			: Promise.resolve();
+		const finalizedShutdown = shutdown.finally(() => {
+			if (this.windowShutdowns.get(windowId) === finalizedShutdown) {
+				this.windowShutdowns.delete(windowId);
+			}
+			this.disposedWindows.delete(windowId);
+		});
+		this.windowShutdowns.set(windowId, finalizedShutdown);
+		return finalizedShutdown;
+	}
+
+	private shutdown(): Promise<void> {
+		if (!this.shutdownPromise) {
+			this.shutdownRequested = true;
+			const instances = [...this.instances.entries()];
+			this.instances.clear();
+			for (const [windowId] of instances) {
+				this.disposedWindows.add(windowId);
+			}
+			const shutdowns = new Set<Promise<void>>([
+				...this.windowShutdowns.values(),
+				...instances.map(([, instance]) => Promise.resolve().then(() => instance.shutdown())),
+			]);
+			this.shutdownPromise = Promise.allSettled(shutdowns).then(results => {
+				const errors = results
+					.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+					.map(result => result.reason);
+				if (errors.length === 1) {
+					throw errors[0];
+				}
+				if (errors.length > 1) {
+					throw new AggregateError(errors, 'Failed to shut down Playwright services.');
+				}
+			}).finally(() => {
+				this.windowShutdowns.clear();
+				this.disposedWindows.clear();
+			});
+		}
+		return this.shutdownPromise;
 	}
 
 	private getOrCreate(windowId: number): PlaywrightService {
+		if (this.shutdownRequested) {
+			throw new Error('Playwright channel is shutting down.');
+		}
+		if (this.disposedWindows.has(windowId)) {
+			throw new Error(`Playwright service for window ${windowId} has been disposed.`);
+		}
 		let instance = this.instances.get(windowId);
 		if (!instance) {
 			instance = new PlaywrightService(
