@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { DeferredPromise } from 'cs/base/common/async';
 import { URI } from 'cs/base/common/uri';
 import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { DocumentTranslationProgress } from 'cs/base/parts/sandbox/common/sandboxTypes';
@@ -98,14 +99,20 @@ function createDialogService() {
 function createExportService(
 	nativeHostService: INativeHostService,
 	fetchService: IFetchService,
+	options: {
+		localeService?: { getLocale: () => string };
+		settingsModel?: SettingsModel;
+	} = {},
 ) {
-	const settingsModel = new SettingsModel();
-	settingsModel.setPdfDownloadDir('/tmp');
+	const settingsModel = options.settingsModel ?? new SettingsModel();
+	if (!options.settingsModel) {
+		settingsModel.setPdfDownloadDir('/tmp');
+	}
 	return new ArticleSummaryTranslationExportService(
 		nativeHostService,
 		new NoOpNotificationService(),
 		createDialogService(),
-		{ getLocale: () => 'en' } as never,
+		(options.localeService ?? { getLocale: () => 'en' }) as never,
 		new WorkbenchLanguageService(),
 		settingsModel,
 		fetchService,
@@ -220,4 +227,113 @@ test('ArticleSummaryTranslationExportService cancels an active export task', asy
 	const exportArgs = invoked.find(entry => entry.command === 'export_articles_docx')?.args;
 	const cancelArgs = invoked.find(entry => entry.command === 'cancel_document_task')?.args;
 	assert.deepEqual(cancelArgs, { taskId: exportArgs?.taskId });
+});
+
+test('ArticleSummaryTranslationExportService cancels an active desktop task when disposed', async () => {
+	const articleId = 'article.dispose';
+	let rejectExport: ((error: unknown) => void) | null = null;
+	const invoked: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
+	const invoke = (async (command: string, args?: Record<string, unknown>) => {
+		invoked.push({ command, args });
+		if (command === 'export_articles_docx') {
+			return new Promise((_resolve, reject) => { rejectExport = reject; });
+		}
+		if (command === 'cancel_document_task') {
+			rejectExport?.(new Error('Canceled'));
+			return true;
+		}
+		throw new Error(`Unexpected desktop command: ${command}`);
+	}) as ElectronInvoke;
+	const service = createExportService(
+		createNativeHostService({ onTranslationProgress: () => () => {} }, invoke),
+		createFetchService([createArticleDetail(articleId)]),
+	);
+
+	const running = service.handleExportArticleSummaries([articleId], true, () => {});
+	await delay(0);
+	service.dispose();
+	await running;
+
+	const exportArgs = invoked.find(entry => entry.command === 'export_articles_docx')?.args;
+	const cancelArgs = invoked.find(entry => entry.command === 'cancel_document_task')?.args;
+	assert.deepEqual(cancelArgs, { taskId: exportArgs?.taskId });
+});
+
+test('ArticleSummaryTranslationExportService suppresses results from article details settled after disposal', async () => {
+	const articleId = 'article.pending';
+	const articleDetail = new DeferredPromise<ArticleDetail | null>();
+	const fetchService = {
+		getArticle: () => ({
+			id: articleId,
+			journalId: 'journal.example',
+			url: URI.parse('https://example.com/pending'),
+			doi: '10.1000/pending',
+		}),
+		getArticleDetail: () => undefined,
+		fetchArticle: () => articleDetail.p,
+	} as unknown as IFetchService;
+	const invoked: string[] = [];
+	const service = createExportService(
+		createNativeHostService({ onTranslationProgress: () => () => {} }, (async (command: string) => {
+			invoked.push(command);
+			return command === 'cancel_document_task' ? true : null;
+		}) as ElectronInvoke),
+		fetchService,
+	);
+	const unavailable: ArticleId[][] = [];
+
+	const running = service.handleExportArticleSummaries(
+		[articleId],
+		false,
+		articleIds => unavailable.push([...articleIds]),
+	);
+	await delay(0);
+	service.dispose();
+	articleDetail.complete(null);
+	await running;
+
+	assert.deepEqual(unavailable, []);
+	assert.deepEqual(invoked, ['cancel_document_task']);
+});
+
+test('ArticleSummaryTranslationExportService uses locale and download settings captured at operation start', async () => {
+	const articleId = 'article.snapshot';
+	const articleDetail = new DeferredPromise<ArticleDetail>();
+	const fetchService = {
+		getArticle: () => ({
+			id: articleId,
+			journalId: 'journal.example',
+			url: URI.parse('https://example.com/snapshot'),
+			doi: '10.1000/snapshot',
+		}),
+		getArticleDetail: () => undefined,
+		fetchArticle: () => articleDetail.p,
+	} as unknown as IFetchService;
+	let locale = 'en';
+	const settingsModel = new SettingsModel();
+	settingsModel.setPdfDownloadDir('/tmp/start');
+	let exportArgs: Record<string, unknown> | undefined;
+	const service = createExportService(
+		createNativeHostService({ onTranslationProgress: () => () => {} }, (async (
+			command: string,
+			args?: Record<string, unknown>,
+		) => {
+			assert.equal(command, 'export_articles_docx');
+			exportArgs = args;
+			return { articleCount: 1, filePath: '/tmp/articles.docx' };
+		}) as ElectronInvoke),
+		fetchService,
+		{ localeService: { getLocale: () => locale }, settingsModel },
+	);
+
+	const running = service.handleExportArticleSummaries([articleId], true, () => {});
+	await delay(0);
+	locale = 'zh-Hans';
+	settingsModel.setPdfDownloadDir('/tmp/changed');
+	articleDetail.complete(createArticleDetail(articleId));
+	await running;
+	service.dispose();
+
+	assert.equal(exportArgs?.locale, 'en');
+	assert.equal(exportArgs?.preferredDirectory, '/tmp/start');
 });

@@ -82,10 +82,7 @@ export class ArticleSummaryTranslationExportService {
   ) {}
 
   readonly dispose = () => {
-    this.currentTask?.source.cancel();
-    this.currentTask?.source.dispose();
-    this.currentTask?.restoreStatusbar(true);
-    this.currentTask = null;
+    this.cancelExportArticleSummaries();
   };
 
   readonly handleExportArticleSummaries = async (
@@ -240,6 +237,7 @@ export class ArticleSummaryTranslationExportService {
     }
 
     task.source.cancel();
+    task.source.dispose();
     task.restoreStatusbar(true);
     this.currentTask = null;
     void this.nativeHostService.invoke('cancel_document_task', { taskId: task.taskId })
@@ -262,6 +260,9 @@ export class ArticleSummaryTranslationExportService {
       }
 
       const detail = await this.resolveArticleDetail(articleId, token);
+      if (token.isCancellationRequested) {
+        return [];
+      }
       if (!detail) {
         unavailableArticleIds.push(articleId);
         continue;
