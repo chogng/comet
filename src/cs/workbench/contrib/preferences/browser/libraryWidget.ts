@@ -50,7 +50,7 @@ export type LibrarySettingsSectionProps = {
   libraryDocumentCount: number;
   libraryFileCount: number;
   libraryQueuedJobCount: number;
-  libraryDocuments: LibraryDocumentSummary[];
+  libraryDocuments: readonly LibraryDocumentSummary[];
   libraryDbFile: string;
   ragCacheDir: string;
   onKnowledgeBaseEnabledChange: (checked: boolean) => void;

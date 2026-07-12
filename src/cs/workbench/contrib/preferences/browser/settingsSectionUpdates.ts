@@ -1,10 +1,10 @@
 import type { SettingsSectionId } from 'cs/workbench/contrib/preferences/common/settings';
-import type { SettingsPartProps } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { SettingsViewState } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
 
 export function shouldUpdateSettingsSection(
   sectionId: SettingsSectionId,
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   switch (sectionId) {
     case 'locale':
@@ -39,8 +39,8 @@ export function shouldUpdateSettingsSection(
 }
 
 function shouldUpdateLocaleSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -53,8 +53,8 @@ function shouldUpdateLocaleSection(
 }
 
 function shouldUpdateSupportedSourcesSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -71,8 +71,8 @@ function shouldUpdateSupportedSourcesSection(
 }
 
 function shouldUpdateLayoutSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -90,8 +90,8 @@ function shouldUpdateLayoutSection(
 }
 
 function shouldUpdateBrowserSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -116,8 +116,8 @@ function shouldUpdateBrowserSection(
 }
 
 function shouldUpdateNotificationsSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -141,8 +141,8 @@ function shouldUpdateNotificationsSection(
 }
 
 function shouldUpdateAppearanceSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -162,8 +162,8 @@ function shouldUpdateAppearanceSection(
 }
 
 function shouldUpdateTextEditorSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   if (!previousProps) {
     return true;
@@ -197,8 +197,8 @@ function shouldUpdateTextEditorSection(
 }
 
 function shouldUpdateKnowledgeBaseLibrarySection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -223,8 +223,8 @@ function shouldUpdateKnowledgeBaseLibrarySection(
 }
 
 function shouldUpdateKnowledgeBaseRagSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -239,8 +239,8 @@ function shouldUpdateKnowledgeBaseRagSection(
 }
 
 function shouldUpdateDownloadDirectorySection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -259,8 +259,8 @@ function shouldUpdateDownloadDirectorySection(
 }
 
 function shouldUpdateLlmModelSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -272,8 +272,8 @@ function shouldUpdateLlmModelSection(
 }
 
 function shouldUpdateLlmApiKeySection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -286,8 +286,8 @@ function shouldUpdateLlmApiKeySection(
 }
 
 function shouldUpdateTranslationSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||
@@ -302,8 +302,8 @@ function shouldUpdateTranslationSection(
 }
 
 function shouldUpdateConfigPathSection(
-  previousProps: SettingsPartProps | undefined,
-  currentProps: SettingsPartProps,
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
 ) {
   return (
     !previousProps ||

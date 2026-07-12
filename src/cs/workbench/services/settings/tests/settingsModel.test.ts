@@ -89,7 +89,7 @@ test('Settings model and controller are delayed DI owners shared by consumers', 
 		assert.equal(services.get(ISettingsController), firstControllerConsumer.settingsController);
 
 		firstConsumer.settingsModel.setUseMica(false);
-		assert.equal(firstControllerConsumer.settingsController.getSnapshot().useMica, false);
+		assert.equal(firstConsumer.settingsModel.getSnapshot().useMica, false);
 	} finally {
 		instantiationService.dispose();
 	}

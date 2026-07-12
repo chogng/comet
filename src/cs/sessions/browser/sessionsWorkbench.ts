@@ -3,11 +3,6 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-	ILibraryModel,
-	LibraryModel,
-} from 'cs/workbench/services/knowledgeBase/libraryModel';
-
 import { Schemas } from 'cs/base/common/network';
 import { $ } from 'cs/base/browser/dom';
 import {
@@ -17,10 +12,6 @@ import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { SessionsLayoutView } from 'cs/sessions/browser/layout';
 import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
 import { SessionsLayoutCommandIds } from 'cs/sessions/common/layoutCommands';
-import {
-	ISettingsController,
-	SettingsController,
-} from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { generateUuid } from 'cs/base/common/uuid';
 
@@ -33,10 +24,7 @@ import {
 import { createTitlebarPart } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
 import type { TitlebarPart } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
 import { syncWorkbenchWindowTitle } from 'cs/workbench/browser/parts/titlebar/windowTitle';
-import {
-	createSettingsPartView,
-	createSettingsPartProps,
-} from 'cs/workbench/contrib/preferences/browser/settingsEditor';
+import { SettingsPartView } from 'cs/workbench/contrib/preferences/browser/settingsEditor';
 
 import { SessionSidebarPartView } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import { SessionsEditorParts } from 'cs/sessions/browser/parts/editor/editorParts';
@@ -73,24 +61,18 @@ import { NotificationsStatus } from 'cs/workbench/browser/parts/notifications/no
 import { NotificationsToasts } from 'cs/workbench/browser/parts/notifications/notificationsToasts';
 import { NotificationService } from 'cs/workbench/services/notification/common/notificationService';
 
-import {
-	localeService,
-} from 'cs/workbench/services/localization/browser/localeService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import {
 	getWindowStateSnapshot,
 	subscribeWindowState,
 } from 'cs/workbench/browser/window';
 
 import { getLocaleMessages } from 'language/i18n';
-import { IFetchService } from 'cs/workbench/services/fetch/common/fetch';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import {
-	IEditorDraftStyleService,
-	type IEditorDraftStyleService as EditorDraftStyleService,
-} from 'cs/editor/browser/text/editorDraftStyleService';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { IWorkbenchConfigurationService } from 'cs/workbench/services/configuration/common/configuration';
+import { ISettingsModel, type SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import {
 	BrowserMaxHistoryEntriesSettingId,
 	BrowserPageZoomSettingId,
@@ -113,22 +95,12 @@ import {
 
 let activeSessionsWorkbenchHost: SessionsWorkbenchHost | null = null;
 
-function resolveRuntimeState(nativeHost: INativeHostService) {
-	const electronRuntime = nativeHost.canInvoke();
-
-	return {
-		electronRuntime,
-		desktopRuntime: electronRuntime,
-	};
-}
-
 class SessionsWorkbenchHost {
 	private readonly rootElement: HTMLElement;
 	private readonly containerElement: HTMLDivElement;
 	private readonly shellElement: HTMLDivElement;
 	private readonly pageMount: HTMLDivElement;
 	private readonly settingsOverlayElement: HTMLDivElement;
-	private readonly settingsOverlayBodyElement: HTMLDivElement;
 	private readonly statusbarElement: HTMLElement;
 	private readonly titlebarPart: TitlebarPart;
 	private readonly notificationsDisposables = new DisposableStore();
@@ -136,9 +108,8 @@ class SessionsWorkbenchHost {
 	private sidebarPart: SessionSidebarPartView | null = null;
 	private readonly collapsedEditorTitlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
 	private readonly sidebarFooterActionsView: SidebarFooterActionsView;
-	private settingsView: ReturnType<typeof createSettingsPartView> | null = null;
+	private settingsView: SettingsPartView | null = null;
 	private readonly globalDisposables: Array<() => void> = [];
-	private servicesSubscribed = false;
 	private isDisposed = false;
 	private isRendering = false;
 	private renderPending = false;
@@ -157,8 +128,8 @@ class SessionsWorkbenchHost {
 		@IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
-		@ISettingsController private readonly settingsController: SettingsController,
-		@ILibraryModel private readonly libraryModel: LibraryModel,
+		@ISettingsModel private readonly settingsModel: SettingsModel,
+		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@ISessionsPartService private readonly sessionsPart: SessionsPart,
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
@@ -166,12 +137,10 @@ class SessionsWorkbenchHost {
 		@IEditorGroupsService private readonly editorGroupsService: SessionsEditorParts,
 		@IEditorService private readonly editorService: IEditorService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@IFetchService private readonly fetchService: IFetchService,
 		@IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
 		@ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
-		@IEditorDraftStyleService private readonly editorDraftStyleService: EditorDraftStyleService,
 		) {
-			const initialUi = getLocaleMessages(localeService.getLocale());
+			const initialUi = getLocaleMessages(this.localeService.getLocale());
 			const dropdownServices = {
 			contextMenuService: this.contextMenuService,
 			contextViewProvider: this.contextViewService,
@@ -194,12 +163,9 @@ class SessionsWorkbenchHost {
 		this.shellElement = $<HTMLDivElement>('div');
 		this.pageMount = $<HTMLDivElement>('div');
 		this.settingsOverlayElement = $<HTMLDivElement>('div');
-		this.settingsOverlayBodyElement = $<HTMLDivElement>('div');
 		this.statusbarElement = $<HTMLElementTagNameMap['section']>('section');
 		this.settingsOverlayElement.className = 'comet-settings-overlay';
 		this.settingsOverlayElement.hidden = true;
-		this.settingsOverlayBodyElement.className = 'comet-settings-body';
-		this.settingsOverlayElement.append(this.settingsOverlayBodyElement);
 		this.settingsOverlayElement.addEventListener('click', event => {
 			if (event.target === this.settingsOverlayElement) {
 				this.closeSettingsOverlay();
@@ -230,10 +196,10 @@ class SessionsWorkbenchHost {
 		this.editorGroupsService.mainPart.initialize();
 		this.openInitialDraftIfUnambiguous();
 		this.globalDisposables.push(
-			localeService.subscribe(this.requestRender),
+			this.localeService.subscribe(this.requestRender),
 			this.sessionsLayoutService.onDidChangeLayoutState(this.requestRender),
 			subscribeWindowState(this.requestRender),
-			this.editorDraftStyleService.subscribe(this.requestRender),
+			this.settingsModel.subscribe(this.requestRender),
 			this.editorGroupsService.onDidChange(this.requestRender),
 		);
 
@@ -252,6 +218,7 @@ class SessionsWorkbenchHost {
 
 		this.titlebarPart.dispose();
 		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, null);
+		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, null);
 
 		this.sessionsLayoutView?.dispose();
 		this.sessionsLayoutView = null;
@@ -334,20 +301,6 @@ class SessionsWorkbenchHost {
 		);
 	}
 
-	private ensureServiceSubscriptions(services: {
-		settingsController: SettingsController;
-		libraryModel: LibraryModel;
-	}) {
-		if (this.servicesSubscribed) {
-			return;
-		}
-
-		this.servicesSubscribed = true;
-		this.globalDisposables.push(
-			services.settingsController.subscribe(this.requestRender),
-			services.libraryModel.subscribe(this.requestRender),
-		);
-	}
 
 	private readonly togglePrimarySidebarVisibility = () => {
 		this.commandService.executeCommand(
@@ -458,37 +411,23 @@ class SessionsWorkbenchHost {
 		this.sessionsLayoutView.layout();
 	}
 
-	private renderSettingsOverlay(
-		props: {
-			settingsPartProps: ReturnType<typeof createSettingsPartProps>;
-		},
-	) {
+
+	private renderSettingsOverlay() {
 		if (!this.settingsOverlayVisible) {
-			this.settingsView?.dispose();
-			this.settingsView = null;
-			this.settingsOverlayBodyElement.replaceChildren();
 			this.settingsOverlayElement.hidden = true;
+			registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, null);
 			return;
 		}
 
 		if (!this.settingsView) {
-			this.settingsView = createSettingsPartView(props.settingsPartProps, this.contextViewService);
-		} else {
-			this.settingsView.setProps(props.settingsPartProps);
+			this.settingsView = this.instantiationService.createInstance(SettingsPartView);
+			this.settingsOverlayElement.replaceChildren(this.settingsView.getElement());
 		}
 		this.settingsOverlayElement.hidden = false;
-		const navigationElement = this.settingsView.getNavigationElement();
-		const settingsElement = this.settingsView.getElement();
-		if (
-			this.settingsOverlayBodyElement.children[0] !== navigationElement ||
-			this.settingsOverlayBodyElement.children[1] !== settingsElement ||
-			this.settingsOverlayBodyElement.childElementCount !== 2
-		) {
-			this.settingsOverlayBodyElement.replaceChildren(
-				navigationElement,
-				settingsElement,
-			);
-		}
+		registerWorkbenchPartDomNode(
+			WORKBENCH_PART_IDS.settings,
+			this.settingsView.getElement(),
+		);
 	}
 
 	private applyStartupLayoutPreferenceIfNeeded(params: {
@@ -504,7 +443,7 @@ class SessionsWorkbenchHost {
 	}
 
 	private performRender() {
-		const locale = localeService.getLocale();
+		const locale = this.localeService.getLocale();
 		const ui = getLocaleMessages(locale);
 		const {
 			mode: layoutMode,
@@ -513,12 +452,9 @@ class SessionsWorkbenchHost {
 		} = this.sessionsLayoutService.getLayoutState();
 		const isAgentMode = layoutMode === 'agent';
 		const { isFullscreen: isWindowFullscreen } = getWindowStateSnapshot();
-		const nativeHost = this.nativeHostService;
-		const { electronRuntime, desktopRuntime } =
-			resolveRuntimeState(nativeHost);
+		const electronRuntime = this.nativeHostService.canInvoke();
 
-		const settingsControllerInstance = this.settingsController;
-		const settingsSnapshot = settingsControllerInstance.getSnapshot();
+		const settingsSnapshot = this.settingsModel.getSnapshot();
 		if (
 			this.applyStartupLayoutPreferenceIfNeeded({
 				hasLoadedSettings: settingsSnapshot.hasLoadedSettings,
@@ -527,46 +463,15 @@ class SessionsWorkbenchHost {
 		) {
 			return;
 		}
-		const editorDraftStyleSnapshot = this.editorDraftStyleService.getSnapshot();
 		const {
 			hasLoadedSettings,
-			systemNotificationsEnabled,
-			warningNotificationsEnabled,
-			menuBarIconEnabled,
-			completionNotificationsEnabled,
 			statusbarVisible,
-			startupLayout,
-			browserTabKeepAliveLimit,
 			browserMaxHistoryEntries,
 			browserPageZoom,
 			browserSearchEngine,
 			useMica,
 			theme,
 			workbenchColorCustomizations,
-			knowledgeBaseEnabled,
-			autoIndexDownloadedPdf,
-			knowledgeBasePdfDownloadDir,
-			libraryStorageMode,
-			libraryDirectory,
-			maxConcurrentIndexJobs,
-			activeRagProvider,
-			ragProviders,
-			retrievalCandidateCount,
-			retrievalTopK,
-			pdfDownloadDir,
-			pdfFileNameUseSelectionOrder,
-			activeLlmProvider,
-			llmProviders,
-			activeTranslationProvider,
-			translationProviders,
-			configPath,
-			defaultConfigPath,
-			isSettingsLoading,
-			isSettingsSaving,
-			isTestingRagConnection,
-			isTestingLlmConnection,
-			isTestingTranslationConnection,
-			isLoadingTranslationModels,
 		} = settingsSnapshot;
 		this.syncBrowserSettings({
 			browserMaxHistoryEntries,
@@ -575,9 +480,6 @@ class SessionsWorkbenchHost {
 		});
 		applyWorkbenchTheme(theme, workbenchColorCustomizations);
 		applyWorkbenchBrowserStyles();
-		const libraryModelInstance = this.libraryModel;
-		const { librarySnapshot, isLibraryLoading } =
-			libraryModelInstance.getSnapshot();
 		const activeEditor = this.editorGroupsService.activeGroup.activeEditor;
 		const browserPageTitle = activeEditor?.getName() ?? '';
 		const handleOpenEditor: EditorOpenHandler = (input, options) =>
@@ -625,198 +527,12 @@ class SessionsWorkbenchHost {
 			onToggleEditorCollapse: this.toggleEditorCollapsed,
 		});
 
-		this.ensureServiceSubscriptions({
-			settingsController: settingsControllerInstance,
-			libraryModel: libraryModelInstance,
-		});
 
 		const titlebarLeadingActionsProps = createTitlebarLeadingActionsProps({
 			ui,
 			isPrimarySidebarVisible: isSidebarVisible,
 			onTogglePrimarySidebar: this.togglePrimarySidebarVisibility,
 			onFocusAddressBar: focusWorkbenchWebUrlInput,
-		});
-		const settingsPartProps = createSettingsPartProps({
-			state: {
-				ui,
-				isSettingsLoading,
-				locale,
-				supportedSources: this.fetchService.getJournals(),
-				systemNotificationsEnabled,
-				warningNotificationsEnabled,
-				menuBarIconEnabled,
-				completionNotificationsEnabled,
-				useMica,
-				statusbarVisible,
-				startupLayout,
-				browserTabKeepAliveLimit,
-				browserMaxHistoryEntries,
-				browserPageZoom,
-				browserSearchEngine,
-				theme,
-				editorDraftStyle: {
-					defaultValue: {
-						defaultBodyStyle: {
-							...settingsSnapshot.editorDraftStyle.defaultValue.defaultBodyStyle,
-							inlineStyleDefaults: {
-								...settingsSnapshot.editorDraftStyle.defaultValue.defaultBodyStyle.inlineStyleDefaults,
-							},
-						},
-					},
-					userValue: settingsSnapshot.editorDraftStyle.userValue
-						? {
-							defaultBodyStyle: {
-								...settingsSnapshot.editorDraftStyle.userValue.defaultBodyStyle,
-								inlineStyleDefaults: {
-									...settingsSnapshot.editorDraftStyle.userValue.defaultBodyStyle.inlineStyleDefaults,
-								},
-							},
-						}
-						: null,
-					value: {
-						defaultBodyStyle: {
-							...editorDraftStyleSnapshot.defaultBodyStyle,
-							inlineStyleDefaults: {
-								...editorDraftStyleSnapshot.defaultBodyStyle.inlineStyleDefaults,
-							},
-						},
-					},
-				},
-				editorDraftFontFamilyOptions: editorDraftStyleSnapshot.fontFamilyPresets,
-				editorDraftFontSizeOptions: editorDraftStyleSnapshot.fontSizePresets,
-				knowledgeBaseEnabled,
-				autoIndexDownloadedPdf,
-				knowledgeBasePdfDownloadDir,
-				libraryStorageMode,
-				libraryDirectory,
-				maxConcurrentIndexJobs,
-				activeRagProvider,
-				ragProviders,
-				retrievalCandidateCount,
-				retrievalTopK,
-				pdfDownloadDir,
-				pdfFileNameUseSelectionOrder,
-				activeLlmProvider,
-				llmProviders,
-				activeTranslationProvider,
-				translationProviders,
-				desktopRuntime,
-				configPath,
-				defaultConfigPath,
-				isLibraryLoading,
-				libraryDocumentCount: librarySnapshot.totalCount,
-				libraryFileCount: librarySnapshot.fileCount,
-				libraryQueuedJobCount: librarySnapshot.queuedJobCount,
-				libraryDocuments: librarySnapshot.items,
-				libraryDbFile: librarySnapshot.libraryDbFile,
-				defaultManagedDirectory: librarySnapshot.defaultManagedDirectory,
-				ragCacheDir: librarySnapshot.ragCacheDir,
-				isSettingsSaving,
-				isTestingRagConnection,
-				isTestingLlmConnection,
-				isTestingTranslationConnection,
-				isLoadingTranslationModels,
-			},
-			actions: {
-				onLocaleChange: settingsControllerInstance.setLocale,
-				onSystemNotificationsEnabledChange:
-					settingsControllerInstance.setSystemNotificationsEnabled,
-				onWarningNotificationsEnabledChange:
-					settingsControllerInstance.setWarningNotificationsEnabled,
-				onMenuBarIconEnabledChange:
-					settingsControllerInstance.setMenuBarIconEnabled,
-				onCompletionNotificationsEnabledChange:
-					settingsControllerInstance.setCompletionNotificationsEnabled,
-				onUseMicaChange: settingsControllerInstance.setUseMica,
-				onStatusbarVisibleChange: settingsControllerInstance.setStatusbarVisible,
-				onStartupLayoutChange: settingsControllerInstance.setStartupLayout,
-				onBrowserTabKeepAliveLimitChange:
-					settingsControllerInstance.setBrowserTabKeepAliveLimit,
-				onBrowserMaxHistoryEntriesChange:
-					settingsControllerInstance.setBrowserMaxHistoryEntries,
-				onBrowserPageZoomChange: settingsControllerInstance.setBrowserPageZoom,
-				onBrowserSearchEngineChange: settingsControllerInstance.setBrowserSearchEngine,
-				onThemeChange: settingsControllerInstance.setTheme,
-				onEditorDraftFontFamilyChange:
-					settingsControllerInstance.setEditorDraftFontFamily,
-				onEditorDraftFontSizeChange:
-					settingsControllerInstance.setEditorDraftFontSize,
-				onEditorDraftLineHeightChange:
-					settingsControllerInstance.setEditorDraftLineHeightFromInput,
-				onEditorDraftParagraphSpacingBeforeChange:
-					settingsControllerInstance.setEditorDraftParagraphSpacingBeforePtFromInput,
-				onEditorDraftParagraphSpacingAfterChange:
-					settingsControllerInstance.setEditorDraftParagraphSpacingAfterPtFromInput,
-				onEditorDraftColorChange: settingsControllerInstance.setEditorDraftColor,
-				onResetEditorDraftStyle:
-					settingsControllerInstance.handleResetEditorDraftStyle,
-				onKnowledgeBaseEnabledChange: settingsControllerInstance.setKnowledgeBaseEnabled,
-				onAutoIndexDownloadedPdfChange:
-					settingsControllerInstance.setAutoIndexDownloadedPdf,
-				onKnowledgeBasePdfDownloadDirChange:
-					settingsControllerInstance.setKnowledgeBasePdfDownloadDir,
-				onChooseKnowledgeBasePdfDownloadDir:
-					settingsControllerInstance.handleChooseKnowledgeBasePdfDownloadDir,
-				onLibraryStorageModeChange:
-					settingsControllerInstance.setLibraryStorageMode,
-				onLibraryDirectoryChange: settingsControllerInstance.setLibraryDirectory,
-				onMaxConcurrentIndexJobsChange:
-					settingsControllerInstance.setMaxConcurrentIndexJobs,
-				onRagProviderApiKeyChange: settingsControllerInstance.setRagProviderApiKey,
-				onRagProviderBaseUrlChange:
-					settingsControllerInstance.setRagProviderBaseUrl,
-				onRagProviderEmbeddingModelChange:
-					settingsControllerInstance.setRagProviderEmbeddingModel,
-				onRagProviderRerankerModelChange:
-					settingsControllerInstance.setRagProviderRerankerModel,
-				onRagProviderEmbeddingPathChange:
-					settingsControllerInstance.setRagProviderEmbeddingPath,
-				onRagProviderRerankPathChange:
-					settingsControllerInstance.setRagProviderRerankPath,
-				onRetrievalCandidateCountChange:
-					settingsControllerInstance.setRetrievalCandidateCount,
-				onRetrievalTopKChange: settingsControllerInstance.setRetrievalTopK,
-				onPdfDownloadDirChange: settingsControllerInstance.setPdfDownloadDir,
-				onPdfFileNameUseSelectionOrderChange:
-					settingsControllerInstance.setPdfFileNameUseSelectionOrder,
-				onChooseLibraryDirectory: () =>
-					void settingsControllerInstance.handleChooseLibraryDirectory(),
-				onChoosePdfDownloadDir: () =>
-					void settingsControllerInstance.handleChoosePdfDownloadDir(),
-				onActiveLlmProviderChange: settingsControllerInstance.setActiveLlmProvider,
-				onLlmProviderApiKeyChange: settingsControllerInstance.setLlmProviderApiKey,
-				onLlmProviderModelChange: settingsControllerInstance.setLlmProviderModel,
-				onLlmProviderSelectedModelOption:
-					settingsControllerInstance.setLlmProviderSelectedModelOption,
-				onLlmProviderReasoningEffortChange:
-					settingsControllerInstance.setLlmProviderReasoningEffort,
-				onLlmProviderModelEnabledChange:
-					settingsControllerInstance.setLlmProviderModelEnabled,
-				onLlmProviderUseMaxContextWindowChange:
-					settingsControllerInstance.setLlmProviderUseMaxContextWindow,
-				onActiveTranslationProviderChange:
-					settingsControllerInstance.setActiveTranslationProvider,
-				onTranslationProviderApiKeyChange:
-					settingsControllerInstance.setTranslationProviderApiKey,
-				onTranslationProviderBaseUrlChange:
-					settingsControllerInstance.setTranslationProviderBaseUrl,
-				onTranslationProviderModelChange:
-					settingsControllerInstance.setTranslationProviderModel,
-				onTestRagConnection: () =>
-					void settingsControllerInstance.handleTestRagConnection(),
-				onTestLlmConnection: () =>
-					void settingsControllerInstance.handleTestLlmConnection(),
-				onFetchTranslationModels: () =>
-					void settingsControllerInstance.handleFetchTranslationModels(),
-				onTestTranslationConnection: () =>
-					void settingsControllerInstance.handleTestTranslationConnection(),
-				onChooseConfigPath: () =>
-					void settingsControllerInstance.handleChooseConfigPath(),
-				onResetConfigPath: settingsControllerInstance.handleResetConfigPath,
-				onResetKnowledgeBaseSettings:
-					settingsControllerInstance.handleResetKnowledgeBaseSettings,
-				onResetDownloadDir: settingsControllerInstance.handleResetDownloadDir,
-			},
 		});
 
 		syncWorkbenchWindowTitle({
@@ -839,7 +555,7 @@ class SessionsWorkbenchHost {
 			collapsedEditorTitlebarActionsElement:
 				this.collapsedEditorTitlebarActionsView.getElement(),
 		});
-		this.renderSettingsOverlay({ settingsPartProps });
+		this.renderSettingsOverlay();
 
 		this.titlebarPart.sync({
 			electronRuntime,

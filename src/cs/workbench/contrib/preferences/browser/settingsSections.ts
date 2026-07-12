@@ -37,15 +37,16 @@ import {
   setSettingsFocusKey,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
 import type {
-  SettingsDropdownOption,
-  SettingsPartProps,
+  SettingsViewState,
 } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { EditorDraftStyleOption } from 'cs/editor/browser/text/editorDraftStyleCatalog';
+import type { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { createBuiltInLanguagePackItems } from 'cs/platform/languagePacks/common/languagePacks';
 import {
   maxBrowserTabKeepAliveLimit,
   minBrowserTabKeepAliveLimit,
 } from 'cs/workbench/services/webContent/webContentRetentionConfig';
-type SelectOption = SettingsDropdownOption;
+type SelectOption = EditorDraftStyleOption;
 
 function setSelectHostDisabled(host: HTMLElement, disabled: boolean) {
   const selectElement = host.querySelector<HTMLSelectElement>('.comet-select-box');
@@ -54,7 +55,7 @@ function setSelectHostDisabled(host: HTMLElement, disabled: boolean) {
   }
 }
 
-function createThemeOptions(props: SettingsPartProps): readonly SelectOption[] {
+function createThemeOptions(props: SettingsViewState): readonly SelectOption[] {
   return [
     { value: 'light', label: props.labels.settingsThemeLight },
     { value: 'dark', label: props.labels.settingsThemeDark },
@@ -62,14 +63,14 @@ function createThemeOptions(props: SettingsPartProps): readonly SelectOption[] {
   ];
 }
 
-function createStartupLayoutOptions(props: SettingsPartProps): readonly SelectOption[] {
+function createStartupLayoutOptions(props: SettingsViewState): readonly SelectOption[] {
   return [
     { value: 'agent', label: props.labels.settingsStartupLayoutAgent },
     { value: 'flow', label: props.labels.settingsStartupLayoutFlow },
   ];
 }
 
-function createBrowserPageZoomOptions(props: SettingsPartProps): readonly SelectOption[] {
+function createBrowserPageZoomOptions(props: SettingsViewState): readonly SelectOption[] {
   return [
     {
       value: MATCH_WINDOW_ZOOM_LABEL,
@@ -82,7 +83,7 @@ function createBrowserPageZoomOptions(props: SettingsPartProps): readonly Select
   ];
 }
 
-function createBrowserSearchEngineOptions(props: SettingsPartProps): readonly SelectOption[] {
+function createBrowserSearchEngineOptions(props: SettingsViewState): readonly SelectOption[] {
   const labels: Record<BrowserSearchEngineId, string> = {
     [BrowserSearchEngineId.Bing]: props.labels.settingsBrowserSearchEngineBing,
     [BrowserSearchEngineId.Google]: props.labels.settingsBrowserSearchEngineGoogle,
@@ -229,7 +230,11 @@ function toColorPickerValue(colorValue: string) {
     ?? '#000000';
 }
 
-export function renderLocaleSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
+export function renderLocaleSection(
+	props: SettingsViewState,
+	contextViewProvider: IContextViewProvider,
+	settingsController: SettingsController,
+) {
   const language = createSettingsSection({
     sectionClassName: 'comet-settings-language-section',
     panelClassName: 'comet-settings-language-panel',
@@ -242,7 +247,7 @@ export function renderLocaleSection(props: SettingsPartProps, contextViewProvide
 	})),
     props.locale,
     'settings.locale',
-	props.onLocaleChange,
+	settingsController.setLocale,
     contextViewProvider,
     'comet-settings-language-toggle',
   );
@@ -257,8 +262,9 @@ export function renderLocaleSection(props: SettingsPartProps, contextViewProvide
 }
 
 export function renderSupportedSourcesSection(
-	props: Pick<SettingsPartProps,
-		'labels' | 'supportedSources' | 'showSupportedSources' | 'isSettingsSaving' | 'onToggleSupportedSources'>,
+	props: Pick<SettingsViewState,
+		'labels' | 'supportedSources' | 'showSupportedSources' | 'isSettingsSaving'>,
+	onToggleSupportedSources: () => void,
 ) {
   const supportedSources = createSettingsSection({
     title: props.labels.settingsSupportedSources,
@@ -299,7 +305,7 @@ export function renderSupportedSourcesSection(
           ? props.labels.settingsSupportedSourcesHide
           : props.labels.settingsSupportedSourcesShow,
         disabled: props.isSettingsSaving,
-        onClick: props.onToggleSupportedSources,
+		onClick: onToggleSupportedSources,
       }),
       itemClassName: 'comet-settings-supported-sources-actions-item',
       controlClassName: 'comet-settings-supported-sources-actions',
@@ -309,7 +315,11 @@ export function renderSupportedSourcesSection(
   return supportedSources.element;
 }
 
-export function renderLayoutSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
+export function renderLayoutSection(
+	props: SettingsViewState,
+	contextViewProvider: IContextViewProvider,
+	settingsController: SettingsController,
+) {
   const layout = createSettingsSection({
     title: props.labels.settingsLayoutTitle,
     sectionClassName: 'comet-settings-layout-section',
@@ -320,9 +330,7 @@ export function renderLayoutSection(props: SettingsPartProps, contextViewProvide
     createStartupLayoutOptions(props),
     props.startupLayout,
     'settings.general.layout.startupLayout',
-    (value) => {
-      props.onStartupLayoutChange(value === 'agent' ? 'agent' : 'flow');
-    },
+	settingsController.setStartupLayout,
     contextViewProvider,
     'comet-settings-layout-startup-layout-select',
   );
@@ -336,7 +344,7 @@ export function renderLayoutSection(props: SettingsPartProps, contextViewProvide
     step: '1',
     decrementAriaLabel: numberStepperDecrementAriaLabel,
     incrementAriaLabel: numberStepperIncrementAriaLabel,
-    onDidChange: props.onBrowserTabKeepAliveLimitChange,
+	onDidChange: settingsController.setBrowserTabKeepAliveLimit,
     disabled: props.isSettingsSaving,
   });
   setSettingsFocusKey(browserTabKeepAliveLimitInput.inputElement, 'settings.general.layout.browserTabKeepAliveLimit');
@@ -354,7 +362,7 @@ export function renderLayoutSection(props: SettingsPartProps, contextViewProvide
         focusKey: 'settings.general.layout.statusbarVisible',
         disabled: props.isSettingsSaving,
         title: props.labels.settingsStatusbar,
-        onChange: props.onStatusbarVisibleChange,
+		onChange: settingsController.setStatusbarVisible,
       }),
     }),
     createSettingsRow({
@@ -366,7 +374,11 @@ export function renderLayoutSection(props: SettingsPartProps, contextViewProvide
   return layout.element;
 }
 
-export function renderBrowserSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
+export function renderBrowserSection(
+	props: SettingsViewState,
+	contextViewProvider: IContextViewProvider,
+	settingsController: SettingsController,
+) {
   const browser = createSettingsSection({
     title: props.labels.settingsBrowserTitle,
     sectionClassName: 'comet-settings-browser-section',
@@ -382,7 +394,7 @@ export function renderBrowserSection(props: SettingsPartProps, contextViewProvid
     step: '1',
     decrementAriaLabel: numberStepperDecrementAriaLabel,
     incrementAriaLabel: numberStepperIncrementAriaLabel,
-    onDidChange: props.onBrowserMaxHistoryEntriesChange,
+	onDidChange: settingsController.setBrowserMaxHistoryEntries,
     disabled: props.isSettingsSaving,
   });
   setSettingsFocusKey(maxHistoryEntriesInput.inputElement, 'settings.browser.maxHistoryEntries');
@@ -393,7 +405,7 @@ export function renderBrowserSection(props: SettingsPartProps, contextViewProvid
     ),
     props.browserPageZoom,
     'settings.browser.pageZoom',
-    props.onBrowserPageZoomChange,
+	settingsController.setBrowserPageZoom,
     contextViewProvider,
     'comet-settings-browser-select',
   );
@@ -405,7 +417,7 @@ export function renderBrowserSection(props: SettingsPartProps, contextViewProvid
     ),
     props.browserSearchEngine,
     'settings.browser.searchEngine',
-    props.onBrowserSearchEngineChange,
+	settingsController.setBrowserSearchEngine,
     contextViewProvider,
     'comet-settings-browser-select',
   );
@@ -430,19 +442,17 @@ export function renderBrowserSection(props: SettingsPartProps, contextViewProvid
   return browser.element;
 }
 
-export function renderAppearanceSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
+export function renderAppearanceSection(
+	props: SettingsViewState,
+	contextViewProvider: IContextViewProvider,
+	settingsController: SettingsController,
+) {
   const field = el('div', 'comet-settings-appearance-settings');
   const themeSelect = buildSelect(
     createThemeOptions(props),
     props.theme,
     'settings.appearance.theme',
-    (value) => {
-      const nextTheme =
-        value === 'dark' || value === 'light' || value === 'system'
-          ? value
-          : 'light';
-      props.onThemeChange(nextTheme);
-    },
+	settingsController.setTheme,
     contextViewProvider,
     'comet-settings-appearance-theme-select',
   );
@@ -473,7 +483,7 @@ export function renderAppearanceSection(props: SettingsPartProps, contextViewPro
         focusKey: 'settings.appearance.useMica',
         disabled: props.isSettingsSaving || !props.desktopRuntime,
         title: props.labels.settingsUseMica,
-        onChange: props.onUseMicaChange,
+		onChange: settingsController.setUseMica,
       }),
     }),
   );
@@ -481,7 +491,10 @@ export function renderAppearanceSection(props: SettingsPartProps, contextViewPro
   return field;
 }
 
-export function renderNotificationsSection(props: SettingsPartProps) {
+export function renderNotificationsSection(
+	props: SettingsViewState,
+	settingsController: SettingsController,
+) {
   const notifications = createSettingsSection({
     title: props.labels.settingsNotificationsTitle,
     sectionClassName: 'comet-settings-notifications-section',
@@ -498,7 +511,7 @@ export function renderNotificationsSection(props: SettingsPartProps) {
         focusKey: 'settings.general.notifications.system',
         disabled: notificationsDisabled,
         title: props.labels.settingsSystemNotifications,
-        onChange: props.onSystemNotificationsEnabledChange,
+		onChange: settingsController.setSystemNotificationsEnabled,
       }),
     }),
     createSettingsRow({
@@ -509,7 +522,7 @@ export function renderNotificationsSection(props: SettingsPartProps) {
         focusKey: 'settings.general.notifications.warning',
         disabled: notificationsDisabled,
         title: props.labels.settingsWarningNotifications,
-        onChange: props.onWarningNotificationsEnabledChange,
+		onChange: settingsController.setWarningNotificationsEnabled,
       }),
     }),
     createSettingsRow({
@@ -520,7 +533,7 @@ export function renderNotificationsSection(props: SettingsPartProps) {
         focusKey: 'settings.general.notifications.menuBarIcon',
         disabled: notificationsDisabled,
         title: props.labels.settingsMenuBarIcon,
-        onChange: props.onMenuBarIconEnabledChange,
+		onChange: settingsController.setMenuBarIconEnabled,
       }),
     }),
     createSettingsRow({
@@ -531,14 +544,17 @@ export function renderNotificationsSection(props: SettingsPartProps) {
         focusKey: 'settings.general.notifications.completion',
         disabled: notificationsDisabled,
         title: props.labels.settingsCompletionNotifications,
-        onChange: props.onCompletionNotificationsEnabledChange,
+		onChange: settingsController.setCompletionNotificationsEnabled,
       }),
     }),
   );
   return notifications.element;
 }
 
-export function renderDownloadDirectorySection(props: SettingsPartProps) {
+export function renderDownloadDirectorySection(
+	props: SettingsViewState,
+	settingsController: SettingsController,
+) {
   const field = el('div', 'comet-settings-download-settings');
   const effectiveDownloadDir = props.pdfDownloadDir.trim() || props.labels.systemDownloads;
   const downloadDirectory = createSettingsSection({
@@ -555,7 +571,7 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
         focusKey: 'settings.download.open',
         title: props.labels.chooseDirectory,
         disabled: !props.desktopRuntime || props.isSettingsSaving,
-        onClick: props.onChoosePdfDownloadDir,
+		onClick: () => void settingsController.handleChoosePdfDownloadDir(),
       }),
       itemClassName: 'comet-settings-download-directory-item',
       controlClassName: 'comet-settings-download-directory-control',
@@ -575,7 +591,7 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
         focusKey: 'settings.download.selectionOrder',
         disabled: props.isSettingsSaving,
         title: props.labels.pdfFileNameUseSelectionOrder,
-        onChange: props.onPdfFileNameUseSelectionOrderChange,
+		onChange: settingsController.setPdfFileNameUseSelectionOrder,
       }),
     }),
   );
@@ -583,7 +599,10 @@ export function renderDownloadDirectorySection(props: SettingsPartProps) {
   return field;
 }
 
-export function renderConfigPathSection(props: SettingsPartProps) {
+export function renderConfigPathSection(
+	props: SettingsViewState,
+	settingsController: SettingsController,
+) {
   const configPath = createSettingsSection({
     sectionClassName: 'comet-settings-config-path-section',
     panelClassName: 'comet-settings-config-path-panel',
@@ -598,7 +617,7 @@ export function renderConfigPathSection(props: SettingsPartProps) {
         focusKey: 'settings.config.open',
         title: props.labels.changeConfigLocation,
         disabled: !props.desktopRuntime || props.isSettingsSaving || !props.configPath.trim(),
-        onClick: props.onChooseConfigPath,
+		onClick: () => void settingsController.handleChooseConfigPath(),
       }),
       itemClassName: 'comet-settings-config-path-item',
       controlClassName: 'comet-settings-config-path-control',
@@ -607,7 +626,11 @@ export function renderConfigPathSection(props: SettingsPartProps) {
   return configPath.element;
 }
 
-export function renderTextEditorSection(props: SettingsPartProps, contextViewProvider: IContextViewProvider) {
+export function renderTextEditorSection(
+	props: SettingsViewState,
+	contextViewProvider: IContextViewProvider,
+	settingsController: SettingsController,
+) {
   const defaultBodyStyle = props.editorDraftStyle.value.defaultBodyStyle;
   const isDisabled = props.isSettingsSaving;
   const textEditorPanel = createSettingsSection({
@@ -625,7 +648,7 @@ export function renderTextEditorSection(props: SettingsPartProps, contextViewPro
     ),
     defaultBodyStyle.fontFamilyValue,
     'settings.textEditor.fontFamily',
-    props.onEditorDraftFontFamilyChange,
+	settingsController.setEditorDraftFontFamily,
     contextViewProvider,
     'comet-settings-text-editor-select',
   );
@@ -637,7 +660,7 @@ export function renderTextEditorSection(props: SettingsPartProps, contextViewPro
     ),
     defaultBodyStyle.fontSizeValue,
     'settings.textEditor.fontSize',
-    props.onEditorDraftFontSizeChange,
+	settingsController.setEditorDraftFontSize,
     contextViewProvider,
     'comet-settings-text-editor-select',
   );
@@ -651,7 +674,7 @@ export function renderTextEditorSection(props: SettingsPartProps, contextViewPro
     step: '0.1',
     decrementAriaLabel: numberStepperDecrementAriaLabel,
     incrementAriaLabel: numberStepperIncrementAriaLabel,
-    onDidChange: props.onEditorDraftLineHeightChange,
+	onDidChange: settingsController.setEditorDraftLineHeightFromInput,
     disabled: isDisabled,
   });
   setSettingsFocusKey(lineHeightInput.inputElement, 'settings.textEditor.lineHeight');
@@ -664,7 +687,7 @@ export function renderTextEditorSection(props: SettingsPartProps, contextViewPro
     step: '0.5',
     decrementAriaLabel: numberStepperDecrementAriaLabel,
     incrementAriaLabel: numberStepperIncrementAriaLabel,
-    onDidChange: props.onEditorDraftParagraphSpacingBeforeChange,
+	onDidChange: settingsController.setEditorDraftParagraphSpacingBeforePtFromInput,
     disabled: isDisabled,
   });
   setSettingsFocusKey(paragraphSpacingBeforeInput.inputElement, 'settings.textEditor.paragraphSpacingBefore');
@@ -677,7 +700,7 @@ export function renderTextEditorSection(props: SettingsPartProps, contextViewPro
     step: '0.5',
     decrementAriaLabel: numberStepperDecrementAriaLabel,
     incrementAriaLabel: numberStepperIncrementAriaLabel,
-    onDidChange: props.onEditorDraftParagraphSpacingAfterChange,
+	onDidChange: settingsController.setEditorDraftParagraphSpacingAfterPtFromInput,
     disabled: isDisabled,
   });
   setSettingsFocusKey(paragraphSpacingAfterInput.inputElement, 'settings.textEditor.paragraphSpacingAfter');
@@ -687,7 +710,7 @@ export function renderTextEditorSection(props: SettingsPartProps, contextViewPro
     value: toColorPickerValue(defaultBodyStyle.color),
     className: 'comet-settings-text-editor-color-picker',
     focusKey: 'settings.textEditor.colorPicker',
-    onInput: props.onEditorDraftColorChange,
+	onInput: settingsController.setEditorDraftColor,
   });
   colorPickerInput.inputElement.disabled = isDisabled;
   const colorValueInput = buildInput({

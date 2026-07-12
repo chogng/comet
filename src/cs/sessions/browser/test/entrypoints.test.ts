@@ -156,16 +156,26 @@ test('Sessions host directly composes Parts without a state-forwarding wrapper',
 	assert.match(sidebar, /getLayoutState\(\)\.isSidebarVisible/);
 });
 
-test('Settings controller is a DI service without mutable shell context', () => {
+test('Settings view owns its service state without a shell Props bus', () => {
 	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
 	const workbenchCommon = readSource('src/cs/workbench/workbench.common.main.ts');
 	assert.match(
 		sessionsWorkbench,
-		/@ISettingsController private readonly settingsController: SettingsController/,
+		/@ISettingsModel private readonly settingsModel: SettingsModel/,
 	);
 	assert.doesNotMatch(
 		sessionsWorkbench,
-		/getWorkbenchSettingsController|let settingsController|settingsControllerInstance\.setContext|this\.settingsController\.start\(/,
+		/ISettingsController|ILibraryModel|IFetchService|IEditorDraftStyleService|createSettingsPartProps|settingsPartProps|settingsView\.setProps/,
+	);
+	assert.match(sessionsWorkbench, /createInstance\(SettingsPartView\)/);
+	assert.doesNotMatch(sessionsWorkbench, /settingsOverlayBodyElement|getNavigationElement\(/);
+	assert.match(
+		sessionsWorkbench,
+		/registerWorkbenchPartDomNode\(WORKBENCH_PART_IDS\.settings, null\)/,
+	);
+	assert.match(
+		sessionsWorkbench,
+		/registerWorkbenchPartDomNode\(\s*WORKBENCH_PART_IDS\.settings,\s*this\.settingsView\.getElement\(\)/,
 	);
 	assert.match(workbenchCommon, /preferences\/browser\/settings\.contribution/);
 
@@ -174,7 +184,7 @@ test('Settings controller is a DI service without mutable shell context', () => 
 	);
 	assert.doesNotMatch(
 		settingsController,
-		/SettingsControllerContext|CreateSettingsControllerParams|readonly setContext/,
+		/SettingsControllerContext|CreateSettingsControllerParams|readonly setContext|readonly getSnapshot|readonly subscribe/,
 	);
 	assert.match(settingsController, /@INativeHostService private readonly nativeHostService/);
 	assert.match(settingsController, /updateLocalePreference\(value, this\.getSettingsModelContext\(\)\)/);
@@ -186,7 +196,23 @@ test('Settings controller is a DI service without mutable shell context', () => 
 	const settingsEditor = readSource(
 		'src/cs/workbench/contrib/preferences/browser/settingsEditor.ts',
 	);
-	assert.doesNotMatch(settingsEditor, /createSettingsPartLabels/);
+	assert.doesNotMatch(
+		settingsEditor,
+		/createSettingsPartLabels|createSettingsPartProps|createSettingsPartView|setProps\(props|getNavigationElement|getContentElement|registerWorkbenchPartDomNode/,
+	);
+	assert.match(settingsEditor, /@ISettingsModel private readonly settingsModel/);
+	assert.match(settingsEditor, /@ISettingsController private readonly settingsController/);
+	assert.match(settingsEditor, /@ILibraryModel private readonly libraryModel/);
+	assert.match(settingsEditor, /@IFetchService private readonly fetchService/);
+	assert.match(settingsEditor, /@IEditorDraftStyleService private readonly editorDraftStyleService/);
+	assert.match(settingsEditor, /@IWorkbenchLocaleService private readonly localeService/);
+	assert.match(settingsEditor, /@IWorkbenchLanguageService private readonly languageService/);
+	assert.match(settingsEditor, /@INativeHostService private readonly nativeHostService/);
+	assert.match(settingsEditor, /@IContextViewService private readonly contextViewService/);
+	const settingsTypes = readSource(
+		'src/cs/workbench/contrib/preferences/browser/settingsTypes.ts',
+	);
+	assert.doesNotMatch(settingsTypes, /SettingsPartProps|SettingsPartState|SettingsPartActions/);
 });
 
 test('Library model is a DI service without mutable shell context', () => {
@@ -196,14 +222,17 @@ test('Library model is a DI service without mutable shell context', () => {
 	);
 
 	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
+	const settingsEditor = readSource(
+		'src/cs/workbench/contrib/preferences/browser/settingsEditor.ts',
+	);
 	const workbenchCommon = readSource('src/cs/workbench/workbench.common.main.ts');
 	assert.match(
-		sessionsWorkbench,
+		settingsEditor,
 		/@ILibraryModel private readonly libraryModel: LibraryModel/,
 	);
 	assert.doesNotMatch(
 		sessionsWorkbench,
-		/createLibraryModel|LibraryModelContext|getWorkbenchLibraryModel|libraryModelInstance\.setContext/,
+		/ILibraryModel|createLibraryModel|LibraryModelContext|getWorkbenchLibraryModel|libraryModelInstance\.setContext/,
 	);
 	assert.match(workbenchCommon, /services\/knowledgeBase\/libraryModel/);
 

@@ -251,12 +251,7 @@ export function buildSettingsSwitch(config: {
     onChange: config.onChange,
   });
   const element = view.getElement();
-  const input = element.querySelector<HTMLInputElement>('.switch-input');
-  if (input) {
-    setSettingsFocusKey(input, config.focusKey);
-  } else {
-    setSettingsFocusKey(element, config.focusKey);
-  }
+  setSettingsFocusKey(view.getInputElement(), config.focusKey);
   return element;
 }
 

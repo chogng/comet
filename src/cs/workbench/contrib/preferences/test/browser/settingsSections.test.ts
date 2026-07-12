@@ -38,8 +38,7 @@ test('Supported Sources exposes the Journal home without leaking its discovery U
 		supportedSources: [journal],
 		showSupportedSources: true,
 		isSettingsSaving: false,
-		onToggleSupportedSources: () => {},
-	});
+	}, () => {});
 	const url = section.querySelector<HTMLElement>('.comet-settings-supported-source-url');
 
 	assert.deepEqual({

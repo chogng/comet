@@ -18,11 +18,12 @@ import {
 	buildSettingsButton,
 	createSettingsElement,
 } from 'cs/workbench/contrib/preferences/browser/settingsUiPrimitives';
-import type { SettingsPartProps } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { SettingsViewState } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
+import type { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { createDefaultKnowledgeBaseSettings } from 'cs/workbench/services/knowledgeBase/config';
 import { createDefaultRagSettings } from 'cs/workbench/services/rag/config';
 
-export type SettingsSectionRenderer = (props: SettingsPartProps) => HTMLElement;
+export type SettingsSectionRenderer = (state: SettingsViewState) => HTMLElement;
 
 export type SettingsSectionRenderers = Readonly<Record<SettingsSectionId, SettingsSectionRenderer>>;
 
@@ -33,42 +34,44 @@ type SettingsTreeOptions = {
 	readonly loadingHintElement: HTMLElement;
 	readonly noResultsElement: HTMLElement;
 	readonly sectionRenderers: SettingsSectionRenderers;
+	readonly settingsController: SettingsController;
 };
 
-function isKnowledgeBasePageAtDefaults(props: SettingsPartProps) {
+function isKnowledgeBasePageAtDefaults(state: SettingsViewState) {
 	const defaultKnowledgeBaseSettings = createDefaultKnowledgeBaseSettings();
 	const defaultRagSettings = createDefaultRagSettings();
 
 	return (
-		props.knowledgeBaseEnabled === defaultKnowledgeBaseSettings.enabled &&
-		props.autoIndexDownloadedPdf === defaultKnowledgeBaseSettings.autoIndexDownloadedPdf &&
-		props.knowledgeBasePdfDownloadDir.trim() === '' &&
-		props.libraryStorageMode === defaultKnowledgeBaseSettings.libraryStorageMode &&
-		props.libraryDirectory.trim() === '' &&
-		props.maxConcurrentIndexJobs === defaultKnowledgeBaseSettings.maxConcurrentIndexJobs &&
-		props.activeRagProvider === defaultRagSettings.activeProvider &&
-		JSON.stringify(props.ragProviders) === JSON.stringify(defaultRagSettings.providers) &&
-		props.retrievalCandidateCount === defaultRagSettings.retrievalCandidateCount &&
-		props.retrievalTopK === defaultRagSettings.retrievalTopK
+		state.knowledgeBaseEnabled === defaultKnowledgeBaseSettings.enabled &&
+		state.autoIndexDownloadedPdf === defaultKnowledgeBaseSettings.autoIndexDownloadedPdf &&
+		state.knowledgeBasePdfDownloadDir.trim() === '' &&
+		state.libraryStorageMode === defaultKnowledgeBaseSettings.libraryStorageMode &&
+		state.libraryDirectory.trim() === '' &&
+		state.maxConcurrentIndexJobs === defaultKnowledgeBaseSettings.maxConcurrentIndexJobs &&
+		state.activeRagProvider === defaultRagSettings.activeProvider &&
+		JSON.stringify(state.ragProviders) === JSON.stringify(defaultRagSettings.providers) &&
+		state.retrievalCandidateCount === defaultRagSettings.retrievalCandidateCount &&
+		state.retrievalTopK === defaultRagSettings.retrievalTopK
 	);
 }
 
 function renderSettingsPageFooter(
 	pageId: SettingsPageId,
-	props: SettingsPartProps,
+	state: SettingsViewState,
+	settingsController: SettingsController,
 ): HTMLElement | null {
 	switch (pageId) {
 		case 'general': {
 			const button = buildSettingsButton({
-				label: props.labels.resetDefault,
+				label: state.labels.resetDefault,
 				className: 'comet-settings-page-footer-button',
 				focusKey: 'settings.page.general.reset',
 				disabled:
-					!props.desktopRuntime ||
-					props.isSettingsSaving ||
-					!props.defaultConfigPath.trim() ||
-					props.configPath === props.defaultConfigPath,
-				onClick: props.onResetConfigPath,
+					!state.desktopRuntime ||
+					state.isSettingsSaving ||
+					!state.defaultConfigPath.trim() ||
+					state.configPath === state.defaultConfigPath,
+				onClick: settingsController.handleResetConfigPath,
 			});
 			const footer = createSettingsElement('div', 'comet-settings-page-footer');
 			footer.append(button);
@@ -76,11 +79,11 @@ function renderSettingsPageFooter(
 		}
 		case 'textEditor': {
 			const button = buildSettingsButton({
-				label: props.labels.resetDefault,
+				label: state.labels.resetDefault,
 				className: 'comet-settings-page-footer-button',
 				focusKey: 'settings.page.textEditor.reset',
-				disabled: props.isSettingsSaving || props.editorDraftStyle.userValue === null,
-				onClick: props.onResetEditorDraftStyle,
+				disabled: state.isSettingsSaving || state.editorDraftStyle.userValue === null,
+				onClick: settingsController.handleResetEditorDraftStyle,
 			});
 			const footer = createSettingsElement('div', 'comet-settings-page-footer');
 			footer.append(button);
@@ -88,11 +91,11 @@ function renderSettingsPageFooter(
 		}
 		case 'knowledgeBase': {
 			const button = buildSettingsButton({
-				label: props.labels.resetDefault,
+				label: state.labels.resetDefault,
 				className: 'comet-settings-page-footer-button',
 				focusKey: 'settings.page.knowledgeBase.reset',
-				disabled: props.isSettingsSaving || isKnowledgeBasePageAtDefaults(props),
-				onClick: props.onResetKnowledgeBaseSettings,
+				disabled: state.isSettingsSaving || isKnowledgeBasePageAtDefaults(state),
+				onClick: settingsController.handleResetKnowledgeBaseSettings,
 			});
 			const footer = createSettingsElement('div', 'comet-settings-page-footer');
 			footer.append(button);
@@ -117,22 +120,22 @@ export class SettingsTree {
 	}
 
 	updateSections(
-		props: SettingsPartProps,
-		previousProps: SettingsPartProps | undefined,
+		state: SettingsViewState,
+		previousState: SettingsViewState | undefined,
 		forceAll = false,
 	) {
 		for (const sectionId of Object.keys(this.sections) as SettingsSectionId[]) {
-			if (forceAll || shouldUpdateSettingsSection(sectionId, previousProps, props)) {
-				this.updateSection(sectionId, props);
+			if (forceAll || shouldUpdateSettingsSection(sectionId, previousState, state)) {
+				this.updateSection(sectionId, state);
 			}
 		}
 	}
 
 	updateSection(
 		sectionId: SettingsSectionId,
-		props: SettingsPartProps,
+		state: SettingsViewState,
 	) {
-		this.sections[sectionId].replaceChildren(this.options.sectionRenderers[sectionId](props));
+		this.sections[sectionId].replaceChildren(this.options.sectionRenderers[sectionId](state));
 	}
 
 	dispose() {
@@ -143,11 +146,11 @@ export class SettingsTree {
 
 	renderPage(
 		pageId: SettingsPageId,
-		props: SettingsPartProps,
+		state: SettingsViewState,
 	) {
 		const activeSectionIds = this.model.getActiveSectionIds(pageId);
 		this.options.pageTitleElement.textContent = this.model.getPageTitle(pageId);
-		const pageFooter = renderSettingsPageFooter(pageId, props);
+		const pageFooter = renderSettingsPageFooter(pageId, state, this.options.settingsController);
 		const contentChildren: Node[] = [
 			this.options.pageTitleElement,
 			...activeSectionIds.map(sectionId => this.sections[sectionId]),
@@ -161,7 +164,7 @@ export class SettingsTree {
 			contentChildren.push(pageFooter);
 		}
 
-		if (props.isSettingsLoading) {
+		if (state.isSettingsLoading) {
 			contentChildren.splice(1, 0, this.options.loadingHintElement);
 		}
 

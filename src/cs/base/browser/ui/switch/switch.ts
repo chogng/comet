@@ -116,6 +116,10 @@ export class SwitchView extends Disposable {
     return this.element;
   }
 
+  getInputElement() {
+    return this.inputElement;
+  }
+
   setProps(props: SwitchProps = {}) {
     if (this.disposed) {
       return;

@@ -54,9 +54,11 @@ function createTestLocaleService(
 function createSettingsController(
 	invokeDesktop: ElectronInvoke,
 	editorDraftStyleService: EditorDraftStyleService = new EditorDraftStyleService(),
-): SettingsController {
-	return new SettingsController(
-		new SettingsModel(),
+): { controller: SettingsController; settingsModel: SettingsModel } {
+	const settingsModel = new SettingsModel();
+	return {
+		controller: new SettingsController(
+		settingsModel,
 		{
 			canInvoke: () => true,
 			invoke: invokeDesktop,
@@ -65,7 +67,9 @@ function createSettingsController(
 		createTestLocaleService(),
 		new WorkbenchLanguageService(),
 		editorDraftStyleService,
-	);
+		),
+		settingsModel,
+	};
 }
 
 test('SettingsController uses the current locale for async completion notifications', async () => {
@@ -176,7 +180,7 @@ test('SettingsController syncs editorDraftStyleService through load and autosave
     throw new Error(`Unexpected desktop command in editor draft style settings test: ${command}`);
   }) as ElectronInvoke;
 
-	const controller = createSettingsController(invokeDesktop, editorDraftStyleService);
+	const { controller } = createSettingsController(invokeDesktop, editorDraftStyleService);
 
   try {
     controller.start();
@@ -287,7 +291,7 @@ test('SettingsController editorDraft style handlers update service snapshot and 
     throw new Error(`Unexpected desktop command in editor draft style settings test: ${command}`);
   }) as ElectronInvoke;
 
-	const controller = createSettingsController(invokeDesktop, editorDraftStyleService);
+	const { controller } = createSettingsController(invokeDesktop, editorDraftStyleService);
 
   try {
     const runtimePresetsBeforeStart = editorDraftStyleService.getSnapshot();
@@ -421,7 +425,7 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
     throw new Error(`Unexpected desktop command in browser tab keep-alive test: ${command}`);
   }) as ElectronInvoke;
 
-  const controller = createSettingsController(invokeDesktop);
+	const { controller, settingsModel } = createSettingsController(invokeDesktop);
 
   try {
     controller.start();
@@ -429,7 +433,7 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
     await delay(0);
     await flushMicrotasks();
 
-    assert.equal(controller.getSnapshot().browserTabKeepAliveLimit, 5);
+	assert.equal(settingsModel.getSnapshot().browserTabKeepAliveLimit, 5);
 
 	controller.setBrowserTabKeepAliveLimit('0');
     await delay(0);
@@ -461,11 +465,11 @@ test('SettingsController loads and persists browser tab keep-alive limit', async
 });
 
 test('SettingsController owns strict numeric input normalization', () => {
-	const controller = createSettingsController((async (command: string, args?: { settings?: unknown }) => {
+	const { controller, settingsModel } = createSettingsController((async (command: string, args?: { settings?: unknown }) => {
 		assert.equal(command, 'save_settings');
 		return args?.settings ?? {};
 	}) as ElectronInvoke);
-	const initialSnapshot = controller.getSnapshot();
+	const initialSnapshot = settingsModel.getSnapshot();
 
 	controller.setBrowserTabKeepAliveLimit('');
 	controller.setBrowserMaxHistoryEntries('12.5');
@@ -476,7 +480,7 @@ test('SettingsController owns strict numeric input normalization', () => {
 	controller.setBrowserMaxHistoryEntries('1e2');
 	controller.setMaxConcurrentIndexJobs('1.0');
 	controller.setRetrievalCandidateCount('0b11');
-	assert.deepEqual(controller.getSnapshot(), initialSnapshot);
+	assert.deepEqual(settingsModel.getSnapshot(), initialSnapshot);
 
 	controller.setBrowserTabKeepAliveLimit('-20');
 	controller.setBrowserMaxHistoryEntries('999999');
@@ -486,11 +490,11 @@ test('SettingsController owns strict numeric input normalization', () => {
 
 	assert.deepEqual(
 		{
-			browserTabKeepAliveLimit: controller.getSnapshot().browserTabKeepAliveLimit,
-			browserMaxHistoryEntries: controller.getSnapshot().browserMaxHistoryEntries,
-			maxConcurrentIndexJobs: controller.getSnapshot().maxConcurrentIndexJobs,
-			retrievalCandidateCount: controller.getSnapshot().retrievalCandidateCount,
-			retrievalTopK: controller.getSnapshot().retrievalTopK,
+			browserTabKeepAliveLimit: settingsModel.getSnapshot().browserTabKeepAliveLimit,
+			browserMaxHistoryEntries: settingsModel.getSnapshot().browserMaxHistoryEntries,
+			maxConcurrentIndexJobs: settingsModel.getSnapshot().maxConcurrentIndexJobs,
+			retrievalCandidateCount: settingsModel.getSnapshot().retrievalCandidateCount,
+			retrievalTopK: settingsModel.getSnapshot().retrievalTopK,
 		},
 		{
 			browserTabKeepAliveLimit: minBrowserTabKeepAliveLimit,
@@ -503,8 +507,8 @@ test('SettingsController owns strict numeric input normalization', () => {
 
 	controller.setBrowserTabKeepAliveLimit('999');
 	controller.setBrowserMaxHistoryEntries('-20');
-	assert.equal(controller.getSnapshot().browserTabKeepAliveLimit, maxBrowserTabKeepAliveLimit);
-	assert.equal(controller.getSnapshot().browserMaxHistoryEntries, minBrowserMaxHistoryEntries);
+	assert.equal(settingsModel.getSnapshot().browserTabKeepAliveLimit, maxBrowserTabKeepAliveLimit);
+	assert.equal(settingsModel.getSnapshot().browserMaxHistoryEntries, minBrowserMaxHistoryEntries);
 	controller.dispose();
 });
 

@@ -1,8 +1,6 @@
 import type {
-  AppStartupLayout,
-  AppTheme,
-  LlmProviderId,
-  TranslationProviderId,
+	LlmProviderId,
+	TranslationProviderId,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import {
   areEditorDraftStyleSettingsEqual,
@@ -26,7 +24,6 @@ import {
   ISettingsModel,
   SettingsModel,
 } from 'cs/workbench/services/settings/settingsModel';
-import type { SettingsModelSnapshot } from 'cs/workbench/services/settings/settingsModel';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
@@ -101,12 +98,6 @@ export class SettingsController {
     @IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 	@IEditorDraftStyleService private readonly editorDraftStyleService: EditorDraftStyleService,
   ) {}
-
-  readonly subscribe = (listener: () => void) =>
-    this.settingsModel.subscribe(listener);
-
-  readonly getSnapshot = (): SettingsModelSnapshot =>
-    this.settingsModel.getSnapshot();
 
   readonly start = () => {
     if (this.started || this.disposed) {
@@ -248,12 +239,20 @@ export class SettingsController {
     this.scheduleImmediateAutoSave();
   };
 
-  readonly setStartupLayout = (nextStartupLayout: AppStartupLayout) => {
+	readonly setStartupLayout = (nextStartupLayout: string) => {
+		if (nextStartupLayout !== 'agent' && nextStartupLayout !== 'flow') {
+			return;
+		}
+
     this.settingsModel.setStartupLayout(nextStartupLayout);
     this.scheduleImmediateAutoSave();
   };
 
-  readonly setTheme = (nextTheme: AppTheme) => {
+	readonly setTheme = (nextTheme: string) => {
+		if (nextTheme !== 'light' && nextTheme !== 'dark' && nextTheme !== 'system') {
+			return;
+		}
+
     this.settingsModel.setTheme(nextTheme);
     this.scheduleImmediateAutoSave();
   };
