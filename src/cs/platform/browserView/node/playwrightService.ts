@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DisposableMap, DisposableStore, IDisposable, toDisposable } from 'cs/base/common/lifecycle';
+import { DisposableMap, DisposableStore, IDisposable, MutableDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import { DeferredPromise, disposableTimeout, raceCancellation, raceCancellationError, raceTimeout } from 'cs/base/common/async';
 import { CancellationError, CancellationToken, CancellationTokenSource, isCancellationError } from 'cs/base/common/cancellation';
 import { Emitter, Event } from 'cs/base/common/event';
@@ -18,6 +18,7 @@ import {
 	BrowserPageReadinessTimeoutError,
 	IBrowserPageSnapshot,
 	IInvokeFunctionResult,
+	IInvokeFunctionSummaryResult,
 	IPageTrackingLease,
 	IPageSnapshotOptions,
 	IPlaywrightService,
@@ -921,6 +922,104 @@ export class PlaywrightService implements IPlaywrightService {
  * Playwright {@link Page} instances via FIFO matching of group IPC events and
  * Playwright CDP events.
  */
+type DeferredResultSettlement =
+	| { readonly kind: 'fulfilled'; readonly result: unknown }
+	| { readonly kind: 'rejected'; readonly error: unknown };
+
+type DeferredResultUpdate = 'settled' | 'dialog' | 'timeout';
+
+class DeferredResultEntry implements IDisposable {
+	private readonly _onDidUpdate = new Emitter<void>();
+	readonly onDidUpdate = this._onDidUpdate.event;
+	private readonly expiration = new MutableDisposable<IDisposable>();
+	private generation = 0;
+	private disposed = false;
+	private _settlement: DeferredResultSettlement | undefined;
+	private dialogVersion = 0;
+	private reportedDialogVersion = 0;
+	private latestDialogError: DialogInterruptedError | undefined;
+
+	constructor(
+		readonly pageId: string,
+		promise: Promise<unknown>,
+		readonly logCtx?: IExecutionLogContext,
+	) {
+		this.observe(promise);
+	}
+
+	get settlement(): DeferredResultSettlement | undefined {
+		return this._settlement;
+	}
+
+	get hasPendingDialog(): boolean {
+		return this.dialogVersion !== this.reportedDialogVersion;
+	}
+
+	takePendingDialog(): DialogInterruptedError | undefined {
+		if (!this.hasPendingDialog) {
+			return undefined;
+		}
+		this.reportedDialogVersion = this.dialogVersion;
+		return this.latestDialogError;
+	}
+
+	private observe(promise: Promise<unknown>): void {
+		if (this.disposed) {
+			throw new Error('Cannot observe a disposed deferred result.');
+		}
+		this._settlement = undefined;
+		const generation = ++this.generation;
+		void promise.then(
+			result => this._settle(generation, { kind: 'fulfilled', result }),
+			error => {
+				if (error instanceof DialogInterruptedError) {
+					this._followDialog(generation, error);
+					return;
+				}
+				this._settle(generation, { kind: 'rejected', error });
+			},
+		);
+	}
+
+	private _followDialog(generation: number, error: DialogInterruptedError): void {
+		if (this.disposed || generation !== this.generation) {
+			return;
+		}
+		this.latestDialogError = error;
+		this.dialogVersion++;
+		this._onDidUpdate.fire();
+		this.observe(error.waitForCompletion());
+	}
+
+	pauseExpiration(): void {
+		this.expiration.clear();
+	}
+
+	armExpiration(onExpired: () => void): void {
+		this.expiration.value = disposableTimeout(onExpired, DEFERRED_RESULT_CLEANUP_MS);
+	}
+
+	private _settle(generation: number, settlement: DeferredResultSettlement): void {
+		if (this.disposed || generation !== this.generation) {
+			return;
+		}
+		this.latestDialogError = undefined;
+		this.reportedDialogVersion = this.dialogVersion;
+		this._settlement = settlement;
+		this._onDidUpdate.fire();
+	}
+
+	dispose(): void {
+		if (this.disposed) {
+			return;
+		}
+		this.disposed = true;
+		this.generation++;
+		this.expiration.dispose();
+		this._onDidUpdate.dispose();
+	}
+}
+
 class PlaywrightSession {
 	private readonly resources = new DisposableStore();
 	private readonly shutdownCancellation = this.resources.add(new CancellationTokenSource());
@@ -945,11 +1044,8 @@ class PlaywrightSession {
 	private _openContext: BrowserContext | undefined = undefined;
 
 	/** In-flight deferred results keyed by their generated ID. */
-	private readonly _deferredResults = this.resources.add(new DisposableMap<string, {
-		pageId: string;
-		promise: Promise<unknown>;
-		logCtx?: IExecutionLogContext;
-	} & IDisposable>());
+	private readonly _deferredResults = this.resources.add(new DisposableMap<string, DeferredResultEntry>());
+	private readonly _activeDeferredResultWaits = new Set<string>();
 
 	constructor(
 		readonly sessionId: string,
@@ -999,8 +1095,16 @@ class PlaywrightSession {
 			}
 		}
 
-		const summary = await this._getSummary(viewId);
-		return { pageId: viewId, summary };
+		try {
+			const summary = await this._getSummary(viewId);
+			return { pageId: viewId, summary };
+		} catch (error) {
+			return rethrowAfterCleanup(
+				error,
+				() => page.close(),
+				`Failed to close page "${viewId}" after its initial summary failed.`,
+			);
+		}
 	}
 
 	getSummary(pageId: string): Promise<string> {
@@ -1106,27 +1210,15 @@ class PlaywrightSession {
 		try {
 			fn = await this._compileFunction(fnDef);
 		} catch (err: unknown) {
-			// Surface compile/syntax errors as { error, summary }, like other execution failures.
+			// Surface compile and syntax failures through the same structured result as runtime failures.
 			this._logExecution(logCtx, false);
-			const summary = await this._getSummary(pageId);
-			return { error: err instanceof Error ? err.message : String(err), summary };
+			return {
+				error: err instanceof Error ? err.message : String(err),
+				...await this._readOperationSummary(pageId),
+			};
 		}
 		const wrappedCallback = async (page: Page) => fn(createPageApiProxy(page, logCtx.pageMethodsCalled), args);
-
-		if (timeoutMs !== undefined) {
-			return this._runWithDeferral(pageId, wrappedCallback, timeoutMs, undefined, logCtx);
-		}
-
-		let result, error;
-		try {
-			result = await this._runAgainstPage(pageId, wrappedCallback);
-		} catch (err: unknown) {
-			error = err instanceof Error ? err.message : String(err);
-		}
-
-		this._logExecution(logCtx, !error);
-		const summary = await this._getSummary(pageId);
-		return { result, error, summary };
+		return this._runWithDeferral(pageId, wrappedCallback, timeoutMs, logCtx);
 	}
 
 	waitForDeferredResult(deferredResultId: string, timeoutMs: number): Promise<IInvokeFunctionResult> {
@@ -1138,13 +1230,68 @@ class PlaywrightSession {
 		if (!entry) {
 			throw new Error(`No deferred result found with ID "${deferredResultId}". It may have been cleaned up or already consumed.`);
 		}
-
-		const { pageId, promise, logCtx } = entry;
-		if (logCtx) {
-			logCtx.resumeCount++;
+		if (this._activeDeferredResultWaits.has(deferredResultId)) {
+			throw new Error(`Deferred result "${deferredResultId}" is already being awaited.`);
 		}
-		this._deferredResults.deleteAndDispose(deferredResultId);
-		return this._runWithDeferral(pageId, () => promise, timeoutMs, deferredResultId, logCtx);
+		this._activeDeferredResultWaits.add(deferredResultId);
+		entry.pauseExpiration();
+		try {
+			if (entry.logCtx) {
+				entry.logCtx.resumeCount++;
+			}
+
+			let result, error;
+			const update = await this._waitForDeferredUpdate(entry, timeoutMs);
+			let interrupted = update !== 'settled';
+			if (update === 'settled') {
+				const settlement = entry.settlement;
+				if (!settlement) {
+					throw new Error(`Deferred result "${deferredResultId}" settled without an outcome.`);
+				}
+				if (settlement.kind === 'fulfilled') {
+					result = settlement.result;
+				} else {
+					error = settlement.error instanceof Error ? settlement.error.message : String(settlement.error);
+				}
+			} else if (update === 'dialog') {
+				const dialogError = entry.takePendingDialog();
+				if (!dialogError) {
+					throw new Error(`Deferred result "${deferredResultId}" reported a dialog without an interruption error.`);
+				}
+				error = dialogError.message;
+			}
+			const summaryResult = await this._readOperationSummary(entry.pageId);
+			if (interrupted && entry.settlement) {
+				interrupted = false;
+				const settlement = entry.settlement;
+				if (settlement.kind === 'fulfilled') {
+					result = settlement.result;
+					error = undefined;
+				} else {
+					result = undefined;
+					error = settlement.error instanceof Error ? settlement.error.message : String(settlement.error);
+				}
+			} else if (interrupted && entry.hasPendingDialog) {
+				const dialogError = entry.takePendingDialog();
+				if (!dialogError) {
+					throw new Error(`Deferred result "${deferredResultId}" lost its pending dialog interruption.`);
+				}
+				error = dialogError.message;
+			}
+			if (interrupted) {
+				this._armDeferredResultExpiration(deferredResultId, entry);
+			} else {
+				this._deferredResults.deleteAndDispose(deferredResultId);
+			}
+			return {
+				result,
+				error,
+				...summaryResult,
+				deferredResultId: interrupted ? deferredResultId : undefined,
+			};
+		} finally {
+			this._activeDeferredResultWaits.delete(deferredResultId);
+		}
 	}
 
 	replyToFileChooser(pageId: string, files: string[]): Promise<{ summary: string }> {
@@ -1179,7 +1326,7 @@ class PlaywrightSession {
 
 	// --- Private: page operations ---
 
-	private async _getSummary(pageId: string, full = false): Promise<string> {
+	private async _getSummary(pageId: string, full?: boolean): Promise<string> {
 		const page = await this._getPage(pageId);
 		const tab = this._tabs.get(page);
 		if (!tab) {
@@ -1200,55 +1347,128 @@ class PlaywrightSession {
 		);
 	}
 
-	private async _runWithDeferral(pageId: string, callback: (page: Page) => Promise<unknown>, timeoutMs: number, existingDeferredId?: string, logCtx?: IExecutionLogContext): Promise<IInvokeFunctionResult> {
-		const deferred = new DeferredPromise();
-
-		// Attach settlement logging once, on the initiating call: `deferred.p` settles
-		// when the page work finishes no matter how many times the result is deferred,
-		// resumed, or abandoned, so a deferred run is still logged once it settles.
-		// `_logExecution` is idempotent, so this is a no-op if the synchronous path
-		// below already logged a non-deferred completion.
-		if (existingDeferredId === undefined && logCtx) {
-			deferred.p.then(() => this._logExecution(logCtx, true), () => this._logExecution(logCtx, false));
-		}
-
-		const wrappedPromise = this._runAgainstPage(pageId, async (page) => {
-			const promise = callback(page);
-			deferred.complete(promise);
-			return promise;
-		});
-		this._trackBackgroundOperation(wrappedPromise);
+	private async _runWithDeferral(pageId: string, callback: (page: Page) => Promise<unknown>, timeoutMs: number | undefined, logCtx?: IExecutionLogContext): Promise<IInvokeFunctionResult> {
+		const wrappedPromise = this._runAgainstPage(pageId, callback);
+		const completionPromise = this._followDialogInterruptions(wrappedPromise);
+		this._trackBackgroundOperation(completionPromise);
 
 		let result, error;
 		let interrupted = false;
+		let deferredPromise = wrappedPromise;
 
 		try {
-			result = await raceTimeout(wrappedPromise, timeoutMs, () => { interrupted = true; });
+			result = timeoutMs === undefined
+				? await wrappedPromise
+				: await raceTimeout(wrappedPromise, timeoutMs, () => { interrupted = true; });
 		} catch (err: unknown) {
 			if (err instanceof DialogInterruptedError) {
 				interrupted = true;
+				deferredPromise = err.waitForCompletion();
 			}
 			error = err instanceof Error ? err.message : String(err);
 		}
 
 		let deferredResultId: string | undefined;
+		let deferredEntry: DeferredResultEntry | undefined;
 		if (interrupted) {
 			if (logCtx) {
 				logCtx.wasDeferred = true;
 			}
-			deferredResultId = existingDeferredId ?? generateUuid();
-			const cleanup = disposableTimeout(() => this._deferredResults.deleteAndDispose(deferredResultId!), DEFERRED_RESULT_CLEANUP_MS);
-			this._deferredResults.set(deferredResultId, { pageId, promise: deferred.p, logCtx, dispose: () => cleanup.dispose() });
-			this.logService.info(`[PlaywrightSession] Execution interrupted, deferred as ${deferredResultId}`);
+			if (logCtx) {
+				void completionPromise.then(
+					() => this._logExecution(logCtx, true),
+					() => this._logExecution(logCtx, false),
+				);
+			}
+			deferredResultId = generateUuid();
+			deferredEntry = this._registerDeferredResult(deferredResultId, pageId, deferredPromise, logCtx);
 		} else if (logCtx) {
-			// Completed or failed within the timeout: log the outcome now rather than
-			// relying on the settlement promise, which never settles if the page work
-			// threw before `settleWith` ran (e.g. the page could not be resolved).
+			// The complete page operation settled within this invocation.
 			this._logExecution(logCtx, !error);
 		}
 
-		const summary = await this._getSummary(pageId);
-		return { result, error, summary, deferredResultId };
+		const summaryResult = await this._readOperationSummary(pageId);
+		if (deferredResultId !== undefined && deferredEntry !== undefined) {
+			this._armDeferredResultExpiration(deferredResultId, deferredEntry);
+			this.logService.info(`[PlaywrightSession] Execution interrupted, deferred as ${deferredResultId}`);
+		}
+		return {
+			result,
+			error,
+			...summaryResult,
+			deferredResultId,
+		};
+	}
+
+	private async _followDialogInterruptions(initialPromise: Promise<unknown>): Promise<unknown> {
+		let currentPromise = initialPromise;
+		while (true) {
+			try {
+				return await currentPromise;
+			} catch (error) {
+				if (!(error instanceof DialogInterruptedError)) {
+					throw error;
+				}
+				currentPromise = error.waitForCompletion();
+			}
+		}
+	}
+
+	private async _waitForDeferredUpdate(entry: DeferredResultEntry, timeoutMs: number): Promise<DeferredResultUpdate> {
+		if (entry.settlement) {
+			return 'settled';
+		}
+		if (entry.hasPendingDialog) {
+			return 'dialog';
+		}
+		if (this.shutdownCancellation.token.isCancellationRequested) {
+			throw new CancellationError();
+		}
+
+		const deferred = new DeferredPromise<void>();
+		const updateListener = Event.once(entry.onDidUpdate)(() => deferred.complete());
+		const cancellationListener = this.shutdownCancellation.token.onCancellationRequested(() => deferred.error(new CancellationError()));
+		const timeout = disposableTimeout(() => deferred.complete(), timeoutMs);
+		if (entry.settlement || entry.hasPendingDialog) {
+			deferred.complete();
+		}
+		try {
+			await deferred.p;
+		} finally {
+			updateListener.dispose();
+			cancellationListener.dispose();
+			timeout.dispose();
+		}
+		if (this.shutdownCancellation.token.isCancellationRequested) {
+			throw new CancellationError();
+		}
+		if (entry.settlement) {
+			return 'settled';
+		}
+		return entry.hasPendingDialog ? 'dialog' : 'timeout';
+	}
+
+	private async _readOperationSummary(pageId: string): Promise<IInvokeFunctionSummaryResult> {
+		try {
+			return { summary: await this._getSummary(pageId) };
+		} catch (error) {
+			return { summaryError: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	private _registerDeferredResult(deferredResultId: string, pageId: string, promise: Promise<unknown>, logCtx?: IExecutionLogContext): DeferredResultEntry {
+		this._assertRunning();
+		const entry = new DeferredResultEntry(pageId, promise, logCtx);
+		this._deferredResults.set(deferredResultId, entry);
+		return entry;
+	}
+
+	private _armDeferredResultExpiration(deferredResultId: string, entry: DeferredResultEntry): void {
+		this._assertRunning();
+		if (this._deferredResults.get(deferredResultId) !== entry) {
+			throw new Error(`Deferred result "${deferredResultId}" lost ownership before it could be returned.`);
+		}
+		entry.armExpiration(() => this._deferredResults.deleteAndDispose(deferredResultId));
 	}
 
 	/**

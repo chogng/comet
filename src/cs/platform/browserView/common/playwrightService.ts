@@ -85,13 +85,16 @@ export class BrowserPageSnapshotTooLargeError extends BrowserPageSnapshotError {
 	}
 }
 
-export interface IInvokeFunctionResult {
-	result?: unknown;
-	error?: string;
-	summary: string;
-	/** When present the function did not complete within the timeout. Pass this ID to {@link IPlaywrightService.waitForDeferredResult} to keep waiting. */
-	deferredResultId?: string;
-}
+export type IInvokeFunctionSummaryResult =
+	| { readonly summary: string; readonly summaryError?: never }
+	| { readonly summary?: never; readonly summaryError: string };
+
+export type IInvokeFunctionResult = IInvokeFunctionSummaryResult & {
+	readonly result?: unknown;
+	readonly error?: string;
+	/** When present the function was interrupted before completion. Pass this ID to {@link IPlaywrightService.waitForDeferredResult} to keep waiting. */
+	readonly deferredResultId?: string;
+};
 
 export interface IPageTrackingLease {
 	/** Stable BrowserView identity addressed by this lease. */
@@ -184,14 +187,15 @@ export interface IPlaywrightService {
 	 * If the timeout fires before the function completes, or the function is otherwise interrupted,
 	 * the in-flight promise is stored as a *deferred result* and the returned object includes a
 	 * {@link deferredResultId} that can be passed to {@link waitForDeferredResult} to resume waiting.
-	 * When {@link timeoutMs} is omitted the function runs to completion with no deferral.
+	 * When {@link timeoutMs} is omitted, the function awaits indefinitely unless a page dialog interrupts it;
+	 * interrupted dialog work is still returned as a deferred result so it can resume after the dialog is handled.
 	 *
 	 * @param sessionId Identifies the session making the request.
 	 * @param pageId The browser view ID identifying the page to operate on.
 	 * @param fnDef The function code to execute. Should contain the function definition but not its invocation, e.g. `async (page, arg1, arg2) => { ... }`.
 	 * @param args Additional arguments to pass to the function after the `page` object.
-	 * @param timeoutMs Maximum time (in ms) to wait for the function to complete before deferring. When omitted the call awaits indefinitely.
-	 * @returns The result of the function execution, including a page summary and optionally a deferredResultId if the call did not complete.
+	 * @param timeoutMs Maximum time (in ms) to wait for the function to complete before deferring. When omitted there is no time-based deferral.
+	 * @returns The function result, exactly one of `summary` or `summaryError`, and optionally a deferredResultId if the call did not complete.
 	 */
 	invokeFunction(sessionId: string, pageId: string, fnDef: string, args?: unknown[], timeoutMs?: number): Promise<IInvokeFunctionResult>;
 
@@ -199,7 +203,7 @@ export interface IPlaywrightService {
 	 * Continue waiting for a previously deferred function invocation.
 	 *
 	 * @param sessionId Identifies the session making the request.
-	 * @param deferredResultId The ID returned from a timed-out {@link invokeFunction} call.
+	 * @param deferredResultId The ID returned from a previously deferred {@link invokeFunction} call.
 	 * @param timeoutMs Maximum time (in ms) to wait before returning a deferred result again.
 	 * @returns The same shape as {@link invokeFunction}. If the result is still not
 	 * available after the timeout, {@link deferredResultId} is returned again.
