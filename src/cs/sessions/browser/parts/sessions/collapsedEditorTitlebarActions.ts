@@ -25,7 +25,6 @@ export class CollapsedEditorTitlebarActionsView extends Disposable {
 	) {
 		super();
 		this.actionsView = this._register(createEditorTitlebarActionsView(this.createViewProps()));
-		this._register(this.layoutService.onDidChangeLayoutState(this.render, this));
 		this._register(toDisposable(this.localeService.subscribe(this.render)));
 		this.render();
 	}
@@ -35,8 +34,6 @@ export class CollapsedEditorTitlebarActionsView extends Disposable {
 	}
 
 	private readonly render = (): void => {
-		const element = this.actionsView.getElement();
-		element.hidden = !this.layoutService.getLayoutState().isEditorCollapsed;
 		this.actionsView.setProps(this.createViewProps());
 	};
 

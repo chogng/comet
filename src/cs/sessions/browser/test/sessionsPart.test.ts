@@ -368,7 +368,7 @@ function createPartHarness(store: DisposableStore, actionServices?: IActionServi
 	if (actionServices) {
 		store.add(instantiationService.createInstance(SessionsActionsContribution));
 	}
-	const part = store.add(new SessionsPart(instantiationService));
+	const part = store.add(new SessionsPart(instantiationService, layoutService));
 	const grid = part.getElement().querySelector<HTMLElement>('.comet-sessions-grid');
 	assert.ok(grid);
 	return { contextKeyService, factory, instantiationService, layoutService, part, grid };
@@ -477,20 +477,20 @@ test('SessionsPart publishes new and committed slot focus with the active slot s
 	}
 });
 
-test('Sessions Part owns the collapsed Editor action and mutates layout directly', () => {
+test('Sessions Part mounts the collapsed Editor action only while the Editor is collapsed', () => {
 	const store = new DisposableStore();
 	const { layoutService, part } = createPartHarness(store);
-	const toggleButton = () => part.getElement().querySelector<HTMLButtonElement>(
+	const toggleButtons = () => part.getElement().querySelectorAll<HTMLButtonElement>(
 		'.comet-editor-titlebar-toggle-editor-btn',
 	);
 
 	try {
-		assert.ok(toggleButton());
-		assert.equal(toggleButton()?.closest<HTMLElement>('.comet-editor-titlebar-actionbar')?.hidden, true);
+		assert.equal(toggleButtons().length, 0);
 		layoutService.setEditorCollapsed(true);
-		assert.equal(toggleButton()?.closest<HTMLElement>('.comet-editor-titlebar-actionbar')?.hidden, false);
-		toggleButton()?.click();
+		assert.equal(toggleButtons().length, 1);
+		toggleButtons()[0]?.click();
 		assert.equal(layoutService.getLayoutState().isEditorCollapsed, false);
+		assert.equal(toggleButtons().length, 0);
 	} finally {
 		store.dispose();
 	}

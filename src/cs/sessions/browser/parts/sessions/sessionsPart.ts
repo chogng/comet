@@ -11,6 +11,7 @@ import { IInstantiationService } from 'cs/platform/instantiation/common/instanti
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { SessionView } from 'cs/sessions/browser/parts/sessions/sessionView';
 import { CollapsedEditorTitlebarActionsView } from 'cs/sessions/browser/parts/sessions/collapsedEditorTitlebarActions';
+import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
 import {
 	ISessionsPartService,
 	type ISessionsPartFocusTarget,
@@ -40,6 +41,7 @@ export class SessionsPart extends Disposable implements ISessionsPartService {
 	private readonly titlebarTrailingElement = $<HTMLElementTagNameMap['div']>('div.comet-session-titlebar-trailing');
 	private readonly windowControlsSpacerElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-window-controls-spacer');
 	private readonly gridElement = $<HTMLElementTagNameMap['div']>('div.comet-sessions-grid');
+	private readonly collapsedEditorActionsView: CollapsedEditorTitlebarActionsView;
 	private readonly records = new Map<IVisibleSessionSlot, ISessionSlotRecord>();
 	private visibleSlots: readonly IVisibleSessionSlot[] = [];
 	private layoutWidth = 0;
@@ -50,18 +52,20 @@ export class SessionsPart extends Disposable implements ISessionsPartService {
 
 	constructor(
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@ISessionsLayoutService private readonly layoutService: ISessionsLayoutService,
 	) {
 		super();
-		const collapsedEditorActionsView = this._register(
+		this.collapsedEditorActionsView = this._register(
 			this.instantiationService.createInstance(CollapsedEditorTitlebarActionsView),
 		);
-		this.titlebarTrailingElement.append(collapsedEditorActionsView.getElement());
+		this._register(this.layoutService.onDidChangeLayoutState(this.renderCollapsedEditorActions, this));
 		this.titlebarElement.append(
 			this.titlebarLeadingElement,
 			this.titlebarTrailingElement,
 			this.windowControlsSpacerElement,
 		);
 		this.element.append(this.titlebarElement, this.gridElement);
+		this.renderCollapsedEditorActions();
 	}
 
 	getElement(): HTMLElement {
@@ -139,6 +143,20 @@ export class SessionsPart extends Disposable implements ISessionsPartService {
 		this.records.set(slot, record);
 		return record;
 	}
+
+	private readonly renderCollapsedEditorActions = (): void => {
+		const actionsElement = this.collapsedEditorActionsView.getElement();
+		const isMounted = actionsElement.parentElement === this.titlebarTrailingElement;
+		const shouldMount = this.layoutService.getLayoutState().isEditorCollapsed;
+		if (isMounted === shouldMount) {
+			return;
+		}
+		this.titlebarTrailingElement.replaceChildren(...(
+			shouldMount
+				? [actionsElement]
+				: []
+		));
+	};
 
 	private assertState(
 		visibleSessions: readonly IVisibleSessionSlot[],
