@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { Event } from 'cs/base/common/event';
+import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { observableValue, type ISettableObservable } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
@@ -27,6 +27,12 @@ import { ContextKeyServiceImpl, IContextKeyService } from 'cs/platform/contextke
 import { SessionsPart } from 'cs/sessions/browser/parts/sessions/sessionsPart';
 import { SessionsCommandIds } from 'cs/sessions/common/sessionCommands';
 import { SessionsActionsContribution } from 'cs/sessions/contrib/sessions/browser/sessions.contribution';
+import type { ISessionsLayoutState } from 'cs/sessions/services/layout/browser/layoutPolicy';
+import {
+	ISessionsLayoutService,
+	type ISessionsPartSizes,
+	type SessionsLayoutMode,
+} from 'cs/sessions/services/layout/browser/layoutService';
 import {
 	IChatViewFactory,
 	type IAddressedChatView,
@@ -66,6 +72,7 @@ import {
 import type { ISessionDraftOptions } from 'cs/sessions/services/sessions/common/sessionsProvider';
 import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import {
 	IDialogService,
 	type IConfirmation,
@@ -73,6 +80,11 @@ import {
 	type IInput,
 	type IInputResult,
 } from 'cs/workbench/services/dialogs/common/dialogService';
+import {
+	IWorkbenchLanguageService,
+	WorkbenchLanguageService,
+} from 'cs/workbench/services/language/common/languageService';
+import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 
 let cleanupDomEnvironment: (() => void) | undefined;
 
@@ -278,8 +290,38 @@ interface IActionServices {
 	readonly dialogService: TestDialogService;
 }
 
+class TestSessionsPartLayoutService extends Disposable implements ISessionsLayoutService {
+	declare readonly _serviceBrand: undefined;
+
+	private readonly changeEmitter = this._register(new Emitter<ISessionsLayoutState>());
+	readonly onDidChangeLayoutState = this.changeEmitter.event;
+
+	private state: ISessionsLayoutState = {
+		mode: 'flow',
+		isSidebarVisible: true,
+		sidebarSize: 320,
+		isEditorCollapsed: false,
+		expandedEditorSize: 640,
+	};
+
+	getLayoutState(): ISessionsLayoutState { return this.state; }
+	setViewport(): void { throw new Error('Unexpected viewport change.'); }
+	applyStartupLayoutMode(): boolean { throw new Error('Unexpected startup layout change.'); }
+	applyLayoutMode(_mode: SessionsLayoutMode): void { throw new Error('Unexpected layout mode change.'); }
+	setPartSizes(_sizes: ISessionsPartSizes): void { throw new Error('Unexpected Part size change.'); }
+	setSidebarVisible(): void { throw new Error('Unexpected Sidebar visibility change.'); }
+	setSidebarSize(): void { throw new Error('Unexpected Sidebar size change.'); }
+	toggleSidebarVisibility(): void { throw new Error('Unexpected Sidebar visibility toggle.'); }
+	setEditorCollapsed(collapsed: boolean): void {
+		this.state = { ...this.state, isEditorCollapsed: collapsed };
+		this.changeEmitter.fire(this.state);
+	}
+	toggleEditorCollapsed(): void { this.setEditorCollapsed(!this.state.isEditorCollapsed); }
+}
+
 function createPartHarness(store: DisposableStore, actionServices?: IActionServices) {
 	const factory = new TestChatViewFactory();
+	const layoutService = store.add(new TestSessionsPartLayoutService());
 	const contextMenuService: IContextMenuServiceType = {
 		_serviceBrand: undefined,
 		showContextMenu: () => {},
@@ -303,6 +345,13 @@ function createPartHarness(store: DisposableStore, actionServices?: IActionServi
 			[IContextMenuService, contextMenuService],
 			[IContextViewService, contextViewService],
 			[IContextKeyService, contextKeyService],
+			[ISessionsLayoutService, layoutService],
+			[IWorkbenchCommandService, { executeCommand: async () => undefined } as never],
+			[IWorkbenchLocaleService, {
+				getLocale: () => 'en',
+				subscribe: () => () => {},
+			} as never],
+			[IWorkbenchLanguageService, new WorkbenchLanguageService()],
 		);
 	if (actionServices) {
 		services.set(ISessionsManagementService, actionServices.managementService);
@@ -319,7 +368,7 @@ function createPartHarness(store: DisposableStore, actionServices?: IActionServi
 	const part = store.add(new SessionsPart(instantiationService));
 	const grid = part.getElement().querySelector<HTMLElement>('.comet-sessions-grid');
 	assert.ok(grid);
-	return { contextKeyService, factory, instantiationService, part, grid };
+	return { contextKeyService, factory, instantiationService, layoutService, part, grid };
 }
 
 function findAddressedView(factory: TestChatViewFactory, session: IActiveSession): TestAddressedChatView {
@@ -420,6 +469,25 @@ test('SessionsPart publishes new and committed slot focus with the active slot s
 		part.dispose();
 		assert.equal(newSessionView.disposeCount, 1);
 		assert.equal(addressedView.disposeCount, 1);
+	} finally {
+		store.dispose();
+	}
+});
+
+test('Sessions Part owns the collapsed Editor action and mutates layout directly', () => {
+	const store = new DisposableStore();
+	const { layoutService, part } = createPartHarness(store);
+	const toggleButton = () => part.getElement().querySelector<HTMLButtonElement>(
+		'.comet-editor-titlebar-toggle-editor-btn',
+	);
+
+	try {
+		assert.ok(toggleButton());
+		assert.equal(toggleButton()?.closest<HTMLElement>('.comet-editor-titlebar-actionbar')?.hidden, true);
+		layoutService.setEditorCollapsed(true);
+		assert.equal(toggleButton()?.closest<HTMLElement>('.comet-editor-titlebar-actionbar')?.hidden, false);
+		toggleButton()?.click();
+		assert.equal(layoutService.getLayoutState().isEditorCollapsed, false);
 	} finally {
 		store.dispose();
 	}

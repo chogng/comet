@@ -10,10 +10,7 @@ import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { SessionView } from 'cs/sessions/browser/parts/sessions/sessionView';
-import {
-	createSessionTitlebarView,
-	type SessionTitlebarView,
-} from 'cs/sessions/browser/parts/sessions/sessionTitlebar';
+import { CollapsedEditorTitlebarActionsView } from 'cs/sessions/browser/parts/sessions/collapsedEditorTitlebarActions';
 import {
 	ISessionsPartService,
 	type ISessionsPartFocusTarget,
@@ -38,7 +35,10 @@ export class SessionsPart extends Disposable implements ISessionsPartService {
 	readonly id = SESSION_PART_IDS.sessions;
 
 	private readonly element = $<HTMLElementTagNameMap['section']>('section.comet-sessions-part');
-	private readonly titlebarView: SessionTitlebarView;
+	private readonly titlebarElement = $<HTMLElementTagNameMap['header']>('header.comet-session-titlebar');
+	private readonly titlebarLeadingElement = $<HTMLElementTagNameMap['div']>('div.comet-session-titlebar-leading');
+	private readonly titlebarTrailingElement = $<HTMLElementTagNameMap['div']>('div.comet-session-titlebar-trailing');
+	private readonly windowControlsSpacerElement = $<HTMLElementTagNameMap['div']>('div.comet-titlebar-window-controls-spacer');
 	private readonly gridElement = $<HTMLElementTagNameMap['div']>('div.comet-sessions-grid');
 	private readonly records = new Map<IVisibleSessionSlot, ISessionSlotRecord>();
 	private visibleSlots: readonly IVisibleSessionSlot[] = [];
@@ -52,19 +52,20 @@ export class SessionsPart extends Disposable implements ISessionsPartService {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this.titlebarView = this._register(createSessionTitlebarView({}));
-		this.element.append(this.titlebarView.getElement(), this.gridElement);
+		const collapsedEditorActionsView = this._register(
+			this.instantiationService.createInstance(CollapsedEditorTitlebarActionsView),
+		);
+		this.titlebarTrailingElement.append(collapsedEditorActionsView.getElement());
+		this.titlebarElement.append(
+			this.titlebarLeadingElement,
+			this.titlebarTrailingElement,
+			this.windowControlsSpacerElement,
+		);
+		this.element.append(this.titlebarElement, this.gridElement);
 	}
 
 	getElement(): HTMLElement {
 		return this.element;
-	}
-
-	setTitlebarActions(leading: HTMLElement | null, trailing: HTMLElement | null): void {
-		this.titlebarView.setProps({
-			leadingActionsElement: leading,
-			trailingActionsElement: trailing,
-		});
 	}
 
 	updateVisibleSessions(

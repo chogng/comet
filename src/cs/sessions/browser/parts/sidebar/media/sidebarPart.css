@@ -94,3 +94,64 @@
 	outline: 2px solid var(--vscode-focusBorder, #0078d4);
 	outline-offset: -1px;
 }
+
+.comet-titlebar-leading-actions {
+	--cs-actionbar-hover-background: var(--comet-toolbar-hoverBackground);
+	--cs-actionbar-active-background: var(--comet-toolbar-activeBackground);
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	height: 100%;
+	-webkit-app-region: no-drag;
+}
+
+.comet-titlebar-leading-actions .comet-actionbar-actions-container,
+.comet-titlebar-leading-actions .comet-actionbar-item {
+	display: inline-flex;
+	align-items: center;
+	height: 100%;
+}
+
+.comet-titlebar-menu-btn.comet-actionbar-action,
+.comet-titlebar-primary-sidebar-toggle-btn.comet-actionbar-action,
+.comet-titlebar-address-bar-btn.comet-actionbar-action {
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 6px;
+	padding: 0;
+	background: transparent;
+	color: inherit;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	-webkit-app-region: no-drag;
+}
+
+.comet-titlebar-menu-btn.comet-actionbar-action .lx-icon,
+.comet-titlebar-primary-sidebar-toggle-btn.comet-actionbar-action .lx-icon,
+.comet-titlebar-address-bar-btn.comet-actionbar-action .lx-icon {
+	width: 16px;
+	height: 16px;
+	font-size: 16px;
+}
+
+.comet-titlebar-menu-btn.comet-actionbar-action:hover,
+.comet-titlebar-primary-sidebar-toggle-btn.comet-actionbar-action:hover,
+.comet-titlebar-address-bar-btn.comet-actionbar-action:hover {
+	background: var(--cs-actionbar-hover-background);
+}
+
+.comet-titlebar-menu-btn.comet-actionbar-action:active,
+.comet-titlebar-primary-sidebar-toggle-btn.comet-actionbar-action:active,
+.comet-titlebar-address-bar-btn.comet-actionbar-action:active {
+	background: var(--cs-actionbar-active-background);
+}
+
+.comet-titlebar-main-menu {
+	width: 180px;
+	min-height: 72px;
+	background: var(--workbench-chrome-bg);
+	border: 1px solid var(--comet-separator-border);
+	border-radius: 6px;
+}

@@ -10,7 +10,9 @@ import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { observableValue } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
+import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import { INotificationService } from 'cs/platform/notification/common/notification';
@@ -24,6 +26,10 @@ import {
 import type {
 	ISessionsLayoutState,
 } from 'cs/sessions/services/layout/browser/layoutPolicy';
+import {
+	ISessionsSettingsOverlayService,
+	SessionsSettingsOverlayService,
+} from 'cs/sessions/services/settings/browser/settingsOverlayService';
 import {
 	ISessionsService,
 	OpenNewSessionKind,
@@ -55,6 +61,8 @@ import {
 } from 'cs/sessions/services/sessions/common/sessionsView';
 import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
+import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
 	IWorkbenchLanguageService,
 	WorkbenchLanguageService,
@@ -66,6 +74,10 @@ import {
 } from 'cs/workbench/services/sidebar/common/sidebarEntryService';
 
 let cleanupDomEnvironment: (() => void) | undefined;
+
+function delay(ms = 0): Promise<void> {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 test.before(() => {
 	cleanupDomEnvironment = installDomTestEnvironment().cleanup;
@@ -159,8 +171,14 @@ class TestSessionsLayoutService extends Disposable implements ISessionsLayoutSer
 		throw new Error('Unexpected startup layout change.');
 	}
 
-	applyLayoutMode(_mode: SessionsLayoutMode): void {
-		throw new Error('Unexpected layout mode change.');
+	applyLayoutMode(mode: SessionsLayoutMode): void {
+		this.state = {
+			...this.state,
+			mode,
+			isSidebarVisible: true,
+			isEditorCollapsed: mode === 'agent',
+		};
+		this.changeEmitter.fire(this.state);
 	}
 
 	setPartSizes(_sizes: ISessionsPartSizes): void {
@@ -172,7 +190,7 @@ class TestSessionsLayoutService extends Disposable implements ISessionsLayoutSer
 	}
 
 	toggleSidebarVisibility(): void {
-		throw new Error('Unexpected Sidebar visibility toggle.');
+		this.setSidebarVisible(!this.state.isSidebarVisible);
 	}
 
 	setEditorCollapsed(_collapsed: boolean, _expandedEditorSize?: number): void {
@@ -233,11 +251,17 @@ function createSession(name: string): { readonly model: ISession; readonly title
 	};
 }
 
-test('Session Sidebar consumes authoritative layout and Sessions services directly', () => {
+test('Session Sidebar consumes authoritative layout and Sessions services directly', async () => {
 	const store = new DisposableStore();
+	const dropdownServices = store.add(await createDropdownTestServices());
 	const managementService = new TestSessionsManagementService();
 	const sessionsService = new TestSessionsService();
 	const layoutService = store.add(new TestSessionsLayoutService());
+	const settingsOverlayService = store.add(new SessionsSettingsOverlayService());
+	let locale: 'en' | 'zh' = 'en';
+	const localeListeners = new Set<() => void>();
+	let openedEditorCount = 0;
+	let focusedEditorInputCount = 0;
 	managementService.sessionTypes.set([{
 		providerId: 'provider.test',
 		sessionType: {
@@ -252,23 +276,37 @@ test('Session Sidebar consumes authoritative layout and Sessions services direct
 		[ISessionsManagementService, managementService],
 		[ISessionsService, sessionsService],
 		[ISessionsLayoutService, layoutService],
+		[ISessionsSettingsOverlayService, settingsOverlayService],
 		[IWorkbenchSidebarEntryService, sidebarEntryService],
+		[IContextMenuService, dropdownServices.contextMenuService],
+		[IContextViewService, dropdownServices.contextViewProvider as never],
+		[IEditorGroupsService, {
+			mainPart: {
+				focusPrimaryInput: () => {
+					focusedEditorInputCount += 1;
+				},
+			},
+		} as never],
+		[IEditorService, {
+			openEditor: async () => {
+				openedEditorCount += 1;
+			},
+		} as never],
 		[IQuickInputService, { pick: async () => undefined } as never],
 		[INotificationService, { error: () => {} } as never],
 		[IWorkbenchLocaleService, {
-			getLocale: () => 'en',
-			subscribe: () => () => {},
+			getLocale: () => locale,
+			subscribe: (listener: () => void) => {
+				localeListeners.add(listener);
+				return () => localeListeners.delete(listener);
+			},
 		} as never],
 		[IWorkbenchLanguageService, new WorkbenchLanguageService()],
 	), true));
 	const first = createSession('first');
 	const second = createSession('second');
 	managementService.sessions.set([second.model, first.model], undefined);
-	const part = store.add(instantiationService.createInstance(
-		SessionSidebarPartView,
-		null,
-		null,
-	));
+	const part = store.add(instantiationService.createInstance(SessionSidebarPartView));
 
 	try {
 		const element = part.getElement();
@@ -277,6 +315,74 @@ test('Session Sidebar consumes authoritative layout and Sessions services direct
 		assert.equal(element.classList.contains('comet-is-collapsed'), true);
 		layoutService.setSidebarVisible(true);
 		assert.equal(element.classList.contains('comet-is-collapsed'), false);
+
+		const sidebarToggle = element.querySelector<HTMLButtonElement>(
+			'.comet-titlebar-primary-sidebar-toggle-btn',
+		);
+		assert.ok(sidebarToggle);
+		sidebarToggle.click();
+		assert.equal(layoutService.getLayoutState().isSidebarVisible, false);
+		layoutService.setSidebarVisible(true);
+		const addressBarButton = element.querySelector<HTMLButtonElement>(
+			'.comet-titlebar-address-bar-btn',
+		);
+		const settingsButton = element.querySelector<HTMLButtonElement>(
+			'.comet-sidebar-footer-settings-btn',
+		);
+		assert.ok(addressBarButton);
+		assert.ok(settingsButton);
+		addressBarButton.click();
+		assert.equal(openedEditorCount, 1);
+		assert.equal(focusedEditorInputCount, 1);
+		settingsButton.click();
+		assert.equal(settingsOverlayService.isVisible(), true);
+		assert(element.querySelector('.comet-sidebar-footer-settings-btn')
+			?.closest('.comet-actionbar-item')?.classList.contains('comet-is-active'));
+		settingsOverlayService.setVisible(false);
+
+		const moreButton = element.querySelector<HTMLButtonElement>(
+			'.comet-sidebar-footer-more-btn',
+		);
+		assert.ok(moreButton);
+		moreButton.click();
+		await delay();
+		const layoutItem = [...document.body.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item')]
+			.find(item => item.textContent?.includes('Layout'));
+		assert.ok(layoutItem);
+		layoutItem.click();
+		await delay();
+		const flowItem = [...document.body.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item')]
+			.find(item => item.textContent?.includes('Flow'));
+		assert.ok(flowItem);
+		flowItem.click();
+		await delay();
+		assert.equal(layoutService.getLayoutState().mode, 'flow');
+
+		const updatedMoreButton = element.querySelector<HTMLButtonElement>(
+			'.comet-sidebar-footer-more-btn',
+		);
+		assert.ok(updatedMoreButton);
+		updatedMoreButton.click();
+		await delay();
+		const updatedLayoutItem = [...document.body.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item')]
+			.find(item => item.textContent?.includes('Layout'));
+		assert.ok(updatedLayoutItem);
+		updatedLayoutItem.click();
+		await delay();
+		const activeFlowItem = [...document.body.querySelectorAll<HTMLElement>('.comet-dropdown-menu-item')]
+			.find(item => item.textContent?.includes('Flow'));
+		assert.ok(activeFlowItem);
+		assert(activeFlowItem.classList.contains('selected'));
+		dropdownServices.contextViewProvider.hideContextView();
+
+		locale = 'zh';
+		for (const listener of [...localeListeners]) {
+			listener();
+		}
+		assert.equal(
+			element.querySelector('.comet-sidebar-footer-settings-btn')?.getAttribute('aria-label'),
+			'设置',
+		);
 
 		const [newChatButton] = element.querySelectorAll<HTMLButtonElement>(
 			'.comet-sidebar-home-nav-item',
@@ -305,6 +411,12 @@ test('Session Sidebar consumes authoritative layout and Sessions services direct
 		first.title.set('Renamed first', undefined);
 		managementService.sessions.set([first.model, second.model], undefined);
 		assert.deepEqual(recentButtons().map(button => button.textContent), ['Renamed first', 'Session second']);
+
+		part.dispose();
+		assert.equal(localeListeners.size, 0);
+		layoutService.setSidebarVisible(false);
+		settingsOverlayService.setVisible(true);
+		assert.equal(element.childElementCount, 0);
 	} finally {
 		store.dispose();
 	}

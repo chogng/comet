@@ -66,12 +66,6 @@
 	padding-inline-end: 0;
 }
 
-.comet-app-window.comet-has-leading-window-controls .comet-session-header .comet-titlebar-leading-actions-host {
-	padding-inline-start: calc(
-		var(--workbench-leading-window-controls-width, 0px) + 12px
-	);
-}
-
 .comet-app-window.comet-has-native-window-controls-overlay .comet-sessions-content-grid:not(.comet-is-editor-visible) .comet-session-titlebar > .comet-titlebar-window-controls-spacer,
 .comet-app-window.comet-has-native-window-controls-overlay .comet-sessions-content-grid.comet-is-editor-visible .comet-sessions-layout-part-editor .comet-editor-titlebar > .comet-titlebar-window-controls-spacer {
 	flex-basis: var(--workbench-window-controls-width, 0px);

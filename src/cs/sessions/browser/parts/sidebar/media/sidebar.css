@@ -1,0 +1,236 @@
+/* Sessions Sidebar structure and content. */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.comet-sidebar-root {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.comet-sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  flex: 0 0 var(--sidebar-footer-height);
+  height: var(--sidebar-footer-height);
+  min-height: var(--sidebar-footer-height);
+  padding: 0 8px;
+  background: var(--sidebar-surface-bg);
+}
+
+.comet-sidebar-footer > * {
+  min-width: 0;
+}
+
+.comet-sidebar-titlebar {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--workbench-titlebar-height, 40px);
+  height: var(--workbench-titlebar-height, 40px);
+  flex: 0 0 var(--workbench-titlebar-height, 40px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: var(--sidebar-surface-bg);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
+}
+
+.comet-sidebar-titlebar[hidden],
+.comet-sidebar-header[hidden] {
+  display: none;
+}
+
+.comet-sidebar-titlebar-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.comet-sidebar-header {
+  min-width: 0;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 5px;
+  background: var(--sidebar-surface-bg);
+}
+
+.comet-sidebar-tab-list {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--vscode-sideBar-tabBorder, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--vscode-sideBar-tabBackground, rgba(0, 0, 0, 0.045));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  -webkit-app-region: no-drag;
+}
+
+.comet-sidebar-tab {
+  appearance: none;
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--vscode-sideBar-tabInactiveForeground, #6f7478);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.comet-sidebar-tab-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.comet-sidebar-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.comet-sidebar-tab:hover {
+  color: var(--vscode-sideBar-tabHoverForeground, #23272b);
+  background: var(--vscode-sideBar-tabHoverBackground, rgba(255, 255, 255, 0.42));
+}
+
+.comet-sidebar-tab.comet-is-active {
+  color: var(--vscode-sideBar-tabActiveForeground, #1f2328);
+  background: var(--vscode-sideBar-tabActiveBackground, #ffffff);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+.comet-sidebar-tab:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #0078d4);
+  outline-offset: 1px;
+}
+
+.comet-sidebar-tab-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  -webkit-app-region: no-drag;
+}
+
+.comet-sidebar-content {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.comet-sidebar-content-host,
+.comet-sidebar-tab-panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  background: var(--sidebar-surface-bg);
+}
+
+.comet-sidebar-tab-panel {
+  flex-direction: column;
+}
+
+.comet-sidebar-home-nav {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px 10px;
+}
+
+.comet-sidebar-home-nav-item {
+  appearance: none;
+  min-width: 0;
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--comet-sideBar-foreground, #2b2f33);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.comet-sidebar-home-nav-item:hover {
+  background: var(--comet-toolbar-hoverBackground, rgba(0, 0, 0, 0.06));
+}
+
+.comet-sidebar-home-nav-item:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #0078d4);
+  outline-offset: -1px;
+}
+
+.comet-sidebar-home-nav-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--vscode-sideBar-tabInactiveForeground, #6f7478);
+}
+
+.comet-sidebar-home-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comet-sidebar-recents {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 8px 8px;
+}
+
+.comet-sidebar-recents-title {
+  margin: 0;
+  padding: 0 8px 8px;
+  color: var(--vscode-sideBarTitle-foreground, #8a8a8a);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.comet-sidebar-recents-body {
+  min-height: 0;
+  flex: 1;
+}

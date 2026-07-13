@@ -33,7 +33,6 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'agentbar.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'modelSubscriptions.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'window.test.ts'),
-  path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'sidebar.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'viewPartView.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorDraftStyleSettings.test.ts'),
   path.join(
@@ -68,6 +67,18 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'entrypoints.test.ts'),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'sessionsPart.test.ts'),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'sidebarPart.test.ts'),
+  path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'titlebarPart.test.ts'),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'services',
+    'settings',
+    'test',
+    'browser',
+    'settingsOverlayService.test.ts',
+  ),
   path.join(
     rootDir,
     'src',

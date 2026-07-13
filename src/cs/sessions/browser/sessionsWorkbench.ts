@@ -11,18 +11,11 @@ import {
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { SessionsLayoutView } from 'cs/sessions/browser/layout';
 import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
-import { SessionsLayoutCommandIds } from 'cs/sessions/common/layoutCommands';
+import { ISessionsSettingsOverlayService } from 'cs/sessions/services/settings/browser/settingsOverlayService';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { generateUuid } from 'cs/base/common/uuid';
 
-import { getEditorCreationActions } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
-import { SidebarFooterActionsView } from 'cs/workbench/browser/parts/sidebar/sidebarFooterActions';
-import {
-	createSidebarFooterTitlebarActionsProps,
-	createTitlebarLeadingActionsProps,
-} from 'cs/workbench/browser/parts/titlebar/titlebarActions';
-import { createTitlebarPart } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
-import type { TitlebarPart } from 'cs/workbench/browser/parts/titlebar/titlebarPart';
+import { SessionsTitlebarPart } from 'cs/sessions/browser/parts/titlebar/titlebarPart';
 import { syncWorkbenchWindowTitle } from 'cs/workbench/browser/parts/titlebar/windowTitle';
 import { SettingsPartView } from 'cs/workbench/contrib/preferences/browser/settingsEditor';
 
@@ -38,7 +31,6 @@ import { ISessionsManagementService } from 'cs/sessions/services/sessions/common
 import { SessionWorkspaceKind } from 'cs/sessions/services/sessions/common/session';
 import { isNewSessionSlot } from 'cs/sessions/services/sessions/common/sessionsView';
 
-import { createEditorTitlebarActionsView } from 'cs/workbench/browser/parts/editor/editorTitlebarActionsView';
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { INotificationService } from 'cs/platform/notification/common/notification';
@@ -53,7 +45,6 @@ import { IInstantiationService } from 'cs/platform/instantiation/common/instanti
 import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import {
 	IEditorService,
-	type EditorOpenHandler,
 } from 'cs/workbench/services/editor/common/editorService';
 import { NotificationsAlerts } from 'cs/workbench/browser/parts/notifications/notificationsAlerts';
 import { NotificationsCenter } from 'cs/workbench/browser/parts/notifications/notificationsCenter';
@@ -62,15 +53,14 @@ import { NotificationsToasts } from 'cs/workbench/browser/parts/notifications/no
 import { NotificationService } from 'cs/workbench/services/notification/common/notificationService';
 
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import {
 	getWindowStateSnapshot,
 	subscribeWindowState,
 } from 'cs/workbench/browser/window';
 
-import { getLocaleMessages } from 'language/i18n';
 import { normalizeUrl } from 'cs/workbench/common/url';
 import type { AppStartupLayout } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { INativeHostService } from 'cs/platform/native/common/native';
 import { IWorkbenchConfigurationService } from 'cs/workbench/services/configuration/common/configuration';
 import { ISettingsModel, type SettingsModel } from 'cs/workbench/services/settings/settingsModel';
 import {
@@ -79,8 +69,6 @@ import {
 	BrowserSearchEngineSettingId,
 } from 'cs/base/parts/sandbox/common/browserSettings';
 import { IOpenerService } from 'cs/platform/opener/common/opener';
-import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
-import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { applyWorkbenchTheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
 import { applyWorkbenchBrowserStyles } from 'cs/workbench/browser/style';
 import {
@@ -102,18 +90,15 @@ class SessionsWorkbenchHost {
 	private readonly pageMount: HTMLDivElement;
 	private readonly settingsOverlayElement: HTMLDivElement;
 	private readonly statusbarElement: HTMLElement;
-	private readonly titlebarPart: TitlebarPart;
+	private readonly titlebarPart: SessionsTitlebarPart;
 	private readonly notificationsDisposables = new DisposableStore();
 	private sessionsLayoutView: SessionsLayoutView | null = null;
 	private sidebarPart: SessionSidebarPartView | null = null;
-	private readonly collapsedEditorTitlebarActionsView: ReturnType<typeof createEditorTitlebarActionsView>;
-	private readonly sidebarFooterActionsView: SidebarFooterActionsView;
 	private settingsView: SettingsPartView | null = null;
 	private readonly globalDisposables: Array<() => void> = [];
 	private isDisposed = false;
 	private isRendering = false;
 	private renderPending = false;
-	private settingsOverlayVisible = false;
 	private hasAppliedStartupLayoutPreference = false;
 	private appliedBrowserSettings: {
 		maxHistoryEntries: number;
@@ -123,13 +108,10 @@ class SessionsWorkbenchHost {
 	constructor(
 		rootElement: HTMLElement,
 		@INotificationService private readonly notificationService: NotificationService,
-		@INativeHostService private readonly nativeHostService: INativeHostService,
 		@IOpenerService private readonly openerService: IOpenerService,
-		@IWorkbenchCommandService private readonly commandService: IWorkbenchCommandService,
-		@IContextViewService private readonly contextViewService: IContextViewService,
-		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@ISettingsModel private readonly settingsModel: SettingsModel,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
+		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@ISessionsPartService private readonly sessionsPart: SessionsPart,
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
@@ -139,25 +121,8 @@ class SessionsWorkbenchHost {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IWorkbenchConfigurationService private readonly configurationService: IWorkbenchConfigurationService,
 		@ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
+		@ISessionsSettingsOverlayService private readonly settingsOverlayService: ISessionsSettingsOverlayService,
 		) {
-			const initialUi = getLocaleMessages(this.localeService.getLocale());
-			const dropdownServices = {
-			contextMenuService: this.contextMenuService,
-			contextViewProvider: this.contextViewService,
-		};
-			this.collapsedEditorTitlebarActionsView = createEditorTitlebarActionsView({
-				...dropdownServices,
-				isEditorCollapsed: true,
-				labels: {
-					headerAddAction: initialUi.editorHeaderAddAction,
-					expandEditor: initialUi.editorExpand,
-					collapseEditor: initialUi.editorCollapse,
-				},
-				creationActions: getEditorCreationActions(initialUi),
-				commandService: this.commandService,
-				onToggleEditorCollapse: this.toggleEditorCollapsed,
-		});
-		this.sidebarFooterActionsView = new SidebarFooterActionsView(dropdownServices);
 		this.rootElement = rootElement;
 		this.containerElement = $<HTMLDivElement>('div');
 		this.shellElement = $<HTMLDivElement>('div');
@@ -168,18 +133,17 @@ class SessionsWorkbenchHost {
 		this.settingsOverlayElement.hidden = true;
 		this.settingsOverlayElement.addEventListener('click', event => {
 			if (event.target === this.settingsOverlayElement) {
-				this.closeSettingsOverlay();
+				this.settingsOverlayService.setVisible(false);
 			}
 		});
-		this.titlebarPart = createTitlebarPart(
+		this.titlebarPart = this.instantiationService.createInstance(
+			SessionsTitlebarPart,
 			this.containerElement,
 			this.shellElement,
 			this.statusbarElement,
-			dropdownServices,
 		);
 
 		this.rootElement.replaceChildren(this.containerElement);
-		this.containerElement.append(this.titlebarPart.getElement(), this.shellElement);
 		this.shellElement.append(
 			this.pageMount,
 			this.settingsOverlayElement,
@@ -201,6 +165,7 @@ class SessionsWorkbenchHost {
 			subscribeWindowState(this.requestRender),
 			this.settingsModel.subscribe(this.requestRender),
 			this.editorGroupsService.onDidChange(this.requestRender),
+			this.settingsOverlayService.onDidChangeVisibility(this.requestRender),
 		);
 
 		this.requestRender();
@@ -224,8 +189,6 @@ class SessionsWorkbenchHost {
 		this.sessionsLayoutView = null;
 		this.sidebarPart?.dispose();
 		this.sidebarPart = null;
-		this.collapsedEditorTitlebarActionsView.dispose();
-		this.sidebarFooterActionsView.dispose();
 		this.settingsView?.dispose();
 		this.settingsView = null;
 		this.notificationsDisposables.dispose();
@@ -302,39 +265,6 @@ class SessionsWorkbenchHost {
 	}
 
 
-	private readonly togglePrimarySidebarVisibility = () => {
-		this.commandService.executeCommand(
-			SessionsLayoutCommandIds.toggleSidebarVisibility,
-		);
-	};
-
-	private readonly toggleEditorCollapsed = () => {
-		this.commandService.executeCommand(
-			SessionsLayoutCommandIds.toggleEditorCollapsed,
-		);
-	};
-
-	private readonly applyAgentLayout = () => {
-		this.commandService.executeCommand(SessionsLayoutCommandIds.applyAgentLayout);
-	};
-
-	private readonly applyFlowLayout = () => {
-		this.commandService.executeCommand(SessionsLayoutCommandIds.applyFlowLayout);
-	};
-
-	private readonly toggleSettingsPage = () => {
-		this.settingsOverlayVisible = !this.settingsOverlayVisible;
-		this.requestRender();
-	};
-
-	private readonly closeSettingsOverlay = () => {
-		if (!this.settingsOverlayVisible) {
-			return;
-		}
-		this.settingsOverlayVisible = false;
-		this.requestRender();
-	};
-
 	private openInitialDraftIfUnambiguous(): void {
 		if (this.sessionsManagementService.draftSession.get()
 			|| this.sessionsManagementService.getSessions().length > 0
@@ -359,48 +289,22 @@ class SessionsWorkbenchHost {
 		});
 	}
 
-	private renderWorkbenchContentPage(props: {
-		isLayoutEdgeSnappingEnabled: boolean;
-		sidebarFooterActionsProps: ReturnType<
-			typeof createSidebarFooterTitlebarActionsProps
-		>;
-		collapsedEditorTitlebarActionsElement: HTMLElement;
-	}) {
-		this.sidebarFooterActionsView.setProps(
-			props.sidebarFooterActionsProps,
-		);
-
-		//#region Column titlebar routing
-
+	private renderWorkbenchContentPage(isLayoutEdgeSnappingEnabled: boolean) {
 		if (!this.sidebarPart) {
-			this.sidebarPart = this.instantiationService.createInstance(
-				SessionSidebarPartView,
-				this.titlebarPart.getLeadingActionsElement(),
-				this.sidebarFooterActionsView.getElement(),
-			);
+			this.sidebarPart = this.instantiationService.createInstance(SessionSidebarPartView);
 		}
-
-		//#endregion
-
-		const { isEditorCollapsed } = this.sessionsLayoutService.getLayoutState();
-		this.sessionsPart.setTitlebarActions(
-			null,
-			isEditorCollapsed
-				? props.collapsedEditorTitlebarActionsElement
-				: null,
-		);
 
 		if (!this.sessionsLayoutView) {
 			this.sessionsLayoutView = this.instantiationService.createInstance(
 				SessionsLayoutView,
-				props.isLayoutEdgeSnappingEnabled,
+				isLayoutEdgeSnappingEnabled,
 				this.sidebarPart,
 				this.sessionsPart,
 				this.editorGroupsService.mainPart,
 			);
 		} else {
 			this.sessionsLayoutView.setEdgeSnappingEnabled(
-				props.isLayoutEdgeSnappingEnabled,
+				isLayoutEdgeSnappingEnabled,
 			);
 		}
 
@@ -413,7 +317,7 @@ class SessionsWorkbenchHost {
 
 
 	private renderSettingsOverlay() {
-		if (!this.settingsOverlayVisible) {
+		if (!this.settingsOverlayService.isVisible()) {
 			this.settingsOverlayElement.hidden = true;
 			registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, null);
 			return;
@@ -444,16 +348,8 @@ class SessionsWorkbenchHost {
 
 	private performRender() {
 		const locale = this.localeService.getLocale();
-		const ui = getLocaleMessages(locale);
-		const {
-			mode: layoutMode,
-			isSidebarVisible,
-			isEditorCollapsed,
-		} = this.sessionsLayoutService.getLayoutState();
-		const isAgentMode = layoutMode === 'agent';
+		const ui = this.languageService.getLocaleMessages(locale);
 		const { isFullscreen: isWindowFullscreen } = getWindowStateSnapshot();
-		const electronRuntime = this.nativeHostService.canInvoke();
-
 		const settingsSnapshot = this.settingsModel.getSnapshot();
 		if (
 			this.applyStartupLayoutPreferenceIfNeeded({
@@ -464,12 +360,9 @@ class SessionsWorkbenchHost {
 			return;
 		}
 		const {
-			hasLoadedSettings,
-			statusbarVisible,
 			browserMaxHistoryEntries,
 			browserPageZoom,
 			browserSearchEngine,
-			useMica,
 			theme,
 			workbenchColorCustomizations,
 		} = settingsSnapshot;
@@ -482,9 +375,6 @@ class SessionsWorkbenchHost {
 		applyWorkbenchBrowserStyles();
 		const activeEditor = this.editorGroupsService.activeGroup.activeEditor;
 		const browserPageTitle = activeEditor?.getName() ?? '';
-		const handleOpenEditor: EditorOpenHandler = (input, options) =>
-			this.editorService.openEditor(input, options);
-
 		this.openerService.setDefaultExternalOpener({
 			openExternal: async (href, { sourceUri }) => {
 				if (sourceUri.scheme !== Schemas.http && sourceUri.scheme !== Schemas.https) {
@@ -496,7 +386,7 @@ class SessionsWorkbenchHost {
 					return false;
 				}
 
-				handleOpenEditor({
+				void this.editorService.openEditor({
 					resource: BrowserViewUri.forId(generateUuid()),
 					options: {
 						viewState: {
@@ -507,63 +397,14 @@ class SessionsWorkbenchHost {
 				return true;
 			},
 		});
-		const focusWorkbenchWebUrlInput = () => {
-			handleOpenEditor({
-				resource: BrowserViewUri.forId(generateUuid()),
-			});
-			this.editorGroupsService.mainPart.focusPrimaryInput();
-		};
-		this.collapsedEditorTitlebarActionsView.setProps({
-			contextMenuService: this.contextMenuService,
-				contextViewProvider: this.contextViewService,
-				isEditorCollapsed: true,
-				labels: {
-				headerAddAction: ui.editorHeaderAddAction,
-				expandEditor: ui.editorExpand,
-				collapseEditor: ui.editorCollapse,
-			},
-			creationActions: getEditorCreationActions(ui),
-			commandService: this.commandService,
-			onToggleEditorCollapse: this.toggleEditorCollapsed,
-		});
-
-
-		const titlebarLeadingActionsProps = createTitlebarLeadingActionsProps({
-			ui,
-			isPrimarySidebarVisible: isSidebarVisible,
-			onTogglePrimarySidebar: this.togglePrimarySidebarVisibility,
-			onFocusAddressBar: focusWorkbenchWebUrlInput,
-		});
-
 		syncWorkbenchWindowTitle({
 			appName: ui.appName,
 			activeEditor,
 			browserPageTitle,
 		});
 
-		this.renderWorkbenchContentPage({
-			isLayoutEdgeSnappingEnabled: isWindowFullscreen,
-			sidebarFooterActionsProps: createSidebarFooterTitlebarActionsProps({
-				ui,
-				isSettingsActive: this.settingsOverlayVisible,
-				isAgentSidebarVisible: isAgentMode,
-				isEditorCollapsed,
-				onApplyLayoutAgent: this.applyAgentLayout,
-				onApplyLayoutFlow: this.applyFlowLayout,
-				onOpenSettings: this.toggleSettingsPage,
-			}),
-			collapsedEditorTitlebarActionsElement:
-				this.collapsedEditorTitlebarActionsView.getElement(),
-		});
+		this.renderWorkbenchContentPage(isWindowFullscreen);
 		this.renderSettingsOverlay();
-
-		this.titlebarPart.sync({
-			electronRuntime,
-			useMica,
-			statusbarVisible: hasLoadedSettings && statusbarVisible,
-			isEditorVisible: !isEditorCollapsed,
-			leadingActions: titlebarLeadingActionsProps,
-		});
 
 		this.lifecycleService.setPhase(LifecyclePhase.Restored);
 

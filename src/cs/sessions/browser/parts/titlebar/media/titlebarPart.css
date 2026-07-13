@@ -1,0 +1,56 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.comet-app-window {
+  --workbench-window-controls-width: 0px;
+  --workbench-titlebar-height: 40px;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  background: transparent;
+}
+
+.comet-app-window.comet-has-statusbar {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+/* #region Sessions headless titlebar chrome */
+
+.comet-titlebar-chrome {
+  --comet-titlebar-border: var(--comet-separator-border);
+  display: none;
+}
+
+/* #endregion */
+
+.comet-titlebar-window-controls-spacer {
+  flex: 0 0 0;
+  width: 0;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.comet-app-window input,
+.comet-app-window textarea {
+  color: inherit;
+  background: var(--workbench-chrome-bg);
+}
+
+.comet-app-window input::placeholder,
+.comet-app-window textarea::placeholder {
+  color: rgba(26, 37, 48, 0.55);
+}
+
+/* #region App shell */
+
+/* Keep the frameless host transparent and fill the inner shell instead. */
+.comet-app-window:not(.comet-is-mica-enabled) .comet-statusbar-part {
+  background-color: var(--workbench-chrome-bg);
+}
+
+/* #endregion */

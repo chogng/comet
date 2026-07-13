@@ -15,7 +15,6 @@ import type {
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
-import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import {
 	ILibraryModel,
 	LibraryModel,
@@ -295,89 +294,4 @@ test('workbenchPartDom subscriptions stop after disposal', () => {
 
   assert.equal(notificationCount, 1);
   assert.equal(getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.editor], null);
-});
-
-test('resolveWorkbenchStatusbarVisibility requires the editor to be visible', async () => {
-  const { resolveWorkbenchStatusbarVisibility } = await import(
-    'cs/workbench/browser/parts/titlebar/titlebarPart'
-  );
-
-  assert.equal(resolveWorkbenchStatusbarVisibility(true, true), true);
-  assert.equal(resolveWorkbenchStatusbarVisibility(true, false), false);
-  assert.equal(resolveWorkbenchStatusbarVisibility(false, true), false);
-});
-
-test('TitlebarPart syncs headless chrome before the shell and statusbar', async () => {
-  const { createTitlebarPart } = await import(
-    'cs/workbench/browser/parts/titlebar/titlebarPart'
-  );
-  const container = document.createElement('div');
-  const shell = document.createElement('div');
-  const statusbar = document.createElement('section');
-  let toggleCount = 0;
-  let focusAddressBarCount = 0;
-  const dropdownServices = await createDropdownTestServices();
-
-  const titlebarPart = createTitlebarPart(container, shell, statusbar, dropdownServices);
-  container.append(titlebarPart.getElement(), shell);
-
-  try {
-    titlebarPart.sync({
-      electronRuntime: false,
-      useMica: false,
-      statusbarVisible: true,
-      isEditorVisible: true,
-      leadingActions: {
-        menuLabel: 'Menu',
-        isPrimarySidebarVisible: true,
-        primarySidebarToggleLabel: 'Hide primary sidebar',
-        addressBarLabel: 'Address bar',
-        onTogglePrimarySidebar: () => {
-          toggleCount += 1;
-        },
-        onFocusAddressBar: () => {
-          focusAddressBarCount += 1;
-        },
-      },
-    });
-
-    assert(container.classList.contains('comet-has-statusbar'));
-    assert.equal(container.classList.contains('comet-has-leading-window-controls'), false);
-    assert.equal(
-      container.style.getPropertyValue('--workbench-leading-window-controls-width'),
-      '',
-    );
-    assert.equal(container.children[0], titlebarPart.getElement());
-    assert.equal(container.children[1], shell);
-    assert.equal(container.children[2], statusbar);
-    assert.equal(titlebarPart.getElement().classList.contains('comet-titlebar-chrome'), true);
-    assert.equal(
-      titlebarPart.getLeadingActionsElement().parentElement,
-      null,
-    );
-    const menuButton = titlebarPart.getLeadingActionsElement().querySelector('.comet-titlebar-menu-btn');
-    const toggleButton = titlebarPart.getLeadingActionsElement().querySelector('.comet-titlebar-primary-sidebar-toggle-btn');
-    const addressBarButton = titlebarPart.getLeadingActionsElement().querySelector('.comet-titlebar-address-bar-btn');
-    assert(menuButton instanceof HTMLButtonElement);
-    assert(toggleButton instanceof HTMLButtonElement);
-    assert(addressBarButton instanceof HTMLButtonElement);
-    assert.equal(menuButton.getAttribute('aria-label'), 'Menu');
-    assert.equal(toggleButton.getAttribute('aria-label'), 'Hide primary sidebar');
-    assert.equal(addressBarButton.getAttribute('aria-label'), 'Address bar');
-    toggleButton.click();
-    addressBarButton.click();
-    assert.equal(toggleCount, 1);
-    assert.equal(focusAddressBarCount, 1);
-    assert.equal(
-      getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.titlebar],
-      titlebarPart.getElement(),
-    );
-    assert.equal(
-      getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.statusbar],
-      statusbar,
-    );
-  } finally {
-    titlebarPart.dispose();
-    dropdownServices.dispose();
-  }
 });

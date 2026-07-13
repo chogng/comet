@@ -7,6 +7,7 @@
 import 'cs/workbench/workbench.common.main';
 
 import 'cs/sessions/services/layout/browser/layoutService';
+import 'cs/sessions/services/settings/browser/settingsOverlayService';
 import 'cs/sessions/services/sessions/browser/sessionsProvidersService';
 import 'cs/sessions/services/sessions/browser/sessionsManagementService';
 import 'cs/sessions/browser/parts/editor/editorParts';

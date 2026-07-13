@@ -135,13 +135,15 @@ test('Sessions host directly composes Parts without a state-forwarding wrapper',
 		sessionsWorkbench,
 		/SessionWorkbenchContentPartViews|workbenchContentPartViews|partViewProps/,
 	);
-	assert.match(sessionsWorkbench, /createInstance\(\s*SessionSidebarPartView,/);
+	assert.match(sessionsWorkbench, /createInstance\(\s*SessionSidebarPartView\s*\)/);
+	assert.match(sessionsWorkbench, /createInstance\(\s*SessionsTitlebarPart,/);
 	assert.match(sessionsWorkbench, /createInstance\(\s*SessionsLayoutView,/);
 	assert.match(
 		sessionsWorkbench,
 		/@ISessionsPartService private readonly sessionsPart: SessionsPart/,
 	);
-	assert.match(sessionsWorkbench, /this\.sessionsPart\.setTitlebarActions\(/);
+	assert.doesNotMatch(sessionsWorkbench, /setTitlebarActions|collapsedEditorTitlebarActions|sidebarFooterActionsProps/);
+	assert.doesNotMatch(sessionsWorkbench, /titlebarPart\.sync|new SessionsTitlebarPart/);
 
 	const layout = readSource('src/cs/sessions/browser/layout.ts');
 	assert.doesNotMatch(layout, /ISessionsLayoutPartViews|partViews/);
@@ -152,6 +154,9 @@ test('Sessions host directly composes Parts without a state-forwarding wrapper',
 	const sidebar = readSource('src/cs/sessions/browser/parts/sidebar/sidebarPart.ts');
 	assert.doesNotMatch(sidebar, /SessionSidebar(?:View)?Props|\bisCollapsed\b|setProps\(/);
 	assert.match(sidebar, /@ISessionsLayoutService private readonly layoutService/);
+	assert.match(sidebar, /createInstance\(SidebarTitlebarActionsView\)/);
+	assert.match(sidebar, /createInstance\(SidebarFooterActionsView\)/);
+	assert.doesNotMatch(sidebar, /titlebarActionsElement: HTMLElement|footerActionsElement: HTMLElement/);
 	assert.match(sidebar, /@IWorkbenchLocaleService private readonly localeService/);
 	assert.match(sidebar, /getLayoutState\(\)\.isSidebarVisible/);
 });

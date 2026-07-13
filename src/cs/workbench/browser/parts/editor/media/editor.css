@@ -64,6 +64,59 @@
 	margin-left: 0;
 }
 
+.comet-editor-titlebar-actionbar {
+	--cs-actionbar-hover-background: var(--comet-toolbar-hoverBackground);
+	--cs-actionbar-active-background: var(--comet-toolbar-activeBackground);
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	height: 100%;
+	-webkit-app-region: no-drag;
+}
+
+.comet-editor-titlebar-actionbar .comet-actionbar-actions-container,
+.comet-editor-titlebar-actionbar .comet-actionbar-item {
+	display: inline-flex;
+	align-items: center;
+	height: 100%;
+}
+
+.comet-editor-titlebar-add-btn.comet-actionbar-action,
+.comet-editor-titlebar-agent-btn.comet-actionbar-action,
+.comet-editor-titlebar-toggle-editor-btn.comet-actionbar-action {
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 6px;
+	padding: 0;
+	background: transparent;
+	color: inherit;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	-webkit-app-region: no-drag;
+}
+
+.comet-editor-titlebar-add-btn.comet-actionbar-action .lx-icon,
+.comet-editor-titlebar-agent-btn.comet-actionbar-action .lx-icon,
+.comet-editor-titlebar-toggle-editor-btn.comet-actionbar-action .lx-icon {
+	width: 16px;
+	height: 16px;
+	font-size: 16px;
+}
+
+.comet-editor-titlebar-add-btn.comet-actionbar-action:hover,
+.comet-editor-titlebar-agent-btn.comet-actionbar-action:hover,
+.comet-editor-titlebar-toggle-editor-btn.comet-actionbar-action:hover {
+	background: var(--cs-actionbar-hover-background);
+}
+
+.comet-editor-titlebar-add-btn.comet-actionbar-action:active,
+.comet-editor-titlebar-agent-btn.comet-actionbar-action:active,
+.comet-editor-titlebar-toggle-editor-btn.comet-actionbar-action:active {
+	background: var(--cs-actionbar-active-background);
+}
+
 .comet-editor-toolbar {
   --editor-toolbar-horizontal-padding: 6px;
   display: flex;
