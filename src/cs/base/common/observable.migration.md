@@ -1,0 +1,278 @@
+# Observable graph kernel migration
+
+## Temporary scope
+
+This migration owns the atomic replacement of the Observable graph kernel and
+the direct call-site changes required by that public API:
+
+- `src/cs/base/common/observable.ts`;
+- implementation modules created under
+  `src/cs/base/common/observableInternal/**`;
+- kernel cases in `src/cs/base/common/test/observable.test.ts`;
+- `ObserverNode` and its focused tests under `src/cs/base/browser/**`;
+- `DomWidget` and its focused tests under `src/cs/platform/domWidget/**`;
+- mechanical signature and import changes in every surviving source that
+  imports `cs/base/common/observable`; and
+- the kernel, read, transaction, derivation, reaction, and UI-effect sections
+  of `.github/instructions/observables.instructions.md`.
+
+It does not add event bridges, signals, or disposable observable values; those
+belong to [Observable event bridges](observable-events.migration.md). It also
+does not decide every domain's aggregate-versus-transaction boundary; that
+belongs to [Observable state audit](observable-state-audit.migration.md).
+
+Sessions files also in the
+[Agent Host migration](../../sessions/agent-host.migration.md) follow that
+migration's deletion boundary. Legacy `default` provider and `mainChat` code is
+deleted, not ported to preserve it. Surviving Agent Host, Comet, Session, and
+Chat sources call the final Observable API directly.
+
+## Prerequisites and ownership
+
+The directly discovered Base lane from
+[Test lane and coverage](../../../../test/test-infrastructure.migration.md)
+must exist before the kernel conformance cutover. The lifecycle hooks and
+`node:test` leak helper from
+[Disposable tracking core](disposable-tracking.migration.md) must exist before
+graph resources are accepted as leak-free.
+
+Those migrations own discovery and lifecycle instrumentation. This migration
+alone owns Observable kernel conformance; there is no reciprocal dependency or
+private test runner.
+
+## Boundary being replaced
+
+The current implementation accepts an `unknown` transaction and ignores it,
+walks observers immediately for every write, recomputes derived values on
+every read, and has no begin/end update protocol. Related writes expose
+intermediate states, dependency diamonds can rerun redundantly, and a derived
+node notifies before knowing whether its value changed.
+
+The current `ObserverNode` also copies the upstream pattern of storing DOM
+mutations in `derived` nodes, composing child effects through `readEffect`, and
+keeping the root alive through `recomputeInitiallyAndOnChange`. Upstream's
+model is internally coherent because its Observable API intentionally permits
+an effectful derived to be held alive as an update mechanism. It is not the
+Comet target: Comet defines `derived` as pure state and `autorun` as the
+imperative sink. Copying that pattern would make the permanent purity rule
+false at a foundational DOM call site.
+
+`DomWidget.createObservable` and `instantiateObservable` similarly construct
+and own disposable widgets inside `derived`. Repository search shows their
+only consumers are the class's append helpers, so retaining those public
+factories would preserve an abstraction with the wrong ownership semantics.
+
+## Final project-owned target
+
+### One graph kernel
+
+`cs/base/common/observable` is the sole public Observable module. It defines
+its public contracts and factories directly; it does not re-export an internal
+barrel. Implementation nodes under `observableInternal` import Comet's real
+errors, lifecycle, and equality primitives. Consumers never import an internal
+node, dependency facade, second implementation, compatibility overload, or
+legacy alias.
+
+The kernel consists of:
+
+- `IObservable`, `ISettableObservable`, `IObserver`, `IReader`,
+  `IReaderWithStore`, and `ITransaction`;
+- `observableValue` and `constObservable`;
+- `derived` and `derivedOpts`;
+- `autorun`;
+- synchronous `transaction`; and
+- `isObservable`, tracked `read`, and untracked `get`.
+
+The kernel invariants are:
+
+- every transaction brackets affected observers with balanced begin/end
+  updates, including when its callback throws;
+- writes made before a throwing callback exits remain the committed state,
+  reactions observe that stable state, and the original callback error then
+  propagates;
+- nested mutation methods receive the addressed transaction; there is no
+  implicit global, nested replacement, asynchronous, or reusable transaction;
+- a dependency diamond is glitch-free and one reaction runs once for one
+  meaningful committed result;
+- derived nodes receive dependency-only `IReader` instances, are lazy, cache
+  only while observed, reconcile dynamic dependencies, compare before
+  notifying, and release dependencies when unobserved;
+- ordinary and derived values use `Object.is` unless `derivedOpts` supplies a
+  semantic comparator;
+- only `IReaderWithStore` passed to `autorun` exposes resource stores;
+  `store` is disposed before the next run and `delayedStore` immediately after
+  the replacement run;
+- `autorun` executes immediately, owns its dependencies and both stores, and
+  cannot prevent sibling reactions after one callback fails;
+- a derived computation never mutates observable or external state;
+- an autorun may mutate an external sink but never writes the Observable graph
+  directly or through a service; and
+- re-entry, writes from a derived or reaction, and reuse of a finished
+  transaction throw synchronously. No recovery transaction is started.
+
+Class-owned state and derivations use their owning object as debug identity.
+An explicit string remains valid only for ownerless module state and focused
+fixtures.
+
+### Direct `ObserverNode` effect model
+
+`ObserverNode` stores private property-effect definitions and its child
+description, not effectful `IObservable` instances. Construction applies
+non-reactive class, style, attributes, handlers, and statically known child
+structure once. Reactive class, each reactive style property, each reactive
+attribute, `tabIndex`, and `obsRef` remain separate effect definitions so one
+dependency does not rerun unrelated DOM work.
+
+`keepUpdated(store)` creates one private live-tree runtime for that root. The
+runtime activates property definitions with owned `autorun` instances only
+when their nodes are live. Before live activation, no reactive dependency is
+observed and no `obsRef` is published. A node belongs to at most one live-tree
+runtime; a second simultaneous root activation is rejected. Disposing the
+runtime stops every effect, removes every dependency, releases nested nodes,
+clears the active-runtime markers, and publishes each `obsRef(null)` exactly
+once.
+
+One structure autorun owned by the live-tree runtime recursively reads only
+observables that decide the whole child tree and builds a candidate snapshot.
+Before mutating DOM it rejects cycles and repeated object children, whether an
+`ObserverNode` or a raw DOM node, so a bad snapshot leaves the previous tree
+and ownership intact. It then compares each parent's child identities, updates
+only changed child lists, and reconciles one activation store per
+`ObserverNode` across the whole root. A retained or moved child keeps its
+effect owner, a removed child is disposed after the DOM update, and a new child
+is activated under the root runtime. Child attribute changes run the child's
+property effects without rerunning the structure autorun.
+
+`readEffect` and `recomputeInitiallyAndOnChange` are deleted from this path.
+No public effect-compatibility helper replaces them.
+
+### Direct `DomWidget` ownership
+
+`createAppend` and `instantiateAppend` are the only widget construction
+entries. With hot reload disabled they construct, append, and register one
+widget directly. With hot reload enabled, an owned `autorun` reads the current
+constructor, creates the widget, replaces the previous element atomically, and
+uses delayed-store ownership so the previous widget is disposed only after its
+replacement is in the DOM.
+
+`createObservable` and `instantiateObservable` are deleted together with their
+type members and call sites. A derived value never constructs or owns a
+`DomWidget`.
+
+## Direct migration steps
+
+1. Expand the directly discovered kernel conformance suite and install the
+   project leak helper. Cover transactions, dynamic dependencies, diamond
+   propagation, equality-neutral results, reader stores, reactions, rejected
+   graph writes, re-entry, errors, and disposal before replacing mechanics.
+2. Replace the ignored transaction and immediate observer protocol with typed
+   begin/end updates, possible-change versus actual-change propagation, and
+   `finally` finalization. Delete the old graph classes in the same cutover.
+3. Split the dependency-only `IReader` passed to deriveds from the
+   `IReaderWithStore` passed to autoruns. Implement lazy cached derived nodes
+   and the reaction node over the one observer protocol. Reject graph mutation
+   from active computations and reactions.
+4. Migrate every surviving import and mechanical call shape directly:
+   class-owned factories receive their owner, reactive callbacks use
+   `.read(reader)`, imperative boundaries use `.get()`, set calls receive
+   `ITransaction | undefined`, and every autorun is registered immediately.
+   Do not add overloads for the old signatures.
+5. Replace `ObserverNode`'s derived-effect storage with private property effects
+   and one live-tree structure runtime. Reconcile node identity across the
+   entire root and validate candidate snapshots before DOM mutation. Delete
+   `readEffect` and all `recomputeInitiallyAndOnChange` use.
+6. Delete the two observable-producing `DomWidget` methods. Implement hot
+   replacement directly in the append autoruns and preserve replacement-before-
+   disposal ordering.
+7. Delete legacy Agent Host consumers through their owning migration and
+   compile surviving Sessions consumers directly against the kernel.
+8. Run the Base common, Base browser, Platform DOM widget, and all other
+   affected lanes, test type checking, and layer verification. Delete this
+   document after every criterion holds.
+
+## Call-site decisions
+
+| Existing pattern | Direct target |
+|---|---|
+| class field `observableValue('name', value)` | `observableValue(this, value)` |
+| class-owned `derived(reader => value)` | `derived(this, reader => value)` |
+| `.get()` inside `derived` or `autorun` | `.read(reader)` |
+| locally created unregistered autorun | immediate registration by its real owner |
+| effectful `derived` | pure `derived` data plus an owned `autorun` sink |
+| `ObserverNode.readEffect` composition | one private live-tree runtime with property effects and whole-tree identity reconciliation |
+| `DomWidget.createObservable` or `instantiateObservable` | direct owned construction in the append method |
+| legacy source already scheduled for deletion | deletion by its owning migration |
+
+## Required conformance cases
+
+### Graph kernel
+
+- balanced finalization after success and callback throw;
+- committed pre-throw writes followed by propagation of the original error;
+- nested addressed mutation, finished-transaction reuse, re-entry, and
+  rejected writes from deriveds and autoruns;
+- dynamic dependency removal and observed-cache release;
+- glitch-free diamonds and one reaction per meaningful commit;
+- equality-neutral value and derived changes;
+- immediate autorun, both reader-store disposal orders, idempotent reaction
+  disposal, and sibling progress after a failing reaction; and
+- no tracked graph node, reader resource, or reaction surviving its test.
+
+### `ObserverNode`
+
+- static DOM is correct before live activation without observing reactive
+  inputs;
+- reactive class, individual style, attribute, `tabIndex`, and child changes
+  update only their addressed effects;
+- `obsRef` publishes on activation and clears exactly once on disposal;
+- retained dynamic children keep their effects, removed children stop
+  updating, and new children activate;
+- moving a child between parents in one committed tree keeps one activation
+  owner regardless of reaction order;
+- child attribute updates do not rebuild parent children;
+- duplicate placement, child cycles, and simultaneous root activation are
+  rejected before changing the previous live tree, and a later valid snapshot
+  can still commit; and
+- disposing the live element prevents every later DOM update.
+
+### `DomWidget`
+
+- normal construction appends and disposes one widget;
+- hot replacement installs the new element before disposing the previous
+  widget;
+- constructor or instantiation failure leaves the previous live widget and
+  reports the error according to the hot-reload contract; and
+- append-owner disposal removes and disposes the final widget exactly once.
+
+## Behavior that must be preserved
+
+- Existing public DOM creation and live-element APIs keep their user-visible
+  behavior.
+- Static DOM work remains eager; reactive DOM work remains lazy until live.
+- Dynamic child dependencies remain fine-grained and stop after removal.
+- Hot reload replaces widgets without a blank intermediate DOM state.
+- `constObservable`, `derivedOpts`, `isObservable`, tracked `read`, and
+  untracked `get` remain available as final kernel contracts.
+
+## Completion and deletion criteria
+
+This migration is complete only when:
+
+- `ISettableObservable.set` uses `ITransaction | undefined` and one graph
+  implements every kernel invariant;
+- no old graph class, alternate import path, facade, global or async
+  transaction, ignored transaction, or compatibility overload remains;
+- all surviving call sites use final owner/read/registration signatures and no
+  consumer imports `observableInternal`;
+- no derived mutates the graph or an external sink and no autorun writes the
+  graph, and the derived reader exposes no resource store;
+- `ObserverNode` contains no side-effecting derived, `readEffect`, or
+  `recomputeInitiallyAndOnChange` path and passes its full conformance matrix;
+- `DomWidget` contains neither observable-producing factory and passes its
+  ownership matrix;
+- legacy `default` and `mainChat` consumers are deleted rather than adapted;
+- every scoped lane, test type checking, coverage, and layer verification
+  passes; and
+- the durable Observable instruction describes only the implemented target.
+
+Delete this document in the same change that satisfies these criteria.

@@ -58,6 +58,17 @@ Use tabs, not spaces.
 - Prefer named regex capture groups over numbered ones
 - Do not use `any` or `unknown` unless absolutely necessary
 - Register disposables immediately after creation — use `DisposableStore`, `MutableDisposable`, or `this._register()`
+- Every project-owned class with a `dispose()` method participates explicitly
+  in `IDisposable` through `Disposable`, another lifecycle-tracked required
+  base, or its own `implements IDisposable`; structural-only disposable
+  classes are not allowed. Extend `Disposable` when the hierarchy permits it.
+  Do not duplicate tracking inherited from a lifecycle-tracked base. When the
+  required base is not lifecycle-tracked, own children in `DisposableStore`,
+  call `trackDisposable(this)` at creation, and call `markAsDisposed(this)` at
+  the first terminal disposed state. A class that owns a disposable field has
+  an explicit lifetime and disposes or transfers that field. Use
+  `toDisposable` for function-backed cleanup instead of returning a raw object
+  with a `dispose` method.
 - Declare service dependencies in constructors via DI — never access services through `IInstantiationService` elsewhere. In particular, do **not** lazily resolve a service with `this.instantiationService.invokeFunction(accessor => accessor.get(ISomeService))`; add `@ISomeService` as a constructor parameter instead. If a constructor cycle prevents direct injection, break the cycle (e.g. pass the dependency into an `init()`/wiring method from the orchestrator, or relocate the call) rather than reaching through `invokeFunction`/`accessor.get`.
 - Use `IEditorService` to open editors, not `IEditorGroupsService.activeGroup.openEditor`
 - Avoid `bind()`/`call()`/`apply()` solely for `this` — prefer arrow functions
