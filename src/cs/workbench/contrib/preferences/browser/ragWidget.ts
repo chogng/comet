@@ -1,4 +1,6 @@
 import type { RagProviderId, RagProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { DisposableStore } from 'cs/base/common/lifecycle';
+import type { IHoverService } from 'cs/platform/hover/browser/hover';
 import {
   NumberStepper,
   numberStepperDecrementAriaLabel,
@@ -41,9 +43,18 @@ export type RagSettingsSectionProps = {
   onTestRagConnection: () => void;
 };
 
-function renderRagNumberField(props: RagSettingsSectionProps, label: string, value: number, focusKey: string, min: string, max: string, onInput: (value: string) => void) {
+function renderRagNumberField(
+	props: RagSettingsSectionProps,
+	label: string,
+	value: number,
+	focusKey: string,
+	min: string,
+	max: string,
+	onInput: (value: string) => void,
+	disposables: DisposableStore,
+) {
   const wrap = el('div', 'comet-settings-limit-input-wrap');
-  const stepper = new NumberStepper({
+  const stepper = disposables.add(new NumberStepper({
     value,
     className: 'comet-settings-number-stepper comet-settings-limit-input',
     min,
@@ -54,7 +65,7 @@ function renderRagNumberField(props: RagSettingsSectionProps, label: string, val
     incrementAriaLabel: numberStepperIncrementAriaLabel,
     onDidChange: onInput,
     disabled: props.isSettingsSaving,
-  });
+  }));
   setSettingsFocusKey(stepper.inputElement, focusKey);
   wrap.append(stepper.element);
   return createSettingsRow({
@@ -65,7 +76,14 @@ function renderRagNumberField(props: RagSettingsSectionProps, label: string, val
   });
 }
 
-function renderRagTextField(label: string, value: string, focusKey: string, onInput: (value: string) => void, className = 'comet-settings-field') {
+function renderRagTextField(
+	label: string,
+	value: string,
+	focusKey: string,
+	onInput: (value: string) => void,
+	disposables: DisposableStore,
+	className = 'comet-settings-field',
+) {
   return createSettingsRow({
     title: label,
     control: buildInput({
@@ -73,7 +91,7 @@ function renderRagTextField(label: string, value: string, focusKey: string, onIn
       className: 'comet-settings-input-control comet-settings-rag-text-input',
       focusKey,
       onInput,
-    }).element,
+    }, disposables).element,
     itemClassName: className.includes('comet-settings-llm-span-2')
       ? 'comet-settings-rag-text-item comet-settings-rag-wide-item'
       : 'comet-settings-rag-text-item',
@@ -81,7 +99,11 @@ function renderRagTextField(label: string, value: string, focusKey: string, onIn
   });
 }
 
-export function renderRagSettingsSection(props: RagSettingsSectionProps) {
+export function renderRagSettingsSection(
+	props: RagSettingsSectionProps,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
+) {
   const section = createSettingsSection({
     title: props.labels.settingsRagTitle,
     description: props.labels.settingsRagHint,
@@ -97,7 +119,7 @@ export function renderRagSettingsSection(props: RagSettingsSectionProps) {
       className: 'comet-settings-input-control comet-settings-rag-text-input',
       focusKey: 'settings.rag.provider',
       readOnly: true,
-    }).element,
+    }, disposables).element,
     buildHint(props.labels.settingsRagProviderHint),
   );
   section.list.append(
@@ -107,13 +129,13 @@ export function renderRagSettingsSection(props: RagSettingsSectionProps) {
       itemClassName: 'comet-settings-rag-provider-item',
       controlClassName: 'comet-settings-rag-provider-row-control',
     }),
-	renderRagNumberField(props, props.labels.settingsRagCandidateCount, props.retrievalCandidateCount, 'settings.rag.candidates', String(minRagRetrievalCandidateCount), String(maxRagRetrievalCandidateCount), props.onRetrievalCandidateCountChange),
-	renderRagNumberField(props, props.labels.settingsRagTopK, props.retrievalTopK, 'settings.rag.topK', String(minRagRetrievalTopK), String(props.retrievalCandidateCount), props.onRetrievalTopKChange),
-    renderRagTextField(props.labels.settingsRagBaseUrl, provider.baseUrl, 'settings.rag.baseUrl', value => props.onRagProviderBaseUrlChange(props.activeRagProvider, value), 'comet-settings-field comet-settings-llm-span-2'),
-    renderRagTextField(props.labels.settingsRagEmbeddingModel, provider.embeddingModel, 'settings.rag.embeddingModel', value => props.onRagProviderEmbeddingModelChange(props.activeRagProvider, value)),
-    renderRagTextField(props.labels.settingsRagRerankerModel, provider.rerankerModel, 'settings.rag.rerankerModel', value => props.onRagProviderRerankerModelChange(props.activeRagProvider, value)),
-    renderRagTextField(props.labels.settingsRagEmbeddingPath, provider.embeddingPath, 'settings.rag.embeddingPath', value => props.onRagProviderEmbeddingPathChange(props.activeRagProvider, value)),
-    renderRagTextField(props.labels.settingsRagRerankPath, provider.rerankPath, 'settings.rag.rerankPath', value => props.onRagProviderRerankPathChange(props.activeRagProvider, value)),
+	renderRagNumberField(props, props.labels.settingsRagCandidateCount, props.retrievalCandidateCount, 'settings.rag.candidates', String(minRagRetrievalCandidateCount), String(maxRagRetrievalCandidateCount), props.onRetrievalCandidateCountChange, disposables),
+	renderRagNumberField(props, props.labels.settingsRagTopK, props.retrievalTopK, 'settings.rag.topK', String(minRagRetrievalTopK), String(props.retrievalCandidateCount), props.onRetrievalTopKChange, disposables),
+    renderRagTextField(props.labels.settingsRagBaseUrl, provider.baseUrl, 'settings.rag.baseUrl', value => props.onRagProviderBaseUrlChange(props.activeRagProvider, value), disposables, 'comet-settings-field comet-settings-llm-span-2'),
+    renderRagTextField(props.labels.settingsRagEmbeddingModel, provider.embeddingModel, 'settings.rag.embeddingModel', value => props.onRagProviderEmbeddingModelChange(props.activeRagProvider, value), disposables),
+    renderRagTextField(props.labels.settingsRagRerankerModel, provider.rerankerModel, 'settings.rag.rerankerModel', value => props.onRagProviderRerankerModelChange(props.activeRagProvider, value), disposables),
+    renderRagTextField(props.labels.settingsRagEmbeddingPath, provider.embeddingPath, 'settings.rag.embeddingPath', value => props.onRagProviderEmbeddingPathChange(props.activeRagProvider, value), disposables),
+    renderRagTextField(props.labels.settingsRagRerankPath, provider.rerankPath, 'settings.rag.rerankPath', value => props.onRagProviderRerankPathChange(props.activeRagProvider, value), disposables),
   );
 
   const apiKeyInput = buildSecretInput({
@@ -131,7 +153,7 @@ export function renderRagSettingsSection(props: RagSettingsSectionProps) {
     disabled: props.isSettingsSaving,
     onSubmit: value => props.onRagProviderApiKeyChange(props.activeRagProvider, value),
     onClear: () => props.onRagProviderApiKeyChange(props.activeRagProvider, ''),
-  });
+  }, hoverService, disposables);
   const apiKeyControl = el('div', 'comet-settings-rag-api-key-control');
   apiKeyControl.append(apiKeyInput);
   section.list.append(createSettingsRow({

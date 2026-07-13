@@ -6,7 +6,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { URI } from 'cs/base/common/uri';
+import { DisposableStore } from 'cs/base/common/lifecycle';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { locales } from 'language/locales';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 
@@ -33,12 +35,13 @@ test('Supported Sources exposes the Journal home without leaking its discovery U
 		providerId: 'provider.test',
 	};
 	const labels = locales.en;
+	const disposables = new DisposableStore();
 	const section = renderSupportedSourcesSection({
 		labels,
 		supportedSources: [journal],
 		showSupportedSources: true,
 		isSettingsSaving: false,
-	}, () => {});
+	}, () => {}, getHoverService(), disposables);
 	const url = section.querySelector<HTMLElement>('.comet-settings-supported-source-url');
 
 	assert.deepEqual({
@@ -50,6 +53,7 @@ test('Supported Sources exposes the Journal home without leaking its discovery U
 		title: `${labels.settingsSupportedSourceUrl}: ${journal.homeUrl.toString(true)}`,
 		containsDiscoveryUrl: false,
 	});
+	disposables.dispose();
 });
 
 test('Chinese Settings navigation localizes the Appearance page', () => {

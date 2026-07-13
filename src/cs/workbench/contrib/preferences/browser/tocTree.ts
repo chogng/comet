@@ -5,6 +5,7 @@
 
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
+import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import {
 	getSettingsPageNavigationItems,
 } from 'cs/workbench/contrib/preferences/browser/settingsLayout';
@@ -88,6 +89,7 @@ export class TOCTreeModel {
 export class TOCTree {
 	private options: TOCTreeOptions;
 	private pendingFocusItemId: SettingsPageId | null = null;
+	private readonly renderDisposables = new DisposableStore();
 	private readonly element = createSettingsElement('nav', 'comet-settings-toc');
 	private readonly list = createSettingsElement('ul', 'comet-settings-toc-list');
 
@@ -114,11 +116,13 @@ export class TOCTree {
 	}
 
 	dispose() {
+		this.renderDisposables.dispose();
 		this.element.replaceChildren();
 	}
 
 	private render() {
 		const focusedItemBeforeRender = this.getFocusedItemId();
+		this.renderDisposables.clear();
 		const focusTargetItemId = this.pendingFocusItemId ?? focusedItemBeforeRender;
 		this.pendingFocusItemId = null;
 		this.element.ariaLabel = this.options.title;
@@ -153,8 +157,14 @@ export class TOCTree {
 		}
 		label.append(document.createTextNode(element.label));
 		button.append(label);
-		button.addEventListener('keydown', event => this.handleItemKeyDown(event, element));
-		button.addEventListener('click', () => this.selectPage(element.pageId, true, element.id));
+		const handleKeyDown = (event: KeyboardEvent) => this.handleItemKeyDown(event, element);
+		const handleClick = () => this.selectPage(element.pageId, true, element.id);
+		button.addEventListener('keydown', handleKeyDown);
+		button.addEventListener('click', handleClick);
+		this.renderDisposables.add(toDisposable(() => {
+			button.removeEventListener('keydown', handleKeyDown);
+			button.removeEventListener('click', handleClick);
+		}));
 		entry.append(button);
 		return entry;
 	}

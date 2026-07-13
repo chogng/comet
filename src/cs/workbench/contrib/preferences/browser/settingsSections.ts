@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DEFAULT_EDITOR_DRAFT_BODY_COLOR } from 'cs/base/common/editorDraftStyle';
+import { DisposableStore } from 'cs/base/common/lifecycle';
 import {
   BrowserSearchEngineId,
   BROWSER_SEARCH_ENGINES,
@@ -19,6 +20,7 @@ import {
   minBrowserMaxHistoryEntries,
 } from 'cs/base/parts/sandbox/common/browserSettings';
 import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IHoverService } from 'cs/platform/hover/browser/hover';
 import {
   NumberStepper,
   numberStepperDecrementAriaLabel,
@@ -234,6 +236,7 @@ export function renderLocaleSection(
 	props: SettingsViewState,
 	contextViewProvider: IContextViewProvider,
 	settingsController: SettingsController,
+	disposables: DisposableStore,
 ) {
   const language = createSettingsSection({
     sectionClassName: 'comet-settings-language-section',
@@ -250,6 +253,7 @@ export function renderLocaleSection(
 	settingsController.setLocale,
     contextViewProvider,
     'comet-settings-language-toggle',
+	disposables,
   );
   language.list.append(
     createSettingsRow({
@@ -265,6 +269,8 @@ export function renderSupportedSourcesSection(
 	props: Pick<SettingsViewState,
 		'labels' | 'supportedSources' | 'showSupportedSources' | 'isSettingsSaving'>,
 	onToggleSupportedSources: () => void,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
 ) {
   const supportedSources = createSettingsSection({
     title: props.labels.settingsSupportedSources,
@@ -306,7 +312,7 @@ export function renderSupportedSourcesSection(
           : props.labels.settingsSupportedSourcesShow,
         disabled: props.isSettingsSaving,
 		onClick: onToggleSupportedSources,
-      }),
+      }, hoverService, disposables),
       itemClassName: 'comet-settings-supported-sources-actions-item',
       controlClassName: 'comet-settings-supported-sources-actions',
     }),
@@ -319,6 +325,7 @@ export function renderLayoutSection(
 	props: SettingsViewState,
 	contextViewProvider: IContextViewProvider,
 	settingsController: SettingsController,
+	disposables: DisposableStore,
 ) {
   const layout = createSettingsSection({
     title: props.labels.settingsLayoutTitle,
@@ -333,9 +340,10 @@ export function renderLayoutSection(
 	settingsController.setStartupLayout,
     contextViewProvider,
     'comet-settings-layout-startup-layout-select',
+	disposables,
   );
   setSelectHostDisabled(startupLayoutSelect, props.isSettingsSaving);
-  const browserTabKeepAliveLimitInput = new NumberStepper({
+  const browserTabKeepAliveLimitInput = disposables.add(new NumberStepper({
     value: props.browserTabKeepAliveLimit,
     className: 'comet-settings-number-stepper comet-settings-limit-input',
     min: String(minBrowserTabKeepAliveLimit),
@@ -346,7 +354,7 @@ export function renderLayoutSection(
     incrementAriaLabel: numberStepperIncrementAriaLabel,
 	onDidChange: settingsController.setBrowserTabKeepAliveLimit,
     disabled: props.isSettingsSaving,
-  });
+  }));
   setSettingsFocusKey(browserTabKeepAliveLimitInput.inputElement, 'settings.general.layout.browserTabKeepAliveLimit');
   layout.list.append(
     createSettingsRow({
@@ -363,7 +371,7 @@ export function renderLayoutSection(
         disabled: props.isSettingsSaving,
         title: props.labels.settingsStatusbar,
 		onChange: settingsController.setStatusbarVisible,
-      }),
+      }, disposables),
     }),
     createSettingsRow({
       title: props.labels.settingsBrowserTabKeepAliveLimit,
@@ -378,6 +386,7 @@ export function renderBrowserSection(
 	props: SettingsViewState,
 	contextViewProvider: IContextViewProvider,
 	settingsController: SettingsController,
+	disposables: DisposableStore,
 ) {
   const browser = createSettingsSection({
     title: props.labels.settingsBrowserTitle,
@@ -385,7 +394,7 @@ export function renderBrowserSection(
     panelClassName: 'comet-settings-browser-panel',
     listClassName: 'comet-settings-browser-list',
   });
-  const maxHistoryEntriesInput = new NumberStepper({
+  const maxHistoryEntriesInput = disposables.add(new NumberStepper({
     value: props.browserMaxHistoryEntries,
     className: 'comet-settings-number-stepper comet-settings-limit-input',
     min: String(minBrowserMaxHistoryEntries),
@@ -396,7 +405,7 @@ export function renderBrowserSection(
     incrementAriaLabel: numberStepperIncrementAriaLabel,
 	onDidChange: settingsController.setBrowserMaxHistoryEntries,
     disabled: props.isSettingsSaving,
-  });
+  }));
   setSettingsFocusKey(maxHistoryEntriesInput.inputElement, 'settings.browser.maxHistoryEntries');
   const pageZoomSelect = buildSelect(
     ensureCurrentSelectOption(
@@ -408,6 +417,7 @@ export function renderBrowserSection(
 	settingsController.setBrowserPageZoom,
     contextViewProvider,
     'comet-settings-browser-select',
+	disposables,
   );
   setSelectHostDisabled(pageZoomSelect, props.isSettingsSaving);
   const searchEngineSelect = buildSelect(
@@ -420,6 +430,7 @@ export function renderBrowserSection(
 	settingsController.setBrowserSearchEngine,
     contextViewProvider,
     'comet-settings-browser-select',
+	disposables,
   );
   setSelectHostDisabled(searchEngineSelect, props.isSettingsSaving);
   browser.list.append(
@@ -446,6 +457,7 @@ export function renderAppearanceSection(
 	props: SettingsViewState,
 	contextViewProvider: IContextViewProvider,
 	settingsController: SettingsController,
+	disposables: DisposableStore,
 ) {
   const field = el('div', 'comet-settings-appearance-settings');
   const themeSelect = buildSelect(
@@ -455,6 +467,7 @@ export function renderAppearanceSection(
 	settingsController.setTheme,
     contextViewProvider,
     'comet-settings-appearance-theme-select',
+	disposables,
   );
   setSelectHostDisabled(themeSelect, props.isSettingsSaving);
   const appearanceTheme = createSettingsSection({
@@ -484,7 +497,7 @@ export function renderAppearanceSection(
         disabled: props.isSettingsSaving || !props.desktopRuntime,
         title: props.labels.settingsUseMica,
 		onChange: settingsController.setUseMica,
-      }),
+      }, disposables),
     }),
   );
   field.append(appearanceTheme.element, appearanceToggles.element);
@@ -494,6 +507,7 @@ export function renderAppearanceSection(
 export function renderNotificationsSection(
 	props: SettingsViewState,
 	settingsController: SettingsController,
+	disposables: DisposableStore,
 ) {
   const notifications = createSettingsSection({
     title: props.labels.settingsNotificationsTitle,
@@ -512,7 +526,7 @@ export function renderNotificationsSection(
         disabled: notificationsDisabled,
         title: props.labels.settingsSystemNotifications,
 		onChange: settingsController.setSystemNotificationsEnabled,
-      }),
+      }, disposables),
     }),
     createSettingsRow({
       title: props.labels.settingsWarningNotifications,
@@ -523,7 +537,7 @@ export function renderNotificationsSection(
         disabled: notificationsDisabled,
         title: props.labels.settingsWarningNotifications,
 		onChange: settingsController.setWarningNotificationsEnabled,
-      }),
+      }, disposables),
     }),
     createSettingsRow({
       title: props.labels.settingsMenuBarIcon,
@@ -534,7 +548,7 @@ export function renderNotificationsSection(
         disabled: notificationsDisabled,
         title: props.labels.settingsMenuBarIcon,
 		onChange: settingsController.setMenuBarIconEnabled,
-      }),
+      }, disposables),
     }),
     createSettingsRow({
       title: props.labels.settingsCompletionNotifications,
@@ -545,7 +559,7 @@ export function renderNotificationsSection(
         disabled: notificationsDisabled,
         title: props.labels.settingsCompletionNotifications,
 		onChange: settingsController.setCompletionNotificationsEnabled,
-      }),
+      }, disposables),
     }),
   );
   return notifications.element;
@@ -554,6 +568,8 @@ export function renderNotificationsSection(
 export function renderDownloadDirectorySection(
 	props: SettingsViewState,
 	settingsController: SettingsController,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
 ) {
   const field = el('div', 'comet-settings-download-settings');
   const effectiveDownloadDir = props.pdfDownloadDir.trim() || props.labels.systemDownloads;
@@ -572,7 +588,7 @@ export function renderDownloadDirectorySection(
         title: props.labels.chooseDirectory,
         disabled: !props.desktopRuntime || props.isSettingsSaving,
 		onClick: () => void settingsController.handleChoosePdfDownloadDir(),
-      }),
+      }, hoverService, disposables),
       itemClassName: 'comet-settings-download-directory-item',
       controlClassName: 'comet-settings-download-directory-control',
     }),
@@ -592,7 +608,7 @@ export function renderDownloadDirectorySection(
         disabled: props.isSettingsSaving,
         title: props.labels.pdfFileNameUseSelectionOrder,
 		onChange: settingsController.setPdfFileNameUseSelectionOrder,
-      }),
+      }, disposables),
     }),
   );
   field.append(downloadDirectory.element, downloadOptions.element);
@@ -602,6 +618,8 @@ export function renderDownloadDirectorySection(
 export function renderConfigPathSection(
 	props: SettingsViewState,
 	settingsController: SettingsController,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
 ) {
   const configPath = createSettingsSection({
     sectionClassName: 'comet-settings-config-path-section',
@@ -618,7 +636,7 @@ export function renderConfigPathSection(
         title: props.labels.changeConfigLocation,
         disabled: !props.desktopRuntime || props.isSettingsSaving || !props.configPath.trim(),
 		onClick: () => void settingsController.handleChooseConfigPath(),
-      }),
+      }, hoverService, disposables),
       itemClassName: 'comet-settings-config-path-item',
       controlClassName: 'comet-settings-config-path-control',
     }),
@@ -630,6 +648,7 @@ export function renderTextEditorSection(
 	props: SettingsViewState,
 	contextViewProvider: IContextViewProvider,
 	settingsController: SettingsController,
+	disposables: DisposableStore,
 ) {
   const defaultBodyStyle = props.editorDraftStyle.value.defaultBodyStyle;
   const isDisabled = props.isSettingsSaving;
@@ -651,6 +670,7 @@ export function renderTextEditorSection(
 	settingsController.setEditorDraftFontFamily,
     contextViewProvider,
     'comet-settings-text-editor-select',
+	disposables,
   );
   setSelectHostDisabled(fontFamilySelect, isDisabled);
   const fontSizeSelect = buildSelect(
@@ -663,9 +683,10 @@ export function renderTextEditorSection(
 	settingsController.setEditorDraftFontSize,
     contextViewProvider,
     'comet-settings-text-editor-select',
+	disposables,
   );
   setSelectHostDisabled(fontSizeSelect, isDisabled);
-  const lineHeightInput = new NumberStepper({
+  const lineHeightInput = disposables.add(new NumberStepper({
     value: defaultBodyStyle.lineHeight,
     className: 'comet-settings-number-stepper comet-settings-text-editor-line-height-input',
     min: '0.5',
@@ -676,9 +697,9 @@ export function renderTextEditorSection(
     incrementAriaLabel: numberStepperIncrementAriaLabel,
 	onDidChange: settingsController.setEditorDraftLineHeightFromInput,
     disabled: isDisabled,
-  });
+  }));
   setSettingsFocusKey(lineHeightInput.inputElement, 'settings.textEditor.lineHeight');
-  const paragraphSpacingBeforeInput = new NumberStepper({
+  const paragraphSpacingBeforeInput = disposables.add(new NumberStepper({
     value: defaultBodyStyle.paragraphSpacingBeforePt,
     className: 'comet-settings-number-stepper comet-settings-text-editor-spacing-input',
     min: '0',
@@ -689,9 +710,9 @@ export function renderTextEditorSection(
     incrementAriaLabel: numberStepperIncrementAriaLabel,
 	onDidChange: settingsController.setEditorDraftParagraphSpacingBeforePtFromInput,
     disabled: isDisabled,
-  });
+  }));
   setSettingsFocusKey(paragraphSpacingBeforeInput.inputElement, 'settings.textEditor.paragraphSpacingBefore');
-  const paragraphSpacingAfterInput = new NumberStepper({
+  const paragraphSpacingAfterInput = disposables.add(new NumberStepper({
     value: defaultBodyStyle.paragraphSpacingAfterPt,
     className: 'comet-settings-number-stepper comet-settings-text-editor-spacing-input',
     min: '0',
@@ -702,23 +723,23 @@ export function renderTextEditorSection(
     incrementAriaLabel: numberStepperIncrementAriaLabel,
 	onDidChange: settingsController.setEditorDraftParagraphSpacingAfterPtFromInput,
     disabled: isDisabled,
-  });
+  }));
   setSettingsFocusKey(paragraphSpacingAfterInput.inputElement, 'settings.textEditor.paragraphSpacingAfter');
   const colorRow = el('div', 'comet-settings-text-editor-color-row');
   const colorPickerInput = buildInput({
     type: 'color',
     value: toColorPickerValue(defaultBodyStyle.color),
-    className: 'comet-settings-text-editor-color-picker',
-    focusKey: 'settings.textEditor.colorPicker',
+	className: 'comet-settings-text-editor-color-picker',
+	focusKey: 'settings.textEditor.colorPicker',
 	onInput: settingsController.setEditorDraftColor,
-  });
+	  }, disposables);
   colorPickerInput.inputElement.disabled = isDisabled;
   const colorValueInput = buildInput({
     value: defaultBodyStyle.color,
     className: 'comet-settings-input-control comet-settings-text-editor-color-value',
     focusKey: 'settings.textEditor.colorValue',
     readOnly: true,
-  });
+  }, disposables);
   colorRow.append(colorPickerInput.element, colorValueInput.element);
 
   textEditorPanel.list.append(

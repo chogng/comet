@@ -1,13 +1,14 @@
-import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import { ButtonView } from 'cs/base/browser/ui/button/button';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import type { LxIconName } from 'cs/base/browser/ui/lxicons/lxicons';
 import { SelectBox } from 'cs/base/browser/ui/selectbox/selectBox';
 import { createSwitchView } from 'cs/base/browser/ui/switch/switch';
+import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
+import type { IHoverService } from 'cs/platform/hover/browser/hover';
 import { ZIndex } from 'cs/platform/layout/browser/zIndexRegistry';
 
-const hoverService = getHoverService();
 export const settingsPopupContextViewLayer = ZIndex.ModalDialog - 2575;
 
 type SettingsSelectOption = {
@@ -56,7 +57,7 @@ export function buildSettingsInput(config: {
   step?: string;
   inputMode?: HTMLInputElement['inputMode'];
   onInput?: (value: string) => void;
-}) {
+}, disposables: DisposableStore) {
   const host = createSettingsElement('div');
   const inputBox = new InputBox(host, undefined, {
     className: `comet-settings-inputbox ${config.className}`.trim(),
@@ -72,10 +73,11 @@ export function buildSettingsInput(config: {
       inputMode: config.inputMode,
     },
   });
+	disposables.add(inputBox);
   setSettingsFocusKey(inputBox.inputElement, config.focusKey);
   const onInput = config.onInput;
   if (onInput) {
-    inputBox.onDidChange((value) => onInput(value));
+	disposables.add(inputBox.onDidChange((value) => onInput(value)));
   }
   return inputBox;
 }
@@ -96,7 +98,7 @@ export function buildSettingsSecretInput(config: {
   onSubmit: (value: string) => void;
   onClear?: () => void;
   className?: string;
-}) {
+}, hoverService: IHoverService, disposables: DisposableStore) {
   const element = createSettingsElement(
     'div',
     config.className ?? 'comet-settings-field comet-settings-llm-api-field comet-settings-llm-span-2',
@@ -117,7 +119,7 @@ export function buildSettingsSecretInput(config: {
     focusKey: config.focusKey,
     placeholder: config.placeholder,
     disabled: config.disabled,
-  });
+  }, disposables);
   const actions = createSettingsElement('div', 'comet-settings-api-key-actions');
   const submitButton = buildSettingsButton({
     label: isConfigured ? config.updateLabel : config.setLabel,
@@ -132,24 +134,26 @@ export function buildSettingsSecretInput(config: {
         submitButton.disabled = true;
       }
     },
-  });
+  }, hoverService, disposables);
 
   title.textContent = config.title;
   subtitle.textContent = config.subtitle ?? '';
   subtitle.hidden = !config.subtitle;
   status.textContent = isConfigured ? config.configuredLabel : config.notConfiguredLabel;
   element.classList.toggle('comet-settings-api-key-empty', !isConfigured);
-  inputBox.onDidChange((value) => {
+	disposables.add(inputBox.onDidChange((value) => {
     pendingValue = value;
     submitButton.disabled = Boolean(config.disabled) || !value.trim();
-  });
-  inputBox.inputElement.addEventListener('keydown', (event) => {
+  }));
+	const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Enter' || submitButton.disabled) {
       return;
     }
     event.preventDefault();
     submitButton.click();
-  });
+	};
+	inputBox.inputElement.addEventListener('keydown', handleKeyDown);
+	disposables.add(toDisposable(() => inputBox.inputElement.removeEventListener('keydown', handleKeyDown)));
   actions.append(submitButton);
   if (isConfigured && config.onClear) {
     actions.append(buildSettingsButton({
@@ -157,7 +161,7 @@ export function buildSettingsSecretInput(config: {
       focusKey: `${config.focusKey}.clear`,
       disabled: config.disabled,
       onClick: config.onClear,
-    }));
+    }, hoverService, disposables));
   }
   inputWrap.append(inputBox.element);
   row.append(inputWrap, actions);
@@ -174,6 +178,7 @@ export function buildSettingsSelect(
   onChange: (value: string) => void,
   contextViewProvider: IContextViewProvider,
   className: string,
+  disposables: DisposableStore,
 ) {
   const selectBox = new SelectBox(
     options.map((option) => ({
@@ -191,9 +196,10 @@ export function buildSettingsSelect(
       contextViewLayer: settingsPopupContextViewLayer,
     },
   );
+	disposables.add(selectBox);
   const host = createSettingsElement('div');
   selectBox.render(host);
-  selectBox.onDidSelect(({ selected }) => onChange(selected));
+	disposables.add(selectBox.onDidSelect(({ selected }) => onChange(selected)));
   setSettingsFocusKey(selectBox.domNode, focusKey);
   return host;
 }
@@ -206,33 +212,22 @@ export function buildSettingsButton(config: {
   title?: string;
   disabled?: boolean;
   onClick: () => void;
-}) {
+}, hoverService: IHoverService, disposables: DisposableStore) {
   const extraClasses = (config.className ?? '').trim();
   const isIconButton = extraClasses.includes('comet-settings-btn-icon');
-  const buttonClassName = [
-    'comet-settings-btn',
-    'comet-btn-base',
-    'comet-btn-secondary',
-    isIconButton ? 'comet-btn-mode-icon comet-btn-sm' : 'comet-btn-md',
-    extraClasses,
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const button = setSettingsFocusKey(
-    createSettingsElement('button', buttonClassName),
-    config.focusKey,
-  );
-  button.type = 'button';
-  if (config.icon) {
-    button.append(createLxIcon(config.icon));
-  } else {
-    button.textContent = config.label;
-  }
-  hoverService.applyHover(button, config.title ?? config.label);
-  button.ariaLabel = config.title ?? config.label;
-  button.disabled = Boolean(config.disabled);
-  button.addEventListener('click', () => config.onClick());
-  return button;
+	const buttonView = disposables.add(new ButtonView({
+		className: ['comet-settings-btn', extraClasses].filter(Boolean).join(' '),
+		variant: 'secondary',
+		size: isIconButton ? 'sm' : 'md',
+		mode: isIconButton ? 'icon' : 'text',
+		children: config.icon ? createLxIcon(config.icon) : config.label,
+		disabled: config.disabled,
+		title: config.title ?? config.label,
+		ariaLabel: config.title ?? config.label,
+		hoverService,
+		onClick: config.onClick,
+	}));
+	return setSettingsFocusKey(buttonView.getElement(), config.focusKey);
 }
 
 export function buildSettingsSwitch(config: {
@@ -241,7 +236,7 @@ export function buildSettingsSwitch(config: {
   disabled?: boolean;
   title?: string;
   onChange: (checked: boolean) => void;
-}) {
+}, disposables: DisposableStore) {
   const view = createSwitchView({
     checked: config.checked,
     disabled: config.disabled,
@@ -250,6 +245,7 @@ export function buildSettingsSwitch(config: {
     animationKey: config.focusKey,
     onChange: config.onChange,
   });
+	disposables.add(view);
   const element = view.getElement();
   setSettingsFocusKey(view.getInputElement(), config.focusKey);
   return element;
@@ -261,7 +257,7 @@ export function buildSettingsCheckbox(config: {
   focusKey: string;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
-}) {
+}, disposables: DisposableStore) {
   const input = setSettingsFocusKey(
     createSettingsElement('input', config.className),
     config.focusKey,
@@ -269,6 +265,8 @@ export function buildSettingsCheckbox(config: {
   input.type = 'checkbox';
   input.checked = config.checked;
   input.disabled = Boolean(config.disabled);
-  input.addEventListener('change', () => config.onChange(input.checked));
+	const handleChange = () => config.onChange(input.checked);
+	input.addEventListener('change', handleChange);
+	disposables.add(toDisposable(() => input.removeEventListener('change', handleChange)));
   return input;
 }

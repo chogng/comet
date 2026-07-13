@@ -3,6 +3,8 @@ import type {
   LibraryStorageMode,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import { DisposableStore } from 'cs/base/common/lifecycle';
+import type { IHoverService } from 'cs/platform/hover/browser/hover';
 import {
   NumberStepper,
   numberStepperDecrementAriaLabel,
@@ -63,7 +65,12 @@ export type LibrarySettingsSectionProps = {
   onMaxConcurrentIndexJobsChange: (value: string) => void;
 };
 
-function renderLibraryReadOnlyField(label: string, value: string, focusKey: string) {
+function renderLibraryReadOnlyField(
+	label: string,
+	value: string,
+	focusKey: string,
+	disposables: DisposableStore,
+) {
   return createSettingsRow({
     title: label,
     control: buildInput({
@@ -71,13 +78,17 @@ function renderLibraryReadOnlyField(label: string, value: string, focusKey: stri
       className: 'comet-settings-input-control',
       focusKey,
       readOnly: true,
-    }).element,
+    }, disposables).element,
     itemClassName: 'comet-settings-library-readonly-item',
     controlClassName: 'comet-settings-library-readonly-control',
   });
 }
 
-function renderLibraryDownloadDirectoryField(props: LibrarySettingsSectionProps) {
+function renderLibraryDownloadDirectoryField(
+	props: LibrarySettingsSectionProps,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
+) {
   const effectiveDownloadDir =
     props.knowledgeBasePdfDownloadDir.trim() || props.labels.systemDownloads;
   return createSettingsRow({
@@ -89,15 +100,18 @@ function renderLibraryDownloadDirectoryField(props: LibrarySettingsSectionProps)
       title: props.labels.chooseDirectory,
       disabled: !props.desktopRuntime || props.isSettingsSaving,
       onClick: props.onChooseKnowledgeBasePdfDownloadDir,
-    }),
+    }, hoverService, disposables),
     itemClassName: 'comet-settings-library-download-directory-item',
     controlClassName: 'comet-settings-library-directory-control',
   });
 }
 
-function renderLibraryMaxConcurrentJobsField(props: LibrarySettingsSectionProps) {
+function renderLibraryMaxConcurrentJobsField(
+	props: LibrarySettingsSectionProps,
+	disposables: DisposableStore,
+) {
   const jobsWrap = el('div', 'comet-settings-limit-input-wrap');
-  const maxConcurrentJobsInput = new NumberStepper({
+  const maxConcurrentJobsInput = disposables.add(new NumberStepper({
     value: props.maxConcurrentIndexJobs,
     className: 'comet-settings-number-stepper comet-settings-limit-input',
 	min: String(minKnowledgeBaseConcurrentIndexJobs),
@@ -108,7 +122,7 @@ function renderLibraryMaxConcurrentJobsField(props: LibrarySettingsSectionProps)
     incrementAriaLabel: numberStepperIncrementAriaLabel,
     onDidChange: props.onMaxConcurrentIndexJobsChange,
     disabled: props.isSettingsSaving,
-  });
+  }));
   setSettingsFocusKey(maxConcurrentJobsInput.inputElement, 'settings.library.maxJobs');
   jobsWrap.append(maxConcurrentJobsInput.element);
   return createSettingsRow({
@@ -179,7 +193,12 @@ function renderLibraryRecentDocuments(props: LibrarySettingsSectionProps) {
   });
 }
 
-function renderLibraryStorageSection(props: LibrarySettingsSectionProps, effectiveManagedDirectory: string) {
+function renderLibraryStorageSection(
+	props: LibrarySettingsSectionProps,
+	effectiveManagedDirectory: string,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
+) {
   const usesManagedCopy = props.libraryStorageMode === 'managed-copy';
   const libraryDirectoryDescription = usesManagedCopy
     ? `${props.labels.settingsLibraryDirectoryHint} ${props.labels.currentDir} ${effectiveManagedDirectory || '-'}`
@@ -197,7 +216,7 @@ function renderLibraryStorageSection(props: LibrarySettingsSectionProps, effecti
       control: buildSelect([
         { value: 'linked-original', label: props.labels.settingsLibraryStorageModeLinkedOriginal },
         { value: 'managed-copy', label: props.labels.settingsLibraryStorageModeManagedCopy },
-      ], props.libraryStorageMode, 'settings.library.storage', value => props.onLibraryStorageModeChange(value as LibraryStorageMode), props.contextViewProvider, 'comet-settings-llm-provider'),
+      ], props.libraryStorageMode, 'settings.library.storage', value => props.onLibraryStorageModeChange(value as LibraryStorageMode), props.contextViewProvider, 'comet-settings-llm-provider', disposables),
     }),
   );
 
@@ -211,18 +230,22 @@ function renderLibraryStorageSection(props: LibrarySettingsSectionProps, effecti
         title: props.labels.chooseDirectory,
         disabled: !props.desktopRuntime || props.isSettingsSaving || !usesManagedCopy,
         onClick: props.onChooseLibraryDirectory,
-      }),
+      }, hoverService, disposables),
       itemClassName: 'comet-settings-library-directory-item',
       controlClassName: 'comet-settings-library-directory-control',
     }),
-    renderLibraryReadOnlyField(props.labels.settingsLibraryDbFile, props.libraryDbFile, 'settings.library.db'),
-    renderLibraryReadOnlyField(props.labels.settingsLibraryFilesDir, effectiveManagedDirectory, 'settings.library.filesDir'),
-    renderLibraryReadOnlyField(props.labels.settingsLibraryCacheDir, props.ragCacheDir, 'settings.library.cacheDir'),
+    renderLibraryReadOnlyField(props.labels.settingsLibraryDbFile, props.libraryDbFile, 'settings.library.db', disposables),
+    renderLibraryReadOnlyField(props.labels.settingsLibraryFilesDir, effectiveManagedDirectory, 'settings.library.filesDir', disposables),
+    renderLibraryReadOnlyField(props.labels.settingsLibraryCacheDir, props.ragCacheDir, 'settings.library.cacheDir', disposables),
   );
   return section.element;
 }
 
-function renderLibraryIndexingSection(props: LibrarySettingsSectionProps) {
+function renderLibraryIndexingSection(
+	props: LibrarySettingsSectionProps,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
+) {
   const section = createSettingsSection({
     title: props.labels.settingsNavigationKnowledgeBase,
     titleClassName: 'comet-settings-section-title',
@@ -240,7 +263,7 @@ function renderLibraryIndexingSection(props: LibrarySettingsSectionProps) {
         disabled: props.isSettingsSaving,
         title: props.labels.settingsKnowledgeBaseMode,
         onChange: props.onKnowledgeBaseEnabledChange,
-      }),
+      }, disposables),
     }),
     createSettingsRow({
       title: props.labels.settingsKnowledgeBaseAutoIndex,
@@ -251,28 +274,32 @@ function renderLibraryIndexingSection(props: LibrarySettingsSectionProps) {
         disabled: props.isSettingsSaving || !props.knowledgeBaseEnabled,
         title: props.labels.settingsKnowledgeBaseAutoIndex,
         onChange: props.onAutoIndexDownloadedPdfChange,
-      }),
+      }, disposables),
     }),
   );
   if (!props.knowledgeBaseEnabled) {
     section.element.append(buildHint(props.labels.settingsKnowledgeBaseModeDisabledHint, 'comet-settings-hint comet-settings-library-mode-note'));
   }
   section.list.append(
-    renderLibraryDownloadDirectoryField(props),
-    renderLibraryMaxConcurrentJobsField(props),
+    renderLibraryDownloadDirectoryField(props, hoverService, disposables),
+    renderLibraryMaxConcurrentJobsField(props, disposables),
     renderLibraryStats(props),
     renderLibraryRecentDocuments(props),
   );
   return section.element;
 }
 
-export function renderLibrarySettingsSection(props: LibrarySettingsSectionProps) {
+export function renderLibrarySettingsSection(
+	props: LibrarySettingsSectionProps,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
+) {
   const field = el('div', 'comet-settings-field comet-settings-library-sections');
   const effectiveManagedDirectory = props.libraryDirectory.trim() || props.defaultManagedDirectory;
 
   field.append(
-    renderLibraryStorageSection(props, effectiveManagedDirectory),
-    renderLibraryIndexingSection(props),
+    renderLibraryStorageSection(props, effectiveManagedDirectory, hoverService, disposables),
+    renderLibraryIndexingSection(props, hoverService, disposables),
   );
   return field;
 }

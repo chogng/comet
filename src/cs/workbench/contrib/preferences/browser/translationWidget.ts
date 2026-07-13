@@ -3,7 +3,9 @@ import type {
   TranslationProviderId,
   TranslationProviderSettings,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
+import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import type { IContextViewProvider } from 'cs/base/browser/ui/contextview/contextview';
+import type { IHoverService } from 'cs/platform/hover/browser/hover';
 import type { LocaleMessages } from 'language/locales';
 import {
   createSettingsSection,
@@ -50,11 +52,16 @@ function createCustomTranslationModelOptions(models: readonly string[]) {
   }));
 }
 
-export class TranslationSettingsSection {
+export class TranslationSettingsSection extends Disposable {
   private props: TranslationSettingsSectionProps;
   private readonly element = el('div', 'comet-settings-field');
+  private readonly renderDisposables = this._register(new DisposableStore());
 
-  constructor(props: TranslationSettingsSectionProps) {
+	constructor(
+		props: TranslationSettingsSectionProps,
+		private readonly hoverService: IHoverService,
+	) {
+		super();
     this.props = props;
     this.setProps(props);
   }
@@ -65,8 +72,14 @@ export class TranslationSettingsSection {
 
   setProps(props: TranslationSettingsSectionProps) {
     this.props = props;
+	this.renderDisposables.clear();
     this.element.replaceChildren(this.render());
   }
+
+	override dispose() {
+		super.dispose();
+		this.element.replaceChildren();
+	}
 
   private render() {
     const section = createSettingsSection({
@@ -86,6 +99,7 @@ export class TranslationSettingsSection {
       (value) => this.props.onActiveTranslationProviderChange(value as TranslationProviderId),
       this.props.contextViewProvider,
       'comet-settings-llm-provider',
+	  this.renderDisposables,
     );
     section.list.append(
       createSettingsRow({
@@ -132,7 +146,7 @@ export class TranslationSettingsSection {
       onSubmit: (value) => this.props.onTranslationProviderApiKeyChange(provider, value),
       onClear: () => this.props.onTranslationProviderApiKeyChange(provider, ''),
       className: 'comet-settings-field comet-settings-llm-api-field comet-settings-translation-ai-field comet-settings-llm-span-2',
-    });
+    }, this.hoverService, this.renderDisposables);
   }
 
   private renderOpenAICompatibleRows() {
@@ -143,7 +157,7 @@ export class TranslationSettingsSection {
       focusKey: 'settings.translation.openai.baseUrl',
       placeholder: 'https://api.openai.com/v1',
       onInput: (value) => this.props.onTranslationProviderBaseUrlChange('openai-compatible', value),
-    }).element;
+    }, this.renderDisposables).element;
 
     return [
       createSettingsRow({
@@ -163,7 +177,7 @@ export class TranslationSettingsSection {
       className: 'comet-settings-input-control comet-settings-translation-base-url-input',
       focusKey: 'settings.translation.custom.baseUrl',
       onInput: (value) => this.props.onTranslationProviderBaseUrlChange('custom', value),
-    }).element;
+    }, this.renderDisposables).element;
     const modelControl = el('div', 'comet-settings-translation-model-action-control');
     if (provider.models.length > 0) {
       modelControl.append(buildSelect(
@@ -173,6 +187,7 @@ export class TranslationSettingsSection {
         (value) => this.props.onTranslationProviderModelChange('custom', value),
         this.props.contextViewProvider,
         'comet-settings-translation-model-input',
+		this.renderDisposables,
       ));
     } else {
       modelControl.append(buildInput({
@@ -180,7 +195,7 @@ export class TranslationSettingsSection {
         className: 'comet-settings-input-control comet-settings-translation-model-input',
         focusKey: 'settings.translation.custom.model',
         onInput: (value) => this.props.onTranslationProviderModelChange('custom', value),
-      }).element);
+      }, this.renderDisposables).element);
     }
     modelControl.append(buildButton({
       label: this.props.labels.settingsTranslationFetchModels,
@@ -188,7 +203,7 @@ export class TranslationSettingsSection {
       title: this.props.labels.settingsTranslationFetchModels,
       disabled: this.props.isSettingsSaving || this.props.isLoadingTranslationModels,
       onClick: this.props.onFetchTranslationModels,
-    }));
+    }, this.hoverService, this.renderDisposables));
 
     return [
       createSettingsRow({
@@ -230,6 +245,7 @@ export class TranslationSettingsSection {
         (value) => this.props.onGlmModelChange(value),
         this.props.contextViewProvider,
         'comet-settings-llm-provider',
+		this.renderDisposables,
       ),
       itemClassName: 'comet-settings-translation-model-item',
       controlClassName: 'comet-settings-translation-model-control',
@@ -257,7 +273,7 @@ export class TranslationSettingsSection {
       title: this.props.labels.settingsTranslationTestConnection,
       disabled: this.props.isSettingsSaving || this.props.isTestingTranslationConnection,
       onClick: this.props.onTestTranslationConnection,
-    }));
+    }, this.hoverService, this.renderDisposables));
 
     return createSettingsRow({
       title: '',
@@ -293,6 +309,7 @@ export class TranslationSettingsSection {
         (value) => this.props.onTranslationProviderModelChange('openai-compatible', value),
         this.props.contextViewProvider,
         'comet-settings-llm-provider',
+		this.renderDisposables,
       ),
       itemClassName: 'comet-settings-translation-model-item',
       controlClassName: 'comet-settings-translation-model-control',

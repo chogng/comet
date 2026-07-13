@@ -209,6 +209,23 @@ test('Settings view owns its service state without a shell Props bus', () => {
 	assert.match(settingsEditor, /@IWorkbenchLanguageService private readonly languageService/);
 	assert.match(settingsEditor, /@INativeHostService private readonly nativeHostService/);
 	assert.match(settingsEditor, /@IContextViewService private readonly contextViewService/);
+	assert.match(settingsEditor, /@IHoverService private readonly hoverService/);
+	const settingsUiPrimitives = readSource(
+		'src/cs/workbench/contrib/preferences/browser/settingsUiPrimitives.ts',
+	);
+	assert.doesNotMatch(settingsUiPrimitives, /getHoverService/);
+	assert.match(settingsUiPrimitives, /new ButtonView/);
+	assert.match(settingsUiPrimitives, /disposables\.add\(selectBox\)/);
+	const llmWidget = readSource(
+		'src/cs/workbench/contrib/preferences/browser/llmWidget.ts',
+	);
+	const translationWidget = readSource(
+		'src/cs/workbench/contrib/preferences/browser/translationWidget.ts',
+	);
+	assert.doesNotMatch(llmWidget, /getHoverService/);
+	assert.match(llmWidget, /class LlmModelSettingsSection extends Disposable/);
+	assert.match(llmWidget, /class LlmApiKeySettingsSection extends Disposable/);
+	assert.match(translationWidget, /class TranslationSettingsSection extends Disposable/);
 	const settingsTypes = readSource(
 		'src/cs/workbench/contrib/preferences/browser/settingsTypes.ts',
 	);

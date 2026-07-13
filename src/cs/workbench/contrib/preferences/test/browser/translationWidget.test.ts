@@ -10,6 +10,7 @@ import type { TranslationSettingsSectionProps } from 'cs/workbench/contrib/prefe
 import { createDefaultLlmSettings } from 'cs/workbench/services/llm/config';
 import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { locales } from 'language/locales';
 
 let cleanupDomEnvironment: (() => void) | null = null;
@@ -69,7 +70,7 @@ test('TranslationSettingsSection renders fetched custom models as select options
 
   const widget = new TranslationSettingsSection(createTranslationWidgetProps({
     translationProviders,
-  }));
+  }), getHoverService());
 
   const modelSelect = widget
     .getElement()
@@ -82,4 +83,38 @@ test('TranslationSettingsSection renders fetched custom models as select options
   );
   assert.equal(modelSelect.value, 'step-3.7-flash');
   assert.equal(widget.getElement().querySelector('datalist'), null);
+	widget.dispose();
+});
+
+test('TranslationSettingsSection disposes controls replaced by setProps and final disposal', () => {
+	const baseUrlChanges: string[] = [];
+	const props = createTranslationWidgetProps({
+		onTranslationProviderBaseUrlChange: (_provider, value) => {
+			baseUrlChanges.push(value);
+		},
+	});
+	const widget = new TranslationSettingsSection(props, getHoverService());
+	const oldInput = widget.getElement().querySelector<HTMLInputElement>(
+		'[data-focus-key="settings.translation.custom.baseUrl"]',
+	);
+	assert(oldInput);
+
+	widget.setProps({ ...props, isSettingsSaving: true });
+	assert.equal(widget.getElement().contains(oldInput), false);
+	oldInput.value = 'https://stale.example.com';
+	oldInput.dispatchEvent(new Event('input', { bubbles: true }));
+	assert.deepEqual(baseUrlChanges, []);
+
+	const currentInput = widget.getElement().querySelector<HTMLInputElement>(
+		'[data-focus-key="settings.translation.custom.baseUrl"]',
+	);
+	assert(currentInput);
+	currentInput.value = 'https://current.example.com';
+	currentInput.dispatchEvent(new Event('input', { bubbles: true }));
+	assert.deepEqual(baseUrlChanges, ['https://current.example.com']);
+
+	widget.dispose();
+	currentInput.value = 'https://disposed.example.com';
+	currentInput.dispatchEvent(new Event('input', { bubbles: true }));
+	assert.deepEqual(baseUrlChanges, ['https://current.example.com']);
 });

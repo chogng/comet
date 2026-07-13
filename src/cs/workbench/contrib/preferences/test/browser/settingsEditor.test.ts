@@ -16,6 +16,7 @@ import { InstantiationService } from 'cs/platform/instantiation/common/instantia
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
+import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { getWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
@@ -121,7 +122,9 @@ test('SettingsPartView owns service state and preserves local search state acros
 		languageService,
 		nativeHostService,
 		dropdownServices.contextViewProvider,
+		getHoverService(),
 	);
+	let viewDisposed = false;
 
 	try {
 		const element = view.getElement();
@@ -172,6 +175,15 @@ test('SettingsPartView owns service state and preserves local search state acros
 		const generalNavigationButton = element.querySelector<HTMLButtonElement>('[data-page-target="general"]');
 		assert(generalNavigationButton);
 		generalNavigationButton.click();
+		const startupLayoutSelect = element.querySelector<HTMLSelectElement>(
+			'select[data-focus-key="settings.general.layout.startupLayout"]',
+		);
+		assert(startupLayoutSelect);
+		startupLayoutSelect.click();
+		assert.notEqual(
+			dropdownServices.contextViewProvider.getContextViewElement().style.display,
+			'none',
+		);
 		const statusbarInput = element.querySelector<HTMLInputElement>(
 			'input[data-focus-key="settings.general.layout.statusbarVisible"]',
 		);
@@ -189,6 +201,37 @@ test('SettingsPartView owns service state and preserves local search state acros
 		assert(updatedStatusbarInput);
 		assert.notEqual(updatedStatusbarInput, statusbarInput);
 		assert.equal(document.activeElement, updatedStatusbarInput);
+		assert.equal(
+			dropdownServices.contextViewProvider.getContextViewElement().style.display,
+			'none',
+		);
+		const statusbarVisibleAfterUpdate = settingsModel.getSnapshot().statusbarVisible;
+		statusbarInput.checked = !statusbarVisibleAfterUpdate;
+		statusbarInput.dispatchEvent(new Event('change', { bubbles: true }));
+		assert.equal(
+			settingsModel.getSnapshot().statusbarVisible,
+			statusbarVisibleAfterUpdate,
+		);
+
+		const textEditorNavigationButton = element.querySelector<HTMLButtonElement>('[data-page-target="textEditor"]');
+		assert(textEditorNavigationButton);
+		textEditorNavigationButton.click();
+		const previousLineHeightInput = element.querySelector<HTMLInputElement>(
+			'[data-focus-key="settings.textEditor.lineHeight"]',
+		);
+		assert(previousLineHeightInput);
+		const previousDraftStyle = editorDraftStyleService.getSnapshot().defaultBodyStyle;
+		const nextLineHeight = previousDraftStyle.lineHeight + 0.1;
+		editorDraftStyleService.setDefaultBodyStyle({
+			...previousDraftStyle,
+			lineHeight: nextLineHeight,
+		});
+		const currentLineHeightInput = element.querySelector<HTMLInputElement>(
+			'[data-focus-key="settings.textEditor.lineHeight"]',
+		);
+		assert(currentLineHeightInput);
+		assert.notEqual(currentLineHeightInput, previousLineHeightInput);
+		assert.equal(currentLineHeightInput.value, String(nextLineHeight));
 
 		const literatureNavigationButton = element.querySelector<HTMLButtonElement>('[data-page-target="literature"]');
 		assert(literatureNavigationButton);
@@ -209,8 +252,43 @@ test('SettingsPartView owns service state and preserves local search state acros
 			element.querySelector<HTMLElement>('.comet-settings-supported-sources-table')?.hidden,
 			false,
 		);
-	} finally {
+		supportedSourcesToggle.click();
+		assert.equal(
+			element.querySelector('button[data-focus-key="settings.supportedSources.toggle"]'),
+			updatedSupportedSourcesToggle,
+		);
+		assert.equal(
+			element.querySelector<HTMLElement>('.comet-settings-supported-sources-table')?.hidden,
+			false,
+		);
+
+		const modelNavigationButton = element.querySelector<HTMLButtonElement>('[data-page-target="model"]');
+		assert(modelNavigationButton);
+		modelNavigationButton.click();
+		const modelSearchInput = element.querySelector<HTMLInputElement>(
+			'[data-focus-key="settings.llm.modelSearch"]',
+		);
+		const modelSwitchInput = element.querySelector<HTMLInputElement>(
+			'.comet-settings-model-list-switch .comet-switch-input',
+		);
+		assert(modelSearchInput);
+		assert(modelSwitchInput);
+		const llmProvidersBeforeDispose = JSON.stringify(settingsModel.getSnapshot().llmProviders);
+		const searchPlaceholderBeforeDispose = searchInput.placeholder;
+
 		view.dispose();
+		viewDisposed = true;
+		modelSwitchInput.checked = !modelSwitchInput.checked;
+		modelSwitchInput.dispatchEvent(new Event('change', { bubbles: true }));
+		settingsModel.setUseMica(!settingsModel.getSnapshot().useMica);
+		localeService.applyLocale('zh');
+		assert.equal(JSON.stringify(settingsModel.getSnapshot().llmProviders), llmProvidersBeforeDispose);
+		assert.equal(searchInput.placeholder, searchPlaceholderBeforeDispose);
+		assert.equal(element.childElementCount, 0);
+	} finally {
+		if (!viewDisposed) {
+			view.dispose();
+		}
 		settingsController.dispose();
 		fetchService.dispose();
 		journalRegistration.dispose();

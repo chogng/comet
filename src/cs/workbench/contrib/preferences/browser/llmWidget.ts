@@ -1,8 +1,9 @@
 import { createActionBarView } from 'cs/base/browser/ui/actionbar/actionbar';
 import { createSwitchView } from 'cs/base/browser/ui/switch/switch';
-import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { InputBox } from 'cs/base/browser/ui/inputbox/inputBox';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
+import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
+import type { IHoverService } from 'cs/platform/hover/browser/hover';
 import type { LlmProviderId, LlmProviderSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import type { LocaleMessages } from 'language/locales';
 import {
@@ -22,8 +23,6 @@ import {
   type LlmModelOption,
   type LlmModelDefinition,
 } from 'cs/workbench/services/llm/registry';
-
-const hoverService = getHoverService();
 
 function normalizeModelLabel(value: string) {
   return value.replace(/[\u2010-\u2015\u2212]/g, '-');
@@ -88,6 +87,7 @@ type LlmModelListEntry = {
 type ModelListItemView = {
   element: HTMLElement;
   update: (entry: LlmModelListEntry) => void;
+	dispose: () => void;
 };
 
 type ModelOrderState =
@@ -97,7 +97,7 @@ type ModelOrderState =
 
 const COLLAPSED_MODEL_COUNT = 8;
 
-export class LlmModelSettingsSection {
+export class LlmModelSettingsSection extends Disposable {
   private props: LlmSettingsSectionProps;
   private readonly element = el('div', 'comet-settings-llm-settings');
   private readonly modelSection = createSettingsSection({
@@ -107,34 +107,41 @@ export class LlmModelSettingsSection {
     listClassName: 'comet-settings-llm-model-list',
   });
   private readonly maxContextSwitchRowControl = el('div', 'comet-settings-llm-max-context-control');
-  private readonly maxContextSwitch = createSwitchView();
+  private readonly maxContextSwitch = this._register(createSwitchView());
   private readonly modelPanel = el('div', 'comet-settings-model-panel');
   private readonly modelSearchRow = el('div', 'comet-settings-model-search-row');
   private readonly modelSearchInputHost = el('div', 'comet-settings-model-search-input-host');
-  private readonly modelSearchActions = this.createModelSearchActions();
-  private readonly modelSearchInputBox = new InputBox(this.modelSearchInputHost, undefined, {
+  private readonly modelSearchActions: ReturnType<typeof createActionBarView>;
+  private readonly modelSearchInputBox = this._register(new InputBox(this.modelSearchInputHost, undefined, {
     className: 'comet-settings-model-search-input',
     value: '',
     placeholder: '',
-  });
+  }));
   private readonly modelSearchInput = setFocusKey(
     this.modelSearchInputBox.inputElement,
     'settings.llm.modelSearch',
   );
   private readonly modelList = el('div', 'comet-settings-model-list');
   private readonly modelListItemViews = new Map<string, ModelListItemView>();
+	private readonly modelListRenderDisposables = this._register(new DisposableStore());
   private modelOrderState: ModelOrderState = { phase: 'uninitialized' };
   private modelQuery = '';
   private isModelListExpanded = false;
 
-  constructor(props: LlmSettingsSectionProps) {
+	constructor(
+		props: LlmSettingsSectionProps,
+		private readonly hoverService: IHoverService,
+	) {
+		super();
     this.props = props;
-    this.modelSearchInputBox.onDidChange((value) => {
+	this.modelSearchActions = this._register(this.createModelSearchActions());
+	this._register(this.modelSearchInputBox.onDidChange((value) => {
       this.modelQuery = value;
       this.renderModelList();
-    });
+    }));
     this.modelSearchInput.spellcheck = false;
     this.maxContextSwitchRowControl.append(this.maxContextSwitch.getElement());
+	setFocusKey(this.maxContextSwitch.getInputElement(), 'settings.llm.maxContext');
     this.modelSearchRow.append(this.modelSearchInputHost, this.modelSearchActions.getElement());
     this.modelPanel.append(this.modelSearchRow, this.modelList);
     this.element.append(this.modelSection.element);
@@ -144,6 +151,15 @@ export class LlmModelSettingsSection {
   getElement() {
     return this.element;
   }
+
+	override dispose() {
+		for (const view of this.modelListItemViews.values()) {
+			view.dispose();
+		}
+		this.modelListItemViews.clear();
+		super.dispose();
+		this.element.replaceChildren();
+	}
 
   enterModelPage() {
     const entries = this.getRawModelListEntries();
@@ -200,6 +216,7 @@ export class LlmModelSettingsSection {
     return createActionBarView({
       className: 'comet-settings-model-search-actions',
       ariaRole: 'group',
+	  hoverService: this.hoverService,
       items: [
         {
           label: 'Refresh',
@@ -347,8 +364,11 @@ export class LlmModelSettingsSection {
   }
 
   private renderModelList() {
+	this.modelListRenderDisposables.clear();
     const query = this.modelQuery.trim().toLowerCase();
-    const entries = this.getModelListEntries().filter((entry) => {
+	const allEntries = this.getModelListEntries();
+	this.pruneModelListItemViews(allEntries);
+    const entries = allEntries.filter((entry) => {
       if (!query) {
         return true;
       }
@@ -387,27 +407,36 @@ export class LlmModelSettingsSection {
     }
 
     let currentEntry = entry;
+	const disposables = new DisposableStore();
     const item = el(
       'div',
       'comet-settings-model-list-item',
     );
     const nameButton = el('button', 'comet-settings-model-list-button');
     nameButton.type = 'button';
-    nameButton.addEventListener('click', () => {
+	const handleNameClick = () => {
       if (this.props.activeLlmProvider !== currentEntry.providerId) {
         this.props.onActiveLlmProviderChange(currentEntry.providerId);
       }
       this.props.onLlmProviderModelChange(currentEntry.providerId, currentEntry.model.id);
-    });
+	};
+	nameButton.addEventListener('click', handleNameClick);
+	disposables.add(toDisposable(() => nameButton.removeEventListener('click', handleNameClick)));
 
     const titleRow = el('span', 'comet-settings-model-list-title-row');
     const name = el('span', 'comet-settings-model-list-name');
     nameButton.append(titleRow);
 
-    const switchView = createSwitchView();
+    const switchView = disposables.add(createSwitchView());
     const switchElement = switchView.getElement();
-    switchElement.addEventListener('click', (event) => event.stopPropagation());
-    switchElement.addEventListener('mousedown', (event) => event.stopPropagation());
+	const stopPropagation = (event: Event) => event.stopPropagation();
+	switchElement.addEventListener('click', stopPropagation);
+	switchElement.addEventListener('mousedown', stopPropagation);
+	disposables.add(toDisposable(() => {
+		switchElement.removeEventListener('click', stopPropagation);
+		switchElement.removeEventListener('mousedown', stopPropagation);
+	}));
+	const nameHover = disposables.add(this.hoverService.applyHover(nameButton, ''));
 
     const update = (nextEntry: LlmModelListEntry) => {
       currentEntry = nextEntry;
@@ -430,7 +459,7 @@ export class LlmModelSettingsSection {
       item.dataset.modelEntryKey = this.getModelEntryKey(nextEntry);
 
       nameButton.disabled = !isEnabled;
-      hoverService.applyHover(nameButton, nextEntry.model.description || displayLabel);
+	  nameHover.update(nextEntry.model.description || displayLabel);
       name.textContent = displayLabel;
       titleRow.replaceChildren(name);
 
@@ -464,6 +493,10 @@ export class LlmModelSettingsSection {
     const view: ModelListItemView = {
       element: item,
       update,
+	  dispose: () => {
+		  disposables.dispose();
+		  item.replaceChildren();
+	  },
     };
     this.modelListItemViews.set(entryKey, view);
     return view;
@@ -482,13 +515,26 @@ export class LlmModelSettingsSection {
     const button = el('button', 'comet-settings-model-list-toggle-button');
     button.type = 'button';
     button.textContent = isCollapsed ? 'View all models' : 'Collapse models';
-    button.addEventListener('click', () => {
+	const handleClick = () => {
       this.isModelListExpanded = !this.isModelListExpanded;
       this.renderModelList();
-    });
+	};
+	button.addEventListener('click', handleClick);
+	this.modelListRenderDisposables.add(toDisposable(() => button.removeEventListener('click', handleClick)));
     item.append(button);
     return item;
   }
+
+	private pruneModelListItemViews(entries: readonly LlmModelListEntry[]) {
+		const entryKeys = new Set(entries.map(entry => this.getModelEntryKey(entry)));
+		for (const [entryKey, view] of this.modelListItemViews) {
+			if (entryKeys.has(entryKey)) {
+				continue;
+			}
+			view.dispose();
+			this.modelListItemViews.delete(entryKey);
+		}
+	}
 
   private syncModelListNodes(nodes: readonly HTMLElement[]) {
     const desiredNodes = new Set(nodes);
@@ -504,9 +550,10 @@ export class LlmModelSettingsSection {
   }
 }
 
-export class LlmApiKeySettingsSection {
+export class LlmApiKeySettingsSection extends Disposable {
   private props: LlmSettingsSectionProps;
   private readonly element = el('div', 'comet-settings-llm-settings');
+	private readonly renderDisposables = this._register(new DisposableStore());
   private readonly apiKeySection = createSettingsSection({
     sectionClassName: 'comet-settings-llm-api-section',
     panelClassName: 'comet-settings-llm-api-block-panel',
@@ -514,7 +561,11 @@ export class LlmApiKeySettingsSection {
   });
   private readonly apiKeyControl = el('div', 'comet-settings-llm-api-key-control');
 
-  constructor(props: LlmSettingsSectionProps) {
+	constructor(
+		props: LlmSettingsSectionProps,
+		private readonly hoverService: IHoverService,
+	) {
+		super();
     this.props = props;
     this.element.append(this.apiKeySection.element);
     this.setProps(props);
@@ -524,8 +575,14 @@ export class LlmApiKeySettingsSection {
     return this.element;
   }
 
+	override dispose() {
+		super.dispose();
+		this.element.replaceChildren();
+	}
+
   setProps(props: LlmSettingsSectionProps) {
     this.props = props;
+	this.renderDisposables.clear();
     const provider = this.props.llmProviders[this.props.activeLlmProvider];
     this.apiKeyControl.replaceChildren(buildSecretInput({
       title: this.props.labels.settingsLlmApiKey,
@@ -545,7 +602,7 @@ export class LlmApiKeySettingsSection {
       onClear: () =>
         this.props.onLlmProviderApiKeyChange(this.props.activeLlmProvider, ''),
       className: 'comet-settings-field comet-settings-llm-api-field',
-    }));
+    }, this.hoverService, this.renderDisposables));
     this.apiKeySection.list.replaceChildren(
       createSettingsRow({
         title: '',

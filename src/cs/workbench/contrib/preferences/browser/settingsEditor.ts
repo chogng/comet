@@ -12,6 +12,7 @@ import {
 	type IEditorDraftStyleService as EditorDraftStyleService,
 } from 'cs/editor/browser/text/editorDraftStyleService';
 import { IContextViewService } from 'cs/platform/contextview/browser/contextView';
+import { IHoverService } from 'cs/platform/hover/browser/hover';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import {
 	renderLibrarySettingsSection,
@@ -113,6 +114,7 @@ export class SettingsPartView {
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 		@INativeHostService private readonly nativeHostService: INativeHostService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
+		@IHoverService private readonly hoverService: IHoverService,
 	) {
 		this.supportedSources = this.fetchService.getJournals();
 		this.state = this.createState();
@@ -126,6 +128,7 @@ export class SettingsPartView {
 			noResultsElement: this.noResultsHint,
 			sectionRenderers: this.createSectionRenderers(),
 			settingsController: this.settingsController,
+			hoverService: this.hoverService,
 		});
 		this.tocTree = new TOCTree(this.tocTreeModel, {
 			title: this.state.labels.settingsTitle,
@@ -134,9 +137,12 @@ export class SettingsPartView {
 		});
 		this.initializeSearch();
 		const llmSectionProps = this.getLlmSectionProps();
-		this.llmModelSection = new LlmModelSettingsSection(llmSectionProps);
-		this.llmApiKeySection = new LlmApiKeySettingsSection(llmSectionProps);
-		this.translationSection = new TranslationSettingsSection(this.getTranslationSectionProps());
+		this.llmModelSection = this.disposables.add(new LlmModelSettingsSection(llmSectionProps, this.hoverService));
+		this.llmApiKeySection = this.disposables.add(new LlmApiKeySettingsSection(llmSectionProps, this.hoverService));
+		this.translationSection = this.disposables.add(new TranslationSettingsSection(
+			this.getTranslationSectionProps(),
+			this.hoverService,
+		));
 		this.navigation.append(this.search, this.tocTree.getElement());
 		this.container.append(this.topbar, this.contentScrollable.getDomNode());
 		this.element.append(this.navigation, this.container);
@@ -342,13 +348,13 @@ export class SettingsPartView {
 
 	private createSectionRenderers(): SettingsSectionRenderers {
 		return {
-			locale: state => renderLocaleSection(state, this.contextViewService, this.settingsController),
-			layout: state => renderLayoutSection(state, this.contextViewService, this.settingsController),
-			browser: state => renderBrowserSection(state, this.contextViewService, this.settingsController),
-			notifications: state => renderNotificationsSection(state, this.settingsController),
-			appearance: state => renderAppearanceSection(state, this.contextViewService, this.settingsController),
-			configPath: state => renderConfigPathSection(state, this.settingsController),
-			textEditor: state => renderTextEditorSection(state, this.contextViewService, this.settingsController),
+			locale: (state, disposables) => renderLocaleSection(state, this.contextViewService, this.settingsController, disposables),
+			layout: (state, disposables) => renderLayoutSection(state, this.contextViewService, this.settingsController, disposables),
+			browser: (state, disposables) => renderBrowserSection(state, this.contextViewService, this.settingsController, disposables),
+			notifications: (state, disposables) => renderNotificationsSection(state, this.settingsController, disposables),
+			appearance: (state, disposables) => renderAppearanceSection(state, this.contextViewService, this.settingsController, disposables),
+			configPath: (state, disposables) => renderConfigPathSection(state, this.settingsController, this.hoverService, disposables),
+			textEditor: (state, disposables) => renderTextEditorSection(state, this.contextViewService, this.settingsController, disposables),
 			llmModel: () => {
 				this.updateLlmModelSection();
 				return this.llmModelSection.getElement();
@@ -361,10 +367,10 @@ export class SettingsPartView {
 				this.updateTranslationSection();
 				return this.translationSection.getElement();
 			},
-			supportedSources: state => renderSupportedSourcesSection(state, this.handleToggleSupportedSources),
-			knowledgeBaseLibrary: () => renderLibrarySettingsSection(this.getLibrarySectionProps()),
-			knowledgeBaseRag: () => renderRagSettingsSection(this.getRagSectionProps()),
-			downloadDirectory: state => renderDownloadDirectorySection(state, this.settingsController),
+			supportedSources: (state, disposables) => renderSupportedSourcesSection(state, this.handleToggleSupportedSources, this.hoverService, disposables),
+			knowledgeBaseLibrary: (_state, disposables) => renderLibrarySettingsSection(this.getLibrarySectionProps(), this.hoverService, disposables),
+			knowledgeBaseRag: (_state, disposables) => renderRagSettingsSection(this.getRagSectionProps(), this.hoverService, disposables),
+			downloadDirectory: (state, disposables) => renderDownloadDirectorySection(state, this.settingsController, this.hoverService, disposables),
 		};
 	}
 

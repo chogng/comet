@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
+import { DisposableStore, MutableDisposable } from 'cs/base/common/lifecycle';
+import type { IHoverService } from 'cs/platform/hover/browser/hover';
 import {
 	createSettingsSectionMap,
 	type SettingsSectionMap,
@@ -23,7 +25,10 @@ import type { SettingsController } from 'cs/workbench/contrib/preferences/browse
 import { createDefaultKnowledgeBaseSettings } from 'cs/workbench/services/knowledgeBase/config';
 import { createDefaultRagSettings } from 'cs/workbench/services/rag/config';
 
-export type SettingsSectionRenderer = (state: SettingsViewState) => HTMLElement;
+export type SettingsSectionRenderer = (
+	state: SettingsViewState,
+	disposables: DisposableStore,
+) => HTMLElement;
 
 export type SettingsSectionRenderers = Readonly<Record<SettingsSectionId, SettingsSectionRenderer>>;
 
@@ -35,6 +40,7 @@ type SettingsTreeOptions = {
 	readonly noResultsElement: HTMLElement;
 	readonly sectionRenderers: SettingsSectionRenderers;
 	readonly settingsController: SettingsController;
+	readonly hoverService: IHoverService;
 };
 
 function isKnowledgeBasePageAtDefaults(state: SettingsViewState) {
@@ -59,6 +65,8 @@ function renderSettingsPageFooter(
 	pageId: SettingsPageId,
 	state: SettingsViewState,
 	settingsController: SettingsController,
+	hoverService: IHoverService,
+	disposables: DisposableStore,
 ): HTMLElement | null {
 	switch (pageId) {
 		case 'general': {
@@ -72,7 +80,7 @@ function renderSettingsPageFooter(
 					!state.defaultConfigPath.trim() ||
 					state.configPath === state.defaultConfigPath,
 				onClick: settingsController.handleResetConfigPath,
-			});
+			}, hoverService, disposables);
 			const footer = createSettingsElement('div', 'comet-settings-page-footer');
 			footer.append(button);
 			return footer;
@@ -84,7 +92,7 @@ function renderSettingsPageFooter(
 				focusKey: 'settings.page.textEditor.reset',
 				disabled: state.isSettingsSaving || state.editorDraftStyle.userValue === null,
 				onClick: settingsController.handleResetEditorDraftStyle,
-			});
+			}, hoverService, disposables);
 			const footer = createSettingsElement('div', 'comet-settings-page-footer');
 			footer.append(button);
 			return footer;
@@ -96,7 +104,7 @@ function renderSettingsPageFooter(
 				focusKey: 'settings.page.knowledgeBase.reset',
 				disabled: state.isSettingsSaving || isKnowledgeBasePageAtDefaults(state),
 				onClick: settingsController.handleResetKnowledgeBaseSettings,
-			});
+			}, hoverService, disposables);
 			const footer = createSettingsElement('div', 'comet-settings-page-footer');
 			footer.append(button);
 			return footer;
@@ -108,6 +116,10 @@ function renderSettingsPageFooter(
 
 export class SettingsTree {
 	private readonly sections: SettingsSectionMap = createSettingsSectionMap(() => createSettingsElement('section', 'comet-settings-section'));
+	private readonly sectionDisposables = createSettingsSectionMap(
+		() => new MutableDisposable<DisposableStore>(),
+	);
+	private readonly pageDisposables = new MutableDisposable<DisposableStore>();
 
 	constructor(
 		private readonly model: SettingsTreeModel,
@@ -135,10 +147,23 @@ export class SettingsTree {
 		sectionId: SettingsSectionId,
 		state: SettingsViewState,
 	) {
-		this.sections[sectionId].replaceChildren(this.options.sectionRenderers[sectionId](state));
+		const disposables = new DisposableStore();
+		let element: HTMLElement;
+		try {
+			element = this.options.sectionRenderers[sectionId](state, disposables);
+		} catch (error) {
+			disposables.dispose();
+			throw error;
+		}
+		this.sectionDisposables[sectionId].value = disposables;
+		this.sections[sectionId].replaceChildren(element);
 	}
 
 	dispose() {
+		this.pageDisposables.dispose();
+		for (const disposables of Object.values(this.sectionDisposables)) {
+			disposables.dispose();
+		}
 		for (const section of Object.values(this.sections)) {
 			section.replaceChildren();
 		}
@@ -148,9 +173,23 @@ export class SettingsTree {
 		pageId: SettingsPageId,
 		state: SettingsViewState,
 	) {
+		const pageDisposables = new DisposableStore();
 		const activeSectionIds = this.model.getActiveSectionIds(pageId);
 		this.options.pageTitleElement.textContent = this.model.getPageTitle(pageId);
-		const pageFooter = renderSettingsPageFooter(pageId, state, this.options.settingsController);
+		let pageFooter: HTMLElement | null;
+		try {
+			pageFooter = renderSettingsPageFooter(
+				pageId,
+				state,
+				this.options.settingsController,
+				this.options.hoverService,
+				pageDisposables,
+			);
+		} catch (error) {
+			pageDisposables.dispose();
+			throw error;
+		}
+		this.pageDisposables.value = pageDisposables;
 		const contentChildren: Node[] = [
 			this.options.pageTitleElement,
 			...activeSectionIds.map(sectionId => this.sections[sectionId]),

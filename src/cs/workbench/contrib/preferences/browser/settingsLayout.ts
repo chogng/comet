@@ -327,14 +327,14 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
   },
 };
 
-export type SettingsSectionMap = Record<SettingsSectionId, HTMLElement>;
+export type SettingsSectionMap<T = HTMLElement> = Record<SettingsSectionId, T>;
 export type SettingsNavigationItem = {
   id: SettingsPageId;
   label: string;
   icon?: LxIconName;
 };
 
-export function createSettingsSectionMap(factory: () => HTMLElement): SettingsSectionMap {
+export function createSettingsSectionMap<T>(factory: () => T): SettingsSectionMap<T> {
   const sectionIds = new Set<SettingsSectionId>();
   for (const page of settingsPageLayout) {
     for (const sectionId of page.sections) {
@@ -342,7 +342,7 @@ export function createSettingsSectionMap(factory: () => HTMLElement): SettingsSe
     }
   }
   const entries = Array.from(sectionIds).map((id) => [id, factory()] as const);
-  return Object.fromEntries(entries) as SettingsSectionMap;
+  return Object.fromEntries(entries) as SettingsSectionMap<T>;
 }
 
 export function getSettingsPageNavigationItems(
