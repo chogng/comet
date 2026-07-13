@@ -9,7 +9,6 @@ import {
 } from 'cs/workbench/browser/layout';
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import {
-  disposeWorkbenchInstantiationService,
   getWorkbenchInstantiationService,
 } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
@@ -131,17 +130,8 @@ export function createWorkbenchDocumentLocaleContribution(): Disposable {
   };
 }
 
-export function createWorkbenchServicesLifecycleContribution(): Disposable {
-  return {
-    dispose: () => {
-      disposeWorkbenchInstantiationService();
-    },
-  };
-}
-
 registerWorkbenchContribution(createWorkbenchContainerStateContribution);
 registerWorkbenchContribution(createWorkbenchDocumentLocaleContribution);
-registerWorkbenchContribution(createWorkbenchServicesLifecycleContribution);
 registerWorkbenchContribution(() =>
   getWorkbenchInstantiationService().createInstance(WorkbenchStatusbarContribution),
 );

@@ -15,4 +15,3 @@ import 'cs/sessions/browser/parts/sessions/sessionsPart';
 import 'cs/sessions/services/sessions/browser/sessionsService';
 import 'cs/sessions/contrib/chat/browser/chat.contribution';
 import 'cs/sessions/contrib/sessions/browser/sessions.contribution';
-import 'cs/sessions/browser/sessions.contribution';

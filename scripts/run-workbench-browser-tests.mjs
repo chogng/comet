@@ -17,6 +17,15 @@ const rootDir =
     : path.dirname(scriptFilePath);
 const outputDir = path.join(rootDir, '.tmp', 'workbench-browser-tests');
 const entryPoints = [
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'platform',
+    'instantiation',
+    'tests',
+    'instantiation.test.ts',
+  ),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'splitview.test.ts'),
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'gridview.test.ts'),
   path.join(
@@ -65,6 +74,15 @@ const entryPoints = [
   path.join(rootDir, 'src', 'cs', 'workbench', 'browser', 'test', 'editorPaneHost.test.ts'),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'editorPartLifecycle.test.ts'),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'entrypoints.test.ts'),
+  path.join(
+    rootDir,
+    'src',
+    'cs',
+    'sessions',
+    'browser',
+    'test',
+    'sessionsWorkbenchLifecycle.test.ts',
+  ),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'sessionsPart.test.ts'),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'sidebarPart.test.ts'),
   path.join(rootDir, 'src', 'cs', 'sessions', 'browser', 'test', 'titlebarPart.test.ts'),

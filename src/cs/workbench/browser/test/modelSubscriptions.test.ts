@@ -13,7 +13,9 @@ import type {
 import type {
   ElectronInvoke,
 } from 'cs/base/parts/sandbox/common/electronTypes';
+import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
+import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import {
 	ILibraryModel,
@@ -38,6 +40,17 @@ import {
   subscribePdfDownloadStatus,
 } from 'cs/workbench/services/document/pdfDownloadStatus';
 import { SettingsModel } from 'cs/workbench/services/settings/settingsModel';
+import {
+	registerWorkbenchContribution,
+	startWorkbenchContributions,
+	stopWorkbenchContributions,
+} from 'cs/workbench/common/contributions';
+import {
+	disposeWorkbenchInstantiationService,
+	getWorkbenchInstantiationService,
+	registerWorkbenchDisposable,
+	registerWorkbenchService,
+} from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let originalDocumentLanguage = '';
@@ -294,4 +307,200 @@ test('workbenchPartDom subscriptions stop after disposal', () => {
 
   assert.equal(notificationCount, 1);
   assert.equal(getWorkbenchPartDomSnapshot()[WORKBENCH_PART_IDS.editor], null);
+});
+
+test('workbench contributions clean up a partial failed start and can restart', () => {
+	const transitions: string[] = [];
+	const startError = new Error('contribution startup failed');
+	let shouldFailStart = true;
+
+	registerWorkbenchContribution(() => {
+		transitions.push('start:first');
+		return {
+			dispose: () => transitions.push('dispose:first'),
+		};
+	});
+	registerWorkbenchContribution(() => {
+		transitions.push('start:second');
+		if (shouldFailStart) {
+			shouldFailStart = false;
+			throw startError;
+		}
+		return {
+			dispose: () => transitions.push('dispose:second'),
+		};
+	});
+
+	assert.throws(startWorkbenchContributions, error => error === startError);
+	assert.deepEqual(transitions, [
+		'start:first',
+		'start:second',
+		'dispose:first',
+	]);
+
+	try {
+		startWorkbenchContributions();
+	} finally {
+		stopWorkbenchContributions();
+	}
+	assert.deepEqual(transitions, [
+		'start:first',
+		'start:second',
+		'dispose:first',
+		'start:first',
+		'start:second',
+		'dispose:second',
+		'dispose:first',
+	]);
+});
+
+test('workbench contributions instantiate factories registered during startup exactly once', () => {
+	const transitions: string[] = [];
+	let hasRegisteredNestedFactory = false;
+
+	registerWorkbenchContribution(() => {
+		transitions.push('start:parent');
+		if (!hasRegisteredNestedFactory) {
+			hasRegisteredNestedFactory = true;
+			registerWorkbenchContribution(() => {
+				transitions.push('start:nested');
+				return {
+					dispose: () => transitions.push('dispose:nested'),
+				};
+			});
+		}
+		return {
+			dispose: () => transitions.push('dispose:parent'),
+		};
+	});
+
+	startWorkbenchContributions();
+	stopWorkbenchContributions();
+	assert.deepEqual(transitions, [
+		'start:parent',
+		'start:nested',
+		'dispose:nested',
+		'dispose:parent',
+	]);
+
+	transitions.length = 0;
+	startWorkbenchContributions();
+	stopWorkbenchContributions();
+	assert.deepEqual(transitions, [
+		'start:parent',
+		'start:nested',
+		'dispose:nested',
+		'dispose:parent',
+	]);
+});
+
+test('workbench contributions finish LIFO cleanup after dispose errors and can restart', () => {
+	const transitions: string[] = [];
+	const firstDisposeError = new Error('first contribution dispose failed');
+	const secondDisposeError = new Error('second contribution dispose failed');
+	let shouldFailFirstDispose = true;
+	let shouldFailSecondDispose = true;
+
+	registerWorkbenchContribution(() => ({
+		dispose: () => transitions.push('dispose:retained'),
+	}));
+	registerWorkbenchContribution(() => ({
+		dispose: () => {
+			transitions.push('dispose:first-error');
+			if (shouldFailFirstDispose) {
+				shouldFailFirstDispose = false;
+				throw firstDisposeError;
+			}
+		},
+	}));
+	registerWorkbenchContribution(() => ({
+		dispose: () => {
+			transitions.push('dispose:second-error');
+			if (shouldFailSecondDispose) {
+				shouldFailSecondDispose = false;
+				throw secondDisposeError;
+			}
+		},
+	}));
+
+	startWorkbenchContributions();
+	assert.throws(stopWorkbenchContributions, error => {
+		assert.ok(error instanceof AggregateError);
+		assert.deepEqual(error.errors, [secondDisposeError, firstDisposeError]);
+		return true;
+	});
+	assert.deepEqual(transitions, [
+		'dispose:second-error',
+		'dispose:first-error',
+		'dispose:retained',
+	]);
+
+	transitions.length = 0;
+	startWorkbenchContributions();
+	stopWorkbenchContributions();
+	assert.deepEqual(transitions, [
+		'dispose:second-error',
+		'dispose:first-error',
+		'dispose:retained',
+	]);
+});
+
+interface IThrowingWorkbenchTeardownService {
+	readonly _serviceBrand: undefined;
+}
+
+const IThrowingWorkbenchTeardownService = createDecorator<IThrowingWorkbenchTeardownService>(
+	'throwingWorkbenchTeardownService',
+);
+
+class ThrowingWorkbenchTeardownService implements IThrowingWorkbenchTeardownService {
+	declare readonly _serviceBrand: undefined;
+
+	constructor(
+		private readonly transitions: string[],
+		private readonly error: Error,
+	) {}
+
+	dispose(): void {
+		this.transitions.push('dispose:instantiation-service');
+		throw this.error;
+	}
+}
+
+test('workbench instantiation teardown releases every stage and aggregates failures', () => {
+	const transitions: string[] = [];
+	const registeredError = new Error('registered disposable failed');
+	const serviceError = new Error('instantiation service failed');
+
+	registerWorkbenchService(
+		IThrowingWorkbenchTeardownService,
+		new SyncDescriptor(ThrowingWorkbenchTeardownService, [transitions, serviceError]),
+	);
+	getWorkbenchInstantiationService().invokeFunction(accessor => {
+		accessor.get(IThrowingWorkbenchTeardownService);
+	});
+	registerWorkbenchDisposable({
+		dispose: () => transitions.push('dispose:registered-tail'),
+	});
+	registerWorkbenchDisposable({
+		dispose: () => {
+			transitions.push('dispose:registered-error');
+			throw registeredError;
+		},
+	});
+
+	try {
+		assert.throws(disposeWorkbenchInstantiationService, error => {
+			assert.ok(error instanceof AggregateError);
+			assert.deepEqual(error.errors, [registeredError, serviceError]);
+			return true;
+		});
+		assert.deepEqual(transitions, [
+			'dispose:registered-error',
+			'dispose:registered-tail',
+			'dispose:instantiation-service',
+		]);
+	} finally {
+		getWorkbenchInstantiationService();
+	}
 });

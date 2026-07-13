@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Schemas } from 'cs/base/common/network';
-import { $ } from 'cs/base/browser/dom';
+import { $, addDisposableListener } from 'cs/base/browser/dom';
+import { onUnexpectedError } from 'cs/base/common/errors';
 import {
 	registerWorkbenchPartDomNode,
 } from 'cs/workbench/browser/layout';
@@ -32,13 +33,19 @@ import { SessionWorkspaceKind } from 'cs/sessions/services/sessions/common/sessi
 import { isNewSessionSlot } from 'cs/sessions/services/sessions/common/sessionsView';
 
 import { setARIAContainer } from 'cs/base/browser/ui/aria/aria';
-import { DisposableStore } from 'cs/base/common/lifecycle';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+} from 'cs/base/common/lifecycle';
 import { INotificationService } from 'cs/platform/notification/common/notification';
 import {
 	IStorageService,
 	WillSaveStateReason,
 } from 'cs/platform/storage/common/storage';
 import {
+	disposeWorkbenchInstantiationService,
 	getWorkbenchInstantiationService,
 } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
@@ -81,9 +88,7 @@ import {
 	stopWorkbenchContributions,
 } from 'cs/workbench/common/contributions';
 
-let activeSessionsWorkbenchHost: SessionsWorkbenchHost | null = null;
-
-class SessionsWorkbenchHost {
+class SessionsWorkbenchHost extends Disposable {
 	private readonly rootElement: HTMLElement;
 	private readonly containerElement: HTMLDivElement;
 	private readonly shellElement: HTMLDivElement;
@@ -92,11 +97,11 @@ class SessionsWorkbenchHost {
 	private readonly statusbarElement: HTMLElement;
 	private readonly titlebarPart: SessionsTitlebarPart;
 	private readonly notificationsDisposables = new DisposableStore();
-	private sessionsLayoutView: SessionsLayoutView | null = null;
-	private sidebarPart: SessionSidebarPartView | null = null;
-	private settingsView: SettingsPartView | null = null;
-	private readonly globalDisposables: Array<() => void> = [];
+	private readonly sessionsLayoutView = new MutableDisposable<SessionsLayoutView>();
+	private readonly sidebarPart = new MutableDisposable<SessionSidebarPartView>();
+	private readonly settingsView = new MutableDisposable<SettingsPartView>();
 	private isDisposed = false;
+	private hasStarted = false;
 	private isRendering = false;
 	private renderPending = false;
 	private hasAppliedStartupLayoutPreference = false;
@@ -123,6 +128,7 @@ class SessionsWorkbenchHost {
 		@ILifecycleService private readonly lifecycleService: IWorkbenchLifecycleService,
 		@ISessionsSettingsOverlayService private readonly settingsOverlayService: ISessionsSettingsOverlayService,
 		) {
+		super();
 		this.rootElement = rootElement;
 		this.containerElement = $<HTMLDivElement>('div');
 		this.shellElement = $<HTMLDivElement>('div');
@@ -131,17 +137,22 @@ class SessionsWorkbenchHost {
 		this.statusbarElement = $<HTMLElementTagNameMap['section']>('section');
 		this.settingsOverlayElement.className = 'comet-settings-overlay';
 		this.settingsOverlayElement.hidden = true;
-		this.settingsOverlayElement.addEventListener('click', event => {
-			if (event.target === this.settingsOverlayElement) {
-				this.settingsOverlayService.setVisible(false);
-			}
-		});
+		this._register(this.notificationsDisposables);
 		this.titlebarPart = this.instantiationService.createInstance(
 			SessionsTitlebarPart,
 			this.containerElement,
 			this.shellElement,
 			this.statusbarElement,
 		);
+		this._register(this.titlebarPart);
+		this._register(this.settingsView);
+		this._register(this.sidebarPart);
+		this._register(this.sessionsLayoutView);
+		this._register(addDisposableListener(this.settingsOverlayElement, 'click', event => {
+			if (event.target === this.settingsOverlayElement) {
+				this.settingsOverlayService.setVisible(false);
+			}
+		}));
 
 		this.rootElement.replaceChildren(this.containerElement);
 		this.shellElement.append(
@@ -156,43 +167,39 @@ class SessionsWorkbenchHost {
 		);
 	}
 
-	start() {
+	start(): void {
+		if (this.isDisposed) {
+			throw new Error('Cannot start a disposed Sessions Workbench Host.');
+		}
+		if (this.hasStarted) {
+			throw new Error('Sessions Workbench Host has already started.');
+		}
+		this.hasStarted = true;
 		this.editorGroupsService.mainPart.initialize();
 		this.openInitialDraftIfUnambiguous();
-		this.globalDisposables.push(
-			this.localeService.subscribe(this.requestRender),
-			this.sessionsLayoutService.onDidChangeLayoutState(this.requestRender),
-			subscribeWindowState(this.requestRender),
-			this.settingsModel.subscribe(this.requestRender),
-			this.editorGroupsService.onDidChange(this.requestRender),
-			this.settingsOverlayService.onDidChangeVisibility(this.requestRender),
-		);
+		this._register(toDisposable(this.localeService.subscribe(this.requestRender)));
+		this._register(this.sessionsLayoutService.onDidChangeLayoutState(this.requestRender));
+		this._register(toDisposable(subscribeWindowState(this.requestRender)));
+		this._register(toDisposable(this.settingsModel.subscribe(this.requestRender)));
+		this._register(this.editorGroupsService.onDidChange(this.requestRender));
+		this._register(this.settingsOverlayService.onDidChangeVisibility(this.requestRender));
 
 		this.requestRender();
 	}
 
-	dispose() {
+	override dispose(): void {
 		if (this.isDisposed) {
 			return;
 		}
 
 		this.isDisposed = true;
-		while (this.globalDisposables.length > 0) {
-			this.globalDisposables.pop()?.();
+		try {
+			super.dispose();
+		} finally {
+			registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, null);
+			registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, null);
+			this.rootElement.replaceChildren();
 		}
-
-		this.titlebarPart.dispose();
-		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.container, null);
-		registerWorkbenchPartDomNode(WORKBENCH_PART_IDS.settings, null);
-
-		this.sessionsLayoutView?.dispose();
-		this.sessionsLayoutView = null;
-		this.sidebarPart?.dispose();
-		this.sidebarPart = null;
-		this.settingsView?.dispose();
-		this.settingsView = null;
-		this.notificationsDisposables.dispose();
-		this.rootElement.replaceChildren();
 	}
 
 	private createNotificationsHandlers() {
@@ -290,29 +297,33 @@ class SessionsWorkbenchHost {
 	}
 
 	private renderWorkbenchContentPage(isLayoutEdgeSnappingEnabled: boolean) {
-		if (!this.sidebarPart) {
-			this.sidebarPart = this.instantiationService.createInstance(SessionSidebarPartView);
+		let sidebarPart = this.sidebarPart.value;
+		if (!sidebarPart) {
+			sidebarPart = this.instantiationService.createInstance(SessionSidebarPartView);
+			this.sidebarPart.value = sidebarPart;
 		}
 
-		if (!this.sessionsLayoutView) {
-			this.sessionsLayoutView = this.instantiationService.createInstance(
+		let sessionsLayoutView = this.sessionsLayoutView.value;
+		if (!sessionsLayoutView) {
+			sessionsLayoutView = this.instantiationService.createInstance(
 				SessionsLayoutView,
 				isLayoutEdgeSnappingEnabled,
-				this.sidebarPart,
+				sidebarPart,
 				this.sessionsPart,
 				this.editorGroupsService.mainPart,
 			);
+			this.sessionsLayoutView.value = sessionsLayoutView;
 		} else {
-			this.sessionsLayoutView.setEdgeSnappingEnabled(
+			sessionsLayoutView.setEdgeSnappingEnabled(
 				isLayoutEdgeSnappingEnabled,
 			);
 		}
 
-		const workbenchContentElement = this.sessionsLayoutView.getElement();
+		const workbenchContentElement = sessionsLayoutView.getElement();
 		if (this.pageMount.firstChild !== workbenchContentElement) {
 			this.pageMount.replaceChildren(workbenchContentElement);
 		}
-		this.sessionsLayoutView.layout();
+		sessionsLayoutView.layout();
 	}
 
 
@@ -323,14 +334,16 @@ class SessionsWorkbenchHost {
 			return;
 		}
 
-		if (!this.settingsView) {
-			this.settingsView = this.instantiationService.createInstance(SettingsPartView);
-			this.settingsOverlayElement.replaceChildren(this.settingsView.getElement());
+		let settingsView = this.settingsView.value;
+		if (!settingsView) {
+			settingsView = this.instantiationService.createInstance(SettingsPartView);
+			this.settingsView.value = settingsView;
+			this.settingsOverlayElement.replaceChildren(settingsView.getElement());
 		}
 		this.settingsOverlayElement.hidden = false;
 		registerWorkbenchPartDomNode(
 			WORKBENCH_PART_IDS.settings,
-			this.settingsView.getElement(),
+			settingsView.getElement(),
 		);
 	}
 
@@ -411,56 +424,205 @@ class SessionsWorkbenchHost {
 	}
 }
 
-class SessionsWorkbenchApplication {
+type SessionsWorkbenchState = 'idle' | 'starting' | 'running' | 'disposed';
+
+let sessionsWorkbenchState: SessionsWorkbenchState = 'idle';
+let activeSessionsWorkbenchApplication: SessionsWorkbenchApplication | null = null;
+let sessionsWorkbenchShutdownPromise: Promise<void> | null = null;
+
+class SessionsWorkbenchApplication extends Disposable {
+	private hasStarted = false;
+	private isDisposed = false;
+	private isShutdownRequested = false;
+	private storageInitialized = false;
+	private storageInitializationSettled: Promise<void> | null = null;
+	private shutdownPromise: Promise<void> | null = null;
+
 	constructor(
 		@IStorageService private readonly storageService: IStorageService,
 		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
-	) {}
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
+		super();
+	}
 
 	async start(): Promise<void> {
-		await this.storageService.init();
+		if (this.hasStarted) {
+			throw new Error('Sessions Workbench Application has already started.');
+		}
+		this.hasStarted = true;
+		const storageInitialization = this.storageService.init();
+		this.storageInitializationSettled = storageInitialization.then(
+			() => {
+				this.storageInitialized = true;
+			},
+			() => undefined,
+		);
+		await storageInitialization;
+		this.ensureStartupActive();
+
 		this.editorGroupsService.initialize();
+		this.ensureStartupActive();
+		this._register(toDisposable(stopWorkbenchContributions));
 		startWorkbenchContributions();
-		window.addEventListener('beforeunload', () => {
-			void this.storageService.flush(WillSaveStateReason.SHUTDOWN);
-			stopWorkbenchContributions();
-		}, {
-			once: true,
-		});
-		renderSessionsWorkbench();
-	}
-}
+		this.ensureStartupActive();
 
-export function disposeSessionsWorkbench(): void {
-	activeSessionsWorkbenchHost?.dispose();
-	activeSessionsWorkbenchHost = null;
-	stopWorkbenchContributions();
-}
-
-function renderSessionsWorkbench() {
-	const rootElement = document.getElementById('root');
-
-	if (!rootElement) {
-		throw new Error('Root element #root was not found.');
+		const host = this.createHost();
+		this._register(host);
+		this.ensureStartupActive();
+		host.start();
+		this.ensureStartupActive();
+		this._register(addDisposableListener(window, 'beforeunload', () => {
+			void disposeSessionsWorkbench().catch(onUnexpectedError);
+		}));
+		this.ensureStartupActive();
 	}
 
-	applyWorkbenchTheme();
-	applyWorkbenchBrowserStyles();
-	setARIAContainer(document.body);
+	shutdown(): Promise<void> {
+		this.isShutdownRequested = true;
+		this.shutdownPromise ??= this.doShutdown();
+		return this.shutdownPromise;
+	}
 
-	activeSessionsWorkbenchHost?.dispose();
-	activeSessionsWorkbenchHost = null;
+	override dispose(): void {
+		if (this.isDisposed) {
+			return;
+		}
 
-	activeSessionsWorkbenchHost = getWorkbenchInstantiationService().createInstance(
-		SessionsWorkbenchHost,
-		rootElement,
-	);
-	activeSessionsWorkbenchHost.start();
+		this.isDisposed = true;
+		const disposeErrors: unknown[] = [];
+		try {
+			super.dispose();
+		} catch (error) {
+			disposeErrors.push(error);
+		}
+
+		try {
+			disposeWorkbenchInstantiationService();
+		} catch (error) {
+			disposeErrors.push(error);
+		}
+
+		if (disposeErrors.length > 1) {
+			throw new AggregateError(
+				disposeErrors,
+				'Failed to dispose the Sessions Workbench Application and its services.',
+			);
+		}
+		if (disposeErrors.length === 1) {
+			throw disposeErrors[0];
+		}
+	}
+
+	private createHost(): SessionsWorkbenchHost {
+		const rootElement = document.getElementById('root');
+		if (!rootElement) {
+			throw new Error('Root element #root was not found.');
+		}
+
+		applyWorkbenchTheme();
+		applyWorkbenchBrowserStyles();
+		setARIAContainer(document.body);
+		return this.instantiationService.createInstance(SessionsWorkbenchHost, rootElement);
+	}
+
+	private ensureStartupActive(): void {
+		if (this.isShutdownRequested || this.isDisposed) {
+			throw new Error('Sessions Workbench Application was shut down during startup.');
+		}
+	}
+
+	private async doShutdown(): Promise<void> {
+		if (!this.storageInitialized) {
+			await this.storageInitializationSettled;
+		}
+
+		const shutdownErrors: unknown[] = [];
+		if (this.storageInitialized) {
+			try {
+				await this.storageService.flush(WillSaveStateReason.SHUTDOWN);
+			} catch (error) {
+				shutdownErrors.push(error);
+			}
+		}
+
+		try {
+			this.dispose();
+		} catch (error) {
+			shutdownErrors.push(error);
+		}
+
+		if (shutdownErrors.length > 1) {
+			throw new AggregateError(
+				shutdownErrors,
+				'Failed to save and dispose the Sessions Workbench Application.',
+			);
+		}
+		if (shutdownErrors.length === 1) {
+			throw shutdownErrors[0];
+		}
+	}
 }
 
 export async function startSessionsWorkbench(): Promise<void> {
-	const application = getWorkbenchInstantiationService().createInstance(
-		SessionsWorkbenchApplication,
-	);
-	await application.start();
+	if (sessionsWorkbenchState !== 'idle') {
+		throw new Error(`Sessions Workbench cannot start from state '${sessionsWorkbenchState}'.`);
+	}
+
+	sessionsWorkbenchState = 'starting';
+	let application: SessionsWorkbenchApplication | null = null;
+	try {
+		application = getWorkbenchInstantiationService().createInstance(
+			SessionsWorkbenchApplication,
+		);
+		activeSessionsWorkbenchApplication = application;
+		await application.start();
+		if (
+			sessionsWorkbenchState !== 'starting'
+			|| activeSessionsWorkbenchApplication !== application
+		) {
+			throw new Error('Sessions Workbench shutdown started before startup completed.');
+		}
+		sessionsWorkbenchState = 'running';
+	} catch (error) {
+		activeSessionsWorkbenchApplication = null;
+		sessionsWorkbenchState = 'disposed';
+		if (!application) {
+			try {
+				disposeWorkbenchInstantiationService();
+			} catch (disposeError) {
+				throw new AggregateError(
+					[error, disposeError],
+					'Sessions Workbench construction and service disposal both failed.',
+				);
+			}
+			throw error;
+		}
+
+		sessionsWorkbenchShutdownPromise ??= application.shutdown();
+		try {
+			await sessionsWorkbenchShutdownPromise;
+		} catch (shutdownError) {
+			throw new AggregateError(
+				[error, shutdownError],
+				'Sessions Workbench startup and shutdown both failed.',
+			);
+		}
+		throw error;
+	}
+}
+
+export function disposeSessionsWorkbench(): Promise<void> {
+	if (sessionsWorkbenchShutdownPromise) {
+		return sessionsWorkbenchShutdownPromise;
+	}
+	if (sessionsWorkbenchState === 'idle') {
+		return Promise.resolve();
+	}
+
+	sessionsWorkbenchState = 'disposed';
+	const application = activeSessionsWorkbenchApplication;
+	activeSessionsWorkbenchApplication = null;
+	sessionsWorkbenchShutdownPromise = application?.shutdown() ?? Promise.resolve();
+	return sessionsWorkbenchShutdownPromise;
 }

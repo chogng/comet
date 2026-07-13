@@ -1,6 +1,11 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { DisposableStore } from 'cs/base/common/lifecycle';
 import {
-  dispose,
+  disposeAll,
   isDisposable,
   type IDisposable,
 } from 'cs/base/common/lifecycle';
@@ -40,20 +45,19 @@ export class InstantiationService implements IInstantiationService {
   }
 
   dispose(): void {
-    if (this.disposed) {
-      return;
-    }
+		if (this.disposed) {
+			return;
+		}
 
-    this.disposed = true;
-    dispose(this.children);
-    this.children.clear();
-
-    for (const candidate of this.servicesToMaybeDispose) {
-      if (isDisposable(candidate)) {
-        candidate.dispose();
-      }
-    }
-    this.servicesToMaybeDispose.clear();
+		this.disposed = true;
+		const children = [...this.children];
+		const serviceCandidates = [...this.servicesToMaybeDispose];
+		this.children.clear();
+		this.servicesToMaybeDispose.clear();
+		disposeAll([
+			...serviceCandidates.filter(isDisposable),
+			...children,
+		]);
   }
 
   createChild(

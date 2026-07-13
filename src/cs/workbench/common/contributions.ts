@@ -2,7 +2,10 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DisposableLike } from 'cs/base/common/lifecycle';
+import {
+	disposeAll,
+	type DisposableLike,
+} from 'cs/base/common/lifecycle';
 
 export type Disposable = DisposableLike;
 export type WorkbenchContribution = DisposableLike;
@@ -12,14 +15,15 @@ export type WorkbenchContributionFactory = () =>
 
 const workbenchContributionFactories: WorkbenchContributionFactory[] = [];
 const activeWorkbenchContributions: WorkbenchContribution[] = [];
-let workbenchContributionsStarted = false;
+type WorkbenchContributionsState = 'idle' | 'starting' | 'running' | 'stopping';
+let workbenchContributionsState: WorkbenchContributionsState = 'idle';
 
 export function registerWorkbenchContribution(
 	contributionFactory: WorkbenchContributionFactory,
 ): void {
 	workbenchContributionFactories.push(contributionFactory);
 
-	if (!workbenchContributionsStarted) {
+	if (workbenchContributionsState !== 'running') {
 		return;
 	}
 
@@ -30,24 +34,50 @@ export function registerWorkbenchContribution(
 }
 
 export function startWorkbenchContributions(): void {
-	if (workbenchContributionsStarted) {
+	if (workbenchContributionsState === 'starting') {
+		throw new Error('Workbench contributions are already starting.');
+	}
+	if (workbenchContributionsState === 'stopping') {
+		throw new Error('Workbench contributions cannot start while stopping.');
+	}
+	if (workbenchContributionsState === 'running') {
 		return;
 	}
 
-	workbenchContributionsStarted = true;
+	workbenchContributionsState = 'starting';
 
-	for (const contributionFactory of workbenchContributionFactories) {
-		const contribution = contributionFactory();
-		if (contribution) {
-			activeWorkbenchContributions.push(contribution);
+	try {
+		for (let index = 0; index < workbenchContributionFactories.length; index += 1) {
+			const contributionFactory = workbenchContributionFactories[index];
+			const contribution = contributionFactory();
+			if (contribution) {
+				activeWorkbenchContributions.push(contribution);
+			}
 		}
+		workbenchContributionsState = 'running';
+	} catch (startError) {
+		try {
+			stopWorkbenchContributions();
+		} catch (stopError) {
+			throw new AggregateError(
+				[startError, stopError],
+				'Workbench contribution startup and cleanup both failed.',
+			);
+		}
+		throw startError;
 	}
 }
 
 export function stopWorkbenchContributions(): void {
-	while (activeWorkbenchContributions.length > 0) {
-		activeWorkbenchContributions.pop()?.dispose();
+	if (workbenchContributionsState === 'idle' || workbenchContributionsState === 'stopping') {
+		return;
 	}
 
-	workbenchContributionsStarted = false;
+	workbenchContributionsState = 'stopping';
+	const contributions = activeWorkbenchContributions.splice(0);
+	try {
+		disposeAll(contributions);
+	} finally {
+		workbenchContributionsState = 'idle';
+	}
 }

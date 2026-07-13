@@ -1,5 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type { IDisposable } from 'cs/base/common/lifecycle';
-import { DisposableStore } from 'cs/base/common/lifecycle';
+import { DisposableStore, disposeAll } from 'cs/base/common/lifecycle';
 import { setCommandServiceInstantiationService } from 'cs/platform/commands/common/commands';
 import type { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
@@ -70,12 +75,14 @@ export function registerWorkbenchDisposable(disposable: IDisposable): void {
 }
 
 export function disposeWorkbenchInstantiationService(): void {
-  if (disposed) {
-    return;
-  }
+	if (disposed) {
+		return;
+	}
 
-  disposed = true;
-  commandServiceInstantiationService.dispose();
-  disposables.dispose();
-  instantiationService.dispose();
+	disposed = true;
+	disposeAll([
+		instantiationService,
+		disposables,
+		commandServiceInstantiationService,
+	]);
 }

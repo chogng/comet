@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -108,3 +113,55 @@ test('InstantiationService accessor is only valid during invocation', () => {
   service.dispose();
 });
 
+test('InstantiationService disposes every owned service in reverse creation order and aggregates failures', () => {
+	interface ITeardownService {
+		readonly _serviceBrand: undefined;
+	}
+
+	const IFirstTeardownService = createDecorator<ITeardownService>('firstTeardownService');
+	const ISecondTeardownService = createDecorator<ITeardownService>('secondTeardownService');
+	const IThirdTeardownService = createDecorator<ITeardownService>('thirdTeardownService');
+	const transitions: string[] = [];
+	const firstError = new Error('first service disposal failed');
+	const thirdError = new Error('third service disposal failed');
+
+	class TeardownService implements ITeardownService {
+		declare readonly _serviceBrand: undefined;
+
+		constructor(
+			private readonly name: string,
+			private readonly error: Error | undefined,
+		) {}
+
+		dispose(): void {
+			transitions.push(this.name);
+			if (this.error) {
+				throw this.error;
+			}
+		}
+	}
+
+	const service = new InstantiationService(
+		new ServiceCollection(
+			[IFirstTeardownService, new SyncDescriptor(TeardownService, ['first', firstError])],
+			[ISecondTeardownService, new SyncDescriptor(TeardownService, ['second', undefined])],
+			[IThirdTeardownService, new SyncDescriptor(TeardownService, ['third', thirdError])],
+		),
+		true,
+	);
+	service.invokeFunction(accessor => {
+		accessor.get(IFirstTeardownService);
+		accessor.get(ISecondTeardownService);
+		accessor.get(IThirdTeardownService);
+	});
+
+	assert.throws(() => service.dispose(), error => {
+		assert.ok(error instanceof AggregateError);
+		assert.deepEqual(error.errors, [thirdError, firstError]);
+		return true;
+	});
+	assert.deepEqual(transitions, ['third', 'second', 'first']);
+
+	service.dispose();
+	assert.deepEqual(transitions, ['third', 'second', 'first']);
+});

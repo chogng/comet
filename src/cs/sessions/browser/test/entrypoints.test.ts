@@ -54,28 +54,73 @@ test('browser and desktop bootstrap the Sessions application exactly once', () =
 	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
 	assert.match(sessionsWorkbench, /@IStorageService private readonly storageService/);
 	assert.ok(
-		sessionsWorkbench.indexOf('await this.storageService.init()')
+		sessionsWorkbench.indexOf('await storageInitialization')
 			< sessionsWorkbench.indexOf('startWorkbenchContributions()'),
 		'Sessions storage must initialize before product contributions start',
 	);
 	assert.ok(
+		sessionsWorkbench.indexOf('this._register(toDisposable(stopWorkbenchContributions))')
+			< sessionsWorkbench.indexOf('startWorkbenchContributions()'),
+		'Contribution cleanup ownership must exist before factories start',
+	);
+	assert.ok(
 		sessionsWorkbench.indexOf('startWorkbenchContributions()')
-			< sessionsWorkbench.indexOf('renderSessionsWorkbench()'),
+			< sessionsWorkbench.indexOf('const host = this.createHost()'),
 		'product contributions must start before the Sessions host renders',
 	);
 	assert.match(
 		sessionsWorkbench,
-		/this\.storageService\.flush\(WillSaveStateReason\.SHUTDOWN\)/,
+		/await this\.storageService\.flush\(WillSaveStateReason\.SHUTDOWN\)/,
 	);
 	assert.doesNotMatch(sessionsWorkbench, /handleWorkbenchEditorShortcut|handleWindowKeydown/);
+	assert.match(sessionsWorkbench, /class SessionsWorkbenchApplication extends Disposable/);
+	assert.match(sessionsWorkbench, /this\._register\(toDisposable\(stopWorkbenchContributions\)\)/);
+	assert.match(sessionsWorkbench, /addDisposableListener\(window, 'beforeunload'/);
+	assert.match(sessionsWorkbench, /disposeSessionsWorkbench\(\): Promise<void>/);
+	assert.match(sessionsWorkbench, /disposeWorkbenchInstantiationService\(\)/);
 	assert.match(
 		sessionsWorkbench,
-		/export function disposeSessionsWorkbench\(\): void \{[\s\S]*?stopWorkbenchContributions\(\);[\s\S]*?\}/,
+		/if \(!this\.storageInitialized\) \{\s*await this\.storageInitializationSettled;\s*\}\s*const shutdownErrors/,
+	);
+	assert.match(
+		sessionsWorkbench,
+		/let application: SessionsWorkbenchApplication \| null = null;\s*try \{\s*application = getWorkbenchInstantiationService\(\)\.createInstance/,
 	);
 	assert.ok(
-		sessionsWorkbench.lastIndexOf('this.storageService.flush(WillSaveStateReason.SHUTDOWN)')
-			< sessionsWorkbench.lastIndexOf('stopWorkbenchContributions()'),
-		'Sessions state must save before product contributions stop',
+		count(sessionsWorkbench, /this\.ensureStartupActive\(\)/g) >= 6,
+		'Sessions startup must recheck shutdown after callbacks that can re-enter lifecycle code',
+	);
+	assert.match(
+		sessionsWorkbench,
+		/sessionsWorkbenchState !== 'starting'\s*\|\| activeSessionsWorkbenchApplication !== application/,
+	);
+	assert.doesNotMatch(sessionsWorkbench, /activeSessionsWorkbenchHost|renderSessionsWorkbench/);
+	assert.ok(
+		sessionsWorkbench.lastIndexOf('await this.storageService.flush(WillSaveStateReason.SHUTDOWN)')
+			< sessionsWorkbench.lastIndexOf('this.dispose()'),
+		'Sessions state must finish saving before Host and product contributions stop',
+	);
+	assert.ok(
+		sessionsWorkbench.lastIndexOf('super.dispose()')
+			< sessionsWorkbench.lastIndexOf('disposeWorkbenchInstantiationService()'),
+		'Host and product contributions must stop before DI services dispose',
+	);
+	assert.match(
+		sessionsWorkbench,
+		/try \{\s*super\.dispose\(\);\s*\} finally \{\s*registerWorkbenchPartDomNode\(WORKBENCH_PART_IDS\.container, null\)/,
+	);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/sessions/browser/sessions.contribution.ts')),
+		false,
+	);
+	const commonMain = readSource('src/cs/sessions/sessions.common.main.ts');
+	assert.doesNotMatch(commonMain, /['"]cs\/sessions\/browser\/sessions\.contribution['"]/);
+	const workbenchContribution = readSource(
+		'src/cs/workbench/contrib/workbench/workbench.contribution.ts',
+	);
+	assert.doesNotMatch(
+		workbenchContribution,
+		/createWorkbenchServicesLifecycleContribution|disposeWorkbenchInstantiationService/,
 	);
 });
 
@@ -180,7 +225,7 @@ test('Settings view owns its service state without a shell Props bus', () => {
 	);
 	assert.match(
 		sessionsWorkbench,
-		/registerWorkbenchPartDomNode\(\s*WORKBENCH_PART_IDS\.settings,\s*this\.settingsView\.getElement\(\)/,
+		/registerWorkbenchPartDomNode\(\s*WORKBENCH_PART_IDS\.settings,\s*settingsView\.getElement\(\)/,
 	);
 	assert.match(workbenchCommon, /preferences\/browser\/settings\.contribution/);
 
