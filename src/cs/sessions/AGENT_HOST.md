@@ -25,6 +25,12 @@ Local and remote describe Host placement and transport. `comet`, `copilot`,
 how that behavior is bound to the Host. None of these dimensions is inferred
 from another.
 
+Agent packages add a separate installation dimension. Comet is the only
+bundled and default-installed package. Every other Agent is absent until the
+user explicitly installs its package for the addressed Host and authenticated
+user scope. Session creation and Turn execution never install or download an
+Agent package. See [Agent package architecture](AGENT_PACKAGES.md).
+
 ## Identities
 
 Agent Host keeps the following identities distinct:
@@ -34,6 +40,8 @@ Agent Host keeps the following identities distinct:
 | Host authority | One stable local or remote Agent Host endpoint | connection registry |
 | Client connection ID | One logical client connection across transport reconnections | Host protocol |
 | Sessions provider ID | One provider instance backed by one Host authority | Agent Host Sessions contribution |
+| Agent package ID | One stable Host installation identity | Agent package catalog |
+| Agent package revision | One exact verified package version, target, manifest, and digest | Agent package catalog |
 | Agent ID | One stable Agent behavior registered inside a Host | Agent Host runtime |
 | Agent runtime connection ID | One logical connected Agent runtime across transport reconnections | Agent Runtime Protocol |
 | Agent runtime registration revision | One exact runtime endpoint, descriptor, capability, and resume-schema registration for an Agent ID | Agent Host runtime |
@@ -42,10 +50,12 @@ Agent Host keeps the following identities distinct:
 | Turn ID | One accepted user request and Agent response lifecycle | Agent Host runtime |
 | Operation ID | One retry-safe mutating protocol operation | operation owner |
 
-The built-in Comet Agent has Agent ID `comet`. `CometAgent` names its
-Host-facing Agent integration; it does not imply that Comet orchestration is
-implemented in TypeScript or runs in the Agent Host process. Host placement and
-runtime packaging are not part of its Agent identity.
+The built-in Comet Agent has Agent ID `comet` and is supplied by the bundled
+package whose package ID is also `comet`. The strings occupy separate identity
+namespaces. `CometAgent` names its Host-facing Agent integration; it does not
+imply that Comet orchestration is implemented in TypeScript or runs in the
+Agent Host process. Host placement and runtime packaging are not part of its
+Agent identity.
 
 The local Host has one stable provider identity. Each remote Host authority has
 its own provider identity derived from its stable authority. Agent IDs remain
@@ -64,6 +74,8 @@ Every Chat is addressed by its own Chat ID.
 
 The environment-neutral protocol and Node Agent Host runtime own:
 
+- installable and installed Agent package catalogs, verified package
+  operations, and activation into the Agent registry;
 - Agent registration, discovery, descriptors, models, and capabilities;
 - canonical Session, Chat, Turn, and operation identities;
 - the Session catalog and each Session's Chat catalog;
@@ -107,9 +119,11 @@ unqualified runtime or tries another endpoint after materialization fails.
 
 An Agent runtime that uses an SDK additionally owns its SDK clients, request
 and event mapping, Tool projection, aliases, callbacks, caches, and SDK resume
-data. Those types never escape the runtime. Whether the runtime is embedded or
-connected does not change its Agent, Session, Chat, Turn, Tool, attachment, or
-permission semantics.
+data after its package is installed and activated. Package discovery,
+verification, installation, update, and uninstall belong to Agent Host rather
+than the runtime. SDK types never escape the runtime. Whether the runtime is
+embedded or connected does not change its Agent, Session, Chat, Turn, Tool,
+attachment, or permission semantics.
 
 An Agent does not register an `ISessionsProvider`, create a Workbench Chat
 model, manipulate Sessions services, access UI, own an Agent Host client
@@ -118,43 +132,23 @@ content-resource contracts.
 
 ### Comet Agent runtime
 
-The `CometAgent` integration binds Agent ID `comet` to exactly one Comet
-runtime. The runtime may be embedded or supplied as a connected Comet Code SDK
-runtime. A Rust Comet Code package implements the Agent Runtime Protocol
-directly, or exposes the same port through one direct native binding; Comet
-does not require a second product request path or a Comet-specific Sessions
-provider.
+The bundled `comet` package binds Agent ID `comet` to exactly one Comet runtime.
+The runtime may implement `IAgent` in-process or connect as a Rust Comet Code
+runtime through the Agent Runtime Protocol. The Host composition chooses one
+form before registration and never switches forms after failure.
 
-The Comet runtime owns Comet's internal orchestration loop:
+The Comet runtime owns prompt construction, exact model configuration,
+provider projection, execution budgets, the repeated model-and-Tool loop, and
+opaque orchestration checkpoints. Agent Host remains the owner of canonical
+Session, Chat, Turn, Tool-call, permission, input-request, and operation state.
+Comet uses the accepted Tool set and Host Tool Execution Port and never creates
+a private Sessions provider or Tool lifecycle.
 
-- normalized prompt and model-input construction;
-- explicit step, token, time, and concurrency budgets;
-- exact model-provider selection and provider request conversion;
-- model response and Tool-call interpretation;
-- repeated model, Tool, and result steps until the Turn reaches a terminal
-  outcome;
-- Comet-specific orchestration state and opaque resume data.
-
-The Comet runtime consumes the accepted canonical Tool-set revision directly.
-Each model-request implementation may encode the descriptors for its provider
-API, but Comet invokes every model-selected operation through the Host Tool
-Execution Port and feeds the canonical result back into its own loop. It does
-not create a parallel Tool lifecycle, hold Feature callbacks, or execute a
-hidden Tool registry.
-
-Agent Host remains the owner of Session, Chat, Turn, Tool-call, permission, and
-operation state. Comet orchestration decides the next reasoning or execution
-step but cannot bypass those state machines. Each Agent Host composition
-registers one Comet runtime form explicitly; runtime failure never causes the
-Host to switch between embedded, connected, SDK, model-provider, or Agent
-runtime endpoints.
-
-The Comet runtime never imports or calls another registered Agent runtime
-directly. Registered Agents are peer execution endpoints, and the Agent Runtime
-Port does not expose implicit cross-Agent invocation. Internal model and Tool
-steps remain orchestration state in the parent Turn. When the owning Comet
-runtime creates one of its own worker conversations, it publishes that
-Tool-origin Chat through the ordinary Host Chat lifecycle.
+Registered Agents are peers. Comet does not invoke another Agent implicitly;
+its private substeps remain inside the parent Turn, and visible Comet-owned
+workers use ordinary Tool-origin Chats. The full execution configuration,
+orchestration, attachment, Tool, worker, Rust runtime, and resume boundaries are
+defined in [Comet Agent architecture](COMET_AGENT.md).
 
 ### Host connections
 
@@ -232,15 +226,20 @@ Protocol version. Initialization exchanges:
 
 - a stable logical runtime connection ID;
 - supported protocol versions and transport limits;
+- the exact Agent package ID and revision authorized to activate the runtime;
 - the exact Agent IDs and descriptor revisions being registered;
 - capability revisions and supported Tool Schema Profiles;
 - supported opaque resume-schema IDs;
 - informational runtime implementation and build identity.
 
-Runtime endpoint authentication establishes which package may register each
-Agent ID before initialization. It is distinct from product-client transport
-authentication and from credentials the Agent later uses with an SDK or model
-provider. A self-declared Agent ID grants no registration authority.
+Runtime endpoint authentication establishes which installed package revision,
+operation-scoped staged package revision, or bundled Host composition may
+negotiate each Agent ID. A staged negotiation is visible only inside its
+package transaction and becomes an active registration only at atomic commit.
+Runtime authentication is distinct from product-client transport authentication
+and from credentials the Agent later uses with an SDK or model provider. A
+self-declared Agent ID or discoverable package grants no registration
+authority.
 
 The Host selects one offered protocol version and atomically accepts or rejects
 each Agent registration. Duplicate Agent IDs, incompatible versions, invalid
@@ -300,9 +299,10 @@ contains:
 
 The Host selects one offered protocol version that it implements and returns
 the selected version, Host implementation identity, current Host sequence,
-Host and Agent descriptor revisions, and initial subscription snapshots. If no
-offered version is compatible, initialization fails. Neither peer sends normal
-commands before initialization or retries by parsing another dialect.
+Host, package-catalog, and Agent descriptor revisions, and initial subscription
+snapshots. If no offered version is compatible, initialization fails. Neither
+peer sends normal commands before initialization or retries by parsing another
+dialect.
 
 Implementation names and build versions are informational. Feature detection
 uses negotiated protocol version and explicit capabilities, never parsed
@@ -324,9 +324,14 @@ State is addressed through typed channels:
 
 ```text
 Host root channel
-├── Agent and model descriptors
+├── installable and installed Agent package catalogs
+├── Agent and model descriptors and activation state
 ├── Session catalog
 └── connection-level capabilities
+
+Package operation channel
+├── exact package revision, source, payload digest, and impact
+└── bounded progress and one terminal install, update, or uninstall result
 
 Session channel
 ├── Session metadata and lifecycle
@@ -370,11 +375,11 @@ explicitly. The client drops those subscriptions and does not redirect them to
 another Session, Chat, terminal, or resource.
 
 After state recovery, the provider reconciles in-flight mutations by stable
-operation ID. Turn submissions additionally use their payload digest. The same
-ID and digest returns the committed outcome; the same ID with different content
-is a conflict. A client never resends an uncertain mutation under a new ID
-before reconciliation, so reconnect cannot duplicate a Session, Chat, or user
-turn.
+operation ID. Package operations and Turn submissions additionally use their
+payload digest. The same ID and digest returns the committed outcome; the same
+ID with different content is a conflict. A client never resends an uncertain
+mutation under a new ID before reconciliation, so reconnect cannot duplicate a
+package activation, Session, Chat, or user turn.
 
 ### Authentication, permissions, and errors
 
@@ -479,7 +484,8 @@ Turn acceptance contract:
 
 ```text
 caller supplies Session options and Chat creation specifications
-    → Host validates authority, Agent, workspace, config, and capacity
+    → Host validates authority, activated Agent registration, workspace,
+      config, and capacity
     → Host records one idempotent create operation
     → Host reserves canonical Session, Chat, and optional Turn identities
     → prepared content is bound to the reserved identities
@@ -488,6 +494,11 @@ caller supplies Session options and Chat creation specifications
     → provider publishes committed models and consumes accepted composers
     → addressed Agent begins each committed initial Turn
 ```
+
+An optional Agent must already be installed and activated for the addressed
+Host before this operation begins. A missing Agent registration fails Session
+creation explicitly. The Host does not install a package, download an SDK, or
+reinterpret Agent discovery as activation from this path.
 
 The Agent create calls are idempotent under the Host operation identity. A
 backing object created before catalog commit remains part of that recorded
@@ -602,6 +613,8 @@ Persistence follows ownership:
 
 | State | Owner |
 |---|---|
+| installable and installed Agent package catalogs | Agent Host package services |
+| package operations and activated registration bindings | Agent Host package services |
 | Host authority and Agent identity | Agent Host catalog |
 | Session and Chat membership | Agent Host catalog |
 | normalized Session and Chat metadata | Agent Host runtime |
@@ -631,13 +644,12 @@ src/cs/platform/agentHost/
 │   └── desktop local-Host connection
 └── node/
     ├── Host runtime, catalog, subscriptions, content, and Tool services
+    ├── packages/
+    │   └── package discovery, verification, storage, operations, and activation
     ├── runtime/
     │   └── generic connected-runtime negotiation, correlation, and lifecycle
-    └── agents/             optional embedded Agent runtimes
-        ├── comet/
-        ├── copilot/
-        ├── claude/
-        └── codex/
+    └── agents/comet/
+        └── embedded bundled Comet runtime, when selected by composition
 
 src/cs/sessions/contrib/providers/agentHost/
 ├── browser/
@@ -658,24 +670,27 @@ Agent Host.
 
 ## Adding an Agent
 
-1. Use one stable Agent ID and define truthful descriptors, capabilities,
-   Tool Schema Profiles, and resume schemas.
-2. Register exactly one endpoint form for that Agent ID: implement `IAgent`
-   under `cs/platform/agentHost/node/agents/<agent>/` for an embedded runtime,
-   or implement the Agent Runtime Protocol and connect through
-   `IAgentRuntimeConnection` for a connected runtime.
-3. Keep Agent-specific runtime, SDK or model-provider types, clients, caches,
-   event mapping, authentication, and resume data inside the implementation.
-4. Consume the exact Turn-bound Tool set. The runtime owns lossless projection,
+1. Use one stable package ID and declare the exact stable Agent IDs it may
+   register, as defined in [Agent package architecture](AGENT_PACKAGES.md).
+2. Publish one verified package manifest and one endpoint form. Optional
+   Agents remain absent until the user explicitly installs that package.
+3. Implement `IAgent` for an embedded runtime or implement the Agent Runtime
+   Protocol and connect through `IAgentRuntimeConnection` for a connected
+   runtime. Comet is the only bundled embedded-runtime composition.
+4. Define truthful descriptors, capabilities, Tool Schema Profiles, and resume
+   schemas. Keep Agent-specific SDK or model-provider types, clients, caches,
+   event mapping, authentication, and resume data inside the runtime.
+5. Consume the exact Turn-bound Tool set. The runtime owns lossless projection,
    deterministic aliases, call normalization, result encoding, and invocation
    through the Host Tool Execution Port.
-5. Register the Agent with the Host registry, which rejects duplicate IDs.
-6. Add contract tests for create, restore, release, delete, send, queue,
-   steering, cancellation, history, capability enforcement, Tool projection,
-   resume-schema validation, and event order. Connected runtimes also test
-   negotiation, correlation, disconnect, and exact resumption.
-7. Do not add a Sessions provider, Chat view, Agent-specific Host request path,
-   dual embedded and connected registration, or runtime fallback.
+6. Activate the package transaction atomically; the Host registry rejects
+   duplicate, partial, undeclared, or dual-form Agent registrations.
+7. Add package lifecycle and Agent contract tests for install, update,
+   uninstall, create, restore, release, delete, send, queue, steering,
+   cancellation, history, Tool projection, resume validation, and event order.
+8. Do not add a Sessions provider, Chat view, Agent-specific Host request path,
+   automatic installation, dual embedded and connected registration, or
+   runtime fallback.
 
 ## Adding a Host connection
 
@@ -693,6 +708,11 @@ Agent Host.
 
 - `CometAgent` is the built-in Agent integration and has stable Agent ID
   `comet`.
+- The bundled `comet` package is the only default-installed Agent package.
+  Every other Agent requires an explicit user install operation for the
+  addressed Host and user scope.
+- Installable, installed, activated, authenticated, and materialized are
+  distinct states. Session and Turn paths never install or download packages.
 - Local and remote are Host placements, not Agent identities.
 - Embedded and connected are runtime bindings, not Agent identities.
 - One Host authority produces one Sessions provider instance.
@@ -712,7 +732,9 @@ Agent Host.
   infer a missing transition.
 - Mutations reconcile by stable operation identity and never duplicate on
   reconnect.
-- Agent SDK and model-provider types never escape their owning runtime.
+- Agent SDKs are package-private runtime dependencies, not product installation
+  identities, and SDK or model-provider types never escape their owning
+  runtime.
 - Every Agent runtime owns its Tool projection. The Comet runtime consumes
   canonical Tools and projects them only at its model-provider boundary.
   Feature and executor implementations never convert Tools into
@@ -730,7 +752,7 @@ Agent Host.
   canonical Host history.
 - Capabilities gate optional behavior; provider-ID and Agent-ID branching is
   forbidden outside registration and identity routing.
-- Missing connections, Agents, Sessions, Chats, Turns, capabilities, versions,
-  resume schemas, and resources fail explicitly. No operation falls back to
-  another Host, Agent, runtime endpoint, packaging form, resource,
-  representation, or code path.
+- Missing connections, packages, Agents, Sessions, Chats, Turns, capabilities,
+  versions, resume schemas, and resources fail explicitly. No operation falls
+  back to another package source or revision, Host, Agent, runtime endpoint,
+  packaging form, resource, representation, or code path.

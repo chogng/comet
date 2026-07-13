@@ -94,11 +94,15 @@ ISessionsManagementService
 
 Local and remote are Host placements, not Agent identities. The built-in
 `CometAgent` integration has stable Agent ID `comet`; its orchestration runtime
-may be embedded or supplied by a connected Comet Code SDK runtime. Every Agent
-runtime owns its SDK or model-provider calls, event conversion, truthful
-capabilities, and opaque resume data and never imports Sessions or Workbench
-Chat. Runtime packaging does not create another Sessions provider. See
-[Agent Host architecture](AGENT_HOST.md).
+may be embedded or supplied by a connected Rust Comet Code runtime. Comet is
+the only bundled and default-installed Agent package. Copilot, Claude, Codex,
+and other Agents are absent until the user explicitly installs their package
+for the addressed Host. Every Agent runtime owns its SDK or model-provider
+calls, event conversion, truthful capabilities, and opaque resume data and
+never imports Sessions or Workbench Chat. Runtime packaging does not create
+another Sessions provider. See [Agent Host architecture](AGENT_HOST.md),
+[Agent package architecture](AGENT_PACKAGES.md), and
+[Comet Agent architecture](COMET_AGENT.md).
 
 ## Core contracts
 
@@ -465,7 +469,8 @@ import `ChatWidget` or inspect its DOM.
 ```text
 new-session action
     → ISessionsService.openNewSession(options)
-    → management service asks the selected provider for a draft
+    → management service validates an activated Agent selection and asks the
+      selected provider for a draft
     → view service activates the draft
     → user submits one captured composer revision
     → management service routes the submission to the owning provider
@@ -478,6 +483,11 @@ new-session action
       only after Host acceptance
     → management and view services reconcile the committed identity atomically
 ```
+
+Only an Agent in the addressed Host's active runtime registry can own the
+draft. An installable-but-absent package may be shown through a separate
+explicit install action, but it is not a valid Agent selection. Draft creation,
+Session commit, and first send never install a package or download an SDK.
 
 A draft-to-committed transition is explicit. Session selection, input history,
 view state, and provider ownership move with that transition in one operation.
@@ -611,7 +621,11 @@ its visual contract.
 - Local and remote identify Host placement; Agent identity remains independent
   of placement.
 - `CometAgent` is the built-in Agent integration and has stable Agent ID
-  `comet`; its runtime packaging is not Sessions state.
+  `comet`; its runtime packaging is not Sessions state. The bundled `comet`
+  package is the only default-installed Agent package.
+- Optional Agents appear as executable selections only after an explicit
+  per-Host user install operation has atomically activated their package.
+  Installable catalog entries are not Agent registrations.
 - Session identity is globally unique across providers.
 - A Session owns zero or more equal-status Chats. `ISession` has no
   distinguished Chat field, and catalog position never controls routing,
@@ -632,6 +646,8 @@ its visual contract.
   Sessions, choose an Agent, or own backend lifecycle.
 - Agent runtimes enter Sessions only through Agent Host and never
   register a direct `ISessionsProvider`.
+- Sessions, provider draft creation, Session creation, and send operations
+  never install, update, uninstall, or inspect an Agent SDK package.
 - Providers do not import Sessions UI, Parts, or shell layout.
 - Host protocol models and Agent backend clients stay in Platform Agent Host.
   Provider connection state and Host-to-Sessions mapping stay in the Agent Host
@@ -678,15 +694,22 @@ an alternative mutable source of truth.
 
 ## Adding Agent execution
 
-Add a new Agent by registering exactly one Host-side runtime endpoint. An
-embedded runtime implements `IAgent` under
-`src/cs/platform/agentHost/node/agents/<agent>/`; a connected runtime implements
-the language-neutral Agent Runtime Protocol and joins through
-`IAgentRuntimeConnection`. Register one stable Agent ID and truthful
-capabilities, Tool projection limits, and resume schemas. Keep orchestration,
-SDK or model-provider types, clients, caches, event conversion, and resume
-values inside that runtime. Do not add a Sessions provider, Chat view, dual
-runtime registration, or fallback path for an Agent.
+Add a new optional Agent as an explicitly installed Agent package, not as a
+Sessions contribution. Its manifest declares exact Agent IDs and one runtime
+entry-point form. An embedded runtime implements `IAgent`; a connected runtime
+implements the language-neutral Agent Runtime Protocol and joins through
+`IAgentRuntimeConnection`. Register stable identities and truthful capabilities,
+Tool projection limits, and resume schemas only when the package transaction
+commits. Keep orchestration, SDK or model-provider types, clients, caches,
+event conversion, and resume values inside that runtime. Do not add the Agent
+to the default installed set, a Sessions provider, Chat view, automatic
+installation path, dual runtime registration, or fallback path.
+
+Comet is the sole bundled exception: its package is activated by product
+composition and its embedded or Rust connected runtime follows
+[Comet Agent architecture](COMET_AGENT.md). Package discovery, installation,
+activation, update, uninstall, and retained-state rules are defined in
+[Agent package architecture](AGENT_PACKAGES.md).
 
 Add a new Host placement or transport by implementing `IAgentHostConnection`.
 Register one shared `AgentHostSessionsProvider` for each stable connection.
@@ -705,6 +728,8 @@ operations are defined in
 
 - [Sessions application overview](README.md)
 - [Agent Host architecture](AGENT_HOST.md)
+- [Agent package architecture](AGENT_PACKAGES.md)
+- [Comet Agent architecture](COMET_AGENT.md)
 - [Attachment architecture](ATTACHMENTS.md)
 - [Tool architecture](TOOLS.md)
 - [Interaction target architecture](INTERACTION_TARGETS.md)

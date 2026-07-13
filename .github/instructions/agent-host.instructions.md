@@ -1,5 +1,5 @@
 ---
-description: Architecture rules for Agent Host, embedded and connected Agent runtimes, and local and remote Host connections.
+description: Architecture rules for Agent packages, Agent Host, embedded and connected runtimes, and local and remote Host connections.
 applyTo: "{src/cs/platform/agentHost/**,src/cs/sessions/contrib/providers/agentHost/**}"
 ---
 
@@ -7,6 +7,11 @@ applyTo: "{src/cs/platform/agentHost/**,src/cs/sessions/contrib/providers/agentH
 
 Read `src/cs/sessions/AGENT_HOST.md` before changing Agent Host contracts,
 Agents, connections, or Sessions integration. Read
+`src/cs/sessions/AGENT_PACKAGES.md` before changing package discovery,
+installation, verification, activation, update, uninstall, SDK loading, or
+runtime registration. Read `src/cs/sessions/COMET_AGENT.md` before changing
+Comet execution configuration, orchestration, model integration, workers,
+checkpoints, or embedded and Rust runtime composition. Read
 `src/cs/sessions/ATTACHMENTS.md` before changing attachment, content-reference,
 content-resource, or submission contracts. Read `src/cs/sessions/TOOLS.md`
 before changing canonical Tools, schemas, Tool sets, Agent projection,
@@ -16,7 +21,21 @@ binding, target-backed Tools, or lazy Feature operations.
 
 - Agent Host is the single execution boundary for every Agent runtime.
 - The `CometAgent` integration has stable Agent ID `comet`; its orchestration
-  runtime may be embedded or connected.
+  runtime may be embedded or connected. The bundled `comet` package is the
+  only default-installed Agent package.
+- Copilot, Claude, Codex, and every other optional Agent are absent until the
+  user explicitly installs their package for the addressed Host and user
+  scope. Installable catalog entries are not installed packages or Agent
+  registrations. Session creation, restore, send, model selection, and Agent
+  discovery never install or download a package.
+- Agent package ID, package revision, Agent ID, runtime registration,
+  authentication, and runtime materialization are separate. Agent SDKs remain
+  private runtime dependencies and are not the product installation contract.
+- Package install and update stage, verify, negotiate, and atomically publish
+  installed state and declared Agent registrations. Uninstall preserves Host
+  Session history and never reassigns Sessions to another Agent. Do not infer
+  package state from product configuration, files, environment variables,
+  credentials, or Agent display data.
 - Local and remote identify Host placement and transport, not Agent identity.
 - `cs/platform/agentHost` owns the protocol, runtime, connection contract,
   Agent registry, Host-side `IAgent` contract, and language-neutral Agent
@@ -142,11 +161,14 @@ binding, target-backed Tools, or lazy Feature operations.
   servers, commands, mutation permissions, confirmation policy, Agent
   selection, model selection, and exposed Tool sets remain separate request
   fields.
-- Agent runtime resumption requires the same logical runtime identity,
+- Resuming an accepted active Turn requires the same logical runtime identity,
   registration revision, active-operation identities, and an explicitly
-  supported resume schema. Missing runtime state fails explicitly.
+  supported resume schema. A released Session or Chat may materialize after an
+  atomic package update only when the activated registration supports its
+  stored schema or an explicit Agent-owned state migration completed. Missing
+  runtime state fails explicitly.
 - Optional operations are capability-gated and fail explicitly when
   unsupported.
 - Do not branch on Agent IDs for behavior, probe for methods, try another Agent
-  or Host after failure, switch runtime packaging, or retain a second execution
-  path.
+  or Host after failure, switch runtime packaging, auto-install a package, try
+  another package source or revision, or retain a second execution path.

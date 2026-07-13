@@ -70,12 +70,20 @@ originating client.
 - `cs/platform/agentHost/browser` — remote-capable connection support
 - `cs/platform/agentHost/electron-browser` — desktop local Host connection
 - `cs/platform/agentHost/node` — Host runtime and runtime endpoint support
+- `cs/platform/agentHost/node/packages` — Agent package discovery, staging,
+  verification, installed catalog, operations, storage, and atomic activation
 - `cs/platform/agentHost/node/runtime` — generic connected Agent runtime
   negotiation, correlation, and lifecycle
 - `cs/platform/agentHost/node/agents/<agent>` — optional embedded Agent runtime
   implementations
 
 Agent Host is a Platform subsystem and never imports Workbench or Sessions.
+Comet is the only bundled and default-installed Agent package. Every optional
+Agent package is absent until an explicit user install operation commits for
+the addressed Host; Session creation and Turn execution never install or
+download it. Package ID, Agent ID, runtime registration, authentication, and
+materialization remain separate.
+
 `IAgent` is the single Host-facing semantic port. Embedded runtimes implement
 it under `cs/platform/agentHost/node/agents/<agent>`. External or cross-language
 runtimes implement its language-neutral Agent Runtime Protocol and join through
@@ -88,6 +96,9 @@ Agent Host contracts, connected-runtime support, and in-repository embedded
 runtime code belong in this subsystem rather than a parallel top-level
 `cs/agent` layer. A connected runtime package owns its implementation outside
 the TypeScript layer and exposes only the Agent Runtime Protocol to Agent Host.
+SDKs are private dependencies of installed Agent runtimes, not product
+installation identities. Sessions contributions never import the package
+manager or an SDK implementation.
 
 ## Sessions Organization
 

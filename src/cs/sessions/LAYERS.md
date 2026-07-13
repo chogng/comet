@@ -2,6 +2,7 @@
 
 For application ownership and layout, see [README.md](README.md),
 [SESSIONS.md](SESSIONS.md), [AGENT_HOST.md](AGENT_HOST.md),
+[AGENT_PACKAGES.md](AGENT_PACKAGES.md), [COMET_AGENT.md](COMET_AGENT.md),
 [ATTACHMENTS.md](ATTACHMENTS.md), [TOOLS.md](TOOLS.md),
 [INTERACTION_TARGETS.md](INTERACTION_TARGETS.md), and [LAYOUT.md](LAYOUT.md).
 
@@ -50,9 +51,10 @@ public Workbench APIs
 **Location:** `src/cs/platform/agentHost/**`
 
 Contains the environment-neutral Host protocol, Host connection contract,
-Agent registry, normalized content-resource contracts, canonical Tool and
-executor-binding contracts, Host-side `IAgent` port, language-neutral Agent
-Runtime Protocol, Node Host runtime, connected-runtime support, and optional
+Agent package manifests, catalogs and operations, Agent registry, normalized
+content-resource contracts, canonical Tool and executor-binding contracts,
+Host-side `IAgent` port, language-neutral Agent Runtime Protocol, Node Host
+runtime, package verification and activation, connected-runtime support, and
 embedded Agent runtimes. As a Platform subsystem it may import only Base and
 Platform modules. It never imports Editor, Workbench, Sessions, or Code.
 
@@ -62,6 +64,13 @@ Agent Runtime Protocol. Each runtime owns its SDK or model-provider projection;
 the Comet runtime owns Comet orchestration regardless of packaging. They do not
 implement `ISessionsProvider`, import Workbench Chat, or own local or remote
 Agent Host transport.
+
+`node/packages/` owns installable and installed catalogs, staging,
+verification, package operations, storage, and atomic activation. Comet is the
+only bundled and default-installed package. Optional packages are not loaded or
+registered until an explicit user install operation commits for the addressed
+Host. Sessions and provider contributions never import package management or
+SDK implementations.
 
 ### Sessions common
 
@@ -139,7 +148,9 @@ session contracts.
 The shared Agent Host provider implements `ISessionsProvider` for one
 `IAgentHostConnection` and registers through `ISessionsProvidersService`. It
 may use public Sessions contracts and public Workbench Chat model contracts
-needed to connect an addressed Chat resource.
+needed to connect an addressed Chat resource. It may project package catalog
+and operation state received through the connection, but it does not download,
+verify, install, update, uninstall, or load Agent packages.
 
 Local and remote contributions in the same provider family supply connections
 to the shared provider implementation. Agent runtimes do not register direct
@@ -244,7 +255,9 @@ Sessions feature contribution → provider implementation
 Sessions Part → concrete ChatWidget
 provider → Sessions Part or shell layout
 provider → sibling provider internals
+Sessions or provider implementation → Agent package manager or SDK internals
 Agent runtime → Workbench or Sessions
+Agent runtime → Agent package manager
 Platform Agent Host → Workbench or Sessions
 local or remote Agent Host connection → Agent runtime internals
 Agent runtime connection → Sessions provider or Workbench Feature internals

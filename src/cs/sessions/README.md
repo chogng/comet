@@ -72,9 +72,10 @@ src/cs/sessions/
 Core, services, non-provider contributions, and provider contributions have
 different dependency permissions. See [LAYERS.md](LAYERS.md).
 
-Agent contracts, runtime connections, and embedded implementations live in the
-lower `src/cs/platform/agentHost/` subsystem. Sessions consumes them only
-through an Agent Host connection and the shared provider contribution.
+Agent package lifecycle, Agent contracts, runtime connections, and embedded
+implementations live in the lower `src/cs/platform/agentHost/` subsystem.
+Sessions consumes them only through an Agent Host connection and the shared
+provider contribution.
 
 ## Documentation
 
@@ -82,6 +83,8 @@ through an Agent Host connection and the shared provider contribution.
 |---|---|
 | [SESSIONS.md](SESSIONS.md) | Domain model, services, providers, lifecycle, persistence, and Chat integration |
 | [AGENT_HOST.md](AGENT_HOST.md) | Agent Runtime Port, embedded and connected runtimes, Host connections, and Sessions integration |
+| [AGENT_PACKAGES.md](AGENT_PACKAGES.md) | Bundled and user-installed Agent packages, catalogs, verification, activation, update, and uninstall |
+| [COMET_AGENT.md](COMET_AGENT.md) | Comet execution configuration, model-and-Tool orchestration, Rust runtime slot, workers, and resumption |
 | [ATTACHMENTS.md](ATTACHMENTS.md) | Composer attachments, producers, content-resource transport, submission, and source-specific rules |
 | [TOOLS.md](TOOLS.md) | Canonical Tools, schema profiles, Turn-bound Tool sets, Agent projection, calls, results, and executor routing |
 | [INTERACTION_TARGETS.md](INTERACTION_TARGETS.md) | Request-scoped resource targets, explicit Chat binding, and lazy Tool operations |
@@ -95,14 +98,17 @@ through an Agent Host connection and the shared provider contribution.
 3. Put target-specific layout policy in `contrib/layout/`.
 4. Put optional changes, terminal, task, list, action, editor, and Chat
    integrations in `contrib/<feature>/`.
-5. Put embedded Agent runtimes in
+5. Put Agent package lifecycle in `cs/platform/agentHost/node/packages/`.
+   Comet is the only bundled and default-installed package; optional packages
+   require an explicit per-Host user install operation.
+6. Put embedded Agent runtimes in
    `cs/platform/agentHost/node/agents/<agent>/`; connect external or
    cross-language runtimes through the common Agent Runtime Protocol and
-   `IAgentRuntimeConnection`.
-6. Put shared Host-to-Sessions integration in `contrib/providers/agentHost/`
+   `IAgentRuntimeConnection`. Keep Comet orchestration behind the same port.
+7. Put shared Host-to-Sessions integration in `contrib/providers/agentHost/`
    together with local and remote connection registration.
-7. Keep reusable single-conversation and editor infrastructure in
+8. Keep reusable single-conversation and editor infrastructure in
    `cs/workbench` and integrate it from the higher Sessions layer.
-8. Register contributions only from Sessions entry points.
-9. Update the owning architecture, layout, and layer documents with every
+9. Register contributions only from Sessions entry points.
+10. Update the owning architecture, layout, and layer documents with every
    durable boundary change.

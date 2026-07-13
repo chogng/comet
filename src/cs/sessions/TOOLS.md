@@ -212,21 +212,25 @@ An Agent runtime that uses an SDK owns:
   surface;
 - deterministic SDK-visible aliases that satisfy its naming rules;
 - a bijective mapping from aliases to exact canonical registrations;
-- SDK installation, rebind, restart, and lifetime mechanics;
+- package-private SDK loading, session binding, rebind, restart, and lifetime
+  mechanics after the owning Agent package is activated;
 - normalization of SDK call identity, input, progress, and cancellation;
 - conversion of canonical results into the matching SDK call;
 - truthful projection capabilities and limits.
 
 SDK descriptors, callbacks, call handles, and result objects remain inside the
-Agent runtime. Agent Host never routes by a bare SDK name.
+Agent runtime. Package discovery, installation, update, uninstall, and Agent
+activation follow [Agent package architecture](AGENT_PACKAGES.md); a Tool or
+Turn path never installs an SDK. Agent Host never routes by a bare SDK name.
 
 The Comet runtime owns Comet's internal model and Tool loop, explicit execution
 budgets, normalized prompt construction, and model-provider request conversion.
-It may be embedded or supplied by a connected Comet Code SDK runtime. It
+It may be embedded or supplied by a connected Rust Comet Code runtime. It
 consumes the accepted canonical Tool set directly, invokes registrations
 through the Host Tool Execution Port, and feeds canonical results back into its
 model loop. Runtime packaging does not create another Tool contract or permit
-direct Feature callbacks.
+direct Feature callbacks. Its complete orchestration boundary is defined in
+[Comet Agent architecture](COMET_AGENT.md).
 
 Comet model-provider formats remain internal to the Comet runtime. They may
 encode canonical descriptors and results for a provider API, but they do not
@@ -397,6 +401,8 @@ Workbench Feature implementation.
 - Every model-visible Tool belongs to one accepted canonical Tool-set revision.
 - Every model call maps bijectively to one exact canonical registration.
 - SDK-specific formats remain inside the owning Agent runtime.
+- Agent package installation is separate from Tool preparation and execution;
+  neither a Tool nor a Turn can auto-install an SDK-backed Agent.
 - The Comet runtime consumes canonical Tools through its orchestration loop,
   regardless of whether that runtime is embedded or connected.
 - Every executor receives and returns canonical Tool data only.

@@ -10,6 +10,8 @@ Read these documents before changing Sessions code:
 - `src/cs/sessions/README.md`
 - `src/cs/sessions/SESSIONS.md`
 - `src/cs/sessions/AGENT_HOST.md`
+- `src/cs/sessions/AGENT_PACKAGES.md`
+- `src/cs/sessions/COMET_AGENT.md`
 - `src/cs/sessions/ATTACHMENTS.md`
 - `src/cs/sessions/TOOLS.md`
 - `src/cs/sessions/INTERACTION_TARGETS.md`
@@ -52,7 +54,12 @@ code / server
   identify Agent behavior; embedded and connected describe runtime binding.
 - `CometAgent` is Comet's built-in Agent integration and has stable Agent ID
   `comet`. Its runtime may be embedded or connected through the Agent Runtime
-  Protocol; runtime packaging is not Sessions state.
+  Protocol; runtime packaging is not Sessions state. The bundled `comet`
+  package is the only default-installed Agent package.
+- Copilot, Claude, Codex, and every other optional Agent package are absent
+  until an explicit user install operation commits for the addressed Host.
+  Sessions may expose a separate install action, but an installable catalog
+  entry is never an executable Agent selection.
 - One shared Agent Host Sessions provider maps each Host connection into the
   provider-independent Sessions domain. Local and remote contributions do not
   duplicate Session or Chat models.
@@ -119,6 +126,8 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
   connected runtimes use `IAgentRuntimeConnection`. Neither registers a direct
   Sessions provider, and one Agent ID never has dual runtime registration or a
   fallback runtime.
+- Draft creation, Session creation, restore, and send never install, update,
+  uninstall, download, inspect, or load an Agent SDK package.
 - Commands carry the originating session/chat context and never silently
   target the globally active session.
 

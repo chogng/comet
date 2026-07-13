@@ -4,7 +4,8 @@
 
 This migration covers the direct replacement of the built-in default Sessions
 provider and main-agent command path by the architecture defined in
-[AGENT_HOST.md](AGENT_HOST.md), [ATTACHMENTS.md](ATTACHMENTS.md),
+[AGENT_HOST.md](AGENT_HOST.md), [AGENT_PACKAGES.md](AGENT_PACKAGES.md),
+[COMET_AGENT.md](COMET_AGENT.md), [ATTACHMENTS.md](ATTACHMENTS.md),
 [TOOLS.md](TOOLS.md), and
 [INTERACTION_TARGETS.md](INTERACTION_TARGETS.md).
 
@@ -14,6 +15,11 @@ Comet Code runtime is not required to delete this migration document; the
 Agent Host composition must already register exactly one embedded or connected
 Comet runtime without changing Sessions, Chat, Turn, attachment, or Tool
 contracts.
+
+The migration also establishes the Host-owned Agent package lifecycle. Its
+default installed set contains only the bundled `comet` package. Optional
+Copilot, Claude, Codex, and other packages remain absent until an explicit user
+install operation commits for the addressed Host.
 
 The scoped files and final locations are:
 
@@ -48,7 +54,8 @@ The scoped files and final locations are:
 - `src/cs/workbench/services/llm/mainAgentPayload.ts`;
 - `src/cs/sessions/sessions.desktop.main.ts`;
 - `src/cs/sessions/sessions.web.main.ts`;
-- `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/ATTACHMENTS.md`,
+- `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/AGENT_PACKAGES.md`,
+  `src/cs/sessions/COMET_AGENT.md`, `src/cs/sessions/ATTACHMENTS.md`,
   `src/cs/sessions/TOOLS.md`, `src/cs/sessions/INTERACTION_TARGETS.md`,
   `src/cs/sessions/README.md`,
   `src/cs/sessions/SESSIONS.md`, `src/cs/sessions/LAYOUT.md`, and
@@ -113,12 +120,24 @@ copy upstream `defaultChat` routing, Feature-advisory directory handling,
 client-local URI assumptions, or permissive handling that can leave required
 state actions unapplied.
 
+The upstream SDK downloader also treats product-configured SDKs as available
+before their bytes are local and may trigger a cold download from first Agent
+use. That mechanism is a runtime dependency cache, not the target installation
+contract. The target does not copy create-on-use or send-on-use download:
+optional packages become executable only after a separate explicit install and
+activation transaction, while Comet is the sole bundled package.
+
 ## Final project-owned boundary
 
 - The `CometAgent` integration, with stable Agent ID `comet`, owns the built-in
-  Agent registration without defining its runtime packaging.
+  Agent registration. Its bundled package is the only default-installed Agent
+  package and may bind one embedded or connected runtime form.
+- Agent Host owns separate installable-package, installed-package, and active
+  runtime-registration catalogs. Optional packages require an explicit user
+  install for the addressed Host; Session and Turn paths never install or
+  download an SDK.
 - `IAgent` is the single Host-side semantic port. An embedded Comet runtime may
-  implement it directly; a connected Comet Code SDK runtime implements the
+  implement it directly; a connected Rust Comet Code runtime implements the
   language-neutral Agent Runtime Protocol through `IAgentRuntimeConnection`.
 - One Host authority accepts one active runtime registration per Agent ID. The
   registration declares exact descriptor, capability, Tool Schema Profile, and
@@ -164,6 +183,7 @@ The naming cutover is direct:
 | `DefaultSessionsProvider` | `AgentHostSessionsProvider` |
 | `DefaultSession` and `DefaultChat` | Host-identified provider models implementing `ISession` and `IChat` |
 | `mainAgent` and `run_main_agent_turn` | one `CometAgent` integration registered as `comet` through the Agent Runtime Port |
+| product-configured or first-use SDK download | explicit Host package install and activation; only `comet` is bundled |
 | `defaultChat` and `mainChat` roles | no durable role; address the exact Chat ID |
 | `sessions.providers.default` | one-time migration input, then deleted; Host catalog and Comet Agent resume state are authoritative |
 
@@ -176,9 +196,12 @@ names. No target registration imports or dispatches through the legacy path.
    initialization, typed errors, channel snapshots and contiguous revisions,
    complete replay-or-snapshot reconnection, retry-safe operation identities,
    Host-side `IAgent` port, language-neutral Agent Runtime Protocol,
-   `IAgentRuntimeConnection`, and Node runtime under
-   `src/cs/platform/agentHost/`. Keep Agent Host client connections and Agent
-   runtime connections as distinct protocols.
+   `IAgentRuntimeConnection`, Agent package identities, manifests, installable
+   and installed catalogs, package operations, and Node runtime under
+   `src/cs/platform/agentHost/`. Add direct package staging, verification,
+   storage, activation, update, uninstall, and retained-data ownership under
+   `node/packages/`. Keep Agent Host client connections and Agent runtime
+   connections as distinct protocols.
 2. Move canonical Agent and Tool protocol values shared by Host integrations
    from `src/cs/agent/` into Platform Agent Host common contracts. Move the
    current model-and-Tool loop and provider implementations into one embedded
@@ -225,9 +248,13 @@ names. No target registration imports or dispatches through the legacy path.
    document epochs so a target can address one navigation without pretending
    to be an immutable content snapshot.
 5. Register the `CometAgent` integration with Agent Host under Agent ID `comet`
-   and one exact runtime registration revision. Persist the opaque
-   resume-schema ID with Agent backing. Reject duplicate Agent IDs,
-   unsupported resume schemas, and runtime replacement during an active Turn.
+   through the bundled `comet` package and one exact runtime registration
+   revision. Make it the only default-installed package. Do not register or
+   download Copilot, Claude, Codex, or another optional package until an
+   explicit user install transaction commits for the addressed Host. Persist
+   the opaque resume-schema ID with Agent backing. Reject duplicate or partial
+   Agent registrations, unsupported resume schemas, and runtime or package
+   replacement during an active Turn.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
 7. Implement the shared `AgentHostSessionsProvider`, its provider-owned
@@ -294,8 +321,10 @@ names. No target registration imports or dispatches through the legacy path.
     folders, or other present-time Feature state when the old turn did not
     persist that association.
 12. Replace the desktop entry-point import of the legacy default provider with
-    local Agent Host registration. Register remote Host discovery only in
-    targets that provide a real remote connection implementation.
+    local Agent Host registration and activation of the bundled `comet`
+    package. Register remote Host discovery only in targets that provide a real
+    remote connection implementation. Do not register optional SDK-backed
+    Agents from product configuration or entry-point side effects.
 13. Update all tests to exercise the Agent contract, Host runtime, local and
     remote connections, shared Sessions provider, composer restoration,
     preparation failure, Host acceptance, acknowledgement reconciliation,
@@ -308,10 +337,13 @@ names. No target registration imports or dispatches through the legacy path.
     mapping, embedded and connected Comet Tool-loop execution, Agent Runtime
     Protocol negotiation, runtime-call correlation, resume-schema rejection,
     exact Turn resumption, runtime disconnect without implementation failover,
-    lazy target-backed reads, and connected-executor disconnect and effect
-    reconciliation. Cover typed Article item identity and Chat-origin Browser
-    target binding without DOM-order inference, including document-epoch
-    changes and snapshot content digests.
+    bundled-Comet-only initial package state, explicit optional-package
+    install, atomic activation and update, uninstall with retained Session
+    history, incompatible resume-schema rejection, package operation
+    reconciliation, lazy target-backed reads, and connected-executor disconnect
+    and effect reconciliation. Cover typed Article item identity and
+    Chat-origin Browser target binding without DOM-order inference, including
+    document-epoch changes and snapshot content digests.
 14. Delete `src/cs/sessions/contrib/providers/default/**`, the
    `run_main_agent_turn` command and payload contracts, default-provider
    storage, every `default`-prefixed implementation symbol and file, the
@@ -346,8 +378,8 @@ registration, catch-and-try-next logic, or a legacy command path.
 The migration is complete only when:
 
 1. The `CometAgent` integration is registered through Agent Host under Agent ID
-   `comet` and handles the built-in Agent end to end through one exact runtime
-   endpoint.
+   `comet`, is activated by the bundled `comet` package, and handles the
+   built-in Agent end to end through one exact runtime endpoint.
 2. Local and remote Host connections use the same protocol and shared Sessions
    provider implementation.
 3. Initialization negotiates one explicit version, channel state applies from
@@ -409,9 +441,17 @@ The migration is complete only when:
     conformance, resume-schema validation, Tool Execution Port, Agent
     projection, Comet orchestration, schema-profile, Sessions provider, Chat
     integration, entry-point, layer, and lifecycle tests pass.
-20. Durable documentation describes only the final Agent Host, Attachment,
-    Tool, and interaction-target architectures and keeps Agent runtime
-    packaging, Tool projection, executor routing, and Host placement separate.
+20. Durable documentation describes only the final Agent Host, Agent package,
+    Comet Agent, Attachment, Tool, and interaction-target architectures and
+    keeps package installation, Agent runtime packaging, Tool projection,
+    executor routing, and Host placement separate.
+21. The authoritative initial installed-package set contains only `comet`.
+    Installable, installed, activated, authenticated, and materialized states
+    are distinct; optional Agents require an explicit per-Host user install;
+    Session creation, restore, send, model selection, and Agent discovery
+    trigger no package or SDK download. Install, update, uninstall, retained
+    data, and uncertain package operations use the common Host protocol and
+    pass local and remote conformance tests.
 
 ## Deletion condition
 
