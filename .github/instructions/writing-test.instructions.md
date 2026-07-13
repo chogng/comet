@@ -30,6 +30,11 @@ applyTo: "{src/cs/**/test/**,src/cs/**/tests/**,src/cs/**/*.test.ts,src/cs/**/*.
 | Test infrastructure | `scripts/**/*.test.ts` | Test discovery, build, execution, and repository verification |
 | Application smoke | `test/smoke/src/**/*.test.ts` | The built Electron application driven through `test/automation` and Playwright APIs |
 
+Agent Host tests and their support modules live under
+`src/cs/platform/agentHost/test/{common,browser,electron-browser,node}/`,
+partitioned by the runtime they exercise. They do not live under Agent Host
+production runtime or component directories.
+
 Integration tests use deterministic local infrastructure, temporary
 directories, and local servers. A test that requires public network access,
 credentials, or a mutable third-party service belongs to an explicit opt-in

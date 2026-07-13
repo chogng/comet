@@ -18,8 +18,8 @@ const agentHostCommonEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
-  'common',
   'test',
+  'common',
   'agentHostProtocol.test.ts',
 );
 const agentPackageLifecycleEntryPoint = path.join(
@@ -28,9 +28,9 @@ const agentPackageLifecycleEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'packages',
-  'test',
   'agentPackageLifecycle.test.ts',
 );
 const agentHostAuthorityEntryPoint = path.join(
@@ -39,9 +39,9 @@ const agentHostAuthorityEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'host',
-  'test',
   'agentHostAuthority.test.ts',
 );
 const agentHostStateStoresEntryPoint = path.join(
@@ -50,9 +50,9 @@ const agentHostStateStoresEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'storage',
-  'test',
   'agentHostStateStores.test.ts',
 );
 const agentToolsEntryPoint = path.join(
@@ -61,9 +61,9 @@ const agentToolsEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'tools',
-  'test',
   'agentTools.test.ts',
 );
 const agentClientToolPublicationEntryPoint = path.join(
@@ -72,9 +72,9 @@ const agentClientToolPublicationEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'tools',
-  'test',
   'agentClientToolPublication.test.ts',
 );
 const clientAgentToolsEntryPoint = path.join(
@@ -83,8 +83,8 @@ const clientAgentToolsEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
-  'browser',
   'test',
+  'browser',
   'clientAgentTools.test.ts',
 );
 const clientContentResourcesEntryPoint = path.join(
@@ -93,8 +93,8 @@ const clientContentResourcesEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
-  'browser',
   'test',
+  'browser',
   'clientContentResources.test.ts',
 );
 const localAgentHostConnectionEntryPoint = path.join(
@@ -103,8 +103,8 @@ const localAgentHostConnectionEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
-  'electron-browser',
   'test',
+  'electron-browser',
   'localAgentHostConnection.test.ts',
 );
 const agentContentResourceServiceEntryPoint = path.join(
@@ -113,9 +113,9 @@ const agentContentResourceServiceEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'content',
-  'test',
   'agentContentResourceService.test.ts',
 );
 const cometAgentEntryPoint = path.join(
@@ -124,10 +124,10 @@ const cometAgentEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'agents',
   'comet',
-  'test',
   'cometAgent.test.ts',
 );
 const openAIResponsesEntryPoint = path.join(
@@ -136,10 +136,10 @@ const openAIResponsesEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'agents',
   'comet',
-  'test',
   'openAIResponses.test.ts',
 );
 const openAIChatCompletionsEntryPoint = path.join(
@@ -148,10 +148,10 @@ const openAIChatCompletionsEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'agents',
   'comet',
-  'test',
   'openAIChatCompletions.test.ts',
 );
 const connectedAgentRuntimeEntryPoint = path.join(
@@ -160,9 +160,9 @@ const connectedAgentRuntimeEntryPoint = path.join(
   'cs',
   'platform',
   'agentHost',
+  'test',
   'node',
   'runtime',
-  'test',
   'connectedAgentRuntime.test.ts',
 );
 const agentHostCommonOutputFile = path.join(outputDir, 'agent-host-common.test.mjs');

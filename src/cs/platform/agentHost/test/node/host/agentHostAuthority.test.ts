@@ -75,7 +75,7 @@ import {
 	getAgentHostSessionsChannelId,
 } from 'cs/platform/agentHost/common/protocol';
 import type { IAgentToolSet } from 'cs/platform/agentHost/common/tools';
-import { runAgentHostSubscriptionConformanceScenario } from 'cs/platform/agentHost/common/test/agentHostConnectionConformance';
+import { runAgentHostSubscriptionConformanceScenario } from 'cs/platform/agentHost/test/common/agentHostConnectionConformance';
 import {
 	AgentPackageLifecycle,
 	type IAgentPackageArtifactPort,
@@ -85,7 +85,7 @@ import {
 import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
 import type { IAgentToolTurnAuthorityPort, IAgentToolTurnBinding } from 'cs/platform/agentHost/node/tools/agentToolCallAuthority';
 import { COMET_AGENT_RESUME_SCHEMA } from 'cs/platform/agentHost/node/agents/comet/cometResume';
-import { AgentHostAuthority, type IAgentHostAuthorityOptions } from '../agentHostAuthority.js';
+import { AgentHostAuthority, type IAgentHostAuthorityOptions } from 'cs/platform/agentHost/node/host/agentHostAuthority';
 import {
 	createEmptyAgentHostCatalog,
 	migrateLegacySessionsCatalog,
@@ -93,7 +93,7 @@ import {
 	type IAgentHostLegacyCatalogSource,
 	type IAgentHostLegacyCatalogMigrationCompanion,
 	type IAgentHostPersistedCatalog,
-} from '../agentHostCatalog.js';
+} from 'cs/platform/agentHost/node/host/agentHostCatalog';
 
 const packageId = createAgentPackageId('comet');
 const agentId = createAgentId('comet');

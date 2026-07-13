@@ -50,8 +50,8 @@ import {
 	IAgentPackageRuntimePort,
 	IAgentPackageStateStore,
 	computeAgentResumeStateDigest,
-} from '../agentPackageLifecycle.js';
-import type { IVerifiedAgentPackage } from '../agentPackageTypes.js';
+} from 'cs/platform/agentHost/node/packages/agentPackageLifecycle';
+import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
 
 const hostTarget: IAgentPackageTarget = {
 	operatingSystem: 'test-os',

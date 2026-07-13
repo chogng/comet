@@ -26,9 +26,9 @@ import {
 	type IAgentToolExecutorEndpoint,
 	type IAgentToolRegistration,
 } from 'cs/platform/agentHost/common/tools';
-import { AgentClientToolPublication } from '../agentClientToolPublication.js';
-import { AgentToolEndpointRegistry } from '../agentToolExecution.js';
-import { AgentToolRegistry } from '../agentToolRegistry.js';
+import { AgentClientToolPublication } from 'cs/platform/agentHost/node/tools/agentClientToolPublication';
+import { AgentToolEndpointRegistry } from 'cs/platform/agentHost/node/tools/agentToolExecution';
+import { AgentToolRegistry } from 'cs/platform/agentHost/node/tools/agentToolRegistry';
 
 const connection = createAgentHostClientConnectionId('client-publication-test');
 

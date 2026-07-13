@@ -71,16 +71,16 @@ import {
 	AgentToolExecutionService,
 	IAgentToolCallAuthorityPort,
 	IAgentToolTimerPort,
-} from '../agentToolExecution.js';
+} from 'cs/platform/agentHost/node/tools/agentToolExecution';
 import {
 	AgentToolCallAuthority,
 	type IAgentToolPermissionPort,
-} from '../agentToolCallAuthority.js';
-import { AgentToolRegistry } from '../agentToolRegistry.js';
+} from 'cs/platform/agentHost/node/tools/agentToolCallAuthority';
+import { AgentToolRegistry } from 'cs/platform/agentHost/node/tools/agentToolRegistry';
 import {
 	AgentToolSetPreparationService,
 	IAgentToolSetPreparationRequest,
-} from '../agentToolSetPreparation.js';
+} from 'cs/platform/agentHost/node/tools/agentToolSetPreparation';
 
 const authorityId = createAgentHostAuthorityId('local');
 const packageId = createAgentPackageId('test.package');

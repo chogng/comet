@@ -13,7 +13,7 @@ import {
 	ApplicationStorageAgentHostCatalogStore,
 	ApplicationStorageAgentPackageStateStore,
 	ApplicationStorageLegacyAgentHostCatalogSource,
-} from '../agentHostStateStores.js';
+} from 'cs/platform/agentHost/node/storage/agentHostStateStores';
 
 const legacyAgentHostCatalogStorageKey = 'agentHost.catalog.v1';
 const agentHostCatalogStorageKey = 'agentHost.catalog.v2';
