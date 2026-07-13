@@ -16,9 +16,9 @@ export const ragProviders: ReadonlyArray<RagProviderDefinition> = [
     id: 'moark',
     label: 'Moark',
     apiStyle: 'openai-compatible+rerank',
-    defaultBaseUrl: 'https://api.moark.com/v1',
+    defaultBaseUrl: 'https://api.moark.ai/v1',
     defaultEmbeddingPath: '/embeddings',
-    defaultRerankPath: '/rerank/multimodal',
+    defaultRerankPath: '/rerank',
   },
 ];
 

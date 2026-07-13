@@ -1,330 +1,451 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { CancellationError } from 'cs/base/common/errors';
+import { cleanText } from 'cs/base/common/strings';
 import type {
-  RagConnectionTestResult,
-  RagProviderId,
-  TestRagConnectionPayload,
+	RagConnectionTestResult,
+	RagProviderId,
+	TestRagConnectionPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { RagErrorCode, isRagError, ragError } from 'cs/workbench/services/rag/ragErrors';
-import { cleanText } from 'cs/base/common/strings';
-import { defaultRagProviderId } from 'cs/workbench/services/rag/config';
 import { isRagProviderId } from 'cs/workbench/services/rag/registry';
 
-const ragTestTimeoutMs = 20000;
+const ragConnectionTestTimeoutMs = 20000;
+const maximumErrorResponseLength = 4096;
 
-export type ResolvedMoarkRequest = {
-  provider: RagProviderId;
-  apiKey: string;
-  baseUrl: string;
-  embeddingModel: string;
-  rerankerModel: string;
-  embeddingPath: string;
-  rerankPath: string;
-};
+export interface ResolvedMoarkRequest {
+	readonly provider: RagProviderId;
+	readonly apiKey: string;
+	readonly baseUrl: string;
+	readonly embeddingModel: string;
+	readonly rerankerModel: string;
+	readonly embeddingPath: string;
+	readonly rerankPath: string;
+}
 
-type MoarkRerankResult = {
-  index: number;
-  score: number | null;
-};
+export interface MoarkRequestOptions {
+	readonly timeoutMs: number;
+	readonly signal?: AbortSignal;
+}
+
+export interface MoarkRerankResult {
+	readonly index: number;
+	readonly score: number;
+}
+
+function invalidConfiguration(
+	provider: RagProviderId,
+	statusText: string,
+): never {
+	throw ragError(RagErrorCode.ConnectionFailed, {
+		provider,
+		status: 'INVALID_CONFIGURATION',
+		statusText,
+	});
+}
+
+function invalidResponse(
+	request: ResolvedMoarkRequest,
+	statusText: string,
+): never {
+	throw ragError(RagErrorCode.ConnectionFailed, {
+		provider: request.provider,
+		status: 'INVALID_RESPONSE',
+		statusText,
+	});
+}
 
 function normalizeProvider(value: unknown): RagProviderId {
-  if (!isRagProviderId(value)) {
-    throw ragError(RagErrorCode.ProviderUnsupported, {
-      provider: typeof value === 'string' ? value : '',
-    });
-  }
+	if (!isRagProviderId(value)) {
+		throw ragError(RagErrorCode.ProviderUnsupported, {
+			provider: typeof value === 'string' ? value : '',
+		});
+	}
 
-  return value;
+	return value;
 }
 
 function normalizeBaseUrl(value: unknown): string {
-  const baseUrl = cleanText(value);
-  if (!baseUrl) {
-    throw ragError(RagErrorCode.BaseUrlInvalid, { value: '' });
-  }
+	const baseUrl = cleanText(value);
+	if (!baseUrl) {
+		throw ragError(RagErrorCode.BaseUrlInvalid, { value: '' });
+	}
 
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(baseUrl);
-  } catch {
-    throw ragError(RagErrorCode.BaseUrlInvalid, { value: baseUrl });
-  }
+	let parsedUrl: URL;
+	try {
+		parsedUrl = new URL(baseUrl);
+	} catch {
+		throw ragError(RagErrorCode.BaseUrlInvalid, { value: baseUrl });
+	}
 
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    throw ragError(RagErrorCode.BaseUrlInvalid, { value: baseUrl });
-  }
+	if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+		throw ragError(RagErrorCode.BaseUrlInvalid, { value: baseUrl });
+	}
+	if (parsedUrl.username || parsedUrl.password || parsedUrl.search || parsedUrl.hash) {
+		throw ragError(RagErrorCode.BaseUrlInvalid, { value: baseUrl });
+	}
 
-  return parsedUrl.toString().replace(/\/+$/, '');
+	return parsedUrl.toString().replace(/\/+$/, '');
 }
 
 function normalizeApiKey(value: unknown): string {
-  const apiKey = cleanText(value);
-  if (!apiKey) {
-    throw ragError(RagErrorCode.ApiKeyMissing);
-  }
+	const apiKey = cleanText(value);
+	if (!apiKey) {
+		throw ragError(RagErrorCode.ApiKeyMissing);
+	}
 
-  return apiKey;
+	return apiKey;
 }
 
 function normalizeEmbeddingModel(value: unknown): string {
-  const embeddingModel = cleanText(value);
-  if (!embeddingModel) {
-    throw ragError(RagErrorCode.EmbeddingModelMissing);
-  }
+	const embeddingModel = cleanText(value);
+	if (!embeddingModel) {
+		throw ragError(RagErrorCode.EmbeddingModelMissing);
+	}
 
-  return embeddingModel;
+	return embeddingModel;
 }
 
 function normalizeRerankerModel(value: unknown): string {
-  const rerankerModel = cleanText(value);
-  if (!rerankerModel) {
-    throw ragError(RagErrorCode.RerankerModelMissing);
-  }
+	const rerankerModel = cleanText(value);
+	if (!rerankerModel) {
+		throw ragError(RagErrorCode.RerankerModelMissing);
+	}
 
-  return rerankerModel;
+	return rerankerModel;
 }
 
-function normalizeEndpointPath(value: unknown, fallbackValue: string): string {
-  const endpointPath = cleanText(value) || fallbackValue;
-  if (/^https?:\/\//i.test(endpointPath)) {
-    return endpointPath.replace(/\/+$/, '');
-  }
+function normalizeEndpointPath(
+	provider: RagProviderId,
+	value: unknown,
+	field: 'embeddingPath' | 'rerankPath',
+): string {
+	const endpointPath = cleanText(value);
+	if (!endpointPath) {
+		invalidConfiguration(provider, `MoArk ${field} is required.`);
+	}
 
-  return endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+	if (/^[a-z][a-z\d+.-]*:/i.test(endpointPath)) {
+		let parsedUrl: URL;
+		try {
+			parsedUrl = new URL(endpointPath);
+		} catch {
+			invalidConfiguration(provider, `MoArk ${field} must be an HTTP or HTTPS URL or path.`);
+		}
+		if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+			invalidConfiguration(provider, `MoArk ${field} must use HTTP or HTTPS.`);
+		}
+		if (parsedUrl.username || parsedUrl.password || parsedUrl.hash) {
+			invalidConfiguration(provider, `MoArk ${field} must not contain credentials or a fragment.`);
+		}
+		return parsedUrl.toString().replace(/\/+$/, '');
+	}
+	if (endpointPath.includes('#')) {
+		invalidConfiguration(provider, `MoArk ${field} must not contain a fragment.`);
+	}
+
+	return endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
 }
 
 function buildEndpointUrl(baseUrl: string, endpointPath: string): string {
-  if (/^https?:\/\//i.test(endpointPath)) {
-    return endpointPath;
-  }
+	if (/^https?:\/\//i.test(endpointPath)) {
+		return endpointPath;
+	}
 
-  return `${baseUrl}${endpointPath}`;
+	return `${baseUrl}${endpointPath}`;
 }
 
-function createHeaders(apiKey: string) {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey}`,
-  };
+function createHeaders(apiKey: string): Record<string, string> {
+	return {
+		'Content-Type': 'application/json',
+		Authorization: `Bearer ${apiKey}`,
+		'X-Failover-Enabled': 'false',
+	};
+}
+
+function assertRequestOptions(options: MoarkRequestOptions): void {
+	if (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0) {
+		throw new RangeError('MoArk request timeout must be a positive safe integer.');
+	}
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+	if (signal?.aborted) {
+		throw new CancellationError();
+	}
 }
 
 async function requestJson(
-  request: ResolvedMoarkRequest,
-  url: string,
-  body: unknown,
-  timeoutMs: number,
+	request: ResolvedMoarkRequest,
+	url: string,
+	body: unknown,
+	options: MoarkRequestOptions,
 ): Promise<unknown> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
+	assertRequestOptions(options);
+	throwIfAborted(options.signal);
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: createHeaders(request.apiKey),
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+	const controller = new AbortController();
+	const abort = { kind: 'none' as 'none' | 'cancelled' | 'timeout' };
+	const abortFromExternalSignal = () => {
+		if (abort.kind !== 'none') {
+			return;
+		}
+		abort.kind = 'cancelled';
+		controller.abort();
+	};
+	const timeoutId = setTimeout(() => {
+		if (abort.kind !== 'none') {
+			return;
+		}
+		abort.kind = 'timeout';
+		controller.abort();
+	}, options.timeoutMs);
+	options.signal?.addEventListener('abort', abortFromExternalSignal, { once: true });
+	if (options.signal?.aborted) {
+		abortFromExternalSignal();
+	}
 
-    if (!response.ok) {
-      const errorText = cleanText(await response.text());
-      throw ragError(RagErrorCode.ConnectionFailed, {
-        provider: request.provider,
-        status: response.status,
-        statusText: response.statusText || errorText || 'Request failed',
-      });
-    }
+	try {
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: createHeaders(request.apiKey),
+			body: JSON.stringify(body),
+			signal: controller.signal,
+		});
+		throwIfAborted(options.signal);
 
-    return (await response.json()) as unknown;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw ragError(RagErrorCode.ConnectionFailed, {
-        provider: request.provider,
-        status: 'TIMEOUT',
-        statusText: `Connection timed out after ${timeoutMs}ms`,
-      });
-    }
+		if (!response.ok) {
+			const errorText = cleanText(await response.text()).slice(0, maximumErrorResponseLength);
+			throw ragError(RagErrorCode.ConnectionFailed, {
+				provider: request.provider,
+				status: response.status,
+				statusText: errorText,
+			});
+		}
 
-    if (isRagError(error)) {
-      throw error;
-    }
+		try {
+			const payload = await response.json() as unknown;
+			throwIfAborted(options.signal);
+			return payload;
+		} catch (error) {
+			if (error instanceof CancellationError || error instanceof Error && error.name === 'AbortError') {
+				throw error;
+			}
+			invalidResponse(request, 'MoArk response body is not valid JSON.');
+		}
+	} catch (error) {
+		if (error instanceof Error && error.name === 'AbortError') {
+			if (abort.kind === 'cancelled') {
+				throw new CancellationError();
+			}
+			if (abort.kind === 'timeout') {
+				throw ragError(RagErrorCode.ConnectionFailed, {
+					provider: request.provider,
+					status: 'TIMEOUT',
+					statusText: `Connection timed out after ${options.timeoutMs}ms`,
+				});
+			}
+		}
 
-    throw ragError(RagErrorCode.ConnectionFailed, {
-      provider: request.provider,
-      status: 'NETWORK_ERROR',
-      statusText: error instanceof Error ? error.message : String(error),
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
+		if (error instanceof CancellationError || isRagError(error)) {
+			throw error;
+		}
+
+		throw ragError(RagErrorCode.ConnectionFailed, {
+			provider: request.provider,
+			status: 'NETWORK_ERROR',
+			statusText: error instanceof Error ? error.message : String(error),
+		});
+	} finally {
+		options.signal?.removeEventListener('abort', abortFromExternalSignal);
+		clearTimeout(timeoutId);
+	}
 }
 
-function parseEmbeddingResponse(payload: unknown): number[][] {
-  if (!payload || typeof payload !== 'object') {
-    throw ragError(RagErrorCode.ConnectionFailed, {
-      status: 'INVALID_RESPONSE',
-      statusText: 'Embedding response payload is not an object.',
-    });
-  }
+function parseEmbeddingResponse(
+	request: ResolvedMoarkRequest,
+	payload: unknown,
+	expectedCount: number,
+): number[][] {
+	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+		invalidResponse(request, 'Embedding response payload must be an object.');
+	}
 
-  const data = (payload as { data?: Array<{ embedding?: unknown }> }).data;
-  if (!Array.isArray(data) || data.length === 0) {
-    throw ragError(RagErrorCode.ConnectionFailed, {
-      status: 'INVALID_RESPONSE',
-      statusText: 'Embedding response data is empty.',
-    });
-  }
+	const data = (payload as { data?: unknown }).data;
+	if (!Array.isArray(data) || data.length !== expectedCount) {
+		invalidResponse(request, `Embedding response must contain exactly ${expectedCount} indexed vectors.`);
+	}
 
-  return data.map((item) => {
-    if (!Array.isArray(item?.embedding)) {
-      throw ragError(RagErrorCode.ConnectionFailed, {
-        status: 'INVALID_RESPONSE',
-        statusText: 'Embedding vector is missing.',
-      });
-    }
+	const embeddings: number[][] = [];
+	const indexes = new Set<number>();
+	let vectorLength: number | undefined;
+	for (const value of data) {
+		if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+			invalidResponse(request, 'Each embedding result must be an object.');
+		}
+		const item = value as { index?: unknown; embedding?: unknown };
+		if (!Number.isSafeInteger(item.index) || (item.index as number) < 0 || (item.index as number) >= expectedCount) {
+			invalidResponse(request, 'Embedding result index is outside the request range.');
+		}
+		const index = item.index as number;
+		if (indexes.has(index)) {
+			invalidResponse(request, `Embedding response contains duplicate index ${index}.`);
+		}
+		indexes.add(index);
 
-    return item.embedding.map((value) => Number(value));
-  });
+		if (!Array.isArray(item.embedding) || item.embedding.length === 0) {
+			invalidResponse(request, `Embedding vector ${index} must be a non-empty array.`);
+		}
+		if (item.embedding.some(component => typeof component !== 'number' || !Number.isFinite(component))) {
+			invalidResponse(request, `Embedding vector ${index} contains a non-finite component.`);
+		}
+		const embedding = item.embedding as number[];
+		if (vectorLength === undefined) {
+			vectorLength = embedding.length;
+		} else if (embedding.length !== vectorLength) {
+			invalidResponse(request, 'Embedding response vectors must have one consistent dimension.');
+		}
+		embeddings[index] = embedding;
+	}
+
+	return Array.from({ length: expectedCount }, (_value, index) => {
+		const embedding = embeddings[index];
+		if (!embedding) {
+			invalidResponse(request, `Embedding response is missing index ${index}.`);
+		}
+		return embedding;
+	});
 }
 
-function parseRerankResponse(payload: unknown): MoarkRerankResult[] {
-  if (!payload || typeof payload !== 'object') {
-    return [];
-  }
+function parseRerankResponse(
+	request: ResolvedMoarkRequest,
+	payload: unknown,
+	documentCount: number,
+): MoarkRerankResult[] {
+	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+		invalidResponse(request, 'Rerank response payload must be an object.');
+	}
 
-  const data = (
-    payload as {
-      results?: Array<{ index?: unknown; relevance_score?: unknown; score?: unknown }>;
-      data?: Array<{ index?: unknown; relevance_score?: unknown; score?: unknown }>;
-    }
-  ).results ?? (
-    payload as {
-      data?: Array<{ index?: unknown; relevance_score?: unknown; score?: unknown }>;
-    }
-  ).data;
+	const results = (payload as { results?: unknown }).results;
+	if (!Array.isArray(results) || results.length !== documentCount) {
+		invalidResponse(request, `Rerank response must contain exactly ${documentCount} indexed results.`);
+	}
 
-  if (!Array.isArray(data)) {
-    return [];
-  }
+	const indexes = new Set<number>();
+	return results.map(value => {
+		if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+			invalidResponse(request, 'Each rerank result must be an object.');
+		}
+		const item = value as { index?: unknown; relevance_score?: unknown };
+		if (!Number.isSafeInteger(item.index) || (item.index as number) < 0 || (item.index as number) >= documentCount) {
+			invalidResponse(request, 'Rerank result index is outside the request range.');
+		}
+		const index = item.index as number;
+		if (indexes.has(index)) {
+			invalidResponse(request, `Rerank response contains duplicate index ${index}.`);
+		}
+		indexes.add(index);
+		if (typeof item.relevance_score !== 'number' || !Number.isFinite(item.relevance_score)) {
+			invalidResponse(request, `Rerank result ${index} must contain a finite relevance_score.`);
+		}
 
-  return data
-    .map((item) => {
-      const index = Number(item?.index);
-      if (!Number.isFinite(index)) {
-        return null;
-      }
-
-      const rawScore =
-        typeof item?.relevance_score === 'number'
-          ? item.relevance_score
-          : typeof item?.score === 'number'
-            ? item.score
-            : null;
-
-      return {
-        index,
-        score: rawScore,
-      };
-    })
-    .filter((item): item is MoarkRerankResult => Boolean(item));
+		return {
+			index,
+			score: item.relevance_score,
+		};
+	});
 }
 
-export function resolveMoarkRequest(payload: TestRagConnectionPayload = {}): ResolvedMoarkRequest {
-  return {
-    provider: normalizeProvider(payload.provider ?? defaultRagProviderId),
-    apiKey: normalizeApiKey(payload.apiKey),
-    baseUrl: normalizeBaseUrl(payload.baseUrl),
-    embeddingModel: normalizeEmbeddingModel(payload.embeddingModel),
-    rerankerModel: normalizeRerankerModel(payload.rerankerModel),
-    embeddingPath: normalizeEndpointPath(payload.embeddingPath, '/embeddings'),
-    rerankPath: normalizeEndpointPath(payload.rerankPath, '/rerank/multimodal'),
-  };
+function assertInputStrings(values: readonly string[], description: string): void {
+	if (values.length === 0) {
+		throw new TypeError(`${description} must contain at least one string.`);
+	}
+	values.forEach((value, index) => {
+		if (typeof value !== 'string' || cleanText(value).length === 0) {
+			throw new TypeError(`${description} ${index} must be a non-empty string.`);
+		}
+	});
+}
+
+export function resolveMoarkRequest(payload: TestRagConnectionPayload): ResolvedMoarkRequest {
+	const provider = normalizeProvider(payload.provider);
+	return {
+		provider,
+		apiKey: normalizeApiKey(payload.apiKey),
+		baseUrl: normalizeBaseUrl(payload.baseUrl),
+		embeddingModel: normalizeEmbeddingModel(payload.embeddingModel),
+		rerankerModel: normalizeRerankerModel(payload.rerankerModel),
+		embeddingPath: normalizeEndpointPath(provider, payload.embeddingPath, 'embeddingPath'),
+		rerankPath: normalizeEndpointPath(provider, payload.rerankPath, 'rerankPath'),
+	};
 }
 
 export async function requestMoarkEmbeddings(
-  request: ResolvedMoarkRequest,
-  input: string[],
-  timeoutMs = ragTestTimeoutMs,
+	request: ResolvedMoarkRequest,
+	input: readonly string[],
+	options: MoarkRequestOptions,
 ): Promise<number[][]> {
-  const responseJson = await requestJson(
-    request,
-    buildEndpointUrl(request.baseUrl, request.embeddingPath),
-    {
-      model: request.embeddingModel,
-      input,
-    },
-    timeoutMs,
-  );
+	assertInputStrings(input, 'MoArk embedding input');
+	const responseJson = await requestJson(
+		request,
+		buildEndpointUrl(request.baseUrl, request.embeddingPath),
+		{
+			model: request.embeddingModel,
+			input,
+		},
+		options,
+	);
 
-  return parseEmbeddingResponse(responseJson);
+	return parseEmbeddingResponse(request, responseJson, input.length);
 }
 
 export async function requestMoarkRerank(
-  request: ResolvedMoarkRequest,
-  query: string,
-  documents: string[],
-  topN: number,
-  timeoutMs = ragTestTimeoutMs,
+	request: ResolvedMoarkRequest,
+	query: string,
+	documents: readonly string[],
+	options: MoarkRequestOptions,
 ): Promise<MoarkRerankResult[]> {
-  const url = buildEndpointUrl(request.baseUrl, request.rerankPath);
-  const attempts = [
-    {
-      model: request.rerankerModel,
-      query,
-      documents,
-      top_n: topN,
-      return_documents: true,
-    },
-    {
-      model: request.rerankerModel,
-      query,
-      documents: documents.map((text) => ({ text })),
-      top_n: topN,
-      return_documents: true,
-    },
-  ];
+	if (!cleanText(query)) {
+		throw ragError(RagErrorCode.QueryEmpty);
+	}
+	assertInputStrings(documents, 'MoArk rerank documents');
+	const responseJson = await requestJson(
+		request,
+		buildEndpointUrl(request.baseUrl, request.rerankPath),
+		{
+			model: request.rerankerModel,
+			query,
+			documents,
+		},
+		options,
+	);
 
-  let lastError: unknown = null;
-  for (const attempt of attempts) {
-    try {
-      const responseJson = await requestJson(request, url, attempt, timeoutMs);
-      const results = parseRerankResponse(responseJson);
-      if (results.length > 0) {
-        return results;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  if (lastError) {
-    throw lastError;
-  }
-
-  throw ragError(RagErrorCode.ConnectionFailed, {
-    provider: request.provider,
-    status: 'INVALID_RESPONSE',
-    statusText: 'Rerank response did not return any results.',
-  });
+	return parseRerankResponse(request, responseJson, documents.length);
 }
 
 export async function testMoarkConnection(
-  payload: TestRagConnectionPayload = {},
+	payload: TestRagConnectionPayload,
+	signal?: AbortSignal,
 ): Promise<RagConnectionTestResult> {
-  const request = resolveMoarkRequest(payload);
-  const embeddings = await requestMoarkEmbeddings(request, ['test', 'validation']);
-  const rerankResults = await requestMoarkRerank(
-    request,
-    'Which document is about literature?',
-    ['This document is about literature review.', 'This document is about weather.'],
-    2,
-  );
+	const request = resolveMoarkRequest(payload);
+	const options = { timeoutMs: ragConnectionTestTimeoutMs, signal } satisfies MoarkRequestOptions;
+	const embeddings = await requestMoarkEmbeddings(request, ['test', 'validation'], options);
+	const rerankResults = await requestMoarkRerank(
+		request,
+		'Which document is about literature?',
+		['This document is about literature review.', 'This document is about weather.'],
+		options,
+	);
 
-  return {
-    provider: request.provider,
-    baseUrl: request.baseUrl,
-    embeddingModel: request.embeddingModel,
-    rerankerModel: request.rerankerModel,
-    embeddingDimensions: embeddings[0]?.length ?? 0,
-    rerankCount: rerankResults.length,
-  };
+	return {
+		provider: request.provider,
+		baseUrl: request.baseUrl,
+		embeddingModel: request.embeddingModel,
+		rerankerModel: request.rerankerModel,
+		embeddingDimensions: embeddings[0].length,
+		rerankCount: rerankResults.length,
+	};
 }

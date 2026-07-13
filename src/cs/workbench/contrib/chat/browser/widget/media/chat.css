@@ -24,19 +24,11 @@
   align-items: center;
 }
 
-.comet-session-chat-view-body.comet-is-article-batch-state {
-  justify-content: flex-start;
-}
-
 .comet-chat-thread-widget {
   flex: 1;
   min-height: 0;
   position: relative;
   width: 100%;
-}
-
-.comet-session-chat-view-body.comet-is-article-batch-state > .comet-session-chat-view-thread {
-  flex: 0 1 auto;
 }
 
 .comet-chat-thread-widget.comet-is-empty {
@@ -196,10 +188,6 @@
   gap: 8px;
 }
 
-.comet-session-chat-view-body.comet-is-article-batch-state > .comet-chat-composer-host {
-  margin-top: 0;
-}
-
 .comet-chat-composer-host.comet-is-empty-state {
   --comet-chat-composer-max-width: 680px;
   margin-top: 0;
@@ -233,6 +221,54 @@
   font: inherit;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.comet-chat-composer-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 8px 0;
+}
+
+.comet-chat-composer-context-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 4px;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid #dce5ee;
+  border-radius: 999px;
+  background: #f4f8fb;
+  color: #304357;
+  font-size: 11px;
+}
+
+.comet-chat-composer-context-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comet-chat-composer-context-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+}
+
+.comet-chat-composer-context-remove:not(:disabled):hover {
+  background: #e2eaf2;
+}
+
+.comet-chat-composer-context-remove:disabled {
+  opacity: 0.5;
 }
 
 .comet-chat-composer-toolbar {
@@ -406,192 +442,102 @@
   font-size: 16px;
 }
 
-.comet-chat-composer-article-menu {
-  box-sizing: border-box;
-  max-height: min(340px, var(--comet-context-view-available-height, 340px));
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid #d8d8d8;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 12px 32px rgba(25, 35, 45, 0.16);
-  overflow: hidden;
-}
-
-.comet-chat-composer-article-menu-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.comet-chat-composer-article-menu-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: #5c6a78;
-  font-size: 12px;
-  line-height: 1.3;
-}
-
-.comet-chat-composer-article-menu-title .lx-icon {
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
-}
-
-.comet-chat-composer-article-menu-actions.comet-actionbar {
-  --cs-actionbar-radius: 6px;
-  --cs-actionbar-foreground: #1a2530;
-  --cs-actionbar-hover-foreground: #1a2530;
-  --cs-actionbar-hover-background: var(--comet-toolbar-hoverBackground);
-  --cs-actionbar-active-foreground: #1a2530;
-  --cs-actionbar-active-background: var(--comet-toolbar-activeBackground);
-}
-
-.comet-chat-composer-article-menu-actions .comet-actionbar-action.comet-chat-composer-article-menu-close {
-  width: 28px;
-  height: 28px;
-}
-
-.comet-chat-composer-article-menu-actions .comet-actionbar-action.comet-chat-composer-article-menu-close .lx-icon {
-  width: 16px;
-  height: 16px;
-  font-size: 16px;
-}
-
-.comet-chat-composer-article-source-list {
-  display: grid;
-  min-height: 0;
-  max-height: none;
-}
-
-.comet-chat-composer-article-source-scrollable {
-  height: 100%;
-  min-height: 0;
-  max-height: none;
-}
-
-.comet-chat-composer-article-source-scrollable > .comet-chat-composer-article-source-list.comet-scrollable-content {
-  position: relative;
-  inset: auto;
-  height: 100%;
-  min-height: 0;
-  max-height: none;
-}
-
-.comet-chat-composer-article-source {
-  width: 100%;
-  min-height: 38px;
-  padding: 0 10px;
-  border: 0;
-  border-top: 1px solid #edf1f5;
-  background: transparent;
-  color: #273544;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.35;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.comet-chat-composer-article-source:first-child {
-  border-top: 0;
-}
-
-.comet-chat-composer-article-source:hover:not(:disabled),
-.comet-chat-composer-article-source:focus-visible {
-  background: #f6f8fa;
-  outline: none;
-}
-
-.comet-chat-composer-article-source:disabled {
-  color: #9aa7b4;
-  cursor: default;
-}
-
-.comet-chat-result {
-  display: grid;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #e2e9f1;
-  border-radius: 10px;
-  background: #ffffff;
-}
-
-.comet-chat-result-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.comet-chat-answer {
+.comet-chat-host-response > .rendered-markdown {
   color: #203040;
   font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
-.comet-chat-answer > .rendered-markdown {
+.comet-chat-host-response > .rendered-markdown {
   display: grid;
   gap: 8px;
 }
 
-.comet-chat-answer > .rendered-markdown p,
-.comet-chat-answer > .rendered-markdown blockquote,
-.comet-chat-answer > .rendered-markdown pre,
-.comet-chat-answer > .rendered-markdown table {
+.comet-chat-host-response > .rendered-markdown p,
+.comet-chat-host-response > .rendered-markdown blockquote,
+.comet-chat-host-response > .rendered-markdown pre,
+.comet-chat-host-response > .rendered-markdown table {
   margin: 0;
 }
 
-.comet-chat-answer > .rendered-markdown ul,
-.comet-chat-answer > .rendered-markdown ol {
+.comet-chat-host-response > .rendered-markdown ul,
+.comet-chat-host-response > .rendered-markdown ol {
   margin: 0;
   padding-left: 20px;
 }
 
-.comet-chat-answer > .rendered-markdown li {
+.comet-chat-host-response > .rendered-markdown li {
   margin: 2px 0;
 }
 
-.comet-chat-answer > .rendered-markdown li.comet-chat-article-choice {
-  list-style: none;
+.comet-chat-host-response {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: start;
+  gap: 8px;
+}
+
+.comet-chat-host-turn-presentation {
+  display: grid;
+  gap: 10px;
+}
+
+.comet-chat-host-reasoning {
+  color: #526171;
+}
+
+.comet-chat-host-reasoning > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.comet-chat-host-reasoning > p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+.comet-chat-host-tool,
+.comet-chat-host-turn-status,
+.comet-chat-host-context-item {
+  padding: 6px 8px;
+  border: 1px solid #dfe8f1;
+  border-radius: 7px;
+  background: #f7fafc;
+  color: #526171;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.comet-chat-host-user-context {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.comet-chat-host-context-item {
+  display: grid;
   gap: 6px;
 }
 
-.comet-chat-answer > .rendered-markdown li.comet-chat-article-choice > .comet-chat-article-checkbox {
-	width: 14px;
-	height: 14px;
-	margin: 3px 0 0;
-	font-size: 12px;
+.comet-chat-host-context-image {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 260px;
+  border-radius: 6px;
+  object-fit: contain;
 }
 
-.comet-chat-article-choice-content {
-  min-width: 0;
-}
-
-.comet-chat-answer > .rendered-markdown a {
+.comet-chat-host-response > .rendered-markdown a {
   color: #0a5fbf;
   text-decoration: none;
   overflow-wrap: anywhere;
 }
 
-.comet-chat-answer > .rendered-markdown a:hover {
+.comet-chat-host-response > .rendered-markdown a:hover {
   color: #084c9a;
   text-decoration: underline;
 }
 
-.comet-chat-answer > .rendered-markdown pre {
+.comet-chat-host-response > .rendered-markdown pre {
   overflow: auto;
   padding: 8px 10px;
   border: 1px solid #dfe8f1;
@@ -599,146 +545,32 @@
   background: #f7fafc;
 }
 
-.comet-chat-answer > .rendered-markdown code {
+.comet-chat-host-response > .rendered-markdown code {
   font-family: Consolas, 'Courier New', monospace;
   font-size: 12px;
 }
 
-.comet-chat-answer > .rendered-markdown :not(pre) > code {
+.comet-chat-host-response > .rendered-markdown :not(pre) > code {
   padding: 1px 4px;
   border-radius: 4px;
   background: #eef3f8;
 }
 
-.comet-chat-answer > .rendered-markdown blockquote {
+.comet-chat-host-response > .rendered-markdown blockquote {
   padding-left: 10px;
   border-left: 3px solid #d6e0e8;
   color: #4d6075;
 }
 
-.comet-chat-answer > .rendered-markdown table {
+.comet-chat-host-response > .rendered-markdown table {
   display: block;
   overflow: auto;
   border-collapse: collapse;
 }
 
-.comet-chat-answer > .rendered-markdown th,
-.comet-chat-answer > .rendered-markdown td {
+.comet-chat-host-response > .rendered-markdown th,
+.comet-chat-host-response > .rendered-markdown td {
   padding: 4px 6px;
   border: 1px solid #dfe8f1;
   text-align: left;
-}
-
-.comet-chat-message-link {
-  color: #0a5fbf;
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.comet-chat-message-link:hover {
-  color: #084c9a;
-  text-decoration: underline;
-}
-
-.comet-chat-evidence {
-  display: grid;
-  gap: 8px;
-}
-
-.comet-chat-patch-card {
-  display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #f8fbfe;
-  border: 1px solid #dfe8f1;
-}
-
-.comet-chat-patch-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.comet-chat-patch-label {
-  color: #203040;
-  font-size: 12px;
-}
-
-.comet-chat-patch-summary,
-.comet-chat-patch-error {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.comet-chat-patch-summary {
-  color: #5e7186;
-}
-
-.comet-chat-patch-error {
-  color: #a12424;
-}
-
-.comet-chat-patch-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.comet-chat-patch-btn.comet-btn-base {
-  min-height: 28px;
-  border-radius: 8px;
-}
-
-.comet-chat-evidence-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 8px;
-}
-
-.comet-chat-evidence-item {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #f8fbfe;
-  border: 1px solid #dfe8f1;
-}
-
-.comet-chat-evidence-title {
-  color: #203040;
-  font-size: 12px;
-}
-
-.comet-chat-evidence-meta,
-.comet-chat-evidence-text {
-  margin: 0;
-  color: #5e7186;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.comet-chat-mode-pill {
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.comet-chat-mode-pill.comet-is-enabled {
-  background: #eaf6ef;
-  color: #1f6a3a;
-  border: 1px solid #b5dfc2;
-}
-
-.comet-chat-mode-pill.comet-is-disabled {
-  background: #f4f6f9;
-  color: #66798f;
-  border: 1px solid #dbe3ea;
 }

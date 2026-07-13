@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createHash } from 'node:crypto';
 import { BrowserWindow, screen, session, WebContentsView, type Session } from 'electron';
 import { VSBuffer } from 'cs/base/common/buffer';
 import { Emitter, type Event } from 'cs/base/common/event';
@@ -12,6 +13,7 @@ import { appError } from 'cs/base/parts/sandbox/common/appError';
 
 import {
   BrowserViewErrorCode,
+  maximumBrowserViewReadableContentCharacters,
   BrowserViewStorageScope,
   browserZoomDefaultIndex,
   browserZoomFactors,
@@ -20,6 +22,7 @@ import {
   type IBrowserViewCaptureScreenshotOptions,
   type IBrowserViewCreatedEvent,
   type IBrowserViewCreateOptions,
+  type IBrowserViewDocumentIdentity,
   type IBrowserViewDevToolsStateEvent,
   type IBrowserViewFaviconChangeEvent,
   type IBrowserViewFindInPageOptions,
@@ -32,6 +35,7 @@ import {
   type IBrowserViewViewStateEvent,
   type IBrowserViewOwner,
   type IBrowserViewPermissionRequestEvent,
+  type IBrowserViewReadableContent,
   type IBrowserViewRect,
   type IBrowserViewService,
   type IBrowserViewState,
@@ -54,6 +58,9 @@ import type { ICDPConnection } from 'cs/platform/browserView/common/cdp/types';
 import { BrowserViewDebugger } from 'cs/platform/browserView/electron-main/browserViewDebugger';
 import { BrowserViewInspector } from 'cs/platform/browserView/electron-main/browserViewInspector';
 import { BrowserViewScreenshot } from 'cs/platform/browserView/electron-main/browserViewScreenshot';
+import {
+	parseBrowserViewReadableContentEvaluation,
+} from 'cs/platform/browserView/electron-main/browserViewReadableContent';
 import {
   createBrowserViewStateCaptureScript,
   createBrowserViewStateRestoreScript,
@@ -2188,6 +2195,58 @@ export class BrowserViewMainService implements IBrowserViewService {
     publishBrowserViewViewState(id, viewState);
     return viewState;
   }
+
+	async captureDocumentIdentity(id: string): Promise<IBrowserViewDocumentIdentity> {
+		const metadata = getBrowserViewTargetMetadata(id);
+		const entry = getBrowserViewTargetEntry(id);
+		if (entry.view.webContents.isLoadingMainFrame()) {
+			throw new Error(`Browser view '${id}' cannot capture its document identity while loading.`);
+		}
+		const documentEpoch = metadata.viewStateDocumentId;
+		if (!documentEpoch) {
+			throw new Error(`Browser view '${id}' has not published a main-frame document identity.`);
+		}
+		const url = entry.view.webContents.getURL();
+		if (!url) {
+			throw new Error(`Browser view '${id}' has no current document URL.`);
+		}
+		return { documentEpoch, url };
+	}
+
+	async readReadableContent(id: string, documentEpoch: string): Promise<IBrowserViewReadableContent> {
+		const expectedDocument = await this.captureDocumentIdentity(id);
+		if (documentEpoch !== expectedDocument.documentEpoch) {
+			throw new Error(`Browser view '${id}' is no longer displaying document epoch '${documentEpoch}'.`);
+		}
+		const metadata = getBrowserViewTargetMetadata(id);
+		const entry = getBrowserViewTargetEntry(id);
+		const generation = metadata.navigationGeneration;
+		const result = await entry.view.webContents.executeJavaScript(
+			`window.__vscode_helpers.getReadableContent(${maximumBrowserViewReadableContentCharacters})`,
+			true,
+		);
+		if (
+			metadata.navigationGeneration !== generation ||
+			metadata.viewStateDocumentId !== documentEpoch ||
+			entry.view.webContents.getURL() !== expectedDocument.url ||
+			entry.view.webContents.isLoadingMainFrame()
+		) {
+			throw new Error(`Browser view '${id}' changed documents while its readable content was being captured.`);
+		}
+		const content = parseBrowserViewReadableContentEvaluation(result);
+		if (!content) {
+			throw new Error(`Browser view '${id}' returned invalid readable content.`);
+		}
+		return {
+			documentEpoch,
+			url: expectedDocument.url,
+			title: entry.view.webContents.getTitle(),
+			text: content.text,
+			byteLength: Buffer.byteLength(content.text, 'utf8'),
+			digest: `sha256:${createHash('sha256').update(content.text).digest('hex')}`,
+			truncated: content.truncated,
+		};
+	}
 
   async restoreViewState(id: string, value: IBrowserViewViewStateEvent): Promise<boolean> {
     const viewState = parseBrowserViewViewState(value);

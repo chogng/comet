@@ -7,6 +7,7 @@ import type { CancellationToken } from 'cs/base/common/cancellation';
 import type { URI } from 'cs/base/common/uri';
 import type {
 	ArticleDetail,
+	ArticleReadableContent,
 	ArticleListItem,
 	ArticleListSource,
 	ArticlePublication,
@@ -24,6 +25,7 @@ export interface IFetchProvider {
 	discoverArticleListSources(journal: JournalDescriptor, token: CancellationToken): Promise<ParsedArticleListCatalog>;
 	fetchArticleListPage(journal: JournalDescriptor, source: ArticleListSource, url: URI, token: CancellationToken): Promise<ParsedArticleListPage>;
 	fetchArticleDetail(journal: JournalDescriptor, article: ArticleRecord, token: CancellationToken): Promise<ParsedArticleDetail>;
+	fetchArticleReadableContent(journal: JournalDescriptor, article: ArticleRecord, token: CancellationToken): Promise<ParsedArticleReadableContent>;
 }
 
 export interface ParsedArticleListCatalog {
@@ -66,3 +68,5 @@ export interface ParsedArticleListItem extends Omit<ArticleListItem, 'id' | 'art
 export interface ParsedArticleDetail extends Omit<ArticleDetail, 'articleId' | 'journalId' | 'publication'> {
 	readonly publication: ArticlePublication;
 }
+
+export interface ParsedArticleReadableContent extends Pick<ArticleReadableContent, 'url' | 'title' | 'text'> {}

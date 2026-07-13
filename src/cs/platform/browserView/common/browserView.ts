@@ -11,6 +11,8 @@ import { IPermissionCategoryState, ISerializedBrowserPermissionsSnapshot, IBrows
 
 const commandPrefix = 'workbench.action.browser';
 
+export const maximumBrowserViewReadableContentCharacters = 1_048_576;
+
 export enum BrowserViewErrorCode {
 	PreviewNotReady = 'PREVIEW_NOT_READY',
 }
@@ -269,6 +271,23 @@ export interface IBrowserViewViewStateEvent {
 	readonly scrollY: number;
 }
 
+/** Identifies one exact live main-frame document without carrying its content. */
+export interface IBrowserViewDocumentIdentity {
+	readonly documentEpoch: string;
+	readonly url: string;
+}
+
+/** One bounded readable snapshot of an exact integrated-Browser document epoch. */
+export interface IBrowserViewReadableContent {
+	readonly documentEpoch: string;
+	readonly url: string;
+	readonly title: string;
+	readonly text: string;
+	readonly byteLength: number;
+	readonly digest: string;
+	readonly truncated: boolean;
+}
+
 export interface IBrowserViewLoadingEvent {
 	loading: boolean;
 	error?: IBrowserViewLoadError;
@@ -466,6 +485,12 @@ export interface IBrowserViewService {
 
 	/** Restore scroll state when the current visible document can reach the stored coordinates. */
 	restoreViewState(id: string, viewState: IBrowserViewViewStateEvent): Promise<boolean>;
+
+	/** Capture the exact current main-frame document identity. */
+	captureDocumentIdentity(id: string): Promise<IBrowserViewDocumentIdentity>;
+
+	/** Read bounded normalized text from one exact current main-frame document epoch. */
+	readReadableContent(id: string, documentEpoch: string): Promise<IBrowserViewReadableContent>;
 
 	/**
 	 * Navigate the browser view to a URL

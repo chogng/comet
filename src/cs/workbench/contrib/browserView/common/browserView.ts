@@ -18,7 +18,9 @@ import {
 import type { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {
 	IBrowserViewBounds,
+	IBrowserViewDocumentIdentity,
 	IBrowserViewNavigationEvent,
+	IBrowserViewReadableContent,
 	IBrowserViewViewStateEvent,
 	IBrowserViewLoadingEvent,
 	IBrowserViewLoadError,
@@ -304,6 +306,8 @@ export interface IBrowserViewModel extends IDisposable {
 	setVisible(visible: boolean): Promise<void>;
 	captureViewState(): Promise<IBrowserViewViewStateEvent>;
 	restoreViewState(viewState: IBrowserViewViewStateEvent): Promise<boolean>;
+	captureDocumentIdentity(): Promise<IBrowserViewDocumentIdentity>;
+	readReadableContent(documentEpoch: string): Promise<IBrowserViewReadableContent>;
 	loadURL(url: string, options?: INavigateOptions): Promise<void>;
 	goBack(): Promise<void>;
 	goForward(): Promise<void>;
@@ -594,6 +598,14 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 
 	restoreViewState(viewState: IBrowserViewViewStateEvent): Promise<boolean> {
 		return this.browserViewService.restoreViewState(this.id, viewState);
+	}
+
+	captureDocumentIdentity(): Promise<IBrowserViewDocumentIdentity> {
+		return this.browserViewService.captureDocumentIdentity(this.id);
+	}
+
+	readReadableContent(documentEpoch: string): Promise<IBrowserViewReadableContent> {
+		return this.browserViewService.readReadableContent(this.id, documentEpoch);
 	}
 
 	async loadURL(url: string, options?: INavigateOptions): Promise<void> {

@@ -2,7 +2,6 @@ import type { LlmModelDefinition } from 'cs/workbench/services/llm/types';
 
 const geminiDefaults = {
   provider: 'gemini',
-  apiStyle: 'openai-compatible',
   enabled: true,
 } as const;
 

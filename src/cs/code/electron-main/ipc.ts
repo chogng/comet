@@ -15,6 +15,7 @@ import type {
   DeleteLibraryDocumentPayload,
   IndexDownloadedPdfPayload,
   LibraryDocumentStatusPayload,
+  LlmSettings,
   ListTranslationModelsPayload,
   ListLibraryDocumentsPayload,
   NativeOpenDialogOptions,
@@ -23,7 +24,6 @@ import type {
   WebContentPdfDownloadPayload,
   WebContentHtmlArchivePayload,
   ReindexLibraryDocumentPayload,
-  RagAnswerArticlesPayload,
   LoadTranslationCachePayload,
   SaveSettingsPayload,
   SaveTranslationCachePayload,
@@ -79,8 +79,7 @@ import {
   showSaveDialog,
 } from 'cs/platform/dialogs/electron-main/dialogMainService';
 import { testLlmConnection } from 'cs/code/electron-main/llm/llm';
-import { runMainAgentTurn } from 'cs/code/electron-main/agent/agent';
-import { answerQuestionFromArticles, testRagConnection } from 'cs/code/electron-main/rag/rag';
+import { testMoarkConnection } from 'cs/code/electron-main/rag/moark';
 import { listTranslationModels, testTranslationConnection } from 'cs/code/electron-main/translation/translation';
 import {
   applyMainWindowBackgroundMaterial,
@@ -271,6 +270,7 @@ async function invokeCommand<TCommand extends AppCommand>(
   storage: AppStorageService,
   nativeHostMainService: NativeHostMainService,
   themeMainService: IThemeMainService,
+	updateLlmSettings: (settings: LlmSettings) => Promise<void>,
 	playwrightService: IPlaywrightService,
 	cancellationToken: CancellationToken,
   emitToRenderer?: (channel: string, payload: unknown) => void,
@@ -287,6 +287,7 @@ async function invokeCommand<TCommand extends AppCommand>(
     case 'save_settings':
       {
         const saved = await storage.saveSettings((payload as SaveSettingsPayload)?.settings ?? {});
+		await updateLlmSettings(saved.llm);
         themeMainService.updateSettings(saved);
         setMenuBarIconEnabled(saved.menuBarIconEnabled);
         if (micaMaterialTimeout) {
@@ -325,7 +326,7 @@ async function invokeCommand<TCommand extends AppCommand>(
         payload as ListTranslationModelsPayload,
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'test_rag_connection':
-      return testRagConnection(
+      return testMoarkConnection(
         payload as TestRagConnectionPayload,
       ) as Promise<AppCommandResultMap[TCommand]>;
     case 'pick_download_directory':
@@ -430,15 +431,6 @@ async function invokeCommand<TCommand extends AppCommand>(
       return storage.reindexLibraryDocument(
         payload as ReindexLibraryDocumentPayload,
       ) as Promise<AppCommandResultMap[TCommand]>;
-    case 'rag_answer_articles':
-      return answerQuestionFromArticles(
-        payload as RagAnswerArticlesPayload,
-        await storage.loadSettings(),
-      ) as Promise<AppCommandResultMap[TCommand]>;
-    case 'run_main_agent_turn':
-      return runMainAgentTurn(
-        payload as AppCommandPayloadMap['run_main_agent_turn'],
-      ) as Promise<AppCommandResultMap[TCommand]>;
     case 'export_articles_docx':
       {
         const mainWindow = getMainWindow();
@@ -485,6 +477,7 @@ export function registerAppIpc(
   storage: AppStorageService,
   nativeHostMainService: NativeHostMainService,
   themeMainService: IThemeMainService,
+	updateLlmSettings: (settings: LlmSettings) => Promise<void>,
 ) {
   electronMainChannelServer.register();
 	const sharedProcessMainChannels = new Map<string, IServerChannel<string>>([
@@ -554,6 +547,7 @@ export function registerAppIpc(
         storage,
         nativeHostMainService,
         themeMainService,
+		updateLlmSettings,
 		getPlaywrightService(event),
 		cancellationToken,
         (channel, eventPayload) => {
@@ -580,6 +574,7 @@ export function registerAppIpc(
           storage,
           nativeHostMainService,
           themeMainService,
+		  updateLlmSettings,
 		  getPlaywrightService(_event),
 		  CancellationTokenNone,
           (channel, eventPayload) => {

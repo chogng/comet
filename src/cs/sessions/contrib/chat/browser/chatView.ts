@@ -17,20 +17,14 @@ import {
 	type IChatModel,
 	type IChatModelReference,
 } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import {
-	ChatRequestAttachmentKind,
-	type IChatRequest,
-	type IChatRequestAttachment,
-} from 'cs/workbench/contrib/chat/common/chatRequest';
 import { parseLlmModelOptionValue } from 'cs/workbench/services/llm/registry';
-import { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
 import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 import type {
 	IAddressedChatView,
 	INewSessionChatView,
 } from 'cs/sessions/services/chatView/browser/chatViewFactory';
-import { ChatInteractivity, SessionStatus, type IChat, type ISession } from 'cs/sessions/services/sessions/common/session';
+import { ChatInteractivity, ChatOriginKind, SessionStatus, type IChat, type ISession } from 'cs/sessions/services/sessions/common/session';
 import { ISessionsManagementService } from 'cs/sessions/services/sessions/common/sessionsManagement';
 
 abstract class AbstractSessionsChatView extends Disposable {
@@ -48,7 +42,6 @@ abstract class AbstractSessionsChatView extends Disposable {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IChatService private readonly chatService: IChatService,
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
-		@IDraftEditorService private readonly draftEditorService: IDraftEditorService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
@@ -193,11 +186,12 @@ abstract class AbstractSessionsChatView extends Disposable {
 		models: ReturnType<ISessionsManagementService['getModels']>,
 	): readonly ChatModelDropdownOption[] {
 		return models.map(model => {
-			const parsed = parseLlmModelOptionValue(model.identifier);
+			const parsed = parseLlmModelOptionValue(model.id);
 			return {
-				value: model.identifier,
-				label: model.metadata.name,
-				title: model.metadata.detail,
+				value: model.id,
+				label: model.label,
+				title: model.detail,
+				disabled: !model.enabled,
 				providerId: parsed?.providerId,
 				modelId: parsed?.modelId,
 				reasoningEffort: parsed?.reasoningEffort,
@@ -221,31 +215,11 @@ abstract class AbstractSessionsChatView extends Disposable {
 	private async sendRequest(): Promise<void> {
 		const session = this.requireSession();
 		const chat = this.requireChat();
-		const model = this.requireModel();
-		const snapshot = model.getSnapshot();
-		const request: IChatRequest = {
-			prompt: snapshot.input,
-			attachments: this.createAttachments(snapshot.checkedArticleIds),
-		};
 		try {
-			await this.sessionsManagementService.sendRequest(session, chat, request);
+			await this.sessionsManagementService.sendRequest(session, chat);
 		} catch (error) {
 			this.notificationService.error(error instanceof Error ? error.message : String(error));
 		}
-	}
-
-	private createAttachments(articleIds: readonly string[]): readonly IChatRequestAttachment[] {
-		const attachments: IChatRequestAttachment[] = articleIds.map(articleId => ({
-			kind: ChatRequestAttachmentKind.Article,
-			id: `article:${articleId}`,
-			name: articleId,
-			articleId,
-		}));
-		const editorAttachment = this.draftEditorService.getActiveRequestAttachment();
-		if (editorAttachment) {
-			attachments.push(editorAttachment);
-		}
-		return attachments;
 	}
 
 	private isCurrentResource(resource: URI): boolean {
@@ -266,25 +240,28 @@ abstract class AbstractSessionsChatView extends Disposable {
 		return this.chat;
 	}
 
-	private requireModel(): IChatModel {
-		if (!this.model) {
-			throw new Error('A Sessions Chat view requires a loaded Chat model.');
-		}
-		return this.model;
-	}
 }
 
-/** Renders the main Chat of a provider-owned new-Session draft. */
+/** Renders the addressed Chat of a provider-owned new-Session draft. */
 export class NewSessionChatView extends AbstractSessionsChatView implements INewSessionChatView {
-	setSession(session: ISession | undefined): void {
+	setDraft(session: ISession | undefined, chat: IChat | undefined): void {
 		if (!session) {
+			if (chat) {
+				throw new Error('A new-Session Chat view cannot bind a Chat without its Session draft.');
+			}
 			this.clearChat();
 			return;
 		}
 		if (session.status.get() !== SessionStatus.Draft) {
 			throw new Error(`Session '${session.sessionId}' is not a draft.`);
 		}
-		this.setBoundChat(session, session.mainChat.get());
+		if (!chat
+			|| !session.chats.get().includes(chat)
+			|| chat.origin.kind !== ChatOriginKind.User
+			|| chat.interactivity.get() !== ChatInteractivity.Full) {
+			throw new Error(`Session draft '${session.sessionId}' does not own the addressed Chat.`);
+		}
+		this.setBoundChat(session, chat);
 	}
 }
 

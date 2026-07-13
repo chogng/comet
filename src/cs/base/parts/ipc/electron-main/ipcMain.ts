@@ -11,9 +11,14 @@ import {
 } from 'electron';
 
 import { serializeAppError } from 'cs/base/parts/sandbox/common/appError';
-import { CancellationTokenSource } from 'cs/base/common/cancellation';
+import {
+	CancellationError,
+	CancellationTokenNone,
+	CancellationTokenSource,
+	type CancellationToken,
+} from 'cs/base/common/cancellation';
 import { EventEmitter, type Event } from 'cs/base/common/event';
-import { toDisposable } from 'cs/base/common/lifecycle';
+import { type IDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 
 const APP_SERVICE_IPC_CALL_CHANNEL = 'app:ipc-call';
@@ -23,6 +28,7 @@ const APP_SERVICE_IPC_DISPOSE_CHANNEL = 'app:ipc-dispose';
 const APP_SERVICE_IPC_RENDERER_CHANNEL_REGISTER_CHANNEL = 'app:ipc-renderer-channel-register';
 const APP_SERVICE_IPC_RENDERER_CHANNEL_DISPOSE_CHANNEL = 'app:ipc-renderer-channel-dispose';
 const APP_SERVICE_IPC_RENDERER_CALL_CHANNEL = 'app:ipc-renderer-call';
+const APP_SERVICE_IPC_RENDERER_CALL_CANCEL_CHANNEL = 'app:ipc-renderer-call-cancel';
 const APP_SERVICE_IPC_RENDERER_CALL_RESULT_CHANNEL = 'app:ipc-renderer-call-result';
 const APP_SERVICE_IPC_RENDERER_EVENT_SUBSCRIBE_CHANNEL = 'app:ipc-renderer-event-subscribe';
 const APP_SERVICE_IPC_RENDERER_EVENT_CHANNEL = 'app:ipc-renderer-event';
@@ -58,6 +64,7 @@ type PendingRendererCall = {
 	readonly channelName: string;
 	resolve(value: unknown): void;
 	reject(error: Error): void;
+	cancellation?: IDisposable;
 };
 
 type RendererEventSubscribeRequest = {
@@ -232,12 +239,17 @@ export class ElectronMainChannelServer {
 
 	getRendererChannel(senderId: number, channelName: string): IChannel {
 		return {
-			call: async <T = unknown>(command: string, arg?: unknown) => {
+			call: async <T = unknown>(
+				command: string,
+				arg?: unknown,
+				cancellationToken: CancellationToken = CancellationTokenNone,
+			) => {
 				return await this.callRendererChannel<T>(
 					senderId,
 					channelName,
 					command,
 					arg,
+					cancellationToken,
 				);
 			},
 			listen: <T = unknown>(event: string, arg?: unknown): Event<T> => {
@@ -289,6 +301,7 @@ export class ElectronMainChannelServer {
 
 		for (const [requestId, pendingCall] of this.pendingRendererCalls) {
 			if (pendingCall.senderId === senderId) {
+				pendingCall.cancellation?.dispose();
 				pendingCall.reject(
 					new Error(`Renderer IPC sender '${senderId}' was disposed.`),
 				);
@@ -373,6 +386,7 @@ export class ElectronMainChannelServer {
 				pendingCall.senderId === senderId &&
 				pendingCall.channelName === channelName
 			) {
+				pendingCall.cancellation?.dispose();
 				pendingCall.reject(
 					new Error(
 						`Renderer IPC channel '${channelName}' was disposed for sender '${senderId}'.`,
@@ -417,7 +431,11 @@ export class ElectronMainChannelServer {
 		channelName: string,
 		command: string,
 		arg?: unknown,
+		cancellationToken: CancellationToken = CancellationTokenNone,
 	): Promise<T> {
+		if (cancellationToken.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
 		const sender = this.resolveRendererWebContents(senderId, channelName);
 		const requestId = this.createRendererRequestId(senderId);
 		const request: RendererCallRequest = {
@@ -428,17 +446,25 @@ export class ElectronMainChannelServer {
 		};
 
 		return new Promise<T>((resolve, reject) => {
-			this.pendingRendererCalls.set(requestId, {
+			const pendingCall: PendingRendererCall = {
 				senderId,
 				channelName,
 				resolve: value => resolve(value as T),
 				reject,
+			};
+			this.pendingRendererCalls.set(requestId, pendingCall);
+			pendingCall.cancellation = cancellationToken.onCancellationRequested(() => {
+				this.cancelRendererCall(requestId, true);
 			});
+			if (!this.pendingRendererCalls.has(requestId)) {
+				return;
+			}
 
 			try {
 				sender.send(APP_SERVICE_IPC_RENDERER_CALL_CHANNEL, request);
 			} catch (error) {
 				this.pendingRendererCalls.delete(requestId);
+				pendingCall.cancellation.dispose();
 				reject(error instanceof Error ? error : new Error(String(error)));
 			}
 		});
@@ -454,6 +480,7 @@ export class ElectronMainChannelServer {
 		}
 
 		this.pendingRendererCalls.delete(response.requestId);
+		pendingCall.cancellation?.dispose();
 		if (response.ok) {
 			pendingCall.resolve(response.result);
 			return;
@@ -475,6 +502,22 @@ export class ElectronMainChannelServer {
 		}
 
 		subscription.emitter.fire(payload.data);
+	}
+
+	private cancelRendererCall(requestId: string, notifyRenderer: boolean): void {
+		const pendingCall = this.pendingRendererCalls.get(requestId);
+		if (pendingCall === undefined) {
+			return;
+		}
+		this.pendingRendererCalls.delete(requestId);
+		pendingCall.cancellation?.dispose();
+		if (notifyRenderer) {
+			const sender = webContents.fromId(pendingCall.senderId);
+			if (sender !== undefined && !sender.isDestroyed()) {
+				sender.send(APP_SERVICE_IPC_RENDERER_CALL_CANCEL_CHANNEL, requestId);
+			}
+		}
+		pendingCall.reject(new CancellationError());
 	}
 
 	private disposeRendererEventSubscription(

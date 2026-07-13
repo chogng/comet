@@ -22,7 +22,7 @@ export const NewSessionSlot: INewSessionSlot = Object.freeze({
 
 /** Adds view-owned Chat selection and stickiness to one visible Session. */
 export interface IActiveSession extends ISession {
-	readonly activeChat: IObservable<IChat>;
+	readonly activeChat: IObservable<IChat | undefined>;
 	readonly openChats: IObservable<readonly IChat[]>;
 	readonly closedChats: IObservable<readonly IChat[]>;
 	readonly visibleChatTabs: IObservable<readonly IChat[]>;

@@ -3,44 +3,88 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { assertNever } from 'cs/base/common/assert';
+import { CancellationError, type CancellationToken } from 'cs/base/common/cancellation';
 import { onUnexpectedError } from 'cs/base/common/errors';
 import { EventEmitter } from 'cs/base/common/event';
-import { Disposable } from 'cs/base/common/lifecycle';
+import { Disposable, type IDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import { cloneAndChange } from 'cs/base/common/objects';
 import { getComparisonKey } from 'cs/base/common/resources';
-import type { URI } from 'cs/base/common/uri';
-import { generateUuid } from 'cs/base/common/uuid';
+import { URI } from 'cs/base/common/uri';
 import {
-	applyWritingEditorEdits,
-	type WritingEditorApplyEditFailureReason,
-} from 'cs/editor/common/writingEditorDocument';
-import { localize } from 'cs/nls';
+	assertAgentHostInteractionTarget,
+	type IAgentHostInteractionTarget,
+} from 'cs/platform/agentHost/common/attachments';
+import {
+	createAgentChatId,
+	createAgentSessionId,
+	createAgentSubmissionId,
+	createAgentToolId,
+	createAgentTurnId,
+	type AgentToolId,
+	type AgentSubmissionId,
+} from 'cs/platform/agentHost/common/identities';
+import {
+	assertAgentHostChatState,
+	type IAgentHostChatState,
+} from 'cs/platform/agentHost/common/protocol';
+import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
-import { INotificationService } from 'cs/platform/notification/common/notification';
+import {
+	IStorageService,
+	StorageScope,
+	StorageTarget,
+} from 'cs/platform/storage/common/storage';
 import {
 	IChatService as IChatServiceDecorator,
-	type ChatMessage,
-	type ChatPatchProposal,
 	type IChatModel,
 	type IChatModelInitialState,
+	type IChatHostModelIdentity,
+	type IChatHostPresentationUpdate,
 	type IChatModelReference,
+	type IChatModelOwnerReference,
 	type IChatModelSnapshot,
-	type IChatRequestCompletion,
-	type IChatRequestTransaction,
-	type IPreparedChatRequestState,
+	type IPreparedChatSubmission,
 	type IChatService,
 } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
-import type { ArticleId } from 'cs/workbench/services/fetch/common/fetch';
 import {
-	parseChatImageAttachments,
-	type IChatImageAttachment,
-} from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
+	ChatAttachmentProducerRegistry,
+	capturePendingChatAttachment,
+	maximumPendingChatAttachments,
+	maximumPendingChatInteractionTargets,
+	prepareChatAttachments,
+	type IChatAttachmentProducer,
+	type IPreparedChatAttachments,
+	type IChatSubmissionCapture,
+	type IPendingChatAttachment,
+} from 'cs/workbench/contrib/chat/common/chatService/chatComposer';
+import {
+	ChatImageAttachmentProducer,
+	ChatSelectionAttachmentProducer,
+	ChatTextAttachmentProducer,
+} from 'cs/workbench/contrib/chat/common/chatService/chatOwnedAttachments';
+import {
+	ChatPersistenceSchemaVersion,
+	ChatPersistenceStorageKey,
+	parseChatPersistedResourceState,
+	parseChatPersistedState,
+	serializeChatPersistedState,
+	type IChatPersistedResourceState,
+	type IChatPersistedState,
+} from 'cs/workbench/contrib/chat/common/chatService/chatPersistence';
+import {
+	ChatHostPresentationSchemaVersion,
+	parseChatHostPresentation,
+	parseChatHostPresentationProjection,
+	type IChatHostPresentation,
+	type IChatHostPresentationIdentity,
+	type IChatHostPresentationProvider,
+} from 'cs/workbench/contrib/chat/common/chatService/chatTurnPresentations';
 
 interface ILiveChatModel {
 	readonly model: ChatModel;
+	readonly persistenceListener: IDisposable;
 	referenceCount: number;
+	permanentlyDeleted: boolean;
 }
 
 function cloneStructuredValue<T>(value: T): T {
@@ -60,117 +104,133 @@ function freezeStructuredValue<T>(value: T): T {
 	return Object.freeze(value);
 }
 
-function cloneMessage(message: ChatMessage): ChatMessage {
-	if (message.role === 'user') {
-		return {
-			...message,
-			imageAttachments: parseChatImageAttachments(message.imageAttachments),
-		};
-	}
+function captureInteractionTarget(target: IAgentHostInteractionTarget): IAgentHostInteractionTarget {
+	assertAgentHostInteractionTarget(target);
+	return freezeStructuredValue(cloneStructuredValue(target));
+}
 
-	return {
-		...message,
-		imageAttachments: parseChatImageAttachments(message.imageAttachments),
-		articleList: message.articleList
-			? { articleIds: [...message.articleList.articleIds] }
-			: undefined,
-		result: message.result ? cloneStructuredValue(message.result) : message.result,
-		patchProposal: message.patchProposal
-			? {
-				...message.patchProposal,
-				patch: cloneStructuredValue(message.patchProposal.patch),
-				target: {
-					resource: message.patchProposal.target.resource,
-					document: cloneStructuredValue(message.patchProposal.target.document),
-				},
+function hostPresentationKey(
+	presentation: IChatHostPresentationIdentity,
+): string {
+	return `${presentation.session}\0${presentation.chat}\0${presentation.turn}\0${presentation.responsePartIndex}`;
+}
+
+function hostPresentationContentKey(presentation: IChatHostPresentation): string {
+	return encodeAgentHostProtocolValue({
+		type: presentation.type,
+		value: presentation.value,
+	});
+}
+
+function validateHostPresentations(
+	identity: IChatHostModelIdentity,
+	state: IAgentHostChatState,
+	presentations: readonly IChatHostPresentation[],
+): readonly IChatHostPresentation[] {
+	const turns = new Map(state.turns.map(turn => [turn.id, turn]));
+	const keys = new Set<string>();
+	return Object.freeze(presentations.map(rawPresentation => {
+		const presentation = parseChatHostPresentation(rawPresentation);
+		const turn = turns.get(presentation.turn);
+		const key = hostPresentationKey(presentation);
+		if (presentation.session !== identity.session
+			|| presentation.chat !== identity.chat
+			|| !turn
+			|| turn.response[presentation.responsePartIndex] === undefined) {
+			throw new Error(`Host presentation '${key}' does not match canonical Host history.`);
+		}
+		if (keys.has(key)) {
+			throw new Error(`Host presentation '${key}' is duplicated.`);
+		}
+		keys.add(key);
+		return presentation;
+	}));
+}
+
+function mergeHostPresentations(
+	projected: readonly IChatHostPresentation[],
+	sources: readonly (readonly IChatHostPresentation[])[],
+): readonly IChatHostPresentation[] {
+	const ordered: IChatHostPresentation[] = [];
+	const byKey = new Map<string, IChatHostPresentation>();
+	for (const presentation of projected) {
+		const key = hostPresentationKey(presentation);
+		if (byKey.has(key)) {
+			throw new Error(`Projected Host presentation '${key}' is duplicated.`);
+		}
+		byKey.set(key, presentation);
+		ordered.push(presentation);
+	}
+	for (const source of sources) {
+		for (const rawPresentation of source) {
+			const presentation = parseChatHostPresentation(rawPresentation);
+			const key = hostPresentationKey(presentation);
+			const candidate = byKey.get(key);
+			if (candidate) {
+				if (hostPresentationContentKey(candidate) !== hostPresentationContentKey(presentation)) {
+					throw new Error(`Host presentation '${key}' conflicts with canonical Host history.`);
+				}
+				continue;
 			}
-			: message.patchProposal,
-	};
+			byKey.set(key, presentation);
+			ordered.push(presentation);
+		}
+	}
+	return Object.freeze(ordered);
+}
+
+function requireComposerRevision(value: number | undefined): number {
+	const revision = value ?? 0;
+	if (!Number.isSafeInteger(revision) || revision < 0) {
+		throw new TypeError('A Chat composer revision must be a non-negative safe integer.');
+	}
+	return revision;
+}
+
+function nextComposerRevision(revision: number): number {
+	if (revision === Number.MAX_SAFE_INTEGER) {
+		throw new RangeError('A Chat composer revision cannot advance beyond Number.MAX_SAFE_INTEGER.');
+	}
+	return revision + 1;
+}
+
+function requireMutableComposer(resource: URI, snapshot: IChatModelSnapshot): void {
+	if (snapshot.preparingSubmission) {
+		throw new Error(
+			`Chat composer '${resource.toString()}' is preparing submission '${snapshot.preparingSubmission.id}'.`,
+		);
+	}
 }
 
 function createInitialSnapshot(initialState: IChatModelInitialState | undefined): IChatModelSnapshot {
-	return {
-		input: initialState?.input ?? '',
-		messages: initialState?.messages?.map(cloneMessage) ?? [],
-		activeRequest: undefined,
-		errorMessage: initialState?.errorMessage,
-		checkedArticleIds: [...new Set(initialState?.checkedArticleIds ?? [])],
-	};
-}
-
-function createArticleFetchEmptyMessageContent(sourceLabel: string, message: string): string {
-	const normalizedSourceLabel = sourceLabel.trim();
-	return [
-		`> ${message}`,
-		normalizedSourceLabel ? `> ${normalizedSourceLabel}` : '',
-	].filter(Boolean).join('\n');
-}
-
-function canApplyChatPatch(patchProposal: ChatPatchProposal): boolean {
-	return patchProposal.accepted
-		&& !patchProposal.requiresCustomExecutor
-		&& !patchProposal.validationError
-		&& !patchProposal.isApplied;
-}
-
-function createChatPatchProposal(
-	completion: IChatRequestCompletion['patchProposal'],
-): ChatPatchProposal | null {
-	if (!completion) {
-		return null;
+	const pendingAttachments = (initialState?.pendingAttachments ?? []).map(capturePendingChatAttachment);
+	if (pendingAttachments.length > maximumPendingChatAttachments) {
+		throw new RangeError(`A Chat composer accepts at most ${maximumPendingChatAttachments} attachments.`);
+	}
+	if (new Set(pendingAttachments.map(attachment => attachment.id)).size !== pendingAttachments.length) {
+		throw new Error('A restored Chat composer contains duplicate attachment IDs.');
 	}
 
-	return {
-		...completion.proposal,
-		patch: cloneStructuredValue(completion.proposal.patch),
-		target: {
-			resource: completion.target.resource,
-			document: cloneStructuredValue(completion.target.document),
-		},
-		isApplied: false,
-		applyError: null,
-	};
-}
-
-function requireActiveRequest(
-	resource: URI,
-	snapshot: IChatModelSnapshot,
-	requestId: string,
-) {
-	const activeRequest = snapshot.activeRequest;
-	if (!activeRequest) {
-		throw new Error(`No Chat request is active for ${resource.toString()}.`);
-	}
-
-	if (activeRequest.id !== requestId) {
-		throw new Error(
-			`Chat request ${requestId} does not match active request ${activeRequest.id} for ${resource.toString()}.`,
+	const interactionTargets = (initialState?.interactionTargets ?? []).map(captureInteractionTarget);
+	if (interactionTargets.length > maximumPendingChatInteractionTargets) {
+		throw new RangeError(
+			`A Chat composer accepts at most ${maximumPendingChatInteractionTargets} interaction targets.`,
 		);
 	}
-
-	return activeRequest;
-}
-
-function documentKey(document: ChatPatchProposal['target']['document']): string {
-	return JSON.stringify(document);
-}
-
-function localizePatchEditFailure(
-	reason: WritingEditorApplyEditFailureReason,
-	blockId: string,
-): string {
-	switch (reason) {
-		case 'unknown-block':
-			return localize('chat.patch.unknownBlock', "The patch targets a draft block that no longer exists: {0}.", blockId);
-		case 'unsupported-structured-content':
-			return localize('chat.patch.structuredContent', "The patch cannot edit structured content in draft block {0}.", blockId);
-		case 'expected-text-mismatch':
-			return localize('chat.patch.textChanged', "The text in draft block {0} changed after this patch was generated.", blockId);
-		case 'match-not-found':
-			return localize('chat.patch.matchNotFound', "The text targeted by this patch no longer exists in draft block {0}.", blockId);
-		default:
-			return assertNever(reason);
+	if (new Set(interactionTargets.map(target => target.id)).size !== interactionTargets.length) {
+		throw new Error('A restored Chat composer contains duplicate interaction-target IDs.');
 	}
+
+	return {
+		hostState: undefined,
+		hostPresentations: [],
+		input: initialState?.input ?? '',
+		composerRevision: requireComposerRevision(initialState?.composerRevision),
+		pendingAttachments,
+		interactionTargets,
+		preparingSubmission: undefined,
+		errorMessage: initialState?.errorMessage,
+	};
 }
 
 class ChatModel extends Disposable implements IChatModel {
@@ -179,6 +239,7 @@ class ChatModel extends Disposable implements IChatModel {
 	}));
 	readonly onDidChange = this.onDidChangeEmitter.event;
 	private snapshot: IChatModelSnapshot;
+	private hostIdentity: IChatHostModelIdentity | undefined;
 	private isDisposed = false;
 
 	constructor(
@@ -194,6 +255,22 @@ class ChatModel extends Disposable implements IChatModel {
 		return this.snapshot;
 	}
 
+	getHostPresentation(identity: IChatHostPresentationIdentity): IChatHostPresentation | undefined {
+		this.assertNotDisposed();
+		const session = createAgentSessionId(identity.session);
+		const chat = createAgentChatId(identity.chat);
+		const turn = createAgentTurnId(identity.turn);
+		if (!Number.isSafeInteger(identity.responsePartIndex) || identity.responsePartIndex < 0) {
+			throw new TypeError('Host presentation response-part index must be a non-negative safe integer.');
+		}
+		return this.snapshot.hostPresentations.find(presentation =>
+			presentation.session === session
+			&& presentation.chat === chat
+			&& presentation.turn === turn
+			&& presentation.responsePartIndex === identity.responsePartIndex,
+		);
+	}
+
 	update(updater: (snapshot: IChatModelSnapshot) => IChatModelSnapshot): void {
 		this.assertNotDisposed();
 		const nextSnapshot = updater(this.snapshot);
@@ -205,16 +282,64 @@ class ChatModel extends Disposable implements IChatModel {
 		this.onDidChangeEmitter.fire();
 	}
 
-	commitPreparedSnapshot(
-		expectedSnapshot: IChatModelSnapshot,
-		preparedSnapshot: IChatModelSnapshot,
+	getHostIdentity(): IChatHostModelIdentity | undefined {
+		return this.hostIdentity;
+	}
+
+	validateHostState(identity: IChatHostModelIdentity, state: IAgentHostChatState): IChatHostModelIdentity {
+		assertAgentHostChatState(state);
+		const session = createAgentSessionId(identity.session);
+		const chat = createAgentChatId(identity.chat);
+		if (state.session !== session || state.id !== chat) {
+			throw new Error(
+				`Agent Host Chat state '${state.session}/${state.id}' does not match model binding '${session}/${chat}'.`,
+			);
+		}
+		if (this.hostIdentity
+			&& (this.hostIdentity.session !== session || this.hostIdentity.chat !== chat)) {
+			throw new Error(
+				`Chat model '${this.resource.toString()}' is already bound to `
+				+ `'${this.hostIdentity.session}/${this.hostIdentity.chat}'.`,
+			);
+		}
+		return Object.freeze({ session, chat });
+	}
+
+	replaceHostState(
+		identity: IChatHostModelIdentity,
+		state: IAgentHostChatState,
+		hostPresentations: readonly IChatHostPresentation[],
 	): void {
-		this.update(snapshot => {
-			if (snapshot !== expectedSnapshot) {
-				throw new Error(`Chat model changed before a prepared state was committed: ${this.resource.toString()}`);
-			}
-			return preparedSnapshot;
-		});
+		const validatedIdentity = this.validateHostState(identity, state);
+		const capturedState = freezeStructuredValue(cloneStructuredValue(state));
+		const capturedPresentations = validateHostPresentations(
+			validatedIdentity,
+			capturedState,
+			hostPresentations,
+		);
+		this.update(snapshot => ({
+			...snapshot,
+			hostState: capturedState,
+			hostPresentations: capturedPresentations,
+		}));
+		this.hostIdentity ??= validatedIdentity;
+	}
+
+	replaceHostPresentations(
+		identity: IChatHostModelIdentity,
+		hostPresentations: readonly IChatHostPresentation[],
+	): void {
+		const state = this.snapshot.hostState;
+		if (!state) {
+			throw new Error(`Chat model '${this.resource.toString()}' has no canonical Host state.`);
+		}
+		const validatedIdentity = this.validateHostState(identity, state);
+		const capturedPresentations = validateHostPresentations(
+			validatedIdentity,
+			state,
+			hostPresentations,
+		);
+		this.update(snapshot => ({ ...snapshot, hostPresentations: capturedPresentations }));
 	}
 
 	override dispose(): void {
@@ -233,123 +358,81 @@ class ChatModel extends Disposable implements IChatModel {
 	}
 }
 
-class ChatRequestTransaction implements IChatRequestTransaction {
-	private active = true;
-
-	constructor(
-		private readonly model: ChatModel,
-		private readonly requestId: string,
-		private readonly initialSnapshot: IChatModelSnapshot,
-	) {}
-
-	prepareCompletion(completion: IChatRequestCompletion): IPreparedChatRequestState {
-		const normalizedContent = completion.content.trim();
-		return this.prepare(snapshot => {
-			requireActiveRequest(this.model.resource, snapshot, this.requestId);
-			if (!normalizedContent) {
-				throw new Error('Chat request completion content must not be empty.');
-			}
-
-			return {
-				...snapshot,
-				messages: [
-					...snapshot.messages,
-					{
-						id: generateUuid(),
-						role: 'assistant',
-						content: normalizedContent,
-						imageAttachments: [],
-						result: completion.result
-							? cloneStructuredValue(completion.result)
-							: completion.result,
-						patchProposal: createChatPatchProposal(completion.patchProposal),
-					},
-				],
-				activeRequest: undefined,
-				errorMessage: undefined,
-			};
-		});
-	}
-
-	prepareFailure(errorMessage: string): IPreparedChatRequestState {
-		const normalizedErrorMessage = errorMessage.trim();
-		return this.prepare(snapshot => {
-			const activeRequest = requireActiveRequest(this.model.resource, snapshot, this.requestId);
-			if (!normalizedErrorMessage) {
-				throw new Error('Chat request error message must not be empty.');
-			}
-
-			return {
-				...snapshot,
-				input: activeRequest.prompt,
-				activeRequest: undefined,
-				errorMessage: normalizedErrorMessage,
-			};
-		});
-	}
-
-	rollback(): void {
-		this.assertActive();
-		this.model.update(snapshot => {
-			requireActiveRequest(this.model.resource, snapshot, this.requestId);
-			return this.initialSnapshot;
-		});
-		this.active = false;
-	}
-
-	private prepare(
-		prepareSnapshot: (snapshot: IChatModelSnapshot) => IChatModelSnapshot,
-	): IPreparedChatRequestState {
-		this.assertActive();
-		const expectedSnapshot = this.model.getSnapshot();
-		const preparedSnapshot = freezeStructuredValue(prepareSnapshot(expectedSnapshot));
-		let committed = false;
-		return Object.freeze({
-			snapshot: preparedSnapshot,
-			commit: () => {
-				if (committed) {
-					throw new Error(`Prepared Chat state was already committed: ${this.model.resource.toString()}`);
-				}
-				this.assertActive();
-				this.model.commitPreparedSnapshot(expectedSnapshot, preparedSnapshot);
-				this.active = false;
-				committed = true;
-			},
-		});
-	}
-
-	private assertActive(): void {
-		if (!this.active) {
-			throw new Error(`Chat request transaction is no longer active: ${this.model.resource.toString()}`);
-		}
-	}
-}
-
 export class ChatService implements IChatService {
 	declare readonly _serviceBrand: undefined;
 
 	private readonly models = new Map<string, ILiveChatModel>();
+	private readonly attachmentProducers = new ChatAttachmentProducerRegistry();
+	private readonly hostPresentationProviders = new Map<AgentToolId, IChatHostPresentationProvider>();
+	private readonly persistedChats = new Map<string, IChatPersistedResourceState>();
+	private persistedState: IChatPersistedState | undefined;
+	private readonly onDidDeleteModelEmitter = new EventEmitter<URI>({
+		onListenerError: onUnexpectedError,
+	});
+	readonly onDidDeleteModel = this.onDidDeleteModelEmitter.event;
 
 	constructor(
-		@INotificationService private readonly notificationService: INotificationService,
-		@IDraftEditorService private readonly draftEditorService: IDraftEditorService,
-	) {}
+		@IStorageService private readonly storageService: IStorageService,
+	) {
+		this.attachmentProducers.register(ChatTextAttachmentProducer);
+		this.attachmentProducers.register(ChatSelectionAttachmentProducer);
+		this.attachmentProducers.register(ChatImageAttachmentProducer);
+		this.persistedState = parseChatPersistedState(
+			storageService.get(ChatPersistenceStorageKey, StorageScope.APPLICATION),
+		);
+		for (const chat of this.persistedState?.chats ?? []) {
+			this.persistedChats.set(getComparisonKey(URI.parse(chat.resource)), chat);
+		}
+	}
 
 	createModel(
 		resource: URI,
 		initialState?: IChatModelInitialState,
-	): IChatModelReference {
+	): IChatModelOwnerReference {
 		const resourceKey = getComparisonKey(resource);
 		if (this.models.has(resourceKey)) {
 			throw new Error(`Chat model already exists: ${resource.toString()}`);
 		}
 
+		const persisted = this.persistedChats.get(resourceKey);
+		if (persisted && persisted.resource !== resource.toString(true)) {
+			throw new Error(
+				`Persisted Chat resource '${persisted.resource}' conflicts with '${resource.toString(true)}'.`,
+			);
+		}
+		if (persisted && initialState && [
+			'input',
+			'composerRevision',
+			'pendingAttachments',
+			'interactionTargets',
+		].some(key => Object.hasOwn(initialState, key))) {
+			throw new Error(`Chat model '${resource.toString()}' has conflicting restored composer state.`);
+		}
+		const restoredInitialState = persisted
+			? {
+				...initialState,
+				input: persisted.composer.input,
+				composerRevision: persisted.composer.revision,
+				pendingAttachments: persisted.composer.attachments,
+				interactionTargets: persisted.composer.interactionTargets,
+			}
+			: initialState;
+		for (const attachment of persisted?.composer.attachments ?? []) {
+			if (this.attachmentProducers.has(attachment.producerType)) {
+				this.attachmentProducers.validate(attachment);
+			}
+		}
+
+		const model = new ChatModel(resource, restoredInitialState);
 		const liveModel: ILiveChatModel = {
-			model: new ChatModel(resource, initialState),
+			model,
+			persistenceListener: model.onDidChange(() => this.persistModel(model)),
 			referenceCount: 0,
+			permanentlyDeleted: false,
 		};
 		this.models.set(resourceKey, liveModel);
-		return this.createReference(resourceKey, liveModel);
+		this.persistModel(model);
+		return this.createOwnerReference(resourceKey, liveModel);
 	}
 
 	acquireModel(resource: URI): IChatModelReference {
@@ -362,8 +445,123 @@ export class ChatService implements IChatService {
 		return this.createReference(resourceKey, liveModel);
 	}
 
+	registerAttachmentProducer(producer: IChatAttachmentProducer): IDisposable {
+		if (this.attachmentProducers.has(producer.type)) {
+			throw new Error(`Chat attachment producer '${producer.type}' is already registered.`);
+		}
+		for (const { model } of this.models.values()) {
+			for (const attachment of model.getSnapshot().pendingAttachments) {
+				if (attachment.producerType !== producer.type) {
+					continue;
+				}
+				if (attachment.producerStateVersion !== producer.stateVersion) {
+					throw new Error(
+						`Stored Chat attachment '${attachment.id}' uses producer-state version `
+						+ `${attachment.producerStateVersion}; producer '${producer.type}' requires ${producer.stateVersion}.`,
+					);
+				}
+				producer.validateState(attachment.state);
+			}
+		}
+		return this.attachmentProducers.register(producer);
+	}
+
+	registerHostPresentationProvider(provider: IChatHostPresentationProvider): IDisposable {
+		const tool = createAgentToolId(provider.tool);
+		if (typeof provider.project !== 'function') {
+			throw new TypeError(`Host presentation provider '${tool}' is invalid.`);
+		}
+		if (this.hostPresentationProviders.has(tool)) {
+			throw new Error(`Host presentation provider '${tool}' is already registered.`);
+		}
+
+		this.hostPresentationProviders.set(tool, provider);
+		const prepared: {
+			readonly model: ChatModel;
+			readonly identity: IChatHostModelIdentity;
+			readonly presentations: readonly IChatHostPresentation[];
+		}[] = [];
+		try {
+			for (const { model } of this.models.values()) {
+				const snapshot = model.getSnapshot();
+				const identity = model.getHostIdentity();
+				if (!snapshot.hostState || !identity) {
+					continue;
+				}
+				const projected = this.projectHostPresentations(
+					identity,
+					snapshot.hostState,
+					snapshot.hostPresentations,
+				);
+				prepared.push({
+					model,
+					identity,
+					presentations: mergeHostPresentations(projected, [
+						snapshot.hostPresentations,
+					]),
+				});
+			}
+		} catch (error) {
+			this.hostPresentationProviders.delete(tool);
+			throw error;
+		}
+		for (const item of prepared) {
+			item.model.replaceHostPresentations(item.identity, item.presentations);
+		}
+
+		let registered = true;
+		return toDisposable(() => {
+			if (!registered) {
+				return;
+			}
+			registered = false;
+			if (this.hostPresentationProviders.get(tool) === provider) {
+				this.hostPresentationProviders.delete(tool);
+			}
+		});
+	}
+
+	updateHostPresentation(resource: URI, update: IChatHostPresentationUpdate): void {
+		const expected = parseChatHostPresentation({
+			schemaVersion: ChatHostPresentationSchemaVersion,
+			...update.identity,
+			type: update.type,
+			value: update.expectedValue,
+		});
+		const replacement = parseChatHostPresentation({
+			schemaVersion: ChatHostPresentationSchemaVersion,
+			...update.identity,
+			type: update.type,
+			value: update.value,
+		});
+		const model = this.getModel(resource);
+		const identity = model.getHostIdentity();
+		const state = model.getSnapshot().hostState;
+		if (!identity || !state) {
+			throw new Error(`Chat model '${resource.toString()}' has no canonical Host binding.`);
+		}
+		model.update(snapshot => {
+			const key = hostPresentationKey(expected);
+			const current = snapshot.hostPresentations.find(presentation =>
+				hostPresentationKey(presentation) === key,
+			);
+			if (!current
+				|| current.type !== expected.type
+				|| hostPresentationContentKey(current) !== hostPresentationContentKey(expected)) {
+				throw new Error(`Host presentation '${key}' changed before its Feature update committed.`);
+			}
+			return {
+				...snapshot,
+				hostPresentations: snapshot.hostPresentations.map(presentation =>
+					presentation === current ? replacement : presentation,
+				),
+			};
+		});
+	}
+
 	setInput(resource: URI, value: string): void {
 		this.updateModel(resource, snapshot => {
+			requireMutableComposer(resource, snapshot);
 			if (snapshot.input === value && snapshot.errorMessage === undefined) {
 				return snapshot;
 			}
@@ -371,246 +569,392 @@ export class ChatService implements IChatService {
 			return {
 				...snapshot,
 				input: value,
+				composerRevision: snapshot.input === value
+					? snapshot.composerRevision
+					: nextComposerRevision(snapshot.composerRevision),
 				errorMessage: undefined,
 			};
 		});
 	}
 
-	insertContextMessage(
+	addComposerContext(
 		resource: URI,
-		content: string,
-		imageAttachments: readonly IChatImageAttachment[],
+		attachments: readonly IPendingChatAttachment[],
+		targets: readonly IAgentHostInteractionTarget[],
 	): void {
-		const model = this.getModel(resource);
-		const normalizedContent = content.trim();
-		if (!normalizedContent) {
-			throw new Error('A Chat context message requires non-empty content.');
+		if (attachments.length === 0 || targets.length === 0) {
+			throw new Error('An atomic Chat composer context requires attachments and interaction targets.');
 		}
-		const capturedImageAttachments = parseChatImageAttachments(imageAttachments);
-
-		model.update(snapshot => ({
-			...snapshot,
-			messages: [
-				...snapshot.messages,
-				{
-					id: generateUuid(),
-					role: 'user',
-					content: normalizedContent,
-					imageAttachments: capturedImageAttachments,
-				},
-			],
-			errorMessage: undefined,
-		}));
-	}
-
-	insertArticleList(
-		resource: URI,
-		_sourceLabel: string,
-		articleIds: readonly ArticleId[],
-		content: string,
-	): void {
-		const model = this.getModel(resource);
-		if (articleIds.length === 0 || !content.trim()) {
-			return;
+		const capturedAttachments = attachments.map(capturePendingChatAttachment);
+		for (const attachment of capturedAttachments) {
+			this.attachmentProducers.validate(attachment);
+		}
+		const attachmentIds = capturedAttachments.map(attachment => attachment.id);
+		if (new Set(attachmentIds).size !== attachmentIds.length) {
+			throw new Error('A Chat composer context contains duplicate attachment IDs.');
+		}
+		const capturedTargets = targets.map(captureInteractionTarget);
+		const targetIds = capturedTargets.map(target => target.id);
+		if (new Set(targetIds).size !== targetIds.length) {
+			throw new Error('A Chat composer context contains duplicate interaction-target IDs.');
 		}
 
-		model.update(snapshot => ({
-			...snapshot,
-			messages: [
-				...snapshot.messages,
-				{
-					id: generateUuid(),
-					role: 'assistant',
-					content,
-					imageAttachments: [],
-					includeInAgentHistory: false,
-					articleList: { articleIds: [...articleIds] },
-				},
-			],
-			errorMessage: undefined,
-		}));
-	}
-
-	insertArticleFetchEmptyResult(resource: URI, sourceLabel: string, message: string): void {
-		const model = this.getModel(resource);
-		if (!message.trim()) {
-			return;
-		}
-
-		model.update(snapshot => ({
-			...snapshot,
-			messages: [
-				...snapshot.messages,
-				{
-					id: generateUuid(),
-					role: 'assistant',
-					content: createArticleFetchEmptyMessageContent(sourceLabel, message),
-					imageAttachments: [],
-					includeInAgentHistory: false,
-				},
-			],
-			errorMessage: undefined,
-		}));
-	}
-
-	applyPatch(resource: URI, messageId: string): void {
-		const model = this.getModel(resource);
-		const assistantMessage = model.getSnapshot().messages.find(
-			(message): message is Extract<ChatMessage, { role: 'assistant' }> =>
-				message.id === messageId && message.role === 'assistant',
-		);
-		const patchProposal = assistantMessage?.patchProposal ?? null;
-		if (!patchProposal || !canApplyChatPatch(patchProposal)) {
-			return;
-		}
-
-		const targetDocument = this.draftEditorService.getDocument(patchProposal.target.resource);
-		if (!targetDocument) {
-			this.reportPatchApplyFailure(
-				model,
-				messageId,
-				localize('chat.patch.targetUnavailable', "The draft targeted by this patch is unavailable."),
-			);
-			return;
-		}
-
-		if (documentKey(targetDocument) !== documentKey(patchProposal.target.document)) {
-			this.reportPatchApplyFailure(
-				model,
-				messageId,
-				localize('chat.patch.targetChanged', "The draft changed after this patch was generated."),
-			);
-			return;
-		}
-
-		const textEdits = patchProposal.patch.operations.flatMap(operation =>
-			operation.kind === 'text-edit' ? [operation.edit] : [],
-		);
-		if (textEdits.length !== patchProposal.patch.operations.length) {
-			this.reportPatchApplyFailure(
-				model,
-				messageId,
-				localize('chat.patch.requiresExecutor', "This patch requires an unsupported custom executor."),
-			);
-			return;
-		}
-
-		const applyResult = applyWritingEditorEdits(patchProposal.target.document, textEdits);
-		if (!applyResult.ok) {
-			this.reportPatchApplyFailure(
-				model,
-				messageId,
-				localizePatchEditFailure(applyResult.reason, applyResult.blockId),
-			);
-			return;
-		}
-
-		this.draftEditorService.setDocument(patchProposal.target.resource, applyResult.document);
-		this.updateMessage(model, messageId, message => {
-			if (message.role !== 'assistant' || !message.patchProposal) {
-				return message;
-			}
-
-			return {
-				...message,
-				patchProposal: {
-					...message.patchProposal,
-					isApplied: true,
-					applyError: null,
-				},
-			};
-		});
-		this.notificationService.info(localize('chat.patch.applied', "Patch applied to the draft."));
-	}
-
-	isArticleChecked(resource: URI, articleId: ArticleId): boolean {
-		return this.getModel(resource).getSnapshot().checkedArticleIds.includes(articleId);
-	}
-
-	setArticleChecked(resource: URI, articleId: ArticleId, checked: boolean): void {
 		this.updateModel(resource, snapshot => {
-			const isChecked = snapshot.checkedArticleIds.includes(articleId);
-			if (isChecked === checked) {
-				return snapshot;
+			requireMutableComposer(resource, snapshot);
+			if (snapshot.pendingAttachments.length + capturedAttachments.length > maximumPendingChatAttachments) {
+				throw new RangeError(`A Chat composer accepts at most ${maximumPendingChatAttachments} attachments.`);
 			}
-
-			return {
-				...snapshot,
-				checkedArticleIds: checked
-					? [...snapshot.checkedArticleIds, articleId]
-					: snapshot.checkedArticleIds.filter(id => id !== articleId),
-			};
-		});
-	}
-
-	removeArticleChecks(resource: URI, articleIds: readonly ArticleId[]): void {
-		const model = this.getModel(resource);
-		if (articleIds.length === 0) {
-			return;
-		}
-
-		const removedArticleIds = new Set(articleIds);
-		model.update(snapshot => {
-			const checkedArticleIds = snapshot.checkedArticleIds.filter(
-				articleId => !removedArticleIds.has(articleId),
-			);
-			if (checkedArticleIds.length === snapshot.checkedArticleIds.length) {
-				return snapshot;
-			}
-
-			return { ...snapshot, checkedArticleIds };
-		});
-	}
-
-	startRequest(
-		resource: URI,
-		requestId: string,
-		prompt: string,
-		imageAttachments: readonly IChatImageAttachment[],
-	): IChatRequestTransaction {
-		const model = this.getModel(resource);
-		if (!requestId.trim()) {
-			throw new Error('Chat request id must not be empty.');
-		}
-
-		const normalizedPrompt = prompt.trim();
-		if (!normalizedPrompt) {
-			throw new Error('Chat request prompt must not be empty.');
-		}
-		const capturedImageAttachments = parseChatImageAttachments(imageAttachments);
-
-		const initialSnapshot = model.getSnapshot();
-		model.update(snapshot => {
-			if (snapshot.activeRequest) {
-				throw new Error(
-					`Chat request ${snapshot.activeRequest.id} is already active for ${resource.toString()}.`,
+			if (snapshot.interactionTargets.length + capturedTargets.length > maximumPendingChatInteractionTargets) {
+				throw new RangeError(
+					`A Chat composer accepts at most ${maximumPendingChatInteractionTargets} interaction targets.`,
 				);
 			}
-
+			const existingAttachmentIds = new Set(snapshot.pendingAttachments.map(attachment => attachment.id));
+			const duplicateAttachment = capturedAttachments.find(attachment =>
+				existingAttachmentIds.has(attachment.id),
+			);
+			if (duplicateAttachment) {
+				throw new Error(`Chat attachment '${duplicateAttachment.id}' is already pending.`);
+			}
+			const existingTargetIds = new Set(snapshot.interactionTargets.map(target => target.id));
+			const duplicateTarget = capturedTargets.find(target => existingTargetIds.has(target.id));
+			if (duplicateTarget) {
+				throw new Error(`Chat interaction target '${duplicateTarget.id}' is already bound.`);
+			}
 			return {
 				...snapshot,
-				input: '',
-				messages: [
-					...snapshot.messages,
-					{
-						id: generateUuid(),
-						role: 'user',
-						content: normalizedPrompt,
-						imageAttachments: capturedImageAttachments,
-					},
-				],
-				activeRequest: {
-					id: requestId,
-					prompt: normalizedPrompt,
+				composerRevision: nextComposerRevision(snapshot.composerRevision),
+				pendingAttachments: [...snapshot.pendingAttachments, ...capturedAttachments],
+				interactionTargets: [...snapshot.interactionTargets, ...capturedTargets],
+				errorMessage: undefined,
+			};
+		});
+	}
+
+	addPendingAttachments(resource: URI, attachments: readonly IPendingChatAttachment[]): void {
+		if (attachments.length === 0) {
+			return;
+		}
+		const captured = attachments.map(attachment => capturePendingChatAttachment(attachment));
+		for (const attachment of captured) {
+			this.attachmentProducers.validate(attachment);
+		}
+		const capturedIds = captured.map(attachment => attachment.id);
+		if (new Set(capturedIds).size !== capturedIds.length) {
+			throw new Error('A pending Chat attachment batch contains duplicate attachment IDs.');
+		}
+
+		this.updateModel(resource, snapshot => {
+			requireMutableComposer(resource, snapshot);
+			if (snapshot.pendingAttachments.length + captured.length > maximumPendingChatAttachments) {
+				throw new RangeError(`A Chat composer accepts at most ${maximumPendingChatAttachments} attachments.`);
+			}
+			const existingIds = new Set(snapshot.pendingAttachments.map(attachment => attachment.id));
+			const duplicate = captured.find(attachment => existingIds.has(attachment.id));
+			if (duplicate) {
+				throw new Error(`Chat attachment '${duplicate.id}' is already pending.`);
+			}
+			return {
+				...snapshot,
+				composerRevision: nextComposerRevision(snapshot.composerRevision),
+				pendingAttachments: [...snapshot.pendingAttachments, ...captured],
+				errorMessage: undefined,
+			};
+		});
+	}
+
+	removePendingAttachment(resource: URI, attachmentId: IPendingChatAttachment['id']): void {
+		let discarded: IPendingChatAttachment | undefined;
+		this.updateModel(resource, snapshot => {
+			requireMutableComposer(resource, snapshot);
+			discarded = snapshot.pendingAttachments.find(attachment => attachment.id === attachmentId);
+			if (!discarded) {
+				throw new Error(`Chat attachment '${attachmentId}' is not pending.`);
+			}
+			return {
+				...snapshot,
+				composerRevision: nextComposerRevision(snapshot.composerRevision),
+				pendingAttachments: snapshot.pendingAttachments.filter(attachment => attachment !== discarded),
+			};
+		});
+		this.attachmentProducers.discard(discarded!);
+	}
+
+	clearPendingAttachments(resource: URI): void {
+		let discarded: readonly IPendingChatAttachment[] = [];
+		this.updateModel(resource, snapshot => {
+			requireMutableComposer(resource, snapshot);
+			if (snapshot.pendingAttachments.length === 0) {
+				return snapshot;
+			}
+			discarded = snapshot.pendingAttachments;
+			return {
+				...snapshot,
+				composerRevision: nextComposerRevision(snapshot.composerRevision),
+				pendingAttachments: [],
+			};
+		});
+		this.attachmentProducers.discardAll(discarded);
+	}
+
+	addInteractionTargets(resource: URI, targets: readonly IAgentHostInteractionTarget[]): void {
+		if (targets.length === 0) {
+			return;
+		}
+		const captured = targets.map(captureInteractionTarget);
+		const capturedIds = captured.map(target => target.id);
+		if (new Set(capturedIds).size !== capturedIds.length) {
+			throw new Error('A Chat interaction-target batch contains duplicate target IDs.');
+		}
+
+		this.updateModel(resource, snapshot => {
+			requireMutableComposer(resource, snapshot);
+			if (snapshot.interactionTargets.length + captured.length > maximumPendingChatInteractionTargets) {
+				throw new RangeError(
+					`A Chat composer accepts at most ${maximumPendingChatInteractionTargets} interaction targets.`,
+				);
+			}
+			const existingIds = new Set(snapshot.interactionTargets.map(target => target.id));
+			const duplicate = captured.find(target => existingIds.has(target.id));
+			if (duplicate) {
+				throw new Error(`Chat interaction target '${duplicate.id}' is already bound.`);
+			}
+			return {
+				...snapshot,
+				composerRevision: nextComposerRevision(snapshot.composerRevision),
+				interactionTargets: [...snapshot.interactionTargets, ...captured],
+				errorMessage: undefined,
+			};
+		});
+	}
+
+	removeInteractionTarget(resource: URI, targetId: IAgentHostInteractionTarget['id']): void {
+		this.updateModel(resource, snapshot => {
+			requireMutableComposer(resource, snapshot);
+			const interactionTargets = snapshot.interactionTargets.filter(target => target.id !== targetId);
+			if (interactionTargets.length === snapshot.interactionTargets.length) {
+				throw new Error(`Chat interaction target '${targetId}' is not bound.`);
+			}
+			return {
+				...snapshot,
+				composerRevision: nextComposerRevision(snapshot.composerRevision),
+				interactionTargets,
+			};
+		});
+	}
+
+	clearInteractionTargets(resource: URI): void {
+		this.updateModel(resource, snapshot => {
+			requireMutableComposer(resource, snapshot);
+			if (snapshot.interactionTargets.length === 0) {
+				return snapshot;
+			}
+			return {
+				...snapshot,
+				composerRevision: nextComposerRevision(snapshot.composerRevision),
+				interactionTargets: [],
+			};
+		});
+	}
+
+	async prepareSubmission(
+		resource: URI,
+		submissionId: AgentSubmissionId,
+		token: CancellationToken,
+	): Promise<IPreparedChatSubmission> {
+		const capturedSubmissionId = createAgentSubmissionId(submissionId);
+		if (token.isCancellationRequested) {
+			throw new CancellationError();
+		}
+
+		const resourceKey = getComparisonKey(resource);
+		const liveModel = this.models.get(resourceKey);
+		if (!liveModel) {
+			throw new Error(`Chat model does not exist: ${resource.toString()}`);
+		}
+		const model = liveModel.model;
+		const initialSnapshot = model.getSnapshot();
+		requireMutableComposer(resource, initialSnapshot);
+		if (!initialSnapshot.input.trim()) {
+			throw new Error('A Chat submission requires a non-empty prompt.');
+		}
+
+		const capture: IChatSubmissionCapture = freezeStructuredValue({
+			submissionId: capturedSubmissionId,
+			composerRevision: initialSnapshot.composerRevision,
+			prompt: initialSnapshot.input,
+			attachments: [...initialSnapshot.pendingAttachments],
+			interactionTargets: [...initialSnapshot.interactionTargets],
+		});
+		model.update(snapshot => {
+			if (snapshot !== initialSnapshot) {
+				throw new Error(`Chat composer changed before preparation began: ${resource.toString()}`);
+			}
+			return {
+				...snapshot,
+				preparingSubmission: {
+					id: capturedSubmissionId,
+					composerRevision: capture.composerRevision,
 				},
 				errorMessage: undefined,
 			};
 		});
+		const preparationReference = this.createReference(resourceKey, liveModel);
 
-		return new ChatRequestTransaction(model, requestId, initialSnapshot);
+		let preparedAttachments: IPreparedChatAttachments | undefined;
+		try {
+			preparedAttachments = await prepareChatAttachments(
+				this.attachmentProducers,
+				resource,
+				capture,
+				token,
+			);
+			if (token.isCancellationRequested) {
+				throw new CancellationError();
+			}
+		} catch (error) {
+			const cleanupErrors: unknown[] = [];
+			if (preparedAttachments) {
+				try {
+					await preparedAttachments.release();
+				} catch (releaseError) {
+					cleanupErrors.push(releaseError);
+				}
+			}
+			try {
+				this.clearPreparingSubmission(model, capturedSubmissionId, capture.composerRevision);
+			} catch (stateError) {
+				cleanupErrors.push(stateError);
+			}
+			try {
+				preparationReference.dispose();
+			} catch (referenceError) {
+				cleanupErrors.push(referenceError);
+			}
+			if (cleanupErrors.length === 0) {
+				throw error;
+			}
+			throw new AggregateError(
+				[error, ...cleanupErrors],
+				`Failed to discard Chat submission '${capturedSubmissionId}' preparation.`,
+			);
+		}
+		if (!preparedAttachments) {
+			preparationReference.dispose();
+			throw new Error(`Chat submission '${capturedSubmissionId}' completed without prepared attachments.`);
+		}
+
+		let active = true;
+		const finish = async (accepted: boolean): Promise<void> => {
+			if (!active) {
+				throw new Error(`Prepared Chat submission '${capturedSubmissionId}' is no longer active.`);
+			}
+			active = false;
+			const finishErrors: unknown[] = [];
+			let acceptedComposer = false;
+			try {
+				if (accepted) {
+					model.update(snapshot => {
+						this.requirePreparingSubmission(
+							resource,
+							snapshot,
+							capturedSubmissionId,
+							capture.composerRevision,
+						);
+						return {
+							...snapshot,
+							input: '',
+							composerRevision: nextComposerRevision(snapshot.composerRevision),
+							pendingAttachments: [],
+							interactionTargets: [],
+							preparingSubmission: undefined,
+							errorMessage: undefined,
+						};
+					});
+					acceptedComposer = true;
+				} else {
+					this.clearPreparingSubmission(model, capturedSubmissionId, capture.composerRevision);
+				}
+			} catch (error) {
+				finishErrors.push(error);
+			}
+
+			if (acceptedComposer) {
+				try {
+					this.attachmentProducers.discardAll(capture.attachments);
+				} catch (discardError) {
+					finishErrors.push(discardError);
+				}
+			}
+
+			try {
+				await preparedAttachments.release();
+			} catch (releaseError) {
+				finishErrors.push(releaseError);
+			}
+			try {
+				preparationReference.dispose();
+			} catch (referenceError) {
+				finishErrors.push(referenceError);
+			}
+			if (finishErrors.length === 1) {
+				throw finishErrors[0];
+			}
+			if (finishErrors.length > 1) {
+				throw new AggregateError(
+					finishErrors,
+					`Failed to finish Chat submission '${capturedSubmissionId}'.`,
+				);
+			}
+		};
+
+		return Object.freeze({
+			capture,
+			attachments: preparedAttachments.attachments,
+			interactionTargets: capture.interactionTargets,
+			accept: () => finish(true),
+			reject: () => finish(false),
+		});
+	}
+
+	private requirePreparingSubmission(
+		resource: URI,
+		snapshot: IChatModelSnapshot,
+		submissionId: AgentSubmissionId,
+		composerRevision: number,
+	): void {
+		const preparing = snapshot.preparingSubmission;
+		if (!preparing
+			|| preparing.id !== submissionId
+			|| preparing.composerRevision !== composerRevision
+			|| snapshot.composerRevision !== composerRevision) {
+			throw new Error(
+				`Chat submission '${submissionId}' no longer owns composer revision ${composerRevision} `
+				+ `for ${resource.toString()}.`,
+			);
+		}
+	}
+
+	private clearPreparingSubmission(
+		model: ChatModel,
+		submissionId: AgentSubmissionId,
+		composerRevision: number,
+	): void {
+		model.update(snapshot => {
+			this.requirePreparingSubmission(
+				model.resource,
+				snapshot,
+				submissionId,
+				composerRevision,
+			);
+			return { ...snapshot, preparingSubmission: undefined };
+		});
 	}
 
 	private createReference(resourceKey: string, liveModel: ILiveChatModel): IChatModelReference {
+		if (liveModel.permanentlyDeleted) {
+			throw new Error(`Chat model was permanently deleted: ${liveModel.model.resource.toString()}`);
+		}
 		liveModel.referenceCount += 1;
 		let isDisposed = false;
 		return {
@@ -626,14 +970,245 @@ export class ChatService implements IChatService {
 					return;
 				}
 
-				if (this.models.get(resourceKey) !== liveModel) {
-					throw new Error(`Chat model registry ownership changed: ${liveModel.model.resource.toString()}`);
+				if (!liveModel.permanentlyDeleted) {
+					if (this.models.get(resourceKey) !== liveModel) {
+						throw new Error(`Chat model registry ownership changed: ${liveModel.model.resource.toString()}`);
+					}
+					this.models.delete(resourceKey);
 				}
 
-				this.models.delete(resourceKey);
+				liveModel.persistenceListener.dispose();
 				liveModel.model.dispose();
 			},
 		};
+	}
+
+	private createOwnerReference(
+		resourceKey: string,
+		liveModel: ILiveChatModel,
+	): IChatModelOwnerReference {
+		const reference = this.createReference(resourceKey, liveModel);
+		let isDisposed = false;
+		return {
+			object: reference.object,
+			replaceHostState: (identity, state) => {
+				if (isDisposed) {
+					throw new Error(`Chat model owner is disposed: ${liveModel.model.resource.toString()}`);
+				}
+				this.replaceHostState(liveModel.model, identity, state);
+			},
+			importHostPresentations: (identity, presentations) => {
+				if (isDisposed) {
+					throw new Error(`Chat model owner is disposed: ${liveModel.model.resource.toString()}`);
+				}
+				this.importHostPresentations(liveModel.model, identity, presentations);
+			},
+			delete: () => {
+				if (isDisposed) {
+					throw new Error(`Chat model owner is disposed: ${liveModel.model.resource.toString()}`);
+				}
+				if (liveModel.model.getSnapshot().preparingSubmission) {
+					throw new Error(
+						`Chat model cannot be deleted while preparing a submission: ${liveModel.model.resource.toString()}`,
+					);
+				}
+				isDisposed = true;
+				try {
+					this.deleteModel(resourceKey, liveModel);
+				} finally {
+					reference.dispose();
+				}
+			},
+			dispose: () => {
+				if (isDisposed) {
+					return;
+				}
+				isDisposed = true;
+				reference.dispose();
+			},
+		};
+	}
+
+	private replaceHostState(
+		model: ChatModel,
+		identity: IChatHostModelIdentity,
+		state: IAgentHostChatState,
+	): void {
+		const validatedIdentity = model.validateHostState(identity, state);
+		const stored = this.persistedChats.get(getComparisonKey(model.resource));
+		const retained = validateHostPresentations(
+			validatedIdentity,
+			state,
+			mergeHostPresentations([], [
+				model.getSnapshot().hostPresentations,
+				...(stored ? [stored.presentations] : []),
+			]),
+		);
+		const projected = this.projectHostPresentations(validatedIdentity, state, retained);
+		model.replaceHostState(
+			validatedIdentity,
+			state,
+			mergeHostPresentations(projected, [retained]),
+		);
+	}
+
+	private importHostPresentations(
+		model: ChatModel,
+		identity: IChatHostModelIdentity,
+		presentations: readonly IChatHostPresentation[],
+	): void {
+		const state = model.getSnapshot().hostState;
+		if (!state) {
+			throw new Error(`Chat model '${model.resource.toString()}' has no canonical Host state.`);
+		}
+		const validatedIdentity = model.validateHostState(identity, state);
+		const retained = validateHostPresentations(validatedIdentity, state, mergeHostPresentations([], [
+			model.getSnapshot().hostPresentations,
+			presentations,
+		]));
+		const projected = this.projectHostPresentations(validatedIdentity, state, retained);
+		model.replaceHostPresentations(
+			validatedIdentity,
+			mergeHostPresentations(projected, [retained]),
+		);
+	}
+
+	private projectHostPresentations(
+		identity: IChatHostModelIdentity,
+		state: IAgentHostChatState,
+		persisted: readonly IChatHostPresentation[],
+	): readonly IChatHostPresentation[] {
+		if (state.id !== identity.chat || state.session !== identity.session) {
+			throw new Error(`Canonical Host state does not match '${identity.session}/${identity.chat}'.`);
+		}
+		const persistedByKey = new Map(persisted.map(presentation => [
+			hostPresentationKey(presentation),
+			presentation,
+		]));
+		const presentations: IChatHostPresentation[] = [];
+		for (const turn of state.turns) {
+			const calls = new Map(turn.response.flatMap(part =>
+				part.kind === 'toolCall' ? [[part.call, part] as const] : [],
+			));
+			for (const [responsePartIndex, part] of turn.response.entries()) {
+				if (part.kind === 'toolCall') {
+					calls.set(part.call, part);
+					continue;
+				}
+				if (part.kind !== 'toolResult' || part.status !== 'completed') {
+					continue;
+				}
+				const call = calls.get(part.call);
+				if (!call) {
+					throw new Error(`Completed Host Tool result '${part.call}' has no exact call.`);
+				}
+				const provider = this.hostPresentationProviders.get(call.tool);
+				if (!provider) {
+					continue;
+				}
+				if (!Object.hasOwn(part, 'output') || part.output === undefined) {
+					throw new Error(`Completed Host Tool result '${part.call}' has no canonical output.`);
+				}
+				const output = part.output;
+				const presentationIdentity = {
+					session: identity.session,
+					chat: identity.chat,
+					turn: turn.id,
+					responsePartIndex,
+				};
+				const persistedPresentation = persistedByKey.get(hostPresentationKey(presentationIdentity));
+				const projection = parseChatHostPresentationProjection(provider.tool, provider.project({
+					session: identity.session,
+					chat: identity.chat,
+					turn,
+					responsePartIndex,
+					call,
+					result: { ...part, status: 'completed', output },
+				}, persistedPresentation?.value));
+				presentations.push(parseChatHostPresentation({
+					schemaVersion: ChatHostPresentationSchemaVersion,
+					session: identity.session,
+					chat: identity.chat,
+					turn: turn.id,
+					responsePartIndex,
+					type: projection.type,
+					value: projection.value,
+				}));
+			}
+		}
+		return Object.freeze(presentations);
+	}
+
+	private persistModel(model: ChatModel): void {
+		const resourceKey = getComparisonKey(model.resource);
+		const snapshot = model.getSnapshot();
+		const existing = this.persistedChats.get(resourceKey);
+		const presentations = snapshot.hostState
+			? snapshot.hostPresentations
+			: existing?.presentations ?? [];
+		const shouldPersist = snapshot.input.length > 0
+			|| snapshot.pendingAttachments.length > 0
+			|| snapshot.interactionTargets.length > 0
+			|| presentations.length > 0;
+		const next = shouldPersist
+			? parseChatPersistedResourceState({
+				resource: model.resource.toString(true),
+				composer: {
+					input: snapshot.input,
+					revision: snapshot.composerRevision,
+					attachments: snapshot.pendingAttachments,
+					interactionTargets: snapshot.interactionTargets,
+				},
+				presentations,
+			})
+			: undefined;
+		if (JSON.stringify(existing) === JSON.stringify(next)) {
+			return;
+		}
+		if (next) {
+			this.persistedChats.set(resourceKey, next);
+		} else {
+			this.persistedChats.delete(resourceKey);
+		}
+		this.commitPersistedChats();
+	}
+
+	private deleteModel(resourceKey: string, liveModel: ILiveChatModel): void {
+		if (liveModel.permanentlyDeleted
+			|| this.models.get(resourceKey) !== liveModel) {
+			throw new Error(`Chat model cannot be permanently deleted: ${liveModel.model.resource.toString()}`);
+		}
+		liveModel.permanentlyDeleted = true;
+		liveModel.persistenceListener.dispose();
+		this.models.delete(resourceKey);
+		if (this.persistedChats.delete(resourceKey)) {
+			this.commitPersistedChats();
+		}
+		this.onDidDeleteModelEmitter.fire(liveModel.model.resource);
+		this.attachmentProducers.discardAll(liveModel.model.getSnapshot().pendingAttachments);
+	}
+
+	private commitPersistedChats(): void {
+		if (this.persistedState?.revision === Number.MAX_SAFE_INTEGER) {
+			throw new RangeError('Persisted Chat state revision cannot advance further.');
+		}
+		const nextState: IChatPersistedState = Object.freeze({
+			schemaVersion: ChatPersistenceSchemaVersion,
+			revision: this.persistedState ? this.persistedState.revision + 1 : 0,
+			chats: Object.freeze(
+				[...this.persistedChats.values()].sort((left, right) =>
+					left.resource.localeCompare(right.resource),
+				),
+			),
+			completedMigrations: this.persistedState?.completedMigrations ?? Object.freeze([]),
+		});
+		this.storageService.store(
+			ChatPersistenceStorageKey,
+			serializeChatPersistedState(nextState),
+			StorageScope.APPLICATION,
+			StorageTarget.USER,
+		);
+		this.persistedState = nextState;
 	}
 
 	private getModel(resource: URI): ChatModel {
@@ -652,45 +1227,6 @@ export class ChatService implements IChatService {
 		this.getModel(resource).update(updater);
 	}
 
-	private updateMessage(
-		model: ChatModel,
-		messageId: string,
-		updater: (message: ChatMessage) => ChatMessage,
-	): void {
-		model.update(snapshot => {
-			let changed = false;
-			const messages = snapshot.messages.map(message => {
-				if (message.id !== messageId) {
-					return message;
-				}
-
-				const nextMessage = updater(message);
-				changed ||= !Object.is(nextMessage, message);
-				return nextMessage;
-			});
-
-			return changed ? { ...snapshot, messages } : snapshot;
-		});
-	}
-
-	private reportPatchApplyFailure(model: ChatModel, messageId: string, errorMessage: string): void {
-		this.updateMessage(model, messageId, message => {
-			if (message.role !== 'assistant' || !message.patchProposal) {
-				return message;
-			}
-
-			return {
-				...message,
-				patchProposal: {
-					...message.patchProposal,
-					applyError: errorMessage,
-				},
-			};
-		});
-		this.notificationService.error(
-			localize('chat.patch.applyFailed', "Failed to apply patch: {0}", errorMessage),
-		);
-	}
 }
 
 registerSingleton(IChatServiceDecorator, ChatService, InstantiationType.Delayed);

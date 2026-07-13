@@ -25,6 +25,54 @@
 	box-shadow: inset 0 1px 0 var(--comet-editor-draftInsetShadow, rgba(255, 255, 255, 0.85));
 }
 
+.comet-draft-editor-patch-card {
+	display: grid;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid #dfe8f1;
+	border-radius: 10px;
+	background: #f8fbfe;
+}
+
+.comet-draft-editor-patch-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.comet-draft-editor-patch-label,
+.comet-draft-editor-patch-status {
+	color: #203040;
+	font-size: 12px;
+}
+
+.comet-draft-editor-patch-summary,
+.comet-draft-editor-patch-error {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.comet-draft-editor-patch-summary {
+	color: #5e7186;
+}
+
+.comet-draft-editor-patch-error {
+	color: #a12424;
+}
+
+.comet-draft-editor-patch-footer {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+}
+
+.comet-draft-editor-patch-button.comet-btn-base {
+	min-height: 28px;
+	border-radius: 8px;
+}
+
 @media (max-width: 760px) {
 	.comet-editor-draft-pane {
 		padding-left: 10px;

@@ -5,7 +5,6 @@
 
 import { Disposable } from 'cs/base/common/lifecycle';
 import {
-	autorun,
 	observableValue,
 	type IObservable,
 	type IObservableReader,
@@ -26,7 +25,7 @@ import {
 } from 'cs/sessions/services/sessions/common/sessionsView';
 
 export interface IVisibleSessionViewState {
-	readonly activeChatKey: string;
+	readonly activeChatKey: string | undefined;
 	readonly closedChatKeys: readonly string[];
 	readonly shownToolChatKeys: readonly string[];
 	readonly sticky: boolean;
@@ -34,7 +33,7 @@ export interface IVisibleSessionViewState {
 
 interface IVisibleSessionState {
 	readonly session: ISession;
-	readonly activeChatKey: string;
+	readonly activeChat: IChat | undefined;
 	readonly closedChatKeys: ReadonlySet<string>;
 	readonly shownToolChatKeys: ReadonlySet<string>;
 	readonly sticky: boolean;
@@ -46,10 +45,6 @@ function chatKey(chat: IChat): string {
 
 function isVisibleChat(chat: IChat): boolean {
 	return chat.interactivity.get() !== ChatInteractivity.Hidden;
-}
-
-function areSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-	return left.size === right.size && [...left].every(value => right.has(value));
 }
 
 /** Stable view-owned wrapper for one slot-bound Session model. */
@@ -64,10 +59,9 @@ export class VisibleSession extends Disposable implements IActiveSession {
 	readonly isArchived: ISession['isArchived'];
 	readonly workspace: ISession['workspace'];
 	readonly changes: ISession['changes'];
-	readonly mainChat: ISession['mainChat'];
 	readonly chats: ISession['chats'];
 	readonly capabilities: ISession['capabilities'];
-	readonly activeChat: IObservable<IChat>;
+	readonly activeChat: IObservable<IChat | undefined>;
 	readonly openChats: IObservable<readonly IChat[]>;
 	readonly closedChats: IObservable<readonly IChat[]>;
 	readonly visibleChatTabs: IObservable<readonly IChat[]>;
@@ -75,25 +69,30 @@ export class VisibleSession extends Disposable implements IActiveSession {
 
 	constructor(
 		session: ISession,
-		initialChat: IChat,
+		initialChat: IChat | undefined,
 		initialState: IVisibleSessionViewState | undefined,
 		private readonly saveViewState: (sessionId: string, state: IVisibleSessionViewState) => void,
 	) {
 		super();
-		this.assertOwnedVisibleChat(session, initialChat);
-		const restoredActiveChat = session.chats.get().find(chat =>
-			chatKey(chat) === initialState?.activeChatKey && isVisibleChat(chat),
-		) ?? initialChat;
-		const restoredActiveChatKey = chatKey(restoredActiveChat);
+		const explicitActiveChat = initialChat
+			? this.requireOwnedVisibleChat(session, initialChat)
+			: undefined;
+		const restoredActiveChat = initialState?.activeChatKey
+			? session.chats.get().find(chat => chatKey(chat) === initialState.activeChatKey && isVisibleChat(chat))
+			: undefined;
+		const activeChat = explicitActiveChat ?? restoredActiveChat;
+		const activeChatKey = activeChat ? chatKey(activeChat) : undefined;
 		const restoredShownToolChatKeys = new Set(initialState?.shownToolChatKeys);
-		if (restoredActiveChat.origin?.kind === ChatOriginKind.Tool) {
-			restoredShownToolChatKeys.add(restoredActiveChatKey);
+		if (activeChat?.origin.kind === ChatOriginKind.Tool && activeChatKey) {
+			restoredShownToolChatKeys.add(activeChatKey);
 		}
 		const restoredClosedChatKeys = new Set(initialState?.closedChatKeys);
-		restoredClosedChatKeys.delete(restoredActiveChatKey);
+		if (activeChatKey) {
+			restoredClosedChatKeys.delete(activeChatKey);
+		}
 		const restoredState = this.reconcileState({
 			session,
-			activeChatKey: restoredActiveChatKey,
+			activeChat,
 			closedChatKeys: restoredClosedChatKeys,
 			shownToolChatKeys: restoredShownToolChatKeys,
 			sticky: initialState?.sticky ?? false,
@@ -114,53 +113,44 @@ export class VisibleSession extends Disposable implements IActiveSession {
 			this.state.read(reader).session.workspace.read(reader));
 		this.changes = this.createProjection(reader =>
 			this.state.read(reader).session.changes.read(reader));
-		this.mainChat = this.createProjection(reader =>
-			this.state.read(reader).session.mainChat.read(reader));
 		this.chats = this.createProjection(reader =>
 			this.state.read(reader).session.chats.read(reader));
 		this.capabilities = this.createProjection(reader =>
 			this.state.read(reader).session.capabilities.read(reader));
 		this.activeChat = this.createProjection(reader => {
 			const state = this.state.read(reader);
-			const selected = state.session.chats.read(reader).find(chat => chatKey(chat) === state.activeChatKey);
-			if (selected
-				&& selected.interactivity.read(reader) !== ChatInteractivity.Hidden
-				&& !state.closedChatKeys.has(state.activeChatKey)
-				&& (selected.origin?.kind !== ChatOriginKind.Tool || state.shownToolChatKeys.has(state.activeChatKey))) {
-				return selected;
+			const activeChat = state.activeChat;
+			if (!activeChat || !state.session.chats.read(reader).includes(activeChat)) {
+				return undefined;
 			}
-			return state.session.mainChat.read(reader);
+			const key = chatKey(activeChat);
+			return activeChat.interactivity.read(reader) !== ChatInteractivity.Hidden
+				&& !state.closedChatKeys.has(key)
+				&& (activeChat.origin.kind !== ChatOriginKind.Tool || state.shownToolChatKeys.has(key))
+				? activeChat
+				: undefined;
 		});
 		this.openChats = this.createProjection(reader => {
 			const state = this.state.read(reader);
 			return state.session.chats.read(reader).filter(chat =>
 				chat.interactivity.read(reader) !== ChatInteractivity.Hidden
-				&& !state.closedChatKeys.has(chatKey(chat))
-				&& (chat.origin?.kind !== ChatOriginKind.Tool || state.shownToolChatKeys.has(chatKey(chat))),
+					&& !state.closedChatKeys.has(chatKey(chat))
+					&& (chat.origin.kind !== ChatOriginKind.Tool || state.shownToolChatKeys.has(chatKey(chat))),
 			);
 		});
 		this.closedChats = this.createProjection(reader => {
 			const state = this.state.read(reader);
 			return state.session.chats.read(reader).filter(chat =>
 				chat.interactivity.read(reader) !== ChatInteractivity.Hidden
-				&& chat.origin?.kind !== ChatOriginKind.Tool
-				&& state.closedChatKeys.has(chatKey(chat)),
+					&& chat.origin.kind !== ChatOriginKind.Tool
+					&& state.closedChatKeys.has(chatKey(chat)),
 			);
 		});
 		this.visibleChatTabs = this.createProjection(reader => {
 			return this.openChats.read(reader);
 		});
 		this.sticky = this.createProjection(reader => this.state.read(reader).sticky);
-		this._register(autorun(reader => {
-			const previous = this.state.read(reader);
-			const next = this.reconcileState(previous, previous.session, reader);
-			if (previous.activeChatKey !== next.activeChatKey
-				|| !areSetsEqual(previous.closedChatKeys, next.closedChatKeys)
-				|| !areSetsEqual(previous.shownToolChatKeys, next.shownToolChatKeys)) {
-				this.publishState(next);
-			}
-		}));
-		this.persistViewState(restoredState);
+		this.saveViewState(restoredState.session.sessionId, this.toViewState(restoredState));
 	}
 
 	get sessionId() { return this.state.get().session.sessionId; }
@@ -188,14 +178,14 @@ export class VisibleSession extends Disposable implements IActiveSession {
 		const state = this.state.get();
 		const current = this.requireCurrentVisibleChat(state.session, chat);
 		const key = chatKey(current);
-		if (current.origin?.kind === ChatOriginKind.Tool && !state.shownToolChatKeys.has(key)) {
+		if (current.origin.kind === ChatOriginKind.Tool && !state.shownToolChatKeys.has(key)) {
 			throw new Error(`Tool Chat '${current.resource.toString()}' must be opened before it can become active.`);
 		}
 		if (state.closedChatKeys.has(key)) {
 			throw new Error(`Chat '${current.resource.toString()}' is closed.`);
 		}
-		if (state.activeChatKey !== key) {
-			this.publishState({ ...state, activeChatKey: key });
+		if (state.activeChat !== current) {
+			this.publishState({ ...state, activeChat: current });
 		}
 	}
 
@@ -206,12 +196,12 @@ export class VisibleSession extends Disposable implements IActiveSession {
 		const closedChatKeys = new Set(state.closedChatKeys);
 		const shownToolChatKeys = new Set(state.shownToolChatKeys);
 		closedChatKeys.delete(key);
-		if (current.origin?.kind === ChatOriginKind.Tool) {
+		if (current.origin.kind === ChatOriginKind.Tool) {
 			shownToolChatKeys.add(key);
 		}
 		this.publishState({
 			...state,
-			activeChatKey: key,
+			activeChat: current,
 			closedChatKeys,
 			shownToolChatKeys,
 		});
@@ -221,22 +211,17 @@ export class VisibleSession extends Disposable implements IActiveSession {
 		const state = this.state.get();
 		const current = this.requireCurrentVisibleChat(state.session, chat);
 		const key = chatKey(current);
-		if (key === chatKey(state.session.mainChat.get())) {
-			throw new Error(`The main Chat of Session '${state.session.sessionId}' cannot be closed.`);
-		}
 
 		const closedChatKeys = new Set(state.closedChatKeys);
 		const shownToolChatKeys = new Set(state.shownToolChatKeys);
-		if (current.origin?.kind === ChatOriginKind.Tool) {
+		if (current.origin.kind === ChatOriginKind.Tool) {
 			shownToolChatKeys.delete(key);
 		} else {
 			closedChatKeys.add(key);
 		}
 		this.publishState({
 			...state,
-			activeChatKey: state.activeChatKey === key
-				? this.defaultActiveChatKey(state.session, closedChatKeys, shownToolChatKeys)
-				: state.activeChatKey,
+			activeChat: state.activeChat === current ? undefined : state.activeChat,
 			closedChatKeys,
 			shownToolChatKeys,
 		});
@@ -256,12 +241,16 @@ export class VisibleSession extends Disposable implements IActiveSession {
 	}
 
 	private persistViewState(state: IVisibleSessionState): void {
-		this.saveViewState(state.session.sessionId, {
-			activeChatKey: state.activeChatKey,
+		this.saveViewState(state.session.sessionId, this.toViewState(state));
+	}
+
+	private toViewState(state: IVisibleSessionState): IVisibleSessionViewState {
+		return {
+			activeChatKey: state.activeChat ? chatKey(state.activeChat) : undefined,
 			closedChatKeys: [...state.closedChatKeys],
 			shownToolChatKeys: [...state.shownToolChatKeys],
 			sticky: state.sticky,
-		});
+		};
 	}
 
 	private createProjection<T>(compute: (reader: IObservableReader | undefined) => T): IObservable<T> {
@@ -285,58 +274,46 @@ export class VisibleSession extends Disposable implements IActiveSession {
 	private reconcileState(
 		previous: IVisibleSessionState,
 		session: ISession,
-		reader?: IObservableReader,
 	): IVisibleSessionState {
-		const chats = reader ? session.chats.read(reader) : session.chats.get();
-		const mainChat = reader ? session.mainChat.read(reader) : session.mainChat.get();
-		const mainChatKey = chatKey(mainChat);
+		const chats = session.chats.get();
 		const visibleChats = chats.filter(chat =>
-			(reader ? chat.interactivity.read(reader) : chat.interactivity.get()) !== ChatInteractivity.Hidden,
+			chat.interactivity.get() !== ChatInteractivity.Hidden,
 		);
-		const visibleKeys = new Set(visibleChats.map(chatKey));
 		const peerKeys = new Set(chats
-			.filter(chat => chat.origin?.kind !== ChatOriginKind.Tool && chatKey(chat) !== mainChatKey)
+			.filter(chat => chat.origin.kind !== ChatOriginKind.Tool)
 			.map(chatKey));
 		const toolKeys = new Set(chats
-			.filter(chat => chat.origin?.kind === ChatOriginKind.Tool)
+			.filter(chat => chat.origin.kind === ChatOriginKind.Tool)
 			.map(chatKey));
 		const closedChatKeys = new Set([...previous.closedChatKeys].filter(key => peerKeys.has(key)));
 		const shownToolChatKeys = new Set([...previous.shownToolChatKeys].filter(key => toolKeys.has(key)));
-		const activeChatKey = visibleKeys.has(previous.activeChatKey)
-			&& !closedChatKeys.has(previous.activeChatKey)
-			&& (toolKeys.has(previous.activeChatKey) ? shownToolChatKeys.has(previous.activeChatKey) : true)
-			? previous.activeChatKey
-			: mainChatKey;
+		const previousActiveChatKey = previous.activeChat ? chatKey(previous.activeChat) : undefined;
+		const currentActiveChat = previousActiveChatKey
+			? visibleChats.find(chat => chatKey(chat) === previousActiveChatKey)
+			: undefined;
+		const activeChat = currentActiveChat && previousActiveChatKey
+			&& !closedChatKeys.has(previousActiveChatKey)
+			&& (currentActiveChat.origin.kind !== ChatOriginKind.Tool || shownToolChatKeys.has(previousActiveChatKey))
+			? currentActiveChat
+			: undefined;
 		return {
 			session,
-			activeChatKey,
+			activeChat,
 			closedChatKeys,
 			shownToolChatKeys,
 			sticky: previous.sticky,
 		};
 	}
 
-	private defaultActiveChatKey(
-		session: ISession,
-		closedChatKeys: ReadonlySet<string>,
-		shownToolChatKeys: ReadonlySet<string>,
-	): string {
-		const candidates = session.chats.get().filter(chat => {
-			const key = chatKey(chat);
-			return isVisibleChat(chat)
-				&& !closedChatKeys.has(key)
-				&& (chat.origin?.kind !== ChatOriginKind.Tool || shownToolChatKeys.has(key));
-		});
-		return chatKey(candidates.at(-1) ?? session.mainChat.get());
-	}
-
-	private assertOwnedVisibleChat(session: ISession, chat: IChat): void {
-		if (!session.chats.get().some(candidate => chatKey(candidate) === chatKey(chat))) {
+	private requireOwnedVisibleChat(session: ISession, chat: IChat): IChat {
+		const current = session.chats.get().find(candidate => chatKey(candidate) === chatKey(chat));
+		if (!current) {
 			throw new Error(`Chat '${chat.resource.toString()}' is not owned by Session '${session.sessionId}'.`);
 		}
-		if (!isVisibleChat(chat)) {
+		if (!isVisibleChat(current)) {
 			throw new Error(`Hidden Chat '${chat.resource.toString()}' cannot be displayed.`);
 		}
+		return current;
 	}
 
 	private requireCurrentVisibleChat(session: ISession, chat: IChat): IChat {
@@ -355,6 +332,7 @@ export class VisibleSession extends Disposable implements IActiveSession {
 		}
 		super.dispose();
 	}
+
 }
 
 interface IVisibleSessionsState {
@@ -448,7 +426,7 @@ export class VisibleSessions extends Disposable {
 		}
 	}
 
-	setActive(session: ISession | undefined): VisibleSession | undefined {
+	setActive(session: ISession | undefined, initialChat?: IChat): VisibleSession | undefined {
 		const current = this.state.get();
 		const existing = session
 			? current.slots.find((slot): slot is VisibleSession => slot instanceof VisibleSession && slot.sessionId === session.sessionId)
@@ -457,11 +435,14 @@ export class VisibleSessions extends Disposable {
 			if (session && existing instanceof VisibleSession && !existing.isBoundTo(session)) {
 				throw new Error(`Session '${session.sessionId}' must be updated through an explicit replacement.`);
 			}
+			if (initialChat && existing instanceof VisibleSession) {
+				existing.openChat(initialChat);
+			}
 			this.publishActive(current.slots, existing);
 			return isNewSessionSlot(existing) ? undefined : existing;
 		}
 
-		const target: IVisibleSessionSlot = session ? this.createVisibleSession(session) : NewSessionSlot;
+		const target: IVisibleSessionSlot = session ? this.createVisibleSession(session, initialChat) : NewSessionSlot;
 		const replacement = this.chooseReplacement(current);
 		const slots = [...current.slots];
 		let removedWrapper: VisibleSession | undefined;
@@ -496,6 +477,7 @@ export class VisibleSessions extends Disposable {
 	setSticky(session: IActiveSession, sticky: boolean): void {
 		const wrapper = this.requireVisibleSession(session);
 		wrapper.setSticky(sticky);
+		this.notifyViewStateChanged();
 		if (!sticky) {
 			this.mostRecentNonStickySlot = wrapper;
 		} else if (this.mostRecentNonStickySlot === wrapper) {
@@ -515,10 +497,12 @@ export class VisibleSessions extends Disposable {
 
 	openChat(session: IActiveSession, chat: IChat): void {
 		this.requireVisibleSession(session).openChat(chat);
+		this.notifyViewStateChanged();
 	}
 
 	closeChat(session: IActiveSession, chat: IChat): void {
 		this.requireVisibleSession(session).closeChat(chat);
+		this.notifyViewStateChanged();
 	}
 
 	reconcileSession(session: ISession): void {
@@ -527,8 +511,7 @@ export class VisibleSessions extends Disposable {
 		);
 		if (wrapper) {
 			wrapper.reconcileChats();
-			const state = this.state.get();
-			this.state.set({ ...state, slots: [...state.slots] }, undefined);
+			this.notifyViewStateChanged();
 		}
 	}
 
@@ -552,8 +535,7 @@ export class VisibleSessions extends Disposable {
 			if (previousSessionId !== to.sessionId) {
 				this.viewStates.delete(previousSessionId);
 			}
-			const state = this.state.get();
-			this.state.set({ ...state, slots: [...state.slots] }, undefined);
+			this.notifyViewStateChanged();
 			return;
 		}
 
@@ -605,34 +587,15 @@ export class VisibleSessions extends Disposable {
 		this.state.set({ slots, activeSlot: target }, undefined);
 	}
 
-	private createVisibleSession(session: ISession): VisibleSession {
+	private createVisibleSession(session: ISession, initialChat?: IChat): VisibleSession {
 		return new VisibleSession(
 			session,
-			session.mainChat.get(),
+			initialChat,
 			this.viewStates.get(session.sessionId),
 			(sessionId, state) => {
 				this.viewStates.set(sessionId, state);
-				this.notifyViewStateChanged();
 			},
 		);
-	}
-
-	private createProjection<T>(compute: (reader: IObservableReader | undefined) => T): IObservable<T> {
-		let lastValue = compute(undefined);
-		return {
-			get: () => {
-				if (!this.disposed.get()) {
-					lastValue = compute(undefined);
-				}
-				return lastValue;
-			},
-			read: reader => {
-				if (!this.disposed.read(reader)) {
-					lastValue = compute(reader);
-				}
-				return lastValue;
-			},
-		};
 	}
 
 	private chooseReplacement(state: IVisibleSessionsState): IVisibleSessionSlot | undefined {
@@ -656,6 +619,24 @@ export class VisibleSessions extends Disposable {
 			throw new Error(`Session '${session.sessionId}' is not visible.`);
 		}
 		return wrapper;
+	}
+
+	private createProjection<T>(compute: (reader: IObservableReader | undefined) => T): IObservable<T> {
+		let lastValue = compute(undefined);
+		return {
+			get: () => {
+				if (!this.disposed.get()) {
+					lastValue = compute(undefined);
+				}
+				return lastValue;
+			},
+			read: reader => {
+				if (!this.disposed.read(reader)) {
+					lastValue = compute(reader);
+				}
+				return lastValue;
+			},
+		};
 	}
 
 	override dispose(): void {

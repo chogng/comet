@@ -3,245 +3,217 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ChatMessage } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { $ } from 'cs/base/browser/dom';
 import { MarkdownString } from 'cs/base/common/htmlContent';
 import type { DisposableStore } from 'cs/base/common/lifecycle';
-import { ChatContentMarkdownRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer';
-import { $ } from 'cs/base/browser/dom';
-import { Checkbox } from 'cs/base/browser/ui/toggle/toggle';
+import type { URI } from 'cs/base/common/uri';
+import type { IAgentHostTurn } from 'cs/platform/agentHost/common/protocol';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
-import type { ArticleId } from 'cs/workbench/services/fetch/common/fetch';
-import { toChatImageDataUrl } from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
+import {
+	type IChatBrowserPresentation,
+	type IChatBrowserPresentationService,
+} from 'cs/workbench/contrib/chat/browser/chatBrowserPresentations';
+import { ChatContentMarkdownRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer';
+import type { IChatHostModelIdentity } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import type { IChatHostPresentation } from 'cs/workbench/contrib/chat/common/chatService/chatTurnPresentations';
+import type { IChatSelectionFragment } from 'cs/workbench/contrib/chat/common/chatService/chatOwnedAttachments';
 import type { LocaleMessages } from 'language/locales';
 
-export type ChatListRendererOptions = {
+export interface ChatListRendererOptions {
 	readonly markdownRendererService: IMarkdownRendererService;
-	readonly onApplyPatch: (messageId: string) => void;
-	readonly isArticleChecked: (articleId: ArticleId) => boolean;
-	readonly onSetArticleChecked: (articleId: ArticleId, checked: boolean) => void;
-};
-
-type AssistantMessage = Extract<ChatMessage, { role: 'assistant' }>;
-type AssistantResult = NonNullable<AssistantMessage['result']>;
-
-function formatEvidenceRankTitle(message: string, rank: number, title: string): string {
-	return message
-		.replace(/\{0\}/gu, () => String(rank))
-		.replace(/\{1\}/gu, () => title);
+	readonly presentationService: IChatBrowserPresentationService;
 }
 
+interface IChatSelectableRegion {
+	readonly element: HTMLElement;
+	readonly message: string;
+	readonly role: IChatSelectionFragment['role'];
+}
+
+/** Renders generic canonical Chat history and registered browser presentations. */
 export class ChatListRenderer {
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
+	private readonly selectableRegions: IChatSelectableRegion[] = [];
 
 	constructor(private readonly options: ChatListRendererOptions) {
 		this.markdownRenderer = new ChatContentMarkdownRenderer(options.markdownRendererService);
 	}
 
-	renderElement(message: ChatMessage, disposables: DisposableStore, ui: LocaleMessages) {
-		if (message.role === 'user') {
-			return this.renderUserMessage(message);
-		}
-
-		return this.renderAssistantMessage(message, disposables, ui);
+	beginRender(): void {
+		this.selectableRegions.length = 0;
 	}
 
-	private renderUserMessage(
-		message: Extract<ChatMessage, { role: 'user' }>,
-	) {
-		const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-user');
-		const body = $<HTMLElementTagNameMap['div']>('div.comet-chat-message-body');
-		const text = $<HTMLElementTagNameMap['p']>('p.comet-chat-message-text');
-		text.textContent = message.content;
-		body.append(text);
-		if (message.imageAttachments.length > 0) {
-			const images = $<HTMLElementTagNameMap['div']>('div.comet-chat-message-images');
-			for (const attachment of message.imageAttachments) {
-				const figure = $<HTMLElementTagNameMap['figure']>('figure.comet-chat-message-image');
-				const image = $<HTMLElementTagNameMap['img']>('img');
-				image.src = toChatImageDataUrl(attachment);
-				image.alt = attachment.name;
-				image.loading = 'lazy';
-				const caption = $<HTMLElementTagNameMap['figcaption']>('figcaption');
-				caption.textContent = attachment.name;
-				figure.append(image, caption);
-				images.append(figure);
+	/** Constructs ordered transcript fragments only from regions registered by this renderer. */
+	captureSelection(selection: Selection | null): readonly IChatSelectionFragment[] {
+		if (!selection || selection.isCollapsed || selection.rangeCount !== 1) {
+			return [];
+		}
+		const range = selection.getRangeAt(0);
+		const startIndex = this.selectableRegions.findIndex(region =>
+			region.element.contains(range.startContainer),
+		);
+		const endIndex = this.selectableRegions.findIndex(region =>
+			region.element.contains(range.endContainer),
+		);
+		if (startIndex < 0 || endIndex < startIndex) {
+			return [];
+		}
+
+		const fragments: IChatSelectionFragment[] = [];
+		for (let index = startIndex; index <= endIndex; index++) {
+			const region = this.selectableRegions[index];
+			const fragmentRange = range.cloneRange();
+			if (index !== startIndex) {
+				fragmentRange.setStart(region.element, 0);
 			}
-			body.append(images);
+			if (index !== endIndex) {
+				fragmentRange.setEnd(region.element, region.element.childNodes.length);
+			}
+			const text = fragmentRange.toString();
+			fragmentRange.detach();
+			if (text.length > 0) {
+				fragments.push(Object.freeze({
+					message: region.message,
+					role: region.role,
+					text,
+				}));
+			}
 		}
-		item.append(body);
-		return item;
+		return Object.freeze(fragments);
 	}
 
-	private renderAssistantMessage(
-		message: Extract<ChatMessage, { role: 'assistant' }>,
+	renderHostTurn(
+		chatResource: URI,
+		identity: IChatHostModelIdentity,
+		turn: IAgentHostTurn,
+		presentations: readonly IChatHostPresentation[],
 		disposables: DisposableStore,
 		ui: LocaleMessages,
-	) {
+	): readonly HTMLElement[] {
+		const user = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-user');
+		const userBody = $<HTMLElementTagNameMap['div']>('div.comet-chat-message-body');
+		if (turn.user.text) {
+			const text = $<HTMLElementTagNameMap['p']>('p.comet-chat-message-text');
+			text.textContent = turn.user.text;
+			userBody.append(text);
+			this.selectableRegions.push({
+				element: text,
+				message: turn.submission,
+				role: 'user',
+			});
+		}
+		const userContext = this.renderHostUserContext(turn, ui);
+		if (userContext) {
+			userBody.append(userContext);
+		}
+		user.append(userBody);
+
+		const assistant = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-assistant');
+		const assistantBody = $<HTMLElementTagNameMap['div']>('div.comet-chat-message-body.comet-chat-host-response');
+		for (const [responsePartIndex, part] of turn.response.entries()) {
+			if (part.kind === 'text') {
+				const rendered = disposables.add(this.markdownRenderer.render(new MarkdownString(part.text)));
+				assistantBody.append(rendered.element);
+				this.selectableRegions.push({
+					element: rendered.element,
+					message: turn.id,
+					role: 'assistant',
+				});
+			} else if (part.kind === 'reasoning') {
+				const reasoning = $<HTMLElementTagNameMap['details']>('details.comet-chat-host-reasoning');
+				const summary = $<HTMLElementTagNameMap['summary']>('summary');
+				summary.textContent = ui.chatHostReasoning;
+				const content = $<HTMLElementTagNameMap['p']>('p');
+				content.textContent = part.text;
+				reasoning.append(summary, content);
+				assistantBody.append(reasoning);
+			} else {
+				const tool = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-tool');
+				tool.textContent = part.kind === 'toolCall'
+					? `${ui.chatHostToolCall}: ${part.tool} (${part.call})`
+					: `${ui.chatHostToolResult}: ${part.call} — ${part.status}`;
+				assistantBody.append(tool);
+			}
+
+			const presentation = presentations.find(candidate =>
+				candidate.session === identity.session
+				&& candidate.chat === identity.chat
+				&& candidate.turn === turn.id
+				&& candidate.responsePartIndex === responsePartIndex,
+			);
+			if (presentation) {
+				assistantBody.append(this.options.presentationService.render({
+					chatResource,
+					presentation: {
+						type: presentation.type,
+						value: presentation.value,
+						origin: {
+							kind: 'host',
+							identity: presentation,
+						},
+					},
+					ui,
+					disposables,
+				}));
+			}
+		}
+		if (turn.failure) {
+			const failure = $<HTMLElementTagNameMap['div']>('div.comet-chat-error');
+			failure.textContent = `${ui.chatHostTurnFailed}: ${turn.failure.message}`;
+			assistantBody.append(failure);
+		} else if (turn.response.length === 0 || !['completed', 'cancelled'].includes(turn.state)) {
+			const status = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-turn-status');
+			status.textContent = ui.chatHostTurnStatus.replace('{0}', turn.state);
+			assistantBody.append(status);
+		}
+		assistant.append(assistantBody);
+		return [user, assistant];
+	}
+
+	renderFeaturePresentation(
+		chatResource: URI,
+		presentation: IChatBrowserPresentation,
+		disposables: DisposableStore,
+		ui: LocaleMessages,
+	): HTMLElement {
 		const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-assistant');
 		const body = $<HTMLElementTagNameMap['div']>('div.comet-chat-message-body');
-
-		if (message.result) {
-			const header = $<HTMLElementTagNameMap['div']>('div.comet-chat-result-header');
-			const strong = $<HTMLElementTagNameMap['strong']>('strong');
-			strong.textContent = ui.assistantSidebarAnswerTitle;
-			const pill = $<HTMLElementTagNameMap['span']>('span', { class: `comet-chat-mode-pill ${message.result.rerankApplied ? 'comet-is-enabled' : 'comet-is-disabled'}` });
-			pill.textContent = message.result.rerankApplied
-				? ui.assistantSidebarRerankOn
-				: ui.assistantSidebarRerankOff;
-			header.append(strong, pill);
-			body.append(header);
-		}
-
-		body.append(this.renderMessageContent(message, disposables, ui));
-
-		const result = message.result ?? null;
-		if (result && result.evidence.length > 0) {
-			body.append(this.renderEvidence(result, ui));
-		}
-
-		const patchProposal = this.renderPatchProposal(message, ui);
-		if (patchProposal) {
-			body.append(patchProposal);
-		}
-
+		body.append(this.options.presentationService.render({
+			chatResource,
+			presentation,
+			ui,
+			disposables,
+		}));
 		item.append(body);
 		return item;
 	}
 
-	private renderMessageContent(
-		message: AssistantMessage,
-		disposables: DisposableStore,
-		ui: LocaleMessages,
-	) {
-		const content = $<HTMLElementTagNameMap['div']>('div.comet-chat-answer');
-
-		if (message.content.trim()) {
-			const rendered = disposables.add(this.markdownRenderer.render(
-				new MarkdownString(message.content),
-			));
-			if (message.articleList) {
-				this.renderArticleSelectionControls(rendered.element, message.articleList.articleIds, disposables, ui);
+	private renderHostUserContext(turn: IAgentHostTurn, ui: LocaleMessages): HTMLElement | undefined {
+		if (turn.user.attachments.length === 0 && turn.user.interactionTargets.length === 0) {
+			return undefined;
+		}
+		const context = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-user-context');
+		for (const attachment of turn.user.attachments) {
+			const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-context-item');
+			const label = $<HTMLElementTagNameMap['span']>('span.comet-chat-host-context-label');
+			label.textContent = `${ui.chatHostAttachment}: ${attachment.display.label}`;
+			item.append(label);
+			if (attachment.content?.kind === 'inline'
+				&& attachment.content.encoding === 'base64'
+				&& attachment.content.mediaType.startsWith('image/')) {
+				const image = $<HTMLElementTagNameMap['img']>('img.comet-chat-host-context-image');
+				image.src = `data:${attachment.content.mediaType};base64,${attachment.content.data}`;
+				image.alt = attachment.display.label;
+				image.loading = 'lazy';
+				item.append(image);
 			}
-			content.append(rendered.element);
+			context.append(item);
 		}
-
-		return content;
-	}
-
-	private renderArticleSelectionControls(
-		root: HTMLElement,
-		articleIds: readonly ArticleId[],
-		disposables: DisposableStore,
-		ui: LocaleMessages,
-	) {
-		const items = Array.from(root.querySelectorAll('li'));
-		if (items.length !== articleIds.length) {
-			throw new Error('Article message items do not match their ArticleId references.');
+		for (const target of turn.user.interactionTargets) {
+			const item = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-context-item');
+			item.textContent = `${ui.chatHostTarget}: ${target.display.label}`;
+			context.append(item);
 		}
-
-		for (let index = 0; index < items.length; index++) {
-			const item = items[index];
-			const articleId = articleIds[index];
-			const checkbox = disposables.add(new Checkbox(
-				ui.chatArticleExportCheckbox,
-				this.options.isArticleChecked(articleId),
-			));
-			checkbox.domNode.classList.add('comet-chat-article-checkbox');
-
-			const content = $<HTMLElementTagNameMap['span']>('span.comet-chat-article-choice-content');
-			content.append(...Array.from(item.childNodes));
-			item.classList.add('comet-chat-article-choice');
-			item.append(checkbox.domNode, content);
-
-			disposables.add(checkbox.onChange(() => {
-				this.options.onSetArticleChecked(articleId, checkbox.checked);
-			}));
-		}
-	}
-
-	private renderEvidence(result: AssistantResult, ui: LocaleMessages) {
-		const evidence = $<HTMLElementTagNameMap['div']>('div.comet-chat-evidence');
-		const title = $<HTMLElementTagNameMap['strong']>('strong');
-		title.textContent = ui.assistantSidebarEvidenceTitle;
-		const list = $<HTMLElementTagNameMap['ul']>('ul.comet-chat-evidence-list');
-		for (const evidenceItem of result.evidence) {
-			const li = $<HTMLElementTagNameMap['li']>('li.comet-chat-evidence-item');
-			const titleNode = $<HTMLElementTagNameMap['strong']>('strong.comet-chat-evidence-title');
-			titleNode.textContent = formatEvidenceRankTitle(
-				ui.chatEvidenceRankTitle,
-				evidenceItem.rank,
-				evidenceItem.title,
-			);
-			const meta = $<HTMLElementTagNameMap['p']>('p.comet-chat-evidence-meta');
-			meta.textContent = [evidenceItem.journalTitle, evidenceItem.publishedAt]
-				.filter(Boolean)
-				.join(' | ');
-			const text = $<HTMLElementTagNameMap['p']>('p.comet-chat-evidence-text');
-			text.textContent = evidenceItem.excerpt;
-			li.append(titleNode, meta, text);
-			list.append(li);
-		}
-		evidence.append(title, list);
-		return evidence;
-	}
-
-	private renderPatchProposal(
-		message: AssistantMessage,
-		ui: LocaleMessages,
-	) {
-		const patchProposal = message.patchProposal ?? null;
-		if (!patchProposal) {
-			return null;
-		}
-
-		const card = $<HTMLElementTagNameMap['div']>('div.comet-chat-patch-card');
-		const header = $<HTMLElementTagNameMap['div']>('div.comet-chat-patch-header');
-		const label = $<HTMLElementTagNameMap['strong']>('strong.comet-chat-patch-label');
-		label.textContent = patchProposal.patch.label;
-		header.append(label);
-
-		if (patchProposal.isApplied) {
-			const status = $<HTMLElementTagNameMap['span']>('span.comet-chat-mode-pill.comet-is-enabled');
-			status.textContent = ui.assistantSidebarPatchApplied;
-			header.append(status);
-		} else if (patchProposal.requiresCustomExecutor) {
-			const status = $<HTMLElementTagNameMap['span']>('span.comet-chat-mode-pill.comet-is-disabled');
-			status.textContent = ui.assistantSidebarPatchRequiresExecutor;
-			header.append(status);
-		}
-
-		card.append(header);
-
-		if (patchProposal.patch.summary) {
-			const summary = $<HTMLElementTagNameMap['p']>('p.comet-chat-patch-summary');
-			summary.textContent = patchProposal.patch.summary;
-			card.append(summary);
-		}
-
-		const errorText = patchProposal.validationError || patchProposal.applyError;
-		if (errorText) {
-			const error = $<HTMLElementTagNameMap['p']>('p.comet-chat-patch-error');
-			error.textContent = errorText;
-			card.append(error);
-		}
-
-		if (
-			patchProposal.accepted &&
-			!patchProposal.requiresCustomExecutor &&
-			!patchProposal.validationError &&
-			!patchProposal.isApplied
-		) {
-			const footer = $<HTMLElementTagNameMap['div']>('div.comet-chat-patch-footer');
-			const applyButton = $<HTMLElementTagNameMap['button']>('button.comet-chat-patch-btn.comet-btn-base.comet-btn-secondary.comet-btn-sm');
-			applyButton.type = 'button';
-			applyButton.textContent = ui.assistantSidebarPatchApply;
-			applyButton.addEventListener('click', () => {
-				this.options.onApplyPatch(message.id);
-			});
-			footer.append(applyButton);
-			card.append(footer);
-		}
-
-		return card;
+		return context;
 	}
 }

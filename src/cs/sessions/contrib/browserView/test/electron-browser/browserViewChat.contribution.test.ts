@@ -7,11 +7,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { encodeBase64, VSBuffer } from 'cs/base/common/buffer';
-import { Event } from 'cs/base/common/event';
+import { Emitter, type Event } from 'cs/base/common/event';
+import type { IDisposable } from 'cs/base/common/lifecycle';
 import { observableValue } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
 import { MenuRegistry } from 'cs/platform/actions/common/actions';
-import { BrowserViewCommandId } from 'cs/platform/browserView/common/browserView';
+import { BrowserViewCommandId, type IElementData } from 'cs/platform/browserView/common/browserView';
 import { commandsRegistry } from 'cs/platform/commands/common/commands';
 import { ConfigurationService } from 'cs/platform/configuration/common/configurationService';
 import { configurationRegistry, ConfigurationScope } from 'cs/platform/configuration/common/configurationRegistry';
@@ -21,21 +22,21 @@ import type { ServicesAccessor } from 'cs/platform/instantiation/common/instanti
 import type { ILogService } from 'cs/platform/log/common/log';
 import {
 	BrowserEditorChatIntegration,
+	type IBrowserChatActionContext,
 } from 'cs/sessions/contrib/browserView/electron-browser/browserViewChat.contribution';
-import type { ISessionsService } from 'cs/sessions/services/sessions/browser/sessionsService';
-import { SessionsContextKeys } from 'cs/sessions/common/contextkeys';
 import {
 	ChatInteractivity,
+	ChatOriginKind,
 	type IChat,
+	type ISession,
 } from 'cs/sessions/services/sessions/common/session';
-import type { IActiveSession } from 'cs/sessions/services/sessions/common/sessionsView';
+import type { ISessionsManagementService } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import { BrowserEditor } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 import type { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import type { IChatImageAttachment } from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
-import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
+import type { IPendingChatAttachment } from 'cs/workbench/contrib/chat/common/chatService/chatComposer';
 
 const throwingAccessor = {
 	get(): never {
@@ -43,19 +44,9 @@ const throwingAccessor = {
 	},
 } as ServicesAccessor;
 
-const testLogService = {
-	_serviceBrand: undefined,
-	trace() {},
-	debug() {},
-	info() {},
-	warn() {},
-	error() {},
-} as ILogService;
-
 interface IContextInsert {
 	readonly resource: URI;
-	readonly content: string;
-	readonly imageAttachments: readonly IChatImageAttachment[];
+	readonly attachments: readonly IPendingChatAttachment[];
 }
 
 interface IIntegrationHarness {
@@ -64,44 +55,92 @@ interface IIntegrationHarness {
 	readonly inserts: IContextInsert[];
 	readonly screenshotOptions: unknown[];
 	readonly consoleLogReads: { count: number };
+	readonly onDidLogError: Event<readonly unknown[]>;
+	readonly selectElement: (data: IElementData) => void;
+	readonly setSessions: (sessions: readonly ISession[]) => void;
+	readonly ownedEmitters: readonly IDisposable[];
 }
 
-function createHarness(activeChatResource: URI | undefined): IIntegrationHarness {
+function requireAttachmentStateString(
+	attachment: IPendingChatAttachment | undefined,
+	key: string,
+): string {
+	const state = attachment?.state;
+	if (state === null || typeof state !== 'object' || Array.isArray(state)) {
+		throw new Error('Expected a pending attachment state record.');
+	}
+	const value = (state as Readonly<Record<string, unknown>>)[key];
+	if (typeof value !== 'string') {
+		throw new Error(`Expected pending attachment state '${key}' to be a string.`);
+	}
+	return value;
+}
+
+function createChat(resource: URI, interactivity = ChatInteractivity.Full): IChat {
+	return {
+		resource,
+		origin: { kind: ChatOriginKind.User },
+		interactivity: observableValue('browserChatInteractivity', interactivity),
+	} as unknown as IChat;
+}
+
+function createSession(sessionId: string, chats: readonly IChat[]): ISession {
+	return {
+		sessionId,
+		chats: observableValue<readonly IChat[]>('browserChatChats', chats),
+	} as unknown as ISession;
+}
+
+function createHarness(
+	initialSessions: readonly ISession[],
+	draftSession: ISession | undefined = undefined,
+): IIntegrationHarness {
 	const inserts: IContextInsert[] = [];
 	const screenshotOptions: unknown[] = [];
 	const consoleLogReads = { count: 0 };
-	const mainChatResource = URI.parse('chat://main');
-	const activeChat = {
-		resource: activeChatResource,
-		interactivity: observableValue('browserChatInteractivity', ChatInteractivity.Full),
-	} as unknown as IChat;
-	const activeSession = activeChatResource
-		? {
-			sessionId: 'default:session-resource',
-			resource: URI.parse('session://resource'),
-			mainChat: observableValue<IChat>('browserChatMainChat', { resource: mainChatResource } as IChat),
-			chats: observableValue<readonly IChat[]>('browserChatChats', [activeChat]),
-			activeChat: observableValue<IChat>('browserChatActiveChat', activeChat),
-		} as unknown as IActiveSession
-		: undefined;
-	const sessionsService = {
+	let sessions = initialSessions;
+	const sessionsManagementService = {
 		_serviceBrand: undefined,
-		activeSession: observableValue<IActiveSession | undefined>('browserChatActiveSession', activeSession),
-	} as unknown as ISessionsService;
+		draftSession: observableValue<ISession | undefined>('browserChatDraftSession', draftSession),
+		getSessions: () => sessions,
+	} as unknown as ISessionsManagementService;
+	const logErrorEmitter = new Emitter<readonly unknown[]>();
+	const testLogService = {
+		_serviceBrand: undefined,
+		trace() {},
+		debug() {},
+		info() {},
+		warn() {},
+		error(...args: unknown[]) {
+			logErrorEmitter.fire(args);
+		},
+	} as ILogService;
 	const chatService = {
 		_serviceBrand: undefined,
-		insertContextMessage(
+		addPendingAttachments(
 			resource: URI,
-			content: string,
-			imageAttachments: readonly IChatImageAttachment[],
+			attachments: readonly IPendingChatAttachment[],
 		): void {
-			inserts.push({ resource, content, imageAttachments });
+			inserts.push({ resource, attachments });
 		},
 	} as IChatService;
+	const elementSelectionActiveEmitter = new Emitter<boolean>();
+	const areaSelectionActiveEmitter = new Emitter<boolean>();
+	const selectElementEmitter = new Emitter<IElementData>();
+	let elementSelectionActive = false;
 	const model = {
 		url: 'https://example.com/article',
-		isElementSelectionActive: false,
+		get isElementSelectionActive() {
+			return elementSelectionActive;
+		},
 		isAreaSelectionActive: false,
+		onDidChangeElementSelectionActive: elementSelectionActiveEmitter.event,
+		onDidChangeAreaSelectionActive: areaSelectionActiveEmitter.event,
+		onDidSelectElement: selectElementEmitter.event,
+		toggleElementSelection: async () => {
+			elementSelectionActive = !elementSelectionActive;
+			elementSelectionActiveEmitter.fire(elementSelectionActive);
+		},
 		getConsoleLogs: async () => {
 			consoleLogReads.count += 1;
 			return 'console.log("addressed");';
@@ -113,9 +152,14 @@ function createHarness(activeChatResource: URI | undefined): IIntegrationHarness
 	} as IBrowserViewModel;
 
 	let integration: BrowserEditorChatIntegration;
+	const modelChangeEmitter = new Emitter<{
+		readonly model: IBrowserViewModel | undefined;
+		readonly isNew: boolean;
+		readonly detachReason: 'modelChanged';
+	}>();
 	const editor = Object.create(BrowserEditor.prototype) as BrowserEditor;
 	Object.defineProperties(editor, {
-		onDidChangeModel: { value: Event.None },
+		onDidChangeModel: { value: modelChangeEmitter.event },
 		model: { get: () => model },
 		ensureBrowserFocus: { value: () => undefined },
 		getContribution: {
@@ -125,31 +169,69 @@ function createHarness(activeChatResource: URI | undefined): IIntegrationHarness
 	integration = new BrowserEditorChatIntegration(
 		editor,
 		new ContextKeyServiceImpl(),
-		sessionsService,
+		sessionsManagementService,
 		chatService,
 		new ConfigurationService(),
 		testLogService,
 	);
+	modelChangeEmitter.fire({ model, isNew: false, detachReason: 'modelChanged' });
 
-	return { editor, integration, inserts, screenshotOptions, consoleLogReads };
+	return {
+		editor,
+		integration,
+		inserts,
+		screenshotOptions,
+		consoleLogReads,
+		onDidLogError: logErrorEmitter.event,
+		selectElement: data => selectElementEmitter.fire(data),
+		setSessions: value => {
+			sessions = value;
+		},
+		ownedEmitters: [
+			logErrorEmitter,
+			elementSelectionActiveEmitter,
+			areaSelectionActiveEmitter,
+			selectElementEmitter,
+			modelChangeEmitter,
+		],
+	};
 }
 
 function executeBrowserChatCommand(
 	commandId: BrowserViewCommandId,
-	editor?: BrowserEditor,
-	activeEditorPane?: BrowserEditor | null,
+	context?: IBrowserChatActionContext,
 ): Promise<unknown> {
 	const command = commandsRegistry.getCommand(commandId);
 	assert.ok(command, `Expected '${commandId}' to be registered.`);
-	const accessor = activeEditorPane !== undefined
-		? {
-			get(service: unknown) {
-				assert.equal(service, IEditorService);
-				return { activeEditorPane: activeEditorPane ?? undefined };
-			},
-		} as ServicesAccessor
-		: throwingAccessor;
-	return Promise.resolve(command.handler(accessor, editor));
+	return Promise.resolve(command.handler(throwingAccessor, context));
+}
+
+function createActionContext(
+	harness: IIntegrationHarness,
+	sessionId: string,
+	chatResource: URI,
+): IBrowserChatActionContext {
+	return {
+		browserEditor: harness.editor,
+		sessionId,
+		chatResource,
+	};
+}
+
+function once<T>(event: Event<T>): Promise<T> {
+	return new Promise<T>(resolve => {
+		const listener = event(value => {
+			listener.dispose();
+			resolve(value);
+		});
+	});
+}
+
+function disposeHarness(harness: IIntegrationHarness): void {
+	harness.integration.dispose();
+	for (const emitter of harness.ownedEmitters) {
+		emitter.dispose();
+	}
 }
 
 test('Sessions Browser Chat contribution registers stable commands and configuration', () => {
@@ -200,19 +282,18 @@ test('Sessions Browser Chat contribution registers stable commands and configura
 	});
 });
 
-test('Browser Chat actions require an active Browser and a fully interactive Chat', () => {
+test('Browser Chat action preconditions describe only the Browser source', () => {
 	const command = MenuRegistry.getCommand(BrowserViewCommandId.AddScreenshotToChat);
 	assert.ok(command?.precondition);
 	const contextKeyService = new ContextKeyServiceImpl();
 	contextKeyService.setContextKeyValue('activeEditor', BrowserEditorInput.EDITOR_ID);
 	contextKeyService.setContextKeyValue('browserHasUrl', true);
 	contextKeyService.setContextKeyValue('browserHasError', false);
-	contextKeyService.setContextKeyValue(SessionsContextKeys.activeChatFullyInteractive.key, false);
-	assert.equal(contextKeyService.contextMatchesRules(command.precondition), false);
-
-	contextKeyService.setContextKeyValue(SessionsContextKeys.activeChatFullyInteractive.key, true);
 	assert.equal(contextKeyService.contextMatchesRules(command.precondition), true);
 
+	contextKeyService.setContextKeyValue('browserHasError', true);
+	assert.equal(contextKeyService.contextMatchesRules(command.precondition), false);
+	contextKeyService.setContextKeyValue('browserHasError', false);
 	contextKeyService.setContextKeyValue('activeEditor', 'workbench.editor.draft');
 	assert.equal(contextKeyService.contextMatchesRules(command.precondition), false);
 });
@@ -227,7 +308,6 @@ test('Browser element selection shortcuts require Browser editor focus', () => {
 	contextKeyService.setContextKeyValue('activeEditor', BrowserEditorInput.EDITOR_ID);
 	contextKeyService.setContextKeyValue('browserHasUrl', true);
 	contextKeyService.setContextKeyValue('browserHasError', false);
-	contextKeyService.setContextKeyValue(SessionsContextKeys.activeChatFullyInteractive.key, true);
 	contextKeyService.setContextKeyValue('browserElementSelectionActive', true);
 	contextKeyService.setContextKeyValue(ActiveEditorFocusedContext.key, false);
 	assert.equal(
@@ -248,52 +328,117 @@ test('Browser element selection shortcuts require Browser editor focus', () => {
 	);
 });
 
-test('console logs and screenshots address the active Session Chat resource', async () => {
-	const activeChatResource = URI.parse('chat://active-peer');
-	const harness = createHarness(activeChatResource);
+test('console logs and screenshots use the explicitly addressed Session Chat', async () => {
+	const decoyChat = createChat(URI.parse('chat://decoy'));
+	const addressedChat = createChat(URI.parse('chat://addressed-peer'));
+	const decoySession = createSession('provider:decoy', [decoyChat]);
+	const addressedSession = createSession('provider:addressed', [addressedChat]);
+	const harness = createHarness([decoySession, addressedSession]);
+	const context = createActionContext(harness, addressedSession.sessionId, addressedChat.resource);
 	try {
-		await executeBrowserChatCommand(
-			BrowserViewCommandId.AddConsoleLogsToChat,
-			undefined,
-			harness.editor,
-		);
-		await executeBrowserChatCommand(BrowserViewCommandId.AddScreenshotToChat, harness.editor);
+		await executeBrowserChatCommand(BrowserViewCommandId.AddConsoleLogsToChat, context);
+		await executeBrowserChatCommand(BrowserViewCommandId.AddScreenshotToChat, context);
 
 		assert.deepEqual(harness.inserts.map(insert => insert.resource.toString()), [
-			activeChatResource.toString(),
-			activeChatResource.toString(),
+			addressedChat.resource.toString(),
+			addressedChat.resource.toString(),
 		]);
-		assert.match(harness.inserts[0]?.content ?? '', /^## Browser Console Logs/m);
-		assert.match(harness.inserts[0]?.content ?? '', /console\.log\("addressed"\);/);
-		assert.match(harness.inserts[1]?.content ?? '', /^## Browser Screenshot/m);
-		assert.match(harness.inserts[1]?.content ?? '', /Screenshot Type: viewport/);
-		assert.match(harness.inserts[1]?.content ?? '', /Screenshot Size: 10 bytes/);
-		assert.equal(harness.inserts[1]?.imageAttachments.length, 1);
-		assert.equal(harness.inserts[1]?.imageAttachments[0]?.mimeType, 'image/jpeg');
-		assert.equal(
-			harness.inserts[1]?.imageAttachments[0]?.data,
-			encodeBase64(VSBuffer.fromString('jpeg-bytes')),
+		assert.match(
+			requireAttachmentStateString(harness.inserts[0]?.attachments[0], 'text'),
+			/^## Browser Console Logs[\s\S]*console\.log\("addressed"\);/,
 		);
+		assert.match(
+			requireAttachmentStateString(harness.inserts[1]?.attachments[0], 'text'),
+			/^## Browser Screenshot[\s\S]*Screenshot Type: viewport[\s\S]*Screenshot Size: 10 bytes/,
+		);
+		assert.equal(harness.inserts[1]?.attachments.length, 2);
+		assert.deepEqual(harness.inserts[1]?.attachments[1]?.state, {
+			name: 'Browser Screenshot.jpeg',
+			mediaType: 'image/jpeg',
+			base64: encodeBase64(VSBuffer.fromString('jpeg-bytes')),
+		});
 		assert.deepEqual(harness.screenshotOptions, [{ quality: 80 }]);
 	} finally {
-		harness.integration.dispose();
+		disposeHarness(harness);
 	}
 });
 
-test('Browser Chat actions fail explicitly without an active Session or Browser Editor target', async () => {
-	const harness = createHarness(undefined);
+test('Browser Chat actions reject missing and mismatched addressed targets before Browser reads', async () => {
+	const firstChat = createChat(URI.parse('chat://first'));
+	const secondChat = createChat(URI.parse('chat://second'));
+	const firstSession = createSession('provider:first', [firstChat]);
+	const secondSession = createSession('provider:second', [secondChat]);
+	const harness = createHarness([firstSession, secondSession]);
 	try {
 		await assert.rejects(
-			executeBrowserChatCommand(BrowserViewCommandId.AddConsoleLogsToChat, harness.editor),
-			/Browser Add to Chat requires an active Session/,
+			executeBrowserChatCommand(BrowserViewCommandId.AddConsoleLogsToChat),
+			/requires an addressed Browser, Session, and Chat context/,
+		);
+		const mismatchedContext = createActionContext(harness, firstSession.sessionId, secondChat.resource);
+		await assert.rejects(
+			executeBrowserChatCommand(BrowserViewCommandId.AddConsoleLogsToChat, mismatchedContext),
+			/not owned by Session 'provider:first'/,
+		);
+		await assert.rejects(
+			executeBrowserChatCommand(BrowserViewCommandId.AddScreenshotToChat, mismatchedContext),
+			/not owned by Session 'provider:first'/,
 		);
 		assert.equal(harness.consoleLogReads.count, 0);
+		assert.deepEqual(harness.screenshotOptions, []);
 		assert.deepEqual(harness.inserts, []);
 		await assert.rejects(
-			executeBrowserChatCommand(BrowserViewCommandId.AddScreenshotToChat, undefined, null),
-			/requires an active Browser Editor/,
+			executeBrowserChatCommand(
+				BrowserViewCommandId.AddScreenshotToChat,
+				{ ...mismatchedContext, browserEditor: {} as BrowserEditor },
+			),
+			/requires an addressed Browser, Session, and Chat context/,
 		);
 	} finally {
-		harness.integration.dispose();
+		disposeHarness(harness);
+	}
+});
+
+test('delayed element selection retains the exact Session and Chat pair', async () => {
+	const chatResource = URI.parse('chat://element-target');
+	const addressedSession = createSession('provider:addressed', [createChat(chatResource)]);
+	const harness = createHarness([addressedSession]);
+	const context = createActionContext(harness, addressedSession.sessionId, chatResource);
+	try {
+		await executeBrowserChatCommand(BrowserViewCommandId.AddElementToChat, context);
+		harness.setSessions([
+			createSession('provider:other', [createChat(chatResource)]),
+		]);
+		const loggedError = once(harness.onDidLogError);
+		harness.selectElement({
+			outerHTML: '<main>Addressed element</main>',
+			computedStyle: 'display: block',
+			bounds: { x: 0, y: 0, width: 100, height: 20 },
+		});
+		const errorArguments = await loggedError;
+
+		assert.match(String(errorArguments[0]), /Failed to attach element/);
+		assert.match(String(errorArguments[1]), /Session 'provider:addressed' is not managed/);
+		assert.deepEqual(harness.screenshotOptions, []);
+		assert.deepEqual(harness.inserts, []);
+	} finally {
+		disposeHarness(harness);
+	}
+});
+
+test('Browser Chat actions resolve an explicitly addressed draft Chat', async () => {
+	const draftChat = createChat(URI.parse('chat://draft'));
+	const draftSession = createSession('provider:draft', [draftChat]);
+	const harness = createHarness([], draftSession);
+	try {
+		await executeBrowserChatCommand(
+			BrowserViewCommandId.AddConsoleLogsToChat,
+			createActionContext(harness, draftSession.sessionId, draftChat.resource),
+		);
+
+		assert.deepEqual(harness.inserts.map(insert => insert.resource.toString()), [
+			draftChat.resource.toString(),
+		]);
+	} finally {
+		disposeHarness(harness);
 	}
 });

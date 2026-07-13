@@ -5,17 +5,24 @@
 
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
-import { normalizeWritingEditorDocument, type WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
+import {
+	normalizeWritingEditorDocument,
+	type WritingEditorDocument,
+	type WritingEditorSelection,
+} from 'cs/editor/common/writingEditorDocument';
 import { getComparisonKey } from 'cs/base/common/resources';
 import type { URI } from 'cs/base/common/uri';
 import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import { DraftEditorInput } from 'cs/workbench/contrib/draftEditor/common/draftEditorInput';
-import {
-	ChatRequestAttachmentKind,
-	type IChatRequestEditorAttachment,
-} from 'cs/workbench/contrib/chat/common/chatRequest';
 
 export const IDraftEditorService = createDecorator<IDraftEditorService>('draftEditorService');
+
+export interface IDraftEditorTargetSnapshot {
+	readonly resource: URI;
+	readonly name: string;
+	readonly document: WritingEditorDocument;
+	readonly selection: WritingEditorSelection | null | undefined;
+}
 
 export interface IDraftEditorService {
 	readonly _serviceBrand: undefined;
@@ -23,8 +30,8 @@ export interface IDraftEditorService {
 	canSaveActive(): boolean;
 	saveActive(): boolean;
 	getDocument(resource: URI): WritingEditorDocument | null;
+	getTargetSnapshot(resource: URI): IDraftEditorTargetSnapshot | null;
 	setDocument(resource: URI, value: WritingEditorDocument): void;
-	getActiveRequestAttachment(): IChatRequestEditorAttachment | undefined;
 }
 
 export class DraftEditorService implements IDraftEditorService {
@@ -57,31 +64,28 @@ export class DraftEditorService implements IDraftEditorService {
 		return input ? normalizeWritingEditorDocument(input.document) : null;
 	}
 
+	getTargetSnapshot(resource: URI): IDraftEditorTargetSnapshot | null {
+		const input = this.findOpenInput(resource);
+		if (!input) {
+			return null;
+		}
+		const selection = input.getPaneSelectionSnapshot();
+		return Object.freeze({
+			resource: input.resource,
+			name: input.getName(),
+			document: normalizeWritingEditorDocument(input.document),
+			selection: selection === undefined || selection === null
+				? selection
+				: Object.freeze({ ...selection }),
+		});
+	}
+
 	setDocument(resource: URI, value: WritingEditorDocument): void {
 		const input = this.findOpenInput(resource);
 		if (!input) {
 			throw new Error(`Draft editor resource '${resource.toString()}' is not open.`);
 		}
 		input.setDocument(value);
-	}
-
-	getActiveRequestAttachment(): IChatRequestEditorAttachment | undefined {
-		const input = this.activeInput;
-		if (!input) {
-			return undefined;
-		}
-		const selection = input.getPaneSelectionSnapshot();
-		if (selection === undefined) {
-			return undefined;
-		}
-		return {
-			kind: ChatRequestAttachmentKind.Editor,
-			id: `editor:${input.resource.toString()}`,
-			name: input.getName(),
-			resource: input.resource,
-			document: normalizeWritingEditorDocument(input.document),
-			selection: selection ? { ...selection } : null,
-		};
 	}
 
 	private findOpenInput(resource: URI): DraftEditorInput | undefined {

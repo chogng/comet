@@ -9,6 +9,7 @@ import type { ArticleListSource, ArticleRecord, JournalDescriptor } from 'cs/wor
 import type {
 	IFetchProvider,
 	ParsedArticleDetail,
+	ParsedArticleReadableContent,
 	ParsedArticleListCatalog,
 	ParsedArticleListCatalogEntry,
 	ParsedArticleListPage,
@@ -16,6 +17,10 @@ import type {
 import { FetchPageSessionFactory, IFetchPageSessionFactory } from 'cs/workbench/services/fetch/electron-browser/fetchPageSession';
 import { resolveFetchParser, type FetchParseContext } from 'cs/workbench/services/fetch/electron-browser/fetchParserResolver';
 import { isNatureArticleDetail, parseNatureArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleDetailParser';
+import {
+	natureArticleReadableBodySelector,
+	parseNatureArticleReadableContent,
+} from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleReadableContentParser';
 import { isNatureArticleList, isNatureNewsOpinionList, parseNatureArticleList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleListParser';
 import {
 	isNatureArticleTypeCatalog,
@@ -196,6 +201,24 @@ export class NatureFetchProvider implements IFetchProvider {
 					parser: parseNatureArticleDetail,
 				},
 			], context)(context.document, context.uri, journal);
+		} finally {
+			await session.dispose();
+		}
+	}
+
+	async fetchArticleReadableContent(
+		_journal: JournalDescriptor,
+		article: ArticleRecord,
+		token: CancellationToken,
+	): Promise<ParsedArticleReadableContent> {
+		const session = await this.pageSessionFactory.createOwned(this._admitsSnapshot);
+		try {
+			const snapshot = await session.navigateAndCapture(
+				article.url,
+				{ selector: natureArticleReadableBodySelector, state: 'visible' },
+				token,
+			);
+			return parseNatureArticleReadableContent(this._parseDocument(snapshot.html), snapshot.uri);
 		} finally {
 			await session.dispose();
 		}

@@ -42,6 +42,7 @@ import {
 import { VisibleSession } from 'cs/sessions/services/sessions/browser/visibleSessions';
 import {
 	ChatInteractivity,
+	ChatOriginKind,
 	type IChat,
 	type ISession,
 	type ISessionCapabilities,
@@ -70,8 +71,7 @@ import {
 	type ISessionsModelsChangeEvent,
 } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import type { ISessionDraftOptions } from 'cs/sessions/services/sessions/common/sessionsProvider';
-import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
-import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import type { ISessionModel } from 'cs/sessions/services/sessions/common/sessionsProvider';
 import { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import {
 	IDialogService,
@@ -128,10 +128,10 @@ abstract class TestSessionsChatView extends Disposable implements ISessionsChatV
 }
 
 class TestNewSessionChatView extends TestSessionsChatView implements INewSessionChatView {
-	readonly sessions: Array<ISession | undefined> = [];
+	readonly drafts: Array<{ session: ISession | undefined; chat: IChat | undefined }> = [];
 
-	setSession(session: ISession | undefined): void {
-		this.sessions.push(session);
+	setDraft(session: ISession | undefined, chat: IChat | undefined): void {
+		this.drafts.push({ session, chat });
 	}
 }
 
@@ -172,6 +172,7 @@ class TestActionManagementService implements ISessionsManagementService {
 	readonly onDidChangeModels = Event.None as Event<ISessionsModelsChangeEvent>;
 	readonly renamed: Array<{ session: ISession; title: string }> = [];
 	readonly deleted: ISession[] = [];
+	readonly deletedChats: Array<{ session: ISession; chat: IChat }> = [];
 
 	constructor(sessions: readonly ISession[]) {
 		this.sessions = observableValue<readonly ISession[]>('sessionActionsSessions', sessions);
@@ -183,16 +184,20 @@ class TestActionManagementService implements ISessionsManagementService {
 	getSessionForChatResource(_resource: URI): ISessionChatOwner | undefined { return undefined; }
 	createSessionDraft(_providerId: SessionsProviderId, _options: ISessionDraftOptions): ISession { throw new Error('Unexpected Session draft creation.'); }
 	discardSessionDraft(_session: ISession): void { throw new Error('Unexpected Session draft discard.'); }
-	getModels(_session: ISession, _chat: IChat): readonly ILanguageModelChatMetadataAndIdentifier[] { return []; }
-	sendRequest(_session: ISession, _chat: IChat, _request: IChatRequest): Promise<void> { throw new Error('Unexpected Session request.'); }
+	getModels(_session: ISession, _chat: IChat): readonly ISessionModel[] { return []; }
+	sendRequest(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Unexpected Session request.'); }
 	createChat(_session: ISession): Promise<IChat> { throw new Error('Unexpected Chat creation.'); }
 	forkChat(_session: ISession, _sourceChat: IChat, _turnId: string): Promise<IChat> { throw new Error('Unexpected Chat fork.'); }
 	async renameSession(session: ISession, title: string): Promise<void> { this.renamed.push({ session, title }); }
 	renameChat(_session: ISession, _chat: IChat, _title: string): Promise<void> { throw new Error('Unexpected Chat rename.'); }
 	setChatModel(_session: ISession, _chat: IChat, _modelId: string | undefined): Promise<void> { throw new Error('Unexpected model change.'); }
 	setSessionArchived(_session: ISession, _archived: boolean): Promise<void> { throw new Error('Unexpected archive change.'); }
+	releaseSession(_session: ISession): Promise<void> { throw new Error('Unexpected Session release.'); }
+	releaseChat(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Unexpected Chat release.'); }
+	cancelTurn(_session: ISession, _chat: IChat, _turnId: string): Promise<void> { throw new Error('Unexpected Turn cancellation.'); }
+	steerTurn(_session: ISession, _chat: IChat, _turnId: string, _message: string): Promise<void> { throw new Error('Unexpected Turn steering.'); }
 	async deleteSession(session: ISession): Promise<void> { this.deleted.push(session); }
-	deleteChat(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Unexpected Chat deletion.'); }
+	async deleteChat(session: ISession, chat: IChat): Promise<void> { this.deletedChats.push({ session, chat }); }
 }
 
 class TestActionSessionsService implements ISessionsService {
@@ -200,12 +205,26 @@ class TestActionSessionsService implements ISessionsService {
 	readonly visibleSessions = observableValue<readonly IVisibleSessionSlot[]>('sessionActionsVisible', [NewSessionSlot]);
 	readonly activeSession = observableValue<IActiveSession | undefined>('sessionActionsActive', undefined);
 	readonly closed: Array<IActiveSession | undefined> = [];
+	readonly closedChats: Array<{ session: IActiveSession; chat: IChat }> = [];
+	readonly reopenedChats: Array<{ session: IActiveSession; chat: IChat }> = [];
 
 	openSession(_sessionId: SessionId): void { throw new Error('Unexpected Session open.'); }
 	openNewSession(_options?: IOpenNewSessionOptions): ISession | undefined { throw new Error('Unexpected new Session open.'); }
 	openChat(_session: ISession, _chatResource: URI): void { throw new Error('Unexpected Chat open.'); }
-	closeChat(_session: IActiveSession, _chat: IChat): void { throw new Error('Unexpected Chat close.'); }
-	reopenChat(_session: IActiveSession, _chat: IChat): void { throw new Error('Unexpected Chat reopen.'); }
+	closeChat(session: IActiveSession, chat: IChat): void {
+		if (!(session instanceof VisibleSession)) {
+			throw new Error('Expected a visible Session wrapper.');
+		}
+		this.closedChats.push({ session, chat });
+		session.closeChat(chat);
+	}
+	reopenChat(session: IActiveSession, chat: IChat): void {
+		if (!(session instanceof VisibleSession)) {
+			throw new Error('Expected a visible Session wrapper.');
+		}
+		this.reopenedChats.push({ session, chat });
+		session.openChat(chat);
+	}
 	closeSession(session: IActiveSession | undefined): void { this.closed.push(session); }
 	setActiveSession(_session: IActiveSession | undefined): void { throw new Error('Unexpected active Session change.'); }
 	setSessionSticky(_session: IActiveSession, _sticky: boolean): void { throw new Error('Unexpected sticky Session change.'); }
@@ -238,16 +257,17 @@ function createChat(resource: string): IChat {
 		interactivity: observableValue(`interactivity-${resource}`, ChatInteractivity.Full),
 		capabilities: observableValue(`capabilities-${resource}`, {
 			supportsRename: true,
-			supportsDelete: false,
+			supportsDelete: true,
 		}),
-		origin: undefined,
+		origin: { kind: ChatOriginKind.User },
 	};
 }
 
 function createSession(
 	name: string,
 	capabilities: ISettableObservable<ISessionCapabilities> = observableValue(`sessionCapabilities-${name}`, {
-		supportsMultipleChats: true,
+		supportsCreateChat: true,
+		maximumChatCount: undefined,
 		supportsFork: true,
 		supportsRename: true,
 		supportsArchive: true,
@@ -255,9 +275,9 @@ function createSession(
 		supportsChanges: false,
 		supportsModels: false,
 	}),
+	chats: readonly IChat[] = [createChat(`test-chat:/${name}/conversation`)],
 ): ISession {
 	const resource = URI.parse(`test-session:/${name}`);
-	const mainChat = createChat(`test-chat:/${name}/main`);
 	return {
 		sessionId: toSessionId('provider.test', resource),
 		resource,
@@ -273,15 +293,22 @@ function createSession(
 			kind: SessionWorkspaceKind.WorkspaceLess,
 		}),
 		changes: observableValue(`sessionChanges-${name}`, []),
-		mainChat: observableValue(`sessionMainChat-${name}`, mainChat),
-		chats: observableValue<readonly IChat[]>(`sessionChats-${name}`, [mainChat]),
+		chats: observableValue<readonly IChat[]>(`sessionChats-${name}`, chats),
 		capabilities,
 	};
 }
 
+function requireSingleChat(session: ISession): IChat {
+	const chats = session.chats.get();
+	assert.equal(chats.length, 1, `Expected Session '${session.sessionId}' to contain exactly one Chat.`);
+	const chat = chats[0];
+	assert.ok(chat);
+	return chat;
+}
+
 function createVisibleSession(name: string): VisibleSession {
 	const session = createSession(name);
-	return new VisibleSession(session, session.mainChat.get(), undefined, () => {});
+	return new VisibleSession(session, requireSingleChat(session), undefined, () => {});
 }
 
 interface IActionServices {
@@ -477,6 +504,82 @@ test('SessionsPart publishes new and committed slot focus with the active slot s
 	}
 });
 
+test('SessionsPart renders a committed Session without a Chat without creating an addressed Chat view', () => {
+	const store = new DisposableStore();
+	const sessionModel = createSession('without-chat', undefined, []);
+	const session = store.add(new VisibleSession(sessionModel, undefined, undefined, () => {}));
+	const { factory, part } = createPartHarness(store);
+
+	try {
+		part.updateVisibleSessions([session], session);
+		part.layout(600, 400);
+		part.focusSession(session);
+
+		assert.equal(session.activeChat.get(), undefined);
+		assert.equal(factory.addressedViews.length, 0);
+		assert.equal(factory.newSessionViews.length, 0);
+	} finally {
+		store.dispose();
+	}
+});
+
+test('Session Chat navigation requires explicit selection and routes tab close and reopen intent through SessionsService', () => {
+	const store = new DisposableStore();
+	const firstChat = createChat('test-chat:/navigation/first');
+	const secondChat = createChat('test-chat:/navigation/second');
+	const sessionModel = createSession('navigation', undefined, [firstChat, secondChat]);
+	const session = store.add(new VisibleSession(sessionModel, undefined, undefined, () => {}));
+	const managementService = new TestActionManagementService([sessionModel]);
+	const sessionsService = new TestActionSessionsService();
+	const dialogService = new TestDialogService();
+	const { factory, part } = createPartHarness(store, {
+		managementService,
+		sessionsService,
+		dialogService,
+	});
+
+	try {
+		part.updateVisibleSessions([session], session);
+		const sessionElement = part.getElement().querySelector<HTMLElement>('.comet-session-view');
+		assert.ok(sessionElement);
+		assert.equal(factory.addressedViews.length, 0);
+		assert.equal(sessionElement.querySelectorAll('.comet-session-no-chat-choice').length, 2);
+
+		const choices = sessionElement.querySelectorAll<HTMLButtonElement>('.comet-session-no-chat-choice');
+		choices[1]?.click();
+		assert.deepEqual(sessionsService.reopenedChats, [{ session, chat: secondChat }]);
+		assert.equal(session.activeChat.get(), secondChat);
+		assert.equal(factory.addressedViews.length, 1);
+		assert.equal(factory.addressedViews[0]?.bindings.at(-1)?.chat, secondChat);
+
+		const tabSelectButtons = sessionElement.querySelectorAll<HTMLButtonElement>('.comet-session-chat-tab-select');
+		assert.equal(tabSelectButtons.length, 2);
+		tabSelectButtons[0]?.click();
+		assert.equal(session.activeChat.get(), firstChat);
+		assert.equal(factory.addressedViews.length, 2);
+		assert.equal(factory.addressedViews[0]?.disposeCount, 1);
+		assert.equal(factory.addressedViews[1]?.bindings.at(-1)?.chat, firstChat);
+
+		const activeCloseButton = sessionElement.querySelector<HTMLButtonElement>(
+			'.comet-session-chat-tab.comet-is-active .comet-session-chat-tab-close',
+		);
+		assert.ok(activeCloseButton);
+		activeCloseButton.click();
+		assert.deepEqual(sessionsService.closedChats, [{ session, chat: firstChat }]);
+		assert.equal(session.activeChat.get(), undefined);
+		assert.equal(sessionElement.querySelector('.comet-session-chat-tabs')?.hasAttribute('hidden'), true);
+
+		const reopenChoice = [...sessionElement.querySelectorAll<HTMLButtonElement>('.comet-session-no-chat-choice')]
+			.find(button => button.textContent?.startsWith('Reopen '));
+		assert.ok(reopenChoice);
+		reopenChoice.click();
+		assert.equal(session.activeChat.get(), firstChat);
+		assert.deepEqual(sessionsService.reopenedChats.at(-1), { session, chat: firstChat });
+	} finally {
+		store.dispose();
+	}
+});
+
 test('Sessions Part mounts the collapsed Editor action only while the Editor is collapsed', () => {
 	const store = new DisposableStore();
 	const { layoutService, part } = createPartHarness(store);
@@ -500,7 +603,8 @@ test('Session header gates operations by capability and preserves the originatin
 	const store = new DisposableStore();
 	const firstModel = createSession('actions-first');
 	const secondCapabilities = observableValue<ISessionCapabilities>('sessionCapabilities-actions-second', {
-		supportsMultipleChats: false,
+		supportsCreateChat: false,
+		maximumChatCount: 1,
 		supportsFork: false,
 		supportsRename: true,
 		supportsArchive: false,
@@ -509,8 +613,8 @@ test('Session header gates operations by capability and preserves the originatin
 		supportsModels: false,
 	});
 	const secondModel = createSession('actions-second', secondCapabilities);
-	const first = store.add(new VisibleSession(firstModel, firstModel.mainChat.get(), undefined, () => {}));
-	const second = store.add(new VisibleSession(secondModel, secondModel.mainChat.get(), undefined, () => {}));
+	const first = store.add(new VisibleSession(firstModel, requireSingleChat(firstModel), undefined, () => {}));
+	const second = store.add(new VisibleSession(secondModel, requireSingleChat(secondModel), undefined, () => {}));
 	const managementService = new TestActionManagementService([firstModel, secondModel]);
 	const sessionsService = new TestActionSessionsService();
 	const dialogService = new TestDialogService();
@@ -525,7 +629,9 @@ test('Session header gates operations by capability and preserves the originatin
 		assert.equal(contextKeyService.getContextKeyValue('sessions.activeChatFullyInteractive'), false);
 		sessionsService.activeSession.set(first, undefined);
 		assert.equal(contextKeyService.getContextKeyValue('sessions.activeChatFullyInteractive'), true);
-		(first.activeChat.get().interactivity as ISettableObservable<ChatInteractivity>).set(
+		const activeChat = first.activeChat.get();
+		assert.ok(activeChat);
+		(activeChat.interactivity as ISettableObservable<ChatInteractivity>).set(
 			ChatInteractivity.ReadOnly,
 			undefined,
 		);
@@ -540,6 +646,7 @@ test('Session header gates operations by capability and preserves the originatin
 			SessionsCommandIds.renameSession,
 			SessionsCommandIds.deleteSession,
 			SessionsCommandIds.closeSession,
+			SessionsCommandIds.deleteChat,
 		]);
 
 		const closeButton = secondElement.querySelector<HTMLButtonElement>(
@@ -548,6 +655,17 @@ test('Session header gates operations by capability and preserves the originatin
 		assert.ok(closeButton);
 		closeButton.click();
 		assert.deepEqual(sessionsService.closed, [second]);
+		const deleteChatButton = secondElement.querySelector<HTMLButtonElement>(
+			`[data-actionbar-item-id="${SessionsCommandIds.deleteChat}"] button`,
+		);
+		assert.ok(deleteChatButton);
+		deleteChatButton.click();
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.deepEqual(managementService.deletedChats, [{
+			session: secondModel,
+			chat: requireSingleChat(secondModel),
+		}]);
 
 		await Promise.resolve(commandService.executeCommand(SessionsCommandIds.renameSession, second));
 		await Promise.resolve(commandService.executeCommand(SessionsCommandIds.deleteSession, second));
@@ -560,7 +678,7 @@ test('Session header gates operations by capability and preserves the originatin
 			supportsRename: false,
 			supportsDelete: false,
 		}, undefined);
-		assert.deepEqual(getActionIds(), [SessionsCommandIds.closeSession]);
+		assert.deepEqual(getActionIds(), [SessionsCommandIds.closeSession, SessionsCommandIds.deleteChat]);
 	} finally {
 		store.dispose();
 	}

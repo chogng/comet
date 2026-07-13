@@ -26,6 +26,7 @@ import {
   type AppErrorCode,
 } from 'cs/base/parts/sandbox/common/appError';
 import type { DisposableLike } from 'cs/base/common/lifecycle';
+import { CancellationTokenSource } from 'cs/base/common/cancellation';
 
 const APP_IPC_CHANNEL_PREFIX = 'app:';
 const APP_SERVICE_IPC_CALL_CHANNEL = 'app:ipc-call';
@@ -35,6 +36,7 @@ const APP_SERVICE_IPC_DISPOSE_CHANNEL = 'app:ipc-dispose';
 const APP_SERVICE_IPC_RENDERER_CHANNEL_REGISTER_CHANNEL = 'app:ipc-renderer-channel-register';
 const APP_SERVICE_IPC_RENDERER_CHANNEL_DISPOSE_CHANNEL = 'app:ipc-renderer-channel-dispose';
 const APP_SERVICE_IPC_RENDERER_CALL_CHANNEL = 'app:ipc-renderer-call';
+const APP_SERVICE_IPC_RENDERER_CALL_CANCEL_CHANNEL = 'app:ipc-renderer-call-cancel';
 const APP_SERVICE_IPC_RENDERER_CALL_RESULT_CHANNEL = 'app:ipc-renderer-call-result';
 const APP_SERVICE_IPC_RENDERER_EVENT_SUBSCRIBE_CHANNEL = 'app:ipc-renderer-event-subscribe';
 const APP_SERVICE_IPC_RENDERER_EVENT_CHANNEL = 'app:ipc-renderer-event';
@@ -207,6 +209,10 @@ type RendererEventSubscription = {
 
 const rendererChannels = new Map<string, IServerChannel<string>>();
 const rendererEventSubscriptions = new Map<string, RendererEventSubscription>();
+const rendererCalls = new Map<string, {
+  readonly channelName: string;
+  readonly cancellationSource: CancellationTokenSource;
+}>();
 
 function getRendererChannel(channelName: string): IServerChannel<string> {
   const channel = rendererChannels.get(channelName);
@@ -236,6 +242,16 @@ function disposeRendererChannelSubscriptions(channelName: string): void {
   }
 }
 
+function cancelRendererChannelCalls(channelName: string): void {
+  for (const [requestId, call] of rendererCalls) {
+    if (call.channelName === channelName) {
+      call.cancellationSource.cancel();
+      call.cancellationSource.dispose();
+      rendererCalls.delete(requestId);
+    }
+  }
+}
+
 function registerIpcServiceChannel(
   channelName: string,
   channel: IServerChannel<string>,
@@ -248,6 +264,7 @@ function registerIpcServiceChannel(
   sendIpc(APP_SERVICE_IPC_RENDERER_CHANNEL_REGISTER_CHANNEL, channelName);
 
   return () => {
+    cancelRendererChannelCalls(channelName);
     disposeRendererChannelSubscriptions(channelName);
     rendererChannels.delete(channelName);
     sendIpc(APP_SERVICE_IPC_RENDERER_CHANNEL_DISPOSE_CHANNEL, channelName);
@@ -258,12 +275,21 @@ function registerRendererChannelHandlers(): void {
   ipcRenderer.on(
     APP_SERVICE_IPC_RENDERER_CALL_CHANNEL,
     async (_event, request: RendererCallRequest) => {
+      const cancellationSource = new CancellationTokenSource();
       try {
+        if (rendererCalls.has(request.requestId)) {
+          throw new Error(`Renderer IPC request '${request.requestId}' is already active.`);
+        }
+        rendererCalls.set(request.requestId, {
+          channelName: request.channelName,
+          cancellationSource,
+        });
         const channel = getRendererChannel(request.channelName);
         const result = await channel.call(
           APP_SERVICE_IPC_RENDERER_CONTEXT,
           request.command,
           request.arg,
+          cancellationSource.token,
         );
         sendIpc(APP_SERVICE_IPC_RENDERER_CALL_RESULT_CHANNEL, {
           requestId: request.requestId,
@@ -276,7 +302,19 @@ function registerRendererChannelHandlers(): void {
           ok: false,
           error: serializeAppError(error),
         } satisfies RendererCallResponse);
+      } finally {
+        if (rendererCalls.get(request.requestId)?.cancellationSource === cancellationSource) {
+          rendererCalls.delete(request.requestId);
+        }
+        cancellationSource.dispose();
       }
+    },
+  );
+
+  ipcRenderer.on(
+    APP_SERVICE_IPC_RENDERER_CALL_CANCEL_CHANNEL,
+    (_event, requestId: string) => {
+      rendererCalls.get(requestId)?.cancellationSource.cancel();
     },
   );
 

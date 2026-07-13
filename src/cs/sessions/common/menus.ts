@@ -7,4 +7,6 @@ import { MenuId } from 'cs/platform/actions/common/actions';
 
 export const SessionsMenuIds = {
 	sessionHeader: MenuId.for('SessionsSessionHeader'),
+	chatHeader: MenuId.for('SessionsChatHeader'),
+	chatTurn: MenuId.for('SessionsChatTurn'),
 } as const;

@@ -45,6 +45,8 @@ import {
 	matchesShortcutLabel,
 	type DraftEditorCommandId,
 } from 'cs/editor/browser/text/editorCommandRegistry';
+import { DraftEditorChatAttachmentsContribution } from 'cs/workbench/contrib/draftEditor/browser/draftEditorChatAttachments';
+import { DraftEditorAgentToolsContribution } from 'cs/workbench/contrib/draftEditor/browser/draftEditorAgentTools';
 
 const DraftEditorSurfaceActionIds: readonly DraftEditorSurfaceActionId[] = ['undo', 'redo'];
 type DraftEditorWorkbenchCommandId = DraftEditorCommandId | 'saveDraft';
@@ -245,4 +247,10 @@ registerWorkbenchContribution(() =>
 );
 registerWorkbenchContribution(() =>
 	getWorkbenchInstantiationService().createInstance(DraftEditorActionsContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(DraftEditorChatAttachmentsContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(DraftEditorAgentToolsContribution),
 );

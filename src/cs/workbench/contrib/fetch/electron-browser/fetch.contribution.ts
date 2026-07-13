@@ -21,6 +21,8 @@ import { scienceFetchProviderDescriptor } from 'cs/workbench/services/fetch/elec
 import { scienceJournals } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceJournals';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
+import { ArticleChatAttachmentsContribution } from 'cs/workbench/contrib/fetch/browser/articleChatAttachments';
+import { ArticleChatPresentationsContribution } from 'cs/workbench/contrib/fetch/browser/articleChatPresentations';
 
 registerSingleton(IFetchPageSessionFactory, FetchPageSessionFactory, InstantiationType.Delayed);
 
@@ -72,4 +74,10 @@ registerWorkbenchContribution(() =>
 );
 registerWorkbenchContribution(() =>
 	getWorkbenchInstantiationService().createInstance(FetchActionsContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(ArticleChatAttachmentsContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(ArticleChatPresentationsContribution),
 );

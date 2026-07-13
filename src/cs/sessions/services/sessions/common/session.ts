@@ -107,7 +107,8 @@ export const enum SessionChangeKind {
 
 /** Declares Session-level operations guaranteed by its provider. */
 export interface ISessionCapabilities {
-	readonly supportsMultipleChats: boolean;
+	readonly supportsCreateChat: boolean;
+	readonly maximumChatCount: number | undefined;
 	readonly supportsFork: boolean;
 	readonly supportsRename: boolean;
 	readonly supportsArchive: boolean;
@@ -127,7 +128,7 @@ export interface IChat {
 	readonly modelId: IObservable<string | undefined>;
 	readonly interactivity: IObservable<ChatInteractivity>;
 	readonly capabilities: IObservable<IChatCapabilities>;
-	readonly origin: IChatOrigin | undefined;
+	readonly origin: IChatOrigin;
 }
 
 /** Represents one provider-owned Agent working context. */
@@ -144,7 +145,6 @@ export interface ISession {
 	readonly isArchived: IObservable<boolean>;
 	readonly workspace: IObservable<ISessionWorkspaceState>;
 	readonly changes: IObservable<readonly ISessionChange[]>;
-	readonly mainChat: IObservable<IChat>;
 	readonly chats: IObservable<readonly IChat[]>;
 	readonly capabilities: IObservable<ISessionCapabilities>;
 }
@@ -176,16 +176,13 @@ export function assertSessionInvariants(session: ISession): void {
 	}
 
 	const chats = session.chats.get();
-	const mainChat = session.mainChat.get();
-	if (!chats.includes(mainChat)) {
-		throw new Error(`Session '${session.sessionId}' does not contain its main Chat model.`);
+	const maximumChatCount = session.capabilities.get().maximumChatCount;
+	if (maximumChatCount !== undefined && (!Number.isInteger(maximumChatCount) || maximumChatCount < 0)) {
+		throw new Error(`Session '${session.sessionId}' has an invalid maximum Chat count.`);
 	}
 
 	const chatsByResource = new Map<string, IChat>();
 	for (const chat of chats) {
-		if (chat !== mainChat && !chat.origin) {
-			throw new Error(`Session '${session.sessionId}' has an additional Chat without an origin.`);
-		}
 		const resourceKey = getComparisonKey(chat.resource);
 		if (chatsByResource.has(resourceKey)) {
 			throw new Error(`Session '${session.sessionId}' contains duplicate Chat resources.`);
@@ -196,16 +193,6 @@ export function assertSessionInvariants(session: ISession): void {
 		assertChatOrigin(session, chat, chatsByResource);
 	}
 	assertChatOriginsAcyclic(session, chats, chatsByResource);
-
-	if (mainChat.origin && mainChat.origin.kind !== ChatOriginKind.User) {
-		throw new Error(`Session '${session.sessionId}' has a non-user main Chat origin.`);
-	}
-	if (mainChat.interactivity.get() === ChatInteractivity.Hidden) {
-		throw new Error(`Session '${session.sessionId}' has a hidden main Chat.`);
-	}
-	if (mainChat.capabilities.get().supportsDelete) {
-		throw new Error(`Session '${session.sessionId}' has a deletable main Chat.`);
-	}
 }
 
 function assertChatOrigin(
@@ -215,7 +202,7 @@ function assertChatOrigin(
 ): void {
 	const origin = chat.origin;
 	if (!origin) {
-		return;
+		throw new Error(`Session '${session.sessionId}' has a Chat without an origin.`);
 	}
 
 	if (origin.kind === ChatOriginKind.User) {
@@ -246,8 +233,8 @@ function assertChatOriginsAcyclic(
 ): void {
 	for (const chat of chats) {
 		const path = new Set<string>();
-		let current = chat;
-		while (current.origin && current.origin.kind !== ChatOriginKind.User) {
+		let current: IChat = chat;
+		while (current.origin.kind !== ChatOriginKind.User) {
 			const resourceKey = getComparisonKey(current.resource);
 			if (path.has(resourceKey)) {
 				throw new Error(`Session '${session.sessionId}' contains a cycle in its Chat origins.`);

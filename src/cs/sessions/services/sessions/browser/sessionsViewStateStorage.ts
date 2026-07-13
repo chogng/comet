@@ -88,7 +88,9 @@ function parseSessionViewState(value: unknown): IStoredSessionViewState {
 	return {
 		sessionId: requireString(entry.sessionId, 'view-state Session ID'),
 		state: {
-			activeChatKey: requireString(state.activeChatKey, 'active Chat key'),
+			activeChatKey: state.activeChatKey === undefined
+				? undefined
+				: requireString(state.activeChatKey, 'active Chat key'),
 			closedChatKeys: requireStringArray(state.closedChatKeys, 'closed Chat keys'),
 			shownToolChatKeys: requireStringArray(state.shownToolChatKeys, 'shown Tool Chat keys'),
 			sticky: state.sticky,

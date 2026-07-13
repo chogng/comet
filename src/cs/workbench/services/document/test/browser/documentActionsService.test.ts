@@ -15,12 +15,10 @@ import type {
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { URI } from 'cs/base/common/uri';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
-import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';
 import { getPdfDownloadStatus } from 'cs/workbench/services/document/pdfDownloadStatus';
-import type { IUntypedEditorInput } from 'cs/workbench/common/editor';
 import {
 	IDocumentActionsService,
 	type IArticleSelectionSnapshot,
@@ -130,8 +128,6 @@ function createSuccessfulDownloadInvoke(payloads: WebContentPdfDownloadPayload[]
 }
 
 function createService(options: CreateServiceOptions = {}) {
-	const openRequests: IUntypedEditorInput[] = [];
-	const unavailableEvents: Array<{ resource: URI; articleIds: readonly ArticleId[] }> = [];
 	const articleExports: Array<{
 		articleIds: readonly ArticleId[];
 		translateSummaries: boolean;
@@ -165,17 +161,6 @@ function createService(options: CreateServiceOptions = {}) {
 		} as never,
 		options.fetchService ?? createFetchService([]),
 		{
-			openEditor: async (input: IUntypedEditorInput) => {
-				openRequests.push(input);
-				return {} as never;
-			},
-		} as never,
-		{
-			removeArticleChecks: (resource: URI, articleIds: readonly ArticleId[]) => {
-				unavailableEvents.push({ resource, articleIds: [...articleIds] });
-			},
-		} as never,
-		{
 			upsertDocumentSummary: (document: unknown) => { libraryUpserts.push(document); },
 			refresh: async () => { libraryRefreshes.push(true); },
 		} as never,
@@ -195,8 +180,6 @@ function createService(options: CreateServiceOptions = {}) {
 	);
 	return {
 		service,
-		openRequests,
-		unavailableEvents,
 		articleExports,
 		notificationService,
 		settings,
@@ -210,23 +193,6 @@ test('DocumentActionsService is registered once with delayed instantiation', () 
 	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IDocumentActionsService);
 	assert.equal(registrations.length, 1);
 	assert.equal(registrations[0]?.[1].supportsDelayedInstantiation, true);
-});
-
-test('DocumentActionsService opens an ArticleId through IEditorService', async () => {
-	const articleId = 'article.open';
-	const { service, openRequests } = createService({
-		fetchService: createFetchService([createArticleDetail(articleId, {
-			url: URI.parse('https://www.nature.com/articles/example'),
-		})]),
-	});
-
-	await service.openArticleDetails(articleId);
-	service.dispose();
-
-	assert.equal(openRequests.length, 1);
-	const [request] = openRequests;
-	assert.equal(request?.options?.viewState?.url, 'https://www.nature.com/articles/example');
-	assert.ok(request && 'resource' in request && request.resource && BrowserViewUri.getId(request.resource));
 });
 
 test('DocumentActionsService exports one explicit Article selection', async () => {
@@ -245,29 +211,28 @@ test('DocumentActionsService exports one explicit Article selection', async () =
 	);
 });
 
-test('DocumentActionsService keeps unavailable export results bound to the explicit selection', async () => {
+test('DocumentActionsService does not own Feature selection returned as unavailable', async () => {
 	const initialResource = URI.from({ scheme: 'chat', path: '/initial-selection' });
 	const replacementResource = URI.from({ scheme: 'chat', path: '/replacement-selection' });
-	const { service, articleExports, unavailableEvents } = createService();
+	const { service, articleExports } = createService();
 
 	await service.exportArticleSummaries({ resource: initialResource, articleIds: ['article.initial'] });
 	await service.exportArticleSummaries({ resource: replacementResource, articleIds: ['article.replacement'] });
 	articleExports[0]?.onUnavailableArticleIds(['article.initial-missing']);
 	service.dispose();
 
-	assert.equal(unavailableEvents[0]?.resource, initialResource);
-	assert.deepEqual(unavailableEvents[0]?.articleIds, ['article.initial-missing']);
+	assert.equal(articleExports.length, 2);
 });
 
-test('DocumentActionsService suppresses unavailable Article export results after disposal', async () => {
+test('DocumentActionsService accepts unavailable export completion after disposal without owning selection', async () => {
 	const resource = URI.from({ scheme: 'chat', path: '/disposed-export' });
-	const { service, articleExports, unavailableEvents } = createService();
+	const { service, articleExports } = createService();
 
 	await service.exportArticleSummaries({ resource, articleIds: ['article.pending'] });
 	service.dispose();
 	articleExports[0]?.onUnavailableArticleIds(['article.pending']);
 
-	assert.deepEqual(unavailableEvents, []);
+	assert.equal(articleExports.length, 1);
 });
 
 test('DocumentActionsService exports an explicit Draft without invoking Article export', async () => {
@@ -355,15 +320,15 @@ test('DocumentActionsService rejects a detail without a PDF URL before native in
 	assert.deepEqual(notificationService.errors, [locales.en.errorPdfLinkNotFound]);
 });
 
-test('DocumentActionsService removes missing ArticleIds from the addressed Chat', async () => {
+test('DocumentActionsService reports a missing Article without mutating Feature selection', async () => {
 	const articleSelectionResource = URI.from({ scheme: 'chat', path: '/unavailable' });
-	const { service, unavailableEvents } = createService();
+	const notificationService = new TestNotificationService();
+	const { service } = createService({ notificationService });
 
 	await service.downloadArticlePdf('article.missing', articleSelectionResource);
 	service.dispose();
 
-	assert.equal(unavailableEvents[0]?.resource, articleSelectionResource);
-	assert.deepEqual(unavailableEvents[0]?.articleIds, ['article.missing']);
+	assert.deepEqual(notificationService.infos, [locales.en.articleDetailsUnavailable]);
 });
 
 test('DocumentActionsService cancels a batch only through the explicit cancel operation', async () => {
@@ -456,7 +421,7 @@ test('DocumentActionsService suppresses Article detail results settled after bat
 		getArticleDetail: () => undefined,
 		fetchArticle: () => articleDetail.p,
 	} as unknown as IFetchService;
-	const { service, unavailableEvents } = createService({
+	const { service } = createService({
 		invokeDesktop: (async (command: string) => {
 			invoked.push(command);
 			return command === 'cancel_document_task' ? true : null;
@@ -475,7 +440,6 @@ test('DocumentActionsService suppresses Article detail results settled after bat
 	await running;
 	service.dispose();
 
-	assert.deepEqual(unavailableEvents, []);
 	assert.deepEqual(notificationService.infos, []);
 	assert.deepEqual(invoked, ['cancel_document_task']);
 });

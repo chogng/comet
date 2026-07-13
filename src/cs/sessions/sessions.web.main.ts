@@ -6,3 +6,4 @@
 import 'cs/workbench/workbench.web.main';
 import 'cs/sessions/sessions.common.main';
 import 'cs/sessions/contrib/layout/browser/layout.contribution';
+import 'cs/sessions/contrib/browserView/browser/chatArticleBrowserService';

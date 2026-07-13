@@ -23,6 +23,7 @@ export type AppEnvironmentPaths = {
   libraryDbFile: string;
   libraryFilesDir: string;
   ragCacheDir: string;
+  agentHostContentDir: string;
 };
 
 function resolvePortableExecutableDir() {
@@ -71,6 +72,7 @@ export function resolveEnvironmentMainPaths(): AppEnvironmentPaths {
     libraryDbFile: path.join(dataDir, 'library.sqlite'),
     libraryFilesDir: path.join(dataDir, 'library-files'),
     ragCacheDir: path.join(cacheDir, 'rag'),
+    agentHostContentDir: path.join(cacheDir, 'agent-host', 'content'),
   };
 }
 
@@ -191,6 +193,7 @@ export async function prepareEnvironmentMain(paths: AppEnvironmentPaths) {
     fs.mkdir(paths.logsDir, { recursive: true }),
     fs.mkdir(paths.libraryFilesDir, { recursive: true }),
     fs.mkdir(paths.ragCacheDir, { recursive: true }),
+    fs.mkdir(paths.agentHostContentDir, { recursive: true }),
   ]);
 
   await cleanupLegacyStorageFiles(paths);

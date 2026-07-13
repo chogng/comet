@@ -14,13 +14,18 @@ import { SessionsContextKeys } from 'cs/sessions/common/contextkeys';
 import { SessionsMenuIds } from 'cs/sessions/common/menus';
 import { SessionsCommandIds } from 'cs/sessions/common/sessionCommands';
 import { ISessionsService } from 'cs/sessions/services/sessions/browser/sessionsService';
-import { ChatInteractivity } from 'cs/sessions/services/sessions/common/session';
+import { ChatInteractivity, type IChat, type ISession } from 'cs/sessions/services/sessions/common/session';
 import type { IActiveSession } from 'cs/sessions/services/sessions/common/sessionsView';
+import {
+	isCreateChatAvailable,
+	isForkChatAvailable,
+	type ISessionChatActionContext,
+	type ISessionChatTurnActionContext,
+} from 'cs/sessions/services/sessions/common/sessionActions';
 import {
 	ISessionsManagementService,
 	type ISessionsManagementService as ISessionsManagementServiceContract,
 } from 'cs/sessions/services/sessions/common/sessionsManagement';
-import type { ISession } from 'cs/sessions/services/sessions/common/session';
 import { registerWorkbenchContribution } from 'cs/workbench/common/contributions';
 import { IDialogService } from 'cs/workbench/services/dialogs/common/dialogService';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
@@ -52,13 +57,70 @@ export class SessionsActionsContribution extends Disposable {
 		const activeChatFullyInteractive = SessionsContextKeys.activeChatFullyInteractive.bindTo(contextKeyService);
 		this._register(autorun(reader => {
 			const activeSession = this.sessionsService.activeSession.read(reader);
+			const activeChat = activeSession?.activeChat.read(reader);
 			activeChatFullyInteractive.set(
-				activeSession?.activeChat.read(reader).interactivity.read(reader) === ChatInteractivity.Full,
+				activeChat?.interactivity.read(reader) === ChatInteractivity.Full,
 			);
 		}));
+		this.registerCreateChatAction();
+		this.registerForkChatAction();
+		this.registerDeleteChatAction();
 		this.registerRenameAction();
 		this.registerDeleteAction();
 		this.registerCloseAction();
+	}
+
+	private registerCreateChatAction(): void {
+		const command = {
+			id: SessionsCommandIds.createChat,
+			title: localize2('createChat', "New Chat"),
+			icon: Codicon.add,
+		};
+		this._register(commandsRegistry.registerCommand(command.id, (_accessor, context?: IActiveSession) =>
+			this.createChat(context),
+		));
+		this._register(MenuRegistry.appendMenuItem(SessionsMenuIds.sessionHeader, {
+			command,
+			group: 'navigation',
+			order: 1,
+			when: SessionsContextKeys.sessionHeaderCanCreateChat.isEqualTo(true),
+		}));
+	}
+
+	private registerForkChatAction(): void {
+		const command = {
+			id: SessionsCommandIds.forkChat,
+			title: localize2('forkChat', "Fork Chat"),
+			icon: Codicon.repoForked,
+		};
+		this._register(commandsRegistry.registerCommand(command.id, (
+			_accessor,
+			context?: ISessionChatTurnActionContext,
+		) => this.forkChat(context)));
+		this._register(MenuRegistry.appendMenuItem(SessionsMenuIds.chatTurn, {
+			command,
+			group: 'navigation',
+			order: 1,
+			when: SessionsContextKeys.chatTurnCanFork.isEqualTo(true),
+		}));
+	}
+
+	private registerDeleteChatAction(): void {
+		const command = {
+			id: SessionsCommandIds.deleteChat,
+			title: localize2('deleteChat', "Delete Chat"),
+			icon: Codicon.trash,
+		};
+		this._register(commandsRegistry.registerCommand(command.id, (
+			_accessor,
+			context?: ISessionChatActionContext,
+		) => this.deleteChat(context)));
+		this._register(MenuRegistry.appendMenuItem(SessionsMenuIds.chatHeader, {
+			command,
+			group: 'navigation',
+			order: 1,
+			when: SessionsContextKeys.chatHeaderSupportsDelete.isEqualTo(true),
+		}));
 	}
 
 	private registerRenameAction(): void {
@@ -73,7 +135,7 @@ export class SessionsActionsContribution extends Disposable {
 		this._register(MenuRegistry.appendMenuItem(SessionsMenuIds.sessionHeader, {
 			command,
 			group: 'navigation',
-			order: 1,
+			order: 2,
 			when: SessionsContextKeys.sessionHeaderSupportsRename.isEqualTo(true),
 		}));
 	}
@@ -90,7 +152,7 @@ export class SessionsActionsContribution extends Disposable {
 		this._register(MenuRegistry.appendMenuItem(SessionsMenuIds.sessionHeader, {
 			command,
 			group: 'navigation',
-			order: 2,
+			order: 3,
 			when: SessionsContextKeys.sessionHeaderSupportsDelete.isEqualTo(true),
 		}));
 	}
@@ -110,9 +172,99 @@ export class SessionsActionsContribution extends Disposable {
 		this._register(MenuRegistry.appendMenuItem(SessionsMenuIds.sessionHeader, {
 			command,
 			group: 'navigation',
-			order: 3,
+			order: 4,
 			when: SessionsContextKeys.sessionHeaderHasSession.isEqualTo(true),
 		}));
+	}
+
+	private async createChat(context: IActiveSession | undefined): Promise<void> {
+		const session = requireActionSession(context, this.managementService);
+		const capabilities = session.capabilities.get();
+		if (!isCreateChatAvailable(capabilities, session.chats.get().length)) {
+			throw new Error(`Session '${session.sessionId}' does not currently support creating another Chat.`);
+		}
+
+		let chat: IChat;
+		try {
+			chat = await this.managementService.createChat(session);
+		} catch (error) {
+			await this.dialogService.error(localize(
+				'createChatFailed',
+				"Failed to create the chat: {0}",
+				toErrorMessage(error),
+			));
+			return;
+		}
+		this.sessionsService.openChat(session, chat.resource);
+	}
+
+	private async forkChat(context: ISessionChatTurnActionContext | undefined): Promise<void> {
+		const { session, chat } = this.requireActionChat(context);
+		const turnId = context?.turnId.trim();
+		if (!turnId) {
+			throw new Error('Fork Chat requires its originating Turn context.');
+		}
+		const capabilities = session.capabilities.get();
+		if (!isForkChatAvailable(capabilities, session.chats.get().length)) {
+			throw new Error(`Session '${session.sessionId}' does not currently support forking another Chat.`);
+		}
+
+		let fork: IChat;
+		try {
+			fork = await this.managementService.forkChat(session, chat, turnId);
+		} catch (error) {
+			await this.dialogService.error(localize(
+				'forkChatFailed',
+				"Failed to fork the chat: {0}",
+				toErrorMessage(error),
+			));
+			return;
+		}
+		this.sessionsService.openChat(session, fork.resource);
+	}
+
+	private async deleteChat(context: ISessionChatActionContext | undefined): Promise<void> {
+		const { session, chat } = this.requireActionChat(context);
+		if (!chat.capabilities.get().supportsDelete) {
+			throw new Error(`Chat '${chat.resource.toString()}' does not support delete.`);
+		}
+
+		const confirmation = await this.dialogService.confirm({
+			title: localize('deleteChatDialogTitle', "Delete Chat"),
+			message: localize('deleteChatConfirm', "Are you sure you want to delete this chat?"),
+			detail: localize('deleteChatDetail', "This action cannot be undone."),
+			primaryButton: localize('deleteChatButton', "Delete"),
+		});
+		if (!confirmation.confirmed) {
+			return;
+		}
+
+		try {
+			await this.managementService.deleteChat(session, chat);
+		} catch (error) {
+			await this.dialogService.error(localize(
+				'deleteChatFailed',
+				"Failed to delete the chat: {0}",
+				toErrorMessage(error),
+			));
+		}
+	}
+
+	private requireActionChat(context: ISessionChatActionContext | undefined): {
+		readonly session: ISession;
+		readonly chat: ISessionChatActionContext['chat'];
+	} {
+		if (!context) {
+			throw new Error('A Chat action requires its originating Session and Chat context.');
+		}
+		const session = this.managementService.getSession(context.session.sessionId);
+		if (!session) {
+			throw new Error(`Session '${context.session.sessionId}' is not managed.`);
+		}
+		if (!session.chats.get().includes(context.chat)) {
+			throw new Error(`Chat '${context.chat.resource.toString()}' is not the current model owned by Session '${session.sessionId}'.`);
+		}
+		return { session, chat: context.chat };
 	}
 
 	private async renameSession(context: IActiveSession | undefined): Promise<void> {

@@ -45,6 +45,7 @@ import {
 } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import {
 	ChatInteractivity,
+	ChatOriginKind,
 	type IChat,
 	type ISession,
 	type SessionId,
@@ -59,8 +60,7 @@ import {
 	type IActiveSession,
 	type IVisibleSessionSlot,
 } from 'cs/sessions/services/sessions/common/sessionsView';
-import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
-import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import type { ISessionModel } from 'cs/sessions/services/sessions/common/sessionsProvider';
 import { IEditorGroupsService } from 'cs/workbench/services/editor/common/editorGroupsService';
 import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
@@ -104,14 +104,18 @@ class TestSessionsManagementService implements ISessionsManagementService {
 	getSessionForChatResource(_resource: URI): ISessionChatOwner | undefined { return undefined; }
 	createSessionDraft(_providerId: SessionsProviderId, _options: ISessionDraftOptions): ISession { throw new Error('Unexpected Session draft creation.'); }
 	discardSessionDraft(_session: ISession): void { throw new Error('Unexpected Session draft discard.'); }
-	getModels(_session: ISession, _chat: IChat): readonly ILanguageModelChatMetadataAndIdentifier[] { return []; }
-	sendRequest(_session: ISession, _chat: IChat, _request: IChatRequest): Promise<void> { throw new Error('Unexpected Session request.'); }
+	getModels(_session: ISession, _chat: IChat): readonly ISessionModel[] { return []; }
+	sendRequest(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Unexpected Session request.'); }
 	createChat(_session: ISession): Promise<IChat> { throw new Error('Unexpected Chat creation.'); }
 	forkChat(_session: ISession, _sourceChat: IChat, _turnId: string): Promise<IChat> { throw new Error('Unexpected Chat fork.'); }
 	renameSession(_session: ISession, _title: string): Promise<void> { throw new Error('Unexpected Session rename.'); }
 	renameChat(_session: ISession, _chat: IChat, _title: string): Promise<void> { throw new Error('Unexpected Chat rename.'); }
 	setChatModel(_session: ISession, _chat: IChat, _modelId: string | undefined): Promise<void> { throw new Error('Unexpected model change.'); }
 	setSessionArchived(_session: ISession, _archived: boolean): Promise<void> { throw new Error('Unexpected archive change.'); }
+	releaseSession(_session: ISession): Promise<void> { throw new Error('Unexpected Session release.'); }
+	releaseChat(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Unexpected Chat release.'); }
+	cancelTurn(_session: ISession, _chat: IChat, _turnId: string): Promise<void> { throw new Error('Unexpected Turn cancellation.'); }
+	steerTurn(_session: ISession, _chat: IChat, _turnId: string, _message: string): Promise<void> { throw new Error('Unexpected Turn steering.'); }
 	deleteSession(_session: ISession): Promise<void> { throw new Error('Unexpected Session deletion.'); }
 	deleteChat(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Unexpected Chat deletion.'); }
 }
@@ -213,9 +217,9 @@ class TestSessionsLayoutService extends Disposable implements ISessionsLayoutSer
 
 function createSession(name: string): { readonly model: ISession; readonly title: ReturnType<typeof observableValue<string>> } {
 	const resource = URI.parse(`test-session:/${name}`);
-	const chatResource = URI.parse(`test-chat:/${name}/main`);
+	const chatResource = URI.parse(`test-chat:/${name}/conversation`);
 	const title = observableValue(`sidebarSessionTitle-${name}`, `Session ${name}`);
-	const mainChat: IChat = {
+	const chat: IChat = {
 		resource: chatResource,
 		createdAt: new Date(1),
 		title: observableValue(`sidebarChatTitle-${name}`, `Chat ${name}`),
@@ -228,7 +232,7 @@ function createSession(name: string): { readonly model: ISession; readonly title
 			supportsRename: false,
 			supportsDelete: false,
 		}),
-		origin: undefined,
+		origin: { kind: ChatOriginKind.User },
 	};
 	return {
 		title,
@@ -245,10 +249,10 @@ function createSession(name: string): { readonly model: ISession; readonly title
 			isArchived: observableValue(`sidebarSessionArchived-${name}`, false),
 			workspace: observableValue(`sidebarSessionWorkspace-${name}`, { kind: SessionWorkspaceKind.WorkspaceLess }),
 			changes: observableValue(`sidebarSessionChanges-${name}`, []),
-			mainChat: observableValue(`sidebarSessionMainChat-${name}`, mainChat),
-			chats: observableValue<readonly IChat[]>(`sidebarSessionChats-${name}`, [mainChat]),
+			chats: observableValue<readonly IChat[]>(`sidebarSessionChats-${name}`, [chat]),
 			capabilities: observableValue(`sidebarSessionCapabilities-${name}`, {
-				supportsMultipleChats: false,
+				supportsCreateChat: false,
+				maximumChatCount: 1,
 				supportsFork: false,
 				supportsRename: false,
 				supportsArchive: false,

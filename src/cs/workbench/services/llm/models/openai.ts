@@ -2,7 +2,6 @@ import type { LlmModelDefinition } from 'cs/workbench/services/llm/types';
 
 const openaiDefaults = {
   provider: 'openai',
-  apiStyle: 'openai',
   enabled: true,
   supported_service_tiers: ['auto', 'default', 'priority', 'flex'],
   default_service_tier: 'auto',
@@ -18,6 +17,7 @@ const openai: ReadonlyArray<LlmModelDefinition> = [
     supports_image_input: true,
     default_input_token_limit: 272_000,
     input_token_limit: 922_000,
+    max_output_tokens: 128_000,
     reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh'],
     recommendedTasks: ['chat', 'reasoning'],
   },
@@ -29,6 +29,7 @@ const openai: ReadonlyArray<LlmModelDefinition> = [
     knowledge_cutoff_date: '2025-08-31',
     supports_image_input: true,
     input_token_limit: 272_000,
+    max_output_tokens: 128_000,
     reasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
     recommendedTasks: ['chat', 'reasoning'],
   },

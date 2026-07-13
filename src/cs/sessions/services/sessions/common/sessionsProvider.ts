@@ -13,8 +13,14 @@ import type {
 	SessionTypeId,
 	SessionsProviderId,
 } from 'cs/sessions/services/sessions/common/session';
-import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
-import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+
+/** Describes one model selection exposed by a Sessions provider. */
+export interface ISessionModel {
+	readonly id: string;
+	readonly label: string;
+	readonly detail?: string;
+	readonly enabled: boolean;
+}
 
 /** Identifies one authoritative provider collection transition. */
 export const enum SessionTransitionKind {
@@ -48,10 +54,6 @@ export interface ISessionDraftOptions {
 	readonly workspace: ISessionResolvedWorkspaceState;
 }
 
-/** Hard request-boundary limits enforced before provider dispatch. */
-export const maximumSessionChatRequestAttachments = 64;
-export const maximumSessionChatRequestPayloadBytes = 16 * 1024 * 1024;
-
 /** Connects one backend to the provider-independent Sessions domain. */
 export interface ISessionsProvider extends IDisposable {
 	readonly id: SessionsProviderId;
@@ -61,16 +63,20 @@ export interface ISessionsProvider extends IDisposable {
 	readonly onDidChangeSessions: Event<ISessionsChangeEvent>;
 	readonly onDidChangeModels: Event<void>;
 	getSessions(): readonly ISession[];
-	getModels(session: ISession, chat: IChat): readonly ILanguageModelChatMetadataAndIdentifier[];
+	getModels(session: ISession, chat: IChat): readonly ISessionModel[];
 	createSessionDraft(options: ISessionDraftOptions): ISession;
 	discardSessionDraft(session: ISession): void;
-	sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void>;
+	sendRequest(session: ISession, chat: IChat): Promise<void>;
 	createChat(session: ISession): Promise<IChat>;
 	forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat>;
 	renameSession(session: ISession, title: string): Promise<void>;
 	renameChat(session: ISession, chat: IChat, title: string): Promise<void>;
 	setChatModel(session: ISession, chat: IChat, modelId: string | undefined): Promise<void>;
 	setSessionArchived(session: ISession, archived: boolean): Promise<void>;
+	releaseSession(session: ISession): Promise<void>;
+	releaseChat(session: ISession, chat: IChat): Promise<void>;
+	cancelTurn(session: ISession, chat: IChat, turnId: string): Promise<void>;
+	steerTurn(session: ISession, chat: IChat, turnId: string, message: string): Promise<void>;
 	deleteSession(session: ISession): Promise<void>;
 	deleteChat(session: ISession, chat: IChat): Promise<void>;
 }

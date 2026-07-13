@@ -16,10 +16,9 @@ import type {
 } from 'cs/sessions/services/sessions/common/session';
 import type {
 	ISessionDraftOptions,
+	ISessionModel,
 	ISessionTransition,
 } from 'cs/sessions/services/sessions/common/sessionsProvider';
-import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
-import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
 
 /** Identifies one provider-owned Session type available for draft creation. */
 export interface IProviderSessionType {
@@ -77,14 +76,18 @@ export interface ISessionsManagementService {
 	getSessionForChatResource(resource: URI): ISessionChatOwner | undefined;
 	createSessionDraft(providerId: SessionsProviderId, options: ISessionDraftOptions): ISession;
 	discardSessionDraft(session: ISession): void;
-	getModels(session: ISession, chat: IChat): readonly ILanguageModelChatMetadataAndIdentifier[];
-	sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void>;
+	getModels(session: ISession, chat: IChat): readonly ISessionModel[];
+	sendRequest(session: ISession, chat: IChat): Promise<void>;
 	createChat(session: ISession): Promise<IChat>;
 	forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat>;
 	renameSession(session: ISession, title: string): Promise<void>;
 	renameChat(session: ISession, chat: IChat, title: string): Promise<void>;
 	setChatModel(session: ISession, chat: IChat, modelId: string | undefined): Promise<void>;
 	setSessionArchived(session: ISession, archived: boolean): Promise<void>;
+	releaseSession(session: ISession): Promise<void>;
+	releaseChat(session: ISession, chat: IChat): Promise<void>;
+	cancelTurn(session: ISession, chat: IChat, turnId: string): Promise<void>;
+	steerTurn(session: ISession, chat: IChat, turnId: string, message: string): Promise<void>;
 	deleteSession(session: ISession): Promise<void>;
 	deleteChat(session: ISession, chat: IChat): Promise<void>;
 }

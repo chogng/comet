@@ -2,7 +2,6 @@ import type { LlmModelDefinition } from 'cs/workbench/services/llm/types';
 
 const glmDefaults = {
   provider: 'glm',
-  apiStyle: 'openai-compatible',
   enabled: true,
 } as const;
 
@@ -21,6 +20,7 @@ const glm: ReadonlyArray<LlmModelDefinition> = [
     label: 'GLM-4.7-Flash',
     description: 'Fast GLM model for lightweight chat tasks.',
     context_window_tokens: 200_000,
+    max_output_tokens: 131_072,
     latency_tier: 'fast',
     recommendedTasks: ['chat'],
   },
@@ -29,6 +29,9 @@ const glm: ReadonlyArray<LlmModelDefinition> = [
     id: 'glm-4.6v-flash',
     label: 'GLM-4.6V-Flash',
     description: 'Fast GLM-4.6V Flash model.',
+    supports_image_input: true,
+    context_window_tokens: 128_000,
+    max_output_tokens: 32_768,
     latency_tier: 'fast',
     recommendedTasks: ['chat'],
   },

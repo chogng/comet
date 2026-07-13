@@ -11,10 +11,11 @@ import type {
 } from 'cs/workbench/services/llm/types';
 
 export type {
-  LlmApiStyle,
+  LlmChatCompletionsMaximumOutputTokensField,
   LlmModelDefinition,
   LlmModelLatencyTier,
   LlmProviderDefinition,
+  LlmProviderProtocol,
   LlmReasoningEffort,
   LlmServiceTier,
   LlmTask,

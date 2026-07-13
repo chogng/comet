@@ -9,7 +9,6 @@ import { Disposable, DisposableMap, DisposableStore, type IDisposable } from 'cs
 import { derived, observableValue, type IObservable } from 'cs/base/common/observable';
 import { getComparisonKey, isEqual } from 'cs/base/common/resources';
 import { URI } from 'cs/base/common/uri';
-import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { IStorageService } from 'cs/platform/storage/common/storage';
 import {
@@ -32,7 +31,6 @@ import {
 	SessionWorkspaceKind,
 	type SessionsProviderId,
 } from 'cs/sessions/services/sessions/common/session';
-import { isSerializedJsonLargerThan } from 'cs/sessions/services/sessions/common/serializedSize';
 import {
 	ISessionsManagementService,
 	SessionDraftChangeKind,
@@ -43,20 +41,12 @@ import {
 	type ISessionsModelsChangeEvent,
 } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import {
-	maximumSessionChatRequestAttachments,
-	maximumSessionChatRequestPayloadBytes,
 	SessionTransitionKind,
 	type ISessionDraftOptions,
+	type ISessionModel,
 	type ISessionsChangeEvent,
 	type ISessionsProvider,
 } from 'cs/sessions/services/sessions/common/sessionsProvider';
-import {
-	ChatRequestAttachmentKind,
-	type IChatRequest,
-	type IChatRequestAttachment,
-} from 'cs/workbench/contrib/chat/common/chatRequest';
-import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
-import { parseChatImageAttachment } from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
 
 interface ISessionsManagementState {
 	readonly sessions: readonly ISession[];
@@ -70,100 +60,6 @@ interface IAuthoritativeChangedTransitionTracker {
 	readonly chatResourceSnapshots: string[][];
 }
 
-function freezeJsonValue<T>(value: T): T {
-	if (!value || typeof value !== 'object') {
-		return value;
-	}
-	const pending: object[] = [value];
-	const visited = new Set<object>();
-	while (pending.length > 0) {
-		const current = pending.pop()!;
-		if (visited.has(current)) {
-			continue;
-		}
-		visited.add(current);
-		const record = current as Record<string, unknown>;
-		for (const key in record) {
-			if (!Object.prototype.hasOwnProperty.call(record, key)) {
-				continue;
-			}
-			const child = record[key];
-			if (child && typeof child === 'object') {
-				pending.push(child);
-			}
-		}
-		Object.freeze(current);
-	}
-	return value;
-}
-
-function snapshotWritingEditorDocument(document: WritingEditorDocument): WritingEditorDocument {
-	const serialized = JSON.stringify(document);
-	if (typeof serialized !== 'string') {
-		throw new Error('A Session Chat editor attachment requires a serializable document.');
-	}
-	const snapshot = JSON.parse(serialized) as unknown;
-	if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
-		throw new Error('A Session Chat editor attachment requires an object document.');
-	}
-	return freezeJsonValue(snapshot as WritingEditorDocument);
-}
-
-function snapshotChatRequestAttachment(attachment: IChatRequestAttachment): IChatRequestAttachment {
-	switch (attachment.kind) {
-		case ChatRequestAttachmentKind.Resource:
-			return Object.freeze({
-				kind: attachment.kind,
-				id: attachment.id,
-				name: attachment.name,
-				resource: URI.from(attachment.resource.toJSON(), true),
-				mimeType: attachment.mimeType,
-			});
-		case ChatRequestAttachmentKind.Text:
-			return Object.freeze({
-				kind: attachment.kind,
-				id: attachment.id,
-				name: attachment.name,
-				content: attachment.content,
-				mimeType: attachment.mimeType,
-			});
-		case ChatRequestAttachmentKind.Article:
-			return Object.freeze({
-				kind: attachment.kind,
-				id: attachment.id,
-				name: attachment.name,
-				articleId: attachment.articleId,
-			});
-		case ChatRequestAttachmentKind.Editor:
-			return Object.freeze({
-				kind: attachment.kind,
-				id: attachment.id,
-				name: attachment.name,
-				resource: URI.from(attachment.resource.toJSON(), true),
-				document: snapshotWritingEditorDocument(attachment.document),
-				selection: attachment.selection ? Object.freeze({ ...attachment.selection }) : null,
-			});
-		case ChatRequestAttachmentKind.Image: {
-			const image = parseChatImageAttachment({
-				id: attachment.id,
-				name: attachment.name,
-				mimeType: attachment.mimeType,
-				data: attachment.data,
-			});
-			return Object.freeze({ kind: attachment.kind, ...image });
-		}
-		default:
-			throw new Error('A Session Chat request contains an unknown attachment kind.');
-	}
-}
-
-function snapshotSessionChatRequest(request: IChatRequest): IChatRequest {
-	return Object.freeze({
-		prompt: request.prompt,
-		attachments: Object.freeze(request.attachments.map(snapshotChatRequestAttachment)),
-	});
-}
-
 /** Default provider-independent Sessions domain owner. */
 export class SessionsManagementService extends Disposable implements ISessionsManagementService, ISessionsProvidersChangeParticipant {
 	declare readonly _serviceBrand: undefined;
@@ -174,6 +70,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly providers = new Map<SessionsProviderId, ISessionsProvider>();
 	private readonly draftReplacements = new WeakMap<ISession, ISession>();
 	private readonly changedTransitionTrackers = new Set<IAuthoritativeChangedTransitionTracker>();
+	private readonly sessionCatalogMutations = new Map<SessionId, Promise<void>>();
 	private readonly recencyStorage: SessionsRecencyStorage;
 
 	private readonly state = observableValue<ISessionsManagementState>('sessionsManagementState', {
@@ -329,8 +226,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				throw new Error(`Sessions provider '${provider.id}' created a Session that is not a draft.`);
 			}
 			this.assertDraftWorkspace(draftSession, options.workspace);
-			if (draftSession.mainChat.get().interactivity.get() !== ChatInteractivity.Full) {
-				throw new Error(`Session draft '${draftSession.sessionId}' does not have an interactive main Chat.`);
+			const draftChats = draftSession.chats.get();
+			const draftChat = draftChats[0];
+			if (draftChats.length !== 1
+				|| !draftChat
+				|| draftChat.origin.kind !== ChatOriginKind.User
+				|| draftChat.interactivity.get() !== ChatInteractivity.Full) {
+				throw new Error(`Session draft '${draftSession.sessionId}' must contain one interactive user Chat.`);
 			}
 			this.assertProviderSnapshotMatchesTracked(provider);
 			this.assertGlobalState(this.providerSessions, draftSession);
@@ -380,7 +282,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		});
 	}
 
-	getModels(session: ISession, chat: IChat): readonly ILanguageModelChatMetadataAndIdentifier[] {
+	getModels(session: ISession, chat: IChat): readonly ISessionModel[] {
 		const { provider } = this.requireOwnedSession(session, true);
 		this.requireChat(session, chat);
 		if (!session.capabilities.get().supportsModels) {
@@ -392,21 +294,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return models;
 	}
 
-	async sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void> {
+	async sendRequest(session: ISession, chat: IChat): Promise<void> {
 		const ownership = this.requireOwnedSession(session, true);
 		this.requireChat(session, chat);
 		this.requireInteractiveChat(session, chat);
-		if (!request.prompt.trim()) {
-			throw new Error('A Session Chat request must contain a prompt.');
-		}
-		this.assertRequestPayload(request);
-		const requestSnapshot = snapshotSessionChatRequest(request);
-		this.assertRequestPayload(requestSnapshot);
-		if (ownership.isDraft && session.mainChat.get() !== chat) {
-			throw new Error(`Session draft '${session.sessionId}' accepts requests only on its main Chat.`);
-		}
-
-		await ownership.provider.sendRequest(session, chat, requestSnapshot);
+		await ownership.provider.sendRequest(session, chat);
 		if (ownership.isDraft) {
 			const replacement = this.draftReplacements.get(session);
 			if (!replacement || !this.state.get().sessions.includes(replacement)) {
@@ -415,118 +307,102 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 	}
 
-	private assertRequestPayload(request: IChatRequest): void {
-		if (request.attachments.length > maximumSessionChatRequestAttachments) {
-			throw new RangeError(
-				`A Session Chat request cannot contain more than ${maximumSessionChatRequestAttachments} attachments.`,
-			);
-		}
-		const attachmentIds = new Set<string>();
-		for (const attachment of request.attachments) {
-			if (!attachment.id.trim() || !attachment.name.trim()) {
-				throw new Error('Every Session Chat request attachment requires an ID and name.');
+	createChat(session: ISession): Promise<IChat> {
+		return this.runSessionCatalogMutation(session, async () => {
+			const { provider } = this.requireOwnedSession(session, false);
+			const capabilities = session.capabilities.get();
+			if (!capabilities.supportsCreateChat) {
+				throw new Error(`Session '${session.sessionId}' does not support user-created peer Chats.`);
 			}
-			if (attachmentIds.has(attachment.id)) {
-				throw new Error(`Session Chat request attachment ID '${attachment.id}' is duplicated.`);
+			this.assertChatCapacity(session, capabilities.maximumChatCount);
+
+			const previousChatResources = new Set(session.chats.get().map(chat => getComparisonKey(chat.resource)));
+			const transitionTracker: IAuthoritativeChangedTransitionTracker = { provider, session, chatResourceSnapshots: [] };
+			this.changedTransitionTrackers.add(transitionTracker);
+			let chat: IChat;
+			try {
+				chat = await provider.createChat(session);
+			} finally {
+				this.changedTransitionTrackers.delete(transitionTracker);
 			}
-			attachmentIds.add(attachment.id);
-		}
-		if (isSerializedJsonLargerThan(request, maximumSessionChatRequestPayloadBytes)) {
-			throw new RangeError(
-				`A Session Chat request cannot exceed ${maximumSessionChatRequestPayloadBytes} serialized bytes.`,
-			);
-		}
+			this.requireOwnedSession(session, false);
+			this.requireChat(session, chat);
+			assertSessionInvariants(session);
+			const chatResourceKey = getComparisonKey(chat.resource);
+			const currentChatResourceKeys = session.chats.get().map(candidate => getComparisonKey(candidate.resource));
+			const currentChatResources = new Set(currentChatResourceKeys);
+			if (previousChatResources.has(chatResourceKey)
+				|| currentChatResources.size !== previousChatResources.size + 1
+				|| !currentChatResources.has(chatResourceKey)
+				|| [...previousChatResources].some(resource => !currentChatResources.has(resource))) {
+				throw new Error(`Sessions provider '${provider.id}' did not preserve the Chat collection and add exactly one new Chat resource.`);
+			}
+			if (!transitionTracker.chatResourceSnapshots.some(snapshot =>
+				snapshot.length === currentChatResourceKeys.length
+				&& snapshot.every((resource, index) => resource === currentChatResourceKeys[index]),
+			)) {
+				throw new Error(`Sessions provider '${provider.id}' did not publish an authoritative changed transition for the new Chat.`);
+			}
+			if (chat.origin.kind !== ChatOriginKind.User) {
+				throw new Error(`Sessions provider '${provider.id}' did not create a user-origin peer Chat.`);
+			}
+			if (chat.interactivity.get() !== ChatInteractivity.Full) {
+				throw new Error(`Sessions provider '${provider.id}' created a non-interactive peer Chat.`);
+			}
+			this.assertGlobalState(this.providerSessions, this.state.get().draftSession);
+			return chat;
+		});
 	}
 
-	async createChat(session: ISession): Promise<IChat> {
-		const { provider } = this.requireOwnedSession(session, false);
-		if (!session.capabilities.get().supportsMultipleChats) {
-			throw new Error(`Session '${session.sessionId}' does not support user-created peer Chats.`);
-		}
+	forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat> {
+		return this.runSessionCatalogMutation(session, async () => {
+			const { provider } = this.requireOwnedSession(session, false);
+			this.requireChat(session, sourceChat);
+			const capabilities = session.capabilities.get();
+			if (!capabilities.supportsFork) {
+				throw new Error(`Session '${session.sessionId}' does not support Chat forks.`);
+			}
+			this.assertChatCapacity(session, capabilities.maximumChatCount);
+			if (!turnId.trim()) {
+				throw new Error('A Chat fork requires a source turn ID.');
+			}
 
-		const previousChatResources = new Set(session.chats.get().map(chat => getComparisonKey(chat.resource)));
-		const transitionTracker: IAuthoritativeChangedTransitionTracker = { provider, session, chatResourceSnapshots: [] };
-		this.changedTransitionTrackers.add(transitionTracker);
-		let chat: IChat;
-		try {
-			chat = await provider.createChat(session);
-		} finally {
-			this.changedTransitionTrackers.delete(transitionTracker);
-		}
-		this.requireOwnedSession(session, false);
-		this.requireChat(session, chat);
-		assertSessionInvariants(session);
-		const chatResourceKey = getComparisonKey(chat.resource);
-		const currentChatResourceKeys = session.chats.get().map(candidate => getComparisonKey(candidate.resource));
-		const currentChatResources = new Set(currentChatResourceKeys);
-		if (previousChatResources.has(chatResourceKey)
-			|| currentChatResources.size !== previousChatResources.size + 1
-			|| !currentChatResources.has(chatResourceKey)
-			|| [...previousChatResources].some(resource => !currentChatResources.has(resource))) {
-			throw new Error(`Sessions provider '${provider.id}' did not preserve the Chat collection and add exactly one new Chat resource.`);
-		}
-		if (!transitionTracker.chatResourceSnapshots.some(snapshot =>
-			snapshot.length === currentChatResourceKeys.length
-			&& snapshot.every((resource, index) => resource === currentChatResourceKeys[index]),
-		)) {
-			throw new Error(`Sessions provider '${provider.id}' did not publish an authoritative changed transition for the new Chat.`);
-		}
-		if (chat === session.mainChat.get() || chat.origin?.kind !== ChatOriginKind.User) {
-			throw new Error(`Sessions provider '${provider.id}' did not create a user-origin peer Chat.`);
-		}
-		if (chat.interactivity.get() !== ChatInteractivity.Full) {
-			throw new Error(`Sessions provider '${provider.id}' created a non-interactive peer Chat.`);
-		}
-		this.assertGlobalState(this.providerSessions, this.state.get().draftSession);
-		return chat;
-	}
-
-	async forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat> {
-		const { provider } = this.requireOwnedSession(session, false);
-		this.requireChat(session, sourceChat);
-		const capabilities = session.capabilities.get();
-		if (!capabilities.supportsMultipleChats || !capabilities.supportsFork) {
-			throw new Error(`Session '${session.sessionId}' does not support Chat forks.`);
-		}
-		if (!turnId.trim()) {
-			throw new Error('A Chat fork requires a source turn ID.');
-		}
-
-		const previousChatResources = new Set(session.chats.get().map(chat => getComparisonKey(chat.resource)));
-		const transitionTracker: IAuthoritativeChangedTransitionTracker = { provider, session, chatResourceSnapshots: [] };
-		this.changedTransitionTrackers.add(transitionTracker);
-		let chat: IChat;
-		try {
-			chat = await provider.forkChat(session, sourceChat, turnId);
-		} finally {
-			this.changedTransitionTrackers.delete(transitionTracker);
-		}
-		this.requireOwnedSession(session, false);
-		this.requireChat(session, chat);
-		assertSessionInvariants(session);
-		const chatResourceKey = getComparisonKey(chat.resource);
-		const currentChatResourceKeys = session.chats.get().map(candidate => getComparisonKey(candidate.resource));
-		const currentChatResources = new Set(currentChatResourceKeys);
-		if (previousChatResources.has(chatResourceKey)
-			|| currentChatResources.size !== previousChatResources.size + 1
-			|| !currentChatResources.has(chatResourceKey)
-			|| [...previousChatResources].some(resource => !currentChatResources.has(resource))) {
-			throw new Error(`Sessions provider '${provider.id}' did not preserve the Chat collection and add exactly one Chat fork resource.`);
-		}
-		if (!transitionTracker.chatResourceSnapshots.some(snapshot =>
-			snapshot.length === currentChatResourceKeys.length
-			&& snapshot.every((resource, index) => resource === currentChatResourceKeys[index]),
-		)) {
-			throw new Error(`Sessions provider '${provider.id}' did not publish an authoritative changed transition for the Chat fork.`);
-		}
-		if (chat.origin?.kind !== ChatOriginKind.Fork || !isEqual(chat.origin.parentChat, sourceChat.resource)) {
-			throw new Error(`Sessions provider '${provider.id}' created a fork with the wrong origin.`);
-		}
-		if (chat.interactivity.get() !== ChatInteractivity.Full) {
-			throw new Error(`Sessions provider '${provider.id}' created a non-interactive Chat fork.`);
-		}
-		this.assertGlobalState(this.providerSessions, this.state.get().draftSession);
-		return chat;
+			const previousChatResources = new Set(session.chats.get().map(chat => getComparisonKey(chat.resource)));
+			const transitionTracker: IAuthoritativeChangedTransitionTracker = { provider, session, chatResourceSnapshots: [] };
+			this.changedTransitionTrackers.add(transitionTracker);
+			let chat: IChat;
+			try {
+				chat = await provider.forkChat(session, sourceChat, turnId);
+			} finally {
+				this.changedTransitionTrackers.delete(transitionTracker);
+			}
+			this.requireOwnedSession(session, false);
+			this.requireChat(session, chat);
+			assertSessionInvariants(session);
+			const chatResourceKey = getComparisonKey(chat.resource);
+			const currentChatResourceKeys = session.chats.get().map(candidate => getComparisonKey(candidate.resource));
+			const currentChatResources = new Set(currentChatResourceKeys);
+			if (previousChatResources.has(chatResourceKey)
+				|| currentChatResources.size !== previousChatResources.size + 1
+				|| !currentChatResources.has(chatResourceKey)
+				|| [...previousChatResources].some(resource => !currentChatResources.has(resource))) {
+				throw new Error(`Sessions provider '${provider.id}' did not preserve the Chat collection and add exactly one Chat fork resource.`);
+			}
+			if (!transitionTracker.chatResourceSnapshots.some(snapshot =>
+				snapshot.length === currentChatResourceKeys.length
+				&& snapshot.every((resource, index) => resource === currentChatResourceKeys[index]),
+			)) {
+				throw new Error(`Sessions provider '${provider.id}' did not publish an authoritative changed transition for the Chat fork.`);
+			}
+			if (chat.origin.kind !== ChatOriginKind.Fork || !isEqual(chat.origin.parentChat, sourceChat.resource)) {
+				throw new Error(`Sessions provider '${provider.id}' created a fork with the wrong origin.`);
+			}
+			if (chat.interactivity.get() !== ChatInteractivity.Full) {
+				throw new Error(`Sessions provider '${provider.id}' created a non-interactive Chat fork.`);
+			}
+			this.assertGlobalState(this.providerSessions, this.state.get().draftSession);
+			return chat;
+		});
 	}
 
 	async renameSession(session: ISession, title: string): Promise<void> {
@@ -567,7 +443,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 		const models = [...provider.getModels(session, chat)];
 		this.assertModels(provider, models);
-		if (modelId !== undefined && !models.some(model => model.identifier === modelId)) {
+		if (modelId !== undefined && !models.some(model => model.id === modelId && model.enabled)) {
 			throw new Error(`Model '${modelId}' is not available for Chat '${chat.resource.toString()}'.`);
 		}
 
@@ -592,43 +468,136 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 	}
 
-	async deleteSession(session: ISession): Promise<void> {
-		const { provider } = this.requireOwnedSession(session, false);
-		if (!session.capabilities.get().supportsDelete) {
-			throw new Error(`Session '${session.sessionId}' does not support delete.`);
-		}
+	releaseSession(session: ISession): Promise<void> {
+		return this.runSessionCatalogMutation(session, async () => {
+			const { provider } = this.requireOwnedSession(session, false);
+			const providerId = session.providerId;
+			const sessionId = session.sessionId;
+			const resourceKey = getComparisonKey(session.resource);
+			await provider.releaseSession(session);
+			this.requireOwnedSession(session, false);
+			const released = this.state.get().sessions.find(candidate => candidate.sessionId === sessionId);
+			if (
+				!released
+				|| released !== session
+				|| released.providerId !== providerId
+				|| released.sessionId !== sessionId
+				|| getComparisonKey(released.resource) !== resourceKey
+				|| !provider.getSessions().includes(released)
+			) {
+				throw new Error(`Sessions provider '${provider.id}' did not preserve released Session identity '${sessionId}'.`);
+			}
+		});
+	}
 
-		const providerId = session.providerId;
-		const sessionId = session.sessionId;
-		const resourceKey = getComparisonKey(session.resource);
-		await provider.deleteSession(session);
-		const hasDeletedIdentity = (candidate: ISession): boolean =>
-			candidate.sessionId === sessionId
-			|| (candidate.providerId === providerId && getComparisonKey(candidate.resource) === resourceKey);
-		if (this.state.get().sessions.some(hasDeletedIdentity) || provider.getSessions().some(hasDeletedIdentity)) {
-			throw new Error(`Sessions provider '${provider.id}' did not remove Session identity '${sessionId}'.`);
+	releaseChat(session: ISession, chat: IChat): Promise<void> {
+		return this.runSessionCatalogMutation(session, async () => {
+			const { provider } = this.requireOwnedSession(session, false);
+			this.requireChat(session, chat);
+			const chatResourceKey = getComparisonKey(chat.resource);
+			await provider.releaseChat(session, chat);
+			this.requireOwnedSession(session, false);
+			const released = session.chats.get().find(candidate => getComparisonKey(candidate.resource) === chatResourceKey);
+			if (released !== chat) {
+				throw new Error(`Sessions provider '${provider.id}' did not preserve released Chat '${chat.resource.toString()}'.`);
+			}
+		});
+	}
+
+	async cancelTurn(session: ISession, chat: IChat, turnId: string): Promise<void> {
+		const { provider } = this.requireOwnedSession(session, false);
+		this.requireChat(session, chat);
+		const exactTurnId = this.requireTurnId(turnId);
+		await provider.cancelTurn(session, chat, exactTurnId);
+		this.requireOwnedSession(session, false);
+		this.requireChat(session, chat);
+	}
+
+	async steerTurn(session: ISession, chat: IChat, turnId: string, message: string): Promise<void> {
+		const { provider } = this.requireOwnedSession(session, false);
+		this.requireChat(session, chat);
+		const exactTurnId = this.requireTurnId(turnId);
+		const exactMessage = message.trim();
+		if (!exactMessage) {
+			throw new Error('Turn steering requires a non-empty message.');
+		}
+		await provider.steerTurn(session, chat, exactTurnId, exactMessage);
+		this.requireOwnedSession(session, false);
+		this.requireChat(session, chat);
+	}
+
+	deleteSession(session: ISession): Promise<void> {
+		return this.runSessionCatalogMutation(session, async () => {
+			const { provider } = this.requireOwnedSession(session, false);
+			if (!session.capabilities.get().supportsDelete) {
+				throw new Error(`Session '${session.sessionId}' does not support delete.`);
+			}
+
+			const providerId = session.providerId;
+			const sessionId = session.sessionId;
+			const resourceKey = getComparisonKey(session.resource);
+			await provider.deleteSession(session);
+			const hasDeletedIdentity = (candidate: ISession): boolean =>
+				candidate.sessionId === sessionId
+				|| (candidate.providerId === providerId && getComparisonKey(candidate.resource) === resourceKey);
+			if (this.state.get().sessions.some(hasDeletedIdentity) || provider.getSessions().some(hasDeletedIdentity)) {
+				throw new Error(`Sessions provider '${provider.id}' did not remove Session identity '${sessionId}'.`);
+			}
+		});
+	}
+
+	deleteChat(session: ISession, chat: IChat): Promise<void> {
+		return this.runSessionCatalogMutation(session, async () => {
+			const { provider } = this.requireOwnedSession(session, false);
+			this.requireChat(session, chat);
+			if (!chat.capabilities.get().supportsDelete) {
+				throw new Error(`Chat '${chat.resource.toString()}' does not support delete.`);
+			}
+
+			const chatResourceKey = getComparisonKey(chat.resource);
+			await provider.deleteChat(session, chat);
+			this.requireOwnedSession(session, false);
+			if (session.chats.get().some(candidate => getComparisonKey(candidate.resource) === chatResourceKey)) {
+				throw new Error(`Sessions provider '${provider.id}' did not remove Chat '${chat.resource.toString()}'.`);
+			}
+			assertSessionInvariants(session);
+			this.assertGlobalState(this.providerSessions, this.state.get().draftSession);
+		});
+	}
+
+	private assertChatCapacity(session: ISession, maximumChatCount: number | undefined): void {
+		if (maximumChatCount !== undefined && session.chats.get().length >= maximumChatCount) {
+			throw new Error(`Session '${session.sessionId}' has reached its maximum Chat count of ${maximumChatCount}.`);
 		}
 	}
 
-	async deleteChat(session: ISession, chat: IChat): Promise<void> {
-		const { provider } = this.requireOwnedSession(session, false);
-		this.requireChat(session, chat);
-		if (session.mainChat.get() === chat) {
-			throw new Error(`The main Chat of Session '${session.sessionId}' cannot be deleted.`);
+	private requireTurnId(turnId: string): string {
+		const exactTurnId = turnId.trim();
+		if (!exactTurnId) {
+			throw new Error('A Turn operation requires an exact Turn ID.');
 		}
-		this.requireInteractiveChat(session, chat);
-		if (!chat.capabilities.get().supportsDelete) {
-			throw new Error(`Chat '${chat.resource.toString()}' does not support delete.`);
+		return exactTurnId;
+	}
+
+	private async runSessionCatalogMutation<T>(session: ISession, mutation: () => Promise<T>): Promise<T> {
+		const sessionId = session.sessionId;
+		const previousMutation = this.sessionCatalogMutations.get(sessionId);
+		let releaseMutation!: () => void;
+		const mutationReservation = new Promise<void>(resolve => releaseMutation = resolve);
+		this.sessionCatalogMutations.set(sessionId, mutationReservation);
+
+		if (previousMutation) {
+			await previousMutation;
 		}
 
-		const chatResourceKey = getComparisonKey(chat.resource);
-		await provider.deleteChat(session, chat);
-		this.requireOwnedSession(session, false);
-		if (session.chats.get().some(candidate => getComparisonKey(candidate.resource) === chatResourceKey)) {
-			throw new Error(`Sessions provider '${provider.id}' did not remove Chat '${chat.resource.toString()}'.`);
+		try {
+			return await mutation();
+		} finally {
+			releaseMutation();
+			if (this.sessionCatalogMutations.get(sessionId) === mutationReservation) {
+				this.sessionCatalogMutations.delete(sessionId);
+			}
 		}
-		assertSessionInvariants(session);
-		this.assertGlobalState(this.providerSessions, this.state.get().draftSession);
 	}
 
 	prepareProvidersChange(event: ISessionsProvidersChangeEvent): IPreparedSessionsProvidersChange {
@@ -1193,17 +1162,20 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	private assertModels(
 		provider: ISessionsProvider,
-		models: readonly ILanguageModelChatMetadataAndIdentifier[],
+		models: readonly ISessionModel[],
 	): void {
 		const identifiers = new Set<string>();
 		for (const model of models) {
-			if (!model.identifier) {
+			if (!model.id) {
 				throw new Error(`Sessions provider '${provider.id}' returned a model without an identifier.`);
 			}
-			if (identifiers.has(model.identifier)) {
-				throw new Error(`Sessions provider '${provider.id}' returned duplicate model '${model.identifier}'.`);
+			if (!model.label) {
+				throw new Error(`Sessions provider '${provider.id}' returned model '${model.id}' without a label.`);
 			}
-			identifiers.add(model.identifier);
+			if (identifiers.has(model.id)) {
+				throw new Error(`Sessions provider '${provider.id}' returned duplicate model '${model.id}'.`);
+			}
+			identifiers.add(model.id);
 		}
 	}
 

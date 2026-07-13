@@ -12,10 +12,12 @@ import {
 import { onUnexpectedError } from 'cs/base/common/errors';
 import { EventEmitter } from 'cs/base/common/event';
 import { Disposable } from 'cs/base/common/lifecycle';
+import { isEqual } from 'cs/base/common/resources';
 import { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import {
 	ArticleDetail,
 	ArticleId,
+	ArticleReadableContent,
 	ArticleListCatalog,
 	ArticleListItem,
 	ArticleListItemId,
@@ -29,6 +31,7 @@ import {
 	IFetchService,
 	JournalDescriptor,
 	JournalId,
+	maximumArticleReadableContentBytes,
 } from 'cs/workbench/services/fetch/common/fetch';
 import {
 	createArticleGroupId,
@@ -50,6 +53,11 @@ interface IFetchTask<T> {
 	readonly cancellationSource: CancellationTokenSource;
 	promise: Promise<T>;
 	waiterCount: number;
+}
+
+interface IFetchTaskStatePublication {
+	readonly loadStates: Map<string, FetchLoadState>;
+	readonly notify: () => void;
 }
 
 interface IPreparedArticlePage {
@@ -90,6 +98,7 @@ export class FetchService extends Disposable implements IFetchService {
 	private readonly catalogTasks = new Map<JournalId, IFetchTask<void>>();
 	private readonly sourceTasks = new Map<ArticleListSourceId, IFetchTask<void>>();
 	private readonly articleTasks = new Map<ArticleId, IFetchTask<ArticleDetail>>();
+	private readonly articleReadableContentTasks = new Map<ArticleId, IFetchTask<ArticleReadableContent>>();
 	private readonly providers = new Map<FetchProviderId, IFetchProvider>();
 	private nextTaskGeneration = 0;
 
@@ -110,9 +119,13 @@ export class FetchService extends Disposable implements IFetchService {
 		for (const task of this.articleTasks.values()) {
 			task.cancellationSource.cancel();
 		}
+		for (const task of this.articleReadableContentTasks.values()) {
+			task.cancellationSource.cancel();
+		}
 		this.catalogTasks.clear();
 		this.sourceTasks.clear();
 		this.articleTasks.clear();
+		this.articleReadableContentTasks.clear();
 		super.dispose();
 	}
 
@@ -184,7 +197,10 @@ export class FetchService extends Disposable implements IFetchService {
 			const parsed = await provider.discoverArticleListSources(journal, taskToken);
 			this._throwIfCancelled(taskToken);
 			this._replaceCatalog(journal, provider, parsed);
-		}, this.catalogLoadStates, () => this.onDidChangeCatalogEmitter.fire(journalId));
+		}, {
+			loadStates: this.catalogLoadStates,
+			notify: () => this.onDidChangeCatalogEmitter.fire(journalId),
+		});
 		return this._joinTask(task, token);
 	}
 
@@ -214,7 +230,10 @@ export class FetchService extends Disposable implements IFetchService {
 			this._throwIfCancelled(taskToken);
 			const prepared = this._preparePage(journal, source, provider, parsed);
 			this._commitPreparedPage(source, prepared, false);
-		}, this.sourceLoadStates, () => this.onDidChangeSourceEmitter.fire(sourceId));
+		}, {
+			loadStates: this.sourceLoadStates,
+			notify: () => this.onDidChangeSourceEmitter.fire(sourceId),
+		});
 		return this._joinTask(task, token);
 	}
 
@@ -241,7 +260,10 @@ export class FetchService extends Disposable implements IFetchService {
 			this._throwIfCancelled(taskToken);
 			const prepared = this._preparePage(journal, source, provider, parsed);
 			this._commitPreparedPage(source, prepared, true);
-		}, this.sourceLoadStates, () => this.onDidChangeSourceEmitter.fire(sourceId));
+		}, {
+			loadStates: this.sourceLoadStates,
+			notify: () => this.onDidChangeSourceEmitter.fire(sourceId),
+		});
 		return this._joinTask(task, token);
 	}
 
@@ -275,7 +297,70 @@ export class FetchService extends Disposable implements IFetchService {
 				this.articles.set(articleId, { ...article, doi: detail.doi });
 			}
 			return detail;
-		}, this.articleLoadStates, () => this.onDidChangeArticleEmitter.fire(articleId));
+		}, {
+			loadStates: this.articleLoadStates,
+			notify: () => this.onDidChangeArticleEmitter.fire(articleId),
+		});
+		return this._joinTask(task, token);
+	}
+
+	fetchArticleReadableContent(
+		articleId: ArticleId,
+		token: CancellationToken,
+	): Promise<ArticleReadableContent> {
+		if (token.isCancellationRequested) {
+			return Promise.reject(new CancellationError());
+		}
+		const existing = this.articleReadableContentTasks.get(articleId);
+		if (existing) {
+			return this._joinTask(existing, token);
+		}
+		const article = this._requireArticle(articleId);
+		const journal = this._requireJournal(article.journalId);
+		const task = this._startTask(
+			this.articleReadableContentTasks,
+			articleId,
+			async taskToken => {
+				const provider = this._getProvider(journal.providerId);
+				const parsed = await provider.fetchArticleReadableContent(journal, article, taskToken);
+				this._throwIfCancelled(taskToken);
+				const url = provider.canonicalizeArticleUri(parsed.url);
+				if (!isEqual(url, article.url)) {
+					throw new Error(
+						`Article readable content for "${articleId}" resolved from a different Article URL.`,
+					);
+				}
+				if (typeof parsed.title !== 'string' || parsed.title.length === 0 || parsed.title.length > 65_536) {
+					throw new TypeError(`Article readable content for "${articleId}" has an invalid title.`);
+				}
+				if (
+					typeof parsed.text !== 'string'
+					|| parsed.text.length === 0
+					|| parsed.text !== parsed.text.trim()
+					|| parsed.text.includes('\0')
+				) {
+					throw new TypeError(`Article readable content for "${articleId}" is not normalized text.`);
+				}
+				const bytes = new TextEncoder().encode(parsed.text);
+				if (bytes.byteLength > maximumArticleReadableContentBytes) {
+					throw new RangeError(
+						`Article readable content for "${articleId}" cannot exceed `
+						+ `${maximumArticleReadableContentBytes} bytes.`,
+					);
+				}
+				const digest = await this._digestReadableContent(bytes);
+				this._throwIfCancelled(taskToken);
+				return Object.freeze({
+					articleId,
+					url,
+					title: parsed.title,
+					text: parsed.text,
+					byteLength: bytes.byteLength,
+					version: digest,
+					digest,
+				});
+			},
+		);
 		return this._joinTask(task, token);
 	}
 
@@ -454,8 +539,7 @@ export class FetchService extends Disposable implements IFetchService {
 		tasks: Map<string, IFetchTask<T>>,
 		key: string,
 		operation: (token: CancellationToken) => Promise<T>,
-		loadStates: Map<string, FetchLoadState>,
-		notify: () => void,
+		statePublication?: IFetchTaskStatePublication,
 	): IFetchTask<T> {
 		const cancellationSource = new CancellationTokenSource();
 		const generation = ++this.nextTaskGeneration;
@@ -471,13 +555,24 @@ export class FetchService extends Disposable implements IFetchService {
 			try {
 				const result = await operation(cancellationSource.token);
 				this._throwIfCancelled(cancellationSource.token);
-				if (tasks.get(key)?.generation === generation) {
-					this._setLoadStateAndNotify(loadStates, key, 'ready', notify);
+				if (tasks.get(key)?.generation === generation && statePublication) {
+					this._setLoadStateAndNotify(
+						statePublication.loadStates,
+						key,
+						'ready',
+						statePublication.notify,
+					);
 				}
 				return result;
 			} catch (error) {
-				if (tasks.get(key)?.generation === generation) {
-					this._setLoadStateAndNotify(loadStates, key, error instanceof CancellationError ? 'idle' : 'error', notify, error);
+				if (tasks.get(key)?.generation === generation && statePublication) {
+					this._setLoadStateAndNotify(
+						statePublication.loadStates,
+						key,
+						error instanceof CancellationError ? 'idle' : 'error',
+						statePublication.notify,
+						error,
+					);
 				}
 				throw error;
 			} finally {
@@ -488,6 +583,13 @@ export class FetchService extends Disposable implements IFetchService {
 			}
 		})());
 		return task;
+	}
+
+	private async _digestReadableContent(bytes: Uint8Array): Promise<string> {
+		const input = new Uint8Array(bytes.byteLength);
+		input.set(bytes);
+		const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', input));
+		return `sha256:${Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
 	}
 
 	private _joinTask<T>(task: IFetchTask<T>, token: CancellationToken): Promise<T> {

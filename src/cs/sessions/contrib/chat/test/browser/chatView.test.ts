@@ -10,7 +10,6 @@ import { Emitter } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { observableValue } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
-import { createWritingEditorDocumentFromPlainText, type WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { LanguagePackLocale } from 'cs/platform/languagePacks/common/languagePacks';
@@ -37,12 +36,7 @@ import type {
 import { ChatWidget } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
 import type { IChatModel } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { ChatService } from 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
-import {
-	ChatRequestAttachmentKind,
-	type IChatRequest,
-	type IChatRequestEditorAttachment,
-} from 'cs/workbench/contrib/chat/common/chatRequest';
-import type { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
+import { createTestChatStorageService } from 'cs/workbench/contrib/chat/test/common/testChatStorage';
 import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import type {
 	IWorkbenchLocaleService,
@@ -168,37 +162,9 @@ function createWidgetInstantiationService(widget: TestChatWidget): IInstantiatio
 	} as unknown as IInstantiationService;
 }
 
-class TestDraftEditorService implements IDraftEditorService {
-	declare readonly _serviceBrand: undefined;
-	readonly activeInput = undefined;
-
-	constructor(private readonly attachment: IChatRequestEditorAttachment | undefined) {}
-
-	canSaveActive(): boolean {
-		return false;
-	}
-
-	saveActive(): boolean {
-		return false;
-	}
-
-	getDocument(_resource: URI): WritingEditorDocument | null {
-		return null;
-	}
-
-	setDocument(_resource: URI, _value: WritingEditorDocument): void {
-		throw new Error('The Chat view test does not write Draft documents.');
-	}
-
-	getActiveRequestAttachment(): IChatRequestEditorAttachment | undefined {
-		return this.attachment;
-	}
-}
-
 type SentRequest = {
 	readonly session: ISession;
 	readonly chat: IChat;
-	readonly request: IChatRequest;
 };
 
 class TestSessionsManagementService extends Disposable {
@@ -222,8 +188,8 @@ class TestSessionsManagementService extends Disposable {
 		return [];
 	}
 
-	async sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void> {
-		this.sentRequests.push({ session, chat, request });
+	async sendRequest(session: ISession, chat: IChat): Promise<void> {
+		this.sentRequests.push({ session, chat });
 	}
 
 	async setChatModel(session: ISession, chat: IChat, modelId: string | undefined): Promise<void> {
@@ -234,7 +200,7 @@ class TestSessionsManagementService extends Disposable {
 function createChat(
 	resource: string,
 	interactivity: ChatInteractivity = ChatInteractivity.Full,
-	origin: IChat['origin'] = undefined,
+	origin: IChat['origin'] = { kind: ChatOriginKind.User },
 ): IChat {
 	return {
 		resource: URI.parse(resource),
@@ -247,7 +213,7 @@ function createChat(
 		interactivity: observableValue(`interactivity-${resource}`, interactivity),
 		capabilities: observableValue(`capabilities-${resource}`, {
 			supportsRename: true,
-			supportsDelete: origin !== undefined,
+			supportsDelete: true,
 		}),
 		origin,
 	};
@@ -259,10 +225,6 @@ function createSession(
 	status: SessionStatus = SessionStatus.Completed,
 ): ISession {
 	const resource = URI.parse(`test-session:/${name}`);
-	const mainChat = chats[0];
-	if (!mainChat) {
-		throw new Error('A Chat view test Session requires a main Chat.');
-	}
 	return {
 		sessionId: toSessionId('provider.test', resource),
 		resource,
@@ -278,10 +240,10 @@ function createSession(
 			kind: SessionWorkspaceKind.WorkspaceLess,
 		}),
 		changes: observableValue(`sessionChanges-${name}`, []),
-		mainChat: observableValue(`sessionMainChat-${name}`, mainChat),
 		chats: observableValue(`sessionChats-${name}`, chats),
 		capabilities: observableValue(`sessionCapabilities-${name}`, {
-			supportsMultipleChats: true,
+			supportsCreateChat: true,
+			maximumChatCount: undefined,
 			supportsFork: true,
 			supportsRename: true,
 			supportsArchive: true,
@@ -294,17 +256,8 @@ function createSession(
 
 test('AddressedChatView switches explicit resources without cross-routing requests', async () => {
 	const store = new DisposableStore();
-	const editorAttachment: IChatRequestEditorAttachment = {
-		kind: ChatRequestAttachmentKind.Editor,
-		id: 'editor:draft-target',
-		name: 'Draft target',
-		resource: URI.parse('draft:/target'),
-		document: createWritingEditorDocumentFromPlainText('Draft attachment'),
-		selection: null,
-	};
-	const draftEditorService = new TestDraftEditorService(editorAttachment);
 	const notificationService = new NoOpNotificationService();
-	const chatService = new ChatService(notificationService, draftEditorService);
+	const chatService = new ChatService(createTestChatStorageService());
 	const firstChat = createChat('test-chat:/binding/first');
 	const secondChat = createChat(
 		'test-chat:/binding/second',
@@ -323,7 +276,6 @@ test('AddressedChatView switches explicit resources without cross-routing reques
 		createWidgetInstantiationService(widget),
 		chatService,
 		managementService as unknown as ISessionsManagementService,
-		draftEditorService,
 		notificationService,
 		localeService,
 		languageService,
@@ -335,7 +287,6 @@ test('AddressedChatView switches explicit resources without cross-routing reques
 		assert.equal(widget.boundModels.at(-1)?.resource, firstChat.resource);
 
 		chatService.setInput(secondChat.resource, 'Second prompt');
-		chatService.setArticleChecked(secondChat.resource, 'article.second', true);
 		view.setChat(session, secondChat);
 		assert.equal(widget.boundModels.at(-1)?.resource, secondChat.resource);
 		assert.equal(firstOwner.object.getSnapshot().input, 'First prompt');
@@ -351,14 +302,6 @@ test('AddressedChatView switches explicit resources without cross-routing reques
 		const sent = managementService.sentRequests[0];
 		assert.equal(sent?.session, session);
 		assert.equal(sent?.chat, secondChat);
-		assert.equal(sent?.request.prompt, 'Second prompt');
-		assert.deepEqual(sent?.request.attachments[0], {
-			kind: ChatRequestAttachmentKind.Article,
-			id: 'article:article.second',
-			name: 'article.second',
-			articleId: 'article.second',
-		});
-		assert.equal(sent?.request.attachments[1], editorAttachment);
 
 		widget.fireModelSelection(firstChat.resource, 'provider:model-stale');
 		await Promise.resolve();
@@ -370,9 +313,8 @@ test('AddressedChatView switches explicit resources without cross-routing reques
 
 test('Sessions Chat views enforce read-only, Hidden, and draft view constraints', () => {
 	const store = new DisposableStore();
-	const draftEditorService = new TestDraftEditorService(undefined);
 	const notificationService = new NoOpNotificationService();
-	const chatService = new ChatService(notificationService, draftEditorService);
+	const chatService = new ChatService(createTestChatStorageService());
 	const readOnlyChat = createChat('test-chat:/constraints/read-only', ChatInteractivity.ReadOnly);
 	const hiddenChat = createChat(
 		'test-chat:/constraints/hidden',
@@ -394,7 +336,6 @@ test('Sessions Chat views enforce read-only, Hidden, and draft view constraints'
 		createWidgetInstantiationService(addressedWidget),
 		chatService,
 		managementService as unknown as ISessionsManagementService,
-		draftEditorService,
 		notificationService,
 		localeService,
 		languageService,
@@ -404,7 +345,6 @@ test('Sessions Chat views enforce read-only, Hidden, and draft view constraints'
 		createWidgetInstantiationService(newSessionWidget),
 		chatService,
 		managementService as unknown as ISessionsManagementService,
-		draftEditorService,
 		notificationService,
 		localeService,
 		languageService,
@@ -423,13 +363,13 @@ test('Sessions Chat views enforce read-only, Hidden, and draft view constraints'
 		);
 
 		assert.throws(
-			() => newSessionView.setSession(committedSession),
+			() => newSessionView.setDraft(committedSession, readOnlyChat),
 			/is not a draft/,
 		);
-		newSessionView.setSession(draftSession);
+		newSessionView.setDraft(draftSession, draftChat);
 		assert.equal(newSessionWidget.boundModels.at(-1)?.resource, draftChat.resource);
 		assert.equal(newSessionWidget.presentations.at(-1)?.readOnly, false);
-		newSessionView.setSession(undefined);
+		newSessionView.setDraft(undefined, undefined);
 		assert.equal(newSessionWidget.clearCount, 1);
 	} finally {
 		store.dispose();
@@ -438,9 +378,8 @@ test('Sessions Chat views enforce read-only, Hidden, and draft view constraints'
 
 test('AddressedChatView refreshes its active model label on the same instance', () => {
 	const store = new DisposableStore();
-	const draftEditorService = new TestDraftEditorService(undefined);
 	const notificationService = new NoOpNotificationService();
-	const chatService = new ChatService(notificationService, draftEditorService);
+	const chatService = new ChatService(createTestChatStorageService());
 	const chat = createChat('test-chat:/locale/active');
 	const session = createSession('locale', [chat]);
 	const managementService = store.add(new TestSessionsManagementService());
@@ -452,7 +391,6 @@ test('AddressedChatView refreshes its active model label on the same instance', 
 		createWidgetInstantiationService(widget),
 		chatService,
 		managementService as unknown as ISessionsManagementService,
-		draftEditorService,
 		notificationService,
 		localeService,
 		new WorkbenchLanguageService(),

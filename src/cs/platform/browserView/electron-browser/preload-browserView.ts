@@ -231,6 +231,76 @@ function init() {
 		}
 	};
 
+	const getReadableContent = (maximumCharacters: number): { readonly text: string; readonly truncated: boolean } => {
+		if (!Number.isSafeInteger(maximumCharacters) || maximumCharacters <= 0 || maximumCharacters > 1_048_576) {
+			throw new Error('Readable Browser content requires a character limit between 1 and 1048576.');
+		}
+		if (!document.body) {
+			throw new Error('The Browser document has no body.');
+		}
+
+		const excludedElements = new Set(['CANVAS', 'NOSCRIPT', 'SCRIPT', 'STYLE', 'SVG', 'TEMPLATE']);
+		const readableElements = new WeakMap<Element, boolean>();
+		const isReadableElement = (element: Element): boolean => {
+			const cached = readableElements.get(element);
+			if (cached !== undefined) {
+				return cached;
+			}
+
+			const unresolved: Element[] = [];
+			let current: Element | null = element;
+			let readable = true;
+			while (current) {
+				const currentCached = readableElements.get(current);
+				if (currentCached !== undefined) {
+					readable = currentCached;
+					break;
+				}
+				unresolved.push(current);
+				current = current.parentElement;
+			}
+
+			for (let index = unresolved.length - 1; index >= 0; index--) {
+				const candidate = unresolved[index];
+				if (readable) {
+					const style = window.getComputedStyle(candidate);
+					readable =
+						!excludedElements.has(candidate.tagName) &&
+						!candidate.hasAttribute('hidden') &&
+						candidate.getAttribute('aria-hidden') !== 'true' &&
+						style.display !== 'none' &&
+						style.visibility !== 'hidden' &&
+						style.visibility !== 'collapse' &&
+						style.contentVisibility !== 'hidden';
+				}
+				readableElements.set(candidate, readable);
+			}
+			return readableElements.get(element) === true;
+		};
+
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+		let text = '';
+		let truncated = false;
+		for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+			if (!(node instanceof Text) || !node.parentElement || !isReadableElement(node.parentElement)) {
+				continue;
+			}
+			const normalized = node.data.replace(/\s+/g, ' ').trim();
+			if (!normalized) {
+				continue;
+			}
+			const chunk = text ? ` ${normalized}` : normalized;
+			const remaining = maximumCharacters - text.length;
+			if (chunk.length > remaining) {
+				text += chunk.slice(0, remaining);
+				truncated = true;
+				break;
+			}
+			text += chunk;
+		}
+		return { text, truncated };
+	};
+
 	const isolatedHelpers = {
 		/**
 		 * Get the currently selected text in the page.
@@ -254,6 +324,7 @@ function init() {
 
 	const mainWorldHelpers = {
 		getElement,
+		getReadableContent,
 		/** Opaque token exposed for CDP-side frame matching. */
 		getFrameToken(): string { return frameToken; }
 	};

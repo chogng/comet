@@ -16,6 +16,8 @@ export type ArticleGroupId = string;
 export type ArticleListItemId = string;
 export type ArticleId = string;
 
+export const maximumArticleReadableContentBytes = 1024 * 1024;
+
 export interface JournalDescriptor {
 	readonly id: JournalId;
 	readonly title: string;
@@ -131,6 +133,16 @@ export interface ArticleDetail {
 	readonly citationUrl?: URI;
 }
 
+export interface ArticleReadableContent {
+	readonly articleId: ArticleId;
+	readonly url: URI;
+	readonly title: string;
+	readonly text: string;
+	readonly byteLength: number;
+	readonly version: string;
+	readonly digest: string;
+}
+
 export interface ArticleAuthor extends ArticleAuthorRef {
 	readonly isCorresponding?: boolean;
 }
@@ -174,6 +186,7 @@ export interface IFetchService {
 	fetchArticleListSource(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void>;
 	fetchNextPage(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void>;
 	fetchArticle(articleId: ArticleId, token: CancellationToken): Promise<ArticleDetail>;
+	fetchArticleReadableContent(articleId: ArticleId, token: CancellationToken): Promise<ArticleReadableContent>;
 	refreshJournal(journalId: JournalId, token: CancellationToken): Promise<void>;
 	refreshArticleListSource(sourceId: ArticleListSourceId, token: CancellationToken): Promise<void>;
 }

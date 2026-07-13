@@ -38,7 +38,6 @@ import {
 	SessionTransitionKind,
 	type ISessionDraftOptions,
 } from 'cs/sessions/services/sessions/common/sessionsProvider';
-import type { IChatRequest } from 'cs/workbench/contrib/chat/common/chatRequest';
 import type { IActiveSession, IVisibleSessionSlot } from 'cs/sessions/services/sessions/common/sessionsView';
 import {
 	ISessionsPartService,
@@ -49,18 +48,18 @@ import {
 	ISessionsService,
 	SessionsService,
 } from 'cs/sessions/services/sessions/browser/sessionsService';
-import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import type { ISessionModel } from 'cs/sessions/services/sessions/common/sessionsProvider';
 
 interface ITestSession {
 	readonly model: ISession;
-	readonly mainChat: IChat;
+	readonly chat: IChat;
 	readonly chats: ReturnType<typeof observableValue<readonly IChat[]>>;
 }
 
 function createChat(
 	resource: string,
 	interactivity = ChatInteractivity.Full,
-	origin?: IChat['origin'],
+	origin: IChat['origin'] = Object.freeze({ kind: ChatOriginKind.User }),
 ): IChat {
 	return {
 		resource: URI.parse(resource),
@@ -73,7 +72,7 @@ function createChat(
 		interactivity: observableValue(`interactivity-${resource}`, interactivity),
 		capabilities: observableValue(`capabilities-${resource}`, {
 			supportsRename: true,
-			supportsDelete: !!origin,
+			supportsDelete: true,
 		}),
 		origin,
 	};
@@ -81,10 +80,10 @@ function createChat(
 
 function createSession(name: string, status = SessionStatus.Completed): ITestSession {
 	const resource = URI.parse(`test-session:/${name}`);
-	const mainChat = createChat(`test-chat:/${name}/main`);
-	const chats = observableValue<readonly IChat[]>(`chats-${name}`, [mainChat]);
+	const chat = createChat(`test-chat:/${name}/user`);
+	const chats = observableValue<readonly IChat[]>(`chats-${name}`, [chat]);
 	return {
-		mainChat,
+		chat,
 		chats,
 		model: {
 			sessionId: toSessionId('provider.test', resource),
@@ -101,10 +100,10 @@ function createSession(name: string, status = SessionStatus.Completed): ITestSes
 				kind: SessionWorkspaceKind.WorkspaceLess,
 			}),
 			changes: observableValue(`session-changes-${name}`, []),
-			mainChat: observableValue(`session-main-${name}`, mainChat),
 			chats,
 			capabilities: observableValue(`session-capabilities-${name}`, {
-				supportsMultipleChats: true,
+				supportsCreateChat: true,
+				maximumChatCount: undefined,
 				supportsFork: true,
 				supportsRename: true,
 				supportsArchive: true,
@@ -203,14 +202,18 @@ class TestSessionsManagementService implements ISessionsManagementService {
 		this.draftSession.set(undefined, undefined);
 		this.draftEmitter.fire({ kind: SessionDraftChangeKind.Discarded, from: session, to: undefined });
 	}
-	getModels(): readonly ILanguageModelChatMetadataAndIdentifier[] { return []; }
-	sendRequest(_session: ISession, _chat: IChat, _request: IChatRequest): Promise<void> { throw new Error('Not implemented.'); }
+	getModels(): readonly ISessionModel[] { return []; }
+	sendRequest(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Not implemented.'); }
 	createChat(_session: ISession): Promise<IChat> { throw new Error('Not implemented.'); }
 	forkChat(_session: ISession, _sourceChat: IChat, _turnId: string): Promise<IChat> { throw new Error('Not implemented.'); }
 	renameSession(_session: ISession, _title: string): Promise<void> { throw new Error('Not implemented.'); }
 	renameChat(_session: ISession, _chat: IChat, _title: string): Promise<void> { throw new Error('Not implemented.'); }
 	setChatModel(_session: ISession, _chat: IChat, _modelId: string | undefined): Promise<void> { throw new Error('Not implemented.'); }
 	setSessionArchived(_session: ISession, _archived: boolean): Promise<void> { throw new Error('Not implemented.'); }
+	releaseSession(_session: ISession): Promise<void> { throw new Error('Not implemented.'); }
+	releaseChat(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Not implemented.'); }
+	cancelTurn(_session: ISession, _chat: IChat, _turnId: string): Promise<void> { throw new Error('Not implemented.'); }
+	steerTurn(_session: ISession, _chat: IChat, _turnId: string, _message: string): Promise<void> { throw new Error('Not implemented.'); }
 	deleteSession(_session: ISession): Promise<void> { throw new Error('Not implemented.'); }
 	deleteChat(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Not implemented.'); }
 
@@ -251,13 +254,14 @@ class TestSessionsPartService implements ISessionsPartService {
 	readonly updates: Array<{
 		readonly visible: readonly IVisibleSessionSlot[];
 		readonly active: IActiveSession | undefined;
+		readonly activeChat: IChat | undefined;
 	}> = [];
 	readonly focusCalls: Array<IActiveSession | undefined> = [];
 	readonly calls: Array<'update' | 'focus'> = [];
 	emitFocusEventOnFocusCall = false;
 	updateVisibleSessions(visible: readonly IVisibleSessionSlot[], active: IActiveSession | undefined): void {
 		this.calls.push('update');
-		this.updates.push({ visible, active });
+		this.updates.push({ visible, active, activeChat: active?.activeChat.get() });
 	}
 	focusSession(session: IActiveSession | undefined): void {
 		this.calls.push('focus');
@@ -305,6 +309,7 @@ test('SessionsService drives the explicit new slot and honors preserveFocus', ()
 		service.openSession(session.model.sessionId);
 		const active = service.activeSession.get()!;
 		assert.equal(active.sessionId, session.model.sessionId);
+		assert.equal(active.activeChat.get(), undefined);
 		assert.equal(part.focusCalls.at(-1), active);
 
 		const focusCount = part.focusCalls.length;
@@ -338,6 +343,11 @@ test('SessionsService owns explicit draft creation, restoration, and discard', (
 		}), draft.model);
 		const visibleDraft = service.activeSession.get()!;
 		assert.equal(visibleDraft.sessionId, draft.model.sessionId);
+		assert.equal(visibleDraft.activeChat.get(), draft.chat);
+		assert.throws(
+			() => service.closeChat(visibleDraft, draft.chat),
+			/must be discarded instead of closing its Chat/,
+		);
 		service.openNewSession({ kind: OpenNewSessionKind.Empty });
 		assert.equal(service.activeSession.get(), visibleDraft);
 		service.closeSession(visibleDraft);
@@ -345,6 +355,43 @@ test('SessionsService owns explicit draft creation, restoration, and discard', (
 		assert.equal(service.activeSession.get(), undefined);
 	} finally {
 		store.dispose();
+	}
+});
+
+test('SessionsService rejects a draft without exactly one explicit User Chat', () => {
+	const empty = createSession('draft-empty', SessionStatus.Draft);
+	empty.chats.set([], undefined);
+	const multiple = createSession('draft-multiple', SessionStatus.Draft);
+	multiple.chats.set([
+		multiple.chat,
+		createChat('test-chat:/draft-multiple/peer'),
+	], undefined);
+	const toolOnly = createSession('draft-tool', SessionStatus.Draft);
+	toolOnly.chats.set([
+		createChat(
+			'test-chat:/draft-tool/worker',
+			ChatInteractivity.ReadOnly,
+			{ kind: ChatOriginKind.Tool, parentChat: toolOnly.chat.resource },
+		),
+	], undefined);
+
+	for (const draft of [empty, multiple, toolOnly]) {
+		const { store, management, service } = createHarness();
+		management.createDraft = () => draft.model;
+		try {
+			assert.throws(() => service.openNewSession({
+				kind: OpenNewSessionKind.Draft,
+				providerId: 'provider.test',
+				draft: {
+					sessionType: 'provider.test.default',
+					workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
+				},
+			}));
+			assert.deepEqual(management.discardedDrafts, [draft.model]);
+			assert.equal(service.activeSession.get(), undefined);
+		} finally {
+			store.dispose();
+		}
 	}
 });
 
@@ -366,12 +413,13 @@ test('SessionsService preserves the visible wrapper across explicit draft replac
 		management.replaceDraft(draft.model, committed.model);
 		assert.equal(service.activeSession.get(), wrapper);
 		assert.equal(wrapper.status.get(), SessionStatus.Running);
+		assert.equal(wrapper.activeChat.get(), committed.chat);
 		assert.throws(
-			() => service.openChat(draft.model, draft.mainChat.resource),
+			() => service.openChat(draft.model, draft.chat.resource),
 			/not the current managed model/,
 		);
 		assert.throws(
-			() => service.reopenChat(wrapper, draft.mainChat),
+			() => service.reopenChat(wrapper, draft.chat),
 			/not owned by Session/,
 		);
 
@@ -392,23 +440,29 @@ test('SessionsService opens an addressed Chat, rejects Hidden Chats, and keeps P
 	const hidden = createChat(
 		'test-chat:/chat-first/hidden',
 		ChatInteractivity.Hidden,
-		{ kind: ChatOriginKind.Tool, parentChat: first.mainChat.resource },
+		{ kind: ChatOriginKind.Tool, parentChat: first.chat.resource },
 	);
-	first.chats.set([first.mainChat, peer, hidden], undefined);
+	first.chats.set([first.chat, peer, hidden], undefined);
 	const second = createSession('chat-second');
 	const { store, part, service } = createHarness([first.model, second.model]);
 	try {
 		service.openSession(first.model.sessionId);
+		assert.equal(service.activeSession.get()?.activeChat.get(), undefined);
 		service.setSessionSticky(service.activeSession.get()!, true);
 		service.openSession(second.model.sessionId);
 		const secondVisible = service.activeSession.get()!;
 		const focusCountBeforePreservedOpen = part.focusCalls.length;
+		const updateCountBeforePreservedOpen = part.updates.length;
 		service.openChat(first.model, peer.resource, { preserveFocus: true });
 		const firstVisible = service.activeSession.get()!;
 		assert.equal(firstVisible.activeChat.get(), peer);
+		assert.equal(part.updates.length, updateCountBeforePreservedOpen + 1);
+		assert.equal(part.updates.at(-1)?.activeChat, peer);
 		assert.equal(part.focusCalls.length, focusCountBeforePreservedOpen);
 		service.closeChat(firstVisible, peer);
+		assert.equal(firstVisible.activeChat.get(), undefined);
 		service.reopenChat(firstVisible, peer, { preserveFocus: true });
+		assert.equal(firstVisible.activeChat.get(), peer);
 		assert.equal(part.focusCalls.length, focusCountBeforePreservedOpen);
 		assert.throws(() => service.openChat(first.model, hidden.resource), /Hidden Chat/);
 
@@ -419,6 +473,36 @@ test('SessionsService opens an addressed Chat, rejects Hidden Chats, and keeps P
 		part.fireFocus({ kind: 'session', session: firstVisible });
 		assert.equal(service.activeSession.get(), firstVisible);
 		assert.equal(part.focusCalls.length, focusCount);
+	} finally {
+		store.dispose();
+	}
+});
+
+test('SessionsService retains the visible Session when its only Chat is deleted and never reselects a reappearing resource', () => {
+	const session = createSession('only-chat-deletion');
+	const { store, management, service } = createHarness([session.model]);
+	try {
+		service.openChat(session.model, session.chat.resource);
+		const visibleSession = service.activeSession.get()!;
+		assert.equal(visibleSession.activeChat.get(), session.chat);
+
+		session.chats.set([], undefined);
+		management.setSessionsAndFire(
+			[session.model],
+			[{ kind: SessionTransitionKind.Changed, session: session.model }],
+		);
+		assert.equal(service.activeSession.get(), visibleSession);
+		assert.deepEqual(visibleSession.chats.get(), []);
+		assert.equal(visibleSession.activeChat.get(), undefined);
+
+		session.chats.set([session.chat], undefined);
+		management.setSessionsAndFire(
+			[session.model],
+			[{ kind: SessionTransitionKind.Changed, session: session.model }],
+		);
+		assert.equal(service.activeSession.get(), visibleSession);
+		assert.deepEqual(visibleSession.openChats.get(), [session.chat]);
+		assert.equal(visibleSession.activeChat.get(), undefined);
 	} finally {
 		store.dispose();
 	}
@@ -545,7 +629,7 @@ test('SessionsService removes retained view state after authoritative Session de
 		ChatInteractivity.Full,
 		{ kind: ChatOriginKind.User },
 	);
-	session.chats.set([session.mainChat, peer], undefined);
+	session.chats.set([session.chat, peer], undefined);
 	const storage = createStorageService();
 	const { store, management, service } = createHarness([session.model], storage);
 	try {
@@ -579,7 +663,7 @@ test('SessionsService restores visible slots and per-Session Chat state after re
 		ChatInteractivity.Full,
 		{ kind: ChatOriginKind.User },
 	);
-	first.chats.set([first.mainChat, peer], undefined);
+	first.chats.set([first.chat, peer], undefined);
 	const second = createSession('reload-second');
 	const storage = createStorageService();
 	const firstHarness = createHarness([first.model, second.model], storage);
@@ -587,7 +671,10 @@ test('SessionsService restores visible slots and per-Session Chat state after re
 		firstHarness.service.openSession(first.model.sessionId);
 		const firstVisible = firstHarness.service.activeSession.get()!;
 		firstHarness.service.setSessionSticky(firstVisible, true);
+		firstHarness.service.openChat(first.model, peer.resource);
+		assert.equal(firstVisible.activeChat.get(), peer);
 		firstHarness.service.closeChat(firstVisible, peer);
+		assert.equal(firstVisible.activeChat.get(), undefined);
 		firstHarness.service.openSession(second.model.sessionId);
 		storage.fireWillSave();
 	} finally {
@@ -606,7 +693,9 @@ test('SessionsService restores visible slots and per-Session Chat state after re
 			!('kind' in slot) && slot.sessionId === first.model.sessionId,
 		)!;
 		assert.equal(restoredFirst.sticky.get(), true);
+		assert.equal(restoredFirst.activeChat.get(), undefined);
 		assert.deepEqual(restoredFirst.closedChats.get(), [peer]);
+		assert.equal(secondHarness.service.activeSession.get()?.activeChat.get(), undefined);
 	} finally {
 		secondHarness.store.dispose();
 		storage.dispose();

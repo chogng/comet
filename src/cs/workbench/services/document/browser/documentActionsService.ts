@@ -7,9 +7,7 @@ import { CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/c
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { cloneEditorDraftStyleSettings } from 'cs/base/common/editorDraftStyle';
 import { parseAppErrorData } from 'cs/base/parts/sandbox/common/appError';
-import { generateUuid } from 'cs/base/common/uuid';
 import { normalizeWritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
-import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import { INotificationService } from 'cs/platform/notification/common/notification';
@@ -18,7 +16,6 @@ import {
 	IArticleSummaryTranslationExportService,
 	type IArticleSummaryTranslationExportService as IArticleSummaryTranslationExportServiceContract,
 } from 'cs/workbench/contrib/translation/common/articleSummaryTranslationExport';
-import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import {
 	IDocumentActionsService,
 	type IArticleSelectionSnapshot,
@@ -34,7 +31,6 @@ import {
 	markPdfDownloadStarted,
 	markPdfDownloadSucceeded,
 } from 'cs/workbench/services/document/pdfDownloadStatus';
-import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
 	IFetchService,
 	type ArticleDetail,
@@ -110,29 +106,10 @@ export class DocumentActionsService implements IDocumentActionsService {
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 		@ISettingsModel private readonly settingsModel: SettingsModel,
 		@IFetchService private readonly fetchService: IFetchService,
-		@IEditorService private readonly editorService: IEditorService,
-		@IChatService private readonly chatService: IChatService,
 		@ILibraryModel private readonly libraryModel: LibraryModel,
 		@IArticleSummaryTranslationExportService
 		private readonly articleSummaryTranslationExportService: IArticleSummaryTranslationExportServiceContract,
 	) {}
-
-	async openArticleDetails(
-		articleId: ArticleId,
-		articleSelectionResource?: IArticleSelectionSnapshot['resource'],
-	): Promise<void> {
-		this.beginOperation();
-		const article = this.fetchService.getArticle(articleId);
-		if (!article) {
-			this.removeUnavailableArticleIds(articleSelectionResource, [articleId]);
-			return;
-		}
-
-		await this.editorService.openEditor({
-			resource: BrowserViewUri.forId(generateUuid()),
-			options: { viewState: { url: article.url.toString(true) } },
-		});
-	}
 
 	async downloadArticlePdf(
 		articleId: ArticleId,
@@ -153,7 +130,6 @@ export class DocumentActionsService implements IDocumentActionsService {
 		const articleIds = [...selection.articleIds];
 		const unavailableArticleIds = articleIds.filter(articleId => !this.fetchService.getArticle(articleId));
 		if (unavailableArticleIds.length > 0) {
-			this.removeUnavailableArticleIds(selection.resource, unavailableArticleIds);
 			this.notificationService.info(this.getUi().articleDetailsUnavailable);
 		}
 		const availableArticleIds = articleIds.filter(articleId => this.fetchService.getArticle(articleId));
@@ -200,7 +176,7 @@ export class DocumentActionsService implements IDocumentActionsService {
 	}
 
 	async exportArticleSummaries(selection: IArticleSelectionSnapshot): Promise<void> {
-		const lifecycle = this.beginOperation();
+		this.beginOperation();
 		if (!this.nativeHostService.canInvoke()) {
 			return;
 		}
@@ -209,11 +185,7 @@ export class DocumentActionsService implements IDocumentActionsService {
 		await this.articleSummaryTranslationExportService.handleExportArticleSummaries(
 			articleIds,
 			true,
-			unavailableArticleIds => {
-				if (this.isOperationActive(lifecycle)) {
-					this.chatService.removeArticleChecks(selection.resource, unavailableArticleIds);
-				}
-			},
+			() => {},
 		);
 	}
 
@@ -297,7 +269,6 @@ export class DocumentActionsService implements IDocumentActionsService {
 			return;
 		}
 		if (!article) {
-			this.removeUnavailableArticleIds(options.articleSelectionResource, [articleId]);
 			this.notificationService.info(this.getUi().articleDetailsUnavailable);
 			return;
 		}
@@ -449,15 +420,6 @@ export class DocumentActionsService implements IDocumentActionsService {
 			knowledgeBasePdfDownloadDir: settings.knowledgeBasePdfDownloadDir,
 			pdfFileNameUseSelectionOrder: settings.pdfFileNameUseSelectionOrder,
 		};
-	}
-
-	private removeUnavailableArticleIds(
-		resource: IArticleSelectionSnapshot['resource'] | undefined,
-		articleIds: readonly ArticleId[],
-	): void {
-		if (resource) {
-			this.chatService.removeArticleChecks(resource, articleIds);
-		}
 	}
 
 	private getUi(): LocaleMessages {

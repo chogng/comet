@@ -12,9 +12,11 @@ import { createDecorator } from 'cs/platform/instantiation/common/instantiation'
 import { IStorageService } from 'cs/platform/storage/common/storage';
 import {
 	ChatInteractivity,
+	ChatOriginKind,
 	type IChat,
 	type ISession,
 	type SessionId,
+	SessionStatus,
 	type SessionsProviderId,
 } from 'cs/sessions/services/sessions/common/session';
 import {
@@ -179,7 +181,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (options.kind === OpenNewSessionKind.Empty) {
 			this.cancelPendingRestore();
 			const draft = this.sessionsManagementService.draftSession.get();
-			const visibleSession = this.visibility.setActive(draft);
+			const visibleSession = this.visibility.setActive(draft, draft ? this.requireDraftChat(draft) : undefined);
 			this.focusUnlessPreserved(visibleSession, options.preserveFocus);
 			return draft;
 		}
@@ -187,13 +189,25 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.cancelPendingRestore();
 		const draft = this.sessionsManagementService.createSessionDraft(options.providerId, options.draft);
 		try {
-			const visibleSession = this.visibility.setActive(draft)!;
+			const visibleSession = this.visibility.setActive(draft, this.requireDraftChat(draft))!;
 			this.focusUnlessPreserved(visibleSession, options.preserveFocus);
 			return draft;
 		} catch (error) {
 			this.sessionsManagementService.discardSessionDraft(draft);
 			throw error;
 		}
+	}
+
+	private requireDraftChat(session: ISession): IChat {
+		const chats = session.chats.get();
+		const chat = chats[0];
+		if (chats.length !== 1
+			|| !chat
+			|| chat.origin.kind !== ChatOriginKind.User
+			|| chat.interactivity.get() !== ChatInteractivity.Full) {
+			throw new Error(`Session draft '${session.sessionId}' must contain one interactive user Chat.`);
+		}
+		return chat;
 	}
 
 	openChat(session: ISession, chatResource: URI, options: IOpenSessionOptions = {}): void {
@@ -207,13 +221,15 @@ export class SessionsService extends Disposable implements ISessionsService {
 			throw new Error(`Hidden Chat '${chat.resource.toString()}' cannot be opened.`);
 		}
 		this.cancelPendingRestore();
-		const visibleSession = this.visibility.setActive(currentSession)!;
-		this.visibility.openChat(visibleSession, chat);
+		const visibleSession = this.visibility.setActive(currentSession, chat)!;
 		this.focusUnlessPreserved(visibleSession, options.preserveFocus);
 	}
 
 	closeChat(session: IActiveSession, chat: IChat): void {
 		const visibleSession = this.requireVisibleSession(session);
+		if (visibleSession.status.get() === SessionStatus.Draft) {
+			throw new Error(`Session draft '${visibleSession.sessionId}' must be discarded instead of closing its Chat.`);
+		}
 		const currentChat = this.requireCurrentChat(visibleSession, chat);
 		this.cancelPendingRestore();
 		this.visibility.closeChat(visibleSession, currentChat);

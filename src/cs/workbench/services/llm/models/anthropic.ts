@@ -2,7 +2,6 @@ import type { LlmModelDefinition } from 'cs/workbench/services/llm/types';
 
 const anthropicDefaults = {
   provider: 'anthropic',
-  apiStyle: 'openai-compatible',
   enabled: true,
 } as const;
 

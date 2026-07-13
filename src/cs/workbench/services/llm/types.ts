@@ -1,6 +1,7 @@
 import type { LlmProviderId } from 'cs/base/parts/sandbox/common/sandboxTypes';
 
-export type LlmApiStyle = 'openai' | 'openai-compatible';
+export type LlmProviderProtocol = 'openai-responses' | 'openai-chat-completions';
+export type LlmChatCompletionsMaximumOutputTokensField = 'max_tokens' | 'max_completion_tokens';
 export type LlmTask = 'chat' | 'reasoning';
 export type LlmModelLatencyTier = 'fast';
 export type LlmServiceTier = 'auto' | 'default' | 'priority' | 'flex';
@@ -13,12 +14,21 @@ export type LlmReasoningEffort =
   | 'highest'
   | 'xhigh';
 
-export type LlmProviderDefinition = {
+type LlmProviderDefinitionBase = {
   id: LlmProviderId;
   label: string;
-  apiStyle: LlmApiStyle;
   defaultBaseUrl: string;
 };
+
+export type LlmProviderDefinition = LlmProviderDefinitionBase & (
+  | {
+      protocol: 'openai-responses';
+    }
+  | {
+      protocol: 'openai-chat-completions';
+      maximumOutputTokensField: LlmChatCompletionsMaximumOutputTokensField;
+    }
+);
 
 export type LlmModelDefinition = {
   id: string;
@@ -31,7 +41,6 @@ export type LlmModelDefinition = {
   supports_image_input?: boolean;
   supports_chat?: boolean;
   provider: LlmProviderId;
-  apiStyle: LlmApiStyle;
   context_window_tokens?: number;
   default_input_token_limit?: number;
   input_token_limit?: number;

@@ -28,7 +28,6 @@ export const IDocumentActionsService = createDecorator<IDocumentActionsService>(
 
 export interface IDocumentActionsService {
 	readonly _serviceBrand: undefined;
-	openArticleDetails(articleId: ArticleId, articleSelectionResource?: URI): Promise<void>;
 	downloadArticlePdf(articleId: ArticleId, articleSelectionResource?: URI): Promise<void>;
 	downloadArticlePdfs(selection: IArticleSelectionSnapshot): Promise<void>;
 	cancelArticlePdfDownloads(): void;

@@ -744,7 +744,6 @@ export class SettingsModel {
           label: model,
           description: model,
           provider,
-          apiStyle: 'openai-compatible',
           recommendedTasks: [],
           enabled: true,
         },

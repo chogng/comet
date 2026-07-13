@@ -49,6 +49,19 @@ test('browser and desktop bootstrap the Sessions application exactly once', () =
 		assert.doesNotMatch(source, /cs\/workbench\/browser\/workbench/);
 		assert.doesNotMatch(source, /renderWorkbench\(\)/);
 		assert.doesNotMatch(source, /nativeOverlay|isNativeWorkbenchAuxiliaryWindow/);
+		if (target === 'electron-browser') {
+			assert.match(source, /initializeLocalAgentHostWorkbench/);
+			assert.ok(
+				source.indexOf("await import('cs/sessions/sessions.desktop.main')")
+					< source.indexOf('await initializeLocalAgentHostWorkbench()'),
+				'Agent Host provider composition must follow desktop contribution registration',
+			);
+			assert.ok(
+				source.indexOf('await initializeLocalAgentHostWorkbench()')
+					< source.indexOf('await startSessionsWorkbench()'),
+				'Agent Host provider composition must finish before Sessions starts',
+			);
+		}
 	}
 
 	const sessionsWorkbench = readSource('src/cs/sessions/browser/sessionsWorkbench.ts');
@@ -147,8 +160,9 @@ test('Sessions target mains load their matching Workbench foundation before cont
 	assert.match(workbenchCommon, /workbench\/contrib\/draftEditor\/browser\/draftEditor\.contribution/);
 	assert.match(common, /sessions\/contrib\/sessions\/browser\/sessions\.contribution/);
 	assert.match(desktop, /sessions\/contrib\/browserView\/electron-browser\/browserViewChat\.contribution/);
-	assert.match(desktop, /defaultSessionsProvider\.contribution/);
-	assert.doesNotMatch(web, /defaultSessionsProvider/);
+	assert.match(desktop, /workbench\/contrib\/files\/browser\/fileChatAttachments\.contribution/);
+	assert.doesNotMatch(desktop, /providers\/default|defaultSessionsProvider/);
+	assert.doesNotMatch(web, /providers\/default|defaultSessionsProvider/);
 	assert.equal(count(desktop, /layout\.contribution/g), 1);
 	assert.equal(count(web, /layout\.contribution/g), 1);
 	assert.match(desktop, /sessions\/contrib\/splash\/browser\/partsSplash/);
@@ -405,8 +419,12 @@ test('Document actions are a DI service with explicit operation targets', () => 
 	const chatInput = readSource(
 		'src/cs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts',
 	);
-	assert.match(chatInput, /@IDocumentActionsService private readonly documentActionsService/);
-	assert.match(chatInput, /resource: model\.resource,[\s\S]*articleIds,/);
+	const articlePresentation = readSource(
+		'src/cs/workbench/contrib/fetch/browser/articleChatPresentations.ts',
+	);
+	assert.doesNotMatch(chatInput, /IDocumentActionsService|Article/);
+	assert.match(articlePresentation, /@IDocumentActionsService documentActionsService/);
+	assert.match(articlePresentation, /resource: this\.chatResource,[\s\S]*articleIds,/);
 	assert.doesNotMatch(chatInput, /inputToolbarActions|renderChatInputToolbar/);
 	assert.equal(
 		existsSync(path.join(Root, 'src/cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar.ts')),
@@ -416,6 +434,26 @@ test('Document actions are a DI service with explicit operation targets', () => 
 		existsSync(path.join(Root, 'src/cs/workbench/browser/articleBatchTask.ts')),
 		false,
 	);
+});
+
+test('Chat Article Browser opening binds the addressed desktop document without DOM inference', () => {
+	const desktopMain = readSource('src/cs/sessions/sessions.desktop.main.ts');
+	const webMain = readSource('src/cs/sessions/sessions.web.main.ts');
+	const chatList = readSource('src/cs/workbench/contrib/chat/browser/widget/chatListWidget.ts');
+	const articlePresentation = readSource(
+		'src/cs/workbench/contrib/fetch/browser/articleChatPresentations.ts',
+	);
+	const desktopService = readSource(
+		'src/cs/sessions/contrib/browserView/electron-browser/chatArticleBrowserService.ts',
+	);
+	assert.match(desktopMain, /browserView\/electron-browser\/chatArticleBrowserService/);
+	assert.match(webMain, /browserView\/browser\/chatArticleBrowserService/);
+	assert.doesNotMatch(chatList, /IChatArticleBrowserService|Article/);
+	assert.match(articlePresentation, /@IChatArticleBrowserService browserService/);
+	assert.match(articlePresentation, /chatResource: context\.chatResource/);
+	assert.match(desktopService, /createBrowserDocumentTarget/);
+	assert.match(desktopService, /addInteractionTargets\(target\.chatResource/);
+	assert.doesNotMatch(desktopService, /activeEditor|querySelector|closest\(|children\[/);
 });
 
 test('Browser toolbar is owned by the addressed Browser editor without shell actions', () => {

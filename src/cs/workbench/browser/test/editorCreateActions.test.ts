@@ -61,8 +61,8 @@ function createDraftEditorService(saveActive = () => false): IDraftEditorService
 		canSaveActive: () => false,
 		saveActive,
 		getDocument: () => null,
+		getTargetSnapshot: () => null,
 		setDocument() {},
-		getActiveRequestAttachment: () => undefined,
 	};
 }
 

@@ -8,7 +8,7 @@ import { Event } from 'cs/base/common/event';
 import { KeyCode, KeyMod } from 'cs/base/common/keyCodes';
 import { DisposableStore } from 'cs/base/common/lifecycle';
 import { isEqual } from 'cs/base/common/resources';
-import type { URI } from 'cs/base/common/uri';
+import { URI } from 'cs/base/common/uri';
 import { generateUuid } from 'cs/base/common/uuid';
 import { localize, localize2 } from 'cs/nls';
 import { Action2, registerAction2 } from 'cs/platform/actions/common/actions';
@@ -24,12 +24,12 @@ import {
 import type { ServicesAccessor } from 'cs/platform/instantiation/common/instantiation';
 import { KeybindingWeight } from 'cs/platform/keybinding/common/keybindingsRegistry';
 import { ILogService } from 'cs/platform/log/common/log';
-import { ISessionsService } from 'cs/sessions/services/sessions/browser/sessionsService';
-import { SessionsContextKeys } from 'cs/sessions/common/contextkeys';
 import {
 	ChatInteractivity,
 	type IChat,
+	type SessionId,
 } from 'cs/sessions/services/sessions/common/session';
+import { ISessionsManagementService } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import type { IBrowserViewModel } from 'cs/workbench/contrib/browserView/common/browserView';
 import { ActiveEditorFocusedContext } from 'cs/workbench/common/contextkeys';
 import {
@@ -41,17 +41,24 @@ import {
 	CONTEXT_BROWSER_HAS_URL,
 } from 'cs/workbench/contrib/browserView/electron-browser/browserEditor';
 import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { IEditorService } from 'cs/workbench/services/editor/common/editorService';
 import {
-	createChatImageAttachment,
-	type ChatImageMimeType,
-	type IChatImageAttachment,
-} from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
+	BrowserChatAttachmentsContribution,
+	createBrowserImageAttachment,
+	createBrowserTextAttachment,
+} from 'cs/sessions/contrib/browserView/electron-browser/browserChatAttachments';
+import { registerWorkbenchContribution } from 'cs/workbench/common/contributions';
+import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 
 const BrowserSendElementsToChatAttachImagesSettingId = 'workbench.browser.sendElementsToChat.attachImages';
 
 const CONTEXT_BROWSER_ELEMENT_SELECTION_ACTIVE = new RawContextKey<boolean>('browserElementSelectionActive', false);
 const CONTEXT_BROWSER_AREA_SELECTION_ACTIVE = new RawContextKey<boolean>('browserAreaSelectionActive', false);
+
+interface IBrowserCapturedImage {
+	readonly name: string;
+	readonly mediaType: 'image/jpeg' | 'image/png';
+	readonly data: Awaited<ReturnType<IBrowserViewModel['captureScreenshot']>>;
+}
 
 function formatElementPath(ancestors: readonly IElementAncestor[] | undefined): string | undefined {
 	if (!ancestors || ancestors.length === 0) {
@@ -120,16 +127,42 @@ function createElementContextValue(
 	return sections.join('\n\n');
 }
 
-function requireBrowserEditorChatIntegration(candidate: unknown): BrowserEditorChatIntegration {
-	if (!(candidate instanceof BrowserEditor)) {
-		throw new Error('Browser Add to Chat requires an active Browser Editor.');
+/** Identifies one exact Session Chat addressed by a Browser action. */
+export interface IBrowserChatTarget {
+	readonly sessionId: SessionId;
+	readonly chatResource: URI;
+}
+
+/** Carries the Browser source and exact Session Chat target for one action. */
+export interface IBrowserChatActionContext extends IBrowserChatTarget {
+	readonly browserEditor: BrowserEditor;
+}
+
+function requireBrowserChatActionContext(candidate: unknown): {
+	readonly integration: BrowserEditorChatIntegration;
+	readonly target: IBrowserChatTarget;
+} {
+	if (!candidate || typeof candidate !== 'object') {
+		throw new Error('Browser Add to Chat requires an addressed Browser, Session, and Chat context.');
 	}
-	const editor = candidate;
-	const integration = editor.getContribution(BrowserEditorChatIntegration);
+	const context = candidate as Partial<IBrowserChatActionContext>;
+	if (!(context.browserEditor instanceof BrowserEditor)
+		|| typeof context.sessionId !== 'string'
+		|| !context.sessionId
+		|| !URI.isUri(context.chatResource)) {
+		throw new Error('Browser Add to Chat requires an addressed Browser, Session, and Chat context.');
+	}
+	const integration = context.browserEditor.getContribution(BrowserEditorChatIntegration);
 	if (!integration) {
 		throw new Error('The target Browser Editor has no Sessions Chat integration.');
 	}
-	return integration;
+	return {
+		integration,
+		target: Object.freeze({
+			sessionId: context.sessionId,
+			chatResource: context.chatResource,
+		}),
+	};
 }
 
 function toPromise<T>(event: Event<T>): Promise<T> {
@@ -140,12 +173,12 @@ function toPromise<T>(event: Event<T>): Promise<T> {
 export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 	private readonly elementSelectionActiveContext: ContextKey<boolean>;
 	private readonly areaSelectionActiveContext: ContextKey<boolean>;
-	private elementSelectionChatResource: URI | undefined;
+	private elementSelectionTarget: IBrowserChatTarget | undefined;
 
 	constructor(
 		editor: BrowserEditor,
 		@IContextKeyService contextKeyService: IContextKeyService,
-		@ISessionsService private readonly sessionsService: ISessionsService,
+		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
 		@IChatService private readonly chatService: IChatService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ILogService private readonly logService: ILogService,
@@ -156,7 +189,7 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 	}
 
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
-		this.elementSelectionChatResource = undefined;
+		this.elementSelectionTarget = undefined;
 		this.elementSelectionActiveContext.set(model.isElementSelectionActive);
 		this.areaSelectionActiveContext.set(model.isAreaSelectionActive);
 
@@ -167,47 +200,47 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 			this.areaSelectionActiveContext.set(active);
 		}));
 		store.add(model.onDidSelectElement(data => {
-			const chatResource = this.elementSelectionChatResource;
-			this.elementSelectionChatResource = undefined;
-			if (!chatResource) {
-				this.logService.error('BrowserEditor.addElementToChat: Selection has no addressed Chat resource.');
+			const target = this.elementSelectionTarget;
+			this.elementSelectionTarget = undefined;
+			if (!target) {
+				this.logService.error('BrowserEditor.addElementToChat: Selection has no addressed Session Chat target.');
 				return;
 			}
-			void this.attachElementDataToChat(data, model, chatResource).catch(error => {
+			void this.attachElementDataToChat(data, model, target).catch(error => {
 				this.logService.error('BrowserEditor.addElementToChat: Failed to attach element', error);
 			});
 		}));
 	}
 
 	override onModelDetached(): void {
-		this.elementSelectionChatResource = undefined;
+		this.elementSelectionTarget = undefined;
 		this.elementSelectionActiveContext.reset();
 		this.areaSelectionActiveContext.reset();
 	}
 
-	async toggleElementSelection(): Promise<void> {
+	async toggleElementSelection(target: IBrowserChatTarget): Promise<void> {
+		this.requireTargetChat(target);
 		const model = this.requireModel();
-		const chat = this.requireActiveChat();
-		this.elementSelectionChatResource = model.isElementSelectionActive ? undefined : chat.resource;
+		this.elementSelectionTarget = model.isElementSelectionActive ? undefined : target;
 		this.editor.ensureBrowserFocus();
 		try {
 			await model.toggleElementSelection();
 		} catch (error) {
-			this.elementSelectionChatResource = undefined;
+			this.elementSelectionTarget = undefined;
 			throw error;
 		}
 	}
 
-	async addConsoleLogsToChat(): Promise<void> {
+	async addConsoleLogsToChat(target: IBrowserChatTarget): Promise<void> {
+		this.requireTargetChat(target);
 		const model = this.requireModel();
-		const chat = this.requireActiveChat();
 		const logs = await model.getConsoleLogs();
 		if (!logs.trim()) {
 			return;
 		}
 
-		this.insertBrowserContext(
-			chat,
+		this.addBrowserContext(
+			target,
 			localize('browser.consoleLogsTitle', "Browser Console Logs"),
 			[
 				localize('browser.attachedConsoleLogs', "Attached Console Logs from Integrated Browser"),
@@ -218,19 +251,20 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 		);
 	}
 
-	async addScreenshotToChat(): Promise<void> {
+	async addScreenshotToChat(target: IBrowserChatTarget): Promise<void> {
+		this.requireTargetChat(target);
 		await this.captureScreenshotToChat(
 			this.requireModel(),
-			this.requireActiveChat(),
+			target,
 			'viewport',
 			localize('browser.screenshotTitle', "Browser Screenshot"),
 			{ quality: 80 },
 		);
 	}
 
-	async addAreaScreenshotToChat(): Promise<void> {
+	async addAreaScreenshotToChat(target: IBrowserChatTarget): Promise<void> {
+		this.requireTargetChat(target);
 		const model = this.requireModel();
-		const chat = this.requireActiveChat();
 		if (model.isAreaSelectionActive) {
 			await model.toggleAreaSelection(false);
 			return;
@@ -246,17 +280,18 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 
 		await this.captureScreenshotToChat(
 			model,
-			chat,
+			target,
 			'area',
 			localize('browser.areaScreenshotTitle', "Browser Area Screenshot"),
 			{ quality: 80, pageRect: rect, awaitNextPaint: true },
 		);
 	}
 
-	async addFullPageScreenshotToChat(): Promise<void> {
+	async addFullPageScreenshotToChat(target: IBrowserChatTarget): Promise<void> {
+		this.requireTargetChat(target);
 		await this.captureScreenshotToChat(
 			this.requireModel(),
-			this.requireActiveChat(),
+			target,
 			'fullPage',
 			localize('browser.fullPageScreenshotTitle', "Browser Full Page Screenshot"),
 			{ fullPage: true, format: 'png' },
@@ -266,49 +301,37 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 	private async attachElementDataToChat(
 		elementData: IElementData,
 		model: IBrowserViewModel,
-		chatResource: URI,
+		target: IBrowserChatTarget,
 	): Promise<void> {
+		this.requireTargetChat(target);
 		const displayName = getElementDisplayName(elementData);
 		const attachImages = this.configurationService.getValue<boolean>(BrowserSendElementsToChatAttachImagesSettingId);
 		const screenshot = attachImages
 			? await model.captureScreenshot({ quality: 90, pageRect: elementData.bounds })
 			: undefined;
-		const imageAttachments = screenshot
-			? [createChatImageAttachment(
-				generateUuid(),
-				`${displayName}.jpeg`,
-				'image/jpeg',
-				screenshot,
-			)]
+		const images: readonly IBrowserCapturedImage[] = screenshot
+			? [{ name: `${displayName}.jpeg`, mediaType: 'image/jpeg', data: screenshot }]
 			: [];
-		const chat = this.requireChatResource(chatResource);
-
-		this.insertBrowserContext(
-			chat,
+		this.addBrowserContext(
+			target,
 			localize('browser.elementContextTitle', "Browser Element"),
 			createElementContextValue(elementData, displayName),
-			imageAttachments,
+			images,
 		);
 	}
 
 	private async captureScreenshotToChat(
 		model: IBrowserViewModel,
-		chat: IChat,
+		target: IBrowserChatTarget,
 		type: 'viewport' | 'area' | 'fullPage',
 		title: string,
 		options: NonNullable<Parameters<IBrowserViewModel['captureScreenshot']>[0]>,
 	): Promise<void> {
 		const screenshot = await model.captureScreenshot(options);
-		const mimeType: ChatImageMimeType = options.format === 'png' ? 'image/png' : 'image/jpeg';
+		const mimeType: IBrowserCapturedImage['mediaType'] = options.format === 'png' ? 'image/png' : 'image/jpeg';
 		const extension = mimeType === 'image/png' ? 'png' : 'jpeg';
-		const image = createChatImageAttachment(
-			generateUuid(),
-			`${title}.${extension}`,
-			mimeType,
-			screenshot,
-		);
-		this.insertBrowserContext(
-			chat,
+		this.addBrowserContext(
+			target,
 			title,
 			[
 				localize('browser.attachedScreenshot', "Attached Screenshot from Integrated Browser"),
@@ -316,24 +339,26 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 				`${localize('browser.urlLabel', "URL")}: ${model.url}`,
 				`${localize('browser.screenshotSizeLabel', "Screenshot Size")}: ${screenshot.byteLength} bytes`,
 			].join('\n\n'),
-			[image],
+			[{ name: `${title}.${extension}`, mediaType: mimeType, data: screenshot }],
 		);
 	}
 
-	private insertBrowserContext(
-		chat: IChat,
+	private addBrowserContext(
+		target: IBrowserChatTarget,
 		title: string,
 		content: string,
-		imageAttachments: readonly IChatImageAttachment[],
+		images: readonly IBrowserCapturedImage[],
 	): void {
-		if (chat.interactivity.get() !== ChatInteractivity.Full) {
-			throw new Error('Browser Add to Chat requires a fully interactive Chat.');
-		}
-		this.chatService.insertContextMessage(
-			chat.resource,
-			`## ${title}\n\n${content}`,
-			imageAttachments,
-		);
+		const chat = this.requireTargetChat(target);
+		this.chatService.addPendingAttachments(chat.resource, [
+			createBrowserTextAttachment(generateUuid(), title, `## ${title}\n\n${content}`),
+			...images.map(image => createBrowserImageAttachment(
+				generateUuid(),
+				image.name,
+				image.mediaType,
+				image.data,
+			)),
+		]);
 	}
 
 	private requireModel(): IBrowserViewModel {
@@ -344,25 +369,23 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 		return model;
 	}
 
-	private requireActiveChat(): IChat {
-		const activeSession = this.sessionsService.activeSession.get();
-		if (!activeSession) {
-			throw new Error('Browser Add to Chat requires an active Session.');
+	private requireTargetChat(target: IBrowserChatTarget): IChat {
+		const draft = this.sessionsManagementService.draftSession.get();
+		const sessions = draft
+			? [...this.sessionsManagementService.getSessions(), draft]
+			: this.sessionsManagementService.getSessions();
+		const matchingSessions = sessions.filter(session => session.sessionId === target.sessionId);
+		if (matchingSessions.length !== 1) {
+			throw new Error(`Browser Add to Chat Session '${target.sessionId}' is not managed.`);
 		}
-		const chat = activeSession.activeChat.get();
-		if (chat.interactivity.get() !== ChatInteractivity.Full) {
-			throw new Error('Browser Add to Chat requires a fully interactive Chat.');
-		}
-		return chat;
-	}
-
-	private requireChatResource(resource: URI): IChat {
-		const activeSession = this.sessionsService.activeSession.get();
-		const chat = activeSession?.chats.get().find(candidate =>
-			isEqual(candidate.resource, resource),
+		const chat = matchingSessions[0].chats.get().find(candidate =>
+			isEqual(candidate.resource, target.chatResource),
 		);
 		if (!chat) {
-			throw new Error('Browser Add to Chat target is no longer active.');
+			throw new Error(`Browser Add to Chat Chat '${target.chatResource.toString()}' is not owned by Session '${target.sessionId}'.`);
+		}
+		if (chat.interactivity.get() !== ChatInteractivity.Full) {
+			throw new Error('Browser Add to Chat requires a fully interactive Chat.');
 		}
 		return chat;
 	}
@@ -370,11 +393,14 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 
 BrowserEditor.registerContribution(BrowserEditorChatIntegration);
 
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(BrowserChatAttachmentsContribution),
+);
+
 const browserCanAddToChat = ContextKeyExpr.and(
 	BROWSER_EDITOR_ACTIVE,
 	CONTEXT_BROWSER_HAS_URL.isEqualTo(true),
 	CONTEXT_BROWSER_HAS_ERROR.isEqualTo(false),
-	SessionsContextKeys.activeChatFullyInteractive.isEqualTo(true),
 );
 
 class AddElementToChatAction extends Action2 {
@@ -405,8 +431,9 @@ class AddElementToChatAction extends Action2 {
 		});
 	}
 
-	async run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): Promise<void> {
-		await requireBrowserEditorChatIntegration(browserEditor).toggleElementSelection();
+	async run(_accessor: ServicesAccessor, context?: IBrowserChatActionContext): Promise<void> {
+		const { integration, target } = requireBrowserChatActionContext(context);
+		await integration.toggleElementSelection(target);
 	}
 }
 
@@ -422,8 +449,9 @@ class AddConsoleLogsToChatAction extends Action2 {
 		});
 	}
 
-	async run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): Promise<void> {
-		await requireBrowserEditorChatIntegration(browserEditor).addConsoleLogsToChat();
+	async run(_accessor: ServicesAccessor, context?: IBrowserChatActionContext): Promise<void> {
+		const { integration, target } = requireBrowserChatActionContext(context);
+		await integration.addConsoleLogsToChat(target);
 	}
 }
 
@@ -439,8 +467,9 @@ class AddScreenshotToChatAction extends Action2 {
 		});
 	}
 
-	async run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): Promise<void> {
-		await requireBrowserEditorChatIntegration(browserEditor).addScreenshotToChat();
+	async run(_accessor: ServicesAccessor, context?: IBrowserChatActionContext): Promise<void> {
+		const { integration, target } = requireBrowserChatActionContext(context);
+		await integration.addScreenshotToChat(target);
 	}
 }
 
@@ -457,8 +486,9 @@ class AddAreaScreenshotToChatAction extends Action2 {
 		});
 	}
 
-	async run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): Promise<void> {
-		await requireBrowserEditorChatIntegration(browserEditor).addAreaScreenshotToChat();
+	async run(_accessor: ServicesAccessor, context?: IBrowserChatActionContext): Promise<void> {
+		const { integration, target } = requireBrowserChatActionContext(context);
+		await integration.addAreaScreenshotToChat(target);
 	}
 }
 
@@ -474,8 +504,9 @@ class AddFullPageScreenshotToChatAction extends Action2 {
 		});
 	}
 
-	async run(accessor: ServicesAccessor, browserEditor: unknown = accessor.get(IEditorService).activeEditorPane): Promise<void> {
-		await requireBrowserEditorChatIntegration(browserEditor).addFullPageScreenshotToChat();
+	async run(_accessor: ServicesAccessor, context?: IBrowserChatActionContext): Promise<void> {
+		const { integration, target } = requireBrowserChatActionContext(context);
+		await integration.addFullPageScreenshotToChat(target);
 	}
 }
 

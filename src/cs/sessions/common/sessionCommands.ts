@@ -4,6 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 export const SessionsCommandIds = {
+	createChat: 'sessions.action.createChat',
+	forkChat: 'sessions.action.forkChat',
+	deleteChat: 'sessions.action.deleteChat',
 	renameSession: 'sessions.action.renameSession',
 	deleteSession: 'sessions.action.deleteSession',
 	closeSession: 'sessions.action.closeSession',

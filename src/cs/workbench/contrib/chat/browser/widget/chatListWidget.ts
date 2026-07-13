@@ -3,17 +3,23 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { $ } from 'cs/base/browser/dom';
+import { $, addDisposableListener } from 'cs/base/browser/dom';
 import { createLxIcon } from 'cs/base/browser/ui/lxicons/lxicons';
 import { DomScrollableElement } from 'cs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from 'cs/base/common/lifecycle';
-import { getComparisonKey } from 'cs/base/common/resources';
+import { getComparisonKey, isEqual } from 'cs/base/common/resources';
 import { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 import { ChatListRenderer } from 'cs/workbench/contrib/chat/browser/widget/chatListRenderer';
-import type { IChatModel } from 'cs/workbench/contrib/chat/common/chatService/chatService';
-import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import type {
+	IChatModel,
+	IChatModelSnapshot,
+} from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import type { IAgentHostChatState } from 'cs/platform/agentHost/common/protocol';
 import type { LocaleMessages } from 'language/locales';
+import type { IChatHostPresentation } from 'cs/workbench/contrib/chat/common/chatService/chatTurnPresentations';
+import { IChatBrowserPresentationService } from 'cs/workbench/contrib/chat/browser/chatBrowserPresentations';
+import { IChatTranscriptSelectionService } from 'cs/workbench/contrib/chat/browser/chatTranscriptSelections';
 
 /** Scrollable transcript for the one Chat model currently bound by its owner. */
 export class ChatListWidget extends Disposable {
@@ -30,24 +36,19 @@ export class ChatListWidget extends Disposable {
 	constructor(
 		private ui: LocaleMessages,
 		@IMarkdownRendererService markdownRendererService: IMarkdownRendererService,
-		@IChatService private readonly chatService: IChatService,
+		@IChatBrowserPresentationService private readonly presentationService: IChatBrowserPresentationService,
+		@IChatTranscriptSelectionService private readonly transcriptSelectionService: IChatTranscriptSelectionService,
 	) {
 		super();
 		this.renderer = new ChatListRenderer({
 			markdownRendererService,
-			onApplyPatch: messageId => {
-				const model = this.requireModel();
-				this.chatService.applyPatch(model.resource, messageId);
-			},
-			isArticleChecked: articleId => {
-				const model = this.requireModel();
-				return this.chatService.isArticleChecked(model.resource, articleId);
-			},
-			onSetArticleChecked: (articleId, checked) => {
-				const model = this.requireModel();
-				this.chatService.setArticleChecked(model.resource, articleId, checked);
-			},
+			presentationService,
 		});
+		this._register(presentationService.onDidChange(resource => {
+			if (this.model && isEqual(this.model.resource, resource)) {
+				this.renderSnapshot(this.model.getSnapshot());
+			}
+		}));
 		this.scrollableElement = this._register(new DomScrollableElement(this.contentElement, {
 			className: 'comet-chat-thread-scrollable',
 			horizontal: ScrollbarVisibility.Hidden,
@@ -55,6 +56,11 @@ export class ChatListWidget extends Disposable {
 			useShadows: true,
 		}));
 		this._register(this.scrollableElement.onScroll(() => this.updateScrollDownButtonVisibility()));
+		this._register(addDisposableListener(
+			this.contentElement.ownerDocument,
+			'selectionchange',
+			() => this.updateTranscriptSelection(),
+		));
 		this.scrollDownButton.type = 'button';
 		this.scrollDownButton.setAttribute('aria-label', this.ui.chatScrollToBottom);
 		this.scrollDownButton.append(createLxIcon('chevron-down'));
@@ -65,7 +71,7 @@ export class ChatListWidget extends Disposable {
 		this.scrollDownButton.addEventListener('click', handleScrollDownClick);
 		this._register(toDisposable(() => this.scrollDownButton.removeEventListener('click', handleScrollDownClick)));
 		this.element.append(this.scrollableElement.getDomNode(), this.scrollDownButton);
-		this.renderMessages([]);
+		this.renderItems(undefined, []);
 	}
 
 	getElement(): HTMLElement {
@@ -78,11 +84,16 @@ export class ChatListWidget extends Disposable {
 		}
 		this.ui = ui;
 		this.scrollDownButton.setAttribute('aria-label', this.ui.chatScrollToBottom);
-		this.renderMessages(this.model?.getSnapshot().messages ?? []);
+		const snapshot = this.model?.getSnapshot();
+		this.renderItems(
+			snapshot?.hostState,
+			snapshot?.hostPresentations ?? [],
+		);
 	}
 
 	setModel(model: IChatModel | undefined): void {
 		if (this.model) {
+			this.transcriptSelectionService.clearSelection(this.model.resource);
 			this.scrollTopByResource.set(
 				getComparisonKey(this.model.resource),
 				this.scrollableElement.getScrollPosition().scrollTop,
@@ -91,24 +102,37 @@ export class ChatListWidget extends Disposable {
 		this.modelSubscription.clear();
 		this.model = model;
 		if (model) {
-			this.modelSubscription.value = model.onDidChange(() => this.renderMessages(model.getSnapshot().messages));
+			this.modelSubscription.value = model.onDidChange(() => this.renderSnapshot(model.getSnapshot()));
 		}
 		const storedScrollTop = model
 			? this.scrollTopByResource.get(getComparisonKey(model.resource))
 			: undefined;
-		this.renderMessages(
-			model?.getSnapshot().messages ?? [],
+		const snapshot = model?.getSnapshot();
+		this.renderItems(
+			snapshot?.hostState,
+			snapshot?.hostPresentations ?? [],
 			storedScrollTop ?? 'end',
 		);
 	}
 
 	override dispose(): void {
+		if (this.model) {
+			this.transcriptSelectionService.clearSelection(this.model.resource);
+		}
 		super.dispose();
 		this.element.replaceChildren();
 	}
 
-	private renderMessages(
-		messages: readonly import('cs/workbench/contrib/chat/common/chatService/chatService').ChatMessage[],
+	private renderSnapshot(snapshot: IChatModelSnapshot): void {
+		this.renderItems(
+			snapshot.hostState,
+			snapshot.hostPresentations,
+		);
+	}
+
+	private renderItems(
+		hostState: IAgentHostChatState | undefined,
+		hostPresentations: readonly IChatHostPresentation[],
 		targetScrollTop?: number | 'end',
 	): void {
 		const previousScrollTop = this.scrollableElement.getScrollPosition().scrollTop;
@@ -116,10 +140,33 @@ export class ChatListWidget extends Disposable {
 			|| (targetScrollTop === undefined
 				&& (this.contentElement.childElementCount === 0 || this.isScrolledToBottom()));
 		this.renderDisposables.clear();
+		if (this.model) {
+			this.transcriptSelectionService.clearSelection(this.model.resource);
+		}
+		this.renderer.beginRender();
+		const renderedHostTurns = hostState === undefined
+			? []
+			: hostState.turns.flatMap(turn => this.renderer.renderHostTurn(
+				this.model!.resource,
+				{ session: hostState.session, chat: hostState.id },
+				turn,
+				hostPresentations.filter(presentation => presentation.turn === turn.id),
+				this.renderDisposables,
+				this.ui,
+			));
+		const featurePresentations = this.model
+			? this.presentationService.getFeaturePresentations(this.model.resource)
+			: [];
 		this.contentElement.replaceChildren(
-			...messages.map(message => this.renderer.renderElement(message, this.renderDisposables, this.ui)),
+			...renderedHostTurns,
+			...featurePresentations.map(presentation => this.renderer.renderFeaturePresentation(
+				this.model!.resource,
+				presentation,
+				this.renderDisposables,
+				this.ui,
+			)),
 		);
-		const isEmpty = messages.length === 0;
+		const isEmpty = (hostState?.turns.length ?? 0) === 0 && featurePresentations.length === 0;
 		this.element.classList.toggle('comet-is-empty', isEmpty);
 		this.contentElement.classList.toggle('comet-is-empty', isEmpty);
 		this.scrollableElement.scanDomNode();
@@ -131,13 +178,6 @@ export class ChatListWidget extends Disposable {
 			});
 		}
 		this.updateScrollDownButtonVisibility();
-	}
-
-	private requireModel(): IChatModel {
-		if (!this.model) {
-			throw new Error('A Chat transcript action requires a bound Chat model.');
-		}
-		return this.model;
 	}
 
 	private isScrolledToBottom(): boolean {
@@ -157,6 +197,17 @@ export class ChatListWidget extends Disposable {
 		this.element.classList.toggle(
 			'comet-show-scroll-down',
 			this.contentElement.childElementCount > 0 && !this.isScrolledToBottom(),
+		);
+	}
+
+	private updateTranscriptSelection(): void {
+		const model = this.model;
+		if (!model) {
+			return;
+		}
+		this.transcriptSelectionService.setSelection(
+			model.resource,
+			this.renderer.captureSelection(this.contentElement.ownerDocument.getSelection()),
 		);
 	}
 }

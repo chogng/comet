@@ -18,7 +18,7 @@ const defaultEnabledLlmModelOptions: Record<LlmProviderId, string[]> = {
     serializeLlmModelOptionValue('glm', 'glm-4.6v-flash'),
   ],
   kimi: [serializeLlmModelOptionValue('kimi', 'kimi-k2.5')],
-  deepseek: [serializeLlmModelOptionValue('deepseek', 'deepseek-chat')],
+  deepseek: [serializeLlmModelOptionValue('deepseek', 'deepseek-v4-flash')],
   anthropic: [],
   openai: [
     serializeLlmModelOptionValue('openai', 'gpt-5-codex', 'medium'),

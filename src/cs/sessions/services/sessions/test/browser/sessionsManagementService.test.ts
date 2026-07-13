@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'node:test';
 
+import { DeferredPromise } from 'cs/base/common/async';
 import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { observableValue, type ISettableObservable } from 'cs/base/common/observable';
@@ -41,25 +42,19 @@ import {
 	SessionDraftChangeKind,
 } from 'cs/sessions/services/sessions/common/sessionsManagement';
 import {
-	maximumSessionChatRequestAttachments,
-	maximumSessionChatRequestPayloadBytes,
 	SessionTransitionKind,
 	type ISessionDraftOptions,
 	type ISessionsChangeEvent,
 	type ISessionsProvider,
 } from 'cs/sessions/services/sessions/common/sessionsProvider';
-import {
-	ChatRequestAttachmentKind,
-	type IChatRequest,
-	type IChatRequestAttachment,
-} from 'cs/workbench/contrib/chat/common/chatRequest';
-import type { ILanguageModelChatMetadataAndIdentifier } from 'cs/workbench/contrib/chat/common/languageModels';
+import type { ISessionModel } from 'cs/sessions/services/sessions/common/sessionsProvider';
 
 const TestDate = new Date('2026-07-11T00:00:00.000Z');
 const WorkspaceLess: ISessionResolvedWorkspaceState = { kind: SessionWorkspaceKind.WorkspaceLess };
 
 const FullSessionCapabilities: ISessionCapabilities = {
-	supportsMultipleChats: true,
+	supportsCreateChat: true,
+	maximumChatCount: undefined,
 	supportsFork: true,
 	supportsRename: true,
 	supportsArchive: true,
@@ -85,7 +80,7 @@ interface ISessionFixture {
 	readonly workspace: ISettableObservable<ISessionWorkspaceState>;
 	readonly chats: ISettableObservable<readonly IChat[]>;
 	readonly capabilities: ISettableObservable<ISessionCapabilities>;
-	readonly mainChat: IChatFixture;
+	readonly chat: IChatFixture;
 }
 
 function createChat(
@@ -118,7 +113,7 @@ function createChat(
 			modelId,
 			interactivity,
 			capabilities,
-			origin: options.origin,
+			origin: options.origin ?? { kind: ChatOriginKind.User },
 		},
 	};
 }
@@ -135,15 +130,13 @@ function createSession(
 		readonly updatedAt?: Date;
 	} = {},
 ): ISessionFixture {
-	const mainChat = createChat(options.chatResource ?? URI.parse(`test-chat:/${providerId}${resource.path}`), {
-		capabilities: { supportsRename: true, supportsDelete: false },
-	});
+	const chat = createChat(options.chatResource ?? URI.parse(`test-chat:/${providerId}${resource.path}`));
 	const title = observableValue('sessionTitle', resource.path);
 	const updatedAt = observableValue('sessionUpdatedAt', options.updatedAt ?? TestDate);
 	const status = observableValue('sessionStatus', options.status ?? SessionStatus.Completed);
 	const isArchived = observableValue('sessionIsArchived', false);
 	const workspace = observableValue<ISessionWorkspaceState>('sessionWorkspace', options.workspace ?? WorkspaceLess);
-	const chats = observableValue<readonly IChat[]>('sessionChats', [mainChat.model]);
+	const chats = observableValue<readonly IChat[]>('sessionChats', [chat.model]);
 	const capabilities = observableValue('sessionCapabilities', {
 		...FullSessionCapabilities,
 		...options.capabilities,
@@ -156,7 +149,7 @@ function createSession(
 		workspace,
 		chats,
 		capabilities,
-		mainChat,
+		chat,
 		model: {
 			sessionId: toSessionId(providerId, resource),
 			resource,
@@ -170,7 +163,6 @@ function createSession(
 			isArchived,
 			workspace,
 			changes: observableValue('sessionChanges', []),
-			mainChat: observableValue('sessionMainChat', mainChat.model),
 			chats,
 			capabilities,
 		},
@@ -185,7 +177,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 	readonly label: string;
 	readonly sessionTypes: ISessionType[];
 	readonly sessions: ISession[] = [];
-	readonly models: ILanguageModelChatMetadataAndIdentifier[] = [];
+	readonly models: ISessionModel[] = [];
 
 	private readonly sessionTypesEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeSessionTypes = this.sessionTypesEmitter.event;
@@ -196,13 +188,17 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 
 	createSessionDraftHandler: (options: ISessionDraftOptions) => ISession = unexpectedOperation;
 	discardSessionDraftHandler: (session: ISession) => void = unexpectedOperation;
-	sendRequestHandler: (session: ISession, chat: IChat, request: IChatRequest) => Promise<void> = async () => unexpectedOperation();
+	sendRequestHandler: (session: ISession, chat: IChat) => Promise<void> = async () => unexpectedOperation();
 	createChatHandler: (session: ISession) => Promise<IChat> = async () => unexpectedOperation();
 	forkChatHandler: (session: ISession, sourceChat: IChat, turnId: string) => Promise<IChat> = async () => unexpectedOperation();
 	renameSessionHandler: (session: ISession, title: string) => Promise<void> = async () => unexpectedOperation();
 	renameChatHandler: (session: ISession, chat: IChat, title: string) => Promise<void> = async () => unexpectedOperation();
 	setChatModelHandler: (session: ISession, chat: IChat, modelId: string | undefined) => Promise<void> = async () => unexpectedOperation();
 	setSessionArchivedHandler: (session: ISession, archived: boolean) => Promise<void> = async () => unexpectedOperation();
+	releaseSessionHandler: (session: ISession) => Promise<void> = async () => unexpectedOperation();
+	releaseChatHandler: (session: ISession, chat: IChat) => Promise<void> = async () => unexpectedOperation();
+	cancelTurnHandler: (session: ISession, chat: IChat, turnId: string) => Promise<void> = async () => unexpectedOperation();
+	steerTurnHandler: (session: ISession, chat: IChat, turnId: string, message: string) => Promise<void> = async () => unexpectedOperation();
 	deleteSessionHandler: (session: ISession) => Promise<void> = async () => unexpectedOperation();
 	deleteChatHandler: (session: ISession, chat: IChat) => Promise<void> = async () => unexpectedOperation();
 
@@ -224,7 +220,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 		return this.sessions;
 	}
 
-	getModels(): readonly ILanguageModelChatMetadataAndIdentifier[] {
+	getModels(): readonly ISessionModel[] {
 		return this.models;
 	}
 
@@ -236,8 +232,8 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 		this.discardSessionDraftHandler(session);
 	}
 
-	sendRequest(session: ISession, chat: IChat, request: IChatRequest): Promise<void> {
-		return this.sendRequestHandler(session, chat, request);
+	sendRequest(session: ISession, chat: IChat): Promise<void> {
+		return this.sendRequestHandler(session, chat);
 	}
 
 	createChat(session: ISession): Promise<IChat> {
@@ -262,6 +258,22 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 
 	setSessionArchived(session: ISession, archived: boolean): Promise<void> {
 		return this.setSessionArchivedHandler(session, archived);
+	}
+
+	releaseSession(session: ISession): Promise<void> {
+		return this.releaseSessionHandler(session);
+	}
+
+	releaseChat(session: ISession, chat: IChat): Promise<void> {
+		return this.releaseChatHandler(session, chat);
+	}
+
+	cancelTurn(session: ISession, chat: IChat, turnId: string): Promise<void> {
+		return this.cancelTurnHandler(session, chat, turnId);
+	}
+
+	steerTurn(session: ISession, chat: IChat, turnId: string, message: string): Promise<void> {
+		return this.steerTurnHandler(session, chat, turnId, message);
 	}
 
 	deleteSession(session: ISession): Promise<void> {
@@ -431,15 +443,11 @@ async function assertRecencyLifecycleSaveFailure(options: {
 	}
 }
 
-function createModel(identifier: string): ILanguageModelChatMetadataAndIdentifier {
+function createModel(id: string): ISessionModel {
 	return {
-		identifier,
-		metadata: {
-			id: identifier,
-			name: identifier,
-			vendor: 'test',
-			version: '1',
-		},
+		id,
+		label: id,
+		enabled: true,
 	};
 }
 
@@ -514,9 +522,9 @@ test('Sessions management aggregates provider snapshots with provider-aware look
 		assert.equal(management.getSession(first.model.sessionId), first.model);
 		assert.equal(management.getSessionByResource(firstProvider.id, sharedResource), first.model);
 		assert.equal(management.getSessionByResource(secondProvider.id, sharedResource), second.model);
-		assert.deepEqual(management.getSessionForChatResource(second.mainChat.model.resource), {
+		assert.deepEqual(management.getSessionForChatResource(second.chat.model.resource), {
 			session: second.model,
-			chat: second.mainChat.model,
+			chat: second.chat.model,
 		});
 		assert.deepEqual(
 			management.sessionTypes.get().map(entry => `${entry.providerId}:${entry.sessionType.id}`),
@@ -788,7 +796,7 @@ test('Sessions management applies provider registration and removal as authorita
 	}
 });
 
-test('Session draft replacement is atomic, explicit, and preserves the complete Chat request', async () => {
+test('Session draft replacement is atomic, explicit, and preserves the addressed Chat send', async () => {
 	const provider = new TestSessionsProvider('provider.draft');
 	const resource = URI.parse('test-session:/draft');
 	const draft = createSession(provider.id, resource, {
@@ -801,9 +809,9 @@ test('Session draft replacement is atomic, explicit, and preserves the complete 
 	});
 	provider.createSessionDraftHandler = () => draft.model;
 	provider.discardSessionDraftHandler = () => {};
-	let receivedRequest: IChatRequest | undefined;
-	provider.sendRequestHandler = async (_session, _chat, request) => {
-		receivedRequest = request;
+	let receivedAddress: { readonly session: ISession; readonly chat: IChat } | undefined;
+	provider.sendRequestHandler = async (session, chat) => {
+		receivedAddress = { session, chat };
 		provider.setSessionsAndFire([committed.model], {
 			transitions: [{
 				kind: SessionTransitionKind.Replaced,
@@ -822,26 +830,14 @@ test('Session draft replacement is atomic, explicit, and preserves the complete 
 	}));
 	const draftEvents: SessionDraftChangeKind[] = [];
 	store.add(management.onDidChangeDraftSession(event => draftEvents.push(event.kind)));
-	const attachment: IChatRequestAttachment = {
-		kind: ChatRequestAttachmentKind.Text,
-		id: 'attachment.text',
-		name: 'Evidence',
-		content: 'immutable evidence',
-		mimeType: 'text/plain',
-	};
-	const request: IChatRequest = { prompt: 'Start', attachments: [attachment] };
-
 	try {
 		assert.equal(management.createSessionDraft(provider.id, {
 			sessionType: `${provider.id}.default`,
 			workspace: WorkspaceLess,
 		}), draft.model);
-		await management.sendRequest(draft.model, draft.mainChat.model, request);
+		await management.sendRequest(draft.model, draft.chat.model);
 
-		assert.notEqual(receivedRequest, request);
-		assert.deepEqual(receivedRequest, request);
-		assert.notEqual(receivedRequest.attachments, request.attachments);
-		assert.notEqual(receivedRequest.attachments[0], attachment);
+		assert.deepEqual(receivedAddress, { session: draft.model, chat: draft.chat.model });
 		assert.deepEqual(replacementSnapshots, [{ sessions: [committed.model], draft: undefined }]);
 		assert.deepEqual(draftEvents, [SessionDraftChangeKind.Created, SessionDraftChangeKind.Replaced]);
 		assert.equal(management.draftSession.get(), undefined);
@@ -870,7 +866,7 @@ test('Session drafts require replacement on send and invalid drafts are released
 			workspace: WorkspaceLess,
 		});
 		await assert.rejects(
-			management.sendRequest(draft.model, draft.mainChat.model, { prompt: 'Start', attachments: [] }),
+			management.sendRequest(draft.model, draft.chat.model),
 			/not explicitly replaced/,
 		);
 		management.discardSessionDraft(draft.model);
@@ -901,6 +897,77 @@ test('Session drafts require replacement on send and invalid drafts are released
 		assert.equal(invalidHarness.management.draftSession.get(), undefined);
 	} finally {
 		invalidHarness.store.dispose();
+	}
+});
+
+test('Session draft validation rejects every invalid initial Chat shape without publishing a draft', () => {
+	const scenarios: readonly {
+		readonly id: string;
+		readonly configure: (draft: ISessionFixture) => void;
+		readonly expectedError: RegExp;
+	}[] = [
+		{
+			id: 'empty',
+			configure: draft => draft.chats.set([], undefined),
+			expectedError: /must contain one interactive user Chat/,
+		},
+		{
+			id: 'multiple',
+			configure: draft => draft.chats.set([
+				draft.chat.model,
+				createChat(URI.parse('test-chat:/draft-multiple-peer')).model,
+			], undefined),
+			expectedError: /must contain one interactive user Chat/,
+		},
+		{
+			id: 'tool-origin-only',
+			configure: draft => draft.chats.set([
+				createChat(URI.parse('test-chat:/draft-tool-only'), {
+					origin: {
+						kind: ChatOriginKind.Tool,
+						parentChat: draft.chat.model.resource,
+					},
+				}).model,
+			], undefined),
+			expectedError: /parent is outside the Session/,
+		},
+		{
+			id: 'read-only-user',
+			configure: draft => draft.chat.interactivity.set(ChatInteractivity.ReadOnly, undefined),
+			expectedError: /must contain one interactive user Chat/,
+		},
+	];
+
+	for (const scenario of scenarios) {
+		const provider = new TestSessionsProvider(`provider.invalid-draft-${scenario.id}`);
+		const draft = createSession(provider.id, URI.parse(`test-session:/${scenario.id}`), {
+			status: SessionStatus.Draft,
+		});
+		scenario.configure(draft);
+		provider.createSessionDraftHandler = () => draft.model;
+		let discardCount = 0;
+		provider.discardSessionDraftHandler = () => {
+			discardCount += 1;
+		};
+		const { store, management } = createHarness([provider]);
+		const draftEvents: SessionDraftChangeKind[] = [];
+		store.add(management.onDidChangeDraftSession(event => draftEvents.push(event.kind)));
+
+		try {
+			assert.throws(
+				() => management.createSessionDraft(provider.id, {
+					sessionType: `${provider.id}.default`,
+					workspace: WorkspaceLess,
+				}),
+				scenario.expectedError,
+			);
+			assert.equal(discardCount, 1);
+			assert.equal(management.draftSession.get(), undefined);
+			assert.deepEqual(draftEvents, []);
+		} finally {
+			store.dispose();
+		}
+		assert.equal(discardCount, 1);
 	}
 });
 
@@ -1105,171 +1172,83 @@ test('Sessions management routes required operations and explicit Auto model sel
 	const session = createSession(provider.id, URI.parse('test-session:/routing'));
 	provider.sessions.push(session.model);
 	provider.models.push(createModel('model.test'));
-	const requests: IChatRequest[] = [];
-	provider.sendRequestHandler = async (_session, _chat, request) => {
-		requests.push(request);
+	const requests: Array<{ readonly session: ISession; readonly chat: IChat }> = [];
+	provider.sendRequestHandler = async (addressedSession, addressedChat) => {
+		requests.push({ session: addressedSession, chat: addressedChat });
 	};
 	provider.renameSessionHandler = async (_session, title) => session.title.set(title, undefined);
 	provider.renameChatHandler = async (_session, chat, title) => {
-		if (chat === session.mainChat.model) {
-			session.mainChat.title.set(title, undefined);
+		if (chat === session.chat.model) {
+			session.chat.title.set(title, undefined);
 		}
 	};
 	const selectedModels: Array<string | undefined> = [];
 	provider.setChatModelHandler = async (_session, _chat, modelId) => {
 		selectedModels.push(modelId);
-		session.mainChat.modelId.set(modelId, undefined);
+		session.chat.modelId.set(modelId, undefined);
 	};
 	provider.setSessionArchivedHandler = async (_session, archived) => session.isArchived.set(archived, undefined);
+	const releases: string[] = [];
+	provider.releaseSessionHandler = async () => { releases.push('session'); };
+	provider.releaseChatHandler = async () => { releases.push('chat'); };
+	const turnOperations: Array<{ readonly kind: 'cancel' | 'steer'; readonly turnId: string; readonly message?: string }> = [];
+	provider.cancelTurnHandler = async (_session, _chat, turnId) => {
+		turnOperations.push({ kind: 'cancel', turnId });
+	};
+	provider.steerTurnHandler = async (_session, _chat, turnId, message) => {
+		turnOperations.push({ kind: 'steer', turnId, message });
+	};
 	const { store, management } = createHarness([provider]);
 	const modelEvents: string[] = [];
 	store.add(management.onDidChangeModels(event => modelEvents.push(event.providerId)));
-	const attachment: IChatRequestAttachment = {
-		kind: ChatRequestAttachmentKind.Resource,
-		id: 'resource',
-		name: 'Source',
-		resource: URI.parse('file:///source.txt'),
-		mimeType: 'text/plain',
-	};
-	const request: IChatRequest = { prompt: 'Continue', attachments: [attachment] };
-
 	try {
-		await management.sendRequest(session.model, session.mainChat.model, request);
+		await management.sendRequest(session.model, session.chat.model);
 		await management.renameSession(session.model, 'Renamed Session');
-		await management.renameChat(session.model, session.mainChat.model, 'Renamed Chat');
-		assert.deepEqual(management.getModels(session.model, session.mainChat.model), provider.models);
-		await management.setChatModel(session.model, session.mainChat.model, 'model.test');
-		await management.setChatModel(session.model, session.mainChat.model, undefined);
+		await management.renameChat(session.model, session.chat.model, 'Renamed Chat');
+		assert.deepEqual(management.getModels(session.model, session.chat.model), provider.models);
+		await management.setChatModel(session.model, session.chat.model, 'model.test');
+		await management.setChatModel(session.model, session.chat.model, undefined);
 		await management.setSessionArchived(session.model, true);
+		await management.releaseChat(session.model, session.chat.model);
+		await management.releaseSession(session.model);
+		await management.cancelTurn(session.model, session.chat.model, ' turn.cancel ');
+		await management.steerTurn(session.model, session.chat.model, ' turn.steer ', ' focus on tests ');
 		provider.fireModelsChanged();
 
-		assert.notEqual(requests[0], request);
-		assert.equal(requests[0].prompt, request.prompt);
-		const receivedAttachment = requests[0].attachments[0];
-		assert.notEqual(receivedAttachment, attachment);
-		assert.equal(receivedAttachment.kind, ChatRequestAttachmentKind.Resource);
-		if (receivedAttachment.kind !== ChatRequestAttachmentKind.Resource
-			|| attachment.kind !== ChatRequestAttachmentKind.Resource) {
-			throw new Error('Expected a resource attachment snapshot.');
-		}
-		assert.equal(receivedAttachment.resource.toString(), attachment.resource.toString());
+		assert.deepEqual(requests, [{ session: session.model, chat: session.chat.model }]);
 		assert.deepEqual(selectedModels, ['model.test', undefined]);
 		assert.deepEqual(modelEvents, [provider.id]);
+		assert.deepEqual(releases, ['chat', 'session']);
+		assert.deepEqual(turnOperations, [
+			{ kind: 'cancel', turnId: 'turn.cancel' },
+			{ kind: 'steer', turnId: 'turn.steer', message: 'focus on tests' },
+		]);
 		assert.equal(session.title.get(), 'Renamed Session');
-		assert.equal(session.mainChat.title.get(), 'Renamed Chat');
+		assert.equal(session.chat.title.get(), 'Renamed Chat');
 		assert.equal(session.isArchived.get(), true);
 	} finally {
 		store.dispose();
 	}
 });
 
-test('Sessions management rejects duplicate, excessive, and oversized Chat request attachments', async () => {
-	const provider = new TestSessionsProvider('provider.request-limits');
-	const session = createSession(provider.id, URI.parse('test-session:/request-limits'));
+test('Sessions management rejects a disabled provider model before mutation', async () => {
+	const provider = new TestSessionsProvider('provider.disabled-model');
+	const session = createSession(provider.id, URI.parse('test-session:/disabled-model'));
 	provider.sessions.push(session.model);
-	provider.sendRequestHandler = async () => {};
-	const { store, management } = createHarness([provider]);
-	const createTextAttachment = (id: string, content = 'text'): IChatRequestAttachment => ({
-		kind: ChatRequestAttachmentKind.Text,
-		id,
-		name: id,
-		content,
-		mimeType: 'text/plain',
-	});
-
-	try {
-		await assert.rejects(
-			management.sendRequest(session.model, session.mainChat.model, {
-				prompt: 'Ask',
-				attachments: [createTextAttachment('duplicate'), createTextAttachment('duplicate')],
-			}),
-			/duplicated/,
-		);
-		await assert.rejects(
-			management.sendRequest(session.model, session.mainChat.model, {
-				prompt: 'Ask',
-				attachments: Array.from(
-					{ length: maximumSessionChatRequestAttachments + 1 },
-					(_, index) => createTextAttachment(`attachment-${index}`),
-				),
-			}),
-			/more than/,
-		);
-		await assert.rejects(
-			management.sendRequest(session.model, session.mainChat.model, {
-				prompt: 'Ask',
-				attachments: [createTextAttachment(
-					'oversized',
-					'x'.repeat(maximumSessionChatRequestPayloadBytes),
-				)],
-			}),
-			/serialized bytes/,
-		);
-	} finally {
-		store.dispose();
-	}
-});
-
-test('Sessions management dispatches an immutable request snapshot across an asynchronous provider call', async () => {
-	const provider = new TestSessionsProvider('provider.request-snapshot');
-	const session = createSession(provider.id, URI.parse('test-session:/request-snapshot'));
-	provider.sessions.push(session.model);
-	let releaseRequest!: () => void;
-	const requestGate = new Promise<void>(resolve => releaseRequest = resolve);
-	let receivedRequest: IChatRequest | undefined;
-	provider.sendRequestHandler = async (_session, _chat, request) => {
-		receivedRequest = request;
-		await requestGate;
+	provider.models.push({ ...createModel('model.disabled'), enabled: false });
+	let mutationCount = 0;
+	provider.setChatModelHandler = async () => {
+		mutationCount += 1;
 	};
 	const { store, management } = createHarness([provider]);
-	const document = {
-		type: 'doc',
-		content: [{
-			type: 'paragraph',
-			content: [{ type: 'text', text: 'original document' }],
-		}],
-	};
-	const attachment = {
-		kind: ChatRequestAttachmentKind.Editor as const,
-		id: 'editor',
-		name: 'Editor',
-		resource: URI.parse('draft:/request-snapshot'),
-		document,
-		selection: { blockId: 'block-1', startOffset: 0, endOffset: 8 },
-	};
-	const attachments: IChatRequestAttachment[] = [attachment];
-	const request = { prompt: 'Original prompt', attachments };
-
 	try {
-		const sendRequest = management.sendRequest(session.model, session.mainChat.model, request);
-		request.prompt = 'Mutated prompt';
-		document.content[0].content[0].text = 'mutated document';
-		attachments.push({
-			kind: ChatRequestAttachmentKind.Text,
-			id: 'late',
-			name: 'Late',
-			content: 'late mutation',
-			mimeType: 'text/plain',
-		});
-
-		assert.ok(receivedRequest);
-		assert.equal(receivedRequest.prompt, 'Original prompt');
-		assert.equal(receivedRequest.attachments.length, 1);
-		const receivedAttachment = receivedRequest.attachments[0];
-		assert.equal(receivedAttachment.kind, ChatRequestAttachmentKind.Editor);
-		if (receivedAttachment.kind !== ChatRequestAttachmentKind.Editor) {
-			throw new Error('Expected an editor attachment snapshot.');
-		}
-		assert.equal(receivedAttachment.document.content?.[0]?.content?.[0]?.text, 'original document');
-		assert.equal(Object.isFrozen(receivedRequest), true);
-		assert.equal(Object.isFrozen(receivedRequest.attachments), true);
-		assert.equal(Object.isFrozen(receivedAttachment), true);
-		assert.equal(Object.isFrozen(receivedAttachment.document), true);
-		assert.equal(Object.isFrozen(receivedAttachment.document.content?.[0] ?? {}), true);
-		releaseRequest();
-		await sendRequest;
+		await assert.rejects(
+			management.setChatModel(session.model, session.chat.model, 'model.disabled'),
+			/Model 'model.disabled' is not available/,
+		);
+		assert.equal(mutationCount, 0);
+		assert.equal(session.chat.modelId.get(), undefined);
 	} finally {
-		releaseRequest();
 		store.dispose();
 	}
 });
@@ -1293,18 +1272,18 @@ test('Mutation postconditions reject Session or Chat models replaced while await
 		});
 	};
 	provider.renameChatHandler = async (current, chat, title) => {
-		sessions[1].mainChat.title.set(title, undefined);
+		sessions[1].chat.title.set(title, undefined);
 		provider.setSessionsAndFire([sessions[2].model], {
 			transitions: [{ kind: SessionTransitionKind.Replaced, from: current, to: sessions[2].model }],
 		});
-		assert.equal(chat, sessions[1].mainChat.model);
+		assert.equal(chat, sessions[1].chat.model);
 	};
 	provider.setChatModelHandler = async (current, chat, modelId) => {
-		sessions[2].mainChat.modelId.set(modelId, undefined);
+		sessions[2].chat.modelId.set(modelId, undefined);
 		provider.setSessionsAndFire([sessions[3].model], {
 			transitions: [{ kind: SessionTransitionKind.Replaced, from: current, to: sessions[3].model }],
 		});
-		assert.equal(chat, sessions[2].mainChat.model);
+		assert.equal(chat, sessions[2].chat.model);
 	};
 	provider.setSessionArchivedHandler = async (current, archived) => {
 		sessions[3].isArchived.set(archived, undefined);
@@ -1317,11 +1296,11 @@ test('Mutation postconditions reject Session or Chat models replaced while await
 	try {
 		await assert.rejects(management.renameSession(sessions[0].model, 'Renamed'), /stale model/);
 		await assert.rejects(
-			management.renameChat(sessions[1].model, sessions[1].mainChat.model, 'Renamed Chat'),
+			management.renameChat(sessions[1].model, sessions[1].chat.model, 'Renamed Chat'),
 			/stale model/,
 		);
 		await assert.rejects(
-			management.setChatModel(sessions[2].model, sessions[2].mainChat.model, 'model.await'),
+			management.setChatModel(sessions[2].model, sessions[2].chat.model, 'model.await'),
 			/stale model/,
 		);
 		await assert.rejects(management.setSessionArchived(sessions[3].model, true), /stale model/);
@@ -1339,7 +1318,7 @@ test('Sessions management routes peer, fork, Chat delete, and Session delete lif
 		origin: { kind: ChatOriginKind.User },
 	});
 	const fork = createChat(URI.parse('test-chat:/fork'), {
-		origin: { kind: ChatOriginKind.Fork, parentChat: session.mainChat.model.resource },
+		origin: { kind: ChatOriginKind.Fork, parentChat: session.chat.model.resource },
 	});
 	provider.createChatHandler = async () => {
 		session.chats.set([...session.chats.get(), peer.model], undefined);
@@ -1374,9 +1353,9 @@ test('Sessions management routes peer, fork, Chat delete, and Session delete lif
 
 	try {
 		assert.equal(await management.createChat(session.model), peer.model);
-		assert.equal(await management.forkChat(session.model, session.mainChat.model, 'turn.1'), fork.model);
+		assert.equal(await management.forkChat(session.model, session.chat.model, 'turn.1'), fork.model);
 		await management.deleteChat(session.model, fork.model);
-		assert.deepEqual(session.chats.get(), [session.mainChat.model, peer.model]);
+		assert.deepEqual(session.chats.get(), [session.chat.model, peer.model]);
 		await management.deleteSession(session.model);
 		assert.deepEqual(management.sessions.get(), []);
 		assert.deepEqual(transitionKinds, [
@@ -1390,13 +1369,294 @@ test('Sessions management routes peer, fork, Chat delete, and Session delete lif
 	}
 });
 
+test('Chat creation and fork use independent capabilities and one dynamic capacity', async () => {
+	const provider = new TestSessionsProvider('provider.chat-capacity');
+	const session = createSession(provider.id, URI.parse('test-session:/chat-capacity'), {
+		capabilities: {
+			supportsCreateChat: true,
+			maximumChatCount: 3,
+			supportsFork: false,
+		},
+	});
+	const peer = createChat(URI.parse('test-chat:/capacity-peer'));
+	const fork = createChat(URI.parse('test-chat:/capacity-fork'), {
+		origin: { kind: ChatOriginKind.Fork, parentChat: session.chat.model.resource },
+	});
+	provider.sessions.push(session.model);
+	provider.createChatHandler = async () => {
+		session.chats.set([...session.chats.get(), peer.model], undefined);
+		provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		});
+		return peer.model;
+	};
+	provider.forkChatHandler = async () => {
+		session.chats.set([...session.chats.get(), fork.model], undefined);
+		provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		});
+		return fork.model;
+	};
+	const { store, management } = createHarness([provider]);
+
+	try {
+		assert.equal(await management.createChat(session.model), peer.model);
+		await assert.rejects(
+			management.forkChat(session.model, session.chat.model, 'turn.disabled'),
+			/does not support Chat forks/,
+		);
+
+		session.capabilities.set({
+			...session.capabilities.get(),
+			supportsCreateChat: false,
+			supportsFork: true,
+		}, undefined);
+		provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		});
+		assert.equal(await management.forkChat(session.model, session.chat.model, 'turn.enabled'), fork.model);
+		await assert.rejects(
+			management.createChat(session.model),
+			/does not support user-created peer Chats/,
+		);
+
+		session.capabilities.set({
+			...session.capabilities.get(),
+			supportsCreateChat: true,
+			maximumChatCount: 0,
+		}, undefined);
+		assert.doesNotThrow(() => provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		}));
+		assert.equal(session.chats.get().length, 3);
+		await assert.rejects(management.createChat(session.model), /maximum Chat count of 0/);
+		await assert.rejects(
+			management.forkChat(session.model, session.chat.model, 'turn.capacity'),
+			/maximum Chat count of 0/,
+		);
+	} finally {
+		store.dispose();
+	}
+});
+
+test('Concurrent Chat creation reserves one remaining Session capacity slot', async () => {
+	const provider = new TestSessionsProvider('provider.concurrent-create-capacity');
+	const session = createSession(provider.id, URI.parse('test-session:/concurrent-create-capacity'), {
+		capabilities: { maximumChatCount: 2 },
+	});
+	const peers = [
+		createChat(URI.parse('test-chat:/concurrent-create-first')),
+		createChat(URI.parse('test-chat:/concurrent-create-second')),
+	];
+	provider.sessions.push(session.model);
+	const providerCallStarted = new DeferredPromise<void>();
+	const releaseProviderCall = new DeferredPromise<void>();
+	let providerCallCount = 0;
+	provider.createChatHandler = async () => {
+		const callIndex = providerCallCount++;
+		providerCallStarted.complete(undefined);
+		await releaseProviderCall.p;
+		const peer = peers[callIndex];
+		session.chats.set([...session.chats.get(), peer.model], undefined);
+		provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		});
+		return peer.model;
+	};
+	const { store, management } = createHarness([provider]);
+	const operations: Promise<IChat>[] = [];
+
+	try {
+		const first = management.createChat(session.model);
+		operations.push(first);
+		await providerCallStarted.p;
+		const second = management.createChat(session.model);
+		operations.push(second);
+
+		assert.equal(providerCallCount, 1);
+		releaseProviderCall.complete(undefined);
+		assert.equal(await first, peers[0].model);
+		await assert.rejects(second, /maximum Chat count of 2/);
+		assert.equal(providerCallCount, 1);
+		assert.deepEqual(session.chats.get(), [session.chat.model, peers[0].model]);
+	} finally {
+		if (!releaseProviderCall.isSettled) {
+			releaseProviderCall.complete(undefined);
+		}
+		await Promise.allSettled(operations);
+		store.dispose();
+	}
+});
+
+test('Concurrent Chat create and fork operations share Session capacity in call order', async () => {
+	const runOrdering = async (firstKind: 'create' | 'fork'): Promise<void> => {
+		const provider = new TestSessionsProvider(`provider.concurrent-${firstKind}-capacity`);
+		const session = createSession(provider.id, URI.parse(`test-session:/concurrent-${firstKind}-capacity`), {
+			capabilities: { maximumChatCount: 2 },
+		});
+		const peer = createChat(URI.parse(`test-chat:/concurrent-${firstKind}-peer`));
+		const fork = createChat(URI.parse(`test-chat:/concurrent-${firstKind}-fork`), {
+			origin: { kind: ChatOriginKind.Fork, parentChat: session.chat.model.resource },
+		});
+		provider.sessions.push(session.model);
+		const providerCallStarted = new DeferredPromise<void>();
+		const releaseProviderCall = new DeferredPromise<void>();
+		let createCallCount = 0;
+		let forkCallCount = 0;
+		const commitChat = (chat: IChat): IChat => {
+			session.chats.set([...session.chats.get(), chat], undefined);
+			provider.setSessionsAndFire([session.model], {
+				transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+			});
+			return chat;
+		};
+		provider.createChatHandler = async () => {
+			createCallCount += 1;
+			providerCallStarted.complete(undefined);
+			await releaseProviderCall.p;
+			return commitChat(peer.model);
+		};
+		provider.forkChatHandler = async () => {
+			forkCallCount += 1;
+			providerCallStarted.complete(undefined);
+			await releaseProviderCall.p;
+			return commitChat(fork.model);
+		};
+		const { store, management } = createHarness([provider]);
+		const operations: Promise<IChat>[] = [];
+
+		try {
+			const first = firstKind === 'create'
+				? management.createChat(session.model)
+				: management.forkChat(session.model, session.chat.model, 'turn.first');
+			operations.push(first);
+			await providerCallStarted.p;
+			const second = firstKind === 'create'
+				? management.forkChat(session.model, session.chat.model, 'turn.second')
+				: management.createChat(session.model);
+			operations.push(second);
+
+			assert.deepEqual(
+				{ createCallCount, forkCallCount },
+				firstKind === 'create'
+					? { createCallCount: 1, forkCallCount: 0 }
+					: { createCallCount: 0, forkCallCount: 1 },
+			);
+			releaseProviderCall.complete(undefined);
+			const expectedChat = firstKind === 'create' ? peer.model : fork.model;
+			assert.equal(await first, expectedChat);
+			await assert.rejects(second, /maximum Chat count of 2/);
+			assert.deepEqual(
+				{ createCallCount, forkCallCount },
+				firstKind === 'create'
+					? { createCallCount: 1, forkCallCount: 0 }
+					: { createCallCount: 0, forkCallCount: 1 },
+			);
+			assert.deepEqual(session.chats.get(), [session.chat.model, expectedChat]);
+		} finally {
+			if (!releaseProviderCall.isSettled) {
+				releaseProviderCall.complete(undefined);
+			}
+			await Promise.allSettled(operations);
+			store.dispose();
+		}
+	};
+
+	await runOrdering('create');
+	await runOrdering('fork');
+});
+
+test('Chat create and delete share one FIFO catalog mutation boundary', async () => {
+	const provider = new TestSessionsProvider('provider.concurrent-chat-catalog');
+	const session = createSession(provider.id, URI.parse('test-session:/concurrent-chat-catalog'));
+	const peer = createChat(URI.parse('test-chat:/concurrent-chat-catalog-peer'));
+	provider.sessions.push(session.model);
+	const createStarted = new DeferredPromise<void>();
+	const releaseCreate = new DeferredPromise<void>();
+	const providerCalls: string[] = [];
+	provider.createChatHandler = async () => {
+		providerCalls.push('create');
+		createStarted.complete(undefined);
+		await releaseCreate.p;
+		session.chats.set([...session.chats.get(), peer.model], undefined);
+		provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		});
+		return peer.model;
+	};
+	provider.deleteChatHandler = async (_session, chat) => {
+		providerCalls.push('delete');
+		session.chats.set(session.chats.get().filter(candidate => candidate !== chat), undefined);
+		provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		});
+	};
+	const { store, management } = createHarness([provider]);
+	const operations: Promise<unknown>[] = [];
+
+	try {
+		const create = management.createChat(session.model);
+		operations.push(create);
+		await createStarted.p;
+		const deletion = management.deleteChat(session.model, session.chat.model);
+		operations.push(deletion);
+		assert.deepEqual(providerCalls, ['create']);
+
+		releaseCreate.complete(undefined);
+		assert.equal(await create, peer.model);
+		await deletion;
+		assert.deepEqual(providerCalls, ['create', 'delete']);
+		assert.deepEqual(session.chats.get(), [peer.model]);
+	} finally {
+		if (!releaseCreate.isSettled) {
+			releaseCreate.complete(undefined);
+		}
+		await Promise.allSettled(operations);
+		store.dispose();
+	}
+});
+
+test('First, last, and only Chats delete by their own capability and leave an empty Session', async () => {
+	const provider = new TestSessionsProvider('provider.chat-delete-order');
+	const session = createSession(provider.id, URI.parse('test-session:/chat-delete-order'));
+	const middle = createChat(URI.parse('test-chat:/delete-middle'));
+	const last = createChat(URI.parse('test-chat:/delete-last'));
+	session.chats.set([session.chat.model, middle.model, last.model], undefined);
+	provider.sessions.push(session.model);
+	const deleted: IChat[] = [];
+	provider.deleteChatHandler = async (_session, chat) => {
+		deleted.push(chat);
+		session.chats.set(session.chats.get().filter(candidate => candidate !== chat), undefined);
+		provider.setSessionsAndFire([session.model], {
+			transitions: [{ kind: SessionTransitionKind.Changed, session: session.model }],
+		});
+	};
+	const { store, management } = createHarness([provider]);
+
+	try {
+		await management.deleteChat(session.model, session.chat.model);
+		assert.deepEqual(session.chats.get(), [middle.model, last.model]);
+
+		await management.deleteChat(session.model, last.model);
+		assert.deepEqual(session.chats.get(), [middle.model]);
+
+		await management.deleteChat(session.model, middle.model);
+		assert.deepEqual(session.chats.get(), []);
+		assert.equal(management.getSession(session.model.sessionId), session.model);
+		assert.deepEqual(provider.getSessions(), [session.model]);
+		assert.deepEqual(deleted, [session.chat.model, last.model, middle.model]);
+	} finally {
+		store.dispose();
+	}
+});
+
 test('Chat creation requires one new resource and an authoritative matching collection transition', async () => {
 	const reusedProvider = new TestSessionsProvider('provider.reused-chat');
 	const reusedSession = createSession(reusedProvider.id, URI.parse('test-session:/reused-chat'));
 	const existingPeer = createChat(URI.parse('test-chat:/existing-peer'), {
 		origin: { kind: ChatOriginKind.User },
 	});
-	reusedSession.chats.set([reusedSession.mainChat.model, existingPeer.model], undefined);
+	reusedSession.chats.set([reusedSession.chat.model, existingPeer.model], undefined);
 	reusedProvider.sessions.push(reusedSession.model);
 	reusedProvider.createChatHandler = async () => {
 		reusedProvider.setSessionsAndFire([reusedSession.model], {
@@ -1437,7 +1697,7 @@ test('Chat creation requires one new resource and an authoritative matching coll
 	const unrelatedProvider = new TestSessionsProvider('provider.unrelated-change');
 	const unrelatedSession = createSession(unrelatedProvider.id, URI.parse('test-session:/unrelated-change'));
 	const fork = createChat(URI.parse('test-chat:/unreported-fork'), {
-		origin: { kind: ChatOriginKind.Fork, parentChat: unrelatedSession.mainChat.model.resource },
+		origin: { kind: ChatOriginKind.Fork, parentChat: unrelatedSession.chat.model.resource },
 	});
 	unrelatedProvider.sessions.push(unrelatedSession.model);
 	unrelatedProvider.forkChatHandler = async () => {
@@ -1450,7 +1710,7 @@ test('Chat creation requires one new resource and an authoritative matching coll
 	const unrelatedHarness = createHarness([unrelatedProvider]);
 	try {
 		await assert.rejects(
-			unrelatedHarness.management.forkChat(unrelatedSession.model, unrelatedSession.mainChat.model, 'turn.1'),
+			unrelatedHarness.management.forkChat(unrelatedSession.model, unrelatedSession.chat.model, 'turn.1'),
 			/authoritative changed transition for the Chat fork/,
 		);
 	} finally {
@@ -1489,10 +1749,10 @@ test('Delete postconditions use stable Session and Chat identities', async () =>
 	const peerResource = URI.parse('test-chat:/stable-peer');
 	const peer = createChat(peerResource, { origin: { kind: ChatOriginKind.User } });
 	const replacementPeer = createChat(peerResource, { origin: { kind: ChatOriginKind.User } });
-	chatSession.chats.set([chatSession.mainChat.model, peer.model], undefined);
+	chatSession.chats.set([chatSession.chat.model, peer.model], undefined);
 	chatProvider.sessions.push(chatSession.model);
 	chatProvider.deleteChatHandler = async () => {
-		chatSession.chats.set([chatSession.mainChat.model, replacementPeer.model], undefined);
+		chatSession.chats.set([chatSession.chat.model, replacementPeer.model], undefined);
 		chatProvider.setSessionsAndFire([chatSession.model], {
 			transitions: [{ kind: SessionTransitionKind.Changed, session: chatSession.model }],
 		});
@@ -1509,11 +1769,12 @@ test('Delete postconditions use stable Session and Chat identities', async () =>
 	}
 });
 
-test('Capabilities, Chat interactivity, and main Chat semantics gate current operations', async () => {
+test('Capabilities and addressed Chat state gate current operations', async () => {
 	const provider = new TestSessionsProvider('provider.gates');
 	const session = createSession(provider.id, URI.parse('test-session:/gates'), {
 		capabilities: {
-			supportsMultipleChats: false,
+			supportsCreateChat: false,
+			maximumChatCount: 2,
 			supportsFork: false,
 			supportsRename: false,
 			supportsArchive: false,
@@ -1521,28 +1782,29 @@ test('Capabilities, Chat interactivity, and main Chat semantics gate current ope
 			supportsModels: false,
 		},
 	});
+	session.chat.capabilities.set({ supportsRename: true, supportsDelete: false }, undefined);
 	const readOnly = createChat(URI.parse('test-chat:/read-only'), {
-		origin: { kind: ChatOriginKind.Tool, parentChat: session.mainChat.model.resource },
+		origin: { kind: ChatOriginKind.Tool, parentChat: session.chat.model.resource },
 		interactivity: ChatInteractivity.ReadOnly,
 		capabilities: { supportsRename: true, supportsDelete: true },
 	});
-	session.chats.set([session.mainChat.model, readOnly.model], undefined);
+	session.chats.set([session.chat.model, readOnly.model], undefined);
 	provider.sessions.push(session.model);
 	const { store, management } = createHarness([provider]);
 
 	try {
 		await assert.rejects(management.createChat(session.model), /does not support user-created peer Chats/);
-		await assert.rejects(management.forkChat(session.model, session.mainChat.model, 'turn'), /does not support Chat forks/);
+		await assert.rejects(management.forkChat(session.model, session.chat.model, 'turn'), /does not support Chat forks/);
 		await assert.rejects(management.renameSession(session.model, 'Name'), /does not support rename/);
 		await assert.rejects(management.setSessionArchived(session.model, true), /does not support archive/);
 		await assert.rejects(management.deleteSession(session.model), /does not support delete/);
-		assert.throws(() => management.getModels(session.model, session.mainChat.model), /does not support model selection/);
+		assert.throws(() => management.getModels(session.model, session.chat.model), /does not support model selection/);
 		await assert.rejects(
-			management.sendRequest(session.model, readOnly.model, { prompt: 'No', attachments: [] }),
+			management.sendRequest(session.model, readOnly.model),
 			/not interactive/,
 		);
 		await assert.rejects(management.renameChat(session.model, readOnly.model, 'No'), /not interactive/);
-		await assert.rejects(management.deleteChat(session.model, session.mainChat.model), /main Chat .* cannot be deleted/);
+		await assert.rejects(management.deleteChat(session.model, session.chat.model), /does not support delete/);
 	} finally {
 		store.dispose();
 	}

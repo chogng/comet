@@ -10,6 +10,12 @@ import { Event } from 'cs/base/common/event';
 import { CancellationTokenNone } from 'cs/base/common/cancellation';
 import { URI } from 'cs/base/common/uri';
 import {
+	createAgentHostClientConnectionId,
+	createAgentSubmissionId,
+} from 'cs/platform/agentHost/common/identities';
+import type { IClientAgentToolService } from 'cs/platform/agentHost/browser/clientAgentTools';
+import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
+import {
 	createWritingEditorDocumentFromPlainText,
 	writingEditorDocumentToPlainText,
 } from 'cs/editor/common/writingEditorDocument';
@@ -27,7 +33,13 @@ import type {
 	IEditorGroupsOpenOptions,
 	IEditorGroupsService,
 } from 'cs/workbench/services/editor/common/editorGroupsService';
-import { ChatRequestAttachmentKind } from 'cs/workbench/contrib/chat/common/chatRequest';
+import { ChatService } from 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
+import { createTestChatStorageService } from 'cs/workbench/contrib/chat/test/common/testChatStorage';
+import { ChatComposerSourceService } from 'cs/workbench/contrib/chat/browser/composer/chatComposerSources';
+import {
+	createDraftEditorSnapshotAttachment,
+	DraftEditorChatAttachmentsContribution,
+} from 'cs/workbench/contrib/draftEditor/browser/draftEditorChatAttachments';
 import { locales } from 'language/locales';
 
 function createCloseService(confirmClose = true): IDraftEditorCloseService {
@@ -232,7 +244,7 @@ test('DraftEditorService reads and patches the explicitly addressed open Draft r
 	}
 });
 
-test('DraftEditorService snapshots only the active bound Draft Pane selection', () => {
+test('explicit Draft Editor attachment snapshots only the active bound Draft Pane selection', async () => {
 	const group = new EditorGroupModel('draft-attachment-group');
 	const first = new DraftEditorInput({
 		id: 'draft-attachment-first',
@@ -271,13 +283,13 @@ test('DraftEditorService snapshots only the active bound Draft Pane selection', 
 			shouldFocus: false,
 		});
 
-		const attachment = service.getActiveRequestAttachment();
-		assert(attachment);
-		assert.deepEqual(attachment, {
-			kind: ChatRequestAttachmentKind.Editor,
-			id: `editor:${first.resource.toString()}`,
+		assert.equal(service.activeInput, first);
+		const firstSnapshot = service.getTargetSnapshot(first.resource);
+		assert(firstSnapshot);
+		const attachment = createDraftEditorSnapshotAttachment('editor-attachment-1', firstSnapshot);
+		assert.deepEqual(attachment.state, {
+			resource: first.resource.toString(true),
 			name: 'First Draft',
-			resource: first.resource,
 			document: first.document,
 			selection: {
 				blockId: initialSelection.blockId,
@@ -285,20 +297,71 @@ test('DraftEditorService snapshots only the active bound Draft Pane selection', 
 				endOffset: 5,
 			},
 		});
-		assert.deepEqual(Object.keys(attachment.selection!), [
-			'blockId',
-			'startOffset',
-			'endOffset',
-		]);
+
+		const chatService = new ChatService(createTestChatStorageService());
+			const contribution = new DraftEditorChatAttachmentsContribution(
+				chatService,
+				service,
+				new ChatComposerSourceService(),
+				{
+					_serviceBrand: undefined,
+					connection: createAgentHostClientConnectionId('draft-test-client'),
+					publish: () => { throw new Error('Draft attachment test does not publish Tools.'); },
+				} as IClientAgentToolService,
+			);
+		const owner = chatService.createModel(URI.parse('chat:/draft-attachment'));
+		try {
+			chatService.setInput(owner.object.resource, 'Use the selected draft context');
+			chatService.addPendingAttachments(owner.object.resource, [attachment]);
+			const prepared = await chatService.prepareSubmission(
+				owner.object.resource,
+				createAgentSubmissionId('draft-submission-1'),
+				CancellationTokenNone,
+			);
+			assert.equal(prepared.attachments.length, 1);
+			assert.deepEqual(prepared.attachments[0].representation.value, attachment.state);
+			assert.equal(
+				prepared.attachments[0].content?.mediaType,
+				'application/vnd.comet.editor-snapshot+json',
+			);
+			await prepared.reject();
+			const restored = owner.object.getSnapshot().pendingAttachments;
+			assert.equal(restored.length, 1);
+			assert.equal(restored[0].id, attachment.id);
+			assert.equal(
+				encodeAgentHostProtocolValue(restored[0].state),
+				encodeAgentHostProtocolValue(attachment.state),
+			);
+		} finally {
+			owner.dispose();
+			contribution.dispose();
+		}
 
 		pane.clearInput();
-		assert.equal(service.getActiveRequestAttachment(), undefined);
+		const unboundSnapshot = service.getTargetSnapshot(first.resource);
+		assert(unboundSnapshot);
+		assert.throws(
+			() => createDraftEditorSnapshotAttachment('editor-attachment-2', unboundSnapshot),
+			/no current pane snapshot/,
+		);
 
 		group.setActive(second);
 		pane.setInput(second, undefined, {}, CancellationTokenNone);
-		assert.equal(service.getActiveRequestAttachment()?.resource, second.resource);
+		assert.equal(service.activeInput, second);
+		const secondSnapshot = service.getTargetSnapshot(second.resource);
+		assert(secondSnapshot);
+		assert.equal(
+			(createDraftEditorSnapshotAttachment('editor-attachment-3', secondSnapshot).state as { resource: string }).resource,
+			second.resource.toString(true),
+		);
 		group.setActive(first);
-		assert.equal(service.getActiveRequestAttachment(), undefined);
+		assert.equal(service.activeInput, first);
+		const inactivePaneSnapshot = service.getTargetSnapshot(first.resource);
+		assert(inactivePaneSnapshot);
+		assert.throws(
+			() => createDraftEditorSnapshotAttachment('editor-attachment-4', inactivePaneSnapshot),
+			/no current pane snapshot/,
+		);
 	} finally {
 		pane.dispose();
 		group.dispose();

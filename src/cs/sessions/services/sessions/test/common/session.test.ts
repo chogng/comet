@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'node:test';
 
 import { constObservable } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
@@ -26,8 +26,9 @@ const TestProviderId = 'test.sessions.provider';
 const TestSessionResource = URI.parse('test-session:/session');
 const TestDate = new Date('2026-07-11T00:00:00.000Z');
 
-const DefaultSessionCapabilities: ISessionCapabilities = {
-	supportsMultipleChats: false,
+const baseSessionCapabilities: ISessionCapabilities = {
+	supportsCreateChat: false,
+	maximumChatCount: undefined,
 	supportsFork: false,
 	supportsRename: true,
 	supportsArchive: true,
@@ -57,17 +58,16 @@ function createChat(
 			supportsRename: true,
 			supportsDelete: true,
 		}),
-		origin: options.origin,
+		origin: options.origin ?? { kind: ChatOriginKind.User },
 	};
 }
 
 function createSession(options: {
-	readonly chats: readonly IChat[];
-	readonly mainChat: IChat;
+	readonly chats?: readonly IChat[];
 	readonly capabilities?: Partial<ISessionCapabilities>;
 	readonly workspace?: ISessionWorkspaceState;
 	readonly sessionId?: string;
-}): ISession {
+} = {}): ISession {
 	return {
 		sessionId: options.sessionId ?? toSessionId(TestProviderId, TestSessionResource),
 		resource: TestSessionResource,
@@ -81,64 +81,48 @@ function createSession(options: {
 		isArchived: constObservable(false),
 		workspace: constObservable(options.workspace ?? { kind: SessionWorkspaceKind.WorkspaceLess }),
 		changes: constObservable([]),
-		mainChat: constObservable(options.mainChat),
-		chats: constObservable(options.chats),
+		chats: constObservable(options.chats ?? []),
 		capabilities: constObservable({
-			...DefaultSessionCapabilities,
+			...baseSessionCapabilities,
 			...options.capabilities,
 		}),
 	};
 }
 
-function createMainChat(options: Parameters<typeof createChat>[1] = {}): IChat {
-	return createChat(URI.parse('test-chat:/main'), {
-		...options,
-		capabilities: options.capabilities ?? {
+test('Session invariants accept empty and ordered equal-status Chat catalogs', () => {
+	const userChat = createChat(URI.parse('test-chat:/user'), {
+		capabilities: {
 			supportsRename: true,
-			supportsDelete: false,
+			supportsDelete: true,
 		},
-	});
-}
-
-test('Session invariants accept explicit peer and Multi-Agent worker Chats', () => {
-	const mainChat = createMainChat();
-	const peerChat = createChat(URI.parse('test-chat:/peer'), {
-		origin: { kind: ChatOriginKind.User },
 	});
 	const forkChat = createChat(URI.parse('test-chat:/fork'), {
 		origin: {
 			kind: ChatOriginKind.Fork,
-			parentChat: mainChat.resource,
+			parentChat: userChat.resource,
 		},
 	});
 	const workerChat = createChat(URI.parse('test-chat:/worker'), {
-		interactivity: ChatInteractivity.ReadOnly,
+		interactivity: ChatInteractivity.Hidden,
 		origin: {
 			kind: ChatOriginKind.Tool,
-			parentChat: mainChat.resource,
+			parentChat: forkChat.resource,
 		},
 		capabilities: {
 			supportsRename: false,
 			supportsDelete: false,
 		},
 	});
-	const session = createSession({
-		mainChat,
-		chats: [mainChat, peerChat, forkChat, workerChat],
+
+	assert.doesNotThrow(() => assertSessionInvariants(createSession()));
+	assert.doesNotThrow(() => assertSessionInvariants(createSession({
+		chats: [workerChat, forkChat, userChat],
 		capabilities: {
-			supportsMultipleChats: true,
+			supportsCreateChat: true,
+			maximumChatCount: 4,
 			supportsFork: true,
 		},
-	});
-	const workerOnlySession = createSession({
-		mainChat,
-		chats: [mainChat, workerChat],
-	});
-
-	assert.doesNotThrow(() => {
-		assertSessionInvariants(session);
-		assertSessionInvariants(workerOnlySession);
-	});
+	})));
 });
 
 test('Session identity is deterministic and provider-aware', () => {
@@ -162,42 +146,51 @@ test('Session identity is deterministic and provider-aware', () => {
 	);
 });
 
-test('Session capabilities gate current operations without invalidating authoritative history', () => {
-	const mainChat = createMainChat();
-	const peerChat = createChat(URI.parse('test-chat:/peer'), {
-		origin: { kind: ChatOriginKind.User },
-	});
+test('Session capability changes do not invalidate authoritative Chat history', () => {
+	const userChat = createChat(URI.parse('test-chat:/user'));
+	const peerChat = createChat(URI.parse('test-chat:/peer'));
 	const forkChat = createChat(URI.parse('test-chat:/fork'), {
 		origin: {
 			kind: ChatOriginKind.Fork,
-			parentChat: mainChat.resource,
+			parentChat: userChat.resource,
 		},
 	});
 
 	assert.doesNotThrow(() => assertSessionInvariants(createSession({
-		mainChat,
-		chats: [mainChat, peerChat, forkChat],
+		chats: [userChat, peerChat, forkChat],
 		capabilities: {
-			supportsMultipleChats: false,
+			supportsCreateChat: false,
+			maximumChatCount: 0,
 			supportsFork: false,
 		},
-		workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
+	})));
+	assert.doesNotThrow(() => assertSessionInvariants(createSession({
+		chats: [userChat],
+		capabilities: {
+			supportsCreateChat: true,
+			maximumChatCount: undefined,
+			supportsFork: true,
+		},
 	})));
 });
 
-test('Session invariants reject invalid identity, membership, and origin state', () => {
-	const validMain = createMainChat();
-	const missingMain = createMainChat();
-	const duplicateMain = createMainChat();
-	const duplicatePeer = createChat(duplicateMain.resource, {
-		origin: { kind: ChatOriginKind.User },
-	});
-	const hiddenMain = createMainChat({ interactivity: ChatInteractivity.Hidden });
-	const additionalWithoutOrigin = createChat(URI.parse('test-chat:/missing-origin'));
+test('Session invariants reject invalid capacity, identity, membership, and origin state', () => {
+	const userChat = createChat(URI.parse('test-chat:/user'));
+	const duplicateUser = createChat(userChat.resource);
+	const missingOrigin = {
+		...createChat(URI.parse('test-chat:/missing-origin')),
+		origin: undefined as never,
+	};
 	const externalParentWorker = createChat(URI.parse('test-chat:/external-parent-worker'), {
 		origin: {
 			kind: ChatOriginKind.Tool,
 			parentChat: URI.parse('test-chat:/outside'),
+		},
+	});
+	const selfParented = createChat(URI.parse('test-chat:/self-parented'), {
+		origin: {
+			kind: ChatOriginKind.Fork,
+			parentChat: URI.parse('test-chat:/self-parented'),
 		},
 	});
 	const cycleA = createChat(URI.parse('test-chat:/cycle-a'), {
@@ -212,41 +205,22 @@ test('Session invariants reject invalid identity, membership, and origin state',
 			parentChat: cycleA.resource,
 		},
 	});
-	const deletableMain = createMainChat({
-		capabilities: {
-			supportsRename: true,
-			supportsDelete: true,
-		},
-	});
 
 	const invalidSessions = [
+		createSession({ chats: [userChat], sessionId: 'not-canonical' }),
 		createSession({
-			mainChat: validMain,
-			chats: [validMain],
-			sessionId: 'not-canonical',
-		}),
-		createSession({ mainChat: missingMain, chats: [validMain] }),
-		createSession({
-			mainChat: duplicateMain,
-			chats: [duplicateMain, duplicatePeer],
-			capabilities: { supportsMultipleChats: true },
-		}),
-		createSession({ mainChat: hiddenMain, chats: [hiddenMain] }),
-		createSession({
-			mainChat: validMain,
-			chats: [validMain, additionalWithoutOrigin],
-			capabilities: { supportsMultipleChats: true },
+			chats: [userChat],
+			capabilities: { maximumChatCount: -1 },
 		}),
 		createSession({
-			mainChat: validMain,
-			chats: [validMain, externalParentWorker],
-			capabilities: { supportsMultipleChats: true },
+			chats: [userChat],
+			capabilities: { maximumChatCount: 1.5 },
 		}),
-		createSession({
-			mainChat: validMain,
-			chats: [validMain, cycleA, cycleB],
-		}),
-		createSession({ mainChat: deletableMain, chats: [deletableMain] }),
+		createSession({ chats: [userChat, duplicateUser] }),
+		createSession({ chats: [missingOrigin] }),
+		createSession({ chats: [userChat, externalParentWorker] }),
+		createSession({ chats: [selfParented] }),
+		createSession({ chats: [cycleA, cycleB] }),
 	];
 
 	const messages = invalidSessions.map(session => {
@@ -258,14 +232,15 @@ test('Session invariants reject invalid identity, membership, and origin state',
 		}
 	});
 
+	const sessionId = toSessionId(TestProviderId, TestSessionResource);
 	assert.deepEqual(messages, [
 		"Session 'not-canonical' does not use its canonical provider-aware identity.",
-		`Session '${toSessionId(TestProviderId, TestSessionResource)}' does not contain its main Chat model.`,
-		`Session '${toSessionId(TestProviderId, TestSessionResource)}' contains duplicate Chat resources.`,
-		`Session '${toSessionId(TestProviderId, TestSessionResource)}' has a hidden main Chat.`,
-		`Session '${toSessionId(TestProviderId, TestSessionResource)}' has an additional Chat without an origin.`,
-		`Session '${toSessionId(TestProviderId, TestSessionResource)}' has a child Chat whose parent is outside the Session.`,
-		`Session '${toSessionId(TestProviderId, TestSessionResource)}' contains a cycle in its Chat origins.`,
-		`Session '${toSessionId(TestProviderId, TestSessionResource)}' has a deletable main Chat.`,
+		`Session '${sessionId}' has an invalid maximum Chat count.`,
+		`Session '${sessionId}' has an invalid maximum Chat count.`,
+		`Session '${sessionId}' contains duplicate Chat resources.`,
+		`Session '${sessionId}' has a Chat without an origin.`,
+		`Session '${sessionId}' has a child Chat whose parent is outside the Session.`,
+		`Session '${sessionId}' has a self-parented Chat.`,
+		`Session '${sessionId}' contains a cycle in its Chat origins.`,
 	]);
 });

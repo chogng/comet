@@ -1,5 +1,8 @@
 import { app } from 'electron';
+import { fileURLToPath } from 'node:url';
 
+import { CancellationError } from 'cs/base/common/errors';
+import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
 import {
   configureDevelopmentEnvironmentMain,
   configureEnvironmentMainPaths,
@@ -18,6 +21,7 @@ import { ThemeMainService } from 'cs/platform/theme/electron-main/themeMainServi
 import { createNativeHostMainService } from 'cs/platform/native/electron-main/nativeHostMainService';
 import { registerWindowOpenPolicy } from 'cs/platform/window/electron-main/windowOpenPolicy';
 import { WindowsMainService } from 'cs/platform/windows/electron-main/windowsMainService';
+import { LocalAgentHostMain } from 'cs/code/electron-main/agentHost/localAgentHostMain';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
@@ -44,6 +48,25 @@ app.whenReady().then(async () => {
   await storage.init();
 
   const settings = await storage.loadSettings();
+  const agentHost = await LocalAgentHostMain.create({
+    storage: storage.applicationStorage,
+    settings: settings.llm,
+    loadSettings: async (signal) => {
+      if (signal.aborted) {
+        throw new CancellationError();
+      }
+      const currentSettings = await storage.loadSettings();
+      if (signal.aborted) {
+        throw new CancellationError();
+      }
+      return currentSettings.llm;
+    },
+    contentMaterializationRoot: environmentMainPaths.agentHostContentDir,
+    bundledArtifactPath: fileURLToPath(import.meta.url),
+    channelServer: electronMainChannelServer,
+    fetch: (url, init) => fetch(url, init),
+    now: Date.now,
+  });
   const themeMainService = new ThemeMainService(storage, settings);
   const windowsMainService = new WindowsMainService(storage, themeMainService, browserAutomationWindowCloseLifecycle);
   const nativeHostMainService = createNativeHostMainService(themeMainService);
@@ -55,6 +78,11 @@ app.whenReady().then(async () => {
 		const errors: unknown[] = [];
 		try {
 			await shutdownBrowserAutomation();
+		} catch (error) {
+			errors.push(error);
+		}
+		try {
+			await agentHost.shutdown();
 		} catch (error) {
 			errors.push(error);
 		}
@@ -79,7 +107,7 @@ app.whenReady().then(async () => {
   if (isDevelopmentEnvironmentMain()) {
     registerDevShortcuts({ getMainWindow });
   }
-  registerAppIpc(storage, nativeHostMainService, themeMainService);
+  registerAppIpc(storage, nativeHostMainService, themeMainService, settings => agentHost.updateSettings(settings));
   await windowsMainService.openMainWindow(settings);
   setMenuBarIconEnabled(settings.menuBarIconEnabled);
 });

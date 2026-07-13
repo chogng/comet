@@ -12,9 +12,15 @@ import { InstantiationService } from 'cs/platform/instantiation/common/instantia
 import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
-import type { ArticleListSource, ArticleRecord, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
+import {
+	maximumArticleReadableContentBytes,
+	type ArticleId,
+	type ArticleListSource,
+	type ArticleRecord,
+	type JournalDescriptor,
+} from 'cs/workbench/services/fetch/common/fetch';
 import { createArticleId, createArticleListSourceId } from 'cs/workbench/services/fetch/common/fetchIds';
-import type { IFetchProvider, ParsedArticleDetail, ParsedArticleListCatalog, ParsedArticleListPage } from 'cs/workbench/services/fetch/common/fetchProvider';
+import type { IFetchProvider, ParsedArticleDetail, ParsedArticleListCatalog, ParsedArticleListPage, ParsedArticleReadableContent } from 'cs/workbench/services/fetch/common/fetchProvider';
 import { FetchRegistry, IFetchRegistry } from 'cs/workbench/services/fetch/common/fetchRegistry';
 import { FetchService } from 'cs/workbench/services/fetch/browser/fetchService';
 
@@ -79,6 +85,18 @@ class TestFetchProvider implements IFetchProvider {
 			publication: { title: 'Test Journal' },
 		};
 	}
+
+	async fetchArticleReadableContent(
+		_journal: JournalDescriptor,
+		article: ArticleRecord,
+		_token: CancellationToken,
+	): Promise<ParsedArticleReadableContent> {
+		return {
+			url: article.url,
+			title: 'Authoritative title',
+			text: 'Complete Article body.',
+		};
+	}
 }
 
 const journal: JournalDescriptor = {
@@ -99,6 +117,13 @@ function createFetchService(provider: typeof TestFetchProvider = TestFetchProvid
 	registry.registerJournal(journal);
 	registry.registerProvider({ id: 'provider.test', ctor: provider });
 	return createFetchServiceFromRegistry(registry);
+}
+
+async function loadFirstArticle(service: FetchService): Promise<ArticleId> {
+	const sourceId = createArticleListSourceId(journal.id, URI.parse('https://example.com/articles'));
+	await service.discoverArticleListSources(journal.id, CancellationTokenNone);
+	await service.fetchArticleListSource(sourceId, CancellationTokenNone);
+	return createArticleId(journal.id, URI.parse('https://example.com/articles/one'));
 }
 
 class FailsOnceInConstructorFetchProvider extends TestFetchProvider {
@@ -247,6 +272,142 @@ test('FetchService keeps source, list item, article record, and detail state dis
 	await service.refreshJournal(journal.id, CancellationTokenNone);
 	assert.equal(service.getArticlePages(sourceId).length, 1);
 	assert.equal(service.getCatalogLoadState(journal.id).status, 'ready');
+});
+
+class ChangingReadableContentProvider extends TestFetchProvider {
+	private static requestCount = 0;
+
+	static reset(): void {
+		this.requestCount = 0;
+	}
+
+	static getRequestCount(): number {
+		return this.requestCount;
+	}
+
+	override async fetchArticleReadableContent(
+		_journal: JournalDescriptor,
+		article: ArticleRecord,
+		_token: CancellationToken,
+	): Promise<ParsedArticleReadableContent> {
+		ChangingReadableContentProvider.requestCount += 1;
+		return {
+			url: article.url,
+			title: 'Authoritative title',
+			text: `Complete Article body version ${ChangingReadableContentProvider.requestCount}.`,
+		};
+	}
+}
+
+test('FetchService returns immutable complete readable versions without caching a later extraction', async () => {
+	ChangingReadableContentProvider.reset();
+	const service = createFetchService(ChangingReadableContentProvider);
+	const articleId = await loadFirstArticle(service);
+
+	const first = await service.fetchArticleReadableContent(articleId, CancellationTokenNone);
+	const second = await service.fetchArticleReadableContent(articleId, CancellationTokenNone);
+
+	assert.equal(first.text, 'Complete Article body version 1.');
+	assert.equal(second.text, 'Complete Article body version 2.');
+	assert.notEqual(first.version, second.version);
+	assert.equal(first.version, first.digest);
+	assert.match(first.digest, /^sha256:[0-9a-f]{64}$/);
+	assert.equal(first.byteLength, new TextEncoder().encode(first.text).byteLength);
+	assert.equal(Object.isFrozen(first), true);
+	assert.equal(ChangingReadableContentProvider.getRequestCount(), 2);
+});
+
+class MismatchedReadableContentProvider extends TestFetchProvider {
+	private static requestCount = 0;
+
+	static reset(): void {
+		this.requestCount = 0;
+	}
+
+	static getRequestCount(): number {
+		return this.requestCount;
+	}
+
+	override async fetchArticleReadableContent(): Promise<ParsedArticleReadableContent> {
+		MismatchedReadableContentProvider.requestCount += 1;
+		return {
+			url: URI.parse('https://example.com/articles/different'),
+			title: 'Different Article',
+			text: 'Different complete body.',
+		};
+	}
+}
+
+test('FetchService rejects mismatched readable Article identity and never substitutes it', async () => {
+	MismatchedReadableContentProvider.reset();
+	const service = createFetchService(MismatchedReadableContentProvider);
+	const articleId = await loadFirstArticle(service);
+
+	await assert.rejects(
+		service.fetchArticleReadableContent(articleId, CancellationTokenNone),
+		/resolved from a different Article URL/,
+	);
+	await assert.rejects(
+		service.fetchArticleReadableContent(articleId, CancellationTokenNone),
+		/resolved from a different Article URL/,
+	);
+	assert.equal(MismatchedReadableContentProvider.getRequestCount(), 2);
+});
+
+class OversizedReadableContentProvider extends TestFetchProvider {
+	override async fetchArticleReadableContent(
+		_journal: JournalDescriptor,
+		article: ArticleRecord,
+		_token: CancellationToken,
+	): Promise<ParsedArticleReadableContent> {
+		return {
+			url: article.url,
+			title: 'Oversized Article',
+			text: 'x'.repeat(maximumArticleReadableContentBytes + 1),
+		};
+	}
+}
+
+test('FetchService rejects complete readable content above the exact byte bound', async () => {
+	const service = createFetchService(OversizedReadableContentProvider);
+	const articleId = await loadFirstArticle(service);
+	await assert.rejects(
+		service.fetchArticleReadableContent(articleId, CancellationTokenNone),
+		new RegExp(`cannot exceed ${maximumArticleReadableContentBytes} bytes`),
+	);
+});
+
+class CancellationObservedReadableContentProvider extends TestFetchProvider {
+	static token: CancellationToken | undefined;
+
+	static reset(): void {
+		this.token = undefined;
+	}
+
+	override fetchArticleReadableContent(
+		_journal: JournalDescriptor,
+		_article: ArticleRecord,
+		token: CancellationToken,
+	): Promise<ParsedArticleReadableContent> {
+		CancellationObservedReadableContentProvider.token = token;
+		return new Promise((_resolve, reject) => {
+			token.onCancellationRequested(() => reject(new CancellationError()));
+		});
+	}
+}
+
+test('FetchService cancels complete readable extraction when its only waiter cancels', async () => {
+	CancellationObservedReadableContentProvider.reset();
+	const service = createFetchService(CancellationObservedReadableContentProvider);
+	const articleId = await loadFirstArticle(service);
+	const source = new CancellationTokenSource();
+	const pending = service.fetchArticleReadableContent(articleId, source.token);
+
+	source.cancel();
+	await assert.rejects(pending, CancellationError);
+	await Promise.resolve();
+	assert.equal(CancellationObservedReadableContentProvider.token?.isCancellationRequested, true);
+	source.dispose();
 });
 
 test('FetchService isolates observer failures from successful Catalog, Source, and Article tasks', async () => {

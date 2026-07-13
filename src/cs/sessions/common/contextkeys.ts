@@ -9,7 +9,10 @@ export const SessionsContextKeys = {
 	sidebarVisible: new RawContextKey<boolean>('sessions.sidebarVisible', true),
 	editorCollapsed: new RawContextKey<boolean>('sessions.editorCollapsed', true),
 	sessionHeaderHasSession: new RawContextKey<boolean>('sessions.sessionHeaderHasSession', false),
+	sessionHeaderCanCreateChat: new RawContextKey<boolean>('sessions.sessionHeaderCanCreateChat', false),
 	sessionHeaderSupportsRename: new RawContextKey<boolean>('sessions.sessionHeaderSupportsRename', false),
 	sessionHeaderSupportsDelete: new RawContextKey<boolean>('sessions.sessionHeaderSupportsDelete', false),
+	chatHeaderSupportsDelete: new RawContextKey<boolean>('sessions.chatHeaderSupportsDelete', false),
+	chatTurnCanFork: new RawContextKey<boolean>('sessions.chatTurnCanFork', false),
 	activeChatFullyInteractive: new RawContextKey<boolean>('sessions.activeChatFullyInteractive', false),
 } as const;

@@ -175,16 +175,6 @@ export interface ArticleSummaryExportInput {
 	publishedAt?: string;
 }
 
-export interface ArticleContextInput {
-	sourceUrl: string;
-	doi?: string;
-	title: string;
-	authors: string[];
-	abstract?: string;
-	journalTitle: string;
-	publishedAt?: string;
-}
-
 export interface ExportArticlesDocxPayload {
 	taskId?: string;
 	articles?: ArticleSummaryExportInput[];
@@ -475,84 +465,6 @@ export interface ReindexLibraryDocumentResult {
 	jobType: LibraryJobType;
 }
 
-export interface RagEvidenceItem {
-	rank: number;
-	title: string;
-	journalTitle: string | null;
-	publishedAt: string | null;
-	sourceUrl: string;
-	score: number | null;
-	excerpt: string;
-}
-
-export interface RagAnswerArticlesPayload {
-	question?: string;
-	writingContext?: string | null;
-	articleContexts?: ArticleContextInput[];
-	llm?: LlmSettings;
-	rag?: RagSettings;
-}
-
-export interface RagAnswerResult {
-	answer: string;
-	evidence: RagEvidenceItem[];
-	provider: RagProviderId;
-	llmProvider: LlmProviderId;
-	llmModel: string;
-	embeddingModel: string;
-	rerankerModel: string;
-	rerankApplied: boolean;
-}
-
-export type AgentMessagePayload = import('cs/agent/common/protocol').AgentMessage;
-export type AgentStopReasonPayload = import('cs/agent/common/protocol').AgentStopReason;
-export type AgentEditorPatchPayload =
-	import('cs/agent/common/editorTools').AgentEditorPatch;
-export type MainAgentAvailableToolId =
-	Extract<
-		import('cs/agent/common/editorTools').AgentEditorToolId,
-		| 'get_selection_context'
-		| 'list_text_units'
-		| 'apply_editor_patch'
-		| 'retrieve_evidence'
-	>;
-
-export interface MainAgentPatchProposal {
-	patch: AgentEditorPatchPayload;
-	accepted: boolean;
-	operationsValidated: number;
-	failedOperationIndex: number | null;
-	requiresCustomExecutor: boolean;
-	validationError: string | null;
-}
-
-export interface RunMainAgentTurnPayload {
-	messages: AgentMessagePayload[];
-	writingContext: string | null;
-	editorSelection: WritingEditorSelectionPayload | null;
-	editorDocument: WritingEditorDocumentPayload | null;
-	articleContexts: ArticleContextInput[];
-	llm: LlmSettings;
-	rag: RagSettings;
-	availableTools: MainAgentAvailableToolId[];
-}
-
-export interface MainAgentToolTrace {
-	step: number;
-	toolName: string;
-	isError: boolean;
-}
-
-export interface RunMainAgentTurnResult {
-	stopReason: AgentStopReasonPayload;
-	finalText: string;
-	llmProvider: LlmProviderId;
-	llmModel: string;
-	lastEvidenceResult: RagAnswerResult | null;
-	lastPatchProposal: MainAgentPatchProposal | null;
-	toolTrace: MainAgentToolTrace[];
-}
-
 export interface AppCommandPayloadMap {
 	clear_web_cache: undefined;
 	clear_web_cookies: undefined;
@@ -580,8 +492,6 @@ export interface AppCommandPayloadMap {
 	get_library_document_status: LibraryDocumentStatusPayload;
 	list_library_documents: ListLibraryDocumentsPayload;
 	reindex_library_document: ReindexLibraryDocumentPayload;
-	rag_answer_articles: RagAnswerArticlesPayload;
-	run_main_agent_turn: RunMainAgentTurnPayload;
 	export_articles_docx: ExportArticlesDocxPayload;
 	export_editor_docx: ExportEditorDocxPayload;
 }
@@ -613,8 +523,6 @@ export interface AppCommandResultMap {
 	get_library_document_status: LibraryDocumentSummary | null;
 	list_library_documents: LibraryDocumentsResult;
 	reindex_library_document: ReindexLibraryDocumentResult;
-	rag_answer_articles: RagAnswerResult;
-	run_main_agent_turn: RunMainAgentTurnResult;
 	export_articles_docx: DocxExportResult | null;
 	export_editor_docx: EditorDocxExportResult | null;
 }

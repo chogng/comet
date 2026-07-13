@@ -6,10 +6,14 @@
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { URI } from 'cs/base/common/uri';
 import type { ArticleListSource, ArticleRecord, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
-import type { IFetchProvider, ParsedArticleDetail, ParsedArticleListCatalog, ParsedArticleListPage } from 'cs/workbench/services/fetch/common/fetchProvider';
+import type { IFetchProvider, ParsedArticleDetail, ParsedArticleListCatalog, ParsedArticleListPage, ParsedArticleReadableContent } from 'cs/workbench/services/fetch/common/fetchProvider';
 import { FetchPageSessionFactory, IFetchPageSessionFactory } from 'cs/workbench/services/fetch/electron-browser/fetchPageSession';
 import { resolveFetchParser, type FetchParseContext } from 'cs/workbench/services/fetch/electron-browser/fetchParserResolver';
 import { isScienceArticleDetail, parseScienceArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceArticleDetailParser';
+import {
+	parseScienceArticleReadableContent,
+	scienceArticleReadableBodySelector,
+} from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceArticleReadableContentParser';
 import { parseScienceCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceCatalogParser';
 import { isScienceCurrentIssue, parseScienceCurrentIssue } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceCurrentIssueParser';
 import { isScienceFirstRelease, parseScienceFirstRelease } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceFirstReleaseParser';
@@ -78,6 +82,24 @@ export class ScienceFetchProvider implements IFetchProvider {
 					parser: parseScienceArticleDetail,
 				},
 			], context)(context.document, context.uri, journal);
+		} finally {
+			await session.dispose();
+		}
+	}
+
+	async fetchArticleReadableContent(
+		_journal: JournalDescriptor,
+		article: ArticleRecord,
+		token: CancellationToken,
+	): Promise<ParsedArticleReadableContent> {
+		const session = await this.pageSessionFactory.createOwned(this._admitsSnapshot);
+		try {
+			const snapshot = await session.navigateAndCapture(
+				article.url,
+				{ selector: scienceArticleReadableBodySelector, state: 'visible' },
+				token,
+			);
+			return parseScienceArticleReadableContent(this._parseDocument(snapshot.html), snapshot.uri);
 		} finally {
 			await session.dispose();
 		}

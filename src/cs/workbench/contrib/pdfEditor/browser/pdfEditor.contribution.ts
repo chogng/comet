@@ -22,6 +22,7 @@ import 'cs/workbench/contrib/pdfEditor/browser/pdfEditor.css';
 import { registerStatusbarModeRenderer } from 'cs/workbench/browser/parts/statusbar/statusbarModeRenderers';
 import { renderPdfStatusbarMode } from 'cs/workbench/contrib/pdfEditor/browser/pdfEditorStatusbarRenderer';
 import { registerEditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
+import { PdfEditorChatAttachmentsContribution } from 'cs/workbench/contrib/pdfEditor/browser/pdfChatAttachments';
 
 editorInputSerializerRegistry.register(PdfEditorInput.ID, new PdfEditorInputSerializer());
 registerStatusbarModeRenderer('pdf', renderPdfStatusbarMode);
@@ -92,4 +93,7 @@ registerWorkbenchContribution(() =>
 );
 registerWorkbenchContribution(() =>
 	getWorkbenchInstantiationService().createInstance(PdfEditorActionsContribution),
+);
+registerWorkbenchContribution(() =>
+	getWorkbenchInstantiationService().createInstance(PdfEditorChatAttachmentsContribution),
 );

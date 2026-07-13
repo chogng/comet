@@ -7,9 +7,9 @@ import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 
 import { DeferredPromise } from 'cs/base/common/async';
-import { VSBuffer } from 'cs/base/common/buffer';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { Event as BaseEvent, EventEmitter } from 'cs/base/common/event';
+import type { IDisposable } from 'cs/base/common/lifecycle';
 import type { IRenderedMarkdown, MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
 import type { IMarkdownString } from 'cs/base/common/htmlContent';
 import { URI } from 'cs/base/common/uri';
@@ -17,15 +17,37 @@ import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestU
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 import type { LanguagePackLocale } from 'cs/platform/languagePacks/common/languagePacks';
+import {
+	createAgentChatId,
+	createAgentHostPayloadDigest,
+	createAgentSessionId,
+	createAgentSubmissionId,
+	createAgentToolCallId,
+	createAgentToolId,
+	createAgentTurnId,
+} from 'cs/platform/agentHost/common/identities';
+import type { IAgentHostChatState } from 'cs/platform/agentHost/common/protocol';
+import { assertAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import type { IChatWidgetPresentation } from 'cs/workbench/contrib/chat/browser/chat';
 import type { ChatWidget as ChatWidgetType } from 'cs/workbench/contrib/chat/browser/widget/chatWidget';
-import type { IChatModelReference } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import type {
+	IChatModelReference,
+} from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { ChatService } from 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
 import {
-	createChatImageAttachment,
-	toChatImageDataUrl,
-} from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
-import type { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
+	ChatHostPresentationSchemaVersion,
+} from 'cs/workbench/contrib/chat/common/chatService/chatTurnPresentations';
+import { createTestChatStorageService } from 'cs/workbench/contrib/chat/test/common/testChatStorage';
+import {
+	ArticleChatPresentationState,
+	ArticleChatPresentationsContribution,
+	IArticleChatPresentationState,
+} from 'cs/workbench/contrib/fetch/browser/articleChatPresentations';
+import {
+	ArticleHistoryChatPresentationType,
+	createArticleHistoryChatPresentation,
+	parseArticleListChatPresentation,
+} from 'cs/workbench/contrib/fetch/common/articleChatPresentations';
 import {
 	IWorkbenchLanguageService,
 	WorkbenchLanguageService,
@@ -43,7 +65,10 @@ import type {
 	IFetchService,
 	JournalDescriptor,
 } from 'cs/workbench/services/fetch/common/fetch';
-import type { IArticleSelectionSnapshot } from 'cs/workbench/services/document/common/documentActions';
+import type {
+	IArticleSelectionSnapshot,
+} from 'cs/workbench/services/document/common/documentActions';
+import type { IChatArticleBrowserTarget } from 'cs/workbench/contrib/browserView/common/chatArticleBrowser';
 
 let cleanupDomEnvironment: (() => void) | undefined;
 let cleanupResizeObserver: (() => void) | undefined;
@@ -52,7 +77,10 @@ let chatService: ChatService;
 let fetchService: TestFetchService;
 let createWidget: () => ChatWidgetType;
 let localeService: TestWorkbenchLocaleService;
+let articlePresentationState: ArticleChatPresentationState;
+let articleContribution: IDisposable;
 const articleExports: IArticleSelectionSnapshot[] = [];
+const articleOpenTargets: IChatArticleBrowserTarget[] = [];
 let desktopRuntime = true;
 
 class TestWorkbenchLocaleService implements IWorkbenchLocaleService {
@@ -195,6 +223,7 @@ class TestFetchService implements IFetchService {
 	}
 	async fetchNextPage(): Promise<void> {}
 	async fetchArticle(): Promise<never> { throw new Error('No Article detail is available in this test.'); }
+	async fetchArticleReadableContent(): Promise<never> { throw new Error('No Article body is available in this test.'); }
 	async refreshJournal(): Promise<void> {}
 	async refreshArticleListSource(): Promise<void> {}
 }
@@ -243,6 +272,50 @@ function presentation(resource: URI, readOnly = false): IChatWidgetPresentation 
 	};
 }
 
+function createWidgetHostState(
+	label: string,
+	text: string,
+	turnState: 'running' | 'completed' = 'completed',
+) {
+	const session = createAgentSessionId(`session-${label}`);
+	const chat = createAgentChatId(`chat-${label}`);
+	const turn = createAgentTurnId(`turn-${label}`);
+	const state: IAgentHostChatState = {
+		id: chat,
+		session,
+		createdAt: 1,
+		modifiedAt: 2,
+		title: label,
+		origin: { kind: 'user' },
+		model: null,
+		lifecycle: 'available',
+		interactivity: 'full',
+		status: turnState === 'completed' ? 'completed' : 'running',
+		isRead: true,
+		capabilities: {
+			supportsRename: true,
+			supportsSetModel: true,
+			supportsFork: true,
+			supportsRelease: true,
+			supportsDelete: true,
+			supportsSubmit: true,
+			supportsCancel: turnState !== 'completed',
+		},
+		turns: [{
+			id: turn,
+			submission: createAgentSubmissionId(`submission-${label}`),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'c'.repeat(64)}`),
+			state: turnState,
+			user: { text, attachments: [], interactionTargets: [] },
+			response: turnState === 'completed'
+				? [{ kind: 'text', text: `${text} response` }]
+				: [],
+		}],
+		...(turnState === 'completed' ? {} : { activeTurn: turn }),
+	};
+	return { identity: { session, chat }, state };
+}
+
 function disposeWidget(widget: ChatWidgetType, ...references: IChatModelReference[]) {
 	widget.dispose();
 	for (const reference of references) {
@@ -256,7 +329,7 @@ before(async () => {
 	await import('cs/platform/contextview/browser/contextViewService');
 	await import('cs/platform/contextview/browser/contextMenuService');
 
-	const [{ renderMarkdown }, markdownModule, chatModule, fetchModule, notificationModule, nativeHostModule, documentActionsModule, instantiationModule] = await Promise.all([
+	const [{ renderMarkdown }, markdownModule, chatModule, fetchModule, notificationModule, nativeHostModule, documentActionsModule, chatArticleBrowserModule, instantiationModule] = await Promise.all([
 		import('cs/base/browser/markdownRenderer'),
 		import('cs/platform/markdown/browser/markdownRenderer'),
 		import('cs/workbench/contrib/chat/common/chatService/chatService'),
@@ -264,6 +337,7 @@ before(async () => {
 		import('cs/platform/notification/common/notification'),
 		import('cs/platform/native/common/native'),
 		import('cs/workbench/services/document/common/documentActions'),
+		import('cs/workbench/contrib/browserView/common/chatArticleBrowser'),
 		import('cs/workbench/services/instantiation/browser/workbenchInstantiationService'),
 	]);
 
@@ -273,13 +347,8 @@ before(async () => {
 		warn() {},
 		error() {},
 	} as unknown as INotificationService;
-	const draftEditorService = {
-		_serviceBrand: undefined,
-		activeInput: null,
-		getDocument: () => null,
-		setDocument() {},
-	} as unknown as IDraftEditorService;
-	chatService = new ChatService(notificationService, draftEditorService);
+	chatService = new ChatService(createTestChatStorageService());
+	articlePresentationState = new ArticleChatPresentationState(chatService);
 
 	const markdownRendererService: IMarkdownRendererService = {
 		_serviceBrand: undefined,
@@ -297,6 +366,7 @@ before(async () => {
 	instantiationModule.registerWorkbenchService(markdownModule.IMarkdownRendererService, markdownRendererService);
 	instantiationModule.registerWorkbenchService(chatModule.IChatService, chatService);
 	instantiationModule.registerWorkbenchService(fetchModule.IFetchService, fetchService);
+	instantiationModule.registerWorkbenchService(IArticleChatPresentationState, articlePresentationState);
 	instantiationModule.registerWorkbenchService(notificationModule.INotificationService, notificationService);
 	instantiationModule.registerWorkbenchService(nativeHostModule.INativeHostService, {
 		_serviceBrand: undefined,
@@ -311,13 +381,24 @@ before(async () => {
 			});
 		},
 	} as never);
+	instantiationModule.registerWorkbenchService(chatArticleBrowserModule.IChatArticleBrowserService, {
+		_serviceBrand: undefined,
+		open: async (target: IChatArticleBrowserTarget) => {
+			articleOpenTargets.push(target);
+		},
+	});
 	instantiationModule.registerWorkbenchService(IWorkbenchLocaleService, localeService);
 	instantiationModule.registerWorkbenchService(IWorkbenchLanguageService, new WorkbenchLanguageService());
 	({ ChatWidget } = await import('cs/workbench/contrib/chat/browser/widget/chatWidget'));
+	articleContribution = instantiationModule.getWorkbenchInstantiationService().createInstance(
+		ArticleChatPresentationsContribution,
+	);
 	createWidget = () => instantiationModule.getWorkbenchInstantiationService().createInstance(ChatWidget);
 });
 
 after(() => {
+	articleContribution.dispose();
+	articlePresentationState.dispose();
 	cleanupResizeObserver?.();
 	cleanupDomEnvironment?.();
 });
@@ -325,8 +406,10 @@ after(() => {
 test('ChatWidget renders and follows exactly its addressed model', () => {
 	const first = chatService.createModel(URI.parse('chat:/widget/first'));
 	const second = chatService.createModel(URI.parse('chat:/widget/second'));
-	chatService.insertContextMessage(first.object.resource, 'First message', []);
-	chatService.insertContextMessage(second.object.resource, 'Second message', []);
+	const firstHost = createWidgetHostState('addressed-first', 'First message');
+	const secondHost = createWidgetHostState('addressed-second', 'Second message');
+	first.replaceHostState(firstHost.identity, firstHost.state);
+	second.replaceHostState(secondHost.identity, secondHost.state);
 	const widget = createWidget();
 	document.body.append(widget.getElement());
 
@@ -335,10 +418,12 @@ test('ChatWidget renders and follows exactly its addressed model', () => {
 		assert.match(widget.getElement().textContent ?? '', /First message/);
 		assert.doesNotMatch(widget.getElement().textContent ?? '', /Second message/);
 
-		chatService.insertContextMessage(second.object.resource, 'Still isolated', []);
+		const secondUpdate = createWidgetHostState('addressed-second', 'Still isolated');
+		second.replaceHostState(secondUpdate.identity, secondUpdate.state);
 		assert.doesNotMatch(widget.getElement().textContent ?? '', /Still isolated/);
 
-		chatService.insertContextMessage(first.object.resource, 'First update', []);
+		const firstUpdate = createWidgetHostState('addressed-first', 'First update');
+		first.replaceHostState(firstUpdate.identity, firstUpdate.state);
 		assert.match(widget.getElement().textContent ?? '', /First update/);
 	} finally {
 		disposeWidget(widget, first, second);
@@ -346,32 +431,36 @@ test('ChatWidget renders and follows exactly its addressed model', () => {
 });
 
 test('ChatWidget refreshes transcript, composer, and model-picker labels on the same instance', () => {
-	const reference = chatService.createModel(URI.parse('chat:/widget/locale'), {
-		messages: [{
-			id: 'localized-answer',
-			role: 'assistant',
-			content: 'Localized response',
-			imageAttachments: [],
-			result: {
-				answer: 'Localized response',
-				evidence: [{
-					rank: 1,
-					title: 'Evidence title',
-					journalTitle: null,
-					publishedAt: null,
-					sourceUrl: 'https://example.com/evidence',
-					score: null,
-					excerpt: 'Evidence excerpt',
-				}],
-				provider: 'moark',
-				llmProvider: 'openai',
-				llmModel: 'model-a',
-				embeddingModel: 'embedding-a',
-				rerankerModel: 'reranker-a',
-				rerankApplied: true,
-			},
+	const reference = chatService.createModel(URI.parse('chat:/widget/locale'));
+	const host = createWidgetHostState('localized', 'Localized response');
+	reference.replaceHostState(host.identity, host.state);
+	const articleValue = createArticleHistoryChatPresentation([], {
+		answer: 'Localized response',
+		evidence: [{
+			rank: 1,
+			title: 'Evidence title',
+			journalTitle: null,
+			publishedAt: null,
+			sourceUrl: 'https://example.com/evidence',
+			score: null,
+			excerpt: 'Evidence excerpt',
 		}],
+		provider: 'moark',
+		llmProvider: 'openai',
+		llmModel: 'model-a',
+		embeddingModel: 'embedding-a',
+		rerankerModel: 'reranker-a',
+		rerankApplied: true,
 	});
+	assertAgentHostProtocolValue(articleValue);
+	reference.importHostPresentations(host.identity, [{
+		schemaVersion: ChatHostPresentationSchemaVersion,
+		...host.identity,
+		turn: host.state.turns[0].id,
+		responsePartIndex: 0,
+		type: ArticleHistoryChatPresentationType,
+		value: articleValue,
+	}]);
 	const widget = createWidget();
 	const modelPresentation = {
 		...presentation(reference.object.resource),
@@ -423,8 +512,10 @@ test('ChatWidget refreshes transcript, composer, and model-picker labels on the 
 test('ChatWidget keeps transcript scroll positions isolated by Chat resource', () => {
 	const first = chatService.createModel(URI.parse('chat:/widget/scroll-first'));
 	const second = chatService.createModel(URI.parse('chat:/widget/scroll-second'));
-	chatService.insertContextMessage(first.object.resource, 'First long transcript', []);
-	chatService.insertContextMessage(second.object.resource, 'Second long transcript', []);
+	const firstHost = createWidgetHostState('scroll-first', 'First long transcript');
+	const secondHost = createWidgetHostState('scroll-second', 'Second long transcript');
+	first.replaceHostState(firstHost.identity, firstHost.state);
+	second.replaceHostState(secondHost.identity, secondHost.state);
 	const widget = createWidget();
 	document.body.append(widget.getElement());
 
@@ -481,7 +572,7 @@ test('ChatWidget composer mutations and submission carry the bound resource', ()
 	}
 });
 
-test('ChatWidget send action enforces the same prompt and request guard as Enter', () => {
+test('ChatWidget send action enforces the same prompt and Host Turn guard as Enter', () => {
 	const reference = chatService.createModel(URI.parse('chat:/widget/send-guard'));
 	const widget = createWidget();
 	widget.setModel(reference.object, presentation(reference.object.resource));
@@ -506,7 +597,8 @@ test('ChatWidget send action enforces the same prompt and request guard as Enter
 		sendButton.click();
 		assert.equal(submitCount, 1);
 
-		chatService.startRequest(reference.object.resource, 'active-request', 'Ready prompt', []);
+		const activeHost = createWidgetHostState('send-guard', 'Ready prompt', 'running');
+		reference.replaceHostState(activeHost.identity, activeHost.state);
 		sendButton = widget.getElement().querySelector<HTMLButtonElement>('.comet-chat-composer-send-action');
 		assert(sendButton);
 		assert.equal(sendButton.disabled, true);
@@ -559,7 +651,8 @@ test('ChatWidget rejects a presentation for another resource', () => {
 
 test('ChatWidget read-only presentation omits the composer', () => {
 	const reference = chatService.createModel(URI.parse('chat:/widget/read-only'));
-	chatService.insertContextMessage(reference.object.resource, 'Archived transcript', []);
+	const host = createWidgetHostState('read-only', 'Archived transcript');
+	reference.replaceHostState(host.identity, host.state);
 	const widget = createWidget();
 	widget.setModel(reference.object, presentation(reference.object.resource, true));
 
@@ -571,33 +664,175 @@ test('ChatWidget read-only presentation omits the composer', () => {
 	}
 });
 
-test('ChatWidget renders the actual image bytes attached to a Chat message', () => {
-	const image = createChatImageAttachment(
-		'browser-image',
-		'Browser.jpeg',
-		'image/jpeg',
-		VSBuffer.fromString('browser-image-bytes'),
-	);
-	const reference = chatService.createModel(URI.parse('chat:/widget/image'), {
-		messages: [{
-			id: 'browser-context',
-			role: 'user',
-			content: 'Browser screenshot',
-			imageAttachments: [image],
+test('ChatWidget renders the authoritative typed Host transcript without serializing tool payloads', () => {
+	const owner = chatService.createModel(URI.parse('chat:/widget/host-transcript'));
+	const session = createAgentSessionId('session-host-transcript');
+	const chat = createAgentChatId('chat-host-transcript');
+	const call = createAgentToolCallId('tool-call-host-transcript');
+	const state: IAgentHostChatState = {
+		id: chat,
+		session,
+		createdAt: 1,
+		modifiedAt: 2,
+		title: 'Host transcript',
+		origin: { kind: 'user' },
+		model: null,
+		lifecycle: 'available',
+		interactivity: 'full',
+		status: 'completed',
+		isRead: true,
+		capabilities: {
+			supportsRename: true,
+			supportsSetModel: true,
+			supportsFork: true,
+			supportsRelease: true,
+			supportsDelete: true,
+			supportsSubmit: true,
+			supportsCancel: false,
+		},
+		turns: [{
+			id: createAgentTurnId('turn-host-transcript'),
+			submission: createAgentSubmissionId('submission-host-transcript'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'a'.repeat(64)}`),
+			state: 'completed',
+			user: {
+				text: 'Exact Host question',
+				attachments: [],
+				interactionTargets: [],
+			},
+			response: [
+				{ kind: 'reasoning', text: 'Typed Host reasoning' },
+				{
+					kind: 'toolCall',
+					call,
+					tool: createAgentToolId('comet.search'),
+					input: { privateQuery: 'must-not-render' },
+				},
+				{
+					kind: 'toolResult',
+					call,
+					status: 'completed',
+					output: { privateResult: 'must-not-render' },
+				},
+				{ kind: 'text', text: 'Exact Host answer' },
+			],
 		}],
-	});
+	};
+	owner.replaceHostState({ session, chat }, state);
 	const widget = createWidget();
 
 	try {
-		widget.setModel(reference.object, presentation(reference.object.resource));
-		const renderedImage = widget.getElement().querySelector<HTMLImageElement>(
-			'.comet-chat-message-image img',
-		);
-		assert(renderedImage);
-		assert.equal(renderedImage.alt, image.name);
-		assert.equal(renderedImage.src, toChatImageDataUrl(image));
+		widget.setModel(owner.object, presentation(owner.object.resource));
+		const content = widget.getElement().textContent ?? '';
+		assert.match(content, /Exact Host question/);
+		assert.match(content, /Typed Host reasoning/);
+		assert.match(content, /Tool call: comet\.search \(tool-call-host-transcript\)/);
+		assert.match(content, /Tool result: tool-call-host-transcript — completed/);
+		assert.match(content, /Exact Host answer/);
+		assert.doesNotMatch(content, /must-not-render/);
 	} finally {
-		disposeWidget(widget, reference);
+		disposeWidget(widget, owner);
+	}
+});
+
+test('ChatWidget renders durable Host presentation only after its exact canonical response part', () => {
+	const owner = chatService.createModel(URI.parse('chat:/widget/host-turn-presentation'));
+	const session = createAgentSessionId('session-host-presentation');
+	const chat = createAgentChatId('chat-host-presentation');
+	const turn = createAgentTurnId('turn-host-presentation');
+	owner.replaceHostState({ session, chat }, {
+		id: chat,
+		session,
+		createdAt: 1,
+		modifiedAt: 2,
+		title: 'Host presentation',
+		origin: { kind: 'user' },
+		model: null,
+		lifecycle: 'available',
+		interactivity: 'full',
+		status: 'completed',
+		isRead: true,
+		capabilities: {
+			supportsRename: true,
+			supportsSetModel: true,
+			supportsFork: true,
+			supportsRelease: true,
+			supportsDelete: true,
+			supportsSubmit: true,
+			supportsCancel: false,
+		},
+		turns: [{
+			id: turn,
+			submission: createAgentSubmissionId('submission-host-presentation'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'b'.repeat(64)}`),
+			state: 'completed',
+			user: {
+				text: 'Which identical response owns the presentation?',
+				attachments: [],
+				interactionTargets: [],
+			},
+			response: [
+				{ kind: 'text', text: 'Repeated canonical answer' },
+				{ kind: 'text', text: 'Repeated canonical answer' },
+			],
+		}],
+	});
+	const result = {
+		answer: 'Repeated canonical answer',
+		evidence: [{
+			rank: 1,
+			title: 'Exact migrated evidence',
+			journalTitle: 'Exact Journal',
+			publishedAt: null,
+			sourceUrl: 'https://example.com/exact-evidence',
+			score: null,
+			excerpt: 'Evidence attached to response part one.',
+		}],
+		provider: 'moark' as const,
+		llmProvider: 'openai' as const,
+		llmModel: 'model-exact',
+		embeddingModel: 'embedding-exact',
+		rerankerModel: 'reranker-exact',
+		rerankApplied: true,
+	};
+	const articleValue = createArticleHistoryChatPresentation(['article:exact-migrated'], result);
+	assertAgentHostProtocolValue(articleValue);
+	owner.importHostPresentations({ session, chat }, [{
+		schemaVersion: ChatHostPresentationSchemaVersion,
+		session,
+		chat,
+		turn,
+		responsePartIndex: 1,
+		type: ArticleHistoryChatPresentationType,
+		value: articleValue,
+	}]);
+	const widget = createWidget();
+	widget.setModel(owner.object, presentation(owner.object.resource, true));
+	document.body.append(widget.getElement());
+
+	try {
+		const textParts = widget.getElement().querySelectorAll<HTMLElement>(
+			'.comet-chat-host-response > .rendered-markdown',
+		);
+		assert.equal(textParts.length, 2);
+		const durablePresentation = widget.getElement().querySelector<HTMLElement>(
+			'.comet-chat-host-turn-presentation',
+		);
+		assert(durablePresentation);
+		assert.equal(durablePresentation.previousElementSibling, textParts[1]);
+		assert.match(durablePresentation.textContent ?? '', /article:exact-migrated/);
+		assert.match(durablePresentation.textContent ?? '', /Exact migrated evidence/);
+		const checkbox = durablePresentation.querySelector<HTMLElement>(
+			'.comet-chat-article-checkbox[role="checkbox"]',
+		);
+		assert(checkbox);
+		checkbox.click();
+		assert.deepEqual(
+			articlePresentationState.getSelectedArticleIds(owner.object.resource),
+			['article:exact-migrated'],
+		);
+	} finally {
+		disposeWidget(widget, owner);
 	}
 });
 
@@ -621,6 +856,37 @@ function clickArticleSource(widget: ChatWidgetType): void {
 	source.click();
 }
 
+function insertArticlePresentation(
+	resource: URI,
+	sourceLabel: string,
+	items: readonly {
+		readonly id: string;
+		readonly articleId: string;
+		readonly title: string;
+		readonly url: string;
+		readonly publishedAt?: string;
+	}[],
+): void {
+	const records = new Map(items.map(item => [item.articleId, {
+		id: item.articleId,
+		journalId: 'journal:test',
+		url: URI.parse(item.url),
+	}]));
+	articlePresentationState.addArticleList(
+		resource,
+		sourceLabel,
+		items.map(item => ({
+			id: item.id,
+			articleId: item.articleId,
+			title: item.title,
+			authors: [],
+			relatedArticles: [],
+			publishedAt: item.publishedAt,
+		})),
+		{ getArticle: (articleId: string) => records.get(articleId) } as unknown as IFetchService,
+	);
+}
+
 test('ChatWidget inserts a fetched Article page only into its addressed model', async () => {
 	const sourceFetch = fetchService.configureArticleSource();
 	const first = chatService.createModel(URI.parse('chat:/widget/article-first'));
@@ -635,28 +901,31 @@ test('ChatWidget inserts a fetched Article page only into its addressed model', 
 		await sourceFetch.p;
 		await Promise.resolve();
 
-		assert.match(first.object.getSnapshot().messages.at(-1)?.content ?? '', /Test Article/);
-		assert.equal(second.object.getSnapshot().messages.length, 0);
+		assert.equal(articlePresentationState.getPresentations(first.object.resource).length, 1);
+		assert.equal(articlePresentationState.getPresentations(second.object.resource).length, 0);
+		assert.match(widget.getElement().textContent ?? '', /Test Article/);
 	} finally {
 		fetchService.reset();
 		disposeWidget(widget, first, second);
 	}
 });
 
-test('ChatWidget maps Article list checkboxes by occurrence while writing one addressed Article selection', () => {
+test('ChatWidget maps typed Article items by occurrence and opens the addressed target', async () => {
 	const first = chatService.createModel(URI.parse('chat:/widget/article-checkbox-first'));
 	const second = chatService.createModel(URI.parse('chat:/widget/article-checkbox-second'));
-	chatService.insertArticleList(
+	insertArticlePresentation(
 		first.object.resource,
 		'First source',
-		['article:first', 'article:shared', 'article:shared'],
-		'- First Article\n- Shared Article featured\n- Shared Article in section',
+		[
+			{ id: 'item:first', articleId: 'article:first', title: 'First Article', url: 'https://example.com/first' },
+			{ id: 'item:shared-featured', articleId: 'article:shared', title: 'Shared Article featured', url: 'https://example.com/shared' },
+			{ id: 'item:shared-section', articleId: 'article:shared', title: 'Shared Article in section', url: 'https://example.com/shared' },
+		],
 	);
-	chatService.insertArticleList(
+	insertArticlePresentation(
 		second.object.resource,
 		'Second source',
-		['article:second'],
-		'- Second Article',
+		[{ id: 'item:second', articleId: 'article:second', title: 'Second Article', url: 'https://example.com/second' }],
 	);
 	const widget = createWidget();
 	widget.setModel(first.object, presentation(first.object.resource));
@@ -668,24 +937,42 @@ test('ChatWidget maps Article list checkboxes by occurrence while writing one ad
 
 	try {
 		assert.deepEqual(checkedStates(), ['false', 'false', 'false']);
+		const openCount = articleOpenTargets.length;
+		const firstOpen = widget.getElement().querySelector<HTMLButtonElement>('.comet-chat-article-open');
+		assert(firstOpen);
+		firstOpen.click();
+		await Promise.resolve();
+		assert.equal(articleOpenTargets.length, openCount + 1);
+		assert.equal(articleOpenTargets.at(-1)?.chatResource, first.object.resource);
+		assert.equal(articleOpenTargets.at(-1)?.articleId, 'article:first');
+		assert.equal(articleOpenTargets.at(-1)?.uri.toString(true), 'https://example.com/first');
 		checkboxes()[1].click();
-		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared']);
-		assert.deepEqual(second.object.getSnapshot().checkedArticleIds, []);
+		assert.deepEqual(articlePresentationState.getSelectedArticleIds(first.object.resource), ['article:shared']);
+		assert.deepEqual(articlePresentationState.getSelectedArticleIds(second.object.resource), []);
 		assert.deepEqual(checkedStates(), ['false', 'true', 'true']);
 
 		checkboxes()[0].click();
-		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared', 'article:first']);
+		assert.deepEqual(
+			articlePresentationState.getSelectedArticleIds(first.object.resource),
+			['article:shared', 'article:first'],
+		);
 		assert.deepEqual(checkedStates(), ['true', 'true', 'true']);
 
 		const staleFirstCheckbox = checkboxes()[2];
 		widget.setModel(second.object, presentation(second.object.resource));
 		staleFirstCheckbox.click();
-		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared', 'article:first']);
-		assert.deepEqual(second.object.getSnapshot().checkedArticleIds, []);
+		assert.deepEqual(
+			articlePresentationState.getSelectedArticleIds(first.object.resource),
+			['article:shared', 'article:first'],
+		);
+		assert.deepEqual(articlePresentationState.getSelectedArticleIds(second.object.resource), []);
 
 		checkboxes()[0].click();
-		assert.deepEqual(second.object.getSnapshot().checkedArticleIds, ['article:second']);
-		assert.deepEqual(first.object.getSnapshot().checkedArticleIds, ['article:shared', 'article:first']);
+		assert.deepEqual(articlePresentationState.getSelectedArticleIds(second.object.resource), ['article:second']);
+		assert.deepEqual(
+			articlePresentationState.getSelectedArticleIds(first.object.resource),
+			['article:shared', 'article:first'],
+		);
 		widget.setModel(first.object, presentation(first.object.resource));
 		assert.deepEqual(checkedStates(), ['true', 'true', 'true']);
 	} finally {
@@ -695,8 +982,8 @@ test('ChatWidget maps Article list checkboxes by occurrence while writing one ad
 
 test('ChatWidget exports the checked Articles from its addressed Chat', async () => {
 	const reference = chatService.createModel(URI.parse('chat:/widget/article-export'));
-	chatService.setArticleChecked(reference.object.resource, 'article:first', true);
-	chatService.setArticleChecked(reference.object.resource, 'article:second', true);
+	articlePresentationState.setArticleSelected(reference.object.resource, 'article:first', true);
+	articlePresentationState.setArticleSelected(reference.object.resource, 'article:second', true);
 	const widget = createWidget();
 	widget.setModel(reference.object, presentation(reference.object.resource));
 	document.body.append(widget.getElement());
@@ -712,6 +999,8 @@ test('ChatWidget exports the checked Articles from its addressed Chat', async ()
 			resource: reference.object.resource,
 			articleIds: ['article:first', 'article:second'],
 		}]);
+		assert.deepEqual(articlePresentationState.getSelectedArticleIds(reference.object.resource), []);
+		articlePresentationState.setArticleSelected(reference.object.resource, 'article:first', true);
 		desktopRuntime = false;
 		widget.setPresentation(presentation(reference.object.resource));
 		const webExportButton = widget.getElement().querySelector('[aria-label="Export DOCX"]');
@@ -723,26 +1012,14 @@ test('ChatWidget exports the checked Articles from its addressed Chat', async ()
 	}
 });
 
-test('ChatWidget rejects Article messages whose rendered items do not match their ArticleId references', () => {
-	const reference = chatService.createModel(URI.parse('chat:/widget/article-checkbox-mismatch'), {
-		messages: [{
-			id: 'article-checkbox-mismatch',
-			role: 'assistant',
-			content: '- One rendered Article',
-			imageAttachments: [],
-			articleList: { articleIds: ['article:first', 'article:second'] },
-		}],
-	});
-	const widget = createWidget();
-
-	try {
-		assert.throws(
-			() => widget.setModel(reference.object, presentation(reference.object.resource)),
-			/Article message items do not match their ArticleId references/,
-		);
-	} finally {
-		disposeWidget(widget, reference);
-	}
+test('Article Feature rejects duplicate typed occurrence identities', () => {
+	assert.throws(() => parseArticleListChatPresentation({
+		sourceLabel: 'Typed source',
+		items: [
+			{ id: 'item:duplicate', articleId: 'article:first', title: 'First', url: 'https://example.com/first', metadata: '' },
+			{ id: 'item:duplicate', articleId: 'article:second', title: 'Second', url: 'https://example.com/second', metadata: '' },
+		],
+	}), /duplicate item ID 'item:duplicate'/);
 });
 
 test('ChatWidget cancels an Article fetch when rebound and never cross-routes its result', async () => {
@@ -763,8 +1040,8 @@ test('ChatWidget cancels an Article fetch when rebound and never cross-routes it
 		await sourceFetch.p;
 		await Promise.resolve();
 
-		assert.equal(first.object.getSnapshot().messages.length, 0);
-		assert.equal(second.object.getSnapshot().messages.length, 0);
+		assert.equal(articlePresentationState.getPresentations(first.object.resource).length, 0);
+		assert.equal(articlePresentationState.getPresentations(second.object.resource).length, 0);
 	} finally {
 		fetchService.reset();
 		disposeWidget(widget, first, second);
@@ -787,7 +1064,7 @@ test('ChatWidget cancels an Article fetch when disposed', async () => {
 		sourceFetch.complete();
 		await sourceFetch.p;
 		await Promise.resolve();
-		assert.equal(reference.object.getSnapshot().messages.length, 0);
+		assert.equal(articlePresentationState.getPresentations(reference.object.resource).length, 0);
 	} finally {
 		fetchService.reset();
 		disposeWidget(widget, reference);
@@ -810,7 +1087,7 @@ test('ChatWidget cancels an Article fetch when its context view is externally hi
 		sourceFetch.complete();
 		await sourceFetch.p;
 		await Promise.resolve();
-		assert.equal(reference.object.getSnapshot().messages.length, 0);
+		assert.equal(articlePresentationState.getPresentations(reference.object.resource).length, 0);
 	} finally {
 		fetchService.reset();
 		disposeWidget(widget, reference);
@@ -838,7 +1115,7 @@ test('ChatWidget clears an active Article source when its Catalog no longer cont
 		sourceFetch.complete();
 		await sourceFetch.p;
 		await Promise.resolve();
-		assert.equal(reference.object.getSnapshot().messages.length, 0);
+		assert.equal(articlePresentationState.getPresentations(reference.object.resource).length, 0);
 	} finally {
 		fetchService.reset();
 		disposeWidget(widget, reference);

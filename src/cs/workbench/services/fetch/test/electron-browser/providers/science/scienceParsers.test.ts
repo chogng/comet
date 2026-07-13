@@ -9,6 +9,7 @@ import { JSDOM } from 'jsdom';
 import { URI } from 'cs/base/common/uri';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import { isScienceArticleDetail, parseScienceArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceArticleDetailParser';
+import { parseScienceArticleReadableContent } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceArticleReadableContentParser';
 import { parseScienceCatalog } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceCatalogParser';
 import { ScienceFetchProvider } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceFetchProvider';
 import { isScienceCurrentIssue, parseScienceCurrentIssue } from 'cs/workbench/services/fetch/electron-browser/providers/science/scienceCurrentIssueParser';
@@ -351,6 +352,43 @@ test('Science and Science Advances saved Detail fixtures preserve complete field
 		citationUrl: URI.parse('https://www.science.org/action/showCitFormats?doi=10.1126/sciadv.detail'),
 	});
 	assert.equal(isScienceArticleDetail(documentFrom('<main><h1>Verify your account</h1></main>')), false);
+});
+
+test('Science readable content uses the complete body for both proven Detail structures', () => {
+	const scienceDetailBase = URI.parse('https://www.science.org/doi/10.1126/science.detail');
+	const science = parseScienceArticleReadableContent(documentFrom(scienceDetailFixture), scienceDetailBase);
+	assert.deepEqual(science, {
+		url: scienceDetailBase,
+		title: 'Science detail',
+		text: [
+			"Editor's summary",
+			"Editor's summary",
+			'Abstract',
+			'Science detail abstract',
+			'Introduction',
+			'The complete Science body begins here.',
+			'Materials and methods',
+			'The synthetic protocol is fully described.',
+			'Discussion',
+			'The complete Science conclusion is retained.',
+		].join('\n'),
+	});
+	assert.equal(science.text.includes('articleFixtureScriptExecuted'), false);
+
+	const advancesDetailBase = URI.parse('https://www.science.org/doi/10.1126/sciadv.detail');
+	const advances = parseScienceArticleReadableContent(
+		documentFrom(scienceAdvancesDetailFixture),
+		advancesDetailBase,
+	);
+	assert.equal(advances.title, 'Improper geometric ferroelectricity at the monolayer limit');
+	assert.equal(advances.text.includes('The complete Science Advances discussion is present.'), true);
+	assert.throws(
+		() => parseScienceArticleReadableContent(
+			documentFrom(scienceDetailFixture.replace('class="article__body"', 'class="abstract-content-only"')),
+			scienceDetailBase,
+		),
+		/does not contain its readable body/,
+	);
 });
 
 test('Science rejects a Current Issue Section containing cards without a label', () => {

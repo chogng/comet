@@ -58,6 +58,83 @@
 	height: 14px;
 }
 
+.comet-session-chat-host {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.comet-session-chat-tabs {
+	box-sizing: border-box;
+	flex: 0 0 32px;
+	height: 32px;
+	min-width: 0;
+	display: flex;
+	align-items: stretch;
+	overflow-x: auto;
+	border-bottom: 1px solid var(--comet-border, rgba(0, 0, 0, 0.12));
+	-webkit-app-region: no-drag;
+}
+
+.comet-session-chat-tabs[hidden] {
+	display: none;
+}
+
+.comet-session-chat-tab {
+	box-sizing: border-box;
+	flex: 0 1 180px;
+	min-width: 80px;
+	display: flex;
+	align-items: center;
+	border-right: 1px solid var(--comet-border, rgba(0, 0, 0, 0.12));
+}
+
+.comet-session-chat-tab.comet-is-active {
+	background: var(--comet-list-activeSelectionBackground, rgba(0, 0, 0, 0.06));
+}
+
+.comet-session-chat-tab-select,
+.comet-session-chat-tab-close,
+.comet-session-no-chat-choice {
+	appearance: none;
+	box-sizing: border-box;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.comet-session-chat-tab-select {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	padding: 0 8px;
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.comet-session-chat-tab-close {
+	flex: 0 0 24px;
+	width: 24px;
+	height: 24px;
+	margin-right: 4px;
+	border-radius: 4px;
+	font-size: 16px;
+	line-height: 20px;
+}
+
+.comet-session-chat-tab-select:hover,
+.comet-session-chat-tab-close:hover,
+.comet-session-no-chat-choice:hover {
+	background: var(--comet-list-hoverBackground, rgba(0, 0, 0, 0.08));
+}
+
 .comet-session-view-content,
 .comet-session-chat-view {
 	flex: 1 1 auto;
@@ -75,4 +152,32 @@
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+}
+
+.comet-session-no-chat {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 12px;
+	padding: 24px;
+	color: var(--comet-description-foreground, #5f6b76);
+}
+
+.comet-session-no-chat-choices {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+}
+
+.comet-session-no-chat-choice {
+	max-width: 240px;
+	padding: 6px 10px;
+	border: 1px solid var(--comet-border, rgba(0, 0, 0, 0.12));
+	border-radius: 4px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }

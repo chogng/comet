@@ -2,7 +2,6 @@ import type { LlmModelDefinition } from 'cs/workbench/services/llm/types';
 
 const kimiDefaults = {
   provider: 'kimi',
-  apiStyle: 'openai-compatible',
   enabled: true,
 } as const;
 
@@ -14,6 +13,7 @@ const kimi: ReadonlyArray<LlmModelDefinition> = [
     description: 'Balanced Kimi model for chat, multimodal use, and reasoning.',
     supports_image_input: true,
     context_window_tokens: 256_000,
+    max_output_tokens: 32_768,
     recommendedTasks: ['chat', 'reasoning'],
   },
   {

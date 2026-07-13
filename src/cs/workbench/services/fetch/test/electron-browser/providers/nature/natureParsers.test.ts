@@ -8,9 +8,10 @@ import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { CancellationTokenNone } from 'cs/base/common/cancellation';
 import { URI } from 'cs/base/common/uri';
-import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
+import { maximumArticleReadableContentBytes, type JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import { FetchParserNotFoundError } from 'cs/workbench/services/fetch/electron-browser/fetchParserResolver';
 import { isNatureArticleDetail, parseNatureArticleDetail } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleDetailParser';
+import { parseNatureArticleReadableContent } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleReadableContentParser';
 import { isNatureArticleList, isNatureNewsOpinionList, parseNatureArticleList } from 'cs/workbench/services/fetch/electron-browser/providers/nature/natureArticleListParser';
 import {
 	isNatureArticleTypeCatalog,
@@ -145,6 +146,38 @@ test('Nature fixtures parse catalog, ordinary list, news list, and article detai
 			journal,
 		).authors.map(author => author.isCorresponding),
 		[undefined, undefined],
+	);
+});
+
+test('Nature readable content requires and preserves the complete provider-specific body', () => {
+	const readable = parseNatureArticleReadableContent(documentFrom(natureArticleDetailFixture), base);
+	assert.deepEqual(readable, {
+		url: base,
+		title: 'Nature detail',
+		text: [
+			'Abstract',
+			'Detail abstract',
+			'Introduction',
+			'The complete Nature body begins with explicit evidence.',
+			'Methods',
+			'Researchers measured the bounded synthetic cohort.',
+			'Results',
+			'The complete Nature result remained stable.',
+		].join('\n'),
+	});
+	assert.equal(readable.text.includes('articleFixtureScriptExecuted'), false);
+	assert.throws(
+		() => parseNatureArticleReadableContent(
+			documentFrom(natureArticleDetailFixture.replace('class="c-article-body"', 'class="article-abstract-only"')),
+			base,
+		),
+		/does not contain its readable body/,
+	);
+	assert.throws(
+		() => parseNatureArticleReadableContent(documentFrom(`
+			<main><h1>Oversized</h1><div class="c-article-body"><p>${'x'.repeat(maximumArticleReadableContentBytes + 1)}</p></div></main>
+		`), base),
+		/cannot exceed/,
 	);
 });
 

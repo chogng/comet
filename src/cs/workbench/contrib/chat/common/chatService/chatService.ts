@@ -5,66 +5,47 @@
 
 import type { Event } from 'cs/base/common/event';
 import type { IDisposable } from 'cs/base/common/lifecycle';
+import type { CancellationToken } from 'cs/base/common/cancellation';
 import type { URI } from 'cs/base/common/uri';
+import type { IAgentHostAttachment, IAgentHostInteractionTarget } from 'cs/platform/agentHost/common/attachments';
 import type {
-	MainAgentPatchProposal,
-	RagAnswerResult,
-} from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
+	AgentChatId,
+	AgentSessionId,
+	AgentSubmissionId,
+} from 'cs/platform/agentHost/common/identities';
+import type { IAgentHostChatState } from 'cs/platform/agentHost/common/protocol';
+import type { AgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
-import type { ArticleId } from 'cs/workbench/services/fetch/common/fetch';
-import type { IChatImageAttachment } from 'cs/workbench/contrib/chat/common/chatService/chatImageAttachment';
+import type {
+	IChatAttachmentProducer,
+	IChatSubmissionCapture,
+	IPendingChatAttachment,
+} from 'cs/workbench/contrib/chat/common/chatService/chatComposer';
+import type {
+	IChatHostPresentation,
+	IChatHostPresentationIdentity,
+	IChatHostPresentationProvider,
+	ChatPresentationTypeId,
+} from 'cs/workbench/contrib/chat/common/chatService/chatTurnPresentations';
 
 export const IChatService = createDecorator<IChatService>('chatService');
 
-/** Identifies the immutable Draft state against which a patch was generated. */
-export interface IChatPatchTarget {
-	readonly resource: URI;
-	readonly document: WritingEditorDocument;
-}
-
-/** Describes a patch proposed by one assistant turn. */
-export type ChatPatchProposal = MainAgentPatchProposal & {
-	readonly target: IChatPatchTarget;
-	readonly isApplied: boolean;
-	readonly applyError: string | null;
-};
-
-export interface IChatArticleList {
-	readonly articleIds: readonly ArticleId[];
-}
-
-interface IChatTextMessageBase {
-	readonly id: string;
-	readonly content: string;
-	readonly imageAttachments: readonly IChatImageAttachment[];
-	readonly includeInAgentHistory?: boolean;
-}
-
-export type ChatMessage =
-	| (IChatTextMessageBase & {
-		readonly role: 'user';
-	})
-	| (IChatTextMessageBase & {
-		readonly role: 'assistant';
-		readonly articleList?: IChatArticleList;
-		readonly result?: RagAnswerResult | null;
-		readonly patchProposal?: ChatPatchProposal | null;
-	});
-
-/** Identifies the only request currently mutating one Chat model. */
-export interface IChatActiveRequest {
-	readonly id: string;
-	readonly prompt: string;
+/** Identifies the immutable composer revision currently being prepared for Host acceptance. */
+export interface IChatPreparingSubmission {
+	readonly id: AgentSubmissionId;
+	readonly composerRevision: number;
 }
 
 /** Immutable observable state for one addressed Chat resource. */
 export interface IChatModelSnapshot {
+	readonly hostState: IAgentHostChatState | undefined;
+	readonly hostPresentations: readonly IChatHostPresentation[];
 	readonly input: string;
-	readonly messages: readonly ChatMessage[];
-	readonly activeRequest: IChatActiveRequest | undefined;
+	readonly composerRevision: number;
+	readonly pendingAttachments: readonly IPendingChatAttachment[];
+	readonly interactionTargets: readonly IAgentHostInteractionTarget[];
+	readonly preparingSubmission: IChatPreparingSubmission | undefined;
 	readonly errorMessage: string | undefined;
-	readonly checkedArticleIds: readonly ArticleId[];
 }
 
 /** Read surface for one addressed Chat model. */
@@ -72,6 +53,7 @@ export interface IChatModel {
 	readonly resource: URI;
 	readonly onDidChange: Event<void>;
 	getSnapshot(): IChatModelSnapshot;
+	getHostPresentation(identity: IChatHostPresentationIdentity): IChatHostPresentation | undefined;
 }
 
 /** Lifetime reference to a loaded addressed Chat model. */
@@ -79,63 +61,73 @@ export interface IChatModelReference extends IDisposable {
 	readonly object: IChatModel;
 }
 
+/** Exact Host backing identity applied only by the owner of one Chat presentation model. */
+export interface IChatHostModelIdentity {
+	readonly session: AgentSessionId;
+	readonly chat: AgentChatId;
+}
+
+/** Ownership reference used by a provider to publish authoritative Host history. */
+export interface IChatModelOwnerReference extends IChatModelReference {
+	replaceHostState(identity: IChatHostModelIdentity, state: IAgentHostChatState): void;
+	importHostPresentations(
+		identity: IChatHostModelIdentity,
+		presentations: readonly IChatHostPresentation[],
+	): void;
+	delete(): void;
+}
+
 /** Initial state supplied by the owner that creates a Chat resource. */
 export interface IChatModelInitialState {
 	readonly input?: string;
-	readonly messages?: readonly ChatMessage[];
+	readonly composerRevision?: number;
+	readonly pendingAttachments?: readonly IPendingChatAttachment[];
+	readonly interactionTargets?: readonly IAgentHostInteractionTarget[];
 	readonly errorMessage?: string;
-	readonly checkedArticleIds?: readonly ArticleId[];
 }
 
-/** Successful result committed for one active Chat request. */
-export interface IChatRequestCompletion {
-	readonly content: string;
-	readonly result: RagAnswerResult | null;
-	readonly patchProposal: {
-		readonly proposal: MainAgentPatchProposal;
-		readonly target: IChatPatchTarget;
-	} | null;
+/** Compare-and-set mutation for Feature-owned opaque presentation state. */
+export interface IChatHostPresentationUpdate {
+	readonly identity: IChatHostPresentationIdentity;
+	readonly type: ChatPresentationTypeId;
+	readonly expectedValue: AgentHostProtocolValue;
+	readonly value: AgentHostProtocolValue;
 }
 
-/** A validated terminal Chat state that has not yet been published to observers. */
-export interface IPreparedChatRequestState {
-	readonly snapshot: IChatModelSnapshot;
-	commit(): void;
-}
-
-/** Owns one active Chat request until its terminal state is committed or the request is rolled back. */
-export interface IChatRequestTransaction {
-	prepareCompletion(completion: IChatRequestCompletion): IPreparedChatRequestState;
-	prepareFailure(errorMessage: string): IPreparedChatRequestState;
-	rollback(): void;
+/** Owns one resolved composer capture until exact Host acceptance or rejection is reconciled. */
+export interface IPreparedChatSubmission {
+	readonly capture: IChatSubmissionCapture;
+	readonly attachments: readonly IAgentHostAttachment[];
+	readonly interactionTargets: readonly IAgentHostInteractionTarget[];
+	accept(): Promise<void>;
+	reject(): Promise<void>;
 }
 
 /** Owns loaded single-conversation models addressed strictly by resource. */
 export interface IChatService {
 	readonly _serviceBrand: undefined;
-	createModel(resource: URI, initialState?: IChatModelInitialState): IChatModelReference;
+	/** Fires only after an addressed Chat model is permanently deleted. */
+	readonly onDidDeleteModel: Event<URI>;
+	createModel(resource: URI, initialState?: IChatModelInitialState): IChatModelOwnerReference;
 	acquireModel(resource: URI): IChatModelReference;
+	registerAttachmentProducer(producer: IChatAttachmentProducer): IDisposable;
+	registerHostPresentationProvider(provider: IChatHostPresentationProvider): IDisposable;
+	updateHostPresentation(resource: URI, update: IChatHostPresentationUpdate): void;
 	setInput(resource: URI, value: string): void;
-	insertContextMessage(
+	addComposerContext(
 		resource: URI,
-		content: string,
-		imageAttachments: readonly IChatImageAttachment[],
+		attachments: readonly IPendingChatAttachment[],
+		targets: readonly IAgentHostInteractionTarget[],
 	): void;
-	insertArticleList(
+	addPendingAttachments(resource: URI, attachments: readonly IPendingChatAttachment[]): void;
+	removePendingAttachment(resource: URI, attachmentId: IPendingChatAttachment['id']): void;
+	clearPendingAttachments(resource: URI): void;
+	addInteractionTargets(resource: URI, targets: readonly IAgentHostInteractionTarget[]): void;
+	removeInteractionTarget(resource: URI, targetId: IAgentHostInteractionTarget['id']): void;
+	clearInteractionTargets(resource: URI): void;
+	prepareSubmission(
 		resource: URI,
-		sourceLabel: string,
-		articleIds: readonly ArticleId[],
-		content: string,
-	): void;
-	insertArticleFetchEmptyResult(resource: URI, sourceLabel: string, message: string): void;
-	applyPatch(resource: URI, messageId: string): void;
-	isArticleChecked(resource: URI, articleId: ArticleId): boolean;
-	setArticleChecked(resource: URI, articleId: ArticleId, checked: boolean): void;
-	removeArticleChecks(resource: URI, articleIds: readonly ArticleId[]): void;
-	startRequest(
-		resource: URI,
-		requestId: string,
-		prompt: string,
-		imageAttachments: readonly IChatImageAttachment[],
-	): IChatRequestTransaction;
+		submissionId: AgentSubmissionId,
+		token: CancellationToken,
+	): Promise<IPreparedChatSubmission>;
 }

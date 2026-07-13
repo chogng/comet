@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { URI } from 'cs/base/common/uri';
 import type { ArticleListSource, ArticleRecord, JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
-import type { IFetchProvider, ParsedArticleDetail, ParsedArticleListCatalog, ParsedArticleListPage } from 'cs/workbench/services/fetch/common/fetchProvider';
+import type { IFetchProvider, ParsedArticleDetail, ParsedArticleListCatalog, ParsedArticleListPage, ParsedArticleReadableContent } from 'cs/workbench/services/fetch/common/fetchProvider';
 import { FetchRegistry } from 'cs/workbench/services/fetch/common/fetchRegistry';
 
 class TestFetchProvider implements IFetchProvider {
@@ -35,6 +35,14 @@ class TestFetchProvider implements IFetchProvider {
 	}
 
 	fetchArticleDetail(_journal: JournalDescriptor, _article: ArticleRecord, _token: CancellationToken): Promise<ParsedArticleDetail> {
+		throw new Error('Not implemented.');
+	}
+
+	fetchArticleReadableContent(
+		_journal: JournalDescriptor,
+		_article: ArticleRecord,
+		_token: CancellationToken,
+	): Promise<ParsedArticleReadableContent> {
 		throw new Error('Not implemented.');
 	}
 }

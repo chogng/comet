@@ -16,7 +16,7 @@ export interface ISessionsChatView extends IDisposable {
 
 /** Renders the explicit new-Session slot or its provider-owned draft. */
 export interface INewSessionChatView extends ISessionsChatView {
-	setSession(session: ISession | undefined): void;
+	setDraft(session: ISession | undefined, chat: IChat | undefined): void;
 }
 
 /** Renders one explicitly addressed Chat in a committed Session. */

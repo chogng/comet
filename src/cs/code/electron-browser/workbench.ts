@@ -35,6 +35,10 @@ function isSmokeTestDriverEnabled() {
 async function main() {
 	assertDesktopIpcBridge();
 	await import('cs/sessions/sessions.desktop.main');
+	const { initializeLocalAgentHostWorkbench } = await import(
+		'cs/code/electron-browser/agentHost'
+	);
+	await initializeLocalAgentHostWorkbench();
 
 	const { startSessionsWorkbench } = await import('cs/sessions/browser/sessionsWorkbench');
 	await startSessionsWorkbench();

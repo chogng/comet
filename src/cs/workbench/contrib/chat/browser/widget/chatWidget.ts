@@ -19,6 +19,7 @@ import { ChatInputPart } from 'cs/workbench/contrib/chat/browser/widget/input/ch
 import type { IChatModel } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import type { IChatModelSnapshot } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
+import { IChatBrowserPresentationService } from 'cs/workbench/contrib/chat/browser/chatBrowserPresentations';
 import { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
 import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
 
@@ -44,6 +45,7 @@ export class ChatWidget extends Disposable {
 	constructor(
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatService private readonly chatService: IChatService,
+		@IChatBrowserPresentationService private readonly presentationService: IChatBrowserPresentationService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 	) {
@@ -51,6 +53,11 @@ export class ChatWidget extends Disposable {
 		this.ui = this.languageService.getLocaleMessages(this.localeService.getLocale());
 		this.element.tabIndex = -1;
 		this.listWidget = this._register(instantiationService.createInstance(ChatListWidget, this.ui));
+		this._register(presentationService.onDidChange(resource => {
+			if (this.model && isEqual(this.model.resource, resource)) {
+				this.render();
+			}
+		}));
 		this._register(toDisposable(this.localeService.subscribe(() => this.handleLocaleChanged())));
 		this.render();
 	}
@@ -110,10 +117,12 @@ export class ChatWidget extends Disposable {
 		}
 		const snapshot = model.getSnapshot();
 		this.renderedSnapshot = snapshot;
+		const isTranscriptEmpty = (snapshot.hostState?.turns.length ?? 0) === 0
+			&& this.presentationService.getFeaturePresentations(model.resource).length === 0;
 		const shell = $<HTMLElementTagNameMap['div']>('div', { class: [
 				'comet-session-chat-view-body',
 				'comet-chat-shell',
-				snapshot.messages.length === 0 ? 'comet-is-empty-state' : '',
+				isTranscriptEmpty ? 'comet-is-empty-state' : '',
 			]
 				.filter(Boolean)
 				.join(' ') });
@@ -149,9 +158,11 @@ export class ChatWidget extends Disposable {
 
 		const snapshot = model.getSnapshot();
 		if (
-			previousSnapshot.messages === snapshot.messages
-			&& previousSnapshot.activeRequest === snapshot.activeRequest
-			&& previousSnapshot.checkedArticleIds === snapshot.checkedArticleIds
+			previousSnapshot.hostState === snapshot.hostState
+			&& previousSnapshot.hostPresentations === snapshot.hostPresentations
+			&& previousSnapshot.pendingAttachments === snapshot.pendingAttachments
+			&& previousSnapshot.interactionTargets === snapshot.interactionTargets
+			&& previousSnapshot.preparingSubmission === snapshot.preparingSubmission
 			&& snapshot.errorMessage === undefined
 		) {
 			this.renderedSnapshot = snapshot;
@@ -178,6 +189,9 @@ export class ChatWidget extends Disposable {
 			throw new Error('A Chat widget input requires an addressed model and presentation.');
 		}
 		const snapshot = model.getSnapshot();
+		const hostTurnIsActive = snapshot.hostState?.turns.some(turn =>
+			!['completed', 'cancelled', 'failed'].includes(turn.state),
+		) ?? false;
 		return {
 			ui: this.ui,
 			chatModel: model,
@@ -186,7 +200,8 @@ export class ChatWidget extends Disposable {
 			onQuestionChange: (value: string) => {
 				this.chatService.setInput(model.resource, value);
 			},
-			isAsking: snapshot.activeRequest !== undefined,
+			isBusy: hostTurnIsActive
+				|| snapshot.preparingSubmission !== undefined,
 			onAsk: () => {
 				this.submitRequestEmitter.fire({ chatResource: model.resource });
 			},
@@ -195,7 +210,8 @@ export class ChatWidget extends Disposable {
 			onSelectModel: (modelId: string | undefined) => {
 				this.modelSelectionEmitter.fire({ chatResource: model.resource, modelId });
 			},
-			isEmpty: snapshot.messages.length === 0,
+			isEmpty: (snapshot.hostState?.turns.length ?? 0) === 0
+				&& this.presentationService.getFeaturePresentations(model.resource).length === 0,
 		};
 	}
 }
