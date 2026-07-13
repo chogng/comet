@@ -74,8 +74,10 @@ identity.
    Comet Agent contracts and update every call site directly.
 4. Replace Comet Agent imports of Editor, Workbench Chat, Fetch, RAG, and other
    higher-layer types with bounded Host context and client-tool contracts.
-   Register the concrete feature operations from their owning higher-layer
-   contributions.
+   Register content extraction and the other concrete feature operations from
+   their owning higher-layer contributions. Article requests carry normalized
+   metadata and stable content references, with scoped handles materialized by
+   the content owner, rather than treating Article detail as complete text.
 5. Register `CometAgent` with the Agent Host runtime under Agent ID `comet`.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
@@ -83,8 +85,11 @@ identity.
    `ISession` and `IChat` models, draft replacement, capability mapping, and
    authoritative collection transitions.
 8. Move Chat model creation and Host turn application into the shared Agent
-   Host Sessions integration. Keep Chat input routed through
-   `ISessionsManagementService` and the addressed provider.
+   Host Sessions integration. Add one addressed composer-attachment model for
+   Article selection and Chat transcript selection, snapshot it at send, and
+   associate submitted attachments with the user turn. Keep Chat input routed
+   through `ISessionsManagementService` and the addressed provider; do not use
+   synthetic transcript messages as pending request context.
 9. Move default-provider Session and Chat persistence to the Host catalog and
    Comet Agent resume boundary. Perform one explicit, versioned, atomic data
    migration of `sessions.providers.default` at the new storage owner and

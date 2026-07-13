@@ -25,12 +25,22 @@ Downstream operations receive an `ArticleId` snapshot and resolve the required
 Cross-process calls use feature-specific DTOs; `ArticleId` and Fetch domain
 objects do not move to electron-main for later lookup.
 
+`ArticleDetail` is structured Article detail and metadata. It is not a contract
+for the complete article body. Complete readable content is produced by a
+feature-owned content extraction capability using an explicitly addressed
+Article or Browser resource. Content extraction is independent of any Agent
+implementation.
+
 Workbench Chat owns article references stored in one addressed conversation and
 its transient checked-article selection. The Agent Host Sessions provider that
 routes a request resolves explicit Article attachments through `IFetchService`
-and constructs the normalized Agent Host Article context. The addressed Agent
-converts that context into SDK input. Chat does not own backend routing, and
-Sessions core does not own a parallel article selection.
+and constructs normalized Article metadata plus a stable content reference.
+The content owner materializes a bounded read handle for the addressed request.
+The addressed Agent converts that context into SDK input and can read complete
+text through the typed content client-tool operation when required. Agent
+implementations do not scrape Article pages or treat `ArticleDetail` as full
+text. Chat does not own backend routing, and Sessions core does not own a
+parallel article selection.
 
 ## Runtime boundary
 

@@ -114,6 +114,19 @@ request transactions. It does not create product `ISession` objects, choose an
 Agent, own backend Session lifecycle, or serve as the durable Agent history
 authority.
 
+Pending composer attachments and submitted message attachments are distinct
+states. Adding selected transcript text, an Article, an Editor selection, a
+Browser page, text, or an image updates the addressed composer. Sending captures
+an immutable attachment snapshot and associates it with the submitted user
+turn. A feature action never manufactures a submitted Chat message merely to
+make context visible to a later Agent request.
+
+Text selected from the Chat transcript is captured by the Chat renderer as
+ordered fragments with source message identity and role. Chat stores the
+captured text as a composer attachment. The Host receives only bounded text
+context when the request is submitted; DOM ranges and renderer objects remain
+inside Workbench Chat.
+
 The Sessions Chat contribution binds Chat input to
 `ISessionsManagementService`. Requests continue through the owning Sessions
 provider; Workbench Chat never calls an Agent SDK or Host connection directly.
@@ -124,6 +137,21 @@ Editor documents, Article records, Browser state, and other higher-layer
 objects never enter Platform Agent Host directly. Their owning Workbench or
 Sessions contribution resolves them into bounded Agent Host DTOs before a
 request crosses `IAgentHostConnection`.
+
+An Article attachment contains stable Article identity, normalized metadata,
+and a stable content reference. `ArticleDetail` does not represent the complete
+article body. Complete text comes from a feature-owned content extraction
+capability that can return bounded chunks. The extraction capability is
+independent of Agent identity and SDK choice.
+
+Persistent normalized turns store the content reference and metadata, not a
+live capability handle. The feature owner materializes a read handle for an
+addressed Host connection, Session, Chat, and lease lifetime declared by the
+protocol. An Agent can invoke the typed read-content client tool with that
+handle; the connection routes the request to the feature owner that issued it.
+Agent Host does not scrape pages, and an Agent does not import Fetch or Browser
+types. Unknown, expired, denied, or unsupported references and handles fail
+explicitly without trying another extractor.
 
 Agent Host defines typed context and client-tool envelopes in its common
 protocol. Feature owners register the corresponding client-side
