@@ -190,6 +190,10 @@ activation transaction, while Comet is the sole bundled package.
   preparation. The Host binds the bounded opaque result and its exact Agent and
   model descriptor revisions to the Turn; no SDK-native configuration crosses
   that boundary.
+- Agent Host owns SDK-neutral Host-default and Session configuration schema and
+  value state. Every Agent exposes configuration resolution, bounded dynamic
+  completion, and addressed Session application through the same Agent Runtime
+  Port; SDK-native configuration and credentials remain inside the runtime.
 - The Comet runtime owns the migrated model and Tool orchestration loop. It
   consumes canonical Tool registrations directly, invokes them through the
   Host Tool Execution Port, and keeps model-provider conversion internal
@@ -228,7 +232,8 @@ names. No target registration imports or dispatches through the legacy path.
    complete replay-or-snapshot reconnection, retry-safe operation identities,
    Host-side `IAgent` port, language-neutral Agent Runtime Protocol,
    `IAgentRuntimeConnection`, Agent package identities, manifests, installable
-   and installed catalogs, package operations, and Node runtime under
+   and installed catalogs, package operations, Host-default and Session
+   configuration schemas, values, actions, and Node runtime under
    `src/cs/platform/agentHost/`. Add direct package staging, verification,
    immutable executable-dependency resolution, storage, activation,
    package-wide quiescing, resume migration, update, uninstall, Agent-backed
@@ -254,6 +259,9 @@ names. No target registration imports or dispatches through the legacy path.
    update every call site directly. Register exactly one Comet endpoint for
    each Agent Host composition; do not retain the command path or dual-register
    embedded and connected runtimes.
+   Add the common Agent configuration surface, migrate Comet model-provider
+   settings into SDK-neutral Host-default, Session, and model-selection
+   schemas, and keep their native provider projection inside the Comet runtime.
 4. Replace Comet Agent imports of Editor, Workbench Chat, Fetch, RAG, and other
    higher-layer types with bounded Host context, content-resource contracts,
    and model-facing Tool contracts with explicit executor bindings.
@@ -380,7 +388,10 @@ names. No target registration imports or dispatches through the legacy path.
     Profiles, lossless SDK and Comet model projection, SDK alias and call
     mapping, embedded and connected Comet Tool-loop execution, Agent Runtime
     Protocol negotiation, common execution-profile resolution, resolution
-    retry stability, runtime-call correlation, resume-schema rejection, exact
+    retry stability, Host-default and Session configuration resolution,
+    dynamic completion, schema-revision validation, atomic mutable updates,
+    retained-config activation rejection, runtime-call correlation,
+    resume-schema rejection, exact
     Turn resumption, runtime disconnect without implementation failover,
     bundled-Comet-only initial package state, explicit optional-package
     install, atomic activation and update, uninstall with retained Session
@@ -413,6 +424,8 @@ registration, catch-and-try-next logic, or a legacy command path.
   preserving a privileged main-Chat role;
 - explicit draft discard and atomic draft-to-committed replacement;
 - model discovery, selection, and disabled-model validation;
+- persisted Agent defaults and explicit Session or model configuration without
+  exposing SDK-native values or credentials;
 - text, image, Editor, and Article request context;
 - request size and model-context enforcement;
 - tool execution, evidence results, and Editor patch proposals;
@@ -522,6 +535,12 @@ The migration is complete only when:
     mutations, releases materialized backing, and commits migrated state
     atomically; Agent-backed deletion and post-uninstall Host-record purge
     remain distinct operations.
+22. Host Agent defaults, Session configuration, and model execution settings
+    use separate exact schema revisions. Agent Host snapshots and ordered
+    actions own canonical schemas and values; every runtime resolves and
+    applies them through the common Agent configuration surface. Invalid or
+    stale state fails explicitly, raw credentials and SDK-native configuration
+    cross no Host boundary, and no Agent-specific settings path remains.
 
 ## Deletion condition
 

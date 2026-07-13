@@ -71,7 +71,7 @@ Package lifecycle keeps these identities distinct:
 | Agent package ID | Stable product installation identity |
 | Agent package revision | Exact version, target platform, manifest revision, and content digest |
 | Agent ID | Stable behavior identity registered with Agent Host |
-| Agent runtime registration revision | Exact activated runtime binding and its negotiated descriptor, capabilities, resume schemas, and migration edges |
+| Agent runtime registration revision | Exact activated runtime binding and its negotiated descriptor, configuration schemas, capabilities, resume schemas, and migration edges |
 | Package operation ID | Retry-safe install, update, uninstall, Agent-data deletion, or Host-record purge operation |
 
 Package ID and Agent ID occupy different namespaces even when both are
@@ -132,9 +132,9 @@ that declares at least:
 
 The manifest authorizes identities and execution resources; it does not replace
 runtime negotiation. The activated runtime still publishes its exact Agent
-descriptors, capability revisions, Tool Schema Profiles, and resume-schema IDs
-through the Agent Runtime Port. Registration fails when runtime claims exceed
-the manifest or Host policy.
+descriptors, configuration-schema revisions, capability revisions, Tool Schema
+Profiles, and resume-schema IDs through the Agent Runtime Port. Registration
+fails when runtime claims exceed the manifest or Host policy.
 
 The installable catalog and product composition assign the package's
 distribution class. A manifest cannot declare itself product-bundled or
@@ -142,8 +142,11 @@ authorize an embedded entry point. Process, filesystem, network, secret, and
 Tool-executor privileges for a user-installed package are enforced at its
 connected-runtime process boundary.
 
-SDK types, native protocol objects, package-private configuration, credentials,
-and filesystem layout never enter the manifest-facing common Agent contract.
+User-visible Agent configuration uses the SDK-neutral schema and value contract
+defined in [Agent Host architecture](AGENT_HOST.md). That configuration is
+runtime negotiation and Host state, not package manifest authority. SDK types,
+native protocol objects, package-private configuration, credentials, and
+filesystem layout never enter the manifest-facing common Agent contract.
 Package extraction paths are Host implementation details and are never used as
 Session or Agent identity.
 
@@ -208,6 +211,12 @@ revision and one Agent runtime registration revision. Duplicate Agent IDs,
 partial registration of a package, undeclared Agent IDs, an embedded entry
 point outside product composition, or mixed runtime bindings fail the
 activation transaction.
+
+Activation also validates the runtime's declared configuration-schema
+capabilities, exact Host-default schema revision, retained Host Agent defaults,
+and retained Session configuration attributed to the package. Incompatible,
+stale, or malformed configuration rejects activation without deleting,
+coercing, or silently replacing the retained values.
 
 Installation does not authenticate the user to an Agent SDK or model provider.
 The runtime must be able to negotiate its descriptor and truthful
@@ -406,8 +415,9 @@ managers, SDKs, or runtime implementations.
 3. Implement the Agent Runtime Protocol and join through
    `IAgentRuntimeConnection`; user-installed code never implements `IAgent`
    inside the Host process.
-4. Keep SDK loading, native types, provider conversion, credentials, and resume
-   data inside that runtime.
+4. Publish SDK-neutral configuration schemas through the Agent Runtime Port.
+   Keep SDK loading, native configuration types, provider conversion,
+   credentials, and resume data inside that runtime.
 5. Add explicit install, package-wide update, resume migration, activation,
    uninstall, Agent-data deletion, Host-record purge, and incompatible-resume
    tests for local and remote Hosts.
@@ -424,6 +434,8 @@ managers, SDKs, or runtime implementations.
 - Package ID, Agent ID, runtime registration, and Session identity remain
   separate.
 - SDKs are private dependencies, not product installation authority.
+- Agent configuration schemas and values are Host protocol state negotiated
+  with the runtime; they are not package manifest fields or SDK-native objects.
 - Installable, installed, activated, authenticated, and materialized are
   distinct states.
 - Activation commits only after the complete declared executable dependency

@@ -46,7 +46,8 @@ Agent Host keeps the following identities distinct:
 | Agent package revision | One exact verified package version, target, manifest, and digest | Agent package catalog |
 | Agent ID | One stable Agent behavior registered inside a Host | Agent Host runtime |
 | Agent runtime connection ID | One logical connected Agent runtime across transport reconnections | Agent Runtime Protocol |
-| Agent runtime registration revision | One exact runtime endpoint, descriptor, capability, resume-schema, and migration-edge registration for an Agent ID | Agent Host runtime |
+| Agent runtime registration revision | One exact runtime endpoint, descriptor, configuration, capability, resume-schema, and migration-edge registration for an Agent ID | Agent Host runtime |
+| Agent configuration schema revision | One exact SDK-neutral Host-default, Session, or model configuration schema | Agent Host runtime and addressed Agent runtime |
 | Agent execution profile revision | One immutable Agent-resolved execution choice for an exact runtime registration and submission | addressed Agent runtime |
 | Session ID | One stable working context durably attributed to one package and Agent | Agent Host runtime |
 | Chat ID | One conversation stream inside one Session | Agent Host runtime |
@@ -120,14 +121,14 @@ Agent-specific Host bridge.
 
 One Host authority accepts exactly one active registration for an Agent ID.
 The registration records the exact endpoint, descriptor and capability
-revisions, the resume-schema IDs it can materialize, and exact declared
-resume-migration edges. A Session persists its Agent ID, resume-schema ID, and
-opaque resume data together with its owning package ID. A replacement runtime
-must belong to that same package, activate the same Agent ID, and explicitly
-materialize that schema or migrate it through a declared edge inside the
-package update transaction. Host code never hands opaque state to an
-unqualified package or runtime and never tries another endpoint after
-materialization fails.
+revisions, configuration-schema capabilities and revisions, the resume-schema
+IDs it can materialize, and exact declared resume-migration edges. A Session
+persists its Agent ID, resume-schema ID, and opaque resume data together with
+its owning package ID. A replacement runtime must belong to that same package,
+activate the same Agent ID, and explicitly materialize that schema or migrate
+it through a declared edge inside the package update transaction. Host code
+never hands opaque state to an unqualified package or runtime and never tries
+another endpoint after materialization fails.
 
 An Agent runtime that uses an SDK additionally owns its SDK clients, request
 and event mapping, Tool projection, aliases, callbacks, caches, and SDK resume
@@ -228,6 +229,120 @@ content-resource protocol, so explicit message context never depends on the
 model choosing a function. Content references and leases are defined in
 [Attachment architecture](ATTACHMENTS.md).
 
+## Agent configuration
+
+Agent configuration is bounded, SDK-neutral protocol state. It is distinct
+from package manifests, runtime credentials, opaque resume state, and the
+immutable execution profile bound to one Turn. Agent Host owns configuration
+schema and value state; the addressed Agent runtime owns interpretation and
+conversion into its SDK or model-provider representation.
+
+### Scopes and authority
+
+Configuration has three explicit scopes:
+
+| Scope | Authority | Lifetime |
+|---|---|---|
+| Host Agent defaults | Agent Host root state for one Host authority, authenticated user scope, and Agent ID | persisted independently from Sessions and used when resolving new Session configuration |
+| Session configuration | Agent Host Session state | resolved and committed with the Session, then changed only through an addressed configuration operation |
+| Model execution settings | normalized execution selection and the addressed model descriptor | resolved into one immutable Agent execution profile for one submission |
+
+Host Agent defaults and Session configuration use the common Agent
+configuration schema. A present candidate Session value takes precedence over
+the corresponding Host Agent default; the property schema's declared default
+applies only when both omit the property. Session resolution materializes the
+resulting values into the committed Session configuration state. A later Host
+default change affects newly resolved Sessions and does not mutate an existing
+Session implicitly.
+
+Model execution settings are not another mutable Session configuration bag.
+Each model descriptor publishes the exact configuration schema revision that
+its selection accepts. Workbench Chat captures the selected values as part of
+the normalized execution selection, and the addressed Agent combines that
+selection with the committed Session configuration while resolving the
+immutable execution profile. The accepted profile remains unchanged when a
+Host default, Session value, model descriptor, or later selection changes.
+
+Host defaults are namespaced by Agent ID. Session property identity includes
+its platform or Agent owner and stable property ID. Platform-owned property
+IDs are reserved; an Agent may consume a declared platform property but cannot
+redefine it. Agent-owned properties cannot collide with another Agent or with
+platform configuration. Shared Host code routes configuration by exact owner,
+schema revision, Agent ID, and Session ID and never branches on an Agent ID to
+interpret a value.
+
+### Schema and resolution
+
+The Agent Host protocol defines one bounded configuration-schema profile over
+canonical protocol values. A schema identifies:
+
+- its exact owner and schema revision;
+- stable namespaced property IDs, value types, constraints, and declared
+  defaults;
+- which properties are valid as Host defaults or Session values;
+- which Session properties may change after Session creation;
+- which properties support bounded dynamic completions;
+- display metadata and explicit persistence or redaction policy.
+
+An activated Agent registration publishes its Host-default configuration
+schema revision. `IAgent.configuration` resolves the dynamic Session schema and
+values for an exact runtime registration, workspace, model descriptor,
+Host-default revision, and candidate Session values. It also provides bounded
+completions only for properties whose schema declares dynamic completion. A
+completion is presentation data, not acceptance authority; the selected value
+still passes the exact schema before use.
+
+Agent Host validates schema ownership, revisions, bounds, required properties,
+and every value before publishing configuration state or invoking an Agent.
+Unknown properties, duplicate ownership, stale schemas, malformed persisted
+values, and invalid candidate values fail with a typed configuration error.
+The Host never skips an invalid layer, coerces a value, drops an unknown key,
+or substitutes another Agent's schema or default.
+
+The Agent runtime receives only validated canonical values. Copilot, Claude,
+Codex, Comet, and later runtimes define their own schemas through the same port
+and privately map those values to their SDK, CLI, or model-provider settings.
+SDK configuration classes, generated native protocol values, Zod objects,
+provider option bags, and filesystem layout never cross the Agent Runtime
+Port.
+
+Configuration values contain no raw credential material. A schema may accept
+a typed credential reference when the Agent authentication contract declares
+that reference kind, but only the addressed runtime resolves it through the
+Agent authentication boundary. Credentials never enter configuration
+snapshots, actions, completion results, execution profiles, package manifests,
+logs, or diagnostics.
+
+### Mutation and protocol state
+
+Host-default and Session-configuration changes are separate idempotent
+operations. Each request carries an operation ID, payload digest, exact owner,
+and expected schema revision. Agent Host constructs and validates the complete
+candidate value state before mutation. A rejected property or value commits no
+partial patch.
+
+A property that is not declared Session-mutable is fixed after Session
+creation. Updating a mutable property addresses the exact Session and Agent
+runtime registration. For materialized backing, the runtime applies the full
+validated candidate under the same operation identity before Host state
+commits; runtime rejection leaves the prior Host state authoritative. Released
+backing receives the committed configuration during materialization. An
+uncertain runtime result is reconciled under the same operation identity before
+another mutation, and reconnection never repeats an applied SDK change under a
+new identity.
+
+Host root snapshots contain Agent-default schemas, revisions, and values.
+Session snapshots contain the exact resolved Session schema revision and
+values. Successful changes publish ordered root or Session configuration
+actions through the ordinary contiguous channel-revision rules. Clients never
+reconstruct configuration from settings files, environment variables,
+credentials, package contents, Agent display data, or SDK state.
+
+Connected runtimes implement configuration resolution, completion, and
+Session application through the Agent Runtime Protocol. Embedded and connected
+forms expose the same state, validation, mutation, ordering, and failure
+semantics; no Agent-specific Host bridge or settings adapter exists.
+
 ## Agent Runtime Protocol
 
 ### Registration and negotiation
@@ -241,6 +356,7 @@ negotiating one Agent Runtime Protocol version. Initialization exchanges:
 - the exact Agent package ID and revision authorized to activate the runtime;
 - the exact Agent IDs and descriptor revisions being registered;
 - capability revisions and supported Tool Schema Profiles;
+- configuration-schema capabilities and exact Host-default schema revisions;
 - supported opaque resume-schema IDs and exact migration edges;
 - informational runtime implementation and build identity.
 
@@ -263,9 +379,10 @@ Agent ID and exact accepted registration revision.
 
 The protocol serializes the same lifecycle and Turn operations as `IAgent`.
 Host-to-runtime commands include Session and Chat creation, materialization,
-release, deletion, execution-profile resolution, operation-scoped resume
-migration, accepted Turn execution, steering, cancellation, Tool results,
-permission decisions, and user-input responses.
+release, deletion, Session-configuration resolution, completion and
+application, execution-profile resolution, operation-scoped resume migration,
+accepted Turn execution, steering, cancellation, Tool results, permission
+decisions, and user-input responses.
 
 Runtime-to-Host traffic includes ordered Agent actions, model and capability
 updates, canonical Tool calls, content-resource reads for accepted
@@ -339,6 +456,7 @@ State is addressed through typed channels:
 Host root channel
 ├── installable and installed Agent package catalogs
 ├── Agent and model descriptors and activation state
+├── Agent-default configuration schemas, revisions, and values
 ├── Session catalog
 └── connection-level capabilities
 
@@ -351,6 +469,7 @@ Package operation channel
 
 Session channel
 ├── Session metadata and lifecycle
+├── resolved configuration schema revision and values
 └── Chat catalog
 
 Chat channel
@@ -429,10 +548,17 @@ interface IAgent {
 	readonly id: AgentId;
 	readonly descriptor: IObservable<IAgentDescriptor>;
 	readonly onDidEmitAction: Event<IAgentAction>;
+	readonly configuration: IAgentConfiguration;
 	readonly executionProfiles: IAgentExecutionProfiles;
 	readonly sessions: IAgentSessions;
 	readonly chats: IAgentChats;
 	readonly resumeStates: IAgentResumeStates;
+}
+
+interface IAgentConfiguration {
+	resolveSession(request: IAgentResolveSessionConfigurationRequest): Promise<IAgentResolvedSessionConfiguration>;
+	completeSession(request: IAgentSessionConfigurationCompletionRequest): Promise<readonly IAgentConfigurationCompletion[]>;
+	updateSession(request: IAgentUpdateSessionConfigurationRequest): Promise<void>;
 }
 
 interface IAgentExecutionProfile {
@@ -491,6 +617,13 @@ runtime receives and emits their canonical protocol values through
 without introducing Agent-specific semantics. Every mutating call carries
 Host-issued identity and operation context in its concrete options even where
 the summary above omits those fields.
+
+The configuration surface is required even when an Agent publishes no
+user-editable properties. Its resolution returns the exact bounded schema and
+values for the addressed context; completion is valid only for a property that
+declares it; and update accepts the complete validated candidate for one
+Session. Callers do not probe for configuration methods or route configuration
+through Agent-specific services.
 
 Execution-profile resolution is the common pre-Turn Agent port for Comet,
 Copilot, Claude, Codex, and other runtimes. The request carries one normalized
@@ -706,8 +839,10 @@ Persistence follows ownership:
 | Host authority, owning package, and Agent identity | Agent Host catalog |
 | Session and Chat membership | Agent Host catalog |
 | normalized Session and Chat metadata | Agent Host runtime |
+| Host Agent-default schemas, revisions, and values | Agent Host runtime |
+| resolved Session configuration schema revisions and values | Agent Host runtime |
 | canonical normalized turns, accepted execution-profile envelopes, Turn bindings, and ordered actions | Agent Host runtime |
-| runtime resume schema, opaque checkpoint, private history, and metadata | addressed Agent runtime |
+| SDK-native configuration projection, runtime resume schema, opaque checkpoint, private history, and metadata | addressed Agent runtime |
 | pending composer, transcript presentation cache, and Chat UI state | Workbench Chat |
 | visible Session and active Chat state | Sessions services |
 
@@ -770,9 +905,10 @@ Protocol to Agent Host.
 3. Implement the Agent Runtime Protocol and connect through
    `IAgentRuntimeConnection`. Only the product-bundled Comet composition may
    implement `IAgent` as an embedded runtime.
-4. Define truthful descriptors, capabilities, Tool Schema Profiles, and resume
-   schemas. Keep Agent-specific SDK or model-provider types, clients, caches,
-   event mapping, authentication, and resume data inside the runtime.
+4. Define truthful descriptors, configuration schemas, model configuration,
+   capabilities, Tool Schema Profiles, and resume schemas. Keep Agent-specific
+   SDK or model-provider types, clients, native configuration, caches, event
+   mapping, authentication, and resume data inside the runtime.
 5. Consume the exact Turn-bound Tool set. The runtime owns lossless projection,
    deterministic aliases, call normalization, result encoding, and invocation
    through the Host Tool Execution Port.
@@ -821,6 +957,11 @@ Protocol to Agent Host.
 - The Host owns canonical Session, Chat, Turn, and operation identity.
 - Every accepted Turn binds one profile resolved through the common Agent port;
   profile bodies remain opaque to Host and SDK formats remain inside runtimes.
+- Host Agent defaults, Session configuration, and model execution settings are
+  separate scopes with exact schema revisions. Agent Host owns canonical
+  schema and value state; each runtime owns only its native projection.
+- Invalid, stale, or unauthorized configuration fails explicitly. No layer is
+  skipped, coerced, silently dropped, or interpreted through Agent-ID branches.
 - Every Session retains its owning package ID and Agent ID; another package
   cannot claim its catalog or opaque resume state by registering the same Agent
   ID.

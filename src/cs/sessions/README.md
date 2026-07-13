@@ -82,7 +82,7 @@ Agent Host connection and the shared provider contribution.
 | Document | Purpose |
 |---|---|
 | [SESSIONS.md](SESSIONS.md) | Domain model, services, providers, lifecycle, persistence, and Chat integration |
-| [AGENT_HOST.md](AGENT_HOST.md) | Agent Runtime Port, common execution profiles, embedded and connected runtimes, Host connections, and Sessions integration |
+| [AGENT_HOST.md](AGENT_HOST.md) | Agent Runtime Port, Agent configuration, common execution profiles, embedded and connected runtimes, Host connections, and Sessions integration |
 | [AGENT_PACKAGES.md](AGENT_PACKAGES.md) | Bundled and user-installed Agent packages, catalogs, verification, activation, update, deletion, and retained data |
 | [COMET_AGENT.md](COMET_AGENT.md) | Comet execution profiles, Host Turn binding, model-and-Tool orchestration, Rust runtime slot, workers, and resumption |
 | [ATTACHMENTS.md](ATTACHMENTS.md) | Composer attachments, producers, content-resource transport, submission, and source-specific rules |
