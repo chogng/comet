@@ -43,7 +43,7 @@ import {
 } from 'cs/platform/agentHost/node/storage/agentHostStateStores';
 
 const modelOption = 'openai:gpt-5.5:medium';
-const packageStateStorageKey = 'agentHost.packages.v1';
+const packageStateStorageKey = 'agentHost.packages.v2';
 
 function provider(baseUrl = '') {
 	return {

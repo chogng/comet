@@ -122,7 +122,7 @@ import {
 	createAgentTurnId,
 } from 'cs/platform/agentHost/common/identities';
 import { assertAgentHostProtocolValue, encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
-import type { IAgentToolCall, IAgentToolExecutionPort } from 'cs/platform/agentHost/common/tools';
+import type { AgentToolResult, IAgentToolCall, IAgentToolExecutionPort } from 'cs/platform/agentHost/common/tools';
 import {
 	assertAgentToolCall,
 	assertAgentToolEndpointReconciliation,
