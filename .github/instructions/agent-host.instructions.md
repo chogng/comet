@@ -27,6 +27,13 @@ Agents, connections, or Sessions integration.
   atomically establishes the default Chat.
 - `IChatService` owns addressed conversation models only. It does not create
   product Sessions or own backend lifecycle.
+- Agent Host message attachments use one generic envelope with producer model
+  representation, bounded inline content or content references, MIME data, and
+  bounded round-trip metadata. The protocol does not enumerate Workbench
+  Feature attachment kinds.
+- Attachment transport and media capabilities are explicit. An Agent never
+  silently drops an attachment, stringifies an unreadable resource, or retries
+  it as another kind.
 - Optional operations are capability-gated and fail explicitly when
   unsupported.
 - Do not branch on Agent IDs for behavior, probe for methods, try another Agent

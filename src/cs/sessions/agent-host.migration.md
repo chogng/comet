@@ -14,8 +14,12 @@ The scoped files and final locations are:
   require direct call-site changes;
 - `src/cs/sessions/contrib/chat/**` where addressed Chat models bind to
   Sessions management;
+- `src/cs/sessions/contrib/browserView/**` where Browser context migrates to
+  the common composer-attachment API;
 - `src/cs/workbench/contrib/chat/common/chatService/**` where the public Chat
   model contract requires Agent Host state integration;
+- `src/cs/workbench/contrib/draftEditor/**` where Editor context migrates to
+  the common composer-attachment API;
 - `src/cs/platform/agentHost/**`;
 - `src/cs/agent/**`;
 - `src/cs/code/electron-main/agent/**`;
@@ -85,11 +89,15 @@ identity.
    `ISession` and `IChat` models, draft replacement, capability mapping, and
    authoritative collection transitions.
 8. Move Chat model creation and Host turn application into the shared Agent
-   Host Sessions integration. Add one addressed composer-attachment model for
-   Article selection and Chat transcript selection, snapshot it at send, and
-   associate submitted attachments with the user turn. Keep Chat input routed
-   through `ISessionsManagementService` and the addressed provider; do not use
-   synthetic transcript messages as pending request context.
+   Host Sessions integration. Add one addressed composer-attachment model and
+   one public attachment API plus a registry for Feature-owned attachment
+   types. Keep Article selection independent, and replace its automatic request
+   projection with an explicit Article attachment action. Replace direct Editor
+   harvesting and synthetic Browser context messages with explicit producers
+   registered through the common attachment path. Snapshot only existing
+   composer attachments at send and associate them with the user turn. Keep
+   Chat input routed through `ISessionsManagementService` and the addressed
+   provider.
 9. Move default-provider Session and Chat persistence to the Host catalog and
    Comet Agent resume boundary. Perform one explicit, versioned, atomic data
    migration of `sessions.providers.default` at the new storage owner and
@@ -142,14 +150,17 @@ The migration is complete only when:
 6. No Platform Agent Host file imports Editor, Workbench, Sessions, or Code.
 7. No Sessions service or non-provider contribution imports an Agent
    implementation.
-8. `providers/default`, `DefaultSessionsProvider`, `DefaultSession`,
+8. Every Feature adds request context through the common addressed Chat
+   attachment API, and submitted attachments use the normalized Host protocol
+   without provider-specific routing or silent omission.
+9. `providers/default`, `DefaultSessionsProvider`, `DefaultSession`,
    `DefaultChat`, and `run_main_agent_turn` no longer exist.
-9. The parallel `src/cs/agent/**` layer no longer exists.
-10. No old symbol is retained through an alias, wrapper, re-export, or
-   compatibility module.
-11. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
-   lifecycle tests pass.
-12. Durable documentation describes only the final Agent Host architecture.
+10. The parallel `src/cs/agent/**` layer no longer exists.
+11. No old symbol is retained through an alias, wrapper, re-export, or
+    compatibility module.
+12. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
+    lifecycle tests pass.
+13. Durable documentation describes only the final Agent Host architecture.
 
 ## Deletion condition
 

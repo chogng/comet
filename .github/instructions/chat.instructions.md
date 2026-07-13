@@ -23,24 +23,49 @@ one chat is scoped to that addressed model or view.
 
 ## Composer attachments
 
-The addressed Chat model owns pending composer attachments separately from the
-submitted transcript. Article references, Chat transcript selections, Editor
-selections, Browser context, text, and images enter the next request through
-that attachment collection. Adding context to the composer never inserts a
-synthetic user message into the transcript.
+The addressed Chat model owns one pending composer-attachment collection
+separately from the submitted transcript. Browser, Article, PDF, File, Editor,
+Chat-selection, text, and image features all add and remove attachments through
+the same public `IChatService` attachment operations addressed by
+`chatResource`. A feature does not mutate the Chat model directly or add a
+feature-specific callback to the Chat widget.
 
-Checked Articles remain an explicit selection owned by the addressed Chat. A
-download or export operation consumes an immutable selection snapshot without
-submitting a request. Sending consumes a snapshot of the same selected Article
-IDs as Article attachments. The composer visibly presents selected or attached
-context so a later request never includes hidden context.
+Chat treats an attachment as an object registered under a stable attachment
+type. The common envelope contains only identity, type, label, and bounded
+serializable producer state. Chat does not enumerate Feature attachment kinds
+or interpret producer state. The contribution that owns an attachment type
+owns its validation, codec, presentation factory, send-time resolver, and
+restoration rules. Adding a new attachment type does not change Chat services,
+the Sessions provider, or existing attachment implementations.
+
+Chat owns only generic collection behavior: addressed lifetime, ordering,
+deduplication by attachment identity, add, remove, clear, immutable submission
+snapshots, and request transaction rollback. A registered resolver receives its
+own typed producer state, the submission context, and cancellation, and emits
+one bounded Host message attachment. Missing or duplicate type registrations,
+invalid state, size violations, denied access, and unsupported transport
+capabilities fail explicitly. Resolution never tries another type or source.
+
+Feature selection is not attachment state. Selecting Articles, Files, Chat
+messages, or Editor content does not add anything to the composer. A
+Feature-owned explicit Add to Chat action snapshots the selection and calls the
+common attachment API. Download, export, delete, and other Feature actions
+consume their own selection snapshots and never read or mutate Chat
+attachments. Normal Chat submission sends only objects already present in the
+composer attachment collection.
+
+Adding context to the composer never inserts a synthetic user message into the
+transcript. Accepted requests associate the submitted attachment snapshot with
+the user turn so transcript rendering, history, retry, and restoration preserve
+what the user actually sent.
 
 The Chat transcript renderer owns text selection inside rendered messages. It
 exposes typed selectable regions carrying message identity and role; the list
 widget does not recover ownership by matching CSS classes or walking unrelated
-DOM. A completed selection is captured as ordered immutable message fragments
-and added to the addressed composer as a Chat-selection attachment. Controls,
-attachment chrome, and other non-content UI are not selectable context.
+DOM. When the user invokes Add to Chat, the current selection is captured as
+ordered immutable message fragments and added to the addressed composer through
+the common attachment API. Controls, attachment chrome, and other non-content
+UI are not selectable context.
 
 A Chat-selection attachment preserves the selected text and its source message
 metadata for presentation and deduplication. It becomes bounded text context at

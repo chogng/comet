@@ -31,16 +31,24 @@ feature-owned content extraction capability using an explicitly addressed
 Article or Browser resource. Content extraction is independent of any Agent
 implementation.
 
-Workbench Chat owns article references stored in one addressed conversation and
-its transient checked-article selection. The Agent Host Sessions provider that
-routes a request resolves explicit Article attachments through `IFetchService`
-and constructs normalized Article metadata plus a stable content reference.
-The content owner materializes a bounded read handle for the addressed request.
-The addressed Agent converts that context into SDK input and can read complete
-text through the typed content client-tool operation when required. Agent
-implementations do not scrape Article pages or treat `ArticleDetail` as full
-text. Chat does not own backend routing, and Sessions core does not own a
-parallel article selection.
+Article checkbox state is Feature selection, not Chat attachment state.
+Download and export consume an immutable `ArticleId` selection snapshot without
+adding Chat context. An explicit Add Selected Articles to Chat action consumes
+the same selection snapshot and creates Article attachments through Chat's
+common addressed attachment API. Normal Chat submission never turns Article
+selection into attachments implicitly. A Summarize Selected Articles action,
+when provided, is an explicit compound Feature action rather than special
+behavior in general Chat submission.
+
+The registered Article attachment type owns validation, presentation,
+persistence, and resolution. Its resolver resolves only an explicitly attached
+Article through `IFetchService` and constructs normalized Article metadata plus
+a stable content reference. The content owner materializes a bounded read
+handle for the addressed request. The addressed Agent converts that context
+into SDK input and can read complete text through the typed content client-tool
+operation when required. Agent implementations do not scrape Article pages or
+treat `ArticleDetail` as full text. Chat and Sessions core do not interpret
+Article attachment state.
 
 ## Runtime boundary
 

@@ -127,9 +127,55 @@ captured text as a composer attachment. The Host receives only bounded text
 context when the request is submitted; DOM ranges and renderer objects remain
 inside Workbench Chat.
 
+All attachment producers use the same addressed Chat attachment API. Browser,
+Article, PDF, File, Editor, Chat-selection, text, and image features do not add
+provider-specific request paths. Only an explicit Feature attachment action
+adds an object to the composer. Feature selection, active Editor state,
+downloads, exports, and other operations remain independent and are never
+projected into pending attachments by general Chat submission.
+
 The Sessions Chat contribution binds Chat input to
 `ISessionsManagementService`. Requests continue through the owning Sessions
 provider; Workbench Chat never calls an Agent SDK or Host connection directly.
+
+### Attachment pipeline
+
+Attachments cross three explicit representations:
+
+```text
+feature-owned source
+    → registered attachment object in the addressed composer
+    → producer-resolved Agent Host message attachment
+    → addressed Agent's SDK input
+```
+
+The Chat attachment model knows only the common envelope: stable attachment ID,
+stable attachment type ID, label, and bounded serializable producer state. It
+owns collection ordering, deduplication, removal, submission snapshots, and
+transaction rollback. It does not contain an Article, Browser, PDF, File, or
+Editor union and does not inspect producer state.
+
+Each attachment type is contributed through a registry. Its owner provides the
+state validator and codec, composer and transcript presentation factories,
+send-time resolver, and restoration behavior. A resolver can capture an
+in-memory Editor document, publish a PDF or File resource, preserve a PDF or
+Editor selection, issue an Article or Browser content reference, or embed a
+small immutable image. The Sessions provider dispatches by the registered type
+without importing or branching on Feature identities.
+
+The Agent Host message protocol carries one generic attachment envelope with a
+producer-supplied model representation, optional bounded inline content or
+content reference, MIME information, and bounded round-trip metadata. These are
+transport forms, not a list of Comet Feature kinds. Each submitted attachment
+is stored with its message. Common validation covers identity, size, content
+leases, and duplicate attachments before the Host commits the turn.
+
+Agent descriptors advertise supported attachment transport and media
+capabilities, not Article, Browser, PDF, Workbench Feature, or Agent-ID cases.
+The addressed Agent translates the common envelope into its SDK request. An
+unsupported carrier or media type fails before submission; Agent
+implementations never silently drop an attachment, stringify an unreadable
+resource, or retry it as another kind.
 
 ### Feature context and client tools
 
