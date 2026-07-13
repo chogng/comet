@@ -5,9 +5,10 @@ applyTo: "{src/cs/platform/browserView/**,src/cs/workbench/services/browserView/
 
 # BrowserView architecture
 
-Read `src/cs/sessions/TOOLS.md` and `src/cs/sessions/CLIENT_TOOLS.md` before
-changing Browser Tool descriptors, interaction targets, Agent-readable
-content, or Client Tool integration. Read
+Read `src/cs/sessions/TOOLS.md` and
+`src/cs/sessions/INTERACTION_TARGETS.md` before changing Browser Tool
+descriptors, interaction targets, Agent-readable content, or executor
+integration. Read
 `src/cs/sessions/ATTACHMENTS.md` before changing Browser attachments.
 
 ## Ownership
@@ -89,10 +90,10 @@ requires an explicit Use in Chat action to create the binding. General Chat
 submission never infers a target from the globally active Editor.
 
 An interaction target carries identity and document epoch only. Dynamic content
-is read only when the model or Agent SDK emits a call to the separately exposed
-readable-content Client Tool, and the resulting Tool output records its content
-digest. An explicit Browser attachment instead publishes an immutable snapshot
-during preparation; Agent SDK translation reads its content reference through
+is read only when the model or Agent emits a call to the separately exposed
+readable-content Tool, and the resulting Tool output records its content digest.
+An explicit Browser attachment instead publishes an immutable snapshot
+during preparation; Agent input translation reads its content reference through
 the Host content-resource protocol, not through a Tool call. Neither path
 substitutes the other.
 

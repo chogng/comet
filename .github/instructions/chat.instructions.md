@@ -9,8 +9,8 @@ Read `src/cs/sessions/ATTACHMENTS.md` before changing composer attachments,
 attachment producers, content publication, or submission transactions. Read
 `src/cs/sessions/TOOLS.md` before changing Tool policy, Tool selection, or
 Tool-set preparation. Read
-`src/cs/sessions/CLIENT_TOOLS.md` before changing request-scoped interaction
-targets or Client Tool integration.
+`src/cs/sessions/INTERACTION_TARGETS.md` before changing request-scoped target
+binding or target-backed Tool integration.
 
 Chat is a Workbench contribution for one addressed conversation. It owns the
 conversation model, transcript, composer, attachments, voice interaction, and
@@ -33,9 +33,9 @@ owns only the visible policy and canonical Tool IDs. This state is separate
 from attachments and interaction targets. Chat never copies Tool descriptors,
 executor handles, or SDK objects. During submission preparation, Agent Host
 resolves one immutable Tool-set revision from authoritative registries,
-capabilities, targets, and policy and binds it to the submission ID. Host
-acceptance revalidates and records that revision as the accepted Turn's exposed
-Tool set.
+capabilities, targets, and policy and binds it to the submission ID and exact
+Agent runtime registration revision. Host acceptance revalidates and records
+that revision as the accepted Turn's exposed Tool set.
 
 ## Composer attachments
 
@@ -112,14 +112,14 @@ the captured revision. Lost acknowledgement is reconciled by ID and digest; the
 same ID with different content is a conflict. The digest excludes leases and
 connection-local handles but includes immutable content versions, ordered
 attachment identity, target identity and version, requested Tool policy, and
-the prepared Tool-set revision. The Host rejects stale attachment, Agent,
-model, or Tool descriptors before commit.
+the prepared Tool-set and Agent runtime registration revisions. The Host
+rejects stale attachment, Agent, model, or Tool descriptors before commit.
 
 Resolver failure, cancellation, or Host rejection before acceptance releases
 all prepared content leases, leaves the composer unchanged, and creates no
-transcript turn. SDK invocation, tool, cancellation, or runtime failure after
-Host acceptance completes the already committed turn as failed or cancelled;
-it does not restore the submitted composer or delete the user turn.
+transcript turn. Agent runtime, Tool, cancellation, or execution-engine failure
+after Host acceptance completes the already committed turn as failed or
+cancelled; it does not restore the submitted composer or delete the user turn.
 
 Retry and replay use the normalized attachments stored on the submitted Host
 message. They never rerun a pending-attachment resolver against the current
@@ -132,7 +132,7 @@ content reference. They never carry an interaction target, Tool descriptor, or
 executor binding. Agent and model selection, Tool registration and exposure,
 Skills, MCP servers, commands, mutation permissions, and confirmation policy
 are separate typed request fields and never enter the attachment registry.
-Agent SDK translation reads an accepted content reference through the Host
+Agent input translation reads an accepted content reference through the Host
 content-resource protocol, not through a model Tool call.
 
 The Chat transcript renderer owns text selection inside rendered messages. It
@@ -157,16 +157,14 @@ global focus. Capturing a target records identity and version only. It does not
 read content, create an attachment, register a Tool, or grant permission.
 
 The immutable request snapshot includes bound targets so an Agent can address a
-separately exposed Client Tool during the accepted Turn. A Client Tool is a
-canonical Tool whose executor is the exact contributing client, not the Agent
-SDK conversion boundary. Binding a target does not register or expose that
-Tool. When a Feature workflow promises a target-backed operation, submission
-validates that a compatible Tool is in the independently resolved Tool set or
-fails before acceptance. Content is produced only when the model or Agent SDK
-emits the Tool call. Generic Tool-set and Agent Tool Port rules follow
-`src/cs/sessions/TOOLS.md`; target persistence, client execution, effect
-reconciliation, and the Browser Article flow follow
-`src/cs/sessions/CLIENT_TOOLS.md`.
+separately exposed Tool during the accepted Turn. Binding a target does not
+register or expose that Tool. When a Feature workflow promises a target-backed
+operation, submission validates that a compatible Tool is in the independently
+resolved Tool set or fails before acceptance. Content is produced only when the
+model or Agent emits the Tool call. Tool-set, Agent-integration, executor, and
+effect-reconciliation rules follow `src/cs/sessions/TOOLS.md`; target
+persistence and the Browser Article flow follow
+`src/cs/sessions/INTERACTION_TARGETS.md`.
 
 Those responsibilities belong to the
 [Sessions application](../../src/cs/sessions/SESSIONS.md).

@@ -5,7 +5,7 @@
 Attachments are Comet's common path for adding bounded user-selected context to
 one addressed Chat request. The same path carries Browser, Article, PDF, File,
 Directory, Editor, Chat-selection, text, and image context without adding a
-Feature-specific request route to Sessions, Agent Host, or an Agent SDK.
+Feature-specific request route to Sessions, Agent Host, or an Agent.
 
 ```text
 Feature source
@@ -13,7 +13,7 @@ Feature source
     → immutable composer revision
     → producer-resolved Host attachment
     → committed user turn
-    → addressed Agent's SDK input
+    → addressed Agent runtime input
 ```
 
 An attachment is context, not an action. It does not select an Agent or model,
@@ -21,9 +21,9 @@ register a tool, enable a skill or MCP server, grant mutation authority, or
 approve a permission request. Those are separate typed request fields and
 runtime contracts. Reading or materializing an accepted attachment through the
 Host content service is message translation, not a model function call.
-Canonical Tool and SDK-projection rules are defined in
-[Tool architecture](TOOLS.md); the `client` executor specialization is defined
-in [Client Tool architecture](CLIENT_TOOLS.md).
+Canonical Tool, Agent-integration, and executor-routing rules are defined in
+[Tool architecture](TOOLS.md). Request-scoped resource identity is defined in
+[Interaction target architecture](INTERACTION_TARGETS.md).
 
 ## Attachment states
 
@@ -95,8 +95,8 @@ attachments.
 
 Agent Host validates, stores, and routes normalized attachments. It does not
 import Workbench Features or execute producer extraction logic. The addressed
-Agent converts the common content carrier and bounded model metadata into its
-SDK request without routing on a Comet Feature type.
+Agent runtime converts the common content carrier and bounded model metadata
+into its execution-engine request without routing on a Comet Feature type.
 
 ## Pending composer contract
 
@@ -201,15 +201,15 @@ source version in place of the submitted version. If the exact version is no
 longer available, the operation fails and requires a new attachment.
 
 A remote Host never receives a client-local `file` URI as a readable Host path.
-If an SDK requires filesystem paths, its Agent asks the Host content service to
-materialize the referenced blob or tree version inside Host-owned storage. The
-materialized path is scoped to that Host and lease and does not become a new
-source identity.
+If an Agent runtime's execution engine requires filesystem paths, the runtime
+asks the Host content service to materialize the referenced blob or tree
+version inside Host-owned storage. The materialized path is scoped to that Host
+and lease and does not become a new source identity.
 
 ### Content-resource protocol
 
 The Host content service exposes the typed resource operations required to
-translate a normalized attachment into Agent SDK input. It can open an exact
+translate a normalized attachment into Agent input. It can open an exact
 reference, read bounded blob ranges, page a tree manifest, read an exact tree
 entry, materialize a Host-owned copy, and release the resulting lease. Every
 operation addresses the stored content version and owning Host or client; it
@@ -219,16 +219,22 @@ For a client-owned reference, the Host routes a bounded content-resource
 request through the exact originating client connection. This reverse request
 is transport for already accepted message context. It is not published in the
 Tool set, does not create a Tool call or Tool result, and does not require the
-model to choose an operation. The Agent implementation uses it while mapping
-the normalized attachment to the SDK representation declared by the effective
-Agent and model capabilities.
+model to choose an operation. The Agent runtime uses it while mapping the
+normalized attachment to the execution representation declared by the
+effective Agent and model capabilities.
+
+A connected Agent runtime issues the same content-resource operation through
+the Agent Runtime Protocol. Agent Host remains the resource authority and, when
+necessary, routes the bounded read to the exact originating client. The
+connected runtime never receives a client connection handle or a second
+attachment protocol.
 
 A Feature extraction service may implement both immutable attachment
-publication and a lazy readable-content Client Tool. The protocols remain
+publication and a target-backed readable-content Tool. The protocols remain
 separate: publication and content-resource reads preserve the submitted
-attachment version, while a Client Tool reads an interaction target in response
-to a model-issued function call. Sharing the extraction service does not merge
-their identity, authority, lifetime, persistence, or failure semantics.
+attachment version, while the Tool reads an interaction target in response to
+a model-issued call. Sharing the extraction service does not merge their
+identity, authority, lifetime, persistence, or failure semantics.
 
 ## Capability and limit validation
 
@@ -254,12 +260,12 @@ producer contract, stringifies an unreadable reference, flattens a tree into a
 prompt, expands a Directory into inferred File attachments, extracts a PDF as
 text, or retries with another representation.
 
-Content access occurs through the Host content service during SDK translation
-or materialization. Its availability and limits are attachment carrier
-capabilities, not Tool descriptors. Preparation validates the exact
+Content access occurs through the Host content service during Agent runtime
+input translation or materialization. Its availability and limits are
+attachment carrier capabilities, not Tool descriptors. Preparation validates the exact
 content-resource owner, protocol capability, lifetime, and bounds before Host
-acceptance. An accepted attachment never depends on a readable-content Client
-Tool or on the model deciding to issue a function call.
+acceptance. An accepted attachment never depends on a readable-content Tool or
+on the model deciding to issue a function call.
 
 ## Submission transaction
 
@@ -277,17 +283,19 @@ capture one addressed composer revision
 
 The captured revision is read-only except for cancellation while preparation is
 active. The digest covers the canonical prompt, non-executable request
-configuration, Agent and model selection, request-scoped interaction target
-identities and versions, requested Tool policy, prepared Tool-set revision,
-ordered attachment identities, producer type IDs, model representations,
-carriers, structural shapes, media information, and immutable content versions
-or digests. It excludes ephemeral lease tokens and connection-local handles.
+configuration, Agent and model selection, Agent runtime registration revision,
+request-scoped interaction target identities and versions, requested Tool
+policy, prepared Tool-set revision, ordered attachment identities, producer
+type IDs, model representations, carriers, structural shapes, media
+information, and immutable content versions or digests. It excludes ephemeral
+lease tokens and connection-local handles.
 
 The prepared Tool-set revision is an immutable Host value bound to the
-submission ID, Host authority, Agent and model descriptor revisions, exact
-targets, and executor registrations. Host acceptance revalidates it. If it is
-stale, the Host rejects the submission without substituting a later Tool set;
-a new preparation revision requires a new submission ID and payload digest.
+submission ID, Host authority, Agent runtime registration revision, Agent and
+model descriptor revisions, exact targets, and executor registrations. Host
+acceptance revalidates it. If it is stale, the Host rejects the submission
+without substituting a later Tool set; a new preparation revision requires a
+new submission ID and payload digest.
 
 The Host returns the already committed turn when the same submission ID and
 digest are repeated. Reusing an ID with a different digest is a conflict. This
@@ -299,7 +307,7 @@ makes acknowledgement loss and reconnect recovery deterministic.
 | capability or limit validation | staged leases are released; composer is preserved; no turn exists |
 | Host rejection before acceptance | staged leases are released; composer is preserved; no turn exists |
 | connection loss before acknowledgement | reconcile by submission ID and digest before any resend |
-| Agent, SDK, tool, or runtime failure after acceptance | committed user turn remains and reaches a failed or cancelled terminal state |
+| Agent runtime, Tool, or execution-engine failure after acceptance | committed user turn remains and reaches a failed or cancelled terminal state |
 
 Retry and replay use the normalized attachments stored with the submitted Host
 message. They never rerun a pending producer against current Feature state.
@@ -307,17 +315,17 @@ message. They never rerun a pending producer against current Feature state.
 ### Initial Turn of a new Session
 
 Preparation for a product Session draft uses the selected Host authority,
-Agent and model descriptor revisions, requested Tool policy, prepared Tool-set
-revision, submission ID, and create-operation ID before a Host Session exists.
-The Host create operation reserves canonical Session, ordinary Chat, Turn, and
-attachment identities without publishing them, binds staged content to those
-identities, and then atomically commits the Session catalog entry, Chat catalog
-entry, user message, normalized attachments, interaction targets, and exposed
-Tool-set revision.
+Agent runtime registration revision, Agent and model descriptor revisions,
+requested Tool policy, prepared Tool-set revision, submission ID, and
+create-operation ID before a Host Session exists. The Host create operation
+reserves canonical Session, ordinary Chat, Turn, and attachment identities
+without publishing them, binds staged content to those identities, and then
+atomically commits the Session catalog entry, Chat catalog entry, user message,
+normalized attachments, interaction targets, and exposed Tool-set revision.
 
 Preparation, content binding, Agent backing creation, or Host validation failure
 before that commit releases staged leases and provisional backing, preserves the
-product draft and composer, and publishes no empty Host Session. Agent or SDK
+product draft and composer, and publishes no empty Host Session. Agent runtime
 execution begins only after commit; later failure is the terminal state of the
 already committed initial Turn.
 
@@ -368,10 +376,10 @@ register, expose, or enable a Tool.
 
 An Editor Browser can instead bind an exact request-scoped interaction target
 to the addressed Chat input. That target carries no page body and creates no
-attachment or snapshot. Content is extracted only if the model or Agent SDK
-emits a call to the registered readable-content Client Tool.
-This lazy flow and its target rules are defined in
-[Client Tool architecture](CLIENT_TOOLS.md).
+attachment or snapshot. Content is extracted only if the model or Agent
+emits a call to the registered readable-content Tool. This lazy flow and its
+target rules are defined in
+[Interaction target architecture](INTERACTION_TARGETS.md).
 
 ### Article
 
@@ -403,9 +411,9 @@ when present, captures an exact bounded range separately from a full File.
 A Directory attachment resolves to one immutable `tree` manifest. The manifest
 contains only captured entries and records normalized relative paths, entry
 kinds, media information, byte sizes, and content versions or digests. The
-Directory producer owns explicit enumeration, exclusion, depth, and symbolic-
-link policy. Resolution fails without publishing a partial manifest if an entry
-changes while the version is being bound.
+Directory producer owns explicit enumeration, exclusion, depth, and
+symbolic-link policy. Resolution fails without publishing a partial manifest if
+an entry changes while the version is being bound.
 
 Tree manifests reject absolute child paths and parent traversal. A resolver
 never follows a symbolic link outside the attached root. The Host can list or
@@ -439,7 +447,7 @@ src/cs/workbench/contrib/fetch/          Article producer and readable-content p
 src/cs/workbench/contrib/pdfEditor/      PDF document and PDF-selection producers
 src/cs/workbench/contrib/draftEditor/    Editor document and Editor-selection producers
 src/cs/workbench/contrib/files/          File, File-selection, and Directory producers
-src/cs/sessions/contrib/browserView/     Browser-page producer and Browser Client Tool target
+src/cs/sessions/contrib/browserView/     Browser-page producer and interaction target
 ```
 
 Text, image, and Chat-selection producers live with Workbench Chat because Chat
@@ -479,6 +487,8 @@ resource protocol contracts; it contains no Feature producer.
 - Durable content references and ephemeral read leases remain separate.
 - Submitted content references are read through the content-resource protocol,
   never through an implicit Tool call.
+- Connected Agent runtimes issue the same content-resource operations through
+  the Agent Runtime Protocol and never receive originating client handles.
 - Client-local paths never masquerade as remote Host paths.
 - Retry uses the submitted version and never reads current Feature state as a
   substitute.

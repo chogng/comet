@@ -77,23 +77,28 @@ widgets or transcript state into Sessions core.
 
 ### Sessions and Agent Host
 
-Agent Host is Comet's common execution boundary for Agent SDKs. Sessions sees
-one `ISessionsProvider` per local or remote Host connection. The provider maps
-the Host's canonical Session and Chat catalogs into provider-independent
-`ISession` and `IChat` models.
+Agent Host is Comet's common execution boundary for every Agent runtime.
+Sessions sees one `ISessionsProvider` per local or remote Host connection. The
+provider maps the Host's canonical Session and Chat catalogs into
+provider-independent `ISession` and `IChat` models.
 
 ```text
 ISessionsManagementService
     → AgentHostSessionsProvider
     → IAgentHostConnection
     → Agent Host runtime
-    → CometAgent / CopilotAgent / ClaudeAgent / CodexAgent
+    → IAgent
+        ├── embedded Agent runtime
+        └── connected Agent runtime through IAgentRuntimeConnection
 ```
 
 Local and remote are Host placements, not Agent identities. The built-in
-`CometAgent` has stable Agent ID `comet`. Agent implementations own SDK calls,
-SDK event conversion, capabilities, and opaque resume data; they never import
-Sessions or Workbench Chat. See [Agent Host architecture](AGENT_HOST.md).
+`CometAgent` integration has stable Agent ID `comet`; its orchestration runtime
+may be embedded or supplied by a connected Comet Code SDK runtime. Every Agent
+runtime owns its SDK or model-provider calls, event conversion, truthful
+capabilities, and opaque resume data and never imports Sessions or Workbench
+Chat. Runtime packaging does not create another Sessions provider. See
+[Agent Host architecture](AGENT_HOST.md).
 
 ## Core contracts
 
@@ -140,7 +145,8 @@ Every Chat declares its origin:
 
 - `User` — a user-facing Chat created by the user or product workflow;
 - `Fork` — a branch created from a specific turn of a parent chat;
-- `Tool` — a worker chat created by an agent or tool for a subagent.
+- `Tool` — a worker Chat created by the Session's owning Agent runtime or one
+  of its Tools.
 
 ```text
 IChat
@@ -151,10 +157,11 @@ IChat
 └── chat-level observables
 ```
 
-Fork and Tool origins identify their `parentChat`. A Tool-origin chat is the
-execution record of a child agent, not another participant mixed into the
-parent transcript. Worker chats are normally read-only or hidden and surface
-as a separate view only when the user explicitly opens them.
+Fork and Tool origins identify their `parentChat`. A Tool-origin Chat is the
+execution record of a worker owned by the same Session Agent, not another
+participant mixed into the parent transcript and not an implicit invocation of
+a different registered Agent. Worker Chats are normally read-only or hidden
+and surface as a separate view only when the user explicitly opens them.
 
 Chats retain provider order unless a product-level ordering rule explicitly
 says otherwise. Shared code must not manufacture Chats by grouping unrelated
@@ -245,8 +252,8 @@ committed registry or management transition.
 
 Agent Host provider instances are contributions because they connect local and
 remote Host endpoints to Sessions. One shared implementation serves every Host
-connection. Agent SDK integrations register inside the Platform Agent Host
-runtime and never implement a direct Sessions provider. The Sessions domain,
+connection. Embedded and connected Agent runtimes register inside the Platform
+Agent Host and never implement a direct Sessions provider. The Sessions domain,
 aggregation, lifecycle, and view-facing state remain Sessions services.
 
 ### `ISessionsManagementService`
@@ -479,11 +486,12 @@ or recently created sessions.
 
 Attachment preparation failure or cancellation occurs before Host Session
 creation and leaves the product draft and composer unchanged. Preparation uses
-the selected Host connection, Agent descriptor, and submission ID; it does not
-require a fabricated or published Host Session or Chat identity. The Host
-reserves canonical identities inside the create operation so content can bind
-before the Session, Chat, and Turn are committed. Failure in any pre-commit
-step publishes no partial or empty Session.
+the selected Host connection, exact Agent runtime registration and descriptor
+revisions, and submission ID; it does not require a fabricated or published
+Host Session or Chat identity. The Host reserves canonical identities inside
+the create operation so content can bind before the Session, Chat, and Turn are
+committed. Failure in any pre-commit step publishes no partial or empty
+Session.
 
 ### Sending to an existing chat
 
@@ -509,9 +517,9 @@ Every request addresses both a Session and a Chat. A provider must not redirect
 a request to the first, most recent, visible, or otherwise inferred Chat.
 
 Sessions management and provider contracts do not carry prompt or attachment
-DTOs. The addressed Workbench Chat model is the only composer and request-
-scoped interaction-target owner; the owning provider obtains its immutable
-submission snapshot through Chat's common API. The Sessions Chat view never
+DTOs. The addressed Workbench Chat model is the only composer and
+request-scoped interaction-target owner; the owning provider obtains its
+immutable submission snapshot through Chat's common API. The Sessions Chat view never
 rebuilds attachment or target state at the send boundary.
 
 For a single-Chat Session, callers still address that exact Chat identity. A
@@ -559,7 +567,7 @@ Persistence follows ownership:
 | State | Owner |
 |---|---|
 | Host, Agent, Session, and Chat identity and catalogs | Agent Host runtime |
-| SDK resume data and private event history | addressed Agent |
+| runtime resume schema, opaque data, and private event history | addressed Agent runtime |
 | loaded conversation model, transcript, and composer state | Workbench Chat contribution |
 | Sessions-specific concrete chat view | Sessions Chat contribution |
 | provider registry | Sessions provider contributions and provider service |
@@ -602,7 +610,8 @@ its visual contract.
 - One Agent Host connection maps to one provider instance.
 - Local and remote identify Host placement; Agent identity remains independent
   of placement.
-- `CometAgent` is the built-in Agent and has stable Agent ID `comet`.
+- `CometAgent` is the built-in Agent integration and has stable Agent ID
+  `comet`; its runtime packaging is not Sessions state.
 - Session identity is globally unique across providers.
 - A Session owns zero or more equal-status Chats. `ISession` has no
   distinguished Chat field, and catalog position never controls routing,
@@ -621,7 +630,7 @@ its visual contract.
   chat resource, but never import concrete Chat widgets or UI.
 - `IChatService` owns addressed Chat models only. It does not create product
   Sessions, choose an Agent, or own backend lifecycle.
-- Agent implementations enter Sessions only through Agent Host and never
+- Agent runtimes enter Sessions only through Agent Host and never
   register a direct `ISessionsProvider`.
 - Providers do not import Sessions UI, Parts, or shell layout.
 - Host protocol models and Agent backend clients stay in Platform Agent Host.
@@ -669,11 +678,15 @@ an alternative mutable source of truth.
 
 ## Adding Agent execution
 
-Add a new Agent SDK by implementing the Host-side `IAgent` contract under
-`src/cs/platform/agentHost/node/agents/<agent>/`. Register it with the Agent
-Host runtime, declare truthful capabilities, and keep every SDK type, client,
-cache, event conversion, and resume value inside that implementation. Do not
-add a Sessions provider or Chat view for an Agent.
+Add a new Agent by registering exactly one Host-side runtime endpoint. An
+embedded runtime implements `IAgent` under
+`src/cs/platform/agentHost/node/agents/<agent>/`; a connected runtime implements
+the language-neutral Agent Runtime Protocol and joins through
+`IAgentRuntimeConnection`. Register one stable Agent ID and truthful
+capabilities, Tool projection limits, and resume schemas. Keep orchestration,
+SDK or model-provider types, clients, caches, event conversion, and resume
+values inside that runtime. Do not add a Sessions provider, Chat view, dual
+runtime registration, or fallback path for an Agent.
 
 Add a new Host placement or transport by implementing `IAgentHostConnection`.
 Register one shared `AgentHostSessionsProvider` for each stable connection.
@@ -683,9 +696,10 @@ mapping; it does not duplicate Session or Chat models or branch on Agent IDs.
 The complete contracts and verification requirements are defined in
 [AGENT_HOST.md](AGENT_HOST.md). Composer and submitted context contracts are
 defined in [ATTACHMENTS.md](ATTACHMENTS.md). Canonical Tool contracts and Agent
-SDK projection are defined in [TOOLS.md](TOOLS.md). Client-owned operations,
-reverse execution, and lazy interaction targets are the `client` executor
-specialization defined in [CLIENT_TOOLS.md](CLIENT_TOOLS.md).
+integration, including connected client executors, are defined in
+[TOOLS.md](TOOLS.md). Request-scoped resource binding and lazy target-backed
+operations are defined in
+[INTERACTION_TARGETS.md](INTERACTION_TARGETS.md).
 
 ## Related documents
 
@@ -693,6 +707,6 @@ specialization defined in [CLIENT_TOOLS.md](CLIENT_TOOLS.md).
 - [Agent Host architecture](AGENT_HOST.md)
 - [Attachment architecture](ATTACHMENTS.md)
 - [Tool architecture](TOOLS.md)
-- [Client Tool architecture](CLIENT_TOOLS.md)
+- [Interaction target architecture](INTERACTION_TARGETS.md)
 - [Sessions application layout](LAYOUT.md)
 - [Sessions layer rules](LAYERS.md)

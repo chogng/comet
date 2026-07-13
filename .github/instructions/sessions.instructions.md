@@ -12,7 +12,7 @@ Read these documents before changing Sessions code:
 - `src/cs/sessions/AGENT_HOST.md`
 - `src/cs/sessions/ATTACHMENTS.md`
 - `src/cs/sessions/TOOLS.md`
-- `src/cs/sessions/CLIENT_TOOLS.md`
+- `src/cs/sessions/INTERACTION_TARGETS.md`
 - `src/cs/sessions/LAYOUT.md`
 - `src/cs/sessions/LAYERS.md`
 
@@ -47,10 +47,12 @@ code / server
   owning duplicate state.
 - Sessions feature contributions own optional Chat, Editor, changes, terminal,
   task, list, action, and onboarding integration.
-- Agent Host is the common execution boundary for Agent SDKs. Local and remote
-  describe Host placement; `comet`, `copilot`, `claude`, and `codex` identify
-  Agent implementations.
-- `CometAgent` is Comet's built-in Agent and has stable Agent ID `comet`.
+- Agent Host is the common execution boundary for every Agent runtime. Local
+  and remote describe Host placement; `comet`, `copilot`, `claude`, and `codex`
+  identify Agent behavior; embedded and connected describe runtime binding.
+- `CometAgent` is Comet's built-in Agent integration and has stable Agent ID
+  `comet`. Its runtime may be embedded or connected through the Agent Runtime
+  Protocol; runtime packaging is not Sessions state.
 - One shared Agent Host Sessions provider maps each Host connection into the
   provider-independent Sessions domain. Local and remote contributions do not
   duplicate Session or Chat models.
@@ -58,7 +60,7 @@ code / server
   `comet`, and Host placement is `local` or `remote`. Do not use `default` as
   an implementation prefix or identity, and do not define a `mainChat` or
   `defaultChat` role.
-- Agent implementations, Host protocols, and connection services never escape
+- Agent runtimes, Host protocols, and connection services never escape
   into Sessions core, shared services, or non-provider contributions.
 - Workbench Chat owns one conversation model and reusable Chat widgets.
 - Workbench Editor owns inputs, groups, resolvers, panes, and registries.
@@ -84,7 +86,7 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
 - A draft's initial request reserves identities and atomically commits its
   Session, ordinary Chat, and user Turn only after content preparation binds.
   Pre-commit failure preserves the draft and publishes no empty Session.
-- User, fork, and Multi-Agent worker Chats share the same catalog and lifecycle
+- User, fork, and Agent-owned worker Chats share the same catalog and lifecycle
   rules; no first Chat receives permanent close, delete, or routing privileges.
 - The product-wide new-conversation action creates a new session. Creating a
   peer chat in an existing session is a separate capability-gated operation.
@@ -113,8 +115,10 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
 - Sessions providers route addressed Session and Chat operations; Workbench
   `IChatService` owns only the addressed conversation model and never creates
   a product Session or chooses an Agent.
-- Agent SDK integrations implement the Host-side `IAgent` contract and never
-  register a direct Sessions provider.
+- Embedded runtimes implement the Host-side `IAgent` contract directly;
+  connected runtimes use `IAgentRuntimeConnection`. Neither registers a direct
+  Sessions provider, and one Agent ID never has dual runtime registration or a
+  fallback runtime.
 - Commands carry the originating session/chat context and never silently
   target the globally active session.
 

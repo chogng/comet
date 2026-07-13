@@ -132,8 +132,8 @@ activeSession changes
 ```
 
 A Session with one open user Chat renders it without a Chat tab strip. Peer and
-fork Chats appear as tabs only when the provider supports them. Tool-origin
-Multi-Agent worker Chats are hidden from the ordinary tab strip until
+fork Chats appear as tabs only when the provider supports them. Agent-owned
+Tool-origin worker Chats are hidden from the ordinary tab strip until
 explicitly opened and normally use the Chat view in read-only mode. Hidden
 Chats never receive a visible Chat host. A Session with no active Chat renders
 an explicit no-Chat state instead of selecting the first catalog entry. Draft

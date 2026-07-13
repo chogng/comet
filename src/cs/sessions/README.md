@@ -72,19 +72,19 @@ src/cs/sessions/
 Core, services, non-provider contributions, and provider contributions have
 different dependency permissions. See [LAYERS.md](LAYERS.md).
 
-Agent SDK contracts and implementations live in the lower
-`src/cs/platform/agentHost/` subsystem. Sessions consumes them only through an
-Agent Host connection and the shared provider contribution.
+Agent contracts, runtime connections, and embedded implementations live in the
+lower `src/cs/platform/agentHost/` subsystem. Sessions consumes them only
+through an Agent Host connection and the shared provider contribution.
 
 ## Documentation
 
 | Document | Purpose |
 |---|---|
 | [SESSIONS.md](SESSIONS.md) | Domain model, services, providers, lifecycle, persistence, and Chat integration |
-| [AGENT_HOST.md](AGENT_HOST.md) | Agent runtime, SDK contracts, Host connections, and Sessions integration |
+| [AGENT_HOST.md](AGENT_HOST.md) | Agent Runtime Port, embedded and connected runtimes, Host connections, and Sessions integration |
 | [ATTACHMENTS.md](ATTACHMENTS.md) | Composer attachments, producers, content-resource transport, submission, and source-specific rules |
-| [TOOLS.md](TOOLS.md) | Canonical Tools, schema profiles, Tool sets, Agent Tool Ports, calls, results, and executor contracts |
-| [CLIENT_TOOLS.md](CLIENT_TOOLS.md) | Client executor registration, interaction targets, reverse execution, and Feature-owned operations |
+| [TOOLS.md](TOOLS.md) | Canonical Tools, schema profiles, Turn-bound Tool sets, Agent projection, calls, results, and executor routing |
+| [INTERACTION_TARGETS.md](INTERACTION_TARGETS.md) | Request-scoped resource targets, explicit Chat binding, and lazy Tool operations |
 | [LAYOUT.md](LAYOUT.md) | Product shell, Parts, visibility, focus, editor presentation, and CSS ownership |
 | [LAYERS.md](LAYERS.md) | Import hierarchy, contribution boundaries, and entry points |
 
@@ -95,8 +95,10 @@ Agent Host connection and the shared provider contribution.
 3. Put target-specific layout policy in `contrib/layout/`.
 4. Put optional changes, terminal, task, list, action, editor, and Chat
    integrations in `contrib/<feature>/`.
-5. Put Agent SDK implementations in
-   `cs/platform/agentHost/node/agents/<agent>/`.
+5. Put embedded Agent runtimes in
+   `cs/platform/agentHost/node/agents/<agent>/`; connect external or
+   cross-language runtimes through the common Agent Runtime Protocol and
+   `IAgentRuntimeConnection`.
 6. Put shared Host-to-Sessions integration in `contrib/providers/agentHost/`
    together with local and remote connection registration.
 7. Keep reusable single-conversation and editor infrastructure in

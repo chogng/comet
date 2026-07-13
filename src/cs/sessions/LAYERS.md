@@ -3,7 +3,7 @@
 For application ownership and layout, see [README.md](README.md),
 [SESSIONS.md](SESSIONS.md), [AGENT_HOST.md](AGENT_HOST.md),
 [ATTACHMENTS.md](ATTACHMENTS.md), [TOOLS.md](TOOLS.md),
-[CLIENT_TOOLS.md](CLIENT_TOOLS.md), and [LAYOUT.md](LAYOUT.md).
+[INTERACTION_TARGETS.md](INTERACTION_TARGETS.md), and [LAYOUT.md](LAYOUT.md).
 
 ## Source hierarchy
 
@@ -51,13 +51,17 @@ public Workbench APIs
 
 Contains the environment-neutral Host protocol, Host connection contract,
 Agent registry, normalized content-resource contracts, canonical Tool and
-executor-binding contracts, Node Host runtime, and Agent SDK implementations.
-As a Platform subsystem it may import only Base and Platform modules. It never
-imports Editor, Workbench, Sessions, or Code.
+executor-binding contracts, Host-side `IAgent` port, language-neutral Agent
+Runtime Protocol, Node Host runtime, connected-runtime support, and optional
+embedded Agent runtimes. As a Platform subsystem it may import only Base and
+Platform modules. It never imports Editor, Workbench, Sessions, or Code.
 
-Agent implementations register with the Host runtime through public Platform
-contracts and own their SDK-specific Agent Tool Ports. They do not implement
-`ISessionsProvider`, import Workbench Chat, or own local or remote transport.
+Embedded runtimes implement `IAgent` directly. External or cross-language
+runtimes implement the same semantics through `IAgentRuntimeConnection` and the
+Agent Runtime Protocol. Each runtime owns its SDK or model-provider projection;
+the Comet runtime owns Comet orchestration regardless of packaging. They do not
+implement `ISessionsProvider`, import Workbench Chat, or own local or remote
+Agent Host transport.
 
 ### Sessions common
 
@@ -138,12 +142,12 @@ may use public Sessions contracts and public Workbench Chat model contracts
 needed to connect an addressed Chat resource.
 
 Local and remote contributions in the same provider family supply connections
-to the shared provider implementation. Agent SDKs do not register direct
+to the shared provider implementation. Agent runtimes do not register direct
 Sessions providers.
 
 Providers do not import core Part implementations, shell layout, or another
 provider's internals. They never import `ChatWidget`, a concrete Chat view, or
-an Agent implementation.
+an Agent runtime implementation.
 
 ### Sessions entry points
 
@@ -240,9 +244,10 @@ Sessions feature contribution → provider implementation
 Sessions Part → concrete ChatWidget
 provider → Sessions Part or shell layout
 provider → sibling provider internals
-Agent implementation → Workbench or Sessions
+Agent runtime → Workbench or Sessions
 Platform Agent Host → Workbench or Sessions
-local or remote connection → Agent implementation internals
+local or remote Agent Host connection → Agent runtime internals
+Agent runtime connection → Sessions provider or Workbench Feature internals
 one Part → sibling Part implementation or DOM
 code entry point → both Workbench shell and Sessions shell
 ```

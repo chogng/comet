@@ -50,32 +50,44 @@ Browser producers remain with the contribution that owns the source semantics
 and consume Chat's public API. Platform Agent Host owns only normalized content
 and resource protocol contracts; it never owns a Workbench Feature producer.
 
-Generic interaction-target state lives with Workbench Chat. Model-facing Client
-Tool descriptors, targets, and implementations live with the contribution that
-owns the Feature service. Platform Agent Host owns canonical Tool schema
-profiles, descriptors, executor bindings, Tool sets, routing, call state,
-results, and permissions. Each Agent implementation owns its SDK-specific Agent
-Tool Port. Client Tool contributions never import Agent SDKs or perform SDK
-projection; the shared client connection owns the SDK-neutral Client Tool
-Execution Port. Attachment content-resource providers remain with their Feature
-producers and do not enter the Tool registry merely because a remote Host reads
-them through the originating client.
+Generic interaction-target state lives with Workbench Chat. Tool descriptors,
+targets, and executor implementations live with the contribution that owns the
+Feature service. Platform Agent Host owns canonical Tool schema profiles,
+descriptors, executor bindings, Tool sets, routing, call state, results,
+permissions, the Tool Execution Port, the Host-side `IAgent` port, and the
+Agent Runtime Protocol. Agent runtimes own SDK or model-provider projection;
+the Comet runtime owns Comet orchestration. Feature contributions never import
+Agent SDKs or model-provider formats. The shared client connection publishes
+connected executors and carries canonical execution messages. Attachment
+content-resource providers remain with their Feature producers and do not enter
+the Tool registry merely because a remote Host reads them through the
+originating client.
 
 ## Agent Host Organization
 
-- `cs/platform/agentHost/common` — environment-neutral Host protocol,
-  connection contracts, and Host-side Agent contracts
+- `cs/platform/agentHost/common` — environment-neutral Host protocol, Agent
+  Runtime Protocol, connection contracts, and Host-side Agent contracts
 - `cs/platform/agentHost/browser` — remote-capable connection support
 - `cs/platform/agentHost/electron-browser` — desktop local Host connection
-- `cs/platform/agentHost/node` — Host runtime and Agent implementations
+- `cs/platform/agentHost/node` — Host runtime and runtime endpoint support
+- `cs/platform/agentHost/node/runtime` — generic connected Agent runtime
+  negotiation, correlation, and lifecycle
+- `cs/platform/agentHost/node/agents/<agent>` — optional embedded Agent runtime
+  implementations
 
 Agent Host is a Platform subsystem and never imports Workbench or Sessions.
-Agent implementations live under `cs/platform/agentHost/node/agents/<agent>`
-and expose SDK behavior only through the common Host contracts. Their Agent
-Tool Ports contain SDK Tool formats, aliases, call conversion, and result
-encoding; no parallel Tool conversion layer exists in Feature contributions.
-Agent protocol and turn runtime code belongs in this subsystem rather than a
-parallel top-level `cs/agent` layer.
+`IAgent` is the single Host-facing semantic port. Embedded runtimes implement
+it under `cs/platform/agentHost/node/agents/<agent>`. External or cross-language
+runtimes implement its language-neutral Agent Runtime Protocol and join through
+`IAgentRuntimeConnection`; generic connection code lives under
+`cs/platform/agentHost/node/runtime`, not in Agent-specific Sessions or Feature
+code. SDK and model-provider Tool formats, aliases, call conversion, result
+encoding, and Comet orchestration remain inside their owning runtime. No
+parallel Tool conversion or execution layer exists in Feature contributions.
+Agent Host contracts, connected-runtime support, and in-repository embedded
+runtime code belong in this subsystem rather than a parallel top-level
+`cs/agent` layer. A connected runtime package owns its implementation outside
+the TypeScript layer and exposes only the Agent Runtime Protocol to Agent Host.
 
 ## Sessions Organization
 
@@ -108,7 +120,7 @@ in `cs/sessions/contrib/<feature>`, not in Sessions core or Workbench.
 - Sessions core and services do not import Sessions contributions.
 - Non-provider Sessions contributions do not import provider implementations.
 - Providers register through public Sessions service contracts.
-- Agent SDK integrations register with the Platform Agent Host runtime, not
+- Embedded and connected Agent runtimes register with Platform Agent Host, not
   with Sessions. One shared Agent Host Sessions provider maps each Host
   connection to `ISessionsProvider`.
 - Sessions entry points are the only modules that load Sessions contribution
