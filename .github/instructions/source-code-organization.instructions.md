@@ -65,6 +65,11 @@ parallel top-level `cs/agent` layer.
   provider plus local and remote Host connection registration
 - `cs/sessions/sessions.*.main.ts` — Sessions contribution entry points
 
+`agentHost` is the only built-in provider family name. Agent IDs such as
+`comet` name behavior, and `local` and `remote` name Host placement. Do not
+create a `default`-prefixed provider, Session, Chat, file, directory, or
+implementation symbol, and do not introduce `mainChat` as a special Chat role.
+
 ### Workbench Contribution Rules
 
 - Within Workbench, non-entrypoint code outside `contrib/` does not import

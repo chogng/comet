@@ -1,4 +1,4 @@
-# Default Sessions provider to Agent Host migration
+# Legacy `default` Sessions provider to Agent Host migration
 
 ## Temporary scope
 
@@ -16,8 +16,13 @@ The scoped files and final locations are:
   Sessions management;
 - `src/cs/sessions/contrib/browserView/**` where Browser context migrates to
   the common composer-attachment API;
-- `src/cs/workbench/contrib/chat/common/chatService/**` where the public Chat
-  model contract requires Agent Host state integration;
+- `src/cs/workbench/contrib/chat/**` where the public Chat model, composer,
+  attachment registry, and submission transaction require Agent Host state
+  integration;
+- `src/cs/workbench/contrib/fetch/**` where Article attachment contributions
+  enter the common composer path;
+- `src/cs/workbench/contrib/pdfEditor/**` and `src/cs/editor/browser/pdf/**`
+  where PDF context enters the common composer path;
 - `src/cs/workbench/contrib/draftEditor/**` where Editor context migrates to
   the common composer-attachment API;
 - `src/cs/platform/agentHost/**`;
@@ -33,7 +38,8 @@ The scoped files and final locations are:
 - `src/cs/sessions/sessions.desktop.main.ts`;
 - `src/cs/sessions/sessions.web.main.ts`;
 - `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/README.md`,
-  `src/cs/sessions/SESSIONS.md`, and `src/cs/sessions/LAYERS.md`;
+  `src/cs/sessions/SESSIONS.md`, `src/cs/sessions/LAYOUT.md`, and
+  `src/cs/sessions/LAYERS.md`;
 - `.github/instructions/agent-host.instructions.md`,
   `.github/instructions/sessions.instructions.md`,
   `.github/instructions/source-code-organization.instructions.md`, and
@@ -49,10 +55,25 @@ resolution, request payload construction, native command dispatch, lifecycle,
 and durable transcript storage. The electron-main `run_main_agent_turn` command
 owns the corresponding built-in Agent execution.
 
+The current request boundary also carries a closed Resource, Text, Article,
+Editor, and Image union through Sessions management. The Sessions Chat view
+constructs Article attachments from checkbox state, harvests the active Editor
+at send time, and inserts Browser context as synthetic user history. The
+provider appends the user message and clears input before Feature attachment
+resolution, then branches on every Feature kind. These paths are removed rather
+than wrapped by the common attachment API.
+
 This boundary makes the built-in Agent a direct Sessions provider and gives it
 a unique integration path that other Agent SDKs cannot reuse. The names
 `default` and `mainAgent` also mix product selection and UI role with Agent
 identity.
+
+The current shared Sessions contract separately makes `ISession.mainChat` a
+permanent privileged Chat. Management and view services use it for draft send,
+selection, close, delete, and missing-selection recovery. The upstream Agent
+Host state similarly exposes `defaultChat` and falls back to the first catalog
+Chat when that identity is absent. The target does not copy either design:
+catalog order is not identity, and missing Chat state remains explicit.
 
 ## Final project-owned boundary
 
@@ -66,6 +87,31 @@ identity.
 - `IChatService` owns addressed Chat presentation models only.
 - All Agent SDK integrations implement `IAgent`; none registers a direct
   Sessions provider.
+- The shared provider family and implementation path use `agentHost`; Agent
+  behavior uses registered Agent IDs such as `comet`; Host placement uses
+  `local` or `remote`; and every Chat is addressed by its own Chat ID.
+- A Session owns an ordered collection of zero or more equal-status Chats. It
+  has no `mainChat`, `defaultChat`, primary-Chat identity, or implicit
+  first-Chat routing rule. View-owned `activeChat` is optional and never
+  becomes Host or provider domain state.
+- No target symbol, filename, directory, provider ID, Session type, Chat type,
+  storage key, or runtime route uses `default` as an implementation identity or
+  prefix. `sessions.providers.default` is solely a one-time migration source
+  key and is deleted after the new state commits.
+
+The naming cutover is direct:
+
+| Legacy source | Durable target |
+|---|---|
+| `contrib/providers/default/**` | `contrib/providers/agentHost/**` |
+| `DefaultSessionsProvider` | `AgentHostSessionsProvider` |
+| `DefaultSession` and `DefaultChat` | Host-identified provider models implementing `ISession` and `IChat` |
+| `mainAgent` and `run_main_agent_turn` | `CometAgent` registered through Agent Host as `comet` |
+| `defaultChat` and `mainChat` roles | no durable role; address the exact Chat ID |
+| `sessions.providers.default` | one-time migration input, then deleted; Host catalog and Comet Agent resume state are authoritative |
+
+These are call-site and ownership migrations, not aliases or compatibility
+names. No target registration imports or dispatches through the legacy path.
 
 ## Direct migration steps
 
@@ -82,36 +128,68 @@ identity.
    their owning higher-layer contributions. Article requests carry normalized
    metadata and stable content references, with scoped handles materialized by
    the content owner, rather than treating Article detail as complete text.
+   Register client tools independently from attachments; resolved attachments
+   may supply scoped read references or target tokens but do not construct the
+   request's tool list.
 5. Register `CometAgent` with the Agent Host runtime under Agent ID `comet`.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
 7. Implement the shared `AgentHostSessionsProvider`, its provider-owned
    `ISession` and `IChat` models, draft replacement, capability mapping, and
-   authoritative collection transitions.
+   authoritative collection transitions. Remove `ISession.mainChat` and update
+   every call site directly to use the addressed Chat or optional view-owned
+   `activeChat`. Allow a committed Session to contain zero Chats. Remove
+   first-Chat close and delete restrictions and every implicit Chat-selection
+   substitution. Replace `supportsMultipleChats` with explicit user-Chat
+   creation capability and capacity; update every capability consumer directly.
 8. Move Chat model creation and Host turn application into the shared Agent
-   Host Sessions integration. Add one addressed composer-attachment model and
-   one public attachment API plus a registry for Feature-owned attachment
-   types. Keep Article selection independent, and replace its automatic request
-   projection with an explicit Article attachment action. Replace direct Editor
-   harvesting and synthetic Browser context messages with explicit producers
-   registered through the common attachment path. Snapshot only existing
-   composer attachments at send and associate them with the user turn. Keep
-   Chat input routed through `ISessionsManagementService` and the addressed
-   provider.
-9. Move default-provider Session and Chat persistence to the Host catalog and
-   Comet Agent resume boundary. Perform one explicit, versioned, atomic data
-   migration of `sessions.providers.default` at the new storage owner and
-   delete the old key after the new state commits. Runtime routing never reads
-   both formats or chooses between them.
-10. Replace the desktop entry-point import of the default provider with local
-   Agent Host registration. Register remote Host discovery only in targets that
-   provide a real remote connection implementation.
-11. Update all tests to exercise the Agent contract, Host runtime, local and
-   remote connections, shared Sessions provider, and Chat model integration.
-12. Delete `src/cs/sessions/contrib/providers/default/**`, the
-    `run_main_agent_turn` command and payload contracts, default-provider
-    storage, the parallel `src/cs/agent/**` layer, and all obsolete tests in the
-    same migration.
+   Host Sessions integration. Add one addressed composer-attachment model, one
+   public attachment API, current-version producer codecs, and registries for
+   Feature-owned resolution and browser presentation. Replace the closed
+   request attachment union. Change Sessions management and provider send
+   contracts to route only the addressed Session and Chat; the shared provider
+   begins the immutable composer submission through `IChatService`. Update
+   every call site directly.
+9. Add the preparing-submission transaction and normalized Host attachment
+   protocol. Resolve every captured attachment, bind immutable source versions,
+   validate limits and Agent capabilities, then submit with an idempotent
+   submission ID and payload digest. Consume the composer only after Host
+   acceptance. Pre-acceptance failure preserves it and creates no turn;
+   post-acceptance Agent failure completes the committed turn as failed. For a
+   product draft, prepare under the Host connection and submission ID before
+   creating the Host Session, then atomically create that Session and one
+   ordinary User Chat through the common Session and Chat contracts. Bind the
+   prepared references to their returned identities; the created Chat receives
+   no permanent role.
+10. Register Article, Browser, PDF, File, Editor, Chat-selection, text, and
+   image producers directly through the common attachment path. Keep Article
+   and other Feature selections independent, replace automatic Article
+   projection with explicit attachment actions, and delete direct Editor
+   harvesting and synthetic Browser context messages. Add version-addressed,
+   bounded content publication before enabling Article full-content attachment
+   resolution; `ArticleDetail` is never used as a full-text fallback.
+11. Move legacy default-provider Session and Chat persistence to the Host
+    catalog and Comet Agent resume boundary. Perform one explicit, versioned,
+    atomic data migration of `sessions.providers.default` at the new storage
+    owner and delete the old key after the new state commits. Runtime routing
+    never reads both formats or chooses between them. Preserve attachment data
+    that the old store actually recorded, including user-message images. Do not
+    invent historical Article, Editor, Browser, or File attachments from
+    current checkbox state, the active Editor, Article lists, or other
+    present-time Feature state when the old turn did not persist that
+    association.
+12. Replace the desktop entry-point import of the legacy default provider with
+    local Agent Host registration. Register remote Host discovery only in
+    targets that provide a real remote connection implementation.
+13. Update all tests to exercise the Agent contract, Host runtime, local and
+   remote connections, shared Sessions provider, composer restoration,
+   preparation failure, Host acceptance, acknowledgement reconciliation,
+   retry versioning, and local and remote content lifetimes.
+14. Delete `src/cs/sessions/contrib/providers/default/**`, the
+   `run_main_agent_turn` command and payload contracts, default-provider
+   storage, every `default`-prefixed implementation symbol and file, the
+   parallel `src/cs/agent/**` layer, and all obsolete tests in the same
+   migration.
 
 Call sites migrate directly to the final contracts. The migration must not add
 aliases, re-exports, wrappers, facades, compatibility providers, dual
@@ -120,7 +198,8 @@ registration, catch-and-try-next logic, or a legacy command path.
 ## Behavior that must be preserved
 
 - workspace-bound and workspace-less Session creation;
-- one main Chat for every Session;
+- existing Chat histories, identities, origins, and catalog ordering without
+  preserving a privileged main-Chat role;
 - explicit draft discard and atomic draft-to-committed replacement;
 - model discovery, selection, and disabled-model validation;
 - text, image, Editor, and Article request context;
@@ -143,8 +222,10 @@ The migration is complete only when:
    end to end.
 2. Local and remote Host connections use the same protocol and shared Sessions
    provider implementation.
-3. Session creation and default Chat creation use the common Host contracts.
-4. Additional Chat lifecycle uses the common Host Chat contract and truthful
+3. Session creation and Chat creation use the common Host contracts. A product
+   draft may request both in one atomic Host transaction without creating a
+   permanent Chat role.
+4. Every Chat lifecycle uses the common Host Chat contract and truthful
    capabilities.
 5. No Agent SDK implementation imports Sessions or Workbench Chat.
 6. No Platform Agent Host file imports Editor, Workbench, Sessions, or Code.
@@ -153,14 +234,27 @@ The migration is complete only when:
 8. Every Feature adds request context through the common addressed Chat
    attachment API, and submitted attachments use the normalized Host protocol
    without provider-specific routing or silent omission.
-9. `providers/default`, `DefaultSessionsProvider`, `DefaultSession`,
-   `DefaultChat`, and `run_main_agent_turn` no longer exist.
-10. The parallel `src/cs/agent/**` layer no longer exists.
-11. No old symbol is retained through an alias, wrapper, re-export, or
+9. Sessions management and provider send contracts carry only addressed
+   Session and Chat identity; no closed Feature attachment union or parallel
+   request payload remains outside `IChatService`.
+10. Pre-acceptance attachment and Host failures preserve the composer and
+   create no turn; post-acceptance Agent failures preserve the committed failed
+   turn; retry never substitutes current Feature state for submitted content.
+11. `providers/default`, `DefaultSessionsProvider`, `DefaultSession`,
+   `DefaultChat`, every other `default`-prefixed implementation identity, and
+   `run_main_agent_turn` no longer exist. The old storage key appears only in
+   the completed one-time data migration and is absent from runtime routing and
+   newly persisted state.
+12. `ISession.mainChat`, `defaultChat`, main-Chat branches, first-Chat
+    privileges, and implicit first-Chat selection no longer exist. Empty
+    committed Sessions and an undefined view-owned `activeChat` are represented
+    explicitly.
+13. The parallel `src/cs/agent/**` layer no longer exists.
+14. No old symbol is retained through an alias, wrapper, re-export, or
     compatibility module.
-12. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
+15. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
     lifecycle tests pass.
-13. Durable documentation describes only the final Agent Host architecture.
+16. Durable documentation describes only the final Agent Host architecture.
 
 ## Deletion condition
 

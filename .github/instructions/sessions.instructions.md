@@ -51,6 +51,10 @@ code / server
 - One shared Agent Host Sessions provider maps each Host connection into the
   provider-independent Sessions domain. Local and remote contributions do not
   duplicate Session or Chat models.
+- The shared provider family is named `agentHost`, the built-in Agent is named
+  `comet`, and Host placement is `local` or `remote`. Do not use `default` as
+  an implementation prefix or identity, and do not define a `mainChat` or
+  `defaultChat` role.
 - Agent implementations, Host protocols, and connection services never escape
   into Sessions core, shared services, or non-provider contributions.
 - Workbench Chat owns one conversation model and reusable Chat widgets.
@@ -70,12 +74,12 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
 
 ## Session model
 
-- Every session has exactly one `mainChat`, and `mainChat` is always in
-  `session.chats`.
-- Ordinary single-agent sessions expose only `mainChat`.
-- Additional chats represent provider-supported peer, fork, or Multi-Agent
-  worker flows and retain explicit origin, parent, capability, and
-  interactivity state.
+- A session owns an ordered collection of zero or more equal-status Chats.
+  `ISession` has no distinguished Chat property.
+- Every Chat has explicit origin, identity, capability, and interactivity
+  state. A Chat created with a new Session is an ordinary Chat after commit.
+- User, fork, and Multi-Agent worker Chats share the same catalog and lifecycle
+  rules; no first Chat receives permanent close, delete, or routing privileges.
 - The product-wide new-conversation action creates a new session. Creating a
   peer chat in an existing session is a separate capability-gated operation.
 - Unrelated conversations are separate sessions; UI code never groups them by

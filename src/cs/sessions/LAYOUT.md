@@ -112,8 +112,8 @@ is “visible”.
 
 `ISessionsService.visibleSessions` determines the session views hosted by the
 Part. `activeSession` identifies the focused visible session, and each
-`IActiveSession.activeChat` identifies the chat rendered in that session view.
-Rendering follows observable identity:
+optional `IActiveSession.activeChat` identifies the Chat rendered in that
+Session view. Rendering follows observable identity:
 
 ```text
 visibleSessions changes
@@ -121,8 +121,9 @@ visibleSessions changes
     → reconcile the authoritative ordered slots
     → release view resources when a slot binding changes
     → bind each occupied slot to its IActiveSession view model
-    → restore each slot's active visible chat or select mainChat
-    → obtain concrete chat views through IChatViewFactory
+    → restore only the exact persisted Chat when still available
+    → otherwise retain an explicit undefined activeChat
+    → obtain a concrete Chat view only for an addressed activeChat
     → restore session-owned view state
 
 activeSession changes
@@ -130,12 +131,14 @@ activeSession changes
     → preserve every other visible session view
 ```
 
-A normal single-chat session renders `mainChat` without a chat tab strip.
-Peer and fork chats appear as tabs only when the provider supports them.
-Tool-origin Multi-Agent worker chats are hidden from the ordinary tab strip
-until explicitly opened and normally use the chat view in read-only mode.
-Hidden chats never receive a visible chat host. Draft and committed sessions
-use explicit model state, not title text or DOM class inference.
+A Session with one open user Chat renders it without a Chat tab strip. Peer and
+fork Chats appear as tabs only when the provider supports them. Tool-origin
+Multi-Agent worker Chats are hidden from the ordinary tab strip until
+explicitly opened and normally use the Chat view in read-only mode. Hidden
+Chats never receive a visible Chat host. A Session with no active Chat renders
+an explicit no-Chat state instead of selecting the first catalog entry. Draft
+and committed Sessions use explicit model state, not title text or DOM class
+inference.
 
 The product-wide new-conversation action opens a new session slot. An explicit,
 capability-gated in-session action creates a peer chat in the current session;
@@ -240,9 +243,8 @@ Sessions shell creates Part
 
 Register disposables immediately. A Part visibility change does not transfer
 ownership or imply disposal. Closing a session follows the session lifecycle.
-Closing a non-main chat tab updates `IActiveSession` view state; deleting a chat
-uses the provider lifecycle. Hiding the Part follows the Sessions layout
-lifecycle.
+Closing a Chat tab updates `IActiveSession` view state; deleting a Chat uses the
+provider lifecycle. Hiding the Part follows the Sessions layout lifecycle.
 
 ## CSS ownership
 

@@ -38,17 +38,21 @@ the same selection snapshot and creates Article attachments through Chat's
 common addressed attachment API. Normal Chat submission never turns Article
 selection into attachments implicitly. A Summarize Selected Articles action,
 when provided, is an explicit compound Feature action rather than special
-behavior in general Chat submission.
+behavior in general Chat submission. It first adds the captured selection
+through the common attachment API and then invokes the normal Chat submission
+path; preparation failure leaves those visible composer attachments in place.
 
 The registered Article attachment type owns validation, presentation,
 persistence, and resolution. Its resolver resolves only an explicitly attached
 Article through `IFetchService` and constructs normalized Article metadata plus
-a stable content reference. The content owner materializes a bounded read
-handle for the addressed request. The addressed Agent converts that context
-into SDK input and can read complete text through the typed content client-tool
-operation when required. Agent implementations do not scrape Article pages or
-treat `ArticleDetail` as full text. Chat and Sessions core do not interpret
-Article attachment state.
+a stable, version-addressed content reference. The content owner materializes a
+bounded read handle for the addressed request. If the full-content extractor or
+the referenced version is unavailable, preparation fails; the resolver never
+substitutes `ArticleDetail`, a list summary, or a currently active Browser page.
+The addressed Agent converts that context into SDK input and can read complete
+text through the typed content client-tool operation when required. Agent
+implementations do not scrape Article pages or treat `ArticleDetail` as full
+text. Chat and Sessions core do not interpret Article attachment state.
 
 ## Runtime boundary
 

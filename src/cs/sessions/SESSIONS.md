@@ -109,7 +109,6 @@ ISession
 ├── providerId
 ├── sessionType
 ├── workspace
-├── mainChat: IObservable<IChat>
 ├── chats: IObservable<readonly IChat[]>
 ├── capabilities: IObservable<ISessionCapabilities>
 └── session-level observables
@@ -119,9 +118,10 @@ Consumers use the shared contract and never reach into a provider
 implementation or backend client.
 
 A session is defined by its shared agent working context, not by the number of
-chats it currently contains. Every session has exactly one `mainChat`. A normal
-single-agent session exposes only that chat. Additional chats exist only when
-the provider reports a supported peer, fork, or Multi-Agent worker flow.
+Chats it currently contains. Its ordered `chats` collection may be empty and
+contains no distinguished first, primary, main, or default Chat. A Chat created
+in the same transaction as a Session becomes an ordinary catalog member after
+commit.
 
 The product-wide new-conversation action creates a new session. Creating a peer
 chat inside an existing session is a distinct, capability-gated operation. A
@@ -130,22 +130,21 @@ into chats of one session.
 
 ### `IChat`
 
-An `IChat` is one conversation stream inside a session. The `mainChat` is the
-session's canonical user conversation. Additional chats are separate streams
-that share the session's workspace and runtime while retaining independent
-identity, title, turns, model selection, status, and interactivity.
+An `IChat` is one conversation stream inside a session. All Chats share the
+session's workspace and runtime while retaining independent identity, title,
+turns, model selection, status, capabilities, and interactivity. Routing always
+uses the addressed Chat identity; catalog order does not confer a role.
 
-Every additional chat declares its origin; the main chat may omit origin or use
-`User`:
+Every Chat declares its origin:
 
-- `User` — a user-created peer chat;
+- `User` — a user-facing Chat created by the user or product workflow;
 - `Fork` — a branch created from a specific turn of a parent chat;
 - `Tool` — a worker chat created by an agent or tool for a subagent.
 
 ```text
 IChat
 ├── resource
-├── origin?: IChatOrigin
+├── origin: IChatOrigin
 │   ├── kind: User | Fork | Tool
 │   └── parentChat?: URI
 └── chat-level observables
@@ -156,9 +155,9 @@ execution record of a child agent, not another participant mixed into the
 parent transcript. Worker chats are normally read-only or hidden and surface
 as a separate view only when the user explicitly opens them.
 
-The main chat is always part of `chats`. Additional chats retain provider order
-unless a product-level ordering rule explicitly says otherwise. Shared code
-must not manufacture additional chats by grouping unrelated conversations.
+Chats retain provider order unless a product-level ordering rule explicitly
+says otherwise. Shared code must not manufacture Chats by grouping unrelated
+conversations or infer a canonical Chat from catalog position.
 
 ### Session and chat state
 
@@ -192,19 +191,20 @@ the new-session UI can gate the operation before it creates a draft.
 ### Capabilities
 
 `ISessionCapabilities` describes behavior that the active provider can
-guarantee. `supportsMultipleChats` gates user-created peer chats, and
-`supportsFork` gates chat forks. Other capabilities cover rename, changes,
-and models. Capabilities are observable when they can change after provider
-registration or session hydration. They describe operations available now;
-they do not invalidate peer, fork, or worker chats already reported by the
-provider.
+guarantee. `supportsCreateChat` gates user-created Chats, and `supportsFork`
+gates Chat forks. A Host with a Chat count limit declares that limit explicitly
+rather than encoding capacity as a special first Chat. Other capabilities cover
+rename, changes, and models. Capabilities are observable when they can change
+after provider registration or Session hydration. They describe operations
+available now; they do not invalidate User, Fork, or Tool Chats already
+reported by the provider.
 
 UI availability is derived from capabilities. UI and shared services do not
 branch on a provider ID or session type to choose provider-specific behavior.
-The new-peer-chat action requires the multiple-chat capability, and the fork
-action requires both the multiple-chat and fork capabilities. Tool-origin
-worker chats are authoritative provider state rather than a user-created
-operation and are surfaced according to their interactivity and origin.
+The new-Chat action requires the create capability and available capacity, and
+the fork action requires the fork capability. Tool-origin worker Chats are
+authoritative provider state rather than a user-created operation and are
+surfaced according to their interactivity and origin.
 
 ### Chat interactivity
 
@@ -218,8 +218,9 @@ The view service filters hidden chats before selection. The chat view enforces
 read-only behavior before rendering an input. The provider reports
 interactivity and origin but does not manipulate UI.
 
-The main chat is always `Full` or `ReadOnly`; it is never `Hidden`. Otherwise a
-session would have no deterministic visible chat when opened.
+A Session may have no visible Chat because its catalog is empty or all of its
+Chats are hidden. That state is represented explicitly; selection code does not
+substitute the first Chat or manufacture a visible Chat.
 
 ## Services
 
@@ -286,7 +287,7 @@ presentation state:
 ```text
 IActiveSession
 ├── session model fields from ISession
-├── activeChat: IObservable<IChat>
+├── activeChat: IObservable<IChat | undefined>
 ├── openChats: IObservable<readonly IChat[]>
 ├── closedChats: IObservable<readonly IChat[]>
 ├── visibleChatTabs: IObservable<readonly IChat[]>
@@ -294,13 +295,16 @@ IActiveSession
 ```
 
 `activeChat` is scoped to its owning visible session. It is not a second domain
-relationship and is not stored by the provider or management service. The
-`mainChat` cannot be closed or deleted independently from its session.
+relationship and is not stored by the provider or management service. Closing
+a Chat removes only its view. Deleting a Chat is a separate provider operation
+gated by that Chat's capability; the first and last Chat receive no exception.
 
-Single-chat sessions keep `activeChat === mainChat` and do not show chat tabs.
-Tool-origin worker chats stay out of the normal tab strip until explicitly
+A visible Session with one open user Chat does not show a chat tab strip.
+Tool-origin worker Chats stay out of the normal tab strip until explicitly
 opened. Closing a worker tab hides its view; it does not delete the provider's
-worker execution record.
+worker execution record. When the active Chat closes or disappears,
+`activeChat` becomes `undefined` unless the same authoritative transition
+explicitly selects another Chat.
 
 ### `ISessionsService`
 
@@ -388,7 +392,7 @@ path.
 | Management model | View-facing model |
 |---|---|
 | providers and session collection | active visible session |
-| session chat membership and main chat | per-session active and open chats |
+| session chat membership and ordering | per-session active and open chats |
 | draft creation and disposal | open, close, focus, and navigation |
 | send and CRUD routing | session-scoped view state |
 | provider reconciliation | active-session context keys |
@@ -424,7 +428,8 @@ command, list, or resource opener
     → create or restore its IActiveSession view model
     → insert or replace it in the requested visible-session slot
     → set the canonical active visible session
-    → select the restored visible chat or mainChat
+    → restore the exact persisted visible Chat when it is still available
+    → otherwise leave activeChat undefined
     → ISessionsPartService reconciles the mounted slots
     → focus only when the request does not preserve focus
 ```
@@ -436,10 +441,11 @@ globally active session is the action target.
 
 ```text
 IActiveSession.activeChat changes for a visible session
-    → that session view selects its chat host
-    → IChatViewFactory creates or reuses a contributed ChatView
-    → ChatView loads the addressed IChat resource
-    → Chat contribution renders the transcript and permitted input
+    → when defined, that session view selects its chat host
+        → IChatViewFactory creates or reuses a contributed ChatView
+        → ChatView loads the addressed IChat resource
+        → Chat contribution renders the transcript and permitted input
+    → when undefined, the session view renders its explicit no-Chat state
 ```
 
 Sessions owns visible-session placement, selection, and chat-host placement.
@@ -453,11 +459,14 @@ new-session action
     → ISessionsService.openNewSession(options)
     → management service asks the selected provider for a draft
     → view service activates the draft
-    → user sends the first request
-    → management service routes the request to the owning provider
-    → provider explicitly creates the Host Session and its default Chat
-    → provider replaces the draft with the committed ISession
-    → provider sends on the committed mainChat
+    → user submits one captured composer revision
+    → management service routes the submission to the owning provider
+    → provider prepares every attachment under the stable submission ID
+    → Host atomically creates the Session and one ordinary User Chat
+      through the common Session and Chat creation contracts
+    → provider replaces the product draft and its Chat with committed models
+    → provider binds prepared content to the returned Session and Chat IDs
+    → provider submits the normalized initial turn on that addressed Chat
     → management and view services reconcile the committed identity atomically
 ```
 
@@ -466,26 +475,41 @@ view state, and provider ownership move with that transition in one operation.
 Do not recover a missing replacement signal by guessing from titles, folders,
 or recently created sessions.
 
+Attachment preparation failure or cancellation occurs before Host Session
+creation and leaves the product draft and composer unchanged. Preparation uses
+the selected Host connection, Agent descriptor, and submission ID; it does not
+require a fabricated Host Session or Chat identity. Prepared content is bound
+to the canonical identities only after explicit Host creation succeeds.
+
 ### Sending to an existing chat
 
 ```text
-chat input
-    → managementService.sendRequest(session, chat, request)
+send action in the addressed Chat view
+    → managementService.sendRequest(session, chat)
     → resolve the provider from session ownership
+    → provider begins the addressed Chat submission transaction
+    → prepare and validate normalized attachments
     → provider routes the addressed Session and Chat to its Host connection
-    → Host routes the request to the owning Agent
+    → Host accepts and commits the canonical user turn
+    → Host routes the committed request to the owning Agent
     → Host publishes committed turn and lifecycle state
     → provider updates the addressed Chat model and Session observables
     → services reconcile state
     → ISessionsService and ISessionsPartService reconcile presentation
 ```
 
-Every request addresses both a session and a chat. Multi-chat providers must
-not route a peer-chat request through the main chat as a fallback.
+Every request addresses both a Session and a Chat. A provider must not redirect
+a request to the first, most recent, visible, or otherwise inferred Chat.
 
-For a single-chat session, callers address `session.mainChat`. A Tool-origin
-worker chat accepts a request only when its interactivity and provider contract
-allow it; read-only worker transcripts never expose a send operation.
+Sessions management and provider contracts do not carry prompt or attachment
+DTOs. The addressed Workbench Chat model is the only composer owner; the owning
+provider obtains its immutable submission snapshot through Chat's common API.
+The Sessions Chat view never rebuilds attachment state at the send boundary.
+
+For a single-Chat Session, callers still address that exact Chat identity. A
+Tool-origin worker Chat accepts a request only when its interactivity and
+provider contract allow it; read-only worker transcripts never expose a send
+operation.
 
 ### Provider change propagation
 
@@ -572,8 +596,9 @@ its visual contract.
   of placement.
 - `CometAgent` is the built-in Agent and has stable Agent ID `comet`.
 - Session identity is globally unique across providers.
-- Every session has one main chat, and `mainChat` is always a member of
-  `chats`.
+- A Session owns zero or more equal-status Chats. `ISession` has no
+  distinguished Chat field, and catalog position never controls routing,
+  closing, or deletion.
 - Unrelated user conversations are separate sessions; providers do not group
   them merely because they share a provider or workspace.
 - Core provider operations are required, not optional convenience methods.
