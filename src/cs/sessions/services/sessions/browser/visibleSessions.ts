@@ -8,7 +8,7 @@ import {
 	autorun,
 	observableValue,
 	type IObservable,
-	type IReader,
+	type IObservableReader,
 	type ISettableObservable,
 } from 'cs/base/common/observable';
 import { getComparisonKey } from 'cs/base/common/resources';
@@ -264,7 +264,7 @@ export class VisibleSession extends Disposable implements IActiveSession {
 		});
 	}
 
-	private createProjection<T>(compute: (reader: IReader | undefined) => T): IObservable<T> {
+	private createProjection<T>(compute: (reader: IObservableReader | undefined) => T): IObservable<T> {
 		let lastValue = compute(undefined);
 		return {
 			get: () => {
@@ -285,7 +285,7 @@ export class VisibleSession extends Disposable implements IActiveSession {
 	private reconcileState(
 		previous: IVisibleSessionState,
 		session: ISession,
-		reader?: IReader,
+		reader?: IObservableReader,
 	): IVisibleSessionState {
 		const chats = reader ? session.chats.read(reader) : session.chats.get();
 		const mainChat = reader ? session.mainChat.read(reader) : session.mainChat.get();
@@ -617,7 +617,7 @@ export class VisibleSessions extends Disposable {
 		);
 	}
 
-	private createProjection<T>(compute: (reader: IReader | undefined) => T): IObservable<T> {
+	private createProjection<T>(compute: (reader: IObservableReader | undefined) => T): IObservable<T> {
 		let lastValue = compute(undefined);
 		return {
 			get: () => {

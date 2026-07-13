@@ -18,7 +18,7 @@ import { URI } from '../common/uri.js';
 import { hash } from '../common/hash.js';
 import { CodeWindow, ensureCodeWindow, mainWindow } from './window.js';
 import { isPointWithinTriangle } from '../common/numbers.js';
-import { IObservable, derived, derivedOpts, IReader, observableValue, isObservable } from '../common/observable.js';
+import { IObservable, derived, derivedOpts, IObservableReader, observableValue, isObservable } from '../common/observable.js';
 
 export interface IRegisteredCodeWindow {
 	readonly window: CodeWindow;
@@ -2133,7 +2133,7 @@ export class DisposableResizeObserver extends Disposable {
  * so the slot only carries an attribution within the same task as the
  * `ResizeObserver loop completed with undelivered notifications` warning
  * (which fires synchronously at the end of the resize-observation phase).
- * A microtask would be too eager â€?microtask checkpoints run between each
+ * A microtask would be too eager ï¿½?microtask checkpoints run between each
  * callback, before the loop-error dispatch.
  */
 let _lastInvokedDisposableResizeObserver: DisposableResizeObserver | undefined;
@@ -2677,7 +2677,7 @@ export abstract class ObserverNode<T extends HTMLOrSVGElement = HTMLOrSVGElement
 		}
 
 		if (children) {
-			function getChildren(reader: IReader | undefined, children: ValueOrList2<HTMLOrSVGElement | string | ObserverNode | undefined>): (HTMLOrSVGElement | string)[] {
+			function getChildren(reader: IObservableReader | undefined, children: ValueOrList2<HTMLOrSVGElement | string | ObserverNode | undefined>): (HTMLOrSVGElement | string)[] {
 				if (isObservable(children)) {
 					return getChildren(reader, children.read(reader));
 				}
@@ -2707,7 +2707,7 @@ export abstract class ObserverNode<T extends HTMLOrSVGElement = HTMLOrSVGElement
 		}
 	}
 
-	readEffect(reader: IReader | undefined): void {
+	readEffect(reader: IObservableReader | undefined): void {
 		for (const d of this._deriveds) {
 			d.read(reader);
 		}
@@ -2774,7 +2774,7 @@ function setClassName(domNode: HTMLOrSVGElement, className: string) {
 	}
 }
 
-function resolve<T>(value: ValueOrList<T>, reader: IReader | undefined, cb: (val: T) => void): void {
+function resolve<T>(value: ValueOrList<T>, reader: IObservableReader | undefined, cb: (val: T) => void): void {
 	if (isObservable(value)) {
 		cb(value.read(reader));
 		return;
@@ -2788,7 +2788,7 @@ function resolve<T>(value: ValueOrList<T>, reader: IReader | undefined, cb: (val
 	// eslint-disable-next-line local/code-no-any-casts
 	cb(value as any);
 }
-function getClassName(className: ValueOrList<string | undefined | false> | undefined, reader: IReader | undefined): string {
+function getClassName(className: ValueOrList<string | undefined | false> | undefined, reader: IObservableReader | undefined): string {
 	let result = '';
 	resolve(className, reader, val => {
 		if (val) {

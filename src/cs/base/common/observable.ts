@@ -29,7 +29,7 @@ function notifyObservers(observers: ReadonlySet<ObservableObserver>): void {
 	}
 }
 
-export interface IReader {
+export interface IObservableReader {
 	readonly store: DisposableStore;
 	readonly delayedStore: DisposableStore;
 	readObservable<T>(observable: IObservable<T>): T;
@@ -37,14 +37,14 @@ export interface IReader {
 
 export interface IObservable<T> {
 	get(): T;
-	read(reader: IReader | undefined): T;
+	read(reader: IObservableReader | undefined): T;
 }
 
 export interface ISettableObservable<T> extends IObservable<T> {
 	set(value: T, transaction: unknown): void;
 }
 
-class Reader implements IReader {
+class ObservableReader implements IObservableReader {
 	constructor(
 		private readonly observer: TrackedObserver | undefined,
 		readonly store = new DisposableStore(),
@@ -60,8 +60,8 @@ class Reader implements IReader {
 	}
 }
 
-function track(reader: IReader | undefined, dependency: ObservableDependency): void {
-	if (reader instanceof Reader) {
+function track(reader: IObservableReader | undefined, dependency: ObservableDependency): void {
+	if (reader instanceof ObservableReader) {
 		reader.track(dependency);
 	}
 }
@@ -73,7 +73,7 @@ class ConstObservable<T> implements IObservable<T> {
 		return this.value;
 	}
 
-	read(_reader: IReader | undefined): T {
+	read(_reader: IObservableReader | undefined): T {
 		return this.value;
 	}
 }
@@ -87,7 +87,7 @@ class ObservableValue<T> implements ISettableObservable<T>, ObservableDependency
 		return this.value;
 	}
 
-	read(reader: IReader | undefined): T {
+	read(reader: IObservableReader | undefined): T {
 		track(reader, this);
 		return this.value;
 	}
@@ -116,13 +116,13 @@ class DerivedObservable<T> implements IObservable<T>, ObservableDependency, Trac
 	private store = new DisposableStore();
 	private delayedStore = new DisposableStore();
 
-	constructor(private readonly compute: (reader: IReader) => T) {}
+	constructor(private readonly compute: (reader: IObservableReader) => T) {}
 
 	get(): T {
 		return this.recompute();
 	}
 
-	read(reader: IReader | undefined): T {
+	read(reader: IObservableReader | undefined): T {
 		track(reader, this);
 		return this.get();
 	}
@@ -166,7 +166,7 @@ class DerivedObservable<T> implements IObservable<T>, ObservableDependency, Trac
 		this.delayedStore = new DisposableStore();
 
 		try {
-			return this.compute(new Reader(this, this.store, this.delayedStore));
+			return this.compute(new ObservableReader(this, this.store, this.delayedStore));
 		} finally {
 			previousDelayedStore.dispose();
 		}
@@ -186,7 +186,7 @@ class Autorun implements IDisposable, TrackedObserver {
 	private running = false;
 	private needsRun = false;
 
-	constructor(private readonly runner: (reader: IReader) => void) {
+	constructor(private readonly runner: (reader: IObservableReader) => void) {
 		this.run();
 	}
 
@@ -241,7 +241,7 @@ class Autorun implements IDisposable, TrackedObserver {
 			this.delayedStore = new DisposableStore();
 
 			try {
-				this.runner(new Reader(this, this.store, this.delayedStore));
+				this.runner(new ObservableReader(this, this.store, this.delayedStore));
 			} finally {
 				this.running = false;
 				previousDelayedStore.dispose();
@@ -265,19 +265,19 @@ export function observableValue<T>(_name: string, value: T): ISettableObservable
 	return new ObservableValue(value);
 }
 
-export function derived<T>(compute: (reader: IReader) => T): DerivedObservable<T>;
-export function derived<T>(_owner: unknown, compute: (reader: IReader) => T): DerivedObservable<T>;
+export function derived<T>(compute: (reader: IObservableReader) => T): DerivedObservable<T>;
+export function derived<T>(_owner: unknown, compute: (reader: IObservableReader) => T): DerivedObservable<T>;
 export function derived<T>(
-	ownerOrCompute: unknown | ((reader: IReader) => T),
-	compute?: (reader: IReader) => T,
+	ownerOrCompute: unknown | ((reader: IObservableReader) => T),
+	compute?: (reader: IObservableReader) => T,
 ): DerivedObservable<T> {
 	const callback = (typeof ownerOrCompute === 'function'
-		? ownerOrCompute as (reader: IReader) => T
+		? ownerOrCompute as (reader: IObservableReader) => T
 		: compute)!;
 	return new DerivedObservable(callback);
 }
 
-export function derivedOpts<T>(_options: DerivedOptions, compute: (reader: IReader) => T): DerivedObservable<T> {
+export function derivedOpts<T>(_options: DerivedOptions, compute: (reader: IObservableReader) => T): DerivedObservable<T> {
 	return new DerivedObservable(compute);
 }
 
@@ -289,6 +289,6 @@ export function isObservable<T = unknown>(value: unknown): value is IObservable<
 	);
 }
 
-export function autorun(runner: (reader: IReader) => void): IDisposable {
+export function autorun(runner: (reader: IObservableReader) => void): IDisposable {
 	return new Autorun(runner);
 }

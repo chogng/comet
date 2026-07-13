@@ -28,14 +28,26 @@ import implementation modules under `observableInternal`.
   a dependency and makes the computation react to later changes.
 - Use `observable.get()` only at an imperative boundary where no reader exists
   and no reactive dependency is intended.
+- `IObservable.read` requires `IObservableReader` and delegates through that
+  contract. It never accepts `undefined` or falls back to `get()`. Tracking
+  never depends on a concrete Reader class.
+- Every Observable implements the complete observer subscription protocol.
+  Do not hand-build a partial `{ get, read }` projection; use a kernel factory
+  or implement the complete `IObservable` contract.
 - A `derived` computation is pure observable state derivation. It does not set
   another observable, dispatch control flow, or invoke an external mutation.
-- The reader passed to `derived` exposes dependency reads only. Resource stores
-  are not part of the derived reader contract.
-- The `IReaderWithStore` passed to `autorun` exposes `store` and
-  `delayedStore`. `store` owns resources until just before the next run;
-  `delayedStore` keeps previous resources through the replacement run and
-  disposes them immediately afterwards. Both dispose with the autorun.
+- `derived` and `derivedOpts` receive `IObservableReader`, which exposes
+  dependency reads only. A concrete derived node has no resource Store.
+- `autorun` receives `IObservableReaderWithStore`, which extends
+  `IObservableReader` with `store` and `delayedStore`. `store` owns resources
+  until just before the next run; `delayedStore` keeps previous resources
+  through a successful replacement run and disposes them immediately after
+  that run. Both dispose with the autorun.
+- A kernel-provided Reader and its Store getters are valid only while their
+  callback is running and their owning graph node remains active. Consume the
+  supplied Reader directly; do not implement one, retain it, or retain either
+  Store for later mutation. If an autorun disposes itself, return from the
+  callback without reading or accessing a Store again.
 
 ## Updates and transactions
 
@@ -66,6 +78,10 @@ import implementation modules under `observableInternal`.
   is required.
 - A derived value is lazy. It is cached while observed, tracks dynamic
   dependencies, and releases its dependencies when it becomes unobserved.
+- If an observed derived throws while recomputing, it publishes no candidate
+  value and retains its recoverable dependencies for a later retry. A failing
+  unobserved `get()` releases every temporary dependency before propagating the
+  error.
 - `autorun` executes immediately and again after a tracked dependency commits
   a meaningful change. Register its disposable immediately with the owning
   `Disposable` or `DisposableStore`.
@@ -76,6 +92,22 @@ import implementation modules under `observableInternal`.
 - Disposing an autorun removes every dependency and disposes both reader
   stores. One failing reaction is reported through the unexpected-error
   handler and does not prevent other reactions from observing the commit.
+- A failed autorun run does not retain its candidate resources. Resources added
+  to that run's new stores are disposed, previous delayed resources remain
+  owned, and previous plus newly read dependencies remain observed for a
+  retry. The next successful run or final autorun disposal releases the
+  retained delayed resources. The previous ordinary `store` has already been
+  disposed before the run and is not restored.
+- Store lifetime does not roll back arbitrary external mutations. When an
+  effect requires atomic replacement, construct and validate the candidate
+  first, commit the external mutation second, and only then register the
+  committed resource. Use `delayedStore` when the previous resource must stay
+  live through candidate construction.
+- Store cleanup attempts every registered resource. Cleanup errors during a
+  rerun are reported without skipping the replacement callback or blocking
+  sibling reactions. Explicit final autorun disposal removes its dependencies,
+  attempts both Stores, and then propagates any cleanup aggregate to its
+  caller.
 
 ## UI effects and owned resources
 
