@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IDisposable } from 'cs/base/common/lifecycle';
+import { registerElectronRendererChannel } from 'cs/base/parts/ipc/electron-browser/rendererChannelClient';
 import type { ElectronAPI, ElectronIpcApi } from 'cs/base/parts/sandbox/common/electronTypes';
 import {
 	CONTEXT_MENU_CHANNEL,
@@ -70,9 +72,10 @@ export function popup(
 	const requestItems = items.map(item => createMenuItem(item, processedItems));
 	let disposed = false;
 	const ipc = getElectronIpc();
-	let disposeCallbackChannel: () => void;
+	let callbackChannelRegistration: IDisposable;
 
-	disposeCallbackChannel = ipc.registerChannel(
+	callbackChannelRegistration = registerElectronRendererChannel(
+		ipc,
 		callbackChannel,
 		{
 			async call<T = unknown>(_context: string, command: string, arg?: unknown): Promise<T> {
@@ -97,7 +100,7 @@ export function popup(
 					try {
 						item?.click?.(payload.contextmenuEvent ?? {});
 					} finally {
-						disposeCallbackChannel();
+						callbackChannelRegistration.dispose();
 					}
 				}
 				return undefined as T;
@@ -123,7 +126,7 @@ export function popup(
 		}
 
 		disposed = true;
-		disposeCallbackChannel();
+		callbackChannelRegistration.dispose();
 		onHide?.(true);
 		console.error('Failed to show native context menu.', error);
 	});

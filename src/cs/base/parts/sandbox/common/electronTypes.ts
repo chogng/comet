@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import type {
   AppCommand,
   AppCommandPayloadMap,
@@ -6,9 +11,6 @@ import type {
   WindowControlAction,
   WindowState,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type {
-  IServerChannel,
-} from 'cs/base/parts/ipc/common/ipc';
 import type {
   WebContentBounds,
   WebContentLayoutPhase,
@@ -26,6 +28,50 @@ export type ElectronInvoke = {
 };
 
 export type WindowStateListener = (state: WindowState) => void;
+
+/** Describes one main-to-renderer channel call without carrying executable objects. */
+export interface ElectronRendererChannelCallRequest {
+  readonly requestId: string;
+  readonly channelName: string;
+  readonly command: string;
+  readonly arg?: unknown;
+}
+
+export type ElectronRendererChannelCallResponse = {
+  readonly requestId: string;
+} & (
+  | { readonly ok: true; readonly result: unknown }
+  | { readonly ok: false; readonly error: string }
+);
+
+/** Describes one main-to-renderer event subscription. */
+export interface ElectronRendererChannelEventSubscribeRequest {
+  readonly subscriptionId: string;
+  readonly channelName: string;
+  readonly eventName: string;
+  readonly arg?: unknown;
+}
+
+/** Carries one renderer channel event or terminal subscription error. */
+export interface ElectronRendererChannelEventPayload {
+  readonly subscriptionId: string;
+  readonly data?: unknown;
+  readonly error?: string;
+}
+
+/** Transports renderer channel DTOs across the isolated preload boundary. */
+export interface ElectronRendererChannelApi {
+  register(channelName: string): void;
+  dispose(channelName: string): void;
+  sendCallResult(response: ElectronRendererChannelCallResponse): void;
+  sendEvent(payload: ElectronRendererChannelEventPayload): void;
+  onCall(listener: (request: ElectronRendererChannelCallRequest) => void): () => void;
+  onCallCancellation(listener: (requestId: string) => void): () => void;
+  onEventSubscription(
+    listener: (request: ElectronRendererChannelEventSubscribeRequest) => void,
+  ): () => void;
+  onEventDisposal(listener: (subscriptionId: string) => void): () => void;
+}
 
 export interface ElectronWindowControls {
   perform: (action: WindowControlAction) => void;
@@ -80,10 +126,7 @@ export interface ElectronIpcApi {
     arg: unknown,
     listener: (payload: T) => void,
   ) => () => void;
-  registerChannel: (
-    channelName: string,
-    channel: IServerChannel<string>,
-  ) => () => void;
+  rendererChannels: ElectronRendererChannelApi;
 }
 
 export interface ElectronAPI {

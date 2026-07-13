@@ -1,5 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Comet Studio. All rights reserved.
+ *  Copyright (c) Comet. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 import type { CancellationToken } from 'cs/base/common/cancellation';
@@ -7,6 +8,7 @@ import type { Event } from 'cs/base/common/event';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import { generateUuid } from 'cs/base/common/uuid';
 import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';
+import { registerElectronRendererChannel } from 'cs/base/parts/ipc/electron-browser/rendererChannelClient';
 import type { ElectronIpcApi } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
 
@@ -40,6 +42,6 @@ export class ElectronIPCMainProcessService
 	}
 
 	registerChannel(channelName: string, channel: IServerChannel<string>): void {
-		this._register(toDisposable(this.ipc.registerChannel(channelName, channel)));
+		this._register(registerElectronRendererChannel(this.ipc, channelName, channel));
 	}
 }
