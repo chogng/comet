@@ -74,28 +74,31 @@ originating client.
   verification, installed catalog, operations, storage, and atomic activation
 - `cs/platform/agentHost/node/runtime` — generic connected Agent runtime
   negotiation, correlation, and lifecycle
-- `cs/platform/agentHost/node/agents/<agent>` — optional embedded Agent runtime
-  implementations
+- `cs/platform/agentHost/node/agents/comet` — product-bundled embedded Comet
+  runtime, when selected by product composition
 
 Agent Host is a Platform subsystem and never imports Workbench or Sessions.
 Comet is the only bundled and default-installed Agent package. Every optional
 Agent package is absent until an explicit user install operation commits for
 the addressed Host; Session creation and Turn execution never install or
-download it. Package ID, Agent ID, runtime registration, authentication, and
-materialization remain separate.
+download it. Optional packages always execute as connected runtimes outside
+the Host process. Package ID, Agent ID, runtime registration, authentication,
+and materialization remain separate.
 
-`IAgent` is the single Host-facing semantic port. Embedded runtimes implement
-it under `cs/platform/agentHost/node/agents/<agent>`. External or cross-language
-runtimes implement its language-neutral Agent Runtime Protocol and join through
+`IAgent` is the single Host-facing semantic port. The product-bundled embedded
+Comet runtime implements it under `cs/platform/agentHost/node/agents/comet`.
+User-installed Agents and the connected Comet form implement its
+language-neutral Agent Runtime Protocol and join through
 `IAgentRuntimeConnection`; generic connection code lives under
 `cs/platform/agentHost/node/runtime`, not in Agent-specific Sessions or Feature
 code. SDK and model-provider Tool formats, aliases, call conversion, result
 encoding, and Comet orchestration remain inside their owning runtime. No
 parallel Tool conversion or execution layer exists in Feature contributions.
-Agent Host contracts, connected-runtime support, and in-repository embedded
-runtime code belong in this subsystem rather than a parallel top-level
-`cs/agent` layer. A connected runtime package owns its implementation outside
-the TypeScript layer and exposes only the Agent Runtime Protocol to Agent Host.
+Agent Host contracts, connected-runtime support, and the in-repository
+embedded Comet runtime belong in this subsystem rather than a parallel
+top-level `cs/agent` layer. A connected runtime package owns its implementation
+outside the TypeScript layer and exposes only the Agent Runtime Protocol to
+Agent Host.
 SDKs are private dependencies of installed Agent runtimes, not product
 installation identities. Sessions contributions never import the package
 manager or an SDK implementation.

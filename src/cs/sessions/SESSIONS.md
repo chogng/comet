@@ -88,7 +88,7 @@ ISessionsManagementService
     → IAgentHostConnection
     → Agent Host runtime
     → IAgent
-        ├── embedded Agent runtime
+        ├── product-bundled embedded Comet runtime
         └── connected Agent runtime through IAgentRuntimeConnection
 ```
 
@@ -97,10 +97,12 @@ Local and remote are Host placements, not Agent identities. The built-in
 may be embedded or supplied by a connected Rust Comet Code runtime. Comet is
 the only bundled and default-installed Agent package. Copilot, Claude, Codex,
 and other Agents are absent until the user explicitly installs their package
-for the addressed Host. Every Agent runtime owns its SDK or model-provider
-calls, event conversion, truthful capabilities, and opaque resume data and
-never imports Sessions or Workbench Chat. Runtime packaging does not create
-another Sessions provider. See [Agent Host architecture](AGENT_HOST.md),
+for the addressed Host. Every user-installed package runs through a connected
+runtime outside the Host process. Every Agent runtime owns its SDK or
+model-provider calls, event conversion, truthful capabilities, and opaque
+resume data and never imports Sessions or Workbench Chat. Runtime packaging
+does not create another Sessions provider. See
+[Agent Host architecture](AGENT_HOST.md),
 [Agent package architecture](AGENT_PACKAGES.md), and
 [Comet Agent architecture](COMET_AGENT.md).
 
@@ -474,9 +476,11 @@ new-session action
     → view service activates the draft
     → user submits one captured composer revision
     → management service routes the submission to the owning provider
+    → addressed Agent resolves one immutable execution profile
     → provider prepares every attachment under the stable submission ID
     → Host reserves Session, ordinary User Chat, and Turn identities
     → provider binds prepared content to those reserved identities
+    → Host prepares one exact Tool-set revision against the resolved profile
     → Host atomically commits the Session, Chat, and normalized initial Turn
       through the common Session, Chat, and Turn contracts
     → provider replaces the product draft and consumes its captured composer
@@ -494,14 +498,14 @@ view state, and provider ownership move with that transition in one operation.
 Do not recover a missing replacement signal by guessing from titles, folders,
 or recently created sessions.
 
-Attachment preparation failure or cancellation occurs before Host Session
-creation and leaves the product draft and composer unchanged. Preparation uses
-the selected Host connection, exact Agent runtime registration and descriptor
-revisions, and submission ID; it does not require a fabricated or published
-Host Session or Chat identity. The Host reserves canonical identities inside
-the create operation so content can bind before the Session, Chat, and Turn are
-committed. Failure in any pre-commit step publishes no partial or empty
-Session.
+Profile, attachment, or Tool-set preparation failure or cancellation occurs
+before Host Session creation and leaves the product draft and composer
+unchanged. Preparation uses the selected Host connection, exact Agent runtime
+registration, resolved execution profile, descriptor revisions, and submission
+ID; it does not require a fabricated or published Host Session or Chat identity.
+The Host reserves canonical identities inside the create operation so content
+can bind before the Session, Chat, and Turn are committed. Failure in any
+pre-commit step publishes no partial or empty Session.
 
 ### Sending to an existing chat
 
@@ -510,9 +514,11 @@ send action in the addressed Chat view
     → managementService.sendRequest(session, chat)
     → resolve the provider from session ownership
     → provider begins the addressed Chat submission transaction
-    → capture prompt, attachments, interaction targets, and Tool policy
+    → capture prompt, Agent execution selection, attachments, interaction
+      targets, and Tool policy
+    → addressed Agent resolves one immutable execution profile
     → prepare attachments
-    → Host prepares one exact Tool-set revision for the submission
+    → Host prepares one exact Tool-set revision against that profile
     → validate and digest the common request snapshot
     → provider routes the prepared addressed request to its Host connection
     → Host accepts and commits the canonical user turn and request snapshot
@@ -646,6 +652,8 @@ its visual contract.
   Sessions, choose an Agent, or own backend lifecycle.
 - Agent runtimes enter Sessions only through Agent Host and never
   register a direct `ISessionsProvider`.
+- Providers carry the normalized execution selection to Agent Host; they do not
+  resolve Agent profiles or construct SDK-native configuration themselves.
 - Sessions, provider draft creation, Session creation, and send operations
   never install, update, uninstall, or inspect an Agent SDK package.
 - Providers do not import Sessions UI, Parts, or shell layout.
@@ -696,14 +704,14 @@ an alternative mutable source of truth.
 
 Add a new optional Agent as an explicitly installed Agent package, not as a
 Sessions contribution. Its manifest declares exact Agent IDs and one runtime
-entry-point form. An embedded runtime implements `IAgent`; a connected runtime
-implements the language-neutral Agent Runtime Protocol and joins through
-`IAgentRuntimeConnection`. Register stable identities and truthful capabilities,
-Tool projection limits, and resume schemas only when the package transaction
-commits. Keep orchestration, SDK or model-provider types, clients, caches,
-event conversion, and resume values inside that runtime. Do not add the Agent
-to the default installed set, a Sessions provider, Chat view, automatic
-installation path, dual runtime registration, or fallback path.
+entry point. The user-installed runtime implements the language-neutral Agent
+Runtime Protocol and joins through `IAgentRuntimeConnection`; it never loads
+inside the Host process. Register stable identities and truthful capabilities,
+Tool projection limits, resume schemas, and migration edges only when the
+package transaction commits. Keep orchestration, SDK or model-provider types,
+clients, caches, event conversion, and resume values inside that runtime. Do
+not add the Agent to the default installed set, a Sessions provider, Chat view,
+automatic installation path, dual runtime registration, or fallback path.
 
 Comet is the sole bundled exception: its package is activated by product
 composition and its embedded or Rust connected runtime follows

@@ -59,7 +59,8 @@ code / server
 - Copilot, Claude, Codex, and every other optional Agent package are absent
   until an explicit user install operation commits for the addressed Host.
   Sessions may expose a separate install action, but an installable catalog
-  entry is never an executable Agent selection.
+  entry is never an executable Agent selection. Every user-installed Agent
+  executes through a connected runtime outside the Host process.
 - One shared Agent Host Sessions provider maps each Host connection into the
   provider-independent Sessions domain. Local and remote contributions do not
   duplicate Session or Chat models.
@@ -93,6 +94,9 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
 - A draft's initial request reserves identities and atomically commits its
   Session, ordinary Chat, and user Turn only after content preparation binds.
   Pre-commit failure preserves the draft and publishes no empty Session.
+- Submission preparation resolves one immutable Agent execution profile through
+  the common Host port before preparing attachments and the Tool set. Sessions
+  and providers do not build SDK-native configuration or a second profile.
 - User, fork, and Agent-owned worker Chats share the same catalog and lifecycle
   rules; no first Chat receives permanent close, delete, or routing privileges.
 - The product-wide new-conversation action creates a new session. Creating a
@@ -122,10 +126,10 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
 - Sessions providers route addressed Session and Chat operations; Workbench
   `IChatService` owns only the addressed conversation model and never creates
   a product Session or chooses an Agent.
-- Embedded runtimes implement the Host-side `IAgent` contract directly;
-  connected runtimes use `IAgentRuntimeConnection`. Neither registers a direct
-  Sessions provider, and one Agent ID never has dual runtime registration or a
-  fallback runtime.
+- The product-bundled embedded Comet runtime implements the Host-side `IAgent`
+  contract directly. User-installed Agents and the connected Comet form use
+  `IAgentRuntimeConnection`. Neither registers a direct Sessions provider, and
+  one Agent ID never has dual runtime registration or a fallback runtime.
 - Draft creation, Session creation, restore, and send never install, update,
   uninstall, download, inspect, or load an Agent SDK package.
 - Commands carry the originating session/chat context and never silently

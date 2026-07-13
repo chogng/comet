@@ -55,22 +55,25 @@ Agent package manifests, catalogs and operations, Agent registry, normalized
 content-resource contracts, canonical Tool and executor-binding contracts,
 Host-side `IAgent` port, language-neutral Agent Runtime Protocol, Node Host
 runtime, package verification and activation, connected-runtime support, and
-embedded Agent runtimes. As a Platform subsystem it may import only Base and
-Platform modules. It never imports Editor, Workbench, Sessions, or Code.
+the product-bundled embedded Comet runtime. As a Platform subsystem it may
+import only Base and Platform modules. It never imports Editor, Workbench,
+Sessions, or Code.
 
-Embedded runtimes implement `IAgent` directly. External or cross-language
-runtimes implement the same semantics through `IAgentRuntimeConnection` and the
-Agent Runtime Protocol. Each runtime owns its SDK or model-provider projection;
-the Comet runtime owns Comet orchestration regardless of packaging. They do not
-implement `ISessionsProvider`, import Workbench Chat, or own local or remote
-Agent Host transport.
+The product-bundled embedded Comet runtime implements `IAgent` directly.
+User-installed Agents and the bundled connected Comet form implement the same
+semantics through `IAgentRuntimeConnection` and the Agent Runtime Protocol.
+Each runtime owns its SDK or model-provider projection; the Comet runtime owns
+Comet orchestration regardless of packaging. They do not implement
+`ISessionsProvider`, import Workbench Chat, or own local or remote Agent Host
+transport.
 
 `node/packages/` owns installable and installed catalogs, staging,
 verification, package operations, storage, and atomic activation. Comet is the
 only bundled and default-installed package. Optional packages are not loaded or
 registered until an explicit user install operation commits for the addressed
-Host. Sessions and provider contributions never import package management or
-SDK implementations.
+Host, and they always execute as connected runtimes outside the Host process.
+Sessions and provider contributions never import package management or SDK
+implementations.
 
 ### Sessions common
 

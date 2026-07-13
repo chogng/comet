@@ -30,11 +30,14 @@ through the common Agent Runtime Port.
 The bundled Comet package is installed and activated by product composition.
 Users do not need an Agent package installation operation before creating a
 Comet Session. Ordinary Agent package operations cannot uninstall Comet; its
-revision changes with the Comet product distribution.
+revision changes with the Comet product distribution through the same
+package-wide quiesce, resume migration, and atomic activation transaction used
+for package updates. Product distribution retains the previous Comet endpoint
+until that transaction commits.
 
 Being installed does not imply that a usable model endpoint or credentials
 exist. Comet publishes truthful readiness and authentication state. If no exact
-model execution configuration can be resolved, an initial-Turn submission or
+model execution profile can be resolved, an initial-Turn submission or
 later send fails explicitly; Comet does not select an unrelated provider or
 Agent. Empty Session creation remains governed by the ordinary Host capability.
 
@@ -48,7 +51,7 @@ Session, Chat, Turn, connection, and resume contracts are defined in
 | Owner | Responsibilities |
 |---|---|
 | Agent Host | Agent registration; Session, Chat, Turn, Tool-call, permission, input-request, operation, and canonical history state |
-| Comet runtime | prompt construction, context policy, model execution configuration, orchestration steps, model and Tool loop, provider projection, usage accounting, and opaque checkpoints |
+| Comet runtime | prompt construction, context policy, model execution profiles, orchestration steps, model and Tool loop, provider projection, usage accounting, and opaque checkpoints |
 | Model endpoint implementation | exact provider request/stream protocol and credential use selected by the Comet runtime |
 | Tool executor | the canonical Feature, Host, Agent, or MCP operation addressed by one Tool registration |
 | Feature content owner | immutable attachment publication and bounded content-resource reads |
@@ -62,26 +65,48 @@ Comet does not own Agent package installation. Once its bundled package is
 activated, the runtime owns only its execution-engine and package-private SDK
 or model-provider lifecycle.
 
-## Execution configuration
+## Execution profile and Turn binding
 
-Every accepted Comet Turn binds one immutable execution-configuration revision
-containing at least:
+The Comet execution profile is Comet's implementation of the common Agent
+execution-profile envelope; it is not a second Comet-only request contract.
+Agent Host invokes the common resolution operation with the exact Comet runtime
+registration, stable submission, and normalized user or product selection.
+Comet returns one bounded immutable profile before attachment and Tool-set
+preparation. Its common envelope names exact Agent and model descriptor
+revisions, while its opaque body contains only Comet-owned execution choices:
 
-- the exact model endpoint, model ID, and model descriptor revision;
-- the exact Comet instruction or execution-profile revision;
+- the exact model endpoint binding corresponding to the envelope's model
+  descriptor revision;
+- the exact Comet instruction-profile revision;
 - reasoning, response, and provider settings supported by that model;
-- Tool Schema Profile and accepted canonical Tool-set revision;
-- step, token, context, time, and concurrency budgets;
-- Host policy ceilings, deadline, and cancellation identity;
-- the Comet runtime registration revision and resume-schema ID.
+- Agent-owned step, token, context, and concurrency budget policy, subsequently
+  constrained by the Host ceilings in the Turn binding;
+- the exact provider-projection behavior required by the selected model.
+
+Agent Host validates the envelope and separately creates one immutable Turn
+execution binding after request preparation. It contains:
+
+- the complete bounded Comet execution-profile envelope;
+- the exact Agent runtime registration revision;
+- the accepted canonical Tool-set revision, including its Tool Schema Profile;
+- Host policy ceilings, accepted deadline, cancellation identity, and output
+  constraints;
+- the optional opaque resume state and its schema ID.
+
+The execution profile never contains a secret, Tool-set revision, executor,
+runtime registration, Host deadline, cancellation identity, or resume state.
+Those values have one authority in the accepted Host Turn binding. Comet
+validates their correlation but does not publish a second copy. Resolution is
+side-effect-free and retry-stable for the same submission, selection digest,
+and runtime registration.
 
 A new Chat request identifies either an explicit user model selection or one
-explicit product-provisioned Comet execution-profile ID. That identified input
-must resolve to one exact configuration before use; a failed user selection is
-not retried through the product profile. Catalog order, display name, model
-family, last successful provider, and installed SDKs never choose a model
-implicitly. A later model change creates a new configuration revision and
-affects only Turns that bind it.
+explicit product-provisioned Comet profile-preset ID. That selection must
+resolve to one exact profile before use; a failed user selection is not retried
+through the product preset. Catalog order, display name, model family, last
+successful provider, and installed SDKs never choose a model implicitly. A
+later model change creates a new profile revision and affects only Turns that
+bind it.
 
 Secrets are referenced through the Agent authentication boundary and are not
 stored in Chat configuration, Turn input, package manifests, or opaque resume
@@ -102,10 +127,10 @@ Comet receives one normalized `IAgent` request containing:
 - the accepted user message and relevant canonical Chat history;
 - normalized attachments and their immutable content references;
 - explicitly bound interaction targets;
-- the accepted canonical Tool-set and descriptor revisions;
-- the immutable Comet execution-configuration revision;
-- permission, cancellation, steering, deadline, and output constraints;
-- an optional opaque Comet checkpoint tagged with a supported resume schema.
+- the immutable Host Turn execution binding, containing the resolved Comet
+  profile envelope, runtime registration, canonical Tool-set, deadline,
+  cancellation, output, and optional resume-state authorities;
+- current permission, cancellation, steering, and user-input operation state.
 
 The request is the complete execution authority. Comet does not query the
 active Editor, visible Browser, selected Article checkboxes, composer DOM,
@@ -118,7 +143,7 @@ prompt text, or previous UI state.
 Comet uses one explicit state machine inside the accepted Host Turn:
 
 ```text
-initialize exact execution revision
+initialize exact execution profile and Host Turn binding
     → materialize accepted attachment context
     → compose provider-neutral model input
     → project exact canonical Tool set
@@ -253,9 +278,12 @@ unbounded provider event log. An accepted active Turn resumes only under the
 same logical Comet registration revision with explicit support for that schema.
 A released Session or Chat may materialize after an atomic Comet package update
 only when the new registration explicitly supports its stored schema or the
-package update completed an Agent-owned state migration. Otherwise the Session
-or Turn is unavailable or failed according to its committed Host state; no
-unqualified runtime, model, or Agent receives the checkpoint.
+package update committed a migration through the common Agent resume-state
+operation. Comet declares exact source and target schema edges and returns a
+new opaque value into package-operation staging; it never mutates committed
+state during validation. Otherwise the Session or Turn is unavailable or
+failed according to its committed Host state; no unqualified runtime, model,
+or Agent receives the checkpoint.
 
 ## Module layout
 
@@ -276,12 +304,14 @@ integration surface is the Agent Runtime Protocol.
 
 Comet conformance covers:
 
-- exact execution-configuration and model binding;
+- exact execution-profile resolution and Host Turn binding;
+- common-profile conformance shared with other Agent runtimes;
 - prompt and attachment input construction within declared limits;
 - lossless Tool projection and canonical call/result correlation;
 - multi-step model and Tool orchestration with explicit budgets;
 - cancellation, steering, permission, input, and terminal-state ordering;
 - effect reconciliation and exact checkpoint resumption;
+- idempotent staged resume migration and atomic package activation;
 - embedded and connected runtime behavioral equivalence;
 - unavailable model, credential, Tool, content, runtime, and resume-schema
   failures without another route.
@@ -295,8 +325,8 @@ Comet conformance covers:
 - Exactly one embedded or connected Comet runtime is registered per Host.
 - The Comet runtime owns orchestration; Agent Host owns canonical product
   lifecycle and state.
-- Every Turn binds one exact model execution configuration and Tool-set
-  revision.
+- Every Turn binds one exact Comet execution profile and one Host-owned Turn
+  execution binding containing the accepted Tool-set revision.
 - SDK and model-provider formats remain private to the Comet runtime.
 - Accepted attachments are read as context; interaction targets require exact
   Tool calls.

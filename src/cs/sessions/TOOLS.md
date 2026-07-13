@@ -169,11 +169,14 @@ Registration, executor availability, policy selection, preparation, exposure,
 and invocation are distinct states.
 
 Workbench Chat may own visible per-request Tool policy and canonical Tool IDs.
-It never owns descriptors, SDK aliases, or executor handles. During submission
-preparation, Agent Host resolves that policy against:
+It never owns descriptors, SDK aliases, or executor handles. The addressed
+Agent first resolves the normalized execution selection through the common
+execution-profile port. During submission preparation, Agent Host resolves
+Tool policy against:
 
 - authoritative registrations and descriptor revisions;
 - exact executor availability;
+- the exact Agent and model descriptor revisions named by that profile;
 - Agent and model Tool capabilities;
 - schema-profile compatibility;
 - bound interaction targets;
@@ -181,15 +184,17 @@ preparation, Agent Host resolves that policy against:
 
 The result is one immutable prepared Tool-set revision bound to the submission
 ID, Host authority, Agent runtime registration revision, Agent and model
-descriptor revisions, targets, and exact Tool registrations. Host acceptance
-revalidates and records it with the Turn.
+descriptor revisions, execution-profile revision, targets, and exact Tool
+registrations. Host acceptance revalidates and records it with the Turn.
 
 The accepted Tool-set revision travels atomically with the `IAgent` Turn
 request. A connected runtime receives the same canonical revision through the
 Agent Runtime Protocol. The common contract publishes no mutable
-origin-specific Tool list beside the Turn. An SDK that requires session-level
-installation, rebinding, or restart performs it inside its Agent runtime before
-starting that Turn. A runtime that cannot enforce the exact accepted set
+origin-specific Tool list beside the Turn. For Comet, the revision belongs to
+the Host-owned Turn execution binding rather than the reusable Comet execution
+profile. An SDK that requires session-scoped Tool registration,
+synchronization, rebinding, or restart performs it inside its Agent runtime
+before starting that Turn. A runtime that cannot enforce the exact accepted set
 rejects execution explicitly.
 
 Every model-visible Tool appears in the accepted canonical snapshot. Fixed
@@ -201,10 +206,10 @@ default.
 
 `IAgent` is the common Host-side integration contract. It receives normalized
 Turn input, including the exact Tool-set revision, and exposes only canonical
-Tool calls and results to Agent Host. An embedded runtime implements it
-directly. A connected runtime uses its language-neutral wire projection through
-`IAgentRuntimeConnection`; Tool identity and schemas do not change at that
-boundary.
+Tool calls and results to Agent Host. The product-bundled embedded Comet runtime
+implements it directly. User-installed Agents and the connected Comet form use
+its language-neutral wire projection through `IAgentRuntimeConnection`; Tool
+identity and schemas do not change at that boundary.
 
 An Agent runtime that uses an SDK owns:
 
@@ -364,9 +369,9 @@ src/cs/platform/agentHost/node/            Tool-set preparation, call state,
                                            reconciliation
 src/cs/platform/agentHost/node/runtime/    connected Agent runtime correlation
                                            and canonical Tool-call transport
-src/cs/platform/agentHost/node/agents/     optional embedded IAgent runtimes;
-                                           SDK and model-provider projection
-                                           remain inside owners
+src/cs/platform/agentHost/node/agents/comet/
+                                           product-bundled embedded Comet
+                                           runtime, when selected
 src/cs/sessions/contrib/providers/agentHost/
                                            connected-executor publication and
                                            connection integration
