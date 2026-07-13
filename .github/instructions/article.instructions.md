@@ -1,6 +1,6 @@
 ---
 description: Durable architecture and parsing rules for Article Fetch.
-applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**,src/cs/workbench/contrib/chat/**,src/cs/workbench/browser/documentActionsModel.ts,src/cs/workbench/contrib/translation/**,src/cs/sessions/browser/sessionsWorkbench.ts,src/cs/sessions/contrib/providers/default/**}"
+applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**,src/cs/workbench/contrib/chat/**,src/cs/workbench/browser/documentActionsModel.ts,src/cs/workbench/contrib/translation/**,src/cs/sessions/browser/sessionsWorkbench.ts,src/cs/sessions/contrib/providers/agentHost/**}"
 ---
 
 # Article Fetch
@@ -26,10 +26,11 @@ Cross-process calls use feature-specific DTOs; `ArticleId` and Fetch domain
 objects do not move to electron-main for later lookup.
 
 Workbench Chat owns article references stored in one addressed conversation and
-its transient checked-article selection. The Sessions provider that routes a
-backend request resolves explicit Article attachments through `IFetchService`
-and constructs the backend-specific context DTO. Chat does not own backend
-routing, and Sessions core does not own a parallel article selection.
+its transient checked-article selection. The Agent Host Sessions provider that
+routes a request resolves explicit Article attachments through `IFetchService`
+and constructs the normalized Agent Host Article context. The addressed Agent
+converts that context into SDK input. Chat does not own backend routing, and
+Sessions core does not own a parallel article selection.
 
 ## Runtime boundary
 

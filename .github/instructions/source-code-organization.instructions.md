@@ -42,12 +42,27 @@ Within each layer, code is organized by runtime environment:
 - `cs/workbench/contrib` — feature contributions
 - `cs/workbench/contrib/chat` — single-conversation models and interaction UI
 
+## Agent Host Organization
+
+- `cs/platform/agentHost/common` — environment-neutral Host protocol,
+  connection contracts, and Host-side Agent contracts
+- `cs/platform/agentHost/browser` — remote-capable connection support
+- `cs/platform/agentHost/electron-browser` — desktop local Host connection
+- `cs/platform/agentHost/node` — Host runtime and Agent implementations
+
+Agent Host is a Platform subsystem and never imports Workbench or Sessions.
+Agent implementations live under `cs/platform/agentHost/node/agents/<agent>`
+and expose SDK behavior only through the common Host contracts.
+Agent protocol and turn runtime code belongs in this subsystem rather than a
+parallel top-level `cs/agent` layer.
+
 ## Sessions Organization
 
 - `cs/sessions/{common|browser|electron-browser}` — application core, shell, layout, and Parts
 - `cs/sessions/services` — provider-agnostic application and session services
 - `cs/sessions/contrib` — Sessions-specific feature integrations
-- `cs/sessions/contrib/providers` — backend-specific session providers
+- `cs/sessions/contrib/providers/agentHost` — shared Agent Host Sessions
+  provider plus local and remote Host connection registration
 - `cs/sessions/sessions.*.main.ts` — Sessions contribution entry points
 
 ### Workbench Contribution Rules
@@ -67,6 +82,9 @@ in `cs/sessions/contrib/<feature>`, not in Sessions core or Workbench.
 - Sessions core and services do not import Sessions contributions.
 - Non-provider Sessions contributions do not import provider implementations.
 - Providers register through public Sessions service contracts.
+- Agent SDK integrations register with the Platform Agent Host runtime, not
+  with Sessions. One shared Agent Host Sessions provider maps each Host
+  connection to `ISessionsProvider`.
 - Sessions entry points are the only modules that load Sessions contribution
   entry points for side effects.
 

@@ -74,6 +74,26 @@ Workbench features. `src/cs/sessions/contrib/chat/` integrates it with the
 Sessions Part through a typed factory contract rather than absorbing Chat
 widgets or transcript state into Sessions core.
 
+### Sessions and Agent Host
+
+Agent Host is Comet's common execution boundary for Agent SDKs. Sessions sees
+one `ISessionsProvider` per local or remote Host connection. The provider maps
+the Host's canonical Session and Chat catalogs into provider-independent
+`ISession` and `IChat` models.
+
+```text
+ISessionsManagementService
+    → AgentHostSessionsProvider
+    → IAgentHostConnection
+    → Agent Host runtime
+    → CometAgent / CopilotAgent / ClaudeAgent / CodexAgent
+```
+
+Local and remote are Host placements, not Agent identities. The built-in
+`CometAgent` has stable Agent ID `comet`. Agent implementations own SDK calls,
+SDK event conversion, capabilities, and opaque resume data; they never import
+Sessions or Workbench Chat. See [Agent Host architecture](AGENT_HOST.md).
+
 ## Core contracts
 
 ### `ISession`
@@ -221,10 +241,11 @@ committed to both owners, and then published to ordinary observers. An invalid
 provider never enters the registry, and an observer failure cannot interrupt a
 committed registry or management transition.
 
-Provider implementations are contributions because they connect optional
-compute backends and session types. Only those implementations live under
-`src/cs/sessions/contrib/providers/`; the Sessions domain, aggregation,
-lifecycle, and view-facing state remain Sessions services.
+Agent Host provider instances are contributions because they connect local and
+remote Host endpoints to Sessions. One shared implementation serves every Host
+connection. Agent SDK integrations register inside the Platform Agent Host
+runtime and never implement a direct Sessions provider. The Sessions domain,
+aggregation, lifecycle, and view-facing state remain Sessions services.
 
 ### `ISessionsManagementService`
 
@@ -381,8 +402,9 @@ inside the management service or provider registry.
 ### Provider registration
 
 ```text
-Sessions provider contribution
-    → creates provider
+local or remote Agent Host contribution
+    → establishes one IAgentHostConnection
+    → creates one shared AgentHostSessionsProvider
     → ISessionsProvidersService.registerProvider(provider)
     → management service prepares and commits the aggregate transition
     → registry publishes the committed change to ordinary observers
@@ -433,7 +455,9 @@ new-session action
     → view service activates the draft
     → user sends the first request
     → management service routes the request to the owning provider
-    → provider commits or explicitly replaces the draft
+    → provider explicitly creates the Host Session and its default Chat
+    → provider replaces the draft with the committed ISession
+    → provider sends on the committed mainChat
     → management and view services reconcile the committed identity atomically
 ```
 
@@ -448,8 +472,10 @@ or recently created sessions.
 chat input
     → managementService.sendRequest(session, chat, request)
     → resolve the provider from session ownership
-    → provider sends on the addressed chat
-    → provider updates chat/session observables
+    → provider routes the addressed Session and Chat to its Host connection
+    → Host routes the request to the owning Agent
+    → Host publishes committed turn and lifecycle state
+    → provider updates the addressed Chat model and Session observables
     → services reconcile state
     → ISessionsService and ISessionsPartService reconcile presentation
 ```
@@ -464,8 +490,9 @@ allow it; read-only worker transcripts never expose a send operation.
 ### Provider change propagation
 
 ```text
-backend change
-    → provider updates its session model observables
+Agent or Host state change
+    → Host commits an ordered state transition
+    → provider updates its Session and Chat model observables
     → provider publishes added, removed, changed, or replaced identities
     → management service reconciles the aggregate collection
     → view service reconciles active presentation state
@@ -499,7 +526,8 @@ Persistence follows ownership:
 
 | State | Owner |
 |---|---|
-| backend session and chat records | provider |
+| Host, Agent, Session, and Chat identity and catalogs | Agent Host runtime |
+| SDK resume data and private event history | addressed Agent |
 | loaded conversation model, transcript, and composer state | Workbench Chat contribution |
 | Sessions-specific concrete chat view | Sessions Chat contribution |
 | provider registry | Sessions provider contributions and provider service |
@@ -539,6 +567,10 @@ its visual contract.
 ## Provider contract rules
 
 - Provider identity is stable and globally unique within the registry.
+- One Agent Host connection maps to one provider instance.
+- Local and remote identify Host placement; Agent identity remains independent
+  of placement.
+- `CometAgent` is the built-in Agent and has stable Agent ID `comet`.
 - Session identity is globally unique across providers.
 - Every session has one main chat, and `mainChat` is always a member of
   `chats`.
@@ -554,11 +586,16 @@ its visual contract.
   when their registrations or sessions are removed.
 - Providers may use public Workbench Chat contracts needed to connect a backend
   chat resource, but never import concrete Chat widgets or UI.
+- `IChatService` owns addressed Chat models only. It does not create product
+  Sessions, choose an Agent, or own backend lifecycle.
+- Agent implementations enter Sessions only through Agent Host and never
+  register a direct `ISessionsProvider`.
 - Providers do not import Sessions UI, Parts, or shell layout.
-- Provider-internal services, protocol models, caches, and backend clients stay
-  inside their provider contribution. Shared services and non-provider
-  contributions consume only `ISession`, `IChat`, capabilities, and the
-  provider-agnostic management contracts.
+- Host protocol models and Agent backend clients stay in Platform Agent Host.
+  Provider connection state and Host-to-Sessions mapping stay in the Agent Host
+  provider contribution. Shared services and non-provider contributions
+  consume only `ISession`, `IChat`, capabilities, and provider-agnostic
+  management contracts.
 - When a provider needs to react to a shared signal such as visibility, the
   shared service exposes that provider-agnostic signal and the provider
   subscribes internally. Shared code does not import a provider service to
@@ -597,27 +634,25 @@ Observable state drives rendering and session switching. Events represent
 collection membership or one-time lifecycle notifications; they are not used as
 an alternative mutable source of truth.
 
-## Adding a provider
+## Adding Agent execution
 
-1. Implement the provider contract with a stable provider ID.
-2. Implement provider-agnostic `ISession` and `IChat` models backed by
-   observables.
-3. Provide exactly one main chat and include it in the session's chat
-   collection.
-4. Add peer, fork, or Tool-origin worker chats only when the backend exposes
-   the corresponding behavior, origin, parent relationship, and
-   interactivity.
-5. Declare truthful capabilities and explicit unsupported operations.
-6. Place the implementation under
-   `src/cs/sessions/contrib/providers/<provider>/`.
-7. Register it through a Sessions contribution and immediately register all
-   created disposables.
-8. Publish every added, removed, changed, and replaced session transition.
-9. Add contract tests for identity, lifecycle, request routing, and disposal.
-10. Add integration tests only for behavior that requires the real backend.
+Add a new Agent SDK by implementing the Host-side `IAgent` contract under
+`src/cs/platform/agentHost/node/agents/<agent>/`. Register it with the Agent
+Host runtime, declare truthful capabilities, and keep every SDK type, client,
+cache, event conversion, and resume value inside that implementation. Do not
+add a Sessions provider or Chat view for an Agent.
+
+Add a new Host placement or transport by implementing `IAgentHostConnection`.
+Register one shared `AgentHostSessionsProvider` for each stable connection.
+Connection code owns transport, authentication, reconnection, and resource
+mapping; it does not duplicate Session or Chat models or branch on Agent IDs.
+
+The complete contracts and verification requirements are defined in
+[AGENT_HOST.md](AGENT_HOST.md).
 
 ## Related documents
 
 - [Sessions application overview](README.md)
+- [Agent Host architecture](AGENT_HOST.md)
 - [Sessions application layout](LAYOUT.md)
 - [Sessions layer rules](LAYERS.md)

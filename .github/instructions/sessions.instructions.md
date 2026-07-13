@@ -9,6 +9,7 @@ Read these documents before changing Sessions code:
 
 - `src/cs/sessions/README.md`
 - `src/cs/sessions/SESSIONS.md`
+- `src/cs/sessions/AGENT_HOST.md`
 - `src/cs/sessions/LAYOUT.md`
 - `src/cs/sessions/LAYERS.md`
 
@@ -43,9 +44,15 @@ code / server
   owning duplicate state.
 - Sessions feature contributions own optional Chat, Editor, changes, terminal,
   task, list, action, and onboarding integration.
-- Provider contributions own backend integration and never depend on UI.
-- Provider-internal protocols and services never escape into core, shared
-  services, or non-provider contributions.
+- Agent Host is the common execution boundary for Agent SDKs. Local and remote
+  describe Host placement; `comet`, `copilot`, `claude`, and `codex` identify
+  Agent implementations.
+- `CometAgent` is Comet's built-in Agent and has stable Agent ID `comet`.
+- One shared Agent Host Sessions provider maps each Host connection into the
+  provider-independent Sessions domain. Local and remote contributions do not
+  duplicate Session or Chat models.
+- Agent implementations, Host protocols, and connection services never escape
+  into Sessions core, shared services, or non-provider contributions.
 - Workbench Chat owns one conversation model and reusable Chat widgets.
 - Workbench Editor owns inputs, groups, resolvers, panes, and registries.
 
@@ -55,8 +62,10 @@ code / server
 src/cs/sessions/{common,browser,node,electron-browser}/
 src/cs/sessions/services/<service>/{common,browser,node,electron-browser}/
 src/cs/sessions/contrib/<feature>/
-src/cs/sessions/contrib/providers/<provider>/
+src/cs/sessions/contrib/providers/agentHost/
 src/cs/sessions/sessions.{common,desktop,web}.main.ts
+
+src/cs/platform/agentHost/{common,browser,electron-browser,node}/
 ```
 
 ## Session model
@@ -91,6 +100,11 @@ src/cs/sessions/sessions.{common,desktop,web}.main.ts
 - Cross-Part operations use typed services. Parts do not import sibling Parts
   or inspect sibling DOM.
 - Capabilities replace provider-ID and session-type branching in shared code.
+- Sessions providers route addressed Session and Chat operations; Workbench
+  `IChatService` owns only the addressed conversation model and never creates
+  a product Session or chooses an Agent.
+- Agent SDK integrations implement the Host-side `IAgent` contract and never
+  register a direct Sessions provider.
 - Commands carry the originating session/chat context and never silently
   target the globally active session.
 

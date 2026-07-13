@@ -1,7 +1,8 @@
 # Sessions layer rules
 
 For application ownership and layout, see [README.md](README.md),
-[SESSIONS.md](SESSIONS.md), and [LAYOUT.md](LAYOUT.md).
+[SESSIONS.md](SESSIONS.md), [AGENT_HOST.md](AGENT_HOST.md), and
+[LAYOUT.md](LAYOUT.md).
 
 ## Source hierarchy
 
@@ -42,6 +43,19 @@ All Sessions layers
     ↓
 public Workbench APIs
 ```
+
+### Platform Agent Host
+
+**Location:** `src/cs/platform/agentHost/**`
+
+Contains the environment-neutral Host protocol, Host connection contract,
+Agent registry, Node Host runtime, and Agent SDK implementations. As a Platform
+subsystem it may import only Base and Platform modules. It never imports
+Editor, Workbench, Sessions, or Code.
+
+Agent implementations register with the Host runtime through public Platform
+contracts. They do not implement `ISessionsProvider`, import Workbench Chat, or
+own local or remote transport.
 
 ### Sessions common
 
@@ -114,16 +128,20 @@ session contracts.
 
 ### Provider contributions
 
-**Location:** `src/cs/sessions/contrib/providers/<provider>/**`
+**Location:** `src/cs/sessions/contrib/providers/agentHost/**`
 
-Providers connect optional compute backends and session types. They implement
-`ISessionsProvider`, register through `ISessionsProvidersService`, and may use
-public Sessions and Workbench Chat contracts needed to connect a backend chat
-resource.
+The shared Agent Host provider implements `ISessionsProvider` for one
+`IAgentHostConnection` and registers through `ISessionsProvidersService`. It
+may use public Sessions contracts and public Workbench Chat model contracts
+needed to connect an addressed Chat resource.
+
+Local and remote contributions in the same provider family supply connections
+to the shared provider implementation. Agent SDKs do not register direct
+Sessions providers.
 
 Providers do not import core Part implementations, shell layout, or another
-provider's internals. Shared provider code lives in an explicitly shared
-provider module or a Sessions service contract.
+provider's internals. They never import `ChatWidget`, a concrete Chat view, or
+an Agent implementation.
 
 ### Sessions entry points
 
@@ -220,6 +238,9 @@ Sessions feature contribution → provider implementation
 Sessions Part → concrete ChatWidget
 provider → Sessions Part or shell layout
 provider → sibling provider internals
+Agent implementation → Workbench or Sessions
+Platform Agent Host → Workbench or Sessions
+local or remote connection → Agent implementation internals
 one Part → sibling Part implementation or DOM
 code entry point → both Workbench shell and Sessions shell
 ```

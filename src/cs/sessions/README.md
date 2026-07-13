@@ -29,7 +29,7 @@ The Sessions application owns:
 - the Sessions Sidebar, Sessions Part, and Sessions Editor Part;
 - session domain models, provider registry, lifecycle, routing, and view state;
 - session workspaces, changes, terminals, tasks, groups, references, and lists;
-- feature contributions and backend provider contributions;
+- feature contributions and Agent Host provider contributions;
 - Sessions-specific integration of reusable Workbench Chat and Editor
   facilities.
 
@@ -62,7 +62,8 @@ src/cs/sessions/
 ├── contrib/                    Sessions feature integrations
 │   ├── chat/                   Workbench Chat integration
 │   ├── layout/                 target-specific layout policy
-│   └── providers/              backend provider implementations
+│   └── providers/
+│       └── agentHost/         shared provider and Host connections
 ├── sessions.common.main.ts     shared contribution entry point
 ├── sessions.desktop.main.ts    desktop contribution entry point
 └── sessions.web.main.ts        web contribution entry point
@@ -71,11 +72,16 @@ src/cs/sessions/
 Core, services, non-provider contributions, and provider contributions have
 different dependency permissions. See [LAYERS.md](LAYERS.md).
 
+Agent SDK contracts and implementations live in the lower
+`src/cs/platform/agentHost/` subsystem. Sessions consumes them only through an
+Agent Host connection and the shared provider contribution.
+
 ## Documentation
 
 | Document | Purpose |
 |---|---|
 | [SESSIONS.md](SESSIONS.md) | Domain model, services, providers, lifecycle, persistence, and Chat integration |
+| [AGENT_HOST.md](AGENT_HOST.md) | Agent runtime, SDK contracts, Host connections, and Sessions integration |
 | [LAYOUT.md](LAYOUT.md) | Product shell, Parts, visibility, focus, editor presentation, and CSS ownership |
 | [LAYERS.md](LAYERS.md) | Import hierarchy, contribution boundaries, and entry points |
 
@@ -86,9 +92,12 @@ different dependency permissions. See [LAYERS.md](LAYERS.md).
 3. Put target-specific layout policy in `contrib/layout/`.
 4. Put optional changes, terminal, task, list, action, editor, and Chat
    integrations in `contrib/<feature>/`.
-5. Put backend implementations in `contrib/providers/<provider>/`.
-6. Keep reusable single-conversation and editor infrastructure in
+5. Put Agent SDK implementations in
+   `cs/platform/agentHost/node/agents/<agent>/`.
+6. Put shared Host-to-Sessions integration in `contrib/providers/agentHost/`
+   together with local and remote connection registration.
+7. Keep reusable single-conversation and editor infrastructure in
    `cs/workbench` and integrate it from the higher Sessions layer.
-7. Register contributions only from Sessions entry points.
-8. Update the owning architecture, layout, and layer documents with every
+8. Register contributions only from Sessions entry points.
+9. Update the owning architecture, layout, and layer documents with every
    durable boundary change.
