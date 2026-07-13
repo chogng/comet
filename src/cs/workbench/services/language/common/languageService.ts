@@ -1,51 +1,44 @@
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
 import {
-  InstantiationType,
-  registerSingleton,
+	InstantiationType,
+	registerSingleton,
 } from 'cs/platform/instantiation/common/extensions';
 import {
-  detectInitialLocale,
-  getLocaleMessages,
-  toDocumentLang,
-  type Locale,
+	detectInitialLocale,
+	getLocaleMessages,
+	toDocumentLang,
+	type Locale,
 } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 
 export const IWorkbenchLanguageService =
-  createDecorator<IWorkbenchLanguageService>('workbenchLanguageService');
+	createDecorator<IWorkbenchLanguageService>('workbenchLanguageService');
 
 export interface IWorkbenchLanguageService {
-  readonly _serviceBrand: undefined;
-  detectInitialLocale(): Locale;
-  getLocaleMessages(locale: Locale): LocaleMessages;
-  toDocumentLang(locale: Locale): string;
+	readonly _serviceBrand: undefined;
+	detectInitialLocale(): Locale;
+	getLocaleMessages(locale: Locale): LocaleMessages;
+	toDocumentLang(locale: Locale): string;
 }
 
 export class WorkbenchLanguageService implements IWorkbenchLanguageService {
-  declare readonly _serviceBrand: undefined;
+	declare readonly _serviceBrand: undefined;
 
-  detectInitialLocale() {
-    return detectInitialLocale();
-  }
+	detectInitialLocale() {
+		return detectInitialLocale();
+	}
 
-  getLocaleMessages(locale: Locale) {
-    return getLocaleMessages(locale);
-  }
+	getLocaleMessages(locale: Locale) {
+		return getLocaleMessages(locale);
+	}
 
-  toDocumentLang(locale: Locale) {
-    return toDocumentLang(locale);
-  }
-}
-
-export function createWorkbenchLanguageService(): IWorkbenchLanguageService {
-  return new WorkbenchLanguageService();
+	toDocumentLang(locale: Locale) {
+		return toDocumentLang(locale);
+	}
 }
 
 registerSingleton(
-  IWorkbenchLanguageService,
-  WorkbenchLanguageService,
-  InstantiationType.Delayed,
+	IWorkbenchLanguageService,
+	WorkbenchLanguageService,
+	InstantiationType.Delayed,
 );
-
-export { detectInitialLocale, getLocaleMessages, toDocumentLang };
-export type { Locale, LocaleMessages };
