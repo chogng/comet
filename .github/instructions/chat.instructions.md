@@ -7,6 +7,8 @@ applyTo: "{src/cs/workbench/contrib/chat/**,src/cs/workbench/contrib/files/**}"
 
 Read `src/cs/sessions/ATTACHMENTS.md` before changing composer attachments,
 attachment producers, content publication, or submission transactions. Read
+`src/cs/sessions/TOOLS.md` before changing Tool policy, Tool selection, or
+Tool-set preparation. Read
 `src/cs/sessions/CLIENT_TOOLS.md` before changing request-scoped interaction
 targets or Client Tool integration.
 
@@ -156,12 +158,14 @@ read content, create an attachment, register a Tool, or grant permission.
 
 The immutable request snapshot includes bound targets so an Agent can address a
 separately exposed Client Tool during the accepted Turn. A Client Tool is a
-model-facing Tool whose executor is the exact contributing client. Binding a
-target does not register or expose that Tool. When a Feature workflow promises
-a target-backed operation, submission validates that a compatible Tool is in
-the independently resolved Tool set or fails before acceptance. Content is
-produced only when the model or Agent SDK emits the Tool call. Tool calls,
-target persistence, effect reconciliation, and the Browser Article flow follow
+canonical Tool whose executor is the exact contributing client, not the Agent
+SDK conversion boundary. Binding a target does not register or expose that
+Tool. When a Feature workflow promises a target-backed operation, submission
+validates that a compatible Tool is in the independently resolved Tool set or
+fails before acceptance. Content is produced only when the model or Agent SDK
+emits the Tool call. Generic Tool-set and Agent Tool Port rules follow
+`src/cs/sessions/TOOLS.md`; target persistence, client execution, effect
+reconciliation, and the Browser Article flow follow
 `src/cs/sessions/CLIENT_TOOLS.md`.
 
 Those responsibilities belong to the

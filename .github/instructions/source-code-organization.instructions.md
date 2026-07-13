@@ -52,9 +52,12 @@ and resource protocol contracts; it never owns a Workbench Feature producer.
 
 Generic interaction-target state lives with Workbench Chat. Model-facing Client
 Tool descriptors, targets, and implementations live with the contribution that
-owns the Feature service. Platform Agent Host owns only the common Tool
-descriptor, executor-binding, routing, call-state, result, and permission
-contracts. Attachment content-resource providers remain with their Feature
+owns the Feature service. Platform Agent Host owns canonical Tool schema
+profiles, descriptors, executor bindings, Tool sets, routing, call state,
+results, and permissions. Each Agent implementation owns its SDK-specific Agent
+Tool Port. Client Tool contributions never import Agent SDKs or perform SDK
+projection; the shared client connection owns the SDK-neutral Client Tool
+Execution Port. Attachment content-resource providers remain with their Feature
 producers and do not enter the Tool registry merely because a remote Host reads
 them through the originating client.
 
@@ -68,7 +71,9 @@ them through the originating client.
 
 Agent Host is a Platform subsystem and never imports Workbench or Sessions.
 Agent implementations live under `cs/platform/agentHost/node/agents/<agent>`
-and expose SDK behavior only through the common Host contracts.
+and expose SDK behavior only through the common Host contracts. Their Agent
+Tool Ports contain SDK Tool formats, aliases, call conversion, and result
+encoding; no parallel Tool conversion layer exists in Feature contributions.
 Agent protocol and turn runtime code belongs in this subsystem rather than a
 parallel top-level `cs/agent` layer.
 

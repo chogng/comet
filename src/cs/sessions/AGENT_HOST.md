@@ -82,8 +82,9 @@ An `IAgent` implementation owns only its SDK-specific behavior:
 - create, materialize, release, and delete SDK backing;
 - translate normalized Host requests into SDK calls;
 - translate SDK events into ordered Agent Host actions;
-- map each accepted Turn's canonical Tool-set revision into the SDK's
-  function/tool surface and map Tool results back to the matching SDK call;
+- implement an Agent Tool Port that projects each accepted canonical Tool-set
+  revision into the SDK, normalizes SDK calls, and returns canonical results to
+  the matching SDK call;
 - expose models, configuration, authentication requirements, and capabilities;
 - persist or reconstruct SDK-specific history and opaque resume data;
 - implement SDK-specific tool and permission integration behind Host contracts.
@@ -141,12 +142,15 @@ Feature-specific producer rules, and submission failure semantics are defined
 in [Attachment architecture](ATTACHMENTS.md).
 
 Request-scoped interaction targets and Feature-owned operations are separate
-from attachments. A Client Tool is a model-facing Tool whose exact executor is
-a connected Comet client contributor; `client`, `host`, `agent`, and `mcp` are
-executor bindings over one canonical Tool lifecycle. Registration, Turn
-exposure, target binding, permission, and invocation remain separate. Their
-complete contract and the lazy Browser-content flow are defined in
-[Tool and Client Tool architecture](CLIENT_TOOLS.md).
+from attachments. Canonical Tool descriptors, schema profiles, registrations,
+Tool-set preparation, Agent Tool Ports, calls, results, permissions, and
+executor kinds are defined in [Tool architecture](TOOLS.md).
+
+A Client Tool is the `client` executor specialization. Its Feature ownership,
+exact client registration, interaction targets, reverse execution, reconnect
+behavior, and lazy Browser-content flow are defined in
+[Client Tool architecture](CLIENT_TOOLS.md). Client Tools use the same Agent
+Tool Port as every other canonical Tool; they are not an SDK conversion layer.
 
 Reading or materializing an accepted attachment content reference is not a
 Tool call. The Agent implementation performs that translation through the Host
@@ -258,9 +262,9 @@ Tool permission requests are scoped to the exact Session, Chat, Turn, Tool
 call, and request ID. User-input requests address the exact Session, Chat,
 Turn, and request ID plus an optional parent Tool call. Each resolves once. An
 attachment read lease or interaction target is not mutation permission, and
-approving one Tool call does not approve a later call. The complete Client Tool
-contract is defined in
-[Tool and Client Tool architecture](CLIENT_TOOLS.md).
+approving one Tool call does not approve a later call. The complete Tool
+permission lifecycle is defined in [Tool architecture](TOOLS.md); client
+execution rules are defined in [Client Tool architecture](CLIENT_TOOLS.md).
 
 Protocol failures use typed error codes with bounded diagnostic data. Missing
 Hosts, Agents, Sessions, Chats, Turns, capabilities, resources, versions, and
@@ -307,8 +311,8 @@ options even where the summary above omits those fields.
 `IAgentChatRequest` carries the normalized user message, submitted attachments,
 bound interaction targets, exact exposed Tool-set revision, and other bounded
 non-Feature request configuration. An Agent implementation receives that one
-common request and translates it into its SDK; it never queries Workbench state
-or reconstructs the Tool set from Agent identity.
+common request and translates it through its Agent Tool Port; it never queries
+Workbench state or reconstructs the Tool set from Agent identity.
 
 The Host catalog and normalized Turn history are authoritative. SDK-backed
 Session discovery or import, when supported, is an explicit capability and
@@ -404,11 +408,10 @@ Chat when an addressed Chat is missing or unavailable.
 Attachment resolution and composer capture are Workbench preparation, not a
 Host Turn. Preparation asks the Host to resolve the request's Tool policy and
 targets into one immutable prepared Tool-set revision bound to the submission
-identity.
-Host acceptance revalidates that revision and atomically commits a user
-message, normalized attachments, bound interaction targets, exposed Tool-set
-revision, Turn ID, submission ID, and initial Turn state. The Agent begins SDK
-execution only after that commit.
+identity. Host acceptance revalidates that revision and atomically commits a
+user message, normalized attachments, bound interaction targets, exposed
+Tool-set revision, Turn ID, submission ID, and initial Turn state. The Agent
+begins SDK execution only after that commit.
 
 ```text
 preparing (Workbench only)
@@ -489,6 +492,7 @@ src/cs/platform/agentHost/
 src/cs/sessions/contrib/providers/agentHost/
 ├── browser/
 │   ├── shared provider and Host-backed Session and Chat models
+│   ├── Client Tool publication and SDK-neutral execution-port integration
 │   └── remote Host discovery and provider registration
 └── electron-browser/
     └── desktop local-Host registration
@@ -505,10 +509,12 @@ not live in a parallel top-level `cs/agent` layer.
 2. Use one stable Agent ID and declare truthful descriptors and capabilities.
 3. Keep SDK types, clients, caches, event mapping, authentication, and resume
    data inside the Agent implementation.
-4. Register the Agent with the Host registry, which rejects duplicate IDs.
-5. Add contract tests for create, restore, release, delete, send, queue,
+4. Implement its Agent Tool Port, including schema-profile capability, Tool-set
+   projection, deterministic aliases, call normalization, and result encoding.
+5. Register the Agent with the Host registry, which rejects duplicate IDs.
+6. Add contract tests for create, restore, release, delete, send, queue,
    steering, cancellation, history, capability enforcement, and event order.
-6. Do not add a Sessions provider, Chat view, or Host transport for the Agent.
+7. Do not add a Sessions provider, Chat view, or Host transport for the Agent.
 
 ## Adding a Host connection
 
@@ -542,6 +548,8 @@ not live in a parallel top-level `cs/agent` layer.
 - Mutations reconcile by stable operation identity and never duplicate on
   reconnect.
 - Agent SDK types never escape their Agent implementation.
+- Every Agent owns one SDK-specific Agent Tool Port; Feature and executor
+  implementations never convert canonical Tools into SDK formats.
 - Every model-visible Tool is represented in the accepted canonical Tool-set
   revision; an Agent never silently adds or omits a Tool.
 - Higher-layer Feature objects cross the Host boundary only as normalized

@@ -2,8 +2,8 @@
 
 For application ownership and layout, see [README.md](README.md),
 [SESSIONS.md](SESSIONS.md), [AGENT_HOST.md](AGENT_HOST.md),
-[ATTACHMENTS.md](ATTACHMENTS.md), [CLIENT_TOOLS.md](CLIENT_TOOLS.md), and
-[LAYOUT.md](LAYOUT.md).
+[ATTACHMENTS.md](ATTACHMENTS.md), [TOOLS.md](TOOLS.md),
+[CLIENT_TOOLS.md](CLIENT_TOOLS.md), and [LAYOUT.md](LAYOUT.md).
 
 ## Source hierarchy
 
@@ -56,8 +56,8 @@ As a Platform subsystem it may import only Base and Platform modules. It never
 imports Editor, Workbench, Sessions, or Code.
 
 Agent implementations register with the Host runtime through public Platform
-contracts. They do not implement `ISessionsProvider`, import Workbench Chat, or
-own local or remote transport.
+contracts and own their SDK-specific Agent Tool Ports. They do not implement
+`ISessionsProvider`, import Workbench Chat, or own local or remote transport.
 
 ### Sessions common
 

@@ -8,9 +8,11 @@ applyTo: "{src/cs/platform/agentHost/**,src/cs/sessions/contrib/providers/agentH
 Read `src/cs/sessions/AGENT_HOST.md` before changing Agent Host contracts,
 Agents, connections, or Sessions integration. Read
 `src/cs/sessions/ATTACHMENTS.md` before changing attachment, content-reference,
-content-resource, or submission contracts. Read
-`src/cs/sessions/CLIENT_TOOLS.md` before changing tools, interaction targets,
-permissions, reverse requests, or Feature-owned client capabilities.
+content-resource, or submission contracts. Read `src/cs/sessions/TOOLS.md`
+before changing canonical Tools, schemas, Tool sets, Agent SDK projection,
+permissions, calls, results, or executors. Read
+`src/cs/sessions/CLIENT_TOOLS.md` before changing client executor registration,
+interaction targets, reverse execution, or Feature-owned client capabilities.
 
 - Agent Host is the single execution boundary for Agent SDKs.
 - `CometAgent` has stable Agent ID `comet`.
@@ -21,10 +23,11 @@ permissions, reverse requests, or Feature-owned client capabilities.
 - Agent implementations own SDK calls, SDK event conversion, capabilities, and
   opaque resume data. They never import Sessions, Workbench Chat, UI, or Host
   transport implementations.
-- Agent implementations translate the exact exposed Tool-set revision into
-  their SDK's function/tool surface, normalize SDK calls into Host Tool calls,
-  and return Host Tool results to the matching SDK call. SDK aliases, dynamic
-  functions, and MCP bridges never change canonical Tool identity or executor.
+- Every Agent implementation owns an SDK-specific Agent Tool Port. The port
+  projects the exact exposed Tool-set revision into the SDK, normalizes SDK
+  calls, and returns canonical results to matching SDK calls. SDK aliases,
+  dynamic functions, and private MCP bridges never change canonical Tool
+  identity or executor.
 - Editor, Article, Browser, and other higher-layer capabilities cross the Host
   boundary only through typed bounded context, content-resource operations, or
   Client Tool calls. Their implementations remain with the Feature owner.
@@ -67,14 +70,23 @@ permissions, reverse requests, or Feature-owned client capabilities.
 - Tool registration, executor availability, Turn exposure, target binding, and
   invocation remain separate. Attachments, targets, Skills, commands, focus,
   and Agent identity never expose a Tool implicitly.
-- A Tool descriptor defines canonical semantics and executor kind; a Tool
-  registration binds one descriptor revision to one exact executor identity.
-  The accepted Tool-set revision records exact registrations, not bare names.
+- A Tool descriptor defines only canonical model-facing semantics. A Tool
+  registration binds one descriptor revision to one exact typed executor
+  identity. The accepted Tool-set revision records exact registrations, not
+  bare names.
+- Tool input and output use versioned Comet Tool Schema Profiles. Agent Tool
+  Ports declare exact profile and projection capabilities; lossy schema
+  conversion or silent constraint removal is forbidden.
 - Every model-visible Tool, including fixed SDK-native Tools, appears in that
   canonical Tool set. An Agent declares whether it supports per-Turn Tool sets,
   requires private SDK rebinding, or exposes a fixed set, and incompatible
   selection fails explicitly.
 - Client Tools execute only through their exact registered contributor.
+  They use the same Agent Tool Port as every other Tool and are not an SDK
+  conversion layer. Feature implementations consume only canonical Tool data.
+  The Client Tool Execution Port carries only canonical calls, cancellation,
+  progress, results, registrations, and target availability across the client
+  connection.
   Request-scoped interaction targets carry identity, version, and display
   metadata but no content, Tool, permission, or executable handle. Missing
   contributors and targets fail without another route.

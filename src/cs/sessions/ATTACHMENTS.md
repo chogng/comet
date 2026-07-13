@@ -21,6 +21,9 @@ register a tool, enable a skill or MCP server, grant mutation authority, or
 approve a permission request. Those are separate typed request fields and
 runtime contracts. Reading or materializing an accepted attachment through the
 Host content service is message translation, not a model function call.
+Canonical Tool and SDK-projection rules are defined in
+[Tool architecture](TOOLS.md); the `client` executor specialization is defined
+in [Client Tool architecture](CLIENT_TOOLS.md).
 
 ## Attachment states
 
@@ -367,8 +370,8 @@ An Editor Browser can instead bind an exact request-scoped interaction target
 to the addressed Chat input. That target carries no page body and creates no
 attachment or snapshot. Content is extracted only if the model or Agent SDK
 emits a call to the registered readable-content Client Tool.
-This lazy flow and its target rules are defined in [Tool and Client Tool
-architecture](CLIENT_TOOLS.md).
+This lazy flow and its target rules are defined in
+[Client Tool architecture](CLIENT_TOOLS.md).
 
 ### Article
 

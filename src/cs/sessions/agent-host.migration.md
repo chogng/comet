@@ -4,8 +4,8 @@
 
 This migration covers the direct replacement of the built-in default Sessions
 provider and main-agent command path by the architecture defined in
-[AGENT_HOST.md](AGENT_HOST.md), [ATTACHMENTS.md](ATTACHMENTS.md), and
-[CLIENT_TOOLS.md](CLIENT_TOOLS.md).
+[AGENT_HOST.md](AGENT_HOST.md), [ATTACHMENTS.md](ATTACHMENTS.md),
+[TOOLS.md](TOOLS.md), and [CLIENT_TOOLS.md](CLIENT_TOOLS.md).
 
 The scoped files and final locations are:
 
@@ -41,7 +41,8 @@ The scoped files and final locations are:
 - `src/cs/sessions/sessions.desktop.main.ts`;
 - `src/cs/sessions/sessions.web.main.ts`;
 - `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/ATTACHMENTS.md`,
-  `src/cs/sessions/CLIENT_TOOLS.md`, `src/cs/sessions/README.md`,
+  `src/cs/sessions/TOOLS.md`, `src/cs/sessions/CLIENT_TOOLS.md`,
+  `src/cs/sessions/README.md`,
   `src/cs/sessions/SESSIONS.md`, `src/cs/sessions/LAYOUT.md`, and
   `src/cs/sessions/LAYERS.md`;
 - `.github/instructions/agent-host.instructions.md`,
@@ -120,7 +121,9 @@ state actions unapplied.
   protocol; targets carry no content and are consumed only by independently
   exposed Client Tools.
 - All Agent SDK integrations implement `IAgent`; none registers a direct
-  Sessions provider.
+  Sessions provider. Each implements one Agent Tool Port that projects the
+  canonical Tool set into its SDK; Client Tool contributions remain SDK-
+  neutral client executors.
 - The shared provider family and implementation path use `agentHost`; Agent
   behavior uses registered Agent IDs such as `comet`; Host placement uses
   `local` or `remote`; and every Chat is addressed by its own Chat ID.
@@ -168,16 +171,22 @@ names. No target registration imports or dispatches through the legacy path.
    rather than treating Article detail as complete text or requiring a model
    Tool call. Register Client Tools independently from attachments and define
    `client`, `host`, `agent`, and `mcp` as executor bindings over one canonical
-   Tool descriptor, call, and result lifecycle. Each Agent implementation maps
-   that descriptor into its SDK's native function, dynamic Tool, or MCP bridge
-   without changing canonical identity or executor. Resolved attachments may
-   supply scoped immutable content references but never interaction targets or
-   the request's Tool list. Add a generic request-scoped interaction-target
-   model: a Feature explicitly binds only identity and version to an addressed
-   Chat input, and lazy content extraction occurs only when the model or Agent
-   SDK emits a call to the independently exposed Client Tool. Add stable Browser
-   main-frame document epochs so a target can address one navigation without
-   pretending to be an immutable content snapshot.
+   Tool descriptor, call, and result lifecycle. Define versioned Comet Tool
+   Schema Profiles and require lossless SDK projection. Each Agent implements
+   one Agent Tool Port that owns SDK-native function, dynamic Tool, fixed Tool,
+   alias, call, result, and private MCP-bridge conversion without changing
+   canonical identity or executor. Client Tool contributions contain no SDK
+   conversion. Add one SDK-neutral Client Tool Execution Port to the shared
+   client connection for canonical calls, cancellation, progress, results,
+   registrations, and target availability. Resolved attachments may supply
+   scoped immutable content references but never interaction targets or the
+   request's Tool list. Add a generic request-scoped interaction-target model:
+   a Feature explicitly binds only identity and version to an addressed Chat
+   input, and lazy content extraction occurs only when the model or Agent SDK
+   emits a call to the independently exposed Client Tool. Add stable Browser
+   main-frame document
+   epochs so a target can address one navigation without pretending to be an
+   immutable content snapshot.
 5. Register `CometAgent` with the Agent Host runtime under Agent ID `comet`.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
@@ -196,13 +205,13 @@ names. No target registration imports or dispatches through the legacy path.
    Host Sessions integration. Add one addressed composer-attachment model, one
    public attachment API, one separate addressed interaction-target model,
    current-version producer codecs, and registries for Feature-owned
-   resolution, canonical Tools with executor bindings, and browser
-   presentation. Add separate request-scoped Tool-selection policy and stable
-   IDs without copying descriptors into Chat. Replace the closed request
-   attachment union and send-time active-Editor harvesting. Change Sessions
-   management and provider send contracts to route only the addressed Session
-   and Chat; the shared provider begins the immutable request snapshot through
-   `IChatService`. Update every call site directly.
+   resolution, canonical Tools with executor bindings, Client Tool execution,
+   and browser presentation. Add separate request-scoped Tool-selection policy
+   and stable IDs without copying descriptors into Chat. Replace the closed
+   request attachment union and send-time active-Editor harvesting. Change
+   Sessions management and provider send contracts to route only the addressed
+   Session and Chat; the shared provider begins the immutable request snapshot
+   through `IChatService`. Update every call site directly.
 9. Add the preparing-submission transaction and normalized Host attachment
    and content-resource protocols. Resolve every captured attachment, bind
    immutable source versions, resolve the requested Tool policy into one exact
@@ -210,8 +219,7 @@ names. No target registration imports or dispatches through the legacy path.
    submit with an idempotent submission ID and payload digest. Host acceptance
    revalidates and records the attachments, interaction targets, and exposed
    Tool-set revision with the Turn. Consume the composer only after Host
-   acceptance. Pre-acceptance failure
-   preserves it and creates no turn;
+   acceptance. Pre-acceptance failure preserves it and creates no turn;
    post-acceptance Agent failure completes the committed turn as failed. For a
    product draft, prepare under the Host connection and submission ID before
    creating the Host Session. In one create operation, reserve Session,
@@ -254,8 +262,9 @@ names. No target registration imports or dispatches through the legacy path.
     local and remote content lifetimes, version negotiation, revision gaps,
     replay and snapshot recovery, operation-ID conflicts, release versus
     delete, monotonic Turn terminal state, explicit interaction-target binding,
-    attachment content-resource reads without Tool calls, canonical Tool-to-SDK
-    mappings, lazy Client Tool reads, and Client Tool disconnect and effect
+    attachment content-resource reads without Tool calls, Comet Tool Schema
+    Profiles, lossless Agent Tool Port projection, SDK alias and call mapping,
+    lazy Client Tool reads, and Client Tool disconnect and effect
     reconciliation. Cover typed Article item identity and Chat-origin Browser
     target binding without DOM-order inference, including document-epoch
     changes and snapshot content digests.
@@ -308,7 +317,10 @@ The migration is complete only when:
 6. Release preserves catalog identity and resume state; delete uses a durable
    idempotent operation; cancellation and steering address an exact Turn; and
    terminal Turn state is monotonic.
-7. No Agent SDK implementation imports Sessions or Workbench Chat.
+7. No Agent SDK implementation imports Sessions or Workbench Chat. Every Agent
+   implements one SDK-specific Agent Tool Port over canonical Tool contracts;
+   no Feature or Client Tool implementation contains SDK Tool conversion. One
+   shared Client Tool Execution Port carries canonical client calls and results.
 8. No Platform Agent Host file imports Editor, Workbench, Sessions, or Code.
 9. No Sessions service or non-provider contribution imports an Agent
    implementation.
@@ -345,10 +357,11 @@ The migration is complete only when:
 17. The parallel `src/cs/agent/**` layer no longer exists.
 18. No old symbol is retained through an alias, wrapper, re-export, or
     compatibility module.
-19. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
-    lifecycle tests pass.
+19. Agent Host, Agent Tool Port, schema-profile, Sessions provider, Chat
+    integration, entry-point, layer, and lifecycle tests pass.
 20. Durable documentation describes only the final Agent Host, Attachment,
-    Tool, and Client Tool architectures.
+    Tool, and Client Tool architectures and keeps generic Tool projection
+    separate from client execution.
 
 ## Deletion condition
 

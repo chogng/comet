@@ -682,16 +682,17 @@ mapping; it does not duplicate Session or Chat models or branch on Agent IDs.
 
 The complete contracts and verification requirements are defined in
 [AGENT_HOST.md](AGENT_HOST.md). Composer and submitted context contracts are
-defined in [ATTACHMENTS.md](ATTACHMENTS.md). Client-owned operations and lazy
-interaction targets that are exposed to an Agent use model-facing Tools with
-explicit executor bindings and are defined in
-[CLIENT_TOOLS.md](CLIENT_TOOLS.md).
+defined in [ATTACHMENTS.md](ATTACHMENTS.md). Canonical Tool contracts and Agent
+SDK projection are defined in [TOOLS.md](TOOLS.md). Client-owned operations,
+reverse execution, and lazy interaction targets are the `client` executor
+specialization defined in [CLIENT_TOOLS.md](CLIENT_TOOLS.md).
 
 ## Related documents
 
 - [Sessions application overview](README.md)
 - [Agent Host architecture](AGENT_HOST.md)
 - [Attachment architecture](ATTACHMENTS.md)
-- [Tool and Client Tool architecture](CLIENT_TOOLS.md)
+- [Tool architecture](TOOLS.md)
+- [Client Tool architecture](CLIENT_TOOLS.md)
 - [Sessions application layout](LAYOUT.md)
 - [Sessions layer rules](LAYERS.md)

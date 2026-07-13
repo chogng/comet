@@ -11,6 +11,7 @@ Read these documents before changing Sessions code:
 - `src/cs/sessions/SESSIONS.md`
 - `src/cs/sessions/AGENT_HOST.md`
 - `src/cs/sessions/ATTACHMENTS.md`
+- `src/cs/sessions/TOOLS.md`
 - `src/cs/sessions/CLIENT_TOOLS.md`
 - `src/cs/sessions/LAYOUT.md`
 - `src/cs/sessions/LAYERS.md`

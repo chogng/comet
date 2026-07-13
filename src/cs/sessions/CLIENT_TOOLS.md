@@ -1,460 +1,336 @@
-# Tool and Client Tool architecture
+# Client Tool architecture
 
 ## Overview
 
-A Tool is a model-facing function-call contract available to an addressed
-Agent during a Turn. A Client Tool is not a separate kind of Agent capability;
-it is a Tool whose exact executor is a connected Comet client contribution.
+A Client Tool is a canonical Tool registration whose executor is one exact
+connected Comet client contributor. It lets a model call a bounded Feature
+operation without moving Browser, Editor, Article, PDF, or other Workbench
+implementations into Agent Host or an Agent SDK.
 
-`client` therefore describes where the call executes, not who requests it.
-The usual caller is the model through an Agent SDK:
+A Client Tool is not the SDK protocol-conversion boundary. Every Agent SDK
+uses its own Agent Tool Port to project all canonical Tools, including Client
+Tools, into that SDK. The common Tool model, schema profiles, Tool-set
+preparation, Agent Tool Port, call state, and result lifecycle are defined in
+[Tool architecture](TOOLS.md).
 
 ```text
-accepted Turn captures one exposed Tool-set revision
-    → Agent implementation maps Tool descriptors into its SDK
-    → model or Agent SDK emits a function/tool call
-    → Agent implementation normalizes the call into Agent Host state
-    → Agent Host validates and routes it to the bound executor
-    → executor returns one bounded Tool result
-    → Agent implementation maps that result back into the same SDK call
-    → model continues the Turn
+Feature contribution registers a canonical Tool with a client executor
+    → Agent Host exposes that exact registration in a Turn's Tool set
+    → Agent Tool Port projects it into the addressed SDK
+    → model or Agent SDK emits a call
+    → Agent Tool Port produces one canonical Tool call
+    → Agent Host routes it to the exact contributing client
+    → Feature executes through its public service
+    → canonical Tool result returns through the Agent Tool Port
 ```
 
-Agent Host records and routes the call; it does not invent a Tool call because
-a Feature, Editor, or attachment is present. A client contribution executes a
-Client Tool only after receiving the exact normalized call bound to it.
+## Boundary
+
+| Concern | Owning contract |
+|---|---|
+| Canonical Tool semantics, schema, Tool set, call, and result | Tool architecture |
+| SDK function format, aliases, callbacks, and result encoding | addressed Agent Tool Port |
+| Exact client execution identity and reverse call routing | Client Tool registration and Client Tool Execution Port |
+| Browser, Editor, Article, PDF, or other operation | owning Feature contribution |
+| Submitted attachment content | attachment and content-resource protocol |
+
+The Agent Tool Port is SDK-specific but executor-neutral. The Client Tool
+execution protocol is executor-specific but SDK-neutral. Neither imports nor
+implements the other.
 
 Client Tools cover model-selected operations such as reading an explicitly
-bound Browser document, querying Editor state, or applying a user-approved
-edit. They do not include every Host-to-client request.
+bound Browser document, querying client-only Editor state, or applying a
+user-approved edit. A Host-to-client message is not automatically a Client
+Tool. It is a Client Tool only when it originates as an exposed canonical Tool
+call and returns a canonical Tool result to the Agent SDK.
 
-## Terms
+## Operations that are not Client Tools
 
-| Term | Meaning |
+These client interactions use their own protocols:
+
+| Operation | Why it is separate |
 |---|---|
-| Tool descriptor | Canonical Tool ID and function name, description, schemas, policy, limits, executor kind, and revision |
-| Tool registration | One descriptor revision bound to one exact executor identity |
-| Executor binding | Tagged exact route to one client contributor, Host implementation, Agent implementation, or MCP server |
-| Exposed Tool set | Host-issued immutable snapshot of exact registrations made available to one accepted Turn |
-| Tool call | One Agent-originated function call with stable call identity and bounded input |
-| Tool result | One terminal success, denial, cancellation, timeout, or failure returned to the same call |
-| Client Tool | A Tool registration whose executor kind is `client` and whose binding names one connected Comet client contributor |
-| Interaction target | Request-scoped identity and version that an exposed Tool may address |
+| Publish or read an attachment content reference | deterministic message context, not a model-selected action |
+| Synchronize Tool descriptors or targets | registry and connection state, not a Tool call |
+| Ask the user for input | addressed Turn input request |
+| Present Tool confirmation | addressed permission request |
+| Open an Editor, navigate, download, or export | direct Feature command |
 
-Registration, availability, exposure, invocation, and execution are separate
-states. A registered Tool is not automatically exposed to every Agent, model,
-Session, Chat, or Turn.
-
-## Executor bindings
-
-Every model-facing Tool uses the same descriptor, call, result, permission, and
-Turn lifecycle. An executor binding carries an exact execution identity and one
-of four kinds:
-
-| Executor kind | Execution owner | Examples |
-|---|---|---|
-| `client` | exact connected Comet client contributor | Browser, Article, Editor, PDF, and other client-only Feature operations |
-| `host` | Agent Host runtime | Host-owned resource or session operations |
-| `agent` | addressed Agent implementation | SDK-native and Agent-private operations surfaced in the Turn |
-| `mcp` | exact registered MCP server | MCP-contributed operations |
-
-These are execution bindings, not competing Tool abstractions. An Agent
-implementation may translate the same canonical descriptor into an SDK-native
-tool, a dynamic function, or an SDK-specific MCP bridge. That translation does
-not change the canonical Tool ID or executor binding. In particular, routing a
-Client Tool through an SDK's MCP integration does not make the MCP server its
-owner.
-
-SDK-internal work that is not exposed as a model-facing function and does not
-enter the product Turn is not a Tool in this contract. If an SDK surfaces a
-call for a registered model-facing capability, the Agent implementation
-normalizes it into the common Tool lifecycle regardless of executor. An SDK
-event or field named `tool` is not sufficient to decide product semantics;
-reserved input, permission, and other control requests map to their dedicated
-Host contracts.
-
-## Operations that are not Tools
-
-The following operations do not enter the canonical Tool registry or generic
-Tool-call lifecycle:
-
-| Operation | Owning contract |
-|---|---|
-| Resolve a pending attachment and bind its immutable version | attachment producer and submission transaction |
-| Read or materialize a submitted attachment content reference | Agent Host content-resource protocol |
-| Open an Editor, navigate a Browser, download, or export | Feature service or command |
-| Ask the user for structured input | addressed Turn input request |
-| Confirm a Tool call | addressed Tool permission request |
-| Synchronize descriptors, targets, state, or capabilities | Agent Host connection protocol |
-
-An SDK may encode one of these semantic operations using an SDK-private tool or
-callback. The Agent implementation still maps it to the owning Host contract;
-an SDK mechanism does not turn attachment transport, user input, permission, or
-state synchronization into a canonical Tool.
-
-A direct reverse request is not a Client Tool merely because it crosses from a
-remote Host to the Comet client. It is a Client Tool only when it is exposed to
-the Agent as a model-facing Tool, produces a normalized Tool call, and returns
-a Tool result to the Agent SDK.
-
-Attachment content access is deliberately not a function call. Once the Host
-accepts an attachment, the Agent implementation can obtain its exact content
-through the content-resource protocol while translating the message into SDK
-input. It never depends on the model deciding to invoke a readable-content
-Tool. The complete content-reference and lease contract is defined in
-[Attachment architecture](ATTACHMENTS.md).
+An SDK-private MCP bridge used to expose a Client Tool is also not the Client
+Tool executor. It is only an implementation mechanism inside that Agent Tool
+Port. Canonical executor ownership remains `client`.
 
 ## Ownership
 
-### Agent Host
-
-Agent Host owns:
-
-- canonical Tool, descriptor revision, executor, call, Turn, and permission-
-  request identities;
-- descriptor and exposed Tool-set validation;
-- input and output schema validation;
-- normalized Tool-call state, ordering, cancellation, and terminal results;
-- routing to the exact executor binding;
-- safety classification and confirmation orchestration;
-- connection availability and call reconciliation;
-- normalized Tool calls and results in canonical Turn history.
-
-Agent Host does not implement Browser extraction, inspect Editor models, parse
-Article records, or call a Feature through another route when its executor is
-unavailable.
-
-### Agent implementation
-
-The addressed Agent implementation:
-
-- receives the exact exposed Tool-set revision for the Turn;
-- maps canonical descriptors into the SDK's function/tool surface;
-- maintains an exact mapping between SDK-visible names and canonical Tool IDs;
-- converts SDK call events into normalized Host calls;
-- returns normalized results to the matching SDK call;
-- keeps SDK-only call IDs, aliases, types, and bridge mechanisms private.
-
-An SDK-visible name may differ because of SDK naming constraints, but the
-mapping is bijective within the exposed Tool-set revision. Agent Host never
-routes by a bare SDK name, display name, Agent ID, or model family. If an SDK
-requires a restart or another private mechanism to install the exact Tool set,
-the Agent implementation owns that adaptation without changing Host, Sessions,
-or Feature semantics.
-
-### Client Feature contribution
+### Feature contribution
 
 The contribution that owns a Client Tool provides:
 
 - one stable namespaced canonical Tool ID and contributor ID;
-- bounded versioned input and output schemas;
-- read, write, or external-effect safety classification;
-- target requirements and exact target validation;
+- a Tool descriptor using the Comet Tool Schema Profile;
+- a `client` executor registration for the exact logical contributor;
+- optional interaction-target type and validation;
 - execution through the Feature's public service;
-- cancellation, timeout, result limits, and typed errors;
-- user-facing confirmation details for effects that require approval.
+- cancellation, timeout, result limits, and typed failures;
+- user-facing effect and confirmation details required by canonical policy.
 
-The contribution registers one implementation with the client-side connection
-integration. It does not construct an Agent-specific SDK request, add Agent-ID
-branches, or expose a second implementation through a hidden local route.
+The contribution never constructs Codex, Copilot, Claude, or other SDK Tool
+objects. It receives canonical input and returns a canonical result. Adding a
+new Agent SDK never changes the Feature implementation.
 
-## Registration, availability, and exposure
+### Client Tool Execution Port
 
-A canonical Tool descriptor contains:
+The client-side Agent Host integration is the Client Tool Execution Port. It:
 
-- stable Tool and contributor identities;
-- canonical function name, display name, and bounded model description;
-- versioned input and output schemas;
-- executor kind and binding requirements;
-- safety class, confirmation policy, and editable-input policy;
-- interaction-target requirements;
-- timeout, input, output, and content limits;
-- descriptor revision.
+- publishes exact Client Tool descriptors and registrations;
+- publishes target availability separately from Tool registration;
+- receives canonical calls addressed to its logical client identity;
+- dispatches each call to the exact registered Feature implementation;
+- returns progress and one terminal canonical result;
+- reconciles active call identities after reconnect.
 
-One registration pairs that descriptor revision with an exact executor
-identity, such as a logical client contributor, Host implementation, addressed
-Agent implementation, or MCP server. The client publishes its Client Tool
-descriptors and executor registrations during connection initialization and
-through ordered registry changes. Duplicate registration identities,
-conflicting non-binding definitions for one canonical Tool ID and revision,
-incompatible schema versions, ambiguous SDK-name mappings, and invalid
-descriptors are rejected atomically.
+It does not reinterpret Tool semantics, choose another Feature, or convert
+canonical Tools into an Agent SDK format.
 
-Availability means the registration's exact executor can currently accept a
-call. Exposure means an allowed registration is included in the Tool-set
-snapshot for an accepted Turn and actually supplied to the addressed Agent
-SDK. Product policy, user selection, Agent capability, model capability, and
-executor availability determine that snapshot explicitly.
+Local and remote Host connections use this same canonical execution contract.
+A local connection may carry it in process and a remote connection may
+serialize it over transport, but neither bypasses the port by calling a
+Feature through a separate route.
 
-Equivalent client instances may publish the same canonical descriptor revision
-under different exact executor bindings. They remain separate registrations.
-For a target-backed Client Tool, the exact target owner must match the selected
-registration. For a target-free Client Tool, request preparation binds the
-originating client only when the Tool-selection policy defines that rule;
-otherwise it requires an exact registration identity. An unresolved ambiguity
-fails before acceptance. A same-named Tool registration never shadows another
-registration or becomes its fallback.
+### Agent Host
 
-When the product offers per-request Tool selection, Workbench Chat owns only
-the visible selection policy and canonical Tool IDs for the addressed input as
-non-attachment request configuration. It does not copy descriptors or executor
-handles. During submission preparation, Agent Host resolves those IDs against
-the authoritative registries, capabilities, availability, targets, and policy.
-It returns one immutable prepared Tool-set revision bound to the submission ID,
-Host authority, Agent and model descriptor revisions, and exact executor
-registrations. The final payload digest covers both the requested policy and
-that prepared revision.
+Agent Host owns registration validation, Tool-set exposure, canonical call
+state, permission orchestration, exact executor routing, terminal results, and
+reconciliation. It never imports Feature implementations or SDK Tool types.
 
-Preparation is idempotent. Repeating the same submission ID with the same
-Agent, model, targets, and Tool policy returns the same prepared revision.
-Reusing that ID with different preparation input is a conflict.
+### Agent implementation
 
-Host acceptance revalidates the prepared revision and atomically records it as
-the Turn's exposed Tool set. A registry, capability, target, or executor change
-that makes it stale rejects submission before acceptance and preserves the
-composer. The Host does not silently resolve a newer set under the same
-submission ID.
+The Agent implementation handles Client Tools only through the same Agent Tool
+Port used for every canonical Tool. It projects descriptors into its SDK,
+normalizes calls, and returns results. It never invokes Browser, Editor,
+Article, PDF, or other client services directly.
 
-Attachments, interaction targets, Skills, UI commands, and Feature focus never
-register or expose a Tool implicitly. MCP discovery may explicitly create or
-remove `mcp` registrations through the Tool registry; an MCP configuration
-object is not itself a Tool or an exposed Tool set. Binding a target may declare
-that the request requires a compatible operation, but the independently
-resolved Tool set must already contain that operation. If a promised target
-operation cannot be exposed, submission fails before Host acceptance instead
-of sending unusable context.
+## Registration and availability
 
-Registry changes affect a later Tool-set snapshot. An accepted Turn retains the
-descriptor revisions and executor bindings it was given. An executor that
-becomes unavailable during the Turn fails the exact call; the Host does not
-replace it with a same-named Tool or another client.
+A Client Tool registration pairs one canonical descriptor revision with:
 
-The exposed snapshot accounts for every model-visible generic Tool, including
-fixed SDK-native Tools. An SDK-reserved control primitive instead maps to a
-dedicated Host operation declared by the Agent's capabilities. An Agent
-descriptor declares whether it can install an exact Tool set per Turn, must
-rebind or restart private SDK state, or has a fixed set. Agent Host rejects a
-selection policy the implementation cannot enforce. An Agent implementation
-never leaves an extra model-visible Tool outside the canonical snapshot or
-silently omits one that the snapshot contains.
+- executor kind `client`;
+- exact logical client connection identity;
+- exact Feature contributor identity;
+- availability and authorization scope;
+- supported target types when applicable.
+
+Registration, current availability, Turn exposure, target binding, permission,
+and invocation are independent states. Registering a Client Tool does not expose
+it to every Agent or Turn. Binding a target does not register or expose a Tool.
+
+Equivalent clients may publish the same canonical descriptor revision, but
+each exact executor binding remains a separate registration. For a Tool backed
+by a target, the selected registration must own that target. For a target-free
+Tool, submission preparation must resolve one exact client registration from
+explicit Tool policy and request origin. Ambiguity fails before Host acceptance.
+
+The Host never merges Client Tools by function name, picks the first client,
+lets one registration shadow another, or replaces a disconnected executor with
+a same-named registration. The accepted Tool-set revision stores the exact
+registration used by the Turn.
 
 ## Interaction targets
 
-An interaction target identifies a resource that a Client Tool may address. It
-contains only:
+An interaction target identifies a client-owned resource that an exposed
+Client Tool may address. It contains only:
 
-- an opaque target ID and owner contribution ID;
+- opaque target ID and owner contributor ID;
 - target type and schema version;
-- exact resource identity and resource or document epoch token;
+- exact resource identity and resource or document epoch;
 - bounded display metadata;
-- connection and availability scope.
+- logical client and availability scope.
 
-A target contains no extracted body, file bytes, DOM object, service instance,
-callback, executable code, content lease, Tool descriptor, or permission
-approval. Possessing a target does not authorize a read or mutation and does
-not expose a Tool.
+A target contains no document body, file bytes, DOM object, service instance,
+callback, Tool descriptor, SDK object, content lease, executable code, or
+permission approval. Possessing a target neither exposes a Tool nor authorizes
+an operation.
 
-Workbench Chat owns visible request-scoped targets for one addressed input
-separately from attachments. A Feature explicitly binds an exact target to that
-input when it establishes the interaction. For example, opening an Article link
-from a Chat result in the Editor Browser can bind the resulting Browser document
-target to the same Chat input. The UI presents the binding so the meaning of
-“this page” is inspectable.
+Workbench Chat owns visible request-scoped targets for one addressed input,
+separately from attachments and Tool policy. A Feature binds a target only
+through an explicit addressed interaction. Ordinary send captures that exact
+identity and epoch; it never scans globally active Editors or Browsers.
 
-Ordinary send captures the bound identity and epoch in the request's
-non-attachment interaction context. It does not read the page or create a
-content snapshot. Agent Host stores the bounded target metadata with the
-accepted Turn. Dynamic content is acquired only when the Agent produces a call
-to an exposed compatible Tool, and the Tool result records the content version
-and digest actually read.
+For example, opening an Article link from one addressed Chat in the Editor
+Browser may bind the resulting Browser document target to that same Chat input.
+Opening a page without an addressed Chat relationship creates no implicit
+target. A separate Use in Chat action can bind it explicitly.
 
-General send never scans Editors, chooses a globally active page, or harvests
-Editor or Browser content. A Browser opened without an addressed Chat binding
-is not implicit context. A separate Use in Chat action can create the binding.
+## Client execution lifecycle
 
-## Function-call lifecycle
-
-One Tool call follows a deterministic lifecycle:
+After the Agent Tool Port emits a canonical Client Tool call, Agent Host:
 
 ```text
-Agent SDK emits call identity, Tool name, and input
-    → Agent implementation resolves the canonical descriptor
-    → Agent Host validates Turn, Tool-set revision, schema, and target
-    → pending confirmation or running
-    → exact executor performs the operation
-    → completed, denied, cancelled, timed out, or failed
-    → bounded result commits to the addressed Turn
-    → Agent implementation returns it to the matching SDK call
+validates Turn, Tool set, registration, schema, and target
+    → obtains per-call confirmation when canonical policy requires it
+    → publishes one running call to the exact logical client
+    → client connection dispatches to the registered Feature executor
+    → Feature validates current target identity and performs the operation
+    → client returns progress and one terminal canonical result
+    → Agent Host validates result schema, status, and bounds
+    → Agent Host commits the result to the addressed Turn
+    → addressed Agent Tool Port returns it to the SDK call
 ```
 
-The call addresses one Host authority, Agent, Session, Chat, Turn, Tool-set
-revision, canonical Tool ID, descriptor revision, exact registration and
-executor binding, call ID, and optional target.
-The executor rejects a stale descriptor, unknown target, wrong contributor,
-invalid schema, expired version, or mismatched Turn before performing effects.
+The client receives canonical Tool ID, descriptor and Tool-set revisions,
+registration ID, call ID, bounded input, optional target, operation identity,
+deadline, cancellation, and permission outcome. It does not receive an SDK Tool
+object or infer identity from an SDK-visible name.
 
-Confirmation is scoped to one call and one validated input. Edited input is
-validated again. Denial is a terminal result returned to the Agent. Approval
-does not persist as authority for another call unless a separate explicit
-permission policy grants that exact scope.
-
-Cancellation is idempotent by call ID. A completed call cannot be reopened.
-Late progress or results are rejected without changing terminal Turn state.
-
-Calls that mutate state or cause external effects carry a stable operation
-identity. After an uncertain disconnect, the Host reconciles that call before
-any retry. It never repeats an external effect under a new call identity or
-routes it to another executor.
+The executor rejects an unknown registration, wrong client, wrong contributor,
+stale descriptor, invalid input, expired target, mismatched Turn, or reused
+effect identity before execution. A terminal call cannot be reopened by late
+progress or a second result.
 
 ## Readable-content Client Tool
 
 Readable content is a model-facing Client Tool implemented by a Feature-owned
-extractor. Its input addresses one exact interaction target and includes an
-opaque cursor and requested bound. Its result contains normalized readable
+extractor. Its input addresses one exact interaction target and includes a
+cursor and requested bound. Its canonical result contains normalized readable
 chunks, source attribution, the content version read, the next cursor when more
 content exists, and exact truncation information.
 
-The extractor owns source acquisition and parsing. Agent Host and Agent SDKs do
-not scrape Browser pages or treat Article detail metadata as complete text. An
-extractor does not execute scripts contained in the source. Unknown, changed,
-expired, denied, or unsupported targets fail explicitly.
+The extractor owns acquisition and parsing. Agent Host and Agent SDKs do not
+scrape Browser pages or treat Article metadata as complete content. The
+extractor does not execute scripts from the source. Unknown, changed, expired,
+denied, or unsupported targets fail explicitly.
 
-The same Feature extraction service may support both immutable attachment
-publication and lazy readable-content execution. Those remain different
-protocol operations: attachment publication produces an immutable content
-reference, while the Client Tool produces a Tool result for a model-issued
-call. Sharing an implementation service does not merge their identities,
-lifetimes, permissions, persistence, or failure semantics.
+The same Feature extraction service may support immutable attachment
+publication and lazy Client Tool execution. Those remain separate protocols:
+attachment publication produces a version-addressed content reference, while
+the Client Tool produces a canonical result for a model-issued call. Sharing
+the extraction service does not merge their identities, lifetimes,
+permissions, persistence, or failure semantics.
 
 ### Open Browser Article flow
 
 ```text
 user opens an Article link from the addressed Chat
-    → Editor Browser binds an exact Browser document target to that input
-    → user asks about “this article” without attaching it
-    → accepted Turn carries target metadata but no article snapshot
-    → Agent SDK exposes the readable-content Tool
-    → model emits a Tool call if it needs the body
-    → Agent Host routes the call to the target's client contributor
-    → extractor returns bounded text for that exact document epoch
-    → Tool result returns to the model and enters canonical Turn history
+    → Editor Browser binds one exact document target to that Chat input
+    → user asks about the opened article without attaching it
+    → accepted Turn contains target metadata and an exposed Tool registration
+    → Agent Tool Port projects the readable-content Tool into the SDK
+    → model calls it if complete content is needed
+    → Agent Host routes the canonical call to the target-owning client
+    → extractor returns bounded content for that exact document epoch
+    → canonical result returns to the model and enters Turn history
 ```
 
-If no Tool call occurs, Comet does not extract or publish the body. If the user
-needs the content to be guaranteed message context independent of Tool choice,
-the user explicitly adds a Browser or Article attachment instead.
+No call means no lazy extraction. If content must be guaranteed message context
+independently from model choice, the user explicitly adds a Browser or Article
+attachment instead.
 
-## Mutation Tools
+## Mutation and external effects
 
-An interaction target and attachment content grant no mutation authority. An
-Editor or Browser mutation uses a separately registered and exposed Tool with
-its own write or external-effect classification, input schema, preview,
-permission request, executor binding, and call identity.
+An interaction target or attachment grants no mutation authority. A client
+mutation uses a separately registered and exposed Client Tool with its own
+write or external-effect classification, input schema, preview, permission
+request, executor binding, and stable operation identity.
 
-Binding a target does not enable that Tool. Adding an attachment neither binds
-a live interaction target nor registers, exposes, or approves a Tool. A
-workflow that intentionally needs both uses two explicit contracts.
+Edited confirmation input is validated again. After uncertain execution or
+disconnect, Agent Host reconciles the exact call and operation before retry. It
+never repeats an effect under a new identity or routes it to another client.
 
 ## Attachments and Client Tools
 
 | Concern | Attachment | Client Tool |
 |---|---|---|
-| Trigger | explicit Add to Chat | model or Agent SDK function call during an accepted Turn |
-| Purpose | immutable message context | explicit read, mutation, or external operation |
-| Agent visibility | part of normalized message input | part of the exposed Tool set |
-| Content timing | version and availability bind before Host acceptance | result is produced only when the call executes |
-| Client transport | content-resource protocol for a client-owned reference | normalized Tool-call routing to a client executor |
-| Failure before Turn | blocks submission and preserves composer | not applicable |
-| Permission | bounded publication and read lease | per-call read, write, or external-effect policy |
-| Persistence | normalized envelope stored with user message | call and result stored in Turn history |
-| Retry | exact submitted content version | no automatic effect replay; every new call has its own identity |
+| Trigger | explicit Add to Chat | model or Agent SDK call during an accepted Turn |
+| Purpose | immutable message context | explicit client-owned operation |
+| Agent visibility | normalized message input | canonical exposed Tool set |
+| SDK conversion | attachment projection owned by Agent implementation | generic Agent Tool Port |
+| Client transport | content-resource request for a client-owned reference | canonical Tool-call execution protocol |
+| Content timing | version binds before Host acceptance | result exists only when the call executes |
+| Permission | publication and bounded read lease | per-call Tool safety and confirmation policy |
+| Persistence | stored with the user message | call and result stored in Turn history |
+| Retry | exact submitted content version | exact call/effect reconciliation; no automatic replay |
 
 The complete attachment contract is defined in
 [Attachment architecture](ATTACHMENTS.md).
 
-## Connection loss and unavailable clients
+## Connection loss
 
-Client Tool descriptors and targets declare their connection dependency. If
-the bound client disconnects before a call starts, the call waits only when the
-Agent and Turn contract explicitly supports waiting; otherwise it fails with a
-typed unavailable result. Agent Host never routes it to another client or
-substitutes a Host implementation.
+Client Tool registrations and targets declare their logical client dependency.
+If that client disconnects before execution, the call waits only when the Turn
+contract explicitly supports waiting; otherwise it receives a typed unavailable
+result. Agent Host does not route it to another client or Host implementation.
 
 After reconnection, the same logical client republishes descriptor and target
-availability. The Host reconciles active call IDs and descriptor revisions
-before resuming. A target whose exact identity or epoch cannot be
+availability and reconciles active canonical call IDs before resuming. A new or
+different client with equivalent registrations is not the executor of an
+already accepted call. A target whose exact identity or epoch cannot be
 re-established remains unavailable.
 
 ## Persistence and privacy
 
-Canonical Turn history stores normalized Tool identity, executor attribution,
-bounded input required for audit, confirmation outcome, bounded result, errors,
-and target metadata. It does not persist live callbacks, credentials,
-permission tokens, DOM state, service objects, or connection-local handles.
+Canonical history stores Tool and registration identity, client executor
+attribution, bounded auditable input, permission outcome, terminal result,
+errors, and target metadata. It does not store live callbacks, DOM state,
+service objects, credentials, SDK aliases, or connection-local handles.
 
-Tool inputs, outputs, and target metadata are untrusted and size-bounded.
-Sensitive values use explicit redaction and persistence policy in the Tool
-schema. Logs do not copy raw credentials or unrestricted document bodies.
+Client Tool input, output, and target metadata are untrusted and bounded.
+Feature schemas declare redaction and persistence policy. Logs never copy raw
+credentials or unrestricted document bodies.
 
 ## Module layout
 
 ```text
-src/cs/platform/agentHost/common/          Tool descriptors, executor bindings,
-                                           calls, results, targets, permissions,
-                                           and protocol contracts
-src/cs/platform/agentHost/node/            Host orchestration and Agent SDK Tool
-                                           translation
+src/cs/platform/agentHost/common/          client executor bindings, execution
+                                           messages, calls, results, targets,
+                                           permissions, and protocol contracts
 src/cs/workbench/contrib/chat/common/      addressed interaction-target model
-                                           and public API
+                                           and public Chat API
 src/cs/sessions/contrib/providers/agentHost/
-                                           Client Tool publication and routing
+                                           Client Tool publication, reverse
+                                           routing, and connection integration
 Feature-owning Workbench or Sessions contributions
-                                           client descriptors, targets, and
-                                           implementations
+                                           canonical descriptors, targets, and
+                                           client implementations
 ```
 
-Platform Agent Host defines no Workbench Feature implementation. The shared
-Sessions provider routes canonical protocol values and consumes only public
-Chat and Feature registration contracts. Attachment content-resource contracts
-remain owned by the architecture defined in `ATTACHMENTS.md` and do not enter
-the Tool registry.
+SDK-specific Agent Tool Ports remain under the owning Agent implementation as
+defined in [Tool architecture](TOOLS.md). Platform Agent Host defines no
+Workbench Feature implementation.
 
 ## Adding a Client Tool
 
-1. Define one stable namespaced canonical Tool ID, schemas, safety class,
-   limits, target requirements, and `client` executor binding.
-2. Implement the operation in the contribution that owns the public Feature
-   service.
-3. Register the descriptor and implementation through the client-side Host
-   connection integration.
-4. Ensure every Agent implementation can map the canonical descriptor and result
-   without exposing SDK types or changing executor identity.
-5. Validate exact target identity, descriptor and Tool-set revisions,
-   permission, input, output, timeout, and cancellation.
-6. Add local and remote contract tests, including SDK mapping, disconnect,
-   stale targets, denial, cancellation, duplicate call IDs, and uncertain
-   effects.
-7. Do not add an Agent-ID branch, Feature import in Platform Agent Host, hidden
-   local implementation, content-resource alias, or catch-and-try-next route.
+1. Define one canonical Tool descriptor, schema profile, safety policy, limits,
+   and target requirements.
+2. Implement the canonical operation in the contribution that owns the public
+   Feature service.
+3. Register its exact descriptor with an executor binding of kind `client`
+   through the client-side Agent Host connection integration.
+4. Ensure intended Agent Tool Ports can project the descriptor without changing
+   its semantics or executor identity.
+5. Validate target, registration, Tool-set and descriptor revisions, input,
+   permission, output, timeout, cancellation, and operation identity.
+6. Add local and remote contract tests for registration, SDK projection,
+   disconnect, stale targets, denial, cancellation, duplicate calls, and
+   uncertain effects.
+7. Do not add an Agent-ID branch, SDK dependency in the Feature, hidden local
+   implementation, name-based route, or catch-and-try-next path.
 
 ## Invariants
 
-- A Client Tool is a model-facing Tool whose exact executor is a connected
-  Comet client contributor.
-- Executor location and SDK exposure mechanism do not change canonical Tool
-  identity.
-- Registration, availability, exposure, target binding, and invocation remain
-  separate states.
-- A request-scoped target carries identity, not content, permission, or a Tool.
-- Content-resource reads for submitted attachments are not Tool calls.
-- No model or Agent SDK call means no lazy content extraction or Tool effect.
-- Every call addresses one contributor, Turn, Tool-set revision, Tool
-  descriptor revision, and optional target.
-- Tool calls and terminal results are ordered canonical Host state and return
-  to the matching Agent SDK call.
-- Mutation and external effects require their own safety and confirmation
-  policy.
-- Local and remote Hosts use the same Tool protocol.
-- Missing contributors, clients, targets, versions, permissions, and
-  capabilities fail explicitly; nothing falls back to another Tool, client,
-  target, executor, or protocol.
+- A Client Tool is a canonical Tool whose exact executor is a connected Comet
+  client contributor.
+- A Client Tool is not the SDK protocol-conversion port.
+- Every Agent SDK projects Client Tools through its generic Agent Tool Port.
+- The Client Tool Execution Port receives and returns canonical Tool data only.
+- Local and remote Hosts use the same Client Tool execution semantics.
+- Feature implementations consume and return only canonical Tool data.
+- Registration, availability, exposure, target binding, permission, and
+  invocation remain separate.
+- Interaction targets carry identity, not content, Tool definitions,
+  permission, or executable handles.
+- Content-resource reads for submitted attachments are not Client Tool calls.
+- No model or Agent SDK call means no lazy Client Tool operation.
+- Every call routes to one exact accepted client registration.
+- Missing clients, registrations, mappings, targets, versions, permissions, and
+  capabilities fail explicitly; nothing falls back to another executor or
+  protocol.

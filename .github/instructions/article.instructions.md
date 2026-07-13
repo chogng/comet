@@ -7,8 +7,8 @@ applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**,
 
 Read `src/cs/sessions/ATTACHMENTS.md` before changing Article attachment,
 content extraction, publication, or Chat submission behavior. Read
-`src/cs/sessions/CLIENT_TOOLS.md` before changing lazy Article or Browser
-content reads and their interaction targets.
+`src/cs/sessions/TOOLS.md` and `src/cs/sessions/CLIENT_TOOLS.md` before changing
+lazy Article or Browser content Tools and their interaction targets.
 
 ## Service ownership
 

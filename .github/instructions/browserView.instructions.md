@@ -5,8 +5,9 @@ applyTo: "{src/cs/platform/browserView/**,src/cs/workbench/services/browserView/
 
 # BrowserView architecture
 
-Read `src/cs/sessions/CLIENT_TOOLS.md` before changing Browser interaction
-targets, Agent-readable content, or Client Tool integration. Read
+Read `src/cs/sessions/TOOLS.md` and `src/cs/sessions/CLIENT_TOOLS.md` before
+changing Browser Tool descriptors, interaction targets, Agent-readable
+content, or Client Tool integration. Read
 `src/cs/sessions/ATTACHMENTS.md` before changing Browser attachments.
 
 ## Ownership
