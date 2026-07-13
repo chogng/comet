@@ -22,8 +22,15 @@ test('Sessions layout commands use the injected layout owner and unregister with
 	const layoutService: ISessionsLayoutService = {
 		_serviceBrand: undefined,
 		onDidChangeLayoutState: Event.None,
+		onDidChangeLayoutGeometry: Event.None,
 		getLayoutState(): ISessionsLayoutState {
 			throw new Error('Unexpected layout state read.');
+		},
+		getLayoutGeometry() {
+			return undefined;
+		},
+		setLayoutGeometry(): void {
+			throw new Error('Unexpected layout geometry mutation.');
 		},
 		setViewport(): void {
 			throw new Error('Unexpected viewport mutation.');

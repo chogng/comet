@@ -142,6 +142,7 @@ class TestSessionsLayoutService extends Disposable implements ISessionsLayoutSer
 
 	private readonly changeEmitter = this._register(new Emitter<ISessionsLayoutState>());
 	readonly onDidChangeLayoutState = this.changeEmitter.event;
+	readonly onDidChangeLayoutGeometry = Event.None;
 
 	private state: ISessionsLayoutState = {
 		mode: 'agent',
@@ -153,6 +154,14 @@ class TestSessionsLayoutService extends Disposable implements ISessionsLayoutSer
 
 	getLayoutState(): ISessionsLayoutState {
 		return this.state;
+	}
+
+	getLayoutGeometry() {
+		return undefined;
+	}
+
+	setLayoutGeometry(): void {
+		throw new Error('Unexpected layout geometry change.');
 	}
 
 	setSidebarVisible(visible: boolean): void {

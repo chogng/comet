@@ -42,10 +42,6 @@ import {
 	type IChatInputModelPickerProps,
 } from 'cs/workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem';
 import {
-	renderChatInputToolbar,
-	type ChatInputToolbarActionItem,
-} from 'cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar';
-import {
 	IDocumentActionsService,
 	type IDocumentActionsService as IDocumentActionsServiceContract,
 } from 'cs/workbench/services/document/common/documentActions';
@@ -62,7 +58,6 @@ export interface ChatInputPartProps {
 	readonly selectedModelId: string | undefined;
 	readonly onSelectModel: (modelId: string | undefined) => void;
 	readonly isEmpty: boolean;
-	readonly inputToolbarActions: readonly ChatInputToolbarActionItem[];
 }
 
 function getModelPickerProps(props: ChatInputPartProps): IChatInputModelPickerProps {
@@ -315,17 +310,7 @@ export class ChatInputPart {
 		this.renderDisposables.add(actionsView);
 		toolbar.append(actionsView.getElement());
 		composer.replaceChildren(textarea, toolbar);
-		const content: HTMLElement[] = [];
-		const inputToolbar = renderChatInputToolbar(
-			this.props.inputToolbarActions,
-			this.renderDisposables,
-			ui.chatInputToolbar,
-		);
-		if (inputToolbar) {
-			content.push(inputToolbar);
-		}
-		content.push(composer, this.renderQuickActions());
-		this.element.replaceChildren(...content);
+		this.element.replaceChildren(composer, this.renderQuickActions());
 		this.syncArticleMenuContextView();
 	}
 

@@ -215,7 +215,6 @@
   "chatArticleExportCheckbox": "导出时包含此文献",
   "chatEvidenceRankTitle": "[{0}] {1}",
   "chatScrollToBottom": "滚动到底部",
-  "chatInputToolbar": "对话输入工具栏",
   "agentbarHistoryEmpty": "无匹配智能体",
   "agentbarHistorySearch": "搜索历史记录",
   "agentbarHistoryConversationTitle": "{0}（{1} 条消息）",

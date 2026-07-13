@@ -11,7 +11,10 @@ import {
 } from 'cs/workbench/browser/layout';
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { SessionsLayoutView } from 'cs/sessions/browser/layout';
-import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
+import {
+	ISessionsLayoutService,
+	type ISessionsContentLayoutGeometry,
+} from 'cs/sessions/services/layout/browser/layoutService';
 import { ISessionsSettingsOverlayService } from 'cs/sessions/services/settings/browser/settingsOverlayService';
 import { BrowserViewUri } from 'cs/platform/browserView/common/browserViewUri';
 import { generateUuid } from 'cs/base/common/uuid';
@@ -311,6 +314,7 @@ class SessionsWorkbenchHost extends Disposable {
 				sidebarPart,
 				this.sessionsPart,
 				this.editorGroupsService.mainPart,
+				this.publishLayoutGeometry,
 			);
 			this.sessionsLayoutView.value = sessionsLayoutView;
 		} else {
@@ -326,6 +330,15 @@ class SessionsWorkbenchHost extends Disposable {
 		sessionsLayoutView.layout();
 	}
 
+	private readonly publishLayoutGeometry = (content: ISessionsContentLayoutGeometry): void => {
+		this.sessionsLayoutService.setLayoutGeometry({
+			titlebarHeight: this.titlebarPart.getElement().getBoundingClientRect().height,
+			statusbarHeight: this.statusbarElement.parentElement === this.containerElement
+				? this.statusbarElement.getBoundingClientRect().height
+				: 0,
+			...content,
+		});
+	};
 
 	private renderSettingsOverlay() {
 		if (!this.settingsOverlayService.isVisible()) {

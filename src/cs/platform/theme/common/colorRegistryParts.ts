@@ -340,16 +340,6 @@ export const editorLoadingCardForeground = registerColor('editor.loadingCardFore
   light: '#607285',
 });
 
-export const editorPlaceholderTitleForeground = registerColor('editor.placeholderTitleForeground', {
-  dark: '#d7e1ea',
-  light: '#1d3145',
-});
-
-export const editorPlaceholderBodyForeground = registerColor('editor.placeholderBodyForeground', {
-  dark: '#93a4b5',
-  light: '#597086',
-});
-
 export const editorStatusModeForeground = registerColor('editor.statusModeForeground', {
   dark: '#8cb9ff',
   light: '#18486e',

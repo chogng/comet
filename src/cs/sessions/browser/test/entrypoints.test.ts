@@ -125,6 +125,16 @@ test('browser and desktop bootstrap the Sessions application exactly once', () =
 });
 
 test('Sessions target mains load their matching Workbench foundation before contributions', () => {
+	for (const removedWorkbenchEntry of [
+		'src/cs/workbench/browser/web.api.ts',
+		'src/cs/workbench/browser/web.main.ts',
+		'src/cs/workbench/electron-browser/desktop.contribution.ts',
+		'src/cs/workbench/electron-browser/desktop.main.ts',
+		'src/cs/workbench/electron-browser/windows.ts',
+	]) {
+		assert.equal(existsSync(path.join(Root, removedWorkbenchEntry)), false);
+	}
+
 	const common = readSource('src/cs/sessions/sessions.common.main.ts');
 	const desktop = readSource('src/cs/sessions/sessions.desktop.main.ts');
 	const web = readSource('src/cs/sessions/sessions.web.main.ts');
@@ -204,6 +214,36 @@ test('Sessions host directly composes Parts without a state-forwarding wrapper',
 	assert.doesNotMatch(sidebar, /titlebarActionsElement: HTMLElement|footerActionsElement: HTMLElement/);
 	assert.match(sidebar, /@IWorkbenchLocaleService private readonly localeService/);
 	assert.match(sidebar, /getLayoutState\(\)\.isSidebarVisible/);
+	assert.doesNotMatch(sidebar, /tabActionsElement|comet-sidebar-tab-actions/);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/sessions/browser/parts/auxiliarybar/auxiliaryBarPart.ts')),
+		false,
+	);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/sessions/browser/parts/media/sessionView.css')),
+		false,
+	);
+	const sessionsPart = readSource('src/cs/sessions/browser/parts/sessions/sessionsPart.ts');
+	const sessionView = readSource('src/cs/sessions/browser/parts/sessions/sessionView.ts');
+	assert.match(sessionsPart, /parts\/sessions\/media\/sessionsPart\.css/);
+	assert.match(sessionView, /parts\/sessions\/media\/sessionView\.css/);
+
+	const editorPart = readSource('src/cs/workbench/browser/parts/editor/editorPart.ts');
+	const editorGroupView = readSource('src/cs/workbench/browser/parts/editor/editorGroupView.ts');
+	const editorCss = readSource('src/cs/workbench/browser/parts/editor/media/editor.css');
+	const statusbarCss = readSource('src/cs/workbench/browser/parts/statusbar/media/statusbar.css');
+	assert.doesNotMatch(editorPart, /titlebarAuxiliaryActionsElements/);
+	assert.doesNotMatch(editorGroupView, /titlebarAuxiliaryActionsElements/);
+	assert.doesNotMatch(editorCss, /comet-editor-placeholder|comet-editor-statusbar/);
+	assert.match(statusbarCss, /\.comet-editor-statusbar/);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/workbench/browser/parts/editor/editorPlaceholder.ts')),
+		false,
+	);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/workbench/browser/parts/editor/editorStatusView.ts')),
+		false,
+	);
 });
 
 test('Settings view owns its service state without a shell Props bus', () => {
@@ -367,6 +407,15 @@ test('Document actions are a DI service with explicit operation targets', () => 
 	);
 	assert.match(chatInput, /@IDocumentActionsService private readonly documentActionsService/);
 	assert.match(chatInput, /resource: model\.resource,[\s\S]*articleIds,/);
+	assert.doesNotMatch(chatInput, /inputToolbarActions|renderChatInputToolbar/);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/workbench/contrib/chat/browser/widget/input/chatInputToolbar.ts')),
+		false,
+	);
+	assert.equal(
+		existsSync(path.join(Root, 'src/cs/workbench/browser/articleBatchTask.ts')),
+		false,
+	);
 });
 
 test('Browser toolbar is owned by the addressed Browser editor without shell actions', () => {

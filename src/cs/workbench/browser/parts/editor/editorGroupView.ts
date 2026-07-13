@@ -60,7 +60,6 @@ export type EditorGroupViewProps = DropdownContextServices & {
   showToolbar?: boolean;
   isEditorCollapsed?: boolean;
   onToggleEditorCollapse: () => void;
-  titlebarAuxiliaryActionsElements?: readonly HTMLElement[];
   hasLeadingTitlebarWindowControlsInset?: boolean;
   onStatusChange?: (status: EditorStatusState) => void;
 };
@@ -439,7 +438,6 @@ export class EditorGroupView {
     });
     this.syncTitlebarActions(
       this.props.showTitlebarActions ? this.titlebarActionsView.getElement() : null,
-      this.props.titlebarAuxiliaryActionsElements ?? [],
     );
 
     if (!group.activeTab) {
@@ -478,33 +476,15 @@ export class EditorGroupView {
 
   private syncTitlebarActions(
     titlebarActionsElement: HTMLElement | null,
-    titlebarAuxiliaryActionsElements: readonly HTMLElement[],
   ) {
-    const nextTitlebarActionsElements: HTMLElement[] = [];
-    for (const element of titlebarAuxiliaryActionsElements) {
-      if (!element || nextTitlebarActionsElements.includes(element)) {
-        continue;
-      }
-      nextTitlebarActionsElements.push(element);
-    }
     if (
-      titlebarActionsElement &&
-      !nextTitlebarActionsElements.includes(titlebarActionsElement)
+      this.actionsElement.childElementCount === (titlebarActionsElement ? 1 : 0)
+      && this.actionsElement.firstElementChild === titlebarActionsElement
     ) {
-      nextTitlebarActionsElements.push(titlebarActionsElement);
-    }
-
-const currentTitlebarActionsElements = Array.from(this.actionsElement.children);
-    const hasSameOrder =
-      currentTitlebarActionsElements.length === nextTitlebarActionsElements.length &&
-      currentTitlebarActionsElements.every(
-        (element, index) => element === nextTitlebarActionsElements[index],
-      );
-    if (hasSameOrder) {
       return;
     }
 
-    this.actionsElement.replaceChildren(...nextTitlebarActionsElements);
+    this.actionsElement.replaceChildren(...(titlebarActionsElement ? [titlebarActionsElement] : []));
   }
 
   private syncToolbar(toolbarContentElement: HTMLElement | null) {

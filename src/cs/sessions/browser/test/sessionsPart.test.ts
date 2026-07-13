@@ -295,6 +295,7 @@ class TestSessionsPartLayoutService extends Disposable implements ISessionsLayou
 
 	private readonly changeEmitter = this._register(new Emitter<ISessionsLayoutState>());
 	readonly onDidChangeLayoutState = this.changeEmitter.event;
+	readonly onDidChangeLayoutGeometry = Event.None;
 
 	private state: ISessionsLayoutState = {
 		mode: 'flow',
@@ -305,6 +306,8 @@ class TestSessionsPartLayoutService extends Disposable implements ISessionsLayou
 	};
 
 	getLayoutState(): ISessionsLayoutState { return this.state; }
+	getLayoutGeometry() { return undefined; }
+	setLayoutGeometry(): void { throw new Error('Unexpected layout geometry change.'); }
 	setViewport(): void { throw new Error('Unexpected viewport change.'); }
 	applyStartupLayoutMode(): boolean { throw new Error('Unexpected startup layout change.'); }
 	applyLayoutMode(_mode: SessionsLayoutMode): void { throw new Error('Unexpected layout mode change.'); }

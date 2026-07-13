@@ -38,6 +38,12 @@ Parts do not create, mount, resize, or dispose sibling Parts.
 The Sessions shell creates each Part through dependency injection and mounts
 each Part root into one Sessions-owned grid slot.
 
+After each completed grid layout, the shell publishes one atomic typed geometry
+snapshot to `ISessionsLayoutService`. The snapshot combines the content widths
+and visibility reported by the layout controller with titlebar and statusbar
+heights measured from chrome owned directly by the shell. Consumers do not
+inspect Part DOM owned by the shell or another Part.
+
 ```text
 Sessions shell
 ├── sidebar slot  → Sidebar Part root

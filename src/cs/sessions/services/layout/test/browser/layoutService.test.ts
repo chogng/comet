@@ -260,6 +260,57 @@ test('SessionsLayoutService exposes immutable snapshots', () => {
 	}
 });
 
+test('SessionsLayoutService owns transient rendered geometry', () => {
+	const storage = createStorageService();
+	const service = new SessionsLayoutService(
+		new TestSessionsLayoutPolicy(),
+		storage,
+	);
+	const observed: object[] = [];
+	const listener = service.onDidChangeLayoutGeometry(geometry => observed.push(geometry));
+
+	try {
+		assert.equal(service.getLayoutGeometry(), undefined);
+
+		const renderedGeometry = {
+			titlebarHeight: 0,
+			statusbarHeight: 22,
+			sidebar: { visible: false, width: 188 },
+			sessions: { visible: true, width: 640 },
+			editor: { visible: true, width: 520 },
+		} as const;
+		service.setLayoutGeometry(renderedGeometry);
+		service.setLayoutGeometry(renderedGeometry);
+
+		const geometry = service.getLayoutGeometry();
+		assert.deepEqual(geometry, renderedGeometry);
+		assert.equal(observed.length, 1);
+		assert.equal(Object.isFrozen(geometry), true);
+		assert.equal(Object.isFrozen(geometry?.sidebar), true);
+		assert.equal(Object.isFrozen(geometry?.sessions), true);
+		assert.equal(Object.isFrozen(geometry?.editor), true);
+		assert.equal(storage.read(), undefined);
+		assert.throws(
+			() => service.setLayoutGeometry({
+				...renderedGeometry,
+				editor: { visible: true, width: Number.NaN },
+			}),
+			/finite non-negative dimensions/,
+		);
+		assert.throws(
+			() => service.setLayoutGeometry({
+				...renderedGeometry,
+				sessions: { visible: false, width: 640 },
+			}),
+			/valid Part visibility/,
+		);
+		assert.equal(service.applyStartupLayoutMode('flow'), true);
+	} finally {
+		listener.dispose();
+		service.dispose();
+	}
+});
+
 test('Sessions layout policy registration rejects duplicates', () => {
 	registerSessionsLayoutPolicy(TestSessionsLayoutPolicy);
 	assert.throws(

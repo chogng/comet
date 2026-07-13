@@ -87,8 +87,6 @@
     "editor.loadingBackground": "rgba(251, 252, 254, 0.92)",
     "editor.loadingCardBackground": "rgba(244, 247, 250, 0.9)",
     "editor.loadingCardForeground": "#607285",
-    "editor.placeholderTitleForeground": "#1d3145",
-    "editor.placeholderBodyForeground": "#597086",
     "editor.statusModeForeground": "#18486e",
     "editor.statusModeBorder": "rgba(88, 141, 191, 0.22)",
     "editor.statusModeBackground": "rgba(225, 238, 249, 0.88)",

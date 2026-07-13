@@ -77,8 +77,6 @@ export type ColorIdentifier =
   | 'editor.loadingBackground'
   | 'editor.loadingCardBackground'
   | 'editor.loadingCardForeground'
-  | 'editor.placeholderTitleForeground'
-  | 'editor.placeholderBodyForeground'
   | 'editor.statusModeForeground'
   | 'editor.statusModeBorder'
   | 'editor.statusModeBackground'

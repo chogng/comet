@@ -215,7 +215,6 @@
   "chatArticleExportCheckbox": "Include Article in Export",
   "chatEvidenceRankTitle": "[{0}] {1}",
   "chatScrollToBottom": "Scroll to Bottom",
-  "chatInputToolbar": "Chat Input Toolbar",
   "agentbarHistoryEmpty": "no matching agents",
   "agentbarHistorySearch": "Search history",
   "agentbarHistoryConversationTitle": "{0} ({1} messages)",

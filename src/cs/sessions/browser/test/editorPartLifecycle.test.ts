@@ -123,6 +123,7 @@ class TestSessionsLayoutService implements ISessionsLayoutService {
 
 	private readonly changeEmitter = new Emitter<ISessionsLayoutState>();
 	readonly onDidChangeLayoutState = this.changeEmitter.event;
+	readonly onDidChangeLayoutGeometry = Event.None;
 	private state: ISessionsLayoutState = {
 		mode: 'agent',
 		isSidebarVisible: true,
@@ -133,6 +134,14 @@ class TestSessionsLayoutService implements ISessionsLayoutService {
 
 	getLayoutState(): ISessionsLayoutState {
 		return this.state;
+	}
+
+	getLayoutGeometry() {
+		return undefined;
+	}
+
+	setLayoutGeometry(): void {
+		throw new Error('Unexpected layout geometry mutation.');
 	}
 
 	setEditorCollapsed(collapsed: boolean, expandedEditorSize?: number): void {

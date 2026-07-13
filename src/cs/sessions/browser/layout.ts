@@ -19,7 +19,10 @@ import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import type { SessionsMainEditorPart } from 'cs/sessions/browser/parts/editor/editorPart';
 import type { SessionSidebarPartView } from 'cs/sessions/browser/parts/sidebar/sidebarPart';
 import type { SessionsPart } from 'cs/sessions/browser/parts/sessions/sessionsPart';
-import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
+import {
+	ISessionsLayoutService,
+	type ISessionsContentLayoutGeometry,
+} from 'cs/sessions/services/layout/browser/layoutService';
 import {
 	getWorkbenchPartDomNode,
 	registerWorkbenchPartDomNode,
@@ -31,6 +34,7 @@ interface ILayoutAxisLimits {
 }
 
 const SidebarIndex = 0;
+const SessionsIndex = 1;
 const EditorIndex = 2;
 const CollapsedSidebarSize = 188;
 const ReserveSashSpace = false;
@@ -138,6 +142,7 @@ class SessionsLayoutController extends Disposable {
 		private readonly sessionsPartView: SessionsLayoutPartView,
 		private readonly editorPartView: SessionsLayoutPartView,
 		private readonly getEdgeSnappingEnabled: () => boolean,
+		private readonly onDidLayout: (geometry: ISessionsContentLayoutGeometry) => void,
 		private readonly layoutService: ISessionsLayoutService,
 	) {
 		super();
@@ -281,6 +286,20 @@ class SessionsLayoutController extends Disposable {
 			const state = this.layoutService.getLayoutState();
 			this.syncSplitPartConstraints(state.isSidebarVisible);
 			this.gridView.layout(this.contentHost.clientWidth, this.contentHost.clientHeight);
+			this.onDidLayout({
+				sidebar: {
+					visible: state.isSidebarVisible,
+					width: this.gridView.getViewSize([SidebarIndex]),
+				},
+				sessions: {
+					visible: true,
+					width: this.gridView.getViewSize([SessionsIndex]),
+				},
+				editor: {
+					visible: !state.isEditorCollapsed,
+					width: this.gridView.getViewSize([EditorIndex]),
+				},
+			});
 		});
 	}
 
@@ -315,6 +334,7 @@ export class SessionsLayoutView extends Disposable {
 		private readonly sidebarPart: SessionSidebarPartView,
 		private readonly sessionsPart: SessionsPart,
 		private readonly editorPart: SessionsMainEditorPart,
+		private readonly onDidLayout: (geometry: ISessionsContentLayoutGeometry) => void,
 		@ISessionsLayoutService private readonly layoutService: ISessionsLayoutService,
 	) {
 		super();
@@ -326,6 +346,7 @@ export class SessionsLayoutView extends Disposable {
 			this.sessionsPartView,
 			this.editorPartView,
 			() => this.isEdgeSnappingEnabled,
+			this.onDidLayout,
 			this.layoutService,
 		));
 		this._register(this.layoutService.onDidChangeLayoutState(this.render, this));

@@ -26,13 +26,34 @@ export interface ISessionsPartSizes {
 	readonly editorSize?: number;
 }
 
+export interface ISessionsHorizontalPartGeometry {
+	readonly visible: boolean;
+	readonly width: number;
+}
+
+export interface ISessionsLayoutGeometry {
+	readonly titlebarHeight: number;
+	readonly statusbarHeight: number;
+	readonly sidebar: ISessionsHorizontalPartGeometry;
+	readonly sessions: ISessionsHorizontalPartGeometry;
+	readonly editor: ISessionsHorizontalPartGeometry;
+}
+
+export type ISessionsContentLayoutGeometry = Pick<
+	ISessionsLayoutGeometry,
+	'sidebar' | 'sessions' | 'editor'
+>;
+
 export const ISessionsLayoutService = createDecorator<ISessionsLayoutService>('sessionsLayoutService');
 
 export interface ISessionsLayoutService {
 	readonly _serviceBrand: undefined;
 	readonly onDidChangeLayoutState: Event<ISessionsLayoutState>;
+	readonly onDidChangeLayoutGeometry: Event<ISessionsLayoutGeometry>;
 	getLayoutState(): ISessionsLayoutState;
+	getLayoutGeometry(): ISessionsLayoutGeometry | undefined;
 	setViewport(width: number, height: number): void;
+	setLayoutGeometry(geometry: ISessionsLayoutGeometry): void;
 	applyStartupLayoutMode(mode: SessionsLayoutMode): boolean;
 	applyLayoutMode(mode: SessionsLayoutMode): void;
 	setPartSizes(sizes: ISessionsPartSizes): void;
@@ -85,6 +106,44 @@ function freezeLayoutState(state: ISessionsLayoutState): ISessionsLayoutState {
 	return Object.freeze({ ...state });
 }
 
+function isEqualLayoutGeometry(
+	left: ISessionsLayoutGeometry,
+	right: ISessionsLayoutGeometry,
+): boolean {
+	return left.titlebarHeight === right.titlebarHeight
+		&& left.statusbarHeight === right.statusbarHeight
+		&& left.sidebar.visible === right.sidebar.visible
+		&& left.sidebar.width === right.sidebar.width
+		&& left.sessions.visible === right.sessions.visible
+		&& left.sessions.width === right.sessions.width
+		&& left.editor.visible === right.editor.visible
+		&& left.editor.width === right.editor.width;
+}
+
+function validateLayoutGeometry(geometry: ISessionsLayoutGeometry): void {
+	if (!isFiniteSize(geometry.titlebarHeight)
+		|| !isFiniteSize(geometry.statusbarHeight)
+		|| !isFiniteSize(geometry.sidebar.width)
+		|| !isFiniteSize(geometry.sessions.width)
+		|| !isFiniteSize(geometry.editor.width)) {
+		throw new Error('Sessions layout geometry must contain finite non-negative dimensions.');
+	}
+	if (typeof geometry.sidebar.visible !== 'boolean'
+		|| geometry.sessions.visible !== true
+		|| typeof geometry.editor.visible !== 'boolean') {
+		throw new Error('Sessions layout geometry must contain valid Part visibility.');
+	}
+}
+
+function freezeLayoutGeometry(geometry: ISessionsLayoutGeometry): ISessionsLayoutGeometry {
+	return Object.freeze({
+		...geometry,
+		sidebar: Object.freeze({ ...geometry.sidebar }),
+		sessions: Object.freeze({ ...geometry.sessions }),
+		editor: Object.freeze({ ...geometry.editor }),
+	});
+}
+
 export class SessionsLayoutService extends Disposable implements ISessionsLayoutService {
 	declare readonly _serviceBrand: undefined;
 
@@ -92,9 +151,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		onListenerError: onUnexpectedError,
 	}));
 	readonly onDidChangeLayoutState = this.changeEmitter.event;
+	private readonly geometryChangeEmitter = this._register(new Emitter<ISessionsLayoutGeometry>({
+		onListenerError: onUnexpectedError,
+	}));
+	readonly onDidChangeLayoutGeometry = this.geometryChangeEmitter.event;
 
 	private viewport = InitialViewport;
 	private state: ISessionsLayoutState;
+	private geometry: ISessionsLayoutGeometry | undefined;
 	private startupLayoutEligible: boolean;
 
 	constructor(
@@ -114,6 +178,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return this.state;
 	}
 
+	getLayoutGeometry(): ISessionsLayoutGeometry | undefined {
+		return this.geometry;
+	}
+
 	setViewport(width: number, height: number): void {
 		if (!isFiniteSize(width) || !isFiniteSize(height)) {
 			throw new Error('Sessions layout viewport dimensions must be finite non-negative numbers.');
@@ -121,6 +189,16 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 
 		this.viewport = { width, height };
 		this.commit(this.state);
+	}
+
+	setLayoutGeometry(geometry: ISessionsLayoutGeometry): void {
+		validateLayoutGeometry(geometry);
+		if (this.geometry && isEqualLayoutGeometry(this.geometry, geometry)) {
+			return;
+		}
+
+		this.geometry = freezeLayoutGeometry(geometry);
+		this.geometryChangeEmitter.fire(this.geometry);
 	}
 
 	applyStartupLayoutMode(mode: SessionsLayoutMode): boolean {

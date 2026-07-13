@@ -1,3 +1,102 @@
+.comet-editor-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+}
+
+.comet-editor-statusbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.comet-editor-statusbar-group.comet-is-primary {
+  flex: 1 1 auto;
+}
+
+.comet-editor-statusbar-group.comet-is-secondary {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.comet-editor-statusbar-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--comet-editor-statusModeForeground, #18486e);
+  border: 1px solid var(--comet-editor-statusModeBorder, rgba(88, 141, 191, 0.22));
+  background: var(--comet-editor-statusModeBackground, rgba(225, 238, 249, 0.88));
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.comet-editor-statusbar-summary {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--comet-editor-statusSummaryForeground, #597086);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.comet-editor-statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--comet-editor-statusItemBorder, rgba(208, 220, 232, 0.9));
+  background: var(--comet-editor-statusItemBackground, rgba(255, 255, 255, 0.7));
+}
+
+.comet-editor-statusbar-item.comet-is-accent {
+  border-color: var(--comet-editor-statusItemAccentBorder, rgba(179, 220, 197, 0.95));
+  background: var(--comet-editor-statusItemAccentBackground, rgba(232, 247, 238, 0.92));
+}
+
+.comet-editor-statusbar-item.comet-is-muted {
+  opacity: 0.7;
+}
+
+.comet-editor-statusbar-item.comet-is-error {
+  border-color: var(--comet-sideBar-statusErrorForeground, #a53333);
+  background: var(--comet-sideBar-statusErrorBackground, #fdecec);
+}
+
+.comet-editor-statusbar-item.comet-is-error .comet-editor-statusbar-item-label,
+.comet-editor-statusbar-item.comet-is-error .comet-editor-statusbar-item-value {
+  color: var(--comet-sideBar-statusErrorForeground, #a53333);
+}
+
+.comet-editor-statusbar-item-label {
+  color: var(--comet-editor-statusItemLabelForeground, #607488);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.comet-editor-statusbar-item-value {
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--comet-editor-statusItemValueForeground, #1d3145);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .comet-statusbar-part {
   min-width: 0;
   min-height: 0;
@@ -50,4 +149,19 @@
 .comet-statusbar-part > .comet-editor-statusbar .comet-editor-statusbar-item.comet-is-actionable:focus-visible {
   outline: 2px solid rgba(48, 126, 214, 0.38);
   outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .comet-editor-statusbar {
+    align-items: flex-start;
+  }
+
+  .comet-editor-statusbar-group.comet-is-secondary {
+    justify-content: flex-start;
+  }
+
+  .comet-editor-statusbar-summary,
+  .comet-editor-statusbar-item-value {
+    max-width: 180px;
+  }
 }

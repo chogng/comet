@@ -7,24 +7,10 @@ import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import type { AppColorScheme, PartsSplash } from 'cs/platform/theme/common/theme';
 import { themeService } from 'cs/platform/theme/browser/themeService';
 import { INativeHostService } from 'cs/platform/native/common/native';
-import { SESSION_PART_IDS } from 'cs/sessions/browser/parts/parts';
 import { ISessionsLayoutService } from 'cs/sessions/services/layout/browser/layoutService';
-import {
-	getWorkbenchPartDomSnapshot,
-	subscribeWorkbenchPartDom,
-} from 'cs/workbench/browser/layout';
-import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
 import { registerWorkbenchContribution } from 'cs/workbench/common/contributions';
 import { getWorkbenchInstantiationService } from 'cs/workbench/services/instantiation/browser/workbenchInstantiationService';
 import { setWorkbenchHostColorScheme } from 'cs/workbench/services/themes/browser/workbenchThemeService';
-
-function getElementWidth(element: HTMLElement | null | undefined): number {
-	return element?.getBoundingClientRect().width ?? 0;
-}
-
-function getElementHeight(element: HTMLElement | null | undefined): number {
-	return element?.getBoundingClientRect().height ?? 0;
-}
 
 function requireThemeColor(colorId: Parameters<typeof themeService.getColor>[0]): string {
 	const color = themeService.getColor(colorId);
@@ -47,8 +33,7 @@ class SessionsPartsSplashContribution extends Disposable {
 			throw new Error('Native host IPC is required for the Sessions parts splash.');
 		}
 
-		this._register(toDisposable(subscribeWorkbenchPartDom(this.scheduleSaveWindowSplash)));
-		this._register(this.layoutService.onDidChangeLayoutState(this.scheduleSaveWindowSplash));
+		this._register(this.layoutService.onDidChangeLayoutGeometry(this.scheduleSaveWindowSplash));
 		this._register(themeService.onDidColorThemeChange(this.scheduleSaveWindowSplash));
 		this._register(toDisposable(ipc.listen<AppColorScheme>(
 			'nativeHost',
@@ -82,6 +67,9 @@ class SessionsPartsSplashContribution extends Disposable {
 	}
 
 	private readonly scheduleSaveWindowSplash = (): void => {
+		if (!this.layoutService.getLayoutGeometry()) {
+			return;
+		}
 		if (this.saveHandle !== undefined) {
 			window.clearTimeout(this.saveHandle);
 		}
@@ -97,8 +85,10 @@ class SessionsPartsSplashContribution extends Disposable {
 
 	private createPartsSplash(): PartsSplash {
 		const theme = themeService.getTheme();
-		const partDom = getWorkbenchPartDomSnapshot();
-		const layoutState = this.layoutService.getLayoutState();
+		const layoutGeometry = this.layoutService.getLayoutGeometry();
+		if (!layoutGeometry) {
+			throw new Error('Sessions layout geometry is required for the parts splash.');
+		}
 		return {
 			baseTheme: theme.kind,
 			colorInfo: {
@@ -114,12 +104,12 @@ class SessionsPartsSplashContribution extends Disposable {
 				windowBorder: requireThemeColor('workbench.panelBorder'),
 			},
 			layoutInfo: {
-				titleBarHeight: getElementHeight(partDom[WORKBENCH_PART_IDS.titlebar]),
-				sideBarWidth: layoutState.isSidebarVisible
-					? getElementWidth(partDom[WORKBENCH_PART_IDS.sidebar])
+				titleBarHeight: layoutGeometry.titlebarHeight,
+				sideBarWidth: layoutGeometry.sidebar.visible
+					? layoutGeometry.sidebar.width
 					: 0,
-				agentBarWidth: getElementWidth(partDom[SESSION_PART_IDS.sessions]),
-				statusBarHeight: getElementHeight(partDom[WORKBENCH_PART_IDS.statusbar]),
+				agentBarWidth: layoutGeometry.sessions.width,
+				statusBarHeight: layoutGeometry.statusbarHeight,
 			},
 		};
 	}

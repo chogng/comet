@@ -190,7 +190,6 @@ export class ChatWidget extends Disposable {
 			onAsk: () => {
 				this.submitRequestEmitter.fire({ chatResource: model.resource });
 			},
-			inputToolbarActions: [],
 			modelOptions: presentation.modelOptions,
 			selectedModelId: presentation.selectedModelId,
 			onSelectModel: (modelId: string | undefined) => {

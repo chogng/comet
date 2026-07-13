@@ -3,7 +3,7 @@ import { createLxIcon, type LxIconName } from 'cs/base/browser/ui/lxicons/lxicon
 import type { IWorkbenchCommandService } from 'cs/workbench/services/commands/common/commandService';
 import type { EditorCreationAction } from 'cs/workbench/browser/parts/editor/editorCreationActionRegistry';
 
-export type EditorEmptyWorkspaceViewProps = {
+type EditorEmptyWorkspaceViewProps = {
   creationActions: readonly EditorCreationAction[];
   commandService: IWorkbenchCommandService;
 };
@@ -53,9 +53,3 @@ export class EditorEmptyWorkspaceView {
     return button;
   }
 }
-
-export function createEditorEmptyWorkspaceView(props: EditorEmptyWorkspaceViewProps) {
-  return new EditorEmptyWorkspaceView(props);
-}
-
-export default EditorEmptyWorkspaceView;

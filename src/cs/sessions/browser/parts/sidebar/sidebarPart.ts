@@ -83,7 +83,6 @@ export class SessionSidebarPartView extends Disposable {
 	private readonly tabListElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-list');
 	private readonly homeTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
 	private readonly codeTabButton = $<HTMLElementTagNameMap['button']>('button.comet-sidebar-tab');
-	private readonly tabActionsElement = $<HTMLElementTagNameMap['div']>('div.comet-sidebar-tab-actions');
 
 	//#endregion
 
@@ -153,7 +152,7 @@ export class SessionSidebarPartView extends Disposable {
 		this.tabListElement.append(this.homeTabButton, this.codeTabButton);
 		this.titlebarActionsElement.append(titlebarActionsView.getElement());
 		this.titlebarElement.append(this.titlebarActionsElement);
-		this.headerElement.append(this.tabListElement, this.tabActionsElement);
+		this.headerElement.append(this.tabListElement);
 		this.contentElement.append(
 			this.headerElement,
 			this.contentHostElement,
@@ -278,10 +277,6 @@ export class SessionSidebarPartView extends Disposable {
 		);
 		this.syncTabButtonState(this.homeTabButton, activeEntry === 'home');
 		this.syncTabButtonState(this.codeTabButton, activeEntry === 'code');
-
-		if (this.tabActionsElement.firstElementChild) {
-			this.tabActionsElement.replaceChildren();
-		}
 	}
 
 	private syncTabButtonState(button: HTMLButtonElement, isActive: boolean) {

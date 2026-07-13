@@ -29,7 +29,7 @@ import type {
 	ISessionsChatView,
 } from 'cs/sessions/services/chatView/browser/chatViewFactory';
 
-import 'cs/sessions/browser/parts/media/sessionView.css';
+import 'cs/sessions/browser/parts/sessions/media/sessionView.css';
 
 type SessionViewBinding =
 	| { readonly kind: 'new'; readonly view: INewSessionChatView }

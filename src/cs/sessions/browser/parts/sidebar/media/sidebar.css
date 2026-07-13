@@ -133,15 +133,6 @@
   outline-offset: 1px;
 }
 
-.comet-sidebar-tab-actions {
-  flex: 0 0 auto;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  -webkit-app-region: no-drag;
-}
-
 .comet-sidebar-content {
   min-height: 0;
   flex: 1;

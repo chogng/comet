@@ -164,7 +164,6 @@ export abstract class MainEditorPart extends Disposable implements IEditorPartHo
 			showToolbar: true,
 			isEditorCollapsed: this.editorCollapsed,
 			onToggleEditorCollapse: () => this.toggleEditorCollapsed(),
-			titlebarAuxiliaryActionsElements: [],
 			hasLeadingTitlebarWindowControlsInset: false,
 			onStatusChange: status => this.updateEditorStatus(status),
 		};

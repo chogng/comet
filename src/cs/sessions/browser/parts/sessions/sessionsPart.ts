@@ -21,7 +21,7 @@ import {
 	isNewSessionSlot,
 } from 'cs/sessions/services/sessions/common/sessionsView';
 
-import 'cs/sessions/browser/parts/media/sessionView.css';
+import 'cs/sessions/browser/parts/sessions/media/sessionsPart.css';
 
 interface ISessionSlotRecord {
 	readonly slot: IVisibleSessionSlot;
