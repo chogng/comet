@@ -26,6 +26,15 @@ Chat does not accept a mutable product-wide context bag containing runtime,
 provider, Editor, or shell callbacks. Shared dependencies use DI; state tied to
 one chat is scoped to that addressed model or view.
 
+When the product exposes per-request Tool selection, the addressed Chat input
+owns only the visible policy and canonical Tool IDs. This state is separate
+from attachments and interaction targets. Chat never copies Tool descriptors,
+executor handles, or SDK objects. During submission preparation, Agent Host
+resolves one immutable Tool-set revision from authoritative registries,
+capabilities, targets, and policy and binds it to the submission ID. Host
+acceptance revalidates and records that revision as the accepted Turn's exposed
+Tool set.
+
 ## Composer attachments
 
 The addressed Chat model owns one pending composer-attachment collection
@@ -42,6 +51,8 @@ serializable producer state. Chat does not enumerate Feature attachment kinds
 or interpret producer state. The owning contribution provides validation,
 serialization, presentation, send-time resolution, semantic identity, and
 restoration. Adding a type does not change Chat services or Sessions routing.
+The registry may dispatch by exact producer type ID, but core code never uses a
+closed Feature-type switch or parses a resource URI to infer producer behavior.
 
 Chat enforces uniqueness only by attachment identity. A producer owns semantic
 identity and decides whether two Article, File, Directory, range, or page
@@ -93,12 +104,14 @@ capabilities are validated before submission to Agent Host. Chat never infers
 attachment support from Agent or model IDs, model families, or display names.
 
 The Host submission uses one stable submission ID and payload digest. Host
-acceptance atomically commits the user turn and normalized attachments. Chat
-then consumes exactly the captured revision. Lost acknowledgement is reconciled
-by ID and digest; the same ID with different content is a conflict. The digest
-excludes leases and connection-local handles but includes immutable content
-versions and ordered attachment identity. The Host rejects a stale descriptor
-revision before commit.
+acceptance atomically commits the user turn, normalized attachments, bound
+interaction targets, and exposed Tool-set revision. Chat then consumes exactly
+the captured revision. Lost acknowledgement is reconciled by ID and digest; the
+same ID with different content is a conflict. The digest excludes leases and
+connection-local handles but includes immutable content versions, ordered
+attachment identity, target identity and version, requested Tool policy, and
+the prepared Tool-set revision. The Host rejects stale attachment, Agent,
+model, or Tool descriptors before commit.
 
 Resolver failure, cancellation, or Host rejection before acceptance releases
 all prepared content leases, leaves the composer unchanged, and creates no
@@ -112,12 +125,13 @@ Editor, File, Directory, page, or Article. If the exact submitted content
 version can no longer be materialized, retry fails explicitly and the user
 must attach a new version.
 
-Attachments carry bounded user context and may include an exact read reference
-or target token. Agent and model selection, tool registration, skills, MCP
-servers, commands, mutation permissions, and confirmation policy are separate
-typed request fields and never enter the attachment registry. An attachment may
-be consumed by an already registered tool, but it never registers or enables
-that tool.
+Attachments carry bounded user context and may include an exact immutable
+content reference. They never carry an interaction target, Tool descriptor, or
+executor binding. Agent and model selection, Tool registration and exposure,
+Skills, MCP servers, commands, mutation permissions, and confirmation policy
+are separate typed request fields and never enter the attachment registry.
+Agent SDK translation reads an accepted content reference through the Host
+content-resource protocol, not through a model Tool call.
 
 The Chat transcript renderer owns text selection inside rendered messages. It
 exposes typed selectable regions carrying message identity and role; the list
@@ -138,12 +152,17 @@ The addressed Chat input owns visible request-scoped interaction targets
 separately from attachments. A Feature explicitly binds an exact target to that
 input; general submission never scans active Editors or invents a target from
 global focus. Capturing a target records identity and version only. It does not
-read content, create an attachment, register a tool, or grant permission.
+read content, create an attachment, register a Tool, or grant permission.
 
 The immutable request snapshot includes bound targets so an Agent can address a
-registered Client Tool during the accepted Turn. Content is produced only when
-the tool executes. Tool calls, target persistence, effect reconciliation, and
-the Browser Article flow follow `src/cs/sessions/CLIENT_TOOLS.md`.
+separately exposed Client Tool during the accepted Turn. A Client Tool is a
+model-facing Tool whose executor is the exact contributing client. Binding a
+target does not register or expose that Tool. When a Feature workflow promises
+a target-backed operation, submission validates that a compatible Tool is in
+the independently resolved Tool set or fails before acceptance. Content is
+produced only when the model or Agent SDK emits the Tool call. Tool calls,
+target persistence, effect reconciliation, and the Browser Article flow follow
+`src/cs/sessions/CLIENT_TOOLS.md`.
 
 Those responsibilities belong to the
 [Sessions application](../../src/cs/sessions/SESSIONS.md).

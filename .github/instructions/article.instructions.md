@@ -63,18 +63,22 @@ a stable, version-addressed content reference. The content owner materializes a
 bounded read handle for the addressed request. If the full-content extractor or
 the referenced version is unavailable, preparation fails; the resolver never
 substitutes `ArticleDetail`, a list summary, or a currently active Browser page.
-The addressed Agent converts that context into SDK input and can read complete
-text through the typed content client-tool operation when required. Agent
+The addressed Agent materializes that exact reference through the Host
+content-resource protocol while converting the attachment into SDK input. This
+read is not a Tool call and does not depend on a model decision. Agent
 implementations do not scrape Article pages or treat `ArticleDetail` as full
-text. Chat and Sessions core do not interpret Article attachment state.
+text. Chat and Sessions core do not interpret Article attachment state. The
+same extractor service may implement lazy readable-content execution, but its
+Client Tool contract remains separate from attachment publication and reads.
 
 Opening an Article link from an addressed Chat in the Editor Browser may bind
 the resulting exact Browser document target to that same Chat input. This
 creates no attachment and extracts no body. If the user asks about the opened
 article, the Agent can invoke the independently registered readable-content
-Client Tool; extraction happens only for that call. Opening the same content
-without an addressed Chat relationship requires an explicit Use in Chat action
-to bind the target, and general send never scans the active Editor.
+Client Tool through a model-facing function call; extraction happens only for
+that call. Opening the same content without an addressed Chat relationship
+requires an explicit Use in Chat action to bind the target, and general send
+never scans the active Editor.
 
 ## Runtime boundary
 

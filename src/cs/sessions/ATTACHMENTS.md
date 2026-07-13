@@ -19,7 +19,8 @@ Feature source
 An attachment is context, not an action. It does not select an Agent or model,
 register a tool, enable a skill or MCP server, grant mutation authority, or
 approve a permission request. Those are separate typed request fields and
-runtime contracts.
+runtime contracts. Reading or materializing an accepted attachment through the
+Host content service is message translation, not a model function call.
 
 ## Attachment states
 
@@ -139,6 +140,15 @@ structural shape, media type, encoding, count, and size constraints. Unknown
 Host attachment-envelope versions fail protocol validation. They are not
 confused with producer-state versions.
 
+Stable type IDs and URI-shaped resource identities are valid protocol
+mechanisms.
+The producer registry dispatches a pending envelope by its exact producer type,
+and an opaque content reference may use a versioned protocol URI. What core
+code never does is switch over a closed list of Feature types, parse a URI
+scheme to infer content semantics or ownership, or choose Agent behavior from
+either value. The normalized representation declares semantics and the typed
+owner field determines content-resource routing.
+
 A content carrier is one of:
 
 ```text
@@ -193,6 +203,30 @@ materialize the referenced blob or tree version inside Host-owned storage. The
 materialized path is scoped to that Host and lease and does not become a new
 source identity.
 
+### Content-resource protocol
+
+The Host content service exposes the typed resource operations required to
+translate a normalized attachment into Agent SDK input. It can open an exact
+reference, read bounded blob ranges, page a tree manifest, read an exact tree
+entry, materialize a Host-owned copy, and release the resulting lease. Every
+operation addresses the stored content version and owning Host or client; it
+never resolves a current Feature selection or current resource version.
+
+For a client-owned reference, the Host routes a bounded content-resource
+request through the exact originating client connection. This reverse request
+is transport for already accepted message context. It is not published in the
+Tool set, does not create a Tool call or Tool result, and does not require the
+model to choose an operation. The Agent implementation uses it while mapping
+the normalized attachment to the SDK representation declared by the effective
+Agent and model capabilities.
+
+A Feature extraction service may implement both immutable attachment
+publication and a lazy readable-content Client Tool. The protocols remain
+separate: publication and content-resource reads preserve the submitted
+attachment version, while a Client Tool reads an interaction target in response
+to a model-issued function call. Sharing the extraction service does not merge
+their identity, authority, lifetime, persistence, or failure semantics.
+
 ## Capability and limit validation
 
 Agent descriptors declare attachment protocol capabilities. Model descriptors
@@ -217,12 +251,12 @@ producer contract, stringifies an unreadable reference, flattens a tree into a
 prompt, expands a Directory into inferred File attachments, extracts a PDF as
 text, or retries with another representation.
 
-Content access may occur through the Host content service during SDK
-translation or through an already registered readable-content Client Tool. If
-the canonical representation requires one of those surfaces, preparation
-validates its exact descriptor and availability independently. Adding the
-attachment never registers the tool or constructs the request's tool list. See
-[Client Tool architecture](CLIENT_TOOLS.md).
+Content access occurs through the Host content service during SDK translation
+or materialization. Its availability and limits are attachment carrier
+capabilities, not Tool descriptors. Preparation validates the exact
+content-resource owner, protocol capability, lifetime, and bounds before Host
+acceptance. An accepted attachment never depends on a readable-content Client
+Tool or on the model deciding to issue a function call.
 
 ## Submission transaction
 
@@ -231,8 +265,9 @@ Submission uses one stable submission ID and payload digest:
 ```text
 capture one addressed composer revision
     → resolve every attachment and bind its exact content version
-    → validate envelope, aggregate limits, and descriptor revision
-    → submit normalized prompt and attachments
+    → Host validates targets and prepares the exact Tool-set revision
+    → validate and digest the complete common request snapshot
+    → submit normalized prompt, attachments, targets, and Tool-set revision
     → Host atomically commits the user turn
     → Chat consumes the captured composer revision
 ```
@@ -240,10 +275,16 @@ capture one addressed composer revision
 The captured revision is read-only except for cancellation while preparation is
 active. The digest covers the canonical prompt, non-executable request
 configuration, Agent and model selection, request-scoped interaction target
-identities and versions, ordered attachment identities, producer type IDs,
-model representations, carriers, structural shapes, media information, and
-immutable content versions or digests. It excludes ephemeral lease tokens and
-connection-local handles.
+identities and versions, requested Tool policy, prepared Tool-set revision,
+ordered attachment identities, producer type IDs, model representations,
+carriers, structural shapes, media information, and immutable content versions
+or digests. It excludes ephemeral lease tokens and connection-local handles.
+
+The prepared Tool-set revision is an immutable Host value bound to the
+submission ID, Host authority, Agent and model descriptor revisions, exact
+targets, and executor registrations. Host acceptance revalidates it. If it is
+stale, the Host rejects the submission without substituting a later Tool set;
+a new preparation revision requires a new submission ID and payload digest.
 
 The Host returns the already committed turn when the same submission ID and
 digest are repeated. Reusing an ID with a different digest is a conflict. This
@@ -263,12 +304,13 @@ message. They never rerun a pending producer against current Feature state.
 ### Initial Turn of a new Session
 
 Preparation for a product Session draft uses the selected Host authority,
-Agent and model descriptor revisions, submission ID, and create-operation ID
-before a Host Session exists. The Host create operation reserves canonical
-Session, ordinary Chat, Turn, and attachment identities without publishing
-them, binds staged content to those identities, and then atomically commits the
-Session catalog entry, Chat catalog entry, user message, and normalized
-attachments.
+Agent and model descriptor revisions, requested Tool policy, prepared Tool-set
+revision, submission ID, and create-operation ID before a Host Session exists.
+The Host create operation reserves canonical Session, ordinary Chat, Turn, and
+attachment identities without publishing them, binds staged content to those
+identities, and then atomically commits the Session catalog entry, Chat catalog
+entry, user message, normalized attachments, interaction targets, and exposed
+Tool-set revision.
 
 Preparation, content binding, Agent backing creation, or Host validation failure
 before that commit releases staged leases and provisional backing, preserves the
@@ -316,23 +358,25 @@ the active page does not attach it. If the addressed document epoch or
 extractor is unavailable, preparation fails instead of using the currently
 active page.
 
-Live Browser interaction is a separately registered tool with its own target,
-permission, and confirmation policy. A Browser attachment may carry an exact
-read target for that tool, but it does not register or enable the tool.
+Live Browser interaction is a separately registered and exposed Tool with its
+own target, permission, and confirmation policy. A Browser attachment may carry
+an exact content reference, but it does not bind an interaction target or
+register, expose, or enable a Tool.
 
 An Editor Browser can instead bind an exact request-scoped interaction target
 to the addressed Chat input. That target carries no page body and creates no
-attachment or snapshot. Content is extracted only if the Agent invokes the
-registered readable-content Client Tool. This lazy flow and its target rules
-are defined in [Client Tool architecture](CLIENT_TOOLS.md).
+attachment or snapshot. Content is extracted only if the model or Agent SDK
+emits a call to the registered readable-content Client Tool.
+This lazy flow and its target rules are defined in [Tool and Client Tool
+architecture](CLIENT_TOOLS.md).
 
 ### Article
 
 An Article attachment preserves stable Article identity, normalized metadata,
-and a version-addressed readable-content reference. `ArticleDetail`, list-card
-text, and abstracts are not substitutes for the complete article body. The
-feature-owned extractor provides bounded complete readable content or
-preparation fails.
+and a version-addressed content reference for the complete readable content.
+`ArticleDetail`, list-card text, and abstracts are not substitutes for the
+complete article body. The Feature-owned extractor provides bounded complete
+readable content or preparation fails.
 
 Article checkbox selection is independent of attachments. Download and export
 operate on their own selection snapshot. An explicit Add Selected Articles to
@@ -392,7 +436,7 @@ src/cs/workbench/contrib/fetch/          Article producer and readable-content p
 src/cs/workbench/contrib/pdfEditor/      PDF document and PDF-selection producers
 src/cs/workbench/contrib/draftEditor/    Editor document and Editor-selection producers
 src/cs/workbench/contrib/files/          File, File-selection, and Directory producers
-src/cs/sessions/contrib/browserView/     Browser-page producer and Browser client-tool target
+src/cs/sessions/contrib/browserView/     Browser-page producer and Browser Client Tool target
 ```
 
 Text, image, and Chat-selection producers live with Workbench Chat because Chat
@@ -430,6 +474,8 @@ resource protocol contracts; it contains no Feature producer.
 - Unsupported or unavailable content blocks submission visibly; nothing is
   silently omitted, converted, or retried as another representation.
 - Durable content references and ephemeral read leases remain separate.
+- Submitted content references are read through the content-resource protocol,
+  never through an implicit Tool call.
 - Client-local paths never masquerade as remote Host paths.
 - Retry uses the submitted version and never reads current Feature state as a
   substitute.

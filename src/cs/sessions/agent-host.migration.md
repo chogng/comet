@@ -116,8 +116,9 @@ state actions unapplied.
 - `IChatService` owns addressed Chat presentation models, generic pending
   attachments, and visible request-scoped interaction targets for the addressed
   input. It does not own backend Session lifecycle. Attachments cross the Host
-  only after immutable resolution; targets carry no content and are consumed
-  only by independently registered Client Tools.
+  only after immutable resolution and are read through the content-resource
+  protocol; targets carry no content and are consumed only by independently
+  exposed Client Tools.
 - All Agent SDK integrations implement `IAgent`; none registers a direct
   Sessions provider.
 - The shared provider family and implementation path use `agentHost`; Agent
@@ -158,19 +159,25 @@ names. No target registration imports or dispatches through the legacy path.
    and SDK-facing state into `CometAgent`. Rename main-agent-owned contracts to
    Comet Agent contracts and update every call site directly.
 4. Replace Comet Agent imports of Editor, Workbench Chat, Fetch, RAG, and other
-   higher-layer types with bounded Host context and client-tool contracts.
+   higher-layer types with bounded Host context, content-resource contracts,
+   and model-facing Tool contracts with explicit executor bindings.
    Register content extraction and the other concrete feature operations from
    their owning higher-layer contributions. Article requests carry normalized
    metadata and stable content references, with scoped handles materialized by
-   the content owner, rather than treating Article detail as complete text.
-   Register client tools independently from attachments; resolved attachments
-   may supply scoped read references or target tokens but do not construct the
-   request's tool list. Add a generic request-scoped interaction-target model:
-   a Feature explicitly binds only identity and version to an addressed Chat
-   input, and content extraction occurs only when the Agent invokes the
-   registered Client Tool. Add stable Browser main-frame document epochs so a
-   target can address one navigation without pretending to be an immutable
-   content snapshot.
+   the content owner and read through the Host content-resource protocol,
+   rather than treating Article detail as complete text or requiring a model
+   Tool call. Register Client Tools independently from attachments and define
+   `client`, `host`, `agent`, and `mcp` as executor bindings over one canonical
+   Tool descriptor, call, and result lifecycle. Each Agent implementation maps
+   that descriptor into its SDK's native function, dynamic Tool, or MCP bridge
+   without changing canonical identity or executor. Resolved attachments may
+   supply scoped immutable content references but never interaction targets or
+   the request's Tool list. Add a generic request-scoped interaction-target
+   model: a Feature explicitly binds only identity and version to an addressed
+   Chat input, and lazy content extraction occurs only when the model or Agent
+   SDK emits a call to the independently exposed Client Tool. Add stable Browser
+   main-frame document epochs so a target can address one navigation without
+   pretending to be an immutable content snapshot.
 5. Register `CometAgent` with the Agent Host runtime under Agent ID `comet`.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
@@ -189,16 +196,22 @@ names. No target registration imports or dispatches through the legacy path.
    Host Sessions integration. Add one addressed composer-attachment model, one
    public attachment API, one separate addressed interaction-target model,
    current-version producer codecs, and registries for Feature-owned
-   resolution, Client Tools, and browser presentation. Replace the closed
-   request attachment union and send-time active-Editor harvesting. Change
-   Sessions management and provider send contracts to route only the addressed
-   Session and Chat; the shared provider begins the immutable request snapshot
-   through `IChatService`. Update every call site directly.
+   resolution, canonical Tools with executor bindings, and browser
+   presentation. Add separate request-scoped Tool-selection policy and stable
+   IDs without copying descriptors into Chat. Replace the closed request
+   attachment union and send-time active-Editor harvesting. Change Sessions
+   management and provider send contracts to route only the addressed Session
+   and Chat; the shared provider begins the immutable request snapshot through
+   `IChatService`. Update every call site directly.
 9. Add the preparing-submission transaction and normalized Host attachment
-   protocol. Resolve every captured attachment, bind immutable source versions,
-   validate limits and Agent capabilities, then submit with an idempotent
-   submission ID and payload digest. Consume the composer only after Host
-   acceptance. Pre-acceptance failure preserves it and creates no turn;
+   and content-resource protocols. Resolve every captured attachment, bind
+   immutable source versions, resolve the requested Tool policy into one exact
+   prepared Tool-set revision, validate limits and Agent capabilities, then
+   submit with an idempotent submission ID and payload digest. Host acceptance
+   revalidates and records the attachments, interaction targets, and exposed
+   Tool-set revision with the Turn. Consume the composer only after Host
+   acceptance. Pre-acceptance failure
+   preserves it and creates no turn;
    post-acceptance Agent failure completes the committed turn as failed. For a
    product draft, prepare under the Host connection and submission ID before
    creating the Host Session. In one create operation, reserve Session,
@@ -241,10 +254,11 @@ names. No target registration imports or dispatches through the legacy path.
     local and remote content lifetimes, version negotiation, revision gaps,
     replay and snapshot recovery, operation-ID conflicts, release versus
     delete, monotonic Turn terminal state, explicit interaction-target binding,
-    lazy content reads, and Client Tool disconnect and effect reconciliation.
-    Cover typed Article item identity and Chat-origin Browser target binding
-    without DOM-order inference, including document-epoch changes and snapshot
-    content digests.
+    attachment content-resource reads without Tool calls, canonical Tool-to-SDK
+    mappings, lazy Client Tool reads, and Client Tool disconnect and effect
+    reconciliation. Cover typed Article item identity and Chat-origin Browser
+    target binding without DOM-order inference, including document-epoch
+    changes and snapshot content digests.
 14. Delete `src/cs/sessions/contrib/providers/default/**`, the
    `run_main_agent_turn` command and payload contracts, default-provider
    storage, every `default`-prefixed implementation symbol and file, the
@@ -301,7 +315,9 @@ The migration is complete only when:
 10. Every Feature attachment enters through the common addressed Chat
     attachment API, and submitted attachments use the normalized Host protocol
     without provider-specific routing or silent omission. Lazy Feature
-    operations use the separate Client Tool and interaction-target contracts.
+    operations use the separate model-facing Client Tool and interaction-target
+    contracts. Reading a submitted content reference uses the content-resource
+    protocol and never creates a Tool call.
 11. File and Directory use separate producers over the common attachment API.
    File submissions bind immutable `blob` references; Directory submissions
    bind immutable bounded `tree` manifests. Remote Hosts receive no client-local
@@ -314,9 +330,9 @@ The migration is complete only when:
    turn; retry never substitutes current Feature state for submitted content.
 14. Request-scoped interaction targets carry only exact identity and version,
    are bound explicitly to one addressed Chat input, and trigger no content
-   extraction unless the Agent invokes the exact registered Client Tool.
-   General submission does not scan globally active Editors or route a missing
-   tool or target to another implementation.
+   extraction unless the model or Agent SDK emits a call to the exact exposed
+   Client Tool. General submission does not scan globally active Editors or
+   route a missing Tool, executor, or target to another implementation.
 15. `providers/default`, `DefaultSessionsProvider`, `DefaultSession`,
    `DefaultChat`, every other `default`-prefixed implementation identity, and
    `run_main_agent_turn` no longer exist. The old storage key appears only in
@@ -331,8 +347,8 @@ The migration is complete only when:
     compatibility module.
 19. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
     lifecycle tests pass.
-20. Durable documentation describes only the final Agent Host, Attachment, and
-    Client Tool architecture.
+20. Durable documentation describes only the final Agent Host, Attachment,
+    Tool, and Client Tool architectures.
 
 ## Deletion condition
 

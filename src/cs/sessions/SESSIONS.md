@@ -492,9 +492,12 @@ send action in the addressed Chat view
     → managementService.sendRequest(session, chat)
     → resolve the provider from session ownership
     → provider begins the addressed Chat submission transaction
-    → prepare and validate normalized attachments
-    → provider routes the addressed Session and Chat to its Host connection
-    → Host accepts and commits the canonical user turn
+    → capture prompt, attachments, interaction targets, and Tool policy
+    → prepare attachments
+    → Host prepares one exact Tool-set revision for the submission
+    → validate and digest the common request snapshot
+    → provider routes the prepared addressed request to its Host connection
+    → Host accepts and commits the canonical user turn and request snapshot
     → Host routes the committed request to the owning Agent
     → Host publishes committed turn and lifecycle state
     → provider updates the addressed Chat model and Session observables
@@ -680,13 +683,15 @@ mapping; it does not duplicate Session or Chat models or branch on Agent IDs.
 The complete contracts and verification requirements are defined in
 [AGENT_HOST.md](AGENT_HOST.md). Composer and submitted context contracts are
 defined in [ATTACHMENTS.md](ATTACHMENTS.md). Client-owned operations and lazy
-interaction targets are defined in [CLIENT_TOOLS.md](CLIENT_TOOLS.md).
+interaction targets that are exposed to an Agent use model-facing Tools with
+explicit executor bindings and are defined in
+[CLIENT_TOOLS.md](CLIENT_TOOLS.md).
 
 ## Related documents
 
 - [Sessions application overview](README.md)
 - [Agent Host architecture](AGENT_HOST.md)
 - [Attachment architecture](ATTACHMENTS.md)
-- [Client Tool architecture](CLIENT_TOOLS.md)
+- [Tool and Client Tool architecture](CLIENT_TOOLS.md)
 - [Sessions application layout](LAYOUT.md)
 - [Sessions layer rules](LAYERS.md)

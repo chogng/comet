@@ -21,9 +21,13 @@ permissions, reverse requests, or Feature-owned client capabilities.
 - Agent implementations own SDK calls, SDK event conversion, capabilities, and
   opaque resume data. They never import Sessions, Workbench Chat, UI, or Host
   transport implementations.
+- Agent implementations translate the exact exposed Tool-set revision into
+  their SDK's function/tool surface, normalize SDK calls into Host Tool calls,
+  and return Host Tool results to the matching SDK call. SDK aliases, dynamic
+  functions, and MCP bridges never change canonical Tool identity or executor.
 - Editor, Article, Browser, and other higher-layer capabilities cross the Host
-  boundary only through typed bounded context or client-tool protocol messages.
-  Their implementations remain with the feature owner.
+  boundary only through typed bounded context, content-resource operations, or
+  Client Tool calls. Their implementations remain with the Feature owner.
 - One shared `AgentHostSessionsProvider` maps one Host connection to
   `ISessionsProvider`. Local and remote contributions supply connections; they
   do not duplicate Session or Chat models.
@@ -56,10 +60,27 @@ permissions, reverse requests, or Feature-owned client capabilities.
   and Turn identity. Completed, cancelled, and failed Turn states are terminal;
   cancellation, steering, permission, and input operations address the exact
   Turn and request.
-- Client Tools use one typed Host protocol and execute only through their exact
-  registered contributor. Request-scoped interaction targets carry identity,
-  version, and display metadata but no content, permission, or executable
-  handle. Missing contributors and targets fail without another route.
+- A Tool is a model-facing function-call contract. `client`, `host`, `agent`,
+  and `mcp` are executor bindings over the same descriptor, call, result, and
+  Turn lifecycle; a Client Tool is a Tool whose exact executor is a connected
+  Comet client contributor.
+- Tool registration, executor availability, Turn exposure, target binding, and
+  invocation remain separate. Attachments, targets, Skills, commands, focus,
+  and Agent identity never expose a Tool implicitly.
+- A Tool descriptor defines canonical semantics and executor kind; a Tool
+  registration binds one descriptor revision to one exact executor identity.
+  The accepted Tool-set revision records exact registrations, not bare names.
+- Every model-visible Tool, including fixed SDK-native Tools, appears in that
+  canonical Tool set. An Agent declares whether it supports per-Turn Tool sets,
+  requires private SDK rebinding, or exposes a fixed set, and incompatible
+  selection fails explicitly.
+- Client Tools execute only through their exact registered contributor.
+  Request-scoped interaction targets carry identity, version, and display
+  metadata but no content, Tool, permission, or executable handle. Missing
+  contributors and targets fail without another route.
+- Host-to-client content-resource reads, descriptor synchronization, user-input
+  requests, permissions, and other non-model protocol operations are not Client
+  Tools and do not enter the model function-call lifecycle.
 - Agent Host message attachments use one generic envelope with a normalized
   common model representation, bounded inline content or content references,
   MIME data, and bounded round-trip metadata. The protocol does not enumerate
@@ -78,7 +99,8 @@ permissions, reverse requests, or Feature-owned client capabilities.
   failure after Host acceptance completes the committed turn as failed.
 - Content references declare ownership, version, and availability scope.
   Client-owned references use exact, turn-scoped grants and never expose a
-  client-local path as a remote-Host path. Reads are chunked and bounded.
+  client-local path as a remote-Host path. Reads are chunked and bounded through
+  the content-resource protocol and never require a model Tool call.
 - File attachments resolve to immutable `blob` references. Directory
   attachments resolve to immutable bounded `tree` manifests with normalized
   relative entries, explicit enumeration and link policy, and depth, entry,
@@ -86,10 +108,11 @@ permissions, reverse requests, or Feature-owned client capabilities.
   access or includes entries absent from its committed manifest.
 - Retry uses the normalized attachments stored on the submitted message. It
   never resolves current Feature state in place of the submitted version.
-- Attachments may carry exact read references or target tokens, but never
-  register or enable tools. Skills, MCP servers, commands, mutation permissions,
-  confirmation policy, Agent selection, and model selection remain separate
-  request fields.
+- Attachments may carry exact immutable content references, but never
+  interaction targets, Tool descriptors, or executor bindings. Skills, MCP
+  servers, commands, mutation permissions, confirmation policy, Agent
+  selection, model selection, and exposed Tool sets remain separate request
+  fields.
 - Optional operations are capability-gated and fail explicitly when
   unsupported.
 - Do not branch on Agent IDs for behavior, probe for methods, try another Agent

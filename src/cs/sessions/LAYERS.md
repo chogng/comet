@@ -50,9 +50,10 @@ public Workbench APIs
 **Location:** `src/cs/platform/agentHost/**`
 
 Contains the environment-neutral Host protocol, Host connection contract,
-Agent registry, normalized content and Client Tool contracts, Node Host runtime,
-and Agent SDK implementations. As a Platform subsystem it may import only Base
-and Platform modules. It never imports Editor, Workbench, Sessions, or Code.
+Agent registry, normalized content-resource contracts, canonical Tool and
+executor-binding contracts, Node Host runtime, and Agent SDK implementations.
+As a Platform subsystem it may import only Base and Platform modules. It never
+imports Editor, Workbench, Sessions, or Code.
 
 Agent implementations register with the Host runtime through public Platform
 contracts. They do not implement `ISessionsProvider`, import Workbench Chat, or

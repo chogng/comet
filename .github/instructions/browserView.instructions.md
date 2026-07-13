@@ -88,9 +88,12 @@ requires an explicit Use in Chat action to create the binding. General Chat
 submission never infers a target from the globally active Editor.
 
 An interaction target carries identity and document epoch only. Dynamic content
-is read at tool invocation time and the resulting tool output records its
-content digest. An explicit Browser attachment instead captures an immutable
-snapshot during preparation. Neither path substitutes the other.
+is read only when the model or Agent SDK emits a call to the separately exposed
+readable-content Client Tool, and the resulting Tool output records its content
+digest. An explicit Browser attachment instead publishes an immutable snapshot
+during preparation; Agent SDK translation reads its content reference through
+the Host content-resource protocol, not through a Tool call. Neither path
+substitutes the other.
 
 ## Native overlay coordination
 

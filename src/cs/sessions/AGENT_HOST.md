@@ -82,6 +82,8 @@ An `IAgent` implementation owns only its SDK-specific behavior:
 - create, materialize, release, and delete SDK backing;
 - translate normalized Host requests into SDK calls;
 - translate SDK events into ordered Agent Host actions;
+- map each accepted Turn's canonical Tool-set revision into the SDK's
+  function/tool surface and map Tool results back to the matching SDK call;
 - expose models, configuration, authentication requirements, and capabilities;
 - persist or reconstruct SDK-specific history and opaque resume data;
 - implement SDK-specific tool and permission integration behind Host contracts.
@@ -139,9 +141,18 @@ Feature-specific producer rules, and submission failure semantics are defined
 in [Attachment architecture](ATTACHMENTS.md).
 
 Request-scoped interaction targets and Feature-owned operations are separate
-from attachments. Client Tool registration, target binding, permission,
-execution, and the lazy Browser-content flow are defined in
-[Client Tool architecture](CLIENT_TOOLS.md).
+from attachments. A Client Tool is a model-facing Tool whose exact executor is
+a connected Comet client contributor; `client`, `host`, `agent`, and `mcp` are
+executor bindings over one canonical Tool lifecycle. Registration, Turn
+exposure, target binding, permission, and invocation remain separate. Their
+complete contract and the lazy Browser-content flow are defined in
+[Tool and Client Tool architecture](CLIENT_TOOLS.md).
+
+Reading or materializing an accepted attachment content reference is not a
+Tool call. The Agent implementation performs that translation through the Host
+content-resource protocol, so explicit message context never depends on the
+model choosing a function. Content references and leases are defined in
+[Attachment architecture](ATTACHMENTS.md).
 
 ## Connection protocol
 
@@ -243,11 +254,13 @@ authentication request identifies an Agent and credential scope and is routed
 through a typed Host challenge. Failure in one scope never causes the Host to
 try another Agent or credential source.
 
-Tool permission and user-input requests are scoped to the exact Session, Chat,
-Turn, tool call, and request ID. They resolve once. An attachment read lease or
-interaction target is not mutation permission, and approving one tool call does
-not approve a later call. The complete Client Tool contract is defined in
-[Client Tool architecture](CLIENT_TOOLS.md).
+Tool permission requests are scoped to the exact Session, Chat, Turn, Tool
+call, and request ID. User-input requests address the exact Session, Chat,
+Turn, and request ID plus an optional parent Tool call. Each resolves once. An
+attachment read lease or interaction target is not mutation permission, and
+approving one Tool call does not approve a later call. The complete Client Tool
+contract is defined in
+[Tool and Client Tool architecture](CLIENT_TOOLS.md).
 
 Protocol failures use typed error codes with bounded diagnostic data. Missing
 Hosts, Agents, Sessions, Chats, Turns, capabilities, resources, versions, and
@@ -290,6 +303,12 @@ These are Host-side contracts, not Workbench services. Concrete contract files
 live under `cs/platform/agentHost/common` and use only lower-layer types. Every
 mutating call carries Host-issued identity and operation context in its concrete
 options even where the summary above omits those fields.
+
+`IAgentChatRequest` carries the normalized user message, submitted attachments,
+bound interaction targets, exact exposed Tool-set revision, and other bounded
+non-Feature request configuration. An Agent implementation receives that one
+common request and translates it into its SDK; it never queries Workbench state
+or reconstructs the Tool set from Agent identity.
 
 The Host catalog and normalized Turn history are authoritative. SDK-backed
 Session discovery or import, when supported, is an explicit capability and
@@ -383,9 +402,13 @@ Chat when an addressed Chat is missing or unavailable.
 ### Turn acceptance and state
 
 Attachment resolution and composer capture are Workbench preparation, not a
-Host Turn. Host acceptance atomically commits a user message, normalized
-attachments, Turn ID, submission ID, and initial Turn state. The Agent begins
-SDK execution only after that commit.
+Host Turn. Preparation asks the Host to resolve the request's Tool policy and
+targets into one immutable prepared Tool-set revision bound to the submission
+identity.
+Host acceptance revalidates that revision and atomically commits a user
+message, normalized attachments, bound interaction targets, exposed Tool-set
+revision, Turn ID, submission ID, and initial Turn state. The Agent begins SDK
+execution only after that commit.
 
 ```text
 preparing (Workbench only)
@@ -519,9 +542,12 @@ not live in a parallel top-level `cs/agent` layer.
 - Mutations reconcile by stable operation identity and never duplicate on
   reconnect.
 - Agent SDK types never escape their Agent implementation.
-- Higher-layer Feature objects cross the Host boundary only as typed bounded
-  context or client-tool messages.
-- Attachments never register tools or grant mutation authority.
+- Every model-visible Tool is represented in the accepted canonical Tool-set
+  revision; an Agent never silently adds or omits a Tool.
+- Higher-layer Feature objects cross the Host boundary only as normalized
+  bounded context, content-resource operations, or model-facing Tool calls.
+- Attachments never register or expose Tools or grant mutation authority.
+- Content-resource reads never enter the model Tool-call lifecycle.
 - Host protocol code imports neither Workbench nor Sessions.
 - Workbench Chat owns presentation and composer state, not backend lifecycle or
   canonical Host history.

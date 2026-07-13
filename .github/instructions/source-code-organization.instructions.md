@@ -50,10 +50,13 @@ Browser producers remain with the contribution that owns the source semantics
 and consume Chat's public API. Platform Agent Host owns only normalized content
 and resource protocol contracts; it never owns a Workbench Feature producer.
 
-Generic interaction-target state lives with Workbench Chat. Client Tool
-descriptors, targets, and implementations live with the contribution that owns
-the Feature service. Platform Agent Host owns only their common protocol,
-routing, call-state, and permission contracts.
+Generic interaction-target state lives with Workbench Chat. Model-facing Client
+Tool descriptors, targets, and implementations live with the contribution that
+owns the Feature service. Platform Agent Host owns only the common Tool
+descriptor, executor-binding, routing, call-state, result, and permission
+contracts. Attachment content-resource providers remain with their Feature
+producers and do not enter the Tool registry merely because a remote Host reads
+them through the originating client.
 
 ## Agent Host Organization
 
