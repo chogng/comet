@@ -5,6 +5,11 @@ applyTo: "{src/cs/workbench/services/fetch/**,src/cs/workbench/contrib/fetch/**,
 
 # Article Fetch
 
+Read `src/cs/sessions/ATTACHMENTS.md` before changing Article attachment,
+content extraction, publication, or Chat submission behavior. Read
+`src/cs/sessions/CLIENT_TOOLS.md` before changing lazy Article or Browser
+content reads and their interaction targets.
+
 ## Service ownership
 
 `IFetchService` is the single owner of journal catalogs, source pages, article
@@ -16,9 +21,11 @@ observer is reported as an unexpected error without changing the committed
 operation result or preventing later observers from receiving the event.
 
 Navigation state such as an active journal, source, or article belongs to the
-view that renders it. Chat-specific article selection belongs to the addressed
-Chat model keyed by `chatResource`. Sessions, the product shell, downloads,
-exports, and knowledge-base services do not own copies of those states.
+view that renders it. Chat-specific Article selection belongs to Article
+presentation state keyed by `chatResource`; it does not enter Chat's generic
+attachment or interaction-target model until an explicit Feature action binds
+one. Sessions, the product shell, downloads, exports, and knowledge-base
+services do not own copies of those states.
 
 Downstream operations receive an `ArticleId` snapshot and resolve the required
 `ArticleRecord` or `ArticleDetail` through `IFetchService` at operation start.
@@ -42,6 +49,13 @@ behavior in general Chat submission. It first adds the captured selection
 through the common attachment API and then invokes the normal Chat submission
 path; preparation failure leaves those visible composer attachments in place.
 
+Article result presentation renders typed items keyed by `ArticleId`. It does
+not render an untyped Markdown list and recover Article ownership by matching
+`li` count, DOM order, CSS classes, or link text. Checkbox and open-link actions
+receive the exact `ArticleId` directly. An Article open action originating in
+Chat also carries the addressed `chatResource`, Article URI, and Article ID so
+the Editor Browser can establish the typed interaction-target relationship.
+
 The registered Article attachment type owns validation, presentation,
 persistence, and resolution. Its resolver resolves only an explicitly attached
 Article through `IFetchService` and constructs normalized Article metadata plus
@@ -53,6 +67,14 @@ The addressed Agent converts that context into SDK input and can read complete
 text through the typed content client-tool operation when required. Agent
 implementations do not scrape Article pages or treat `ArticleDetail` as full
 text. Chat and Sessions core do not interpret Article attachment state.
+
+Opening an Article link from an addressed Chat in the Editor Browser may bind
+the resulting exact Browser document target to that same Chat input. This
+creates no attachment and extracts no body. If the user asks about the opened
+article, the Agent can invoke the independently registered readable-content
+Client Tool; extraction happens only for that call. Opening the same content
+without an addressed Chat relationship requires an explicit Use in Chat action
+to bind the target, and general send never scans the active Editor.
 
 ## Runtime boundary
 

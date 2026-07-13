@@ -43,7 +43,8 @@ imports Sessions.
 Sessions owns the cross-cutting agent working context:
 
 - global session identity, provider ownership, session type, and capabilities;
-- session and chat membership, including main, peer, fork, and worker chats;
+- session and chat membership, including user-created, peer, forked, and
+  tool-origin worker Chats without a privileged Chat role;
 - draft creation, commit/replacement, archive, delete, rename, and restoration;
 - routing requests and mutations to the provider that owns the session;
 - workspace and runtime association, changesets, external changes, task and
@@ -462,11 +463,12 @@ new-session action
     → user submits one captured composer revision
     → management service routes the submission to the owning provider
     → provider prepares every attachment under the stable submission ID
-    → Host atomically creates the Session and one ordinary User Chat
-      through the common Session and Chat creation contracts
-    → provider replaces the product draft and its Chat with committed models
-    → provider binds prepared content to the returned Session and Chat IDs
-    → provider submits the normalized initial turn on that addressed Chat
+    → Host reserves Session, ordinary User Chat, and Turn identities
+    → provider binds prepared content to those reserved identities
+    → Host atomically commits the Session, Chat, and normalized initial Turn
+      through the common Session, Chat, and Turn contracts
+    → provider replaces the product draft and consumes its captured composer
+      only after Host acceptance
     → management and view services reconcile the committed identity atomically
 ```
 
@@ -478,8 +480,10 @@ or recently created sessions.
 Attachment preparation failure or cancellation occurs before Host Session
 creation and leaves the product draft and composer unchanged. Preparation uses
 the selected Host connection, Agent descriptor, and submission ID; it does not
-require a fabricated Host Session or Chat identity. Prepared content is bound
-to the canonical identities only after explicit Host creation succeeds.
+require a fabricated or published Host Session or Chat identity. The Host
+reserves canonical identities inside the create operation so content can bind
+before the Session, Chat, and Turn are committed. Failure in any pre-commit
+step publishes no partial or empty Session.
 
 ### Sending to an existing chat
 
@@ -502,9 +506,10 @@ Every request addresses both a Session and a Chat. A provider must not redirect
 a request to the first, most recent, visible, or otherwise inferred Chat.
 
 Sessions management and provider contracts do not carry prompt or attachment
-DTOs. The addressed Workbench Chat model is the only composer owner; the owning
-provider obtains its immutable submission snapshot through Chat's common API.
-The Sessions Chat view never rebuilds attachment state at the send boundary.
+DTOs. The addressed Workbench Chat model is the only composer and request-
+scoped interaction-target owner; the owning provider obtains its immutable
+submission snapshot through Chat's common API. The Sessions Chat view never
+rebuilds attachment or target state at the send boundary.
 
 For a single-Chat Session, callers still address that exact Chat identity. A
 Tool-origin worker Chat accepts a request only when its interactivity and
@@ -673,11 +678,15 @@ Connection code owns transport, authentication, reconnection, and resource
 mapping; it does not duplicate Session or Chat models or branch on Agent IDs.
 
 The complete contracts and verification requirements are defined in
-[AGENT_HOST.md](AGENT_HOST.md).
+[AGENT_HOST.md](AGENT_HOST.md). Composer and submitted context contracts are
+defined in [ATTACHMENTS.md](ATTACHMENTS.md). Client-owned operations and lazy
+interaction targets are defined in [CLIENT_TOOLS.md](CLIENT_TOOLS.md).
 
 ## Related documents
 
 - [Sessions application overview](README.md)
 - [Agent Host architecture](AGENT_HOST.md)
+- [Attachment architecture](ATTACHMENTS.md)
+- [Client Tool architecture](CLIENT_TOOLS.md)
 - [Sessions application layout](LAYOUT.md)
 - [Sessions layer rules](LAYERS.md)

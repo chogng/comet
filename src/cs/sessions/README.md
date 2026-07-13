@@ -82,6 +82,8 @@ Agent Host connection and the shared provider contribution.
 |---|---|
 | [SESSIONS.md](SESSIONS.md) | Domain model, services, providers, lifecycle, persistence, and Chat integration |
 | [AGENT_HOST.md](AGENT_HOST.md) | Agent runtime, SDK contracts, Host connections, and Sessions integration |
+| [ATTACHMENTS.md](ATTACHMENTS.md) | Composer attachments, producers, content references, submission, and source-specific rules |
+| [CLIENT_TOOLS.md](CLIENT_TOOLS.md) | Client Tool registration, interaction targets, permissions, routing, and lazy content reads |
 | [LAYOUT.md](LAYOUT.md) | Product shell, Parts, visibility, focus, editor presentation, and CSS ownership |
 | [LAYERS.md](LAYERS.md) | Import hierarchy, contribution boundaries, and entry points |
 

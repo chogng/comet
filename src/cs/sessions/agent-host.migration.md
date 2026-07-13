@@ -3,8 +3,9 @@
 ## Temporary scope
 
 This migration covers the direct replacement of the built-in default Sessions
-provider and main-agent command path by the Agent Host architecture defined in
-[AGENT_HOST.md](AGENT_HOST.md).
+provider and main-agent command path by the architecture defined in
+[AGENT_HOST.md](AGENT_HOST.md), [ATTACHMENTS.md](ATTACHMENTS.md), and
+[CLIENT_TOOLS.md](CLIENT_TOOLS.md).
 
 The scoped files and final locations are:
 
@@ -23,6 +24,8 @@ The scoped files and final locations are:
   enter the common composer path;
 - `src/cs/workbench/contrib/pdfEditor/**` and `src/cs/editor/browser/pdf/**`
   where PDF context enters the common composer path;
+- `src/cs/workbench/contrib/files/**` where File and Directory sources
+  contribute their attachment producers;
 - `src/cs/workbench/contrib/draftEditor/**` where Editor context migrates to
   the common composer-attachment API;
 - `src/cs/platform/agentHost/**`;
@@ -37,10 +40,13 @@ The scoped files and final locations are:
 - `src/cs/workbench/services/llm/mainAgentPayload.ts`;
 - `src/cs/sessions/sessions.desktop.main.ts`;
 - `src/cs/sessions/sessions.web.main.ts`;
-- `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/README.md`,
+- `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/ATTACHMENTS.md`,
+  `src/cs/sessions/CLIENT_TOOLS.md`, `src/cs/sessions/README.md`,
   `src/cs/sessions/SESSIONS.md`, `src/cs/sessions/LAYOUT.md`, and
   `src/cs/sessions/LAYERS.md`;
 - `.github/instructions/agent-host.instructions.md`,
+  `.github/instructions/chat.instructions.md`,
+  `.github/instructions/browserView.instructions.md`,
   `.github/instructions/sessions.instructions.md`,
   `.github/instructions/source-code-organization.instructions.md`, and
   `.github/instructions/article.instructions.md`;
@@ -75,6 +81,29 @@ Host state similarly exposes `defaultChat` and falls back to the first catalog
 Chat when that identity is absent. The target does not copy either design:
 catalog order is not identity, and missing Chat state remains explicit.
 
+The current attachment request is a closed Feature union owned by Workbench
+Chat and interpreted again by the default provider. The provider commits and
+clears the input before resolving Feature content, creates its tool list while
+branching on attachment kinds, rejects Resource attachments, and persists only
+the image subset of submitted attachments. Historical Article, Editor,
+Browser, File, or Directory association therefore does not exist in the old
+store and cannot be reconstructed from present Feature state.
+
+The current Article result renderer associates `ArticleId` values with generic
+Markdown list items by querying `li` elements and assuming matching count and
+order. Article link navigation therefore has no typed Chat-and-Article origin
+to bind to the opened Browser document. The target renderer owns typed Article
+items and passes `chatResource`, Article ID, and URI through the open action
+directly; it does not infer the relationship from rendered DOM.
+
+The upstream Agent Host protocol demonstrates explicit initialization and
+version selection, channel subscriptions with snapshots, monotonic server
+sequence numbers, and reconnect by complete replay or fresh snapshot. Those
+protocol mechanisms inform the target connection contract. The target does not
+copy upstream `defaultChat` routing, Feature-advisory directory handling,
+client-local URI assumptions, or permissive handling that can leave required
+state actions unapplied.
+
 ## Final project-owned boundary
 
 - `CometAgent`, with stable Agent ID `comet`, owns the built-in Agent behavior.
@@ -84,7 +113,11 @@ catalog order is not identity, and missing Chat state remains explicit.
 - Local and remote connections implement the same `IAgentHostConnection`.
 - One shared `AgentHostSessionsProvider` implementation maps each Host
   connection into the provider-independent Sessions domain.
-- `IChatService` owns addressed Chat presentation models only.
+- `IChatService` owns addressed Chat presentation models, generic pending
+  attachments, and visible request-scoped interaction targets for the addressed
+  input. It does not own backend Session lifecycle. Attachments cross the Host
+  only after immutable resolution; targets carry no content and are consumed
+  only by independently registered Client Tools.
 - All Agent SDK integrations implement `IAgent`; none registers a direct
   Sessions provider.
 - The shared provider family and implementation path use `agentHost`; Agent
@@ -115,8 +148,10 @@ names. No target registration imports or dispatches through the legacy path.
 
 ## Direct migration steps
 
-1. Add the platform Agent Host contracts, canonical identities, ordered state
-   protocol, and Node runtime under `src/cs/platform/agentHost/`.
+1. Add the platform Agent Host contracts, canonical identities, versioned
+   initialization, typed errors, channel snapshots and contiguous revisions,
+   complete replay-or-snapshot reconnection, retry-safe operation identities,
+   and Node runtime under `src/cs/platform/agentHost/`.
 2. Move the reusable protocol and turn runtime from `src/cs/agent/` into
    Platform Agent Host and update every consumer directly.
 3. Move the implementation of `runMainAgentTurn`, its tools, request limits,
@@ -130,7 +165,12 @@ names. No target registration imports or dispatches through the legacy path.
    the content owner, rather than treating Article detail as complete text.
    Register client tools independently from attachments; resolved attachments
    may supply scoped read references or target tokens but do not construct the
-   request's tool list.
+   request's tool list. Add a generic request-scoped interaction-target model:
+   a Feature explicitly binds only identity and version to an addressed Chat
+   input, and content extraction occurs only when the Agent invokes the
+   registered Client Tool. Add stable Browser main-frame document epochs so a
+   target can address one navigation without pretending to be an immutable
+   content snapshot.
 5. Register `CometAgent` with the Agent Host runtime under Agent ID `comet`.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
@@ -142,14 +182,18 @@ names. No target registration imports or dispatches through the legacy path.
    first-Chat close and delete restrictions and every implicit Chat-selection
    substitution. Replace `supportsMultipleChats` with explicit user-Chat
    creation capability and capacity; update every capability consumer directly.
+   Distinguish runtime release from durable delete, reconcile every catalog
+   mutation by operation ID, and address cancellation and steering by exact
+   Turn ID.
 8. Move Chat model creation and Host turn application into the shared Agent
    Host Sessions integration. Add one addressed composer-attachment model, one
-   public attachment API, current-version producer codecs, and registries for
-   Feature-owned resolution and browser presentation. Replace the closed
-   request attachment union. Change Sessions management and provider send
-   contracts to route only the addressed Session and Chat; the shared provider
-   begins the immutable composer submission through `IChatService`. Update
-   every call site directly.
+   public attachment API, one separate addressed interaction-target model,
+   current-version producer codecs, and registries for Feature-owned
+   resolution, Client Tools, and browser presentation. Replace the closed
+   request attachment union and send-time active-Editor harvesting. Change
+   Sessions management and provider send contracts to route only the addressed
+   Session and Chat; the shared provider begins the immutable request snapshot
+   through `IChatService`. Update every call site directly.
 9. Add the preparing-submission transaction and normalized Host attachment
    protocol. Resolve every captured attachment, bind immutable source versions,
    validate limits and Agent capabilities, then submit with an idempotent
@@ -157,34 +201,50 @@ names. No target registration imports or dispatches through the legacy path.
    acceptance. Pre-acceptance failure preserves it and creates no turn;
    post-acceptance Agent failure completes the committed turn as failed. For a
    product draft, prepare under the Host connection and submission ID before
-   creating the Host Session, then atomically create that Session and one
-   ordinary User Chat through the common Session and Chat contracts. Bind the
-   prepared references to their returned identities; the created Chat receives
-   no permanent role.
-10. Register Article, Browser, PDF, File, Editor, Chat-selection, text, and
-   image producers directly through the common attachment path. Keep Article
-   and other Feature selections independent, replace automatic Article
-   projection with explicit attachment actions, and delete direct Editor
-   harvesting and synthetic Browser context messages. Add version-addressed,
-   bounded content publication before enabling Article full-content attachment
-   resolution; `ArticleDetail` is never used as a full-text fallback.
+   creating the Host Session. In one create operation, reserve Session,
+   ordinary User Chat, and Turn identities, bind prepared references to those
+   identities, and atomically commit the Session, Chat, and initial user Turn.
+   Pre-commit failure publishes none of them; the created Chat receives no
+   permanent role.
+10. Register Article, Browser, PDF, File, Directory, Editor, Chat-selection,
+    text, and image producers directly through the common attachment path. File
+    resolves one immutable `blob`; Directory resolves one immutable bounded
+    `tree` manifest with normalized relative entries, explicit enumeration and
+    link policy, and depth, entry, per-file, and total-byte limits. Do not pass
+    client-local paths to remote Hosts, flatten a Directory into prompt text,
+    expand it into inferred File attachments, or grant access beyond committed
+    tree entries. Keep Article and other Feature selections independent,
+    replace automatic Article projection with explicit attachment actions, and
+    delete direct Editor harvesting and synthetic Browser context messages.
+    Replace Markdown-list DOM correlation with typed Article item rendering and
+    an open action carrying `chatResource`, Article ID, and URI. Add version-
+    addressed, bounded content publication before enabling Article full-content
+    attachment resolution; `ArticleDetail` is never used as a full-text
+    fallback.
 11. Move legacy default-provider Session and Chat persistence to the Host
     catalog and Comet Agent resume boundary. Perform one explicit, versioned,
     atomic data migration of `sessions.providers.default` at the new storage
     owner and delete the old key after the new state commits. Runtime routing
     never reads both formats or chooses between them. Preserve attachment data
     that the old store actually recorded, including user-message images. Do not
-    invent historical Article, Editor, Browser, or File attachments from
-    current checkbox state, the active Editor, Article lists, or other
-    present-time Feature state when the old turn did not persist that
-    association.
+    invent historical Article, Editor, Browser, File, or Directory attachments
+    from current checkbox state, the active Editor, Article lists, workspace
+    folders, or other present-time Feature state when the old turn did not
+    persist that association.
 12. Replace the desktop entry-point import of the legacy default provider with
     local Agent Host registration. Register remote Host discovery only in
     targets that provide a real remote connection implementation.
 13. Update all tests to exercise the Agent contract, Host runtime, local and
-   remote connections, shared Sessions provider, composer restoration,
-   preparation failure, Host acceptance, acknowledgement reconciliation,
-   retry versioning, and local and remote content lifetimes.
+    remote connections, shared Sessions provider, composer restoration,
+    preparation failure, Host acceptance, acknowledgement reconciliation,
+    retry versioning, `blob` and `tree` limits, manifest path and link policy,
+    local and remote content lifetimes, version negotiation, revision gaps,
+    replay and snapshot recovery, operation-ID conflicts, release versus
+    delete, monotonic Turn terminal state, explicit interaction-target binding,
+    lazy content reads, and Client Tool disconnect and effect reconciliation.
+    Cover typed Article item identity and Chat-origin Browser target binding
+    without DOM-order inference, including document-epoch changes and snapshot
+    content digests.
 14. Delete `src/cs/sessions/contrib/providers/default/**`, the
    `run_main_agent_turn` command and payload contracts, default-provider
    storage, every `default`-prefixed implementation symbol and file, the
@@ -222,39 +282,57 @@ The migration is complete only when:
    end to end.
 2. Local and remote Host connections use the same protocol and shared Sessions
    provider implementation.
-3. Session creation and Chat creation use the common Host contracts. A product
-   draft may request both in one atomic Host transaction without creating a
-   permanent Chat role.
-4. Every Chat lifecycle uses the common Host Chat contract and truthful
+3. Initialization negotiates one explicit version, channel state applies from
+   snapshots and contiguous revisions, and reconnection uses complete replay or
+   fresh snapshots without guessing missing state.
+4. Session creation, Chat creation, and Turn acceptance use the common Host
+   contracts. A product draft commits its Session, one ordinary Chat, and
+   initial user Turn in one operation after prepared content binds to reserved
+   identities, without creating a permanent Chat role or partial empty Session.
+5. Every Chat lifecycle uses the common Host Chat contract and truthful
    capabilities.
-5. No Agent SDK implementation imports Sessions or Workbench Chat.
-6. No Platform Agent Host file imports Editor, Workbench, Sessions, or Code.
-7. No Sessions service or non-provider contribution imports an Agent
+6. Release preserves catalog identity and resume state; delete uses a durable
+   idempotent operation; cancellation and steering address an exact Turn; and
+   terminal Turn state is monotonic.
+7. No Agent SDK implementation imports Sessions or Workbench Chat.
+8. No Platform Agent Host file imports Editor, Workbench, Sessions, or Code.
+9. No Sessions service or non-provider contribution imports an Agent
    implementation.
-8. Every Feature adds request context through the common addressed Chat
-   attachment API, and submitted attachments use the normalized Host protocol
-   without provider-specific routing or silent omission.
-9. Sessions management and provider send contracts carry only addressed
+10. Every Feature attachment enters through the common addressed Chat
+    attachment API, and submitted attachments use the normalized Host protocol
+    without provider-specific routing or silent omission. Lazy Feature
+    operations use the separate Client Tool and interaction-target contracts.
+11. File and Directory use separate producers over the common attachment API.
+   File submissions bind immutable `blob` references; Directory submissions
+   bind immutable bounded `tree` manifests. Remote Hosts receive no client-local
+   path, live recursive grant, inferred File expansion, or unmanifested entry.
+12. Sessions management and provider send contracts carry only addressed
    Session and Chat identity; no closed Feature attachment union or parallel
    request payload remains outside `IChatService`.
-10. Pre-acceptance attachment and Host failures preserve the composer and
+13. Pre-acceptance attachment and Host failures preserve the composer and
    create no turn; post-acceptance Agent failures preserve the committed failed
    turn; retry never substitutes current Feature state for submitted content.
-11. `providers/default`, `DefaultSessionsProvider`, `DefaultSession`,
+14. Request-scoped interaction targets carry only exact identity and version,
+   are bound explicitly to one addressed Chat input, and trigger no content
+   extraction unless the Agent invokes the exact registered Client Tool.
+   General submission does not scan globally active Editors or route a missing
+   tool or target to another implementation.
+15. `providers/default`, `DefaultSessionsProvider`, `DefaultSession`,
    `DefaultChat`, every other `default`-prefixed implementation identity, and
    `run_main_agent_turn` no longer exist. The old storage key appears only in
    the completed one-time data migration and is absent from runtime routing and
    newly persisted state.
-12. `ISession.mainChat`, `defaultChat`, main-Chat branches, first-Chat
+16. `ISession.mainChat`, `defaultChat`, main-Chat branches, first-Chat
     privileges, and implicit first-Chat selection no longer exist. Empty
     committed Sessions and an undefined view-owned `activeChat` are represented
     explicitly.
-13. The parallel `src/cs/agent/**` layer no longer exists.
-14. No old symbol is retained through an alias, wrapper, re-export, or
+17. The parallel `src/cs/agent/**` layer no longer exists.
+18. No old symbol is retained through an alias, wrapper, re-export, or
     compatibility module.
-15. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
+19. Agent Host, Sessions provider, Chat integration, entry-point, layer, and
     lifecycle tests pass.
-16. Durable documentation describes only the final Agent Host architecture.
+20. Durable documentation describes only the final Agent Host, Attachment, and
+    Client Tool architecture.
 
 ## Deletion condition
 

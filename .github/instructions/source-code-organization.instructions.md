@@ -41,6 +41,19 @@ Within each layer, code is organized by runtime environment:
 - `cs/workbench/services` — core services (not contrib-specific)
 - `cs/workbench/contrib` — feature contributions
 - `cs/workbench/contrib/chat` — single-conversation models and interaction UI
+- `cs/workbench/contrib/files` — Comet-owned File and Directory attachment
+  producers and source actions over public Workbench file services
+
+Generic attachment collections, registries, and submission transactions live
+with `cs/workbench/contrib/chat`. Article, PDF, File, Directory, Editor, and
+Browser producers remain with the contribution that owns the source semantics
+and consume Chat's public API. Platform Agent Host owns only normalized content
+and resource protocol contracts; it never owns a Workbench Feature producer.
+
+Generic interaction-target state lives with Workbench Chat. Client Tool
+descriptors, targets, and implementations live with the contribution that owns
+the Feature service. Platform Agent Host owns only their common protocol,
+routing, call-state, and permission contracts.
 
 ## Agent Host Organization
 

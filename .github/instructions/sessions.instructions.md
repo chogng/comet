@@ -10,6 +10,8 @@ Read these documents before changing Sessions code:
 - `src/cs/sessions/README.md`
 - `src/cs/sessions/SESSIONS.md`
 - `src/cs/sessions/AGENT_HOST.md`
+- `src/cs/sessions/ATTACHMENTS.md`
+- `src/cs/sessions/CLIENT_TOOLS.md`
 - `src/cs/sessions/LAYOUT.md`
 - `src/cs/sessions/LAYERS.md`
 
@@ -78,6 +80,9 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
   `ISession` has no distinguished Chat property.
 - Every Chat has explicit origin, identity, capability, and interactivity
   state. A Chat created with a new Session is an ordinary Chat after commit.
+- A draft's initial request reserves identities and atomically commits its
+  Session, ordinary Chat, and user Turn only after content preparation binds.
+  Pre-commit failure preserves the draft and publishes no empty Session.
 - User, fork, and Multi-Agent worker Chats share the same catalog and lifecycle
   rules; no first Chat receives permanent close, delete, or routing privileges.
 - The product-wide new-conversation action creates a new session. Creating a

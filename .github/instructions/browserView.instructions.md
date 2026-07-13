@@ -1,9 +1,13 @@
 ---
 description: Architecture rules for BrowserView, browser automation, overlays, and Editor integration.
-applyTo: "{src/cs/platform/browserView/**,src/cs/workbench/services/browserView/**,src/cs/workbench/contrib/browserView/**}"
+applyTo: "{src/cs/platform/browserView/**,src/cs/workbench/services/browserView/**,src/cs/workbench/contrib/browserView/**,src/cs/sessions/contrib/browserView/**}"
 ---
 
 # BrowserView architecture
+
+Read `src/cs/sessions/CLIENT_TOOLS.md` before changing Browser interaction
+targets, Agent-readable content, or Client Tool integration. Read
+`src/cs/sessions/ATTACHMENTS.md` before changing Browser attachments.
 
 ## Ownership
 
@@ -29,6 +33,11 @@ Playwright facade, or page lifecycle.
 BrowserView IDs and Playwright page IDs are product identities. They are not CDP
 `targetId` values and are not inferred from URLs or DOM state.
 
+Each BrowserView also exposes one main-frame document epoch. It changes on a
+committed main-frame navigation and remains distinct from the stable
+BrowserView and page identities. An interaction target binds BrowserView, page,
+and document epoch without claiming that dynamic page content was snapshotted.
+
 ## Editor integration
 
 A visible BrowserView enters Workbench Editor through its typed resource and
@@ -52,7 +61,8 @@ manipulate the Sessions Editor Part directly.
 `IPlaywrightService.captureSnapshot()` is the single typed platform boundary
 for obtaining a complete main-frame page snapshot. It operates only on a page
 tracked by the addressed Playwright session and returns a bounded immutable
-value containing page identity, URI, title, HTML, and capture time.
+value containing page identity, document epoch, URI, title, HTML, capture time,
+and content digest.
 
 URI, title, and HTML are captured atomically from one document execution
 context. Navigation interruption, page closure, cancellation, readiness
@@ -68,6 +78,19 @@ scripts.
 Do not add a parallel DOM Snapshot method to `IBrowserViewService`. Agent-facing
 ARIA summaries remain a separate `IPlaywrightService` capability and are not a
 replacement for the typed HTML snapshot.
+
+## Chat context
+
+Opening a BrowserView does not attach or extract its content. A navigation
+originating from one addressed Chat may bind that exact document as a visible
+request-scoped interaction target for the same Chat input. Other navigation
+requires an explicit Use in Chat action to create the binding. General Chat
+submission never infers a target from the globally active Editor.
+
+An interaction target carries identity and document epoch only. Dynamic content
+is read at tool invocation time and the resulting tool output records its
+content digest. An explicit Browser attachment instead captures an immutable
+snapshot during preparation. Neither path substitutes the other.
 
 ## Native overlay coordination
 
