@@ -11,7 +11,7 @@ Comet disposables:
 - the durable Disposable rules in
   `.github/instructions/coding-guidelines.instructions.md` and
   `.github/instructions/disposable.instructions.md`; and
-- the Base common lane only as needed to execute those focused tests.
+- the Node unit runtime only as needed to execute those focused tests.
 
 It does not audit every structural disposable or convert every test suite.
 That repository-wide adoption belongs to
@@ -85,7 +85,7 @@ module-level test fixture is not exempted merely because it predates a hook.
    cleanup errors.
 4. Add the `node:test` leak helper and prove its hook ordering, serial guard,
    cleanup, error preservation, and tracker reset.
-5. Run the Base common lane, test type checking, and repository verification,
+5. Run the focused Base common tests, test type checking, and repository verification,
    then delete this document once every completion criterion holds.
 
 ## Required conformance cases
@@ -110,7 +110,7 @@ module-level test fixture is not exempted merely because it predates a hook.
 
 This migration is complete only when all scoped lifecycle primitives report
 their real ownership transitions, the helper detects every conformance case,
-no Mocha hook or compatibility wrapper exists, and the Base common lane,
+no Mocha hook or compatibility wrapper exists, and the focused Base common tests,
 `npm run typecheck:tests`, and `npm run verify` pass.
 
 Delete this document in the same change that satisfies these criteria.

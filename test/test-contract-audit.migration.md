@@ -10,7 +10,7 @@ test seams required to control time, ordering, dependency failure, and process
 lifetime. It also owns checked-in test data under those suites and the focused
 fixture and sleep verifiers and their tests under `scripts/verify/**`.
 
-It does not own lane discovery or coverage, lifecycle tracking, Observable
+It does not own unit discovery or coverage, lifecycle tracking, Observable
 kernel semantics, or application smoke reliability. Those belong to their
 focused migration documents. Sessions tests for legacy `default` provider and
 `mainChat` sources are deleted by the
@@ -87,7 +87,7 @@ mock, retry, or swallowed cleanup error is introduced to make a case pass.
 1. Add focused verifier tests for fixture size and encoding, prohibited fixture
    classes, unowned fixtures, direct wall-clock sleeps, and the explicit
    elapsed-time helper boundary. Wire them into `npm run verify`.
-2. Inventory high-risk surviving contracts by owning lane and record their
+2. Inventory high-risk surviving contracts by owning suite and runtime and record their
    legal states, rejected states, commit point, failure state, ordering edges,
    lifetime owner, and persistence or protocol boundary in this temporary
    document while the audit is active.
@@ -103,7 +103,7 @@ mock, retry, or swallowed cleanup error is introduced to make a case pass.
 6. For every fixed defect encountered during the audit, retain a regression
    test that demonstrably fails against the faulty behavior and passes because
    of the direct fix.
-7. Run every affected lane, test type checking, changed-branch coverage, and
+7. Run every affected unit, integration, and application runtime, test type checking, changed-branch coverage, and
    repository verification, then delete this document after all criteria hold.
 
 ## Required audit evidence
@@ -134,7 +134,7 @@ boundary, not because the branch is hard to arrange.
 This migration is complete only when:
 
 - every surviving public contract has its applicable audit evidence in the
-  owning unit or integration lane;
+  owning unit or integration suite;
 - every known defect fixed during the audit has a failing-before regression
   test;
 - no test uses scheduler luck or a wall-clock sleep for readiness;
@@ -144,7 +144,7 @@ This migration is complete only when:
 - no test seam introduces alternate production behavior or compatibility code;
 - legacy Agent Host tests are deleted and final Agent/SDK/Session/Chat tests
   cover the target contracts directly; and
-- all affected lanes, `npm run typecheck:tests`,
+- all affected test runtimes, `npm run typecheck:tests`,
   `npm run test:coverage`, and `npm run verify` pass.
 
 Delete this document in the same change that satisfies these criteria.

@@ -208,7 +208,7 @@ test('Lower source layers do not import Sessions and Workbench has no product ho
 	const hostDefinitions = sessionsSources.filter(file =>
 		readFileSync(file, 'utf8').includes('class SessionsWorkbenchHost'),
 	);
-	assert.deepEqual(hostDefinitions.map(file => path.relative(Root, file)), [
+	assert.deepEqual(hostDefinitions.map(file => path.relative(Root, file).split(path.sep).join('/')), [
 		'src/cs/sessions/browser/sessionsWorkbench.ts',
 	]);
 });

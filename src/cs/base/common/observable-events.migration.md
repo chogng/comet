@@ -51,7 +51,7 @@ the adapter does not start a nested or recovery transaction.
 2. Add the public contracts and nodes directly to the one graph kernel.
 3. Migrate real consumers to the semantically matching factory. Do not convert
    commands or control flow into observable state.
-4. Run Base and every affected consumer lane, then delete this document once
+4. Run the Base tests and every affected consumer test, then delete this document once
    all completion criteria hold.
 
 ## Completion and deletion criteria
@@ -59,7 +59,7 @@ the adapter does not start a nested or recovery transaction.
 This migration is complete only when all event adapters use the one graph,
 subscriptions are lazy and leak-free, value and signal semantics are proven
 distinct, disposable replacement is exact, re-entry is rejected, every direct
-consumer uses the final factory without wrappers, and all affected lanes,
+consumer uses the final factory without wrappers, and all affected test runtimes,
 type checking, coverage, and verification pass.
 
 Delete this document in the same change that satisfies these criteria.

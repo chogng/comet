@@ -95,7 +95,7 @@ disposables to satisfy the helper.
 6. Delete `DisposableLike`, `DisposableHandle`, `DisposableInput`, the
    `isDisposableLike` public guard, and raw function overloads from lifecycle.
    Update all addressed imports and calls directly in the same cutover.
-7. Run every affected lane, test type checking, and repository verification,
+7. Run every affected unit and integration test, test type checking, and repository verification,
    then delete this document after all criteria hold.
 
 ## Required conformance cases
@@ -122,6 +122,6 @@ survivor, raw ownership function, or unowned disposable field; the removed
 lifecycle names and overloads have no declaration or call site; every
 applicable surviving suite uses the leak helper; every conformance case passes;
 legacy Agent Host paths are deleted rather than adapted; and all affected
-lanes, `npm run typecheck:tests`, and `npm run verify` pass.
+test runtimes, `npm run typecheck:tests`, and `npm run verify` pass.
 
 Delete this document in the same change that satisfies these criteria.

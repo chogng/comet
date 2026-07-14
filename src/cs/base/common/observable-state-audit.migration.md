@@ -45,7 +45,7 @@ setter, or mirrored legacy field.
 4. Test success, callback throw after each write boundary, reaction count,
    equality-neutral transitions, cancellation where applicable, and exact
    post-failure state.
-5. Run every affected unit, integration, and smoke lane, then delete this
+5. Run every affected unit, integration, and smoke test runtime, then delete this
    document once every transition has a final classification.
 
 ## Completion and deletion criteria
@@ -55,7 +55,7 @@ sequence is an aggregate write, one explicit addressed transaction, or a
 tested intentionally independent sequence; no transaction preserves duplicate
 authority or legacy Agent Host state; reactions never observe a forbidden
 intermediate combination; exact pre- and post-commit failure states are
-covered; and all affected lanes, type checking, coverage, and verification
+covered; and all affected test runtimes, type checking, coverage, and verification
 pass.
 
 Delete this document in the same change that satisfies these criteria.

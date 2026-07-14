@@ -839,6 +839,10 @@ suite('OpenAIResponsesModelRuntime', () => {
 		] as const;
 		for (const kind of cases) {
 			await t.test(kind, async testContext => {
+				if (kind === 'symbolic link' && process.platform === 'win32') {
+					testContext.skip('Creating file symbolic links requires an elevated Windows process.');
+					return;
+				}
 				const temporary = await realpath(await mkdtemp(path.join(tmpdir(), 'comet-openai-tree-tamper-')));
 				testContext.after(() => rm(temporary, { recursive: true, force: true }));
 				const root = path.join(temporary, 'tree');

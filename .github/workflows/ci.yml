@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -36,3 +38,61 @@ jobs:
 
       - name: Run Electron smoke tests
         run: xvfb-run --auto-servernum npm --prefix test/smoke run mocha
+
+  coverage-collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Collect source-mapped coverage
+        run: npm run test:coverage -- --collect-only --platform any --output coverage-fragments/any
+
+      - name: Upload coverage fragment
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-coverage-any
+          path: coverage-fragments/any
+          if-no-files-found: error
+
+  coverage-evaluate:
+    needs: coverage-collect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download coverage fragments
+        uses: actions/download-artifact@v8
+        with:
+          pattern: test-coverage-*
+          path: coverage-fragments
+
+      - name: Evaluate changed branch coverage
+        run: npm run test:coverage -- --evaluate-only --input coverage-fragments

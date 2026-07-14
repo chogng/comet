@@ -30,9 +30,9 @@ Chat sources call the final Observable API directly.
 
 ## Prerequisites and ownership
 
-The directly discovered Base lane from
-[Test lane and coverage](../../../../test/test-infrastructure.migration.md)
-must exist before the kernel conformance cutover. The lifecycle hooks and
+The directly discovered Node runtime described by
+[Unit tests](../../../../test/unit/README.md) must execute the Base kernel
+conformance suite before the kernel cutover. The lifecycle hooks and
 `node:test` leak helper from
 [Disposable tracking core](disposable-tracking.migration.md) must exist before
 graph resources are accepted as leak-free.
@@ -357,7 +357,7 @@ type members and call sites. A derived value never constructs or owns a
 7. Delete legacy Agent Host consumers through their owning migration and
    compile surviving Sessions consumers directly against the kernel.
 8. Run the Base common, Base browser, Platform DOM widget, and all other
-   affected lanes, test type checking, and layer verification. Delete this
+   affected tests, test type checking, and layer verification. Delete this
    document after every criterion holds.
 
 ## Call-site decisions
@@ -479,7 +479,7 @@ This migration is complete only when:
 - `DomWidget` contains neither observable-producing factory and passes its
   ownership matrix;
 - legacy `default` and `mainChat` consumers are deleted rather than adapted;
-- every scoped lane, test type checking, coverage, and layer verification
+- every scoped test, test type checking, coverage, and layer verification
   passes; and
 - the durable Observable instruction describes only the implemented target.
 

@@ -17,25 +17,25 @@ import {
 import { URI } from 'cs/base/common/uri';
 
 test('resources computes URI path segments', () => {
-	const resource = URI.file('/tmp/workspace/src/file.ts');
+	const resource = URI.parse('test://authority/workspace/src/file.ts');
 	const parent = dirname(resource);
 	const sibling = joinPath(parent, '../test/file.test.ts');
 
 	assert.equal(basename(resource), 'file.ts');
-	assert.equal(parent.toString(), 'file:///tmp/workspace/src');
-	assert.equal(sibling.toString(), 'file:///tmp/workspace/test/file.test.ts');
-	assert.equal(relativePath(URI.file('/tmp/workspace'), sibling), 'test/file.test.ts');
+	assert.equal(parent.toString(), 'test://authority/workspace/src');
+	assert.equal(sibling.toString(), 'test://authority/workspace/test/file.test.ts');
+	assert.equal(relativePath(URI.parse('test://authority/workspace'), sibling), 'test/file.test.ts');
 });
 
 test('resources compares URI parents', () => {
-	const workspace = URI.file('/tmp/workspace');
-	const child = URI.file('/tmp/workspace/src/file.ts');
-	const other = URI.file('/tmp/other/file.ts');
+	const workspace = URI.parse('test://authority/workspace');
+	const child = URI.parse('test://authority/workspace/src/file.ts');
+	const other = URI.parse('test://authority/other/file.ts');
 
 	assert.equal(isEqualOrParent(child, workspace), true);
 	assert.deepEqual(
 		distinctParents([workspace, child, other], item => item).map(item => item.toString()),
-		['file:///tmp/workspace', 'file:///tmp/other/file.ts'],
+		['test://authority/workspace', 'test://authority/other/file.ts'],
 	);
 });
 

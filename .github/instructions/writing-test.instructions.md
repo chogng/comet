@@ -1,6 +1,6 @@
 ---
 description: Comet unit and integration test writing guidelines for placement, execution, assertions, deterministic fixtures, and clean teardown.
-applyTo: "{src/cs/**/test/**,src/cs/**/*.test.ts,src/cs/**/*.integrationTest.ts}"
+applyTo: "{src/cs/**/test/**,src/cs/**/*.test.ts,src/cs/**/*.integrationTest.ts,scripts/**/*.test.ts,test/unit/**}"
 ---
 
 # Writing tests
@@ -11,12 +11,11 @@ the changed public contract.
 
 ## Test types
 
-| Type | Suffix and location | Use for |
-|---|---|---|
-| Unit | `*.test.ts` under `src/cs/**/test/` or next to the owning source | One module or a small collaborating set with controlled dependencies |
-| Integration | `*.integrationTest.ts` next to the owning subsystem | A real boundary such as storage, IPC, a child process, or a local server |
+| Type | Suffix | location | Runs in |
+|---|---|---|---|
+| Unit | `*.test.ts` | `src/cs/**/test/` | Browser, Electron, or Node.js (depends on layer) |
+| Integration | `*.integrationTest.ts` | `src/cs/**/test/` | Real external APIs |
 
-<<<<<<< HEAD
 Platform Agent Host contract and runtime tests and their support modules live under
 `src/cs/platform/agentHost/test/{common,browser,electron-browser,node}/`,
 partitioned by the runtime they exercise. They do not live under Agent Host
@@ -40,21 +39,33 @@ discovery.
 
 ## Running tests
 
-Run the narrowest owning lane while iterating, then every lane affected by the
-changed runtime or process boundary:
+`test/unit/node/index.mjs` discovers every `*.test.ts` and
+`*.integrationTest.ts` under `src`, `scripts`, and `test/unit`, bundles the
+selected sources with one Node runtime policy, and executes them serially. A
+new matching test requires no runner edit; never add a domain runner, source
+manifest, or import-only aggregation test.
 
-- `npm run test:base-common`
-- `npm run test:valid-layers-check`
-- `npm run test:workbench-browser`
-- `npm run test:editor`
-- `npm run test:pdf-selection`
-- `npm run test:library-store`
-- `npm run test:electron-main`
-- `npm run test:agent`
+Runtime directories under `test/unit` identify the process that actually
+executes the tests. JSDOM remains a Node bootstrap; an Electron-layer source
+tested with doubles remains a Node test. Do not add a browser or Electron entry
+point unless it starts that runtime.
+
+Run one source or a repository-relative glob while iterating:
+
+```text
+npm run test:unit -- --run src/cs/example/test/example.test.ts
+npm run test:unit -- --glob "src/cs/example/**/*.test.ts"
+```
+
+Then run the complete Node unit runtime:
+
+```text
+npm run test:unit
+```
 
 Before completing a test change, run `npm run typecheck:tests`,
-`npm run test:coverage`, and `npm run verify`. A passing unit lane does not
-replace an affected integration lane.
+`npm run test:coverage`, and `npm run verify`. A passing focused selection does
+not replace an affected integration or application runtime.
 
 ## Test structure and behavior
 
@@ -119,7 +130,7 @@ or failure injection with a percentage target.
 - Run a suite serially when it uses a process-wide disposable tracker,
   application singleton, shared port, or shared user-data directory.
 - A platform-specific test calls `TestContext.skip(reason)` and returns. The
-  addressed platform must have a lane that executes the test.
+  addressed platform must have a runtime that executes the test.
 
 ## Clean teardown
 

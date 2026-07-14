@@ -4,20 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { runNpmScript } from '../../build/lib/util.ts';
+
 const verifyScripts = [
 	'valid-layers-check',
-	'test:valid-layers-check',
-	'test:server-build',
 	'check:i18n',
 	'typecheck:tests',
-	'test:base-common',
-	'test:workbench-browser',
-	'test:editor',
-	'test:pdf-selection',
-	'test:library-store',
-	'test:electron-main',
-	'test:agent',
-	'test:remote',
+	'test:unit',
 ];
 
 for (const scriptName of verifyScripts) {

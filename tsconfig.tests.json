@@ -1,5 +1,16 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["src/**/*.test.ts", "src/**/tests/**/*.ts", "src/**/*.d.ts"],
+  "compilerOptions": {
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.integrationTest.ts",
+    "src/**/test/**/*.ts",
+    "src/**/tests/**/*.ts",
+    "src/**/*.d.ts",
+    "scripts/**/*.test.ts",
+    "test/unit/**/*.test.ts"
+  ],
   "exclude": ["node_modules", "dist", "dist-electron", "dist-web"]
 }

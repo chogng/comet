@@ -219,7 +219,9 @@ suite('AgentContentResourceService', { concurrency: false }, () => {
 			const blobLease = await host.open(openRequest(blob.content), CancellationTokenNone);
 			const blobCopy = await host.materialize({ lease: blobLease.lease }, CancellationTokenNone);
 			assert.equal(await readFile(blobCopy.resource, 'utf8'), 'exact bytes');
-			assert.equal((await lstat(blobCopy.resource)).mode & 0o777, 0o600);
+			if (process.platform !== 'win32') {
+				assert.equal((await lstat(blobCopy.resource)).mode & 0o777, 0o600);
+			}
 			assert.equal(path.relative(await realpath(root), blobCopy.resource).startsWith('..'), false);
 			await host.releaseMaterialization(blobCopy.id, CancellationTokenNone);
 			await assert.rejects(readFile(blobCopy.resource));
