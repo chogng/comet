@@ -10,6 +10,7 @@ import { DeferredPromise } from 'cs/base/common/async';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { Emitter } from 'cs/base/common/event';
 import { toDisposable, type IDisposable } from 'cs/base/common/lifecycle';
+import { AgentHostManagementService } from 'cs/platform/agentHost/browser/agentHostManagementService';
 import {
 	RemoteAgentHostConnection,
 	type IRemoteAgentHostClientToolEndpoint,
@@ -31,6 +32,7 @@ import {
 	createAgentAttachmentProducerTypeId,
 	createAgentAttachmentRepresentationSchemaId,
 	createAgentChatId,
+	createAgentConfigurationPropertyId,
 	createAgentConfigurationStateRevision,
 	createAgentContentDigest,
 	createAgentContentReferenceId,
@@ -50,6 +52,8 @@ import {
 	createAgentModelDescriptorRevision,
 	createAgentModelId,
 	createAgentPackageId,
+	createAgentPackageContentDigest,
+	createAgentPackageRevision,
 	createAgentRuntimeRegistrationRevision,
 	createAgentSessionId,
 	createAgentSessionTypeId,
@@ -387,6 +391,8 @@ class TestAgentHostConnection implements IAgentHostConnection {
 	readonly prepareRequests: IAgentHostPrepareSubmissionRequest[] = [];
 	readonly mutationRequests: IAgentHostMutationRequest[] = [];
 	readonly operationOutcomeRequests: IAgentHostOperationOutcomeRequest[] = [];
+	readonly packageOperationRequests: IAgentPackageOperationRequest[] = [];
+	readonly packageOperationOutcomeRequests: IAgentPackageOperationOutcomeRequest[] = [];
 	reconnectResult: AgentHostReconnectResult | undefined;
 	reconnectRequest: ((request: IAgentHostReconnectRequest) => Promise<AgentHostReconnectResult>) | undefined;
 	resolveConfiguration: (
@@ -416,6 +422,12 @@ class TestAgentHostConnection implements IAgentHostConnection {
 		throw new Error('Mutation is not configured.');
 	};
 	operationOutcome: (request: IAgentHostOperationOutcomeRequest) => Promise<AgentHostMutationOutcome> = async () => ({ kind: 'unknown' });
+	packageOperation: (
+		request: IAgentPackageOperationRequest,
+	) => Promise<AgentPackageOperationOutcome> = async () => ({ kind: 'unknown' });
+	packageOperationOutcome: (
+		request: IAgentPackageOperationOutcomeRequest,
+	) => Promise<AgentPackageOperationOutcome> = async () => ({ kind: 'unknown' });
 
 	constructor(sessions: readonly IAgentHostSessionState[] = []) {
 		this.replaceSessions(sessions);
@@ -509,12 +521,14 @@ class TestAgentHostConnection implements IAgentHostConnection {
 		return this.operationOutcome(request);
 	}
 
-	executePackageOperation(_request: IAgentPackageOperationRequest): Promise<AgentPackageOperationOutcome> {
-		return Promise.resolve({ kind: 'unknown' });
+	executePackageOperation(request: IAgentPackageOperationRequest): Promise<AgentPackageOperationOutcome> {
+		this.packageOperationRequests.push(request);
+		return this.packageOperation(request);
 	}
 
-	getPackageOperationOutcome(_request: IAgentPackageOperationOutcomeRequest): Promise<AgentPackageOperationOutcome> {
-		return Promise.resolve({ kind: 'unknown' });
+	getPackageOperationOutcome(request: IAgentPackageOperationOutcomeRequest): Promise<AgentPackageOperationOutcome> {
+		this.packageOperationOutcomeRequests.push(request);
+		return this.packageOperationOutcome(request);
 	}
 
 	emitSessionState(state: IAgentHostSessionState, revision: number, digestCharacter: string): AgentHostChannelAction {
@@ -723,6 +737,7 @@ function createRemoteContribution(
 		},
 		chatService,
 		providers,
+		new AgentHostManagementService(),
 		localeService,
 		languageService,
 	);
@@ -781,6 +796,195 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 			createProvider(connection, chatService),
 			/Host defaults for Agent 'comet' do not match its runtime registration schema/,
 		);
+	});
+
+	test('resends an unknown package install with the same operation identity and digest', async () => {
+		const { connection, chatService } = createFixture();
+		const optionalPackageId = createAgentPackageId('claude');
+		const offering = Object.freeze({
+			packageId: optionalPackageId,
+			revision: createAgentPackageRevision('claude.test.v1'),
+			contentDigest: createAgentPackageContentDigest(`sha256:${'c'.repeat(64)}`),
+			source: 'file:///verified/claude-runtime.js',
+			distribution: 'user' as const,
+		});
+		connection.root = {
+			...connection.root,
+			capabilities: { ...connection.root.capabilities, supportsPackageOperations: true },
+			packages: { ...connection.root.packages, installablePackages: [offering] },
+		};
+		let attempt = 0;
+		connection.packageOperation = async request => {
+			attempt += 1;
+			if (attempt === 1) {
+				return { kind: 'unknown' };
+			}
+			return {
+				kind: 'succeeded',
+				result: {
+					operationId: request.operation,
+					requestDigest: request.digest,
+					kind: 'install',
+					packageId: optionalPackageId,
+					stateRevision: 1,
+					affectedRecords: 0,
+				},
+			};
+		};
+		const provider = await createProvider(connection, chatService);
+		try {
+			await provider.installPackage(optionalPackageId);
+			assert.equal(connection.packageOperationRequests.length, 2);
+			assert.deepStrictEqual(connection.packageOperationRequests[1], connection.packageOperationRequests[0]);
+			assert.deepStrictEqual(provider.getManagementSnapshot().pendingPackages, []);
+		} finally {
+			provider.dispose();
+		}
+	});
+
+	test('reconciles a package install after transport loss without creating another operation', async () => {
+		const { connection, chatService } = createFixture();
+		const optionalPackageId = createAgentPackageId('claude');
+		const offering = Object.freeze({
+			packageId: optionalPackageId,
+			revision: createAgentPackageRevision('claude.recovery.v1'),
+			contentDigest: createAgentPackageContentDigest(`sha256:${'d'.repeat(64)}`),
+			source: 'file:///verified/claude-recovery-runtime.js',
+			distribution: 'user' as const,
+		});
+		connection.root = {
+			...connection.root,
+			capabilities: { ...connection.root.capabilities, supportsPackageOperations: true },
+			packages: { ...connection.root.packages, installablePackages: [offering] },
+		};
+		let committed: IAgentPackageOperationRequest | undefined;
+		connection.packageOperation = async request => {
+			committed = request;
+			throw new Error('Transport was lost after package commit.');
+		};
+		let outcomeAttempt = 0;
+		connection.packageOperationOutcome = async request => {
+			outcomeAttempt += 1;
+			if (outcomeAttempt === 1) {
+				throw new Error('Transport is unavailable.');
+			}
+			return {
+				kind: 'succeeded',
+				result: {
+					operationId: request.operation,
+					requestDigest: request.digest,
+					kind: 'install',
+					packageId: optionalPackageId,
+					stateRevision: 1,
+					affectedRecords: 0,
+				},
+			};
+		};
+		const provider = await createProvider(connection, chatService);
+		try {
+			await assert.rejects(
+				provider.installPackage(optionalPackageId),
+				/not reached a reconciled terminal outcome/,
+			);
+			assert.ok(committed);
+			assert.deepStrictEqual(provider.getManagementSnapshot().pendingPackages, [optionalPackageId]);
+
+			const recoverySubscriptions = [...connection.activeSubscriptions];
+			connection.reconnectResult = {
+				kind: 'snapshots',
+				hostSequence: createAgentHostSequence(connection.sequence),
+				snapshots: recoverySubscriptions.map(channel => connection.snapshot(channel)!),
+				missingChannels: [],
+			};
+			provider.beginConnectionRecovery(1);
+			assert.equal(await provider.recoverConnection(2), true);
+			await provider.completeConnectionRecovery(2);
+
+			assert.equal(connection.packageOperationRequests.length, 1);
+			assert.equal(connection.packageOperationOutcomeRequests.length, 2);
+			assert.deepStrictEqual(connection.packageOperationOutcomeRequests[1], {
+				operation: committed.operation,
+				digest: committed.digest,
+			});
+			assert.deepStrictEqual(provider.getManagementSnapshot().pendingPackages, []);
+		} finally {
+			provider.dispose();
+		}
+	});
+
+	test('updates Host defaults through the reconciled mutation path and refreshes the management snapshot', async () => {
+		const { connection, chatService } = createFixture();
+		const propertyId = createAgentConfigurationPropertyId('comet.enabled');
+		const configurationSchema = validateAndFreezeAgentConfigurationSchema({
+			profile: AgentConfigurationSchemaProfile,
+			agent: agentId,
+			scope: 'hostDefault',
+			revision: 'comet.management-defaults.v1',
+			properties: [{
+				id: propertyId,
+				owner: { kind: 'agent', agent: agentId },
+				scopes: ['hostDefault'],
+				value: { type: 'boolean' },
+				required: false,
+				sessionMutable: false,
+				dynamicCompletion: false,
+				display: { label: 'Enabled' },
+				persistence: 'persisted',
+				redaction: 'public',
+			}],
+		});
+		const initialConfiguration = Object.freeze({
+			schema: configurationSchema,
+			revision: createAgentConfigurationStateRevision('comet.management-defaults.state.v1'),
+			values: Object.freeze({}),
+		});
+		connection.root = {
+			...connection.root,
+			agentRegistrations: [{
+				...connection.root.agentRegistrations[0],
+				hostDefaultsSchema: configurationSchema,
+			}],
+			agentDefaults: [initialConfiguration],
+		};
+		let attempt = 0;
+		connection.mutateRequest = async request => {
+			attempt += 1;
+			if (attempt === 1) {
+				return { kind: 'unknown' };
+			}
+			const updatedConfiguration = Object.freeze({
+				schema: configurationSchema,
+				revision: createAgentConfigurationStateRevision('comet.management-defaults.state.v2'),
+				values: Object.freeze({ [propertyId]: true }),
+			});
+			connection.sequence += 1;
+			connection.setRevision(getAgentHostRootChannelId(), 2);
+			connection.root = { ...connection.root, agentDefaults: [updatedConfiguration] };
+			return {
+				kind: 'succeeded',
+				result: {
+					kind: 'updateAgentDefaults',
+					operation: request.operation,
+					digest: request.digest,
+					hostSequence: createAgentHostSequence(connection.sequence),
+					revisions: [],
+					agent: agentId,
+					configuration: updatedConfiguration.revision,
+				},
+			};
+		};
+		const provider = await createProvider(connection, chatService);
+		try {
+			await provider.updateAgentDefault(agentId, propertyId, true);
+			assert.equal(connection.mutationRequests.length, 2);
+			assert.deepStrictEqual(connection.mutationRequests[1], connection.mutationRequests[0]);
+			assert.deepStrictEqual(provider.getManagementSnapshot().agentDefaults[0].values, {
+				[propertyId]: true,
+			});
+			assert.deepStrictEqual(provider.getManagementSnapshot().pendingConfigurations, []);
+		} finally {
+			provider.dispose();
+		}
 	});
 
 	test('reprojects provider, Session type, draft, and preset display across consecutive locale changes without changing identity', async () => {

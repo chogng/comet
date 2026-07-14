@@ -9,6 +9,7 @@ import type { LibraryDocumentSummary } from 'cs/base/parts/sandbox/common/sandbo
 import type { EditorDraftStyleOption } from 'cs/editor/browser/text/editorDraftStyleCatalog';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import type { SettingsModelSnapshot } from 'cs/workbench/services/settings/settingsModel';
+import type { IAgentHostManagementSnapshot } from 'cs/platform/agentHost/browser/agentHostManagementService';
 
 export type SettingsViewState = SettingsModelSnapshot & {
 	readonly labels: LocaleMessages;
@@ -26,4 +27,5 @@ export type SettingsViewState = SettingsModelSnapshot & {
 	readonly libraryDbFile: string;
 	readonly defaultManagedDirectory: string;
 	readonly ragCacheDir: string;
+	readonly agentHostManagement: IAgentHostManagementSnapshot;
 };

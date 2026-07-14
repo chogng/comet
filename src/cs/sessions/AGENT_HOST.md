@@ -343,7 +343,7 @@ runtime alone maps these values to its private SDK or CLI representation.
 | Copilot | `copilot.autoApprove` | Host default and Session | `default`, `autoApprove` | `default` |
 | Copilot | `copilot.isolation` | Host default and Session | `folder`, `worktree` | `folder` |
 | Claude | `claude.permissionMode` | Host default and Session | `default`, `acceptEdits`, `bypassPermissions`, `plan`, `auto` | `default` |
-| Claude | `claude.thinkingLevel` | Model | `none`, `low`, `medium`, `high` | `medium` |
+| Claude | `claude.thinkingLevel` | Model | Exact model-declared subset of `none`, `adaptive`, `low`, `medium`, `high`, `xhigh`, `max` | None; omission preserves the SDK-native behavior |
 | Claude | `claude.model.credential` | Model | `claude.provider-api-key` / `llm` / `anthropic` credential reference | Anthropic API-key reference |
 | Codex | `codex.approvalPolicy` | Host default and Session | `never`, `on-request`, `on-failure`, `untrusted` | `on-request` |
 | Codex | `codex.sandboxMode` | Host default and Session | `read-only`, `workspace-write`, `danger-full-access` | `workspace-write` |

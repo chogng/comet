@@ -30,7 +30,6 @@ const entryPoints = [
   path.join(srcRoot, 'base', 'parts', 'sandbox', 'electron-browser', 'preload.ts'),
   path.join(srcRoot, 'platform', 'browserView', 'electron-browser', 'preload-browserView.ts'),
   path.join(srcRoot, 'code', 'electron-utility', 'sharedProcess', 'sharedProcessMain.ts'),
-  path.join(srcRoot, 'code', 'electron-utility', 'agentRuntime', 'mockAgentRuntimeMain.ts'),
 ];
 
 function resolveSourcePath(candidatePath: string) {

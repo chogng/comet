@@ -9,6 +9,10 @@ import {
 	IClientContentResourceService,
 	type IClientContentResourceLimits,
 } from 'cs/platform/agentHost/browser/clientContentResources';
+import {
+	IAgentHostManagementService,
+	type IAgentHostManagementService as AgentHostManagementService,
+} from 'cs/platform/agentHost/browser/agentHostManagementService';
 import { IClientAgentToolService } from 'cs/platform/agentHost/browser/clientAgentTools';
 import {
 	localAgentHostClientContentResourceChannelName,
@@ -46,6 +50,7 @@ class LocalAgentHostSessionsContribution extends Disposable {
 		@IMainProcessService private readonly mainProcessService: IMainProcessService,
 		@IChatService private readonly chatService: IChatService,
 		@ISessionsProvidersService private readonly sessionsProvidersService: ISessionsProvidersService,
+		@IAgentHostManagementService private readonly agentHostManagementService: AgentHostManagementService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 	) {
@@ -78,6 +83,7 @@ class LocalAgentHostSessionsContribution extends Disposable {
 			connection.connection,
 			this.options.contentResourceLimits,
 		);
+		this._register(this.agentHostManagementService.registerTarget(provider));
 		const clientToolChannel = this._register(new ClientAgentToolChannel(connection.clientTools));
 
 		registerWorkbenchService(IClientContentResourceService, contentResources);

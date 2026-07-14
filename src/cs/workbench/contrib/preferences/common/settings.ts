@@ -11,6 +11,7 @@ export type SettingsSectionId =
 	| 'appearance'
 	| 'configPath'
 	| 'textEditor'
+	| 'agentPackages'
 	| 'llmModel'
 	| 'llmApiKey'
 	| 'translation'
@@ -24,6 +25,7 @@ export type SettingsPageId =
 	| 'browser'
 	| 'appearance'
 	| 'textEditor'
+	| 'agents'
 	| 'model'
 	| 'knowledgeBase'
 	| 'literature';
@@ -51,6 +53,8 @@ export const SettingsId = {
 	EditorDraftParagraphSpacingBefore: 'editorDraftStyle.defaultBodyStyle.paragraphSpacingBefore',
 	EditorDraftParagraphSpacingAfter: 'editorDraftStyle.defaultBodyStyle.paragraphSpacingAfter',
 	EditorDraftColor: 'editorDraftStyle.defaultBodyStyle.color',
+	AgentPackages: 'agents.packages',
+	AgentConfiguration: 'agents.configuration',
 	LlmActiveProvider: 'llm.activeProvider',
 	LlmProviderModel: 'llm.providers.model',
 	LlmProviderEnabledModels: 'llm.providers.enabledModelOptions',

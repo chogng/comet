@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { EventEmitter } from 'cs/base/common/event';
+import { Event as CometEvent, EventEmitter } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
@@ -16,6 +16,25 @@ import { InstantiationService } from 'cs/platform/instantiation/common/instantia
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
+import { AgentHostManagementService } from 'cs/platform/agentHost/browser/agentHostManagementService';
+import {
+	AgentConfigurationSchemaProfile,
+	validateAndFreezeAgentConfigurationSchema,
+} from 'cs/platform/agentHost/common/configuration';
+import {
+	createAgentCapabilityRevision,
+	createAgentConfigurationPropertyId,
+	createAgentConfigurationSchemaRevision,
+	createAgentConfigurationStateRevision,
+	createAgentDescriptorRevision,
+	createAgentHostAuthorityId,
+	createAgentId,
+	createAgentModelDescriptorRevision,
+	createAgentModelId,
+	createAgentPackageId,
+	createAgentPackageContentDigest,
+	createAgentPackageRevision,
+} from 'cs/platform/agentHost/common/identities';
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { getWorkbenchPartDomNode } from 'cs/workbench/browser/layout';
 import { WORKBENCH_PART_IDS } from 'cs/workbench/browser/part';
@@ -104,6 +123,7 @@ test('SettingsPartView owns service state and preserves local search state acros
 		providerId: 'test-provider',
 	});
 	const fetchService = new FetchService(fetchRegistry, instantiationService);
+	const agentHostManagementService = new AgentHostManagementService();
 	const settingsController = new SettingsController(
 		settingsModel,
 		nativeHostService,
@@ -111,6 +131,7 @@ test('SettingsPartView owns service state and preserves local search state acros
 		localeService,
 		languageService,
 		editorDraftStyleService,
+		agentHostManagementService,
 	);
 	const view = new SettingsPartView(
 		settingsModel,
@@ -123,6 +144,7 @@ test('SettingsPartView owns service state and preserves local search state acros
 		nativeHostService,
 		dropdownServices.contextViewProvider,
 		getHoverService(),
+		agentHostManagementService,
 	);
 	let viewDisposed = false;
 
@@ -172,6 +194,136 @@ test('SettingsPartView owns service state and preserves local search state acros
 		localeService.applyLocale('en');
 		searchInput.value = '';
 		searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+		const agentsNavigationButton = element.querySelector<HTMLButtonElement>('[data-page-target="agents"]');
+		assert(agentsNavigationButton);
+		agentsNavigationButton.click();
+		assert.equal(
+			element.querySelector('.comet-settings-block-panel')?.textContent,
+			languageService.getLocaleMessages('en').settingsAgentNoHosts,
+		);
+		const testAgentId = createAgentId('settings-model-agent');
+		const testPackageId = createAgentPackageId('settings-model-package');
+		const modelSchema = validateAndFreezeAgentConfigurationSchema({
+			profile: AgentConfigurationSchemaProfile,
+			agent: testAgentId,
+			scope: 'model',
+			revision: createAgentConfigurationSchemaRevision('settings-model-schema.v1'),
+			properties: [],
+		});
+		const defaultPropertyId = createAgentConfigurationPropertyId('settings-model-agent.enabled');
+		const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
+			profile: AgentConfigurationSchemaProfile,
+			agent: testAgentId,
+			scope: 'hostDefault',
+			revision: createAgentConfigurationSchemaRevision('settings-host-defaults.v1'),
+			properties: [{
+				id: defaultPropertyId,
+				owner: { kind: 'agent', agent: testAgentId },
+				scopes: ['hostDefault'],
+				value: { type: 'boolean' },
+				required: false,
+				sessionMutable: false,
+				dynamicCompletion: false,
+				display: { label: 'Enabled' },
+				persistence: 'persisted',
+				redaction: 'public',
+			}],
+		});
+		const managementOperations: string[] = [];
+		const targetRegistration = agentHostManagementService.registerTarget({
+			authority: createAgentHostAuthorityId('settings-model-host'),
+			onDidChangeManagementState: CometEvent.None,
+			getManagementSnapshot: () => ({
+				authority: createAgentHostAuthorityId('settings-model-host'),
+				label: 'Settings model Host',
+				packages: {
+					revision: 1,
+					installablePackages: [{
+						packageId: testPackageId,
+						revision: createAgentPackageRevision('settings-model-package.v1'),
+						contentDigest: createAgentPackageContentDigest(`sha256:${'f'.repeat(64)}`),
+						source: 'file:///settings-model-package.js',
+						distribution: 'user',
+					}],
+					installedPackages: [],
+					activations: [],
+					retainedBackingRecords: [],
+					materializedBackings: [],
+				},
+				supportsPackageOperations: true,
+				agents: [{
+					id: testAgentId,
+					packageId: testPackageId,
+					revision: createAgentDescriptorRevision('settings-model-agent.v1'),
+					displayName: 'Settings SDK Agent',
+					description: 'Settings SDK Agent test',
+					capabilities: {
+						revision: createAgentCapabilityRevision('settings-model-capabilities.v1'),
+						supportsEmptySession: true,
+						supportsCreateChat: true,
+						maximumChatCount: 1,
+						supportsForkChat: false,
+						supportsQueue: false,
+						supportsSteering: false,
+						supportsCancellation: true,
+						supportsReleaseSession: true,
+						supportsReleaseChat: true,
+						supportsDeleteSession: true,
+						supportsDeleteChat: true,
+					},
+					models: [{
+						id: createAgentModelId('settings-sdk-model'),
+						revision: createAgentModelDescriptorRevision('settings-sdk-model.v1'),
+						displayName: 'Settings SDK Model',
+						enabled: true,
+						configurationSchema: modelSchema,
+						toolSchemaProfiles: [],
+						attachments: {
+							carriers: [],
+							shapes: [],
+							mediaTypes: [],
+							maximumCount: 0,
+							maximumItemBytes: 0,
+							maximumTotalBytes: 0,
+							maximumTreeDepth: 0,
+							maximumTreeEntries: 0,
+							supportsClientContentForBackgroundExecution: false,
+						},
+					}],
+					requiresAgentAuthentication: false,
+				}],
+				agentDefaults: [{
+					schema: hostDefaultsSchema,
+					revision: createAgentConfigurationStateRevision('settings-host-defaults.state.v1'),
+					values: {},
+				}],
+				pendingPackages: [],
+				pendingConfigurations: [],
+			}),
+			installPackage: async packageId => { managementOperations.push(`install:${packageId}`); },
+			uninstallPackage: async () => {},
+			updateAgentDefault: async (agentId, propertyId, value) => {
+				managementOperations.push(`update:${agentId}:${propertyId}:${String(value)}`);
+			},
+			removeAgentDefault: async () => {},
+			resetAgentDefaults: async () => {},
+		});
+		assert.match(element.textContent ?? '', /Settings SDK Model/);
+		const installPackageButton = element.querySelector<HTMLButtonElement>(
+			'[data-focus-key="agent-package.settings-model-host.settings-model-package.install"]',
+		);
+		assert(installPackageButton);
+		installPackageButton.click();
+		const configurationSwitch = element.querySelector<HTMLInputElement>(
+			'[data-focus-key="agent-configuration.settings-model-host.settings-model-agent.settings-model-agent.enabled"]',
+		);
+		assert(configurationSwitch);
+		configurationSwitch.click();
+		assert.deepStrictEqual(managementOperations, [
+			'install:settings-model-package',
+			'update:settings-model-agent:settings-model-agent.enabled:true',
+		]);
+		targetRegistration.dispose();
 		const generalNavigationButton = element.querySelector<HTMLButtonElement>('[data-page-target="general"]');
 		assert(generalNavigationButton);
 		generalNavigationButton.click();

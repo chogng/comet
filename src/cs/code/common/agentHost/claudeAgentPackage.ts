@@ -13,17 +13,15 @@ import {
 	createAgentCapabilityRevision,
 	createAgentConfigurationPropertyId,
 	createAgentConfigurationSchemaRevision,
-	createAgentDescriptorRevision,
-	createAgentExecutionPresetId,
 	createAgentId,
-	createAgentModelDescriptorRevision,
-	createAgentModelId,
 	createAgentPackageContentDigest,
 	createAgentPackageId,
 	createAgentPackageRevision,
 	createAgentResumeSchemaId,
 	createAgentRuntimeRegistrationRevision,
 	createAgentSessionTypeId,
+	type AgentConfigurationSchemaRevision,
+	type AgentDescriptorRevision,
 	type AgentPackageContentDigest,
 } from 'cs/platform/agentHost/common/identities';
 import type {
@@ -87,144 +85,147 @@ export const CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA = validateAndFreezeAgentC
 	revision: createAgentConfigurationSchemaRevision('claude.agent-sdk.session.v1'),
 });
 
-export const CLAUDE_AGENT_MODEL_CONFIGURATION_SCHEMA = validateAndFreezeAgentConfigurationSchema({
-	profile: AgentConfigurationSchemaProfile,
-	agent: CLAUDE_AGENT_ID,
-	scope: 'model',
-	revision: createAgentConfigurationSchemaRevision('claude.agent-sdk.model.v1'),
-	properties: [{
-		id: CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
-		owner: { kind: 'agent', agent: CLAUDE_AGENT_ID },
-		scopes: ['model'],
-		value: { type: 'string', enum: ['none', 'low', 'medium', 'high'] },
-		required: true,
-		default: 'medium',
-		sessionMutable: false,
-		dynamicCompletion: false,
-		display: { label: localize('claudeAgent.thinkingLevel', 'Thinking Level') },
-		persistence: 'persisted',
-		redaction: 'public',
-	}, {
-		id: CLAUDE_AGENT_CREDENTIAL_PROPERTY,
-		owner: { kind: 'agent', agent: CLAUDE_AGENT_ID },
-		scopes: ['model'],
-		value: {
-			type: 'credentialReference',
-			providers: [CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER],
-			scopes: ['llm'],
-			references: [CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE],
-		},
-		required: true,
-		default: {
-			provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
-			scope: 'llm',
-			reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
-		},
-		sessionMutable: false,
-		dynamicCompletion: false,
-		display: {
-			label: localize('claudeAgent.credential', 'Credential'),
-			description: localize('claudeAgent.credential.description', 'Anthropic API key used by the Claude Agent SDK.'),
-		},
-		persistence: 'persisted',
-		redaction: 'credentialReference',
-	}],
-});
+export type ClaudeAgentThinkingLevel = 'none' | 'adaptive' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
-const descriptorRevision = createAgentDescriptorRevision('claude.agent-sdk.descriptor.v1');
-const capabilityRevision = createAgentCapabilityRevision('claude.agent-sdk.capabilities.v1');
-const model = Object.freeze({
-	id: createAgentModelId('claude.agent-sdk-default'),
-	revision: createAgentModelDescriptorRevision('claude.agent-sdk-default.v1'),
-	displayName: localize('claudeAgent.model', 'Claude SDK Default'),
-	enabled: true,
-	configurationSchema: CLAUDE_AGENT_MODEL_CONFIGURATION_SCHEMA,
-	toolSchemaProfiles: Object.freeze([COMET_TOOL_SCHEMA_PROFILE]),
-	attachments: Object.freeze({
-		carriers: Object.freeze([]),
-		shapes: Object.freeze([]),
-		mediaTypes: Object.freeze([]),
-		maximumCount: 0,
-		maximumItemBytes: 0,
-		maximumTotalBytes: 0,
-		maximumTreeDepth: 0,
-		maximumTreeEntries: 0,
-		supportsClientContentForBackgroundExecution: false,
-	}),
-});
+export const CLAUDE_AGENT_CAPABILITY_REVISION = createAgentCapabilityRevision('claude.agent-sdk.capabilities.v1');
+export function createClaudeAgentRuntimeRegistrationRevision(
+	descriptorRevision: AgentDescriptorRevision,
+) {
+	return createAgentRuntimeRegistrationRevision(`claude.agent-sdk-runtime.v2.${descriptorRevision}`);
+}
 
-export const CLAUDE_AGENT_DESCRIPTOR: IAgentDescriptor = Object.freeze({
-	id: CLAUDE_AGENT_ID,
-	packageId: CLAUDE_AGENT_PACKAGE_ID,
-	revision: descriptorRevision,
-	displayName,
-	description,
-	capabilities: Object.freeze({
-		revision: capabilityRevision,
-		supportsEmptySession: true,
-		supportsCreateChat: true,
-		maximumChatCount: 64,
-		supportsForkChat: false,
-		supportsQueue: false,
-		supportsSteering: false,
-		supportsCancellation: true,
-		supportsReleaseSession: true,
-		supportsReleaseChat: true,
-		supportsDeleteSession: true,
-		supportsDeleteChat: true,
-	}),
-	models: Object.freeze([model]),
-	requiresAgentAuthentication: false,
-});
+export function createClaudeAgentModelConfigurationSchema(
+	revision: AgentConfigurationSchemaRevision,
+	thinkingLevels: readonly ClaudeAgentThinkingLevel[],
+) {
+	return validateAndFreezeAgentConfigurationSchema({
+		profile: AgentConfigurationSchemaProfile,
+		agent: CLAUDE_AGENT_ID,
+		scope: 'model',
+		revision,
+		properties: [{
+			id: CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
+			owner: { kind: 'agent', agent: CLAUDE_AGENT_ID },
+			scopes: ['model'],
+			value: { type: 'string', enum: thinkingLevels },
+			required: false,
+			sessionMutable: false,
+			dynamicCompletion: false,
+			display: { label: localize('claudeAgent.thinkingLevel', 'Thinking Level') },
+			persistence: 'persisted',
+			redaction: 'public',
+		}, {
+			id: CLAUDE_AGENT_CREDENTIAL_PROPERTY,
+			owner: { kind: 'agent', agent: CLAUDE_AGENT_ID },
+			scopes: ['model'],
+			value: {
+				type: 'credentialReference',
+				providers: [CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER],
+				scopes: ['llm'],
+				references: [CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE],
+			},
+			required: true,
+			default: {
+				provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+				scope: 'llm',
+				reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+			},
+			sessionMutable: false,
+			dynamicCompletion: false,
+			display: {
+				label: localize('claudeAgent.credential', 'Credential'),
+				description: localize('claudeAgent.credential.description', 'Anthropic API key used by the Claude Agent SDK.'),
+			},
+			persistence: 'persisted',
+			redaction: 'credentialReference',
+		}],
+	});
+}
 
-export const CLAUDE_AGENT_RUNTIME_REGISTRATION: IAgentRuntimeRegistration = Object.freeze({
-	packageId: CLAUDE_AGENT_PACKAGE_ID,
-	agentId: CLAUDE_AGENT_ID,
-	revision: createAgentRuntimeRegistrationRevision('claude.agent-sdk-runtime.v1'),
-	descriptorRevision,
-	capabilityRevision,
-	hostDefaultsSchema,
-	initialSessionConfigurationSchema: CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA.revision,
-	supportedSessionConfigurationSchemas: Object.freeze([CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA.revision]),
-	supportedToolSchemaProfiles: Object.freeze([COMET_TOOL_SCHEMA_PROFILE]),
-	supportedResumeSchemas: Object.freeze([CLAUDE_AGENT_RESUME_SCHEMA]),
-	resumeMigrationEdges: Object.freeze([]),
-});
+export function createClaudeAgentDescriptor(
+	descriptorRevision: AgentDescriptorRevision,
+	models: IAgentDescriptor['models'],
+): IAgentDescriptor {
+	if (models.length === 0) {
+		throw new Error('Claude Agent SDK model discovery returned an empty catalog.');
+	}
+	return Object.freeze({
+		id: CLAUDE_AGENT_ID,
+		packageId: CLAUDE_AGENT_PACKAGE_ID,
+		revision: descriptorRevision,
+		displayName,
+		description,
+		capabilities: Object.freeze({
+			revision: CLAUDE_AGENT_CAPABILITY_REVISION,
+			supportsEmptySession: true,
+			supportsCreateChat: true,
+			maximumChatCount: 64,
+			supportsForkChat: false,
+			supportsQueue: false,
+			supportsSteering: false,
+			supportsCancellation: true,
+			supportsReleaseSession: true,
+			supportsReleaseChat: true,
+			supportsDeleteSession: true,
+			supportsDeleteChat: true,
+		}),
+		models: Object.freeze([...models]),
+		requiresAgentAuthentication: false,
+	});
+}
 
-const automaticPreset = createAgentExecutionPresetId('claude.automatic');
-export const CLAUDE_AGENT_SESSION_TYPE: IAgentHostSessionTypeDescriptor = Object.freeze({
-	id: createAgentSessionTypeId('claude'),
-	packageId: CLAUDE_AGENT_PACKAGE_ID,
-	agentId: CLAUDE_AGENT_ID,
-	displayName: Object.freeze({ kind: 'literal', value: displayName }),
-	description: Object.freeze({ kind: 'literal', value: description }),
-	capabilities: Object.freeze({
-		workspace: 'optional',
-		supportsEmptySession: true,
-		supportsInitialTurn: true,
-		supportsCreateChat: true,
-		maximumChatCount: 64,
-		supportsForkChat: false,
-	}),
-	models: Object.freeze([model.id]),
-	executionPresets: Object.freeze([Object.freeze({
-		id: automaticPreset,
-		displayName: Object.freeze({ kind: 'literal', value: localize('claudeAgent.executionPreset.automatic', 'Automatic') }),
-		model: model.id,
-	})]),
-	automaticExecutionPreset: automaticPreset,
-	toolPolicy: Object.freeze({ kind: 'all' }),
-});
+export function createClaudeAgentRuntimeRegistration(
+	descriptorRevision: AgentDescriptorRevision,
+): IAgentRuntimeRegistration {
+	return Object.freeze({
+		packageId: CLAUDE_AGENT_PACKAGE_ID,
+		agentId: CLAUDE_AGENT_ID,
+		revision: createClaudeAgentRuntimeRegistrationRevision(descriptorRevision),
+		descriptorRevision,
+		capabilityRevision: CLAUDE_AGENT_CAPABILITY_REVISION,
+		hostDefaultsSchema,
+		initialSessionConfigurationSchema: CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA.revision,
+		supportedSessionConfigurationSchemas: Object.freeze([CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA.revision]),
+		supportedToolSchemaProfiles: Object.freeze([COMET_TOOL_SCHEMA_PROFILE]),
+		supportedResumeSchemas: Object.freeze([CLAUDE_AGENT_RESUME_SCHEMA]),
+		resumeMigrationEdges: Object.freeze([]),
+	});
+}
+
+export function createClaudeAgentSessionType(descriptor: IAgentDescriptor): IAgentHostSessionTypeDescriptor {
+	if (descriptor.id !== CLAUDE_AGENT_ID || descriptor.packageId !== CLAUDE_AGENT_PACKAGE_ID) {
+		throw new Error('Claude Agent package received another Agent descriptor.');
+	}
+	return Object.freeze({
+		id: createAgentSessionTypeId('claude'),
+		packageId: CLAUDE_AGENT_PACKAGE_ID,
+		agentId: CLAUDE_AGENT_ID,
+		displayName: Object.freeze({ kind: 'literal', value: displayName }),
+		description: Object.freeze({ kind: 'literal', value: description }),
+		capabilities: Object.freeze({
+			workspace: 'optional',
+			supportsEmptySession: true,
+			supportsInitialTurn: true,
+			supportsCreateChat: true,
+			maximumChatCount: 64,
+			supportsForkChat: false,
+		}),
+		models: Object.freeze(descriptor.models.map(model => model.id)),
+		executionPresets: Object.freeze([]),
+		automaticExecutionPreset: null,
+		toolPolicy: Object.freeze({ kind: 'all' }),
+	});
+}
 
 export const CLAUDE_AGENT_PACKAGE_DEFINITION = Object.freeze({
 	packageId: CLAUDE_AGENT_PACKAGE_ID,
 	agentId: CLAUDE_AGENT_ID,
+	resolveRuntimeRegistrationRevision: (descriptor: IAgentDescriptor) => (
+		createClaudeAgentRuntimeRegistrationRevision(descriptor.revision)
+	),
 	displayName,
-	registration: CLAUDE_AGENT_RUNTIME_REGISTRATION,
-	descriptor: CLAUDE_AGENT_DESCRIPTOR,
 	sessionConfigurationSchema: CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
-	modelConfigurationSchema: CLAUDE_AGENT_MODEL_CONFIGURATION_SCHEMA,
-	sessionType: CLAUDE_AGENT_SESSION_TYPE,
+	resolveSessionType: createClaudeAgentSessionType,
 });
 
 export interface IClaudeAgentPackageArtifact {

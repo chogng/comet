@@ -15,6 +15,11 @@ import { IContextViewService } from 'cs/platform/contextview/browser/contextView
 import { IHoverService } from 'cs/platform/hover/browser/hover';
 import { INativeHostService } from 'cs/platform/native/common/native';
 import {
+	IAgentHostManagementService,
+	type IAgentHostManagementService as AgentHostManagementService,
+} from 'cs/platform/agentHost/browser/agentHostManagementService';
+import { renderAgentPackagesSection } from 'cs/workbench/contrib/preferences/browser/agentPackagesWidget';
+import {
 	renderLibrarySettingsSection,
 	type LibrarySettingsSectionProps,
 } from 'cs/workbench/contrib/preferences/browser/libraryWidget';
@@ -115,6 +120,7 @@ export class SettingsPartView {
 		@INativeHostService private readonly nativeHostService: INativeHostService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IHoverService private readonly hoverService: IHoverService,
+		@IAgentHostManagementService private readonly agentHostManagementService: AgentHostManagementService,
 	) {
 		this.supportedSources = this.fetchService.getJournals();
 		this.state = this.createState();
@@ -168,6 +174,7 @@ export class SettingsPartView {
 		this.disposables.add(this.libraryModel.subscribe(this.handleStateChange));
 		this.disposables.add(this.editorDraftStyleService.subscribe(this.handleStateChange));
 		this.disposables.add(this.localeService.subscribe(this.handleStateChange));
+		this.disposables.add(this.agentHostManagementService.onDidChange(this.handleStateChange));
 	}
 
 	private createState(): SettingsViewState {
@@ -197,6 +204,7 @@ export class SettingsPartView {
 			libraryDbFile: librarySnapshot.libraryDbFile,
 			defaultManagedDirectory: librarySnapshot.defaultManagedDirectory,
 			ragCacheDir: librarySnapshot.ragCacheDir,
+			agentHostManagement: this.agentHostManagementService.getSnapshot(),
 		};
 	}
 
@@ -355,6 +363,13 @@ export class SettingsPartView {
 			appearance: (state, disposables) => renderAppearanceSection(state, this.contextViewService, this.settingsController, disposables),
 			configPath: (state, disposables) => renderConfigPathSection(state, this.settingsController, this.hoverService, disposables),
 			textEditor: (state, disposables) => renderTextEditorSection(state, this.contextViewService, this.settingsController, disposables),
+			agentPackages: (state, disposables) => renderAgentPackagesSection(
+				state,
+				this.settingsController,
+				this.contextViewService,
+				this.hoverService,
+				disposables,
+			),
 			llmModel: () => {
 				this.updateLlmModelSection();
 				return this.llmModelSection.getElement();

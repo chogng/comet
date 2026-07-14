@@ -8,6 +8,10 @@ import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import { IClientAgentToolService } from 'cs/platform/agentHost/browser/clientAgentTools';
 import { IClientContentResourceService } from 'cs/platform/agentHost/browser/clientContentResources';
 import {
+	IAgentHostManagementService,
+	type IAgentHostManagementService as AgentHostManagementService,
+} from 'cs/platform/agentHost/browser/agentHostManagementService';
+import {
 	RemoteAgentHostConnection,
 	type IRemoteAgentHostConnectionOptions,
 	type IRemoteAgentHostProtocolTransport,
@@ -38,6 +42,7 @@ export class RemoteAgentHostSessionsContribution extends Disposable {
 		private readonly options: IRemoteAgentHostSessionsContributionOptions,
 		@IChatService private readonly chatService: IChatService,
 		@ISessionsProvidersService private readonly sessionsProvidersService: ISessionsProvidersService,
+		@IAgentHostManagementService private readonly agentHostManagementService: AgentHostManagementService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 	) {
@@ -63,6 +68,7 @@ export class RemoteAgentHostSessionsContribution extends Disposable {
 				implementation: this.options.implementation,
 			}),
 		));
+		this._register(this.agentHostManagementService.registerTarget(provider));
 
 		registerWorkbenchService(IClientContentResourceService, connection.contentResources);
 		registerWorkbenchService(IClientAgentToolService, connection.clientTools);

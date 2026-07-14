@@ -21,6 +21,8 @@ export function shouldUpdateSettingsSection(
       return shouldUpdateConfigPathSection(previousProps, currentProps);
     case 'textEditor':
       return shouldUpdateTextEditorSection(previousProps, currentProps);
+	case 'agentPackages':
+		return shouldUpdateAgentPackagesSection(previousProps, currentProps);
     case 'llmModel':
       return shouldUpdateLlmModelSection(previousProps, currentProps);
     case 'llmApiKey':
@@ -36,6 +38,15 @@ export function shouldUpdateSettingsSection(
     case 'downloadDirectory':
       return shouldUpdateDownloadDirectorySection(previousProps, currentProps);
   }
+}
+
+function shouldUpdateAgentPackagesSection(
+	previousProps: SettingsViewState | undefined,
+	currentProps: SettingsViewState,
+) {
+	return !previousProps
+		|| previousProps.agentHostManagement !== currentProps.agentHostManagement
+		|| previousProps.labels !== currentProps.labels;
 }
 
 function shouldUpdateLocaleSection(

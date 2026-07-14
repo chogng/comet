@@ -46,6 +46,12 @@ export const settingsPageLayout: readonly SettingsPageDefinition[] = [
     sections: ['textEditor'],
   },
   {
+    id: 'agents',
+    label: labels => labels.settingsNavigationAgents,
+    icon: 'agent',
+    sections: ['agentPackages'],
+  },
+  {
     id: 'model',
     label: (labels) => labels.settingsLlmTitle,
     icon: 'model',
@@ -185,6 +191,21 @@ export const settingsSectionLayout: Readonly<Record<SettingsSectionId, SettingsS
       labels.settingsTextEditorParagraphSpacingBefore,
       labels.settingsTextEditorParagraphSpacingAfter,
       labels.settingsTextEditorColor,
+    ],
+  },
+  agentPackages: {
+    id: 'agentPackages',
+    settingIds: [SettingsId.AgentPackages, SettingsId.AgentConfiguration],
+    searchLabels: labels => [
+      labels.settingsNavigationAgents,
+      labels.settingsAgentPackagesTitle,
+      labels.settingsAgentPackagesHint,
+      labels.settingsAgentConfigurationTitle,
+      labels.settingsAgentConfigurationHint,
+	  labels.settingsAgentModelsTitle,
+	  labels.settingsAgentModelsHint,
+      labels.settingsAgentInstall,
+      labels.settingsAgentUninstall,
     ],
   },
   llmModel: {

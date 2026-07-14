@@ -27,6 +27,7 @@ import {
 	SettingsModel,
 } from 'cs/workbench/services/settings/settingsModel';
 import { IEditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { IAgentHostManagementService } from 'cs/platform/agentHost/browser/agentHostManagementService';
 
 class SettingsModelConsumer {
 	constructor(@ISettingsModel readonly settingsModel: SettingsModel) {}
@@ -41,21 +42,26 @@ test('Settings model and controller are delayed DI owners shared by consumers', 
 	const settingsModelRegistrations = registrations.filter(([id]) => id === ISettingsModel);
 	const settingsControllerRegistrations = registrations.filter(([id]) => id === ISettingsController);
 	const editorDraftStyleRegistrations = registrations.filter(([id]) => id === IEditorDraftStyleService);
+	const agentHostManagementRegistrations = registrations.filter(([id]) => id === IAgentHostManagementService);
 	assert.equal(settingsModelRegistrations.length, 1);
 	assert.equal(settingsControllerRegistrations.length, 1);
 	assert.equal(editorDraftStyleRegistrations.length, 1);
+	assert.equal(agentHostManagementRegistrations.length, 1);
 
 	const settingsModelDescriptor = settingsModelRegistrations[0][1];
 	const settingsControllerDescriptor = settingsControllerRegistrations[0][1];
 	const editorDraftStyleDescriptor = editorDraftStyleRegistrations[0][1];
+	const agentHostManagementDescriptor = agentHostManagementRegistrations[0][1];
 	assert.equal(settingsModelDescriptor.supportsDelayedInstantiation, true);
 	assert.equal(settingsControllerDescriptor.supportsDelayedInstantiation, true);
 	assert.equal(editorDraftStyleDescriptor.supportsDelayedInstantiation, true);
+	assert.equal(agentHostManagementDescriptor.supportsDelayedInstantiation, true);
 
 	const services = new ServiceCollection(
 		[ISettingsModel, settingsModelDescriptor],
 		[ISettingsController, settingsControllerDescriptor],
 		[IEditorDraftStyleService, editorDraftStyleDescriptor],
+		[IAgentHostManagementService, agentHostManagementDescriptor],
 		[INativeHostService, {
 			canInvoke: () => false,
 			invoke: async () => {

@@ -21,12 +21,12 @@ import {
 	createLocalAgentPackageArtifactFile,
 	LocalAgentPackageArtifactPort,
 } from 'cs/code/electron-main/agentHost/localAgentPackageArtifactPort';
-import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/mockAgentPackages';
+import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/test/mockAgentPackages';
 import { COMET_AUTOMATIC_EXECUTION_PRESET } from 'cs/code/electron-main/agentHost/cometModelCatalog';
 import {
 	MockAgentRuntimeConnectionFactory,
 	productMockAgentRuntimeRetentionLimits,
-} from 'cs/code/electron-utility/agentRuntime/mockAgentRuntime';
+} from 'cs/code/electron-utility/agentRuntime/test/mockAgentRuntime';
 import { localAgentHostConnectionChannelName } from 'cs/platform/agentHost/common/connectionChannel';
 import { resolveAgentModelConfigurationCandidate } from 'cs/platform/agentHost/common/configuration';
 import {
@@ -217,7 +217,7 @@ async function createHost(
 ): Promise<LocalAgentHostMain> {
 	const mockRuntimeArtifactPath = options.mockRuntimeArtifactPath ?? path.join(
 		process.cwd(),
-		'src/cs/code/electron-utility/agentRuntime/mockAgentRuntimeMain.ts',
+		'src/cs/code/electron-utility/agentRuntime/test/mockAgentRuntime.ts',
 	);
 	const mockAgentPackageProducts = createMockAgentPackageProducts(
 		Object.freeze({ operatingSystem: process.platform, architecture: process.arch }),
@@ -738,7 +738,7 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.ok(closeHostIndex >= 0);
 	assert.ok(closeHostIndex < closeStorageIndex);
 	assert.match(mainSource, /bundledArtifactPath: fileURLToPath\(import\.meta\.url\)/);
-	assert.match(mainSource, /const mockAgentRuntimeArtifact = await createLocalAgentPackageArtifactFile\(fileURLToPath\(new URL\(/);
+	assert.doesNotMatch(mainSource, /mockAgentRuntime|createMockAgentPackageProducts/);
 	assert.match(mainSource, /const claudeRuntimeArtifact = await createLocalAgentPackageArtifactFile\(fileURLToPath\(new URL\(/);
 	assert.match(mainSource, /const claudeExecutableArtifact = await createLocalAgentPackageArtifactFile\(resolveClaudeAgentSdkExecutable\(\)\)/);
 	assert.match(mainSource, /const claudeAgentPackageProduct = createClaudeAgentPackageProduct\(target,/);

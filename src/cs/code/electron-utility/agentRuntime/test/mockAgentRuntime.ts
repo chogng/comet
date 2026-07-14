@@ -10,7 +10,7 @@ import { Disposable } from 'cs/base/common/lifecycle';
 import {
 	getMockAgentPackageDefinition,
 	type IMockAgentPackageDefinition,
-} from 'cs/code/common/agentHost/mockAgentPackages';
+} from 'cs/code/common/agentHost/test/mockAgentPackages';
 import type {
 	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	IAgentAction,

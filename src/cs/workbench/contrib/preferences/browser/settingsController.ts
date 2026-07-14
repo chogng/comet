@@ -48,6 +48,17 @@ import {
 	minRagRetrievalTopK,
 } from 'cs/workbench/services/rag/config';
 import { isSupportedLanguagePackLocale } from 'cs/platform/languagePacks/common/languagePacks';
+import {
+	IAgentHostManagementService,
+	type IAgentHostManagementService as AgentHostManagementService,
+} from 'cs/platform/agentHost/browser/agentHostManagementService';
+import type {
+	AgentConfigurationPropertyId,
+	AgentHostAuthorityId,
+	AgentId,
+	AgentPackageId,
+} from 'cs/platform/agentHost/common/identities';
+import type { AgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 
 const immediateAutoSaveDelayMs = 0;
 const debouncedAutoSaveDelayMs = 650;
@@ -97,7 +108,97 @@ export class SettingsController {
     @IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
     @IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
 	@IEditorDraftStyleService private readonly editorDraftStyleService: EditorDraftStyleService,
+	@IAgentHostManagementService private readonly agentHostManagementService: AgentHostManagementService,
   ) {}
+
+	readonly installAgentPackage = async (
+		authority: AgentHostAuthorityId,
+		packageId: AgentPackageId,
+	) => {
+		const ui = this.getUi();
+		try {
+			await this.agentHostManagementService.installPackage(authority, packageId);
+			this.notificationService.info(formatLocaleMessage(ui.toastAgentPackageInstalled, {
+				package: packageId,
+			}));
+		} catch (error) {
+			this.notificationService.error(formatLocaleMessage(ui.toastAgentPackageOperationFailed, {
+				error: localizeSettingsError(ui, error),
+			}));
+		}
+	};
+
+	readonly uninstallAgentPackage = async (
+		authority: AgentHostAuthorityId,
+		packageId: AgentPackageId,
+	) => {
+		const ui = this.getUi();
+		try {
+			await this.agentHostManagementService.uninstallPackage(authority, packageId);
+			this.notificationService.info(formatLocaleMessage(ui.toastAgentPackageUninstalled, {
+				package: packageId,
+			}));
+		} catch (error) {
+			this.notificationService.error(formatLocaleMessage(ui.toastAgentPackageOperationFailed, {
+				error: localizeSettingsError(ui, error),
+			}));
+		}
+	};
+
+	readonly updateAgentDefault = async (
+		authority: AgentHostAuthorityId,
+		agentId: AgentId,
+		propertyId: AgentConfigurationPropertyId,
+		value: AgentHostProtocolValue,
+	) => {
+		const ui = this.getUi();
+		try {
+			await this.agentHostManagementService.updateAgentDefault(authority, agentId, propertyId, value);
+			this.notificationService.info(formatLocaleMessage(ui.toastAgentConfigurationUpdated, {
+				agent: agentId,
+			}));
+		} catch (error) {
+			this.notificationService.error(formatLocaleMessage(ui.toastAgentConfigurationFailed, {
+				error: localizeSettingsError(ui, error),
+			}));
+		}
+	};
+
+	readonly removeAgentDefault = async (
+		authority: AgentHostAuthorityId,
+		agentId: AgentId,
+		propertyId: AgentConfigurationPropertyId,
+	) => {
+		const ui = this.getUi();
+		try {
+			await this.agentHostManagementService.removeAgentDefault(authority, agentId, propertyId);
+			this.notificationService.info(formatLocaleMessage(ui.toastAgentConfigurationUpdated, {
+				agent: agentId,
+			}));
+		} catch (error) {
+			this.notificationService.error(formatLocaleMessage(ui.toastAgentConfigurationFailed, {
+				error: localizeSettingsError(ui, error),
+			}));
+		}
+	};
+
+	readonly resetAgentDefaults = async (authority: AgentHostAuthorityId, agentId: AgentId) => {
+		const ui = this.getUi();
+		try {
+			await this.agentHostManagementService.resetAgentDefaults(authority, agentId);
+			this.notificationService.info(formatLocaleMessage(ui.toastAgentConfigurationReset, {
+				agent: agentId,
+			}));
+		} catch (error) {
+			this.notificationService.error(formatLocaleMessage(ui.toastAgentConfigurationFailed, {
+				error: localizeSettingsError(ui, error),
+			}));
+		}
+	};
+
+	readonly reportInvalidAgentConfigurationValue = () => {
+		this.notificationService.error(this.getUi().settingsAgentInvalidConfigurationValue);
+	};
 
   readonly start = () => {
     if (this.started || this.disposed) {

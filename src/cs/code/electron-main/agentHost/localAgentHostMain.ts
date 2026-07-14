@@ -477,12 +477,16 @@ export class LocalAgentHostMain extends Disposable {
 		});
 		const sessionTypeCatalog = new LocalAgentHostSessionTypeCatalog(Object.freeze([
 			Object.freeze({
-				registration: cometAgent.registration,
+				packageId: cometAgent.registration.packageId,
+				agentId: cometAgent.registration.agentId,
+				resolveRuntimeRegistrationRevision: () => cometAgent.registration.revision,
 				resolve: (descriptor: IAgentDescriptor) => this.createCometSessionType(descriptor, modelCatalog),
 			}),
 			...agentPackages.map(product => Object.freeze({
-				registration: product.definition.registration,
-				resolve: (_descriptor: IAgentDescriptor) => product.definition.sessionType,
+				packageId: product.definition.packageId,
+				agentId: product.definition.agentId,
+				resolveRuntimeRegistrationRevision: product.definition.resolveRuntimeRegistrationRevision,
+				resolve: product.definition.resolveSessionType,
 			})),
 		]));
 		const host = this._register(await AgentHostAuthority.create({

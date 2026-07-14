@@ -15,6 +15,7 @@ import {
 	type Options as ClaudeAgentSdkOptions,
 	type PermissionMode,
 	type Query,
+	type ModelInfo,
 	type SDKMessage,
 	type SessionStore,
 } from '@anthropic-ai/claude-agent-sdk';
@@ -27,17 +28,20 @@ import {
 	CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
 	CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
 	CLAUDE_AGENT_CREDENTIAL_PROPERTY,
-	CLAUDE_AGENT_DESCRIPTOR,
 	CLAUDE_AGENT_ID,
-	CLAUDE_AGENT_MODEL_CONFIGURATION_SCHEMA,
 	CLAUDE_AGENT_PACKAGE_ID,
 	CLAUDE_AGENT_PERMISSION_MODE_PROPERTY,
 	CLAUDE_AGENT_RESUME_SCHEMA,
-	CLAUDE_AGENT_RUNTIME_REGISTRATION,
 	CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
 	CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
+	createClaudeAgentDescriptor,
+	createClaudeAgentModelConfigurationSchema,
+	createClaudeAgentRuntimeRegistration,
+	createClaudeAgentRuntimeRegistrationRevision,
+	type ClaudeAgentThinkingLevel,
 } from 'cs/code/common/agentHost/claudeAgentPackage';
 import type {
+	IAgentDescriptor,
 	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	IAgentAction,
 	IAgentCancelTurnRequest,
@@ -97,7 +101,11 @@ import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common
 import {
 	createAgentExecutionProfileDigest,
 	createAgentExecutionProfileRevision,
+	createAgentConfigurationSchemaRevision,
+	createAgentDescriptorRevision,
 	createAgentHostOperationId,
+	createAgentModelDescriptorRevision,
+	createAgentModelId,
 	createAgentRuntimeActionSequence,
 	createAgentRuntimeConnectionGeneration,
 	createAgentRuntimeConnectionId,
@@ -107,11 +115,13 @@ import {
 	type AgentChatId,
 	type AgentHostOperationId,
 	type AgentHostPayloadDigest,
+	type AgentModelId,
 	type AgentPackageRevision,
 	type AgentRuntimeCallId,
 	type AgentRuntimeConnectionGeneration,
 	type AgentRuntimeConnectionId,
 	type AgentRuntimeHostOperationId,
+	type AgentRuntimeRegistrationRevision,
 	type AgentSessionId,
 } from 'cs/platform/agentHost/common/identities';
 import {
@@ -121,6 +131,7 @@ import {
 } from 'cs/platform/agentHost/common/protocolValues';
 import {
 	assertAgentToolResult,
+	COMET_TOOL_SCHEMA_PROFILE,
 	computeAgentToolMutationPayloadDigest,
 	parseCometToolSchema,
 	type AgentToolResult,
@@ -198,7 +209,7 @@ interface IClaudeConfigurationTransaction {
 
 interface IClaudeHostOperationState {
 	readonly parentCall: AgentRuntimeCallId;
-	readonly registration: typeof CLAUDE_AGENT_RUNTIME_REGISTRATION.revision;
+	readonly registration: AgentRuntimeRegistrationRevision;
 	readonly agent: typeof CLAUDE_AGENT_ID;
 	readonly completion: DeferredPromise<AgentRuntimeHostOperationOutcome>;
 }
@@ -211,9 +222,16 @@ interface IClaudeActiveTurn {
 
 interface IClaudeExecutionProfileData {
 	readonly kind: 'claudeAgentSdkExecutionProfile';
+	readonly model: string;
 	readonly permissionMode: PermissionMode;
-	readonly thinkingLevel: 'none' | 'low' | 'medium' | 'high';
+	readonly thinkingLevel: ClaudeAgentThinkingLevel | null;
 	readonly credential: IAgentCredentialReference;
+}
+
+interface IClaudeDiscoveredModel {
+	readonly sdkValue: string;
+	readonly supportsAutoMode: boolean;
+	readonly descriptor: IAgentDescriptor['models'][number];
 }
 
 function response<TRequest, TValue>(
@@ -338,7 +356,10 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	private readonly maximumRetainedTerminalTurns: number;
 	private cacheRootPromise: Promise<string> | undefined;
 	private stateValue: AgentRuntimeConnectionState;
-	private initialized = false;
+	private descriptor: IAgentDescriptor | undefined;
+	private registration: ReturnType<typeof createClaudeAgentRuntimeRegistration> | undefined;
+	private discoveredModels: ReadonlyMap<AgentModelId, IClaudeDiscoveredModel> = new Map();
+	private initializationState: 'notStarted' | 'initializing' | 'initialized' | 'failed' = 'notStarted';
 	private nextActionSequence = 1;
 	private nextHostOperation = 1;
 	private nextToolCall = 1;
@@ -377,14 +398,14 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		return this.stateValue;
 	}
 
-	initialize(request: IAgentRuntimeInitializeRequest): Promise<IAgentRuntimeInitializeResult> {
+	async initialize(request: IAgentRuntimeInitializeRequest): Promise<IAgentRuntimeInitializeResult> {
 		this.assertConnected();
-		if (this.initialized) {
-			return Promise.reject(new AgentHostError(
+		if (this.initializationState !== 'notStarted') {
+			throw new AgentHostError(
 				AgentHostErrorCode.InvalidProtocolValue,
 				'Claude Agent Runtime was already initialized',
 				{ field: 'initialize', value: 'repeated' },
-			));
+			);
 		}
 		if (
 			request.connection !== this.connection
@@ -394,28 +415,174 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			|| request.authorizedAgents.length !== 1
 			|| request.authorizedAgents[0] !== CLAUDE_AGENT_ID
 		) {
-			return Promise.reject(new AgentHostError(
+			throw new AgentHostError(
 				AgentHostErrorCode.InvalidProtocolValue,
 				'Claude Agent Runtime initialization authority does not match',
 				{ field: 'initialize.authority', value: request.packageId },
-			));
+			);
 		}
 		const protocolVersion = selectAgentRuntimeProtocolVersion(
 			request.protocolVersions,
 			Object.freeze([claudeRuntimeProtocolVersion]),
 		);
-		this.initialized = true;
-		return Promise.resolve(Object.freeze({
+		this.initializationState = 'initializing';
+		try {
+			const catalog = await this.discoverModelCatalog();
+			this.descriptor = catalog.descriptor;
+			this.registration = createClaudeAgentRuntimeRegistration(catalog.descriptor.revision);
+			this.discoveredModels = catalog.models;
+			this.initializationState = 'initialized';
+		} catch (error) {
+			this.initializationState = 'failed';
+			throw error;
+		}
+		return Object.freeze({
 			connection: request.connection,
 			generation: request.generation,
 			call: request.call,
 			protocolVersion,
 			transportLimits: Object.freeze({ ...request.transportLimits }),
 			registrations: Object.freeze([Object.freeze({
-				registration: CLAUDE_AGENT_RUNTIME_REGISTRATION,
-				descriptor: CLAUDE_AGENT_DESCRIPTOR,
+				registration: this.registration,
+				descriptor: this.descriptor,
 			})]),
+		});
+	}
+
+	private async discoverModelCatalog(): Promise<{
+		readonly descriptor: IAgentDescriptor;
+		readonly models: ReadonlyMap<AgentModelId, IClaudeDiscoveredModel>;
+	}> {
+		const cacheDirectory = await this.resolveModelCatalogCache();
+		const closePrompt = new DeferredPromise<void>();
+		const prompt = (async function* () {
+			await closePrompt.p;
+		})();
+		const query = this.query({
+			prompt,
+			options: {
+				cwd: cacheDirectory,
+				env: this.claudeDiscoveryEnvironment(cacheDirectory),
+				pathToClaudeCodeExecutable: this.claudeCodeExecutable,
+				persistSession: false,
+				settingSources: [],
+				skills: [],
+				tools: [],
+			},
+		});
+		let sdkModels: ModelInfo[];
+		try {
+			sdkModels = await query.supportedModels();
+		} finally {
+			closePrompt.complete();
+			query.close();
+		}
+		if (!Array.isArray(sdkModels) || sdkModels.length === 0) {
+			throw new AgentHostError(
+				AgentHostErrorCode.InvalidProtocolValue,
+				'Claude Agent SDK returned an empty model catalog',
+				{ field: 'supportedModels', value: 'empty' },
+			);
+		}
+
+		const allowedEffortLevels = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+		const canonicalSource = sdkModels.map((model, index) => {
+			if (
+				typeof model.value !== 'string'
+				|| model.value.length === 0
+				|| typeof model.displayName !== 'string'
+				|| model.displayName.length === 0
+				|| typeof model.description !== 'string'
+				|| (model.resolvedModel !== undefined && (
+					typeof model.resolvedModel !== 'string' || model.resolvedModel.length === 0
+				))
+				|| (model.supportsEffort !== undefined && typeof model.supportsEffort !== 'boolean')
+				|| (model.supportsAdaptiveThinking !== undefined && typeof model.supportsAdaptiveThinking !== 'boolean')
+				|| (model.supportsFastMode !== undefined && typeof model.supportsFastMode !== 'boolean')
+				|| (model.supportsAutoMode !== undefined && typeof model.supportsAutoMode !== 'boolean')
+				|| (model.supportedEffortLevels !== undefined && (
+					!Array.isArray(model.supportedEffortLevels)
+					|| model.supportedEffortLevels.some(level => !allowedEffortLevels.has(level))
+					|| new Set(model.supportedEffortLevels).size !== model.supportedEffortLevels.length
+				))
+				|| ((model.supportedEffortLevels?.length ?? 0) > 0) !== (model.supportsEffort === true)
+			) {
+				throw new AgentHostError(
+					AgentHostErrorCode.InvalidProtocolValue,
+					'Claude Agent SDK returned an invalid model entry',
+					{ field: `supportedModels.${index}`, value: 'invalid' },
+				);
+			}
+			return Object.freeze({
+				value: model.value,
+				...(model.resolvedModel === undefined ? {} : { resolvedModel: model.resolvedModel }),
+				displayName: model.displayName,
+				description: model.description,
+				supportsEffort: model.supportsEffort === true,
+				supportedEffortLevels: Object.freeze([...(model.supportedEffortLevels ?? [])]),
+				supportsAdaptiveThinking: model.supportsAdaptiveThinking === true,
+				supportsFastMode: model.supportsFastMode === true,
+				supportsAutoMode: model.supportsAutoMode === true,
+			});
+		});
+		if (new Set(canonicalSource.map(model => model.value)).size !== canonicalSource.length) {
+			throw new AgentHostError(
+				AgentHostErrorCode.InvalidProtocolValue,
+				'Claude Agent SDK returned duplicate model identities',
+				{ field: 'supportedModels.value', value: 'duplicate' },
+			);
+		}
+
+		const catalogData = encodeAgentHostProtocolValue(Object.freeze({
+			sdkVersion: this.packageRevision,
+			models: canonicalSource,
 		}));
+		const catalogDigest = createHash('sha256').update(catalogData).digest('hex');
+		const discovered = new Map<AgentModelId, IClaudeDiscoveredModel>();
+		for (const model of canonicalSource) {
+			const modelData = encodeAgentHostProtocolValue(model);
+			const modelDigest = createHash('sha256').update(modelData).digest('hex');
+			const modelId = createAgentModelId(`claude:${model.value}`);
+			const effortLevels = model.supportedEffortLevels;
+			const thinkingLevels: ClaudeAgentThinkingLevel[] = [
+				'none',
+				...(model.supportsAdaptiveThinking ? ['adaptive' as const] : []),
+				...effortLevels,
+			];
+			const configurationSchema = createClaudeAgentModelConfigurationSchema(
+				createAgentConfigurationSchemaRevision(`claude.agent-sdk.model.${modelDigest}`),
+				Object.freeze(thinkingLevels),
+			);
+			const descriptor = Object.freeze({
+				id: modelId,
+				revision: createAgentModelDescriptorRevision(`claude.agent-sdk.model.${modelDigest}`),
+				displayName: model.displayName,
+				enabled: true,
+				configurationSchema,
+				toolSchemaProfiles: Object.freeze([COMET_TOOL_SCHEMA_PROFILE]),
+				attachments: Object.freeze({
+					carriers: Object.freeze([]),
+					shapes: Object.freeze([]),
+					mediaTypes: Object.freeze([]),
+					maximumCount: 0,
+					maximumItemBytes: 0,
+					maximumTotalBytes: 0,
+					maximumTreeDepth: 0,
+					maximumTreeEntries: 0,
+					supportsClientContentForBackgroundExecution: false,
+				}),
+			});
+			discovered.set(modelId, Object.freeze({
+				sdkValue: model.value,
+				supportsAutoMode: model.supportsAutoMode,
+				descriptor,
+			}));
+		}
+		const descriptor = createClaudeAgentDescriptor(
+			createAgentDescriptorRevision(`claude.agent-sdk.descriptor.${catalogDigest}`),
+			Object.freeze([...discovered.values()].map(model => model.descriptor)),
+		);
+		return Object.freeze({ descriptor, models: discovered });
 	}
 
 	resolveSessionConfiguration(
@@ -425,7 +592,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		const hostDefaults = validateAndFreezeAgentConfigurationState(request.request.hostDefaults, {
 			agent: CLAUDE_AGENT_ID,
 			scope: 'hostDefault',
-			revision: CLAUDE_AGENT_RUNTIME_REGISTRATION.hostDefaultsSchema.revision,
+			revision: this.requireRegistration().hostDefaultsSchema.revision,
 		});
 		const candidate = validateAndFreezeAgentConfigurationCandidate(
 			CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
@@ -557,16 +724,41 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	): Promise<IAgentRuntimeResponse<IAgentExecutionProfile>> {
 		this.assertCall(request);
 		const sessionConfiguration = this.validateSessionConfiguration(request.request.sessionConfiguration);
+		if (
+			request.request.selection.kind !== 'user'
+			|| !exactRecord(request.request.selection.value, ['model'])
+			|| typeof request.request.selection.value.model !== 'string'
+		) {
+			throw new AgentHostError(
+				AgentHostErrorCode.InvalidProtocolValue,
+				'Claude Agent execution requires an explicit discovered model',
+				{ field: 'executionProfile.selection', value: request.request.selection.kind },
+			);
+		}
+		const discoveredModel = this.discoveredModels.get(createAgentModelId(request.request.selection.value.model));
+		if (discoveredModel === undefined) {
+			throw new AgentHostError(
+				AgentHostErrorCode.InvalidProtocolValue,
+				'Claude Agent execution selected an unknown model',
+				{ field: 'executionProfile.selection.model', value: request.request.selection.value.model },
+			);
+		}
 		const modelConfiguration = resolveAgentModelConfigurationCandidate(
-			CLAUDE_AGENT_MODEL_CONFIGURATION_SCHEMA,
+			discoveredModel.descriptor.configurationSchema,
 			request.request.selection.configuration,
 		);
 		const permissionMode = sessionConfiguration.values[CLAUDE_AGENT_PERMISSION_MODE_PROPERTY];
-		const thinkingLevel = modelConfiguration.values[CLAUDE_AGENT_THINKING_LEVEL_PROPERTY];
+		const thinkingLevel = modelConfiguration.values[CLAUDE_AGENT_THINKING_LEVEL_PROPERTY] ?? null;
 		const credential = modelConfiguration.values[CLAUDE_AGENT_CREDENTIAL_PROPERTY];
+		const thinkingProperty = discoveredModel.descriptor.configurationSchema.properties.find(
+			property => property.id === CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
+		);
 		if (
 			!['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto'].includes(permissionMode as string)
-			|| !['none', 'low', 'medium', 'high'].includes(thinkingLevel as string)
+			|| (permissionMode === 'auto' && !discoveredModel.supportsAutoMode)
+			|| (thinkingLevel !== null && typeof thinkingLevel !== 'string')
+			|| thinkingProperty?.value.type !== 'string'
+			|| (thinkingLevel !== null && !thinkingProperty.value.enum?.includes(thinkingLevel))
 			|| !exactRecord(credential, ['provider', 'scope', 'reference'])
 		) {
 			throw new AgentHostError(
@@ -577,6 +769,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		}
 		const data = encodeAgentHostProtocolValue(Object.freeze({
 			kind: 'claudeAgentSdkExecutionProfile',
+			model: discoveredModel.sdkValue,
 			permissionMode,
 			thinkingLevel,
 			credential,
@@ -585,8 +778,8 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		return Promise.resolve(response(request, Object.freeze({
 			revision: createAgentExecutionProfileRevision(`claude-agent-sdk:${digest}`),
 			digest: createAgentExecutionProfileDigest(`sha256:${digest}`),
-			agentDescriptor: CLAUDE_AGENT_DESCRIPTOR.revision,
-			modelDescriptor: CLAUDE_AGENT_DESCRIPTOR.models[0].revision,
+			agentDescriptor: this.requireDescriptor().revision,
+			modelDescriptor: discoveredModel.descriptor.revision,
 			data,
 		})));
 	}
@@ -953,6 +1146,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 					alwaysLoad: true,
 				}),
 			},
+			model: profile.model,
 			pathToClaudeCodeExecutable: this.claudeCodeExecutable,
 			permissionMode,
 			persistSession: true,
@@ -975,11 +1169,18 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			skills: [],
 			strictMcpConfig: true,
 			systemPrompt: { type: 'preset', preset: 'claude_code' },
-			thinking: profile.thinkingLevel === 'none'
-				? Object.freeze({ type: 'disabled' })
-				: Object.freeze({ type: 'adaptive' }),
 			tools: [],
-			...(profile.thinkingLevel === 'none' ? {} : { effort: profile.thinkingLevel }),
+			...(profile.thinkingLevel === null
+				? {}
+				: {
+					thinking: profile.thinkingLevel === 'none'
+						? Object.freeze({ type: 'disabled' as const })
+						: Object.freeze({ type: 'adaptive' as const }),
+				}),
+			...(profile.thinkingLevel !== null
+				&& ['low', 'medium', 'high', 'xhigh', 'max'].includes(profile.thinkingLevel)
+				? { effort: profile.thinkingLevel as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+				: {}),
 		};
 		const stream = this.query({ prompt: request.request.message, options });
 		active.query = stream;
@@ -1087,7 +1288,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		const common = Object.freeze({
 			id,
 			agent: CLAUDE_AGENT_ID,
-			registration: CLAUDE_AGENT_RUNTIME_REGISTRATION.revision,
+			registration: this.requireRegistration().revision,
 			session: request.request.session,
 			chat: request.request.chat,
 			turn: request.request.turn,
@@ -1166,6 +1367,22 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		return canonicalCacheDirectory;
 	}
 
+	private async resolveModelCatalogCache(): Promise<string> {
+		const cacheRoot = await this.cacheRoot();
+		const cacheDirectory = join(cacheRoot, 'model-catalog');
+		await mkdir(cacheDirectory, { recursive: true, mode: 0o700 });
+		const metadata = await lstat(cacheDirectory);
+		if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+			throw new Error('Claude Agent SDK model catalog cache must be a real directory.');
+		}
+		const canonicalCacheDirectory = await realpath(cacheDirectory);
+		if (canonicalCacheDirectory !== cacheDirectory) {
+			throw new Error('Claude Agent SDK model catalog cache has the wrong canonical address.');
+		}
+		await chmod(canonicalCacheDirectory, 0o700);
+		return canonicalCacheDirectory;
+	}
+
 	private cacheRoot(): Promise<string> {
 		this.cacheRootPromise ??= this.resolveCacheRoot();
 		return this.cacheRootPromise;
@@ -1195,7 +1412,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		const completion = new DeferredPromise<AgentRuntimeHostOperationOutcome>();
 		this.hostOperations.set(operation, {
 			parentCall: parent.call,
-			registration: CLAUDE_AGENT_RUNTIME_REGISTRATION.revision,
+			registration: this.requireRegistration().revision,
 			agent: CLAUDE_AGENT_ID,
 			completion,
 		});
@@ -1204,7 +1421,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			generation: this.generation,
 			operation,
 			parentCall: parent.call,
-			registration: CLAUDE_AGENT_RUNTIME_REGISTRATION.revision,
+			registration: this.requireRegistration().revision,
 			agent: CLAUDE_AGENT_ID,
 			request,
 		}));
@@ -1229,7 +1446,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	private executionProfile(data: string): IClaudeExecutionProfileData {
 		let value: unknown;
 		try { value = JSON.parse(data); } catch { value = undefined; }
-		if (!exactRecord(value, ['kind', 'permissionMode', 'thinkingLevel', 'credential'])) {
+		if (!exactRecord(value, ['kind', 'model', 'permissionMode', 'thinkingLevel', 'credential'])) {
 			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude execution profile is invalid', {
 				field: 'binding.profile.data', value: 'invalid',
 			});
@@ -1237,8 +1454,11 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		const profile = value as unknown as IClaudeExecutionProfileData;
 		if (
 			profile.kind !== 'claudeAgentSdkExecutionProfile'
+			|| typeof profile.model !== 'string'
+			|| profile.model.length === 0
 			|| !['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto'].includes(profile.permissionMode)
-			|| !['none', 'low', 'medium', 'high'].includes(profile.thinkingLevel)
+			|| (profile.thinkingLevel !== null
+				&& !['none', 'adaptive', 'low', 'medium', 'high', 'xhigh', 'max'].includes(profile.thinkingLevel))
 			|| !exactRecord(profile.credential, ['provider', 'scope', 'reference'])
 		) {
 			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude execution profile is invalid', {
@@ -1282,6 +1502,48 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			environment.PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
 		}
 		return Object.freeze(environment);
+	}
+
+	private claudeDiscoveryEnvironment(sdkCacheDirectory: string): Readonly<Record<string, string>> {
+		const environment: Record<string, string> = {
+			CLAUDE_AGENT_SDK_CLIENT_APP: 'comet-studio/0.1.0',
+			CLAUDE_CONFIG_DIR: sdkCacheDirectory,
+			HOME: sdkCacheDirectory,
+		};
+		if (process.platform === 'win32') {
+			environment.USERPROFILE = sdkCacheDirectory;
+			environment.SYSTEMROOT = 'C:\\Windows';
+		} else {
+			environment.PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
+		}
+		return Object.freeze(environment);
+	}
+
+	private requireDescriptor(): IAgentDescriptor {
+		if (this.descriptor === undefined) {
+			throw new AgentHostError(
+				AgentHostErrorCode.InvalidProtocolValue,
+				'Claude Agent Runtime descriptor is unavailable before initialization',
+				{ field: 'runtime.descriptor', value: 'uninitialized' },
+			);
+		}
+		return this.descriptor;
+	}
+
+	private requireRegistration(): ReturnType<typeof createClaudeAgentRuntimeRegistration> {
+		const descriptor = this.requireDescriptor();
+		if (
+			this.registration === undefined
+			|| this.registration.descriptorRevision !== descriptor.revision
+			|| this.registration.revision !== createClaudeAgentRuntimeRegistrationRevision(descriptor.revision)
+		) {
+			throw new AgentHostError(
+				AgentHostErrorCode.InvalidProtocolValue,
+				'Claude Agent Runtime registration is unavailable before initialization',
+				{ field: 'runtime.registration', value: 'uninitialized' },
+			);
+		}
+		return this.registration;
 	}
 
 	private validateSessionConfiguration(value: IAgentConfigurationState): IAgentConfigurationState {
@@ -1543,8 +1805,8 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	private assertCall<TRequest>(request: IAgentRuntimeCall<TRequest>): void {
 		this.assertConnectedEnvelope(request);
 		if (
-			!this.initialized
-			|| request.registration !== CLAUDE_AGENT_RUNTIME_REGISTRATION.revision
+			this.initializationState !== 'initialized'
+			|| request.registration !== this.requireRegistration().revision
 			|| request.agent !== CLAUDE_AGENT_ID
 		) {
 			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude Agent Runtime call authority does not match', {

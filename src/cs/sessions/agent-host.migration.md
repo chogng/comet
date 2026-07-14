@@ -63,6 +63,9 @@ The scoped files and final locations are:
 - `src/cs/platform/secrets/**` where provider credentials move to encrypted
   persistent ownership;
 - `src/cs/agent/**`;
+- `src/cs/code/common/agentHost/**` and
+  `src/cs/code/electron-utility/agentRuntime/**` where SDK packages and
+  connected runtimes implement the common protocol;
 - `src/cs/code/electron-main/agent/**`;
 - `src/cs/code/electron-main/llm/**` and
   `src/cs/code/electron-main/rag/**` where runtime services move behind
@@ -76,6 +79,8 @@ The scoped files and final locations are:
 - `src/cs/workbench/services/llm/mainAgentPayload.ts`;
 - `src/cs/sessions/sessions.desktop.main.ts`;
 - `src/cs/sessions/sessions.web.main.ts`;
+- `src/cs/workbench/contrib/preferences/**` where package, model-catalog, and
+  Host-default configuration management consumes common Host snapshots;
 - `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/AGENT_PACKAGES.md`,
   `src/cs/sessions/REMOTE_AGENT_HOST.md`,
   `src/cs/sessions/COMET_AGENT.md`, `src/cs/sessions/ATTACHMENTS.md`,
@@ -86,6 +91,7 @@ The scoped files and final locations are:
 - `src/cs/platform/tunnel/REMOTE_TUNNEL.md` and
   `src/cs/platform/remote/REMOTE.md`;
 - `.github/instructions/agent-host.instructions.md`,
+  `.github/instructions/agent-sdk.instructions.md`,
   `.github/instructions/chat.instructions.md`,
   `.github/instructions/browserView.instructions.md`,
   `.github/instructions/sessions.instructions.md`,
@@ -640,6 +646,11 @@ The migration is complete only when:
     mutations, releases materialized backing, and commits migrated state
     atomically; Agent-backed deletion and post-uninstall Host-record purge
     remain distinct operations.
+    Each activated SDK runtime discovers its provider-native model catalog,
+    maps it into immutable common descriptor revisions, and publishes that
+    Host snapshot to Sessions and Settings. Product code and Settings contain
+    no parallel provider model list, and model discovery never activates or
+    downloads an absent package.
 22. Host Agent defaults, Session configuration, and model execution settings
     use separate exact schema revisions. Agent Host snapshots and ordered
     actions own canonical schemas and values; every runtime resolves and

@@ -29,7 +29,6 @@ import {
   createLocalAgentPackageContentDigest,
   LocalAgentPackageArtifactPort,
 } from 'cs/code/electron-main/agentHost/localAgentPackageArtifactPort';
-import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/mockAgentPackages';
 import {
   CLAUDE_AGENT_RUNTIME_ENTRY_POINT,
   claudeAgentSdkExecutableTarget,
@@ -82,14 +81,6 @@ app.whenReady().then(async () => {
 
   const settings = await storage.loadSettings();
   const target = Object.freeze({ operatingSystem: process.platform, architecture: process.arch });
-  const mockAgentRuntimeArtifact = await createLocalAgentPackageArtifactFile(fileURLToPath(new URL(
-    '../electron-utility/agentRuntime/mockAgentRuntimeMain.js',
-    import.meta.url,
-  )));
-  const mockAgentPackageProducts = createMockAgentPackageProducts(
-    target,
-    mockAgentRuntimeArtifact,
-  );
   const claudeRuntimeArtifact = await createLocalAgentPackageArtifactFile(fileURLToPath(new URL(
     '../electron-utility/agentRuntime/claudeAgentRuntimeMain.js',
     import.meta.url,
@@ -104,7 +95,7 @@ app.whenReady().then(async () => {
     runtime: claudeRuntimeArtifact,
     executable: claudeExecutableArtifact,
   }));
-  const agentPackageProducts = Object.freeze([...mockAgentPackageProducts, claudeAgentPackageProduct]);
+  const agentPackageProducts = Object.freeze([claudeAgentPackageProduct]);
   const packageArtifactPort = new LocalAgentPackageArtifactPort({
     storageRoot: environmentMainPaths.agentHostPackagesDir,
     packages: agentPackageProducts.map(product => product.verifiedPackage),

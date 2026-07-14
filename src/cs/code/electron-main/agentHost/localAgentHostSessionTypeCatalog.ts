@@ -5,7 +5,10 @@
 
 import type { IAgentDescriptor, IAgentRuntimeRegistration } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostSessionTypeDescriptor } from 'cs/platform/agentHost/common/protocol';
-import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
+import type {
+	AgentId,
+	AgentPackageId,
+} from 'cs/platform/agentHost/common/identities';
 import type {
 	IAgentHostActiveAgentCatalogEntry,
 	IAgentHostSessionTypeCatalog,
@@ -13,12 +16,14 @@ import type {
 
 /** Product-owned Session type projection for one exact runtime registration. */
 export interface ILocalAgentHostSessionTypeCatalogEntry {
-	readonly registration: IAgentRuntimeRegistration;
+	readonly packageId: AgentPackageId;
+	readonly agentId: AgentId;
+	readonly resolveRuntimeRegistrationRevision: (descriptor: IAgentDescriptor) => IAgentRuntimeRegistration['revision'];
 	readonly resolve: (descriptor: IAgentDescriptor) => IAgentHostSessionTypeDescriptor;
 }
 
-function registrationKey(registration: IAgentRuntimeRegistration): string {
-	return encodeAgentHostProtocolValue(registration);
+function agentKey(packageId: AgentPackageId, agentId: AgentId): string {
+	return `${packageId}\0${agentId}`;
 }
 
 /** Resolves createable Session types from the exact active local runtime catalog. */
@@ -26,7 +31,7 @@ export class LocalAgentHostSessionTypeCatalog implements IAgentHostSessionTypeCa
 	private readonly entries: ReadonlyMap<string, ILocalAgentHostSessionTypeCatalogEntry>;
 
 	constructor(entries: readonly ILocalAgentHostSessionTypeCatalogEntry[]) {
-		const keyed = entries.map(entry => [registrationKey(entry.registration), entry] as const);
+		const keyed = entries.map(entry => [agentKey(entry.packageId, entry.agentId), entry] as const);
 		if (new Set(keyed.map(([key]) => key)).size !== keyed.length) {
 			throw new Error('Local Agent Host Session type catalog contains a duplicate runtime registration');
 		}
@@ -35,7 +40,10 @@ export class LocalAgentHostSessionTypeCatalog implements IAgentHostSessionTypeCa
 
 	resolve(activeAgents: readonly IAgentHostActiveAgentCatalogEntry[]): readonly IAgentHostSessionTypeDescriptor[] {
 		return Object.freeze(activeAgents.map(activeAgent => {
-			const entry = this.entries.get(registrationKey(activeAgent.registration));
+			const entry = this.entries.get(agentKey(
+				activeAgent.registration.packageId,
+				activeAgent.registration.agentId,
+			));
 			if (entry === undefined) {
 				throw new Error(`Local Agent Host has no Session type product for runtime '${activeAgent.registration.revision}'`);
 			}
@@ -46,6 +54,9 @@ export class LocalAgentHostSessionTypeCatalog implements IAgentHostSessionTypeCa
 				|| activeAgent.descriptor.capabilities.revision !== activeAgent.registration.capabilityRevision
 			) {
 				throw new Error(`Local Agent Host runtime '${activeAgent.registration.revision}' published a mismatched descriptor`);
+			}
+			if (activeAgent.registration.revision !== entry.resolveRuntimeRegistrationRevision(activeAgent.descriptor)) {
+				throw new Error(`Local Agent Host runtime '${activeAgent.registration.revision}' is outside its product contract`);
 			}
 			const sessionType = entry.resolve(activeAgent.descriptor);
 			if (

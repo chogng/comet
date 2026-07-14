@@ -11,6 +11,7 @@ import {
 } from 'cs/editor/browser/text/editorDraftStyleService';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
+import { AgentHostManagementService } from 'cs/platform/agentHost/browser/agentHostManagementService';
 import { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';
 import { WorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
@@ -67,6 +68,7 @@ function createSettingsController(
 		createTestLocaleService(),
 		new WorkbenchLanguageService(),
 		editorDraftStyleService,
+		new AgentHostManagementService(),
 		),
 		settingsModel,
 	};
@@ -95,6 +97,7 @@ test('SettingsController uses the current locale for async completion notificati
 		createTestLocaleService(() => locale),
 		new WorkbenchLanguageService(),
 		new EditorDraftStyleService(),
+		new AgentHostManagementService(),
 	);
 
 	const operation = controller.handleTestLlmConnection();
@@ -133,6 +136,7 @@ test('SettingsController updates supported locales through the locale service', 
 		),
 		new WorkbenchLanguageService(),
 		new EditorDraftStyleService(),
+		new AgentHostManagementService(),
 	);
 
 	controller.setLocale('unsupported');

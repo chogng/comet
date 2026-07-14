@@ -12,11 +12,11 @@ import {
 	createMockAgentPackageProducts,
 	getMockAgentPackageDefinition,
 	validateInstalledMockAgentPackage,
-} from 'cs/code/common/agentHost/mockAgentPackages';
+} from 'cs/code/common/agentHost/test/mockAgentPackages';
 import {
 	MockAgentRuntime,
 	productMockAgentRuntimeRetentionLimits,
-} from 'cs/code/electron-utility/agentRuntime/mockAgentRuntime';
+} from 'cs/code/electron-utility/agentRuntime/test/mockAgentRuntime';
 import type {
 	IAgentCancelTurnRequest,
 	IAgentCreateChatOptions,

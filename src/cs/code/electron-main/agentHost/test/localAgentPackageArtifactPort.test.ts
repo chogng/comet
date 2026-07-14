@@ -22,7 +22,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/mockAgentPackages';
+import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/test/mockAgentPackages';
 import {
 	createLocalAgentPackageArtifactFile,
 	LocalAgentPackageArtifactPort,

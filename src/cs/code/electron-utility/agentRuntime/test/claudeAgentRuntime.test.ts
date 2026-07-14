@@ -9,22 +9,21 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import type { Query, SDKMessage, SessionKey, SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk';
+import type { ModelInfo, Query, SDKMessage, SessionKey, SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk';
 
 import {
 	CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
 	CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
 	CLAUDE_AGENT_CREDENTIAL_PROPERTY,
-	CLAUDE_AGENT_DESCRIPTOR,
 	CLAUDE_AGENT_ID,
-	CLAUDE_AGENT_MODEL_CONFIGURATION_SCHEMA,
 	CLAUDE_AGENT_PACKAGE_ID,
+	CLAUDE_AGENT_PACKAGE_DEFINITION,
 	CLAUDE_AGENT_PERMISSION_MODE_PROPERTY,
 	CLAUDE_AGENT_RUNTIME_ENTRY_POINT,
-	CLAUDE_AGENT_RUNTIME_REGISTRATION,
 	CLAUDE_AGENT_SDK_EXECUTABLE_TARGET,
 	CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
 	CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
+	createClaudeAgentRuntimeRegistrationRevision,
 	createClaudeAgentPackageProduct,
 	validateInstalledClaudeAgentPackage,
 } from 'cs/code/common/agentHost/claudeAgentPackage';
@@ -39,6 +38,7 @@ import type {
 	IAgentRuntimeAction,
 	IAgentRuntimeCall,
 	IAgentRuntimeHostOperationRequest,
+	IAgentRuntimeInitializeRequest,
 } from 'cs/platform/agentHost/common/connections';
 import {
 	createAgentCancellationId,
@@ -57,6 +57,7 @@ import {
 	createAgentToolSetRevision,
 	createAgentTurnId,
 } from 'cs/platform/agentHost/common/identities';
+import type { IAgentConfigurationCandidate } from 'cs/platform/agentHost/common/configuration';
 import { COMET_TOOL_SCHEMA_PROFILE } from 'cs/platform/agentHost/common/tools';
 
 const connection = createAgentRuntimeConnectionId('claude-sdk-test');
@@ -75,24 +76,27 @@ const sessionConfiguration = Object.freeze({
 	}),
 });
 
-const modelConfiguration = Object.freeze({
-	schema: CLAUDE_AGENT_MODEL_CONFIGURATION_SCHEMA.revision,
-	values: Object.freeze({
-		[CLAUDE_AGENT_THINKING_LEVEL_PROPERTY]: 'high',
-		[CLAUDE_AGENT_CREDENTIAL_PROPERTY]: Object.freeze({
-			provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
-			scope: 'llm',
-			reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
-		}),
-	}),
-});
+const sdkModels = Object.freeze([Object.freeze({
+	value: 'claude-test-model',
+	resolvedModel: 'claude-test-model-20260714',
+	displayName: 'Claude Test Model',
+	description: 'Model published by the SDK test catalog.',
+	supportsEffort: true,
+	supportedEffortLevels: ['low', 'medium', 'high'],
+	supportsAdaptiveThinking: true,
+	supportsFastMode: false,
+} satisfies ModelInfo)]);
 
-function runtimeCall<TRequest>(call: string, request: TRequest): IAgentRuntimeCall<TRequest> {
+function runtimeCall<TRequest>(
+	registration: IAgentRuntimeCall<TRequest>['registration'],
+	call: string,
+	request: TRequest,
+): IAgentRuntimeCall<TRequest> {
 	return Object.freeze({
 		connection,
 		generation,
 		call: createAgentRuntimeCallId(call),
-		registration: CLAUDE_AGENT_RUNTIME_REGISTRATION.revision,
+		registration,
 		agent: CLAUDE_AGENT_ID,
 		request,
 	});
@@ -105,14 +109,39 @@ function operation(name: string, digit: string) {
 	});
 }
 
-function createSdkStream(messages: readonly SDKMessage[]): Query {
+function createSdkStream(
+	messages: readonly SDKMessage[],
+	models: readonly ModelInfo[] = sdkModels,
+): Query {
 	const stream = (async function* () {
 		for (const message of messages) {
 			yield message;
 		}
 	})();
-	Object.assign(stream, { close: () => undefined });
+	Object.assign(stream, {
+		close: () => undefined,
+		supportedModels: async () => [...models],
+	});
 	return stream as unknown as Query;
+}
+
+function runtimeInitializationRequest(call: string): IAgentRuntimeInitializeRequest {
+	return Object.freeze({
+		connection,
+		generation,
+		call: createAgentRuntimeCallId(call),
+		protocolVersions: [createAgentRuntimeProtocolVersion('2')],
+		transportLimits: {
+			maximumRequestBytes: 1024 * 1024,
+			maximumResponseBytes: 1024 * 1024,
+			maximumActionBytes: 1024 * 1024,
+			maximumConcurrentCalls: 8,
+		},
+		packageId: CLAUDE_AGENT_PACKAGE_ID,
+		packageRevision,
+		authorizedAgents: [CLAUDE_AGENT_ID],
+		implementation: { name: 'Claude SDK runtime test', build: 'test' },
+	});
 }
 
 test('Claude product owns the exact SDK runtime and native executable closure', () => {
@@ -148,11 +177,6 @@ test('Claude product owns the exact SDK runtime and native executable closure', 
 	assert.deepEqual(product.definition.sessionConfigurationSchema.properties.map(property => property.id), [
 		CLAUDE_AGENT_PERMISSION_MODE_PROPERTY,
 	]);
-	assert.deepEqual(product.definition.modelConfigurationSchema.properties.map(property => property.id), [
-		CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
-		CLAUDE_AGENT_CREDENTIAL_PROPERTY,
-	]);
-
 	validateInstalledClaudeAgentPackage(Object.freeze({
 		...product.offering,
 		manifest: product.verifiedPackage.manifest,
@@ -189,6 +213,42 @@ test('Claude SessionStore persists, deduplicates, cold-loads, and idempotently d
 	await restored.delete(key);
 });
 
+test('Claude runtime rejects empty and duplicate SDK model catalogs without a fallback', async t => {
+	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'comet-claude-model-catalog-'));
+	const canonicalTemporaryRoot = await realpath(temporaryRoot);
+	t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+	const cases = [{
+		name: 'empty',
+		models: Object.freeze([]),
+		error: /empty model catalog/,
+	}, {
+		name: 'duplicate',
+		models: Object.freeze([sdkModels[0], sdkModels[0]]),
+		error: /duplicate model identities/,
+	}] as const;
+
+	for (const scenario of cases) {
+		const runtime = new ClaudeAgentRuntime({
+			packageRevision,
+			connection,
+			generation,
+			claudeCodeExecutable: executable,
+			stateDirectory: path.join(canonicalTemporaryRoot, scenario.name, 'state'),
+			cacheDirectory: path.join(canonicalTemporaryRoot, scenario.name, 'cache'),
+			query: () => createSdkStream([], scenario.models),
+			...productClaudeAgentRuntimeRetentionLimits,
+		});
+		try {
+			await assert.rejects(
+				runtime.initialize(runtimeInitializationRequest(`initialize-${scenario.name}`)),
+				scenario.error,
+			);
+		} finally {
+			runtime.dispose();
+		}
+	}
+});
+
 test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backing', async t => {
 	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'comet-claude-agent-runtime-'));
 	const canonicalTemporaryRoot = await realpath(temporaryRoot);
@@ -197,6 +257,7 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 	t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
 	type ClaudeQuery = NonNullable<IClaudeAgentRuntimeOptions['query']>;
 	const queryCalls: Parameters<ClaudeQuery>[0][] = [];
+	const discoveryCalls: Parameters<ClaudeQuery>[0][] = [];
 	const deletedSdkSessions: Array<{ readonly sessionId: string; readonly directory: string | undefined }> = [];
 	const sessionStore = {
 		append: async () => undefined,
@@ -204,6 +265,10 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 		delete: async () => undefined,
 	};
 	const query: ClaudeQuery = parameters => {
+		if (typeof parameters.prompt !== 'string') {
+			discoveryCalls.push(parameters);
+			return createSdkStream([]);
+		}
 		queryCalls.push(parameters);
 		const options = parameters.options;
 		if (options === undefined) {
@@ -257,40 +322,81 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 		});
 	});
 	try {
-		const initialized = await runtime.initialize({
-			connection,
-			generation,
-			call: createAgentRuntimeCallId('initialize'),
-			protocolVersions: [createAgentRuntimeProtocolVersion('2')],
-			transportLimits: {
-				maximumRequestBytes: 1024 * 1024,
-				maximumResponseBytes: 1024 * 1024,
-				maximumActionBytes: 1024 * 1024,
-				maximumConcurrentCalls: 8,
-			},
-			packageId: CLAUDE_AGENT_PACKAGE_ID,
-			packageRevision,
-			authorizedAgents: [CLAUDE_AGENT_ID],
-			implementation: { name: 'Claude SDK runtime test', build: 'test' },
-		});
-		assert.deepEqual(initialized.registrations, [{
-			registration: CLAUDE_AGENT_RUNTIME_REGISTRATION,
-			descriptor: CLAUDE_AGENT_DESCRIPTOR,
+		const initialized = await runtime.initialize(runtimeInitializationRequest('initialize'));
+		assert.equal(initialized.registrations.length, 1);
+		const registration = initialized.registrations[0].registration;
+		const descriptor = initialized.registrations[0].descriptor;
+		assert.equal(registration.revision, createClaudeAgentRuntimeRegistrationRevision(descriptor.revision));
+		assert.equal(registration.descriptorRevision, descriptor.revision);
+		assert.equal(
+			CLAUDE_AGENT_PACKAGE_DEFINITION.resolveRuntimeRegistrationRevision(descriptor),
+			registration.revision,
+		);
+		assert.deepEqual(descriptor.models.map(model => ({ id: model.id, displayName: model.displayName })), [{
+			id: 'claude:claude-test-model',
+			displayName: 'Claude Test Model',
 		}]);
+		const thinkingProperty = descriptor.models[0].configurationSchema.properties.find(
+			property => property.id === CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
+		);
+		assert.equal(thinkingProperty?.required, false);
+		assert.equal(thinkingProperty?.default, undefined);
+		const sessionType = CLAUDE_AGENT_PACKAGE_DEFINITION.resolveSessionType(descriptor);
+		assert.deepEqual(sessionType.models, descriptor.models.map(model => model.id));
+		assert.equal(sessionType.automaticExecutionPreset, null);
+		assert.equal(discoveryCalls.length, 1);
+		assert.equal(discoveryCalls[0].options?.env?.ANTHROPIC_API_KEY, undefined);
+		assert.equal(discoveryCalls[0].options?.persistSession, false);
+		const modelConfiguration = Object.freeze({
+			schema: descriptor.models[0].configurationSchema.revision,
+			values: Object.freeze({
+				[CLAUDE_AGENT_THINKING_LEVEL_PROPERTY]: 'high',
+				[CLAUDE_AGENT_CREDENTIAL_PROPERTY]: Object.freeze({
+					provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+					scope: 'llm',
+					reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+				}),
+			}),
+		});
+		const sdkDefaultModelConfiguration = Object.freeze({
+			schema: descriptor.models[0].configurationSchema.revision,
+			values: Object.freeze({
+				[CLAUDE_AGENT_CREDENTIAL_PROPERTY]: Object.freeze({
+					provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+					scope: 'llm',
+					reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+				}),
+			}),
+		});
 
-		const profile: IAgentExecutionProfile = (await runtime.resolveExecutionProfile(runtimeCall('resolve-profile', {
+		const profile: IAgentExecutionProfile = (await runtime.resolveExecutionProfile(runtimeCall(registration.revision, 'resolve-profile', {
 			submission: createAgentSubmissionId('resolve-profile'),
 			selection: {
 				kind: 'user',
-				value: { model: CLAUDE_AGENT_DESCRIPTOR.models[0].id },
+				value: { model: descriptor.models[0].id },
 				configuration: modelConfiguration,
 			},
 			selectionDigest: createAgentHostPayloadDigest(`sha256:${'d'.repeat(64)}`),
-			runtimeRegistration: CLAUDE_AGENT_RUNTIME_REGISTRATION.revision,
+			runtimeRegistration: registration.revision,
 			sessionConfiguration,
 		}))).value;
+		const sdkDefaultProfile: IAgentExecutionProfile = (await runtime.resolveExecutionProfile(runtimeCall(
+			registration.revision,
+			'resolve-default-profile',
+			{
+				submission: createAgentSubmissionId('resolve-default-profile'),
+				selection: {
+					kind: 'user',
+					value: { model: descriptor.models[0].id },
+					configuration: sdkDefaultModelConfiguration,
+				},
+				selectionDigest: createAgentHostPayloadDigest(`sha256:${'e'.repeat(64)}`),
+				runtimeRegistration: registration.revision,
+				sessionConfiguration,
+			},
+		))).value;
 
-		await runtime.createSession(runtimeCall('create-session', {
+		await runtime.createSession(runtimeCall(registration.revision, 'create-session', {
 			...operation('create-session', '1'),
 			session,
 			configuration: sessionConfiguration,
@@ -304,7 +410,7 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 				}],
 			},
 		}));
-		const chatBacking = (await runtime.createChat(runtimeCall('create-chat', {
+		const chatBacking = (await runtime.createChat(runtimeCall(registration.revision, 'create-chat', {
 			...operation('create-chat', '2'),
 			session,
 			chat,
@@ -313,7 +419,11 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 		const createdResume = JSON.parse(chatBacking.resume?.data ?? 'null') as { readonly sdkSessionId?: unknown };
 		assert.equal(typeof createdResume.sdkSessionId, 'string');
 
-		const sendTurn = async (sequence: number): Promise<void> => {
+		const sendTurn = async (
+			sequence: number,
+			turnProfile: IAgentExecutionProfile,
+			turnModelConfiguration: IAgentConfigurationCandidate,
+		): Promise<void> => {
 			const turn = createAgentTurnId(`claude-sdk-turn-${sequence}`);
 			const request: IAgentChatRequest = {
 				...operation(`send-${sequence}`, String(sequence + 2)),
@@ -325,20 +435,20 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 				attachments: [],
 				interactionTargets: [],
 				binding: {
-					profile,
-					modelConfiguration,
+					profile: turnProfile,
+					modelConfiguration: turnModelConfiguration,
 					credentials: [{
 						provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
 						scope: 'llm',
 						reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
 					}],
-					runtimeRegistration: CLAUDE_AGENT_RUNTIME_REGISTRATION.revision,
+					runtimeRegistration: registration.revision,
 					toolSet: {
 						revision: createAgentToolSetRevision(`claude-sdk-tools-${sequence}`),
 						schemaProfile: COMET_TOOL_SCHEMA_PROFILE,
-						runtimeRegistration: CLAUDE_AGENT_RUNTIME_REGISTRATION.revision,
-						agentDescriptor: CLAUDE_AGENT_DESCRIPTOR.revision,
-						modelDescriptor: CLAUDE_AGENT_DESCRIPTOR.models[0].revision,
+						runtimeRegistration: registration.revision,
+						agentDescriptor: descriptor.revision,
+						modelDescriptor: descriptor.models[0].revision,
 						registrations: [],
 					},
 					deadline: Date.now() + 60_000,
@@ -346,11 +456,11 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 					outputConstraints: null,
 				},
 			};
-			await runtime.send(runtimeCall(`send-call-${sequence}`, request));
+			await runtime.send(runtimeCall(registration.revision, `send-call-${sequence}`, request));
 		};
 
-		await sendTurn(1);
-		await sendTurn(2);
+		await sendTurn(1, sdkDefaultProfile, sdkDefaultModelConfiguration);
+		await sendTurn(2, profile, modelConfiguration);
 
 		assert.equal(queryCalls.length, 2);
 		assert.equal(hostOperations.length, 2);
@@ -374,8 +484,7 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 			assert.deepEqual(options.tools, []);
 			assert.deepEqual(options.skills, []);
 			assert.deepEqual(options.settingSources, []);
-			assert.deepEqual(options.thinking, { type: 'adaptive' });
-			assert.equal(options.effort, 'high');
+			assert.equal(options.model, 'claude-test-model');
 			assert.equal(options.env?.ANTHROPIC_API_KEY, 'test-anthropic-api-key');
 			assert.equal(options.env?.CLAUDE_CONFIG_DIR, path.join(cacheDirectory, createdResume.sdkSessionId as string));
 			assert.equal(options.sessionStore, sessionStore);
@@ -392,6 +501,10 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 				},
 			});
 		}
+		assert.equal(firstQuery.options.thinking, undefined);
+		assert.equal(firstQuery.options.effort, undefined);
+		assert.deepEqual(secondQuery.options.thinking, { type: 'adaptive' });
+		assert.equal(secondQuery.options.effort, 'high');
 		assert.equal(
 			actions.filter(action => action.action.kind === 'chatResumeStateChanged').length,
 			1,
@@ -410,7 +523,7 @@ test('Claude runtime maps one durable SDK Chat and deletes its SDK-native backin
 		const terminalActions = actions.filter(action => action.action.kind === 'turnTerminal');
 		assert.ok(terminalActions.every(action => action.action.kind === 'turnTerminal' && action.action.state === 'completed'));
 
-		await runtime.deleteChat(runtimeCall('delete-chat', {
+		await runtime.deleteChat(runtimeCall(registration.revision, 'delete-chat', {
 			...operation('delete-chat', '5'),
 			session,
 			chat,

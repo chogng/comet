@@ -9,11 +9,17 @@ import { Emitter, type Event } from 'cs/base/common/event';
 import { onUnexpectedError } from 'cs/base/common/errors';
 import { Disposable } from 'cs/base/common/lifecycle';
 import { generateUuid } from 'cs/base/common/uuid';
+import type {
+	IAgentHostManagementTarget,
+	IAgentHostManagementTargetSnapshot,
+} from 'cs/platform/agentHost/browser/agentHostManagementService';
 import type { AgentChatOrigin, IAgentRuntimeRegistration } from 'cs/platform/agentHost/common/agent';
 import { AgentHostChannelStateReducer } from 'cs/platform/agentHost/common/channelState';
 import {
+	type AgentConfigurationValues,
 	type IAgentConfigurationCandidate,
 	type IAgentConfigurationState,
+	validateAndFreezeAgentConfigurationCandidate,
 	validateAndFreezeAgentConfigurationSchema,
 	validateAndFreezeAgentConfigurationState,
 } from 'cs/platform/agentHost/common/configuration';
@@ -27,6 +33,7 @@ import {
 	createAgentHostProtocolVersion,
 	createAgentId,
 	createAgentModelId,
+	createAgentPackageOperationId,
 	createAgentPackageId,
 	createAgentResumeSchemaId,
 	createAgentRuntimeRegistrationRevision,
@@ -35,14 +42,24 @@ import {
 	createAgentToolSchemaProfileId,
 	createAgentTurnId,
 	type AgentChatId,
+	type AgentConfigurationPropertyId,
 	type AgentHostChannelId,
 	type AgentHostOperationId,
 	type AgentHostPayloadDigest,
 	type AgentHostSequence,
 	type AgentId,
 	type AgentModelId,
+	type AgentPackageId,
+	type AgentPackageOperationId,
 	type AgentSessionId,
 } from 'cs/platform/agentHost/common/identities';
+import {
+	computeAgentPackageOperationDigest,
+	type AgentPackageOperationOutcome,
+	type AgentPackageOperationPayload,
+	type IAgentPackageOperationRequest,
+} from 'cs/platform/agentHost/common/packages';
+import type { AgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import {
 	assertAgentHostReconnectResult,
 	assertAgentHostSetSubscriptionsResult,
@@ -144,6 +161,13 @@ interface IAgentHostDraftRecord {
 
 interface IAgentHostPendingMutation {
 	readonly request: IAgentHostMutationRequest;
+	readonly configurationAgent?: AgentId;
+}
+
+interface IAgentHostPendingPackageOperation {
+	readonly request: IAgentPackageOperationRequest;
+	readonly packageId: AgentPackageId;
+	readonly kind: AgentPackageOperationPayload['kind'];
 }
 
 interface IAgentHostConnectionRecovery {
@@ -168,6 +192,20 @@ class AgentHostOperationUncertainError extends Error {
 	constructor(readonly operation: AgentHostOperationId, readonly digest: AgentHostPayloadDigest) {
 		super(`Agent Host operation '${operation}' has not reached a reconciled terminal outcome.`);
 		this.name = 'AgentHostOperationUncertainError';
+	}
+}
+
+class AgentPackageOperationFailure extends Error {
+	constructor(readonly operation: AgentPackageOperationId, message: string) {
+		super(message);
+		this.name = 'AgentPackageOperationFailure';
+	}
+}
+
+class AgentPackageOperationUncertainError extends Error {
+	constructor(readonly operation: AgentPackageOperationId, readonly digest: AgentHostPayloadDigest) {
+		super(`Agent package operation '${operation}' has not reached a reconciled terminal outcome.`);
+		this.name = 'AgentPackageOperationUncertainError';
 	}
 }
 
@@ -335,7 +373,7 @@ function modelSignature(root: IAgentHostRootState): string {
 }
 
 /** Maps one exact Agent Host connection into the provider-independent Sessions domain. */
-export class AgentHostSessionsProvider extends Disposable implements ISessionsProvider {
+export class AgentHostSessionsProvider extends Disposable implements ISessionsProvider, IAgentHostManagementTarget {
 	readonly id;
 
 	private readonly sessionTypesChangeEmitter = this._register(new Emitter<void>({ onListenerError: onUnexpectedError }));
@@ -344,6 +382,8 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	readonly onDidChangeSessions: Event<ISessionsChangeEvent> = this.sessionsChangeEmitter.event;
 	private readonly modelsChangeEmitter = this._register(new Emitter<void>({ onListenerError: onUnexpectedError }));
 	readonly onDidChangeModels: Event<void> = this.modelsChangeEmitter.event;
+	private readonly managementChangeEmitter = this._register(new Emitter<void>({ onListenerError: onUnexpectedError }));
+	readonly onDidChangeManagementState: Event<void> = this.managementChangeEmitter.event;
 
 	private readonly sequencer = new Sequencer();
 	private readonly rootReducer = new AgentHostChannelStateReducer(
@@ -364,10 +404,13 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	private draft: IAgentHostDraftRecord | undefined;
 	private lastHostSequence: AgentHostSequence | undefined;
 	private readonly pendingMutations = new Map<AgentHostOperationId, IAgentHostPendingMutation>();
+	private readonly pendingPackageMutations = new Map<AgentPackageOperationId, IAgentHostPendingPackageOperation>();
 	private connectionRecovering = false;
 	private connectionRecoveryEpoch = 0;
 	private interruptedGeneration: number | undefined;
 	private connectionRecovery: IAgentHostConnectionRecovery | undefined;
+	private readonly pendingPackageOperations = new Set<AgentPackageId>();
+	private readonly pendingConfigurationOperations = new Set<AgentId>();
 	private disposed = false;
 
 	private constructor(
@@ -400,6 +443,83 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 
 	get label(): string {
 		return this.options.resolveDisplayText(this.requireRootState().label);
+	}
+
+	get authority() {
+		return this.connection.authority;
+	}
+
+	getManagementSnapshot(): IAgentHostManagementTargetSnapshot {
+		this.assertNotDisposed();
+		const root = this.requireRootState();
+		return Object.freeze({
+			authority: this.connection.authority,
+			label: this.options.resolveDisplayText(root.label),
+			packages: root.packages,
+			supportsPackageOperations: root.capabilities.supportsPackageOperations,
+			agents: root.agents,
+			agentDefaults: root.agentDefaults,
+			pendingPackages: Object.freeze([...this.pendingPackageOperations].sort()),
+			pendingConfigurations: Object.freeze([...this.pendingConfigurationOperations].sort()),
+		});
+	}
+
+	async installPackage(packageId: AgentPackageId): Promise<void> {
+		this.assertNotDisposed();
+		const root = this.requireRootState();
+		if (!root.capabilities.supportsPackageOperations) {
+			throw new Error(`Agent Host '${root.authority}' does not support package operations.`);
+		}
+		if (root.packages.installedPackages.some(installed => installed.packageId === packageId)) {
+			throw new Error(`Agent package '${packageId}' is already installed.`);
+		}
+		const offering = root.packages.installablePackages.find(candidate => candidate.packageId === packageId);
+		if (offering === undefined) {
+			throw new Error(`Agent package '${packageId}' is not installable.`);
+		}
+		await this.executePackageOperation(packageId, Object.freeze({
+			kind: 'install',
+			packageId,
+			offering,
+		}));
+	}
+
+	async uninstallPackage(packageId: AgentPackageId): Promise<void> {
+		this.assertNotDisposed();
+		const root = this.requireRootState();
+		if (!root.capabilities.supportsPackageOperations) {
+			throw new Error(`Agent Host '${root.authority}' does not support package operations.`);
+		}
+		if (!root.packages.installedPackages.some(installed => installed.packageId === packageId)) {
+			throw new Error(`Agent package '${packageId}' is not installed.`);
+		}
+		await this.executePackageOperation(packageId, Object.freeze({
+			kind: 'uninstall',
+			packageId,
+		}));
+	}
+
+	updateAgentDefault(
+		agentId: AgentId,
+		propertyId: AgentConfigurationPropertyId,
+		value: AgentHostProtocolValue,
+	): Promise<void> {
+		return this.commitAgentDefaults(agentId, current => Object.freeze({
+			...current.values,
+			[propertyId]: value,
+		}));
+	}
+
+	removeAgentDefault(agentId: AgentId, propertyId: AgentConfigurationPropertyId): Promise<void> {
+		return this.commitAgentDefaults(agentId, current => {
+			const values: Record<string, AgentHostProtocolValue> = { ...current.values };
+			delete values[propertyId];
+			return Object.freeze(values);
+		});
+	}
+
+	resetAgentDefaults(agentId: AgentId): Promise<void> {
+		return this.commitAgentDefaults(agentId, () => Object.freeze({}));
 	}
 
 	get sessionTypes(): readonly ISessionType[] {
@@ -444,6 +564,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			}), undefined);
 		}
 		this.sessionTypesChangeEmitter.fire();
+		this.managementChangeEmitter.fire();
 	}
 
 	/** Prevents new mutations as soon as the lower transport leaves its connected generation. */
@@ -493,6 +614,9 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 					return false;
 				}
 				if (await this.reconcilePendingMutations(recovery) === undefined) {
+					return false;
+				}
+				if (await this.reconcilePendingPackageOperations(recovery) === undefined) {
 					return false;
 				}
 				await this.hydrateCatalog(true);
@@ -1071,15 +1195,25 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		});
 	}
 
-	private async mutate(payload: AgentHostMutationPayload): Promise<AgentHostMutationResult> {
+	private async mutate(
+		payload: AgentHostMutationPayload,
+		configurationAgent?: AgentId,
+	): Promise<AgentHostMutationResult> {
 		if (this.connectionRecovering) {
 			throw new Error('Agent Host connection is recovering.');
+		}
+		if (configurationAgent !== undefined && this.pendingConfigurationOperations.has(configurationAgent)) {
+			throw new Error(`Agent '${configurationAgent}' already has a pending configuration operation.`);
 		}
 		const operation = createAgentHostOperationId(generateUuid());
 		const digest = await computeAgentHostMutationDigest(payload);
 		const request: IAgentHostMutationRequest = Object.freeze({ operation, digest, payload });
-		const pending = Object.freeze({ request });
+		const pending = Object.freeze({ request, configurationAgent });
 		this.pendingMutations.set(operation, pending);
+		if (configurationAgent !== undefined) {
+			this.pendingConfigurationOperations.add(configurationAgent);
+			this.managementChangeEmitter.fire();
+		}
 		let outcome: AgentHostMutationOutcome;
 		try {
 			outcome = await this.connection.mutate(request);
@@ -1113,22 +1247,22 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 				throw new Error('Agent Host connection recovery was superseded.');
 			}
 			switch (outcome.kind) {
-				case 'succeeded':
+			case 'succeeded':
 					if (outcome.result.operation !== operation || outcome.result.digest !== digest) {
-						this.pendingMutations.delete(operation);
+						this.completePendingMutation(pending);
 						throw new Error(`Agent Host operation '${operation}' returned another operation identity.`);
 					}
-					this.pendingMutations.delete(operation);
+					this.completePendingMutation(pending);
 					return outcome.result;
 				case 'failed':
 					if (outcome.failure.reconciliation === 'terminal') {
-						this.pendingMutations.delete(operation);
+						this.completePendingMutation(pending);
 						throw new AgentHostOperationFailure(operation, outcome.failure.message);
 					}
 					outcome = await this.connection.getOperationOutcome({ operation, digest });
 					break;
 				case 'conflict':
-					this.pendingMutations.delete(operation);
+					this.completePendingMutation(pending);
 					throw new AgentHostOperationFailure(
 						operation,
 						`Agent Host operation '${operation}' conflicts with digest '${outcome.recordedDigest}'.`,
@@ -1147,6 +1281,14 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			}
 		}
 		throw new AgentHostOperationUncertainError(operation, digest);
+	}
+
+	private completePendingMutation(pending: IAgentHostPendingMutation): void {
+		this.pendingMutations.delete(pending.request.operation);
+		if (pending.configurationAgent !== undefined) {
+			this.pendingConfigurationOperations.delete(pending.configurationAgent);
+			this.managementChangeEmitter.fire();
+		}
 	}
 
 	private async reconcilePendingMutations(recovery: IAgentHostConnectionRecovery): Promise<boolean | undefined> {
@@ -1188,6 +1330,178 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		if (result.kind !== kind) {
 			throw new Error(`Agent Host mutation '${kind}' returned '${result.kind}'.`);
 		}
+	}
+
+	private async executePackageOperation(
+		packageId: AgentPackageId,
+		payload: AgentPackageOperationPayload,
+	): Promise<void> {
+		this.assertMutationEntryAllowed();
+		await this.sequencer.queue(async () => {
+			this.assertMutationEntryAllowed();
+			if (this.pendingPackageOperations.has(packageId)) {
+				throw new Error(`Agent package '${packageId}' already has a pending operation.`);
+			}
+			const expectedCatalogRevision = this.requireRootState().packages.revision;
+			const operation = createAgentPackageOperationId(`settings:${generateUuid()}`);
+			const digest = await computeAgentPackageOperationDigest(expectedCatalogRevision, payload);
+			const request: IAgentPackageOperationRequest = Object.freeze({
+				operation,
+				digest,
+				expectedCatalogRevision,
+				payload,
+			});
+			const pending = Object.freeze({ request, packageId, kind: payload.kind });
+			this.pendingPackageMutations.set(operation, pending);
+			this.pendingPackageOperations.add(packageId);
+			this.managementChangeEmitter.fire();
+			try {
+				let outcome: AgentPackageOperationOutcome;
+				try {
+					outcome = await this.connection.executePackageOperation(request);
+				} catch {
+					try {
+						outcome = await this.connection.getPackageOperationOutcome({ operation, digest });
+					} catch {
+						throw new AgentPackageOperationUncertainError(operation, digest);
+					}
+				}
+				await this.reconcilePackageOperation(pending, outcome);
+			} catch (error) {
+				if (
+					this.pendingPackageMutations.has(operation)
+					&& !(error instanceof AgentPackageOperationUncertainError)
+				) {
+					throw new AgentPackageOperationUncertainError(operation, digest);
+				}
+				throw error;
+			}
+			await this.refreshAuthoritativeState();
+		});
+	}
+
+	private async reconcilePackageOperation(
+		pending: IAgentHostPendingPackageOperation,
+		initialOutcome: AgentPackageOperationOutcome,
+		isCurrent: (() => boolean) | undefined = undefined,
+	): Promise<void> {
+		const { operation, digest } = pending.request;
+		let outcome = initialOutcome;
+		let resent = false;
+		for (let reconciliation = 0; reconciliation < 4; reconciliation++) {
+			if (isCurrent !== undefined && !isCurrent()) {
+				throw new Error('Agent Host connection recovery was superseded.');
+			}
+			switch (outcome.kind) {
+				case 'succeeded':
+					this.completePendingPackageOperation(pending);
+					if (
+						outcome.result.operationId !== operation
+						|| outcome.result.requestDigest !== digest
+						|| outcome.result.packageId !== pending.packageId
+						|| outcome.result.kind !== pending.kind
+					) {
+						throw new Error(`Agent package '${pending.packageId}' operation returned another result.`);
+					}
+					return;
+				case 'failed':
+					if (outcome.failure.reconciliation === 'terminal') {
+						this.completePendingPackageOperation(pending);
+						throw new AgentPackageOperationFailure(operation, outcome.failure.message);
+					}
+					outcome = await this.connection.getPackageOperationOutcome({ operation, digest });
+					break;
+				case 'conflict':
+					this.completePendingPackageOperation(pending);
+					throw new AgentPackageOperationFailure(
+						operation,
+						`Agent package operation '${operation}' conflicts with digest '${outcome.recordedDigest}'.`,
+					);
+				case 'pending':
+					outcome = await this.connection.getPackageOperationOutcome({ operation, digest });
+					break;
+				case 'unknown':
+					if (!resent) {
+						resent = true;
+						outcome = await this.connection.executePackageOperation(pending.request);
+					} else {
+						outcome = await this.connection.getPackageOperationOutcome({ operation, digest });
+					}
+					break;
+			}
+		}
+		throw new AgentPackageOperationUncertainError(operation, digest);
+	}
+
+	private completePendingPackageOperation(pending: IAgentHostPendingPackageOperation): void {
+		this.pendingPackageMutations.delete(pending.request.operation);
+		this.pendingPackageOperations.delete(pending.packageId);
+		this.managementChangeEmitter.fire();
+	}
+
+	private async reconcilePendingPackageOperations(
+		recovery: IAgentHostConnectionRecovery,
+	): Promise<boolean | undefined> {
+		const pending = [...this.pendingPackageMutations.values()];
+		for (const packageOperation of pending) {
+			if (!this.isCurrentConnectionRecovery(recovery)) {
+				return undefined;
+			}
+			const { operation, digest } = packageOperation.request;
+			const outcome = await this.connection.getPackageOperationOutcome({ operation, digest });
+			if (!this.isCurrentConnectionRecovery(recovery)) {
+				return undefined;
+			}
+			try {
+				await this.reconcilePackageOperation(
+					packageOperation,
+					outcome,
+					() => this.isCurrentConnectionRecovery(recovery),
+				);
+			} catch (error) {
+				if (!(error instanceof AgentPackageOperationFailure)) {
+					throw error;
+				}
+			}
+		}
+		return pending.length > 0;
+	}
+
+	private requireAgentDefaults(agentId: AgentId): IAgentConfigurationState {
+		this.assertNotDisposed();
+		const current = this.requireRootState().agentDefaults.find(candidate => candidate.schema.agent === agentId);
+		if (current === undefined) {
+			throw new Error(`Agent '${agentId}' has no Host-default configuration.`);
+		}
+		return current;
+	}
+
+	private async commitAgentDefaults(
+		agentId: AgentId,
+		resolveValues: (current: IAgentConfigurationState) => AgentConfigurationValues,
+	): Promise<void> {
+		this.assertMutationEntryAllowed();
+		await this.sequencer.queue(async () => {
+			this.assertMutationEntryAllowed();
+			const current = this.requireAgentDefaults(agentId);
+			const candidate = validateAndFreezeAgentConfigurationCandidate(
+				current.schema,
+				Object.freeze({ schema: current.schema.revision, values: resolveValues(current) }),
+				'hostDefault',
+			);
+			const payload: AgentHostMutationPayload = Object.freeze({
+				kind: 'updateAgentDefaults',
+				agent: agentId,
+				expectedRevision: current.revision,
+				candidate,
+			});
+			const result = await this.mutate(payload, agentId);
+			this.assertMutationKind(result, 'updateAgentDefaults');
+			if (result.agent !== agentId) {
+				throw new Error(`Agent '${agentId}' configuration update returned another Agent.`);
+			}
+			await this.refreshAuthoritativeState();
+		});
 	}
 
 	private async refreshAuthoritativeState(
@@ -1773,6 +2087,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	private fireRootChanges(previous: IAgentHostRootState, current: IAgentHostRootState): void {
+		this.managementChangeEmitter.fire();
 		if (typeSignature(previous) !== typeSignature(current)) {
 			this.sessionTypesChangeEmitter.fire();
 		}
@@ -2206,6 +2521,9 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		}
 		this.records.clear();
 		this.pendingMutations.clear();
+		this.pendingPackageMutations.clear();
+		this.pendingPackageOperations.clear();
+		this.pendingConfigurationOperations.clear();
 		this.sessions = Object.freeze([]);
 		super.dispose();
 	}
