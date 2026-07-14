@@ -131,7 +131,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 		assert.deepStrictEqual(products.map(product => ({
 			packageId: product.offering.packageId,
 			distribution: product.offering.distribution,
-			runtimeForm: product.verifiedPackage.manifest.runtimeForm,
+			execution: product.verifiedPackage.manifest.execution.kind,
 			properties: [
 				...product.definition.sessionConfigurationSchema.properties,
 				...product.definition.modelConfigurationSchema.properties,
@@ -140,13 +140,13 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 			{
 				packageId: 'copilot',
 				distribution: 'user',
-				runtimeForm: 'connected',
+				execution: 'connected',
 				properties: ['copilot.mode', 'copilot.autoApprove', 'copilot.isolation'],
 			},
 			{
 				packageId: 'codex',
 				distribution: 'user',
-				runtimeForm: 'connected',
+				execution: 'connected',
 				properties: [
 					'codex.approvalPolicy',
 					'codex.sandboxMode',
@@ -177,7 +177,10 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 		assert.equal(validateInstalledMockAgentPackage(installed, products), copilot.definition);
 		assert.throws(() => validateInstalledMockAgentPackage(Object.freeze({
 			...installed,
-			manifest: Object.freeze({ ...installed.manifest, runtimeEntryPoint: 'another-runtime.js' }),
+			manifest: Object.freeze({
+				...installed.manifest,
+				execution: Object.freeze({ kind: 'connected' as const, entryPoint: 'another-runtime.js' }),
+			}),
 		}), products), /does not match its exact product artifact/);
 		assert.throws(() => validateInstalledMockAgentPackage(Object.freeze({
 			...installed,

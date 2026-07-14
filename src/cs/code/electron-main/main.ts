@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron';
-import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
@@ -22,36 +22,7 @@ import { createNativeHostMainService } from 'cs/platform/native/electron-main/na
 import { registerWindowOpenPolicy } from 'cs/platform/window/electron-main/windowOpenPolicy';
 import { WindowsMainService } from 'cs/platform/windows/electron-main/windowsMainService';
 import { LocalAgentHostMain } from 'cs/code/electron-main/agentHost/localAgentHostMain';
-import { LocalAgentRuntimeProcessFactory } from 'cs/code/electron-main/agentHost/localAgentRuntimeProcess';
-import { LocalAgentRuntimeSandboxProcessPort } from 'cs/code/electron-main/agentHost/localAgentRuntimeSandboxProcess';
-import {
-  createLocalAgentPackageArtifactFile,
-  createLocalAgentPackageContentDigest,
-  LocalAgentPackageArtifactPort,
-} from 'cs/code/electron-main/agentHost/localAgentPackageArtifactPort';
-import {
-  CLAUDE_AGENT_RUNTIME_ENTRY_POINT,
-  claudeAgentSdkExecutableTarget,
-  createClaudeAgentPackageProduct,
-} from 'cs/code/common/agentHost/claudeAgentPackage';
-
-const require = createRequire(import.meta.url);
-
-function resolveClaudeAgentSdkExecutable(): string {
-  const platformPackage = `${process.platform}-${process.arch}`;
-  const packageName = (() => {
-    switch (platformPackage) {
-      case 'darwin-arm64': return '@anthropic-ai/claude-agent-sdk-darwin-arm64/claude';
-      case 'darwin-x64': return '@anthropic-ai/claude-agent-sdk-darwin-x64/claude';
-      case 'linux-arm64': return '@anthropic-ai/claude-agent-sdk-linux-arm64/claude';
-      case 'linux-x64': return '@anthropic-ai/claude-agent-sdk-linux-x64/claude';
-      case 'win32-arm64': return '@anthropic-ai/claude-agent-sdk-win32-arm64/claude.exe';
-      case 'win32-x64': return '@anthropic-ai/claude-agent-sdk-win32-x64/claude.exe';
-      default: throw new Error(`Claude Agent SDK does not support ${platformPackage}.`);
-    }
-  })();
-  return require.resolve(packageName);
-}
+import { createProductAgentPackageCatalog } from 'cs/platform/agentHost/node/packages/productAgentPackageCatalog';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
@@ -81,41 +52,24 @@ app.whenReady().then(async () => {
 
   const settings = await storage.loadSettings();
   const target = Object.freeze({ operatingSystem: process.platform, architecture: process.arch });
-  const claudeRuntimeArtifact = await createLocalAgentPackageArtifactFile(fileURLToPath(new URL(
-    '../electron-utility/agentRuntime/claudeAgentRuntimeMain.js',
-    import.meta.url,
-  )));
-  const claudeExecutableArtifact = await createLocalAgentPackageArtifactFile(resolveClaudeAgentSdkExecutable());
-  const claudeExecutableTarget = claudeAgentSdkExecutableTarget(target);
-  const claudeAgentPackageProduct = createClaudeAgentPackageProduct(target, Object.freeze({
-    contentDigest: createLocalAgentPackageContentDigest(Object.freeze([
-      Object.freeze({ target: CLAUDE_AGENT_RUNTIME_ENTRY_POINT, contentDigest: claudeRuntimeArtifact.contentDigest }),
-      Object.freeze({ target: claudeExecutableTarget, contentDigest: claudeExecutableArtifact.contentDigest }),
-    ])),
-    runtime: claudeRuntimeArtifact,
-    executable: claudeExecutableArtifact,
-  }));
-  const agentPackageProducts = Object.freeze([claudeAgentPackageProduct]);
-  const packageArtifactPort = new LocalAgentPackageArtifactPort({
-    storageRoot: environmentMainPaths.agentHostPackagesDir,
-    packages: agentPackageProducts.map(product => product.verifiedPackage),
-  });
-  const agentRuntimeSandboxProcessPort = new LocalAgentRuntimeSandboxProcessPort({
-    installedArtifacts: packageArtifactPort,
-    stateRoot: environmentMainPaths.agentHostRuntimeStateDir,
-    executableArtifactTargets: Object.freeze([claudeExecutableTarget]),
+  const agentPackages = await createProductAgentPackageCatalog({
+    target,
+    sdkArtifactRoot: app.isPackaged
+      ? join(process.resourcesPath, 'agent-sdk')
+      : join(app.getAppPath(), 'dist-agent-sdk'),
+    packageStorageRoot: environmentMainPaths.agentHostPackagesDir,
+    agentStateRoot: environmentMainPaths.agentHostAgentStateDir,
   });
   const agentHost = await LocalAgentHostMain.create({
     storage: storage.applicationStorage,
     providerApiKeySecretStorage: storage.providerApiKeySecretStorage,
     contentMaterializationRoot: environmentMainPaths.agentHostContentDir,
     bundledArtifactPath: fileURLToPath(import.meta.url),
-    agentPackageProducts,
-    packageArtifactPort,
+    agentPackageProducts: agentPackages.products,
+    packageArtifactPort: agentPackages.artifacts,
     channelServer: electronMainChannelServer,
     fetch: (url, init) => fetch(url, init),
     now: Date.now,
-    agentRuntimeConnectionFactory: new LocalAgentRuntimeProcessFactory(agentRuntimeSandboxProcessPort),
   });
   const themeMainService = new ThemeMainService(storage, settings);
   const windowsMainService = new WindowsMainService(storage, themeMainService, browserAutomationWindowCloseLifecycle);
@@ -124,35 +78,35 @@ app.whenReady().then(async () => {
     createMainWindow: () => {
       void windowsMainService.openMainWindow();
     },
-	prepareApplicationQuit: async () => {
-		const errors: unknown[] = [];
-		try {
-			await shutdownBrowserAutomation();
-		} catch (error) {
-			errors.push(error);
-		}
-		try {
-			await agentHost.shutdown();
-		} catch (error) {
-			errors.push(error);
-		}
-		try {
-			await storage.close();
-		} catch (error) {
-			errors.push(error);
-		}
-		try {
-			themeMainService.dispose();
-		} catch (error) {
-			errors.push(error);
-		}
-		if (errors.length === 1) {
-			throw errors[0];
-		}
-		if (errors.length > 1) {
-			throw new AggregateError(errors, 'Failed to finalize application services.');
-		}
-	},
+    prepareApplicationQuit: async () => {
+      const errors: unknown[] = [];
+      try {
+        await shutdownBrowserAutomation();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        await agentHost.shutdown();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        await storage.close();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        themeMainService.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length === 1) {
+        throw errors[0];
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, 'Failed to finalize application services.');
+      }
+    },
   });
   if (isDevelopmentEnvironmentMain()) {
     registerDevShortcuts({ getMainWindow });

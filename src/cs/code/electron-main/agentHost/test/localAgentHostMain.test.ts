@@ -20,7 +20,7 @@ import { LocalAgentHostMain } from 'cs/code/electron-main/agentHost/localAgentHo
 import {
 	createLocalAgentPackageArtifactFile,
 	LocalAgentPackageArtifactPort,
-} from 'cs/code/electron-main/agentHost/localAgentPackageArtifactPort';
+} from 'cs/platform/agentHost/node/packages/localAgentPackageArtifactPort';
 import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/test/mockAgentPackages';
 import { COMET_AUTOMATIC_EXECUTION_PRESET } from 'cs/code/electron-main/agentHost/cometModelCatalog';
 import {
@@ -739,17 +739,15 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.ok(closeHostIndex < closeStorageIndex);
 	assert.match(mainSource, /bundledArtifactPath: fileURLToPath\(import\.meta\.url\)/);
 	assert.doesNotMatch(mainSource, /mockAgentRuntime|createMockAgentPackageProducts/);
-	assert.match(mainSource, /const claudeRuntimeArtifact = await createLocalAgentPackageArtifactFile\(fileURLToPath\(new URL\(/);
-	assert.match(mainSource, /const claudeExecutableArtifact = await createLocalAgentPackageArtifactFile\(resolveClaudeAgentSdkExecutable\(\)\)/);
-	assert.match(mainSource, /const claudeAgentPackageProduct = createClaudeAgentPackageProduct\(target,/);
-	assert.match(mainSource, /agentPackageProducts,/);
+	assert.doesNotMatch(mainSource, /ClaudeAgent|claudeAgent|AgentRuntimeProcessFactory/);
+	assert.match(mainSource, /const agentPackages = await createProductAgentPackageCatalog\(\{/);
+	assert.match(mainSource, /sdkArtifactRoot: app\.isPackaged/);
+	assert.match(mainSource, /agentPackageProducts: agentPackages\.products/);
 	assert.match(mainSource, /contentMaterializationRoot: environmentMainPaths\.agentHostContentDir/);
-	assert.match(mainSource, /storageRoot: environmentMainPaths\.agentHostPackagesDir/);
-	assert.match(mainSource, /packageArtifactPort,/);
+	assert.match(mainSource, /packageStorageRoot: environmentMainPaths\.agentHostPackagesDir/);
+	assert.match(mainSource, /packageArtifactPort: agentPackages\.artifacts/);
 	assert.match(mainSource, /providerApiKeySecretStorage: storage\.providerApiKeySecretStorage/);
-	assert.match(mainSource, /const agentRuntimeSandboxProcessPort = new LocalAgentRuntimeSandboxProcessPort\(\{/);
-	assert.match(mainSource, /stateRoot: environmentMainPaths\.agentHostRuntimeStateDir/);
-	assert.match(mainSource, /agentRuntimeConnectionFactory: new LocalAgentRuntimeProcessFactory\(agentRuntimeSandboxProcessPort\)/);
+	assert.match(mainSource, /agentStateRoot: environmentMainPaths\.agentHostAgentStateDir/);
 	assert.match(mainSource, /registerAppIpc\(storage, nativeHostMainService, themeMainService\)/);
 	const saveSettingsIndex = ipcSource.indexOf('const saved = await storage.saveSettings');
 	const updateThemeIndex = ipcSource.indexOf('themeMainService.updateSettings(saved)', saveSettingsIndex);

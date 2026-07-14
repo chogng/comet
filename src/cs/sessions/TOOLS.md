@@ -195,7 +195,7 @@ Agent Runtime Protocol. The common contract publishes no mutable
 origin-specific Tool list beside the Turn. For Comet, the revision belongs to
 the Host-owned Turn execution binding rather than the reusable Comet execution
 profile. An SDK that requires session-scoped Tool registration,
-synchronization, rebinding, or restart performs it inside its Agent runtime
+synchronization, rebinding, or restart performs it inside its Agent
 before starting that Turn. A runtime that cannot enforce the exact accepted set
 rejects execution explicitly.
 
@@ -204,16 +204,17 @@ SDK-native Tools also require canonical descriptors and registrations. An Agent
 never adds, omits, or replaces a Tool based on its own identity or an SDK
 default.
 
-## Agent runtime integration
+## Agent integration
 
 `IAgent` is the common Host-side integration contract. It receives normalized
 Turn input, including the exact Tool-set revision, and exposes only canonical
-Tool calls and results to Agent Host. The product-bundled embedded Comet runtime
-implements it directly. User-installed Agents and the connected Comet form use
-its language-neutral wire projection through `IAgentRuntimeConnection`; Tool
-identity and schemas do not change at that boundary.
+Tool calls and results to Agent Host. The bundled Comet Agent implements it
+directly. Product-maintained SDK Agents also implement it
+directly. Genuinely external Agents use its language-neutral wire projection
+through `IAgentRuntimeConnection`; Tool identity and schemas do not change at
+that boundary.
 
-An Agent runtime that uses an SDK owns:
+An Agent that uses an SDK owns:
 
 - lossless projection into the SDK's native function, Tool, or private MCP
   surface;
@@ -226,8 +227,8 @@ An Agent runtime that uses an SDK owns:
 - truthful projection capabilities and limits.
 
 SDK descriptors, callbacks, call handles, and result objects remain inside the
-Agent runtime. Package discovery, installation, update, uninstall, and Agent
-activation follow [Agent package architecture](AGENT_PACKAGES.md); a Tool or
+Agent implementation. Package discovery, installation, update, uninstall, and
+Agent activation follow [Agent package architecture](AGENT_PACKAGES.md); a Tool or
 Turn path never installs an SDK. Agent Host never routes by a bare SDK name.
 
 The Comet runtime owns Comet's internal model and Tool loop, explicit execution
@@ -371,9 +372,8 @@ src/cs/platform/agentHost/node/            Tool-set preparation, call state,
                                            reconciliation
 src/cs/platform/agentHost/node/runtime/    connected Agent runtime correlation
                                            and canonical Tool-call transport
-src/cs/platform/agentHost/node/agents/comet/
-                                           product-bundled embedded Comet
-                                           runtime, when selected
+src/cs/platform/agentHost/node/agents/     product-maintained direct Agent
+                                           implementations and SDK projection
 src/cs/sessions/contrib/providers/agentHost/
                                            connected-executor publication and
                                            connection integration

@@ -13,12 +13,12 @@ import {
 import { LocalAgentHostSessionTypeCatalog } from 'cs/code/electron-main/agentHost/localAgentHostSessionTypeCatalog';
 import { createAgentRuntimeRegistrationRevision } from 'cs/platform/agentHost/common/identities';
 
-test('LocalAgentHostSessionTypeCatalog rejects a runtime registration outside the product contract', () => {
+test('LocalAgentHostSessionTypeCatalog rejects an Agent registration outside the product contract', () => {
 	const definition = getMockAgentPackageDefinition(mockAgentPackageIds[0]);
 	const catalog = new LocalAgentHostSessionTypeCatalog([{
 		packageId: definition.packageId,
 		agentId: definition.agentId,
-		resolveRuntimeRegistrationRevision: () => definition.registration.revision,
+		resolveRegistrationRevision: () => definition.registration.revision,
 		resolve: () => definition.sessionType,
 	}]);
 

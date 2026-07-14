@@ -30,7 +30,7 @@ import {
 import type {
 	AgentPackagePersistedOperation,
 	IAgentPackagePersistedState,
-	IAgentPackageRuntimeTransitionSide,
+	IAgentPackageActivationTransitionSide,
 } from 'cs/platform/agentHost/common/packages';
 import type { IAgentHostSessionState } from 'cs/platform/agentHost/common/protocol';
 import {
@@ -350,28 +350,28 @@ function visitRuntimeTransitionRegistrations(
 	if (operation === null || typeof operation !== 'object' || Array.isArray(operation)) {
 		throw new Error(`Invalid Agent package operation in storage key '${key}'`);
 	}
-	if (!Object.hasOwn(operation, 'runtimeTransition')) {
+	if (!Object.hasOwn(operation, 'activationTransition')) {
 		return operation as AgentPackagePersistedOperation;
 	}
-	const transition = (operation as { readonly runtimeTransition?: unknown }).runtimeTransition;
+	const transition = (operation as { readonly activationTransition?: unknown }).activationTransition;
 	if (!hasExactFields(transition, ['previous', 'next'])) {
-		throw new Error(`Invalid Agent package runtime transition in storage key '${key}'`);
+		throw new Error(`Invalid Agent package activation transition in storage key '${key}'`);
 	}
-	const migrateSide = (value: unknown): IAgentPackageRuntimeTransitionSide | null => {
+	const migrateSide = (value: unknown): IAgentPackageActivationTransitionSide | null => {
 		if (value === null) {
 			return null;
 		}
 		if (!hasExactFields(value, ['installedPackage', 'registrations']) || !Array.isArray(value.registrations)) {
-			throw new Error(`Invalid Agent package runtime transition side in storage key '${key}'`);
+			throw new Error(`Invalid Agent package activation transition side in storage key '${key}'`);
 		}
 		return {
-			installedPackage: value.installedPackage as IAgentPackageRuntimeTransitionSide['installedPackage'],
+			installedPackage: value.installedPackage as IAgentPackageActivationTransitionSide['installedPackage'],
 			registrations: value.registrations.map(visit),
 		};
 	};
 	return {
 		...operation,
-		runtimeTransition: {
+		activationTransition: {
 			previous: migrateSide(transition.previous),
 			next: migrateSide(transition.next),
 		},

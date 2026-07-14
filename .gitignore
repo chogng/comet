@@ -4,7 +4,9 @@ dist/
 dist-web/
 dist-electron/
 dist-server/
+dist-agent-sdk/
 release/
+.build/
 .vite/
 *.tsbuildinfo
 

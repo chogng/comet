@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import * as esbuild from 'esbuild';
 
+import { packageAgentSdks } from '../agent-sdk/package.ts';
 import { resolveProjectPath } from './util.ts';
 
 type PackageJson = {
@@ -17,13 +18,6 @@ const distElectronDir = resolveProjectPath('dist-electron');
 const languageRoot = resolveProjectPath('build', 'lib');
 const srcRoot = resolveProjectPath('src', 'cs');
 const csRoot = srcRoot;
-const claudeAgentRuntimeEntryPoint = path.join(
-  srcRoot,
-  'code',
-  'electron-utility',
-  'agentRuntime',
-  'claudeAgentRuntimeMain.ts',
-);
 const entryPoints = [
   path.join(srcRoot, 'code', 'electron-main', 'launch.ts'),
   path.join(srcRoot, 'code', 'electron-main', 'main.ts'),
@@ -111,26 +105,14 @@ async function createElectronBuildOptions(plugins: esbuild.Plugin[] = []) {
   } satisfies esbuild.BuildOptions;
 }
 
-async function createClaudeAgentRuntimeBuildOptions(plugins: esbuild.Plugin[] = []) {
-  const options = await createElectronBuildOptions(plugins);
-  const builtinExternals = builtinModules.flatMap(moduleName => [moduleName, `node:${moduleName}`]);
-  return {
-    ...options,
-    entryPoints: [claudeAgentRuntimeEntryPoint],
-    external: [...builtinExternals, 'electron'],
-    packages: undefined,
-  } satisfies esbuild.BuildOptions;
-}
-
 export async function buildElectron() {
+  await packageAgentSdks();
   await fsPromises.rm(distElectronDir, { force: true, recursive: true });
-  await Promise.all([
-    esbuild.build(await createElectronBuildOptions()),
-    esbuild.build(await createClaudeAgentRuntimeBuildOptions()),
-  ]);
+  await esbuild.build(await createElectronBuildOptions());
 }
 
 export async function watchElectronBuild(onBuildSuccess: () => void) {
+  await packageAgentSdks();
   await fsPromises.rm(distElectronDir, { force: true, recursive: true });
 
   const initialBuilds = new Set<number>();
@@ -148,7 +130,7 @@ export async function watchElectronBuild(onBuildSuccess: () => void) {
         }
         if (!initialBuilds.has(buildIndex)) {
           initialBuilds.add(buildIndex);
-          if (initialBuilds.size === 2) {
+          if (initialBuilds.size === 1) {
             resolveInitialBuild();
           }
           return;
@@ -157,10 +139,7 @@ export async function watchElectronBuild(onBuildSuccess: () => void) {
       });
     },
   });
-  const contexts = await Promise.all([
-    esbuild.context(await createElectronBuildOptions([watchPlugin(0)])),
-    esbuild.context(await createClaudeAgentRuntimeBuildOptions([watchPlugin(1)])),
-  ]);
+  const contexts = [await esbuild.context(await createElectronBuildOptions([watchPlugin(0)]))];
 
   await Promise.all(contexts.map(context => context.watch()));
   console.log('[dev:desktop] watching electron main and preload');

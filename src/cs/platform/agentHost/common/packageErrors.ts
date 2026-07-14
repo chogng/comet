@@ -9,7 +9,6 @@ export const AgentPackageErrorCode = {
 	PackageAlreadyInstalled: 'packageAlreadyInstalled',
 	PackageNotInstalled: 'packageNotInstalled',
 	BundledPackageMutationDenied: 'bundledPackageMutationDenied',
-	RuntimeFormDenied: 'runtimeFormDenied',
 	IncompleteDependencyClosure: 'incompleteDependencyClosure',
 	RegistrationInvalid: 'registrationInvalid',
 	AgentIdConflict: 'agentIdConflict',

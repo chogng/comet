@@ -14,38 +14,18 @@ import {
 	createAgentConfigurationPropertyId,
 	createAgentConfigurationSchemaRevision,
 	createAgentId,
-	createAgentPackageContentDigest,
 	createAgentPackageId,
-	createAgentPackageRevision,
 	createAgentResumeSchemaId,
 	createAgentRuntimeRegistrationRevision,
 	createAgentSessionTypeId,
 	type AgentConfigurationSchemaRevision,
 	type AgentDescriptorRevision,
-	type AgentPackageContentDigest,
 } from 'cs/platform/agentHost/common/identities';
-import type {
-	IAgentPackageManifest,
-	IAgentPackageOffering,
-	IAgentPackageTarget,
-	IInstalledAgentPackage,
-} from 'cs/platform/agentHost/common/packages';
-import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import type { IAgentHostSessionTypeDescriptor } from 'cs/platform/agentHost/common/protocol';
 import { COMET_TOOL_SCHEMA_PROFILE } from 'cs/platform/agentHost/common/tools';
-import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
-import type { ILocalAgentPackageProduct } from './agentPackageProducts.js';
-import {
-	localAgentRuntimeProcessPrivilege,
-	localAgentRuntimeStateFilesystemPrivilege,
-} from './localAgentRuntimeProtocol.js';
 
-export const CLAUDE_AGENT_SDK_VERSION = '0.3.208';
 export const CLAUDE_AGENT_PACKAGE_ID = createAgentPackageId('claude');
 export const CLAUDE_AGENT_ID = createAgentId('claude');
-export const CLAUDE_AGENT_RUNTIME_ENTRY_POINT = 'electron-utility/agentRuntime/claudeAgentRuntimeMain.js';
-export const CLAUDE_AGENT_SDK_EXECUTABLE_TARGET = 'vendor/claude-agent-sdk/claude';
-export const CLAUDE_AGENT_SDK_EXECUTABLE_WINDOWS_TARGET = 'vendor/claude-agent-sdk/claude.exe';
 export const CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER = 'claude.provider-api-key';
 export const CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE = 'anthropic';
 export const CLAUDE_AGENT_NETWORK_PRIVILEGE = 'api.anthropic.com';
@@ -53,11 +33,10 @@ export const CLAUDE_AGENT_TOOL_EXECUTOR_PRIVILEGE = 'host.bound-tools';
 export const CLAUDE_AGENT_PERMISSION_MODE_PROPERTY = createAgentConfigurationPropertyId('claude.permissionMode');
 export const CLAUDE_AGENT_THINKING_LEVEL_PROPERTY = createAgentConfigurationPropertyId('claude.thinkingLevel');
 export const CLAUDE_AGENT_CREDENTIAL_PROPERTY = createAgentConfigurationPropertyId('claude.model.credential');
-
 export const CLAUDE_AGENT_RESUME_SCHEMA = createAgentResumeSchemaId('claude.agent-sdk.resume.v2');
 
 const displayName = localize('claudeAgent.displayName', 'Claude');
-const description = localize('claudeAgent.description', 'Claude Agent SDK runtime');
+const description = localize('claudeAgent.description', 'Claude Agent SDK');
 
 const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
 	profile: AgentConfigurationSchemaProfile,
@@ -88,10 +67,11 @@ export const CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA = validateAndFreezeAgentC
 export type ClaudeAgentThinkingLevel = 'none' | 'adaptive' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export const CLAUDE_AGENT_CAPABILITY_REVISION = createAgentCapabilityRevision('claude.agent-sdk.capabilities.v1');
-export function createClaudeAgentRuntimeRegistrationRevision(
+
+export function createClaudeAgentRegistrationRevision(
 	descriptorRevision: AgentDescriptorRevision,
 ) {
-	return createAgentRuntimeRegistrationRevision(`claude.agent-sdk-runtime.v2.${descriptorRevision}`);
+	return createAgentRuntimeRegistrationRevision(`claude.agent-sdk.host.v1.${descriptorRevision}`);
 }
 
 export function createClaudeAgentModelConfigurationSchema(
@@ -174,13 +154,13 @@ export function createClaudeAgentDescriptor(
 	});
 }
 
-export function createClaudeAgentRuntimeRegistration(
+export function createClaudeAgentRegistration(
 	descriptorRevision: AgentDescriptorRevision,
 ): IAgentRuntimeRegistration {
 	return Object.freeze({
 		packageId: CLAUDE_AGENT_PACKAGE_ID,
 		agentId: CLAUDE_AGENT_ID,
-		revision: createClaudeAgentRuntimeRegistrationRevision(descriptorRevision),
+		revision: createClaudeAgentRegistrationRevision(descriptorRevision),
 		descriptorRevision,
 		capabilityRevision: CLAUDE_AGENT_CAPABILITY_REVISION,
 		hostDefaultsSchema,
@@ -220,110 +200,10 @@ export function createClaudeAgentSessionType(descriptor: IAgentDescriptor): IAge
 export const CLAUDE_AGENT_PACKAGE_DEFINITION = Object.freeze({
 	packageId: CLAUDE_AGENT_PACKAGE_ID,
 	agentId: CLAUDE_AGENT_ID,
-	resolveRuntimeRegistrationRevision: (descriptor: IAgentDescriptor) => (
-		createClaudeAgentRuntimeRegistrationRevision(descriptor.revision)
+	resolveRegistrationRevision: (descriptor: IAgentDescriptor) => (
+		createClaudeAgentRegistrationRevision(descriptor.revision)
 	),
 	displayName,
 	sessionConfigurationSchema: CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
 	resolveSessionType: createClaudeAgentSessionType,
 });
-
-export interface IClaudeAgentPackageArtifact {
-	readonly source: string;
-	readonly contentDigest: AgentPackageContentDigest;
-}
-
-export interface IClaudeAgentPackageArtifacts {
-	readonly contentDigest: AgentPackageContentDigest;
-	readonly runtime: IClaudeAgentPackageArtifact;
-	readonly executable: IClaudeAgentPackageArtifact;
-}
-
-export interface IClaudeAgentPackageProduct extends ILocalAgentPackageProduct {
-	readonly definition: typeof CLAUDE_AGENT_PACKAGE_DEFINITION;
-	readonly verifiedPackage: IVerifiedAgentPackage;
-}
-
-export function claudeAgentSdkExecutableTarget(target: IAgentPackageTarget): string {
-	return target.operatingSystem === 'win32'
-		? CLAUDE_AGENT_SDK_EXECUTABLE_WINDOWS_TARGET
-		: CLAUDE_AGENT_SDK_EXECUTABLE_TARGET;
-}
-
-/** Creates the exact Claude SDK product for one desktop target. */
-export function createClaudeAgentPackageProduct(
-	target: IAgentPackageTarget,
-	artifacts: IClaudeAgentPackageArtifacts,
-): IClaudeAgentPackageProduct {
-	const revision = createAgentPackageRevision(
-		`claude.agent-sdk.${CLAUDE_AGENT_SDK_VERSION}.${target.operatingSystem}.${target.architecture}`,
-	);
-	const executableTarget = claudeAgentSdkExecutableTarget(target);
-	const dependencies = Object.freeze([Object.freeze({
-		id: 'claude.agent-runtime',
-		source: artifacts.runtime.source,
-		target: CLAUDE_AGENT_RUNTIME_ENTRY_POINT,
-		digest: artifacts.runtime.contentDigest,
-		license: 'MIT and Anthropic Commercial Terms',
-	}), Object.freeze({
-		id: 'claude.agent-sdk-executable',
-		source: artifacts.executable.source,
-		target: executableTarget,
-		digest: artifacts.executable.contentDigest,
-		license: 'Anthropic Commercial Terms',
-	})]);
-	const privileges = Object.freeze([
-		Object.freeze({ kind: 'process' as const, value: localAgentRuntimeProcessPrivilege }),
-		Object.freeze({ kind: 'filesystem' as const, value: localAgentRuntimeStateFilesystemPrivilege }),
-		Object.freeze({ kind: 'network' as const, value: CLAUDE_AGENT_NETWORK_PRIVILEGE }),
-		Object.freeze({ kind: 'secret' as const, value: 'configured.model.api-key' }),
-		Object.freeze({ kind: 'toolExecutor' as const, value: CLAUDE_AGENT_TOOL_EXECUTOR_PRIVILEGE }),
-	]);
-	const offering: IAgentPackageOffering = Object.freeze({
-		packageId: CLAUDE_AGENT_PACKAGE_ID,
-		revision,
-		contentDigest: createAgentPackageContentDigest(artifacts.contentDigest),
-		source: artifacts.runtime.source,
-		distribution: 'user',
-	});
-	const manifest: IAgentPackageManifest = Object.freeze({
-		schema: 1,
-		packageId: CLAUDE_AGENT_PACKAGE_ID,
-		revision,
-		contentDigest: offering.contentDigest,
-		publisher: 'Comet',
-		target: Object.freeze({ ...target }),
-		runtimeForm: 'connected',
-		runtimeEntryPoint: CLAUDE_AGENT_RUNTIME_ENTRY_POINT,
-		agentIds: Object.freeze([CLAUDE_AGENT_ID]),
-		dependencies,
-		privileges,
-	});
-	const verifiedPackage: IVerifiedAgentPackage = Object.freeze({
-		offering,
-		manifest,
-		dependencyClosure: Object.freeze(dependencies.map(dependency => Object.freeze({
-			...dependency,
-			verifiedDigest: dependency.digest,
-			immutable: true as const,
-		}))),
-		grantedPrivileges: privileges,
-	});
-	return Object.freeze({ definition: CLAUDE_AGENT_PACKAGE_DEFINITION, offering, verifiedPackage });
-}
-
-/** Rejects any installed bytes or authority outside the exact Claude SDK product. */
-export function validateInstalledClaudeAgentPackage(
-	installedPackage: IInstalledAgentPackage,
-	authorizedProduct: IClaudeAgentPackageProduct,
-): void {
-	const expected: IInstalledAgentPackage = Object.freeze({
-		...authorizedProduct.offering,
-		manifest: authorizedProduct.verifiedPackage.manifest,
-		dependencyClosure: authorizedProduct.verifiedPackage.dependencyClosure,
-		grantedPrivileges: authorizedProduct.verifiedPackage.grantedPrivileges,
-	});
-	if (encodeAgentHostProtocolValue(installedPackage) !== encodeAgentHostProtocolValue(expected)) {
-		throw new Error('Installed Claude Agent package does not match its exact SDK product artifact.');
-	}
-}

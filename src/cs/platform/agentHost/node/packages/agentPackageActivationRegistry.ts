@@ -32,8 +32,8 @@ import type {
 	AgentPackagePersistedOperation,
 	IAgentPackageOffering,
 	IAgentPackagePersistedState,
-	IAgentPackageRuntimeTransition,
-	IAgentPackageRuntimeTransitionSide,
+	IAgentPackageActivationTransition,
+	IAgentPackageActivationTransitionSide,
 	IInstalledAgentPackage,
 } from 'cs/platform/agentHost/common/packages';
 import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
@@ -44,7 +44,7 @@ import {
 	type IConnectedAgentRuntime,
 	type IConnectedAgentRuntimeOptions,
 } from 'cs/platform/agentHost/node/runtime/connectedAgentRuntime';
-import type { IAgentPackageRuntimePort } from './agentPackageLifecycle.js';
+import type { IAgentPackageActivationPort } from './agentPackageLifecycle.js';
 
 /** Identifies whether a connected process is launched for restoration or one package operation. */
 export type AgentRuntimeConnectionLaunchContext =
@@ -59,17 +59,33 @@ export interface IAgentRuntimeConnectionFactory {
 	): Promise<IAgentRuntimeConnection>;
 }
 
-/** Binds one product-authorized embedded runtime to exact bundled package offerings. */
-export interface IEmbeddedAgentPackageRuntime {
+/** Binds product-owned Agents to exact bundled package offerings. */
+export interface IBundledAgentPackageActivation {
 	readonly offerings: readonly IAgentPackageOffering[];
 	readonly agents: readonly IAgent[];
 	readonly lifetime: IDisposable;
 }
 
-/** Supplies the runtime boundaries shared by every package activation in one Host. */
-export interface IAgentPackageRuntimeRegistryOptions {
-	readonly embeddedRuntimes: readonly IEmbeddedAgentPackageRuntime[];
-	readonly connectionFactory: IAgentRuntimeConnectionFactory;
+/** Creates product-maintained Agent implementations inside Agent Host after package activation. */
+export interface IHostAgentPackageFactory {
+	readonly offerings: readonly IAgentPackageOffering[];
+	create(
+		installedPackage: IInstalledAgentPackage,
+		services: {
+			readonly toolExecution: IAgentToolExecutionPort;
+			readonly credentialResolver: IAgentCredentialResolver;
+		},
+	): Promise<{
+		readonly agents: readonly IAgent[];
+		readonly lifetime: IDisposable;
+	}>;
+}
+
+/** Supplies the boundaries shared by every package activation in one Host. */
+export interface IAgentPackageActivationRegistryOptions {
+	readonly bundledAgents: readonly IBundledAgentPackageActivation[];
+	readonly hostAgentFactories: readonly IHostAgentPackageFactory[];
+	readonly connectionFactory?: IAgentRuntimeConnectionFactory;
 	readonly toolExecution: IAgentToolExecutionPort;
 	readonly contentResources: IAgentContentResourcePort;
 	readonly credentialResolver: IAgentCredentialResolver;
@@ -78,31 +94,32 @@ export interface IAgentPackageRuntimeRegistryOptions {
 	readonly implementation: IConnectedAgentRuntimeOptions['implementation'];
 }
 
-interface IAgentRuntimeEndpoint {
+interface IAgentEndpoint {
 	readonly registration: IAgentRuntimeRegistration;
 	readonly agent: IAgent;
 }
 
-interface IAgentPackageRuntimeActivation {
+interface IAgentPackageActivation {
 	readonly key: string;
 	readonly installedPackage: IInstalledAgentPackage;
 	readonly registrations: readonly IAgentRuntimeRegistration[];
-	readonly endpoints: ReadonlyMap<AgentId, IAgentRuntimeEndpoint>;
+	readonly endpoints: ReadonlyMap<AgentId, IAgentEndpoint>;
 	readonly connectedRuntimeKey?: number;
+	readonly hostAgentKey?: number;
 	published: boolean;
 }
 
-type AgentPackageRuntimeOperationState = 'prepared' | 'committed' | 'retired' | 'rolledBack';
+type AgentPackageActivationOperationState = 'prepared' | 'committed' | 'retired' | 'rolledBack';
 
-interface IAgentPackageRuntimeOperation {
+interface IAgentPackageActivationOperation {
 	readonly transition: string;
-	previous?: IAgentPackageRuntimeActivation;
-	next?: IAgentPackageRuntimeActivation;
-	state: AgentPackageRuntimeOperationState;
+	previous?: IAgentPackageActivation;
+	next?: IAgentPackageActivation;
+	state: AgentPackageActivationOperationState;
 }
 
-interface IResolvedRuntimeEndpoint extends IAgentRuntimeEndpoint {
-	readonly activation: IAgentPackageRuntimeActivation;
+interface IResolvedAgentEndpoint extends IAgentEndpoint {
+	readonly activation: IAgentPackageActivation;
 }
 
 type AgentPackageUnresolvedPersistedOperation =
@@ -140,17 +157,17 @@ function exactRegistration(
 	return encodeAgentHostProtocolValue(left) === encodeAgentHostProtocolValue(right);
 }
 
-function transitionKey(transition: IAgentPackageRuntimeTransition): string {
+function transitionKey(transition: IAgentPackageActivationTransition): string {
 	return encodeAgentHostProtocolValue(transition);
 }
 
-function sideKey(side: IAgentPackageRuntimeTransitionSide): string {
+function sideKey(side: IAgentPackageActivationTransitionSide): string {
 	return encodeAgentHostProtocolValue(side);
 }
 
 function exactSide(
-	left: IAgentPackageRuntimeTransitionSide | null,
-	right: IAgentPackageRuntimeTransitionSide | null,
+	left: IAgentPackageActivationTransitionSide | null,
+	right: IAgentPackageActivationTransitionSide | null,
 ): boolean {
 	if (left === null || right === null) {
 		return left === right;
@@ -182,64 +199,89 @@ function operationIdentity(
 	});
 }
 
-/** Owns exact embedded and connected package activations for one Agent Host authority. */
-export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPackageRuntimePort, IAgentHostRuntimeResolver {
-	private readonly embeddedRuntimes: ReadonlyMap<string, IEmbeddedAgentPackageRuntime>;
+/** Owns exact bundled, Host, and connected package activations for one Agent Host authority. */
+export class AgentPackageActivationRegistry extends Disposable implements IAgentPackageActivationPort, IAgentHostRuntimeResolver {
+	private readonly bundledAgents: ReadonlyMap<string, IBundledAgentPackageActivation>;
+	private readonly hostAgentFactories: ReadonlyMap<string, IHostAgentPackageFactory>;
 	private readonly connectedRuntimes: DisposableMap<number, IConnectedAgentRuntime>;
-	private readonly activeByPackage = new Map<AgentPackageId, IAgentPackageRuntimeActivation>();
-	private readonly resolvedEndpoints = new Map<string, IResolvedRuntimeEndpoint>();
-	private readonly stagedEndpoints = new Map<string, IResolvedRuntimeEndpoint & { readonly operation: AgentPackageOperationId }>();
-	private readonly operations = new Map<AgentPackageOperationId, IAgentPackageRuntimeOperation>();
+	private readonly hostAgents: DisposableMap<number, IDisposable>;
+	private readonly activeByPackage = new Map<AgentPackageId, IAgentPackageActivation>();
+	private readonly resolvedEndpoints = new Map<string, IResolvedAgentEndpoint>();
+	private readonly stagedEndpoints = new Map<string, IResolvedAgentEndpoint & { readonly operation: AgentPackageOperationId }>();
+	private readonly operations = new Map<AgentPackageOperationId, IAgentPackageActivationOperation>();
 	private restoreState: 'notStarted' | 'restoring' | 'restored' | 'failed' = 'notStarted';
 	private nextConnectedRuntimeKey = 0;
+	private nextHostAgentKey = 0;
 	private disposed = false;
 
-	constructor(private readonly options: IAgentPackageRuntimeRegistryOptions) {
+	constructor(private readonly options: IAgentPackageActivationRegistryOptions) {
 		super();
-		const embeddedRuntimes = new Map<string, IEmbeddedAgentPackageRuntime>();
-		const embeddedLifetimes = new Set<IDisposable>();
-		for (const runtime of options.embeddedRuntimes) {
-			if (runtime.offerings.length === 0 || runtime.agents.length === 0) {
+		const bundledAgents = new Map<string, IBundledAgentPackageActivation>();
+		const bundledLifetimes = new Set<IDisposable>();
+		for (const bundle of options.bundledAgents) {
+			if (bundle.offerings.length === 0 || bundle.agents.length === 0) {
 				throw new AgentPackageError(
 					AgentPackageErrorCode.RegistrationInvalid,
-					'Invalid embedded Agent package runtime registration',
+					'Invalid bundled Agent package registration',
 				);
 			}
-			for (const offering of runtime.offerings) {
+			for (const offering of bundle.offerings) {
 				const key = offeringKey(offering);
-				if (offering.distribution !== 'bundled' || embeddedRuntimes.has(key)) {
+				if (offering.distribution !== 'bundled' || bundledAgents.has(key)) {
 					throw new AgentPackageError(
 						AgentPackageErrorCode.RegistrationInvalid,
-						'Invalid embedded Agent package runtime registration',
+						'Invalid bundled Agent package registration',
 						{ packageId: offering.packageId },
 					);
 				}
-				embeddedRuntimes.set(key, runtime);
+				bundledAgents.set(key, bundle);
 			}
-			embeddedLifetimes.add(runtime.lifetime);
+			bundledLifetimes.add(bundle.lifetime);
 		}
-		this.embeddedRuntimes = embeddedRuntimes;
-		for (const lifetime of embeddedLifetimes) {
+		this.bundledAgents = bundledAgents;
+		for (const lifetime of bundledLifetimes) {
 			this._register(lifetime);
 		}
 		this.connectedRuntimes = this._register(new DisposableMap<number, IConnectedAgentRuntime>());
+		const hostAgentFactories = new Map<string, IHostAgentPackageFactory>();
+		for (const factory of options.hostAgentFactories) {
+			if (factory.offerings.length === 0) {
+				throw new AgentPackageError(
+					AgentPackageErrorCode.RegistrationInvalid,
+					'Host Agent package factory has no authorized offering',
+				);
+			}
+			for (const offering of factory.offerings) {
+				const key = offeringKey(offering);
+				if (offering.distribution !== 'user' || hostAgentFactories.has(key)) {
+					throw new AgentPackageError(
+						AgentPackageErrorCode.RegistrationInvalid,
+						'Invalid Host Agent package factory offering',
+						{ packageId: offering.packageId },
+					);
+				}
+				hostAgentFactories.set(key, factory);
+			}
+		}
+		this.hostAgentFactories = hostAgentFactories;
+		this.hostAgents = this._register(new DisposableMap<number, IDisposable>());
 	}
 
-	async restoreRuntimeState(state: IAgentPackagePersistedState): Promise<void> {
+	async restoreActivationState(state: IAgentPackagePersistedState): Promise<void> {
 		if (this.restoreState !== 'notStarted') {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.StateConflict,
-				'Agent package runtime state restoration already started',
+				'Agent package activation state restoration already started',
 			);
 		}
 		this.assertNotDisposed();
 		this.restoreState = 'restoring';
-		const createdActivations: IAgentPackageRuntimeActivation[] = [];
-		const activationsBySide = new Map<string, IAgentPackageRuntimeActivation>();
+		const createdActivations: IAgentPackageActivation[] = [];
+		const activationsBySide = new Map<string, IAgentPackageActivation>();
 		const activationForSide = async (
-			side: IAgentPackageRuntimeTransitionSide,
+			side: IAgentPackageActivationTransitionSide,
 			context: AgentRuntimeConnectionLaunchContext,
-		): Promise<IAgentPackageRuntimeActivation> => {
+		): Promise<IAgentPackageActivation> => {
 			const key = sideKey(side);
 			const existing = activationsBySide.get(key);
 			if (existing !== undefined) {
@@ -266,7 +308,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 				const side = this.stateSide(state, installedPackage.packageId);
 				if (side === null) {
 					throw this.stateConflict(
-						'Installed Agent package has no active runtime registrations',
+						'Installed Agent package has no active Agent registrations',
 						installedPackage.packageId,
 					);
 				}
@@ -279,7 +321,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 				if (!unresolvedOperation(operation) || operation.phase === 'recorded') {
 					continue;
 				}
-				const transition = operation.runtimeTransition;
+				const transition = operation.activationTransition;
 				const current = this.stateSide(state, operation.packageId);
 				if (operation.phase === 'catalogCommitted') {
 					this.assertExactStateSide(current, transition.next, operation.packageId);
@@ -307,11 +349,11 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 						kind: 'activation',
 						operationId: operation.operation,
 					}));
-				const restoredOperation: IAgentPackageRuntimeOperation = {
+				const restoredOperation: IAgentPackageActivationOperation = {
 					transition: transitionKey(transition),
 					previous,
 					next,
-					state: operation.phase === 'runtimePrepared' ? 'prepared' : 'committed',
+					state: operation.phase === 'activationPrepared' ? 'prepared' : 'committed',
 				};
 				this.operations.set(operation.operation, restoredOperation);
 				if (next !== undefined) {
@@ -337,7 +379,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	async prepareActivation(
 		installedPackage: IInstalledAgentPackage | null,
-		previous: IAgentPackageRuntimeTransition['previous'],
+		previous: IAgentPackageActivationTransition['previous'],
 		operationId: AgentPackageOperationId,
 	): Promise<readonly IAgentRuntimeRegistration[]> {
 		this.assertReady();
@@ -345,7 +387,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		if (packageId === undefined) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.RegistrationInvalid,
-				'Agent package activation has neither a previous nor next runtime',
+				'Agent package activation has neither a previous nor next activation',
 				{ operationId },
 			);
 		}
@@ -369,7 +411,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 			return existing.next?.registrations ?? Object.freeze([]);
 		}
 
-		let next: IAgentPackageRuntimeActivation | undefined;
+		let next: IAgentPackageActivation | undefined;
 		try {
 			if (installedPackage !== null) {
 				next = await this.createActivation(
@@ -379,7 +421,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 				this.assertNotDisposed();
 				this.stageActivation(operationId, next);
 			}
-			const transition: IAgentPackageRuntimeTransition = Object.freeze({
+			const transition: IAgentPackageActivationTransition = Object.freeze({
 				previous,
 				next: next === undefined ? null : this.activationSide(next),
 			});
@@ -401,7 +443,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	async commitActivation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void> {
 		this.assertReady();
 		const operation = this.requireOperation(operationId, transition);
@@ -419,7 +461,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	async retirePreviousActivation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void> {
 		this.assertReady();
 		const operation = this.requireOperation(operationId, transition);
@@ -453,7 +495,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	async rollbackActivation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void> {
 		this.assertReady();
 		const operation = this.requireOperation(operationId, transition);
@@ -477,7 +519,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	async acknowledgeActivationOperation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void> {
 		this.assertReady();
 		const operation = this.operations.get(operationId);
@@ -537,7 +579,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.RegistrationInvalid,
-				'No prepared runtime matches the exact Agent package operation and registration',
+				'No prepared activation matches the exact Agent package operation and registration',
 				{ operationId, packageId: registration.packageId, agentId: registration.agentId },
 			);
 		}
@@ -560,9 +602,9 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		installedPackage: IInstalledAgentPackage,
 		context: AgentRuntimeConnectionLaunchContext,
 		expectedRegistrations?: readonly IAgentRuntimeRegistration[],
-	): Promise<IAgentPackageRuntimeActivation> {
-		const activation = installedPackage.manifest.runtimeForm === 'embedded'
-			? this.createEmbeddedActivation(installedPackage)
+	): Promise<IAgentPackageActivation> {
+		const activation = installedPackage.manifest.execution.kind === 'host'
+			? await this.createHostActivation(installedPackage)
 			: await this.createConnectedActivation(installedPackage, context);
 		try {
 			if (expectedRegistrations !== undefined) {
@@ -579,25 +621,54 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		}
 	}
 
-	private createEmbeddedActivation(
+	private async createHostActivation(
 		installedPackage: IInstalledAgentPackage,
-	): IAgentPackageRuntimeActivation {
-		const runtime = this.embeddedRuntimes.get(offeringKey(installedPackageOffering(installedPackage)));
-		if (runtime === undefined) {
+	): Promise<IAgentPackageActivation> {
+		const bundle = this.bundledAgents.get(offeringKey(installedPackageOffering(installedPackage)));
+		if (bundle !== undefined) {
+			return this.activationFromAgents(installedPackage, bundle.agents);
+		}
+		const factory = this.hostAgentFactories.get(offeringKey(installedPackageOffering(installedPackage)));
+		if (factory === undefined) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.RegistrationInvalid,
-				'No product-authorized embedded runtime matches the Agent package revision',
+				'No product-authorized Host Agent matches the package revision',
 				{ packageId: installedPackage.packageId },
 			);
 		}
-		return this.activationFromAgents(installedPackage, runtime.agents);
+		const created = await factory.create(installedPackage, {
+			toolExecution: this.options.toolExecution,
+			credentialResolver: this.options.credentialResolver,
+		});
+		try {
+			this.assertNotDisposed();
+		} catch (error) {
+			created.lifetime.dispose();
+			throw error;
+		}
+		const hostAgentKey = ++this.nextHostAgentKey;
+		this.hostAgents.set(hostAgentKey, created.lifetime);
+		try {
+			return this.activationFromAgents(installedPackage, created.agents, undefined, hostAgentKey);
+		} catch (error) {
+			this.hostAgents.deleteAndDispose(hostAgentKey);
+			throw error;
+		}
 	}
 
 	private async createConnectedActivation(
 		installedPackage: IInstalledAgentPackage,
 		context: AgentRuntimeConnectionLaunchContext,
-	): Promise<IAgentPackageRuntimeActivation> {
-		const connection = await this.options.connectionFactory.create(installedPackage, context);
+	): Promise<IAgentPackageActivation> {
+		const factory = this.options.connectionFactory;
+		if (factory === undefined) {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.RegistrationInvalid,
+				'No connected Agent factory matches the package revision',
+				{ packageId: installedPackage.packageId },
+			);
+		}
+		const connection = await factory.create(installedPackage, context);
 		try {
 			this.assertNotDisposed();
 		} catch (error) {
@@ -642,8 +713,9 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		installedPackage: IInstalledAgentPackage,
 		agents: readonly IAgent[],
 		connectedRuntimeKey?: number,
-	): IAgentPackageRuntimeActivation {
-		const endpointsByAgent = new Map<AgentId, IAgentRuntimeEndpoint>();
+		hostAgentKey?: number,
+	): IAgentPackageActivation {
+		const endpointsByAgent = new Map<AgentId, IAgentEndpoint>();
 		for (const agent of agents) {
 			if (
 				agent.id !== agent.registration.agentId
@@ -653,7 +725,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 			) {
 				throw new AgentPackageError(
 					AgentPackageErrorCode.RegistrationInvalid,
-					'Agent runtime registration does not match its exact package activation',
+					'Agent registration does not match its exact package activation',
 					{ packageId: installedPackage.packageId, agentId: agent.id },
 				);
 			}
@@ -662,18 +734,18 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		if (endpointsByAgent.size !== installedPackage.manifest.agentIds.length) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.RegistrationInvalid,
-				'Agent package runtime returned a partial registration set',
+				'Agent package activation returned a partial registration set',
 				{ packageId: installedPackage.packageId },
 			);
 		}
-		const endpoints = new Map<AgentId, IAgentRuntimeEndpoint>();
+		const endpoints = new Map<AgentId, IAgentEndpoint>();
 		const registrations: IAgentRuntimeRegistration[] = [];
 		for (const agentId of installedPackage.manifest.agentIds) {
 			const endpoint = endpointsByAgent.get(agentId)!;
 			endpoints.set(agentId, endpoint);
 			registrations.push(endpoint.registration);
 		}
-		const side: IAgentPackageRuntimeTransitionSide = {
+		const side: IAgentPackageActivationTransitionSide = {
 			installedPackage,
 			registrations,
 		};
@@ -683,11 +755,12 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 			registrations: Object.freeze(registrations),
 			endpoints,
 			...(connectedRuntimeKey === undefined ? {} : { connectedRuntimeKey }),
+			...(hostAgentKey === undefined ? {} : { hostAgentKey }),
 			published: false,
 		};
 	}
 
-	private publishActivation(activation: IAgentPackageRuntimeActivation): void {
+	private publishActivation(activation: IAgentPackageActivation): void {
 		for (const endpoint of activation.endpoints.values()) {
 			const key = registrationKey(endpoint.registration);
 			const existing = this.resolvedEndpoints.get(key);
@@ -701,7 +774,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 			) {
 				throw new AgentPackageError(
 					AgentPackageErrorCode.AgentIdConflict,
-					'An exact Agent runtime registration already resolves to another endpoint',
+					'An exact Agent registration already resolves to another endpoint',
 					{
 						packageId: endpoint.registration.packageId,
 						agentId: endpoint.registration.agentId,
@@ -719,8 +792,8 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 	}
 
 	private replacePublishedActivation(
-		previous: IAgentPackageRuntimeActivation | undefined,
-		next: IAgentPackageRuntimeActivation,
+		previous: IAgentPackageActivation | undefined,
+		next: IAgentPackageActivation,
 	): void {
 		if (previous === next) {
 			this.publishActivation(next);
@@ -738,7 +811,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 				} catch (rollbackError) {
 					throw new AggregateError(
 						[error, rollbackError],
-						'Agent runtime publication and rollback both failed',
+						'Agent publication and rollback both failed',
 					);
 				}
 			}
@@ -746,7 +819,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		}
 	}
 
-	private unpublishActivation(activation: IAgentPackageRuntimeActivation): void {
+	private unpublishActivation(activation: IAgentPackageActivation): void {
 		if (!activation.published) {
 			return;
 		}
@@ -761,7 +834,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	private stageActivation(
 		operation: AgentPackageOperationId,
-		activation: IAgentPackageRuntimeActivation,
+		activation: IAgentPackageActivation,
 	): void {
 		for (const endpoint of activation.endpoints.values()) {
 			const key = registrationKey(endpoint.registration);
@@ -769,7 +842,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 			if (existing !== undefined && existing.operation !== operation) {
 				throw new AgentPackageError(
 					AgentPackageErrorCode.StateConflict,
-					'An Agent runtime registration is already staged by another package operation',
+					'An Agent registration is already staged by another package operation',
 					{ packageId: endpoint.registration.packageId, agentId: endpoint.registration.agentId },
 				);
 			}
@@ -785,7 +858,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	private clearStagedActivation(
 		operation: AgentPackageOperationId,
-		activation: IAgentPackageRuntimeActivation,
+		activation: IAgentPackageActivation,
 	): void {
 		for (const endpoint of activation.endpoints.values()) {
 			const key = registrationKey(endpoint.registration);
@@ -795,35 +868,38 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		}
 	}
 
-	private disposeActivation(activation: IAgentPackageRuntimeActivation): void {
+	private disposeActivation(activation: IAgentPackageActivation): void {
 		this.unpublishActivation(activation);
 		if (activation.connectedRuntimeKey !== undefined) {
 			this.connectedRuntimes.deleteAndDispose(activation.connectedRuntimeKey);
+		}
+		if (activation.hostAgentKey !== undefined) {
+			this.hostAgents.deleteAndDispose(activation.hostAgentKey);
 		}
 	}
 
 	private resolveActiveEndpoint(
 		registration: IAgentRuntimeRegistration,
-	): IAgentRuntimeEndpoint {
+	): IAgentEndpoint {
 		const endpoint = this.resolvedEndpoints.get(registrationKey(registration));
 		if (endpoint === undefined || !exactRegistration(endpoint.registration, registration)) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.RegistrationInvalid,
-				'No active runtime matches the exact Agent registration',
+				'No active Agent matches the exact registration',
 				{ packageId: registration.packageId, agentId: registration.agentId },
 			);
 		}
 		return endpoint;
 	}
 
-	private activeSide(packageId: AgentPackageId): IAgentPackageRuntimeTransitionSide | null {
+	private activeSide(packageId: AgentPackageId): IAgentPackageActivationTransitionSide | null {
 		const activation = this.activeByPackage.get(packageId);
 		return activation === undefined ? null : this.activationSide(activation);
 	}
 
 	private activationSide(
-		activation: IAgentPackageRuntimeActivation,
-	): IAgentPackageRuntimeTransitionSide {
+		activation: IAgentPackageActivation,
+	): IAgentPackageActivationTransitionSide {
 		return Object.freeze({
 			installedPackage: activation.installedPackage,
 			registrations: activation.registrations,
@@ -833,7 +909,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 	private stateSide(
 		state: IAgentPackagePersistedState,
 		packageId: AgentPackageId,
-	): IAgentPackageRuntimeTransitionSide | null {
+	): IAgentPackageActivationTransitionSide | null {
 		const installedPackage = state.installedPackages.find(candidate => candidate.packageId === packageId);
 		if (installedPackage === undefined) {
 			return null;
@@ -847,13 +923,13 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 	}
 
 	private assertExactStateSide(
-		actual: IAgentPackageRuntimeTransitionSide | null,
-		expected: IAgentPackageRuntimeTransitionSide | null,
+		actual: IAgentPackageActivationTransitionSide | null,
+		expected: IAgentPackageActivationTransitionSide | null,
 		packageId: AgentPackageId,
 	): void {
 		if (!exactSide(actual, expected)) {
 			throw this.stateConflict(
-				'Agent package runtime transition does not match authoritative persisted state',
+				'Agent package activation transition does not match authoritative persisted state',
 				packageId,
 			);
 		}
@@ -874,7 +950,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.RegistrationInvalid,
-				'Restored Agent runtime does not match the exact persisted registrations',
+				'Restored Agent does not match the exact persisted registrations',
 				{ packageId },
 			);
 		}
@@ -882,8 +958,8 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 
 	private requireOperation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
-	): IAgentPackageRuntimeOperation {
+		transition: IAgentPackageActivationTransition,
+	): IAgentPackageActivationOperation {
 		const operation = this.operations.get(operationId);
 		if (operation === undefined || operation.transition !== transitionKey(transition)) {
 			throw this.operationStateConflict(operationId);
@@ -894,7 +970,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 	private operationStateConflict(operationId: AgentPackageOperationId): AgentPackageError {
 		return new AgentPackageError(
 			AgentPackageErrorCode.StateConflict,
-			'Agent package runtime operation has no matching lifecycle state',
+			'Agent package activation operation has no matching lifecycle state',
 			{ operationId },
 		);
 	}
@@ -912,7 +988,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		if (this.restoreState !== 'restored') {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.StateConflict,
-				'Agent package runtime state has not been restored',
+				'Agent package activation state has not been restored',
 			);
 		}
 	}
@@ -921,7 +997,7 @@ export class AgentPackageRuntimeRegistry extends Disposable implements IAgentPac
 		if (this.disposed) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.StateConflict,
-				'Agent package runtime registry is disposed',
+				'Agent package activation registry is disposed',
 			);
 		}
 	}

@@ -525,7 +525,7 @@ function assertDisplayText(value: AgentHostDisplayText, field: string): void {
 	}
 }
 
-/** Owns one authoritative Agent Host catalog, runtime registry, and protocol state. */
+/** Owns one authoritative Agent Host catalog, activation registry, and protocol state. */
 export class AgentHostAuthority extends Disposable implements IAgentPackageLifecyclePort {
 	private readonly agents = new Map<AgentId, IAgent>();
 	private readonly agentActionSubscriptions = new Map<AgentId, IDisposable>();

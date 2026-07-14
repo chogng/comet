@@ -32,6 +32,7 @@ function installedPackage(): IInstalledAgentPackage {
 		target: 'runtime/main.js',
 		digest,
 		license: 'MIT',
+		executable: true,
 	});
 	return Object.freeze({
 		packageId,
@@ -46,8 +47,7 @@ function installedPackage(): IInstalledAgentPackage {
 			contentDigest: digest,
 			publisher: 'Test',
 			target: Object.freeze({ operatingSystem: 'test', architecture: 'x64' }),
-			runtimeForm: 'connected',
-			runtimeEntryPoint: dependency.target,
+			execution: Object.freeze({ kind: 'connected' as const, entryPoint: dependency.target }),
 			agentIds: Object.freeze([createAgentId('test.connected')]),
 			dependencies: Object.freeze([dependency]),
 			privileges: Object.freeze([privilege]),
@@ -74,7 +74,9 @@ suite('AgentRuntimeSandboxAuthority', () => {
 			packageContentDigest: installed.contentDigest,
 			packageSource: installed.source,
 			target: { operatingSystem: 'test', architecture: 'x64' },
-			runtimeEntryPoint: installed.manifest.runtimeEntryPoint,
+			runtimeEntryPoint: installed.manifest.execution.kind === 'connected'
+				? installed.manifest.execution.entryPoint
+				: assert.fail('Expected connected execution'),
 			artifacts: installed.dependencyClosure,
 			process: processAuthority,
 			filesystem: [],

@@ -55,8 +55,8 @@ targets, and executor implementations live with the contribution that owns the
 Feature service. Platform Agent Host owns canonical Tool schema profiles,
 descriptors, executor bindings, Tool sets, routing, call state, results,
 permissions, the Tool Execution Port, the Host-side `IAgent` port, and the
-Agent Runtime Protocol. Agent runtimes own SDK or model-provider projection;
-the Comet runtime owns Comet orchestration. Feature contributions never import
+Agent Runtime Protocol. Agent implementations own SDK or model-provider
+projection; the Comet Agent owns Comet orchestration. Feature contributions never import
 Agent SDKs or model-provider formats. The shared client connection publishes
 connected executors and carries canonical execution messages. Attachment
 content-resource providers remain with their Feature producers and do not enter
@@ -111,21 +111,23 @@ replace one another after failure.
   Remote Agent Host protocol over supplied Remote Server channel or Remote
   Tunnel endpoint transports
 - `cs/platform/agentHost/electron-browser` — desktop local Host connection
-- `cs/platform/agentHost/node` — Host runtime and runtime endpoint support
+- `cs/platform/agentHost/node` — Host authority, Agent activation, and Node implementation support
 - `cs/platform/agentHost/node/packages` — Agent package discovery, staging,
   verification, installed catalog, operations, storage, and atomic activation
 - `cs/platform/agentHost/node/runtime` — generic connected Agent runtime
   negotiation, correlation, and lifecycle
-- `cs/platform/agentHost/node/agents/comet` — product-bundled embedded Comet
-  runtime, when selected by product composition
+- `cs/platform/agentHost/node/agents/comet` — product-bundled Comet `IAgent`
+- `cs/platform/agentHost/node/agents/<agent>` — product-maintained SDK-specific
+  `IAgent` behavior; Claude and Codex use this owner
 
 Agent Host is a Platform subsystem and never imports Workbench or Sessions.
 Comet is the only bundled and default-installed Agent package. Every optional
 Agent package is absent until an explicit user install operation commits for
 the addressed Host; Session creation and Turn execution never install or
-download it. Optional packages always execute as connected runtimes outside
-the Host process. Package ID, Agent ID, runtime registration, authentication,
-and materialization remain separate.
+download it. A package manifest declares `execution.kind: 'host'` for a direct
+Host Agent or `execution.kind: 'connected'` for a genuinely external
+implementation. Package ID, Agent ID, registration, authentication, and
+materialization remain separate.
 
 Remote Server Agent Host composition lives under
 `cs/server/node/agentHost`. It constructs the shared Platform Node Host
@@ -136,23 +138,23 @@ Remote Tunnel Agent Host hosting binds an `agentHost` endpoint directly to the
 shared Platform Node Host authority. Tunnel provider and relay mechanics remain
 in `cs/platform/tunnel`; Sessions owns discovery UX and provider registration.
 
-`IAgent` is the single Host-facing semantic port. The product-bundled embedded
-Comet runtime implements it under `cs/platform/agentHost/node/agents/comet`.
-User-installed Agents and the connected Comet form implement its
-language-neutral Agent Runtime Protocol and join through
+`IAgent` is the single Host-facing semantic port. Product-bundled Comet and
+product-maintained Claude or Codex SDK integrations implement it directly under
+`cs/platform/agentHost/node/agents/<agent>`. Genuinely external packages may
+implement the language-neutral Agent Runtime Protocol and join through
 `IAgentRuntimeConnection`; generic connection code lives under
 `cs/platform/agentHost/node/runtime`, not in Agent-specific Sessions or Feature
 code. SDK and model-provider Tool formats, aliases, call conversion, result
-encoding, and Comet orchestration remain inside their owning runtime. No
+encoding, and Comet orchestration remain inside their owning Agent. No
 parallel Tool conversion or execution layer exists in Feature contributions.
 Agent Host contracts, connected-runtime support, and the in-repository
-embedded Comet runtime belong in this subsystem rather than a parallel
-top-level `cs/agent` layer. A connected runtime package owns its implementation
-outside the TypeScript layer and exposes only the Agent Runtime Protocol to
-Agent Host.
-SDKs are private dependencies of installed Agent runtimes, not product
-installation identities. Sessions contributions never import the package
-manager or an SDK implementation.
+Host Agents belong in this subsystem rather than a parallel
+top-level `cs/agent` layer. SDK-specific TypeScript source remains under the
+owning `node/agents/<agent>` directory. Exact SDK pins and target artifact
+production live under `build/agent-sdk`; installed SDK bytes remain private to
+the Agent package. Product-maintained SDKs do not add provider runtime
+processes. Sessions contributions never import the package manager or an SDK
+implementation.
 
 ## Sessions Organization
 
@@ -187,8 +189,8 @@ in `cs/sessions/contrib/<feature>`, not in Sessions core or Workbench.
 - Sessions core and services do not import Sessions contributions.
 - Non-provider Sessions contributions do not import provider implementations.
 - Providers register through public Sessions service contracts.
-- Embedded and connected Agent runtimes register with Platform Agent Host, not
-  with Sessions. One shared Agent Host Sessions provider maps each Host
+- Direct and connected Agents register with Platform Agent Host, not with
+  Sessions. One shared Agent Host Sessions provider maps each Host
   connection to `ISessionsProvider`.
 - Sessions entry points are the only modules that load Sessions contribution
   entry points for side effects.

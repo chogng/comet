@@ -29,6 +29,7 @@ export interface IAgentRuntimeSandboxArtifactAuthority {
 	readonly digest: AgentPackageContentDigest;
 	readonly verifiedDigest: AgentPackageContentDigest;
 	readonly license: string;
+	readonly executable: boolean;
 	readonly immutable: true;
 }
 
@@ -100,6 +101,7 @@ function exactArtifact(dependency: IVerifiedAgentPackageDependency): IAgentRunti
 		dependency === null
 		|| typeof dependency !== 'object'
 		|| dependency.immutable !== true
+		|| typeof dependency.executable !== 'boolean'
 		|| dependency.digest !== dependency.verifiedDigest
 	) {
 		throw new Error('Invalid Agent runtime sandbox artifact authority.');
@@ -111,6 +113,7 @@ function exactArtifact(dependency: IVerifiedAgentPackageDependency): IAgentRunti
 		digest: dependency.digest,
 		verifiedDigest: dependency.verifiedDigest,
 		license: requireBoundedText(dependency.license, 'artifact license'),
+		executable: dependency.executable,
 		immutable: true,
 	});
 }
@@ -122,7 +125,7 @@ export function createAgentRuntimeSandboxAuthority(
 ): IAgentRuntimeSandboxAuthority {
 	if (
 		installedPackage.distribution !== 'user'
-		|| installedPackage.manifest.runtimeForm !== 'connected'
+		|| installedPackage.manifest.execution.kind !== 'connected'
 		|| installedPackage.packageId !== installedPackage.manifest.packageId
 		|| installedPackage.revision !== installedPackage.manifest.revision
 		|| installedPackage.contentDigest !== installedPackage.manifest.contentDigest
@@ -157,7 +160,7 @@ export function createAgentRuntimeSandboxAuthority(
 	}
 	const artifacts = Object.freeze(installedPackage.dependencyClosure.map(exactArtifact));
 	const runtimeEntryPoint = requireBoundedText(
-		installedPackage.manifest.runtimeEntryPoint,
+		installedPackage.manifest.execution.entryPoint,
 		'runtime entry point',
 	);
 	if (artifacts.filter(artifact => artifact.target === runtimeEntryPoint).length !== 1) {

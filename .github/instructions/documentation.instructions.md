@@ -32,6 +32,68 @@ Upstream and external projects may be used as implementation evidence while
 working. Translate the resulting decision into Comet's own ownership and
 behavior rules before writing a durable project document.
 
+## Effective document structure
+
+Write documentation so a reader can verify the architecture from concrete
+project evidence instead of reconstructing it from descriptive prose. Use the
+smallest useful subset of the following structure:
+
+1. Start with the architectural outcome and the boundary the document owns.
+2. Show an architecture-at-a-glance flow when three or more components or
+   process boundaries participate.
+3. Name ownership explicitly. Use a compact table when several concerns map to
+   different services, layers, processes, or final repository paths.
+4. Include representative examples of public contracts, state, requests,
+   responses, configuration, or data flow. Examples use real project symbols
+   and shapes; label pseudocode when an exact implementation is intentionally
+   omitted.
+5. Cover invalid and failure behavior where it defines the contract. Do not
+   document only the successful path.
+6. Use bad/good examples when a prohibited shortcut could otherwise look
+   reasonable.
+7. End implementation-facing documents with concrete verification evidence or
+   a verification matrix when several invariants require different tests.
+
+Examples support the invariant; they do not replace it. Keep the prose that
+states who owns the behavior and why the boundary exists, then demonstrate the
+rule with one end-to-end example rather than several disconnected fragments.
+Do not add a diagram, table, or code block when a short sentence communicates
+the relationship more clearly.
+
+For an implementation-facing architecture document, prefer a verifiable block
+like this over several paragraphs that only describe intent:
+
+````markdown
+## Ownership
+
+| Path | Owns |
+|---|---|
+| `src/cs/platform/example/common/` | Public contracts |
+| `src/cs/platform/example/node/` | Node implementation |
+
+```typescript
+interface IExampleRequest {
+	readonly operation: ExampleOperationId;
+	readonly expectedRevision: number;
+}
+```
+
+| Invalid input | Required result |
+|---|---|
+| stale revision | reject without committing state |
+| duplicate operation, same digest | return the recorded outcome |
+| duplicate operation, different digest | report a conflict |
+````
+
+The table identifies final ownership, the code block pins the contract shape,
+and the failure matrix makes behavior testable. Replace `example` with real
+project paths and symbols; do not leave template names in committed documents.
+
+When location matters, show the exact final project path. A path example such
+as `src/cs/platform/example/node/feature/` is useful only when that directory is
+the durable owner. Do not use an entry-point, build-output, staging, cache, or
+migration path as the apparent owner of runtime behavior.
+
 ## Migration documents are temporary
 
 When a durable target differs from the current repository, keep the target
@@ -76,4 +138,8 @@ Before completing a documentation change, verify that:
 2. project architecture is understandable without access to an upstream tree;
 3. temporary facts exist only in explicitly temporary documents;
 4. every path and symbol uses its final project name;
-5. links resolve and migration documents have deletion criteria.
+5. examples agree with the actual public contracts and do not invent an API,
+   default, fallback, or repository location;
+6. instruction `applyTo` scopes include every final location governed by the
+   instruction, including build inputs and process entry points when relevant;
+7. links resolve and migration documents have deletion criteria.

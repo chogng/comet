@@ -230,6 +230,7 @@ async function verifyLocalArtifactAuthority(
 				target: dependency.target,
 				digest: dependency.digest,
 				license: dependency.license,
+				executable: dependency.executable,
 			})
 			|| dependency.immutable !== true
 			|| artifactsById.has(dependency.id)
@@ -243,8 +244,11 @@ async function verifyLocalArtifactAuthority(
 		);
 		targets.add(dependency.target);
 	}
-	if (!targets.has(value.manifest.runtimeEntryPoint)) {
-		throw invalidArtifact('Agent package runtime entry point has no verified dependency', value.packageId);
+	if (
+		value.manifest.execution.kind === 'connected'
+		&& !targets.has(value.manifest.execution.entryPoint)
+	) {
+		throw invalidArtifact('Connected Agent package entry point has no verified dependency', value.packageId);
 	}
 	return artifactsById;
 }
@@ -301,8 +305,8 @@ function referencedInstalledPackages(state: IAgentPackagePersistedState): readon
 		) {
 			continue;
 		}
-		retain(operation.runtimeTransition.previous?.installedPackage);
-		retain(operation.runtimeTransition.next?.installedPackage);
+		retain(operation.activationTransition.previous?.installedPackage);
+		retain(operation.activationTransition.next?.installedPackage);
 	}
 	return Object.freeze([...packages.values()]);
 }
@@ -393,12 +397,16 @@ export class LocalAgentPackageArtifactPort implements IAgentPackageArtifactPort,
 	}
 
 	async resolveRuntimeEntryPoint(installedPackage: IInstalledAgentPackage): Promise<string> {
+		if (installedPackage.manifest.execution.kind !== 'connected') {
+			throw invalidArtifact('Host Agent package has no connected entry point', installedPackage.packageId);
+		}
+		const entryPoint = installedPackage.manifest.execution.entryPoint;
 		const artifactsById = await this.resolveAuthorizedInstalledPackage(installedPackage);
 		const runtimeDependency = installedPackage.dependencyClosure.find(dependency => (
-			dependency.target === installedPackage.manifest.runtimeEntryPoint
+			dependency.target === entryPoint
 		));
 		if (runtimeDependency === undefined) {
-			throw invalidArtifact('Agent package runtime entry point has no verified dependency', installedPackage.packageId);
+			throw invalidArtifact('Connected Agent package entry point has no verified dependency', installedPackage.packageId);
 		}
 		return artifactsById.get(runtimeDependency.id)!.path;
 	}
@@ -454,8 +462,9 @@ export class LocalAgentPackageArtifactPort implements IAgentPackageArtifactPort,
 				const artifactName = storedArtifactName(verified, index);
 				const temporaryPath = path.join(temporaryDirectory, artifactName);
 				const finalPath = path.join(finalDirectory, artifactName);
-				await writeFile(temporaryPath, artifact.bytes, { flag: 'wx', mode: 0o600 });
-				await chmod(temporaryPath, 0o400);
+				const mode = declared.executable ? 0o500 : 0o400;
+				await writeFile(temporaryPath, artifact.bytes, { flag: 'wx', mode });
+				await chmod(temporaryPath, mode);
 				const source = pathToFileURL(finalPath).toString();
 				dependencies.push(Object.freeze({ ...declared, source }));
 				closure.push(Object.freeze({ ...verified, source }));

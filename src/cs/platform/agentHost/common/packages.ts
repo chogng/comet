@@ -37,7 +37,10 @@ import {
 import type { IAgentCredentialReference } from './credentials.js';
 
 export type AgentPackageDistribution = 'bundled' | 'user';
-export type AgentPackageRuntimeForm = 'embedded' | 'connected';
+
+export type AgentPackageExecution =
+	| { readonly kind: 'host' }
+	| { readonly kind: 'connected'; readonly entryPoint: string };
 
 export interface IAgentPackageTarget {
 	readonly operatingSystem: string;
@@ -55,6 +58,7 @@ export interface IAgentPackageDependency {
 	readonly target: string;
 	readonly digest: AgentPackageContentDigest;
 	readonly license: string;
+	readonly executable: boolean;
 }
 
 export interface IVerifiedAgentPackageDependency extends IAgentPackageDependency {
@@ -69,8 +73,7 @@ export interface IAgentPackageManifest {
 	readonly contentDigest: AgentPackageContentDigest;
 	readonly publisher: string;
 	readonly target: IAgentPackageTarget;
-	readonly runtimeForm: AgentPackageRuntimeForm;
-	readonly runtimeEntryPoint: string;
+	readonly execution: AgentPackageExecution;
 	readonly agentIds: readonly AgentId[];
 	readonly dependencies: readonly IAgentPackageDependency[];
 	readonly privileges: readonly IAgentPackagePrivilege[];
@@ -255,31 +258,31 @@ interface IAgentPackagePersistedOperationBase {
 	readonly affectedRecords: number | null;
 }
 
-export interface IAgentPackageRuntimeTransitionSide {
+export interface IAgentPackageActivationTransitionSide {
 	readonly installedPackage: IInstalledAgentPackage;
 	readonly registrations: readonly IAgentRuntimeRegistration[];
 }
 
-export interface IAgentPackageRuntimeTransition {
-	readonly previous: IAgentPackageRuntimeTransitionSide | null;
-	readonly next: IAgentPackageRuntimeTransitionSide | null;
+export interface IAgentPackageActivationTransition {
+	readonly previous: IAgentPackageActivationTransitionSide | null;
+	readonly next: IAgentPackageActivationTransitionSide | null;
 }
 
-export type AgentPackageRuntimeTransitionPhase =
-	| 'runtimePrepared'
-	| 'runtimeCommitted'
+export type AgentPackageActivationTransitionPhase =
+	| 'activationPrepared'
+	| 'activationCommitted'
 	| 'catalogCommitted';
 
 export type AgentPackagePersistedOperation =
 	| (IAgentPackagePersistedOperationBase & {
 		readonly status: 'pending';
 		readonly phase: 'recorded';
-		readonly runtimeTransition?: never;
+		readonly activationTransition?: never;
 	})
 	| (IAgentPackagePersistedOperationBase & {
 		readonly status: 'pending';
-		readonly phase: AgentPackageRuntimeTransitionPhase;
-		readonly runtimeTransition: IAgentPackageRuntimeTransition;
+		readonly phase: AgentPackageActivationTransitionPhase;
+		readonly activationTransition: IAgentPackageActivationTransition;
 	})
 	| (IAgentPackagePersistedOperationBase & {
 		readonly status: 'succeeded';
@@ -288,13 +291,13 @@ export type AgentPackagePersistedOperation =
 	| (IAgentPackagePersistedOperationBase & {
 		readonly status: 'failed';
 		readonly phase: 'recorded';
-		readonly runtimeTransition?: never;
+		readonly activationTransition?: never;
 		readonly failure: IAgentPackageOperationFailure;
 	})
 	| (IAgentPackagePersistedOperationBase & {
 		readonly status: 'failed';
-		readonly phase: AgentPackageRuntimeTransitionPhase;
-		readonly runtimeTransition: IAgentPackageRuntimeTransition;
+		readonly phase: AgentPackageActivationTransitionPhase;
+		readonly activationTransition: IAgentPackageActivationTransition;
 		readonly failure: IAgentPackageOperationFailure;
 	});
 

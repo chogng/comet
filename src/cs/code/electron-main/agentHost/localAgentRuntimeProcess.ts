@@ -33,7 +33,7 @@ import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/proto
 import type {
 	AgentRuntimeConnectionLaunchContext,
 	IAgentRuntimeConnectionFactory,
-} from 'cs/platform/agentHost/node/packages/agentPackageRuntimeRegistry';
+} from 'cs/platform/agentHost/node/packages/agentPackageActivationRegistry';
 import type { IAgentRuntimeSandboxProcessPort } from 'cs/platform/agentHost/electron-main/agentRuntimeSandboxProcess';
 
 /** Launches each installed connected package in its own product-authorized utility process. */

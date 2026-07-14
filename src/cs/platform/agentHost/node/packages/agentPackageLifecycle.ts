@@ -47,7 +47,7 @@ import type {
 	IAgentPackageOperationFailure,
 	IAgentPackageOperationResult,
 	IAgentPackagePersistedState,
-	IAgentPackageRuntimeTransition,
+	IAgentPackageActivationTransition,
 	IAgentPackageTarget,
 	IInstalledAgentPackage,
 	IPurgeAgentPackageHostRecordsRequest,
@@ -88,30 +88,30 @@ export interface IAgentPackageArtifactPort {
 	): Promise<void>;
 }
 
-/** Negotiates staged runtimes and owns Agent-backed lifecycle operations. */
-export interface IAgentPackageRuntimePort {
-	/** Restores every authoritative and operation-scoped runtime before Host composition begins. */
-	restoreRuntimeState(state: IAgentPackagePersistedState): Promise<void>;
+/** Owns staged Agent activations and Agent-backed package lifecycle operations. */
+export interface IAgentPackageActivationPort {
+	/** Restores every authoritative and operation-scoped activation before Host composition begins. */
+	restoreActivationState(state: IAgentPackagePersistedState): Promise<void>;
 	prepareActivation(
 		installedPackage: IInstalledAgentPackage | null,
-		previous: IAgentPackageRuntimeTransition['previous'],
+		previous: IAgentPackageActivationTransition['previous'],
 		operationId: AgentPackageOperationId,
 	): Promise<readonly IAgentRuntimeRegistration[]>;
 	commitActivation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void>;
 	retirePreviousActivation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void>;
 	rollbackActivation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void>;
 	acknowledgeActivationOperation(
 		operationId: AgentPackageOperationId,
-		transition: IAgentPackageRuntimeTransition,
+		transition: IAgentPackageActivationTransition,
 	): Promise<void>;
 	migrateResumeState(
 		registration: IAgentRuntimeRegistration,
@@ -176,7 +176,7 @@ export interface IAgentPackageLifecycleOptions {
 	readonly bundledComet: IBundledCometPackage;
 	readonly stateStore: IAgentPackageStateStore;
 	readonly artifactPort: IAgentPackageArtifactPort;
-	readonly runtimePort: IAgentPackageRuntimePort;
+	readonly activationPort: IAgentPackageActivationPort;
 	readonly maximumPersistedOperations?: number;
 }
 
@@ -433,7 +433,7 @@ function assertRegistrationSet(
 			|| !Array.isArray(registration.supportedResumeSchemas)
 			|| !Array.isArray(registration.resumeMigrationEdges)
 		) {
-			throw new AgentPackageError(AgentPackageErrorCode.RegistrationInvalid, 'Invalid runtime registration fields');
+			throw new AgentPackageError(AgentPackageErrorCode.RegistrationInvalid, 'Invalid Agent registration fields');
 		}
 		createAgentPackageId(registration.packageId);
 		createAgentId(registration.agentId);
@@ -463,7 +463,7 @@ function assertRegistrationSet(
 				|| !Object.hasOwn(edge, 'sourceSchema')
 				|| !Object.hasOwn(edge, 'targetSchema')
 			) {
-				throw new AgentPackageError(AgentPackageErrorCode.RegistrationInvalid, 'Invalid runtime resume migration edge');
+				throw new AgentPackageError(AgentPackageErrorCode.RegistrationInvalid, 'Invalid Agent resume migration edge');
 			}
 			createAgentResumeSchemaId(edge.sourceSchema);
 			createAgentResumeSchemaId(edge.targetSchema);
@@ -544,7 +544,7 @@ function assertNoCrossPackageAgentClaims(
 		if (owner && owner !== registration.packageId) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.AgentIdConflict,
-				'Agent ID already has an active runtime registration',
+				'Agent ID already has an active registration',
 				{ packageId: registration.packageId, agentId: registration.agentId },
 			);
 		}
@@ -647,7 +647,7 @@ function validatePersistedState(
 	if (registrationsByPackage.size !== 0) {
 		throw new AgentPackageError(
 			AgentPackageErrorCode.RegistrationInvalid,
-			'Active runtime registration has no installed Agent package',
+			'Active Agent registration has no installed package',
 		);
 	}
 
@@ -781,16 +781,16 @@ function validatePersistedOperations(
 		const required = candidate.status === 'pending'
 			? candidate.phase === 'recorded'
 				? ['operation', 'digest', 'kind', 'packageId', 'affectedRecords', 'status', 'phase']
-				: ['runtimePrepared', 'runtimeCommitted', 'catalogCommitted'].includes(candidate.phase)
-					? ['operation', 'digest', 'kind', 'packageId', 'affectedRecords', 'status', 'phase', 'runtimeTransition']
+				: ['activationPrepared', 'activationCommitted', 'catalogCommitted'].includes(candidate.phase)
+					? ['operation', 'digest', 'kind', 'packageId', 'affectedRecords', 'status', 'phase', 'activationTransition']
 					: invalidOperationLedger(`Invalid Agent package operation phase '${index}'`)
 			: candidate.status === 'succeeded'
 				? ['operation', 'digest', 'kind', 'packageId', 'affectedRecords', 'status', 'result']
 				: candidate.status === 'failed'
 					? candidate.phase === 'recorded'
 						? ['operation', 'digest', 'kind', 'packageId', 'affectedRecords', 'status', 'phase', 'failure']
-						: ['runtimePrepared', 'runtimeCommitted', 'catalogCommitted'].includes(candidate.phase)
-							? ['operation', 'digest', 'kind', 'packageId', 'affectedRecords', 'status', 'phase', 'runtimeTransition', 'failure']
+						: ['activationPrepared', 'activationCommitted', 'catalogCommitted'].includes(candidate.phase)
+							? ['operation', 'digest', 'kind', 'packageId', 'affectedRecords', 'status', 'phase', 'activationTransition', 'failure']
 							: invalidOperationLedger(`Invalid Agent package operation failure phase '${index}'`)
 					: invalidOperationLedger(`Invalid Agent package operation ledger status '${index}'`);
 		if (Object.keys(candidate).length !== required.length || Object.keys(candidate).some(key => !required.includes(key))) {
@@ -826,8 +826,8 @@ function validatePersistedOperations(
 				operations.push(Object.freeze({ ...common, status: 'pending', phase: 'recorded' }));
 				continue;
 			}
-			const runtimeTransition = validateRuntimeTransition(
-				candidate.runtimeTransition,
+			const activationTransition = validateActivationTransition(
+				candidate.activationTransition,
 				packageId,
 				candidate.kind,
 				hostTarget,
@@ -836,7 +836,7 @@ function validatePersistedOperations(
 				...common,
 				status: 'pending',
 				phase: candidate.phase,
-				runtimeTransition,
+				activationTransition,
 			}));
 			continue;
 		}
@@ -865,8 +865,8 @@ function validatePersistedOperations(
 				...common,
 				status: 'failed',
 				phase: candidate.phase,
-				runtimeTransition: validateRuntimeTransition(
-					candidate.runtimeTransition,
+				activationTransition: validateActivationTransition(
+					candidate.activationTransition,
 					packageId,
 					candidate.kind,
 					hostTarget,
@@ -879,14 +879,14 @@ function validatePersistedOperations(
 	return Object.freeze(operations);
 }
 
-function validateRuntimeTransition(
+function validateActivationTransition(
 	value: unknown,
 	packageId: AgentPackageId,
 	kind: AgentPackageOperationKind,
 	hostTarget: IAgentPackageTarget,
-): IAgentPackageRuntimeTransition {
+): IAgentPackageActivationTransition {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-		return invalidOperationLedger('Invalid Agent package runtime transition');
+		return invalidOperationLedger('Invalid Agent package activation transition');
 	}
 	const candidate = value as Readonly<Record<string, unknown>>;
 	if (
@@ -894,14 +894,14 @@ function validateRuntimeTransition(
 		|| !Object.hasOwn(candidate, 'previous')
 		|| !Object.hasOwn(candidate, 'next')
 	) {
-		return invalidOperationLedger('Invalid Agent package runtime transition fields');
+		return invalidOperationLedger('Invalid Agent package activation transition fields');
 	}
-	const validateSide = (side: unknown): IAgentPackageRuntimeTransition['previous'] => {
+	const validateSide = (side: unknown): IAgentPackageActivationTransition['previous'] => {
 		if (side === null) {
 			return null;
 		}
 		if (typeof side !== 'object' || Array.isArray(side)) {
-			return invalidOperationLedger('Invalid Agent package runtime transition side');
+			return invalidOperationLedger('Invalid Agent package activation transition side');
 		}
 		const record = side as Readonly<Record<string, unknown>>;
 		if (
@@ -910,11 +910,11 @@ function validateRuntimeTransition(
 			|| !Object.hasOwn(record, 'registrations')
 			|| !Array.isArray(record.registrations)
 		) {
-			return invalidOperationLedger('Invalid Agent package runtime transition side fields');
+			return invalidOperationLedger('Invalid Agent package activation transition side fields');
 		}
 		const installedPackage = validateAndFreezeInstalledAgentPackage(record.installedPackage, hostTarget);
 		if (installedPackage.packageId !== packageId) {
-			return invalidOperationLedger('Agent package runtime transition addresses another package');
+			return invalidOperationLedger('Agent package activation transition addresses another package');
 		}
 		return Object.freeze({
 			installedPackage,
@@ -932,7 +932,7 @@ function validateRuntimeTransition(
 		|| (kind === 'uninstall' && (previous === null || next !== null))
 		|| ((kind === 'deleteAgentData' || kind === 'purgeHostRecords') && (previous !== null || next !== null))
 	) {
-		return invalidOperationLedger('Agent package runtime transition does not match its operation');
+		return invalidOperationLedger('Agent package activation transition does not match its operation');
 	}
 	return Object.freeze({ previous, next });
 }
@@ -992,7 +992,7 @@ async function throwWithConfirmedRollback(
 type PendingCatalogCommittedOperation = AgentPackagePersistedOperation & {
 	readonly status: 'pending';
 	readonly phase: 'catalogCommitted';
-	readonly runtimeTransition: IAgentPackageRuntimeTransition;
+	readonly activationTransition: IAgentPackageActivationTransition;
 };
 
 function isPendingCatalogCommittedOperation(
@@ -1045,7 +1045,7 @@ function prepareColdBundledUpdateState(
 	const previousRegistrations = Object.freeze(state.activeRegistrations.filter(candidate => (
 		candidate.packageId === previousPackage.packageId
 	)));
-	const transition: IAgentPackageRuntimeTransition = Object.freeze({
+	const transition: IAgentPackageActivationTransition = Object.freeze({
 		previous: Object.freeze({ installedPackage: previousPackage, registrations: previousRegistrations }),
 		next: Object.freeze({ installedPackage: currentPackage, registrations: currentRegistrations }),
 	});
@@ -1058,7 +1058,7 @@ function prepareColdBundledUpdateState(
 		affectedRecords: null,
 		status: 'pending',
 		phase: 'catalogCommitted',
-		runtimeTransition: transition,
+		activationTransition: transition,
 	});
 	const candidate = validatePersistedState({
 		...state,
@@ -1100,7 +1100,7 @@ export class AgentPackageLifecycle {
 		installablePackages: readonly IAgentPackageOffering[],
 		private readonly stateStore: IAgentPackageStateStore,
 		private readonly artifactPort: IAgentPackageArtifactPort,
-		private readonly runtimePort: IAgentPackageRuntimePort,
+		private readonly activationPort: IAgentPackageActivationPort,
 		private readonly maximumPersistedOperations: number,
 	) {
 		this.installableByKey = new Map(
@@ -1182,7 +1182,7 @@ export class AgentPackageLifecycle {
 			await options.stateStore.commit(undefined, state);
 		}
 		await options.artifactPort.reconcile(state);
-		await options.runtimePort.restoreRuntimeState(state);
+		await options.activationPort.restoreActivationState(state);
 		const lifecycle = new AgentPackageLifecycle(
 			state,
 			coldBundledUpdate,
@@ -1190,7 +1190,7 @@ export class AgentPackageLifecycle {
 			options.installablePackages,
 			options.stateStore,
 			options.artifactPort,
-			options.runtimePort,
+			options.activationPort,
 			maximumPersistedOperations,
 		);
 		await lifecycle.migrateColdBundledUpdate(bundledPackage);
@@ -1215,8 +1215,8 @@ export class AgentPackageLifecycle {
 			&& operation.packageId === currentPackage.packageId
 		));
 		const matching = candidates.filter(operation => {
-			const previous = operation.runtimeTransition.previous?.installedPackage;
-			const next = operation.runtimeTransition.next?.installedPackage;
+			const previous = operation.activationTransition.previous?.installedPackage;
+			const next = operation.activationTransition.next?.installedPackage;
 			if (previous === undefined || next === undefined || !exactInstalledPackage(next, currentPackage)) {
 				return false;
 			}
@@ -1241,11 +1241,11 @@ export class AgentPackageLifecycle {
 		if (operation === undefined) {
 			return;
 		}
-		const next = operation.runtimeTransition.next;
+		const next = operation.activationTransition.next;
 		if (next === null) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.StateConflict,
-				'Bundled Comet update has no activated runtime',
+				'Bundled Comet update has no activated Agent',
 				{ operationId: operation.operation },
 			);
 		}
@@ -1279,13 +1279,13 @@ export class AgentPackageLifecycle {
 		const operation = this.findColdBundledUpdate(currentPackage);
 		const recorded = this.operations.get(coldBundledUpdate.operation.operation);
 		if (operation === undefined && recorded?.persisted.status === 'succeeded') {
-			await this.runtimePort.retirePreviousActivation(
+			await this.activationPort.retirePreviousActivation(
 				coldBundledUpdate.operation.operation,
-				coldBundledUpdate.operation.runtimeTransition,
+				coldBundledUpdate.operation.activationTransition,
 			);
-			await this.runtimePort.acknowledgeActivationOperation(
+			await this.activationPort.acknowledgeActivationOperation(
 				coldBundledUpdate.operation.operation,
-				coldBundledUpdate.operation.runtimeTransition,
+				coldBundledUpdate.operation.activationTransition,
 			);
 			await this.artifactPort.reconcile(this.state);
 			this.coldBundledRuntimeAcknowledged = true;
@@ -1331,13 +1331,13 @@ export class AgentPackageLifecycle {
 		await this.stateStore.commit(coldBundledUpdate.base.revision, completedState);
 		this.acceptState(completedState);
 		recorded.persisted = completedOperation;
-		await this.runtimePort.retirePreviousActivation(
+		await this.activationPort.retirePreviousActivation(
 			operation.operation,
-			operation.runtimeTransition,
+			operation.activationTransition,
 		);
-		await this.runtimePort.acknowledgeActivationOperation(
+		await this.activationPort.acknowledgeActivationOperation(
 			operation.operation,
-			operation.runtimeTransition,
+			operation.activationTransition,
 		);
 		await this.artifactPort.reconcile(this.state);
 		this.coldBundledRuntimeAcknowledged = true;
@@ -1522,26 +1522,26 @@ export class AgentPackageLifecycle {
 		const release = await this.acquireStateLock();
 		try {
 			if (this.coldBundledUpdate !== undefined) {
-				const startupNext = this.coldBundledUpdate.operation.runtimeTransition.next;
+				const startupNext = this.coldBundledUpdate.operation.activationTransition.next;
 				if (startupNext === null) {
 					throw new AgentPackageError(
 						AgentPackageErrorCode.StateConflict,
-						'Bundled Comet update startup transition has no candidate runtime',
+						'Bundled Comet update startup transition has no candidate Agent',
 						{ operationId: this.coldBundledUpdate.operation.operation },
 					);
 				}
 				const operation = this.findColdBundledUpdate(startupNext.installedPackage);
-				if (operation === undefined || operation.runtimeTransition.next === null) {
+				if (operation === undefined || operation.activationTransition.next === null) {
 					throw new AgentPackageError(
 						AgentPackageErrorCode.StateConflict,
 						'Bundled Comet update lost its startup-scoped backing migration',
 						{ operationId: this.coldBundledUpdate.operation.operation },
 					);
 				}
-				const nextPackage = operation.runtimeTransition.next.installedPackage;
+				const nextPackage = operation.activationTransition.next.installedPackage;
 				const retainedBackingRecords = await this.migrateRetainedRecords(
 					nextPackage,
-					operation.runtimeTransition.next.registrations,
+					operation.activationTransition.next.registrations,
 					state.retainedBackingRecords,
 					operation.operation,
 				);
@@ -1652,7 +1652,7 @@ export class AgentPackageLifecycle {
 							affectedRecords: retryRecord.affectedRecords,
 							status: 'pending',
 							phase: retryRecord.phase,
-							runtimeTransition: retryRecord.runtimeTransition,
+							activationTransition: retryRecord.activationTransition,
 						});
 					await this.commitOperationRecord(
 						recorded,
@@ -1671,9 +1671,9 @@ export class AgentPackageLifecycle {
 				}
 				if (recorded.persisted.status === 'pending') {
 					const failure = this.operationFailure(error, recorded.retryRequired);
-					const runtimeTransition = failure.reconciliation === 'terminal'
+					const activationTransition = failure.reconciliation === 'terminal'
 						&& recorded.persisted.phase !== 'recorded'
-						? recorded.persisted.runtimeTransition
+						? recorded.persisted.activationTransition
 						: undefined;
 					try {
 						await this.commitOperationRecord(recorded, Object.freeze({
@@ -1681,10 +1681,10 @@ export class AgentPackageLifecycle {
 							status: 'failed',
 							failure,
 						}));
-						if (runtimeTransition !== undefined) {
-							await this.runtimePort.acknowledgeActivationOperation(
+						if (activationTransition !== undefined) {
+							await this.activationPort.acknowledgeActivationOperation(
 								request.operationId,
-								runtimeTransition,
+								activationTransition,
 							);
 						}
 						await this.artifactPort.reconcile(this.state);
@@ -1835,9 +1835,9 @@ export class AgentPackageLifecycle {
 		recorded: IRecordedPackageOperation,
 		result: IAgentPackageOperationResult,
 	): Promise<void> {
-		const runtimeTransition = recorded.persisted.status === 'pending'
+		const activationTransition = recorded.persisted.status === 'pending'
 			&& recorded.persisted.phase !== 'recorded'
-			? recorded.persisted.runtimeTransition
+			? recorded.persisted.activationTransition
 			: undefined;
 		await this.commitOperationRecord(recorded, Object.freeze({
 			operation: recorded.persisted.operation,
@@ -1848,10 +1848,10 @@ export class AgentPackageLifecycle {
 			status: 'succeeded',
 			result,
 		}));
-		if (runtimeTransition !== undefined) {
-			await this.runtimePort.acknowledgeActivationOperation(
+		if (activationTransition !== undefined) {
+			await this.activationPort.acknowledgeActivationOperation(
 				recorded.persisted.operation,
-				runtimeTransition,
+				activationTransition,
 			);
 		}
 		await this.artifactPort.reconcile(this.state);
@@ -1914,7 +1914,7 @@ export class AgentPackageLifecycle {
 	): Promise<IAgentPackageOperationResult> {
 		const recorded = this.requireRecordedOperation(request);
 		if (recorded.persisted.status === 'pending' && recorded.persisted.phase !== 'recorded') {
-			const nextPackage = recorded.persisted.runtimeTransition.next?.installedPackage;
+			const nextPackage = recorded.persisted.activationTransition.next?.installedPackage;
 			if (nextPackage === undefined) {
 				throw new AgentPackageError(AgentPackageErrorCode.StateConflict, 'Install recovery has no staged package');
 			}
@@ -1956,10 +1956,10 @@ export class AgentPackageLifecycle {
 	): Promise<IAgentPackageOperationResult> {
 		const recorded = this.requireRecordedOperation(request);
 		if (recorded.persisted.status === 'pending' && recorded.persisted.phase !== 'recorded') {
-			const transition = recorded.persisted.runtimeTransition;
+			const transition = recorded.persisted.activationTransition;
 			const nextPackage = transition.next?.installedPackage;
 			if (nextPackage === undefined || transition.previous === null) {
-				throw new AgentPackageError(AgentPackageErrorCode.StateConflict, 'Update recovery has no exact runtime transition');
+				throw new AgentPackageError(AgentPackageErrorCode.StateConflict, 'Update recovery has no exact activation transition');
 			}
 			assertExactOffering({
 				packageId: nextPackage.packageId,
@@ -2024,9 +2024,9 @@ export class AgentPackageLifecycle {
 		}
 		if (recorded.persisted.phase === 'catalogCommitted') {
 			recorded.retryRequired = true;
-			await this.runtimePort.retirePreviousActivation(
+			await this.activationPort.retirePreviousActivation(
 				request.operationId,
-				recorded.persisted.runtimeTransition,
+				recorded.persisted.activationTransition,
 			);
 			const result = this.createOperationResult(kind, request, 0, this.state.catalogRevision);
 			await this.commitSuccessfulOperation(recorded, result);
@@ -2034,7 +2034,7 @@ export class AgentPackageLifecycle {
 		}
 
 		let verifiedPackage: IVerifiedAgentPackage | undefined;
-		let transition: IAgentPackageRuntimeTransition;
+		let transition: IAgentPackageActivationTransition;
 		let mutation: IAgentPackageMutation | undefined;
 		let stateCommitted = false;
 		try {
@@ -2052,7 +2052,7 @@ export class AgentPackageLifecycle {
 					});
 				const registrations = assertRegistrationSet(
 					installedPackage,
-					await this.runtimePort.prepareActivation(installedPackage, previous, request.operationId),
+					await this.activationPort.prepareActivation(installedPackage, previous, request.operationId),
 				);
 				transition = Object.freeze({
 					previous,
@@ -2061,16 +2061,16 @@ export class AgentPackageLifecycle {
 				await this.commitOperationRecord(recorded, Object.freeze({
 					...recorded.persisted,
 					status: 'pending',
-					phase: 'runtimePrepared',
-					runtimeTransition: transition,
+					phase: 'activationPrepared',
+					activationTransition: transition,
 				}));
 			} else {
-				transition = recorded.persisted.runtimeTransition;
+				transition = recorded.persisted.activationTransition;
 			}
 			const installedPackage = transition.next?.installedPackage;
 			const registrations = transition.next?.registrations;
 			if (installedPackage === undefined || registrations === undefined) {
-				throw new AgentPackageError(AgentPackageErrorCode.StateConflict, 'Agent package activation has no staged runtime');
+				throw new AgentPackageError(AgentPackageErrorCode.StateConflict, 'Agent package activation has no staged Agent');
 			}
 			assertExactOffering({
 				packageId: installedPackage.packageId,
@@ -2113,14 +2113,14 @@ export class AgentPackageLifecycle {
 				request.operationId,
 			);
 			await mutation.prepareActivation(registrations);
-			if (recorded.persisted.phase === 'runtimePrepared') {
+			if (recorded.persisted.phase === 'activationPrepared') {
 				recorded.retryRequired = true;
-				await this.runtimePort.commitActivation(request.operationId, transition);
+				await this.activationPort.commitActivation(request.operationId, transition);
 				await this.commitOperationRecord(recorded, Object.freeze({
 					...recorded.persisted,
 					status: 'pending',
-					phase: 'runtimeCommitted',
-					runtimeTransition: transition,
+					phase: 'activationCommitted',
+					activationTransition: transition,
 				}));
 			}
 
@@ -2131,7 +2131,7 @@ export class AgentPackageLifecycle {
 					...recorded.persisted,
 					status: 'pending' as const,
 					phase: 'catalogCommitted' as const,
-					runtimeTransition: transition,
+					activationTransition: transition,
 				});
 				const nextState = validatePersistedState({
 					revision: previousState.revision + 1,
@@ -2181,7 +2181,7 @@ export class AgentPackageLifecycle {
 				releaseState();
 			}
 
-			await this.runtimePort.retirePreviousActivation(request.operationId, transition);
+			await this.activationPort.retirePreviousActivation(request.operationId, transition);
 			const result = this.createOperationResult(kind, request, 0, this.state.catalogRevision);
 			await this.commitSuccessfulOperation(recorded, result);
 			return result;
@@ -2195,8 +2195,8 @@ export class AgentPackageLifecycle {
 				rollbacks.push(() => mutationToRollback.rollback());
 			}
 			if (recorded.persisted.phase !== 'recorded') {
-				const transition = recorded.persisted.runtimeTransition;
-				rollbacks.push(() => this.runtimePort.rollbackActivation(request.operationId, transition));
+				const transition = recorded.persisted.activationTransition;
+				rollbacks.push(() => this.activationPort.rollbackActivation(request.operationId, transition));
 			}
 			if (verifiedPackage) {
 				const packageToDiscard = verifiedPackage;
@@ -2217,9 +2217,9 @@ export class AgentPackageLifecycle {
 		}
 		if (recorded.persisted.phase === 'catalogCommitted') {
 			recorded.retryRequired = true;
-			await this.runtimePort.retirePreviousActivation(
+			await this.activationPort.retirePreviousActivation(
 				request.operationId,
-				recorded.persisted.runtimeTransition,
+				recorded.persisted.activationTransition,
 			);
 			const result = this.createOperationResult('uninstall', request, 0, this.state.catalogRevision);
 			await this.commitSuccessfulOperation(recorded, result);
@@ -2237,29 +2237,29 @@ export class AgentPackageLifecycle {
 		let mutation: IAgentPackageMutation | undefined;
 		let stateCommitted = false;
 		try {
-			let transition: IAgentPackageRuntimeTransition;
+			let transition: IAgentPackageActivationTransition;
 			if (recorded.persisted.phase === 'recorded') {
 				const registrations = Object.freeze(this.state.activeRegistrations.filter(candidate => (
 					candidate.packageId === installedPackage.packageId
 				)));
 				const previous = Object.freeze({ installedPackage, registrations });
-				const nextRegistrations = await this.runtimePort.prepareActivation(
+				const nextRegistrations = await this.activationPort.prepareActivation(
 					null,
 					previous,
 					request.operationId,
 				);
 				if (nextRegistrations.length !== 0) {
-					throw new AgentPackageError(AgentPackageErrorCode.RegistrationInvalid, 'Uninstall runtime activation must be empty');
+					throw new AgentPackageError(AgentPackageErrorCode.RegistrationInvalid, 'Uninstall package activation must be empty');
 				}
 				transition = Object.freeze({ previous, next: null });
 				await this.commitOperationRecord(recorded, Object.freeze({
 					...recorded.persisted,
 					status: 'pending',
-					phase: 'runtimePrepared',
-					runtimeTransition: transition,
+					phase: 'activationPrepared',
+					activationTransition: transition,
 				}));
 			} else {
-				transition = recorded.persisted.runtimeTransition;
+				transition = recorded.persisted.activationTransition;
 				installedPackage = transition.previous!.installedPackage;
 			}
 			mutation = await this.requireLifecyclePort().acquirePackageMutation(
@@ -2275,14 +2275,14 @@ export class AgentPackageLifecycle {
 				await mutation.checkpointAndRelease(materializedRecords),
 			);
 			await mutation.prepareActivation(Object.freeze([]));
-			if (recorded.persisted.phase === 'runtimePrepared') {
+			if (recorded.persisted.phase === 'activationPrepared') {
 				recorded.retryRequired = true;
-				await this.runtimePort.commitActivation(request.operationId, transition);
+				await this.activationPort.commitActivation(request.operationId, transition);
 				await this.commitOperationRecord(recorded, Object.freeze({
 					...recorded.persisted,
 					status: 'pending',
-					phase: 'runtimeCommitted',
-					runtimeTransition: transition,
+					phase: 'activationCommitted',
+					activationTransition: transition,
 				}));
 			}
 			const releaseState = await this.acquireStateLock();
@@ -2292,7 +2292,7 @@ export class AgentPackageLifecycle {
 					...recorded.persisted,
 					status: 'pending' as const,
 					phase: 'catalogCommitted' as const,
-					runtimeTransition: transition,
+					activationTransition: transition,
 				});
 				const nextState = validatePersistedState({
 					revision: previousState.revision + 1,
@@ -2335,7 +2335,7 @@ export class AgentPackageLifecycle {
 			} finally {
 				releaseState();
 			}
-			await this.runtimePort.retirePreviousActivation(request.operationId, transition);
+			await this.activationPort.retirePreviousActivation(request.operationId, transition);
 			const result = this.createOperationResult('uninstall', request, 0, this.state.catalogRevision);
 			await this.commitSuccessfulOperation(recorded, result);
 			return result;
@@ -2345,9 +2345,9 @@ export class AgentPackageLifecycle {
 			}
 			if (!mutation) {
 				const rollbacks: Array<() => Promise<void>> = [];
-				if (recorded.persisted.phase === 'runtimePrepared') {
-					const rollbackTransition = recorded.persisted.runtimeTransition;
-					rollbacks.push(() => this.runtimePort.rollbackActivation(
+				if (recorded.persisted.phase === 'activationPrepared') {
+					const rollbackTransition = recorded.persisted.activationTransition;
+					rollbacks.push(() => this.activationPort.rollbackActivation(
 						request.operationId,
 						rollbackTransition,
 					));
@@ -2359,8 +2359,8 @@ export class AgentPackageLifecycle {
 			const mutationToRollback = mutation;
 			const rollbacks: Array<() => Promise<void>> = [() => mutationToRollback.rollback()];
 			if (recorded.persisted.phase !== 'recorded') {
-				const transition = recorded.persisted.runtimeTransition;
-				rollbacks.push(() => this.runtimePort.rollbackActivation(request.operationId, transition));
+				const transition = recorded.persisted.activationTransition;
+				rollbacks.push(() => this.activationPort.rollbackActivation(request.operationId, transition));
 			}
 			return throwWithConfirmedRollback(
 				toError(error),
@@ -2384,7 +2384,7 @@ export class AgentPackageLifecycle {
 		if (registrations.length !== installedPackage.manifest.agentIds.length) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.AgentDataDeletionDenied,
-				'Agent-backed deletion requires the exact activated package runtime',
+				'Agent-backed deletion requires the exact activated Agent package',
 				{ packageId: request.packageId },
 			);
 		}
@@ -2431,7 +2431,7 @@ export class AgentPackageLifecycle {
 				}
 				recorded.retryRequired = true;
 				deletionStarted = true;
-				await this.runtimePort.deleteBacking(
+				await this.activationPort.deleteBacking(
 					registration,
 					record.identity,
 					request.operationId,
@@ -2605,7 +2605,7 @@ export class AgentPackageLifecycle {
 		if (activeConflict) {
 			throw new AgentPackageError(
 				AgentPackageErrorCode.AgentIdConflict,
-				'Agent ID already has an active runtime registration',
+				'Agent ID already has an active registration',
 				{ packageId, agentId: activeConflict.agentId },
 			);
 		}
@@ -2685,7 +2685,7 @@ export class AgentPackageLifecycle {
 				sourceDigest: record.resumeStateDigest,
 				targetSchema: edges[0].targetSchema,
 			};
-			const resumeState = await this.runtimePort.migrateResumeState(registration, request);
+			const resumeState = await this.activationPort.migrateResumeState(registration, request);
 			if (
 				resumeState.schema !== request.targetSchema
 				|| Buffer.byteLength(resumeState.data, 'utf8') > MAXIMUM_RESUME_STATE_BYTES

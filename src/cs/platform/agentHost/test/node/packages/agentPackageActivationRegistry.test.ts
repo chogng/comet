@@ -43,17 +43,18 @@ import type {
 	AgentPackagePersistedOperation,
 	IAgentPackageOffering,
 	IAgentPackagePersistedState,
-	IAgentPackageRuntimeTransition,
-	IAgentPackageRuntimeTransitionSide,
+	IAgentPackageActivationTransition,
+	IAgentPackageActivationTransitionSide,
 	IInstalledAgentPackage,
 } from 'cs/platform/agentHost/common/packages';
 import type { IAgentToolExecutionPort } from 'cs/platform/agentHost/common/tools';
 import {
-	AgentPackageRuntimeRegistry,
+	AgentPackageActivationRegistry,
 	type AgentRuntimeConnectionLaunchContext,
 	type IAgentRuntimeConnectionFactory,
-	type IEmbeddedAgentPackageRuntime,
-} from 'cs/platform/agentHost/node/packages/agentPackageRuntimeRegistry';
+	type IBundledAgentPackageActivation,
+	type IHostAgentPackageFactory,
+} from 'cs/platform/agentHost/node/packages/agentPackageActivationRegistry';
 
 const protocolVersion = createAgentRuntimeProtocolVersion('2');
 const schemaProfile = createAgentToolSchemaProfileId('comet.tool.v1');
@@ -64,22 +65,22 @@ const transportLimits: IAgentRuntimeTransportLimits = Object.freeze({
 	maximumConcurrentCalls: 4,
 });
 
-interface IRuntimeDefinition {
+interface IAgentDefinition {
 	readonly installedPackage: IInstalledAgentPackage;
 	readonly registration: IAgentRuntimeRegistration;
 	readonly descriptor: IAgentDescriptor;
 	readonly failInitialize?: boolean;
 }
 
-function createRuntimeDefinition(options: {
+function createAgentDefinition(options: {
 	readonly packageId: string;
 	readonly agentId: string;
 	readonly revision: string;
 	readonly digestCharacter: string;
-	readonly runtimeForm: 'embedded' | 'connected';
+	readonly execution: 'host' | 'connected';
 	readonly distribution: 'bundled' | 'user';
 	readonly failInitialize?: boolean;
-}): IRuntimeDefinition {
+}): IAgentDefinition {
 	const packageId = createAgentPackageId(options.packageId);
 	const agentId = createAgentId(options.agentId);
 	const packageRevision = createAgentPackageRevision(options.revision);
@@ -121,7 +122,7 @@ function createRuntimeDefinition(options: {
 		packageId,
 		revision: descriptorRevision,
 		displayName: `${options.agentId} ${options.revision}`,
-		description: 'Runtime registry test Agent',
+		description: 'Activation registry test Agent',
 		capabilities: Object.freeze({
 			revision: capabilityRevision,
 			supportsEmptySession: true,
@@ -178,6 +179,7 @@ function createRuntimeDefinition(options: {
 		target: `bin/${options.packageId}`,
 		digest: dependencyDigest,
 		license: 'MIT',
+		executable: options.execution === 'connected',
 	});
 	const installedPackage: IInstalledAgentPackage = Object.freeze({
 		packageId,
@@ -192,8 +194,9 @@ function createRuntimeDefinition(options: {
 			contentDigest,
 			publisher: 'Comet test',
 			target: Object.freeze({ operatingSystem: 'test-os', architecture: 'test-arch' }),
-			runtimeForm: options.runtimeForm,
-			runtimeEntryPoint: dependency.target,
+			execution: options.execution === 'host'
+				? Object.freeze({ kind: 'host' as const })
+				: Object.freeze({ kind: 'connected' as const, entryPoint: dependency.target }),
 			agentIds: Object.freeze([agentId]),
 			dependencies: Object.freeze([dependency]),
 			privileges: Object.freeze([]),
@@ -213,14 +216,14 @@ function createRuntimeDefinition(options: {
 	});
 }
 
-function activationSide(definition: IRuntimeDefinition): IAgentPackageRuntimeTransitionSide {
+function activationSide(definition: IAgentDefinition): IAgentPackageActivationTransitionSide {
 	return Object.freeze({
 		installedPackage: definition.installedPackage,
 		registrations: Object.freeze([definition.registration]),
 	});
 }
 
-function packageOffering(definition: IRuntimeDefinition): IAgentPackageOffering {
+function packageOffering(definition: IAgentDefinition): IAgentPackageOffering {
 	return Object.freeze({
 		packageId: definition.installedPackage.packageId,
 		revision: definition.installedPackage.revision,
@@ -231,7 +234,7 @@ function packageOffering(definition: IRuntimeDefinition): IAgentPackageOffering 
 }
 
 function persistedState(
-	definition: IRuntimeDefinition,
+	definition: IAgentDefinition,
 	operations: readonly AgentPackagePersistedOperation[] = Object.freeze([]),
 ): IAgentPackagePersistedState {
 	return Object.freeze({
@@ -249,8 +252,8 @@ function persistedState(
 
 function interruptedOperation(
 	operation: AgentPackageOperationId,
-	phase: 'runtimePrepared' | 'runtimeCommitted' | 'catalogCommitted',
-	transition: IAgentPackageRuntimeTransition,
+	phase: 'activationPrepared' | 'activationCommitted' | 'catalogCommitted',
+	transition: IAgentPackageActivationTransition,
 ): AgentPackagePersistedOperation {
 	return Object.freeze({
 		operation,
@@ -260,7 +263,7 @@ function interruptedOperation(
 		affectedRecords: 0,
 		status: 'pending',
 		phase,
-		runtimeTransition: transition,
+		activationTransition: transition,
 	});
 }
 
@@ -275,7 +278,7 @@ class TestRuntimeConnection extends Disposable implements IAgentRuntimeConnectio
 	disposeCount = 0;
 
 	constructor(
-		private readonly definition: IRuntimeDefinition,
+		private readonly definition: IAgentDefinition,
 		sequence: number,
 	) {
 		super();
@@ -344,16 +347,16 @@ class TestRuntimeConnection extends Disposable implements IAgentRuntimeConnectio
 }
 
 interface IConnectionRecord {
-	readonly definition: IRuntimeDefinition;
+	readonly definition: IAgentDefinition;
 	readonly context: AgentRuntimeConnectionLaunchContext;
 	readonly connection: TestRuntimeConnection;
 }
 
 class TestRuntimeConnectionFactory implements IAgentRuntimeConnectionFactory {
-	private readonly definitions = new Map<string, IRuntimeDefinition>();
+	private readonly definitions = new Map<string, IAgentDefinition>();
 	readonly records: IConnectionRecord[] = [];
 
-	constructor(definitions: readonly IRuntimeDefinition[]) {
+	constructor(definitions: readonly IAgentDefinition[]) {
 		for (const definition of definitions) {
 			this.definitions.set(this.key(definition.installedPackage), definition);
 		}
@@ -375,7 +378,7 @@ class TestRuntimeConnectionFactory implements IAgentRuntimeConnectionFactory {
 	}
 }
 
-class TestEmbeddedAgent extends Disposable implements IAgent {
+class TestHostAgent extends Disposable implements IAgent {
 	readonly id;
 	readonly descriptor;
 	readonly registration;
@@ -388,11 +391,11 @@ class TestEmbeddedAgent extends Disposable implements IAgent {
 	private disposedValue = false;
 	disposeCount = 0;
 
-	constructor(definition: IRuntimeDefinition) {
+	constructor(definition: IAgentDefinition) {
 		super();
 		this.id = definition.registration.agentId;
 		this.registration = definition.registration;
-		this.descriptor = observableValue(`TestEmbeddedAgent.${this.id}`, definition.descriptor);
+		this.descriptor = observableValue(`TestHostAgent.${this.id}`, definition.descriptor);
 		this.configuration = {
 			resolveSession: () => this.unexpected('resolveSession'),
 			completeSession: () => this.unexpected('completeSession'),
@@ -431,7 +434,7 @@ class TestEmbeddedAgent extends Disposable implements IAgent {
 	}
 
 	private unexpected(method: string): Promise<never> {
-		return Promise.reject(new Error(`Unexpected embedded Agent call: ${method}`));
+		return Promise.reject(new Error(`Unexpected Host Agent call: ${method}`));
 	}
 }
 
@@ -458,10 +461,12 @@ const credentialResolver: IAgentCredentialResolver = {
 
 function createRegistry(
 	factory: IAgentRuntimeConnectionFactory,
-	embeddedRuntimes: readonly IEmbeddedAgentPackageRuntime[] = Object.freeze([]),
-): AgentPackageRuntimeRegistry {
-	return new AgentPackageRuntimeRegistry({
-		embeddedRuntimes,
+	bundledAgents: readonly IBundledAgentPackageActivation[] = Object.freeze([]),
+	hostAgentFactories: readonly IHostAgentPackageFactory[] = Object.freeze([]),
+): AgentPackageActivationRegistry {
+	return new AgentPackageActivationRegistry({
+		bundledAgents,
+		hostAgentFactories,
 		connectionFactory: factory,
 		toolExecution,
 		contentResources,
@@ -480,28 +485,28 @@ function assertPackageError(code: AgentPackageErrorCode): (error: unknown) => bo
 	};
 }
 
-suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
-	const ownedRegistries: AgentPackageRuntimeRegistry[] = [];
+suite('AgentPackageActivationRegistry', { concurrency: false }, () => {
+	const ownedRegistries: AgentPackageActivationRegistry[] = [];
 	afterEach(() => {
 		for (const registry of ownedRegistries.splice(0).reverse()) {
 			registry.dispose();
 		}
 	});
-	const own = (registry: AgentPackageRuntimeRegistry): AgentPackageRuntimeRegistry => {
+	const own = (registry: AgentPackageActivationRegistry): AgentPackageActivationRegistry => {
 		ownedRegistries.push(registry);
 		return registry;
 	};
 
-	test('restores and resolves one exact product-authorized embedded Agent', async () => {
-		const definition = createRuntimeDefinition({
+	test('restores and resolves one exact product-authorized bundled Agent', async () => {
+		const definition = createAgentDefinition({
 			packageId: 'comet',
 			agentId: 'comet',
 			revision: '1.0.0',
 			digestCharacter: '1',
-			runtimeForm: 'embedded',
+			execution: 'host',
 			distribution: 'bundled',
 		});
-		const agent = new TestEmbeddedAgent(definition);
+		const agent = new TestHostAgent(definition);
 		const registry = own(createRegistry(
 			new TestRuntimeConnectionFactory([]),
 			[{
@@ -511,35 +516,68 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 			}],
 		));
 
-		await registry.restoreRuntimeState(persistedState(definition));
+		await registry.restoreActivationState(persistedState(definition));
 		assert.equal(registry.resolve(definition.registration), agent);
 		registry.dispose();
 		assert.equal(agent.disposeCount, 1);
 	});
 
-	test('switches one exact embedded Agent across authorized bundled offerings', async () => {
-		const previous = createRuntimeDefinition({
+	test('activates one product-authorized user Host Agent without a runtime connection', async () => {
+		const definition = createAgentDefinition({
+			packageId: 'claude',
+			agentId: 'claude',
+			revision: '1.0.0',
+			digestCharacter: '2',
+			execution: 'host',
+			distribution: 'user',
+		});
+		const agent = new TestHostAgent(definition);
+		const connectionFactory = new TestRuntimeConnectionFactory([]);
+		const hostFactory: IHostAgentPackageFactory = {
+			offerings: Object.freeze([packageOffering(definition)]),
+			create: async (installedPackage, services) => {
+				assert.equal(installedPackage, definition.installedPackage);
+				assert.equal(services.toolExecution, toolExecution);
+				assert.equal(services.credentialResolver, credentialResolver);
+				return Object.freeze({ agents: Object.freeze([agent]), lifetime: agent });
+			},
+		};
+		const registry = own(createRegistry(
+			connectionFactory,
+			Object.freeze([]),
+			Object.freeze([hostFactory]),
+		));
+
+		await registry.restoreActivationState(persistedState(definition));
+		assert.equal(registry.resolve(definition.registration), agent);
+		assert.deepEqual(connectionFactory.records, []);
+		registry.dispose();
+		assert.equal(agent.disposeCount, 1);
+	});
+
+	test('switches one exact bundled Agent across authorized bundled offerings', async () => {
+		const previous = createAgentDefinition({
 			packageId: 'comet',
 			agentId: 'comet',
 			revision: '1.0.0',
 			digestCharacter: 'a',
-			runtimeForm: 'embedded',
+			execution: 'host',
 			distribution: 'bundled',
 		});
-		const nextArtifact = createRuntimeDefinition({
+		const nextArtifact = createAgentDefinition({
 			packageId: 'comet',
 			agentId: 'comet',
 			revision: '2.0.0',
 			digestCharacter: 'b',
-			runtimeForm: 'embedded',
+			execution: 'host',
 			distribution: 'bundled',
 		});
-		const next: IRuntimeDefinition = Object.freeze({
+		const next: IAgentDefinition = Object.freeze({
 			installedPackage: nextArtifact.installedPackage,
 			registration: previous.registration,
 			descriptor: previous.descriptor,
 		});
-		const agent = new TestEmbeddedAgent(previous);
+		const agent = new TestHostAgent(previous);
 		const registry = own(createRegistry(
 			new TestRuntimeConnectionFactory([]),
 			[{
@@ -548,7 +586,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 				lifetime: agent,
 			}],
 		));
-		await registry.restoreRuntimeState(persistedState(previous));
+		await registry.restoreActivationState(persistedState(previous));
 
 		const rollbackOperation = createAgentPackageOperationId('update-comet-rollback');
 		const rollbackRegistrations = await registry.prepareActivation(
@@ -556,7 +594,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 			activationSide(previous),
 			rollbackOperation,
 		);
-		const rollbackTransition: IAgentPackageRuntimeTransition = Object.freeze({
+		const rollbackTransition: IAgentPackageActivationTransition = Object.freeze({
 			previous: activationSide(previous),
 			next: Object.freeze({ installedPackage: next.installedPackage, registrations: rollbackRegistrations }),
 		});
@@ -571,7 +609,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 			activationSide(previous),
 			retireOperation,
 		);
-		const retireTransition: IAgentPackageRuntimeTransition = Object.freeze({
+		const retireTransition: IAgentPackageActivationTransition = Object.freeze({
 			previous: activationSide(previous),
 			next: Object.freeze({ installedPackage: next.installedPackage, registrations: retireRegistrations }),
 		});
@@ -584,12 +622,12 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 	});
 
 	test('prepares, commits, retires, and rolls back exact connected activations', async () => {
-		const first = createRuntimeDefinition({ packageId: 'claude', agentId: 'claude', revision: '1.0.0', digestCharacter: '2', runtimeForm: 'connected', distribution: 'user' });
-		const second = createRuntimeDefinition({ packageId: 'claude', agentId: 'claude', revision: '2.0.0', digestCharacter: '3', runtimeForm: 'connected', distribution: 'user' });
-		const third = createRuntimeDefinition({ packageId: 'claude', agentId: 'claude', revision: '3.0.0', digestCharacter: '4', runtimeForm: 'connected', distribution: 'user' });
+		const first = createAgentDefinition({ packageId: 'claude', agentId: 'claude', revision: '1.0.0', digestCharacter: '2', execution: 'connected', distribution: 'user' });
+		const second = createAgentDefinition({ packageId: 'claude', agentId: 'claude', revision: '2.0.0', digestCharacter: '3', execution: 'connected', distribution: 'user' });
+		const third = createAgentDefinition({ packageId: 'claude', agentId: 'claude', revision: '3.0.0', digestCharacter: '4', execution: 'connected', distribution: 'user' });
 		const factory = new TestRuntimeConnectionFactory([first, second, third]);
 		const registry = own(createRegistry(factory));
-		await registry.restoreRuntimeState(persistedState(first));
+		await registry.restoreActivationState(persistedState(first));
 
 		const firstOperation = createAgentPackageOperationId('update-claude-v2');
 		const firstRegistrations = await registry.prepareActivation(
@@ -597,7 +635,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 			activationSide(first),
 			firstOperation,
 		);
-		const firstTransition: IAgentPackageRuntimeTransition = Object.freeze({
+		const firstTransition: IAgentPackageActivationTransition = Object.freeze({
 			previous: activationSide(first),
 			next: Object.freeze({ installedPackage: second.installedPackage, registrations: firstRegistrations }),
 		});
@@ -622,7 +660,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 			activationSide(second),
 			secondOperation,
 		);
-		const secondTransition: IAgentPackageRuntimeTransition = Object.freeze({
+		const secondTransition: IAgentPackageActivationTransition = Object.freeze({
 			previous: activationSide(second),
 			next: Object.freeze({ installedPackage: third.installedPackage, registrations: secondRegistrations }),
 		});
@@ -637,16 +675,16 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 	});
 
 	test('replaces a connected package artifact without inventing a runtime registration revision', async () => {
-		const previous = createRuntimeDefinition({ packageId: 'claude', agentId: 'claude', revision: '1.0.0', digestCharacter: 'a', runtimeForm: 'connected', distribution: 'user' });
-		const nextArtifact = createRuntimeDefinition({ packageId: 'claude', agentId: 'claude', revision: '2.0.0', digestCharacter: 'b', runtimeForm: 'connected', distribution: 'user' });
-		const next: IRuntimeDefinition = Object.freeze({
+		const previous = createAgentDefinition({ packageId: 'claude', agentId: 'claude', revision: '1.0.0', digestCharacter: 'a', execution: 'connected', distribution: 'user' });
+		const nextArtifact = createAgentDefinition({ packageId: 'claude', agentId: 'claude', revision: '2.0.0', digestCharacter: 'b', execution: 'connected', distribution: 'user' });
+		const next: IAgentDefinition = Object.freeze({
 			installedPackage: nextArtifact.installedPackage,
 			registration: previous.registration,
 			descriptor: previous.descriptor,
 		});
 		const factory = new TestRuntimeConnectionFactory([previous, next]);
 		const registry = own(createRegistry(factory));
-		await registry.restoreRuntimeState(persistedState(previous));
+		await registry.restoreActivationState(persistedState(previous));
 		const previousAgent = registry.resolve(previous.registration);
 
 		const rollbackOperation = createAgentPackageOperationId('update-claude-same-registration-rollback');
@@ -655,7 +693,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 			activationSide(previous),
 			rollbackOperation,
 		);
-		const rollbackTransition: IAgentPackageRuntimeTransition = Object.freeze({
+		const rollbackTransition: IAgentPackageActivationTransition = Object.freeze({
 			previous: activationSide(previous),
 			next: Object.freeze({ installedPackage: next.installedPackage, registrations: rollbackRegistrations }),
 		});
@@ -676,7 +714,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 			activationSide(previous),
 			retireOperation,
 		);
-		const retireTransition: IAgentPackageRuntimeTransition = Object.freeze({
+		const retireTransition: IAgentPackageActivationTransition = Object.freeze({
 			previous: activationSide(previous),
 			next: Object.freeze({ installedPackage: next.installedPackage, registrations: retireRegistrations }),
 		});
@@ -692,15 +730,15 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 		assert.deepStrictEqual(factory.records.map(record => record.connection.disposeCount), [1, 1, 0]);
 	});
 
-	test('cold-restores a runtimePrepared activation as staged only', async () => {
-		const first = createRuntimeDefinition({ packageId: 'codex', agentId: 'codex', revision: '1.0.0', digestCharacter: '5', runtimeForm: 'connected', distribution: 'user' });
-		const second = createRuntimeDefinition({ packageId: 'codex', agentId: 'codex', revision: '2.0.0', digestCharacter: '6', runtimeForm: 'connected', distribution: 'user' });
+	test('cold-restores a activationPrepared activation as staged only', async () => {
+		const first = createAgentDefinition({ packageId: 'codex', agentId: 'codex', revision: '1.0.0', digestCharacter: '5', execution: 'connected', distribution: 'user' });
+		const second = createAgentDefinition({ packageId: 'codex', agentId: 'codex', revision: '2.0.0', digestCharacter: '6', execution: 'connected', distribution: 'user' });
 		const operation = createAgentPackageOperationId('update-codex-v2');
 		const transition = Object.freeze({ previous: activationSide(first), next: activationSide(second) });
 		const factory = new TestRuntimeConnectionFactory([first, second]);
 		const registry = own(createRegistry(factory));
-		await registry.restoreRuntimeState(persistedState(first, [
-			interruptedOperation(operation, 'runtimePrepared', transition),
+		await registry.restoreActivationState(persistedState(first, [
+			interruptedOperation(operation, 'activationPrepared', transition),
 		]));
 
 		assert.deepStrictEqual(factory.records.map(record => record.context), [
@@ -720,15 +758,15 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 		assert.equal(factory.records[0].connection.disposeCount, 0);
 	});
 
-	test('cold-restores runtimeCommitted and catalogCommitted activation phases exactly', async () => {
-		const first = createRuntimeDefinition({ packageId: 'copilot', agentId: 'copilot', revision: '1.0.0', digestCharacter: '7', runtimeForm: 'connected', distribution: 'user' });
-		const second = createRuntimeDefinition({ packageId: 'copilot', agentId: 'copilot', revision: '2.0.0', digestCharacter: '8', runtimeForm: 'connected', distribution: 'user' });
+	test('cold-restores activationCommitted and catalogCommitted activation phases exactly', async () => {
+		const first = createAgentDefinition({ packageId: 'copilot', agentId: 'copilot', revision: '1.0.0', digestCharacter: '7', execution: 'connected', distribution: 'user' });
+		const second = createAgentDefinition({ packageId: 'copilot', agentId: 'copilot', revision: '2.0.0', digestCharacter: '8', execution: 'connected', distribution: 'user' });
 		const transition = Object.freeze({ previous: activationSide(first), next: activationSide(second) });
 		const committedOperation = createAgentPackageOperationId('update-copilot-runtime-committed');
 		const committedFactory = new TestRuntimeConnectionFactory([first, second]);
 		const committedRegistry = own(createRegistry(committedFactory));
-		await committedRegistry.restoreRuntimeState(persistedState(first, [
-			interruptedOperation(committedOperation, 'runtimeCommitted', transition),
+		await committedRegistry.restoreActivationState(persistedState(first, [
+			interruptedOperation(committedOperation, 'activationCommitted', transition),
 		]));
 		assert.throws(() => committedRegistry.resolve(first.registration), assertPackageError(AgentPackageErrorCode.RegistrationInvalid));
 		assert.equal(committedRegistry.resolve(second.registration).id, second.registration.agentId);
@@ -739,7 +777,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 		const catalogOperation = createAgentPackageOperationId('update-copilot-catalog-committed');
 		const catalogFactory = new TestRuntimeConnectionFactory([first, second]);
 		const catalogRegistry = own(createRegistry(catalogFactory));
-		await catalogRegistry.restoreRuntimeState(persistedState(second, [
+		await catalogRegistry.restoreActivationState(persistedState(second, [
 			interruptedOperation(catalogOperation, 'catalogCommitted', transition),
 		]));
 		assert.deepStrictEqual(catalogFactory.records.map(record => record.definition.installedPackage.revision), [
@@ -751,12 +789,12 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 	});
 
 	test('disposes a factory connection when connected-runtime negotiation fails', async () => {
-		const definition = createRuntimeDefinition({
+		const definition = createAgentDefinition({
 			packageId: 'broken',
 			agentId: 'broken',
 			revision: '1.0.0',
 			digestCharacter: '9',
-			runtimeForm: 'connected',
+			execution: 'connected',
 			distribution: 'user',
 			failInitialize: true,
 		});
@@ -764,7 +802,7 @@ suite('AgentPackageRuntimeRegistry', { concurrency: false }, () => {
 		const registry = own(createRegistry(factory));
 
 		await assert.rejects(
-			registry.restoreRuntimeState(persistedState(definition)),
+			registry.restoreActivationState(persistedState(definition)),
 			/injected runtime initialization failure/,
 		);
 		assert.equal(factory.records[0].connection.disposeCount, 1);

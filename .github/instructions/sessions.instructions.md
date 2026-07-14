@@ -52,18 +52,19 @@ code / server
   owning duplicate state.
 - Sessions feature contributions own optional Chat, Editor, changes, terminal,
   task, list, action, and onboarding integration.
-- Agent Host is the common execution boundary for every Agent runtime. Local
+- Agent Host is the common execution boundary for every Agent. Local
   and remote describe Host placement; `comet`, `copilot`, `claude`, and `codex`
-  identify Agent behavior; embedded and connected describe runtime binding.
+  identify Agent behavior; direct and connected describe package execution.
 - `CometAgent` is Comet's built-in Agent integration and has stable Agent ID
-  `comet`. Its runtime may be embedded or connected through the Agent Runtime
-  Protocol; runtime packaging is not Sessions state. The bundled `comet`
+  `comet` and implements `IAgent` directly. Package execution is not Sessions
+  state. The bundled `comet`
   package is the only default-installed Agent package.
 - Copilot, Claude, Codex, and every other optional Agent package are absent
   until an explicit user install operation commits for the addressed Host.
   Sessions may expose a separate install action, but an installable catalog
-  entry is never an executable Agent selection. Every user-installed Agent
-  executes through a connected runtime outside the Host process.
+  entry is never an executable Agent selection. Product-maintained SDK Agents
+  implement `IAgent` directly; genuinely external Agents use the connected
+  protocol.
 - One shared Agent Host Sessions provider maps each Host connection into the
   provider-independent Sessions domain. Local and remote contributions do not
   duplicate Session or Chat models.
@@ -76,7 +77,7 @@ code / server
   `comet`, and Host placement is `local` or `remote`. Do not use `default` as
   an implementation prefix or identity, and do not define a `mainChat` or
   `defaultChat` role.
-- Agent runtimes, Host protocols, and connection services never escape
+- Agent implementations, Host protocols, and connection services never escape
   into Sessions core, shared services, or non-provider contributions.
 - Workbench Chat owns one conversation model and reusable Chat widgets.
 - Workbench Editor owns inputs, groups, resolvers, panes, and registries.
@@ -134,10 +135,10 @@ src/cs/platform/agentHost/{common,browser,electron-browser,node}/
 - Sessions providers route addressed Session and Chat operations; Workbench
   `IChatService` owns only the addressed conversation model and never creates
   a product Session or chooses an Agent.
-- The product-bundled embedded Comet runtime implements the Host-side `IAgent`
-  contract directly. User-installed Agents and the connected Comet form use
+- Product-bundled Comet and product-maintained SDK Agents implement the
+  Host-side `IAgent` contract directly. Genuinely external Agents use
   `IAgentRuntimeConnection`. Neither registers a direct Sessions provider, and
-  one Agent ID never has dual runtime registration or a fallback runtime.
+  one Agent ID never has dual registration or a fallback implementation.
 - Draft creation, Session creation, restore, and send never install, update,
   uninstall, download, inspect, or load an Agent SDK package.
 - Commands carry the originating session/chat context and never silently

@@ -40,7 +40,6 @@ import { AgentPackageError, AgentPackageErrorCode } from 'cs/platform/agentHost/
 import type {
 	AgentPackageDistribution,
 	AgentPackagePersistedOperation,
-	AgentPackageRuntimeForm,
 	IAgentPackageBackingRecord,
 	IAgentPackageOffering,
 	IAgentPackageOperationResult,
@@ -53,7 +52,7 @@ import {
 	IAgentPackageArtifactPort,
 	IAgentPackageLifecyclePort,
 	IAgentPackageMutation,
-	IAgentPackageRuntimePort,
+	IAgentPackageActivationPort,
 	IAgentPackageStateStore,
 	computeAgentResumeStateDigest,
 } from 'cs/platform/agentHost/node/packages/agentPackageLifecycle';
@@ -78,7 +77,7 @@ function createVerifiedPackage(options: {
 	readonly revision: string;
 	readonly digestCharacter: string;
 	readonly distribution?: AgentPackageDistribution;
-	readonly runtimeForm?: AgentPackageRuntimeForm;
+	readonly execution?: 'host' | 'connected';
 	readonly closure?: 'complete' | 'missing' | 'digestMismatch';
 }): IVerifiedAgentPackage {
 	const packageId = createAgentPackageId(options.packageId);
@@ -105,8 +104,9 @@ function createVerifiedPackage(options: {
 			contentDigest,
 			publisher: `publisher.${options.packageId}`,
 			target: hostTarget,
-			runtimeForm: options.runtimeForm ?? 'connected',
-			runtimeEntryPoint: `bin/${options.packageId}`,
+			execution: options.execution === 'host'
+				? { kind: 'host' }
+				: { kind: 'connected', entryPoint: `bin/${options.packageId}` },
 			agentIds: [agentId],
 			dependencies: [{
 				id: 'runtime',
@@ -114,6 +114,7 @@ function createVerifiedPackage(options: {
 				target: `bin/${options.packageId}`,
 				digest: dependencyDigest,
 				license: 'MIT',
+				executable: options.execution !== 'host',
 			}],
 			privileges: [{ kind: 'network', value: 'api.example.test' }],
 		},
@@ -126,6 +127,7 @@ function createVerifiedPackage(options: {
 				? packageDigest('0')
 				: dependencyDigest,
 			license: 'MIT',
+			executable: options.execution !== 'host',
 			immutable: true,
 		}],
 		grantedPrivileges: [{ kind: 'network', value: 'api.example.test' }],
@@ -287,7 +289,7 @@ class ArtifactPort implements IAgentPackageArtifactPort {
 	}
 }
 
-class RuntimePort implements IAgentPackageRuntimePort {
+class RuntimePort implements IAgentPackageActivationPort {
 	readonly registrations = new Map<string, readonly IAgentRuntimeRegistration[]>();
 	readonly activationStates = new Map<AgentPackageOperationId, 'prepared' | 'committed' | 'retired' | 'rolledBack'>();
 	readonly acknowledgedOperations: AgentPackageOperationId[] = [];
@@ -305,7 +307,7 @@ class RuntimePort implements IAgentPackageRuntimePort {
 
 	constructor(private readonly trace: string[]) { }
 
-	async restoreRuntimeState(state: IAgentPackagePersistedState): Promise<void> {
+	async restoreActivationState(state: IAgentPackagePersistedState): Promise<void> {
 		this.restoredStates.push(state);
 	}
 
@@ -321,7 +323,7 @@ class RuntimePort implements IAgentPackageRuntimePort {
 
 	async prepareActivation(
 		installedPackage: IInstalledAgentPackage | null,
-		_previous: Parameters<IAgentPackageRuntimePort['prepareActivation']>[1],
+		_previous: Parameters<IAgentPackageActivationPort['prepareActivation']>[1],
 		operationId: AgentPackageOperationId,
 	): Promise<readonly IAgentRuntimeRegistration[]> {
 		this.trace.push('runtime.prepareActivation');
@@ -339,7 +341,7 @@ class RuntimePort implements IAgentPackageRuntimePort {
 
 	async commitActivation(
 		operationId: AgentPackageOperationId,
-		_transition: Parameters<IAgentPackageRuntimePort['commitActivation']>[1],
+		_transition: Parameters<IAgentPackageActivationPort['commitActivation']>[1],
 	): Promise<void> {
 		this.trace.push('runtime.commitActivation');
 		assert.ok(this.activationStates.get(operationId) === undefined || ['prepared', 'committed'].includes(this.activationStates.get(operationId)!));
@@ -352,7 +354,7 @@ class RuntimePort implements IAgentPackageRuntimePort {
 
 	async retirePreviousActivation(
 		operationId: AgentPackageOperationId,
-		_transition: Parameters<IAgentPackageRuntimePort['retirePreviousActivation']>[1],
+		_transition: Parameters<IAgentPackageActivationPort['retirePreviousActivation']>[1],
 	): Promise<void> {
 		this.trace.push('runtime.retirePreviousActivation');
 		assert.ok(this.activationStates.get(operationId) === undefined || ['committed', 'retired'].includes(this.activationStates.get(operationId)!));
@@ -365,7 +367,7 @@ class RuntimePort implements IAgentPackageRuntimePort {
 
 	async rollbackActivation(
 		operationId: AgentPackageOperationId,
-		_transition: Parameters<IAgentPackageRuntimePort['rollbackActivation']>[1],
+		_transition: Parameters<IAgentPackageActivationPort['rollbackActivation']>[1],
 	): Promise<void> {
 		this.trace.push('runtime.rollbackActivation');
 		assert.ok(this.activationStates.get(operationId) === undefined || ['prepared', 'committed', 'rolledBack'].includes(this.activationStates.get(operationId)!));
@@ -378,7 +380,7 @@ class RuntimePort implements IAgentPackageRuntimePort {
 
 	async acknowledgeActivationOperation(
 		operationId: AgentPackageOperationId,
-		_transition: Parameters<IAgentPackageRuntimePort['acknowledgeActivationOperation']>[1],
+		_transition: Parameters<IAgentPackageActivationPort['acknowledgeActivationOperation']>[1],
 	): Promise<void> {
 		this.trace.push('runtime.acknowledgeActivationOperation');
 		assert.ok(this.activationStates.get(operationId) === undefined || ['retired', 'rolledBack'].includes(this.activationStates.get(operationId)!));
@@ -490,7 +492,7 @@ interface IHarness {
 	readonly trace: string[];
 	readonly stateStore: MemoryStateStore;
 	readonly artifactPort: ArtifactPort;
-	readonly runtimePort: RuntimePort;
+	readonly activationPort: RuntimePort;
 	readonly lifecyclePort: LifecyclePort;
 }
 
@@ -503,15 +505,15 @@ async function createHarness(
 		revision: '1.0.0',
 		digestCharacter: 'a',
 		distribution: 'bundled',
-		runtimeForm: 'embedded',
+		execution: 'host',
 	});
 	const stateStore = new MemoryStateStore(trace);
 	const artifactPort = new ArtifactPort(trace);
-	const runtimePort = new RuntimePort(trace);
+	const activationPort = new RuntimePort(trace);
 	const lifecyclePort = new LifecyclePort(trace);
 	for (const verifiedPackage of packages) {
 		artifactPort.add(verifiedPackage);
-		runtimePort.setRegistrations(verifiedPackage, [createRegistration(verifiedPackage)]);
+		activationPort.setRegistrations(verifiedPackage, [createRegistration(verifiedPackage)]);
 	}
 	const lifecycle = await AgentPackageLifecycle.create({
 		hostTarget,
@@ -522,24 +524,24 @@ async function createHarness(
 		},
 		stateStore,
 		artifactPort,
-		runtimePort,
+		activationPort,
 	});
 	lifecycle.bindLifecyclePort(lifecyclePort);
 	trace.length = 0;
-	return { lifecycle, trace, stateStore, artifactPort, runtimePort, lifecyclePort };
+	return { lifecycle, trace, stateStore, artifactPort, activationPort, lifecyclePort };
 }
 
 async function restartLifecycle(
 	harness: IHarness,
 	packages: readonly IVerifiedAgentPackage[],
-	runtimePort: RuntimePort = harness.runtimePort,
+	activationPort: RuntimePort = harness.activationPort,
 ): Promise<AgentPackageLifecycle> {
 	const comet = createVerifiedPackage({
 		packageId: 'comet',
 		revision: '1.0.0',
 		digestCharacter: 'a',
 		distribution: 'bundled',
-		runtimeForm: 'embedded',
+		execution: 'host',
 	});
 	const lifecycle = await AgentPackageLifecycle.create({
 		hostTarget,
@@ -550,7 +552,7 @@ async function restartLifecycle(
 		},
 		stateStore: harness.stateStore,
 		artifactPort: harness.artifactPort,
-		runtimePort,
+		activationPort,
 	});
 	lifecycle.bindLifecyclePort(harness.lifecyclePort);
 	return lifecycle;
@@ -611,14 +613,14 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			revision: '1.0.0',
 			digestCharacter: 'a',
 			distribution: 'bundled',
-			runtimeForm: 'embedded',
+			execution: 'host',
 		});
 		const secondComet = createVerifiedPackage({
 			packageId: 'comet',
 			revision: '2.0.0',
 			digestCharacter: 'b',
 			distribution: 'bundled',
-			runtimeForm: 'embedded',
+			execution: 'host',
 		});
 		const firstSchema = createAgentResumeSchemaId('resume.v1');
 		const secondSchema = createAgentResumeSchemaId('resume.v2');
@@ -639,7 +641,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			}),
 			stateStore,
 			artifactPort,
-			runtimePort: firstRuntime,
+			activationPort: firstRuntime,
 		});
 		const retained = createBackingRecord({
 			packageId: firstComet.manifest.packageId,
@@ -664,7 +666,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			}),
 			stateStore,
 			artifactPort,
-			runtimePort: failedRuntime,
+			activationPort: failedRuntime,
 		});
 		await failedRuntime.migrationStarted.p;
 		assert.equal(stateStore.state, authoritativeState);
@@ -685,7 +687,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			}),
 			stateStore,
 			artifactPort,
-			runtimePort: retryRuntime,
+			activationPort: retryRuntime,
 		});
 		let snapshot = lifecycle.snapshot();
 		assert.equal(snapshot.installedPackages[0].revision, secondComet.offering.revision);
@@ -713,7 +715,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			}),
 			stateStore,
 			artifactPort,
-			runtimePort: restoredRuntime,
+			activationPort: restoredRuntime,
 		});
 		assert.equal(restoredRuntime.migrationCalls.length, 1);
 		trace.length = 0;
@@ -742,7 +744,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			}),
 			stateStore,
 			artifactPort,
-			runtimePort: completedRuntime,
+			activationPort: completedRuntime,
 		});
 		assert.equal(completedRuntime.migrationCalls.length, 0);
 		await lifecycle.completeRestoredBundledUpdate();
@@ -762,9 +764,9 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		assert.deepStrictEqual(initial.activeRegistrations.map(item => item.agentId), ['comet']);
 		assert.deepStrictEqual(initial.materializedBackings, []);
 		assert.deepStrictEqual(harness.artifactPort.staged, []);
-		assert.equal(harness.runtimePort.restoredStates.length, 1);
+		assert.equal(harness.activationPort.restoredStates.length, 1);
 		assert.deepStrictEqual(
-			harness.runtimePort.restoredStates[0].installedPackages,
+			harness.activationPort.restoredStates[0].installedPackages,
 			initial.installedPackages,
 		);
 
@@ -777,27 +779,15 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		assert.throws(() => Object.assign(dependency, { target: 'changed' }), TypeError);
 	});
 
-	test('rejects embedded user packages and incomplete dependency closures without activation', async () => {
-		const embedded = createVerifiedPackage({
-			packageId: 'embedded-user',
-			revision: '1.0.0',
-			digestCharacter: 'c',
-			runtimeForm: 'embedded',
-		});
+	test('rejects incomplete dependency closures without activation', async () => {
 		const incomplete = createVerifiedPackage({
 			packageId: 'incomplete',
 			revision: '1.0.0',
 			digestCharacter: 'd',
 			closure: 'missing',
 		});
-		const harness = await createHarness([embedded, incomplete]);
+		const harness = await createHarness([incomplete]);
 
-		await assertPackageFailure(harness.lifecycle.install({
-			operationId: createAgentPackageOperationId('install-embedded'),
-			requestDigest: requestDigest('2'),
-			packageId: embedded.manifest.packageId,
-			offering: embedded.offering,
-		}), AgentPackageErrorCode.RuntimeFormDenied);
 		await assertPackageFailure(harness.lifecycle.install({
 			operationId: createAgentPackageOperationId('install-incomplete'),
 			requestDigest: requestDigest('3'),
@@ -806,8 +796,8 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		}), AgentPackageErrorCode.IncompleteDependencyClosure);
 
 		assert.deepStrictEqual(harness.lifecycle.snapshot().installedPackages.map(item => item.packageId), ['comet']);
-		assert.equal(harness.artifactPort.discarded.length, 2);
-		assert.equal(harness.runtimePort.activationStates.size, 0);
+		assert.equal(harness.artifactPort.discarded.length, 1);
+		assert.equal(harness.activationPort.activationStates.size, 0);
 	});
 
 	test('reconciles the same operation and digest while rejecting a conflicting digest', async () => {
@@ -858,15 +848,15 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			revision: '1.0.0',
 			digestCharacter: 'a',
 			distribution: 'bundled',
-			runtimeForm: 'embedded',
+			execution: 'host',
 		});
 		const stateStore = new MemoryStateStore(trace);
 		const artifactPort = new ArtifactPort(trace);
-		const runtimePort = new RuntimePort(trace);
+		const activationPort = new RuntimePort(trace);
 		const lifecyclePort = new LifecyclePort(trace);
 		for (const candidate of packages) {
 			artifactPort.add(candidate);
-			runtimePort.setRegistrations(candidate, [createRegistration(candidate)]);
+			activationPort.setRegistrations(candidate, [createRegistration(candidate)]);
 		}
 		await AgentPackageLifecycle.create({
 			hostTarget,
@@ -874,7 +864,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			bundledComet: { verifiedPackage: comet, registrations: [createRegistration(comet)] },
 			stateStore,
 			artifactPort,
-			runtimePort,
+			activationPort,
 			maximumPersistedOperations: 2,
 		});
 		const base = stateStore.state;
@@ -921,7 +911,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			bundledComet: { verifiedPackage: comet, registrations: [createRegistration(comet)] },
 			stateStore,
 			artifactPort,
-			runtimePort,
+			activationPort,
 			maximumPersistedOperations: 2,
 		});
 		lifecycle.bindLifecyclePort(lifecyclePort);
@@ -958,8 +948,8 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			lifecycle.snapshot().installedPackages.some(candidate => candidate.packageId === reusedPackage.manifest.packageId),
 			true,
 		);
-		assert.ok(runtimePort.acknowledgedOperations.includes(pendingOperation));
-		assert.ok(runtimePort.acknowledgedOperations.includes(evictedOperation));
+		assert.ok(activationPort.acknowledgedOperations.includes(pendingOperation));
+		assert.ok(activationPort.acknowledgedOperations.includes(evictedOperation));
 	});
 
 	test('rejects active and retained cross-package Agent ID claims', async () => {
@@ -1019,10 +1009,10 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			digestCharacter: '3',
 		});
 		const harness = await createHarness([firstRevision, secondRevision]);
-		harness.runtimePort.setRegistrations(firstRevision, [createRegistration(firstRevision, {
+		harness.activationPort.setRegistrations(firstRevision, [createRegistration(firstRevision, {
 			schemas: [oldSchema],
 		})]);
-		harness.runtimePort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
+		harness.activationPort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
 			schemas: [newSchema],
 			migrationEdges: [{ sourceSchema: oldSchema, targetSchema: newSchema }],
 		})]);
@@ -1035,7 +1025,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			data: 'old-resume-state',
 		});
 		await commitBackingRecord(harness.lifecycle, record, true);
-		harness.runtimePort.migrationResult = { schema: newSchema, data: 'new-resume-state' };
+		harness.activationPort.migrationResult = { schema: newSchema, data: 'new-resume-state' };
 		harness.trace.length = 0;
 
 		await harness.lifecycle.update({
@@ -1091,10 +1081,10 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			digestCharacter: '5',
 		});
 		const harness = await createHarness([firstRevision, secondRevision]);
-		harness.runtimePort.setRegistrations(firstRevision, [createRegistration(firstRevision, {
+		harness.activationPort.setRegistrations(firstRevision, [createRegistration(firstRevision, {
 			schemas: [oldSchema],
 		})]);
-		harness.runtimePort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
+		harness.activationPort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
 			schemas: [newSchema],
 			migrationEdges: [{ sourceSchema: oldSchema, targetSchema: newSchema }],
 		})]);
@@ -1107,7 +1097,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		});
 		await commitBackingRecord(harness.lifecycle, record, true);
 		const beforeMigrationFailure = harness.lifecycle.snapshot();
-		harness.runtimePort.migrationError = new Error('injected migration failure');
+		harness.activationPort.migrationError = new Error('injected migration failure');
 
 		await assert.rejects(harness.lifecycle.update({
 			operationId: createAgentPackageOperationId('update-rollback-migration'),
@@ -1123,13 +1113,13 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		assert.deepStrictEqual(afterMigrationFailure.retainedBackingRecords, beforeMigrationFailure.retainedBackingRecords);
 		assert.deepStrictEqual(afterMigrationFailure.materializedBackings, beforeMigrationFailure.materializedBackings);
 		assert.equal(harness.lifecyclePort.mutations.at(-1)?.rollbackCount, 1);
-		assert.ok(harness.runtimePort.acknowledgedOperations.includes(
+		assert.ok(harness.activationPort.acknowledgedOperations.includes(
 			createAgentPackageOperationId('update-rollback-migration'),
 		));
 		assert.equal(harness.artifactPort.discarded.at(-1)?.manifest.revision, secondRevision.manifest.revision);
 
-		harness.runtimePort.migrationError = undefined;
-		harness.runtimePort.migrationResult = { schema: newSchema, data: 'migrated' };
+		harness.activationPort.migrationError = undefined;
+		harness.activationPort.migrationResult = { schema: newSchema, data: 'migrated' };
 		harness.stateStore.failNextCatalogCommit = true;
 		const beforeCommitFailure = harness.lifecycle.snapshot();
 		await assert.rejects(harness.lifecycle.update({
@@ -1213,7 +1203,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		});
 		snapshot = harness.lifecycle.snapshot();
 		assert.deepStrictEqual(snapshot.retainedBackingRecords.map(record => record.identity.sessionId), ['retained-two']);
-		assert.deepStrictEqual(harness.runtimePort.deleteCalls, []);
+		assert.deepStrictEqual(harness.activationPort.deleteCalls, []);
 	});
 
 	test('resumes an Agent-backed deletion batch with the same operation identity', async () => {
@@ -1233,7 +1223,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		for (const record of records) {
 			await commitBackingRecord(harness.lifecycle, record, false);
 		}
-		harness.runtimePort.deleteFailureKey = `${optionalPackage.manifest.packageId}:delete-two`;
+		harness.activationPort.deleteFailureKey = `${optionalPackage.manifest.packageId}:delete-two`;
 		const operationId = createAgentPackageOperationId('delete-agent-data');
 		const digest = requestDigest('5');
 		const request = {
@@ -1262,7 +1252,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		assert.equal(result.affectedRecords, 2);
 		assert.deepStrictEqual(harness.lifecycle.snapshot().retainedBackingRecords, []);
 		assert.deepStrictEqual(
-			harness.runtimePort.deleteCalls.map(identity => identity.sessionId),
+			harness.activationPort.deleteCalls.map(identity => identity.sessionId),
 			['delete-one', 'delete-two', 'delete-two'],
 		);
 	});
@@ -1281,10 +1271,10 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			digestCharacter: '9',
 		});
 		const harness = await createHarness([firstRevision, secondRevision]);
-		harness.runtimePort.setRegistrations(firstRevision, [createRegistration(firstRevision, {
+		harness.activationPort.setRegistrations(firstRevision, [createRegistration(firstRevision, {
 			schemas: [oldSchema],
 		})]);
-		harness.runtimePort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
+		harness.activationPort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
 			schemas: [newSchema],
 		})]);
 		await installPackage(harness, firstRevision, 'install-reinstall-v1', '6');
@@ -1312,11 +1302,11 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			false,
 		);
 
-		harness.runtimePort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
+		harness.activationPort.setRegistrations(secondRevision, [createRegistration(secondRevision, {
 			schemas: [newSchema],
 			migrationEdges: [{ sourceSchema: oldSchema, targetSchema: newSchema }],
 		})]);
-		harness.runtimePort.migrationResult = { schema: newSchema, data: 'reinstalled-state' };
+		harness.activationPort.migrationResult = { schema: newSchema, data: 'reinstalled-state' };
 		await harness.lifecycle.install({
 			operationId: createAgentPackageOperationId('reinstall-compatible'),
 			requestDigest: requestDigest('9'),
@@ -1383,7 +1373,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			}
 			return runtime;
 		};
-		let runtime = harness.runtimePort;
+		let runtime = harness.activationPort;
 
 		const installOperation = createAgentPackageOperationId('restart-install');
 		const installRequest = {
@@ -1431,7 +1421,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		assert.ok(runtime.acknowledgedOperations.includes(uninstallOperation));
 	});
 
-	test('recovers runtimeCommitted after uncertain rollback and terminally rolls back a pre-commit activation', async () => {
+	test('recovers activationCommitted after uncertain rollback and terminally rolls back a pre-commit activation', async () => {
 		const firstPackage = createVerifiedPackage({
 			packageId: 'runtime-phase-agent', revision: '1.0.0', digestCharacter: 'e',
 		});
@@ -1443,7 +1433,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		await installPackage(harness, firstPackage, 'runtime-phase-install', 'e');
 
 		const commitFailureOperation = createAgentPackageOperationId('runtime-commit-failure');
-		harness.runtimePort.failCommitOperation = commitFailureOperation;
+		harness.activationPort.failCommitOperation = commitFailureOperation;
 		await assert.rejects(harness.lifecycle.update({
 			operationId: commitFailureOperation,
 			requestDigest: requestDigest('1'),
@@ -1451,7 +1441,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			offering: secondPackage.offering,
 			authority: 'user',
 		}), /activation commit failure/);
-		assert.ok(harness.runtimePort.acknowledgedOperations.includes(commitFailureOperation));
+		assert.ok(harness.activationPort.acknowledgedOperations.includes(commitFailureOperation));
 
 		const uncertainOperation = createAgentPackageOperationId('runtime-commit-uncertain');
 		const uncertainRequest = {
@@ -1462,11 +1452,11 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			authority: 'user' as const,
 		};
 		harness.stateStore.failNextCatalogCommit = true;
-		harness.runtimePort.failRollbackOperation = uncertainOperation;
+		harness.activationPort.failRollbackOperation = uncertainOperation;
 		await assert.rejects(harness.lifecycle.update(uncertainRequest), AggregateError);
 		const persisted = harness.stateStore.state?.operations.find(candidate => candidate.operation === uncertainOperation);
 		assert.equal(persisted?.status, 'failed');
-		assert.equal(persisted?.phase, 'runtimeCommitted');
+		assert.equal(persisted?.phase, 'activationCommitted');
 		const restartedRuntime = new RuntimePort(harness.trace);
 		for (const candidate of packages) {
 			restartedRuntime.setRegistrations(candidate, [createRegistration(candidate)]);
@@ -1479,13 +1469,13 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		);
 	});
 
-	test('rejects unknown fields in a persisted runtime transition', async () => {
+	test('rejects unknown fields in a persisted activation transition', async () => {
 		const optionalPackage = createVerifiedPackage({
 			packageId: 'strict-transition', revision: '1.0.0', digestCharacter: '3',
 		});
 		const harness = await createHarness([optionalPackage]);
 		const operation = createAgentPackageOperationId('strict-transition-install');
-		harness.runtimePort.failRetireOperation = operation;
+		harness.activationPort.failRetireOperation = operation;
 		await assert.rejects(harness.lifecycle.install({
 			operationId: operation,
 			requestDigest: requestDigest('3'),
@@ -1496,14 +1486,14 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		const corrupt = structuredClone(durable);
 		const persisted = corrupt.operations.find(candidate => candidate.operation === operation)!;
 		assert.ok(persisted.status === 'failed' && persisted.phase === 'catalogCommitted');
-		Object.assign(persisted.runtimeTransition.next!.installedPackage.manifest, { unknown: true });
+		Object.assign(persisted.activationTransition.next!.installedPackage.manifest, { unknown: true });
 		harness.stateStore.state = corrupt;
 		await assert.rejects(restartLifecycle(harness, [optionalPackage]), /Invalid Agent package manifest fields/);
 
 		const nullInstalledPackage = structuredClone(durable);
 		const nullRecord = nullInstalledPackage.operations.find(candidate => candidate.operation === operation)!;
 		assert.ok(nullRecord.status === 'failed' && nullRecord.phase === 'catalogCommitted');
-		(nullRecord.runtimeTransition.next as { installedPackage: unknown }).installedPackage = null;
+		(nullRecord.activationTransition.next as { installedPackage: unknown }).installedPackage = null;
 		harness.stateStore.state = nullInstalledPackage;
 		await assert.rejects(restartLifecycle(harness, [optionalPackage]), error => (
 			error instanceof AgentPackageError

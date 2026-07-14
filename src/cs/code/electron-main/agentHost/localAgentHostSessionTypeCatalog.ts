@@ -18,7 +18,7 @@ import type {
 export interface ILocalAgentHostSessionTypeCatalogEntry {
 	readonly packageId: AgentPackageId;
 	readonly agentId: AgentId;
-	readonly resolveRuntimeRegistrationRevision: (descriptor: IAgentDescriptor) => IAgentRuntimeRegistration['revision'];
+	readonly resolveRegistrationRevision: (descriptor: IAgentDescriptor) => IAgentRuntimeRegistration['revision'];
 	readonly resolve: (descriptor: IAgentDescriptor) => IAgentHostSessionTypeDescriptor;
 }
 
@@ -53,17 +53,17 @@ export class LocalAgentHostSessionTypeCatalog implements IAgentHostSessionTypeCa
 				|| activeAgent.descriptor.revision !== activeAgent.registration.descriptorRevision
 				|| activeAgent.descriptor.capabilities.revision !== activeAgent.registration.capabilityRevision
 			) {
-				throw new Error(`Local Agent Host runtime '${activeAgent.registration.revision}' published a mismatched descriptor`);
+				throw new Error(`Local Agent '${activeAgent.registration.revision}' published a mismatched descriptor`);
 			}
-			if (activeAgent.registration.revision !== entry.resolveRuntimeRegistrationRevision(activeAgent.descriptor)) {
-				throw new Error(`Local Agent Host runtime '${activeAgent.registration.revision}' is outside its product contract`);
+			if (activeAgent.registration.revision !== entry.resolveRegistrationRevision(activeAgent.descriptor)) {
+				throw new Error(`Local Agent '${activeAgent.registration.revision}' is outside its product contract`);
 			}
 			const sessionType = entry.resolve(activeAgent.descriptor);
 			if (
 				sessionType.agentId !== activeAgent.registration.agentId
 				|| sessionType.packageId !== activeAgent.registration.packageId
 			) {
-				throw new Error(`Local Agent Host runtime '${activeAgent.registration.revision}' resolved a mismatched Session type`);
+				throw new Error(`Local Agent '${activeAgent.registration.revision}' resolved a mismatched Session type`);
 			}
 			return sessionType;
 		}));

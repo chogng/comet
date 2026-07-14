@@ -26,7 +26,7 @@ import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/test/mo
 import {
 	createLocalAgentPackageArtifactFile,
 	LocalAgentPackageArtifactPort,
-} from 'cs/code/electron-main/agentHost/localAgentPackageArtifactPort';
+} from 'cs/platform/agentHost/node/packages/localAgentPackageArtifactPort';
 import {
 	createAgentHostPayloadDigest,
 	createAgentPackageOperationId,
@@ -130,7 +130,7 @@ test('local Agent package authority hashes, re-reads, and launches the exact run
 	}
 });
 
-test('local Agent package authority rejects a runtime entry point without one verified dependency', async () => {
+test('local Agent package authority rejects a connected entry point without one verified dependency', async () => {
 	const root = await mkdtemp(path.join(tmpdir(), 'comet-agent-package-entry-'));
 	try {
 		const runtimePath = path.join(root, 'mock-agent-runtime.js');
@@ -144,7 +144,7 @@ test('local Agent package authority rejects a runtime entry point without one ve
 			...product.verifiedPackage,
 			manifest: Object.freeze({
 				...product.verifiedPackage.manifest,
-				runtimeEntryPoint: 'another-runtime.js',
+				execution: Object.freeze({ kind: 'connected' as const, entryPoint: 'another-runtime.js' }),
 			}),
 		});
 		const artifacts = new LocalAgentPackageArtifactPort({
@@ -153,7 +153,7 @@ test('local Agent package authority rejects a runtime entry point without one ve
 		});
 		await assert.rejects(
 			artifacts.stage(product.offering, createAgentPackageOperationId('install-missing-runtime')),
-			/runtime entry point has no verified dependency/,
+			/Connected Agent package entry point has no verified dependency/,
 		);
 	} finally {
 		await removeTestRoot(root);
@@ -354,8 +354,8 @@ test('local Agent package reconciliation retains unresolved revisions and collec
 			packageId: firstInstalled.packageId,
 			affectedRecords: null,
 			status: 'pending' as const,
-			phase: 'runtimePrepared' as const,
-			runtimeTransition: Object.freeze({
+			phase: 'activationPrepared' as const,
+			activationTransition: Object.freeze({
 				previous: Object.freeze({ installedPackage: firstInstalled, registrations: Object.freeze([]) }),
 				next: Object.freeze({ installedPackage: secondInstalled, registrations: Object.freeze([]) }),
 			}),

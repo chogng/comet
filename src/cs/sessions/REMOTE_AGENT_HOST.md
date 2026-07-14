@@ -342,7 +342,7 @@ Explicit tunnel disconnect terminates automatic reconnect for that exact
 endpoint until explicit connect. Network-online or application-resume events
 may resume only a non-suppressed reconnect loop for the same route.
 
-## Packages, runtimes, and credentials
+## Packages, Agents, and credentials
 
 The remote Host owns its package lifecycle and executable target. An explicit
 package operation through `IAgentHostConnection` causes that Host to download,
@@ -354,8 +354,9 @@ to the Host. Package manifests are checked against the Host machine's
 operating system, architecture, policy, and storage roots. Installed and
 activated state is authoritative only on that Host.
 
-User-installed Agents run as connected processes on the Host machine under the
-exact package sandbox and authority. They connect through
+Product-maintained SDK packages activate direct `IAgent` implementations on
+the Host machine. Genuinely external Agent packages run as connected processes
+under the exact package sandbox and authority and connect through
 `IAgentRuntimeConnection`, not through Remote management or Remote Tunnel.
 
 Remote Server credentials, tunnel provider management and relay credentials,

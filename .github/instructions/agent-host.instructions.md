@@ -1,6 +1,6 @@
 ---
-description: Architecture rules for Agent packages, Agent Host, embedded and connected runtimes, and local and remote Host connections.
-applyTo: "{src/cs/platform/agentHost/**,src/cs/sessions/contrib/providers/agentHost/**}"
+description: Architecture rules for Agent packages, direct and connected Agents, Agent Host, and local and remote Host connections.
+applyTo: "{build/agent-sdk/**,src/cs/platform/agentHost/**,src/cs/sessions/contrib/providers/agentHost/**,src/cs/workbench/contrib/preferences/**}"
 ---
 
 # Agent Host
@@ -24,28 +24,28 @@ permissions, calls, results, or executors. Read
 `src/cs/sessions/INTERACTION_TARGETS.md` before changing request-scoped target
 binding, target-backed Tools, or lazy Feature operations.
 
-- Agent Host is the single execution boundary for every Agent runtime.
+- Agent Host is the single execution boundary for every Agent.
 - The `CometAgent` integration has stable Agent ID `comet`; its orchestration
-  runtime may be embedded or connected. The bundled `comet` package is the
-  only default-installed Agent package.
+  implements `IAgent` directly. The bundled `comet` package is the only
+  default-installed Agent package.
 - Copilot, Claude, Codex, and every other optional Agent are absent until the
   user explicitly installs their package for the addressed Host and user
   scope. Installable catalog entries are not installed packages or Agent
   registrations. Session creation, restore, send, model selection, and Agent
-  discovery never install or download a package. User-installed packages
-  always execute as connected runtimes outside the Agent Host process; only a
-  product-bundled Comet composition may use an embedded runtime.
+  discovery never install or download a package. Product-maintained SDK
+  packages use direct Host Agents; genuinely external packages use connected
+  Agents. The manifest declares that execution kind explicitly.
 - Treat one installed revision as the complete verified executable dependency
   closure. Package installation or update must stage every SDK, module, helper,
   and native asset before activation. Session, Turn, authentication, and
-  runtime-start paths never download or replace executable dependencies.
-- Launch user-installed runtimes under the exact sandbox and authority derived
+  Agent-activation paths never download or replace executable dependencies.
+- Launch connected Agents under the exact sandbox and authority derived
   from their verified manifest and Host policy. They receive no ambient Host
   service objects or credential environment; filesystem, network, secret, and
   Tool-executor access never exceeds the committed grant.
-- Agent package ID, package revision, Agent ID, runtime registration,
-  authentication, and runtime materialization are separate. Agent SDKs remain
-  private runtime dependencies and are not the product installation contract.
+- Agent package ID, package revision, Agent ID, registration, authentication,
+  and materialization are separate. Agent SDKs remain private package
+  dependencies and are not the product installation contract.
   Persist every Session and Chat backing with its owning package ID as well as
   its Agent ID. Restoration and resume migration require that same package and
   Agent; a different package that registers the same Agent ID must never claim
@@ -59,7 +59,7 @@ binding, target-backed Tools, or lazy Feature operations.
   checkpoints and releases all materialized backing, and commits migrated
   resume values with the new registrations. Uninstall preserves Host Session
   history and never reassigns Sessions to another Agent. Agent-backed deletion
-  requires the activated runtime; retained Host-record purge is Host-only,
+  requires the activated Agent; retained Host-record purge is Host-only,
   requires absent installed state and registrations, and never claims to delete
   Agent or provider backing. Do not infer package state from product
   configuration, files, environment variables, credentials, or Agent display
@@ -73,17 +73,17 @@ binding, target-backed Tools, or lazy Feature operations.
   failure. The selected lower transport restores its logical connection first;
   Agent Host then reconciles subscriptions, actions, operations, content
   leases, and Tool calls by their exact identities.
-- `cs/platform/agentHost` owns the protocol, runtime, connection contract,
-  Agent registry, Host-side `IAgent` contract, and language-neutral Agent
+- `cs/platform/agentHost` owns the protocol, activation and connection
+  contracts, Agent registry, Host-side `IAgent` contract, and language-neutral Agent
   Runtime Protocol. It never imports Workbench or Sessions.
-- `IAgent` is the single Host-facing semantic port. The product-bundled
-  embedded Comet runtime implements it directly; user-installed Agents and the
-  connected Comet form use `IAgentRuntimeConnection` and the exact wire
+- `IAgent` is the single Host-facing semantic port. Product-bundled Comet and
+  product-maintained Claude or Codex SDK integrations implement it directly.
+  Genuinely external Agents use `IAgentRuntimeConnection` and the exact wire
   projection of the same lifecycle. Do not add a second Agent API.
-- One Host authority accepts one active runtime registration per Agent ID.
+- One Host authority accepts one active registration per Agent ID.
   Registrations declare exact descriptor, capability, Tool Schema Profile, and
-  resume-schema revisions and migration edges. Do not dual-register embedded
-  and connected implementations or switch runtime form after failure.
+  resume-schema revisions and migration edges. Do not dual-register direct
+  and connected implementations or switch execution kind after failure.
 - Connected runtime authentication grants registration authority for exact
   Agent IDs and is separate from product-client transport authentication and
   Agent SDK or model-provider credentials.
@@ -93,9 +93,9 @@ binding, target-backed Tools, or lazy Feature operations.
   values resolve only through that active Turn authority, are never copied into
   configuration, profiles, catalogs, logs, or diagnostics, and have no
   alternate credential source.
-- Agent runtimes own their execution strategy, capabilities, opaque resume
+- Agent implementations own their execution strategy, capabilities, opaque resume
   data, SDK or model-provider calls, event conversion, and Tool projection.
-  The Comet runtime owns Comet's model and Tool orchestration loop. Runtimes
+  The Comet Agent owns Comet's model and Tool orchestration loop. Agents
   never import Sessions, Workbench Chat, UI, or Agent Host client-connection
   implementations.
 - Before attachment and Tool-set preparation, resolve the normalized user or
@@ -104,10 +104,10 @@ binding, target-backed Tools, or lazy Feature operations.
   Agent except for exact Agent and model descriptor revisions. It contains no
   secret, Tool set, executor, runtime endpoint, Host deadline, cancellation
   identity, resume state, or SDK-native object. Comet, Copilot, Claude, Codex,
-  and later runtimes use this same port.
+  and later Agents use this same port.
 - The exact accepted Tool-set revision travels with the Turn request. Do not
-  add a mutable client-origin Tool list beside the Turn. Agent runtimes project
-  the canonical set internally; the Comet runtime consumes it directly and
+  add a mutable client-origin Tool list beside the Turn. Agent implementations project
+  the canonical set internally; the Comet Agent consumes it directly and
   invokes Tools through the Host Tool Execution Port. SDK aliases, dynamic
   functions, private MCP bridges, and model-provider formats never change
   canonical Tool identity or executor.
@@ -139,7 +139,7 @@ binding, target-backed Tools, or lazy Feature operations.
 - Mutating operations reconcile by stable operation ID. Turn submissions also
   bind a payload digest. An uncertain result is reconciled before any resend
   under a new identity.
-- Release unloads runtime backing but preserves catalog identity and resume
+- Release unloads Agent backing but preserves catalog identity and resume
   state. Delete is a recorded destructive operation and is never implemented
   as release plus hidden catalog removal.
 - Turn preparation is Workbench state. Host acceptance commits the user message
@@ -192,7 +192,7 @@ binding, target-backed Tools, or lazy Feature operations.
   depth, entry, and byte limits. Callers never infer attachment support from
   Agent IDs, model IDs, family names, or display names.
 - Turn submission is idempotent by stable submission ID and payload digest.
-  Attachment preparation or Host rejection creates no turn; Agent runtime or
+  Attachment preparation or Host rejection creates no turn; Agent or
   execution-engine failure after Host acceptance completes the committed turn
   as failed.
 - Content references declare ownership, version, and availability scope.

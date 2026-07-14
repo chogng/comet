@@ -44,7 +44,7 @@ import {
 	type AgentHostProtocolValue,
 } from 'cs/platform/agentHost/common/protocolValues';
 import { COMET_TOOL_SCHEMA_PROFILE } from 'cs/platform/agentHost/common/tools';
-import type { ILocalAgentPackageProduct } from '../agentPackageProducts.js';
+import type { ILocalConnectedAgentPackageProduct } from 'cs/platform/agentHost/node/packages/agentPackageProducts';
 import { localAgentRuntimeProcessPrivilege } from '../localAgentRuntimeProtocol.js';
 
 /** Stable runtime and presentation definition for one test-only fake Agent package. */
@@ -82,9 +82,10 @@ export interface IMockAgentRuntimeArtifact {
 }
 
 /** One exact test-owned fake package and its connected runtime definition. */
-export interface IMockAgentPackageProduct extends ILocalAgentPackageProduct {
+export interface IMockAgentPackageProduct extends ILocalConnectedAgentPackageProduct {
+	readonly execution: 'connected';
 	readonly definition: IMockAgentPackageDefinition & {
-		resolveRuntimeRegistrationRevision(descriptor: IAgentDescriptor): IAgentRuntimeRegistration['revision'];
+		resolveRegistrationRevision(descriptor: IAgentDescriptor): IAgentRuntimeRegistration['revision'];
 		resolveSessionType(descriptor: IAgentDescriptor): IAgentHostSessionTypeDescriptor;
 	};
 	readonly offering: IAgentPackageOffering;
@@ -310,6 +311,7 @@ export function createMockAgentPackageProducts(
 			target: mockAgentRuntimeEntryPoint,
 			digest: contentDigest,
 			license: 'MIT',
+			executable: true,
 		});
 		const offering: IAgentPackageOffering = Object.freeze({
 			packageId: definition.packageId,
@@ -326,8 +328,7 @@ export function createMockAgentPackageProducts(
 			contentDigest,
 			publisher: 'Comet',
 			target: targetValue,
-			runtimeForm: 'connected',
-			runtimeEntryPoint: dependency.target,
+			execution: Object.freeze({ kind: 'connected' as const, entryPoint: dependency.target }),
 			agentIds: Object.freeze([definition.agentId]),
 			dependencies: Object.freeze([dependency]),
 			privileges,
@@ -344,7 +345,7 @@ export function createMockAgentPackageProducts(
 		});
 		const productDefinition = Object.freeze({
 			...definition,
-			resolveRuntimeRegistrationRevision: () => definition.registration.revision,
+			resolveRegistrationRevision: () => definition.registration.revision,
 			resolveSessionType: (descriptor: IAgentDescriptor) => {
 				if (descriptor.id !== definition.agentId || descriptor.packageId !== definition.packageId) {
 					throw new Error(`Mock Agent package "${definition.packageId}" received another Agent descriptor.`);
@@ -352,7 +353,13 @@ export function createMockAgentPackageProducts(
 				return definition.sessionType;
 			},
 		});
-		return Object.freeze({ definition: productDefinition, offering, verifiedPackage });
+		return Object.freeze({
+			execution: 'connected' as const,
+			definition: productDefinition,
+			offering,
+			verifiedPackage,
+			credentialBindings: Object.freeze([]),
+		});
 	}));
 }
 

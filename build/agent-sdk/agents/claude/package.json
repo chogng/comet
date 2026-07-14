@@ -1,0 +1,8 @@
+{
+  "name": "comet-agent-sdk-claude",
+  "private": true,
+  "description": "Pinned dependency graph used to produce the Claude Agent SDK product artifact.",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.208"
+  }
+}

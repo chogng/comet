@@ -90,7 +90,7 @@ import { runAgentHostSubscriptionConformanceScenario } from 'cs/platform/agentHo
 import {
 	AgentPackageLifecycle,
 	type IAgentPackageArtifactPort,
-	type IAgentPackageRuntimePort,
+	type IAgentPackageActivationPort,
 	type IAgentPackageStateStore,
 } from 'cs/platform/agentHost/node/packages/agentPackageLifecycle';
 import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
@@ -453,8 +453,7 @@ function bundledPackage(revision: string, digestCharacter: string): IVerifiedAge
 			contentDigest,
 			publisher: 'comet',
 			target: packageTarget,
-			runtimeForm: 'embedded' as const,
-			runtimeEntryPoint: 'product/comet',
+			execution: Object.freeze({ kind: 'host' as const }),
 			agentIds: Object.freeze([agentId]),
 			dependencies: Object.freeze([Object.freeze({
 				id: 'runtime',
@@ -462,6 +461,7 @@ function bundledPackage(revision: string, digestCharacter: string): IVerifiedAge
 				target: 'product/comet',
 				digest: dependencyDigest,
 				license: 'MIT',
+				executable: false,
 			})]),
 			privileges: Object.freeze([]),
 		}),
@@ -472,6 +472,7 @@ function bundledPackage(revision: string, digestCharacter: string): IVerifiedAge
 			digest: dependencyDigest,
 			verifiedDigest: dependencyDigest,
 			license: 'MIT',
+			executable: false,
 			immutable: true,
 		})]),
 		grantedPrivileges: Object.freeze([]),
@@ -497,8 +498,7 @@ function optionalPackage(revision: string, digestCharacter: string): IVerifiedAg
 			contentDigest,
 			publisher: 'optional-publisher',
 			target: packageTarget,
-			runtimeForm: 'connected' as const,
-			runtimeEntryPoint: 'bin/optional-agent',
+			execution: Object.freeze({ kind: 'connected' as const, entryPoint: 'bin/optional-agent' }),
 			agentIds: Object.freeze([optionalAgentId]),
 			dependencies: Object.freeze([Object.freeze({
 				id: 'runtime',
@@ -506,6 +506,7 @@ function optionalPackage(revision: string, digestCharacter: string): IVerifiedAg
 				target: 'bin/optional-agent',
 				digest: dependencyDigest,
 				license: 'MIT',
+				executable: true,
 			})]),
 			privileges: Object.freeze([]),
 		}),
@@ -516,6 +517,7 @@ function optionalPackage(revision: string, digestCharacter: string): IVerifiedAg
 			digest: dependencyDigest,
 			verifiedDigest: dependencyDigest,
 			license: 'MIT',
+			executable: true,
 			immutable: true,
 		})]),
 		grantedPrivileges: Object.freeze([]),
@@ -537,8 +539,8 @@ async function createPackageLifecycle(
 		discard: async () => undefined,
 	};
 	const activationStates = new Map<AgentPackageOperationId, 'prepared' | 'committed' | 'retired' | 'rolledBack'>();
-	const runtimePort: IAgentPackageRuntimePort = {
-		restoreRuntimeState: async () => undefined,
+	const activationPort: IAgentPackageActivationPort = {
+		restoreActivationState: async () => undefined,
 		prepareActivation: async (installedPackage, _previous, operationId) => {
 			activationStates.set(operationId, 'prepared');
 			return installedPackage === null ? Object.freeze([]) : Object.freeze([stagedRegistration]);
@@ -556,7 +558,7 @@ async function createPackageLifecycle(
 		bundledComet: Object.freeze({ verifiedPackage: bundledPackage('1.0.0', 'a'), registrations: Object.freeze([registration]) }),
 		stateStore,
 		artifactPort,
-		runtimePort,
+		activationPort,
 	});
 }
 
@@ -599,8 +601,8 @@ async function createOptionalPackageLifecycle(
 			},
 			discard: async () => undefined,
 		},
-		runtimePort: {
-			restoreRuntimeState: async () => undefined,
+		activationPort: {
+			restoreActivationState: async () => undefined,
 			prepareActivation: async (installedPackage, _previous, operationId) => {
 				activationStates.set(operationId, 'prepared');
 				if (installedPackage === null) {

@@ -7,23 +7,21 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, lstat, mkdir, realpath, rm } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 
-import {
-	createSdkMcpServer,
-	deleteSession as deleteClaudeSession,
-	query as claudeQuery,
-	tool as claudeTool,
-	type Options as ClaudeAgentSdkOptions,
-	type PermissionMode,
-	type Query,
-	type ModelInfo,
-	type SDKMessage,
-	type SessionStore,
+import type {
+	Options as ClaudeAgentSdkOptions,
+	PermissionMode,
+	Query,
+	ModelInfo,
+	SDKMessage,
+	SessionStore,
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 import { DeferredPromise } from 'cs/base/common/async';
+import { CancellationTokenNone } from 'cs/base/common/cancellation';
 import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable } from 'cs/base/common/lifecycle';
+import { type IObservable, observableValue } from 'cs/base/common/observable';
 import {
 	CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
 	CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
@@ -36,12 +34,13 @@ import {
 	CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
 	createClaudeAgentDescriptor,
 	createClaudeAgentModelConfigurationSchema,
-	createClaudeAgentRuntimeRegistration,
-	createClaudeAgentRuntimeRegistrationRevision,
+	createClaudeAgentRegistration,
+	createClaudeAgentRegistrationRevision,
 	type ClaudeAgentThinkingLevel,
-} from 'cs/code/common/agentHost/claudeAgentPackage';
+} from './claudeAgentDefinition.js';
 import type {
 	IAgentDescriptor,
+	IAgent,
 	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	IAgentAction,
 	IAgentCancelTurnRequest,
@@ -53,6 +52,7 @@ import type {
 	IAgentDeleteSessionRequest,
 	IAgentExecutionProfile,
 	IAgentExecutionProfileRequest,
+	IAgentExecutionProfiles,
 	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
 	IAgentMaterializeChatRequest,
@@ -62,11 +62,16 @@ import type {
 	IAgentReleaseSessionRequest,
 	IAgentResolvedSessionConfiguration,
 	IAgentResolveSessionConfigurationRequest,
+	IAgentResumeStates,
 	IAgentResumeMigrationRequest,
 	IAgentResumeState,
+	IAgentRuntimeRegistration,
 	IAgentSessionConfigurationCompletionRequest,
 	IAgentSessionBacking,
+	IAgentSessions,
 	IAgentSteerRequest,
+	IAgentChats,
+	IAgentConfiguration,
 	AgentTurnResponsePart,
 } from 'cs/platform/agentHost/common/agent';
 import {
@@ -77,26 +82,7 @@ import {
 	type IAgentConfigurationCompletion,
 	type IAgentConfigurationState,
 } from 'cs/platform/agentHost/common/configuration';
-import type {
-	AgentRuntimeConnectionState,
-	AgentRuntimeDisconnectReason,
-	AgentRuntimeHostOperation,
-	AgentRuntimeHostOperationOutcome,
-	AgentRuntimeHostOperationValue,
-	AgentRuntimeOperationOutcome,
-	IAgentRuntimeAction,
-	IAgentRuntimeCall,
-	IAgentRuntimeConnection,
-	IAgentRuntimeHostOperationProgress,
-	IAgentRuntimeHostOperationRequest,
-	IAgentRuntimeHostOperationResponse,
-	IAgentRuntimeInitializeRequest,
-	IAgentRuntimeInitializeResult,
-	IAgentRuntimeOperationOutcomeRequest,
-	IAgentRuntimeResponse,
-} from 'cs/platform/agentHost/common/connections';
-import { selectAgentRuntimeProtocolVersion } from 'cs/platform/agentHost/common/connections';
-import type { IAgentCredentialReference } from 'cs/platform/agentHost/common/credentials';
+import type { IAgentCredentialReference, IAgentCredentialResolver } from 'cs/platform/agentHost/common/credentials';
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import {
 	createAgentExecutionProfileDigest,
@@ -106,22 +92,12 @@ import {
 	createAgentHostOperationId,
 	createAgentModelDescriptorRevision,
 	createAgentModelId,
-	createAgentRuntimeActionSequence,
-	createAgentRuntimeConnectionGeneration,
-	createAgentRuntimeConnectionId,
-	createAgentRuntimeHostOperationId,
-	createAgentRuntimeProtocolVersion,
 	createAgentToolCallId,
 	type AgentChatId,
 	type AgentHostOperationId,
 	type AgentHostPayloadDigest,
 	type AgentModelId,
 	type AgentPackageRevision,
-	type AgentRuntimeCallId,
-	type AgentRuntimeConnectionGeneration,
-	type AgentRuntimeConnectionId,
-	type AgentRuntimeHostOperationId,
-	type AgentRuntimeRegistrationRevision,
 	type AgentSessionId,
 } from 'cs/platform/agentHost/common/identities';
 import {
@@ -137,33 +113,40 @@ import {
 	type AgentToolResult,
 	type CometToolSchemaNode,
 	type IAgentToolCall,
+	type IAgentToolExecutionPort,
 	type IAgentToolRegistration,
 } from 'cs/platform/agentHost/common/tools';
 import { ClaudeAgentSessionStore } from './claudeAgentSessionStore.js';
 
-const claudeRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('2');
 const claudeMcpServerName = 'comet';
 const claudeSdkSessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export interface IClaudeAgentRuntimeRetentionLimits {
+export interface IClaudeAgentRetentionLimits {
 	readonly maximumRetainedOperations: number;
 	readonly maximumRetainedTerminalTurns: number;
 }
 
-export const productClaudeAgentRuntimeRetentionLimits: IClaudeAgentRuntimeRetentionLimits = Object.freeze({
+export const productClaudeAgentRetentionLimits: IClaudeAgentRetentionLimits = Object.freeze({
 	maximumRetainedOperations: 4_096,
 	maximumRetainedTerminalTurns: 4_096,
 });
 
-export interface IClaudeAgentRuntimeOptions extends IClaudeAgentRuntimeRetentionLimits {
+/** Exact SDK bindings loaded from the installed Claude package receipt. */
+export interface IClaudeAgentSdk {
+	readonly createSdkMcpServer: typeof import('@anthropic-ai/claude-agent-sdk')['createSdkMcpServer'];
+	readonly deleteSession: typeof import('@anthropic-ai/claude-agent-sdk')['deleteSession'];
+	readonly query: typeof import('@anthropic-ai/claude-agent-sdk')['query'];
+	readonly tool: typeof import('@anthropic-ai/claude-agent-sdk')['tool'];
+}
+
+export interface IClaudeAgentOptions extends IClaudeAgentRetentionLimits {
 	readonly packageRevision: AgentPackageRevision;
-	readonly connection: AgentRuntimeConnectionId;
-	readonly generation: AgentRuntimeConnectionGeneration;
 	readonly claudeCodeExecutable: string;
 	readonly stateDirectory: string;
 	readonly cacheDirectory: string;
-	readonly query?: typeof claudeQuery;
-	readonly deleteSession?: typeof deleteClaudeSession;
+	readonly toolExecution: IAgentToolExecutionPort;
+	readonly credentialResolver: IAgentCredentialResolver;
+	readonly sdk: IClaudeAgentSdk;
 	readonly sessionStore?: SessionStore;
 }
 
@@ -207,15 +190,8 @@ interface IClaudeConfigurationTransaction {
 	state: 'prepared' | 'committed' | 'rolledBack';
 }
 
-interface IClaudeHostOperationState {
-	readonly parentCall: AgentRuntimeCallId;
-	readonly registration: AgentRuntimeRegistrationRevision;
-	readonly agent: typeof CLAUDE_AGENT_ID;
-	readonly completion: DeferredPromise<AgentRuntimeHostOperationOutcome>;
-}
-
 interface IClaudeActiveTurn {
-	readonly request: IAgentRuntimeCall<IAgentChatRequest>;
+	readonly request: IAgentChatRequest;
 	readonly abortController: AbortController;
 	query?: Query;
 }
@@ -234,24 +210,10 @@ interface IClaudeDiscoveredModel {
 	readonly descriptor: IAgentDescriptor['models'][number];
 }
 
-function response<TRequest, TValue>(
-	request: IAgentRuntimeCall<TRequest>,
-	value: TValue,
-): IAgentRuntimeResponse<TValue> {
-	return Object.freeze({
-		connection: request.connection,
-		generation: request.generation,
-		call: request.call,
-		registration: request.registration,
-		agent: request.agent,
-		value,
-	});
-}
-
 function resourceMissing(resource: string): never {
 	throw new AgentHostError(
 		AgentHostErrorCode.ResourceMissing,
-		'Claude Agent Runtime resource is missing',
+		'Claude Agent resource is missing',
 		{ resource },
 	);
 }
@@ -331,122 +293,108 @@ function inputShape(registration: IAgentToolRegistration): z.ZodRawShape {
 	return shape;
 }
 
-/** Connected Claude Agent SDK runtime with Host-owned credentials and Tool execution. */
-export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConnection {
-	private readonly disconnectEmitter = this._register(new Emitter<Extract<
-		AgentRuntimeConnectionState,
-		{ readonly kind: 'disconnected' }
-	>>());
-	private readonly actionEmitter = this._register(new Emitter<IAgentRuntimeAction>());
-	private readonly hostOperationEmitter = this._register(new Emitter<IAgentRuntimeHostOperationRequest>());
-	private readonly sessions = new Map<AgentSessionId, IClaudeSessionState>();
+/** Claude Agent SDK implementation owned directly by Agent Host Node. */
+export class ClaudeAgent extends Disposable implements IAgent {
+	readonly id = CLAUDE_AGENT_ID;
+	descriptor!: IObservable<IAgentDescriptor>;
+	registration!: IAgentRuntimeRegistration;
+
+	private readonly actionEmitter = this._register(new Emitter<IAgentAction>());
+	readonly onDidEmitAction: Event<IAgentAction> = this.actionEmitter.event;
+
+	readonly executionProfiles: IAgentExecutionProfiles = {
+		resolve: request => this.resolveExecutionProfile(request),
+	};
+
+	readonly configuration: IAgentConfiguration = {
+		resolveSession: request => this.resolveSessionConfiguration(request),
+		completeSession: request => this.completeSessionConfiguration(request),
+		prepareSessionUpdate: request => this.prepareSessionConfigurationUpdate(request),
+		commitSessionUpdate: request => this.commitSessionConfigurationUpdate(request),
+		rollbackSessionUpdate: request => this.rollbackSessionConfigurationUpdate(request),
+		acknowledgeSessionUpdate: request => this.acknowledgeSessionConfigurationUpdate(request),
+	};
+
+	readonly sessions: IAgentSessions = {
+		create: request => this.createSession(request),
+		materialize: request => this.materializeSession(request),
+		release: request => this.releaseSession(request),
+		delete: request => this.deleteSession(request),
+	};
+
+	readonly chats: IAgentChats = {
+		create: request => this.createChat(request),
+		materialize: request => this.materializeChat(request),
+		release: request => this.releaseChat(request),
+		fork: request => this.forkChat(request),
+		send: request => this.send(request),
+		steer: request => this.steer(request),
+		cancel: request => this.cancel(request),
+		delete: request => this.deleteChat(request),
+	};
+
+	readonly resumeStates: IAgentResumeStates = {
+		migrate: request => this.migrateResumeState(request),
+	};
+
+	private readonly sessionStates = new Map<AgentSessionId, IClaudeSessionState>();
 	private readonly operations = new Map<AgentHostOperationId, IClaudeOperationState>();
 	private readonly configurationTransactions = new Map<AgentHostOperationId, IClaudeConfigurationTransaction>();
-	private readonly hostOperations = new Map<AgentRuntimeHostOperationId, IClaudeHostOperationState>();
 	private readonly activeTurns = new Map<string, IClaudeActiveTurn>();
 	private readonly terminalTurns = new Set<string>();
 	private readonly packageRevision: AgentPackageRevision;
 	private readonly claudeCodeExecutable: string;
 	private readonly stateDirectory: string;
 	private readonly cacheDirectory: string;
-	private readonly query: typeof claudeQuery;
-	private readonly deleteClaudeSession: typeof deleteClaudeSession;
+	private readonly toolExecution: IAgentToolExecutionPort;
+	private readonly credentialResolver: IAgentCredentialResolver;
+	private readonly sdk: IClaudeAgentSdk;
 	private readonly sessionStore: SessionStore;
 	private readonly maximumRetainedOperations: number;
 	private readonly maximumRetainedTerminalTurns: number;
 	private cacheRootPromise: Promise<string> | undefined;
-	private stateValue: AgentRuntimeConnectionState;
-	private descriptor: IAgentDescriptor | undefined;
-	private registration: ReturnType<typeof createClaudeAgentRuntimeRegistration> | undefined;
+	private descriptorValue: IAgentDescriptor | undefined;
 	private discoveredModels: ReadonlyMap<AgentModelId, IClaudeDiscoveredModel> = new Map();
-	private initializationState: 'notStarted' | 'initializing' | 'initialized' | 'failed' = 'notStarted';
-	private nextActionSequence = 1;
-	private nextHostOperation = 1;
 	private nextToolCall = 1;
 
-	readonly connection: AgentRuntimeConnectionId;
-	readonly generation: AgentRuntimeConnectionGeneration;
-	readonly onDidDisconnect = this.disconnectEmitter.event;
-	readonly onDidReconnect = Event.None;
-	readonly onDidEmitAction = this.actionEmitter.event;
-	readonly onDidRequestHostOperation = this.hostOperationEmitter.event;
-
-	constructor(options: IClaudeAgentRuntimeOptions) {
+	private constructor(options: IClaudeAgentOptions) {
 		super();
 		if (
 			!isAbsolute(options.claudeCodeExecutable)
 			|| !isAbsolute(options.stateDirectory)
 			|| !isAbsolute(options.cacheDirectory)
 		) {
-			throw new Error('Claude Agent Runtime paths must be absolute.');
+			throw new Error('Claude Agent paths must be absolute.');
 		}
 		this.packageRevision = options.packageRevision;
-		this.connection = createAgentRuntimeConnectionId(options.connection);
-		this.generation = createAgentRuntimeConnectionGeneration(options.generation);
 		this.claudeCodeExecutable = options.claudeCodeExecutable;
 		this.stateDirectory = options.stateDirectory;
 		this.cacheDirectory = options.cacheDirectory;
-		this.query = options.query ?? claudeQuery;
-		this.deleteClaudeSession = options.deleteSession ?? deleteClaudeSession;
+		this.toolExecution = options.toolExecution;
+		this.credentialResolver = options.credentialResolver;
+		this.sdk = options.sdk;
 		this.sessionStore = options.sessionStore ?? new ClaudeAgentSessionStore(join(this.stateDirectory, 'sessions-v1'));
 		this.maximumRetainedOperations = this.validateRetentionLimit(options.maximumRetainedOperations, 'maximumRetainedOperations');
 		this.maximumRetainedTerminalTurns = this.validateRetentionLimit(options.maximumRetainedTerminalTurns, 'maximumRetainedTerminalTurns');
-		this.stateValue = Object.freeze({ kind: 'connected', connection: this.connection, generation: this.generation });
 	}
 
-	get state(): AgentRuntimeConnectionState {
-		return this.stateValue;
-	}
-
-	async initialize(request: IAgentRuntimeInitializeRequest): Promise<IAgentRuntimeInitializeResult> {
-		this.assertConnected();
-		if (this.initializationState !== 'notStarted') {
-			throw new AgentHostError(
-				AgentHostErrorCode.InvalidProtocolValue,
-				'Claude Agent Runtime was already initialized',
-				{ field: 'initialize', value: 'repeated' },
-			);
-		}
-		if (
-			request.connection !== this.connection
-			|| request.generation !== this.generation
-			|| request.packageId !== CLAUDE_AGENT_PACKAGE_ID
-			|| request.packageRevision !== this.packageRevision
-			|| request.authorizedAgents.length !== 1
-			|| request.authorizedAgents[0] !== CLAUDE_AGENT_ID
-		) {
-			throw new AgentHostError(
-				AgentHostErrorCode.InvalidProtocolValue,
-				'Claude Agent Runtime initialization authority does not match',
-				{ field: 'initialize.authority', value: request.packageId },
-			);
-		}
-		const protocolVersion = selectAgentRuntimeProtocolVersion(
-			request.protocolVersions,
-			Object.freeze([claudeRuntimeProtocolVersion]),
-		);
-		this.initializationState = 'initializing';
+	static async create(options: IClaudeAgentOptions): Promise<ClaudeAgent> {
+		const agent = new ClaudeAgent(options);
 		try {
-			const catalog = await this.discoverModelCatalog();
-			this.descriptor = catalog.descriptor;
-			this.registration = createClaudeAgentRuntimeRegistration(catalog.descriptor.revision);
-			this.discoveredModels = catalog.models;
-			this.initializationState = 'initialized';
+			await agent.initialize();
+			return agent;
 		} catch (error) {
-			this.initializationState = 'failed';
+			agent.dispose();
 			throw error;
 		}
-		return Object.freeze({
-			connection: request.connection,
-			generation: request.generation,
-			call: request.call,
-			protocolVersion,
-			transportLimits: Object.freeze({ ...request.transportLimits }),
-			registrations: Object.freeze([Object.freeze({
-				registration: this.registration,
-				descriptor: this.descriptor,
-			})]),
-		});
+	}
+
+	private async initialize(): Promise<void> {
+		const catalog = await this.discoverModelCatalog();
+		this.descriptorValue = catalog.descriptor;
+		this.descriptor = observableValue('ClaudeAgent.descriptor', catalog.descriptor);
+		this.registration = createClaudeAgentRegistration(catalog.descriptor.revision);
+		this.discoveredModels = catalog.models;
 	}
 
 	private async discoverModelCatalog(): Promise<{
@@ -458,7 +406,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		const prompt = (async function* () {
 			await closePrompt.p;
 		})();
-		const query = this.query({
+		const query = this.sdk.query({
 			prompt,
 			options: {
 				cwd: cacheDirectory,
@@ -586,47 +534,44 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	}
 
 	resolveSessionConfiguration(
-		request: IAgentRuntimeCall<IAgentResolveSessionConfigurationRequest>,
-	): Promise<IAgentRuntimeResponse<IAgentResolvedSessionConfiguration>> {
-		this.assertCall(request);
-		const hostDefaults = validateAndFreezeAgentConfigurationState(request.request.hostDefaults, {
+		request: IAgentResolveSessionConfigurationRequest,
+	): Promise<IAgentResolvedSessionConfiguration> {
+		const hostDefaults = validateAndFreezeAgentConfigurationState(request.hostDefaults, {
 			agent: CLAUDE_AGENT_ID,
 			scope: 'hostDefault',
 			revision: this.requireRegistration().hostDefaultsSchema.revision,
 		});
 		const candidate = validateAndFreezeAgentConfigurationCandidate(
 			CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
-			request.request.candidate,
+			request.candidate,
 			'session',
 		);
-		return Promise.resolve(response(request, Object.freeze({
+		return Promise.resolve(Object.freeze({
 			schema: CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
 			values: resolveAgentSessionConfigurationValues(
 				CLAUDE_AGENT_SESSION_CONFIGURATION_SCHEMA,
 				hostDefaults.values,
 				candidate.values,
 			),
-		})));
+		}));
 	}
 
 	completeSessionConfiguration(
-		request: IAgentRuntimeCall<IAgentSessionConfigurationCompletionRequest>,
-	): Promise<IAgentRuntimeResponse<readonly IAgentConfigurationCompletion[]>> {
-		this.assertCall(request);
+		request: IAgentSessionConfigurationCompletionRequest,
+	): Promise<readonly IAgentConfigurationCompletion[]> {
 		return Promise.reject(new AgentHostError(
 			AgentHostErrorCode.CapabilityUnsupported,
 			'Claude Agent configuration uses static enum values',
-			{ capability: `configurationCompletion:${request.request.property}` },
+			{ capability: `configurationCompletion:${request.property}` },
 		));
 	}
 
 	prepareSessionConfigurationUpdate(
-		request: IAgentRuntimeCall<IAgentPrepareSessionConfigurationUpdateRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		const session = this.requireSession(request.request.session);
-		const current = this.validateSessionConfiguration(request.request.current);
-		const candidate = this.validateSessionConfiguration(request.request.candidate);
+		request: IAgentPrepareSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const session = this.requireSession(request.session);
+		const current = this.validateSessionConfiguration(request.current);
+		const candidate = this.validateSessionConfiguration(request.candidate);
 		if (current.revision !== session.configuration.revision) {
 			return Promise.reject(new AgentHostError(
 				AgentHostErrorCode.StaleConfigurationSchema,
@@ -634,118 +579,114 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 				{ expected: session.configuration.revision, received: current.revision },
 			));
 		}
-		this.beginOperation(request.request.operation, request.request.payloadDigest);
-		const existing = this.configurationTransactions.get(request.request.operation);
+		this.beginOperation(request.operation, request.payloadDigest);
+		const existing = this.configurationTransactions.get(request.operation);
 		if (existing === undefined) {
-			this.configurationTransactions.set(request.request.operation, {
-				digest: request.request.payloadDigest,
-				session: request.request.session,
+			this.configurationTransactions.set(request.operation, {
+				digest: request.payloadDigest,
+				session: request.session,
 				current,
 				candidate,
 				state: 'prepared',
 			});
 		} else if (
-			existing.digest !== request.request.payloadDigest
-			|| existing.session !== request.request.session
+			existing.digest !== request.payloadDigest
+			|| existing.session !== request.session
 			|| existing.candidate.revision !== candidate.revision
 		) {
-			this.digestConflict(request.request.operation, existing.digest, request.request.payloadDigest);
+			this.digestConflict(request.operation, existing.digest, request.payloadDigest);
 		}
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
 	commitSessionConfigurationUpdate(
-		request: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		const transaction = this.requireConfigurationTransaction(request.request.operation, request.request.payloadDigest);
-		if (transaction.candidate.revision !== request.request.configuration) {
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const transaction = this.requireConfigurationTransaction(request.operation, request.payloadDigest);
+		if (transaction.candidate.revision !== request.configuration) {
 			return Promise.reject(new AgentHostError(
 				AgentHostErrorCode.StaleConfigurationSchema,
 				'Claude Agent Session configuration decision is stale',
-				{ expected: transaction.candidate.revision, received: request.request.configuration },
+				{ expected: transaction.candidate.revision, received: request.configuration },
 			));
 		}
 		if (transaction.state === 'prepared') {
 			this.requireSession(transaction.session).configuration = transaction.candidate;
 			transaction.state = 'committed';
-			this.completeOperation(request.request.operation, null);
+			this.completeOperation(request.operation, null);
 		}
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
 	rollbackSessionConfigurationUpdate(
-		request: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		const transaction = this.configurationTransactions.get(request.request.operation);
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const transaction = this.configurationTransactions.get(request.operation);
 		if (transaction === undefined) {
-			this.beginOperation(request.request.operation, request.request.payloadDigest);
-			this.completeOperation(request.request.operation, null);
-			return Promise.resolve(response(request, null));
+			this.beginOperation(request.operation, request.payloadDigest);
+			this.completeOperation(request.operation, null);
+			return Promise.resolve();
 		}
-		this.assertOperationDigest(request.request.operation, transaction.digest, request.request.payloadDigest);
-		if (transaction.candidate.revision !== request.request.configuration) {
+		this.assertOperationDigest(request.operation, transaction.digest, request.payloadDigest);
+		if (transaction.candidate.revision !== request.configuration) {
 			return Promise.reject(new AgentHostError(
 				AgentHostErrorCode.StaleConfigurationSchema,
 				'Claude Agent Session rollback decision is stale',
-				{ expected: transaction.candidate.revision, received: request.request.configuration },
+				{ expected: transaction.candidate.revision, received: request.configuration },
 			));
 		}
 		if (transaction.state === 'prepared') {
 			transaction.state = 'rolledBack';
-			this.completeOperation(request.request.operation, null);
+			this.completeOperation(request.operation, null);
 		}
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
 	acknowledgeSessionConfigurationUpdate(
-		request: IAgentRuntimeCall<IAgentAcknowledgeSessionConfigurationUpdateRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		const transaction = this.configurationTransactions.get(request.request.operation);
+		request: IAgentAcknowledgeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const transaction = this.configurationTransactions.get(request.operation);
 		if (transaction !== undefined) {
-			this.assertOperationDigest(request.request.operation, transaction.digest, request.request.payloadDigest);
+			this.assertOperationDigest(request.operation, transaction.digest, request.payloadDigest);
 			const expectedDecision = transaction.state === 'committed' ? 'commit' : 'rollback';
-			if (transaction.state === 'prepared' || request.request.decision !== expectedDecision) {
+			if (transaction.state === 'prepared' || request.decision !== expectedDecision) {
 				return Promise.reject(new AgentHostError(
 					AgentHostErrorCode.OperationNotPending,
 					'Claude Agent Session configuration decision is not terminal',
-					{ operation: request.request.operation },
+					{ operation: request.operation },
 				));
 			}
-			this.configurationTransactions.delete(request.request.operation);
+			this.configurationTransactions.delete(request.operation);
 		}
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
 	resolveExecutionProfile(
-		request: IAgentRuntimeCall<IAgentExecutionProfileRequest>,
-	): Promise<IAgentRuntimeResponse<IAgentExecutionProfile>> {
-		this.assertCall(request);
-		const sessionConfiguration = this.validateSessionConfiguration(request.request.sessionConfiguration);
+		request: IAgentExecutionProfileRequest,
+	): Promise<IAgentExecutionProfile> {
+		const sessionConfiguration = this.validateSessionConfiguration(request.sessionConfiguration);
 		if (
-			request.request.selection.kind !== 'user'
-			|| !exactRecord(request.request.selection.value, ['model'])
-			|| typeof request.request.selection.value.model !== 'string'
+			request.selection.kind !== 'user'
+			|| !exactRecord(request.selection.value, ['model'])
+			|| typeof request.selection.value.model !== 'string'
 		) {
 			throw new AgentHostError(
 				AgentHostErrorCode.InvalidProtocolValue,
 				'Claude Agent execution requires an explicit discovered model',
-				{ field: 'executionProfile.selection', value: request.request.selection.kind },
+				{ field: 'executionProfile.selection', value: request.selection.kind },
 			);
 		}
-		const discoveredModel = this.discoveredModels.get(createAgentModelId(request.request.selection.value.model));
+		const discoveredModel = this.discoveredModels.get(createAgentModelId(request.selection.value.model));
 		if (discoveredModel === undefined) {
 			throw new AgentHostError(
 				AgentHostErrorCode.InvalidProtocolValue,
 				'Claude Agent execution selected an unknown model',
-				{ field: 'executionProfile.selection.model', value: request.request.selection.value.model },
+				{ field: 'executionProfile.selection.model', value: request.selection.value.model },
 			);
 		}
 		const modelConfiguration = resolveAgentModelConfigurationCandidate(
 			discoveredModel.descriptor.configurationSchema,
-			request.request.selection.configuration,
+			request.selection.configuration,
 		);
 		const permissionMode = sessionConfiguration.values[CLAUDE_AGENT_PERMISSION_MODE_PROPERTY];
 		const thinkingLevel = modelConfiguration.values[CLAUDE_AGENT_THINKING_LEVEL_PROPERTY] ?? null;
@@ -775,40 +716,38 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			credential,
 		}));
 		const digest = createHash('sha256').update(data).digest('hex');
-		return Promise.resolve(response(request, Object.freeze({
+		return Promise.resolve(Object.freeze({
 			revision: createAgentExecutionProfileRevision(`claude-agent-sdk:${digest}`),
 			digest: createAgentExecutionProfileDigest(`sha256:${digest}`),
 			agentDescriptor: this.requireDescriptor().revision,
 			modelDescriptor: discoveredModel.descriptor.revision,
 			data,
-		})));
+		}));
 	}
 
 	migrateResumeState(
-		request: IAgentRuntimeCall<IAgentResumeMigrationRequest>,
-	): Promise<IAgentRuntimeResponse<IAgentResumeState>> {
-		this.assertCall(request);
+		request: IAgentResumeMigrationRequest,
+	): Promise<IAgentResumeState> {
 		return Promise.reject(new AgentHostError(
 			AgentHostErrorCode.CapabilityUnsupported,
-			'Claude Agent Runtime declares no resume migration edge',
-			{ capability: `resumeMigration:${request.request.source.schema}:${request.request.targetSchema}` },
+			'Claude Agent declares no resume migration edge',
+			{ capability: `resumeMigration:${request.source.schema}:${request.targetSchema}` },
 		));
 	}
 
 	createSession(
-		request: IAgentRuntimeCall<IAgentCreateSessionOptions>,
-	): Promise<IAgentRuntimeResponse<IAgentSessionBacking>> {
-		this.assertCall(request);
-		const value = this.runOperation(request.request.operation, request.request.payloadDigest, () => {
-			if (this.sessions.has(request.request.session)) {
-				return resourceMissing(`sessionAlreadyExists:${request.request.session}`);
+		request: IAgentCreateSessionOptions,
+	): Promise<IAgentSessionBacking> {
+		const value = this.runOperation(request.operation, request.payloadDigest, () => {
+			if (this.sessionStates.has(request.session)) {
+				return resourceMissing(`sessionAlreadyExists:${request.session}`);
 			}
 			const resume: IClaudeSessionResumeData = Object.freeze({
 				kind: 'claude-agent-sdk-session',
 				version: 2,
-				workingDirectory: request.request.workspace?.folders[0]?.workingDirectory ?? this.stateDirectory,
+				workingDirectory: request.workspace?.folders[0]?.workingDirectory ?? this.stateDirectory,
 				additionalDirectories: Object.freeze(
-					request.request.workspace?.folders.slice(1).map(folder => folder.workingDirectory) ?? [],
+					request.workspace?.folders.slice(1).map(folder => folder.workingDirectory) ?? [],
 				),
 			});
 			const workspaceDirectories = [resume.workingDirectory, ...resume.additionalDirectories];
@@ -820,27 +759,26 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 					field: 'workspace.folders.workingDirectory', value: 'invalid',
 				});
 			}
-			this.sessions.set(request.request.session, {
-				configuration: this.validateSessionConfiguration(request.request.configuration),
+			this.sessionStates.set(request.session, {
+				configuration: this.validateSessionConfiguration(request.configuration),
 				resume,
 				materialized: true,
 				chats: new Map(),
 			});
-			return Object.freeze({ session: request.request.session, resume: this.resumeState(resume) });
+			return Object.freeze({ session: request.session, resume: this.resumeState(resume) });
 		});
-		return Promise.resolve(response(request, value as IAgentSessionBacking));
+		return Promise.resolve(value as IAgentSessionBacking);
 	}
 
 	materializeSession(
-		request: IAgentRuntimeCall<IAgentMaterializeSessionRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		this.runOperation(request.request.operation, request.request.payloadDigest, () => {
-			const configuration = this.validateSessionConfiguration(request.request.configuration);
-			const existing = this.sessions.get(request.request.session);
+		request: IAgentMaterializeSessionRequest,
+	): Promise<void> {
+		this.runOperation(request.operation, request.payloadDigest, () => {
+			const configuration = this.validateSessionConfiguration(request.configuration);
+			const existing = this.sessionStates.get(request.session);
 			if (existing === undefined) {
-				const resume = this.parseSessionResume(request.request.resume);
-				this.sessions.set(request.request.session, {
+				const resume = this.parseSessionResume(request.resume);
+				this.sessionStates.set(request.session, {
 					configuration,
 					resume,
 					materialized: true,
@@ -852,61 +790,56 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			}
 			return null;
 		});
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
 	releaseSession(
-		request: IAgentRuntimeCall<IAgentReleaseSessionRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		this.runOperation(request.request.operation, request.request.payloadDigest, () => {
-			const session = this.requireSession(request.request.session);
+		request: IAgentReleaseSessionRequest,
+	): Promise<void> {
+		this.runOperation(request.operation, request.payloadDigest, () => {
+			const session = this.requireSession(request.session);
 			session.materialized = false;
 			for (const chat of session.chats.values()) { chat.materialized = false; }
 			return null;
 		});
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
 	async deleteSession(
-		request: IAgentRuntimeCall<IAgentDeleteSessionRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		await this.runAsyncOperation(request.request.operation, request.request.payloadDigest, async () => {
-			const session = this.sessions.get(request.request.session);
+		request: IAgentDeleteSessionRequest,
+	): Promise<void> {
+		await this.runAsyncOperation(request.operation, request.payloadDigest, async () => {
+			const session = this.sessionStates.get(request.session);
 			if (session !== undefined) {
 				for (const chat of session.chats.values()) {
 					await this.deleteChatBacking(session, chat);
 					await this.clearSdkCache(chat.resume.sdkSessionId);
 				}
 			}
-			this.sessions.delete(request.request.session);
-			this.deleteTerminalTurns(`${request.request.session}\u0000`);
+			this.sessionStates.delete(request.session);
+			this.deleteTerminalTurns(`${request.session}\u0000`);
 			return null;
 		});
-		return response(request, null);
 	}
 
 	createChat(
-		request: IAgentRuntimeCall<IAgentCreateChatOptions>,
-	): Promise<IAgentRuntimeResponse<IAgentChatBacking>> {
-		this.assertCall(request);
-		const value = this.runOperation(request.request.operation, request.request.payloadDigest, () => (
-			this.createChatState(request.request.session, request.request.chat)
+		request: IAgentCreateChatOptions,
+	): Promise<IAgentChatBacking> {
+		const value = this.runOperation(request.operation, request.payloadDigest, () => (
+			this.createChatState(request.session, request.chat)
 		));
-		return Promise.resolve(response(request, value as IAgentChatBacking));
+		return Promise.resolve(value as IAgentChatBacking);
 	}
 
 	materializeChat(
-		request: IAgentRuntimeCall<IAgentMaterializeChatRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		this.runOperation(request.request.operation, request.request.payloadDigest, () => {
-			const session = this.requireMaterializedSession(request.request.session);
-			const existing = session.chats.get(request.request.chat);
+		request: IAgentMaterializeChatRequest,
+	): Promise<void> {
+		this.runOperation(request.operation, request.payloadDigest, () => {
+			const session = this.requireMaterializedSession(request.session);
+			const existing = session.chats.get(request.chat);
 			if (existing === undefined) {
-				session.chats.set(request.request.chat, {
-					resume: this.parseChatResume(request.request.resume),
+				session.chats.set(request.chat, {
+					resume: this.parseChatResume(request.resume),
 					materialized: true,
 				});
 			} else {
@@ -914,22 +847,20 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			}
 			return null;
 		});
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
 	releaseChat(
-		request: IAgentRuntimeCall<IAgentReleaseChatRequest>,
-	): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		this.runOperation(request.request.operation, request.request.payloadDigest, () => {
-			this.requireChat(request.request.session, request.request.chat).materialized = false;
+		request: IAgentReleaseChatRequest,
+	): Promise<void> {
+		this.runOperation(request.operation, request.payloadDigest, () => {
+			this.requireChat(request.session, request.chat).materialized = false;
 			return null;
 		});
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
-	forkChat(request: IAgentRuntimeCall<IAgentForkChatRequest>): Promise<IAgentRuntimeResponse<IAgentChatBacking>> {
-		this.assertCall(request);
+	forkChat(_request: IAgentForkChatRequest): Promise<IAgentChatBacking> {
 		return Promise.reject(new AgentHostError(
 			AgentHostErrorCode.CapabilityUnsupported,
 			'Claude Agent SDK chat forking is not supported',
@@ -937,36 +868,35 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		));
 	}
 
-	async send(request: IAgentRuntimeCall<IAgentChatRequest>): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		const chat = this.requireMaterializedChat(request.request.session, request.request.chat);
-		if (request.request.attachments.length !== 0 || request.request.interactionTargets.length !== 0) {
+	async send(request: IAgentChatRequest): Promise<void> {
+		const chat = this.requireMaterializedChat(request.session, request.chat);
+		if (request.attachments.length !== 0 || request.interactionTargets.length !== 0) {
 			throw new AgentHostError(
 				AgentHostErrorCode.CapabilityUnsupported,
-				'Claude Agent SDK runtime does not declare attachments or interaction targets',
+				'Claude Agent SDK does not declare attachments or interaction targets',
 				{ capability: 'turn.content' },
 			);
 		}
-		const operation = this.operations.get(request.request.operation);
+		const operation = this.operations.get(request.operation);
 		if (operation !== undefined) {
-			this.assertOperationDigest(request.request.operation, operation.digest, request.request.payloadDigest);
-			if (operation.state === 'completed') { return response(request, null); }
+			this.assertOperationDigest(request.operation, operation.digest, request.payloadDigest);
+			if (operation.state === 'completed') { return; }
 			throw new AgentHostError(
 				AgentHostErrorCode.OperationNotPending,
-				'Claude Agent Runtime operation is already pending',
-				{ operation: request.request.operation },
+				'Claude Agent operation is already pending',
+				{ operation: request.operation },
 			);
 		}
-		const turn = this.turnKey(request.request.session, request.request.chat, request.request.turn);
+		const turn = this.turnKey(request.session, request.chat, request.turn);
 		if (this.activeTurns.has(turn)) {
 			throw new AgentHostError(AgentHostErrorCode.OperationNotPending, 'Claude Turn is already active', {
-				operation: request.request.operation,
+				operation: request.operation,
 			});
 		}
-		this.beginOperation(request.request.operation, request.request.payloadDigest);
+		this.beginOperation(request.operation, request.payloadDigest);
 		if (this.terminalTurns.has(turn)) {
-			this.completeOperation(request.request.operation, null);
-			return response(request, null);
+			this.completeOperation(request.operation, null);
+			return;
 		}
 		const active: IClaudeActiveTurn = {
 			request,
@@ -975,9 +905,9 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		this.activeTurns.set(turn, active);
 		this.emit(request, Object.freeze({
 			kind: 'turnProgress',
-			session: request.request.session,
-			chat: request.request.chat,
-			turn: request.request.turn,
+			session: request.session,
+			chat: request.chat,
+			turn: request.turn,
 			progress: Object.freeze({ kind: 'state', state: 'running' }),
 		}));
 
@@ -993,13 +923,11 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		} finally {
 			active.query?.close();
 			this.activeTurns.delete(turn);
-			this.completeOperation(request.request.operation, null);
+			this.completeOperation(request.operation, null);
 		}
-		return response(request, null);
 	}
 
-	steer(request: IAgentRuntimeCall<IAgentSteerRequest>): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
+	steer(_request: IAgentSteerRequest): Promise<void> {
 		return Promise.reject(new AgentHostError(
 			AgentHostErrorCode.CapabilityUnsupported,
 			'Claude Agent SDK steering is not supported',
@@ -1007,111 +935,52 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		));
 	}
 
-	cancel(request: IAgentRuntimeCall<IAgentCancelTurnRequest>): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		this.requireMaterializedChat(request.request.session, request.request.chat);
-		this.runOperation(request.request.operation, request.request.payloadDigest, () => {
-			const turn = this.turnKey(request.request.session, request.request.chat, request.request.turn);
+	cancel(request: IAgentCancelTurnRequest): Promise<void> {
+		this.requireMaterializedChat(request.session, request.chat);
+		this.runOperation(request.operation, request.payloadDigest, () => {
+			const turn = this.turnKey(request.session, request.chat, request.turn);
 			const active = this.activeTurns.get(turn);
 			if (active !== undefined) {
 				active.abortController.abort();
 				active.query?.close();
-				this.cancelHostOperations(active.request.call);
 			}
 			if (!this.terminalTurns.has(turn)) {
 				this.emitTerminal(request, 'cancelled');
 			}
 			return null;
 		});
-		return Promise.resolve(response(request, null));
+		return Promise.resolve();
 	}
 
-	async deleteChat(request: IAgentRuntimeCall<IAgentDeleteChatRequest>): Promise<IAgentRuntimeResponse<null>> {
-		this.assertCall(request);
-		await this.runAsyncOperation(request.request.operation, request.request.payloadDigest, async () => {
-			const session = this.sessions.get(request.request.session);
-			const chat = session?.chats.get(request.request.chat);
+	async deleteChat(request: IAgentDeleteChatRequest): Promise<void> {
+		await this.runAsyncOperation(request.operation, request.payloadDigest, async () => {
+			const session = this.sessionStates.get(request.session);
+			const chat = session?.chats.get(request.chat);
 			if (session !== undefined && chat !== undefined) {
 				await this.deleteChatBacking(session, chat);
 				await this.clearSdkCache(chat.resume.sdkSessionId);
-				session.chats.delete(request.request.chat);
+				session.chats.delete(request.chat);
 			}
-			this.deleteTerminalTurns(`${request.request.session}\u0000${request.request.chat}\u0000`);
+			this.deleteTerminalTurns(`${request.session}\u0000${request.chat}\u0000`);
 			return null;
 		});
-		return response(request, null);
-	}
-
-	getOperationOutcome(
-		request: IAgentRuntimeCall<IAgentRuntimeOperationOutcomeRequest>,
-	): Promise<IAgentRuntimeResponse<AgentRuntimeOperationOutcome>> {
-		this.assertCall(request);
-		const operation = this.operations.get(request.request.operation);
-		const outcome: AgentRuntimeOperationOutcome = operation === undefined
-			? Object.freeze({ kind: 'unknown' })
-			: operation.digest !== request.request.digest
-				? Object.freeze({ kind: 'conflict', recordedDigest: operation.digest })
-				: operation.state === 'pending'
-					? Object.freeze({ kind: 'pending' })
-					: Object.freeze({ kind: 'completed', value: operation.value });
-		return Promise.resolve(response(request, outcome));
-	}
-
-	reportHostOperationProgress(progress: IAgentRuntimeHostOperationProgress): Promise<void> {
-		this.assertConnectedEnvelope(progress);
-		const operation = this.hostOperations.get(progress.operation);
-		if (
-			operation === undefined
-			|| operation.parentCall !== progress.parentCall
-			|| operation.registration !== progress.registration
-			|| operation.agent !== progress.agent
-		) {
-			return Promise.reject(new AgentHostError(
-				AgentHostErrorCode.OperationNotFound,
-				'Claude Agent Runtime has no matching Host operation',
-				{ operation: progress.operation },
-			));
-		}
-		return Promise.resolve();
-	}
-
-	completeHostOperation(result: IAgentRuntimeHostOperationResponse): Promise<void> {
-		this.assertConnectedEnvelope(result);
-		const operation = this.hostOperations.get(result.operation);
-		if (
-			operation === undefined
-			|| operation.parentCall !== result.parentCall
-			|| operation.registration !== result.registration
-			|| operation.agent !== result.agent
-		) {
-			return Promise.reject(new AgentHostError(
-				AgentHostErrorCode.OperationNotFound,
-				'Claude Agent Runtime has no matching Host operation',
-				{ operation: result.operation },
-			));
-		}
-		this.hostOperations.delete(result.operation);
-		operation.completion.complete(result.outcome);
-		return Promise.resolve();
 	}
 
 	private async runClaudeTurn(active: IClaudeActiveTurn, chat: IClaudeChatState): Promise<void> {
 		const request = active.request;
-		const profile = this.executionProfile(request.request.binding.profile.data);
-		const credential = this.requireCredential(request.request.binding.credentials, profile.credential);
-		const apiKey = await this.requestHostValue(request, {
-			kind: 'credential.resolve',
+		const profile = this.executionProfile(request.binding.profile.data);
+		const credential = this.requireCredential(request.binding.credentials, profile.credential);
+		const apiKey = await this.credentialResolver.resolve({
+			packageId: CLAUDE_AGENT_PACKAGE_ID,
+			agentId: CLAUDE_AGENT_ID,
+			runtimeRegistration: this.registration.revision,
+			session: request.session,
+			chat: request.chat,
+			turn: request.turn,
 			credential,
-		});
-		if (typeof apiKey !== 'string') {
-			throw new AgentHostError(
-				AgentHostErrorCode.CredentialUnavailable,
-				'Claude API credential is unavailable',
-				{ provider: credential.provider, scope: credential.scope },
-			);
-		}
+		}, CancellationTokenNone);
 		const registrationsBySdkName = new Map<string, IAgentToolRegistration>();
-		const sdkTools = request.request.binding.toolSet.registrations.map(registration => {
+		const sdkTools = request.binding.toolSet.registrations.map(registration => {
 			const sdkName = `mcp__${claudeMcpServerName}__${registration.descriptor.functionName}`;
 			if (registrationsBySdkName.has(sdkName)) {
 				throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude SDK Tool names are not unique', {
@@ -1119,7 +988,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 				});
 			}
 			registrationsBySdkName.set(sdkName, registration);
-			return claudeTool(
+			return this.sdk.tool(
 				registration.descriptor.functionName,
 				registration.descriptor.description,
 				inputShape(registration),
@@ -1130,16 +999,16 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		const sdkCacheDirectory = await this.resolveSdkCache(chat.resume.sdkSessionId);
 		const options: ClaudeAgentSdkOptions = {
 			abortController: active.abortController,
-			additionalDirectories: [...this.requireSession(request.request.session).resume.additionalDirectories],
+			additionalDirectories: [...this.requireSession(request.session).resume.additionalDirectories],
 			allowDangerouslySkipPermissions: permissionMode === 'bypassPermissions',
 			canUseTool: async (toolName, input) => registrationsBySdkName.has(toolName)
 				? Object.freeze({ behavior: 'allow', updatedInput: input })
 				: Object.freeze({ behavior: 'deny', message: `Tool "${toolName}" is outside the accepted Host Tool set.` }),
-			cwd: this.requireSession(request.request.session).resume.workingDirectory,
+			cwd: this.requireSession(request.session).resume.workingDirectory,
 			env: this.claudeEnvironment(apiKey, sdkCacheDirectory),
 			includePartialMessages: false,
 			mcpServers: {
-				[claudeMcpServerName]: createSdkMcpServer({
+				[claudeMcpServerName]: this.sdk.createSdkMcpServer({
 					name: claudeMcpServerName,
 					version: '1.0.0',
 					tools: sdkTools,
@@ -1182,19 +1051,19 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 				? { effort: profile.thinkingLevel as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
 				: {}),
 		};
-		const stream = this.query({ prompt: request.request.message, options });
+		const stream = this.sdk.query({ prompt: request.message, options });
 		active.query = stream;
 		let terminal = false;
 		for await (const message of stream) {
 			terminal = this.consumeSdkMessage(request, chat, message) || terminal;
 		}
-		if (!terminal && !this.terminalTurns.has(this.turnKey(request.request.session, request.request.chat, request.request.turn))) {
+		if (!terminal && !this.terminalTurns.has(this.turnKey(request.session, request.chat, request.turn))) {
 			throw new Error('Claude Agent SDK ended without a terminal result.');
 		}
 	}
 
 	private consumeSdkMessage(
-		request: IAgentRuntimeCall<IAgentChatRequest>,
+		request: IAgentChatRequest,
 		chat: IClaudeChatState,
 		message: SDKMessage,
 	): boolean {
@@ -1206,8 +1075,8 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 				chat.resume = Object.freeze({ ...chat.resume, started: true });
 				this.emit(request, Object.freeze({
 					kind: 'chatResumeStateChanged',
-					session: request.request.session,
-					chat: request.request.chat,
+					session: request.session,
+					chat: request.chat,
 					resume: this.resumeState(chat.resume),
 				}));
 			}
@@ -1239,7 +1108,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	}
 
 	private async executeTool(
-		request: IAgentRuntimeCall<IAgentChatRequest>,
+		request: IAgentChatRequest,
 		registration: IAgentToolRegistration,
 		input: Record<string, unknown>,
 	): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
@@ -1251,9 +1120,8 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 			tool: call.tool,
 			input: call.input,
 		}));
-		const value = await this.requestHostValue(request, { kind: 'tool.execute', call });
-		assertAgentToolResult(value);
-		const result: AgentToolResult = value;
+		const result: AgentToolResult = await this.toolExecution.execute(call, () => undefined);
+		assertAgentToolResult(result);
 		if (result.call !== call.id) {
 			throw new Error('Claude Host Tool result identity changed.');
 		}
@@ -1276,23 +1144,23 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	}
 
 	private async createToolCall(
-		request: IAgentRuntimeCall<IAgentChatRequest>,
+		request: IAgentChatRequest,
 		registration: IAgentToolRegistration,
 		input: AgentHostProtocolValue,
 	): Promise<IAgentToolCall> {
-		const id = createAgentToolCallId(`claude-sdk:${request.request.turn}:${this.nextToolCall++}`);
+		const id = createAgentToolCallId(`claude-sdk:${request.turn}:${this.nextToolCall++}`);
 		const deadline = Math.min(
-			request.request.binding.deadline,
+			request.binding.deadline,
 			Date.now() + registration.descriptor.limits.timeoutMilliseconds,
 		);
 		const common = Object.freeze({
 			id,
 			agent: CLAUDE_AGENT_ID,
 			registration: this.requireRegistration().revision,
-			session: request.request.session,
-			chat: request.request.chat,
-			turn: request.request.turn,
-			toolSet: request.request.binding.toolSet.revision,
+			session: request.session,
+			chat: request.chat,
+			turn: request.turn,
+			toolSet: request.binding.toolSet.revision,
 			tool: registration.descriptor.id,
 			descriptor: registration.descriptor.revision,
 			registrationId: registration.id,
@@ -1303,7 +1171,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		if (registration.descriptor.safety === 'read') {
 			return Object.freeze({ ...common, effect: Object.freeze({ kind: 'read' }) });
 		}
-		const operation = createAgentHostOperationId(`claude-sdk-tool:${request.request.turn}:${this.nextToolCall}`);
+		const operation = createAgentHostOperationId(`claude-sdk-tool:${request.turn}:${this.nextToolCall}`);
 		const payloadDigest = await computeAgentToolMutationPayloadDigest({
 			...common,
 			effect: Object.freeze({ kind: 'mutation', operation }),
@@ -1316,7 +1184,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 
 	private async deleteChatBacking(session: IClaudeSessionState, chat: IClaudeChatState): Promise<void> {
 		if (chat.resume.started) {
-			await this.deleteClaudeSession(chat.resume.sdkSessionId, {
+			await this.sdk.deleteSession(chat.resume.sdkSessionId, {
 				dir: session.resume.workingDirectory,
 				sessionStore: this.sessionStore,
 			});
@@ -1402,47 +1270,6 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		return cacheRoot;
 	}
 
-	private async requestHostValue(
-		parent: IAgentRuntimeCall<IAgentChatRequest>,
-		request: AgentRuntimeHostOperation,
-	): Promise<AgentRuntimeHostOperationValue> {
-		const operation = createAgentRuntimeHostOperationId(
-			`claude-sdk-host:${parent.request.turn}:${this.nextHostOperation++}`,
-		);
-		const completion = new DeferredPromise<AgentRuntimeHostOperationOutcome>();
-		this.hostOperations.set(operation, {
-			parentCall: parent.call,
-			registration: this.requireRegistration().revision,
-			agent: CLAUDE_AGENT_ID,
-			completion,
-		});
-		this.hostOperationEmitter.fire(Object.freeze({
-			connection: this.connection,
-			generation: this.generation,
-			operation,
-			parentCall: parent.call,
-			registration: this.requireRegistration().revision,
-			agent: CLAUDE_AGENT_ID,
-			request,
-		}));
-		const outcome = await completion.p;
-		if (outcome.kind === 'completed') {
-			return outcome.value;
-		}
-		if (outcome.kind === 'cancelled') {
-			throw new Error('Claude Host operation was cancelled.');
-		}
-		throw new Error(outcome.message);
-	}
-
-	private cancelHostOperations(parentCall: AgentRuntimeCallId): void {
-		for (const operation of this.hostOperations.values()) {
-			if (operation.parentCall === parentCall) {
-				operation.completion.complete(Object.freeze({ kind: 'cancelled' }));
-			}
-		}
-	}
-
 	private executionProfile(data: string): IClaudeExecutionProfileData {
 		let value: unknown;
 		try { value = JSON.parse(data); } catch { value = undefined; }
@@ -1520,27 +1347,26 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	}
 
 	private requireDescriptor(): IAgentDescriptor {
-		if (this.descriptor === undefined) {
+		if (this.descriptorValue === undefined) {
 			throw new AgentHostError(
 				AgentHostErrorCode.InvalidProtocolValue,
-				'Claude Agent Runtime descriptor is unavailable before initialization',
-				{ field: 'runtime.descriptor', value: 'uninitialized' },
+				'Claude Agent descriptor is unavailable before initialization',
+				{ field: 'agent.descriptor', value: 'uninitialized' },
 			);
 		}
-		return this.descriptor;
+		return this.descriptorValue;
 	}
 
-	private requireRegistration(): ReturnType<typeof createClaudeAgentRuntimeRegistration> {
+	private requireRegistration(): ReturnType<typeof createClaudeAgentRegistration> {
 		const descriptor = this.requireDescriptor();
 		if (
-			this.registration === undefined
-			|| this.registration.descriptorRevision !== descriptor.revision
-			|| this.registration.revision !== createClaudeAgentRuntimeRegistrationRevision(descriptor.revision)
+			this.registration.descriptorRevision !== descriptor.revision
+			|| this.registration.revision !== createClaudeAgentRegistrationRevision(descriptor.revision)
 		) {
 			throw new AgentHostError(
 				AgentHostErrorCode.InvalidProtocolValue,
-				'Claude Agent Runtime registration is unavailable before initialization',
-				{ field: 'runtime.registration', value: 'uninitialized' },
+				'Claude Agent registration does not match its descriptor',
+				{ field: 'agent.registration', value: 'mismatch' },
 			);
 		}
 		return this.registration;
@@ -1617,7 +1443,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	}
 
 	private requireSession(sessionId: AgentSessionId): IClaudeSessionState {
-		return this.sessions.get(sessionId) ?? resourceMissing(`session:${sessionId}`);
+		return this.sessionStates.get(sessionId) ?? resourceMissing(`session:${sessionId}`);
 	}
 
 	private requireMaterializedSession(sessionId: AgentSessionId): IClaudeSessionState {
@@ -1637,44 +1463,36 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		return chat;
 	}
 
-	private emitResponsePart(request: IAgentRuntimeCall<IAgentChatRequest>, part: AgentTurnResponsePart): void {
+	private emitResponsePart(request: IAgentChatRequest, part: AgentTurnResponsePart): void {
 		this.emit(request, Object.freeze({
 			kind: 'turnProgress',
-			session: request.request.session,
-			chat: request.request.chat,
-			turn: request.request.turn,
+			session: request.session,
+			chat: request.chat,
+			turn: request.turn,
 			progress: Object.freeze({ kind: 'response', part }),
 		}));
 	}
 
 	private emitTerminal(
-		request: IAgentRuntimeCall<IAgentChatRequest | IAgentCancelTurnRequest>,
+		request: IAgentChatRequest | IAgentCancelTurnRequest,
 		state: 'completed' | 'cancelled' | 'failed',
 		data?: AgentHostProtocolValue,
 	): void {
-		const turn = this.turnKey(request.request.session, request.request.chat, request.request.turn);
+		const turn = this.turnKey(request.session, request.chat, request.turn);
 		if (this.terminalTurns.has(turn)) { return; }
 		this.emit(request, Object.freeze({
 			kind: 'turnTerminal',
-			session: request.request.session,
-			chat: request.request.chat,
-			turn: request.request.turn,
+			session: request.session,
+			chat: request.chat,
+			turn: request.turn,
 			state,
 			...(data === undefined ? {} : { data }),
 		}));
 		this.recordTerminalTurn(turn);
 	}
 
-	private emit<TRequest>(request: IAgentRuntimeCall<TRequest>, action: IAgentAction): void {
-		this.actionEmitter.fire(Object.freeze({
-			connection: this.connection,
-			generation: this.generation,
-			sequence: createAgentRuntimeActionSequence(this.nextActionSequence++),
-			call: request.call,
-			registration: request.registration,
-			agent: request.agent,
-			action,
-		}));
+	private emit(_request: IAgentChatRequest | IAgentCancelTurnRequest, action: IAgentAction): void {
+		this.actionEmitter.fire(action);
 	}
 
 	private turnKey(session: AgentSessionId, chat: AgentChatId, turn: string): string {
@@ -1705,7 +1523,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		if (existing !== undefined) {
 			this.assertOperationDigest(operation, existing.digest, digest);
 			if (existing.state === 'completed') { return existing.value as unknown as TValue; }
-			throw new AgentHostError(AgentHostErrorCode.OperationNotPending, 'Claude Agent Runtime operation is already pending', { operation });
+			throw new AgentHostError(AgentHostErrorCode.OperationNotPending, 'Claude Agent operation is already pending', { operation });
 		}
 		this.beginOperation(operation, digest);
 		try {
@@ -1728,7 +1546,7 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 		if (existing !== undefined) {
 			this.assertOperationDigest(operation, existing.digest, digest);
 			if (existing.state === 'completed') { return existing.value as unknown as TValue; }
-			throw new AgentHostError(AgentHostErrorCode.OperationNotPending, 'Claude Agent Runtime operation is already pending', { operation });
+			throw new AgentHostError(AgentHostErrorCode.OperationNotPending, 'Claude Agent operation is already pending', { operation });
 		}
 		this.beginOperation(operation, digest);
 		try {
@@ -1788,79 +1606,26 @@ export class ClaudeAgentRuntime extends Disposable implements IAgentRuntimeConne
 	): never {
 		throw new AgentHostError(
 			AgentHostErrorCode.OperationDigestConflict,
-			'Claude Agent Runtime operation digest conflicts with the recorded operation',
+			'Claude Agent operation digest conflicts with the recorded operation',
 			{ operation, recordedDigest, receivedDigest },
 		);
 	}
 
-	private validateRetentionLimit(value: number, field: keyof IClaudeAgentRuntimeRetentionLimits): number {
+	private validateRetentionLimit(value: number, field: keyof IClaudeAgentRetentionLimits): number {
 		if (!Number.isSafeInteger(value) || value <= 0) {
-			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude Agent Runtime retention limit is invalid', {
+			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude Agent retention limit is invalid', {
 				field, value,
 			});
 		}
 		return value;
 	}
 
-	private assertCall<TRequest>(request: IAgentRuntimeCall<TRequest>): void {
-		this.assertConnectedEnvelope(request);
-		if (
-			this.initializationState !== 'initialized'
-			|| request.registration !== this.requireRegistration().revision
-			|| request.agent !== CLAUDE_AGENT_ID
-		) {
-			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude Agent Runtime call authority does not match', {
-				field: 'runtimeCall.authority', value: request.agent,
-			});
-		}
-	}
-
-	private assertConnectedEnvelope(value: {
-		readonly connection: AgentRuntimeConnectionId;
-		readonly generation: AgentRuntimeConnectionGeneration;
-	}): void {
-		this.assertConnected();
-		if (value.connection !== this.connection || value.generation !== this.generation) {
-			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude Agent Runtime connection generation does not match', {
-				field: 'connection', value: value.connection,
-			});
-		}
-	}
-
-	private assertConnected(): void {
-		if (this.stateValue.kind !== 'connected') {
-			throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'Claude Agent Runtime is disconnected', {
-				field: 'state', value: this.stateValue.kind,
-			});
-		}
-	}
-
-	disconnect(reason: Exclude<AgentRuntimeDisconnectReason, 'disposed'>): void {
-		this.terminate(reason);
-	}
-
-	private terminate(reason: AgentRuntimeDisconnectReason): void {
-		if (this.stateValue.kind === 'disconnected') { return; }
+	override dispose(): void {
 		for (const active of this.activeTurns.values()) {
 			active.abortController.abort();
 			active.query?.close();
 		}
-		for (const operation of this.hostOperations.values()) {
-			operation.completion.complete(Object.freeze({ kind: 'cancelled' }));
-		}
-		this.hostOperations.clear();
-		const state = Object.freeze({
-			kind: 'disconnected' as const,
-			connection: this.connection,
-			generation: this.generation,
-			reason,
-		});
-		this.stateValue = state;
-		this.disconnectEmitter.fire(state);
+		this.activeTurns.clear();
 		super.dispose();
-	}
-
-	override dispose(): void {
-		this.terminate('disposed');
 	}
 }

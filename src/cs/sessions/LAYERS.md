@@ -85,16 +85,16 @@ Contains the environment-neutral Host protocol, Host connection contract,
 Agent package manifests, catalogs and operations, Agent registry, normalized
 content-resource contracts, canonical Tool and executor-binding contracts,
 Host-side `IAgent` port, language-neutral Agent Runtime Protocol, Node Host
-runtime, package verification and activation, connected-runtime support, and
-the product-bundled embedded Comet runtime. As a Platform subsystem it may
+implementation, package verification and activation, connected-Agent support,
+and product-maintained Host Agents. As a Platform subsystem it may
 import only Base and Platform modules. It never imports Editor, Workbench,
 Sessions, or Code.
 
-The product-bundled embedded Comet runtime implements `IAgent` directly.
-User-installed Agents and the bundled connected Comet form implement the same
-semantics through `IAgentRuntimeConnection` and the Agent Runtime Protocol.
-Each runtime owns its SDK or model-provider projection; the Comet runtime owns
-Comet orchestration regardless of packaging. They do not implement
+Product-maintained Agents implement `IAgent` directly under `node/agents/`.
+Genuinely external Agents implement the same semantics through
+`IAgentRuntimeConnection` and the Agent Runtime Protocol. Each Agent owns its
+SDK or model-provider projection; the Comet Agent owns Comet orchestration
+regardless of packaging. They do not implement
 `ISessionsProvider`, import Workbench Chat, or own local or remote Agent Host
 transport.
 
@@ -102,7 +102,8 @@ transport.
 verification, package operations, storage, and atomic activation. Comet is the
 only bundled and default-installed package. Optional packages are not loaded or
 registered until an explicit user install operation commits for the addressed
-Host, and they always execute as connected runtimes outside the Host process.
+Host. Product-maintained SDK packages activate direct Host Agents; external
+packages activate connected Agents outside the Host process.
 Sessions and provider contributions never import package management or SDK
 implementations.
 
@@ -193,7 +194,7 @@ and operation state received through the connection, but it does not download,
 verify, install, update, uninstall, or load Agent packages.
 
 Local and remote contributions in the same provider family supply connections
-to the shared provider implementation. Agent runtimes do not register direct
+to the shared provider implementation. Agents do not register direct
 Sessions providers. Remote Server and Remote Tunnel contributions obtain exact
 lower transports from their owning services; they do not implement Remote
 authority resolution, tunnel provider or relay mechanics, or Remote Server
@@ -201,7 +202,7 @@ lifecycle inside the provider.
 
 Providers do not import core Part implementations, shell layout, or another
 provider's internals. They never import `ChatWidget`, a concrete Chat view, or
-an Agent runtime implementation.
+an Agent implementation.
 
 ### Sessions entry points
 
@@ -299,8 +300,8 @@ Sessions Part → concrete ChatWidget
 provider → Sessions Part or shell layout
 provider → sibling provider internals
 Sessions or provider implementation → Agent package manager or SDK internals
-Agent runtime → Workbench or Sessions
-Agent runtime → Agent package manager
+Agent implementation → Workbench or Sessions
+Agent implementation → Agent package manager
 Platform Agent Host → Workbench or Sessions
 Platform Remote → Workbench, Sessions, Agent Host, or Code
 Remote consumer → private authority resolver or management connection
@@ -310,7 +311,7 @@ Remote Tunnel Agent Host connection → provider SDK or relay path outside
 `IRemoteTunnelConnection`
 Remote Agent Host recovery → switch between Remote Server and Remote Tunnel
 routes
-local or remote Agent Host connection → Agent runtime internals
+local or remote Agent Host connection → Agent implementation internals
 Agent runtime connection → Sessions provider or Workbench Feature internals
 one Part → sibling Part implementation or DOM
 code entry point → both Workbench shell and Sessions shell

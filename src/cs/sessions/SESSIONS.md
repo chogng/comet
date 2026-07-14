@@ -65,7 +65,7 @@ Sessions and Chat have different scopes:
 | Sessions subsystem | Chat contribution |
 |---|---|
 | owns the collection and lifecycle of agent sessions | owns one conversation model and its interaction surface |
-| groups chats by shared provider runtime and workspace | renders turns, input, responses, attachments, and per-chat actions |
+| groups chats by shared Agent and workspace | renders turns, input, responses, attachments, and per-chat actions |
 | routes operations to the owning provider | loads and operates on the addressed chat resource |
 | owns active session and per-session active-chat view state | does not own the global session collection or active session |
 | aggregates session status, changes, recency, and persistence | exposes chat-level status and events consumed by the session model |
@@ -77,7 +77,7 @@ widgets or transcript state into Sessions core.
 
 ### Sessions and Agent Host
 
-Agent Host is Comet's common execution boundary for every Agent runtime.
+Agent Host is Comet's common execution boundary for every Agent.
 Sessions sees one `ISessionsProvider` per local or remote Host connection. The
 provider maps the Host's canonical Session and Chat catalogs into
 provider-independent `ISession` and `IChat` models.
@@ -86,22 +86,23 @@ provider-independent `ISession` and `IChat` models.
 ISessionsManagementService
     → AgentHostSessionsProvider
     → IAgentHostConnection
-    → Agent Host runtime
+    → Agent Host
     → IAgent
-        ├── product-bundled embedded Comet runtime
-        └── connected Agent runtime through IAgentRuntimeConnection
+        ├── product-maintained Host Agent
+        └── external connected Agent through IAgentRuntimeConnection
 ```
 
 Local and remote are Host placements, not Agent identities. The built-in
-`CometAgent` integration has stable Agent ID `comet`; its orchestration runtime
-may be embedded or supplied by a connected Rust Comet Code runtime. Comet is
-the only bundled and default-installed Agent package. Copilot, Claude, Codex,
-and other Agents are absent until the user explicitly installs their package
-for the addressed Host. Every user-installed package runs through a connected
-runtime outside the Host process. Every Agent runtime owns its SDK or
-model-provider calls, event conversion, truthful capabilities, and opaque
-resume data and never imports Sessions or Workbench Chat. Runtime packaging
-does not create another Sessions provider. See
+`CometAgent` integration has stable Agent ID `comet`; its orchestration may be
+implemented directly in the Host or supplied by an external connected Agent.
+Comet is the only bundled and default-installed Agent package. Claude, Codex,
+and other optional Agents are absent until the user explicitly installs their
+package for the addressed Host. A product-maintained SDK package activates a
+direct Host `IAgent`; a genuinely external package activates a connected
+Agent. Every Agent owns its SDK or model-provider calls, event conversion,
+truthful capabilities, and opaque resume data and never imports Sessions or
+Workbench Chat. Package execution form does not create another Sessions
+provider. See
 [Agent Host architecture](AGENT_HOST.md),
 [Remote Agent Host architecture](REMOTE_AGENT_HOST.md),
 [Remote foundation architecture](../platform/remote/REMOTE.md),
@@ -153,7 +154,7 @@ Every Chat declares its origin:
 
 - `User` — a user-facing Chat created by the user or product workflow;
 - `Fork` — a branch created from a specific turn of a parent chat;
-- `Tool` — a worker Chat created by the Session's owning Agent runtime or one
+- `Tool` — a worker Chat created by the Session's owning Agent or one
   of its Tools.
 
 ```text
@@ -260,8 +261,8 @@ committed registry or management transition.
 
 Agent Host provider instances are contributions because they connect local and
 remote Host endpoints to Sessions. One shared implementation serves every Host
-connection. Embedded and connected Agent runtimes register inside the Platform
-Agent Host and never implement a direct Sessions provider. The Sessions domain,
+connection. Direct and connected Agents register inside the Platform Agent Host
+and never implement a direct Sessions provider. The Sessions domain,
 aggregation, lifecycle, and view-facing state remain Sessions services.
 
 ### `ISessionsManagementService`
@@ -490,7 +491,7 @@ new-session action
     → management and view services reconcile the committed identity atomically
 ```
 
-Only an Agent in the addressed Host's active runtime registry can own the
+Only an Agent in the addressed Host's active Agent registry can own the
 draft. An installable-but-absent package may be shown through a separate
 explicit install action, but it is not a valid Agent selection. Draft creation,
 Session commit, and first send never install a package or download an SDK.
@@ -502,7 +503,7 @@ or recently created sessions.
 
 Profile, attachment, or Tool-set preparation failure or cancellation occurs
 before Host Session creation and leaves the product draft and composer
-unchanged. Preparation uses the selected Host connection, exact Agent runtime
+unchanged. Preparation uses the selected Host connection, exact Agent
 registration, resolved execution profile, descriptor revisions, and submission
 ID; it does not require a fabricated or published Host Session or Chat identity.
 The Host reserves canonical identities inside the create operation so content
@@ -584,8 +585,8 @@ Persistence follows ownership:
 
 | State | Owner |
 |---|---|
-| Host, Agent, Session, and Chat identity and catalogs | Agent Host runtime |
-| runtime resume schema, opaque data, and private event history | addressed Agent runtime |
+| Host, Agent, Session, and Chat identity and catalogs | Agent Host |
+| Agent resume schema, opaque data, and private event history | addressed Agent |
 | loaded conversation model, transcript, and composer state | Workbench Chat contribution |
 | Sessions-specific concrete chat view | Sessions Chat contribution |
 | provider registry | Sessions provider contributions and provider service |
@@ -652,7 +653,7 @@ its visual contract.
   chat resource, but never import concrete Chat widgets or UI.
 - `IChatService` owns addressed Chat models only. It does not create product
   Sessions, choose an Agent, or own backend lifecycle.
-- Agent runtimes enter Sessions only through Agent Host and never
+- Agents enter Sessions only through Agent Host and never
   register a direct `ISessionsProvider`.
 - Providers carry the normalized execution selection to Agent Host; they do not
   resolve Agent profiles or construct SDK-native configuration themselves.
@@ -681,7 +682,7 @@ on the provider implementation.
 
 Context keys gate declarative menus, commands, and keybindings. Imperative code
 reads the owning service or observable directly and never reads a context key as
-runtime state.
+authoritative state.
 
 ### Capabilities replace provider branching
 

@@ -89,7 +89,7 @@ import {
 import type {
 	AgentRuntimeConnectionLaunchContext,
 	IAgentRuntimeConnectionFactory,
-} from 'cs/platform/agentHost/node/packages/agentPackageRuntimeRegistry';
+} from 'cs/platform/agentHost/node/packages/agentPackageActivationRegistry';
 
 const mockRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('2');
 

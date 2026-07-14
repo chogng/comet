@@ -1,6 +1,6 @@
 ---
-description: Durable rules and implementation examples for Agent SDK packages, runtimes, model discovery, configuration, credentials, and Settings management.
-applyTo: "{src/cs/platform/agentHost/**,src/cs/code/common/agentHost/**,src/cs/code/electron-main/agentHost/**,src/cs/code/electron-utility/agentRuntime/**,src/cs/sessions/contrib/providers/agentHost/**,src/cs/workbench/contrib/preferences/**}"
+description: Durable rules and concrete examples for product-maintained Agent SDK build artifacts, Host Agents, model snapshots, configuration, packages, and Settings.
+applyTo: "{build/agent-sdk/**,src/cs/platform/agentHost/common/**,src/cs/platform/agentHost/node/agents/**,src/cs/platform/agentHost/node/packages/**,src/cs/code/electron-main/main.ts,src/cs/sessions/contrib/providers/agentHost/**,src/cs/workbench/contrib/preferences/**}"
 ---
 
 # Agent SDK integrations
@@ -8,132 +8,184 @@ applyTo: "{src/cs/platform/agentHost/**,src/cs/code/common/agentHost/**,src/cs/c
 Read `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/AGENT_PACKAGES.md`,
 and `src/cs/sessions/TOOLS.md` before changing an Agent SDK integration.
 
-## Architecture at a glance
+## Target architecture
+
+Product-maintained SDKs are installed Agent package artifacts and execute through
+an `IAgent` implementation owned by Agent Host Node. Claude, Codex, and future
+product-maintained SDKs do not add a provider runtime process or translate
+through the Agent Runtime Protocol.
 
 ```text
-Settings
-    → IAgentHostManagementService
-        → one IAgentHostManagementTarget per Host authority
-            → IAgentHostConnection
-                → Agent Host package, Agent, model, and configuration state
-                    → connected Agent runtime
-                        → private Claude, Codex, Copilot, or other SDK
+build/agent-sdk/agents/<agent>/{package.json,package-lock.json}
+    → target SDK module + executable artifacts
+        → verified package offering
+            → generic install/update/uninstall
+                → Agent Host Node loads the installed SDK module
+                    → <Agent> implements IAgent directly
+                        → canonical descriptor, models, config, Sessions, Chats
+                            → Host snapshot
+                                → Sessions + Settings
 ```
 
-SDK installation and SDK execution are not UI contracts. The user installs an
-Agent package through Agent Host. That verified package privately contains its
-SDK, executable, runtime entry point, and helper closure.
+The external connected-Agent protocol remains available for packages whose
+implementation genuinely belongs in another process. It is not the integration
+mechanism for product-maintained Claude or Codex SDKs.
+
+## Final repository ownership
+
+| Path | Durable owner |
+|---|---|
+| `build/agent-sdk/agents/<agent>/package.json` | One exact SDK version pin |
+| `build/agent-sdk/agents/<agent>/package-lock.json` | Complete reproducible dependency graph |
+| `build/agent-sdk/` | Target artifact production only |
+| `src/cs/platform/agentHost/node/agents/<agent>/` | Direct `IAgent` implementation and SDK-native mapping |
+| `src/cs/platform/agentHost/node/packages/` | Provider-neutral package catalog, artifact verification, activation, update, and uninstall |
+| `src/cs/platform/agentHost/common/` | SDK-neutral Agent, package, model, configuration, credential, and Tool contracts |
+| `src/cs/workbench/contrib/preferences/` | Generic rendering of Host package, model, and configuration snapshots |
+| `src/cs/code/electron-main/main.ts` | Application startup and service composition only |
+
+The Claude placement demonstrates the boundary:
 
 ```text
-installable package offering
-    → explicit install operation
-    → stage and verify the complete dependency closure
-    → activate the connected runtime
-    → runtime discovers provider-native models
-    → runtime publishes canonical Agent descriptors
-    → Host commits one revisioned root snapshot
-    → Sessions and Settings consume that snapshot
+build/agent-sdk/agents/claude/
+├── entry.ts
+├── package.json
+└── package-lock.json
+
+src/cs/platform/agentHost/node/agents/claude/
+├── claudeAgent.ts
+├── claudeAgentDefinition.ts
+├── claudeAgentPackage.ts
+└── claudeAgentSessionStore.ts
 ```
 
-There is no direct `Settings → SDK` or `Session → package manager` path.
+Do not place package definitions, SDK resolution, model discovery, provider
+configuration, or provider behavior under `src/cs/code`. Do not place Agent
+behavior under `build`; build code only produces immutable inputs.
 
-## Ownership
+## Version and update ownership
 
-| Concern | Authority | Example |
-|---|---|---|
-| Package availability and installation | Agent Host package catalog | `installablePackages`, `installedPackages` |
-| Native model availability | Installed SDK runtime | Claude `query.supportedModels()` |
-| Product model identity | Canonical Agent descriptor | `AgentModelId`, descriptor revision |
-| Host defaults | Agent Host configuration state | permission mode |
-| Session and model choices | Canonical configuration candidates | selected model, thinking level |
-| Raw credentials | encrypted Secret Storage | Anthropic API key |
-| UI presentation | Settings over Host snapshots | package, model, and configuration rows |
+Comet owns SDK versions. Users authorize a common package install or update;
+they do not run `npm`, select arbitrary provider versions, or maintain SDK
+directories.
 
-An SDK owns native facts. Comet owns product identities, revisions, validation,
-persistence, and UI contracts.
-
-## Common boundary
-
-Agent Host contracts are SDK-neutral. A renderer-facing management target has
-this shape:
-
-```typescript
-interface IAgentHostManagementTargetSnapshot {
-	readonly authority: AgentHostAuthorityId;
-	readonly label: string;
-	readonly packages: IAgentHostPackageCatalogState;
-	readonly supportsPackageOperations: boolean;
-	readonly agents: readonly IAgentDescriptor[];
-	readonly agentDefaults: readonly IAgentConfigurationState[];
-	readonly pendingPackages: readonly AgentPackageId[];
-	readonly pendingConfigurations: readonly AgentId[];
-}
-```
-
-A snapshot may contain Claude data, but it never contains `ModelInfo`, a Claude
-`Query`, a Codex client, an SDK callback, or a provider credential:
+One SDK update changes the exact build pin and lockfile together:
 
 ```json
 {
-  "authority": "local",
-  "packages": {
-    "installedPackages": [
-      { "packageId": "claude", "revision": "claude.agent-sdk.<version>.<target>" }
-    ]
-  },
-  "agents": [
-    {
-      "id": "claude",
-      "packageId": "claude",
-      "revision": "claude.agent-sdk.descriptor.<catalog-digest>",
-      "models": [
-        {
-          "id": "claude:claude-sonnet-4-5",
-          "revision": "claude.agent-sdk.model.<model-digest>",
-          "displayName": "Claude Sonnet 4.5",
-          "enabled": true
-        }
-      ]
-    }
-  ]
+  "name": "comet-agent-sdk-claude",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.208"
+  }
 }
 ```
 
-The example omits unrelated snapshot fields for readability. Wire values still
-pass the complete common validators.
+The root development dependency may carry the same exact version for TypeScript
+types and tests. It is not the installed production SDK. Artifact production
+must fail when the build pin, lockfile, and root type pin disagree.
 
-An SDK-backed runtime implements the Agent Runtime Protocol directly. Do not
-add provider facades, compatibility adapters, re-exports, parallel Agent APIs,
-or SDK-shaped fields to common contracts.
+The target artifact contains every runtime SDK byte needed by the installed
+Agent package. For Claude this includes both the bundled SDK module and its
+target executable:
 
-## Package lifecycle
+```json
+{
+  "name": "@anthropic-ai/claude-agent-sdk",
+  "version": "0.3.208",
+  "target": "darwin-arm64",
+  "executableSha256": "<sha256>",
+  "moduleSha256": "<sha256>"
+}
+```
 
-The package is the installation unit:
+Application startup consumes the product artifact catalog. It never constructs
+an installable offering from root `node_modules`.
+
+## Package shape
+
+An SDK package declares how its Agent executes. Product-maintained SDK Agents
+use Host execution:
+
+```typescript
+const manifest: IAgentPackageManifest = Object.freeze({
+	schema: 1,
+	packageId: CLAUDE_AGENT_PACKAGE_ID,
+	revision,
+	contentDigest,
+	publisher: 'Comet',
+	target: Object.freeze({ operatingSystem: 'darwin', architecture: 'arm64' }),
+	execution: Object.freeze({ kind: 'host' }),
+	agentIds: Object.freeze([CLAUDE_AGENT_ID]),
+	dependencies: Object.freeze([
+		Object.freeze({
+			id: 'claude.agent-sdk-module',
+			source: 'file:///verified/sdk.js',
+			target: 'vendor/claude-agent-sdk/sdk.js',
+			digest: moduleDigest,
+			license: 'Anthropic Commercial Terms',
+			executable: false,
+		}),
+		Object.freeze({
+			id: 'claude.agent-sdk-executable',
+			source: 'file:///verified/claude',
+			target: 'vendor/claude-agent-sdk/claude',
+			digest: executableDigest,
+			license: 'Anthropic Commercial Terms',
+			executable: true,
+		}),
+	]),
+	privileges,
+});
+```
+
+A genuinely external implementation uses an explicit connected entry point:
+
+```typescript
+execution: Object.freeze({
+	kind: 'connected',
+	entryPoint: 'bin/external-agent.js',
+})
+```
+
+Do not represent a provider SDK executable as a connected Agent entry point.
+The Claude executable is a private SDK dependency invoked by `ClaudeAgent`; it
+is not a Comet Agent Runtime Protocol endpoint.
+
+## Install, activate, and uninstall
+
+Settings uses only the common management service:
 
 ```typescript
 await managementService.installPackage(authority, createAgentPackageId('claude'));
 await managementService.uninstallPackage(authority, createAgentPackageId('claude'));
 ```
 
-Do not call `npm install`, download an executable, or resolve a mutable SDK
-location from either operation's Settings handler. Product composition
-provides one exact verified package offering, and Agent Host performs the
-common install or uninstall operation.
+The Host lifecycle is:
 
-| Package state | Host snapshot | Allowed behavior |
-|---|---|---|
-| Absent | installable offering only | show Install; no Agent or model selection |
-| Installing | package ID in `pendingPackages` | disable competing package actions |
-| Active | installed record, activation, Agent registration, descriptor | show models and allow Session creation |
-| Uninstalled | no installed record or registration | preserve Host Session history; runtime cannot execute |
+```text
+Install
+  1. resolve exact offering
+  2. stage every declared artifact
+  3. verify target, digest, executable mode, privilege grant, and closure
+  4. publish one immutable installed receipt
+  5. load the installed SDK module
+  6. construct ClaudeAgent as IAgent
+  7. discover and validate models
+  8. commit activation and the new Host snapshot
 
-Installation stages and verifies the complete SDK closure before activation.
-Runtime start, authentication, Session creation, and Turn execution never run
-a package manager, download a dependency, or mutate the application install.
+Uninstall
+  1. gate the affected Agent
+  2. drain accepted non-terminal work
+  3. release the direct IAgent instance
+  4. commit removal of registrations and installed receipt
+  5. remove unreferenced SDK module and executable artifacts
+```
 
-Package operations retain one operation ID, request digest, and expected
-catalog revision until a terminal outcome. For example, an `unknown` response
-is reconciled by resending the same request:
+Session history, credentials, Agent-backed deletion, and retained Host-record
+purge are separate operations. Uninstall does not silently perform them.
+
+Package operation identity survives uncertain transport outcomes:
 
 ```typescript
 const request = Object.freeze({ operation, digest, expectedCatalogRevision, payload });
@@ -143,17 +195,73 @@ if (outcome.kind === 'unknown') {
 }
 ```
 
-Code uses the bounded reconciliation loop in the owning Host client rather
-than an unbounded retry. It never creates a new operation identity for an
-uncertain prior operation.
+The bounded owner resends the same operation and digest. It never invents a new
+identity for an uncertain operation.
 
-## Model discovery and snapshots
+## Direct Agent implementation
 
-When an SDK exposes model discovery, the runtime calls that API during explicit
-runtime activation or authentication. Claude uses its real SDK surface:
+An SDK-backed Agent implements `IAgent` in Platform Agent Host Node:
 
 ```typescript
-const query = claudeQuery({
+export class ClaudeAgent extends Disposable implements IAgent {
+	readonly id = CLAUDE_AGENT_ID;
+	readonly descriptor: IObservable<IAgentDescriptor>;
+	readonly registration: IAgentRuntimeRegistration;
+	readonly onDidEmitAction: Event<IAgentAction>;
+	readonly configuration: IAgentConfiguration;
+	readonly executionProfiles: IAgentExecutionProfiles;
+	readonly sessions: IAgentSessions;
+	readonly chats: IAgentChats;
+	readonly resumeStates: IAgentResumeStates;
+}
+```
+
+The package activation factory loads only the module from the verified installed
+receipt and passes its exact bindings to the Agent:
+
+```typescript
+const loadedSdk = await import(installedSdkModule.source);
+const agent = await ClaudeAgent.create({
+	sdk: {
+		query: loadedSdk.query,
+		deleteSession: loadedSdk.deleteSession,
+		createSdkMcpServer: loadedSdk.createSdkMcpServer,
+		tool: loadedSdk.tool,
+	},
+	claudeCodeExecutable: fileURLToPath(installedExecutable.source),
+	toolExecution,
+	credentialResolver,
+	stateDirectory,
+	cacheDirectory,
+	packageRevision,
+	...retentionLimits,
+});
+```
+
+The product package also declares any generic credential binding consumed by
+Host composition; `src/cs/code` does not import provider constants:
+
+```typescript
+credentialBindings: Object.freeze([Object.freeze({
+	provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+	scope: 'llm',
+	reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+	privilege: 'configured.model.api-key',
+})]),
+```
+
+There is no `ClaudeAgentRuntime`, provider utility-process entry, connection
+generation, runtime call envelope, or provider-to-`IAgent` adapter.
+
+## Model snapshots
+
+Model availability comes from the installed SDK. Comet does not maintain a
+parallel Claude or Codex model list.
+
+Claude obtains one native snapshot during activation:
+
+```typescript
+const query = sdk.query({
 	prompt,
 	options: {
 		persistSession: false,
@@ -166,11 +274,10 @@ const query = claudeQuery({
 const sdkModels: ModelInfo[] = await query.supportedModels();
 ```
 
-The Claude runtime maps each private `ModelInfo` into the canonical model
-descriptor inside the runtime boundary:
+Each native model maps to one canonical descriptor:
 
 ```typescript
-const descriptor = Object.freeze({
+const model = Object.freeze({
 	id: createAgentModelId(`claude:${sdkModel.value}`),
 	revision: createAgentModelDescriptorRevision(`claude.agent-sdk.model.${modelDigest}`),
 	displayName: sdkModel.displayName,
@@ -181,110 +288,47 @@ const descriptor = Object.freeze({
 });
 ```
 
-The descriptor and catalog revisions include every native value that affects
-execution or presentation. A Session persists the canonical model ID and exact
-descriptor revision; the runtime privately retains the mapping back to the SDK
-model value.
+The Agent retains the private mapping from canonical model ID to native SDK
+value. Settings and Sessions see only canonical descriptors.
 
-The runtime registration revision changes when its descriptor revision
-changes. Product composition validates that deterministic relationship:
-
-```typescript
-const registrationRevision = createAgentRuntimeRegistrationRevision(
-	`claude.agent-sdk-runtime.v2.${descriptor.revision}`,
-);
-```
-
-Do not publish different registration contents under one fixed revision.
-
-```text
-SDK value "claude-sonnet-4-5"
-    ↕ private runtime map
-AgentModelId "claude:claude-sonnet-4-5"
-```
-
-Codex follows the same output contract. Its runtime calls the actual discovery
-API supplied by the installed Codex package and maps the result into
-`IAgentDescriptor.models`. Do not invent a `listModels()` API, copy Claude
-types, or add a Codex branch to Settings.
-
-If an SDK has no discovery API, the verified package revision declares its
-exact tested model catalog. Changing that catalog requires a new package,
-Agent descriptor, and model descriptor revision.
-
-### Discovery failures
-
-| Native result | Required product result |
+| Native discovery result | Required result |
 |---|---|
-| Empty model array | activation fails explicitly |
-| Duplicate native model identity | activation fails validation |
-| Invalid capability metadata | activation fails validation |
-| SDK unavailable | package does not activate |
-| Package absent | runtime is not started and no model snapshot exists |
+| Valid non-empty unique snapshot | publish content-derived descriptor revisions |
+| Empty array | activation fails |
+| Duplicate identity | activation fails |
+| Invalid capability or effort metadata | activation fails |
+| Missing or corrupt installed SDK module | activation fails |
+| Package absent | no Agent and no model snapshot |
 
-Never substitute a cached guess, generic model name, arbitrary text input, or
-handwritten fallback list.
+Never substitute a handwritten model list, a generic model, arbitrary text
+input, or an older snapshot after discovery failure.
 
-## Configuration
+## Configuration and credentials
 
-Agents describe configuration through common typed schemas. Settings renders
-the schema rather than branching on Agent IDs.
-
-```typescript
-const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
-	profile: AgentConfigurationSchemaProfile,
-	agent: CLAUDE_AGENT_ID,
-	scope: 'hostDefault',
-	revision: createAgentConfigurationSchemaRevision('claude.agent-sdk.host-defaults.v1'),
-	properties: [{
-		id: CLAUDE_AGENT_PERMISSION_MODE_PROPERTY,
-		owner: { kind: 'agent', agent: CLAUDE_AGENT_ID },
-		scopes: ['hostDefault', 'session'],
-		value: { type: 'string', enum: ['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto'] },
-		required: true,
-		default: 'default',
-		sessionMutable: true,
-		dynamicCompletion: false,
-		display: { label: localize('claudeAgent.permissionMode', 'Permission Mode') },
-		persistence: 'persisted',
-		redaction: 'public',
-	}],
-});
-```
-
-Settings writes one property through the generic service:
+Agents publish typed common schemas; Settings renders those schemas without an
+Agent-ID branch:
 
 ```typescript
-await managementService.updateAgentDefault(
-	authority,
-	CLAUDE_AGENT_ID,
-	CLAUDE_AGENT_PERMISSION_MODE_PROPERTY,
-	'plan',
-);
+properties: [{
+	id: CLAUDE_AGENT_PERMISSION_MODE_PROPERTY,
+	owner: { kind: 'agent', agent: CLAUDE_AGENT_ID },
+	scopes: ['hostDefault', 'session'],
+	value: { type: 'string', enum: ['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto'] },
+	required: true,
+	default: 'default',
+	sessionMutable: true,
+	dynamicCompletion: false,
+	display: { label: localize('claudeAgent.permissionMode', 'Permission Mode') },
+	persistence: 'persisted',
+	redaction: 'public',
+}]
 ```
 
-The target validates the complete candidate against the addressed schema and
-expected state revision, then uses the common Host mutation reconciliation
-path. It does not edit an SDK settings file.
+An optional native value has no invented default. If model discovery does not
+declare a thinking default, the property remains optional and the Agent omits
+the SDK option until the user selects a valid value.
 
-An optional SDK value has no invented default. Claude thinking configuration,
-for example, omits `default` when `ModelInfo` does not identify one:
-
-```typescript
-{
-	id: CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
-	value: { type: 'string', enum: ['none', 'adaptive', 'low', 'medium', 'high'] },
-	required: false,
-}
-```
-
-When the value is absent, the runtime omits the SDK `thinking` option. When the
-user selects `high`, the runtime validates that `high` belongs to the selected
-model's exact schema before passing it to the SDK.
-
-## Credentials
-
-Configuration stores a reference, never the raw secret:
+Configuration stores a credential reference:
 
 ```json
 {
@@ -294,107 +338,95 @@ Configuration stores a reference, never the raw secret:
 }
 ```
 
-The Anthropic API key remains in encrypted Secret Storage and resolves only for
-the exact accepted Turn authority. Do not put a raw credential in a package
-record, configuration value, process environment used for discovery, log,
-diagnostic, model descriptor, or execution profile.
+The raw key remains in encrypted Secret Storage and resolves only for the exact
+accepted Turn. It must not enter package records, model snapshots, configuration
+values, execution profiles, logs, diagnostics, or model-discovery environments.
 
-## Settings management
+## Settings
 
-Settings consumes `IAgentHostManagementService.getSnapshot()` and delegates
-mutations back to that service:
+The Agents navigation reads one generic Host management snapshot:
 
 ```typescript
 const snapshot = managementService.getSnapshot();
 for (const target of snapshot.targets) {
 	renderPackages(target.packages);
 	renderModels(target.agents.flatMap(agent => agent.models));
-	renderHostDefaults(target.agentDefaults);
+	renderConfiguration(target.agentDefaults);
 }
 ```
 
-The renderer may use schema metadata for labels and controls. It never imports
-an Agent SDK, reconstructs installation state from files, or stores its own
-model catalog.
-
-The following actions remain distinct:
-
-| User intent | Operation |
+| Snapshot state | UI behavior |
 |---|---|
-| Install executable package | package install |
-| Remove executable package | package uninstall |
-| Reset Host defaults | configuration mutation |
-| Delete a credential | Secret Storage mutation |
-| Delete Agent/provider backing | activated Agent delete lifecycle |
-| Purge retained Host records | absent-package Host purge |
+| Installable, absent | show Install; show no models or config for that Agent |
+| Package operation pending | disable competing package actions |
+| Installed and activating | show installed status; do not invent model rows |
+| Active | show Uninstall, SDK model snapshot, and schema-driven config |
+| Uninstalled | remove Agent/model/config rows; preserve Session history |
 
-Uninstall preserves Host Session history. It is not an alias for credential
-deletion, Agent-backed deletion, or retained-record purge.
+Settings never imports an SDK, scans SDK files, resolves package-manager state,
+or contains a Claude/Codex model table.
 
-## Bad and good patterns
+## Prohibited and required examples
 
 ```typescript
-// Bad: Settings maintains a provider model list.
+// Prohibited: provider model maintenance in UI or product code.
 const claudeModels = ['sonnet', 'opus'];
 
-// Good: Settings renders every Host-published canonical model uniformly.
-const models = snapshot.targets.flatMap(target =>
-	target.agents.flatMap(agent => agent.models),
-);
+// Required: render the Host-published snapshot.
+const models = target.agents.flatMap(agent => agent.models);
 ```
 
 ```typescript
-// Bad: a Turn installs a missing SDK on demand.
+// Prohibited: first Turn installs a missing SDK.
 await installSdkBeforeSend();
 
-// Good: Session creation is available only after package activation.
-const activeAgent = root.agents.find(agent => agent.id === selectedAgentId);
-if (activeAgent === undefined) {
-	throw new Error(`Agent '${selectedAgentId}' is unavailable.`);
+// Required: package activation determines Agent availability.
+const agent = root.agents.find(candidate => candidate.id === requestedAgent);
+if (agent === undefined) {
+	throw new AgentHostError(AgentHostErrorCode.ResourceMissing, 'Agent is unavailable');
 }
 ```
 
 ```typescript
-// Bad: discovery failure silently keeps an old or generic list.
-const models = await discoverModels().catch(() => cachedModels);
+// Prohibited: product SDK translated through a provider runtime connection.
+const runtime = await connectAgentRuntime(new ClaudeAgentRuntime());
 
-// Good: activation exposes the discovery failure.
-const models = await discoverModels();
-if (models.length === 0) {
-	throw new AgentHostError(AgentHostErrorCode.InvalidProtocolValue, 'SDK returned no models');
-}
+// Required: verified package activation constructs the direct Agent.
+const agent = await ClaudeAgent.create(options);
 ```
 
-## Adding an SDK-backed Agent
+## Adding another product-maintained SDK
 
-1. Define one package ID, Agent ID, verified dependency closure, privileges,
-   and deterministic runtime-registration revision rule under
-   `src/cs/code/common/agentHost/`.
-2. Implement the connected runtime under
-   `src/cs/code/electron-utility/agentRuntime/` using only the common Agent
-   Runtime Protocol at its outer boundary.
-3. Call the SDK's real discovery surface and map native models into canonical
-   descriptors with content-derived revisions.
-4. Define common Host-default, Session, and model configuration schemas. Keep
-   SDK-native option mapping inside the runtime.
-5. Register one installable product offering in desktop composition. Do not
-   install it by default.
-6. Reuse `IAgentHostManagementService`; do not add provider-specific Settings
-   services, pages, or routing branches.
-7. Test the runtime through the Agent Runtime Protocol and test package and
-   configuration actions through the generic management target.
+1. Add `build/agent-sdk/agents/<agent>/package.json` with one exact dependency
+   and commit its `package-lock.json`.
+2. Produce a target artifact containing every SDK byte needed after install;
+   record and verify content digests.
+3. Add `src/cs/platform/agentHost/node/agents/<agent>/<agent>Agent.ts` that
+   implements `IAgent` directly.
+4. Add the package product under the same Agent-owned Platform directory and
+   publish it through `productAgentPackageCatalog.ts`.
+5. Use the SDK's real discovery API and publish canonical model descriptors.
+6. Publish Host-default, Session, and model configuration schemas through the
+   common contracts.
+7. Reuse the generic package and Settings services. Do not add provider-specific
+   install, model, configuration, or navigation services.
+8. Test build-pin agreement, artifact integrity, package lifecycle, model
+   discovery failures, direct Agent behavior, configuration, credential
+   isolation, and uninstall cleanup.
 
-## Verification examples
+## Verification matrix
 
-| Contract | Required evidence |
+| Invariant | Evidence |
 |---|---|
-| Package install/uninstall | exact offering, operation ID, digest, revision, terminal outcome |
-| Model discovery | valid, empty, duplicate, malformed, and changed catalogs |
-| Model execution | canonical ID maps to the exact SDK value |
-| Configuration | valid update, invalid value, stale revision, reset, uncertain outcome |
-| Credentials | reference persists; raw secret is absent from snapshots and diagnostics |
-| Recovery | same package or configuration operation reconciles after disconnect |
-| Composition | production build contains no mock package or mock runtime entry point |
+| Exact SDK ownership | build pin, lockfile, root type pin, and artifact metadata agree |
+| Complete install unit | module and executable are both in the verified dependency closure |
+| No provider runtime | no provider runtime class, process entry, connection factory, or adapter |
+| Direct Host Agent | `<Agent>` implements `IAgent` under `platform/agentHost/node/agents` |
+| Model source | valid, empty, duplicate, malformed, and changed SDK snapshots are tested |
+| Generic Settings | install/uninstall, model rows, and config controls use Host snapshots |
+| Credentials | raw secret is absent from persisted and published protocol state |
+| Recovery | the same package/config operation identity reconciles after uncertainty |
+| Production composition | `code/electron-main/main.ts` names no provider package or SDK |
 
-Use deterministic contract fakes in test directories. Production composition
-contains only real package offerings and the bundled Comet package.
+Production code contains real product offerings only. Mocks and deterministic
+SDK bindings remain under test directories.

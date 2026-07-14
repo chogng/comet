@@ -108,14 +108,13 @@ import {
 import { LegacyChatMigrationCompanion } from './legacyChatMigration.js';
 import { LocalAgentHostSessionTypeCatalog } from './localAgentHostSessionTypeCatalog.js';
 import {
-	AgentPackageRuntimeRegistry,
+	AgentPackageActivationRegistry,
 	type IAgentRuntimeConnectionFactory,
-} from 'cs/platform/agentHost/node/packages/agentPackageRuntimeRegistry';
-import type { ILocalAgentPackageProduct } from 'cs/code/common/agentHost/agentPackageProducts';
-import {
-	CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
-	CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
-} from 'cs/code/common/agentHost/claudeAgentPackage';
+} from 'cs/platform/agentHost/node/packages/agentPackageActivationRegistry';
+import type {
+	IAgentPackageCredentialBinding,
+	ILocalAgentPackageProduct,
+} from 'cs/platform/agentHost/node/packages/agentPackageProducts';
 
 const localAgentHostAuthority = createAgentHostAuthorityId('local');
 const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
@@ -162,7 +161,7 @@ export interface ILocalAgentHostMainOptions {
 	readonly channelServer: ILocalAgentHostChannelServer;
 	readonly fetch: (url: string, init: RequestInit) => Promise<Response>;
 	readonly now: () => number;
-	readonly agentRuntimeConnectionFactory: IAgentRuntimeConnectionFactory;
+	readonly agentRuntimeConnectionFactory?: IAgentRuntimeConnectionFactory;
 }
 
 interface ICurrentBundledCometPackage {
@@ -199,11 +198,12 @@ async function createCurrentBundledCometPackage(
 	const source = pathToFileURL(artifact).toString();
 	const target = Object.freeze({ operatingSystem: process.platform, architecture: process.arch });
 	const dependency = Object.freeze({
-		id: 'comet.embedded-runtime',
+		id: 'comet.host-artifact',
 		source,
-		target: 'comet/embedded-runtime.js',
+		target: 'comet/host-artifact.js',
 		digest: artifactDigest,
 		license: 'MIT',
+		executable: false,
 	});
 	const privileges = Object.freeze([
 		Object.freeze({ kind: 'filesystem' as const, value: 'host.content.materializations:read' }),
@@ -225,8 +225,7 @@ async function createCurrentBundledCometPackage(
 		contentDigest: artifactDigest,
 		publisher: 'Comet',
 		target,
-		runtimeForm: 'embedded' as const,
-		runtimeEntryPoint: dependency.target,
+		execution: Object.freeze({ kind: 'host' as const }),
 		agentIds: Object.freeze([COMET_AGENT_ID]),
 		dependencies: Object.freeze([dependency]),
 		privileges,
@@ -314,23 +313,39 @@ class LocalAgentToolTimers implements IAgentToolTimerPort {
 const productionCredentialReferences = new Set(['glm', 'kimi', 'deepseek', 'openai']);
 
 class LocalAgentCredentialSecretSource implements IAgentCredentialSecretSource {
-	constructor(private readonly secrets: IProviderApiKeySecretStorage) {}
+	private readonly packageBindings: ReadonlyMap<string, IAgentPackageCredentialBinding>;
+
+	constructor(
+		private readonly secrets: IProviderApiKeySecretStorage,
+		packageBindings: readonly IAgentPackageCredentialBinding[],
+	) {
+		const bindings = new Map<string, IAgentPackageCredentialBinding>();
+		for (const binding of packageBindings) {
+			const key = this.bindingKey(binding);
+			if (bindings.has(key)) {
+				throw new Error(`Duplicate Agent package credential binding '${key}'.`);
+			}
+			bindings.set(key, binding);
+		}
+		this.packageBindings = bindings;
+	}
 
 	requiredPrivilege(credential: IAgentCredentialReference): string {
 		const cometCredential = credential.provider === COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER
 			&& credential.scope === 'llm'
 			&& productionCredentialReferences.has(credential.reference);
-		const claudeCredential = credential.provider === CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER
-			&& credential.scope === 'llm'
-			&& credential.reference === CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE;
-		if (!cometCredential && !claudeCredential) {
+		if (cometCredential) {
+			return 'configured.model.api-key';
+		}
+		const binding = this.packageBindings.get(this.bindingKey(credential));
+		if (binding === undefined) {
 			throw new AgentHostError(
 				AgentHostErrorCode.CredentialUnauthorized,
 				'Local Agent credential reference is not supported',
 				{ provider: credential.provider, scope: credential.scope },
 			);
 		}
-		return 'configured.model.api-key';
+		return binding.privilege;
 	}
 
 	async resolve(credential: IAgentCredentialReference, token: CancellationToken): Promise<string | undefined> {
@@ -343,6 +358,10 @@ class LocalAgentCredentialSecretSource implements IAgentCredentialSecretSource {
 			throw new CancellationError();
 		}
 		return apiKey.length === 0 ? undefined : apiKey;
+	}
+
+	private bindingKey(credential: Pick<IAgentCredentialReference, 'provider' | 'scope' | 'reference'>): string {
+		return `${credential.provider}\u0000${credential.scope}\u0000${credential.reference}`;
 	}
 }
 
@@ -379,8 +398,12 @@ export class LocalAgentHostMain extends Disposable {
 	private async initialize(): Promise<void> {
 		const bundledPackage = await createCurrentBundledCometPackage(this.options.bundledArtifactPath);
 		const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.embedded.v2');
+		const agentPackages = this.options.agentPackageProducts;
 		const credentials = new AgentCredentialService(
-			new LocalAgentCredentialSecretSource(this.options.providerApiKeySecretStorage),
+			new LocalAgentCredentialSecretSource(
+				this.options.providerApiKeySecretStorage,
+				Object.freeze(agentPackages.flatMap(product => product.credentialBindings)),
+			),
 		);
 		const modelCatalog = this.createModelCatalog(credentials);
 		const contentResources = this._register(new AgentContentResourceService(
@@ -419,7 +442,6 @@ export class LocalAgentHostMain extends Disposable {
 			toolExecution,
 			contentResources,
 		});
-		const agentPackages = this.options.agentPackageProducts;
 		const packageStateStore = new ApplicationStorageAgentPackageStateStore(this.options.storage, {
 			registrations: Object.freeze([Object.freeze({
 				source: Object.freeze({
@@ -435,12 +457,20 @@ export class LocalAgentHostMain extends Disposable {
 				target: cometAgent.registration,
 			})]),
 		});
-		const runtimeRegistry = this._register(new AgentPackageRuntimeRegistry({
-			embeddedRuntimes: Object.freeze([Object.freeze({
+		const activationRegistry = this._register(new AgentPackageActivationRegistry({
+			bundledAgents: Object.freeze([Object.freeze({
 				offerings: Object.freeze([bundledPackage.verifiedPackage.offering]),
 				agents: Object.freeze([cometAgent]),
 				lifetime: cometAgent,
 			})]),
+			hostAgentFactories: Object.freeze(agentPackages.flatMap(product => (
+				product.execution === 'host'
+					? [Object.freeze({
+						offerings: Object.freeze([product.offering]),
+						create: product.createAgent,
+					})]
+					: []
+			))),
 			connectionFactory: this.options.agentRuntimeConnectionFactory,
 			toolExecution,
 			contentResources,
@@ -473,19 +503,19 @@ export class LocalAgentHostMain extends Disposable {
 			}),
 			stateStore: packageStateStore,
 			artifactPort: this.options.packageArtifactPort,
-			runtimePort: runtimeRegistry,
+			activationPort: activationRegistry,
 		});
 		const sessionTypeCatalog = new LocalAgentHostSessionTypeCatalog(Object.freeze([
 			Object.freeze({
 				packageId: cometAgent.registration.packageId,
 				agentId: cometAgent.registration.agentId,
-				resolveRuntimeRegistrationRevision: () => cometAgent.registration.revision,
+				resolveRegistrationRevision: () => cometAgent.registration.revision,
 				resolve: (descriptor: IAgentDescriptor) => this.createCometSessionType(descriptor, modelCatalog),
 			}),
 			...agentPackages.map(product => Object.freeze({
 				packageId: product.definition.packageId,
 				agentId: product.definition.agentId,
-				resolveRuntimeRegistrationRevision: product.definition.resolveRuntimeRegistrationRevision,
+				resolveRegistrationRevision: product.definition.resolveRegistrationRevision,
 				resolve: product.definition.resolveSessionType,
 			})),
 		]));
@@ -496,7 +526,7 @@ export class LocalAgentHostMain extends Disposable {
 			capabilities: Object.freeze([]),
 			implementation: Object.freeze({ name: 'comet.desktop.main', build: 'agent-host.v2' }),
 			sessionTypeCatalog,
-			agentRuntimes: runtimeRegistry,
+			agentRuntimes: activationRegistry,
 			packageLifecycle,
 			credentials,
 			catalogStore,

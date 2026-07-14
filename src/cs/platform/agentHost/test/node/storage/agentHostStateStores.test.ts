@@ -547,8 +547,8 @@ suite('Agent Host application storage', () => {
 		try {
 			const operation = {
 				status: 'pending',
-				phase: 'runtimePrepared',
-				runtimeTransition: {
+				phase: 'activationPrepared',
+				activationTransition: {
 					previous: {
 						installedPackage: { packageId: registrationV2.packageId },
 						registrations: [registrationV2],
@@ -565,7 +565,7 @@ suite('Agent Host application storage', () => {
 			const migrated = await new ApplicationStorageAgentPackageStateStore(storage, packageMigration).read();
 			assert.deepEqual(migrated?.activeRegistrations, [registrationV3]);
 			assert.deepEqual(
-				(migrated?.operations[0] as unknown as typeof operation).runtimeTransition.previous?.registrations,
+				(migrated?.operations[0] as unknown as typeof operation).activationTransition.previous?.registrations,
 				[registrationV3],
 			);
 			assert.equal(storage.get(agentPackageStateStorageKeyV2), undefined);

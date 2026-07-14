@@ -112,11 +112,11 @@ other after failure.
 5. Put Agent package lifecycle in `cs/platform/agentHost/node/packages/`.
    Comet is the only bundled and default-installed package; optional packages
    require an explicit per-Host user install operation.
-6. Keep the product-bundled embedded Comet runtime in
-   `cs/platform/agentHost/node/agents/comet/`. Every user-installed Agent uses
-   a connected runtime through the common Agent Runtime Protocol and
-   `IAgentRuntimeConnection`. Keep Comet orchestration behind the same port in
-   either bundled form.
+6. Keep product-maintained Agent implementations in
+   `cs/platform/agentHost/node/agents/<agent>/`. They implement `IAgent`
+   directly and load only the SDK module installed by their exact package
+   receipt. Put genuinely external Agent processes behind the common Agent
+   Runtime Protocol and `IAgentRuntimeConnection`.
 7. Put Remote authority, persistent connection, channel, and Remote Server
    infrastructure in the owners defined by the
    [Remote foundation](../platform/remote/REMOTE.md). Put tunnel discovery,

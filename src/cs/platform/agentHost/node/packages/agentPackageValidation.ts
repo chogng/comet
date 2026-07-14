@@ -63,7 +63,7 @@ function assertPackageWireShape(verifiedPackage: IVerifiedAgentPackage): void {
 	}
 	assertExactRecord(
 		verifiedPackage.manifest,
-		['schema', 'packageId', 'revision', 'contentDigest', 'publisher', 'target', 'runtimeForm', 'runtimeEntryPoint', 'agentIds', 'dependencies', 'privileges'],
+		['schema', 'packageId', 'revision', 'contentDigest', 'publisher', 'target', 'execution', 'agentIds', 'dependencies', 'privileges'],
 		'Agent package manifest fields',
 	);
 	createAgentPackageId(verifiedPackage.manifest.packageId);
@@ -72,8 +72,17 @@ function assertPackageWireShape(verifiedPackage: IVerifiedAgentPackage): void {
 	assertExactRecord(verifiedPackage.manifest.target, ['operatingSystem', 'architecture'], 'Agent package target fields');
 	assertBoundedText(verifiedPackage.manifest.target.operatingSystem, 'target operating system', verifiedPackage.offering.packageId);
 	assertBoundedText(verifiedPackage.manifest.target.architecture, 'target architecture', verifiedPackage.offering.packageId);
-	if (verifiedPackage.manifest.runtimeForm !== 'embedded' && verifiedPackage.manifest.runtimeForm !== 'connected') {
-		throw new AgentPackageError(AgentPackageErrorCode.InvalidPackage, 'Invalid Agent package runtime form');
+	if (verifiedPackage.manifest.execution.kind === 'host') {
+		assertExactRecord(verifiedPackage.manifest.execution, ['kind'], 'Host Agent package execution fields');
+	} else if (verifiedPackage.manifest.execution.kind === 'connected') {
+		assertExactRecord(verifiedPackage.manifest.execution, ['kind', 'entryPoint'], 'Connected Agent package execution fields');
+		assertBoundedText(
+			verifiedPackage.manifest.execution.entryPoint,
+			'connected Agent entry point',
+			verifiedPackage.offering.packageId,
+		);
+	} else {
+		throw new AgentPackageError(AgentPackageErrorCode.InvalidPackage, 'Invalid Agent package execution');
 	}
 	assertArray(verifiedPackage.manifest.agentIds, 'Agent package Agent IDs');
 	for (const agentId of verifiedPackage.manifest.agentIds) {
@@ -81,14 +90,17 @@ function assertPackageWireShape(verifiedPackage: IVerifiedAgentPackage): void {
 	}
 	assertArray(verifiedPackage.manifest.dependencies, 'Agent package dependencies');
 	for (const dependency of verifiedPackage.manifest.dependencies) {
-		assertExactRecord(dependency, ['id', 'source', 'target', 'digest', 'license'], 'Agent package dependency fields');
+		assertExactRecord(dependency, ['id', 'source', 'target', 'digest', 'license', 'executable'], 'Agent package dependency fields');
 		createAgentPackageContentDigest(dependency.digest);
+		if (typeof dependency.executable !== 'boolean') {
+			throw new AgentPackageError(AgentPackageErrorCode.InvalidPackage, 'Invalid Agent package dependency execution mode');
+		}
 	}
 	assertArray(verifiedPackage.dependencyClosure, 'Agent package dependency closure');
 	for (const dependency of verifiedPackage.dependencyClosure) {
 		assertExactRecord(
 			dependency,
-			['id', 'source', 'target', 'digest', 'verifiedDigest', 'license', 'immutable'],
+			['id', 'source', 'target', 'digest', 'verifiedDigest', 'license', 'executable', 'immutable'],
 			'Agent package verified dependency fields',
 		);
 		createAgentPackageContentDigest(dependency.digest);
@@ -197,6 +209,7 @@ function assertCompleteDependencyClosure(
 			|| dependency.digest !== declared.digest
 			|| dependency.verifiedDigest !== declared.digest
 			|| dependency.license !== declared.license
+			|| dependency.executable !== declared.executable
 			|| dependency.immutable !== true
 		) {
 			throw new AgentPackageError(
@@ -261,14 +274,6 @@ function assertOfferingMatchesManifest(
 
 function assertDistribution(verifiedPackage: IVerifiedAgentPackage): void {
 	const { offering, manifest } = verifiedPackage;
-	if (offering.distribution === 'user' && manifest.runtimeForm !== 'connected') {
-		throw new AgentPackageError(
-			AgentPackageErrorCode.RuntimeFormDenied,
-			'User-installed Agent packages must use a connected runtime',
-			{ packageId: offering.packageId },
-		);
-	}
-
 	if (
 		offering.distribution === 'bundled'
 		&& (
@@ -295,6 +300,7 @@ function freezeManifest(manifest: IAgentPackageManifest): IAgentPackageManifest 
 	return Object.freeze({
 		...manifest,
 		target: Object.freeze({ ...manifest.target }),
+		execution: Object.freeze({ ...manifest.execution }),
 		agentIds: Object.freeze([...manifest.agentIds]),
 		dependencies: Object.freeze(manifest.dependencies.map(dependency => Object.freeze({ ...dependency }))),
 		privileges: Object.freeze(manifest.privileges.map(privilege => Object.freeze({ ...privilege }))),
@@ -309,7 +315,6 @@ export function validateAndFreezeAgentPackage(
 	const { offering, manifest } = verifiedPackage;
 	assertBoundedText(offering.source, 'offering source', offering.packageId);
 	assertBoundedText(manifest.publisher, 'publisher', offering.packageId);
-	assertBoundedText(manifest.runtimeEntryPoint, 'runtime entry point', offering.packageId);
 	if (!Number.isSafeInteger(manifest.schema) || manifest.schema < 1) {
 		throw new AgentPackageError(
 			AgentPackageErrorCode.InvalidPackage,
