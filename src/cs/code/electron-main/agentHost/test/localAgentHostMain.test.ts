@@ -5,9 +5,10 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import type { IpcMainInvokeEvent } from 'electron';
@@ -16,11 +17,21 @@ import { Event, type Event as EventType } from 'cs/base/common/event';
 import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import { InMemoryStorageDatabase, Storage } from 'cs/base/parts/storage/common/storage';
 import { LocalAgentHostMain } from 'cs/code/electron-main/agentHost/localAgentHostMain';
+import {
+	createLocalAgentPackageArtifactFile,
+	LocalAgentPackageArtifactPort,
+} from 'cs/code/electron-main/agentHost/localAgentPackageArtifactPort';
+import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/mockAgentPackages';
 import { COMET_AUTOMATIC_EXECUTION_PRESET } from 'cs/code/electron-main/agentHost/cometModelCatalog';
+import {
+	MockAgentRuntimeConnectionFactory,
+	productMockAgentRuntimeRetentionLimits,
+} from 'cs/code/electron-utility/agentRuntime/mockAgentRuntime';
 import { localAgentHostConnectionChannelName } from 'cs/platform/agentHost/common/connectionChannel';
 import { resolveAgentModelConfigurationCandidate } from 'cs/platform/agentHost/common/configuration';
 import {
 	createAgentHostOperationId,
+	createAgentPackageOperationId,
 	createAgentHostProtocolVersion,
 	createAgentModelId,
 	createAgentSubmissionId,
@@ -29,13 +40,20 @@ import {
 	computeAgentHostMutationDigest,
 	computeAgentHostSubmissionCaptureDigest,
 	getAgentHostRootChannelId,
+	getAgentHostSessionChannelId,
 	getAgentHostSessionsChannelId,
 	type AgentHostMutationOutcome,
 	type AgentHostMutationPayload,
 	type AgentHostPrepareSubmissionResult,
 	type IAgentHostInitializeResult,
 	type IAgentHostPrepareSubmissionRequest,
+	type IAgentHostSetSubscriptionsResult,
 } from 'cs/platform/agentHost/common/protocol';
+import {
+	computeAgentPackageOperationDigest,
+	type AgentPackageOperationOutcome,
+	type AgentPackageOperationPayload,
+} from 'cs/platform/agentHost/common/packages';
 import {
 	ApplicationStorageAgentHostCatalogStore,
 	ApplicationStorageAgentPackageStateStore,
@@ -159,6 +177,15 @@ async function createStorage(): Promise<Storage> {
 	return storage;
 }
 
+async function makeDirectoriesWritable(directory: string): Promise<void> {
+	await chmod(directory, 0o700);
+	for (const entry of await readdir(directory, { withFileTypes: true })) {
+		if (entry.isDirectory() && !entry.isSymbolicLink()) {
+			await makeDirectoriesWritable(path.join(directory, entry.name));
+		}
+	}
+}
+
 function digest(bytes: Uint8Array): string {
 	return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
@@ -183,15 +210,37 @@ async function createHost(
 	artifactPath: string,
 	contentRoot: string,
 	channelServer: RecordingChannelServer,
+	options: {
+		readonly mockRuntimeArtifactPath?: string;
+		readonly packageStorageRoot?: string;
+	} = {},
 ): Promise<LocalAgentHostMain> {
+	const mockRuntimeArtifactPath = options.mockRuntimeArtifactPath ?? path.join(
+		process.cwd(),
+		'src/cs/code/electron-utility/agentRuntime/mockAgentRuntimeMain.ts',
+	);
+	const mockAgentPackageProducts = createMockAgentPackageProducts(
+		Object.freeze({ operatingSystem: process.platform, architecture: process.arch }),
+		await createLocalAgentPackageArtifactFile(mockRuntimeArtifactPath),
+	);
+	const packageArtifactPort = new LocalAgentPackageArtifactPort({
+		storageRoot: options.packageStorageRoot ?? path.join(path.dirname(contentRoot), 'packages'),
+		packages: mockAgentPackageProducts.map(product => product.verifiedPackage),
+	});
 	return LocalAgentHostMain.create({
 		storage,
 		providerApiKeySecretStorage: new TestProviderApiKeySecretStorage(),
 		contentMaterializationRoot: contentRoot,
 		bundledArtifactPath: artifactPath,
+		mockAgentPackageProducts,
+		packageArtifactPort,
 		channelServer,
 		fetch: () => Promise.reject(new Error('An empty Session must not execute a model request.')),
 		now: () => 1_000,
+		agentRuntimeConnectionFactory: new MockAgentRuntimeConnectionFactory(
+			packageArtifactPort,
+			productMockAgentRuntimeRetentionLimits,
+		),
 	});
 }
 
@@ -449,6 +498,228 @@ test('product startup updates the verified bundled Comet revision before registe
 		await firstHost?.shutdown();
 		await secondHost?.shutdown();
 		storage.dispose();
+		await makeDirectoriesWritable(temporaryRoot);
+		await rm(temporaryRoot, { recursive: true, force: true });
+	}
+});
+
+test('desktop Agent Host installs every connected mock product and cold-restores retained Sessions', async () => {
+	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'comet-agent-host-connected-mocks-'));
+	const storage = await createStorage();
+	let firstHost: LocalAgentHostMain | undefined;
+	let secondHost: LocalAgentHostMain | undefined;
+	try {
+		const artifactPath = path.join(temporaryRoot, 'comet-main.js');
+		const mockRuntimeArtifactPath = path.join(temporaryRoot, 'mock-agent-runtime.js');
+		const packageStorageRoot = path.join(temporaryRoot, 'packages');
+		await writeFile(artifactPath, 'verified embedded Comet artifact');
+		await writeFile(mockRuntimeArtifactPath, 'export const mockRuntimeBuild = "one";');
+		const firstChannels = new RecordingChannelServer();
+		firstHost = await createHost(
+			storage,
+			artifactPath,
+			path.join(temporaryRoot, 'first-content'),
+			firstChannels,
+			{ mockRuntimeArtifactPath, packageStorageRoot },
+		);
+		const firstChannel = firstChannels.registeredChannel;
+		if (firstChannel === undefined) {
+			throw new Error('First Agent Host IPC channel was not registered.');
+		}
+		const firstContext = { sender: new TestRendererSender() } as unknown as IpcMainInvokeEvent;
+		const firstIdentity = await firstChannel.call<{ readonly connection: string }>(firstContext, 'identity', undefined);
+		const firstInitialized = await firstChannel.call<IAgentHostInitializeResult>(firstContext, 'initialize', {
+			connection: firstIdentity.connection,
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
+			capabilities: Object.freeze([]),
+			locale: 'en',
+			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),
+			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]),
+		});
+		const initialRoot = firstInitialized.snapshots.find(snapshot => snapshot.kind === 'root');
+		if (initialRoot?.kind !== 'root') {
+			throw new Error('Initial Agent Host root snapshot is missing.');
+		}
+		assert.deepEqual(
+			initialRoot.state.packages.installablePackages.map(offering => offering.packageId),
+			['copilot', 'claude', 'codex'],
+		);
+
+		let packageRevision = initialRoot.state.packages.revision;
+		for (const offering of initialRoot.state.packages.installablePackages) {
+			const payload: AgentPackageOperationPayload = Object.freeze({
+				kind: 'install',
+				packageId: offering.packageId,
+				offering,
+			});
+			const operation = createAgentPackageOperationId(`install-${offering.packageId}`);
+			const requestDigest = await computeAgentPackageOperationDigest(packageRevision, payload);
+			const outcome: AgentPackageOperationOutcome = await firstChannel.call<AgentPackageOperationOutcome>(firstContext, 'executePackageOperation', {
+				operation,
+				digest: requestDigest,
+				expectedCatalogRevision: packageRevision,
+				payload,
+			});
+			if (outcome.kind !== 'succeeded') {
+				throw new Error(
+					`Connected mock package "${offering.packageId}" did not install: ${JSON.stringify(outcome)}`,
+				);
+			}
+			packageRevision = outcome.result.stateRevision;
+		}
+
+		let snapshots = await firstChannel.call<IAgentHostSetSubscriptionsResult>(firstContext, 'setSubscriptions', {
+			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]),
+		});
+		const installedRoot = snapshots.snapshots.find(snapshot => snapshot.kind === 'root');
+		if (installedRoot?.kind !== 'root') {
+			throw new Error('Installed Agent Host root snapshot is missing.');
+		}
+		assert.deepEqual(installedRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'claude', 'codex']);
+		assert.deepEqual(installedRoot.state.sessionTypes.map(type => type.id), ['comet', 'copilot', 'claude', 'codex']);
+		assert.deepEqual(
+			installedRoot.state.agentDefaults.map(defaults => defaults.schema.agent),
+			['comet', 'copilot', 'claude', 'codex'],
+		);
+		const claudeRegistration = installedRoot.state.agentRegistrations.find(registration => registration.agentId === 'claude');
+		if (claudeRegistration === undefined) {
+			throw new Error('Claude connected registration is missing.');
+		}
+		const claudeSessionType = installedRoot.state.sessionTypes.find(type => type.agentId === 'claude');
+		if (claudeSessionType === undefined) {
+			throw new Error('Claude connected Session type is missing.');
+		}
+		const createPayload: AgentHostMutationPayload = Object.freeze({
+			kind: 'createSession',
+			sessionType: claudeSessionType.id,
+			configuration: Object.freeze({
+				schema: claudeRegistration.initialSessionConfigurationSchema,
+				values: Object.freeze({}),
+			}),
+			chats: Object.freeze([]),
+		});
+		const created = await firstChannel.call<AgentHostMutationOutcome>(firstContext, 'mutate', {
+			operation: createAgentHostOperationId('create-connected-claude-session'),
+			digest: await computeAgentHostMutationDigest(createPayload),
+			payload: createPayload,
+		});
+		assert.equal(created.kind, 'succeeded');
+		if (created.kind !== 'succeeded' || created.result.kind !== 'createSession') {
+			throw new Error('Claude connected Session creation failed.');
+		}
+		const retainedSession = created.result.session;
+		const firstPackageState = await new ApplicationStorageAgentPackageStateStore(storage).read();
+		const firstClaudePackage = firstPackageState?.installedPackages.find(candidate => candidate.packageId === 'claude');
+		if (firstClaudePackage === undefined) {
+			throw new Error('Installed Claude package receipt is missing.');
+		}
+		const firstClaudeEntryPoint = fileURLToPath(firstClaudePackage.dependencyClosure[0].source);
+		const firstClaudeDigest = firstClaudePackage.contentDigest;
+
+		await firstHost.shutdown();
+		firstHost = undefined;
+		await writeFile(mockRuntimeArtifactPath, 'export const mockRuntimeBuild = "two";');
+
+		const secondChannels = new RecordingChannelServer();
+		secondHost = await createHost(
+			storage,
+			artifactPath,
+			path.join(temporaryRoot, 'second-content'),
+			secondChannels,
+			{ mockRuntimeArtifactPath, packageStorageRoot },
+		);
+		const secondChannel = secondChannels.registeredChannel;
+		if (secondChannel === undefined) {
+			throw new Error('Second Agent Host IPC channel was not registered.');
+		}
+		const secondContext = { sender: new TestRendererSender() } as unknown as IpcMainInvokeEvent;
+		const secondIdentity = await secondChannel.call<{ readonly connection: string }>(secondContext, 'identity', undefined);
+		const secondInitialized = await secondChannel.call<IAgentHostInitializeResult>(secondContext, 'initialize', {
+			connection: secondIdentity.connection,
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
+			capabilities: Object.freeze([]),
+			locale: 'en',
+			implementation: Object.freeze({ name: 'test.renderer', build: '2' }),
+			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionChannelId(retainedSession)]),
+		});
+		const restoredRoot = secondInitialized.snapshots.find(snapshot => snapshot.kind === 'root');
+		const restoredSession = secondInitialized.snapshots.find(snapshot => snapshot.kind === 'session');
+		if (restoredRoot?.kind !== 'root' || restoredSession?.kind !== 'session') {
+			throw new Error('Cold-restored connected Agent snapshots are missing.');
+		}
+		assert.deepEqual(restoredRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'claude', 'codex']);
+		assert.equal(restoredSession.state.lifecycle, 'available');
+		const restoredPackageState = await new ApplicationStorageAgentPackageStateStore(storage).read();
+		const restoredClaudePackage = restoredPackageState?.installedPackages.find(candidate => candidate.packageId === 'claude');
+		if (restoredClaudePackage === undefined) {
+			throw new Error('Cold-restored Claude installed record is missing.');
+		}
+		assert.equal(restoredClaudePackage.contentDigest, firstClaudeDigest);
+		assert.equal(fileURLToPath(restoredClaudePackage.dependencyClosure[0].source), firstClaudeEntryPoint);
+
+		const claudeOffering = restoredRoot.state.packages.installablePackages.find(offering => offering.packageId === 'claude');
+		if (claudeOffering === undefined) {
+			throw new Error('Claude installable offering is missing after cold restore.');
+		}
+		const uninstallPayload: AgentPackageOperationPayload = Object.freeze({ kind: 'uninstall', packageId: claudeOffering.packageId });
+		let operation = createAgentPackageOperationId('uninstall-cold-restored-claude');
+		let requestDigest = await computeAgentPackageOperationDigest(restoredRoot.state.packages.revision, uninstallPayload);
+		let packageOutcome = await secondChannel.call<AgentPackageOperationOutcome>(secondContext, 'executePackageOperation', {
+			operation,
+			digest: requestDigest,
+			expectedCatalogRevision: restoredRoot.state.packages.revision,
+			payload: uninstallPayload,
+		});
+		assert.equal(packageOutcome.kind, 'succeeded');
+		await assert.rejects(readFile(firstClaudeEntryPoint));
+
+		snapshots = await secondChannel.call<IAgentHostSetSubscriptionsResult>(secondContext, 'setSubscriptions', {
+			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionChannelId(retainedSession)]),
+		});
+		const unavailableRoot = snapshots.snapshots.find(snapshot => snapshot.kind === 'root');
+		const unavailableSession = snapshots.snapshots.find(snapshot => snapshot.kind === 'session');
+		if (unavailableRoot?.kind !== 'root' || unavailableSession?.kind !== 'session') {
+			throw new Error('Uninstalled connected Agent snapshots are missing.');
+		}
+		assert.equal(unavailableRoot.state.agents.some(agent => agent.id === 'claude'), false);
+		assert.equal(unavailableSession.state.lifecycle, 'unavailable');
+
+		const reinstallPayload: AgentPackageOperationPayload = Object.freeze({
+			kind: 'install',
+			packageId: claudeOffering.packageId,
+			offering: claudeOffering,
+		});
+		operation = createAgentPackageOperationId('reinstall-cold-restored-claude');
+		requestDigest = await computeAgentPackageOperationDigest(unavailableRoot.state.packages.revision, reinstallPayload);
+		packageOutcome = await secondChannel.call<AgentPackageOperationOutcome>(secondContext, 'executePackageOperation', {
+			operation,
+			digest: requestDigest,
+			expectedCatalogRevision: unavailableRoot.state.packages.revision,
+			payload: reinstallPayload,
+		});
+		assert.equal(packageOutcome.kind, 'succeeded');
+
+		snapshots = await secondChannel.call<IAgentHostSetSubscriptionsResult>(secondContext, 'setSubscriptions', {
+			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionChannelId(retainedSession)]),
+		});
+		const releasedSession = snapshots.snapshots.find(snapshot => snapshot.kind === 'session');
+		if (releasedSession?.kind !== 'session') {
+			throw new Error('Reinstalled connected Agent Session snapshot is missing.');
+		}
+		assert.equal(releasedSession.state.lifecycle, 'released');
+
+		const deletePayload: AgentHostMutationPayload = Object.freeze({ kind: 'deleteSession', session: retainedSession });
+		const deleted = await secondChannel.call<AgentHostMutationOutcome>(secondContext, 'mutate', {
+			operation: createAgentHostOperationId('delete-cold-restored-claude-session'),
+			digest: await computeAgentHostMutationDigest(deletePayload),
+			payload: deletePayload,
+		});
+		assert.equal(deleted.kind, 'succeeded');
+	} finally {
+		await firstHost?.shutdown();
+		await secondHost?.shutdown();
+		storage.dispose();
+		await makeDirectoriesWritable(temporaryRoot);
 		await rm(temporaryRoot, { recursive: true, force: true });
 	}
 });
@@ -467,8 +738,14 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.ok(closeHostIndex >= 0);
 	assert.ok(closeHostIndex < closeStorageIndex);
 	assert.match(mainSource, /bundledArtifactPath: fileURLToPath\(import\.meta\.url\)/);
+	assert.match(mainSource, /const mockAgentRuntimeArtifact = await createLocalAgentPackageArtifactFile\(fileURLToPath\(new URL\(/);
+	assert.match(mainSource, /mockAgentPackageProducts,/);
 	assert.match(mainSource, /contentMaterializationRoot: environmentMainPaths\.agentHostContentDir/);
+	assert.match(mainSource, /storageRoot: environmentMainPaths\.agentHostPackagesDir/);
+	assert.match(mainSource, /packageArtifactPort,/);
 	assert.match(mainSource, /providerApiKeySecretStorage: storage\.providerApiKeySecretStorage/);
+	assert.match(mainSource, /const mockAgentRuntimeSandboxProcessPort = new MockAgentRuntimeSandboxProcessPort\(packageArtifactPort\)/);
+	assert.match(mainSource, /agentRuntimeConnectionFactory: new MockAgentRuntimeProcessFactory\(mockAgentRuntimeSandboxProcessPort\)/);
 	assert.match(mainSource, /registerAppIpc\(storage, nativeHostMainService, themeMainService\)/);
 	const saveSettingsIndex = ipcSource.indexOf('const saved = await storage.saveSettings');
 	const updateThemeIndex = ipcSource.indexOf('themeMainService.updateSettings(saved)', saveSettingsIndex);

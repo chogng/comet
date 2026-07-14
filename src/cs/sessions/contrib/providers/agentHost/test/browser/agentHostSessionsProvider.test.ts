@@ -6,8 +6,20 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
+import { DeferredPromise } from 'cs/base/common/async';
+import type { CancellationToken } from 'cs/base/common/cancellation';
 import { Emitter } from 'cs/base/common/event';
+import { toDisposable, type IDisposable } from 'cs/base/common/lifecycle';
+import {
+	RemoteAgentHostConnection,
+	type IRemoteAgentHostClientToolEndpoint,
+	type IRemoteAgentHostProtocolTransport,
+	type IRemoteAgentHostTransportStateChange,
+	type RemoteAgentHostTransportState,
+} from 'cs/platform/agentHost/browser/remoteAgentHostConnection';
+import type { IClientContentResourceService } from 'cs/platform/agentHost/browser/clientContentResources';
 import { createTestChatStorageService } from 'cs/workbench/contrib/chat/test/common/testChatStorage';
+import type { IAgentHostAttachment } from 'cs/platform/agentHost/common/attachments';
 import {
 	AgentConfigurationSchemaProfile,
 	validateAndFreezeAgentConfigurationSchema,
@@ -15,8 +27,14 @@ import {
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
 import {
 	createAgentCapabilityRevision,
+	createAgentAttachmentId,
+	createAgentAttachmentProducerTypeId,
+	createAgentAttachmentRepresentationSchemaId,
 	createAgentChatId,
 	createAgentConfigurationStateRevision,
+	createAgentContentDigest,
+	createAgentContentReferenceId,
+	createAgentContentVersion,
 	createAgentDescriptorRevision,
 	createAgentExecutionPresetId,
 	createAgentExecutionProfileDigest,
@@ -40,6 +58,7 @@ import {
 	createAgentToolSetRevision,
 	createAgentTurnId,
 	type AgentHostChannelId,
+	type AgentHostClientConnectionId,
 	type AgentSessionId,
 } from 'cs/platform/agentHost/common/identities';
 import type {
@@ -47,8 +66,11 @@ import type {
 	IAgentPackageOperationOutcomeRequest,
 	IAgentPackageOperationRequest,
 } from 'cs/platform/agentHost/common/packages';
+import { RemoteAgentHostProtocolCommand } from 'cs/platform/agentHost/common/remoteProtocol';
+import type { AgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import {
 	AgentHostOperationFailureCode,
+	computeAgentHostMutationDigest,
 	getAgentHostChatChannelId,
 	getAgentHostRootChannelId,
 	getAgentHostSessionChannelId,
@@ -75,6 +97,7 @@ import {
 	type IAgentHostSessionConfigurationCompletionsResult,
 } from 'cs/platform/agentHost/common/protocol';
 import { AgentHostSessionsProvider } from 'cs/sessions/contrib/providers/agentHost/browser/agentHostSessionsProvider';
+import { RemoteAgentHostSessionsContribution } from 'cs/sessions/contrib/providers/agentHost/browser/remoteAgentHost';
 import { resolveAgentHostDisplayText } from 'cs/sessions/contrib/providers/agentHost/browser/agentHostSessionProjection';
 import {
 	ChatInteractivity,
@@ -82,7 +105,11 @@ import {
 	SessionWorkspaceKind,
 } from 'cs/sessions/services/sessions/common/session';
 import { SessionTransitionKind } from 'cs/sessions/services/sessions/common/sessionsProvider';
+import { SessionsProvidersService } from 'cs/sessions/services/sessions/browser/sessionsProvidersService';
 import { ChatService } from 'cs/workbench/contrib/chat/common/chatService/chatServiceImpl';
+import type { IWorkbenchLanguageService } from 'cs/workbench/services/language/common/languageService';
+import type { IWorkbenchLocaleService } from 'cs/workbench/services/localization/common/locale';
+import { getLocaleMessages } from 'language/i18n';
 
 const authority = createAgentHostAuthorityId('local');
 const packageId = createAgentPackageId('comet');
@@ -92,6 +119,19 @@ const modelId = createAgentModelId('comet-model');
 const automaticPreset = createAgentExecutionPresetId('automatic');
 const payloadDigest = createAgentHostPayloadDigest(`sha256:${'a'.repeat(64)}`);
 const registrationRevision = createAgentRuntimeRegistrationRevision('comet.embedded.v2');
+const remoteContentResourceLimits = Object.freeze({
+	maximumBlobBytes: 4_096,
+	maximumTreeBytes: 8_192,
+	maximumTreeEntries: 32,
+	maximumTreeDepth: 8,
+	maximumReadLength: 1_024,
+	maximumOpenLeases: 8,
+	maximumConcurrentOperations: 4,
+	maximumTotalReadBytes: 8_192,
+	maximumTreePageEntries: 32,
+	maximumTreePages: 32,
+	maximumLeaseDurationMilliseconds: 60_000,
+});
 const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
 	profile: AgentConfigurationSchemaProfile,
 	agent: agentId,
@@ -346,7 +386,9 @@ class TestAgentHostConnection implements IAgentHostConnection {
 	readonly completionRequests: IAgentHostSessionConfigurationCompletionsRequest[] = [];
 	readonly prepareRequests: IAgentHostPrepareSubmissionRequest[] = [];
 	readonly mutationRequests: IAgentHostMutationRequest[] = [];
+	readonly operationOutcomeRequests: IAgentHostOperationOutcomeRequest[] = [];
 	reconnectResult: AgentHostReconnectResult | undefined;
+	reconnectRequest: ((request: IAgentHostReconnectRequest) => Promise<AgentHostReconnectResult>) | undefined;
 	resolveConfiguration: (
 		request: IAgentHostResolveSessionConfigurationRequest,
 	) => Promise<IAgentHostResolveSessionConfigurationResult> = async () => ({
@@ -407,12 +449,15 @@ class TestAgentHostConnection implements IAgentHostConnection {
 
 	async reconnect(request: IAgentHostReconnectRequest): Promise<AgentHostReconnectResult> {
 		this.reconnectRequests.push(request);
-		if (this.reconnectResult === undefined) {
+		const result = this.reconnectRequest !== undefined
+			? await this.reconnectRequest(request)
+			: this.reconnectResult;
+		if (result === undefined) {
 			throw new Error('Reconnect is not configured.');
 		}
-		const missing = new Set(this.reconnectResult.missingChannels.map(item => item.channel));
+		const missing = new Set(result.missingChannels.map(item => item.channel));
 		this.replaceActiveSubscriptions(request.subscriptions.filter(channel => !missing.has(channel)));
-		return this.reconnectResult;
+		return result;
 	}
 
 	async setSubscriptions(request: IAgentHostSetSubscriptionsRequest): Promise<IAgentHostSetSubscriptionsResult> {
@@ -460,6 +505,7 @@ class TestAgentHostConnection implements IAgentHostConnection {
 	}
 
 	getOperationOutcome(request: IAgentHostOperationOutcomeRequest): Promise<AgentHostMutationOutcome> {
+		this.operationOutcomeRequests.push(request);
 		return this.operationOutcome(request);
 	}
 
@@ -537,6 +583,91 @@ class TestAgentHostConnection implements IAgentHostConnection {
 	}
 }
 
+class TestRemoteAgentHostTransport implements IRemoteAgentHostProtocolTransport {
+	private readonly stateEmitter = new Emitter<IRemoteAgentHostTransportStateChange>();
+	private readonly actionEmitter = new Emitter<AgentHostChannelAction>();
+	private readonly hostActionListener: IDisposable;
+	private currentGeneration = 1;
+	readonly onDidChangeState = this.stateEmitter.event;
+	readonly onDidReceiveAction = this.actionEmitter.event;
+	state: RemoteAgentHostTransportState = 'connected';
+	disposed = false;
+
+	constructor(private readonly host: TestAgentHostConnection) {
+		this.hostActionListener = host.onDidReceiveAction(action => this.actionEmitter.fire(action));
+	}
+
+	get generation(): number {
+		return this.currentGeneration;
+	}
+
+	async call(
+		command: typeof RemoteAgentHostProtocolCommand[keyof typeof RemoteAgentHostProtocolCommand],
+		argument: AgentHostProtocolValue | undefined,
+		_cancellation: CancellationToken,
+	): Promise<AgentHostProtocolValue> {
+		switch (command) {
+			case RemoteAgentHostProtocolCommand.Identity:
+				return { authority: this.host.authority, connection: this.host.connection };
+			case RemoteAgentHostProtocolCommand.Initialize:
+				return await this.host.initialize(argument as unknown as IAgentHostInitializeRequest) as unknown as AgentHostProtocolValue;
+			case RemoteAgentHostProtocolCommand.SetSubscriptions:
+				return await this.host.setSubscriptions(
+					argument as unknown as IAgentHostSetSubscriptionsRequest,
+				) as unknown as AgentHostProtocolValue;
+			case RemoteAgentHostProtocolCommand.Reconnect:
+				return await this.host.reconnect(
+					argument as unknown as IAgentHostReconnectRequest,
+				) as unknown as AgentHostProtocolValue;
+			case RemoteAgentHostProtocolCommand.Mutate:
+				return await this.host.mutate(
+					argument as unknown as IAgentHostMutationRequest,
+				) as unknown as AgentHostProtocolValue;
+			case RemoteAgentHostProtocolCommand.GetOperationOutcome:
+				return await this.host.getOperationOutcome(
+					argument as unknown as IAgentHostOperationOutcomeRequest,
+				) as unknown as AgentHostProtocolValue;
+			default:
+				throw new Error(`Unexpected remote Agent Host command '${command}'.`);
+		}
+	}
+
+	bindClientEndpoints(
+		_connection: AgentHostClientConnectionId,
+		_contentResources: IClientContentResourceService,
+		_tools: IRemoteAgentHostClientToolEndpoint,
+	) {
+		return toDisposable(() => {});
+	}
+
+	terminate(): void {
+		this.state = 'terminal';
+		this.stateEmitter.fire(Object.freeze({ state: this.state, generation: this.generation }));
+	}
+
+	interrupt(): void {
+		this.state = 'restoring';
+		this.stateEmitter.fire(Object.freeze({ state: this.state, generation: this.generation }));
+	}
+
+	restore(): void {
+		this.currentGeneration += 1;
+		this.state = 'connected';
+		this.stateEmitter.fire(Object.freeze({ state: this.state, generation: this.generation }));
+	}
+
+	emitAction(action: AgentHostChannelAction): void {
+		this.actionEmitter.fire(action);
+	}
+
+	dispose(): void {
+		this.disposed = true;
+		this.hostActionListener.dispose();
+		this.actionEmitter.dispose();
+		this.stateEmitter.dispose();
+	}
+}
+
 type TestSessionState = IAgentHostSessionState & { readonly fullChats: readonly IAgentHostChatState[] };
 
 function withFullChats(state: IAgentHostSessionState, chats: readonly IAgentHostChatState[]): TestSessionState {
@@ -560,6 +691,41 @@ async function createProvider(connection: TestAgentHostConnection, chatService: 
 		},
 		implementation: { name: 'comet-test', build: '1' },
 	});
+}
+
+function createRemoteContribution(
+	transport: IRemoteAgentHostProtocolTransport,
+	chatService: ChatService,
+	providers: SessionsProvidersService,
+): RemoteAgentHostSessionsContribution {
+	const localeService: IWorkbenchLocaleService = {
+		_serviceBrand: undefined,
+		getLocale: () => 'en',
+		subscribe: () => () => {},
+		applyLocale: () => {},
+		updateLocalePreference: async () => {},
+		syncDocumentLanguage: () => {},
+		initialize: async () => 'en',
+	};
+	const languageService: IWorkbenchLanguageService = {
+		_serviceBrand: undefined,
+		detectInitialLocale: () => 'en',
+		getLocaleMessages,
+		toDocumentLang: () => 'en',
+	};
+	return new RemoteAgentHostSessionsContribution(
+		transport,
+		{
+			implementation: { name: 'remote-provider-test', build: '1' },
+			maximumClientToolCallRecords: 4,
+			maximumBufferedActions: 4,
+			contentResourceLimits: remoteContentResourceLimits,
+		},
+		chatService,
+		providers,
+		localeService,
+		languageService,
+	);
 }
 
 function waitForSessionsChange(provider: AgentHostSessionsProvider) {
@@ -721,6 +887,45 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 		}
 	});
 
+	test('hydrates retained unavailable history without an active Agent registration or Session type', async () => {
+		const sessionId = createAgentSessionId('unavailable-session');
+		const chat = createChatState(sessionId, 'unavailable-chat', 'Unavailable Chat', {
+			lifecycle: 'unavailable',
+		});
+		const session = withFullChats(createSessionState(
+			'unavailable-session',
+			'Unavailable Session',
+			[chat],
+			{ lifecycle: 'unavailable' },
+		), [chat]);
+		const { connection, chatService } = createFixture([session]);
+		connection.root = {
+			...connection.root,
+			capabilities: { ...connection.root.capabilities, supportsCreateSession: false },
+			agents: [],
+			agentRegistrations: [],
+			agentDefaults: [],
+			sessionTypes: [],
+		};
+		const provider = await createProvider(connection, chatService);
+		try {
+			assert.deepStrictEqual(provider.sessionTypes, []);
+			const retained = provider.getSessions();
+			assert.equal(retained.length, 1);
+			assert.equal(retained[0].title.get(), 'Unavailable Session');
+			assert.equal(retained[0].chats.get()[0].title.get(), 'Unavailable Chat');
+			assert.equal(retained[0].chats.get()[0].interactivity.get(), ChatInteractivity.ReadOnly);
+			assert.throws(
+				() => provider.getModels(retained[0], retained[0].chats.get()[0]),
+				/does not expose Session type/,
+			);
+			await assert.rejects(provider.renameSession(retained[0], 'Renamed'), /is 'unavailable'/);
+			assert.deepStrictEqual(connection.mutationRequests, []);
+		} finally {
+			provider.dispose();
+		}
+	});
+
 	test('applies contiguous actions once and requires a fresh exact snapshot after a gap', async () => {
 		const initial = withFullChats(createSessionState('action-session', 'Initial', []), []);
 		const { connection, chatService } = createFixture([initial]);
@@ -775,7 +980,9 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 				missingChannels: [],
 			};
 
-			await provider.recoverConnection();
+			provider.beginConnectionRecovery(1);
+			assert.equal(await provider.recoverConnection(2), true);
+			await provider.completeConnectionRecovery(2);
 			assert.equal(provider.getSessions()[0].title.get(), 'Replayed');
 			assert.deepStrictEqual(connection.reconnectRequests[0].subscriptions, [
 				getAgentHostRootChannelId(),
@@ -815,7 +1022,8 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 			};
 			const subscriptionRequestCount = connection.setSubscriptionsRequests.length;
 
-			await assert.rejects(provider.recoverConnection(), /reconnect replay is not contiguous/);
+			provider.beginConnectionRecovery(1);
+			await assert.rejects(provider.recoverConnection(2), /reconnect replay is not contiguous/);
 			assert.equal(connection.setSubscriptionsRequests.length, subscriptionRequestCount);
 			assert.throws(() => provider.getSessions(), /is disposed/);
 		} finally {
@@ -852,7 +1060,9 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 				missingChannels: [{ channel: firstChannel, reason: 'deleted' }],
 			};
 
-			await provider.recoverConnection();
+			provider.beginConnectionRecovery(1);
+			await provider.recoverConnection(2);
+			await provider.completeConnectionRecovery(2);
 			assert.equal(provider.getSessions()[0].chats.get().length, 1);
 			assert.equal(provider.getSessions()[0].chats.get()[0].title.get(), 'Second');
 			assert.equal(connection.reconnectRequests[0].subscriptions.includes(firstChannel), true);
@@ -1049,6 +1259,223 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 		}
 	});
 
+	test('retries an accepted submission with its exact captured content after live Feature state changes', async () => {
+		const sessionId = createAgentSessionId('accepted-retry-session');
+		const chatState = createChatState(sessionId, 'accepted-retry-chat', 'Accepted Retry');
+		const initial = withFullChats(
+			createSessionState('accepted-retry-session', 'Accepted Retry', [chatState]),
+			[chatState],
+		);
+		const { connection, chatService } = createFixture([initial]);
+		const provider = await createProvider(connection, chatService);
+		const attachmentId = createAgentAttachmentId('live-feature-attachment');
+		const producerType = createAgentAttachmentProducerTypeId('test.live-feature');
+		const representationSchema = createAgentAttachmentRepresentationSchemaId('test.live-feature.v1');
+		const acceptedSource = Object.freeze({
+			reference: createAgentContentReferenceId('live-feature-content-v1'),
+			version: createAgentContentVersion('live-feature-version-v1'),
+			digest: createAgentContentDigest(`sha256:${'1'.repeat(64)}`),
+			text: 'accepted feature content',
+		});
+		const replacementSource = Object.freeze({
+			reference: createAgentContentReferenceId('live-feature-content-v2'),
+			version: createAgentContentVersion('live-feature-version-v2'),
+			digest: createAgentContentDigest(`sha256:${'2'.repeat(64)}`),
+			text: 'replacement feature content',
+		});
+		let liveFeatureSource: typeof acceptedSource | typeof replacementSource = acceptedSource;
+		let resolveCount = 0;
+		let releaseCount = 0;
+		let discardCount = 0;
+		const producerRegistration = chatService.registerAttachmentProducer({
+			type: producerType,
+			stateVersion: 1,
+			validateState: state => assert.deepStrictEqual(state, { feature: 'live-source' }),
+			discard: () => { discardCount += 1; },
+			resolve: async ({ attachment }) => {
+				resolveCount += 1;
+				const source = liveFeatureSource;
+				const normalized: IAgentHostAttachment = Object.freeze({
+					envelopeVersion: 1,
+					id: attachment.id,
+					producerType: attachment.producerType,
+					display: attachment.display,
+					representation: Object.freeze({
+						schema: representationSchema,
+						mediaType: 'text/plain',
+						value: Object.freeze({ text: source.text }),
+					}),
+					content: Object.freeze({
+						kind: 'reference',
+						reference: source.reference,
+						owner: Object.freeze({ kind: 'client', connection: connection.connection }),
+						shape: 'blob',
+						mediaType: 'text/plain',
+						bounds: Object.freeze({ byteLength: 32, maximumReadLength: 32 }),
+						version: source.version,
+						digest: source.digest,
+					}),
+					metadata: Object.freeze([]),
+				});
+				return Object.freeze({
+					attachment: normalized,
+					release: async () => { releaseCount += 1; },
+				});
+			},
+		});
+		const submittedPayloadDigest = createAgentHostPayloadDigest(`sha256:${'3'.repeat(64)}`);
+		const committedTurn = createAgentTurnId('accepted-retry-turn');
+		let committedRequest: IAgentHostMutationRequest | undefined;
+		let mutationAttempt = 0;
+		try {
+			const session = provider.getSessions()[0];
+			const chat = session.chats.get()[0];
+			chatService.setInput(chat.resource, 'use the accepted source');
+			chatService.addPendingAttachments(chat.resource, [Object.freeze({
+				id: attachmentId,
+				producerType,
+				producerStateVersion: 1,
+				display: Object.freeze({ label: 'Live Feature' }),
+				state: Object.freeze({ feature: 'live-source' }),
+			})]);
+			connection.prepare = async request => ({
+				kind: 'prepared',
+				submission: {
+					submission: request.submission,
+					payloadDigest: submittedPayloadDigest,
+					message: request.capture.message,
+					attachments: request.capture.attachments,
+					interactionTargets: request.capture.interactionTargets,
+					sessionConfiguration: sessionConfigurationState,
+					modelConfiguration: request.executionSelection.configuration,
+					credentials: [],
+					executionProfile: {
+						revision: createAgentExecutionProfileRevision('accepted-retry-profile'),
+						digest: createAgentExecutionProfileDigest(`sha256:${'4'.repeat(64)}`),
+						agentDescriptor: createAgentDescriptorRevision('agent-revision-1'),
+						modelDescriptor: createAgentModelDescriptorRevision('model-revision-1'),
+						data: '{}',
+					},
+					runtimeRegistration: registrationRevision,
+					toolSet: {
+						revision: createAgentToolSetRevision('accepted-retry-tools'),
+						schemaProfile: createAgentToolSchemaProfileId('comet.tools'),
+						runtimeRegistration: registrationRevision,
+						agentDescriptor: createAgentDescriptorRevision('agent-revision-1'),
+						modelDescriptor: createAgentModelDescriptorRevision('model-revision-1'),
+						registrations: [],
+					},
+					requestedDeadline: 100,
+					outputConstraints: {},
+				},
+			});
+			connection.mutateRequest = async request => {
+				mutationAttempt += 1;
+				assert.equal(request.payload.kind, 'submitTurn');
+				if (request.payload.kind !== 'submitTurn') {
+					throw new Error('Expected submitTurn.');
+				}
+				const result = Object.freeze({
+					kind: 'submitTurn' as const,
+					operation: request.operation,
+					digest: request.digest,
+					hostSequence: createAgentHostSequence(connection.sequence),
+					revisions: Object.freeze([]),
+					session: sessionId,
+					chat: chatState.id,
+					turn: committedTurn,
+					submission: request.payload.submission.submission,
+				});
+				if (mutationAttempt === 1) {
+					committedRequest = request;
+					const acceptedChat = createChatState(sessionId, 'accepted-retry-chat', 'Accepted Retry', {
+						status: 'running',
+						activeTurn: committedTurn,
+						modifiedAt: 12,
+						turns: [Object.freeze({
+							id: committedTurn,
+							submission: request.payload.submission.submission,
+							payloadDigest: request.payload.submission.payloadDigest,
+								state: 'running',
+							user: Object.freeze({
+								text: request.payload.submission.message,
+								attachments: request.payload.submission.attachments,
+								interactionTargets: request.payload.submission.interactionTargets,
+							}),
+							response: Object.freeze([]),
+						})],
+					});
+					connection.sequence += 1;
+					connection.replaceSessions([withFullChats(
+						createSessionState('accepted-retry-session', 'Accepted Retry', [acceptedChat], {
+							status: 'running',
+							modifiedAt: 3,
+						}),
+						[acceptedChat],
+					)]);
+					connection.setRevision(getAgentHostSessionsChannelId(), 2);
+					connection.setRevision(getAgentHostSessionChannelId(sessionId), 2);
+					connection.setRevision(getAgentHostChatChannelId(sessionId, chatState.id), 2);
+					liveFeatureSource = replacementSource;
+					return Object.freeze({ kind: 'unknown' });
+				}
+				assert.strictEqual(request, committedRequest);
+				return Object.freeze({ kind: 'succeeded', result });
+			};
+
+			await provider.sendRequest(session, chat);
+
+			assert.equal(mutationAttempt, 2);
+			assert.equal(connection.prepareRequests.length, 1);
+			assert.equal(resolveCount, 1);
+			assert.equal(releaseCount, 1);
+			assert.equal(discardCount, 1);
+			assert.equal(connection.mutationRequests.length, 2);
+			assert.strictEqual(connection.mutationRequests[0], connection.mutationRequests[1]);
+			assert.ok(committedRequest);
+			assert.equal(
+				committedRequest.digest,
+				await computeAgentHostMutationDigest(committedRequest.payload),
+			);
+			if (committedRequest.payload.kind !== 'submitTurn') {
+				throw new Error('Expected committed submitTurn.');
+			}
+			const acceptedAttachment = committedRequest.payload.submission.attachments[0];
+			assert.equal(acceptedAttachment.id, attachmentId);
+			assert.equal(committedRequest.payload.submission.payloadDigest, submittedPayloadDigest);
+			assert.equal(acceptedAttachment.content?.kind, 'reference');
+			if (acceptedAttachment.content?.kind !== 'reference') {
+				throw new Error('Expected accepted reference content.');
+			}
+			assert.deepStrictEqual({
+				reference: acceptedAttachment.content.reference,
+				version: acceptedAttachment.content.version,
+				digest: acceptedAttachment.content.digest,
+			}, {
+				reference: acceptedSource.reference,
+				version: acceptedSource.version,
+				digest: acceptedSource.digest,
+			});
+			assert.notEqual(acceptedAttachment.content.reference, replacementSource.reference);
+			assert.notEqual(acceptedAttachment.content.version, replacementSource.version);
+			assert.notEqual(acceptedAttachment.content.digest, replacementSource.digest);
+			const committedSnapshot = connection.snapshot(
+				getAgentHostChatChannelId(sessionId, chatState.id),
+			);
+			assert.equal(committedSnapshot?.kind, 'chat');
+			if (committedSnapshot?.kind !== 'chat') {
+				throw new Error('Expected committed Chat snapshot.');
+			}
+			const historicalTurn = committedSnapshot.state.turns[0];
+			assert.equal(historicalTurn.submission, committedRequest.payload.submission.submission);
+			assert.equal(historicalTurn.payloadDigest, submittedPayloadDigest);
+			assert.deepStrictEqual(historicalTurn.user.attachments, [acceptedAttachment]);
+		} finally {
+			provider.dispose();
+			producerRegistration.dispose();
+		}
+	});
+
 	test('resends an explicitly unknown mutation with the same operation identity and digest', async () => {
 		const sessionId = createAgentSessionId('retry-session');
 		const chat = createChatState(sessionId, 'retry-chat', 'Retry Chat');
@@ -1087,6 +1514,89 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 			provider.dispose();
 		}
 		assert.throws(() => chatService.acquireModel(chatResource), /does not exist/);
+	});
+
+	test('reconciles a committed mutation after transport loss with its original operation and digest before refresh', async () => {
+		const sessionId = createAgentSessionId('committed-before-disconnect');
+		const chat = createChatState(sessionId, 'committed-before-disconnect-chat', 'Commit Chat');
+		const initial = withFullChats(createSessionState(
+			'committed-before-disconnect',
+			'Before disconnect',
+			[chat],
+		), [chat]);
+		const { connection, chatService } = createFixture([initial]);
+		let committed: IAgentHostMutationRequest | undefined;
+		connection.mutateRequest = async request => {
+			committed = request;
+			const renamed = withFullChats({ ...initial, title: 'Committed remotely', modifiedAt: 5 }, [chat]);
+			connection.sequence = 2;
+			connection.replaceSessions([renamed]);
+			connection.setRevision(getAgentHostSessionsChannelId(), 2);
+			connection.setRevision(getAgentHostSessionChannelId(sessionId), 2);
+			throw new Error('Transport was lost after the Host committed the mutation.');
+		};
+		let outcomeAttempt = 0;
+		let subscriptionCountBeforeRecovery = 0;
+		connection.operationOutcome = async request => {
+			outcomeAttempt += 1;
+			if (outcomeAttempt === 1) {
+				throw new Error('Transport is unavailable.');
+			}
+			assert.equal(connection.reconnectRequests.length, 1);
+			assert.equal(connection.setSubscriptionsRequests.length, subscriptionCountBeforeRecovery);
+			assert.ok(committed);
+			return {
+				kind: 'succeeded',
+				result: {
+					kind: 'renameSession',
+					operation: request.operation,
+					digest: request.digest,
+					hostSequence: createAgentHostSequence(2),
+					revisions: [],
+					session: sessionId,
+				},
+			};
+		};
+		const provider = await createProvider(connection, chatService);
+		try {
+			const session = provider.getSessions()[0];
+			await assert.rejects(
+				provider.renameSession(session, 'Committed remotely'),
+				/not reached a reconciled terminal outcome/,
+			);
+			assert.ok(committed);
+			assert.equal(connection.mutationRequests.length, 1);
+			assert.deepStrictEqual(connection.operationOutcomeRequests[0], {
+				operation: committed.operation,
+				digest: committed.digest,
+			});
+
+			const recoverySubscriptions = [...connection.activeSubscriptions];
+			connection.reconnectResult = {
+				kind: 'snapshots',
+				hostSequence: createAgentHostSequence(2),
+				snapshots: recoverySubscriptions.map(channel => connection.snapshot(channel)!),
+				missingChannels: [],
+			};
+			subscriptionCountBeforeRecovery = connection.setSubscriptionsRequests.length;
+			provider.beginConnectionRecovery(1);
+			await assert.rejects(
+				provider.renameSession(session, 'Must wait'),
+				/connection is recovering/,
+			);
+			assert.equal(connection.mutationRequests.length, 1);
+
+			assert.equal(await provider.recoverConnection(2), true);
+			await provider.completeConnectionRecovery(2);
+			assert.equal(connection.mutationRequests.length, 1);
+			assert.equal(connection.operationOutcomeRequests.length, 2);
+			assert.equal(connection.operationOutcomeRequests[1].operation, committed.operation);
+			assert.equal(connection.operationOutcomeRequests[1].digest, committed.digest);
+			assert.ok(connection.setSubscriptionsRequests.length > subscriptionCountBeforeRecovery);
+			assert.equal(provider.getSessions()[0].title.get(), 'Committed remotely');
+		} finally {
+			provider.dispose();
+		}
 	});
 
 	test('routes release, cancellation, and steering to exact Host identities', async () => {
@@ -1151,6 +1661,208 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 			]);
 		} finally {
 			provider.dispose();
+		}
+	});
+
+	test('supersedes an overlapping generation recovery and releases live actions before later mutations', async () => {
+		const sessionId = createAgentSessionId('overlapping-recovery-session');
+		const initial = withFullChats(createSessionState('overlapping-recovery-session', 'Initial', []), []);
+		const host = new TestAgentHostConnection([initial]);
+		const transport = new TestRemoteAgentHostTransport(host);
+		const chatService = new ChatService(createTestChatStorageService());
+		const providers = new SessionsProvidersService();
+		const contribution = createRemoteContribution(transport, chatService, providers);
+		try {
+			await contribution.start();
+			const provider = providers.getProviders()[0];
+			assert.ok(provider instanceof AgentHostSessionsProvider);
+			const generation2Started = new DeferredPromise<void>();
+			const generation2Result = new DeferredPromise<AgentHostReconnectResult>();
+			const generation3Started = new DeferredPromise<void>();
+			const generation3Result = new DeferredPromise<AgentHostReconnectResult>();
+			let reconnectAttempt = 0;
+			host.reconnectRequest = async () => {
+				reconnectAttempt += 1;
+				if (reconnectAttempt === 1) {
+					generation2Started.complete();
+					return generation2Result.p;
+				}
+				generation3Started.complete();
+				return generation3Result.p;
+			};
+
+			transport.interrupt();
+			transport.restore();
+			await generation2Started.p;
+			await assert.rejects(
+				provider.renameSession(provider.getSessions()[0], 'Must not mutate during recovery'),
+				/connection is recovering/,
+			);
+			assert.equal(host.mutationRequests.length, 0);
+
+			transport.interrupt();
+			const snapshotRoot = {
+				...host.root,
+				label: { kind: 'literal' as const, value: 'Generation 3 snapshot' },
+			};
+			const snapshotSession = withFullChats({ ...initial, title: 'Generation 3 snapshot', modifiedAt: 3 }, []);
+			host.root = snapshotRoot;
+			host.sequence = 2;
+			host.replaceSessions([snapshotSession]);
+			host.setRevision(getAgentHostRootChannelId(), 2);
+			host.setRevision(getAgentHostSessionsChannelId(), 2);
+			host.setRevision(getAgentHostSessionChannelId(sessionId), 2);
+			const recoverySubscriptions = [...host.activeSubscriptions];
+			const exactGeneration3Result: AgentHostReconnectResult = {
+				kind: 'snapshots',
+				hostSequence: createAgentHostSequence(2),
+				snapshots: recoverySubscriptions.map(channel => host.snapshot(channel)!),
+				missingChannels: [],
+			};
+			transport.restore();
+			const liveRoot = {
+				...snapshotRoot,
+				label: { kind: 'literal' as const, value: 'Generation 3 live action' },
+				sessionTypes: snapshotRoot.sessionTypes.map(descriptor => ({
+					...descriptor,
+					displayName: { kind: 'literal' as const, value: 'Live Session type' },
+				})),
+			};
+			const ordering: string[] = [];
+			const liveApplied = new DeferredPromise<void>();
+			provider.onDidChangeSessionTypes(() => {
+				if (provider.label === 'Generation 3 live action') {
+					ordering.push('liveAction');
+					liveApplied.complete();
+				}
+			});
+			transport.emitAction({
+				channel: getAgentHostRootChannelId(),
+				kind: 'root',
+				hostSequence: createAgentHostSequence(3),
+				revision: createAgentHostChannelRevision(3),
+				digest: createAgentHostActionDigest(`sha256:${'8'.repeat(64)}`),
+				cause: { kind: 'host' },
+				action: { kind: 'rootStateChanged', state: liveRoot },
+			});
+			assert.equal(provider.label, 'Local Agent Host');
+
+			generation2Result.complete({
+				kind: 'replay',
+				fromHostSequence: createAgentHostSequence(1),
+				throughHostSequence: createAgentHostSequence(1),
+				actions: [],
+				missingChannels: [],
+			});
+			await generation3Started.p;
+			assert.equal(providers.getProviders().length, 1);
+			assert.equal(provider.label, 'Local Agent Host');
+			generation3Result.complete(exactGeneration3Result);
+			await liveApplied.p;
+			await new Promise<void>(resolve => setImmediate(resolve));
+
+			host.mutateRequest = async request => {
+				ordering.push('mutation');
+				assert.equal(provider.label, 'Generation 3 live action');
+				const renamed = withFullChats({ ...snapshotSession, title: 'After recovery', modifiedAt: 4 }, []);
+				host.root = liveRoot;
+				host.sequence = 4;
+				host.replaceSessions([renamed]);
+				host.setRevision(getAgentHostRootChannelId(), 3);
+				host.setRevision(getAgentHostSessionsChannelId(), 3);
+				host.setRevision(getAgentHostSessionChannelId(sessionId), 3);
+				return {
+					kind: 'succeeded',
+					result: {
+						kind: 'renameSession',
+						operation: request.operation,
+						digest: request.digest,
+						hostSequence: createAgentHostSequence(4),
+						revisions: [],
+						session: sessionId,
+					},
+				};
+			};
+			await provider.renameSession(provider.getSessions()[0], 'After recovery');
+			assert.deepStrictEqual(ordering, ['liveAction', 'mutation']);
+			assert.equal(host.reconnectRequests.length, 2);
+			assert.equal(host.mutationRequests.length, 1);
+			assert.equal(provider.getSessions()[0].title.get(), 'After recovery');
+		} finally {
+			contribution.dispose();
+			providers.dispose();
+			host.dispose();
+		}
+	});
+
+	test('rejects an unbounded remote action buffer configuration and disposes its transport', async () => {
+		const host = new TestAgentHostConnection();
+		const transport = new TestRemoteAgentHostTransport(host);
+		try {
+			await assert.rejects(RemoteAgentHostConnection.create(transport, {
+				maximumClientToolCallRecords: 4,
+				maximumBufferedActions: 0,
+				contentResourceLimits: remoteContentResourceLimits,
+			}), /maximum buffered actions must be between 1 and 65536/);
+			await assert.rejects(RemoteAgentHostConnection.create(transport, {
+				maximumClientToolCallRecords: 8,
+				maximumBufferedActions: 65_537,
+				contentResourceLimits: remoteContentResourceLimits,
+			}), /maximum buffered actions must be between 1 and 65536/);
+			assert.equal(transport.disposed, true);
+		} finally {
+			transport.dispose();
+			host.dispose();
+		}
+	});
+
+	test('terminates and disposes a restoring remote transport when its ordered action buffer is full', async () => {
+		const session = withFullChats(createSessionState('bounded-buffer-session', 'Buffered', []), []);
+		const host = new TestAgentHostConnection([session]);
+		const transport = new TestRemoteAgentHostTransport(host);
+		const connection = await RemoteAgentHostConnection.create(transport, {
+			maximumClientToolCallRecords: 4,
+			maximumBufferedActions: 1,
+			contentResourceLimits: remoteContentResourceLimits,
+		});
+		try {
+			let deliveredActions = 0;
+			connection.onDidReceiveAction(() => deliveredActions += 1);
+			const buffered = host.emitSessionState({ ...session, title: 'Buffered once' }, 2, '7');
+
+			transport.interrupt();
+			transport.emitAction(buffered);
+			assert.equal(connection.state, 'restoring');
+			assert.equal(transport.disposed, false);
+
+			transport.emitAction(buffered);
+			assert.equal(connection.state, 'terminal');
+			assert.equal(transport.disposed, true);
+			assert.equal(deliveredActions, 0);
+		} finally {
+			connection.dispose();
+			host.dispose();
+		}
+	});
+
+	test('removes and disposes the remote provider when its transport becomes terminal', async () => {
+		const host = new TestAgentHostConnection();
+		const transport = new TestRemoteAgentHostTransport(host);
+		const chatService = new ChatService(createTestChatStorageService());
+		const providers = new SessionsProvidersService();
+		const contribution = createRemoteContribution(transport, chatService, providers);
+		try {
+			await contribution.start();
+			assert.equal(providers.getProviders().length, 1);
+			const provider = providers.getProviders()[0];
+
+			transport.terminate();
+			assert.equal(providers.getProviders().length, 0);
+			assert.throws(() => provider.getSessions(), /is disposed/);
+		} finally {
+			contribution.dispose();
+			providers.dispose();
+			host.dispose();
 		}
 	});
 });

@@ -329,6 +329,33 @@ SDK configuration classes, generated native protocol values, Zod objects,
 provider option bags, and filesystem layout never cross the Agent Runtime
 Port.
 
+### Product SDK configuration projections
+
+The product-owned Copilot, Claude, and Codex packages publish the following
+canonical Agent-owned properties. Host-default properties seed new Sessions;
+Session properties are persisted in the addressed Session configuration; model
+properties are resolved independently for the selected model. The connected
+runtime alone maps these values to its private SDK or CLI representation.
+
+| Agent | Property | Scope | Canonical values | Baseline default |
+|---|---|---|---|---|
+| Copilot | `copilot.mode` | Host default and Session | `interactive`, `plan`, `autopilot` | `interactive` |
+| Copilot | `copilot.autoApprove` | Host default and Session | `default`, `autoApprove` | `default` |
+| Copilot | `copilot.isolation` | Host default and Session | `folder`, `worktree` | `folder` |
+| Claude | `claude.permissionMode` | Host default and Session | `default`, `acceptEdits`, `bypassPermissions`, `plan`, `auto` | `default` |
+| Claude | `claude.thinkingLevel` | Model | `none`, `low`, `medium`, `high` | `medium` |
+| Codex | `codex.approvalPolicy` | Host default and Session | `never`, `on-request`, `on-failure`, `untrusted` | `on-request` |
+| Codex | `codex.sandboxMode` | Host default and Session | `read-only`, `workspace-write`, `danger-full-access` | `workspace-write` |
+| Codex | `codex.webSearchMode` | Host default and Session | `disabled`, `cached`, `live` | `disabled` |
+| Codex | `codex.personality` | Host default and Session | `none`, `friendly`, `pragmatic` | `none` |
+| Codex | `codex.modelReasoningEffort` | Model | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` | `medium` |
+| Codex | `codex.reasoningSummary` | Model | `none`, `auto`, `concise`, `detailed` | `auto` |
+
+Runtime resolution may narrow an enum or choose a different declared default
+when the exact workspace or model descriptor requires it. That result is a new
+validated schema revision; the Host does not coerce an existing value, invent
+an SDK default, or interpret one Agent's property on behalf of another.
+
 Configuration values contain no raw credential material. A schema may accept
 a typed credential reference when the package and Agent declare that reference
 kind. Preparation collects the exact references declared by the committed
@@ -451,10 +478,23 @@ lifecycle.
 ### Runtime loss and resumption
 
 A connected runtime reconnects with the same logical runtime connection ID,
-accepted registration revision, and exact active-operation set. A runtime
-declares whether it can resume an accepted Turn and supplies the matching
-opaque checkpoint tagged with a supported resume-schema ID. The Host reconciles
-the same Turn and operation identities before execution continues.
+accepted registration revision, and a new contiguous transport generation. A
+generation boundary is a semantic recovery barrier: calls admitted to the lost
+generation terminate with that exact generation unavailable and are never
+silently replayed into the replacement process.
+
+Before admitting new calls, the connected-runtime binding rematerializes every
+Host-committed materialized Session, outstanding Session-configuration
+transaction, and materialized Chat in dependency order. Session and Chat resume
+state comes from the Host-side committed backing ledger, including later
+resume-state actions accepted from the runtime. Release or deletion removes the
+corresponding recovery ownership.
+
+A runtime declares whether it can resume an accepted Turn and supplies the
+matching opaque checkpoint tagged with a supported resume-schema ID. The Host
+may resume only through an explicit committed lifecycle operation after it has
+reconciled the lost Turn and operation identities; the old generation's active
+call itself does not continue in the replacement process.
 
 When the exact runtime registration or resume schema is unavailable, affected
 Sessions or Turns enter an explicit unavailable or failed state according to

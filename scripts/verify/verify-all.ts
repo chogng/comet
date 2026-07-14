@@ -7,6 +7,7 @@ import { runNpmScript } from '../../build/lib/util.ts';
 const verifyScripts = [
 	'valid-layers-check',
 	'test:valid-layers-check',
+	'test:server-build',
 	'check:i18n',
 	'typecheck:tests',
 	'test:base-common',
@@ -16,6 +17,7 @@ const verifyScripts = [
 	'test:library-store',
 	'test:electron-main',
 	'test:agent',
+	'test:remote',
 ];
 
 for (const scriptName of verifyScripts) {

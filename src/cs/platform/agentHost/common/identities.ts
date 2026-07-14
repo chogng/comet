@@ -75,6 +75,7 @@ export type AgentHostSequence = AgentHostCounter<'AgentHostSequence'>;
 export type AgentHostChannelRevision = AgentHostCounter<'AgentHostChannelRevision'>;
 
 const namedIdentityPattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
+const configurationPropertyIdentityPattern = /^[a-z][A-Za-z0-9]*(?:[.-][A-Za-z0-9]+)*$/;
 const opaqueIdentityPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const channelIdentityPattern = /^[\x21-\x7E]+$/;
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
@@ -169,7 +170,12 @@ export function createAgentConfigurationSchemaRevision(value: string): AgentConf
 }
 
 export function createAgentConfigurationPropertyId(value: string): AgentConfigurationPropertyId {
-	return createNamedIdentity(value, 'AgentConfigurationPropertyId');
+	return assertIdentity(
+		value,
+		'AgentConfigurationPropertyId',
+		128,
+		configurationPropertyIdentityPattern,
+	) as AgentConfigurationPropertyId;
 }
 
 export function createAgentConfigurationStateRevision(value: string): AgentConfigurationStateRevision {

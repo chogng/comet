@@ -15,7 +15,7 @@ import {
 	localAgentHostClientToolChannelName,
 	localAgentHostConnectionChannelName,
 } from 'cs/platform/agentHost/common/connectionChannel';
-import type { IAgentHostImplementationIdentity } from 'cs/platform/agentHost/common/protocol';
+import type { AgentHostDisplayText, IAgentHostImplementationIdentity } from 'cs/platform/agentHost/common/protocol';
 import { ClientAgentToolChannel } from 'cs/platform/agentHost/electron-browser/clientAgentToolChannel';
 import { ClientContentResourceChannel } from 'cs/platform/agentHost/electron-browser/clientContentResourceChannel';
 import { LocalAgentHostConnection } from 'cs/platform/agentHost/electron-browser/localAgentHostConnection';
@@ -67,7 +67,7 @@ class LocalAgentHostSessionsContribution extends Disposable {
 			this.chatService,
 			Object.freeze({
 				locale: this.localeService.getLocale(),
-				resolveDisplayText: displayText => resolveAgentHostDisplayText(
+				resolveDisplayText: (displayText: AgentHostDisplayText) => resolveAgentHostDisplayText(
 					displayText,
 					this.languageService.getLocaleMessages(this.localeService.getLocale()),
 				),

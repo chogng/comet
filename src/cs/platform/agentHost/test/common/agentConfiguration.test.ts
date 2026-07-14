@@ -162,6 +162,12 @@ function assertSecretSafe(error: AgentHostError, ...secrets: readonly string[]):
 }
 
 suite('Agent configuration', { concurrency: false }, () => {
+	test('accepts namespaced camel-case SDK configuration property identities', () => {
+		assert.equal(createAgentConfigurationPropertyId('copilot.autoApprove'), 'copilot.autoApprove');
+		assert.equal(createAgentConfigurationPropertyId('claude.permissionMode'), 'claude.permissionMode');
+		assert.equal(createAgentConfigurationPropertyId('codex.modelReasoningEffort'), 'codex.modelReasoningEffort');
+	});
+
 	test('clones and freezes schemas, candidates, and states', () => {
 		const input = createSchemaInput();
 		const schema = validateAndFreezeAgentConfigurationSchema(input);

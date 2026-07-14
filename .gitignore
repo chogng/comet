@@ -3,8 +3,10 @@ node_modules/
 dist/
 dist-web/
 dist-electron/
+dist-server/
 release/
 .vite/
+*.tsbuildinfo
 
 # Logs
 npm-debug.log*

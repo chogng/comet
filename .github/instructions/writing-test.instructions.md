@@ -16,13 +16,27 @@ the changed public contract.
 | Unit | `*.test.ts` under `src/cs/**/test/` or next to the owning source | One module or a small collaborating set with controlled dependencies |
 | Integration | `*.integrationTest.ts` next to the owning subsystem | A real boundary such as storage, IPC, a child process, or a local server |
 
-Test support modules do not use a test-file suffix. A test source belongs to
-exactly one lane and must not be imported from a hand-maintained test index for
-discovery.
-
-Agent Host tests and support modules live under
+<<<<<<< HEAD
+Platform Agent Host contract and runtime tests and their support modules live under
 `src/cs/platform/agentHost/test/{common,browser,electron-browser,node}/`,
-partitioned by the runtime they exercise.
+partitioned by the runtime they exercise. They do not live under Agent Host
+production runtime or component directories.
+
+Product composition, concrete Electron process launchers, and product-owned
+Agent runtime implementations keep their tests in the owning Code subtree's
+sibling `test/` directory. Platform Agent Host tests never import `cs/code/**`
+to exercise a product mock or product runtime.
+
+Integration tests use deterministic local infrastructure, temporary
+directories, and local servers. A test that requires public network access,
+credentials, or a mutable third-party service belongs to an explicit opt-in
+lane and never gates the normal hermetic suite.
+
+Every test source belongs to exactly one declared test lane. Repository
+verification fails for an unassigned test, a test assigned to several lanes,
+or an empty required lane. Support modules do not use a test-file suffix.
+Importing a test indirectly from a hand-maintained index is not test
+discovery.
 
 ## Running tests
 

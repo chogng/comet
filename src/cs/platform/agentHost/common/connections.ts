@@ -295,11 +295,19 @@ export type AgentRuntimeConnectionState =
 		readonly reason: AgentRuntimeDisconnectReason;
 	};
 
+/** Announces one negotiated replacement generation for the same logical Runtime connection. */
+export interface IAgentRuntimeReconnectEvent {
+	readonly connection: AgentRuntimeConnectionId;
+	readonly previousGeneration: AgentRuntimeConnectionGeneration;
+	readonly generation: AgentRuntimeConnectionGeneration;
+}
+
 export interface IAgentRuntimeConnection extends IDisposable {
 	readonly connection: AgentRuntimeConnectionId;
 	readonly generation: AgentRuntimeConnectionGeneration;
 	readonly state: AgentRuntimeConnectionState;
 	readonly onDidDisconnect: Event<Extract<AgentRuntimeConnectionState, { readonly kind: 'disconnected' }>>;
+	readonly onDidReconnect: Event<IAgentRuntimeReconnectEvent>;
 	readonly onDidEmitAction: Event<IAgentRuntimeAction>;
 	readonly onDidRequestHostOperation: Event<IAgentRuntimeHostOperationRequest>;
 	initialize(request: IAgentRuntimeInitializeRequest): Promise<IAgentRuntimeInitializeResult>;

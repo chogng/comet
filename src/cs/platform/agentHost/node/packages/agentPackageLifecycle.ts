@@ -55,6 +55,7 @@ import type {
 	IUpdateAgentPackageRequest,
 } from 'cs/platform/agentHost/common/packages';
 import { assertAgentPackageOperationOutcome } from 'cs/platform/agentHost/common/packages';
+import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import type { IVerifiedAgentPackage } from './agentPackageTypes.js';
 import {
 	validateAndFreezeAgentPackage,
@@ -75,6 +76,8 @@ export interface IAgentPackageStateStore {
 
 /** Stages and verifies one complete package revision without activating it. */
 export interface IAgentPackageArtifactPort {
+	/** Verifies every authoritative receipt and removes closures no longer referenced by package state. */
+	reconcile(state: IAgentPackagePersistedState): Promise<void>;
 	stage(
 		offering: IAgentPackageOffering,
 		operationId: AgentPackageOperationId,
@@ -87,6 +90,8 @@ export interface IAgentPackageArtifactPort {
 
 /** Negotiates staged runtimes and owns Agent-backed lifecycle operations. */
 export interface IAgentPackageRuntimePort {
+	/** Restores every authoritative and operation-scoped runtime before Host composition begins. */
+	restoreRuntimeState(state: IAgentPackagePersistedState): Promise<void>;
 	prepareActivation(
 		installedPackage: IInstalledAgentPackage | null,
 		previous: IAgentPackageRuntimeTransition['previous'],
@@ -101,6 +106,10 @@ export interface IAgentPackageRuntimePort {
 		transition: IAgentPackageRuntimeTransition,
 	): Promise<void>;
 	rollbackActivation(
+		operationId: AgentPackageOperationId,
+		transition: IAgentPackageRuntimeTransition,
+	): Promise<void>;
+	acknowledgeActivationOperation(
 		operationId: AgentPackageOperationId,
 		transition: IAgentPackageRuntimeTransition,
 	): Promise<void>;
@@ -168,6 +177,7 @@ export interface IAgentPackageLifecycleOptions {
 	readonly stateStore: IAgentPackageStateStore;
 	readonly artifactPort: IAgentPackageArtifactPort;
 	readonly runtimePort: IAgentPackageRuntimePort;
+	readonly maximumPersistedOperations?: number;
 }
 
 interface IAgentPackageOperationExecutionRequest {
@@ -194,6 +204,72 @@ function offeringKey(offering: IAgentPackageOffering): string {
 		offering.source,
 		offering.distribution,
 	].join('\u0000');
+}
+
+function installedPackageOffering(installedPackage: IInstalledAgentPackage): IAgentPackageOffering {
+	return Object.freeze({
+		packageId: installedPackage.packageId,
+		revision: installedPackage.revision,
+		contentDigest: installedPackage.contentDigest,
+		source: installedPackage.source,
+		distribution: installedPackage.distribution,
+	});
+}
+
+function exactInstalledPackage(left: IInstalledAgentPackage, right: IInstalledAgentPackage): boolean {
+	return encodeAgentHostProtocolValue(left) === encodeAgentHostProtocolValue(right);
+}
+
+function isTerminalPersistedOperation(operation: AgentPackagePersistedOperation): boolean {
+	return operation.status === 'succeeded'
+		|| (operation.status === 'failed' && operation.failure.reconciliation === 'terminal');
+}
+
+function retainBoundedOperationLedger(
+	operations: readonly AgentPackagePersistedOperation[],
+	maximumPersistedOperations: number,
+	protectedOperation?: AgentPackageOperationId,
+): readonly AgentPackagePersistedOperation[] {
+	if (operations.length <= maximumPersistedOperations) {
+		return Object.freeze([...operations]);
+	}
+	let remainingToEvict = operations.length - maximumPersistedOperations;
+	const evicted = new Set<AgentPackageOperationId>();
+	for (const operation of operations) {
+		if (
+			remainingToEvict !== 0
+			&& operation.operation !== protectedOperation
+			&& isTerminalPersistedOperation(operation)
+		) {
+			evicted.add(operation.operation);
+			remainingToEvict -= 1;
+		}
+	}
+	if (remainingToEvict !== 0) {
+		throw new AgentPackageError(
+			AgentPackageErrorCode.StateConflict,
+			'Agent package operation ledger is occupied by unresolved operations',
+			{ actual: maximumPersistedOperations },
+		);
+	}
+	return Object.freeze(operations.filter(operation => !evicted.has(operation.operation)));
+}
+
+function bundledUpdateIdentity(
+	previous: IInstalledAgentPackage,
+	next: IInstalledAgentPackage,
+): { readonly operation: AgentPackageOperationId; readonly digest: AgentHostPayloadDigest } {
+	const hash = createHash('sha256')
+		.update(encodeAgentHostProtocolValue(Object.freeze({
+			kind: 'productBundledUpdate',
+			previous: installedPackageOffering(previous),
+			next: installedPackageOffering(next),
+		})))
+		.digest('hex');
+	return Object.freeze({
+		operation: createAgentPackageOperationId(`product-bundled:${hash}`),
+		digest: createAgentHostPayloadDigest(`sha256:${hash}`),
+	});
 }
 
 function backingKey(identity: IAgentBackingIdentity): string {
@@ -913,6 +989,101 @@ async function throwWithConfirmedRollback(
 	throw new AggregateError(errors, 'Agent package activation and rollback failed');
 }
 
+type PendingCatalogCommittedOperation = AgentPackagePersistedOperation & {
+	readonly status: 'pending';
+	readonly phase: 'catalogCommitted';
+	readonly runtimeTransition: IAgentPackageRuntimeTransition;
+};
+
+function isPendingCatalogCommittedOperation(
+	operation: AgentPackagePersistedOperation,
+): operation is PendingCatalogCommittedOperation {
+	return operation.status === 'pending' && operation.phase === 'catalogCommitted';
+}
+
+interface IColdBundledUpdateState {
+	readonly base: IAgentPackagePersistedState;
+	readonly candidate: IAgentPackagePersistedState;
+	readonly operation: PendingCatalogCommittedOperation;
+}
+
+function prepareColdBundledUpdateState(
+	state: IAgentPackagePersistedState,
+	currentPackage: IInstalledAgentPackage,
+	currentRegistrations: readonly IAgentRuntimeRegistration[],
+	hostTarget: IAgentPackageTarget,
+	maximumPersistedOperations: number,
+): IColdBundledUpdateState | undefined {
+	const previousPackage = state.installedPackages.find(candidate => candidate.packageId === currentPackage.packageId);
+	if (previousPackage === undefined) {
+		throw new AgentPackageError(
+			AgentPackageErrorCode.InvalidPackage,
+			'Persisted package state has no bundled Comet package',
+			{ packageId: currentPackage.packageId },
+		);
+	}
+	if (exactInstalledPackage(previousPackage, currentPackage)) {
+		return undefined;
+	}
+	const unresolved = state.operations.find(operation => (
+		operation.packageId === currentPackage.packageId
+		&& (
+			operation.status === 'pending'
+			|| (
+				operation.status === 'failed'
+				&& operation.failure.reconciliation === 'sameOperationRequired'
+			)
+		)
+	));
+	if (unresolved !== undefined) {
+		throw new AgentPackageError(
+			AgentPackageErrorCode.StateConflict,
+			'Bundled Comet cannot advance while its previous package operation is unresolved',
+			{ operationId: unresolved.operation },
+		);
+	}
+	const previousRegistrations = Object.freeze(state.activeRegistrations.filter(candidate => (
+		candidate.packageId === previousPackage.packageId
+	)));
+	const transition: IAgentPackageRuntimeTransition = Object.freeze({
+		previous: Object.freeze({ installedPackage: previousPackage, registrations: previousRegistrations }),
+		next: Object.freeze({ installedPackage: currentPackage, registrations: currentRegistrations }),
+	});
+	const identity = bundledUpdateIdentity(previousPackage, currentPackage);
+	const operation: PendingCatalogCommittedOperation = Object.freeze({
+		operation: identity.operation,
+		digest: identity.digest,
+		kind: 'update',
+		packageId: currentPackage.packageId,
+		affectedRecords: null,
+		status: 'pending',
+		phase: 'catalogCommitted',
+		runtimeTransition: transition,
+	});
+	const candidate = validatePersistedState({
+		...state,
+		revision: state.revision + 1,
+		catalogRevision: state.catalogRevision + 1,
+		operations: retainBoundedOperationLedger(
+			[...state.operations, operation],
+			maximumPersistedOperations,
+			operation.operation,
+		),
+		installedPackages: Object.freeze([
+			...state.installedPackages.filter(candidate => candidate.packageId !== currentPackage.packageId),
+			currentPackage,
+		]),
+		activeRegistrations: Object.freeze([
+			...state.activeRegistrations.filter(candidate => candidate.packageId !== currentPackage.packageId),
+			...currentRegistrations,
+		]),
+		materializedBackings: Object.freeze(state.materializedBackings.filter(identity => (
+			identity.packageId !== currentPackage.packageId
+		))),
+	}, hostTarget);
+	return Object.freeze({ base: state, candidate, operation });
+}
+
 /** Owns installed package, active registration, retained backing, and operation state. */
 export class AgentPackageLifecycle {
 	private readonly installableByKey: ReadonlyMap<string, IAgentPackageOffering>;
@@ -920,14 +1091,17 @@ export class AgentPackageLifecycle {
 	private operationTail = Promise.resolve();
 	private stateTail = Promise.resolve();
 	private lifecyclePort: IAgentPackageLifecyclePort | undefined;
+	private coldBundledRuntimeAcknowledged = false;
 
 	private constructor(
 		private state: IAgentPackagePersistedState,
+		private readonly coldBundledUpdate: IColdBundledUpdateState | undefined,
 		private readonly hostTarget: IAgentPackageTarget,
 		installablePackages: readonly IAgentPackageOffering[],
 		private readonly stateStore: IAgentPackageStateStore,
 		private readonly artifactPort: IAgentPackageArtifactPort,
 		private readonly runtimePort: IAgentPackageRuntimePort,
+		private readonly maximumPersistedOperations: number,
 	) {
 		this.installableByKey = new Map(
 			installablePackages.map(offering => [offeringKey(offering), freezeOffering(offering)]),
@@ -942,6 +1116,19 @@ export class AgentPackageLifecycle {
 	}
 
 	static async create(options: IAgentPackageLifecycleOptions): Promise<AgentPackageLifecycle> {
+		const maximumPersistedOperations = options.maximumPersistedOperations
+			?? MAXIMUM_PERSISTED_PACKAGE_OPERATIONS;
+		if (
+			!Number.isSafeInteger(maximumPersistedOperations)
+			|| maximumPersistedOperations < 1
+			|| maximumPersistedOperations > MAXIMUM_PERSISTED_PACKAGE_OPERATIONS
+		) {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.InvalidPackage,
+				'Invalid Agent package operation ledger capacity',
+				{ actual: maximumPersistedOperations },
+			);
+		}
 		const installableKeys = new Set<string>();
 		for (const offering of options.installablePackages) {
 			if (offering.distribution !== 'user' || installableKeys.has(offeringKey(offering))) {
@@ -953,46 +1140,61 @@ export class AgentPackageLifecycle {
 			}
 			installableKeys.add(offeringKey(offering));
 		}
+		const bundledPackage = validateAndFreezeAgentPackage(
+			options.bundledComet.verifiedPackage,
+			options.hostTarget,
+		);
+		if (bundledPackage.packageId !== createAgentPackageId('comet') || bundledPackage.distribution !== 'bundled') {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.InvalidPackage,
+				'Product bundled package must be Comet',
+				{ packageId: bundledPackage.packageId },
+			);
+		}
+		const bundledRegistrations = assertRegistrationSet(
+			bundledPackage,
+			options.bundledComet.registrations,
+		);
 
 		const persistedState = await options.stateStore.read();
 		let state: IAgentPackagePersistedState;
+		let coldBundledUpdate: IColdBundledUpdateState | undefined;
 		if (persistedState) {
-			state = validatePersistedState(persistedState, options.hostTarget);
-		} else {
-			const bundledPackage = validateAndFreezeAgentPackage(
-				options.bundledComet.verifiedPackage,
-				options.hostTarget,
-			);
-			if (bundledPackage.distribution !== 'bundled') {
-				throw new AgentPackageError(
-					AgentPackageErrorCode.InvalidPackage,
-					'Initial Comet package must be product-bundled',
-					{ packageId: bundledPackage.packageId },
-				);
-			}
-			const registrations = assertRegistrationSet(
+			const authoritativeState = validatePersistedState(persistedState, options.hostTarget);
+			coldBundledUpdate = prepareColdBundledUpdateState(
+				authoritativeState,
 				bundledPackage,
-				options.bundledComet.registrations,
+				bundledRegistrations,
+				options.hostTarget,
+				maximumPersistedOperations,
 			);
+			state = coldBundledUpdate?.candidate ?? authoritativeState;
+		} else {
 			state = freezePersistedState({
 				revision: 0,
 				catalogRevision: 0,
 				operations: [],
 				installedPackages: [bundledPackage],
-				activeRegistrations: registrations,
+				activeRegistrations: bundledRegistrations,
 				retainedBackingRecords: [],
 				materializedBackings: [],
 			});
 			await options.stateStore.commit(undefined, state);
 		}
-		return new AgentPackageLifecycle(
+		await options.artifactPort.reconcile(state);
+		await options.runtimePort.restoreRuntimeState(state);
+		const lifecycle = new AgentPackageLifecycle(
 			state,
+			coldBundledUpdate,
 			options.hostTarget,
 			options.installablePackages,
 			options.stateStore,
 			options.artifactPort,
 			options.runtimePort,
+			maximumPersistedOperations,
 		);
+		await lifecycle.migrateColdBundledUpdate(bundledPackage);
+		return lifecycle;
 	}
 
 	/** Binds the one authoritative Host lifecycle coordinator before package mutations can run. */
@@ -1004,6 +1206,141 @@ export class AgentPackageLifecycle {
 			);
 		}
 		this.lifecyclePort = lifecyclePort;
+	}
+
+	private findColdBundledUpdate(currentPackage: IInstalledAgentPackage): PendingCatalogCommittedOperation | undefined {
+		const candidates = this.state.operations.filter((operation): operation is PendingCatalogCommittedOperation => (
+			isPendingCatalogCommittedOperation(operation)
+			&& operation.kind === 'update'
+			&& operation.packageId === currentPackage.packageId
+		));
+		const matching = candidates.filter(operation => {
+			const previous = operation.runtimeTransition.previous?.installedPackage;
+			const next = operation.runtimeTransition.next?.installedPackage;
+			if (previous === undefined || next === undefined || !exactInstalledPackage(next, currentPackage)) {
+				return false;
+			}
+			const identity = bundledUpdateIdentity(previous, next);
+			return operation.operation === identity.operation && operation.digest === identity.digest;
+		});
+		if (matching.length === 0) {
+			return undefined;
+		}
+		if (matching.length !== 1) {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.StateConflict,
+				'Bundled Comet update has multiple exact reconciliation operations',
+				{ packageId: currentPackage.packageId },
+			);
+		}
+		return matching[0];
+	}
+
+	private async migrateColdBundledUpdate(currentPackage: IInstalledAgentPackage): Promise<void> {
+		const operation = this.findColdBundledUpdate(currentPackage);
+		if (operation === undefined) {
+			return;
+		}
+		const next = operation.runtimeTransition.next;
+		if (next === null) {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.StateConflict,
+				'Bundled Comet update has no activated runtime',
+				{ operationId: operation.operation },
+			);
+		}
+		const migratedRecords = await this.migrateRetainedRecords(
+			currentPackage,
+			next.registrations,
+			this.state.retainedBackingRecords,
+			operation.operation,
+		);
+		if (encodeAgentHostProtocolValue(migratedRecords) !== encodeAgentHostProtocolValue(this.state.retainedBackingRecords)) {
+			const migratedState = validatePersistedState({
+				...this.state,
+				retainedBackingRecords: migratedRecords,
+			}, this.hostTarget);
+			this.acceptState(migratedState);
+		}
+	}
+
+	/** Finalizes a cold product update only after the Host restored and validated its retained catalog. */
+	async completeRestoredBundledUpdate(): Promise<void> {
+		const coldBundledUpdate = this.coldBundledUpdate;
+		if (coldBundledUpdate === undefined || this.coldBundledRuntimeAcknowledged) {
+			return;
+		}
+		const currentPackage = this.state.installedPackages.find(candidate => (
+			candidate.packageId === createAgentPackageId('comet')
+		));
+		if (currentPackage === undefined) {
+			throw new AgentPackageError(AgentPackageErrorCode.InvalidPackage, 'Bundled Comet package is absent');
+		}
+		const operation = this.findColdBundledUpdate(currentPackage);
+		const recorded = this.operations.get(coldBundledUpdate.operation.operation);
+		if (operation === undefined && recorded?.persisted.status === 'succeeded') {
+			await this.runtimePort.retirePreviousActivation(
+				coldBundledUpdate.operation.operation,
+				coldBundledUpdate.operation.runtimeTransition,
+			);
+			await this.runtimePort.acknowledgeActivationOperation(
+				coldBundledUpdate.operation.operation,
+				coldBundledUpdate.operation.runtimeTransition,
+			);
+			await this.artifactPort.reconcile(this.state);
+			this.coldBundledRuntimeAcknowledged = true;
+			return;
+		}
+		if (operation === undefined || operation.operation !== coldBundledUpdate.operation.operation) {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.StateConflict,
+				'Bundled Comet update lost its startup-scoped activation',
+				{ operationId: coldBundledUpdate.operation.operation },
+			);
+		}
+		if (recorded === undefined || recorded.persisted.status !== 'pending' || recorded.persisted.phase !== 'catalogCommitted') {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.StateConflict,
+				'Bundled Comet update lost its exact startup-scoped reconciliation operation',
+				{ operationId: operation.operation },
+			);
+		}
+		const result = this.createOperationResult(
+			'update',
+			Object.freeze({
+				operationId: operation.operation,
+				requestDigest: operation.digest,
+				packageId: currentPackage.packageId,
+			}),
+			0,
+			this.state.catalogRevision,
+		);
+		const completedOperation: AgentPackagePersistedOperation = Object.freeze({
+			operation: operation.operation,
+			digest: operation.digest,
+			kind: operation.kind,
+			packageId: operation.packageId,
+			affectedRecords: 0,
+			status: 'succeeded',
+			result,
+		});
+		const completedState = validatePersistedState({
+			...this.state,
+			operations: this.replaceOperation(this.state.operations, completedOperation),
+		}, this.hostTarget);
+		await this.stateStore.commit(coldBundledUpdate.base.revision, completedState);
+		this.acceptState(completedState);
+		recorded.persisted = completedOperation;
+		await this.runtimePort.retirePreviousActivation(
+			operation.operation,
+			operation.runtimeTransition,
+		);
+		await this.runtimePort.acknowledgeActivationOperation(
+			operation.operation,
+			operation.runtimeTransition,
+		);
+		await this.artifactPort.reconcile(this.state);
+		this.coldBundledRuntimeAcknowledged = true;
 	}
 
 	snapshot(): IAgentPackageLifecycleSnapshot {
@@ -1184,6 +1521,38 @@ export class AgentPackageLifecycle {
 	async reconcileHostBackingState(state: IAgentPackageHostBackingState): Promise<void> {
 		const release = await this.acquireStateLock();
 		try {
+			if (this.coldBundledUpdate !== undefined) {
+				const startupNext = this.coldBundledUpdate.operation.runtimeTransition.next;
+				if (startupNext === null) {
+					throw new AgentPackageError(
+						AgentPackageErrorCode.StateConflict,
+						'Bundled Comet update startup transition has no candidate runtime',
+						{ operationId: this.coldBundledUpdate.operation.operation },
+					);
+				}
+				const operation = this.findColdBundledUpdate(startupNext.installedPackage);
+				if (operation === undefined || operation.runtimeTransition.next === null) {
+					throw new AgentPackageError(
+						AgentPackageErrorCode.StateConflict,
+						'Bundled Comet update lost its startup-scoped backing migration',
+						{ operationId: this.coldBundledUpdate.operation.operation },
+					);
+				}
+				const nextPackage = operation.runtimeTransition.next.installedPackage;
+				const retainedBackingRecords = await this.migrateRetainedRecords(
+					nextPackage,
+					operation.runtimeTransition.next.registrations,
+					state.retainedBackingRecords,
+					operation.operation,
+				);
+				const candidate = validatePersistedState({
+					...this.state,
+					retainedBackingRecords,
+					materializedBackings: state.materializedBackings,
+				}, this.hostTarget);
+				this.acceptState(candidate);
+				return;
+			}
 			const next = validatePersistedState({
 				...this.state,
 				revision: this.state.revision + 1,
@@ -1267,13 +1636,13 @@ export class AgentPackageLifecycle {
 					}
 					const pendingRecord: AgentPackagePersistedOperation = retryRecord === undefined || retryRecord.phase === 'recorded'
 						? Object.freeze({
-						operation: request.operationId,
-						digest: request.requestDigest,
-						kind,
-						packageId: request.packageId,
-						affectedRecords: existing?.persisted.affectedRecords ?? null,
-						status: 'pending',
-						phase: 'recorded',
+							operation: request.operationId,
+							digest: request.requestDigest,
+							kind,
+							packageId: request.packageId,
+							affectedRecords: existing?.persisted.affectedRecords ?? null,
+							status: 'pending',
+							phase: 'recorded',
 						})
 						: Object.freeze({
 							operation: request.operationId,
@@ -1302,12 +1671,23 @@ export class AgentPackageLifecycle {
 				}
 				if (recorded.persisted.status === 'pending') {
 					const failure = this.operationFailure(error, recorded.retryRequired);
+					const runtimeTransition = failure.reconciliation === 'terminal'
+						&& recorded.persisted.phase !== 'recorded'
+						? recorded.persisted.runtimeTransition
+						: undefined;
 					try {
 						await this.commitOperationRecord(recorded, Object.freeze({
 							...recorded.persisted,
 							status: 'failed',
 							failure,
 						}));
+						if (runtimeTransition !== undefined) {
+							await this.runtimePort.acknowledgeActivationOperation(
+								request.operationId,
+								runtimeTransition,
+							);
+						}
+						await this.artifactPort.reconcile(this.state);
 					} catch (persistenceError) {
 						throw new AggregateError([error, persistenceError], 'Agent package operation and outcome persistence both failed');
 					}
@@ -1383,13 +1763,21 @@ export class AgentPackageLifecycle {
 			const index = operations.findIndex(candidate => candidate.operation === nextRecord.operation);
 			if (index === -1) {
 				operations.push(nextRecord);
+			} else if (isTerminalPersistedOperation(nextRecord)) {
+				operations.splice(index, 1);
+				operations.push(nextRecord);
 			} else {
 				operations[index] = nextRecord;
 			}
+			const boundedOperations = retainBoundedOperationLedger(
+				operations,
+				this.maximumPersistedOperations,
+				nextRecord.operation,
+			);
 			const next = validatePersistedState({
 				...previous,
 				revision: previous.revision + 1,
-				operations,
+				operations: boundedOperations,
 			}, this.hostTarget);
 			await this.stateStore.commit(previous.revision, next);
 			this.acceptState(next);
@@ -1447,6 +1835,10 @@ export class AgentPackageLifecycle {
 		recorded: IRecordedPackageOperation,
 		result: IAgentPackageOperationResult,
 	): Promise<void> {
+		const runtimeTransition = recorded.persisted.status === 'pending'
+			&& recorded.persisted.phase !== 'recorded'
+			? recorded.persisted.runtimeTransition
+			: undefined;
 		await this.commitOperationRecord(recorded, Object.freeze({
 			operation: recorded.persisted.operation,
 			digest: recorded.persisted.digest,
@@ -1456,10 +1848,27 @@ export class AgentPackageLifecycle {
 			status: 'succeeded',
 			result,
 		}));
+		if (runtimeTransition !== undefined) {
+			await this.runtimePort.acknowledgeActivationOperation(
+				recorded.persisted.operation,
+				runtimeTransition,
+			);
+		}
+		await this.artifactPort.reconcile(this.state);
 	}
 
 	private acceptState(state: IAgentPackagePersistedState): void {
 		this.state = state;
+		const retainedOperationIds = new Set(state.operations.map(operation => operation.operation));
+		for (const [operationId, recorded] of this.operations) {
+			if (retainedOperationIds.has(operationId)) {
+				continue;
+			}
+			if (!isTerminalPersistedOperation(recorded.persisted)) {
+				continue;
+			}
+			this.operations.delete(operationId);
+		}
 		for (const persisted of state.operations) {
 			const recorded = this.operations.get(persisted.operation);
 			if (recorded === undefined) {

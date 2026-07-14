@@ -192,6 +192,13 @@ target identity, the expected provider revision when updating existing state,
 and a digest of the requested value. Retrying the same operation preserves all
 four values. A different requested value requires a new operation ID.
 
+Platform Tunnel computes the digest from a kind-specific canonical value
+before acquiring credentials or invoking the provider. Canonical endpoint
+publication includes every structured identity, protocol, scope, and
+capability field; object fields have stable encoding and capability order is
+normalized. A mutation kind or requested value that does not match its
+SHA-256 digest fails without entering provider authentication or mutation.
+
 A provider that advertises management or hosting capability must honor the
 operation ID as an idempotency key and expose conditional record revisions.
 Discovery-and-connect-only providers may register without mutation capability.
@@ -251,6 +258,14 @@ endpoint removal and tunnel deletion are separate explicit operations. Tunnel
 deletion validates that no protected endpoint or hosting lease is active and
 returns an idempotent terminal outcome.
 
+One hosting lease has separate bounded limits for pending physical streams,
+active logical connections, and retired logical connection identities. The
+lease owns accepted streams after delivery and disposes each stream when it
+closes. A lost stream retains its logical identity and latest generation only
+for the configured grace period. A contiguous replacement generation cancels
+that deadline; expiry releases active capacity and retires the identity so a
+late generation cannot reclaim it.
+
 ## Client connection lifecycle
 
 Connecting addresses one exact descriptor and endpoint:
@@ -268,6 +283,13 @@ The returned `IRemoteTunnelConnection` exposes logical connection identity,
 transport generation, connection state, bounded send and receive, graceful
 close, and terminal failure. It does not expose provider SDK objects or raw
 access tokens.
+
+The Tunnel service atomically reserves active logical-connection capacity
+before authentication, lookup, or relay connection work begins. An in-flight
+initial connection consumes the same bounded capacity as an established,
+reconnecting, or paused connection. Failed initialization and terminal close
+release that capacity exactly once; retired identities remain subject to their
+separate bounded retention policy.
 
 Opening the relay and initializing the service protocol are separate steps.
 Relay success does not prove that a Remote Server or Agent Host handshake
@@ -296,6 +318,18 @@ Reconnect uses bounded exponential backoff and pauses after its declared
 attempt or time budget. Network-online, application-resume, and explicit user
 connect events may resume the same route. An explicit disconnect terminates
 the loop and remains suppressed until explicit connect.
+
+Client, Host, and provider relay ownership each has an explicit cancellable
+grace deadline for a lost logical connection. Successful contiguous reconnect
+cancels all ownership deadlines reached by that generation. Expiry removes the
+corresponding live record and releases its capacity; client expiry also emits
+one typed terminal close. Reconnect and grace delays use the same injected
+Tunnel scheduling boundary.
+
+Relay grace does not own endpoint-protocol recovery. The endpoint owner starts
+and cancels its own semantic deadline from physical stream loss and successful
+protocol reauthentication, and releases its semantic connection independently
+from Tunnel identity retention.
 
 Reconnect never changes provider, account, tunnel ID, cluster, endpoint ID, or
 endpoint kind. If the provider record was deleted, the endpoint disappeared,
@@ -353,15 +387,28 @@ AgentHostAuthority
     → Remote Tunnel host endpoint(kind = agentHost)
     → authenticated relay
     → IRemoteTunnelConnection
+    → endpoint-scoped Agent Host authentication
     → RemoteAgentHostConnection
     → AgentHostSessionsProvider
 ```
 
 The endpoint descriptor advertises the supported Agent Host Protocol revision
-range. After the relay stream opens, `RemoteAgentHostConnection` performs the
-ordinary Agent Host initialization, obtains the authoritative Host authority
-and logical Agent Host client connection ID, subscribes to snapshots, and only
-then creates the shared Sessions provider.
+range. After each relay generation opens, the endpoint owner authenticates one
+separately supplied endpoint credential before attaching or reattaching the
+Agent Host Protocol peer. On generation one, the Host does not allocate an
+Agent Host client connection or bind content, Tool, or protocol services until
+that authentication succeeds. A restored relay generation reauthenticates
+before Agent Host semantic recovery begins.
+
+The endpoint credential is not a provider-management, Host-relay, or
+client-relay credential. It is absent from tunnel descriptors, identities,
+addresses, keys, snapshots, errors, and diagnostics. Rejection, timeout, and
+malformed authentication terminate the exact logical connection without
+probing another credential source or endpoint. After endpoint authentication,
+`RemoteAgentHostConnection` performs ordinary Agent Host initialization,
+obtains the authoritative Host authority and logical Agent Host client
+connection ID, subscribes to snapshots, and only then creates the shared
+Sessions provider.
 
 Tunnel ID is not Host authority. Recently used tunnels do not create offline
 placeholder Hosts. Several Comet clients may connect to one endpoint, but each

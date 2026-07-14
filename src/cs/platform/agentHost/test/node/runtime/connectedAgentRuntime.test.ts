@@ -9,7 +9,7 @@ import { suite, test } from 'node:test';
 import { DeferredPromise } from 'cs/base/common/async';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { CancellationError } from 'cs/base/common/errors';
-import { Emitter } from 'cs/base/common/event';
+import { Emitter, Event } from 'cs/base/common/event';
 import type {
 	IAgentAction,
 	IAgentAcknowledgeSessionConfigurationUpdateRequest,
@@ -61,6 +61,7 @@ import type {
 	IAgentRuntimeHostOperationResponse,
 	IAgentRuntimeInitializeRequest,
 	IAgentRuntimeInitializeResult,
+	IAgentRuntimeReconnectEvent,
 	IAgentRuntimeOperationOutcomeRequest,
 	IAgentRuntimeResponse,
 	IAgentRuntimeTransportLimits,
@@ -144,6 +145,7 @@ import {
 	IConnectedAgentRuntime,
 	IConnectedAgentRuntimeOptions,
 } from 'cs/platform/agentHost/node/runtime/connectedAgentRuntime';
+import { ManagedAgentRuntimeConnection } from 'cs/platform/agentHost/common/managedAgentRuntimeConnection';
 
 const connectionId = createAgentRuntimeConnectionId('runtime-connection-1');
 const generation = createAgentRuntimeConnectionGeneration(7);
@@ -404,17 +406,27 @@ function assertErrorCode(error: unknown, code: AgentHostErrorCode): boolean {
 
 class TestRuntimeConnection implements IAgentRuntimeConnection {
 	private readonly disconnectEmitter = new Emitter<Extract<AgentRuntimeConnectionState, { readonly kind: 'disconnected' }>>();
+	private readonly reconnectEmitter = new Emitter<IAgentRuntimeReconnectEvent>();
 	private readonly actionEmitter = new Emitter<IAgentRuntimeAction>();
 	private readonly hostOperationEmitter = new Emitter<IAgentRuntimeHostOperationRequest>();
-	private stateValue: AgentRuntimeConnectionState = {
-		kind: 'connected',
-		connection: connectionId,
-		generation,
-	};
+	private stateValue: AgentRuntimeConnectionState;
+	private generationValue: ReturnType<typeof createAgentRuntimeConnectionGeneration>;
+	readonly connection: ReturnType<typeof createAgentRuntimeConnectionId>;
 
-	readonly connection = connectionId;
-	readonly generation = generation;
+	constructor(
+		runtimeConnection = connectionId,
+		runtimeGeneration = generation,
+	) {
+		this.connection = runtimeConnection;
+		this.generationValue = runtimeGeneration;
+		this.stateValue = {
+			kind: 'connected',
+			connection: runtimeConnection,
+			generation: runtimeGeneration,
+		};
+	}
 	readonly onDidDisconnect = this.disconnectEmitter.event;
+	readonly onDidReconnect = this.reconnectEmitter.event;
 	readonly onDidEmitAction = this.actionEmitter.event;
 	readonly onDidRequestHostOperation = this.hostOperationEmitter.event;
 	readonly hostOperationProgress: IAgentRuntimeHostOperationProgress[] = [];
@@ -469,6 +481,24 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 	) => Promise<IAgentRuntimeResponse<IAgentSessionBacking>> = request => Promise.resolve(exactResponse(request, {
 		session: request.request.session,
 	}));
+	materializeSessionHandler: (
+		request: IAgentRuntimeCall<IAgentMaterializeSessionRequest>,
+	) => Promise<IAgentRuntimeResponse<null>> = request => Promise.resolve(exactResponse(request, null));
+	createChatHandler: (
+		request: IAgentRuntimeCall<IAgentCreateChatOptions>,
+	) => Promise<IAgentRuntimeResponse<IAgentChatBacking>> = request => Promise.resolve(exactResponse(request, {
+		session: request.request.session,
+		chat: request.request.chat,
+	}));
+	materializeChatHandler: (
+		request: IAgentRuntimeCall<IAgentMaterializeChatRequest>,
+	) => Promise<IAgentRuntimeResponse<null>> = request => Promise.resolve(exactResponse(request, null));
+	forkChatHandler: (
+		request: IAgentRuntimeCall<IAgentForkChatRequest>,
+	) => Promise<IAgentRuntimeResponse<IAgentChatBacking>> = request => Promise.resolve(exactResponse(request, {
+		session: request.request.session,
+		chat: request.request.chat,
+	}));
 	sendHandler: (
 		request: IAgentRuntimeCall<IAgentChatRequest>,
 	) => Promise<IAgentRuntimeResponse<null>> = request => {
@@ -487,6 +517,10 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 
 	get state(): AgentRuntimeConnectionState {
 		return this.stateValue;
+	}
+
+	get generation(): ReturnType<typeof createAgentRuntimeConnectionGeneration> {
+		return this.generationValue;
 	}
 
 	async initialize(request: IAgentRuntimeInitializeRequest): Promise<IAgentRuntimeInitializeResult> {
@@ -536,7 +570,7 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 		return exactResponse(request, null);
 	}
 
-	async createSession(
+	createSession(
 		request: IAgentRuntimeCall<IAgentCreateSessionOptions>,
 	): Promise<IAgentRuntimeResponse<IAgentSessionBacking>> {
 		this.createSessionCalls.push(request);
@@ -575,7 +609,7 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 		request: IAgentRuntimeCall<IAgentMaterializeSessionRequest>,
 	): Promise<IAgentRuntimeResponse<null>> {
 		this.materializeSessionCalls.push(request);
-		return Promise.resolve(exactResponse(request, null));
+		return this.materializeSessionHandler(request);
 	}
 
 	releaseSession(
@@ -596,17 +630,14 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 		request: IAgentRuntimeCall<IAgentCreateChatOptions>,
 	): Promise<IAgentRuntimeResponse<IAgentChatBacking>> {
 		this.createChatCalls.push(request);
-		return Promise.resolve(exactResponse(request, {
-			session: request.request.session,
-			chat: request.request.chat,
-		}));
+		return this.createChatHandler(request);
 	}
 
 	materializeChat(
 		request: IAgentRuntimeCall<IAgentMaterializeChatRequest>,
 	): Promise<IAgentRuntimeResponse<null>> {
 		this.materializeChatCalls.push(request);
-		return Promise.resolve(exactResponse(request, null));
+		return this.materializeChatHandler(request);
 	}
 
 	releaseChat(
@@ -620,10 +651,7 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 		request: IAgentRuntimeCall<IAgentForkChatRequest>,
 	): Promise<IAgentRuntimeResponse<IAgentChatBacking>> {
 		this.forkChatCalls.push(request);
-		return Promise.resolve(exactResponse(request, {
-			session: request.request.session,
-			chat: request.request.chat,
-		}));
+		return this.forkChatHandler(request);
 	}
 
 	steer(request: IAgentRuntimeCall<IAgentSteerRequest>): Promise<IAgentRuntimeResponse<null>> {
@@ -691,10 +719,26 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 		this.disconnectEmitter.fire(state);
 	}
 
+	reconnect(): void {
+		const previousGeneration = this.generationValue;
+		this.generationValue = createAgentRuntimeConnectionGeneration(previousGeneration + 1);
+		this.stateValue = {
+			kind: 'connected',
+			connection: this.connection,
+			generation: this.generationValue,
+		};
+		this.reconnectEmitter.fire({
+			connection: this.connection,
+			previousGeneration,
+			generation: this.generationValue,
+		});
+	}
+
 	dispose(): void {
 		this.disposeCount += 1;
 		this.disconnect('disposed');
 		this.disconnectEmitter.dispose();
+		this.reconnectEmitter.dispose();
 		this.actionEmitter.dispose();
 		this.hostOperationEmitter.dispose();
 	}
@@ -809,7 +853,7 @@ class TestRuntimeContentResources implements IAgentContentResourcePort {
 }
 
 function runtimeOptions(
-	connection: TestRuntimeConnection,
+	connection: IAgentRuntimeConnection,
 	limits: IAgentRuntimeTransportLimits = defaultLimits,
 	toolExecution: IAgentToolExecutionPort = new TestRuntimeToolExecution(),
 	contentResources: IAgentContentResourcePort = new TestRuntimeContentResources(),
@@ -2648,6 +2692,469 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 		runtime.dispose();
 		runtime.dispose();
 		assert.equal(connection.disposeCount, 1);
+	});
+
+	test('commits a successful lifecycle response before its generation drain opens recovery', async () => {
+		const connection = new TestRuntimeConnection();
+		const response = new DeferredPromise<IAgentRuntimeResponse<IAgentSessionBacking>>();
+		connection.createSessionHandler = () => response.p;
+		const runtime = await connect(connection);
+		const agent = runtime.agents[0];
+		const request = sessionRequest(1);
+		const creation = agent.sessions.create(request);
+		const call = connection.createSessionCalls[0];
+
+		response.complete(exactResponse(call, { session: request.session }));
+		connection.reconnect();
+		const recoveryBarrier = agent.sessions.delete({
+			operation: createAgentHostOperationId('wait-for-create-recovery'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'1'.repeat(64)}`),
+			session: createAgentSessionId('unknown-recovery-session'),
+		});
+
+		assert.deepEqual(await creation, { session: request.session });
+		await recoveryBarrier;
+		assert.equal(connection.materializeSessionCalls.length, 1);
+		assert.equal(connection.materializeSessionCalls[0].generation, connection.generation);
+		assert.equal(connection.materializeSessionCalls[0].request.session, request.session);
+
+		runtime.dispose();
+	});
+
+	test('replays an unacknowledged rollback with its prepared candidate identity after reconnect', async () => {
+		const connection = new TestRuntimeConnection();
+		const runtime = await connect(connection);
+		const agent = runtime.agents[0];
+		await agent.sessions.create(sessionRequest(1));
+		const operation = createAgentHostOperationId('configuration-rollback-reconnect');
+		const payloadDigest = createAgentHostPayloadDigest(`sha256:${'2'.repeat(64)}`);
+		await agent.configuration.prepareSessionUpdate({
+			operation,
+			payloadDigest,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			current: sessionConfigurationState,
+			candidate: nextSessionConfigurationState,
+		});
+		await agent.configuration.rollbackSessionUpdate({
+			operation,
+			payloadDigest,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+		});
+
+		connection.reconnect();
+		await agent.sessions.delete({
+			operation: createAgentHostOperationId('wait-for-rollback-recovery'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'3'.repeat(64)}`),
+			session: createAgentSessionId('unknown-rollback-session'),
+		});
+
+		assert.equal(connection.materializeSessionCalls.length, 1);
+		assert.equal(
+			connection.materializeSessionCalls[0].request.configuration.revision,
+			sessionConfigurationState.revision,
+		);
+		assert.equal(connection.prepareSessionConfigurationUpdateCalls.length, 2);
+		assert.equal(connection.rollbackSessionConfigurationUpdateCalls.length, 2);
+		assert.deepEqual(connection.rollbackSessionConfigurationUpdateCalls[1].request, {
+			operation,
+			payloadDigest,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+		});
+
+		runtime.dispose();
+	});
+
+	test('chains superseded recoveries behind every prior generation drain and advances queued calls to the latest generation', async () => {
+		const logicalConnection = createAgentRuntimeConnectionId('managed-overlapping-recovery-runtime');
+		const generations: TestRuntimeConnection[] = [];
+		const reconnects: IAgentRuntimeReconnectEvent[] = [];
+		const managed = await ManagedAgentRuntimeConnection.create({
+			connection: logicalConnection,
+			createGeneration: (runtimeConnection, runtimeGeneration) => {
+				const candidate = new TestRuntimeConnection(runtimeConnection, runtimeGeneration);
+				generations.push(candidate);
+				return Promise.resolve(candidate);
+			},
+		});
+		const reconnectListener = managed.onDidReconnect(event => reconnects.push(event));
+		const toolExecution = new TestRuntimeToolExecution();
+		const toolResult = new DeferredPromise<AgentToolResult>();
+		toolExecution.executeHandler = _call => toolResult.p;
+		const runtime = await connectAgentRuntime(runtimeOptions(
+			managed,
+			defaultLimits,
+			toolExecution,
+		));
+		const agent = runtime.agents[0];
+		await agent.sessions.create(sessionRequest(1));
+		await agent.chats.create({
+			operation: createAgentHostOperationId('create-chat-overlapping-recovery'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'4'.repeat(64)}`),
+			session: sessionId,
+			chat: chatId,
+			origin: { kind: 'user' },
+		});
+
+		const lostResponse = new DeferredPromise<IAgentRuntimeResponse<null>>();
+		const sendStarted = new DeferredPromise<void>();
+		generations[0].sendHandler = () => {
+			sendStarted.complete(undefined);
+			return lostResponse.p;
+		};
+		const reverse = reverseTurnRequest('overlapping-recovery-lost');
+		const lostSend = agent.chats.send(reverse.request);
+		let lostSendFailure: unknown;
+		let lostSendSettled = false;
+		const lostSendCompletion = lostSend.then(
+			() => {
+				lostSendSettled = true;
+			},
+			error => {
+				lostSendSettled = true;
+				lostSendFailure = error;
+			},
+		);
+		await sendStarted.p;
+		const parent = generations[0].sendCalls[0];
+		generations[0].emitHostOperation(hostOperation(parent, 'runtime-host-overlapping-recovery', {
+			kind: 'tool.execute',
+			call: reverse.toolCall,
+		}));
+		await flush();
+		assert.equal(toolExecution.calls.length, 1);
+
+		generations[0].disconnect('processExited');
+		await flush();
+		assert.deepEqual(reconnects[0], {
+			connection: logicalConnection,
+			previousGeneration: createAgentRuntimeConnectionGeneration(1),
+			generation: createAgentRuntimeConnectionGeneration(2),
+		});
+		const queuedCreation = agent.sessions.create(sessionRequest(2));
+		let queuedCreationResult: IAgentSessionBacking | undefined;
+		let queuedCreationFailure: unknown;
+		let queuedCreationSettled = false;
+		const queuedCreationCompletion = queuedCreation.then(
+			value => {
+				queuedCreationSettled = true;
+				queuedCreationResult = value;
+			},
+			error => {
+				queuedCreationSettled = true;
+				queuedCreationFailure = error;
+			},
+		);
+		generations[1].disconnect('processExited');
+		await flush();
+		assert.deepEqual(reconnects[1], {
+			connection: logicalConnection,
+			previousGeneration: createAgentRuntimeConnectionGeneration(2),
+			generation: createAgentRuntimeConnectionGeneration(3),
+		});
+		await flush();
+		assert.equal(generations[1].materializeSessionCalls.length, 0);
+		assert.equal(generations[1].createSessionCalls.length, 0);
+		assert.equal(generations[2].materializeSessionCalls.length, 0);
+		assert.equal(generations[2].createSessionCalls.length, 0);
+
+		toolResult.complete({ call: reverse.toolCall.id, status: 'completed', output: null });
+		await flush();
+		assert.equal(lostSendSettled, true);
+		assert.equal(queuedCreationSettled, true);
+		assertErrorCode(lostSendFailure, AgentHostErrorCode.ResourceMissing);
+		assert.deepEqual((lostSendFailure as AgentHostError).data, {
+			resource: `agentRuntime:${logicalConnection}:1`,
+		});
+		assert.equal(queuedCreationFailure, undefined);
+		assert.deepEqual(queuedCreationResult, { session: createAgentSessionId('session-2') });
+		await Promise.all([lostSendCompletion, queuedCreationCompletion]);
+		assert.equal(generations[2].materializeSessionCalls.length, 1);
+		assert.equal(generations[2].materializeChatCalls.length, 1);
+		assert.equal(generations[2].createSessionCalls.length, 1);
+		assert.equal(generations[2].createSessionCalls[0].request.session, createAgentSessionId('session-2'));
+
+		reconnectListener.dispose();
+		runtime.dispose();
+	});
+
+	test('commits lifecycle resume actions only with successful backing materialization', async () => {
+		const connection = new TestRuntimeConnection();
+		let sequence = 0;
+		const emitSessionResume = (
+			call: IAgentRuntimeCall<{ readonly session: AgentSessionId }>,
+			data: string,
+		): void => {
+			sequence += 1;
+			connection.emitFor(call, sequence, {
+				kind: 'sessionResumeStateChanged',
+				session: call.request.session,
+				resume: { schema: resumeSchema, data },
+			});
+		};
+		const emitChatResume = (
+			call: IAgentRuntimeCall<{ readonly session: AgentSessionId; readonly chat: AgentChatId }>,
+			data: string,
+		): void => {
+			sequence += 1;
+			connection.emitFor(call, sequence, {
+				kind: 'chatResumeStateChanged',
+				session: call.request.session,
+				chat: call.request.chat,
+				resume: { schema: resumeSchema, data },
+			});
+		};
+		connection.createSessionHandler = call => {
+			emitSessionResume(call, 'session-create-action');
+			return Promise.resolve(exactResponse(call, {
+				session: call.request.session,
+				resume: { schema: resumeSchema, data: 'session-create-backing' },
+			}));
+		};
+		connection.materializeSessionHandler = call => {
+			emitSessionResume(call, 'session-materialize-action');
+			return Promise.resolve(exactResponse(call, null));
+		};
+		connection.createChatHandler = call => {
+			emitChatResume(call, 'chat-create-action');
+			return Promise.resolve(exactResponse(call, {
+				session: call.request.session,
+				chat: call.request.chat,
+				resume: { schema: resumeSchema, data: 'chat-create-backing' },
+			}));
+		};
+		connection.materializeChatHandler = call => {
+			emitChatResume(call, 'chat-materialize-action');
+			return Promise.resolve(exactResponse(call, null));
+		};
+		const failedFork = createAgentChatId('chat-4');
+		connection.forkChatHandler = call => {
+			const failed = call.request.chat === failedFork;
+			emitChatResume(call, failed ? 'chat-failed-fork-action' : 'chat-fork-action');
+			if (failed) {
+				return Promise.reject(new Error('fork backing failed'));
+			}
+			return Promise.resolve(exactResponse(call, {
+				session: call.request.session,
+				chat: call.request.chat,
+				resume: { schema: resumeSchema, data: 'chat-fork-backing' },
+			}));
+		};
+
+		const runtime = await connect(connection);
+		const agent = runtime.agents[0];
+		await agent.sessions.create(sessionRequest(1));
+		const materializedSession = createAgentSessionId('session-2');
+		await agent.sessions.materialize({
+			operation: createAgentHostOperationId('materialize-session-resume-action'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'5'.repeat(64)}`),
+			session: materializedSession,
+			configuration: sessionConfigurationState,
+			resume: { schema: resumeSchema, data: 'session-materialize-request' },
+		});
+		await agent.chats.create({
+			operation: createAgentHostOperationId('create-chat-resume-action'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'6'.repeat(64)}`),
+			session: sessionId,
+			chat: chatId,
+			origin: { kind: 'user' },
+		});
+		const materializedChat = createAgentChatId('chat-2');
+		await agent.chats.materialize({
+			operation: createAgentHostOperationId('materialize-chat-resume-action'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'7'.repeat(64)}`),
+			session: sessionId,
+			chat: materializedChat,
+			resume: { schema: resumeSchema, data: 'chat-materialize-request' },
+		});
+		const forkedChat = createAgentChatId('chat-3');
+		const forkRequest = (chat: AgentChatId, operation: string, digit: string): IAgentForkChatRequest => ({
+			operation: createAgentHostOperationId(operation),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${digit.repeat(64)}`),
+			session: sessionId,
+			chat,
+			source: { chat: chatId, turn: turnId },
+		});
+		await agent.chats.fork(forkRequest(forkedChat, 'fork-chat-resume-action', '8'));
+		await assert.rejects(
+			agent.chats.fork(forkRequest(failedFork, 'fork-chat-resume-action-failed', '9')),
+			/fork backing failed/,
+		);
+
+		connection.materializeSessionHandler = call => Promise.resolve(exactResponse(call, null));
+		connection.materializeChatHandler = call => Promise.resolve(exactResponse(call, null));
+		connection.reconnect();
+		await agent.sessions.delete({
+			operation: createAgentHostOperationId('wait-for-resume-recovery'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'a'.repeat(64)}`),
+			session: createAgentSessionId('unknown-resume-session'),
+		});
+
+		const recoveredSessions = connection.materializeSessionCalls
+			.filter(call => call.generation === connection.generation)
+			.map(call => [call.request.session, call.request.resume?.data]);
+		assert.deepEqual(recoveredSessions, [
+			[sessionId, 'session-create-action'],
+			[materializedSession, 'session-materialize-action'],
+		]);
+		const recoveredChats = connection.materializeChatCalls
+			.filter(call => call.generation === connection.generation)
+			.map(call => [call.request.chat, call.request.resume?.data]);
+		assert.deepEqual(recoveredChats, [
+			[chatId, 'chat-create-action'],
+			[materializedChat, 'chat-materialize-action'],
+			[forkedChat, 'chat-fork-action'],
+		]);
+		assert.equal(recoveredChats.some(([chat]) => chat === failedFork), false);
+
+		runtime.dispose();
+	});
+
+	test('rematerializes committed Session and Chat state across generations without replaying a lost Turn', async () => {
+		const logicalConnection = createAgentRuntimeConnectionId('managed-test-runtime');
+		const generations: TestRuntimeConnection[] = [];
+		const managed = await ManagedAgentRuntimeConnection.create({
+			connection: logicalConnection,
+			createGeneration: (connection, runtimeGeneration) => {
+				const runtime = new TestRuntimeConnection(connection, runtimeGeneration);
+				generations.push(runtime);
+				return Promise.resolve(runtime);
+			},
+		});
+		const runtime = await connectAgentRuntime(runtimeOptions(managed));
+		const agent = runtime.agents[0];
+		await agent.sessions.create(sessionRequest(1));
+		await agent.chats.create({
+			operation: createAgentHostOperationId('create-chat-reconnect'),
+			payloadDigest: createAgentHostPayloadDigest(`sha256:${'c'.repeat(64)}`),
+			session: sessionId,
+			chat: chatId,
+			origin: { kind: 'user' },
+		});
+		const configurationOperation = createAgentHostOperationId('configuration-reconnect');
+		const configurationDigest = createAgentHostPayloadDigest(`sha256:${'d'.repeat(64)}`);
+		await agent.configuration.prepareSessionUpdate({
+			operation: configurationOperation,
+			payloadDigest: configurationDigest,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			current: sessionConfigurationState,
+			candidate: nextSessionConfigurationState,
+		});
+		await agent.configuration.commitSessionUpdate({
+			operation: configurationOperation,
+			payloadDigest: configurationDigest,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+		});
+
+		const firstSendStarted = new DeferredPromise<void>();
+		const lostResponse = new DeferredPromise<IAgentRuntimeResponse<null>>();
+		generations[0].sendHandler = () => {
+			firstSendStarted.complete(undefined);
+			return lostResponse.p;
+		};
+		const lostSend = agent.chats.send(turnRequest('generation-one-lost'));
+		await firstSendStarted.p;
+
+		const secondGeneration = new Promise<unknown>(resolve => Event.once(managed.onDidReconnect)(resolve));
+		generations[0].disconnect('processExited');
+		await assert.rejects(lostSend, error => {
+			assertErrorCode(error, AgentHostErrorCode.ResourceMissing);
+			assert.deepEqual((error as AgentHostError).data, {
+				resource: `agentRuntime:${logicalConnection}:1`,
+			});
+			return true;
+		});
+		assert.deepEqual(await secondGeneration, {
+			connection: logicalConnection,
+			previousGeneration: createAgentRuntimeConnectionGeneration(1),
+			generation: createAgentRuntimeConnectionGeneration(2),
+		});
+		assert.equal(generations[1].sendCalls.length, 0);
+		generations[1].sendHandler = call => {
+			assert.equal(generations[1].materializeSessionCalls.length, 1);
+			assert.equal(generations[1].prepareSessionConfigurationUpdateCalls.length, 1);
+			assert.equal(generations[1].commitSessionConfigurationUpdateCalls.length, 1);
+			assert.equal(generations[1].materializeChatCalls.length, 1);
+			generations[1].emitFor(call, 1, {
+				kind: 'turnTerminal',
+				session: call.request.session,
+				chat: call.request.chat,
+				turn: call.request.turn,
+				state: 'completed',
+			});
+			return Promise.resolve(exactResponse(call, null));
+		};
+		await agent.chats.send(turnRequest('generation-two'));
+
+		const thirdGeneration = new Promise<unknown>(resolve => Event.once(managed.onDidReconnect)(resolve));
+		generations[1].disconnect('processExited');
+		assert.deepEqual(await thirdGeneration, {
+			connection: logicalConnection,
+			previousGeneration: createAgentRuntimeConnectionGeneration(2),
+			generation: createAgentRuntimeConnectionGeneration(3),
+		});
+		generations[2].sendHandler = call => {
+			assert.equal(generations[2].materializeSessionCalls.length, 1);
+			assert.equal(generations[2].prepareSessionConfigurationUpdateCalls.length, 1);
+			assert.equal(generations[2].commitSessionConfigurationUpdateCalls.length, 1);
+			assert.equal(generations[2].materializeChatCalls.length, 1);
+			generations[2].emitFor(call, 1, {
+				kind: 'turnTerminal',
+				session: call.request.session,
+				chat: call.request.chat,
+				turn: call.request.turn,
+				state: 'completed',
+			});
+			return Promise.resolve(exactResponse(call, null));
+		};
+		await agent.chats.send(turnRequest('generation-three'));
+		await agent.configuration.acknowledgeSessionUpdate({
+			operation: configurationOperation,
+			payloadDigest: configurationDigest,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+			decision: 'commit',
+		});
+
+		assert.deepEqual(generations.map(candidate => candidate.generation), [1, 2, 3]);
+		assert.deepEqual(generations.slice(1).map(candidate => candidate.materializeSessionCalls[0].request), [
+			{
+				operation: generations[1].materializeSessionCalls[0].request.operation,
+				payloadDigest: generations[1].materializeSessionCalls[0].request.payloadDigest,
+				session: sessionId,
+				configuration: sessionConfigurationState,
+			},
+			{
+				operation: generations[2].materializeSessionCalls[0].request.operation,
+				payloadDigest: generations[2].materializeSessionCalls[0].request.payloadDigest,
+				session: sessionId,
+				configuration: sessionConfigurationState,
+			},
+		]);
+		assert.deepEqual(generations.slice(1).map(candidate => candidate.materializeChatCalls[0].request), [
+			{
+				operation: generations[1].materializeChatCalls[0].request.operation,
+				payloadDigest: generations[1].materializeChatCalls[0].request.payloadDigest,
+				session: sessionId,
+				chat: chatId,
+			},
+			{
+				operation: generations[2].materializeChatCalls[0].request.operation,
+				payloadDigest: generations[2].materializeChatCalls[0].request.payloadDigest,
+				session: sessionId,
+				chat: chatId,
+			},
+		]);
+
+		runtime.dispose();
 	});
 
 	test('enforces negotiated concurrency and request, response, and action byte limits', async () => {

@@ -385,6 +385,16 @@ access are constrained to the granted scope, secrets remain typed references,
 and Tool execution still crosses the canonical Tool Execution Port. A signed
 runtime that requests denied authority does not start.
 
+Product composition supplies `IAgentRuntimeSandboxProcessPort`. Each launch
+request binds the exact installed package ID, revision, content digest, target,
+complete verified artifact closure, granted process, filesystem, network,
+secret, and Tool-executor authority, logical runtime connection, and transport
+generation. The port revalidates the immutable entry point immediately before
+launch, returns the same identities, and owns that generation until disconnect
+or disposal. Restarting a connected runtime creates a new generation through
+the same port and the same package authority; it cannot reuse a process or
+expand policy outside the installed record.
+
 Package operations are idempotent by operation ID and payload digest. After an
 uncertain install, update, uninstall, Agent-data deletion, or Host-record purge
 result, the client reconciles that exact operation before issuing a different
@@ -395,7 +405,10 @@ mutation.
 ```text
 src/cs/platform/agentHost/
 ├── common/
-│   └── package identities, manifests, catalogs, operations, state, and errors
+│   └── package identities, manifests, catalogs, operations, sandbox authority,
+│       state, and errors
+├── electron-main/
+│   └── connected-runtime sandbox process port
 └── node/
     ├── packages/
     │   └── discovery, staging, verification, storage, activation, and cleanup

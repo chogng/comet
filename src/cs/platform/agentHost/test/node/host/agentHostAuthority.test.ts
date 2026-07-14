@@ -62,6 +62,7 @@ import {
 	createAgentTurnId,
 } from 'cs/platform/agentHost/common/identities';
 import type {
+	AgentHostChannelAction,
 	AgentHostMutationPayload,
 	AgentHostMutationOutcome,
 	AgentHostSubmissionTarget,
@@ -527,6 +528,7 @@ async function createPackageLifecycle(
 	stagedRegistration: IAgentRuntimeRegistration = registration,
 ): Promise<AgentPackageLifecycle> {
 	const artifactPort: IAgentPackageArtifactPort = {
+		reconcile: async () => undefined,
 		stage: async offering => {
 			assert.ok(stagedPackage);
 			assert.equal(offering.revision, stagedPackage.offering.revision);
@@ -536,6 +538,7 @@ async function createPackageLifecycle(
 	};
 	const activationStates = new Map<AgentPackageOperationId, 'prepared' | 'committed' | 'retired' | 'rolledBack'>();
 	const runtimePort: IAgentPackageRuntimePort = {
+		restoreRuntimeState: async () => undefined,
 		prepareActivation: async (installedPackage, _previous, operationId) => {
 			activationStates.set(operationId, 'prepared');
 			return installedPackage === null ? Object.freeze([]) : Object.freeze([stagedRegistration]);
@@ -543,6 +546,7 @@ async function createPackageLifecycle(
 		commitActivation: async operationId => { activationStates.set(operationId, 'committed'); },
 		retirePreviousActivation: async operationId => { activationStates.set(operationId, 'retired'); },
 		rollbackActivation: async operationId => { activationStates.set(operationId, 'rolledBack'); },
+		acknowledgeActivationOperation: async operationId => { activationStates.delete(operationId); },
 		migrateResumeState: async (_registration, request) => request.source,
 		deleteBacking: async () => undefined,
 	};
@@ -556,7 +560,9 @@ async function createPackageLifecycle(
 	});
 }
 
-async function createOptionalPackageLifecycle(): Promise<{
+async function createOptionalPackageLifecycle(
+	secondRegistration: IAgentRuntimeRegistration = optionalRegistrationV2,
+): Promise<{
 	readonly lifecycle: AgentPackageLifecycle;
 	readonly first: IVerifiedAgentPackage;
 	readonly second: IVerifiedAgentPackage;
@@ -578,6 +584,7 @@ async function createOptionalPackageLifecycle(): Promise<{
 		}),
 		stateStore,
 		artifactPort: {
+			reconcile: async () => undefined,
 			stage: async offering => {
 				const staged = packages.find(candidate => (
 					candidate.offering.packageId === offering.packageId
@@ -593,6 +600,7 @@ async function createOptionalPackageLifecycle(): Promise<{
 			discard: async () => undefined,
 		},
 		runtimePort: {
+			restoreRuntimeState: async () => undefined,
 			prepareActivation: async (installedPackage, _previous, operationId) => {
 				activationStates.set(operationId, 'prepared');
 				if (installedPackage === null) {
@@ -602,13 +610,14 @@ async function createOptionalPackageLifecycle(): Promise<{
 					return Object.freeze([optionalRegistrationV1]);
 				}
 				if (installedPackage.revision === second.offering.revision) {
-					return Object.freeze([optionalRegistrationV2]);
+					return Object.freeze([secondRegistration]);
 				}
 				throw new Error(`Unexpected optional package revision '${installedPackage.revision}'`);
 			},
 			commitActivation: async operationId => { activationStates.set(operationId, 'committed'); },
 			retirePreviousActivation: async operationId => { activationStates.set(operationId, 'retired'); },
 			rollbackActivation: async operationId => { activationStates.set(operationId, 'rolledBack'); },
+			acknowledgeActivationOperation: async operationId => { activationStates.delete(operationId); },
 			migrateResumeState: async (_registration, request) => request.source,
 			deleteBacking: async () => undefined,
 		},
@@ -640,6 +649,7 @@ class TestAgent implements IAgent {
 	readonly configurationCommits: Parameters<IAgent['configuration']['commitSessionUpdate']>[0][] = [];
 	readonly configurationRollbacks: Parameters<IAgent['configuration']['rollbackSessionUpdate']>[0][] = [];
 	readonly configurationAcknowledgements: Parameters<IAgent['configuration']['acknowledgeSessionUpdate']>[0][] = [];
+	failNextSend = false;
 	failNextConfigurationPrepareAfterAccept = false;
 	failNextConfigurationCommit = false;
 	failNextConfigurationRollback = false;
@@ -758,7 +768,13 @@ class TestAgent implements IAgent {
 			chats.add(request.chat);
 			return Object.freeze({ session: request.session, chat: request.chat, resume: Object.freeze({ schema: resumeSchema, data: '{}' }) });
 		},
-		send: async request => { this.sends.push(request); },
+		send: async request => {
+			this.sends.push(request);
+			if (this.failNextSend) {
+				this.failNextSend = false;
+				throw new Error('injected Agent send failure');
+			}
+		},
 		steer: async request => { this.steers.push(request); },
 		cancel: async request => {
 			this.cancels.push(request);
@@ -855,6 +871,22 @@ function createIdentityFactory(): IAgentHostAuthorityOptions['identityFactory'] 
 	};
 }
 
+function createSessionTypeCatalog(): IAgentHostAuthorityOptions['sessionTypeCatalog'] {
+	return {
+		resolve: activeAgents => Object.freeze(activeAgents.map(activeAgent => {
+			const resolved = activeAgent.registration.agentId === agentId
+				? sessionType
+				: activeAgent.registration.agentId === optionalAgentId
+					? optionalSessionType
+					: undefined;
+			assert.ok(resolved);
+			assert.equal(resolved.packageId, activeAgent.registration.packageId);
+			assert.equal(resolved.agentId, activeAgent.descriptor.id);
+			return resolved;
+		})),
+	};
+}
+
 async function createAuthority(
 	store: MemoryCatalogStore,
 	agent: TestAgent,
@@ -864,6 +896,7 @@ async function createAuthority(
 	runtimeAgents: readonly TestAgent[] = Object.freeze([agent]),
 	contentResources: Pick<IAgentContentResourcePort, 'open' | 'release'> = new TestTurnContentResources(),
 	authentication?: IAgentAuthenticationPort,
+	sessionTypeCatalog: IAgentHostAuthorityOptions['sessionTypeCatalog'] = createSessionTypeCatalog(),
 ): Promise<AgentHostAuthority> {
 	const lifecycle = packageLifecycle ?? await createPackageLifecycle();
 	return AgentHostAuthority.create({
@@ -872,9 +905,15 @@ async function createAuthority(
 		supportedProtocolVersions: Object.freeze([protocolVersion]),
 		capabilities: Object.freeze([]),
 		implementation: Object.freeze({ name: 'test-host', build: '1' }),
-		sessionTypes: Object.freeze([sessionType]),
+		sessionTypeCatalog,
 		agentRuntimes: {
 			resolve: requested => {
+				const resolved = runtimeAgents.find(candidate => candidate.registration.revision === requested.revision);
+				assert.ok(resolved);
+				assert.deepStrictEqual(resolved.registration, requested);
+				return resolved;
+			},
+			resolvePreparedActivation: (_operationId, requested) => {
 				const resolved = runtimeAgents.find(candidate => candidate.registration.revision === requested.revision);
 				assert.ok(resolved);
 				assert.deepStrictEqual(resolved.registration, requested);
@@ -982,6 +1021,21 @@ function referenceAttachment(connection: ReturnType<typeof createAgentHostClient
 }
 
 suite('AgentHostAuthority', { concurrency: false }, () => {
+	test('rejects duplicate Session types resolved by the active Agent catalog', async () => {
+		const agent = new TestAgent();
+		await assert.rejects(createAuthority(
+			new MemoryCatalogStore(),
+			agent,
+			32,
+			undefined,
+			new TestToolTurnAuthority(),
+			Object.freeze([agent]),
+			new TestTurnContentResources(),
+			undefined,
+			{ resolve: () => Object.freeze([sessionType, sessionType]) },
+		), /resolved duplicate type IDs/);
+	});
+
 	test('reconciles a lost acknowledgement and returns replay or fresh restart snapshots', async () => {
 		const store = new MemoryCatalogStore();
 		const agent = new TestAgent();
@@ -1876,6 +1930,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			assert.equal(root.state.capabilities.supportsAgentAuthentication, false);
 			assert.deepStrictEqual(root.state.packages.installedPackages.map(candidate => candidate.packageId), [packageId]);
 			assert.deepStrictEqual(root.state.packages.activations.map(activation => activation.authentication), ['unavailable']);
+			assert.deepStrictEqual(root.state.sessionTypes.map(candidate => candidate.id), [sessionType.id]);
+			assert.deepStrictEqual(root.state.agentDefaults.map(candidate => candidate.schema.agent), [agentId]);
 
 			const installPayload = Object.freeze({
 				kind: 'install' as const,
@@ -1887,6 +1943,20 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			if (installed.outcome.kind !== 'succeeded') { throw new Error('Optional package install failed'); }
 			assert.equal(installed.outcome.result.stateRevision, 1);
 			assert.deepStrictEqual(packages.stagedRevisions, [packages.first.offering.revision]);
+			const installedRootResult = await connection.setSubscriptions({
+				subscriptions: Object.freeze([getAgentHostRootChannelId()]),
+			});
+			const installedRoot = installedRootResult.snapshots[0];
+			assert.equal(installedRoot?.kind, 'root');
+			if (installedRoot?.kind !== 'root') { throw new Error('Installed root snapshot was not returned'); }
+			assert.deepStrictEqual(
+				installedRoot.state.sessionTypes.map(candidate => candidate.id),
+				[sessionType.id, optionalSessionType.id],
+			);
+			assert.deepStrictEqual(
+				installedRoot.state.agentDefaults.map(candidate => candidate.schema.agent),
+				[agentId, optionalAgentId],
+			);
 			assert.deepStrictEqual(
 				await connection.getPackageOperationOutcome({
 					operation: createAgentPackageOperationId('package-install'),
@@ -1936,6 +2006,14 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			assert.equal(uninstalled.outcome.kind, 'succeeded');
 			if (uninstalled.outcome.kind !== 'succeeded') { throw new Error('Optional package uninstall failed'); }
 			assert.equal(uninstalled.outcome.result.stateRevision, 3);
+			const uninstalledRootResult = await connection.setSubscriptions({
+				subscriptions: Object.freeze([getAgentHostRootChannelId()]),
+			});
+			const uninstalledRoot = uninstalledRootResult.snapshots[0];
+			assert.equal(uninstalledRoot?.kind, 'root');
+			if (uninstalledRoot?.kind !== 'root') { throw new Error('Uninstalled root snapshot was not returned'); }
+			assert.deepStrictEqual(uninstalledRoot.state.sessionTypes.map(candidate => candidate.id), [sessionType.id]);
+			assert.deepStrictEqual(uninstalledRoot.state.agentDefaults.map(candidate => candidate.schema.agent), [agentId]);
 
 			const purge = await executePackageOperation(
 				connection,
@@ -1958,6 +2036,262 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			assert.equal(stale.outcome.kind, 'failed');
 			if (stale.outcome.kind !== 'failed') { throw new Error('Stale package catalog precondition did not fail'); }
 			assert.equal(stale.outcome.failure.code, 'stateConflict');
+		} finally {
+			connection.dispose();
+			authority.dispose();
+		}
+	});
+
+	test('publishes retained Session availability and active Session types in one package catalog commit', async () => {
+		const store = new MemoryCatalogStore();
+		const cometAgent = new TestAgent();
+		const optionalAgent = new TestAgent(optionalRegistrationV1, optionalDescriptor);
+		const packages = await createOptionalPackageLifecycle();
+		const authority = await createAuthority(
+			store,
+			cometAgent,
+			32,
+			packages.lifecycle,
+			new TestToolTurnAuthority(),
+			Object.freeze([cometAgent, optionalAgent]),
+		);
+		const connection = await initialize(
+			authority,
+			'client-package-session-availability',
+			Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]),
+		);
+		try {
+			const installed = await executePackageOperation(
+				connection,
+				'package-session-install',
+				0,
+				Object.freeze({ kind: 'install', packageId: optionalPackageId, offering: packages.first.offering }),
+			);
+			assert.equal(installed.outcome.kind, 'succeeded');
+			const created = await mutate(connection, 'package-session-create', Object.freeze({
+				kind: 'createSession',
+				sessionType: optionalSessionType.id,
+				configuration: Object.freeze({
+					schema: optionalSessionConfigurationSchema.revision,
+					values: Object.freeze({}),
+				}),
+				chats: Object.freeze([Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }) })]),
+			}));
+			assert.equal(created.outcome.kind, 'succeeded');
+			if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+				throw new Error('Optional Session creation failed');
+			}
+			const session = created.outcome.result.session;
+			const chat = created.outcome.result.chats[0].chat;
+			await connection.setSubscriptions({ subscriptions: Object.freeze([
+				getAgentHostRootChannelId(),
+				getAgentHostSessionsChannelId(),
+				getAgentHostSessionChannelId(session),
+				getAgentHostChatChannelId(session, chat),
+			]) });
+			const uninstalledActions: AgentHostChannelAction['kind'][] = [];
+			const uninstallSubscription = connection.onDidReceiveAction(action => uninstalledActions.push(action.kind));
+			const uninstalled = await executePackageOperation(
+				connection,
+				'package-session-uninstall',
+				2,
+				Object.freeze({ kind: 'uninstall', packageId: optionalPackageId }),
+			);
+			uninstallSubscription.dispose();
+			assert.equal(uninstalled.outcome.kind, 'succeeded');
+			assert.deepStrictEqual(uninstalledActions, ['root', 'sessions', 'session', 'chat']);
+
+			let snapshots = await connection.setSubscriptions({ subscriptions: Object.freeze([
+				getAgentHostRootChannelId(),
+				getAgentHostSessionsChannelId(),
+				getAgentHostSessionChannelId(session),
+				getAgentHostChatChannelId(session, chat),
+			]) });
+			const unavailableRoot = snapshots.snapshots.find(snapshot => snapshot.kind === 'root');
+			const unavailableSession = snapshots.snapshots.find(snapshot => snapshot.kind === 'session');
+			const unavailableChat = snapshots.snapshots.find(snapshot => snapshot.kind === 'chat');
+			assert.ok(unavailableRoot?.kind === 'root');
+			assert.ok(unavailableSession?.kind === 'session');
+			assert.ok(unavailableChat?.kind === 'chat');
+			assert.deepStrictEqual(unavailableRoot.state.sessionTypes.map(candidate => candidate.id), [sessionType.id]);
+			assert.deepStrictEqual(unavailableRoot.state.agentDefaults.map(candidate => candidate.schema.agent), [agentId]);
+			assert.equal(unavailableSession.state.lifecycle, 'unavailable');
+			assert.equal(unavailableChat.state.lifecycle, 'unavailable');
+
+			const reinstalledActions: AgentHostChannelAction['kind'][] = [];
+			const reinstallSubscription = connection.onDidReceiveAction(action => reinstalledActions.push(action.kind));
+			const reinstalled = await executePackageOperation(
+				connection,
+				'package-session-reinstall',
+				3,
+				Object.freeze({ kind: 'install', packageId: optionalPackageId, offering: packages.first.offering }),
+			);
+			reinstallSubscription.dispose();
+			assert.equal(reinstalled.outcome.kind, 'succeeded');
+			assert.deepStrictEqual(reinstalledActions, ['root', 'sessions', 'session', 'chat']);
+
+			snapshots = await connection.setSubscriptions({ subscriptions: Object.freeze([
+				getAgentHostRootChannelId(),
+				getAgentHostSessionChannelId(session),
+				getAgentHostChatChannelId(session, chat),
+			]) });
+			const releasedRoot = snapshots.snapshots.find(snapshot => snapshot.kind === 'root');
+			const releasedSession = snapshots.snapshots.find(snapshot => snapshot.kind === 'session');
+			const releasedChat = snapshots.snapshots.find(snapshot => snapshot.kind === 'chat');
+			assert.ok(releasedRoot?.kind === 'root');
+			assert.ok(releasedSession?.kind === 'session');
+			assert.ok(releasedChat?.kind === 'chat');
+			assert.deepStrictEqual(
+				releasedRoot.state.sessionTypes.map(candidate => candidate.id),
+				[sessionType.id, optionalSessionType.id],
+			);
+			assert.equal(releasedSession.state.lifecycle, 'released');
+			assert.equal(releasedChat.state.lifecycle, 'released');
+		} finally {
+			connection.dispose();
+			authority.dispose();
+		}
+	});
+
+	test('rejects package activation incompatible with retained Session configuration or models', async () => {
+		const replacementSessionSchema = createConfigurationSchema(
+			optionalAgentId,
+			'session',
+			'optional.session-config.v2',
+		);
+		const replacementDescriptorRevision = createAgentDescriptorRevision('optional.descriptor.v2');
+		const scenarios = Object.freeze([
+			Object.freeze({
+				name: 'configuration',
+				registration: Object.freeze({
+					...optionalRegistrationV2,
+					initialSessionConfigurationSchema: replacementSessionSchema.revision,
+					supportedSessionConfigurationSchemas: Object.freeze([replacementSessionSchema.revision]),
+				}),
+				descriptor: optionalDescriptor,
+			}),
+			Object.freeze({
+				name: 'model',
+				registration: Object.freeze({
+					...optionalRegistrationV2,
+					descriptorRevision: replacementDescriptorRevision,
+				}),
+				descriptor: Object.freeze({
+					...optionalDescriptor,
+					revision: replacementDescriptorRevision,
+					models: Object.freeze(optionalDescriptor.models.map(model => Object.freeze({ ...model, enabled: false }))),
+				}),
+			}),
+		]);
+
+		for (const scenario of scenarios) {
+			const store = new MemoryCatalogStore();
+			const cometAgent = new TestAgent();
+			const optionalAgent = new TestAgent(optionalRegistrationV1, optionalDescriptor);
+			const replacementAgent = new TestAgent(scenario.registration, scenario.descriptor);
+			const packages = await createOptionalPackageLifecycle(scenario.registration);
+			const authority = await createAuthority(
+				store,
+				cometAgent,
+				32,
+				packages.lifecycle,
+				new TestToolTurnAuthority(),
+				Object.freeze([cometAgent, optionalAgent, replacementAgent]),
+			);
+			const connection = await initialize(
+				authority,
+				`client-package-retained-${scenario.name}`,
+				Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]),
+			);
+			try {
+				const installed = await executePackageOperation(
+					connection,
+					`package-retained-${scenario.name}-install`,
+					0,
+					Object.freeze({ kind: 'install', packageId: optionalPackageId, offering: packages.first.offering }),
+				);
+				assert.equal(installed.outcome.kind, 'succeeded');
+				const created = await mutate(connection, `package-retained-${scenario.name}-create`, Object.freeze({
+					kind: 'createSession',
+					sessionType: optionalSessionType.id,
+					configuration: Object.freeze({
+						schema: optionalSessionConfigurationSchema.revision,
+						values: Object.freeze({}),
+					}),
+					chats: Object.freeze([Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }) })]),
+				}));
+				assert.equal(created.outcome.kind, 'succeeded');
+				if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+					throw new Error('Retained Session creation failed');
+				}
+
+				const updated = await executePackageOperation(
+					connection,
+					`package-retained-${scenario.name}-update`,
+					1,
+					Object.freeze({ kind: 'update', packageId: optionalPackageId, offering: packages.second.offering }),
+				);
+				assert.equal(updated.outcome.kind, 'failed');
+				assert.deepStrictEqual(
+					packages.lifecycle.snapshot().activeRegistrations.map(candidate => candidate.revision),
+					[registrationRevision, optionalRegistrationV1.revision],
+				);
+				const snapshots = await connection.setSubscriptions({ subscriptions: Object.freeze([
+					getAgentHostSessionChannelId(created.outcome.result.session),
+					getAgentHostChatChannelId(created.outcome.result.session, created.outcome.result.chats[0].chat),
+				]) });
+				const sessionSnapshot = snapshots.snapshots.find(snapshot => snapshot.kind === 'session');
+				const chatSnapshot = snapshots.snapshots.find(snapshot => snapshot.kind === 'chat');
+				assert.equal(sessionSnapshot?.kind === 'session' && sessionSnapshot.state.lifecycle, 'available');
+				assert.equal(chatSnapshot?.kind === 'chat' && chatSnapshot.state.lifecycle, 'available');
+			} finally {
+				connection.dispose();
+				authority.dispose();
+			}
+		}
+	});
+
+	test('restores the active Agent catalog when package Host publication fails', async () => {
+		const store = new MemoryCatalogStore();
+		const cometAgent = new TestAgent();
+		const optionalAgent = new TestAgent(optionalRegistrationV1, optionalDescriptor);
+		const packages = await createOptionalPackageLifecycle();
+		const authority = await createAuthority(
+			store,
+			cometAgent,
+			32,
+			packages.lifecycle,
+			new TestToolTurnAuthority(),
+			Object.freeze([cometAgent, optionalAgent]),
+		);
+		const connection = await initialize(authority, 'client-package-publication-failure', Object.freeze([
+			getAgentHostRootChannelId(),
+		]));
+		try {
+			const published: AgentHostChannelAction[] = [];
+			const subscription = connection.onDidReceiveAction(action => published.push(action));
+			store.failNextCommit = true;
+			const installed = await executePackageOperation(
+				connection,
+				'package-publication-failure',
+				0,
+				Object.freeze({ kind: 'install', packageId: optionalPackageId, offering: packages.first.offering }),
+			);
+			subscription.dispose();
+			assert.equal(installed.outcome.kind, 'failed');
+			assert.deepStrictEqual(published, []);
+			assert.deepStrictEqual(
+				packages.lifecycle.snapshot().activeRegistrations.map(candidate => candidate.agentId),
+				[agentId],
+			);
+			const result = await connection.setSubscriptions({
+				subscriptions: Object.freeze([getAgentHostRootChannelId()]),
+			});
+			const root = result.snapshots[0];
+			assert.ok(root?.kind === 'root');
+			assert.deepStrictEqual(root.state.agents.map(candidate => candidate.id), [agentId]);
+			assert.deepStrictEqual(root.state.agentDefaults.map(candidate => candidate.schema.agent), [agentId]);
+			assert.deepStrictEqual(root.state.sessionTypes.map(candidate => candidate.id), [sessionType.id]);
 		} finally {
 			connection.dispose();
 			authority.dispose();
@@ -1990,10 +2324,6 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			});
 			const installed = await executePackageOperation(connection, 'purge-recovery-install', 0, installPayload);
 			assert.equal(installed.outcome.kind, 'succeeded');
-			await authority.updateRootConfiguration({
-				agents: Object.freeze([]),
-				sessionTypes: Object.freeze([sessionType, optionalSessionType]),
-			});
 			const created = await mutate(connection, 'purge-recovery-create', Object.freeze({
 				kind: 'createSession',
 				sessionType: optionalSessionType.id,
@@ -2330,6 +2660,63 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		await authority.flushAgentActions();
 		assert.deepStrictEqual(contentResources.releases, ['lease-1']);
 		assert.equal(contentResources.active.size, 0);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('persists the committed Turn as failed when Agent send rejects after acceptance', async () => {
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-send-failure', Object.freeze([]));
+		const created = await mutate(connection, 'operation-send-failure-session', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([Object.freeze({ model: null, origin: Object.freeze({ kind: 'user' }) })]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Send-failure Session was not created');
+		}
+		const session = created.outcome.result.session;
+		const chat = created.outcome.result.chats[0].chat;
+		const prepared = await prepare(
+			connection,
+			'submission-send-failure',
+			Object.freeze({ kind: 'chat', session, chat }),
+		);
+		agent.failNextSend = true;
+		const submitted = await mutate(connection, 'operation-send-failure-turn', Object.freeze({
+			kind: 'submitTurn', session, chat, submission: prepared,
+		}));
+		assert.equal(submitted.outcome.kind, 'succeeded');
+		if (submitted.outcome.kind !== 'succeeded' || submitted.outcome.result.kind !== 'submitTurn') {
+			throw new Error('Send-failure Turn was not committed');
+		}
+		const committedTurn = submitted.outcome.result.turn;
+		assert.equal(agent.sends.length, 1);
+		assert.equal(agent.sends[0].turn, committedTurn);
+
+		await authority.flushAgentActions();
+		const snapshot = await connection.setSubscriptions({
+			subscriptions: Object.freeze([getAgentHostChatChannelId(session, chat)]),
+		});
+		const chatSnapshot = snapshot.snapshots[0];
+		assert.equal(chatSnapshot.kind, 'chat');
+		if (chatSnapshot.kind !== 'chat') {
+			throw new Error('Send-failure Chat snapshot is missing');
+		}
+		assert.equal(chatSnapshot.state.turns.length, 1);
+		assert.equal(chatSnapshot.state.turns[0].id, committedTurn);
+		assert.equal(chatSnapshot.state.turns[0].state, 'failed');
+		assert.equal(chatSnapshot.state.turns[0].failure?.code, 'agentUnavailable');
+		assert.equal(chatSnapshot.state.activeTurn, undefined);
+		assert.equal(chatSnapshot.state.status, 'failed');
+		const persistedTurn = store.state?.sessions[0].chats[0].state.turns[0];
+		assert.equal(persistedTurn?.id, committedTurn);
+		assert.equal(persistedTurn?.state, 'failed');
+		assert.equal(persistedTurn?.failure?.code, 'agentUnavailable');
+
 		connection.dispose();
 		authority.dispose();
 	});

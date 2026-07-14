@@ -2,6 +2,7 @@ import './configurationService.test';
 import '../agentHost/test/cometModelCatalog.test';
 import '../agentHost/test/legacyChatMigration.test';
 import '../agentHost/test/localAgentHostMain.test';
+import '../agentHost/test/localAgentPackageArtifactPort.test';
 import '../../../base/parts/ipc/test/common/messagePortIpc.test';
 import '../../../platform/browserView/test/common/cdpProxy.test';
 import '../../../platform/browserView/test/electron-main/browserViewDebugger.test';

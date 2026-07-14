@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createHash } from 'node:crypto';
+
 import { DeferredPromise, raceCancellationError } from 'cs/base/common/async';
 import { CancellationToken, CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/cancellation';
 import { CancellationError, isCancellationError, onUnexpectedError } from 'cs/base/common/errors';
@@ -87,6 +89,7 @@ import type {
 	IAgentRuntimeHostOperationRequest,
 	IAgentRuntimeHostOperationResponse,
 	IAgentRuntimeInitializeRequest,
+	IAgentRuntimeReconnectEvent,
 	IAgentRuntimeResponse,
 	IAgentRuntimeTransportLimits,
 } from 'cs/platform/agentHost/common/connections';
@@ -219,10 +222,13 @@ interface IPendingConnectedAgentCall extends IConnectedAgentCallContext {
 	readonly call: AgentRuntimeCallId;
 	readonly agent: AgentId;
 	readonly registration: AgentRuntimeRegistrationRevision;
+	readonly generation: ReturnType<typeof createAgentRuntimeConnectionGeneration>;
 	readonly disconnected: DeferredPromise<never>;
 	hostOperationsOpen: boolean;
 	credentialOperationsOpen: boolean;
 	exactTurnTerminalAccepted: boolean;
+	provisionalSessionResume: IAgentResumeState | undefined;
+	provisionalChatResume: IAgentResumeState | undefined;
 }
 
 interface IConnectedAgentContentOwner {
@@ -273,6 +279,11 @@ interface IConnectedAgentRegistration {
 	readonly descriptor: IAgentDescriptor;
 }
 
+interface IConnectedAgentRuntimeRecovery {
+	readonly event: IAgentRuntimeReconnectEvent;
+	readonly promise: Promise<void>;
+}
+
 function invalidRuntimeValue(field: string, value: unknown): AgentHostError {
 	const diagnostic = typeof value === 'number'
 		? value
@@ -296,6 +307,27 @@ function runtimeUnavailable(connection: IAgentRuntimeConnection): AgentHostError
 		'Connected Agent Runtime is unavailable',
 		{ resource: `agentRuntime:${connection.connection}:${connection.generation}` },
 	);
+}
+
+function runtimeGenerationUnavailable(
+	connection: IAgentRuntimeConnection,
+	generation: ReturnType<typeof createAgentRuntimeConnectionGeneration>,
+): AgentHostError {
+	return new AgentHostError(
+		AgentHostErrorCode.ResourceMissing,
+		'Connected Agent Runtime generation was replaced',
+		{ resource: `agentRuntime:${connection.connection}:${generation}` },
+	);
+}
+
+function isRuntimeGenerationUnavailable(
+	error: unknown,
+	connection: IAgentRuntimeConnection,
+	generation: ReturnType<typeof createAgentRuntimeConnectionGeneration>,
+): boolean {
+	return error instanceof AgentHostError
+		&& error.code === AgentHostErrorCode.ResourceMissing
+		&& error.data.resource === `agentRuntime:${connection.connection}:${generation}`;
 }
 
 function assertBoundedString(value: unknown, field: string, maximumLength: number): asserts value is string {
@@ -826,6 +858,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 	private readonly contentMaterializationReleases = new Map<AgentContentMaterializationId, Promise<void>>();
 	private readonly toolCalls = new Map<AgentToolCallId, IConnectedAgentToolCallRecord>();
 	private readonly agentsById = new Map<AgentId, ConnectedAgent>();
+	private readonly pendingGenerationDrains = new Map<ReturnType<typeof createAgentRuntimeConnectionGeneration>, DeferredPromise<void>>();
 	private status: 'initializing' | 'active' | 'invalid' | 'disposed' = 'initializing';
 	private failure: Error | undefined;
 	private initializationDisconnect: DeferredPromise<never> | undefined;
@@ -836,6 +869,8 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 	private protocolVersionValue: AgentRuntimeProtocolVersion | undefined;
 	private transportLimitsValue: IAgentRuntimeTransportLimits | undefined;
 	private agentsValue: readonly IAgent[] = Object.freeze([]);
+	private observedGeneration: ReturnType<typeof createAgentRuntimeConnectionGeneration>;
+	private recovery: IConnectedAgentRuntimeRecovery | undefined;
 
 	readonly connection: IAgentRuntimeConnection;
 	private readonly toolExecution: IAgentToolExecutionPort;
@@ -848,6 +883,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		this.toolExecution = options.toolExecution;
 		this.contentResources = options.contentResources;
 		this.credentialResolver = options.credentialResolver;
+		this.observedGeneration = createAgentRuntimeConnectionGeneration(options.connection.generation);
 		this.initializationOptions = {
 			protocolVersions: options.protocolVersions,
 			transportLimits: options.transportLimits,
@@ -857,6 +893,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			implementation: options.implementation,
 		};
 		this._register(this.connection.onDidDisconnect(event => this.handleDisconnect(event)));
+		this._register(this.connection.onDidReconnect(event => this.handleReconnect(event)));
 		this._register(this.connection.onDidEmitAction(action => this.handleAction(action)));
 		this._register(this.connection.onDidRequestHostOperation(request => this.acceptHostOperation(request)));
 	}
@@ -992,12 +1029,54 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		this.status = 'active';
 	}
 
-	async invoke<TRequest, TValue, TResult>(
+	invoke<TRequest, TValue, TResult>(
 		agent: IConnectedAgentRegistration,
 		request: TRequest,
 		context: IConnectedAgentCallContext,
 		dispatch: (call: IAgentRuntimeCall<TRequest>) => Promise<IAgentRuntimeResponse<TValue>>,
 		validate: (value: TValue) => TResult,
+		commit: (result: TResult, call: IPendingConnectedAgentCall) => void,
+	): Promise<TResult> {
+		if (this.recovery === undefined) {
+			return this.invokeActive(agent, request, context, dispatch, validate, commit);
+		}
+		return this.invokeAfterRecovery(agent, request, context, dispatch, validate, commit);
+	}
+
+	private async invokeAfterRecovery<TRequest, TValue, TResult>(
+		agent: IConnectedAgentRegistration,
+		request: TRequest,
+		context: IConnectedAgentCallContext,
+		dispatch: (call: IAgentRuntimeCall<TRequest>) => Promise<IAgentRuntimeResponse<TValue>>,
+		validate: (value: TValue) => TResult,
+		commit: (result: TResult, call: IPendingConnectedAgentCall) => void,
+	): Promise<TResult> {
+		await this.awaitRecovery();
+		return this.invokeActive(agent, request, context, dispatch, validate, commit);
+	}
+
+	async invokeRecovery<TRequest, TValue, TResult>(
+		agent: IConnectedAgentRegistration,
+		request: TRequest,
+		context: IConnectedAgentCallContext,
+		dispatch: (call: IAgentRuntimeCall<TRequest>) => Promise<IAgentRuntimeResponse<TValue>>,
+		validate: (value: TValue) => TResult,
+		commit: (result: TResult, call: IPendingConnectedAgentCall) => void,
+	): Promise<TResult> {
+		const recovery = this.recovery;
+		if (recovery === undefined || recovery.event.generation !== this.connection.generation) {
+			throw invalidRuntimeValue('runtime.recovery.generation', this.connection.generation);
+		}
+		return this.invokeActive(agent, request, context, dispatch, validate, commit);
+	}
+
+	private async invokeActive<TRequest, TValue, TResult>(
+		agent: IConnectedAgentRegistration,
+		request: TRequest,
+		context: IConnectedAgentCallContext,
+		dispatch: (call: IAgentRuntimeCall<TRequest>) => Promise<IAgentRuntimeResponse<TValue>>,
+		validate: (value: TValue) => TResult,
+		commit: (result: TResult, call: IPendingConnectedAgentCall) => void,
 	): Promise<TResult> {
 		this.assertActive();
 		if (this.pendingCalls.size >= this.transportLimits.maximumConcurrentCalls) {
@@ -1018,10 +1097,13 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			call: callId,
 			agent: agent.registration.agentId,
 			registration: agent.registration.revision,
+			generation: call.generation,
 			disconnected: new DeferredPromise<never>(),
 			hostOperationsOpen: context.kind === 'chat.send',
 			credentialOperationsOpen: context.kind === 'chat.send',
 			exactTurnTerminalAccepted: false,
+			provisionalSessionResume: undefined,
+			provisionalChatResume: undefined,
 		};
 		this.pendingCalls.set(callId, pending);
 		let result: TResult | undefined;
@@ -1065,6 +1147,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 				if (pending.kind === 'chat.send' && !pending.exactTurnTerminalAccepted) {
 					throw invalidRuntimeValue('runtime.call.response.turnTerminal', pending.turn ?? 'missing');
 				}
+				commit(result, pending);
 			} catch (error) {
 				const protocolError = error instanceof AgentHostError
 					? error
@@ -1088,6 +1171,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			cleanupFailure = error;
 		} finally {
 			this.pendingCalls.delete(callId);
+			this.completeGenerationDrain(call.generation);
 		}
 		if (operationFailed && cleanupFailed && operationFailure !== cleanupFailure) {
 			throw new AggregateError(
@@ -1998,6 +2082,136 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		}
 	}
 
+	private handleReconnect(event: IAgentRuntimeReconnectEvent): void {
+		if (this.status === 'disposed' || this.status === 'invalid') {
+			return;
+		}
+		const current = this.connection.state;
+		if (
+			event.connection !== this.connection.connection
+			|| event.previousGeneration !== this.observedGeneration
+			|| event.generation !== event.previousGeneration + 1
+			|| event.generation !== this.connection.generation
+			|| current.kind !== 'connected'
+			|| current.connection !== event.connection
+			|| current.generation !== event.generation
+		) {
+			this.markInvalid(invalidRuntimeValue('runtime.reconnect.correlation', event.generation), true);
+			return;
+		}
+		this.observedGeneration = createAgentRuntimeConnectionGeneration(event.generation);
+		for (const pending of this.pendingCalls.values()) {
+			if (pending.generation === event.previousGeneration && !pending.disconnected.isSettled) {
+				pending.disconnected.error(runtimeGenerationUnavailable(this.connection, event.previousGeneration));
+			}
+		}
+		const previousRecovery = this.recovery;
+		const promise = this.recoverGeneration(event, previousRecovery);
+		const recovery: IConnectedAgentRuntimeRecovery = Object.freeze({ event, promise });
+		this.recovery = recovery;
+		void promise.then(() => {
+			if (this.recovery === recovery) {
+				this.recovery = undefined;
+			}
+		}, error => {
+			if (
+				this.recovery === recovery
+				&& !isRuntimeGenerationUnavailable(error, this.connection, event.generation)
+			) {
+				this.markInvalid(error instanceof Error ? error : invalidRuntimeValue('runtime.recovery', error), true);
+			}
+		});
+	}
+
+	private async recoverGeneration(
+		event: IAgentRuntimeReconnectEvent,
+		previousRecovery: IConnectedAgentRuntimeRecovery | undefined,
+	): Promise<void> {
+		if (previousRecovery !== undefined) {
+			try {
+				await previousRecovery.promise;
+			} catch (error) {
+				if (!isRuntimeGenerationUnavailable(error, this.connection, previousRecovery.event.generation)) {
+					throw error;
+				}
+			}
+		}
+		await this.waitForPriorGenerationDrains(event.generation);
+		if (
+			this.status !== 'active'
+			|| this.connection.generation !== event.generation
+			|| this.connection.state.kind !== 'connected'
+		) {
+			throw runtimeGenerationUnavailable(this.connection, event.generation);
+		}
+		for (const agent of [...this.agentsById.values()].sort((left, right) => left.id.localeCompare(right.id))) {
+			await agent.recoverGeneration(event);
+		}
+	}
+
+	private async awaitRecovery(): Promise<void> {
+		while (this.recovery !== undefined) {
+			const recovery = this.recovery;
+			try {
+				await recovery.promise;
+			} catch (error) {
+				if (
+					this.recovery !== recovery
+					&& isRuntimeGenerationUnavailable(error, this.connection, recovery.event.generation)
+				) {
+					continue;
+				}
+				throw error;
+			}
+			if (this.recovery === recovery) {
+				return;
+			}
+		}
+	}
+
+	private async waitForPriorGenerationDrains(
+		generation: ReturnType<typeof createAgentRuntimeConnectionGeneration>,
+	): Promise<void> {
+		while (true) {
+			const generations = [...new Set(
+				[...this.pendingCalls.values()]
+					.map(pending => pending.generation)
+					.filter(pendingGeneration => pendingGeneration < generation),
+			)];
+			if (generations.length === 0) {
+				return;
+			}
+			await Promise.all(generations.map(pendingGeneration => this.waitForGenerationDrain(pendingGeneration)));
+		}
+	}
+
+	private waitForGenerationDrain(
+		generation: ReturnType<typeof createAgentRuntimeConnectionGeneration>,
+	): Promise<void> {
+		if (![...this.pendingCalls.values()].some(pending => pending.generation === generation)) {
+			return Promise.resolve();
+		}
+		let drain = this.pendingGenerationDrains.get(generation);
+		if (drain === undefined) {
+			drain = new DeferredPromise<void>();
+			this.pendingGenerationDrains.set(generation, drain);
+		}
+		return drain.p;
+	}
+
+	private completeGenerationDrain(
+		generation: ReturnType<typeof createAgentRuntimeConnectionGeneration>,
+	): void {
+		if ([...this.pendingCalls.values()].some(pending => pending.generation === generation)) {
+			return;
+		}
+		const drain = this.pendingGenerationDrains.get(generation);
+		if (drain !== undefined) {
+			this.pendingGenerationDrains.delete(generation);
+			drain.complete(undefined);
+		}
+	}
+
 	private handleDisconnect(
 		event: Extract<AgentRuntimeConnectionState, { readonly kind: 'disconnected' }>,
 	): void {
@@ -2057,7 +2271,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			if (!Number.isSafeInteger(this.expectedActionSequence)) {
 				throw invalidRuntimeValue('runtime.action.sequence', this.expectedActionSequence);
 			}
-			agent.acceptAction(envelope.action);
+			agent.acceptAction(envelope.action, pending);
 		} catch (error) {
 			this.markInvalid(
 				error instanceof AgentHostError
@@ -2330,6 +2544,49 @@ function validateModelConfigurationCandidate(
 	);
 }
 
+interface IConnectedAgentChatRecoveryState {
+	resume: IAgentResumeState | undefined;
+}
+
+interface IConnectedAgentSessionRecoveryState {
+	configuration: IAgentConfigurationState;
+	resume: IAgentResumeState | undefined;
+	readonly chats: Map<AgentChatId, IConnectedAgentChatRecoveryState>;
+}
+
+interface IConnectedAgentConfigurationRecoveryState {
+	readonly request: IAgentPrepareSessionConfigurationUpdateRequest;
+	decision: 'commit' | 'rollback' | undefined;
+}
+
+function freezeResumeState(resume: IAgentResumeState | undefined): IAgentResumeState | undefined {
+	return resume === undefined ? undefined : Object.freeze({ ...resume });
+}
+
+function runtimeRecoveryIdentity(
+	kind: 'session' | 'chat',
+	event: IAgentRuntimeReconnectEvent,
+	registration: AgentRuntimeRegistrationRevision,
+	session: AgentSessionId,
+	chat: AgentChatId | undefined,
+	state: object,
+): { readonly operation: AgentHostOperationId; readonly payloadDigest: ReturnType<typeof createAgentHostPayloadDigest> } {
+	const value = encodeAgentHostProtocolValue(Object.freeze({
+		kind: `runtimeGenerationRecovery.${kind}`,
+		connection: event.connection,
+		generation: event.generation,
+		registration,
+		session,
+		...(chat === undefined ? {} : { chat }),
+		state,
+	}));
+	const digest = createHash('sha256').update(value).digest('hex');
+	return Object.freeze({
+		operation: createAgentHostOperationId(`runtime-recovery:${digest}`),
+		payloadDigest: createAgentHostPayloadDigest(`sha256:${digest}`),
+	});
+}
+
 class ConnectedAgent extends Disposable implements IAgent {
 	readonly id: AgentId;
 	readonly descriptor: IObservable<IAgentDescriptor>;
@@ -2345,6 +2602,8 @@ class ConnectedAgent extends Disposable implements IAgent {
 	readonly resumeStates: IAgentResumeStates;
 
 	private readonly sessionConfigurationSchemas = new Map<AgentConfigurationSchemaRevision, IAgentConfigurationSchema>();
+	private readonly recoverySessions = new Map<AgentSessionId, IConnectedAgentSessionRecoveryState>();
+	private readonly recoveryConfigurations = new Map<AgentHostOperationId, IConnectedAgentConfigurationRecoveryState>();
 
 	constructor(
 		private readonly runtime: ConnectedAgentRuntime,
@@ -2386,8 +2645,139 @@ class ConnectedAgent extends Disposable implements IAgent {
 		};
 	}
 
-	acceptAction(action: IAgentAction): void {
+	acceptAction(action: IAgentAction, pending: IPendingConnectedAgentCall): void {
+		if (action.kind === 'sessionResumeStateChanged') {
+			const resume = Object.freeze({ ...action.resume });
+			if (pending.kind === 'session.create' || pending.kind === 'session.materialize') {
+				pending.provisionalSessionResume = resume;
+			} else {
+				const session = this.recoverySessions.get(action.session);
+				if (session !== undefined) {
+					session.resume = resume;
+				}
+			}
+		} else if (action.kind === 'chatResumeStateChanged') {
+			const resume = Object.freeze({ ...action.resume });
+			if (pending.kind === 'chat.create' || pending.kind === 'chat.materialize' || pending.kind === 'chat.fork') {
+				pending.provisionalChatResume = resume;
+			} else {
+				const chat = this.recoverySessions.get(action.session)?.chats.get(action.chat);
+				if (chat !== undefined) {
+					chat.resume = resume;
+				}
+			}
+		}
 		this.actionEmitter.fire(action);
+	}
+
+	async recoverGeneration(event: IAgentRuntimeReconnectEvent): Promise<void> {
+		for (const [sessionId, session] of [...this.recoverySessions].sort(([left], [right]) => left.localeCompare(right))) {
+			const configurations = [...this.recoveryConfigurations.values()].filter(candidate => (
+				candidate.request.session === sessionId
+			));
+			if (configurations.length > 1) {
+				throw invalidRuntimeValue('runtime.recovery.configurationCount', configurations.length);
+			}
+			const configuration = configurations[0]?.request.current ?? session.configuration;
+			const sessionIdentity = runtimeRecoveryIdentity(
+				'session',
+				event,
+				this.registration.revision,
+				sessionId,
+				undefined,
+				Object.freeze({ configuration, ...(session.resume === undefined ? {} : { resume: session.resume }) }),
+			);
+			const materializeSession: IAgentMaterializeSessionRequest = Object.freeze({
+				...sessionIdentity,
+				session: sessionId,
+				configuration,
+				...(session.resume === undefined ? {} : { resume: session.resume }),
+			});
+			await this.runtime.invokeRecovery(
+				this.connected,
+				materializeSession,
+				sessionContext('session.materialize', materializeSession.operation, sessionId, true),
+				call => this.runtime.connection.materializeSession(call),
+				validateNullResponse,
+				(_result, call) => {
+					if (call.provisionalSessionResume !== undefined) {
+						session.resume = call.provisionalSessionResume;
+					}
+				},
+			);
+
+			const configurationRecovery = configurations[0];
+			if (configurationRecovery !== undefined) {
+				await this.runtime.invokeRecovery(
+					this.connected,
+					configurationRecovery.request,
+					sessionContext(
+						'configuration.prepareSessionUpdate',
+						configurationRecovery.request.operation,
+						sessionId,
+						false,
+					),
+					call => this.runtime.connection.prepareSessionConfigurationUpdate(call),
+					validateNullResponse,
+					() => {},
+				);
+				if (configurationRecovery.decision !== undefined) {
+					const finalize: IAgentFinalizeSessionConfigurationUpdateRequest = Object.freeze({
+						operation: configurationRecovery.request.operation,
+						payloadDigest: configurationRecovery.request.payloadDigest,
+						runtimeRegistration: configurationRecovery.request.runtimeRegistration,
+						session: sessionId,
+						configuration: configurationRecovery.request.candidate.revision,
+					});
+					await this.runtime.invokeRecovery(
+						this.connected,
+						finalize,
+						sessionContext(
+							configurationRecovery.decision === 'commit'
+								? 'configuration.commitSessionUpdate'
+								: 'configuration.rollbackSessionUpdate',
+							finalize.operation,
+							sessionId,
+							false,
+						),
+						call => configurationRecovery.decision === 'commit'
+							? this.runtime.connection.commitSessionConfigurationUpdate(call)
+							: this.runtime.connection.rollbackSessionConfigurationUpdate(call),
+						validateNullResponse,
+						() => {},
+					);
+				}
+			}
+
+			for (const [chatId, chat] of [...session.chats].sort(([left], [right]) => left.localeCompare(right))) {
+				const chatIdentity = runtimeRecoveryIdentity(
+					'chat',
+					event,
+					this.registration.revision,
+					sessionId,
+					chatId,
+					Object.freeze(chat.resume === undefined ? {} : { resume: chat.resume }),
+				);
+				const materializeChat: IAgentMaterializeChatRequest = Object.freeze({
+					...chatIdentity,
+					session: sessionId,
+					chat: chatId,
+					...(chat.resume === undefined ? {} : { resume: chat.resume }),
+				});
+				await this.runtime.invokeRecovery(
+					this.connected,
+					materializeChat,
+					chatContext('chat.materialize', materializeChat.operation, sessionId, chatId, true),
+					call => this.runtime.connection.materializeChat(call),
+					validateNullResponse,
+					(_result, call) => {
+						if (call.provisionalChatResume !== undefined) {
+							chat.resume = call.provisionalChatResume;
+						}
+					},
+				);
+			}
+		}
 	}
 
 	private async resolveSessionConfiguration(
@@ -2425,6 +2815,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 				);
 				return Object.freeze({ schema, values: resolved.values });
 			},
+			() => {},
 		);
 	}
 
@@ -2467,6 +2858,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 				}
 				return completions;
 			},
+			() => {},
 		);
 	}
 
@@ -2495,19 +2887,43 @@ class ConnectedAgent extends Disposable implements IAgent {
 			sessionContext('configuration.prepareSessionUpdate', request.operation, request.session, false),
 			call => this.runtime.connection.prepareSessionConfigurationUpdate(call),
 			validateNullResponse,
+			() => {
+				this.recoveryConfigurations.set(request.operation, {
+					request: Object.freeze({ ...request, current, candidate }),
+					decision: undefined,
+				});
+			},
 		);
 	}
 
 	private async commitSessionConfigurationUpdate(
 		request: IAgentFinalizeSessionConfigurationUpdateRequest,
 	): Promise<void> {
-		await this.finalizeSessionConfigurationUpdate('configuration.commitSessionUpdate', request);
+		const recovery = this.recoveryConfigurations.get(request.operation);
+		await this.finalizeSessionConfigurationUpdate('configuration.commitSessionUpdate', request, () => {
+			if (recovery !== undefined && recovery.request.candidate.revision === request.configuration) {
+				recovery.decision = 'commit';
+				const session = this.recoverySessions.get(request.session);
+				if (session !== undefined) {
+					session.configuration = recovery.request.candidate;
+				}
+			}
+		});
 	}
 
 	private async rollbackSessionConfigurationUpdate(
 		request: IAgentFinalizeSessionConfigurationUpdateRequest,
 	): Promise<void> {
-		await this.finalizeSessionConfigurationUpdate('configuration.rollbackSessionUpdate', request);
+		const recovery = this.recoveryConfigurations.get(request.operation);
+		await this.finalizeSessionConfigurationUpdate('configuration.rollbackSessionUpdate', request, () => {
+			if (recovery !== undefined && recovery.request.candidate.revision === request.configuration) {
+				recovery.decision = 'rollback';
+				const session = this.recoverySessions.get(request.session);
+				if (session !== undefined) {
+					session.configuration = recovery.request.current;
+				}
+			}
+		});
 	}
 
 	private async acknowledgeSessionConfigurationUpdate(
@@ -2526,12 +2942,16 @@ class ConnectedAgent extends Disposable implements IAgent {
 			sessionContext('configuration.acknowledgeSessionUpdate', request.operation, request.session, false),
 			call => this.runtime.connection.acknowledgeSessionConfigurationUpdate(call),
 			validateNullResponse,
+			() => {
+				this.recoveryConfigurations.delete(request.operation);
+			},
 		);
 	}
 
 	private async finalizeSessionConfigurationUpdate(
 		kind: 'configuration.commitSessionUpdate' | 'configuration.rollbackSessionUpdate',
 		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+		commit: () => void,
 	): Promise<void> {
 		validateOperationContext(request.operation, request.payloadDigest);
 		this.validateConfigurationRuntimeRegistration(request.runtimeRegistration, `runtime.${kind}`);
@@ -2545,6 +2965,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 				? this.runtime.connection.commitSessionConfigurationUpdate(call)
 				: this.runtime.connection.rollbackSessionConfigurationUpdate(call),
 			validateNullResponse,
+			commit,
 		);
 	}
 
@@ -2641,6 +3062,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 				}
 				return profile;
 			},
+			() => {},
 		);
 	}
 
@@ -2684,33 +3106,53 @@ class ConnectedAgent extends Disposable implements IAgent {
 				}
 				return Object.freeze({ ...value });
 			},
+			() => {},
 		);
 	}
 
 	private async createSession(request: IAgentCreateSessionOptions): Promise<IAgentSessionBacking> {
 		validateOperationContext(request.operation, request.payloadDigest);
 		createAgentSessionId(request.session);
-		this.validateSessionConfigurationState(request.configuration);
-		return this.runtime.invoke(
+		const configuration = this.validateSessionConfigurationState(request.configuration);
+		const backing = await this.runtime.invoke(
 			this.connected,
-			request,
+			Object.freeze({ ...request, configuration }),
 			sessionContext('session.create', request.operation, request.session, true),
 			call => this.runtime.connection.createSession(call),
 			value => validateSessionBacking(value, request.session, this.connected),
+			(value, call) => {
+				this.recoverySessions.set(request.session, {
+					configuration,
+					resume: call.provisionalSessionResume === undefined
+						? freezeResumeState(value.resume)
+						: call.provisionalSessionResume,
+					chats: new Map(),
+				});
+			},
 		);
+		return backing;
 	}
 
 	private async materializeSession(request: IAgentMaterializeSessionRequest): Promise<void> {
 		validateOperationContext(request.operation, request.payloadDigest);
 		createAgentSessionId(request.session);
-		this.validateSessionConfigurationState(request.configuration);
+		const configuration = this.validateSessionConfigurationState(request.configuration);
 		validateResumeState(request.resume, this.registration, 'runtime.materializeSession.resume');
 		await this.runtime.invoke(
 			this.connected,
-			request,
+			Object.freeze({ ...request, configuration }),
 			sessionContext('session.materialize', request.operation, request.session, true),
 			call => this.runtime.connection.materializeSession(call),
 			validateNullResponse,
+			(_result, call) => {
+				this.recoverySessions.set(request.session, {
+					configuration,
+					resume: call.provisionalSessionResume === undefined
+						? freezeResumeState(request.resume)
+						: call.provisionalSessionResume,
+					chats: this.recoverySessions.get(request.session)?.chats ?? new Map(),
+				});
+			},
 		);
 	}
 
@@ -2724,6 +3166,9 @@ class ConnectedAgent extends Disposable implements IAgent {
 			sessionContext('session.release', request.operation, request.session, true),
 			call => this.runtime.connection.releaseSession(call),
 			validateNullResponse,
+			() => {
+				this.deleteSessionRecovery(request.session);
+			},
 		);
 	}
 
@@ -2736,6 +3181,9 @@ class ConnectedAgent extends Disposable implements IAgent {
 			sessionContext('session.delete', request.operation, request.session, false),
 			call => this.runtime.connection.deleteSession(call),
 			validateNullResponse,
+			() => {
+				this.deleteSessionRecovery(request.session);
+			},
 		);
 	}
 
@@ -2744,13 +3192,21 @@ class ConnectedAgent extends Disposable implements IAgent {
 		createAgentSessionId(request.session);
 		createAgentChatId(request.chat);
 		validateOrigin(request.origin);
-		return this.runtime.invoke(
+		const backing = await this.runtime.invoke(
 			this.connected,
 			request,
 			chatContext('chat.create', request.operation, request.session, request.chat, true),
 			call => this.runtime.connection.createChat(call),
 			value => validateChatBacking(value, request.session, request.chat, this.connected),
+			(value, call) => {
+				this.requireRecoverySession(request.session).chats.set(request.chat, {
+					resume: call.provisionalChatResume === undefined
+						? freezeResumeState(value.resume)
+						: call.provisionalChatResume,
+				});
+			},
 		);
+		return backing;
 	}
 
 	private async materializeChat(request: IAgentMaterializeChatRequest): Promise<void> {
@@ -2764,6 +3220,13 @@ class ConnectedAgent extends Disposable implements IAgent {
 			chatContext('chat.materialize', request.operation, request.session, request.chat, true),
 			call => this.runtime.connection.materializeChat(call),
 			validateNullResponse,
+			(_result, call) => {
+				this.requireRecoverySession(request.session).chats.set(request.chat, {
+					resume: call.provisionalChatResume === undefined
+						? freezeResumeState(request.resume)
+						: call.provisionalChatResume,
+				});
+			},
 		);
 	}
 
@@ -2778,6 +3241,9 @@ class ConnectedAgent extends Disposable implements IAgent {
 			chatContext('chat.release', request.operation, request.session, request.chat, true),
 			call => this.runtime.connection.releaseChat(call),
 			validateNullResponse,
+			() => {
+				this.recoverySessions.get(request.session)?.chats.delete(request.chat);
+			},
 		);
 	}
 
@@ -2787,13 +3253,21 @@ class ConnectedAgent extends Disposable implements IAgent {
 		createAgentChatId(request.chat);
 		createAgentChatId(request.source.chat);
 		createAgentTurnId(request.source.turn);
-		return this.runtime.invoke(
+		const backing = await this.runtime.invoke(
 			this.connected,
 			request,
 			chatContext('chat.fork', request.operation, request.session, request.chat, true),
 			call => this.runtime.connection.forkChat(call),
 			value => validateChatBacking(value, request.session, request.chat, this.connected),
+			(value, call) => {
+				this.requireRecoverySession(request.session).chats.set(request.chat, {
+					resume: call.provisionalChatResume === undefined
+						? freezeResumeState(value.resume)
+						: call.provisionalChatResume,
+				});
+			},
 		);
+		return backing;
 	}
 
 	private async send(request: IAgentChatRequest): Promise<void> {
@@ -2812,6 +3286,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 			),
 			call => this.runtime.connection.send(call),
 			validateNullResponse,
+			() => {},
 		);
 	}
 
@@ -2829,6 +3304,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 			turnContext('chat.steer', request.operation, request.session, request.chat, request.turn),
 			call => this.runtime.connection.steer(call),
 			validateNullResponse,
+			() => {},
 		);
 	}
 
@@ -2844,6 +3320,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 			turnContext('chat.cancel', request.operation, request.session, request.chat, request.turn),
 			call => this.runtime.connection.cancel(call),
 			validateNullResponse,
+			() => {},
 		);
 	}
 
@@ -2857,7 +3334,27 @@ class ConnectedAgent extends Disposable implements IAgent {
 			chatContext('chat.delete', request.operation, request.session, request.chat, false),
 			call => this.runtime.connection.deleteChat(call),
 			validateNullResponse,
+			() => {
+				this.recoverySessions.get(request.session)?.chats.delete(request.chat);
+			},
 		);
+	}
+
+	private requireRecoverySession(session: AgentSessionId): IConnectedAgentSessionRecoveryState {
+		const recovery = this.recoverySessions.get(session);
+		if (recovery === undefined) {
+			throw invalidRuntimeValue('runtime.recovery.session', session);
+		}
+		return recovery;
+	}
+
+	private deleteSessionRecovery(session: AgentSessionId): void {
+		this.recoverySessions.delete(session);
+		for (const [operation, recovery] of this.recoveryConfigurations) {
+			if (recovery.request.session === session) {
+				this.recoveryConfigurations.delete(operation);
+			}
+		}
 	}
 
 	private validateTurnRequest(request: IAgentChatRequest): readonly IAgentCredentialReference[] {

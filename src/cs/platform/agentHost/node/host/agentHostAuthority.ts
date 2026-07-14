@@ -188,6 +188,21 @@ export interface IAgentHostSubmissionPolicy {
 /** Resolves only the immutable runtime endpoint for one exact activated or staged registration. */
 export interface IAgentHostRuntimeResolver {
 	resolve(registration: IAgentRuntimeRegistration): IAgent;
+	resolvePreparedActivation(
+		operationId: AgentPackageOperationId,
+		registration: IAgentRuntimeRegistration,
+	): IAgent;
+}
+
+/** Describes one active Agent entry available to the Host Session type catalog. */
+export interface IAgentHostActiveAgentCatalogEntry {
+	readonly registration: IAgentRuntimeRegistration;
+	readonly descriptor: IAgentDescriptor;
+}
+
+/** Resolves the createable Session types for the exact active Agent catalog. */
+export interface IAgentHostSessionTypeCatalog {
+	resolve(activeAgents: readonly IAgentHostActiveAgentCatalogEntry[]): readonly IAgentHostSessionTypeDescriptor[];
 }
 
 export interface IAgentHostShutdownRequest {
@@ -201,7 +216,7 @@ export interface IAgentHostAuthorityOptions {
 	readonly supportedProtocolVersions: readonly AgentHostProtocolVersion[];
 	readonly capabilities: readonly IAgentHostCapability[];
 	readonly implementation: IAgentHostInitializeResult['implementation'];
-	readonly sessionTypes: readonly IAgentHostSessionTypeDescriptor[];
+	readonly sessionTypeCatalog: IAgentHostSessionTypeCatalog;
 	readonly agentRuntimes: IAgentHostRuntimeResolver;
 	readonly packageLifecycle: AgentPackageLifecycle;
 	readonly authentication?: IAgentAuthenticationPort;
@@ -225,7 +240,6 @@ export interface IAgentHostAgentDescriptorUpdate {
 
 export interface IAgentHostRootConfigurationUpdate {
 	readonly agents: readonly IAgentHostAgentDescriptorUpdate[];
-	readonly sessionTypes: readonly IAgentHostSessionTypeDescriptor[];
 }
 
 interface IPreparedSubmissionRecord {
@@ -567,9 +581,6 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		for (const agent of this.agents.values()) {
 			this.subscribeAgentActions(agent);
 		}
-		for (const sessionType of options.sessionTypes) {
-			this.sessionTypes.set(sessionType.id, sessionType);
-		}
 		this._register(toDisposable(() => {
 			for (const subscription of this.agentActionSubscriptions.values()) {
 				subscription.dispose();
@@ -596,6 +607,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			await authority.restoreCatalogBackings();
 			await authority.completeRestoredSessionConfigurationFinalizations();
 			await options.packageLifecycle.reconcileHostBackingState(authority.packageBackingState(authority.sessions));
+			await options.packageLifecycle.completeRestoredBundledUpdate();
 			await authority.reconcilePackageCatalogRevision();
 			return authority;
 		} catch (error) {
@@ -695,7 +707,10 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 					if (!affected.has(registration.agentId) || staged.has(registration.agentId)) {
 						throw new Error(`Staged registration '${registration.agentId}' does not match the package mutation gate`);
 					}
-					staged.set(registration.agentId, this.resolveAgentRuntime(registration));
+					staged.set(
+						registration.agentId,
+						this.options.agentRuntimes.resolvePreparedActivation(operationId, registration),
+					);
 				}
 				stagedActivation = staged;
 			},
@@ -740,10 +755,30 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 						if (stagedActivation !== undefined) {
 							this.activateAgentRuntimes(affected, stagedActivation!);
 						}
+						const descriptors = new Map(
+							[...this.agents].map(([agentId, agent]) => [agentId, agent.descriptor.get()]),
+						);
+						const sessionTypes = stagedActivation === undefined
+							? this.sessionTypes
+							: this.resolveSessionTypeCatalog(descriptors);
+						const modelConfigurationSchemas = this.validateRootConfiguration(
+							descriptors,
+							Object.freeze([...sessionTypes.values()]),
+						);
+						const reconciled = stagedActivation === undefined
+							? Object.freeze({ sessions: this.sessions, actions: Object.freeze([]) })
+							: await this.reconcilePackageSessionAvailability(affected, sessionTypes);
+						const rootState = this.createRootState(descriptors, sessionTypes);
 						await this.commitHostState(
-							this.sessions,
-							[this.rootAction()],
+							reconciled.sessions,
+							[this.rootAction(rootState), ...reconciled.actions],
 							Object.freeze({ kind: 'operation', operation: lifecycleOperation, payloadDigest: requestDigest }),
+							stagedActivation === undefined
+								? undefined
+								: () => {
+									this.modelConfigurationSchemas = modelConfigurationSchemas;
+									this.replaceSessionTypes(sessionTypes);
+								},
 						);
 					} catch (error) {
 						if (stagedActivation !== undefined) {
@@ -973,18 +1008,12 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				updatedAgents.add(descriptorUpdate.agent.id);
 				descriptors.set(descriptorUpdate.agent.id, descriptorUpdate.descriptor);
 			}
-			const modelConfigurationSchemas = this.validateRootConfiguration(descriptors, update.sessionTypes);
-			const sessionTypes = new Map(update.sessionTypes.map(sessionType => [sessionType.id, sessionType] as const));
-			for (const session of this.sessions.values()) {
-				const sessionType = sessionTypes.get(session.state.type);
-				if (
-					sessionType === undefined
-					|| sessionType.packageId !== session.state.packageId
-					|| sessionType.agentId !== session.state.agentId
-				) {
-					throw new Error(`Agent Host root update removed the exact Session type '${session.state.type}' of an existing Session`);
-				}
-			}
+			const sessionTypes = this.resolveSessionTypeCatalog(descriptors);
+			const modelConfigurationSchemas = this.validateRootConfiguration(
+				descriptors,
+				Object.freeze([...sessionTypes.values()]),
+			);
+			this.validateRetainedSessionTypes(this.sessions, sessionTypes);
 			const state = this.createRootState(descriptors, sessionTypes);
 			await this.commitHostState(
 				this.sessions,
@@ -995,10 +1024,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 					for (const descriptorUpdate of update.agents) {
 						descriptorUpdate.commit();
 					}
-					this.sessionTypes.clear();
-					for (const [sessionTypeId, sessionType] of sessionTypes) {
-						this.sessionTypes.set(sessionTypeId, sessionType);
-					}
+					this.replaceSessionTypes(sessionTypes);
 				},
 			);
 		});
@@ -1289,13 +1315,63 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			const agent = this.resolveAgentRuntime(registration);
 			this.agents.set(agent.id, agent);
 		}
-		for (const agent of this.agents.values()) {
-			this.requireAgentDefaults(agent);
-		}
-		this.modelConfigurationSchemas = this.validateRootConfiguration(
-			new Map([...this.agents].map(([agentId, agent]) => [agentId, agent.descriptor.get()])),
-			this.options.sessionTypes,
+		this.agentDefaults = this.reconcileAgentDefaults(this.agentDefaults);
+		const descriptors = new Map(
+			[...this.agents].map(([agentId, agent]) => [agentId, agent.descriptor.get()]),
 		);
+		const sessionTypes = this.resolveSessionTypeCatalog(descriptors);
+		this.modelConfigurationSchemas = this.validateRootConfiguration(
+			descriptors,
+			Object.freeze([...sessionTypes.values()]),
+		);
+		this.validateRetainedSessionTypes(this.sessions, sessionTypes);
+		this.replaceSessionTypes(sessionTypes);
+	}
+
+	private resolveSessionTypeCatalog(
+		descriptors: ReadonlyMap<AgentId, IAgentDescriptor>,
+	): Map<string, IAgentHostSessionTypeDescriptor> {
+		const activeAgents = Object.freeze([...this.agents].map(([agentId, agent]) => {
+			const descriptor = descriptors.get(agentId);
+			if (descriptor === undefined) {
+				throw new Error(`Agent Host Session type catalog has no descriptor for active Agent '${agentId}'`);
+			}
+			return Object.freeze({ registration: agent.registration, descriptor });
+		}));
+		const resolved = this.options.sessionTypeCatalog.resolve(activeAgents);
+		const typeIds = new Set(resolved.map(sessionType => sessionType.id));
+		if (typeIds.size !== resolved.length) {
+			throw new Error('Agent Host Session type catalog resolved duplicate type IDs');
+		}
+		return new Map(resolved.map(sessionType => (
+			[sessionType.id, sessionType] as const
+		)));
+	}
+
+	private replaceSessionTypes(sessionTypes: ReadonlyMap<string, IAgentHostSessionTypeDescriptor>): void {
+		this.sessionTypes.clear();
+		for (const [sessionTypeId, sessionType] of sessionTypes) {
+			this.sessionTypes.set(sessionTypeId, sessionType);
+		}
+	}
+
+	private validateRetainedSessionTypes(
+		sessions: ReadonlyMap<AgentSessionId, IRuntimeSessionRecord>,
+		sessionTypes: ReadonlyMap<string, IAgentHostSessionTypeDescriptor>,
+	): void {
+		for (const session of sessions.values()) {
+			if (session.state.lifecycle === 'unavailable') {
+				continue;
+			}
+			const sessionType = sessionTypes.get(session.state.type);
+			if (
+				sessionType === undefined
+				|| sessionType.packageId !== session.state.packageId
+				|| sessionType.agentId !== session.state.agentId
+			) {
+				throw new Error(`Agent Host root configuration has no exact Session type '${session.state.type}' for retained Session '${session.state.id}'`);
+			}
+		}
 	}
 
 	private validateRootConfiguration(
@@ -1462,9 +1538,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 	private reconcileAgentDefaults(
 		current: ReadonlyMap<AgentId, IAgentConfigurationState>,
 	): Map<AgentId, IAgentConfigurationState> {
-		const reconciled = new Map(current);
+		const reconciled = new Map<AgentId, IAgentConfigurationState>();
 		for (const agent of this.agents.values()) {
-			const existing = reconciled.get(agent.id);
+			const existing = current.get(agent.id);
 			if (existing === undefined) {
 				const schema = validateAndFreezeAgentConfigurationSchema(agent.registration.hostDefaultsSchema, {
 					agent: agent.id,
@@ -1488,6 +1564,88 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			reconciled.set(agent.id, configuration);
 		}
 		return reconciled;
+	}
+
+	private async reconcilePackageSessionAvailability(
+		affected: ReadonlySet<AgentId>,
+		sessionTypes: ReadonlyMap<string, IAgentHostSessionTypeDescriptor>,
+	): Promise<{
+		readonly sessions: ReadonlyMap<AgentSessionId, IRuntimeSessionRecord>;
+		readonly actions: readonly HostStateAction[];
+	}> {
+		const sessions = new Map(this.sessions);
+		const changed: IRuntimeSessionRecord[] = [];
+		for (const [sessionId, session] of this.sessions) {
+			if (!affected.has(session.state.agentId)) {
+				continue;
+			}
+			if (session.materialized || [...session.chats.values()].some(chat => chat.materialized)) {
+				throw new Error(`Package mutation did not release retained Session '${sessionId}'`);
+			}
+			const activeAgent = this.agents.get(session.state.agentId);
+			const lifecycle = activeAgent?.registration.packageId === session.state.packageId
+				? 'released' as const
+				: 'unavailable' as const;
+			if (lifecycle === 'released') {
+				if (activeAgent === undefined) {
+					throw new Error(`Activated Agent '${session.state.agentId}' is absent during retained Session reconciliation`);
+				}
+				const sessionType = sessionTypes.get(session.state.type);
+				if (
+					sessionType === undefined
+					|| sessionType.packageId !== session.state.packageId
+					|| sessionType.agentId !== session.state.agentId
+				) {
+					throw new Error(`Activated Agent '${session.state.agentId}' has no exact retained Session type '${session.state.type}'`);
+				}
+				await this.requireRuntimeExactSessionConfiguration(
+					activeAgent,
+					session.state.workspace,
+					session.state.configuration,
+				);
+				for (const chat of session.chats.values()) {
+					this.validateChatModel(sessionType, activeAgent, chat.state.model);
+				}
+			}
+			const stateChanged = session.state.lifecycle !== lifecycle
+				|| [...session.chats.values()].some(chat => chat.state.lifecycle !== lifecycle);
+			if (!stateChanged) {
+				continue;
+			}
+			const now = this.checkedNow();
+			const chats = new Map<AgentChatId, IRuntimeChatRecord>();
+			for (const [chatId, chat] of session.chats) {
+				const chatStateChanged = chat.state.lifecycle !== lifecycle;
+				chats.set(chatId, Object.freeze({
+					...chat,
+					materialized: false,
+					state: chatStateChanged
+						? freezeChatState({ ...chat.state, lifecycle, modifiedAt: now })
+						: chat.state,
+				}));
+			}
+			const state = Object.freeze({
+				...session.state,
+				lifecycle,
+				modifiedAt: now,
+				chats: Object.freeze([...chats.values()].map(chat => chatSummary(chat.state))),
+			});
+			const updated = Object.freeze({ ...session, state, materialized: false, chats });
+			sessions.set(sessionId, updated);
+			changed.push(updated);
+		}
+		this.validateRetainedSessionTypes(sessions, sessionTypes);
+		if (changed.length === 0) {
+			return Object.freeze({ sessions, actions: Object.freeze([]) });
+		}
+		const actions: HostStateAction[] = [this.sessionsAction(sessions)];
+		for (const session of changed) {
+			actions.push(this.sessionAction(session.state));
+			for (const chat of session.chats.values()) {
+				actions.push(this.chatAction(chat.state));
+			}
+		}
+		return Object.freeze({ sessions, actions: Object.freeze(actions) });
 	}
 
 	private loadCatalog(catalog: IAgentHostPersistedCatalog): void {
@@ -4357,6 +4515,17 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			const materializedChats: AgentChatId[] = [];
 			let sessionMaterialized = false;
 			try {
+				const sessionType = this.sessionTypes.get(session.state.type);
+				if (
+					sessionType === undefined
+					|| sessionType.packageId !== session.state.packageId
+					|| sessionType.agentId !== session.state.agentId
+				) {
+					throw new Error(`Retained Session '${sessionId}' has no exact active Session type`);
+				}
+				for (const chat of session.chats.values()) {
+					this.validateChatModel(sessionType, agent, chat.state.model);
+				}
 				const configuration = await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration);
 				await agent.sessions.materialize({
 					operation,

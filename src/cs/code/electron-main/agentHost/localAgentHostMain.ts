@@ -19,12 +19,8 @@ import { localAgentHostContentResourceLimits } from './localAgentHostConfigurati
 import { localAgentHostConnectionChannelName } from 'cs/platform/agentHost/common/connectionChannel';
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import type {
-	IAgentBackingIdentity,
 	IAgentDescriptor,
 	IAgentExecutionProfile,
-	IAgentResumeMigrationRequest,
-	IAgentResumeState,
-	IAgentRuntimeRegistration,
 } from 'cs/platform/agentHost/common/agent';
 import {
 	createAgentCancellationId,
@@ -37,18 +33,14 @@ import {
 	createAgentHostPayloadDigest,
 	createAgentHostProtocolVersion,
 	createAgentPackageContentDigest,
-	createAgentPackageOperationId,
 	createAgentPackageRevision,
 	createAgentRuntimeRegistrationRevision,
+	createAgentRuntimeProtocolVersion,
 	createAgentSessionId,
 	createAgentSessionTypeId,
 	createAgentTurnId,
-	type AgentHostOperationId,
-	type AgentHostPayloadDigest,
-	type AgentPackageOperationId,
 } from 'cs/platform/agentHost/common/identities';
 import type { IAgentHostSessionTypeDescriptor } from 'cs/platform/agentHost/common/protocol';
-import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import type {
 	AgentToolCallAuthorization,
 	IAgentToolTimerPort,
@@ -81,7 +73,6 @@ import { AgentHostConnectionChannelFactory } from 'cs/platform/agentHost/electro
 import {
 	AgentHostAuthority,
 	type IAgentHostIdentityFactory,
-	type IAgentHostRuntimeResolver,
 	type IAgentHostSubmissionPolicy,
 } from 'cs/platform/agentHost/node/host/agentHostAuthority';
 import {
@@ -90,14 +81,9 @@ import {
 import {
 	AgentPackageLifecycle,
 	type IAgentPackageArtifactPort,
-	type IAgentPackageRuntimePort,
 } from 'cs/platform/agentHost/node/packages/agentPackageLifecycle';
 import { AgentPackageError, AgentPackageErrorCode } from 'cs/platform/agentHost/common/packageErrors';
-import type {
-	IAgentPackageOffering,
-	IAgentPackageTarget,
-	IInstalledAgentPackage,
-} from 'cs/platform/agentHost/common/packages';
+import type { IAgentPackageTarget } from 'cs/platform/agentHost/common/packages';
 import type {
 	IVerifiedAgentPackage,
 } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
@@ -120,15 +106,28 @@ import {
 	type IProductionCometModelCatalog,
 } from './cometModelCatalog.js';
 import { LegacyChatMigrationCompanion } from './legacyChatMigration.js';
+import { LocalAgentHostSessionTypeCatalog } from './localAgentHostSessionTypeCatalog.js';
+import {
+	AgentPackageRuntimeRegistry,
+	type IAgentRuntimeConnectionFactory,
+} from 'cs/platform/agentHost/node/packages/agentPackageRuntimeRegistry';
+import type { IMockAgentPackageProduct } from 'cs/code/common/agentHost/mockAgentPackages';
 
 const localAgentHostAuthority = createAgentHostAuthorityId('local');
 const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
+const localAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('2');
 const cometSessionType = createAgentSessionTypeId('comet');
 const maximumPreparedToolSets = 4_096;
 const maximumBoundToolTurns = 1_024;
 const maximumToolCallRecords = 16_384;
 const maximumReplayActions = 16_384;
 const maximumTurnMilliseconds = 5 * 60 * 1_000;
+const localAgentRuntimeTransportLimits = Object.freeze({
+	maximumRequestBytes: 16 * 1_024 * 1_024,
+	maximumResponseBytes: 16 * 1_024 * 1_024,
+	maximumActionBytes: 4 * 1_024 * 1_024,
+	maximumConcurrentCalls: 64,
+});
 const initialCometAgentDefaults = Object.freeze({
 	schema: COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
 	revision: createAgentConfigurationStateRevision('comet.host-defaults.initial.v1'),
@@ -154,9 +153,12 @@ export interface ILocalAgentHostMainOptions {
 	readonly providerApiKeySecretStorage: IProviderApiKeySecretStorage;
 	readonly contentMaterializationRoot: string;
 	readonly bundledArtifactPath: string;
+	readonly mockAgentPackageProducts: readonly IMockAgentPackageProduct[];
+	readonly packageArtifactPort: IAgentPackageArtifactPort;
 	readonly channelServer: ILocalAgentHostChannelServer;
 	readonly fetch: (url: string, init: RequestInit) => Promise<Response>;
 	readonly now: () => number;
+	readonly agentRuntimeConnectionFactory: IAgentRuntimeConnectionFactory;
 }
 
 interface ICurrentBundledCometPackage {
@@ -166,55 +168,6 @@ interface ICurrentBundledCometPackage {
 
 function sha256(value: string | Uint8Array): string {
 	return createHash('sha256').update(value).digest('hex');
-}
-
-function operationIdentity(
-	kind: string,
-	operation: AgentPackageOperationId,
-	backing: IAgentBackingIdentity,
-): { readonly operation: AgentHostOperationId; readonly payloadDigest: AgentHostPayloadDigest } {
-	const value = JSON.stringify({ kind, operation, backing });
-	const digest = sha256(value);
-	return Object.freeze({
-		operation: createAgentHostOperationId(`package:${digest}`),
-		payloadDigest: createAgentHostPayloadDigest(`sha256:${digest}`),
-	});
-}
-
-function exactRegistration(
-	actual: IAgentRuntimeRegistration,
-	expected: IAgentRuntimeRegistration,
-): boolean {
-	return actual.packageId === expected.packageId
-		&& actual.agentId === expected.agentId
-		&& actual.revision === expected.revision
-		&& actual.descriptorRevision === expected.descriptorRevision
-		&& actual.capabilityRevision === expected.capabilityRevision
-		&& encodeAgentHostProtocolValue(actual.hostDefaultsSchema)
-			=== encodeAgentHostProtocolValue(expected.hostDefaultsSchema)
-		&& actual.initialSessionConfigurationSchema === expected.initialSessionConfigurationSchema
-		&& actual.supportedSessionConfigurationSchemas.length
-			=== expected.supportedSessionConfigurationSchemas.length
-		&& actual.supportedSessionConfigurationSchemas.every((schema, index) => (
-			schema === expected.supportedSessionConfigurationSchemas[index]
-		))
-		&& actual.supportedToolSchemaProfiles.length === expected.supportedToolSchemaProfiles.length
-		&& actual.supportedToolSchemaProfiles.every((profile, index) => profile === expected.supportedToolSchemaProfiles[index])
-		&& actual.supportedResumeSchemas.length === expected.supportedResumeSchemas.length
-		&& actual.supportedResumeSchemas.every((schema, index) => schema === expected.supportedResumeSchemas[index])
-		&& actual.resumeMigrationEdges.length === expected.resumeMigrationEdges.length
-		&& actual.resumeMigrationEdges.every((edge, index) => {
-			const expectedEdge = expected.resumeMigrationEdges[index];
-			return edge.sourceSchema === expectedEdge.sourceSchema && edge.targetSchema === expectedEdge.targetSchema;
-		});
-}
-
-function exactOffering(actual: IAgentPackageOffering, expected: IAgentPackageOffering): boolean {
-	return actual.packageId === expected.packageId
-		&& actual.revision === expected.revision
-		&& actual.contentDigest === expected.contentDigest
-		&& actual.source === expected.source
-		&& actual.distribution === expected.distribution;
 }
 
 async function createCurrentBundledCometPackage(
@@ -287,211 +240,6 @@ async function createCurrentBundledCometPackage(
 			grantedPrivileges: privileges,
 		}),
 	});
-}
-
-class BundledCometArtifactPort implements IAgentPackageArtifactPort {
-	constructor(private readonly bundledPackage: IVerifiedAgentPackage) { }
-
-	stage(
-		offering: IAgentPackageOffering,
-		_operationId: AgentPackageOperationId,
-	): Promise<IVerifiedAgentPackage> {
-		if (!exactOffering(offering, this.bundledPackage.offering)) {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.PackageNotInstallable,
-				'Agent package offering is not the current product-bundled Comet artifact',
-				{ packageId: offering.packageId },
-			));
-		}
-		return Promise.resolve(this.bundledPackage);
-	}
-
-	discard(
-		verifiedPackage: IVerifiedAgentPackage,
-		_operationId: AgentPackageOperationId,
-	): Promise<void> {
-		if (!exactOffering(verifiedPackage.offering, this.bundledPackage.offering)) {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.InvalidPackage,
-				'Cannot discard an unrelated Agent package artifact',
-				{ packageId: verifiedPackage.offering.packageId },
-			));
-		}
-		return Promise.resolve();
-	}
-}
-
-class EmbeddedCometPackageRuntimePort implements IAgentPackageRuntimePort {
-	private readonly activations = new Map<AgentPackageOperationId, 'prepared' | 'committed' | 'retired' | 'rolledBack'>();
-
-	constructor(
-		private readonly agent: CometAgent,
-		private readonly bundledPackage: IVerifiedAgentPackage,
-	) { }
-
-	prepareActivation(
-		installedPackage: IInstalledAgentPackage | null,
-		previous: Parameters<IAgentPackageRuntimePort['prepareActivation']>[1],
-		operationId: AgentPackageOperationId,
-	): Promise<readonly IAgentRuntimeRegistration[]> {
-		if (
-			installedPackage === null
-			|| installedPackage.packageId !== this.bundledPackage.offering.packageId
-			|| installedPackage.revision !== this.bundledPackage.offering.revision
-			|| installedPackage.contentDigest !== this.bundledPackage.offering.contentDigest
-			|| installedPackage.source !== this.bundledPackage.offering.source
-		) {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.RegistrationInvalid,
-				'Embedded Comet runtime does not belong to the addressed package revision',
-				{ packageId: installedPackage?.packageId ?? this.bundledPackage.offering.packageId },
-			));
-		}
-		if (
-			previous !== null
-			&& (
-				previous.installedPackage.packageId !== this.bundledPackage.offering.packageId
-				|| previous.registrations.length !== 1
-				|| !exactRegistration(previous.registrations[0], this.agent.registration)
-			)
-		) {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.RegistrationInvalid,
-				'Embedded Comet activation does not address the retained endpoint',
-				{ packageId: previous.installedPackage.packageId },
-			));
-		}
-		const state = this.activations.get(operationId);
-		if (state !== undefined && state !== 'prepared') {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.StateConflict,
-				'Embedded Comet activation operation is no longer staged',
-				{ operationId },
-			));
-		}
-		this.activations.set(operationId, 'prepared');
-		return Promise.resolve(Object.freeze([this.agent.registration]));
-	}
-
-	commitActivation(
-		operationId: AgentPackageOperationId,
-		transition: Parameters<IAgentPackageRuntimePort['commitActivation']>[1],
-	): Promise<void> {
-		this.assertTransition(transition);
-		const state = this.activations.get(operationId);
-		if (state !== undefined && state !== 'prepared' && state !== 'committed') {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.StateConflict,
-				'Embedded Comet activation was not prepared',
-				{ operationId },
-			));
-		}
-		this.activations.set(operationId, 'committed');
-		return Promise.resolve();
-	}
-
-	retirePreviousActivation(
-		operationId: AgentPackageOperationId,
-		transition: Parameters<IAgentPackageRuntimePort['retirePreviousActivation']>[1],
-	): Promise<void> {
-		this.assertTransition(transition);
-		const state = this.activations.get(operationId);
-		if (state !== undefined && state !== 'committed' && state !== 'retired') {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.StateConflict,
-				'Embedded Comet activation was not committed',
-				{ operationId },
-			));
-		}
-		this.activations.set(operationId, 'retired');
-		return Promise.resolve();
-	}
-
-	rollbackActivation(
-		operationId: AgentPackageOperationId,
-		transition: Parameters<IAgentPackageRuntimePort['rollbackActivation']>[1],
-	): Promise<void> {
-		this.assertTransition(transition);
-		const state = this.activations.get(operationId);
-		if (state !== undefined && state !== 'prepared' && state !== 'committed' && state !== 'rolledBack') {
-			return Promise.reject(new AgentPackageError(
-				AgentPackageErrorCode.StateConflict,
-				'Embedded Comet activation cannot roll back from its current phase',
-				{ operationId },
-			));
-		}
-		this.activations.set(operationId, 'rolledBack');
-		return Promise.resolve();
-	}
-
-	private assertTransition(transition: Parameters<IAgentPackageRuntimePort['commitActivation']>[1]): void {
-		for (const side of [transition.previous, transition.next]) {
-			if (side === null) {
-				continue;
-			}
-			if (
-				side.installedPackage.packageId !== this.bundledPackage.offering.packageId
-				|| side.registrations.length !== 1
-				|| !exactRegistration(side.registrations[0], this.agent.registration)
-			) {
-				throw new AgentPackageError(
-					AgentPackageErrorCode.RegistrationInvalid,
-					'Embedded Comet runtime transition does not address the composed endpoint',
-					{ packageId: side.installedPackage.packageId },
-				);
-			}
-		}
-	}
-
-	migrateResumeState(
-		registration: IAgentRuntimeRegistration,
-		request: IAgentResumeMigrationRequest,
-	): Promise<IAgentResumeState> {
-		this.assertRegistration(registration);
-		return this.agent.resumeStates.migrate(request);
-	}
-
-	deleteBacking(
-		registration: IAgentRuntimeRegistration,
-		identity: IAgentBackingIdentity,
-		operationId: AgentPackageOperationId,
-	): Promise<void> {
-		this.assertRegistration(registration);
-		const operation = operationIdentity('deleteBacking', operationId, identity);
-		if (identity.chatId !== undefined) {
-			return this.agent.chats.delete({
-				...operation,
-				session: identity.sessionId,
-				chat: identity.chatId,
-			});
-		}
-		return this.agent.sessions.delete({ ...operation, session: identity.sessionId });
-	}
-
-	private assertRegistration(registration: IAgentRuntimeRegistration): void {
-		if (!exactRegistration(registration, this.agent.registration)) {
-			throw new AgentPackageError(
-				AgentPackageErrorCode.RegistrationInvalid,
-				'Package operation addresses another Agent runtime registration',
-				{ packageId: registration.packageId, agentId: registration.agentId },
-			);
-		}
-	}
-}
-
-class EmbeddedCometRuntimeResolver implements IAgentHostRuntimeResolver {
-	constructor(private readonly agent: CometAgent) { }
-
-	resolve(registration: IAgentRuntimeRegistration) {
-		if (!exactRegistration(registration, this.agent.registration)) {
-			throw new AgentPackageError(
-				AgentPackageErrorCode.RegistrationInvalid,
-				'No retained embedded runtime matches the exact Agent registration',
-				{ packageId: registration.packageId, agentId: registration.agentId },
-			);
-		}
-		return this.agent;
-	}
 }
 
 class LocalAgentHostIdentityFactory implements IAgentHostIdentityFactory {
@@ -596,33 +344,6 @@ function randomIdentity(): string {
 	return randomUUID().replaceAll('-', '');
 }
 
-function packageUpdateDigest(
-	installedPackage: IInstalledAgentPackage,
-	offering: IAgentPackageOffering,
-): AgentHostPayloadDigest {
-	return createAgentHostPayloadDigest(`sha256:${sha256(JSON.stringify({
-		kind: 'productBundledUpdate',
-		from: {
-			revision: installedPackage.revision,
-			contentDigest: installedPackage.contentDigest,
-		},
-		to: offering,
-	}))}`);
-}
-
-function packageUpdateOperation(offering: IAgentPackageOffering): AgentPackageOperationId {
-	const digest = sha256(JSON.stringify(offering));
-	return createAgentPackageOperationId(`product-comet:${digest}`);
-}
-
-function requiresBundledUpdate(
-	installedPackage: IInstalledAgentPackage,
-	currentPackage: IVerifiedAgentPackage,
-): boolean {
-	return installedPackage.revision !== currentPackage.offering.revision
-		|| installedPackage.contentDigest !== currentPackage.offering.contentDigest;
-}
-
 /** Owns the local Agent Host, its IPC channel, and its shutdown ordering. */
 export class LocalAgentHostMain extends Disposable {
 	private authority: AgentHostAuthority | undefined;
@@ -684,13 +405,43 @@ export class LocalAgentHostMain extends Disposable {
 			reportUnexpectedError: onUnexpectedError,
 			maximumCallRecords: maximumToolCallRecords,
 		});
-		const cometAgent = this._register(new CometAgent({
+		const cometAgent = new CometAgent({
 			runtimeRegistration,
 			requiresAgentAuthentication: false,
 			models: modelCatalog.models,
 			executionProfileResolver: modelCatalog.executionProfileResolver,
 			toolExecution,
 			contentResources,
+		});
+		const mockPackages = this.options.mockAgentPackageProducts;
+		const packageStateStore = new ApplicationStorageAgentPackageStateStore(this.options.storage, {
+			registrations: Object.freeze([Object.freeze({
+				source: Object.freeze({
+					packageId: COMET_AGENT_PACKAGE_ID,
+					agentId: COMET_AGENT_ID,
+					revision: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
+					descriptorRevision: createAgentDescriptorRevision('comet.descriptor.v1'),
+					capabilityRevision: COMET_AGENT_CAPABILITY_REVISION,
+					supportedToolSchemaProfiles: cometAgent.registration.supportedToolSchemaProfiles,
+					supportedResumeSchemas: cometAgent.registration.supportedResumeSchemas,
+					resumeMigrationEdges: cometAgent.registration.resumeMigrationEdges,
+				}),
+				target: cometAgent.registration,
+			})]),
+		});
+		const runtimeRegistry = this._register(new AgentPackageRuntimeRegistry({
+			embeddedRuntimes: Object.freeze([Object.freeze({
+				offerings: Object.freeze([bundledPackage.verifiedPackage.offering]),
+				agents: Object.freeze([cometAgent]),
+				lifetime: cometAgent,
+			})]),
+			connectionFactory: this.options.agentRuntimeConnectionFactory,
+			toolExecution,
+			contentResources,
+			credentialResolver: credentials,
+			protocolVersions: Object.freeze([localAgentRuntimeProtocolVersion]),
+			transportLimits: localAgentRuntimeTransportLimits,
+			implementation: Object.freeze({ name: 'comet.desktop.main', build: 'agent-runtime.v2' }),
 		}));
 		const catalogStore = new ApplicationStorageAgentHostCatalogStore(this.options.storage, {
 			agentDefaults: Object.freeze([initialCometAgentDefaults]),
@@ -707,43 +458,35 @@ export class LocalAgentHostMain extends Disposable {
 			agentDefaults: Object.freeze([initialCometAgentDefaults]),
 			sessionConfiguration: legacyCometSessionConfiguration,
 		});
-		const artifactPort = new BundledCometArtifactPort(bundledPackage.verifiedPackage);
-		const runtimePort = new EmbeddedCometPackageRuntimePort(cometAgent, bundledPackage.verifiedPackage);
 		const packageLifecycle = await AgentPackageLifecycle.create({
 			hostTarget: bundledPackage.target,
-			installablePackages: Object.freeze([]),
+			installablePackages: Object.freeze(mockPackages.map(product => product.offering)),
 			bundledComet: Object.freeze({
 				verifiedPackage: bundledPackage.verifiedPackage,
 				registrations: Object.freeze([cometAgent.registration]),
 			}),
-			stateStore: new ApplicationStorageAgentPackageStateStore(this.options.storage, {
-				registrations: Object.freeze([Object.freeze({
-					source: Object.freeze({
-						packageId: COMET_AGENT_PACKAGE_ID,
-						agentId: COMET_AGENT_ID,
-						revision: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
-						descriptorRevision: createAgentDescriptorRevision('comet.descriptor.v1'),
-						capabilityRevision: COMET_AGENT_CAPABILITY_REVISION,
-						supportedToolSchemaProfiles: cometAgent.registration.supportedToolSchemaProfiles,
-						supportedResumeSchemas: cometAgent.registration.supportedResumeSchemas,
-						resumeMigrationEdges: cometAgent.registration.resumeMigrationEdges,
-					}),
-					target: cometAgent.registration,
-				})]),
-			}),
-			artifactPort,
-			runtimePort,
+			stateStore: packageStateStore,
+			artifactPort: this.options.packageArtifactPort,
+			runtimePort: runtimeRegistry,
 		});
+		const sessionTypeCatalog = new LocalAgentHostSessionTypeCatalog(Object.freeze([
+			Object.freeze({
+				registration: cometAgent.registration,
+				resolve: (descriptor: IAgentDescriptor) => this.createCometSessionType(descriptor, modelCatalog),
+			}),
+			...mockPackages.map(product => Object.freeze({
+				registration: product.definition.registration,
+				resolve: (_descriptor: IAgentDescriptor) => product.definition.sessionType,
+			})),
+		]));
 		const host = this._register(await AgentHostAuthority.create({
 			authority: localAgentHostAuthority,
 			label: Object.freeze({ kind: 'localized' as const, key: 'agentHost.local.label' as const }),
 			supportedProtocolVersions: Object.freeze([localAgentHostProtocolVersion]),
 			capabilities: Object.freeze([]),
 			implementation: Object.freeze({ name: 'comet.desktop.main', build: 'agent-host.v2' }),
-			sessionTypes: Object.freeze([
-				this.createCometSessionType(cometAgent.descriptor.get(), modelCatalog),
-			]),
-			agentRuntimes: new EmbeddedCometRuntimeResolver(cometAgent),
+			sessionTypeCatalog,
+			agentRuntimes: runtimeRegistry,
 			packageLifecycle,
 			credentials,
 			catalogStore,
@@ -765,15 +508,6 @@ export class LocalAgentHostMain extends Disposable {
 				'Bundled Comet package is not installed',
 				{ packageId: COMET_AGENT_PACKAGE_ID },
 			);
-		}
-		if (requiresBundledUpdate(installedComet, bundledPackage.verifiedPackage)) {
-			await packageLifecycle.update({
-				operationId: packageUpdateOperation(bundledPackage.verifiedPackage.offering),
-				requestDigest: packageUpdateDigest(installedComet, bundledPackage.verifiedPackage.offering),
-				packageId: COMET_AGENT_PACKAGE_ID,
-				offering: bundledPackage.verifiedPackage.offering,
-				authority: 'product',
-			});
 		}
 		this.authority = host;
 		const channelFactory = this._register(new AgentHostConnectionChannelFactory(

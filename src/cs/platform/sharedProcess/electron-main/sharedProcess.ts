@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { MessageChannelMain, type UtilityProcess as ElectronUtilityProcess } from 'electron';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Disposable } from 'cs/base/common/lifecycle';
 import { getDelayedChannel, type IChannel, type IServerChannel } from 'cs/base/parts/ipc/common/ipc';
@@ -49,10 +50,16 @@ export class SharedProcess extends Disposable {
 
 	private async createChannel(channels: ReadonlyMap<string, IServerChannel<string>>): Promise<MessagePortChannel> {
 		const entryPoint = fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url));
-		const process = this.utilityProcess.start(entryPoint, 'Comet Shared Process');
+		const child = this.utilityProcess.start(entryPoint, {
+			serviceName: 'Comet Shared Process',
+			environment: process.env,
+			execArgv: process.execArgv,
+			workingDirectory: dirname(entryPoint),
+			standardIO: 'pipe',
+		});
 		let processExitError: Error | undefined;
 		let channel: MessagePortChannel | undefined;
-		await this.waitForReady(process, error => {
+		await this.waitForReady(child, error => {
 			processExitError = error;
 			channel?.disconnect(error);
 		});

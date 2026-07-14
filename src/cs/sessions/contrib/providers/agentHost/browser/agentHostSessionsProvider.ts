@@ -66,6 +66,7 @@ import {
 	type IAgentHostChatState,
 	type IAgentHostChatStateAction,
 	type IAgentHostImplementationIdentity,
+	type IAgentHostMutationRequest,
 	type IAgentHostRootState,
 	type IAgentHostSetSubscriptionsResult,
 	type IAgentHostSessionCatalogState,
@@ -139,6 +140,15 @@ interface IAgentHostDraftRecord {
 	readonly workspace: ISessionDraftOptions['workspace'];
 	readonly configuration: IAgentConfigurationCandidate;
 	model: AgentModelId | null;
+}
+
+interface IAgentHostPendingMutation {
+	readonly request: IAgentHostMutationRequest;
+}
+
+interface IAgentHostConnectionRecovery {
+	readonly epoch: number;
+	readonly generation: number;
 }
 
 export interface IAgentHostSessionsProviderOptions {
@@ -353,6 +363,11 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	private sessions: readonly AgentHostSession[] = Object.freeze([]);
 	private draft: IAgentHostDraftRecord | undefined;
 	private lastHostSequence: AgentHostSequence | undefined;
+	private readonly pendingMutations = new Map<AgentHostOperationId, IAgentHostPendingMutation>();
+	private connectionRecovering = false;
+	private connectionRecoveryEpoch = 0;
+	private interruptedGeneration: number | undefined;
+	private connectionRecovery: IAgentHostConnectionRecovery | undefined;
 	private disposed = false;
 
 	private constructor(
@@ -431,26 +446,80 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		this.sessionTypesChangeEmitter.fire();
 	}
 
-	/** Applies one transport-confirmed reconnect before queued live actions resume. */
-	recoverConnection(): Promise<void> {
+	/** Prevents new mutations as soon as the lower transport leaves its connected generation. */
+	beginConnectionRecovery(generation: number): void {
+		this.assertNotDisposed();
+		if (this.interruptedGeneration === generation) {
+			return;
+		}
+		if (this.interruptedGeneration !== undefined && generation < this.interruptedGeneration) {
+			throw new Error(`Agent Host interrupted generation regressed from '${this.interruptedGeneration}' to '${generation}'.`);
+		}
+		this.interruptedGeneration = generation;
+		this.connectionRecovering = true;
+		this.connectionRecoveryEpoch += 1;
+		this.connectionRecovery = undefined;
+	}
+
+	/** Reconnects semantic state and reconciles uncertain mutations before queued live actions resume. */
+	recoverConnection(generation: number): Promise<boolean> {
+		this.assertNotDisposed();
+		if (!this.connectionRecovering) {
+			throw new Error('Agent Host provider is not awaiting connection recovery.');
+		}
+		const recovery = Object.freeze({ epoch: this.connectionRecoveryEpoch, generation });
+		this.connectionRecovery = recovery;
 		return this.sequencer.queue(async () => {
 			this.assertNotDisposed();
+			if (!this.isCurrentConnectionRecovery(recovery)) {
+				return false;
+			}
 			if (this.lastHostSequence === undefined) {
 				throw new Error('Agent Host provider cannot reconnect before initialization.');
 			}
-			const request = Object.freeze({
-				connection: this.connection.connection,
-				lastHostSequence: this.lastHostSequence,
-				subscriptions: Object.freeze([...this.subscriptions]),
-			});
-			const result = await this.connection.reconnect(request);
 			try {
+				const request = Object.freeze({
+					connection: this.connection.connection,
+					lastHostSequence: this.lastHostSequence,
+					subscriptions: Object.freeze([...this.subscriptions]),
+				});
+				const result = await this.connection.reconnect(request);
+				if (!this.isCurrentConnectionRecovery(recovery)) {
+					return false;
+				}
 				assertAgentHostReconnectResult(request, result);
-				await this.applyReconnectResult(result);
+				this.applyReconnectResult(result);
+				if (!this.isCurrentConnectionRecovery(recovery)) {
+					return false;
+				}
+				if (await this.reconcilePendingMutations(recovery) === undefined) {
+					return false;
+				}
+				await this.hydrateCatalog(true);
+				return this.isCurrentConnectionRecovery(recovery);
 			} catch (error) {
+				if (!this.isCurrentConnectionRecovery(recovery)) {
+					return false;
+				}
 				this.dispose();
 				throw error;
 			}
+		});
+	}
+
+	/** Clears the mutation barrier only after restored live actions have joined the provider sequencer. */
+	completeConnectionRecovery(generation: number): Promise<boolean> {
+		const recovery = this.connectionRecovery;
+		if (recovery === undefined || recovery.generation !== generation) {
+			return Promise.resolve(false);
+		}
+		return this.sequencer.queue(async () => {
+			if (!this.isCurrentConnectionRecovery(recovery)) {
+				return false;
+			}
+			this.connectionRecovering = false;
+			this.connectionRecovery = undefined;
+			return true;
 		});
 	}
 
@@ -570,7 +639,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async sendRequest(session: ISession, chat: IChat): Promise<void> {
-		this.assertNotDisposed();
+		this.assertMutationEntryAllowed();
 		const ownership = this.requireOwnership(session, true);
 		const ownedChat = this.requireChat(ownership, chat);
 		if (ownedChat.interactivity.get() !== ChatInteractivity.Full) {
@@ -587,6 +656,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async createChat(session: ISession): Promise<IChat> {
+		this.assertMutationEntryAllowed();
 		return this.sequencer.queue(async () => {
 			const record = this.requireCommittedRecord(session);
 			this.assertSessionAvailable(record);
@@ -612,6 +682,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async forkChat(session: ISession, sourceChat: IChat, turnId: string): Promise<IChat> {
+		this.assertMutationEntryAllowed();
 		return this.sequencer.queue(async () => {
 			const record = this.requireCommittedRecord(session);
 			const source = this.requireCommittedChatRecord(record, sourceChat);
@@ -654,6 +725,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async setChatModel(session: ISession, chat: IChat, modelId: string | undefined): Promise<void> {
+		this.assertMutationEntryAllowed();
 		await this.sequencer.queue(async () => {
 			const ownership = this.requireOwnership(session, true);
 			const ownedChat = this.requireChat(ownership, chat);
@@ -970,6 +1042,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		session: ISession,
 		createPayload: (record: IAgentHostSessionRecord) => AgentHostMutationPayload,
 	): Promise<void> {
+		this.assertMutationEntryAllowed();
 		await this.sequencer.queue(async () => {
 			const record = this.requireCommittedRecord(session);
 			this.assertSessionAvailable(record);
@@ -985,6 +1058,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		chat: IChat,
 		createPayload: (record: IAgentHostSessionRecord, chatRecord: IAgentHostChatRecord) => AgentHostMutationPayload,
 	): Promise<void> {
+		this.assertMutationEntryAllowed();
 		await this.sequencer.queue(async () => {
 			const record = this.requireCommittedRecord(session);
 			const chatRecord = this.requireCommittedChatRecord(record, chat);
@@ -998,31 +1072,63 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	private async mutate(payload: AgentHostMutationPayload): Promise<AgentHostMutationResult> {
+		if (this.connectionRecovering) {
+			throw new Error('Agent Host connection is recovering.');
+		}
 		const operation = createAgentHostOperationId(generateUuid());
 		const digest = await computeAgentHostMutationDigest(payload);
-		const request = Object.freeze({ operation, digest, payload });
+		const request: IAgentHostMutationRequest = Object.freeze({ operation, digest, payload });
+		const pending = Object.freeze({ request });
+		this.pendingMutations.set(operation, pending);
 		let outcome: AgentHostMutationOutcome;
 		try {
 			outcome = await this.connection.mutate(request);
 		} catch {
-			outcome = await this.connection.getOperationOutcome({ operation, digest });
+			try {
+				outcome = await this.connection.getOperationOutcome({ operation, digest });
+			} catch {
+				throw new AgentHostOperationUncertainError(operation, digest);
+			}
 		}
+		try {
+			return await this.reconcileMutation(pending, outcome);
+		} catch (error) {
+			if (this.pendingMutations.has(operation)) {
+				throw new AgentHostOperationUncertainError(operation, digest);
+			}
+			throw error;
+		}
+	}
 
+	private async reconcileMutation(
+		pending: IAgentHostPendingMutation,
+		initialOutcome: AgentHostMutationOutcome,
+		isCurrent: (() => boolean) | undefined = undefined,
+	): Promise<AgentHostMutationResult> {
+		const { operation, digest } = pending.request;
+		let outcome = initialOutcome;
 		let resent = false;
 		for (let reconciliation = 0; reconciliation < 4; reconciliation++) {
+			if (isCurrent !== undefined && !isCurrent()) {
+				throw new Error('Agent Host connection recovery was superseded.');
+			}
 			switch (outcome.kind) {
 				case 'succeeded':
 					if (outcome.result.operation !== operation || outcome.result.digest !== digest) {
+						this.pendingMutations.delete(operation);
 						throw new Error(`Agent Host operation '${operation}' returned another operation identity.`);
 					}
+					this.pendingMutations.delete(operation);
 					return outcome.result;
 				case 'failed':
 					if (outcome.failure.reconciliation === 'terminal') {
+						this.pendingMutations.delete(operation);
 						throw new AgentHostOperationFailure(operation, outcome.failure.message);
 					}
 					outcome = await this.connection.getOperationOutcome({ operation, digest });
 					break;
 				case 'conflict':
+					this.pendingMutations.delete(operation);
 					throw new AgentHostOperationFailure(
 						operation,
 						`Agent Host operation '${operation}' conflicts with digest '${outcome.recordedDigest}'.`,
@@ -1033,7 +1139,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 				case 'unknown':
 					if (!resent) {
 						resent = true;
-						outcome = await this.connection.mutate(request);
+						outcome = await this.connection.mutate(pending.request);
 					} else {
 						outcome = await this.connection.getOperationOutcome({ operation, digest });
 					}
@@ -1041,6 +1147,38 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			}
 		}
 		throw new AgentHostOperationUncertainError(operation, digest);
+	}
+
+	private async reconcilePendingMutations(recovery: IAgentHostConnectionRecovery): Promise<boolean | undefined> {
+		const pending = [...this.pendingMutations.values()];
+		for (const mutation of pending) {
+			if (!this.isCurrentConnectionRecovery(recovery)) {
+				return undefined;
+			}
+			const { operation, digest } = mutation.request;
+			const outcome = await this.connection.getOperationOutcome({ operation, digest });
+			if (!this.isCurrentConnectionRecovery(recovery)) {
+				return undefined;
+			}
+			try {
+				await this.reconcileMutation(
+					mutation,
+					outcome,
+					() => this.isCurrentConnectionRecovery(recovery),
+				);
+			} catch (error) {
+				if (!(error instanceof AgentHostOperationFailure)) {
+					throw error;
+				}
+			}
+		}
+		return pending.length > 0;
+	}
+
+	private isCurrentConnectionRecovery(recovery: IAgentHostConnectionRecovery): boolean {
+		return this.connectionRecovering
+			&& this.connectionRecovery === recovery
+			&& this.connectionRecoveryEpoch === recovery.epoch;
 	}
 
 	private assertMutationKind<TKind extends AgentHostMutationPayload['kind']>(
@@ -1225,9 +1363,11 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		try {
 			for (const summary of catalog.sessions) {
 				const state = this.requireSessionReducerState(summary.id);
-				const descriptor = this.requireDescriptor(state.type, state.agentId);
-				if (descriptor.packageId !== state.packageId) {
-					throw new Error(`Agent Host Session '${state.id}' changed its package ownership.`);
+				if (state.lifecycle !== 'unavailable') {
+					const descriptor = this.requireDescriptor(state.type, state.agentId);
+					if (descriptor.packageId !== state.packageId) {
+						throw new Error(`Agent Host Session '${state.id}' changed its package ownership.`);
+					}
 				}
 				const previous = this.records.get(state.id);
 				const record = previous ?? this.createSessionRecord(state);
@@ -1395,7 +1535,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		}
 	}
 
-	private async applyReconnectResult(result: AgentHostReconnectResult): Promise<void> {
+	private applyReconnectResult(result: AgentHostReconnectResult): void {
 		if (result.kind === 'replay') {
 			const previousRoot = this.requireRootState();
 			this.assertReplayActionsApplicable(result.actions);
@@ -1442,7 +1582,6 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			}
 			this.noteHostSequence(result.hostSequence);
 		}
-		await this.hydrateCatalog(true);
 	}
 
 	private assertReplayActionsApplicable(actions: readonly AgentHostChannelAction[]): void {
@@ -1962,9 +2101,11 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			agent: state.agentId,
 			scope: 'session',
 		});
-		const registration = this.requireRuntimeRegistration(state.agentId, state.packageId);
-		if (!registration.supportedSessionConfigurationSchemas.includes(configuration.schema.revision)) {
-			throw new Error(`Agent Host Session '${state.id}' uses an unsupported configuration schema.`);
+		if (state.lifecycle !== 'unavailable') {
+			const registration = this.requireRuntimeRegistration(state.agentId, state.packageId);
+			if (!registration.supportedSessionConfigurationSchemas.includes(configuration.schema.revision)) {
+				throw new Error(`Agent Host Session '${state.id}' uses an unsupported configuration schema.`);
+			}
 		}
 		if (state.id !== summary.id
 			|| state.packageId !== summary.packageId
@@ -2046,6 +2187,13 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		}
 	}
 
+	private assertMutationEntryAllowed(): void {
+		this.assertNotDisposed();
+		if (this.connectionRecovering) {
+			throw new Error('Agent Host connection is recovering.');
+		}
+	}
+
 	override dispose(): void {
 		if (this.disposed) {
 			return;
@@ -2057,6 +2205,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			this.disposeSessionRecord(record);
 		}
 		this.records.clear();
+		this.pendingMutations.clear();
 		this.sessions = Object.freeze([]);
 		super.dispose();
 	}

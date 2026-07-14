@@ -9,6 +9,7 @@
   "scripts": {
     "build:web": "tsc -p tsconfig.build.json --noEmit && vite build --config vite.web.config.ts --mode web",
     "build:desktop": "tsx build/lib/desktop.ts",
+    "build:server": "tsx build/lib/buildServer.ts",
     "build:rust": "tsx build/lib/rust.ts",
     "build:py-worker": "tsx build/lib/pythonWorker.ts",
     "package:win": "tsx build/lib/package.ts --win",
@@ -19,6 +20,7 @@
     "check:i18n": "node scripts/check-i18n-keys.mjs",
     "valid-layers-check": "tsx scripts/verify/valid-layers-check.ts",
     "test:valid-layers-check": "tsx --test scripts/verify/valid-layers-check.test.ts",
+    "test:server-build": "tsx --test scripts/verify/server-build.test.ts",
     "test:base-common": "node scripts/run-base-common-tests.mjs",
     "test:workbench-browser": "node scripts/run-workbench-browser-tests.mjs",
     "test:editor": "node scripts/run-editor-tests.mjs",
@@ -26,6 +28,7 @@
     "test:library-store": "node scripts/run-library-store-tests.mjs",
     "test:electron-main": "node scripts/run-electron-main-tests.mjs",
     "test:agent": "node scripts/run-agent-tests.mjs",
+    "test:remote": "tsx --test src/cs/platform/remote/test/common/remoteAuthorityAndUri.test.ts src/cs/platform/remote/test/node/mockRemoteServer.test.ts",
     "compile:test-automation": "npm --prefix test/automation run compile",
     "compile:test-smoke": "npm --prefix test/smoke run compile",
     "test:smoke": "npm run build:desktop -- --skip-rust --skip-py-worker && npm run compile:test-smoke && npm --prefix test/smoke run mocha",

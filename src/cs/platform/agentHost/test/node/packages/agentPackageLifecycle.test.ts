@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
+import { DeferredPromise } from 'cs/base/common/async';
 import type {
 	IAgentBackingIdentity,
 	IAgentResumeMigrationRequest,
@@ -38,6 +39,7 @@ import {
 import { AgentPackageError, AgentPackageErrorCode } from 'cs/platform/agentHost/common/packageErrors';
 import type {
 	AgentPackageDistribution,
+	AgentPackagePersistedOperation,
 	AgentPackageRuntimeForm,
 	IAgentPackageBackingRecord,
 	IAgentPackageOffering,
@@ -249,11 +251,16 @@ class ArtifactPort implements IAgentPackageArtifactPort {
 	readonly packages = new Map<string, IVerifiedAgentPackage>();
 	readonly staged: IAgentPackageOffering[] = [];
 	readonly discarded: IVerifiedAgentPackage[] = [];
+	readonly reconciled: IAgentPackagePersistedState[] = [];
 
 	constructor(private readonly trace: string[]) { }
 
 	add(verifiedPackage: IVerifiedAgentPackage): void {
 		this.packages.set(this.key(verifiedPackage.offering), verifiedPackage);
+	}
+
+	async reconcile(state: IAgentPackagePersistedState): Promise<void> {
+		this.reconciled.push(state);
 	}
 
 	async stage(
@@ -283,16 +290,24 @@ class ArtifactPort implements IAgentPackageArtifactPort {
 class RuntimePort implements IAgentPackageRuntimePort {
 	readonly registrations = new Map<string, readonly IAgentRuntimeRegistration[]>();
 	readonly activationStates = new Map<AgentPackageOperationId, 'prepared' | 'committed' | 'retired' | 'rolledBack'>();
+	readonly acknowledgedOperations: AgentPackageOperationId[] = [];
+	readonly restoredStates: IAgentPackagePersistedState[] = [];
 	readonly deleteCalls: IAgentBackingIdentity[] = [];
 	readonly migrationCalls: IAgentResumeMigrationRequest[] = [];
 	migrationResult: IAgentResumeState | undefined;
 	migrationError: Error | undefined;
+	migrationStarted: DeferredPromise<void> | undefined;
+	migrationGate: DeferredPromise<void> | undefined;
 	deleteFailureKey: string | undefined;
 	failCommitOperation: AgentPackageOperationId | undefined;
 	failRetireOperation: AgentPackageOperationId | undefined;
 	failRollbackOperation: AgentPackageOperationId | undefined;
 
 	constructor(private readonly trace: string[]) { }
+
+	async restoreRuntimeState(state: IAgentPackagePersistedState): Promise<void> {
+		this.restoredStates.push(state);
+	}
 
 	setRegistrations(
 		verifiedPackage: IVerifiedAgentPackage,
@@ -361,12 +376,26 @@ class RuntimePort implements IAgentPackageRuntimePort {
 		this.activationStates.set(operationId, 'rolledBack');
 	}
 
+	async acknowledgeActivationOperation(
+		operationId: AgentPackageOperationId,
+		_transition: Parameters<IAgentPackageRuntimePort['acknowledgeActivationOperation']>[1],
+	): Promise<void> {
+		this.trace.push('runtime.acknowledgeActivationOperation');
+		assert.ok(this.activationStates.get(operationId) === undefined || ['retired', 'rolledBack'].includes(this.activationStates.get(operationId)!));
+		this.acknowledgedOperations.push(operationId);
+		this.activationStates.delete(operationId);
+	}
+
 	async migrateResumeState(
 		_registration: IAgentRuntimeRegistration,
 		request: IAgentResumeMigrationRequest,
 	): Promise<IAgentResumeState> {
 		this.trace.push('runtime.migrate');
 		this.migrationCalls.push(request);
+		this.migrationStarted?.complete();
+		if (this.migrationGate !== undefined) {
+			await this.migrationGate.p;
+		}
 		if (this.migrationError) {
 			throw this.migrationError;
 		}
@@ -575,6 +604,150 @@ async function commitBackingRecord(
 }
 
 suite('AgentPackageLifecycle', { concurrency: false }, () => {
+	test('keeps a cold bundled Comet candidate non-authoritative until one complete commit', async () => {
+		const trace: string[] = [];
+		const firstComet = createVerifiedPackage({
+			packageId: 'comet',
+			revision: '1.0.0',
+			digestCharacter: 'a',
+			distribution: 'bundled',
+			runtimeForm: 'embedded',
+		});
+		const secondComet = createVerifiedPackage({
+			packageId: 'comet',
+			revision: '2.0.0',
+			digestCharacter: 'b',
+			distribution: 'bundled',
+			runtimeForm: 'embedded',
+		});
+		const firstSchema = createAgentResumeSchemaId('resume.v1');
+		const secondSchema = createAgentResumeSchemaId('resume.v2');
+		const firstRegistration = createRegistration(firstComet, { schemas: Object.freeze([firstSchema]) });
+		const secondRegistration = createRegistration(secondComet, {
+			schemas: Object.freeze([secondSchema]),
+			migrationEdges: Object.freeze([Object.freeze({ sourceSchema: firstSchema, targetSchema: secondSchema })]),
+		});
+		const stateStore = new MemoryStateStore(trace);
+		const artifactPort = new ArtifactPort(trace);
+		const firstRuntime = new RuntimePort(trace);
+		let lifecycle = await AgentPackageLifecycle.create({
+			hostTarget,
+			installablePackages: Object.freeze([]),
+			bundledComet: Object.freeze({
+				verifiedPackage: firstComet,
+				registrations: Object.freeze([firstRegistration]),
+			}),
+			stateStore,
+			artifactPort,
+			runtimePort: firstRuntime,
+		});
+		const retained = createBackingRecord({
+			packageId: firstComet.manifest.packageId,
+			agentId: firstComet.manifest.agentIds[0],
+			sessionId: 'cold-comet-session',
+			schema: firstSchema,
+		});
+		await commitBackingRecord(lifecycle, retained, true);
+
+		const authoritativeState = stateStore.state;
+		assert.ok(authoritativeState);
+		const failedRuntime = new RuntimePort(trace);
+		failedRuntime.migrationStarted = new DeferredPromise<void>();
+		failedRuntime.migrationGate = new DeferredPromise<void>();
+		failedRuntime.migrationError = new Error('injected cold resume migration failure');
+		const failedCreation = AgentPackageLifecycle.create({
+			hostTarget,
+			installablePackages: Object.freeze([]),
+			bundledComet: Object.freeze({
+				verifiedPackage: secondComet,
+				registrations: Object.freeze([secondRegistration]),
+			}),
+			stateStore,
+			artifactPort,
+			runtimePort: failedRuntime,
+		});
+		await failedRuntime.migrationStarted.p;
+		assert.equal(stateStore.state, authoritativeState);
+		assert.equal(stateStore.state.installedPackages[0].revision, firstComet.offering.revision);
+		assert.equal(stateStore.state.retainedBackingRecords[0].resumeState?.schema, firstSchema);
+		failedRuntime.migrationGate.complete();
+		await assert.rejects(failedCreation, /injected cold resume migration failure/);
+		assert.equal(stateStore.state, authoritativeState);
+
+		const retryRuntime = new RuntimePort(trace);
+		retryRuntime.migrationResult = Object.freeze({ schema: secondSchema, data: 'migrated-cold-comet' });
+		lifecycle = await AgentPackageLifecycle.create({
+			hostTarget,
+			installablePackages: Object.freeze([]),
+			bundledComet: Object.freeze({
+				verifiedPackage: secondComet,
+				registrations: Object.freeze([secondRegistration]),
+			}),
+			stateStore,
+			artifactPort,
+			runtimePort: retryRuntime,
+		});
+		let snapshot = lifecycle.snapshot();
+		assert.equal(snapshot.installedPackages[0].revision, secondComet.offering.revision);
+		assert.deepStrictEqual(snapshot.activeRegistrations, [secondRegistration]);
+		assert.deepStrictEqual(snapshot.materializedBackings, []);
+		assert.equal(snapshot.retainedBackingRecords[0].resumeState?.schema, secondSchema);
+		assert.equal(retryRuntime.restoredStates[0].installedPackages[0].revision, secondComet.offering.revision);
+		assert.equal(retryRuntime.migrationCalls.length, 1);
+		const pending = snapshot.operations.at(-1);
+		assert.ok(pending?.status === 'pending' && pending.phase === 'catalogCommitted');
+		assert.equal(stateStore.state, authoritativeState);
+
+		stateStore.failNextCommit = true;
+		await assert.rejects(lifecycle.completeRestoredBundledUpdate(), /injected state commit failure/);
+		assert.equal(stateStore.state, authoritativeState);
+
+		const restoredRuntime = new RuntimePort(trace);
+		restoredRuntime.migrationResult = Object.freeze({ schema: secondSchema, data: 'migrated-cold-comet' });
+		lifecycle = await AgentPackageLifecycle.create({
+			hostTarget,
+			installablePackages: Object.freeze([]),
+			bundledComet: Object.freeze({
+				verifiedPackage: secondComet,
+				registrations: Object.freeze([secondRegistration]),
+			}),
+			stateStore,
+			artifactPort,
+			runtimePort: restoredRuntime,
+		});
+		assert.equal(restoredRuntime.migrationCalls.length, 1);
+		trace.length = 0;
+		await lifecycle.completeRestoredBundledUpdate();
+		assert.deepStrictEqual(trace, [
+			'store.commit',
+			'runtime.retirePreviousActivation',
+			'runtime.acknowledgeActivationOperation',
+		]);
+		snapshot = lifecycle.snapshot();
+		assert.equal(snapshot.operations.at(-1)?.status, 'succeeded');
+		assert.equal(snapshot.installedPackages[0].revision, secondComet.offering.revision);
+		assert.equal(snapshot.retainedBackingRecords[0].resumeState?.schema, secondSchema);
+		assert.deepStrictEqual(stateStore.state?.installedPackages, snapshot.installedPackages);
+		assert.deepStrictEqual(stateStore.state?.activeRegistrations, snapshot.activeRegistrations);
+		assert.deepStrictEqual(stateStore.state?.retainedBackingRecords, snapshot.retainedBackingRecords);
+		assert.deepStrictEqual(restoredRuntime.acknowledgedOperations, [pending.operation]);
+
+		const completedRuntime = new RuntimePort(trace);
+		lifecycle = await AgentPackageLifecycle.create({
+			hostTarget,
+			installablePackages: Object.freeze([]),
+			bundledComet: Object.freeze({
+				verifiedPackage: secondComet,
+				registrations: Object.freeze([secondRegistration]),
+			}),
+			stateStore,
+			artifactPort,
+			runtimePort: completedRuntime,
+		});
+		assert.equal(completedRuntime.migrationCalls.length, 0);
+		await lifecycle.completeRestoredBundledUpdate();
+	});
+
 	test('keeps installable, installed, active, and materialized catalogs distinct', async () => {
 		const optionalPackage = createVerifiedPackage({
 			packageId: 'claude',
@@ -589,6 +762,11 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		assert.deepStrictEqual(initial.activeRegistrations.map(item => item.agentId), ['comet']);
 		assert.deepStrictEqual(initial.materializedBackings, []);
 		assert.deepStrictEqual(harness.artifactPort.staged, []);
+		assert.equal(harness.runtimePort.restoredStates.length, 1);
+		assert.deepStrictEqual(
+			harness.runtimePort.restoredStates[0].installedPackages,
+			initial.installedPackages,
+		);
 
 		await installPackage(harness, optionalPackage, 'install-claude', '1');
 		const installed = harness.lifecycle.snapshot();
@@ -661,6 +839,127 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			kind: 'succeeded',
 			result: firstResult,
 		});
+	});
+
+	test('evicts oldest terminal outcomes while retaining unresolved work at ledger capacity', async () => {
+		const firstPackage = createVerifiedPackage({
+			packageId: 'bounded-first', revision: '1.0.0', digestCharacter: '1',
+		});
+		const secondPackage = createVerifiedPackage({
+			packageId: 'bounded-second', revision: '1.0.0', digestCharacter: '2',
+		});
+		const reusedPackage = createVerifiedPackage({
+			packageId: 'bounded-reused', revision: '1.0.0', digestCharacter: '3',
+		});
+		const packages = Object.freeze([firstPackage, secondPackage, reusedPackage]);
+		const trace: string[] = [];
+		const comet = createVerifiedPackage({
+			packageId: 'comet',
+			revision: '1.0.0',
+			digestCharacter: 'a',
+			distribution: 'bundled',
+			runtimeForm: 'embedded',
+		});
+		const stateStore = new MemoryStateStore(trace);
+		const artifactPort = new ArtifactPort(trace);
+		const runtimePort = new RuntimePort(trace);
+		const lifecyclePort = new LifecyclePort(trace);
+		for (const candidate of packages) {
+			artifactPort.add(candidate);
+			runtimePort.setRegistrations(candidate, [createRegistration(candidate)]);
+		}
+		await AgentPackageLifecycle.create({
+			hostTarget,
+			installablePackages: packages.map(candidate => candidate.offering),
+			bundledComet: { verifiedPackage: comet, registrations: [createRegistration(comet)] },
+			stateStore,
+			artifactPort,
+			runtimePort,
+			maximumPersistedOperations: 2,
+		});
+		const base = stateStore.state;
+		assert.ok(base);
+		const evictedOperation = createAgentPackageOperationId('bounded-old-terminal');
+		const evictedDigest = requestDigest('1');
+		const pendingOperation = createAgentPackageOperationId('bounded-pending');
+		const pendingDigest = requestDigest('2');
+		const terminalResult: IAgentPackageOperationResult = Object.freeze({
+			operationId: evictedOperation,
+			requestDigest: evictedDigest,
+			kind: 'install',
+			packageId: createAgentPackageId('evicted-package'),
+			stateRevision: 0,
+			affectedRecords: 0,
+		});
+		const terminal: AgentPackagePersistedOperation = Object.freeze({
+			operation: evictedOperation,
+			digest: evictedDigest,
+			kind: 'install',
+			packageId: terminalResult.packageId,
+			affectedRecords: 0,
+			status: 'succeeded',
+			result: terminalResult,
+		});
+		const pending: AgentPackagePersistedOperation = Object.freeze({
+			operation: pendingOperation,
+			digest: pendingDigest,
+			kind: 'install',
+			packageId: firstPackage.manifest.packageId,
+			affectedRecords: null,
+			status: 'pending',
+			phase: 'recorded',
+		});
+		stateStore.state = Object.freeze({
+			...base,
+			revision: base.revision + 1,
+			operations: Object.freeze([terminal, pending]),
+		});
+
+		const lifecycle = await AgentPackageLifecycle.create({
+			hostTarget,
+			installablePackages: packages.map(candidate => candidate.offering),
+			bundledComet: { verifiedPackage: comet, registrations: [createRegistration(comet)] },
+			stateStore,
+			artifactPort,
+			runtimePort,
+			maximumPersistedOperations: 2,
+		});
+		lifecycle.bindLifecyclePort(lifecyclePort);
+		assert.ok(lifecycle.snapshot().operations.some(operation => operation.operation === pendingOperation));
+
+		await lifecycle.install({
+			operationId: pendingOperation,
+			requestDigest: pendingDigest,
+			packageId: firstPackage.manifest.packageId,
+			offering: firstPackage.offering,
+		});
+		await lifecycle.install({
+			operationId: createAgentPackageOperationId('bounded-next'),
+			requestDigest: requestDigest('3'),
+			packageId: secondPackage.manifest.packageId,
+			offering: secondPackage.offering,
+		});
+
+		assert.equal(lifecycle.snapshot().operations.length, 2);
+		assert.ok(lifecycle.snapshot().operations.some(operation => operation.operation === pendingOperation));
+		assert.deepStrictEqual(lifecycle.getOperationOutcome({
+			operation: evictedOperation,
+			digest: evictedDigest,
+		}), { kind: 'unknown' });
+
+		await lifecycle.install({
+			operationId: evictedOperation,
+			requestDigest: requestDigest('4'),
+			packageId: reusedPackage.manifest.packageId,
+			offering: reusedPackage.offering,
+		});
+		assert.equal(lifecycle.snapshot().operations.length, 2);
+		assert.equal(
+			lifecycle.snapshot().installedPackages.some(candidate => candidate.packageId === reusedPackage.manifest.packageId),
+			true,
+		);
+		assert.ok(runtimePort.acknowledgedOperations.includes(pendingOperation));
+		assert.ok(runtimePort.acknowledgedOperations.includes(evictedOperation));
 	});
 
 	test('rejects active and retained cross-package Agent ID claims', async () => {
@@ -763,6 +1062,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			'lifecycle.complete',
 			'runtime.retirePreviousActivation',
 			'store.commit',
+			'runtime.acknowledgeActivationOperation',
 		]);
 		const snapshot = harness.lifecycle.snapshot();
 		assert.equal(
@@ -823,10 +1123,9 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		assert.deepStrictEqual(afterMigrationFailure.retainedBackingRecords, beforeMigrationFailure.retainedBackingRecords);
 		assert.deepStrictEqual(afterMigrationFailure.materializedBackings, beforeMigrationFailure.materializedBackings);
 		assert.equal(harness.lifecyclePort.mutations.at(-1)?.rollbackCount, 1);
-		assert.equal(
-			harness.runtimePort.activationStates.get(createAgentPackageOperationId('update-rollback-migration')),
-			'rolledBack',
-		);
+		assert.ok(harness.runtimePort.acknowledgedOperations.includes(
+			createAgentPackageOperationId('update-rollback-migration'),
+		));
 		assert.equal(harness.artifactPort.discarded.at(-1)?.manifest.revision, secondRevision.manifest.revision);
 
 		harness.runtimePort.migrationError = undefined;
@@ -1129,7 +1428,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 		runtime = createRestartRuntime();
 		lifecycle = await restartLifecycle(harness, packages, runtime);
 		await lifecycle.uninstall(uninstallRequest);
-		assert.equal(runtime.activationStates.get(uninstallOperation), 'retired');
+		assert.ok(runtime.acknowledgedOperations.includes(uninstallOperation));
 	});
 
 	test('recovers runtimeCommitted after uncertain rollback and terminally rolls back a pre-commit activation', async () => {
@@ -1152,7 +1451,7 @@ suite('AgentPackageLifecycle', { concurrency: false }, () => {
 			offering: secondPackage.offering,
 			authority: 'user',
 		}), /activation commit failure/);
-		assert.equal(harness.runtimePort.activationStates.get(commitFailureOperation), 'rolledBack');
+		assert.ok(harness.runtimePort.acknowledgedOperations.includes(commitFailureOperation));
 
 		const uncertainOperation = createAgentPackageOperationId('runtime-commit-uncertain');
 		const uncertainRequest = {

@@ -21,6 +21,13 @@ import { createNativeHostMainService } from 'cs/platform/native/electron-main/na
 import { registerWindowOpenPolicy } from 'cs/platform/window/electron-main/windowOpenPolicy';
 import { WindowsMainService } from 'cs/platform/windows/electron-main/windowsMainService';
 import { LocalAgentHostMain } from 'cs/code/electron-main/agentHost/localAgentHostMain';
+import { MockAgentRuntimeProcessFactory } from 'cs/code/electron-main/agentHost/mockAgentRuntimeProcess';
+import { MockAgentRuntimeSandboxProcessPort } from 'cs/code/electron-main/agentHost/mockAgentRuntimeSandboxProcess';
+import {
+  createLocalAgentPackageArtifactFile,
+  LocalAgentPackageArtifactPort,
+} from 'cs/code/electron-main/agentHost/localAgentPackageArtifactPort';
+import { createMockAgentPackageProducts } from 'cs/code/common/agentHost/mockAgentPackages';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
@@ -49,14 +56,30 @@ app.whenReady().then(async () => {
   await storage.init();
 
   const settings = await storage.loadSettings();
+  const mockAgentRuntimeArtifact = await createLocalAgentPackageArtifactFile(fileURLToPath(new URL(
+    '../electron-utility/agentRuntime/mockAgentRuntimeMain.js',
+    import.meta.url,
+  )));
+  const mockAgentPackageProducts = createMockAgentPackageProducts(
+    Object.freeze({ operatingSystem: process.platform, architecture: process.arch }),
+    mockAgentRuntimeArtifact,
+  );
+  const packageArtifactPort = new LocalAgentPackageArtifactPort({
+    storageRoot: environmentMainPaths.agentHostPackagesDir,
+    packages: mockAgentPackageProducts.map(product => product.verifiedPackage),
+  });
+  const mockAgentRuntimeSandboxProcessPort = new MockAgentRuntimeSandboxProcessPort(packageArtifactPort);
   const agentHost = await LocalAgentHostMain.create({
     storage: storage.applicationStorage,
     providerApiKeySecretStorage: storage.providerApiKeySecretStorage,
     contentMaterializationRoot: environmentMainPaths.agentHostContentDir,
     bundledArtifactPath: fileURLToPath(import.meta.url),
+    mockAgentPackageProducts,
+    packageArtifactPort,
     channelServer: electronMainChannelServer,
     fetch: (url, init) => fetch(url, init),
     now: Date.now,
+    agentRuntimeConnectionFactory: new MockAgentRuntimeProcessFactory(mockAgentRuntimeSandboxProcessPort),
   });
   const themeMainService = new ThemeMainService(storage, settings);
   const windowsMainService = new WindowsMainService(storage, themeMainService, browserAutomationWindowCloseLifecycle);

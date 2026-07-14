@@ -139,6 +139,7 @@ the local contribution. It consumes one exact `IAgentHostProtocolTransport`:
 
 The connection owns:
 
+- endpoint-scoped authentication for every Remote Tunnel transport generation;
 - Agent Host initialization and protocol version negotiation;
 - Host authority and Agent Host client connection validation;
 - common protocol serialization, validation, limits, and errors;
@@ -181,10 +182,18 @@ one Remote Tunnel endpoint. Hosting composition:
   exact supported Agent Host Protocol revision range;
 - requires private authenticated endpoint visibility and rejects any provider
   downgrade to public or anonymous access;
+- authenticates a separately provisioned endpoint credential before creating
+  the generation-one Agent Host client connection or binding content, Tool,
+  and protocol services;
 - binds accepted endpoint streams directly to new Agent Host client
   connections;
-- owns the hosting lease and releases live hosting with the product or
-  explicit stop action;
+- owns the exact returned hosting lease and constructs its stop mutation from
+  the returned endpoint identity and opaque descriptor revision;
+- releases live hosting with the product or explicit stop action, preserving
+  the same stop mutation for outcome reconciliation when the provider reports
+  `OperationUnknown`;
+- retains the live Host and stream binding after any rejected stop until the
+  lease has an authoritative stopped state;
 - never publishes an active endpoint before both Host and relay are ready.
 
 The endpoint is not a generic port grant. It exposes only the Agent Host
@@ -244,6 +253,7 @@ obtain the exact authenticated tunnel account
     → select one exact provider, account, tunnel, cluster, and endpoint
     → establish IRemoteTunnelConnection
     → open the endpoint stream
+    → authenticate the separately supplied endpoint credential
     → initialize Agent Host Protocol
     → obtain Host authority and Agent Host client connection ID
     → register reverse endpoints and initial subscriptions
@@ -255,10 +265,12 @@ Enumeration and exact lookup are separate user-intent operations, not fallback
 stages. Tunnel relay success does not imply Agent Host compatibility. A failed
 step disposes all resources created by the attempt and registers no provider.
 
-Remote management, Remote Tunnel, and Agent Host handshakes are separate.
-Compatibility in one layer does not imply compatibility in another. Product,
+Remote management, Remote Tunnel relay, Agent Host endpoint authentication,
+and Agent Host Protocol handshakes are separate. Compatibility or
+authentication in one layer does not imply authority in another. Product,
 build, tunnel labels, display names, ports, and Host implementation strings
-never substitute for negotiated protocol revisions and typed capabilities.
+never substitute for negotiated protocol revisions, endpoint credentials, and
+typed capabilities.
 
 ## Protocol transport contract
 
@@ -308,15 +320,17 @@ Direct Remote Tunnel route:
 relay transport is lost
     → IRemoteTunnelConnection reconnects the same tunnel endpoint
     → endpoint stream reopens on the new tunnel generation
+    → endpoint credential reauthenticates that exact generation
     → RemoteAgentHostConnection reconnects the same Agent Host client
     → Host returns complete replay or fresh snapshots
     → provider reconciles operations and reverse endpoints
 ```
 
-The lower transport never replays Agent Host mutations. Agent Host never
-opens another route to recover lower state. Reconnect preserves the exact
-selected address, lower logical connection, Host authority, Agent Host client
-connection ID, last applied Host sequence, and subscriptions.
+The lower transport never replays Agent Host mutations. Endpoint
+authentication never creates, replays, or reconciles Agent Host mutations.
+Agent Host never opens another route to recover lower state. Reconnect
+preserves the exact selected address, lower logical connection, Host authority,
+Agent Host client connection ID, last applied Host sequence, and subscriptions.
 
 If the lower logical connection expires, the Host authority changes, or the
 Host no longer recognizes the Agent Host client connection, continuation fails
@@ -448,8 +462,12 @@ src/cs/platform/agentHost/
 
 src/cs/server/node/agentHost/
 ├── remoteAgentHostMain.ts  Remote Server Host composition and lifetime
-└── remoteAgentHostChannel.ts
-                             direct Remote channel binding to AgentHostAuthority
+├── remoteTunnelAgentHostMain.ts
+│                            Remote Tunnel Host composition and lifetime
+├── remoteAgentHostChannel.ts
+│                            direct Remote channel binding to AgentHostAuthority
+└── remoteAgentHostEndpointCredentialAuthority.ts
+                             exact tunnel endpoint credential verifier
 
 src/cs/sessions/contrib/providers/agentHost/
 ├── browser/                shared AgentHostSessionsProvider, Remote Server
@@ -476,14 +494,19 @@ Remote Server route startup order:
 Remote Tunnel client startup order:
 
 1. Platform Tunnel provider and authentication integration;
-2. common Sessions services;
-3. Remote Tunnel discovery and Agent Host contribution;
-4. Sessions shell.
+2. exact Agent Host endpoint credential authority;
+3. common Sessions services;
+4. Remote Tunnel discovery and Agent Host contribution;
+5. Sessions shell.
 
 Tunnel hosting starts only after Platform Agent Host and the private protocol
 listener are live. Remote Server advertises its channel only after its Host
 composition is live. An advertised capability or active endpoint always has
-an owning implementation.
+an owning implementation. Tunnel Host shutdown stops the exact returned lease,
+disposes its stream binding and Host service, and then closes the Host
+authority. An unknown stop outcome retains the live composition and exact stop
+mutation until that outcome is reconciled. Any other rejected stop likewise
+retains the live composition until the lease authoritatively reports stopped.
 
 ## Verification
 
@@ -495,6 +518,8 @@ Remote Agent Host conformance covers:
 - one common protocol and provider across local, Remote Server, and Remote
   Tunnel connections;
 - structured capability and protocol revision negotiation;
+- per-generation endpoint authentication before Host materialization or peer
+  attachment, with credential isolation, rejection, timeout, and expiry;
 - tunnel discovery, exact lookup, hosting, explicit disconnect, and status
   without placeholder provider registration;
 - tunnel mutation conflict, lost acknowledgement, and outcome reconciliation;
