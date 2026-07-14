@@ -54,9 +54,10 @@ Remote Agent Host keeps these identities distinct:
 | Remote authority | Stable identity of the Remote Server route |
 | Remote client ID | Logical product client on a persistent Remote Server management connection |
 | Remote transport generation | Physical generation of the Remote Server management connection |
-| Tunnel provider, tunnel, cluster, and endpoint ID | Stable routing identity of the Remote Tunnel route |
+| Tunnel provider, account, tunnel, cluster, and endpoint ID | Stable routing identity of the Remote Tunnel route |
 | Tunnel client connection ID | Logical client connection to the selected tunnel endpoint |
 | Tunnel transport generation | Physical relay generation of the logical tunnel connection |
+| Tunnel operation ID | Idempotent identity of one tunnel record, endpoint, or hosting mutation |
 | Agent Host authority | Stable authority returned by Agent Host initialization |
 | Agent Host client connection ID | Logical `IAgentHostConnection` across semantic reconnections |
 | Sessions provider ID | One provider instance for the initialized Host authority in this application |
@@ -68,8 +69,8 @@ Remote Agent Host keeps these identities distinct:
 
 - `remoteServer` contains the stable Remote authority and required Agent Host
   channel capability;
-- `remoteTunnel` contains the exact provider, tunnel, cluster, and `agentHost`
-  endpoint identity.
+- `remoteTunnel` contains the exact provider, account, tunnel, cluster, and
+  `agentHost` endpoint identity.
 
 The address selects a route before connection. It is not Host authority. Host
 initialization returns the exact `AgentHostAuthority`, and the contribution
@@ -114,7 +115,7 @@ mutation committed merely because a channel frame was delivered.
 
 For a `remoteTunnel` address, Platform Tunnel owns:
 
-- provider, tunnel, cluster, and endpoint identity;
+- provider, account, tunnel, cluster, and endpoint identity;
 - exact discovery and lookup under one authenticated account;
 - endpoint publication and hosting leases;
 - provider and relay authentication scopes;
@@ -178,17 +179,20 @@ one Remote Tunnel endpoint. Hosting composition:
 - obtains one private Agent Host Protocol listener from the Host authority;
 - asks `IRemoteTunnelHostService` to publish an `agentHost` endpoint with the
   exact supported Agent Host Protocol revision range;
+- requires private authenticated endpoint visibility and rejects any provider
+  downgrade to public or anonymous access;
 - binds accepted endpoint streams directly to new Agent Host client
   connections;
-- owns the hosting lease and stops publication with the product or explicit
-  hosting action;
+- owns the hosting lease and releases live hosting with the product or
+  explicit stop action;
 - never publishes an active endpoint before both Host and relay are ready.
 
 The endpoint is not a generic port grant. It exposes only the Agent Host
 Protocol and grants no Remote filesystem, terminal, process, or management
-channel access. Stopping hosting closes or drains endpoint connections but
-does not delete Host Sessions, uninstall packages, or change Host authority.
-Deleting the provider-owned tunnel is a separate explicit operation.
+channel access. Stopping hosting closes or drains endpoint connections and
+leaves the endpoint descriptor offline. It does not delete Host Sessions,
+uninstall packages, or change Host authority. Endpoint removal and deletion of
+the provider-owned tunnel are separate explicit operations.
 
 ### Sessions contributions
 
@@ -237,7 +241,7 @@ Host, or search for a tunnel exposing the same machine.
 ```text
 obtain the exact authenticated tunnel account
     → enumerate or look up compatible agentHost endpoints
-    → select one exact provider, tunnel, cluster, and endpoint
+    → select one exact provider, account, tunnel, cluster, and endpoint
     → establish IRemoteTunnelConnection
     → open the endpoint stream
     → initialize Agent Host Protocol
@@ -343,9 +347,9 @@ exact package sandbox and authority. They connect through
 Remote Server credentials, tunnel provider management and relay credentials,
 Agent Host endpoint credentials, runtime registration credentials, Agent
 authentication, model-provider credentials, and typed secret references are
-separate scopes. A tunnel ID is never converted into a credential. Raw model
-and provider secrets resolve only under the accepted Turn authority and never
-cross to the product client.
+separate scopes. A tunnel ID is never converted into a credential. Raw
+model-provider secrets resolve only under the accepted Turn authority and
+never cross to the product client.
 
 ## Resources and filesystem authority
 
@@ -399,7 +403,7 @@ connection. See [Interaction target architecture](INTERACTION_TARGETS.md).
 | State | Owner |
 |---|---|
 | Remote authority, Remote client, and management generation | Remote foundation and Remote Server route |
-| Tunnel identity, recent selection, hosting lease, logical connection, and relay generation | Remote Tunnel foundation and tunnel contribution |
+| Tunnel identity, recent selection, mutation outcomes, hosting lease, logical connection, and relay generation | Remote Tunnel foundation and tunnel contribution |
 | Host authority, packages, registrations, catalogs, history, and operation outcomes | remote Agent Host |
 | Agent-native resume data and private history | addressed Agent runtime |
 | submitted references, targets, Tool sets, Turns, and Host materializations | remote Agent Host |
@@ -486,13 +490,14 @@ an owning implementation.
 Remote Agent Host conformance covers:
 
 - discriminated Remote Server and Remote Tunnel address validation;
-- exact Remote authority or provider/tunnel/cluster/endpoint to Host authority
-  binding;
+- exact Remote authority or
+  provider/account/tunnel/cluster/endpoint-to-Host-authority binding;
 - one common protocol and provider across local, Remote Server, and Remote
   Tunnel connections;
 - structured capability and protocol revision negotiation;
 - tunnel discovery, exact lookup, hosting, explicit disconnect, and status
   without placeholder provider registration;
+- tunnel mutation conflict, lost acknowledgement, and outcome reconciliation;
 - snapshots, contiguous actions, replay, fresh snapshot recovery, and gaps;
 - Remote management or tunnel relay recovery followed by Agent Host semantic
   recovery in the required order;
@@ -512,9 +517,10 @@ Remote Agent Host conformance covers:
 
 - Remote Server and Remote Tunnel are explicit peer routes to the same Agent
   Host Protocol; neither is fallback for the other.
-- Remote authority, Remote client, Remote generation, tunnel identity, tunnel
-  client, tunnel generation, Host authority, Agent Host client connection,
-  provider, package, Agent, Session, Chat, Turn, and operation identities
+- Remote authority, Remote client, Remote generation, tunnel provider,
+  account, tunnel, cluster, endpoint, tunnel client, tunnel generation, Host
+  authority, Agent Host client connection, Sessions provider, package, Agent,
+  Session, Chat, Turn, tunnel operation, and Agent Host operation identities
   remain separate.
 - One initialized `IAgentHostConnection` creates one common
   `AgentHostSessionsProvider` for its Host authority.

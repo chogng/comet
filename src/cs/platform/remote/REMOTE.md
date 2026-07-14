@@ -127,14 +127,17 @@ semantics.
 
 ### Feature and subsystem consumers
 
-A consumer owns its channel name, request and response values, state model,
-and semantic recovery. It receives an `IRemoteServerConnection` from the
-Remote service and never opens a second socket, resolves the authority again,
-or creates a private Remote Server lifecycle.
+A Remote Server consumer owns its channel name, request and response values,
+state model, and semantic recovery. It receives an
+`IRemoteServerConnection` from the Remote service and never opens a second
+management socket, resolves the authority again, or creates a private Remote
+Server lifecycle.
 
-Examples include remote filesystem, terminal, and Agent Host connections. The
-Remote foundation provides transport and channel continuity only. Each
-subsystem remains authoritative for its own protocol state and operations.
+Examples include remote filesystem, terminal, and the Remote Server Agent Host
+connection. The Remote foundation provides transport and channel continuity
+only. Each subsystem remains authoritative for its own protocol state and
+operations. A direct Remote Tunnel Agent Host is a consumer of Platform Tunnel,
+not an `IRemoteServerConnection` consumer.
 
 ## Authority resolution
 
@@ -166,15 +169,15 @@ configuration, resource URIs, logs, or channel payloads.
 ## Remote Tunnel reachability
 
 Remote Tunnel is first-class Remote infrastructure, not a synonym for the
-Remote management connection. It owns provider, tunnel, cluster, endpoint,
-hosting-lease, relay-connection, and transport-generation identity. Platform
-Remote consumes it only when an authority resolver declares a tunnel-backed
-`remoteServer` endpoint.
+Remote management connection. It owns provider, account, tunnel, cluster,
+endpoint, hosting-lease, relay-connection, and transport-generation identity.
+Platform Remote consumes it only when an authority resolver declares a
+tunnel-backed `remoteServer` endpoint.
 
 ```text
 Remote authority
     → exact tunnel-backed authority resolver
-    → provider + tunnel + cluster + remoteServer endpoint
+    → provider + account + tunnel + cluster + remoteServer endpoint
     → IRemoteTunnelConnection
     → Remote management handshake
     → IRemoteServerConnection

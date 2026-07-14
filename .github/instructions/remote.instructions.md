@@ -3,7 +3,7 @@ description: Architecture rules for Remote authorities, Remote Server connection
 applyTo: "{src/cs/platform/remote/**,src/cs/platform/tunnel/**,src/cs/workbench/services/remote/**,src/cs/server/**,src/cs/platform/agentHost/**,src/cs/sessions/contrib/providers/agentHost/**}"
 ---
 
-# Remote foundation
+# Remote and Remote Tunnel foundations
 
 Read `src/cs/platform/remote/REMOTE.md` before changing Remote authority,
 transport, connection, channel, server, environment, or resource behavior.
@@ -19,8 +19,8 @@ or its connection.
 - One exact resolver handles one Remote authority kind. Missing, duplicate,
   malformed, denied, and incompatible resolution fails explicitly.
 - One application instance uses one persistent Remote management connection
-  for its selected authority. Consumers do not open private sockets or create
-  another Remote Server lifecycle.
+  for its selected authority. Remote Server consumers do not open private
+  management sockets or create another Remote Server lifecycle.
 - Remote authority, endpoint, Remote client, transport generation, Remote
   Server instance, channel, resource, Agent Host authority, and Agent Host
   client connection are separate identities.
@@ -31,11 +31,16 @@ or its connection.
   client-local paths.
 - Bidirectional channels expose exact registered operations. They do not expose
   ambient services or redirect missing operations to another channel.
-- Remote Tunnel provider, tunnel, cluster, endpoint, hosting lease, logical
-  connection, and transport generation are separate from Remote authority,
-  Remote Server connection, and Agent Host identity.
+- Remote Tunnel provider, account, tunnel, cluster, endpoint, hosting lease,
+  logical connection, and transport generation are separate from Remote
+  authority, Remote Server connection, and Agent Host identity.
 - Remote Tunnel discovery and exact lookup are distinct operations. Names,
   labels, and well-known ports never select protocol compatibility.
+- Remote Tunnel mutations preserve one operation ID, target, expected
+  revision, and value digest across retry. Do not emulate missing provider
+  idempotency or conditional updates.
+- `remoteServer` and `agentHost` tunnel endpoints are private and
+  authenticated. Reject provider visibility or connection-scope downgrade.
 - Remote Agent Host supports two exact routes: a typed channel from
   `IRemoteServerConnection`, and a direct `agentHost` endpoint from
   `IRemoteTunnelConnection`. Both carry the common Agent Host Protocol and
@@ -51,5 +56,6 @@ or its connection.
   and resource authority remain separate scopes. Never derive a credential
   from tunnel identity.
 - Do not fall back to a local endpoint, another Remote authority, resolver,
-  transport, tunnel provider, tunnel, cluster, endpoint, route, channel,
-  client, Host, resource, package, Agent, runtime, Tool, or credential source.
+  transport, tunnel provider, account, tunnel, cluster, endpoint, route,
+  channel, client, Host, resource, package, Agent, runtime, Tool, or credential
+  source.

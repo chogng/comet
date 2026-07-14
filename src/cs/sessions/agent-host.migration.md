@@ -161,10 +161,13 @@ relay, endpoint, authentication, or reconnection lifecycle. The upstream
 Remote layers demonstrate authority resolution, one persistent management
 connection, bidirectional channels, URI transformation, and Remote Server
 composition. Its Agent Host tunnel paths additionally demonstrate direct
-Agent Host publication and discovery through a relay. The target keeps both
-durable routes, moves the shared tunnel mechanics into the project-owned
-Remote Tunnel foundation, and carries the common Agent Host Protocol over each
-route without introducing a second Agent API.
+Agent Host publication and discovery through a relay, but identify capability
+through labels and a well-known port and derive an Agent Host connection token
+from tunnel ID. The target keeps both durable routes, moves the shared tunnel
+mechanics into the project-owned Remote Tunnel foundation, uses structured
+provider, account, tunnel, cluster, endpoint-kind, and protocol-revision
+identity, and requires independent endpoint credentials. It carries the common
+Agent Host Protocol over each route without introducing a second Agent API.
 
 ## Final project-owned boundary
 
@@ -215,7 +218,8 @@ route without introducing a second Agent API.
   falls back to or silently replaces the other.
 - Remote owns authority resolution, management transport, channel
   multiplexing, URI transformation, and Remote Server lifecycle. Remote
-  Tunnel owns tunnel identity, hosting, discovery, relay authentication,
+  Tunnel owns provider and account identity, tunnel and endpoint identity,
+  hosting, discovery, relay authentication, mutation outcome reconciliation,
   endpoint streams, and transport generations. Agent Host owns protocol
   negotiation, Host identity, semantic recovery, and content and Tool endpoint
   binding.
@@ -374,9 +378,12 @@ names. No target registration imports or dispatches through the legacy path.
    resolution, one authenticated
    persistent management connection, bidirectional typed channels, Remote
    environment and URI transformation, remote resource ownership, transport
-   reconnection, and Remote Server lifecycle. Add typed Remote Tunnel identity,
-   endpoint publication, discovery, scoped authentication, relay connections,
-   hosting leases, explicit disconnect, and transport recovery. Compose one
+   reconnection, and Remote Server lifecycle. Add typed Remote Tunnel provider,
+   account, tunnel, cluster, endpoint, lease, connection, generation, and
+   operation identity; structured endpoint compatibility; endpoint
+   publication; discovery; scoped authentication; relay connections; hosting
+   leases; mutation outcome reconciliation; explicit disconnect; and transport
+   recovery. Compose one
    `AgentHostAuthority` in the Remote Server, bind its channel directly, and
    implement the Remote Server transport for `RemoteAgentHostConnection` over
    that supplied channel. Bind a Remote Tunnel Agent Host endpoint directly to
@@ -605,6 +612,7 @@ The migration is complete only when:
     compatibility module.
 19. Remote authority, transport, management connection, bidirectional channel,
     URI, Remote Server, Remote Tunnel identity, hosting, discovery, relay,
+    mutation outcome and credential isolation,
     Remote Agent Host, Agent Host, Agent Runtime Protocol,
     bundled embedded and connected runtime conformance, common
     execution-profile resolution, package-wide quiescing,

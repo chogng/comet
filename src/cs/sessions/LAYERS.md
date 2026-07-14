@@ -48,7 +48,7 @@ All Sessions layers
 public Workbench APIs
 ```
 
-### Remote foundation
+### Remote and Tunnel foundations
 
 **Locations:**
 

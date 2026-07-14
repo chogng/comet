@@ -39,7 +39,7 @@ Remote Tunnel is distinct from port forwarding even though both live under
 
 | Facility | Purpose | Stable identity |
 |---|---|---|
-| Remote Tunnel | Publish and discover authenticated product service endpoints through a relay | provider, tunnel, cluster, and endpoint identity |
+| Remote Tunnel | Publish and discover authenticated product service endpoints through a relay | provider, account, tunnel, cluster, and endpoint identity |
 | Port forwarding tunnel | Make one remote `host:port` reachable at one local address for an already connected Remote target | remote authority, remote address, and forwarding lease |
 | Tunnel proxy | Supply an authenticated proxy address and certificate identity to a transport owner | proxy endpoint and credential reference |
 
@@ -54,7 +54,8 @@ Remote Tunnel keeps these identities distinct:
 
 | Identity | Meaning |
 |---|---|
-| Tunnel provider ID | Exact relay provider implementation and account namespace |
+| Tunnel provider ID | Exact relay provider implementation |
+| Tunnel account ID | Exact authenticated account namespace within the provider |
 | Tunnel ID | Stable provider-owned identity of one tunnel record |
 | Cluster ID | Exact provider region or relay cluster containing the tunnel |
 | Tunnel endpoint ID | Stable identity of one published service endpoint on the tunnel |
@@ -63,6 +64,7 @@ Remote Tunnel keeps these identities distinct:
 | Hosting lease ID | One live host attachment that publishes an endpoint |
 | Tunnel client connection ID | One logical client connection to one endpoint |
 | Tunnel transport generation | One physical relay generation for the logical client connection |
+| Tunnel operation ID | Idempotent identity of one create, publish, update, host-start, host-stop, unpublish, or delete mutation |
 | Credential reference | Exact provider, account, scopes, and secret reference used for one operation |
 
 Tunnel ID is not a Remote authority, hostname, filesystem authority, Agent
@@ -72,7 +74,8 @@ name. Display names and labels are presentation metadata and do not select an
 endpoint protocol or compatibility revision.
 
 One tunnel may publish several explicitly declared endpoints. An endpoint is
-addressed by `(providerId, tunnelId, clusterId, endpointId)`. Consumers do not
+addressed by
+`(providerId, accountId, tunnelId, clusterId, endpointId)`. Consumers do not
 select a service by scanning labels, trying well-known ports, or interpreting
 the tunnel display name.
 
@@ -138,7 +141,7 @@ or remains authorized.
 
 A discovered descriptor contains bounded typed values:
 
-- provider, tunnel, and cluster identity;
+- provider, account, tunnel, and cluster identity;
 - display name and optional presentation labels;
 - ownership and visibility metadata safe for presentation;
 - current host availability;
@@ -172,15 +175,41 @@ not select a similarly named result. Duplicate tunnel IDs, cluster mismatch,
 missing endpoints, incompatible protocol revisions, denied scopes, and
 malformed descriptors fail explicitly.
 
-Recently used tunnel records contain only typed tunnel identity, endpoint ID,
-display data, and the authentication provider ID needed to request the right
-account. Removing a recent record removes application history, not the
-provider-owned tunnel. Deleting a tunnel is a separate explicit provider
-operation.
+Recently used tunnel records contain only typed provider, account, tunnel,
+cluster, and endpoint identity plus display data and the authentication
+provider ID needed to request that account. Removing a recent record removes
+application history, not the provider-owned tunnel. Deleting a tunnel is a
+separate explicit provider operation.
 
 An explicit user disconnect marks that exact endpoint as not eligible for
 automatic reconnect. A later explicit connect clears the marker. Discovery
 status refresh never clears user disconnect intent.
+
+## Mutation and outcome reconciliation
+
+Every provider mutation carries one stable tunnel operation ID, its exact
+target identity, the expected provider revision when updating existing state,
+and a digest of the requested value. Retrying the same operation preserves all
+four values. A different requested value requires a new operation ID.
+
+A provider that advertises management or hosting capability must honor the
+operation ID as an idempotency key and expose conditional record revisions.
+Discovery-and-connect-only providers may register without mutation capability.
+Platform Tunnel does not emulate missing idempotency, hosting, or conditional
+update guarantees with local names, duplicate records, or best-effort writes.
+
+Create, endpoint publication, descriptor update, hosting start or stop,
+unpublish, and delete return typed committed, rejected, or unknown outcomes.
+When an acknowledgement is lost, Platform Tunnel reads the exact provider
+record and reconciles the expected revision, endpoint descriptor, hosting
+lease, and operation digest before retrying. It never assumes delivery means
+commit, creates a same-named replacement, or issues a second mutation under a
+new ID.
+
+Conditional update failure returns the current provider revision without
+overwriting it. The product contribution must refresh and present the conflict
+or submit an explicit new operation against the new revision; Platform Tunnel
+does not merge descriptors.
 
 ## Hosting lifecycle
 
@@ -198,26 +227,29 @@ obtain exact provider credential and scopes
 ```
 
 Creation and reuse are separate commands. A create request never adopts a
-same-named tunnel. A reuse request requires the exact provider, tunnel, and
-cluster identity and validates ownership before changing endpoint metadata.
+same-named tunnel. A reuse request requires the exact provider, account,
+tunnel, and cluster identity and validates ownership before changing endpoint
+metadata.
 
 Endpoint publication and relay-host attachment commit as one hosting
-operation. If publication succeeds but attachment fails, the operation removes
-the unpublished generation or records the endpoint offline; it never reports
-active hosting. Hosting state becomes visible only after the relay accepts the
-host connection for the exact endpoint.
+operation. The service stages a new descriptor or descriptor revision and does
+not publish active hosting until the relay accepts the host connection for the
+exact endpoint. If attachment fails, a newly staged endpoint is removed and an
+updated endpoint is restored to its prior committed descriptor and hosting
+state. The failed operation never reports active hosting.
 
 Stopping hosting:
 
 1. stops accepting new endpoint connections;
 2. drains or closes active connections according to the endpoint contract;
 3. releases the hosting lease;
-4. marks or removes the published endpoint according to its durable policy;
+4. publishes the endpoint as offline while retaining its descriptor;
 5. disposes relay, provider, listener, and credential resources.
 
 Stopping a hosting lease does not delete the provider tunnel record. Tunnel
-deletion is explicit, validates that no protected endpoint or hosting lease is
-active, and returns an idempotent terminal outcome.
+endpoint removal and tunnel deletion are separate explicit operations. Tunnel
+deletion validates that no protected endpoint or hosting lease is active and
+returns an idempotent terminal outcome.
 
 ## Client connection lifecycle
 
@@ -242,10 +274,10 @@ Relay success does not prove that a Remote Server or Agent Host handshake
 succeeded. If service initialization fails, the owner closes the tunnel
 connection and publishes no partial service or Sessions provider.
 
-One connection attempt has bounded timeouts for provider lookup, relay
-attachment, endpoint availability, stream opening, and service initialization.
-Timeout identifies the exact step and disposes all resources created by that
-attempt.
+Platform Tunnel applies bounded timeouts to provider lookup, relay attachment,
+endpoint availability, and stream opening. The endpoint owner applies its own
+bounded service-initialization timeout after receiving the stream. Each timeout
+identifies the exact step and disposes the resources created by that layer.
 
 ## Reconnection
 
@@ -254,7 +286,7 @@ Remote Tunnel restores only the selected endpoint transport:
 ```text
 relay transport is lost
     → retain the logical tunnel client connection during its grace period
-    → reconnect the same provider, tunnel, cluster, and endpoint
+    → reconnect the same provider, account, tunnel, cluster, and endpoint
     → create a new tunnel transport generation
     → notify the endpoint protocol owner
     → endpoint owner performs semantic reconnect or fresh initialization
@@ -265,11 +297,12 @@ attempt or time budget. Network-online, application-resume, and explicit user
 connect events may resume the same route. An explicit disconnect terminates
 the loop and remains suppressed until explicit connect.
 
-Reconnect never changes provider, account, tunnel ID, cluster, endpoint ID,
-endpoint kind, or Host authority. If the provider record was deleted, the
-endpoint disappeared, authentication was revoked, or the logical connection
-grace period expired, the connection becomes terminal. A new explicit connect
-creates a new logical tunnel connection and service-protocol connection.
+Reconnect never changes provider, account, tunnel ID, cluster, endpoint ID, or
+endpoint kind. If the provider record was deleted, the endpoint disappeared,
+authentication was revoked, or the logical connection grace period expired,
+the connection becomes terminal. A new explicit connect creates a new logical
+tunnel connection and service-protocol connection. The endpoint protocol owner
+separately validates that its service authority remains unchanged.
 
 Tunnel reconnection does not replay Remote management requests or Agent Host
 mutations. The Remote foundation and Agent Host protocol each reconcile their
@@ -292,17 +325,23 @@ descriptors, logs, URIs, Agent Host snapshots, or Remote channel payloads.
 Secrets remain in the authentication or secret service and enter Platform
 Tunnel as short-lived credential references or guarded values.
 
+Product service endpoints are private and authenticated. Publishing a
+`remoteServer` or `agentHost` endpoint with anonymous or public connection
+scope is rejected. If a provider cannot preserve the requested privacy and
+authentication mode, publication fails instead of downgrading visibility.
+
 Tunnel identity is public routing data, not a secret. Endpoint protocol
 credentials are random, endpoint-scoped values or authenticated channel
 context; they are never derived from tunnel ID, cluster ID, display name, or
 labels. Relay authentication does not grant Agent package, model credential,
 Tool, filesystem, Session, Chat, or Turn permission.
 
-Endpoint streams validate framing, maximum message and queue sizes, malformed
-input thresholds, cancellation, and close. Logs contain bounded tunnel and
-endpoint identities, state transitions, durations, and typed error categories,
-not tokens, unrestricted payloads, Chat content, attachment bodies, or Tool
-results.
+Platform Tunnel enforces byte, queue, backpressure, cancellation, and close
+limits without interpreting endpoint frames. The endpoint protocol owner
+validates framing, message limits, and malformed-input thresholds. Logs contain
+bounded tunnel and endpoint identities, state transitions, durations, and
+typed error categories, not tokens, unrestricted payloads, Chat content,
+attachment bodies, or Tool results.
 
 ## Remote Agent Host endpoint
 
@@ -380,6 +419,8 @@ Remote Tunnel conformance covers:
 - descriptor validation and structured protocol compatibility;
 - enumeration and exact lookup as distinct operations;
 - create, reuse, publish, host, stop, and delete lifecycle;
+- conditional mutation, lost acknowledgement, idempotent retry, conflict, and
+  outcome reconciliation;
 - provider management, host relay, client relay, and endpoint credential
   isolation;
 - desktop and browser connection implementations;
@@ -395,16 +436,18 @@ Remote Tunnel conformance covers:
 
 ## Invariants
 
-- Tunnel provider, tunnel, cluster, endpoint, hosting lease, logical client
-  connection, transport generation, Remote authority, and Agent Host authority
-  remain separate identities.
+- Tunnel provider, account, tunnel, cluster, endpoint, hosting lease, logical
+  client connection, transport generation, operation, Remote authority, and
+  Agent Host authority remain separate identities.
 - Remote Tunnel publishes exact typed endpoints; labels, names, and ports do
   not define protocol compatibility.
 - Tunnel identity is routing data, never a credential or filesystem authority.
+- Product service endpoints are private and authenticated; publication never
+  downgrades their visibility or connection scope.
 - Hosting becomes active only after endpoint publication and relay attachment
   both succeed.
-- Discovery never creates a Host, provider, Remote authority, or offline
-  placeholder.
+- Discovery never creates a Host, Sessions provider, Remote authority, or
+  offline placeholder.
 - Explicit disconnect stops automatic reconnect for the exact endpoint until
   an explicit connect.
 - Reconnection preserves one selected route and changes only its transport

@@ -184,7 +184,8 @@ Neither connection substitutes for or tunnels through the other implicitly.
 The local connection owns local process lifecycle and IPC. A remote connection
 uses either a typed channel from the initialized Remote Server connection or a
 direct `agentHost` endpoint stream from the selected Remote Tunnel connection.
-The lower foundation owns authority or tunnel selection, endpoint
+Product composition selects the exact discriminated address. The lower
+foundation owns authority resolution or tunnel lookup, endpoint
 authentication, and transport reconnection; the Agent Host connection owns
 Agent Host negotiation, semantic reconnection, and exact client content and
 Tool endpoint binding. Connection implementations do not reimplement Agent,
